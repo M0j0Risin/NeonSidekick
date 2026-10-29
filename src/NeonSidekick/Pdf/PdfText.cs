@@ -569,14 +569,23 @@ public static class PdfText
     public static string Pages(int count) => count.ToString(CultureInfo.InvariantCulture) + (count == 1 ? " page" : " pages");
 
     /// <summary>Pages as runs for reading: <c>1–3, 7, 9–12</c>.</summary>
-    public static string Runs(IReadOnlyList<int> pages) => Join(pages, "–", ", ");
+    public static string Runs(IReadOnlyList<int> pages) => Join(pages, "–", ", ", Number);
+
+    /// <summary>
+    /// Numbers as runs for reading, each written by <paramref name="name"/>: a sheet's hidden columns as <c>C–E, H</c> (2026-10-28, review
+    /// P5-15: the Office reader kept its own copy of this).
+    /// </summary>
+    public static string Runs(IReadOnlyList<int> numbers, Func<int, string> name) => Join(numbers, "–", ", ", name);
 
     /// <summary>Pages as a <c>pages</c> argument: <c>1-3,7,9-12</c>.</summary>
-    public static string Spec(IReadOnlyList<int> pages) => Join(pages, "-", ",");
+    public static string Spec(IReadOnlyList<int> pages) => Join(pages, "-", ",", Number);
 
-    private static string Join(IReadOnlyList<int> pages, string dash, string comma)
+    private static string Number(int n) => n.ToString(CultureInfo.InvariantCulture);
+
+    private static string Join(IReadOnlyList<int> pages, string dash, string comma, Func<int, string> name)
     {
         ArgumentNullException.ThrowIfNull(pages);
+        ArgumentNullException.ThrowIfNull(name);
         var parts = new List<string>();
         int i = 0;
         while (i < pages.Count)
@@ -588,9 +597,7 @@ public static class PdfText
                 end = pages[++i];
             }
 
-            parts.Add(end == start
-                ? start.ToString(CultureInfo.InvariantCulture)
-                : start.ToString(CultureInfo.InvariantCulture) + dash + end.ToString(CultureInfo.InvariantCulture));
+            parts.Add(end == start ? name(start) : name(start) + dash + name(end));
             i++;
         }
 

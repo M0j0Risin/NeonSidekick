@@ -28,6 +28,17 @@ public sealed class StoredMessage
     public string? Checkpoint { get; set; }
 
     /// <summary>
+    /// The <c>/undo</c> note this user message carries ahead of its text (<see cref="ConversationHistory.UndoNoteKey"/>, 2026-10-28, review
+    /// P10-01), written only when set: a reopened session still tells the note from what the user typed.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? UndoNote { get; set; }
+
+    /// <summary>A compact's summary's kept checkpoint ids (<see cref="ConversationHistory.CheckpointListKey"/>, 2026-10-28, review P2-06), written only when set.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? Checkpoints { get; set; }
+
+    /// <summary>
     /// The tool a carrier's pictures came from (<see cref="ConversationHistory.SourceKey"/>, 2026-10-03), what a prune's stub
     /// credits. Left out while null, so an older row reads the same and its stub credits <c>view_image</c> as before.
     /// </summary>
@@ -296,7 +307,7 @@ public static class SessionHistory
     internal static StoredMessage Store(ChatMessage message, bool withThinking = false, bool keepCamera = false, bool keepScreen = false)
     {
         bool carrier = ConversationHistory.IsImageCarrier(message);
-        var stored = new StoredMessage { Role = message.Role.Value, Carrier = carrier, Ordinal = ConversationHistory.TurnOrdinal(message), Checkpoint = ConversationHistory.TurnCheckpoint(message), Source = carrier ? ConversationHistory.CarrierSource(message) : null };
+        var stored = new StoredMessage { Role = message.Role.Value, Carrier = carrier, Ordinal = ConversationHistory.TurnOrdinal(message), Checkpoint = ConversationHistory.TurnCheckpoint(message), UndoNote = ConversationHistory.UndoNoteOf(message), Checkpoints = ConversationHistory.CheckpointList(message) is { Count: > 0 } kept ? kept.ToList() : null, Source = carrier ? ConversationHistory.CarrierSource(message) : null };
         foreach (var content in message.Contents)
         {
             switch (content)
@@ -412,6 +423,16 @@ public static class SessionHistory
         if (stored.Checkpoint is { } checkpoint)
         {
             ConversationHistory.SetTurnCheckpoint(message, checkpoint);
+        }
+
+        if (stored.UndoNote is { } note)
+        {
+            ConversationHistory.SetUndoNote(message, note);
+        }
+
+        if (stored.Checkpoints is { Count: > 0 } checkpoints)
+        {
+            ConversationHistory.SetCheckpointList(message, checkpoints);
         }
 
         return message;

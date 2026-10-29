@@ -4567,12 +4567,13 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// <see cref="ConfirmAsync"/> over a page of the caller's own rows (2026-10-09, the shortcut offer's three answers): the row
-    /// picked from the top, or null for ESC; on the pane, or as a prompt without it (where the page's hotkeys do nothing).
+    /// picked from the top, or null for ESC; on the pane, or as a prompt without it (where the page's hotkeys do nothing). It opens on
+    /// <paramref name="cursor"/> (2026-10-28, review U3: the rewind's and <c>/undo</c>'s questions open on their safe row).
     /// </summary>
-    public Task<int?> ChooseAsync(MenuPage page, CancellationToken cancellationToken)
+    public Task<int?> ChooseAsync(MenuPage page, CancellationToken cancellationToken, int cursor = 0)
     {
         ArgumentNullException.ThrowIfNull(page);
-        return PickOnceAsync(page, 0, cancellationToken);
+        return PickOnceAsync(page, cursor, cancellationToken);
     }
 
     /// <summary>

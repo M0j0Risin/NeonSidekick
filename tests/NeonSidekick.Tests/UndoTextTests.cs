@@ -59,19 +59,34 @@ public sealed class UndoTextTests
     }
 
     [Fact]
-    public void ModelNote_IsPinned_AndTwoMerge_IntoOneLine()
+    public void ModelNote_IsPinned_AndTwoClauses_JoinInOneBracket()
     {
-        string first = UndoText.ModelNote(["fix the build\nplease"], ["a.cs", "b.cs"], ["c.cs"]);
-        Assert.Equal(ConversationHistory.UndoNotePreamble + "the file changes you made answering \"fix the build\" are undone; these files are back as they were before: a.cs, b.cs; these were kept as they are: c.cs]", first);
-        Assert.True(ConversationHistory.IsUndoNote(new Microsoft.Extensions.AI.TextContent(first)));
+        string first = UndoText.NoteClause(["fix the build\nplease"], ["a.cs", "b.cs"], ["c.cs"], [], partly: false);
+        Assert.Equal(ConversationHistory.UndoNotePreamble + "the file changes you made answering \"fix the build\" are undone; these files are back as they were before: a.cs, b.cs; these were kept as they are: c.cs]", UndoText.ModelNote([first]));
 
-        string second = UndoText.ModelNote(["rename it"], ["d.cs"], []);
-        string merged = UndoText.Merge(first, second);
+        string second = UndoText.NoteClause(["rename it", "and move it"], ["d.cs"], [], ["e.cs"], partly: true);
+        string merged = UndoText.ModelNote([first, second]);
 
-        Assert.Equal(second, UndoText.Merge(null, second));
-        Assert.StartsWith(first.TrimEnd(']') + "; then the file changes you made answering \"rename it\"", merged, StringComparison.Ordinal);
-        Assert.EndsWith("d.cs]", merged, StringComparison.Ordinal);
+        Assert.StartsWith(UndoText.ModelNote([first])[..^1] + "; then the file changes you made answering \"rename it\" and \"and move it\" are partly undone", merged, StringComparison.Ordinal);
+        Assert.EndsWith("these could not be put back and are as you left them: e.cs]", merged, StringComparison.Ordinal);
         Assert.Single(merged, c => c == ']');
+    }
+
+    /// <summary>The question quotes the turns it undoes (2026-10-28, review P4-07), and newer turns past keeping are said (P1-10).</summary>
+    [Fact]
+    public void Question_QuotesTheTurns_AndNewerNotKept_CountsThem()
+    {
+        Assert.Equal(NoticeGlyphs.Rewind + "Put back the files \"fix the parser\" and \"then the tests\" changed?", UndoText.Question(["fix the parser\nnow","then the tests"]));
+        Assert.Contains("the newest turn that changed files", UndoText.NewerNotKept(1), StringComparison.Ordinal);
+        Assert.Contains("the 3 newest turns", UndoText.NewerNotKept(3), StringComparison.Ordinal);
+    }
+
+    /// <summary>A purge's log line names the stores still being deleted (2026-10-28, review P13-02).</summary>
+    [Fact]
+    public void PurgedLogLine_NamesWhatIsStillBeingDeleted()
+    {
+        Assert.Equal("Purged 1 file checkpoint store (10 bytes)", UndoText.PurgedLogLine(1, 10));
+        Assert.Equal("Purged 2 file checkpoint stores (10 bytes), 1 still being deleted", UndoText.PurgedLogLine(2, 10, 1));
     }
 
     [Fact]
@@ -84,8 +99,9 @@ public sealed class UndoTextTests
     }
 
     [Fact]
-    public void Megabytes_RoundsUp_AndNeverSaysZero()
+    public void Megabytes_RoundsUp_AndSaysZeroForNone()
     {
+        Assert.Equal("0 MB", UndoText.Megabytes(0));   // 2026-10-28, review P4-08
         Assert.Equal("1 MB", UndoText.Megabytes(1));
         Assert.Equal("2 MB", UndoText.Megabytes((1024 * 1024) + 1));
         Assert.Equal("2,048 MB", UndoText.Megabytes(2048L * 1024 * 1024));
@@ -110,6 +126,10 @@ public sealed class UndoTextTests
         Assert.Equal(MidTurnClass.Cancel, ChatScreen.MidTurnPolicy(SlashCommand.Undo, ""));
         Assert.Equal(MidTurnClass.Cancel, ChatScreen.MidTurnPolicy(SlashCommand.Undo, "2"));
         Assert.Equal(MidTurnClass.Deferred, ChatScreen.MidTurnPolicy(SlashCommand.Undo, "purge all"));
+        Assert.Equal(MidTurnClass.Cancel, ChatScreen.MidTurnPolicy(SlashCommand.Rewind, "2 files"));
+        // A typo waits for the reply and is its usage error then (2026-10-28, review P5-12).
+        Assert.Equal(MidTurnClass.Deferred, ChatScreen.MidTurnPolicy(SlashCommand.Undo, "tow"));
+        Assert.Equal(MidTurnClass.Deferred, ChatScreen.MidTurnPolicy(SlashCommand.Rewind, "flies"));
     }
 
     [Fact]

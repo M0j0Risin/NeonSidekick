@@ -239,9 +239,11 @@ public sealed class ConversationHistory
     public const string CheckpointKey = "neon.checkpoint";
 
     /// <summary>
-    /// The <see cref="AIContent.AdditionalProperties"/> key that marks a turn's <c>/undo</c> note (2026-10-28, the checkpoints plan): a text part of
-    /// its own, first on the user message, never joined to what the user typed. A reopened session's part has no properties, so it is also
-    /// known by <see cref="UndoNotePreamble"/>. Never on the wire as a property.
+    /// The <see cref="ChatMessage.AdditionalProperties"/> key on a turn's user message that holds its <c>/undo</c> note, a <see cref="string"/>
+    /// (2026-10-28, the checkpoints plan). The note goes into the message's one text, ahead of what the user typed and a blank line
+    /// (2026-10-28, review P10-01 and P4-10: a part of its own made a two-part array some servers refuse, and Claude's <c>.Text</c> ran the
+    /// two together); the exact note kept here (and saved as <c>StoredMessage.UndoNote</c>) is what <see cref="WithoutUndoNote"/> takes off,
+    /// so a typed line that only looks like a note keeps its text (P5-08). Never sent.
     /// </summary>
     public const string UndoNoteKey = "neon.undoNote";
 
@@ -372,11 +374,61 @@ public sealed class ConversationHistory
         (message.AdditionalProperties ??= new AdditionalPropertiesDictionary())[CheckpointKey] = id;
     }
 
-    /// <summary>Whether <paramref name="content"/> is an <c>/undo</c> note (<see cref="UndoNoteKey"/>, or a restored part by its preamble).</summary>
-    public static bool IsUndoNote(AIContent content) =>
-        content is TextContent text
-        && ((text.AdditionalProperties is { } properties && properties.TryGetValue(UndoNoteKey, out object? tag) && tag is true)
-            || text.Text.StartsWith(UndoNotePreamble, StringComparison.Ordinal));
+    /// <summary>
+    /// The <see cref="ChatMessage.AdditionalProperties"/> key on a compact's summary that holds the file checkpoint ids of the turns it stands
+    /// for, newest first, a <see cref="IReadOnlyList{T}"/> of <see cref="string"/> (2026-10-28, review P2-06: a compaction dropped their reach,
+    /// so <c>/undo</c> could never get back past it). Saved as <c>StoredMessage.Checkpoints</c>. <see cref="Trim"/>'s turn cap has nowhere to put
+    /// them: a turn trimmed off the front loses its reach. Never sent.
+    /// </summary>
+    public const string CheckpointListKey = "neon.checkpoints";
+
+    /// <summary>The checkpoint ids a compact's summary keeps (<see cref="CheckpointListKey"/>), newest first; empty for none.</summary>
+    public static IReadOnlyList<string> CheckpointList(ChatMessage message)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        return message.AdditionalProperties is { } properties && properties.TryGetValue(CheckpointListKey, out object? value) && value is IReadOnlyList<string> ids ? ids : [];
+    }
+
+    /// <summary>Sets the checkpoint ids a compact's summary keeps, or takes them off for none.</summary>
+    public static void SetCheckpointList(ChatMessage message, IReadOnlyList<string>? ids)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        if (ids is not { Count: > 0 })
+        {
+            message.AdditionalProperties?.Remove(CheckpointListKey);
+            return;
+        }
+
+        (message.AdditionalProperties ??= new AdditionalPropertiesDictionary())[CheckpointListKey] = ids.ToList();
+    }
+
+    /// <summary>The <c>/undo</c> note <paramref name="message"/> carries ahead of its text (<see cref="UndoNoteKey"/>); null when none.</summary>
+    public static string? UndoNoteOf(ChatMessage message)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        return message.AdditionalProperties is { } properties && properties.TryGetValue(UndoNoteKey, out object? value) && value is string note ? note : null;
+    }
+
+    /// <summary>Marks <paramref name="message"/> as carrying <paramref name="note"/> ahead of its text (<see cref="UndoNoteKey"/>).</summary>
+    public static void SetUndoNote(ChatMessage message, string note)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        ArgumentNullException.ThrowIfNull(note);
+        (message.AdditionalProperties ??= new AdditionalPropertiesDictionary())[UndoNoteKey] = note;
+    }
+
+    /// <summary>
+    /// <paramref name="text"/> (<paramref name="message"/>'s text, or its start) without the <c>/undo</c> note it carries: only that exact note
+    /// and its blank line, never anything that merely starts like one.
+    /// </summary>
+    public static string WithoutUndoNote(ChatMessage message, string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return UndoNoteOf(message) is { } note && text.StartsWith(note + NoteBreak, StringComparison.Ordinal) ? text[(note.Length + NoteBreak.Length)..] : text;
+    }
+
+    /// <summary>What sits between an <c>/undo</c> note and the user's text.</summary>
+    public const string NoteBreak = "\n\n";
 
     /// <summary>Stamps <paramref name="ordinal"/> on <paramref name="message"/> (<see cref="TurnOrdinalKey"/>), replacing any earlier stamp.</summary>
     public static void SetTurnOrdinal(ChatMessage message, int ordinal)
@@ -486,8 +538,8 @@ public sealed class ConversationHistory
     public void AddUser(string text, IReadOnlyList<ImageAttachment> images) => AddUser(text, images, null);
 
     /// <summary>
-    /// <see cref="AddUser(string, IReadOnlyList{ImageAttachment})"/> with an <c>/undo</c> note (2026-10-28, the checkpoints plan): when given, it goes in
-    /// as the first part, marked <see cref="UndoNoteKey"/>, before the user's own text.
+    /// <see cref="AddUser(string, IReadOnlyList{ImageAttachment})"/> with an <c>/undo</c> note (2026-10-28, the checkpoints plan): when given, it goes
+    /// ahead of the user's text in the one text, a blank line between, and is kept on the message (<see cref="UndoNoteKey"/>).
     /// </summary>
     public void AddUser(string text, IReadOnlyList<ImageAttachment> images, string? note)
     {
@@ -495,13 +547,8 @@ public sealed class ConversationHistory
         ArgumentNullException.ThrowIfNull(images);
         if (note is not null)
         {
-            var parts = new List<AIContent>(images.Count + 2)
-            {
-                new TextContent(note) { AdditionalProperties = new AdditionalPropertiesDictionary { [UndoNoteKey] = true } },
-                new TextContent(text),
-            };
-            parts.AddRange(images.Select(ImagePart));
-            _messages.Add(new ChatMessage(ChatRole.User, parts));
+            AddUser(note + NoteBreak + text, images, null);
+            SetUndoNote(_messages[^1], note);
         }
         else if (images.Count == 0)
         {

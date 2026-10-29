@@ -10,11 +10,12 @@ internal sealed partial class ChatScreen
 {
     /// <summary>
     /// The display path of the Office file <paramref name="path"/> names in the working directory (by its extension, the one
-    /// <see cref="OfficeFile"/> list), or null for anything else: asked before the text read, whose binary probe would answer with
-    /// <c>read_office</c>'s model hint and whose 8 MB cap would refuse a big document.
+    /// <see cref="OfficeFile"/> list, and its first bytes: a zip, or an OLE container for the protected-file refusal), or null for anything
+    /// else: asked before the text read, whose binary probe would answer with <c>read_office</c>'s model hint and whose 8 MB cap would refuse
+    /// a big document. A text file under an Office name is read as text again (2026-10-28, review P12-05, a regression from v0.5.4).
     /// </summary>
     private string? OfficeAt(string path) =>
-        OfficeFile.IsOfficePath(path) && _files.Resolve(path, forWrite: false, out string full) == FileOutcome.Ok && File.Exists(full) ? _files.Relative(full) : null;
+        OfficeFile.IsOfficePath(path) && _files.Resolve(path, forWrite: false, out string full) == FileOutcome.Ok && OfficeFile.IsOfficeFile(full) ? _files.Relative(full) : null;
 
     /// <summary>
     /// A Word document's or a presentation's text for <c>/read</c> (<see cref="OfficeReader.ReadAloud"/>: plain paragraphs, slide titles

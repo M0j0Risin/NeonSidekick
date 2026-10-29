@@ -2561,11 +2561,11 @@ public sealed class WorkingDirectory
                 return new WriteResult(FileOutcome.NotEncodable, display, 0, false, Detail: codec!.Label ?? "UTF-8");
             }
 
-            FileJournal.Writing(this, full);
-            RecheckLinks(full);
+            var mark = PrepareWrite(() => FileJournal.Writing(this, full), full);
             // A new file made only if it is still not there (2026-10-22, review J3: Exists then a move with overwrite clobbered one made between).
             if (!existed && !WriteNew(full, encoded))
             {
+                FileJournal.TakeBack(mark);
                 return new WriteResult(FileOutcome.Exists, display, 0, false);
             }
 
@@ -2609,10 +2609,10 @@ public sealed class WorkingDirectory
                 return new WriteResult(FileOutcome.Exists, display, 0, false);
             }
 
-            FileJournal.Writing(this, full);
-            RecheckLinks(full);
+            var mark = PrepareWrite(() => FileJournal.Writing(this, full), full);
             if (!existed && !WriteNew(full, bytes))
             {
+                FileJournal.TakeBack(mark);
                 return new WriteResult(FileOutcome.Exists, display, 0, false);
             }
 
@@ -2655,8 +2655,7 @@ public sealed class WorkingDirectory
                 return new WriteResult(FileOutcome.Exists, display, 0, false);
             }
 
-            FileJournal.Writing(this, full);
-            RecheckLinks(full);
+            PrepareWrite(() => FileJournal.Writing(this, full), full);
             Directory.CreateDirectory(Path.GetDirectoryName(full)!);
             pending = new PendingWrite(full, display, overwrite, _options.PreserveOnReplace);
             return new WriteResult(FileOutcome.Ok, display, 0, existed);
@@ -2756,19 +2755,21 @@ public sealed class WorkingDirectory
                 return new WriteResult(FileOutcome.TooBig, display, 0, false);
             }
 
-            FileJournal.Writing(this, full);
-            RecheckLinks(full);
+            // The stamp asked before the journal's hook (2026-10-28, review P4-03): it only reads, and a refusal after the hook described a write
+            // that never happened.
             if (existed && StampOf(full) != seen)
             {
                 return new WriteResult(FileOutcome.Failed, display, 0, false, Detail: FileText.ChangedWhileEditing);
             }
 
+            var mark = PrepareWrite(() => FileJournal.Writing(this, full), full);
             if (existed)
             {
                 WriteAtomically(full, encoded, _options.PreserveOnReplace);
             }
             else if (!WriteNew(full, encoded))
             {
+                FileJournal.TakeBack(mark);
                 return new WriteResult(FileOutcome.Exists, display, 0, false);
             }
 
@@ -3011,8 +3012,7 @@ public sealed class WorkingDirectory
             return false;
         }
 
-        FileJournal.Writing(this, full);
-        RecheckLinks(full);
+        PrepareWrite(() => FileJournal.Writing(this, full), full);
         WriteAtomically(full, output, _options.PreserveOnReplace);
         return true;
     }
@@ -3139,8 +3139,7 @@ public sealed class WorkingDirectory
                 return new CreateResult(FileOutcome.Exists, display);
             }
 
-            FileJournal.Making(this, full);
-            RecheckLinks(full);
+            PrepareWrite(() => FileJournal.Making(this, full), full);
             Directory.CreateDirectory(full);
             return new CreateResult(FileOutcome.Ok, display);
         }
@@ -3244,16 +3243,7 @@ public sealed class WorkingDirectory
                 }
             }
 
-            if (move)
-            {
-                FileJournal.Moving(this, source, destination);
-            }
-            else
-            {
-                JournalCopy(this, destination, plan, inTheWay && !folderInTheWay);
-            }
-
-            RecheckLinks(destination);
+            PrepareWrite(() => move ? FileJournal.Moving(this, source, destination) : JournalCopy(this, destination, plan, inTheWay && !folderInTheWay), destination);
             Directory.CreateDirectory(destinationFolder);
             bool renamed = string.Equals(Path.GetDirectoryName(source), destinationFolder, StringComparison.OrdinalIgnoreCase);
             if (isDirectory)
@@ -3393,8 +3383,7 @@ public sealed class WorkingDirectory
             }
 
             // The destination side only (2026-10-28, the checkpoints plan): unc_fetch into the working folder is journaled, unc_put onto a share isn't.
-            JournalCopy(to, destination, plan, inTheWay && !folderInTheWay);
-            to.RecheckLinks(destination);
+            to.PrepareWrite(() => JournalCopy(to, destination, plan, inTheWay && !folderInTheWay), destination);
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
             if (isDirectory)
             {
@@ -3467,8 +3456,7 @@ public sealed class WorkingDirectory
             }
 
             // To the bin while the setting is on (later on 2026-10-15); a link, a drive with no bin and the setting off delete directly.
-            FileJournal.Removing(this, full);
-            RecheckLinks(full, linkItself: true);
+            PrepareWrite(() => FileJournal.Removing(this, full), full, linkItself: true);
             var way = FileDeletes.Remove(full, isDirectory, isLink, RecycleDeletes?.Invoke());
             DiagnosticLog.Debug(Category, DeletedLogLine(Relative(full)) + (way == DeleteWay.Recycled ? " (to the " + FileText.RecycleBinName + ")" : ""));
             return new DeleteResult(FileOutcome.Ok, display, isDirectory) { Way = way };
@@ -3952,8 +3940,7 @@ public sealed class WorkingDirectory
                 return new ZipResult(FileOutcome.Failed, display, Relative(archive), 0, 0, ZipCapDetail(counted, bytes));
             }
 
-            FileJournal.Writing(this, archive);
-            RecheckLinks(archive);
+            PrepareWrite(() => FileJournal.Writing(this, archive), archive);
             Directory.CreateDirectory(Path.GetDirectoryName(archive)!);
             string temp = TempSibling(archive);
             try
@@ -4222,13 +4209,15 @@ public sealed class WorkingDirectory
             // The archive's internet mark goes on what comes out of it (2026-10-22, review O5): SmartScreen, Protected View and Gatekeeper
             // still ask about a downloaded archive's program or document.
             // The checkpoint journal (2026-10-28): the folders made where missing and each file, before anything is written.
-            FileJournal.Placing(this, folders.Concat(files.Select(f => Path.GetDirectoryName(f.Target)!)), files.Select(f => f.Target));
+            // The same folder list the create loop walks (2026-10-28, review P1-03): one per folder, not one per file in it.
+            var making = folders.Concat(files.Select(f => Path.GetDirectoryName(f.Target)!)).Distinct(comparer).OrderBy(f => f.Length).ToList();
+            FileJournal.Placing(this, making, files.Select(f => f.Target));
             byte[]? mark = MarkOfTheWeb.Read(source);
             var made = new List<string>();
             var temps = new List<(string Temp, string Target, bool Exists)>();
             try
             {
-                foreach (string each in folders.Concat(files.Select(f => Path.GetDirectoryName(f.Target)!)).Distinct(comparer).OrderBy(f => f.Length))
+                foreach (string each in making)
                 {
                     if (!Directory.Exists(each))
                     {
@@ -4711,25 +4700,45 @@ public sealed class WorkingDirectory
     /// A copy's destination for the checkpoint journal (2026-10-28, the checkpoints plan): a file in a folder's way saved first, then a folder's
     /// planned folders and files (each existing file saved, each new one noted), or the one file.
     /// </summary>
-    private static void JournalCopy(WorkingDirectory to, string destination, CopyPlan? plan, bool fileInTheWay)
+    private static JournalMark JournalCopy(WorkingDirectory to, string destination, CopyPlan? plan, bool fileInTheWay)
     {
         if (FileJournal.Current is null)
         {
-            return;
+            return JournalMark.None;
         }
 
         if (plan is null)
         {
-            FileJournal.Writing(to, destination);
-            return;
+            return FileJournal.Writing(to, destination);
         }
 
-        if (fileInTheWay)
+        // A folder over a file (2026-10-28, review P3-02): the file saved and the folder noted as made, so an undo takes the folder away
+        // and puts the file back.
+        return fileInTheWay
+            ? FileJournal.Replacing(to, destination, plan.Folders, plan.Files.Select(f => f.Target))
+            : FileJournal.Placing(to, plan.Folders, plan.Files.Select(f => f.Target));
+    }
+
+    /// <summary>
+    /// The checkpoint journal's hook, then the links on the way asked again (2026-10-28, review P4-13: the one pair every tool write goes
+    /// through, held by <c>WorkingDirectoryJournalTests</c>' scan). A link that moved takes back what the hook recorded (review P4-03) before
+    /// the refusal goes on; the mark is the caller's for a write refused later (<see cref="FileJournal.TakeBack"/>). The hook stays before the
+    /// recheck: after it, the G13 window between the recheck and the write would widen.
+    /// </summary>
+    private JournalMark PrepareWrite(Func<JournalMark> hook, string full, bool linkItself = false)
+    {
+        var mark = hook();
+        try
         {
-            FileJournal.Removing(to, destination);
+            RecheckLinks(full, linkItself);
+        }
+        catch (IOException)
+        {
+            FileJournal.TakeBack(mark);
+            throw;
         }
 
-        FileJournal.Placing(to, plan.Folders, plan.Files.Select(f => f.Target));
+        return mark;
     }
 
     /// <summary>
@@ -4982,9 +4991,23 @@ public sealed class WorkingDirectory
             RefuseReadOnly(full);
             if (FileLinks.Count(full) > 1)
             {
-                using var stream = new FileStream(full, FileMode.Truncate, FileAccess.Write, FileShare.None);
-                content.CopyTo(stream);
-                return stream.Length;
+                // Read whole into a temp sibling first (2026-10-28, review P9-05): a source failing partway left the linked file truncated; now
+                // only a copy from the disk can, as the byte[] form's write can.
+                string staged = TempSibling(full);
+                try
+                {
+                    using var stage = new FileStream(staged, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None);
+                    HideTemp(staged);
+                    content.CopyTo(stage);
+                    stage.Position = 0;
+                    using var stream = new FileStream(full, FileMode.Truncate, FileAccess.Write, FileShare.None);
+                    stage.CopyTo(stream);
+                    return stream.Length;
+                }
+                finally
+                {
+                    DeleteQuietly(staged);
+                }
             }
         }
 
@@ -5028,22 +5051,8 @@ public sealed class WorkingDirectory
             return true;
         }
 
-        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
-        string temp = TempSibling(full);
-        try
-        {
-            using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-            {
-                content.CopyTo(stream);
-            }
-
-            HideTemp(temp);
-            return MoveTempNew(temp, full);
-        }
-        finally
-        {
-            DeleteQuietly(temp);
-        }
+        // The one new-file path (2026-10-28, review P6-08): its stale temps swept, as every write's are.
+        return WriteNew(full, content);
     }
 
     /// <summary>
@@ -5100,6 +5109,29 @@ public sealed class WorkingDirectory
         try
         {
             File.WriteAllBytes(temp, bytes);
+            HideTemp(temp);
+            return MoveTempNew(temp, full);
+        }
+        finally
+        {
+            DeleteQuietly(temp);
+        }
+    }
+
+    /// <summary><see cref="WriteNew(string, byte[])"/> from a stream (2026-10-28, review P6-08: a restored file past 64 MB, never held whole).</summary>
+    internal static bool WriteNew(string full, Stream content)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        SweepStaleTemps(Path.GetDirectoryName(full)!);
+        string temp = TempSibling(full);
+        try
+        {
+            using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            {
+                content.CopyTo(stream);
+            }
+
             HideTemp(temp);
             return MoveTempNew(temp, full);
         }

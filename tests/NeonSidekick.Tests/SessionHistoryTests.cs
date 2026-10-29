@@ -26,6 +26,31 @@ public class SessionHistoryTests
         Assert.False(ConversationHistory.IsImageCarrier(back[0]));
     }
 
+    /// <summary>
+    /// An <c>/undo</c> note rides in the user's one text and its exact words are saved beside it, so a restored session strips only that
+    /// (2026-10-28, review P10-01, P5-08); a summary's checkpoint list survives the store (P2-06).
+    /// </summary>
+    [Fact]
+    public void AnUndoNote_AndASummarysCheckpoints_RoundTrip()
+    {
+        var history = new ConversationHistory("");
+        history.AddUser("what now", [], ConversationHistory.UndoNotePreamble + "x]");
+        history.AddUser(ConversationHistory.UndoNotePreamble + "typed, not a note]");
+        var summary = new ChatMessage(ChatRole.User, "summary");
+        ConversationHistory.SetCheckpointList(summary, ["b", "a"]);
+
+        var back = SessionHistory.FromJson(SessionHistory.ToJson([.. history.Messages, summary]));
+
+        var noted = back[^3];
+        Assert.Single(noted.Contents);   // one text part, never two
+        Assert.Equal(ConversationHistory.UndoNotePreamble + "x]" + ConversationHistory.NoteBreak + "what now", noted.Text);
+        Assert.Equal(ConversationHistory.UndoNotePreamble + "x]", ConversationHistory.UndoNoteOf(noted));
+        Assert.Equal("what now", NeonSidekick.App.ConversationRewind.UserLine(noted));
+        Assert.Null(ConversationHistory.UndoNoteOf(back[^2]));
+        Assert.Equal(ConversationHistory.UndoNotePreamble + "typed, not a note]", NeonSidekick.App.ConversationRewind.UserLine(back[^2]));
+        Assert.Equal(["b", "a"], ConversationHistory.CheckpointList(back[^1]));
+    }
+
     [Fact]
     public void AUserTurnWithAPicture_KeepsTheBytesAndTheMediaType()
     {

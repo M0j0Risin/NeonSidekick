@@ -2,9 +2,20 @@ using System.Globalization;
 using System.Text;
 using System.Xml;
 using NeonSidekick.Files;
+using NeonSidekick.Llm.Tools;
+using NeonSidekick.Pdf;
 using NeonSidekick.Sql;
 
 namespace NeonSidekick.Office;
+
+/// <summary>What a workbook's sheet is, by its relationship's type (2026-10-28, review P5-11: a dialog or macro sheet was called a chart sheet).</summary>
+public enum SheetKind
+{
+    Worksheet,
+    Chart,
+    Dialog,
+    Macro,
+}
 
 /// <summary>
 /// An Excel workbook (2026-10-28, the Office plan). With no sheet: every sheet's name, used range and hidden mark (<c>hidden</c>, and
@@ -30,6 +41,18 @@ public sealed class ExcelReader
     /// <summary>The most defined names the overview lists.</summary>
     public const int MaxNamesListed = 50;
 
+    /// <summary>
+    /// The most sheets the overview lists (2026-10-28, review P12-01: one line per sheet and no cap, so thousands of sheets blew past
+    /// <see cref="WorkingDirectory.MaxReadChars"/>); the rest are counted, not scanned.
+    /// </summary>
+    public const int MaxSheetsListed = 100;
+
+    /// <summary>The longest sheet name, defined name or reference the overview shows (review P9-11, P12-01).</summary>
+    public const int MaxNameChars = 200;
+
+    /// <summary>How many visible worksheets the overview tries for its first rows: a blank cover sheet is passed over (review P11-06).</summary>
+    public const int OverviewTries = 3;
+
     private const string WorkbookRels = "xl/_rels/workbook.xml.rels";
 
     private readonly OfficePackage _package;
@@ -39,11 +62,13 @@ public sealed class ExcelReader
     private readonly List<Sheet> _sheets = [];
     private readonly List<(string Name, string Reference, int? Scope)> _names = [];
     private readonly Dictionary<string, string> _sharedFirst = new(StringComparer.Ordinal);
+    private readonly Dictionary<int, CellRange?> _dimensions = [];
+    private readonly Dictionary<int, CellRange?> _used = [];
+    private int _cellMax = MaxCellChars + 1;
     private bool _date1904;
     private List<string>? _strings;
     private string? _stringsPart;
     private List<CellFormat>? _formats;
-    private string? _stylesPart;
 
     public ExcelReader(OfficePackage package, string main, CancellationToken cancellationToken)
     {
@@ -52,9 +77,14 @@ public sealed class ExcelReader
         _cancellation = cancellationToken;
     }
 
-    private sealed record Sheet(int Number, string Name, string State, string? Part, bool IsWorksheet)
+    private sealed record Sheet(int Number, string Name, string State, string? Part, SheetKind Kind)
     {
         public bool Visible => State is not ("hidden" or "veryHidden");
+
+        public bool IsWorksheet => Kind == SheetKind.Worksheet;
+
+        /// <summary>The name as a list shows it, cut past <see cref="MaxNameChars"/>.</summary>
+        public string Shown => UntrustedText.Cut(Name, MaxNameChars);
     }
 
     /// <summary>The answer for <c>read_office</c>: the overview with no <paramref name="sheet"/> or <paramref name="range"/>, else the range's table.</summary>
@@ -66,7 +96,7 @@ public sealed class ExcelReader
         string rangeText = "";
         if (range is { Length: > 0 })
         {
-            switch (CellReference.TryParseRange(range, out rangeSheet, out asked))
+            switch (CellReference.TryParseRange(range, out rangeSheet, out asked, out rangeText))
             {
                 case RangeProblem.Bad:
                     return OfficeText.BadRange(range);
@@ -75,8 +105,6 @@ public sealed class ExcelReader
                 case RangeProblem.Name:
                     return OfficeText.NameAsRange(range.Trim());
             }
-
-            rangeText = range.Contains('!', StringComparison.Ordinal) ? range[(range.LastIndexOf('!') + 1)..].Replace("$", "", StringComparison.Ordinal).Trim() : range.Replace("$", "", StringComparison.Ordinal).Trim();
         }
 
         if (sheet is null && rangeSheet is null)
@@ -87,7 +115,7 @@ public sealed class ExcelReader
         Sheet? chosen = sheet is null ? null : Find(sheet);
         if (sheet is not null && chosen is null)
         {
-            return OfficeText.NoSuchSheet(display, sheet, _sheets.Select(s => s.Name));
+            return OfficeText.NoSuchSheet(display, sheet, SheetNames());
         }
 
         if (rangeSheet is not null)
@@ -95,7 +123,7 @@ public sealed class ExcelReader
             var named = _sheets.FirstOrDefault(s => s.Name.Equals(rangeSheet, StringComparison.OrdinalIgnoreCase));
             if (named is null)
             {
-                return OfficeText.NoSuchSheet(display, rangeSheet, _sheets.Select(s => s.Name));
+                return OfficeText.NoSuchSheet(display, rangeSheet, SheetNames());
             }
 
             if (chosen is not null && chosen != named)
@@ -116,56 +144,124 @@ public sealed class ExcelReader
             ?? (int.TryParse(name, NumberStyles.None, CultureInfo.InvariantCulture, out int number) && number >= 1 && number <= _sheets.Count ? _sheets[number - 1] : null);
     }
 
+    private List<string> SheetNames() => [.. _sheets.Select(s => s.Shown)];
+
+    /// <summary>
+    /// The overview (2026-10-28, review P12-01/P9-11/P11-06/P2-08): at most <see cref="MaxSheetsListed"/> sheets, listed while the text is under
+    /// half the budget, then a count of the rest (not scanned); the defined names while under three quarters; every name and reference one
+    /// line, scrubbed and cut; a damaged sheet named so, not the whole answer; then the first rows of the first of up to
+    /// <see cref="OverviewTries"/> visible worksheets that gives any, in what is left of the budget.
+    /// </summary>
     private string Overview(string display, bool formulas, int budget)
     {
         var sb = new StringBuilder();
         sb.Append(OfficeText.SheetsHeading);
-        var used = new Dictionary<Sheet, CellRange?>();
+        var used = new Dictionary<int, CellRange?>();
+        int listed = 0;
         foreach (var sheet in _sheets)
         {
+            if (listed >= MaxSheetsListed || sb.Length >= budget / 2)
+            {
+                break;
+            }
+
             _cancellation.ThrowIfCancellationRequested();
-            used[sheet] = sheet.IsWorksheet ? UsedRange(sheet) : null;
-            sb.Append('\n').Append(OfficeText.SheetLine(sheet.Number, sheet.Name, used[sheet]?.ToString(), sheet.State, !sheet.IsWorksheet));
+            CellRange? range = null;
+            bool damaged = false;
+            if (sheet.IsWorksheet)
+            {
+                try
+                {
+                    range = UsedRange(sheet);
+                }
+                catch (OfficeDamagedException)
+                {
+                    damaged = true;
+                }
+            }
+
+            used[sheet.Number] = range;
+            sb.Append('\n').Append(OfficeText.SheetLine(sheet.Number, sheet.Shown, range?.ToString(), sheet.State, sheet.Kind, damaged));
+            listed++;
+        }
+
+        if (listed < _sheets.Count)
+        {
+            sb.Append('\n').Append(OfficeText.More(_sheets.Count - listed));
         }
 
         var names = _names.Where(n => n.Reference.Length > 0).ToList();
         if (names.Count > 0)
         {
             sb.Append("\n\n").Append(OfficeText.NamesHeading);
-            foreach (var (name, reference, scope) in names.Take(MaxNamesListed))
+            int shownNames = 0;
+            foreach (var (name, reference, scope) in names)
             {
-                sb.Append("\n- ").Append(name).Append(": ").Append(reference);
-                if (scope is { } index && index >= 0 && index < _sheets.Count)
+                if (shownNames >= MaxNamesListed || sb.Length >= budget * 3 / 4)
                 {
-                    sb.Append(" (in ").Append(_sheets[index].Name).Append(')');
+                    break;
                 }
+
+                string? scopeName = scope is { } index && index >= 0 && index < _sheets.Count ? _sheets[index].Shown : null;
+                sb.Append('\n').Append(OfficeText.NameLine(name, reference, scopeName));
+                shownNames++;
             }
 
-            if (names.Count > MaxNamesListed)
+            if (names.Count > shownNames)
             {
-                sb.Append("\n(and ").Append((names.Count - MaxNamesListed).ToString(CultureInfo.InvariantCulture)).Append(" more)");
+                sb.Append('\n').Append(OfficeText.More(names.Count - shownNames));
             }
         }
 
-        var first = _sheets.FirstOrDefault(s => s.IsWorksheet && s.Visible && used[s] is not null);
-        if (first is null)
+        var candidates = _sheets.Where(s => s.IsWorksheet && s.Visible && used.TryGetValue(s.Number, out var r) && r is not null).Take(OverviewTries).ToList();
+        int room = budget - sb.Length - 500;   // the header line and the first rows' heading
+        if (candidates.Count == 0 || room < 2_000)
         {
-            sb.Append("\n\n").Append(OfficeText.NoVisibleSheet);
+            if (candidates.Count == 0)
+            {
+                sb.Append("\n\n").Append(OfficeText.NoVisibleSheet);
+            }
+
             return OfficeText.WorkbookHeader(display, _sheets.Count, null, null, null) + "\n" + sb;
         }
 
-        var range = used[first]!;
-        var table = Table(first, range, formulas, Math.Max(budget - sb.Length, 2_000), OverviewRows, out var shown, out var next);
-        if (shown is null)
+        OfficeReadException? failure = null;
+        foreach (var first in candidates)
         {
-            sb.Append("\n\n").Append(OfficeText.FirstRows(first.Name)).Append('\n').Append(OfficeText.NoValues(display, first.Name, range.ToString(), range.ToString()));
-            return OfficeText.WorkbookHeader(display, _sheets.Count, null, null, null) + "\n" + sb;
+            var range = used[first.Number]!;
+            string table;
+            CellRange? shown, next, columns;
+            try
+            {
+                table = Table(first, range, formulas, room, OverviewRows, out shown, out next, out columns);
+            }
+            catch (OfficeReadException ex)
+            {
+                failure ??= ex;
+                continue;
+            }
+
+            if (shown is null)
+            {
+                continue;
+            }
+
+            sb.Append("\n\n").Append(OfficeText.FirstRows(first.Shown)).Append('\n').Append(table);
+            return OfficeText.WorkbookHeader(display, _sheets.Count, CellReference.WithSheet(first.Name, shown), range.ToString(),
+                next is null ? null : CellReference.WithSheet(first.Name, next), columns is null ? null : CellReference.WithSheet(first.Name, columns)) + "\n" + sb;
         }
 
-        sb.Append("\n\n").Append(OfficeText.FirstRows(first.Name)).Append('\n').Append(table);
-        return OfficeText.WorkbookHeader(display, _sheets.Count, CellReference.WithSheet(first.Name, shown), range.ToString(), next is null ? null : CellReference.WithSheet(first.Name, next)) + "\n" + sb;
+        var tried = candidates[0];
+        sb.Append("\n\n").Append(OfficeText.FirstRows(tried.Shown)).Append('\n')
+            .Append(failure is not null ? OfficeText.DamagedPast(failure.Part) : OfficeText.NoValues(display, CellReference.QuoteSheet(tried.Name), used[tried.Number]!.ToString(), used[tried.Number]!.ToString()));
+        return OfficeText.WorkbookHeader(display, _sheets.Count, null, null, null) + "\n" + sb;
     }
 
+    /// <summary>
+    /// A range's table. An explicit block of cells is its own bound (2026-10-28, review P3-04: a stale <c>&lt;dimension&gt;</c> clipped it, so
+    /// "A1" hid the whole sheet), the sheet's used range named only when its dimension can be trusted, never scanned for; whole rows and
+    /// columns, and a sheet asked whole, are bound by the used range.
+    /// </summary>
     private string ReadRange(string display, Sheet? sheet, CellRange? asked, string rangeText, bool formulas, int budget)
     {
         if (sheet is null)
@@ -175,15 +271,16 @@ public sealed class ExcelReader
 
         if (!sheet.IsWorksheet)
         {
-            return OfficeText.ChartSheet(sheet.Name);
+            return OfficeText.NotReadSheet(sheet.Shown, sheet.Kind);
         }
 
         string quoted = CellReference.QuoteSheet(sheet.Name);
-        var used = UsedRange(sheet);
-        var bound = used is null ? null : asked is null ? used : asked.Intersect(used);
+        bool cells = asked is { WholeColumns: false, WholeRows: false };
+        var used = cells ? Dimension(sheet) : UsedRange(sheet);
+        var bound = cells ? asked : used is null ? null : asked is null ? used : asked.Intersect(used);
         if (bound is null)
         {
-            return OfficeText.NoValues(display, quoted, asked is null ? "it" : rangeText, used?.ToString());
+            return asked is null ? OfficeText.SheetHoldsNoValues(display, quoted) : OfficeText.NoValues(display, quoted, rangeText, used?.ToString());
         }
 
         if (asked is { IsOneCell: true })
@@ -191,23 +288,36 @@ public sealed class ExcelReader
             var rows = Cells(sheet, bound, formulas, int.MaxValue, 1, whole: true, out _, out _, out _, out string? oneNote);
             string value = rows.Count > 0 && rows[0].Cells.TryGetValue(bound.FirstColumn, out string? v) ? v : "";
             value = value.Length > WorkingDirectory.MaxReadChars ? TextCut.Safe(value, WorkingDirectory.MaxReadChars) + "…" : value;
-            return OfficeText.RangeHeader(display, quoted, bound.ToString(), used!.ToString(), null) + "\n" + OfficeText.OneCell(bound.ToString(), value) + (oneNote is null ? "" : "\n" + oneNote);
+            return OfficeText.RangeHeader(display, quoted, bound.ToString(), used?.ToString(), null) + "\n" + OfficeText.OneCell(bound.ToString(), value) + (oneNote is null ? "" : "\n" + oneNote);
         }
 
-        string table = Table(sheet, bound, formulas, budget, int.MaxValue, out var shown, out var next);
+        string table = Table(sheet, bound, formulas, budget, int.MaxValue, out var shown, out var next, out var columns);
         if (shown is null)
         {
-            return table.Length > 0 ? table : OfficeText.NoValues(display, quoted, asked is null ? "it" : rangeText, used!.ToString());
+            if (table.Length > 0)
+            {
+                return table;
+            }
+
+            // Nothing in the block: the error names the sheet's real used range, scanned now if it must be.
+            used ??= UsedRange(sheet);
+            return asked is null ? OfficeText.SheetHoldsNoValues(display, quoted) : OfficeText.NoValues(display, quoted, rangeText, used?.ToString());
         }
 
-        return OfficeText.RangeHeader(display, quoted, shown.ToString(), used!.ToString(), next is null ? null : CellReference.WithSheet(sheet.Name, next)) + "\n" + table;
+        return OfficeText.RangeHeader(display, quoted, shown.ToString(), used?.ToString(), next is null ? null : CellReference.WithSheet(sheet.Name, next),
+            columns is null ? null : CellReference.WithSheet(sheet.Name, columns)) + "\n" + table;
     }
 
-    /// <summary>The table of <paramref name="bound"/>'s values: the hidden line, the rows. <paramref name="shown"/> null when it holds none.</summary>
-    private string Table(Sheet sheet, CellRange bound, bool formulas, int budget, int maxRows, out CellRange? shown, out CellRange? next)
+    /// <summary>
+    /// The table of <paramref name="bound"/>'s values: the hidden line, the rows. <paramref name="shown"/> null when it holds none;
+    /// <paramref name="next"/> the rows after it (or, when only columns were cut, those columns); <paramref name="columns"/> the columns past
+    /// the shown ones of the rows shown when both were cut (2026-10-28, review P2-02).
+    /// </summary>
+    private string Table(Sheet sheet, CellRange bound, bool formulas, int budget, int maxRows, out CellRange? shown, out CellRange? next, out CellRange? columns)
     {
         shown = null;
         next = null;
+        columns = null;
         int lastColumn = Math.Min(bound.LastColumn, bound.FirstColumn + MaxColumnsShown - 1);
         var view = bound with { LastColumn = lastColumn };
         var rows = Cells(sheet, view, formulas, budget, maxRows, whole: false, out var hiddenColumns, out var hiddenRows, out int? nextRow, out string? note);
@@ -221,24 +331,27 @@ public sealed class ExcelReader
         if (nextRow is { } nr)
         {
             next = new CellRange(bound.FirstColumn, nr, bound.LastColumn, bound.LastRow);
+            if (bound.LastColumn > lastColumn)
+            {
+                columns = new CellRange(lastColumn + 1, bound.FirstRow, bound.LastColumn, lastRow);
+            }
         }
         else if (bound.LastColumn > lastColumn)
         {
             next = new CellRange(lastColumn + 1, bound.FirstRow, bound.LastColumn, bound.LastRow);
         }
-
         var sb = new StringBuilder();
         var hiddenParts = new List<string>();
         var rowsHidden = hiddenRows.Where(r => r <= lastRow).ToList();
         if (rowsHidden.Count > 0)
         {
-            hiddenParts.Add((rowsHidden.Count == 1 ? "row " : "rows ") + CellReference.Runs(rowsHidden, n => n.ToString(CultureInfo.InvariantCulture)));
+            hiddenParts.Add(OfficeText.HiddenRows(PdfText.Runs(rowsHidden, n => n.ToString(CultureInfo.InvariantCulture)), rowsHidden.Count));
         }
 
         var columnsHidden = hiddenColumns.Where(c => c >= bound.FirstColumn && c <= lastColumn).Order().ToList();
         if (columnsHidden.Count > 0)
         {
-            hiddenParts.Add((columnsHidden.Count == 1 ? "column " : "columns ") + CellReference.Runs(columnsHidden, CellReference.Column));
+            hiddenParts.Add(OfficeText.HiddenColumns(PdfText.Runs(columnsHidden, CellReference.Column), columnsHidden.Count));
         }
 
         if (hiddenParts.Count > 0)
@@ -290,11 +403,12 @@ public sealed class ExcelReader
                     {
                         if (_x.Is(reader, OfficeXml.S, "sheet"))
                         {
-                            string name = OfficeXml.Unescape(_x.Attr(reader, "name") ?? "");
+                            // One line, scrubbed (2026-10-28, review P9-11): a name holding a line break broke the overview's list.
+                            string name = UntrustedText.OneLine(OfficeXml.Unescape(_x.Attr(reader, "name") ?? ""));
                             string state = _x.Attr(reader, "state") ?? "visible";
                             string? id = _x.Attr(reader, "id", OfficeXml.R);
                             var rel = id is null ? null : _package.Rel(_main, id);
-                            _sheets.Add(new Sheet(_sheets.Count + 1, name, state, rel is { External: false } ? rel.Target : null, rel is null || rel.Is("worksheet")));
+                            _sheets.Add(new Sheet(_sheets.Count + 1, name, state, rel is { External: false } ? rel.Target : null, KindOf(rel)));
                         }
 
                         OfficeXml.Skip(reader);
@@ -306,9 +420,9 @@ public sealed class ExcelReader
                     {
                         if (_x.Is(reader, OfficeXml.S, "definedName") && !OfficeXml.On(_x.Attr(reader, "hidden"), false))
                         {
-                            string name = _x.Attr(reader, "name") ?? "";
+                            string name = Listed(_x.Attr(reader, "name") ?? "");
                             int? scope = int.TryParse(_x.Attr(reader, "localSheetId"), NumberStyles.None, CultureInfo.InvariantCulture, out int s) ? s : null;
-                            _names.Add((name, OfficeXml.Text(reader).Trim(), scope));
+                            _names.Add((name, Listed(OfficeXml.Text(reader, MaxNameChars + 1)), scope));
                             return;
                         }
 
@@ -323,6 +437,16 @@ public sealed class ExcelReader
             return 0;
         });
     }
+
+    private static SheetKind KindOf(OfficeRel? rel) =>
+        rel is null || rel.Is("worksheet") ? SheetKind.Worksheet
+        : rel.Is("chartsheet") ? SheetKind.Chart
+        : rel.Is("dialogsheet") ? SheetKind.Dialog
+        : rel.Type.EndsWith("macrosheet", StringComparison.OrdinalIgnoreCase) ? SheetKind.Macro
+        : SheetKind.Worksheet;
+
+    /// <summary>A defined name or reference as the overview lists it: escapes undone, one line, scrubbed, cut (review P9-11).</summary>
+    private static string Listed(string text) => UntrustedText.Cut(UntrustedText.OneLine(OfficeXml.Unescape(text)), MaxNameChars);
 
     /// <summary>Thrown to stop a sheet's stream once what was asked is read.</summary>
     private sealed class StopSheet : Exception
@@ -349,17 +473,23 @@ public sealed class ExcelReader
         }
     }
 
-    /// <summary>The sheet's used range: its <c>&lt;dimension&gt;</c>, else the cells it holds; null for none.</summary>
-    private CellRange? UsedRange(Sheet sheet)
+    /// <summary>
+    /// The sheet's <c>&lt;dimension&gt;</c> when it can be trusted, read once (2026-10-28, review P3-04/P11-06/P5-04): a block of more than
+    /// one cell; a single cell is what Excel writes for an empty sheet as well as for one value in A1, so it says nothing; null for none.
+    /// </summary>
+    private CellRange? Dimension(Sheet sheet)
     {
+        if (_dimensions.TryGetValue(sheet.Number, out var known))
+        {
+            return known;
+        }
+
         CellRange? dimension = null;
-        bool found = false;
         Stream(sheet, reader => OfficeXml.Children(reader, () =>
         {
             if (_x.Is(reader, OfficeXml.S, "dimension"))
             {
                 dimension = CellReference.ParseDimension(_x.Attr(reader, "ref"));
-                found = dimension is not null;
                 throw new StopSheet();
             }
 
@@ -371,12 +501,45 @@ public sealed class ExcelReader
             OfficeXml.Skip(reader);
         }));
 
-        if (found)
+        var trusted = dimension is { } d && (d.FirstColumn != d.LastColumn || d.FirstRow != d.LastRow) ? d : null;
+        _dimensions[sheet.Number] = trusted;
+        return trusted;
+    }
+
+    /// <summary>The sheet's used range, found once: its trusted dimension, else the cells it holds (to the stream's bound); null for none.</summary>
+    private CellRange? UsedRange(Sheet sheet)
+    {
+        if (_used.TryGetValue(sheet.Number, out var known))
         {
-            return dimension;
+            return known;
         }
 
-        int c1 = int.MaxValue, r1 = int.MaxValue, c2 = 0, r2 = 0;
+        var used = Dimension(sheet) ?? Scan(sheet);
+        _used[sheet.Number] = used;
+        return used;
+    }
+
+    private CellRange? Scan(Sheet sheet)
+    {        int c1 = int.MaxValue, r1 = int.MaxValue, c2 = 0, r2 = 0;
+        try
+        {
+            ScanCells(sheet, (column, row) =>
+            {
+                c1 = Math.Min(c1, column);
+                c2 = Math.Max(c2, column);
+                r1 = Math.Min(r1, row);
+                r2 = Math.Max(r2, row);
+            });
+        }
+        catch (OfficeStreamLimitException)
+        {
+            // The cells up to the stream's bound.
+        }
+
+        return c2 == 0 ? null : new CellRange(c1, r1, Math.Min(c2, CellReference.MaxColumn), Math.Min(r2, CellReference.MaxRow));
+    }
+
+    private void ScanCells(Sheet sheet, Action<int, int> cell) =>
         Stream(sheet, reader => OfficeXml.Children(reader, () =>
         {
             if (!_x.Is(reader, OfficeXml.S, "sheetData"))
@@ -404,10 +567,7 @@ public sealed class ExcelReader
                     {
                         int column = ColumnNumber(reader, previousColumn);
                         previousColumn = column;
-                        c1 = Math.Min(c1, column);
-                        c2 = Math.Max(c2, column);
-                        r1 = Math.Min(r1, row);
-                        r2 = Math.Max(r2, row);
+                        cell(column, row);
                     }
 
                     OfficeXml.Skip(reader);
@@ -415,9 +575,6 @@ public sealed class ExcelReader
             });
             throw new StopSheet();
         }));
-
-        return c2 == 0 ? null : new CellRange(c1, r1, Math.Min(c2, CellReference.MaxColumn), Math.Min(r2, CellReference.MaxRow));
-    }
 
     private int RowNumber(XmlReader reader, int previous) =>
         int.TryParse(_x.Attr(reader, "r"), NumberStyles.None, CultureInfo.InvariantCulture, out int r) && r >= 1 ? r : previous + 1;
@@ -439,6 +596,7 @@ public sealed class ExcelReader
         int? cutAt = null;
         int chars = 0;
         note = null;
+        _cellMax = whole ? WorkingDirectory.MaxReadChars + 1 : MaxCellChars + 1;
         try
         {
             Stream(sheet, reader => OfficeXml.Children(reader, () =>
@@ -568,19 +726,20 @@ public sealed class ExcelReader
         string? value = null, formula = null, formulaType = null, shared = null, inline = null;
         OfficeXml.Children(reader, () =>
         {
+            // Each text read to the cell's cap at most (2026-10-28, review P5-03).
             if (_x.Is(reader, OfficeXml.S, "v"))
             {
-                value = OfficeXml.Text(reader);
+                value = OfficeXml.Text(reader, _cellMax);
             }
             else if (_x.Is(reader, OfficeXml.S, "f"))
             {
                 formulaType = _x.Attr(reader, "t");
                 shared = _x.Attr(reader, "si");
-                formula = OfficeXml.Text(reader);
+                formula = OfficeXml.Text(reader, _cellMax);
             }
             else if (_x.Is(reader, OfficeXml.S, "is"))
             {
-                inline = RichText(reader);
+                inline = RichText(reader, _cellMax);
             }
             else
             {
@@ -624,15 +783,15 @@ public sealed class ExcelReader
         return formulas && sharedWith is not null ? OfficeText.WithShared(shown, sharedWith) : shown;
     }
 
-    /// <summary>A string item's text (<c>&lt;si&gt;</c> or <c>&lt;is&gt;</c>): its runs joined, phonetic guides left out, escapes undone.</summary>
-    private string RichText(XmlReader reader)
+    /// <summary>A string item's text (<c>&lt;si&gt;</c> or <c>&lt;is&gt;</c>): its runs joined to <paramref name="max"/> characters, phonetic guides left out, escapes undone.</summary>
+    private string RichText(XmlReader reader, int max)
     {
         var sb = new StringBuilder();
         OfficeXml.Children(reader, () =>
         {
             if (_x.Is(reader, OfficeXml.S, "t"))
             {
-                sb.Append(OfficeXml.Text(reader));
+                sb.Append(OfficeXml.Text(reader, max - sb.Length));
             }
             else if (_x.Is(reader, OfficeXml.S, "r"))
             {
@@ -640,7 +799,7 @@ public sealed class ExcelReader
                 {
                     if (_x.Is(reader, OfficeXml.S, "t"))
                     {
-                        sb.Append(OfficeXml.Text(reader));
+                        sb.Append(OfficeXml.Text(reader, max - sb.Length));
                     }
                     else
                     {
@@ -672,7 +831,7 @@ public sealed class ExcelReader
                     {
                         if (_x.Is(reader, OfficeXml.S, "si"))
                         {
-                            _strings.Add(RichText(reader));
+                            _strings.Add(RichText(reader, WorkingDirectory.MaxReadChars + 1));
                         }
                         else
                         {
@@ -694,48 +853,20 @@ public sealed class ExcelReader
         if (_formats is null)
         {
             _formats = [];
-            _stylesPart = _package.Related(_main, "styles");
-            if (_stylesPart is { } part)
+            if (_package.Related(_main, "styles") is { } part)
             {
                 var codes = new Dictionary<int, string>();
                 var ids = new List<int>();
-                OfficePackage.Guard(part, () =>
+                try
                 {
-                    using var reader = _package.Whole(part);
-                    reader.MoveToContent();
-                    OfficeXml.Children(reader, () =>
-                    {
-                        if (_x.Is(reader, OfficeXml.S, "numFmts"))
-                        {
-                            OfficeXml.Children(reader, () =>
-                            {
-                                if (_x.Is(reader, OfficeXml.S, "numFmt") && int.TryParse(_x.Attr(reader, "numFmtId"), NumberStyles.None, CultureInfo.InvariantCulture, out int id))
-                                {
-                                    codes[id] = _x.Attr(reader, "formatCode") ?? "";
-                                }
+                    LoadFormats(part, codes, ids);
+                }
+                catch (OfficeReadException)
+                {
+                    // Styles that won't load show every number as General (2026-10-28, review P2-08): optional, never the whole read.
+                    ids.Clear();
+                }
 
-                                OfficeXml.Skip(reader);
-                            });
-                        }
-                        else if (_x.Is(reader, OfficeXml.S, "cellXfs"))
-                        {
-                            OfficeXml.Children(reader, () =>
-                            {
-                                if (_x.Is(reader, OfficeXml.S, "xf"))
-                                {
-                                    ids.Add(int.TryParse(_x.Attr(reader, "numFmtId"), NumberStyles.None, CultureInfo.InvariantCulture, out int id) ? id : 0);
-                                }
-
-                                OfficeXml.Skip(reader);
-                            });
-                        }
-                        else
-                        {
-                            OfficeXml.Skip(reader);
-                        }
-                    });
-                    return 0;
-                });
                 _formats.AddRange(ids.Select(id => NumberFormats.Classify(id, codes.TryGetValue(id, out string? code) ? code : null)));
             }
         }
@@ -745,8 +876,46 @@ public sealed class ExcelReader
             return _formats.Count > 0 ? _formats[0] : CellFormat.General;
         }
 
-        return int.TryParse(style, NumberStyles.None, CultureInfo.InvariantCulture, out int index) && index < _formats.Count
-            ? _formats[index]
-            : index == 0 && _formats.Count == 0 ? CellFormat.General : throw new OfficeDamagedException(_stylesPart ?? "xl/styles.xml");
+        // A style index past the list is General too (review P2-08), not damage.
+        return int.TryParse(style, NumberStyles.None, CultureInfo.InvariantCulture, out int index) && index < _formats.Count ? _formats[index] : CellFormat.General;
     }
+
+    private void LoadFormats(string part, Dictionary<int, string> codes, List<int> ids) =>
+        OfficePackage.Guard(part, () =>
+        {
+            using var reader = _package.Whole(part);
+            reader.MoveToContent();
+            OfficeXml.Children(reader, () =>
+            {
+                if (_x.Is(reader, OfficeXml.S, "numFmts"))
+                {
+                    OfficeXml.Children(reader, () =>
+                    {
+                        if (_x.Is(reader, OfficeXml.S, "numFmt") && int.TryParse(_x.Attr(reader, "numFmtId"), NumberStyles.None, CultureInfo.InvariantCulture, out int id))
+                        {
+                            codes[id] = _x.Attr(reader, "formatCode") ?? "";
+                        }
+
+                        OfficeXml.Skip(reader);
+                    });
+                }
+                else if (_x.Is(reader, OfficeXml.S, "cellXfs"))
+                {
+                    OfficeXml.Children(reader, () =>
+                    {
+                        if (_x.Is(reader, OfficeXml.S, "xf"))
+                        {
+                            ids.Add(int.TryParse(_x.Attr(reader, "numFmtId"), NumberStyles.None, CultureInfo.InvariantCulture, out int id) ? id : 0);
+                        }
+
+                        OfficeXml.Skip(reader);
+                    });
+                }
+                else
+                {
+                    OfficeXml.Skip(reader);
+                }
+            });
+            return 0;
+        });
 }

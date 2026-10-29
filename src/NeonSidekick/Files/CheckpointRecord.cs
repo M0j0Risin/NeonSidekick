@@ -79,6 +79,9 @@ public sealed class CheckpointEntry
     /// <summary>Why a content's bytes weren't kept (too big, a cap, an online-only file, the store failed); null when they were.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? NotSaved { get; set; }
+
+    /// <summary>A copy (2026-10-28, review P11-12): the commit names its blobs on its own, never on the journal's live entries.</summary>
+    public CheckpointEntry Clone() => (CheckpointEntry)MemberwiseClone();
 }
 
 /// <summary>
@@ -87,6 +90,12 @@ public sealed class CheckpointEntry
 /// </summary>
 public sealed class CheckpointState
 {
+    /// <summary>
+    /// The <see cref="Written"/> of a file that couldn't be read (2026-10-28, review P7-06): never equal to anything, so an unreadable file is
+    /// a conflict, never written over unseen.
+    /// </summary>
+    public const long UnknownWritten = -1;
+
     public string Path { get; set; } = "";
 
     public CheckpointKind Kind { get; set; }
@@ -97,14 +106,18 @@ public sealed class CheckpointState
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Hash { get; set; }
 
-    /// <summary>The write time (UTC ticks) of a file not hashed.</summary>
+    /// <summary>A file's write time (UTC ticks), set whether hashed or not (2026-10-28, review P1-06), <see cref="UnknownWritten"/> when unreadable.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public long? Written { get; set; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Target { get; set; }
 
-    /// <summary>Whether <paramref name="other"/> is the same thing: kinds, and a file's hash (or size and write time when either has none).</summary>
+    /// <summary>
+    /// Whether <paramref name="other"/> is the same thing: kinds, and a file's hash when both have one, else its size and write time when both
+    /// are known (2026-10-28, review P1-06: a seal past the hash budget kept only the write time, which a plan that hashed never matched, a false
+    /// "changed since"), else not (P7-06: unknown content is never the same). A link's target, a missing one read as empty (P6-05).
+    /// </summary>
     public bool Matches(CheckpointState other)
     {
         ArgumentNullException.ThrowIfNull(other);
@@ -117,8 +130,8 @@ public sealed class CheckpointState
         {
             CheckpointKind.File => Size == other.Size && (Hash is not null && other.Hash is not null
                 ? string.Equals(Hash, other.Hash, StringComparison.OrdinalIgnoreCase)
-                : Written is not null && Written == other.Written),
-            CheckpointKind.Link => string.Equals(Target, other.Target, StringComparison.Ordinal),
+                : Written is { } written && written != UnknownWritten && other.Written == written),
+            CheckpointKind.Link => string.Equals(Target ?? "", other.Target ?? "", StringComparison.Ordinal),
             _ => true,
         };
     }

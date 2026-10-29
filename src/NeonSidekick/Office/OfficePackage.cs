@@ -15,24 +15,27 @@ public sealed record OfficeLimits(long MaxFileBytes, long MaxWholePartBytes, lon
     public static readonly OfficeLimits Default = new(100L * 1024 * 1024, 64L * 1024 * 1024, 1024L * 1024 * 1024);
 }
 
-/// <summary>A part that is not a well-formed zip entry, not well-formed XML, missing though named, or indexed past its end.</summary>
-public sealed class OfficeDamagedException(string part, Exception? inner = null) : Exception("damaged: " + part, inner)
+/// <summary>
+/// Why a part didn't read (2026-10-28, review P6-03/P11-13: the three kinds were caught one by one, three times over): the one shape
+/// <see cref="OfficeReader.Refusal"/> turns into a sentence, and what a reader catches to keep the text it has.
+/// </summary>
+public abstract class OfficeReadException(string part, string message, Exception? inner = null) : Exception(message, inner)
 {
     /// <summary>The part's name in the package (<c>xl/worksheets/sheet2.xml</c>).</summary>
     public string Part { get; } = part;
+
+    /// <summary>Whether it is a size the part went past (held whole or streamed), not damage.</summary>
+    public bool TooLarge => this is not OfficeDamagedException;
 }
+
+/// <summary>A part that is not a well-formed zip entry, not well-formed XML, missing though named, or indexed past its end.</summary>
+public sealed class OfficeDamagedException(string part, Exception? inner = null) : OfficeReadException(part, "damaged: " + part, inner);
 
 /// <summary>A part held whole that is larger than <see cref="OfficeLimits.MaxWholePartBytes"/>, or a zip bomb's.</summary>
-public sealed class OfficePartTooLargeException(string part) : Exception("too large: " + part)
-{
-    public string Part { get; } = part;
-}
+public sealed class OfficePartTooLargeException(string part) : OfficeReadException(part, "too large: " + part);
 
-/// <summary>A streamed body that inflated past <see cref="OfficeLimits.MaxStreamedPartBytes"/>: the reader keeps what it has.</summary>
-public sealed class OfficeStreamLimitException(string part) : Exception("stream limit: " + part)
-{
-    public string Part { get; } = part;
-}
+/// <summary>A streamed body that inflated past <see cref="OfficeLimits.MaxStreamedPartBytes"/>, or a bomb's ratio: the reader keeps what it has.</summary>
+public sealed class OfficeStreamLimitException(string part) : OfficeReadException(part, "stream limit: " + part);
 
 /// <summary>One relationship of a part: its id, its type (a URI), the part it names (resolved inside the package) or, when external, the target as written.</summary>
 public sealed record OfficeRel(string Id, string Type, string Target, bool External)
@@ -64,7 +67,21 @@ public sealed class OfficePackage : IDisposable
         _limits = limits;
         foreach (var entry in zip.Entries)
         {
-            _entries.TryAdd(entry.FullName.Replace('\\', '/').TrimStart('/'), entry);
+            // Under its name as stored and its percent-escapes undone too (2026-10-28, review P11-01): Resolve undoes a relationship's
+            // escapes, so a part stored as "sheet%201.xml" was never found and its sheet dropped.
+            string name = entry.FullName.Replace('\\', '/').TrimStart('/');
+            _entries.TryAdd(name, entry);
+            if (name.Contains('%', StringComparison.Ordinal))
+            {
+                try
+                {
+                    _entries.TryAdd(Uri.UnescapeDataString(name), entry);
+                }
+                catch (UriFormatException)
+                {
+                    // Only the stored spelling.
+                }
+            }
         }
     }
 
@@ -147,15 +164,20 @@ public sealed class OfficePackage : IDisposable
             throw new OfficePartTooLargeException(part);
         }
 
-        return Reader(part, entry, _limits.MaxWholePartBytes, streamed: false);
+        return Reader(part, entry, _limits.MaxWholePartBytes, streamed: false, ratioFrom: 0);
     }
 
-    /// <summary>A streamed body: counted as it inflates, <see cref="OfficeStreamLimitException"/> past the streamed bound.</summary>
-    public XmlReader Streamed(string part) => Reader(part, Entry(part), _limits.MaxStreamedPartBytes, streamed: true);
+    /// <summary>
+    /// A streamed body: counted as it inflates, <see cref="OfficeStreamLimitException"/> past the streamed bound, and past
+    /// <see cref="OfficeLimits.MaxWholePartBytes"/> too once it has inflated more than <see cref="WorkingDirectory.MaxCompressionRatio"/>
+    /// times its compressed size (2026-10-28, review P5-03: a streamed part had no ratio rule, only the gigabyte bound).
+    /// </summary>
+    public XmlReader Streamed(string part) => Reader(part, Entry(part), _limits.MaxStreamedPartBytes, streamed: true, ratioFrom: _limits.MaxWholePartBytes);
 
     /// <summary>
     /// <paramref name="read"/> with the ways a part can be broken turned into <see cref="OfficeDamagedException"/> naming it: XML that isn't
-    /// well-formed (or holds a DTD), an entry that won't inflate, an end that comes too soon.
+    /// well-formed (or holds a DTD, or nests past <see cref="OfficeXml.MaxDepth"/>), an entry that won't inflate, an end that comes too soon,
+    /// a stack running short (review P3-01's backstop).
     /// </summary>
     public static T Guard<T>(string part, Func<T> read)
     {
@@ -164,7 +186,7 @@ public sealed class OfficePackage : IDisposable
         {
             return read();
         }
-        catch (Exception ex) when (ex is XmlException or InvalidDataException or EndOfStreamException)
+        catch (Exception ex) when (ex is XmlException or InvalidDataException or EndOfStreamException or InsufficientExecutionStackException)
         {
             throw new OfficeDamagedException(part, ex);
         }
@@ -241,7 +263,7 @@ public sealed class OfficePackage : IDisposable
         CloseInput = true,
     };
 
-    private static XmlReader Reader(string part, ZipArchiveEntry entry, long cap, bool streamed)
+    private static XmlReader Reader(string part, ZipArchiveEntry entry, long cap, bool streamed, long ratioFrom)
     {
         Stream inner;
         try
@@ -253,15 +275,16 @@ public sealed class OfficePackage : IDisposable
             throw new OfficeDamagedException(part, ex);
         }
 
-        return XmlReader.Create(new CountingStream(inner, part, cap, streamed), Settings);
+        return XmlReader.Create(new CountingStream(inner, part, cap, streamed, ratioFrom, entry.CompressedLength), Settings);
     }
 
     /// <summary>
     /// The bytes a part inflates to, counted (2026-10-28, the Office plan: "sizes are counted, never trusted"): past <c>cap</c> it throws,
     /// <see cref="OfficeStreamLimitException"/> for a streamed body, <see cref="OfficePartTooLargeException"/> for a part held whole; an
-    /// entry that won't inflate is <see cref="OfficeDamagedException"/>.
+    /// entry that won't inflate is <see cref="OfficeDamagedException"/>. A streamed body past <c>ratioFrom</c> bytes (0 = no ratio rule here)
+    /// whose count is over <see cref="WorkingDirectory.MaxCompressionRatio"/> times <c>compressed</c> stops as at its bound (review P5-03).
     /// </summary>
-    private sealed class CountingStream(Stream inner, string part, long cap, bool streamed) : Stream
+    private sealed class CountingStream(Stream inner, string part, long cap, bool streamed, long ratioFrom, long compressed) : Stream
     {
         private long _count;
 
@@ -289,6 +312,11 @@ public sealed class OfficePackage : IDisposable
             if (_count > cap)
             {
                 throw streamed ? new OfficeStreamLimitException(part) : new OfficePartTooLargeException(part);
+            }
+
+            if (ratioFrom > 0 && _count > ratioFrom && _count / Math.Max(compressed, 1) > WorkingDirectory.MaxCompressionRatio)
+            {
+                throw new OfficeStreamLimitException(part);
             }
 
             return read;

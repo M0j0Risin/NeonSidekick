@@ -153,8 +153,8 @@ With *File checkpoints* on, each turn keeps what the file tools changed, so `/un
 
 * **Covered:** the tools above and the pictures, PDFs, downloads and exports the other tools save into the working directory or the `images` folder.
 * **Not covered:** shell commands and scripts, the git tools, UNC share and vault writes, databases, skills and MCP tools. `/undo` names them when the turn ran one.
-* **Changed since:** a file you changed after the turn is asked about: restore over it (yours to the Recycle bin first) or skip it. A file the turn made goes to the Recycle bin.
-* **Kept in the profile**, never in the project, so a project's git repository sees nothing. A Ralph pass's and a `/botchat` turn's changes aren't kept.
+* **Changed since:** a file you changed after the turn is asked about: restore over it or skip it. Yours, and a file the turn made, go to the Recycle bin with *File deletes to Recycle bin* on; off, or on a drive with no bin, they're deleted for good.
+* **Kept in the profile**, never in the project, so a project's git repository sees nothing. Automated passes (a Ralph loop's, a plan gap review's, a code audit's) and `/botchat` turns keep none.
 
 #### Reading PDFs
 

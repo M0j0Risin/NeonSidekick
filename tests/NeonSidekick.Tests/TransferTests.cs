@@ -266,6 +266,30 @@ public sealed class TransferTests : IDisposable
         Assert.True(File.Exists(fresh));
     }
 
+    /// <summary>A restore's new file from a stream sweeps a crash's temps and never writes over one that appeared (2026-10-28, review P6-08).</summary>
+    [Fact]
+    public void ANewFileFromAStream_SweepsStaleTemps_AndNeverWritesOverOneThatAppeared()
+    {
+        string stale = Path.Combine(_root, WorkingDirectory.TempPrefix + new string('c', 32) + WorkingDirectory.TempSuffix);
+        File.WriteAllText(stale, "old");
+        File.SetLastWriteTimeUtc(stale, DateTime.UtcNow.AddHours(-2));
+
+        using (var content = new MemoryStream("new"u8.ToArray()))
+        {
+            Assert.True(WorkingDirectory.WriteNew(Full("made.txt"), content));
+        }
+
+        Put("taken.txt", "theirs");
+        using (var content = new MemoryStream("ours"u8.ToArray()))
+        {
+            Assert.False(WorkingDirectory.WriteNew(Full("taken.txt"), content));
+        }
+
+        Assert.Equal("new", File.ReadAllText(Full("made.txt")));
+        Assert.Equal("theirs", File.ReadAllText(Full("taken.txt")));
+        Assert.False(File.Exists(stale));
+        Assert.Empty(Directory.GetFiles(_root, "*" + WorkingDirectory.TempSuffix));
+    }
     /// <summary>A listing leaves a hidden file out and says how many (review Q10, D14).</summary>
     [WindowsFact]
     public void AListing_LeavesHiddenOut_AndCountsThem()

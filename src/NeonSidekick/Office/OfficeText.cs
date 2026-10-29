@@ -51,8 +51,22 @@ public static class OfficeText
     /// <summary>An Office extension over something else: a zip with no document inside, or not a zip. Pinned.</summary>
     public static string NotOffice(string path) => $"Error: '{path}' is not an Office document (no Word, Excel or PowerPoint content inside)";
 
-    /// <summary>Office's lock file (<c>~$name.docx</c>). Pinned.</summary>
+    /// <summary>
+    /// An Office file of another kind than its name says (2026-10-28, review P12-06: an <c>.xlsx</c> renamed <c>.docx</c> was called "no
+    /// Office content inside", which is false). Pinned.
+    /// </summary>
+    public static string OtherKind(string path, OfficeKind actual) =>
+        $"Error: '{path}' holds {KindName(actual)} inside, not what its name says; copy it to a {ExtensionOf(actual)} name and read that";
+
+    /// <summary>Office's lock file (<c>~$name.docx</c>) whose document's name is known: Excel's and PowerPoint's, or a short Word name. Pinned.</summary>
     public static string LockFile(string path, string document) => $"Error: '{path}' is Office's lock file for an open document; read '{document}'";
+
+    /// <summary>
+    /// Word's lock file for a longer name (2026-10-28, review P2-05): Word puts <c>~$</c> over the name's first one or two characters
+    /// (<c>~$port.docx</c> for <c>report.docx</c>), so only the name's end is known. Pinned.
+    /// </summary>
+    public static string LockFileOf(string path, string tail) =>
+        $"Error: '{path}' is Office's lock file for an open document; read the document whose name ends in '{tail}'";
 
     /// <summary>An argument that doesn't fit the file's kind. Pinned.</summary>
     public static string WrongArgument(string argument, OfficeKind kind) =>
@@ -99,39 +113,67 @@ public static class OfficeText
     /// <summary>The line before a slide's speaker notes.</summary>
     public const string NotesHeading = "Notes:";
 
+    /// <summary>
+    /// A slide that didn't read, in its place among the others (2026-10-28, review P2-04/P3-07: one damaged or oversized slide threw the
+    /// whole deck's answer away). Pinned.
+    /// </summary>
+    public static string SlideNotRead(int slide, string part, bool tooLarge) =>
+        $"## Slide {slide.ToString(CultureInfo.InvariantCulture)}\n(not read: " + (tooLarge ? $"{part} is too large to read)" : $"{part} looks damaged; open the file in Office and save it again)");
+
     /// <summary>A slide longer than the read's cap, cut. Pinned.</summary>
     public static string SlideCut(int slide, int shown, int total) =>
         $"(slide {slide.ToString(CultureInfo.InvariantCulture)} cut at {N(shown)} of {N(total)} characters; next: slides \"{slide.ToString(CultureInfo.InvariantCulture)}\" with from_char {shown.ToString(CultureInfo.InvariantCulture)})";
 
-    /// <summary>The workbook overview's first line.</summary>
-    public static string WorkbookHeader(string path, int sheets, string? shown, string? used, string? next) =>
+    /// <summary>The workbook overview's first line; <paramref name="columns"/> the columns past the shown ones, of the rows shown.</summary>
+    public static string WorkbookHeader(string path, int sheets, string? shown, string? used, string? next, string? columns = null) =>
         path + " (Excel workbook, " + Count(sheets, "sheet")
         + (shown is not null ? "; showing " + shown + (used is not null ? " of its used range " + used : "") : "")
-        + (next is { } n ? "; next: range \"" + n + "\"" : "") + ")";
+        + Next(next, columns) + ")";
 
-    /// <summary>A range's answer's first line.</summary>
-    public static string RangeHeader(string path, string sheet, string shown, string? used, string? next) =>
+    /// <summary>A range's answer's first line; <paramref name="columns"/> as <see cref="WorkbookHeader"/>'s.</summary>
+    public static string RangeHeader(string path, string sheet, string shown, string? used, string? next, string? columns = null) =>
         path + " (sheet " + sheet + ", " + shown + (used is not null ? " of used range " + used : "")
-        + (next is { } n ? "; next: range \"" + n + "\"" : "") + ")";
+        + Next(next, columns) + ")";
+
+    // A table cut by rows and by columns names both (2026-10-28, review P2-02: only the rows were named, so the columns past the 40th of
+    // the rows shown were never offered).
+    private static string Next(string? next, string? columns) =>
+        (next is { } n ? "; next: range \"" + n + "\"" : "") + (columns is { } c ? "; the columns past these: range \"" + c + "\"" : "");
 
     /// <summary>The overview's list of sheets.</summary>
     public const string SheetsHeading = "Sheets:";
 
-    /// <summary>One sheet in the overview.</summary>
-    public static string SheetLine(int number, string name, string? used, string state, bool chart) =>
+    /// <summary>One sheet in the overview: its used range, "empty", what kind of sheet isn't read, or that it looks damaged (review P2-08).</summary>
+    public static string SheetLine(int number, string name, string? used, string state, SheetKind kind, bool damaged = false) =>
         number.ToString(CultureInfo.InvariantCulture) + ". " + name + ": "
-        + (chart ? "chart sheet (not read)" : used ?? "empty")
+        + (kind != SheetKind.Worksheet ? SheetKindName(kind) + " (not read)" : damaged ? "looks damaged (not read)" : used ?? "empty")
         + (state == "veryHidden" ? " (very hidden)" : state == "hidden" ? " (hidden)" : "");
 
     /// <summary>The overview's defined names, which <c>range</c> takes by their references.</summary>
     public const string NamesHeading = "Defined names (give range the reference, not the name):";
 
+    /// <summary>One defined name in the overview, with the sheet it is scoped to (2026-10-28, review P5-09: it was written inline).</summary>
+    public static string NameLine(string name, string reference, string? scope) =>
+        "- " + name + ": " + reference + (scope is { } s ? " (in " + s + ")" : "");
+
+    /// <summary>The line after a list cut short: how many more there are (review P5-09, P12-01).</summary>
+    public static string More(int count) => "(and " + count.ToString(CultureInfo.InvariantCulture) + " more)";
+
     /// <summary>The line naming the rows and columns hidden in what is shown.</summary>
     public static string HiddenLine(string what) => "hidden: " + what;
+
+    /// <summary>The hidden rows' part of <see cref="HiddenLine"/>: <c>rows 4–6</c> (review P5-09).</summary>
+    public static string HiddenRows(string runs, int count) => (count == 1 ? "row " : "rows ") + runs;
+
+    /// <summary>The hidden columns' part of <see cref="HiddenLine"/>: <c>column C</c>.</summary>
+    public static string HiddenColumns(string runs, int count) => (count == 1 ? "column " : "columns ") + runs;
 
     /// <summary>A range that holds no values. Pinned.</summary>
     public static string NoValues(string path, string sheet, string range, string? used) =>
         $"{path}: sheet {sheet} holds no values in {range}" + (used is not null ? $"; its used range is {used}" : "; it is empty");
+
+    /// <summary>A whole sheet that holds no values (2026-10-28, review P5-09: the range read "it"). Pinned.</summary>
+    public static string SheetHoldsNoValues(string path, string sheet) => $"{path}: sheet {sheet} holds no values";
 
     /// <summary>A workbook with no worksheet to show first.</summary>
     public const string NoVisibleSheet = "(no visible worksheet to show)";
@@ -139,12 +181,24 @@ public static class OfficeText
     /// <summary>The first rows' heading in the overview.</summary>
     public static string FirstRows(string sheet) => "First rows of " + sheet + ":";
 
-    /// <summary>A sheet asked for that isn't there. Pinned.</summary>
-    public static string NoSuchSheet(string path, string sheet, IEnumerable<string> names) =>
-        $"Error: '{path}' has no sheet \"{sheet}\"; its sheets: " + string.Join(", ", names.Select(n => "\"" + n + "\""));
+    /// <summary>The most sheets <see cref="NoSuchSheet"/> names (2026-10-28, review P12-02: thousands of sheets made a huge error).</summary>
+    public const int MaxSheetsNamed = 50;
 
-    /// <summary>A chart sheet asked for. Pinned.</summary>
-    public static string ChartSheet(string sheet) => $"Error: {sheet} is a chart sheet, which isn't read";
+    /// <summary>A sheet asked for that isn't there: the first <paramref name="max"/> names, then how many more. Pinned.</summary>
+    public static string NoSuchSheet(string path, string sheet, IReadOnlyList<string> names, int max = MaxSheetsNamed) =>
+        $"Error: '{path}' has no sheet \"{sheet}\"; its sheets: " + string.Join(", ", names.Take(max).Select(n => "\"" + n + "\""))
+        + (names.Count > max ? " " + More(names.Count - max) : "");
+
+    /// <summary>A sheet that isn't a worksheet asked for: a chart, dialog or macro sheet (2026-10-28, review P5-11: all were "chart"). Pinned.</summary>
+    public static string NotReadSheet(string sheet, SheetKind kind) => $"Error: {sheet} is a {SheetKindName(kind)}, which isn't read";
+
+    private static string SheetKindName(SheetKind kind) => kind switch
+    {
+        SheetKind.Chart => "chart sheet",
+        SheetKind.Dialog => "dialog sheet",
+        SheetKind.Macro => "macro sheet",
+        _ => "worksheet",
+    };
 
     /// <summary><c>sheet</c> and <c>range</c> naming different sheets. Pinned.</summary>
     public static string SheetsDisagree(string sheet, string rangeSheet) =>
@@ -209,6 +263,13 @@ public static class OfficeText
         OfficeKind.Word => "a Word document",
         OfficeKind.Excel => "a workbook",
         _ => "a presentation",
+    };
+
+    private static string ExtensionOf(OfficeKind kind) => kind switch
+    {
+        OfficeKind.Word => ".docx",
+        OfficeKind.Excel => ".xlsx",
+        _ => ".pptx",
     };
 
     private static string Count(int count, string what) => N(count) + " " + what + (count == 1 ? "" : "s");

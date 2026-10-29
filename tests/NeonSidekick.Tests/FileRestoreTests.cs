@@ -221,8 +221,261 @@ public sealed class FileRestoreTests : IDisposable
 
         var report = _rig.Undo(false, id);
 
+        // 2026-10-28, review P9-03: the gone root's paths read Absent, which "already back" took for put back and spent.
         Assert.NotEmpty(report.Files);
-        Assert.All(report.Files, f => Assert.NotEqual(RestoreOutcome.Restored, f.Outcome));
+        Assert.All(report.Files, f => Assert.Equal(RestoreOutcome.Failed, f.Outcome));
+        Assert.Empty(report.Spent);
+        Assert.True(report.Kept);
+    }
+
+    [Fact]
+    public void AStateSealedPastTheHashBudget_MatchesAnUntouchedFile_AnUnreadableOneNothing()
+    {
+        // 2026-10-28, review P1-06 and P7-06.
+        var sealedBySize = new CheckpointState { Kind = CheckpointKind.File, Size = 3, Written = 42 };
+        var hashed = new CheckpointState { Kind = CheckpointKind.File, Size = 3, Written = 42, Hash = "AB" };
+        var unreadable = new CheckpointState { Kind = CheckpointKind.File, Size = 3, Written = CheckpointState.UnknownWritten };
+
+        Assert.True(sealedBySize.Matches(hashed));
+        Assert.True(hashed.Matches(sealedBySize));
+        Assert.False(hashed.Matches(new CheckpointState { Kind = CheckpointKind.File, Size = 3, Written = 43 }));
+        Assert.False(unreadable.Matches(unreadable));
+        Assert.True(new CheckpointState { Kind = CheckpointKind.Link }.Matches(new CheckpointState { Kind = CheckpointKind.Link, Target = "" }));
+    }
+
+    [Fact]
+    public void RestoreOver_WithTheSavedBytesGone_LeavesYoursInPlace()
+    {
+        // 2026-10-28, review P1-04: yours went to the bin before the saved bytes were read, then nothing came back.
+        File.WriteAllText(_rig.PathOf("a.txt"), "before\n");
+        string id = _rig.Turn(files => files.WriteText("a.txt", "the model's\n", overwrite: true));
+        File.WriteAllText(_rig.PathOf("a.txt"), "yours\n");
+        ((FakeCheckpointStore)_rig.Store).DropBlobs();
+
+        var report = FileRestore.Run(_rig.Plan(id), _rig.Store, _rig.Files.PinnedAt, restoreOver: true, _rig.Bin, CancellationToken.None);
+
+        Assert.Equal(1, report.Count(RestoreOutcome.Failed));
+        Assert.Equal("yours\n", File.ReadAllText(_rig.PathOf("a.txt")));
+        Assert.Empty(_rig.Bin.Moved);
+    }
+
+    [Fact]
+    public void AFileTwoTurnsMadeAndWrote_GoesToTheBinOnce()
+    {
+        // 2026-10-28, review P6-07: each newer content went to the bin as a phantom copy.
+        string first = _rig.Turn(files => files.WriteText("new.txt", "1\n", overwrite: false));
+        File.WriteAllText(_rig.PathOf("new.txt"), "1\n");
+        string second = _rig.Turn(files => files.WriteText("new.txt", "2\n", overwrite: true));
+
+        var report = _rig.Undo(false, second, first);
+
+        Assert.False(File.Exists(_rig.PathOf("new.txt")));
+        Assert.Equal([_rig.PathOf("new.txt")], _rig.Bin.Moved);
+        Assert.Equal(RestoreOutcome.Restored, Assert.Single(report.Files).Outcome);
+    }
+
+    [Fact]
+    public void AFileWhoseOldestBytesWerentKept_IsLeftWhole_NotHalfReplayed()
+    {
+        // 2026-10-28, review P9-04: the newer turn's bytes were put back, then the report said "not kept".
+        File.WriteAllText(_rig.PathOf("big.txt"), "more than four bytes");
+        _rig.Limits = CheckpointLimits.Default with { LargestFileBytes = 4 };
+        string first = _rig.Turn(files => files.WriteText("big.txt", "ab", overwrite: true));
+        _rig.Limits = CheckpointLimits.Default;
+        string second = _rig.Turn(files => files.WriteText("big.txt", "cd", overwrite: true));
+
+        var report = _rig.Undo(false, second, first);
+
+        Assert.Equal("cd", File.ReadAllText(_rig.PathOf("big.txt")));
+        Assert.Equal(RestoreOutcome.NotSaved, Assert.Single(report.Files).Outcome);
+    }
+
+    [Fact]
+    public void AnEditSavedAfterThePlan_IsSkipped_WhateverRestoreOverSaid()
+    {
+        // 2026-10-28, review P4-02: an edit saved while the question was open was written over.
+        File.WriteAllText(_rig.PathOf("a.txt"), "before\n");
+        string id = _rig.Turn(files => files.WriteText("a.txt", "the model's\n", overwrite: true));
+        var plan = _rig.Plan(id);
+        Assert.Empty(plan.Conflicts);
+        File.WriteAllText(_rig.PathOf("a.txt"), "saved meanwhile\n");
+
+        var report = FileRestore.Run(plan, _rig.Store, _rig.Files.PinnedAt, restoreOver: true, _rig.Bin, CancellationToken.None);
+
+        Assert.Equal(RestoreOutcome.Skipped, Assert.Single(report.Files).Outcome);
+        Assert.Equal("saved meanwhile\n", File.ReadAllText(_rig.PathOf("a.txt")));
+        Assert.Empty(_rig.Bin.Moved);
+    }
+
+    [Fact]
+    public void AMadeFolderWithSomethingNewInIt_IsSkipped_AndKept()
+    {
+        // 2026-10-28, review P1-14.
+        string id = _rig.Turn(files => files.CreateDirectory("made"));
+        File.WriteAllText(_rig.PathOf("made/yours.txt"), "y");
+
+        var report = _rig.Undo(false, id);
+
+        Assert.Equal(RestoreOutcome.Skipped, Assert.Single(report.Files).Outcome);
+        Assert.True(File.Exists(_rig.PathOf("made/yours.txt")));
+    }
+
+    [Fact]
+    public void TheDiffs_GoToTextFiles_PastMadeFolders()
+    {
+        // 2026-10-28, review P7-07: the first 20 paths took the slots whether or not they had text.
+        File.WriteAllText(_rig.PathOf("a.txt"), "before\n");
+        string id = _rig.Turn(files =>
+        {
+            for (int i = 0; i < FileRestore.ListedFiles + 5; i++)
+            {
+                files.CreateDirectory("d" + i.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            }
+
+            files.WriteText("a.txt", "after\n", overwrite: true);
+        });
+
+        var report = _rig.Undo(false, id);
+
+        Assert.NotNull(report.Files.Single(f => f.Where.Path == "a.txt").Diff);
+    }
+
+    [Fact]
+    public void AMoveWhoseSourceIsTakenAgain_SkipsBothEnds()
+    {
+        // 2026-10-28, review P2-01: the skipped move's destination was reported restored.
+        File.WriteAllText(_rig.PathOf("a.txt"), "a\n");
+        string id = _rig.Turn(files => files.Move("a.txt", "b.txt", overwrite: false));
+        File.WriteAllText(_rig.PathOf("a.txt"), "yours\n");
+
+        var report = _rig.Undo(false, id);
+
+        Assert.DoesNotContain(report.Files, f => f.Outcome == RestoreOutcome.Restored);
+        Assert.Equal("yours\n", File.ReadAllText(_rig.PathOf("a.txt")));
+        Assert.Equal("a\n", File.ReadAllText(_rig.PathOf("b.txt")));
+        Assert.Empty(report.Spent.Except([id]));
+    }
+
+    [Fact]
+    public void AMovedFileEditedSince_IsSkipped_EvenUnderRestoreOver()
+    {
+        // 2026-10-28, review P8-02: its old bytes were never saved, so moving it back would pass your edit off as the old file.
+        File.WriteAllText(_rig.PathOf("a.txt"), "a\n");
+        string id = _rig.Turn(files => files.Move("a.txt", "b.txt", overwrite: false));
+        File.WriteAllText(_rig.PathOf("b.txt"), "edited\n");
+
+        var plan = _rig.Plan(id);
+        Assert.True(Assert.Single(plan.Conflicts).KindChanged);
+        var report = FileRestore.Run(plan, _rig.Store, _rig.Files.PinnedAt, restoreOver: true, _rig.Bin, CancellationToken.None);
+
+        Assert.DoesNotContain(report.Files, f => f.Outcome == RestoreOutcome.Restored);
+        Assert.Equal("edited\n", File.ReadAllText(_rig.PathOf("b.txt")));
+        Assert.False(File.Exists(_rig.PathOf("a.txt")));
+    }
+
+    [Fact]
+    public void ACaseOnlyRename_IsUndone_ToTheOldCase()
+    {
+        // 2026-10-28, review P8-01: case-blind, the new name read as the old one, "already back", and stayed.
+        if (CaseRule.IsSensitive(_rig.Root))
+        {
+            return;
+        }
+
+        File.WriteAllText(_rig.PathOf("Readme.txt"), "r\n");
+        string id = _rig.Turn(files => Assert.Equal(FileOutcome.Ok, files.Move("Readme.txt", "README.txt", overwrite: false).Outcome));
+        Assert.Equal("README.txt", Path.GetFileName(Directory.GetFiles(_rig.Root).Single()));
+
+        var report = _rig.Undo(false, id);
+
+        Assert.Equal("Readme.txt", Path.GetFileName(Directory.GetFiles(_rig.Root).Single()));
+        Assert.Equal(RestoreOutcome.Restored, Assert.Single(report.Files).Outcome);
+    }
+
+    [WindowsFact]
+    public void ARenameThenAWrite_PutsBackTheOldNamesAttributes()
+    {
+        // 2026-10-28, review P12-04 and P8-06: a rename then an overwrite lost the file's flags; a flag gained since stayed.
+        File.WriteAllText(_rig.PathOf("a.txt"), "a\n");
+        File.SetAttributes(_rig.PathOf("a.txt"), FileAttributes.Hidden);
+        string id = _rig.Turn(files =>
+        {
+            files.Move("a.txt", "b.txt", overwrite: false);
+            files.WriteText("b.txt", "b\n", overwrite: true);
+        });
+        File.SetAttributes(_rig.PathOf("b.txt"), FileAttributes.Hidden | FileAttributes.System);
+
+        _rig.Undo(false, id);
+
+        var attributes = File.GetAttributes(_rig.PathOf("a.txt"));
+        Assert.True(attributes.HasFlag(FileAttributes.Hidden));
+        Assert.False(attributes.HasFlag(FileAttributes.System));
+        Assert.Equal("a\n", File.ReadAllText(_rig.PathOf("a.txt")));
+    }
+
+    [WindowsFact]
+    public void AFileOpenElsewhere_KeepsTheCheckpoint_AndASecondUndoFinishes()
+    {
+        // 2026-10-28, review P1-09: a file open in Word spent the checkpoint with the file never put back.
+        File.WriteAllText(_rig.PathOf("a.txt"), "a0\n");
+        File.WriteAllText(_rig.PathOf("b.txt"), "b0\n");
+        string id = _rig.Turn(files =>
+        {
+            files.WriteText("a.txt", "a1\n", overwrite: true);
+            files.WriteText("b.txt", "b1\n", overwrite: true);
+        });
+
+        RestoreReport first;
+        using (new FileStream(_rig.PathOf("b.txt"), FileMode.Open, FileAccess.Read, FileShare.Read))   // as Word holds a document: readable, not writable
+        {
+            first = _rig.Undo(false, id);
+        }
+
+        Assert.True(first.Kept);
+        Assert.Empty(first.Spent);
+        Assert.Equal(RestoreOutcome.Failed, first.Files.Single(f => f.Where.Path == "b.txt").Outcome);
+        Assert.Equal("a0\n", File.ReadAllText(_rig.PathOf("a.txt")));
+
+        var second = _rig.Undo(false, id);
+
+        Assert.Equal([id], second.Spent);
+        Assert.Equal("b0\n", File.ReadAllText(_rig.PathOf("b.txt")));
+        Assert.Equal(RestoreOutcome.AlreadyBack, second.Files.Single(f => f.Where.Path == "a.txt").Outcome);
+    }
+
+    [Fact]
+    public void TheLists_NameAFileInNewFolders_Once_AndAMoveByItsSource()
+    {
+        // 2026-10-28, review P7-04: one file in two new folders read "3 files".
+        File.WriteAllText(_rig.PathOf("m.txt"), "m\n");
+        string id = _rig.Turn(files =>
+        {
+            files.WriteText("x/y/new.txt", "n\n", overwrite: false);
+            files.Move("m.txt", "moved.txt", overwrite: false);
+            files.CreateDirectory("empty");
+        });
+
+        var listed = _rig.Plan(id).Listed;
+
+        Assert.Equal(["empty", "m.txt", "x/y/new.txt"], listed.Select(p => p.Path).Order(StringComparer.Ordinal));
+        Assert.True(listed.Single(p => p.Path == "empty").Folder);
+    }
+
+    [SymlinkFact]
+    public void AWriteThatReplacedALink_IsUndone_ToTheLinkAgain()
+    {
+        // 2026-10-28, review P3-03: the link's replay found the file the write left and gave up.
+        string outside = Path.Combine(_rig.Dir, "target.txt");
+        File.WriteAllText(outside, "target\n");
+        File.CreateSymbolicLink(_rig.PathOf("ln.txt"), outside);
+        string id = _rig.Turn(files => files.Delete("ln.txt"));
+        File.WriteAllText(_rig.PathOf("ln.txt"), "a file now\n");
+
+        var report = FileRestore.Run(_rig.Plan(id), _rig.Store, _rig.Files.PinnedAt, restoreOver: true, _rig.Bin, CancellationToken.None);
+
+        Assert.Equal(RestoreOutcome.Restored, Assert.Single(report.Files).Outcome);
+        Assert.Equal(outside, new FileInfo(_rig.PathOf("ln.txt")).LinkTarget);
+        Assert.Equal("target\n", File.ReadAllText(outside));
     }
 
     [Fact]

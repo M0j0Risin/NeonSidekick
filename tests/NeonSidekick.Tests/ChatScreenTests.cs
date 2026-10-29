@@ -16697,6 +16697,26 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(_chat.Requests);
     }
 
+    /// <summary>
+    /// A text file under an Office name is read aloud as text, as it was in v0.5.4 (2026-10-28, review P12-05): only a zip or an OLE head
+    /// goes to the Office reader.
+    /// </summary>
+    [Fact]
+    public async Task Read_APlainTextFileNamedDocx_IsReadAsText()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        Directory.CreateDirectory(files);
+        File.WriteAllText(Path.Combine(files, "notes.docx"), "Plain words in a docx name.");
+        PushLine("/read notes.docx");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("● Plain words in a docx name.", output);
+        Assert.DoesNotContain(NeonSidekick.Office.OfficeText.NotOffice("notes.docx"), output);
+    }
+
     /// <summary>A PDF with no browser to read it is an error line, not a "not a text file" (2026-10-14).</summary>
     [Fact]
     public async Task Read_APdfWithoutABrowser_SaysWhatItNeeds()

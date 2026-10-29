@@ -37,6 +37,40 @@ public static class OfficeFile
     /// <summary>OpenDocument's text, sheet and slides, not read yet.</summary>
     public static readonly IReadOnlyList<string> OpenDocumentExtensions = [".odt", ".ods", ".odp"];
 
+    /// <summary>
+    /// The media types of the files <c>read_office</c> reads, one per extension above (2026-10-28, review P8-11/P11-09: prefixes missed the
+    /// macro-enabled template <c>.xltm</c> and took PowerPoint's add-ins, which <c>read_office</c> refuses).
+    /// </summary>
+    public static readonly IReadOnlyList<string> MediaTypes =
+    [
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.ms-word.document.macroEnabled.12",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.template",
+        "application/vnd.ms-word.template.macroEnabled.12",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.ms-excel.sheet.macroEnabled.12",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.template",
+        "application/vnd.ms-excel.template.macroEnabled.12",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/vnd.ms-powerpoint.presentation.macroEnabled.12",
+        "application/vnd.openxmlformats-officedocument.presentationml.template",
+        "application/vnd.ms-powerpoint.template.macroEnabled.12",
+        "application/vnd.openxmlformats-officedocument.presentationml.slideshow",
+        "application/vnd.ms-powerpoint.slideshow.macroEnabled.12",
+    ];
+
+    /// <summary>Whether <paramref name="mediaType"/> (its parameters ignored, any case) is one <see cref="MediaTypes"/> names.</summary>
+    public static bool IsOfficeMediaType(string? mediaType)
+    {
+        if (string.IsNullOrWhiteSpace(mediaType))
+        {
+            return false;
+        }
+
+        string bare = mediaType.Split(';')[0].Trim();
+        return MediaTypes.Any(t => t.Equals(bare, StringComparison.OrdinalIgnoreCase));
+    }
+
     /// <summary>What starts the name of Office's lock file for an open document (<c>~$port.docx</c>).</summary>
     public const string LockFilePrefix = "~$";
 
@@ -77,7 +111,32 @@ public static class OfficeFile
     public static bool LooksLikeCompoundFile(ReadOnlySpan<byte> head) => head.Length >= 4 && head[0] == 0xD0 && head[1] == 0xCF && head[2] == 0x11 && head[3] == 0xE0;
 
     /// <summary>The first bytes of a zip: what every Office file this reads is.</summary>
-    public static bool LooksLikeZip(ReadOnlySpan<byte> head) => head.Length >= 4 && head[0] == (byte)'P' && head[1] == (byte)'K' && head[2] == 3 && head[3] == 4;
+    public static bool LooksLikeZip(ReadOnlySpan<byte> head) => ZipHead.Looks(head);
+
+    /// <summary>
+    /// Whether the file at <paramref name="full"/> is an Office file to hand the reader: an Office extension and a head that's a zip, or an OLE
+    /// container (so a protected file still gets its own refusal). Like <see cref="PdfFile.IsPdfFile"/> (2026-10-28, review P12-05: <c>/read</c>
+    /// sent a plain-text <c>notes.docx</c>, read aloud in v0.5.4, to the Office reader, which refused it). A file that can't be read is not.
+    /// </summary>
+    public static bool IsOfficeFile(string full)
+    {
+        if (!IsOfficePath(full))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var stream = RegularFiles.OpenRead(full, FileShare.ReadWrite | FileShare.Delete);
+            Span<byte> head = stackalloc byte[8];
+            int read = stream.ReadAtLeast(head, head.Length, throwOnEndOfStream: false);
+            return LooksLikeZip(head[..read]) || LooksLikeCompoundFile(head[..read]);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
 
     private static string Extension(string path) => string.IsNullOrWhiteSpace(path) ? "" : Path.GetExtension(path.Trim().TrimEnd('/', '\\'));
 

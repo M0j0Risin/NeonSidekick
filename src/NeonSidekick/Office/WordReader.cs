@@ -2,8 +2,6 @@ using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml;
-using NeonSidekick.Files;
-using NeonSidekick.Sql;
 
 namespace NeonSidekick.Office;
 
@@ -36,8 +34,10 @@ public sealed partial class WordReader
     private readonly Dictionary<string, int> _headings = new(StringComparer.Ordinal);
     private readonly Dictionary<string, (string NumId, int Level)> _styleLists = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Dictionary<int, bool>> _numbering = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _numberingStyles = new(StringComparer.Ordinal);
     private string _part;
     private bool _lastWasList;
+    private int _room = int.MaxValue;
 
     /// <param name="limit">How many characters to read before stopping (the caller's <c>from_char</c> plus its budget, and one more to know there is more).</param>
     public WordReader(OfficePackage package, string main, int limit, bool aloud, CancellationToken cancellationToken)
@@ -98,9 +98,20 @@ public sealed partial class WordReader
         {
             note = OfficeText.RestTooLarge(ex.Part);
         }
+        catch (OfficePartTooLargeException ex) when (_out.Length > 0)
+        {
+            // Footnotes, endnotes or comments over their cap after the body (2026-10-28, review P2-04): the body read stands.
+            note = OfficeText.RestTooLarge(ex.Part);
+        }
 
         return new WordText(_out.ToString(), more, note);
     }
+
+    /// <summary>
+    /// How much one paragraph may still hold (2026-10-28, review P5-03): what is left of the limit, and within a table's cell no more than
+    /// the cell shows, so a run of millions of characters is read past, never held.
+    /// </summary>
+    private int Room() => (int)Math.Max(1, Math.Min(_room, (long)_limit - _out.Length + 1));
 
     /// <summary>Thrown once the limit is passed, to stop the stream at once.</summary>
     private sealed class StopReading : Exception
@@ -163,29 +174,11 @@ public sealed partial class WordReader
         }
         else if (ns == OfficeXml.Mc && reader.LocalName == "AlternateContent")
         {
-            Alternate(reader, () => Block(reader, emit, nested));
+            _x.FirstChoice(reader, () => Block(reader, emit, nested));
             return;
         }
 
         OfficeXml.Skip(reader);
-    }
-
-    /// <summary>An <c>mc:AlternateContent</c>: the first <c>Choice</c>'s children read, every other choice and the <c>Fallback</c> skipped, so nothing reads twice.</summary>
-    private void Alternate(XmlReader reader, Action child)
-    {
-        bool chosen = false;
-        OfficeXml.Children(reader, () =>
-        {
-            if (!chosen && _x.Is(reader, OfficeXml.Mc, "Choice"))
-            {
-                chosen = true;
-                OfficeXml.Children(reader, child);
-            }
-            else
-            {
-                OfficeXml.Skip(reader);
-            }
-        });
     }
 
     /// <summary>A paragraph rendered: its heading's <c>#</c>s or its list mark, the text; empty when it holds none.</summary>
@@ -283,7 +276,7 @@ public sealed partial class WordReader
         }
         else if (ns == OfficeXml.Mc && reader.LocalName == "AlternateContent")
         {
-            Alternate(reader, () => Inline(reader, line));
+            _x.FirstChoice(reader, () => Inline(reader, line));
             return;
         }
 
@@ -308,7 +301,7 @@ public sealed partial class WordReader
                     hidden = RunHidden(reader);
                     return;
                 case "t":
-                    line.Add(OfficeXml.Text(reader), hidden);
+                    line.Add(OfficeXml.Text(reader, line.Left), hidden);
                     return;
                 case "fldChar":
                     Field(_x.Attr(reader, "fldCharType", OfficeXml.W));
@@ -361,7 +354,7 @@ public sealed partial class WordReader
         else if (ns == OfficeXml.Mc && reader.LocalName == "AlternateContent")
         {
             bool inner = hidden;
-            Alternate(reader, () => RunChild(reader, line, ref inner));
+            _x.FirstChoice(reader, () => RunChild(reader, line, ref inner));
             return;
         }
 
@@ -406,8 +399,19 @@ public sealed partial class WordReader
         var inner = new Line(this);
         OfficeXml.Children(reader, () => Inline(reader, inner));
         string text = inner.Finish();
-        line.Raw(url is { Length: > 0 } && !_aloud && text.Length > 0 && !InFieldCode ? "[" + text + "](" + url + ")" : text);
+        line.Raw(url is { Length: > 0 } && !_aloud && text.Length > 0 && !InFieldCode ? "[" + LinkText(text) + "](" + LinkUrl(url) + ")" : text);
     }
+
+    /// <summary>
+    /// A link's text with Markdown's brackets and backslash escaped, and its URL with a space, parentheses and angle brackets percent-encoded
+    /// (2026-10-28, review P9-08: a ')' or a space ended the link early).
+    /// </summary>
+    private static string LinkText(string text) =>
+        text.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("[", "\\[", StringComparison.Ordinal).Replace("]", "\\]", StringComparison.Ordinal);
+
+    private static string LinkUrl(string url) =>
+        url.Replace(" ", "%20", StringComparison.Ordinal).Replace("(", "%28", StringComparison.Ordinal).Replace(")", "%29", StringComparison.Ordinal)
+            .Replace("<", "%3C", StringComparison.Ordinal).Replace(">", "%3E", StringComparison.Ordinal);
 
     /// <summary>A DrawingML drawing: a picture, chart or diagram marker from its <c>docPr</c> alt text, a shape's text box read inline.</summary>
     private void Drawing(XmlReader reader, Line line, bool hidden)
@@ -429,7 +433,7 @@ public sealed partial class WordReader
                 string ns = _x.Key(sub.NamespaceURI);
                 if (ns == OfficeXml.Wp && sub.LocalName == "docPr")
                 {
-                    alt = AltText(sub);
+                    alt = OfficeXml.AltText(sub);
                 }
                 else if (ns == OfficeXml.A && sub.LocalName == "graphicData" && kind.Length == 0)
                 {
@@ -437,7 +441,7 @@ public sealed partial class WordReader
                 }
                 else if (sub.LocalName == "cNvPr" && ns.EndsWith("picture", StringComparison.Ordinal) && !kind.EndsWith("/picture", StringComparison.Ordinal))
                 {
-                    markers.Add(OfficeText.Picture(AltText(sub)));   // a picture in a group or canvas
+                    markers.Add(OfficeText.Picture(OfficeXml.AltText(sub)));   // a picture in a group or canvas
                 }
                 else if (ns == OfficeXml.W && sub.LocalName == "txbxContent")
                 {
@@ -543,74 +547,135 @@ public sealed partial class WordReader
         line.Marker(OfficeText.EmbeddedObject(program), hidden);
     }
 
-    private string AltText(XmlReader reader)
-    {
-        string described = reader.GetAttribute("descr") ?? "";
-        string titled = reader.GetAttribute("title") ?? "";
-        return Plain(described.Length > 0 ? described : titled);
-    }
 
     /// <summary>
     /// A table: Markdown rows (the first as the header), a cell's paragraphs joined by line breaks and made safe by
-    /// <see cref="SqlText.TableCell"/>, long ones cut; a span repeated blank. Read aloud, each cell's text is its own paragraph; nested, the
-    /// cells joined with <c> / </c>.
+    /// <see cref="Sql.SqlText.TableCell"/>, long ones cut; a span repeated blank. Read aloud, each cell's text is its own paragraph as it is read;
+    /// nested, the cells joined with <c> / </c> within one cell's length. Streamed (2026-10-28, review P8-09: a table was held whole before
+    /// the limit was looked at, so a 500,000-row table loaded fully): the width from <c>w:tblGrid</c>, the header and separator through
+    /// <see cref="Body"/>, then each row added with the limit checked, rows before the first with text held as a count.
     /// </summary>
     private void Table(XmlReader reader, Action<string, bool> emit, bool nested)
     {
-        var rows = new List<List<string>>();
-        Rows(reader, rows);
-        if (nested || _aloud)
+        if (nested)
         {
-            var cells = rows.SelectMany(r => r).Where(c => c.Length > 0).ToList();
-            if (nested && cells.Count > 0)
+            var flat = new StringBuilder();
+            Rows(reader, cells =>
             {
-                emit(string.Join(" / ", cells), false);
-            }
-            else
+                foreach (string cell in cells.Where(c => c.Length > 0))
+                {
+                    if (flat.Length <= MaxCellChars)
+                    {
+                        flat.Append(flat.Length > 0 ? " / " : "").Append(cell);
+                    }
+                }
+            }, _ => { });
+            if (flat.Length > 0)
             {
-                cells.ForEach(c => emit(c, false));
+                emit(flat.ToString(), false);
             }
 
             return;
         }
 
-        if (rows.Count == 0 || rows.All(r => r.All(c => c.Length == 0)))
+        if (_aloud)
         {
+            Rows(reader, cells =>
+            {
+                foreach (string cell in cells.Where(c => c.Length > 0))
+                {
+                    emit(cell, false);
+                }
+            }, _ => { });
             return;
         }
 
-        int width = rows.Max(r => r.Count);
-        var sb = new StringBuilder();
-        for (int i = 0; i < rows.Count; i++)
+        int grid = 0;
+        List<string>? header = null;
+        int held = 0;
+        int width = 0;
+        bool started = false;
+        Rows(reader, cells =>
         {
-            sb.Append(i == 0 ? "" : "\n").Append('|');
-            for (int c = 0; c < width; c++)
+            if (started)
             {
-                string cell = c < rows[i].Count ? rows[i][c] : "";
-                sb.Append(' ').Append(SqlText.TableCell(Cut(cell))).Append(" |");
+                TableLine(cells, width);
+                return;
             }
 
-            if (i == 0)
+            bool empty = cells.All(c => c.Length == 0);
+            if (header is null)
             {
-                sb.Append("\n|").Append(string.Concat(Enumerable.Repeat(" --- |", width)));
+                header = cells;
+                if (empty)
+                {
+                    return;
+                }
             }
-        }
+            else if (empty)
+            {
+                held++;
+                return;
+            }
 
-        emit(sb.ToString(), false);
+            started = true;
+            width = Math.Max(grid, header.Count);
+            var top = new StringBuilder();
+            OfficeXml.TableRow(top, header, width);
+            top.Append('\n');
+            OfficeXml.TableSeparator(top, width);
+            Body(top.ToString(), false);
+            for (int i = 0; i < held; i++)
+            {
+                TableLine([], width);
+            }
+
+            if (!ReferenceEquals(cells, header))
+            {
+                TableLine(cells, width);
+            }
+        }, columns => grid = columns);
     }
 
-    private void Rows(XmlReader reader, List<List<string>> rows) =>
+    /// <summary>One more row of the table being written, the limit checked after it.</summary>
+    private void TableLine(IReadOnlyList<string> cells, int width)
+    {
+        var row = new StringBuilder("\n");
+        OfficeXml.TableRow(row, cells, width);
+        _out.Append(row);
+        _lastWasList = false;
+        if (_out.Length >= _limit)
+        {
+            throw new StopReading();
+        }
+    }
+
+    private void Rows(XmlReader reader, Action<List<string>> row, Action<int> grid) =>
         OfficeXml.Children(reader, () =>
         {
             if (_x.Is(reader, OfficeXml.W, "tr"))
             {
                 var cells = new List<string>();
                 CellsOf(reader, cells);
-                rows.Add(cells);
+                row(cells);
+            }
+            else if (_x.Is(reader, OfficeXml.W, "tblGrid"))
+            {
+                int columns = 0;
+                OfficeXml.Children(reader, () =>
+                {
+                    if (_x.Is(reader, OfficeXml.W, "gridCol"))
+                    {
+                        columns++;
+                    }
+
+                    OfficeXml.Skip(reader);
+                });
+                grid(Math.Min(columns, 1_000));
             }
             else if (_x.Key(reader.NamespaceURI) == OfficeXml.W && reader.LocalName is "sdt" or "sdtContent" or "customXml" or "ins")
             {
-                Rows(reader, rows);
+                Rows(reader, row, grid);
             }
             else
             {
@@ -640,28 +705,47 @@ public sealed partial class WordReader
         int span = 1;
         bool continued = false;
         var parts = new List<string>();
-        OfficeXml.Children(reader, () =>
+        int length = 0;
+
+        // A cell holds no more than it shows (review P5-03): its paragraphs capped while they are built.
+        int room = _room;
+        _room = Math.Min(_room, MaxCellChars + 1);
+        try
         {
-            if (_x.Is(reader, OfficeXml.W, "tcPr"))
+            OfficeXml.Children(reader, () =>
             {
-                OfficeXml.Children(reader, () =>
+                if (_x.Is(reader, OfficeXml.W, "tcPr"))
                 {
-                    if (_x.Is(reader, OfficeXml.W, "gridSpan") && int.TryParse(_x.Attr(reader, "val", OfficeXml.W), NumberStyles.Integer, CultureInfo.InvariantCulture, out int s))
+                    OfficeXml.Children(reader, () =>
                     {
-                        span = Math.Clamp(s, 1, 64);
-                    }
-                    else if (_x.Is(reader, OfficeXml.W, "vMerge"))
+                        if (_x.Is(reader, OfficeXml.W, "gridSpan") && int.TryParse(_x.Attr(reader, "val", OfficeXml.W), NumberStyles.Integer, CultureInfo.InvariantCulture, out int s))
+                        {
+                            span = Math.Clamp(s, 1, 64);
+                        }
+                        else if (_x.Is(reader, OfficeXml.W, "vMerge"))
+                        {
+                            continued = _x.Attr(reader, "val", OfficeXml.W) is null or "continue";
+                        }
+
+                        OfficeXml.Skip(reader);
+                    });
+                    return;
+                }
+
+                Block(reader, (t, _) =>
+                {
+                    if (length <= MaxCellChars)
                     {
-                        continued = _x.Attr(reader, "val", OfficeXml.W) is null or "continue";
+                        parts.Add(t);
+                        length += t.Length + 1;
                     }
-
-                    OfficeXml.Skip(reader);
-                });
-                return;
-            }
-
-            Block(reader, (t, _) => parts.Add(t), nested: true);
-        });
+                }, nested: true);
+            });
+        }
+        finally
+        {
+            _room = room;
+        }
 
         cells.Add(continued ? "" : string.Join("\n", parts));
         for (int i = 1; i < span; i++)
@@ -669,9 +753,6 @@ public sealed partial class WordReader
             cells.Add("");
         }
     }
-
-    private static string Cut(string cell) => cell.Length <= MaxCellChars ? cell : TextCut.Safe(cell, MaxCellChars) + "…";
-
     /// <summary>Footnotes or endnotes after the body: <c>[^id]: text</c>, the separators Word keeps among them left out.</summary>
     private void Notes(string kind, string element, string heading, string mark)
     {
@@ -715,7 +796,7 @@ public sealed partial class WordReader
         {
             if (_x.Is(reader, OfficeXml.W, "comment"))
             {
-                string author = Plain(_x.Attr(reader, "author", OfficeXml.W) ?? "");
+                string author = OfficeXml.Plain(_x.Attr(reader, "author", OfficeXml.W) ?? "");
                 var texts = new List<string>();
                 Blocks(reader, (t, _) => texts.Add(t), nested: true);
                 lines.Add("- " + (author.Length > 0 ? author + ": " : "") + string.Join(" ", texts));
@@ -762,14 +843,47 @@ public sealed partial class WordReader
         }
     }
 
-    /// <summary>The paragraph styles' heading levels and lists, followed down their <c>basedOn</c> chains.</summary>
+    /// <summary>
+    /// The paragraph styles' heading levels and lists, followed down their <c>basedOn</c> chains, and the numbering styles' lists (review
+    /// P9-07). Styles that won't load leave Word's built-in heading ids (2026-10-28, review P2-04: a bad <c>styles.xml</c> made the whole
+    /// document "damaged").
+    /// </summary>
     private void LoadStyles()
     {
         var styles = new Dictionary<string, (string? Name, string? BasedOn, int? Outline, string? NumId, int? Level)>(StringComparer.Ordinal);
+        try
+        {
+            ReadStyles(styles);
+        }
+        catch (OfficeReadException)
+        {
+            styles.Clear();
+            _numberingStyles.Clear();
+        }
+
+        Resolve(styles);
+    }
+
+    private void ReadStyles(Dictionary<string, (string? Name, string? BasedOn, int? Outline, string? NumId, int? Level)> styles)
+    {
         if (_package.Related(_main, "styles") is { } part)
         {
             Whole(part, reader => OfficeXml.Children(reader, () =>
             {
+                if (_x.Is(reader, OfficeXml.W, "style") && _x.Attr(reader, "type", OfficeXml.W) == "numbering" && _x.Attr(reader, "styleId", OfficeXml.W) is { } listStyle)
+                {
+                    using var sub = reader.ReadSubtree();
+                    while (sub.Read())
+                    {
+                        if (_x.Is(sub, OfficeXml.W, "numId") && _x.Attr(sub, "val", OfficeXml.W) is { } listNum)
+                        {
+                            _numberingStyles[listStyle] = listNum;
+                        }
+                    }
+
+                    return;
+                }
+
                 if (_x.Is(reader, OfficeXml.W, "style") && _x.Attr(reader, "type", OfficeXml.W) is null or "paragraph" && _x.Attr(reader, "styleId", OfficeXml.W) is { } id)
                 {
                     string? name = null, basedOn = null, numId = null;
@@ -824,7 +938,10 @@ public sealed partial class WordReader
                 OfficeXml.Skip(reader);
             }));
         }
+    }
 
+    private void Resolve(Dictionary<string, (string? Name, string? BasedOn, int? Outline, string? NumId, int? Level)> styles)
+    {
         foreach (string id in styles.Keys)
         {
             string? current = id;
@@ -884,7 +1001,11 @@ public sealed partial class WordReader
     [GeneratedRegex("^heading ?([1-9])$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex HeadingName();
 
-    /// <summary>Which lists number their items: <c>numId</c> → its abstract list's levels, ordered unless a bullet (or none).</summary>
+    /// <summary>
+    /// Which lists number their items: <c>numId</c> → its abstract list's levels, ordered unless a bullet (or none). A <c>numStyleLink</c> is
+    /// followed to the numbering style's list, and a <c>w:num</c>'s <c>lvlOverride</c> wins (2026-10-28, review P9-07: lists numbered either
+    /// way read as bullets). Numbering that won't load leaves every list a bullet list (review P2-04), the body still read.
+    /// </summary>
     private void LoadNumbering()
     {
         if (_package.Related(_main, "numbering") is not { } part)
@@ -893,75 +1014,127 @@ public sealed partial class WordReader
         }
 
         var abstracts = new Dictionary<string, Dictionary<int, bool>>(StringComparer.Ordinal);
+        var links = new Dictionary<string, string>(StringComparer.Ordinal);
         var nums = new Dictionary<string, string>(StringComparer.Ordinal);
-        Whole(part, reader => OfficeXml.Children(reader, () =>
+        var overrides = new Dictionary<string, Dictionary<int, bool>>(StringComparer.Ordinal);
+        try
         {
-            if (_x.Is(reader, OfficeXml.W, "abstractNum") && _x.Attr(reader, "abstractNumId", OfficeXml.W) is { } abstractId)
+            Whole(part, reader => OfficeXml.Children(reader, () =>
             {
-                var levels = new Dictionary<int, bool>();
-                OfficeXml.Children(reader, () =>
+                if (_x.Is(reader, OfficeXml.W, "abstractNum") && _x.Attr(reader, "abstractNumId", OfficeXml.W) is { } abstractId)
                 {
-                    if (_x.Is(reader, OfficeXml.W, "lvl") && Int(_x.Attr(reader, "ilvl", OfficeXml.W)) is { } ilvl)
+                    var levels = new Dictionary<int, bool>();
+                    OfficeXml.Children(reader, () =>
                     {
-                        OfficeXml.Children(reader, () =>
+                        if (_x.Is(reader, OfficeXml.W, "numStyleLink") && _x.Attr(reader, "val", OfficeXml.W) is { } link)
                         {
-                            if (_x.Is(reader, OfficeXml.W, "numFmt"))
-                            {
-                                levels[ilvl] = _x.Attr(reader, "val", OfficeXml.W) is not (null or "bullet" or "none");
-                            }
-
+                            links[abstractId] = link;
                             OfficeXml.Skip(reader);
-                        });
-                        return;
-                    }
+                            return;
+                        }
 
-                    OfficeXml.Skip(reader);
-                });
-                abstracts[abstractId] = levels;
-                return;
-            }
+                        Level(reader, levels);
+                    });
+                    abstracts[abstractId] = levels;
+                    return;
+                }
 
-            if (_x.Is(reader, OfficeXml.W, "num") && _x.Attr(reader, "numId", OfficeXml.W) is { } numId)
-            {
-                OfficeXml.Children(reader, () =>
+                if (_x.Is(reader, OfficeXml.W, "num") && _x.Attr(reader, "numId", OfficeXml.W) is { } numId)
                 {
-                    if (_x.Is(reader, OfficeXml.W, "abstractNumId") && _x.Attr(reader, "val", OfficeXml.W) is { } abstractNumId)
+                    var over = new Dictionary<int, bool>();
+                    OfficeXml.Children(reader, () =>
                     {
-                        nums[numId] = abstractNumId;
+                        if (_x.Is(reader, OfficeXml.W, "abstractNumId") && _x.Attr(reader, "val", OfficeXml.W) is { } abstractNumId)
+                        {
+                            nums[numId] = abstractNumId;
+                        }
+                        else if (_x.Is(reader, OfficeXml.W, "lvlOverride"))
+                        {
+                            OfficeXml.Children(reader, () => Level(reader, over));
+                            return;
+                        }
+
+                        OfficeXml.Skip(reader);
+                    });
+                    if (over.Count > 0)
+                    {
+                        overrides[numId] = over;
                     }
 
-                    OfficeXml.Skip(reader);
-                });
-                return;
-            }
+                    return;
+                }
 
-            OfficeXml.Skip(reader);
-        }));
+                OfficeXml.Skip(reader);
+            }));
+        }
+        catch (OfficeReadException)
+        {
+            return;
+        }
 
         foreach (var (numId, abstractId) in nums)
         {
-            if (abstracts.TryGetValue(abstractId, out var levels))
+            // One hop through a numbering style at a time, as deep as a style chain goes.
+            string current = abstractId;
+            for (int hop = 0; hop < MaxStyleDepth && links.TryGetValue(current, out string? style) && _numberingStyles.TryGetValue(style, out string? linkedNum)
+                && nums.TryGetValue(linkedNum, out string? linked) && linked != current; hop++)
+            {
+                current = linked;
+            }
+
+            var levels = abstracts.TryGetValue(current, out var found) ? new Dictionary<int, bool>(found) : [];
+            if (overrides.TryGetValue(numId, out var over))
+            {
+                foreach (var (level, ordered) in over)
+                {
+                    levels[level] = ordered;
+                }
+            }
+
+            if (levels.Count > 0)
             {
                 _numbering[numId] = levels;
             }
         }
     }
 
+    /// <summary>A <c>w:lvl</c> the reader stands on: whether that level numbers its items; anything else skipped.</summary>
+    private void Level(XmlReader reader, Dictionary<int, bool> levels)
+    {
+        if (_x.Is(reader, OfficeXml.W, "lvl") && Int(_x.Attr(reader, "ilvl", OfficeXml.W)) is { } ilvl)
+        {
+            OfficeXml.Children(reader, () =>
+            {
+                if (_x.Is(reader, OfficeXml.W, "numFmt"))
+                {
+                    levels[ilvl] = _x.Attr(reader, "val", OfficeXml.W) is not (null or "bullet" or "none");
+                }
+
+                OfficeXml.Skip(reader);
+            });
+            return;
+        }
+
+        OfficeXml.Skip(reader);
+    }
+
     private static int? Int(string? value) => int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int n) ? n : null;
 
-    /// <summary>An attribute's text for one line: line breaks as spaces.</summary>
-    private static string Plain(string text) => text.Replace("\r\n", " ", StringComparison.Ordinal).Replace('\n', ' ').Replace('\r', ' ').Trim();
 
     /// <summary>One paragraph's text as it builds: hidden runs wrapped in their marks, a field's code left out, markers spaced from the words.</summary>
     private sealed class Line(WordReader owner)
     {
         private readonly StringBuilder _text = new();
+        private readonly int _max = owner.Room();
         private bool _hidden;
         private bool _spaceNext;
 
+        /// <summary>How many more characters the paragraph takes; past it, text is left out (review P5-03).</summary>
+        public int Left => Math.Max(_max - _text.Length, 0);
+
         public void Add(string text, bool hidden)
         {
-            if (text.Length == 0 || owner.InFieldCode || (hidden && owner._aloud))
+            if (text.Length == 0 || owner.InFieldCode || (hidden && owner._aloud) || Left == 0)
             {
                 return;
             }
@@ -978,7 +1151,7 @@ public sealed partial class WordReader
             }
 
             _spaceNext = false;
-            _text.Append(text);
+            _text.Append(text.AsSpan(0, Math.Min(text.Length, Math.Max(Left, 0))));
         }
 
         /// <summary>Text already built (a link's), placed outside any hidden mark.</summary>

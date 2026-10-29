@@ -101,14 +101,14 @@ public static class WebText
     /// <summary>What <see cref="Binary"/> adds for an Office file (2026-10-28). Pinned.</summary>
     public const string SaveOfficeNote = "; save it with download_file and read_office reads it";
 
-    /// <summary>Whether an answer is a Word, Excel or PowerPoint file: an OOXML media type, or the URL's path ending in one's extension.</summary>
+    /// <summary>
+    /// Whether an answer is a Word, Excel or PowerPoint file <c>read_office</c> reads: one of <see cref="Files.OfficeFile.MediaTypes"/>
+    /// (2026-10-28, review P8-11/P11-09: an exact list, not prefixes), or the URL's path ending in one's extension.
+    /// </summary>
     public static bool IsOffice(string url, string mediaType)
     {
         ArgumentNullException.ThrowIfNull(url);
-        if (mediaType?.StartsWith("application/vnd.openxmlformats-officedocument.", StringComparison.OrdinalIgnoreCase) == true
-            || mediaType?.StartsWith("application/vnd.ms-word.", StringComparison.OrdinalIgnoreCase) == true
-            || mediaType?.StartsWith("application/vnd.ms-excel.sheet.macroenabled", StringComparison.OrdinalIgnoreCase) == true
-            || mediaType?.StartsWith("application/vnd.ms-powerpoint.", StringComparison.OrdinalIgnoreCase) == true)
+        if (Files.OfficeFile.IsOfficeMediaType(mediaType))
         {
             return true;
         }

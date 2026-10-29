@@ -869,15 +869,29 @@ public static partial class ConversationCompactor
         return names;
     }
 
-    /// <summary>The list after a summary: <see cref="SummaryPreamble"/> + <paramref name="summary"/> as one user message, then the opening pairs, then the recent turns.</summary>
+    /// <summary>
+    /// The list after a summary: <see cref="SummaryPreamble"/> + <paramref name="summary"/> as one user message, then the opening pairs, then the
+    /// recent turns. The summary keeps the file checkpoints of the turns it stands for (2026-10-28, review P2-06, the user's pick: keep them), an
+    /// earlier summary's too, newest first (<see cref="ConversationHistory.CheckpointListKey"/>), so <c>/undo</c> still reaches them.
+    /// </summary>
     public static List<ChatMessage> Summarised(string summary, Plan plan)
     {
         ArgumentNullException.ThrowIfNull(summary);
         ArgumentNullException.ThrowIfNull(plan);
-        var messages = new List<ChatMessage>(1 + plan.Opening.Count + plan.Recent.Count)
+        var head = new ChatMessage(ChatRole.User, SummaryPreamble + summary.Trim());
+        var kept = new List<string>();
+        for (int i = plan.Older.Count - 1; i >= 0; i--)
         {
-            new(ChatRole.User, SummaryPreamble + summary.Trim()),
-        };
+            if (ConversationHistory.IsTurnStart(plan.Older[i]) && ConversationHistory.TurnCheckpoint(plan.Older[i]) is { } id)
+            {
+                kept.Add(id);
+            }
+
+            kept.AddRange(ConversationHistory.CheckpointList(plan.Older[i]));
+        }
+
+        ConversationHistory.SetCheckpointList(head, kept);
+        var messages = new List<ChatMessage>(1 + plan.Opening.Count + plan.Recent.Count) { head };
         messages.AddRange(plan.Opening);
         messages.AddRange(plan.Recent);
         return messages;

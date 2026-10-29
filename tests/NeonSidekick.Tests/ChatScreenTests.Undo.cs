@@ -28,7 +28,7 @@ public partial class ChatScreenTests
     private static Dictionary<string, object?> WriteArgs(string path, string content) => new() { ["path"] = path, ["content"] = content };
 
     private static string? UndoNoteIn(IReadOnlyList<ChatMessage> request) =>
-        request.SelectMany(m => m.Contents).Where(ConversationHistory.IsUndoNote).OfType<TextContent>().Select(t => t.Text).SingleOrDefault();
+        request.Select(ConversationHistory.UndoNoteOf).SingleOrDefault(n => n is not null);
 
     [Fact]
     public async Task Undo_PutsBackTheLastTurnsFiles_AfterAYes_AndTheNextMessageTellsTheModel()
@@ -45,12 +45,14 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.Contains(UndoText.Question(1), output);
+        Assert.Contains(UndoText.Question(["write a note"]), output);
         Assert.False(File.Exists(WorkFile("note.txt")));
         Assert.Equal([WorkFile("note.txt")], _recycleBin!.Moved);
         Assert.Empty(_checkpoints!.Records);   // spent
         string note = UndoNoteIn(_chat.Requests[^1])!;
-        Assert.StartsWith(UndoText.ModelNote(["write a note"], [], [])[..^1], note, StringComparison.Ordinal);
+        Assert.StartsWith(UndoText.ModelNote([UndoText.NoteClause(["write a note"], [], [], [], partly: false)])[..^1], note, StringComparison.Ordinal);
+        // The note rides in the user's own text (2026-10-28, review P10-01: a part of its own made a two-part array some servers refuse).
+        Assert.Equal(note + ConversationHistory.NoteBreak + "what now", _chat.Requests[^1].Last(ConversationHistory.IsTurnStart).Text);
         Assert.Contains("note.txt", note, StringComparison.Ordinal);
         Assert.Null(UndoNoteIn(_chat.Requests[1]));
     }
@@ -199,6 +201,94 @@ public partial class ChatScreenTests
         Assert.Equal("b", File.ReadAllText(WorkFile("b.txt")));   // conversation only
         Assert.Empty(_checkpoints!.Records);   // both turns' refs gone: one spent, one dropped with its turn
         Assert.Equal(2, _checkpoints.Removed.Count);
+    }
+
+    /// <summary>
+    /// The question quotes the turn it undoes, never "the last turn" when that one changed nothing (2026-10-28, review P4-07), and one
+    /// <c>/undo</c> looks its checkpoints up once (P1-12: <c>Find</c> ran for the plan and again for the stamps).
+    /// </summary>
+    [Fact]
+    public async Task Undo_QuotesTheTurnThatWrote_PastAChat_AndFindsOnce()
+    {
+        CheckpointsOn();
+        _chat.Enqueue(FakeChatClient.Call("c1", WriteFileTool.ToolName, WriteArgs("note.txt", "hello"))).EnqueueText("Written.")
+            .EnqueueText("Just chat.");
+        StepsWhenIdle(Line("write a note"), Line("how are you"), Line("/undo"), Key(Keys.Enter), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(UndoText.Question(["write a note"]), output);
+        Assert.Equal(1, _checkpoints!.Finds);
+        Assert.Single(_checkpoints.Records);   // a no keeps it
+    }
+
+    /// <summary>Newer turns whose checkpoints are gone are said, and <c>/undo</c> reaches the one still kept (2026-10-28, review P1-10).</summary>
+    [Fact]
+    public async Task Undo_PastNewerTurnsNoLongerKept_SaysSo_AndUndoesTheKeptOne()
+    {
+        CheckpointsOn();
+        _chat.Enqueue(FakeChatClient.Call("c1", WriteFileTool.ToolName, WriteArgs("a.txt", "a"))).EnqueueText("A.")
+            .Enqueue(FakeChatClient.Call("c2", WriteFileTool.ToolName, WriteArgs("b.txt", "b"))).EnqueueText("B.");
+        StepsWhenIdle(
+            Line("make a"), Line("make b"),
+            input =>
+            {
+                _checkpoints!.Records.RemoveAt(_checkpoints.Records.Count - 1);   // b's checkpoint cleared
+                PushLine(input, "/undo");
+            },
+            Key(Keys.Char('y')), Key(Keys.Enter),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(UndoText.NewerNotKept(1), output);
+        Assert.Contains(UndoText.Question(["make a"]), output);
+        Assert.False(File.Exists(WorkFile("a.txt")));
+        Assert.True(File.Exists(WorkFile("b.txt")));
+    }
+
+    /// <summary>The conflict choice opens on "Skip them": Enter leaves your file as it is (2026-10-28, review P7-03).</summary>
+    [Fact]
+    public async Task Undo_AFileChangedSince_EnterSkips()
+    {
+        CheckpointsOn();
+        _chat.Enqueue(FakeChatClient.Call("c1", WriteFileTool.ToolName, WriteArgs("note.txt", "hello"))).EnqueueText("Written.");
+        StepsWhenIdle(
+            Line("write a note"),
+            input =>
+            {
+                File.WriteAllText(WorkFile("note.txt"), "mine");
+                PushLine(input, "/undo");
+            },
+            Key(Keys.Char('y')), Key(Keys.Enter),
+            Key(Keys.Enter),
+            Line("/exit"));
+
+        await RunAsync();
+
+        Assert.Equal("mine", File.ReadAllText(WorkFile("note.txt")));
+        Assert.Empty(_recycleBin!.Moved);
+    }
+
+    /// <summary>
+    /// The rewind's files choice opens on Cancel: Enter rewinds nothing and keeps the files and their checkpoint (2026-10-28, review P7-01:
+    /// it opened on "Conversation and files"): back to the turns' list.
+    /// </summary>
+    [Fact]
+    public async Task Rewind_TheFilesChoice_Enter_Cancels()
+    {
+        CheckpointsOn();
+        _chat.EnqueueText("One.")
+            .Enqueue(FakeChatClient.Call("c1", WriteFileTool.ToolName, WriteArgs("a.txt", "a"))).EnqueueText("A.");
+        StepsWhenIdle(Line("one"), Line("make a"), Line("/rewind"), Key(Keys.Enter), Key(Keys.Enter), Key(Keys.Escape), Line("/exit"));   // Cancel goes back to the list; Esc closes it
+
+        string output = await RunAsync();
+
+        Assert.Contains(RewindText.ConversationOnlyNote, output);
+        Assert.Equal("a", File.ReadAllText(WorkFile("a.txt")));
+        Assert.Single(_checkpoints!.Records);
+        Assert.Empty(_checkpoints.Removed);
+        Assert.Equal(3, _chat.Requests.Count);   // nothing sent again
     }
 
     [Fact]

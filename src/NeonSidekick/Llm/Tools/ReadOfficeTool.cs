@@ -126,7 +126,7 @@ public sealed class ReadOfficeTool : FileTool
             return OfficeText.BadSlides(spec);
         }
 
-        if (kind == OfficeKind.Slides && fromChar > 0 && (slides is null || slides.Resolve(int.MaxValue).Count != 1))
+        if (kind == OfficeKind.Slides && fromChar > 0 && slides?.Single is null)
         {
             return OfficeText.FromCharNeedsOneSlide;
         }

@@ -1,5 +1,6 @@
 using System.Text;
 using NeonSidekick.Files;
+using NeonSidekick.Llm.Tools;
 using NeonSidekick.Pdf;
 
 namespace NeonSidekick.Office;
@@ -14,6 +15,9 @@ public sealed record OfficeRequest(string? Sheet = null, string? Range = null, P
 /// or a label; anything but a zip isn't Office), the package's main part handed to <see cref="WordReader"/>, <see cref="ExcelReader"/> or
 /// <see cref="SlidesReader"/>. Damage is one <see cref="OfficeText.Damaged"/> answer, never an exception out. No cache in v1: each call opens
 /// the file again (parsing XML is cheap beside <c>read_pdf</c>'s headless browser); a cache would key on <c>PdfDocKey</c>'s rule, never the path.
+/// Every answer goes through <see cref="UntrustedText.Scrub"/> once at the end (2026-10-28, review P2-11: only <c>_xHHHH_</c> escapes were
+/// scrubbed, so a literal C1 control in a cell or a run reached the transcript), and every failure through <see cref="Refusal"/> (review
+/// P6-03/P11-13: an <see cref="IOException"/> mid-inflate escaped to the caller).
 /// </summary>
 public static class OfficeReader
 {
@@ -25,7 +29,13 @@ public static class OfficeReader
         {
             string name = Path.GetFileName(path.Trim().TrimEnd('/', '\\'));
             string folder = path.Trim()[..^name.Length];
-            return OfficeText.LockFile(path, folder + name[OfficeFile.LockFilePrefix.Length..]);
+            string tail = name[OfficeFile.LockFilePrefix.Length..];
+
+            // Word puts "~$" over a longer name's first characters (2026-10-28, review P2-05: ~$port.docx is report.docx's), so a tail of
+            // six or more letters may have lost one or two; Excel and PowerPoint put it in front of the whole name.
+            return OfficeFile.Kind(path) == OfficeKind.Word && Path.GetFileNameWithoutExtension(tail).Length >= 6
+                ? OfficeText.LockFileOf(path, tail)
+                : OfficeText.LockFile(path, folder + tail);
         }
 
         return OfficeFile.IsLegacyPath(path) ? OfficeText.Legacy(path)
@@ -55,6 +65,8 @@ public static class OfficeReader
     /// <summary>
     /// The text <c>/read</c> speaks: a Word document's paragraphs or a presentation's slides (titles as sentences), no markers, cut at
     /// <see cref="WorkingDirectory.MaxReadChars"/> as a text file is (<c>Cut</c> then); a workbook refused. <c>Text</c> or <c>Error</c>.
+    /// Hidden slides aren't spoken (2026-10-28, review P7-10: <c>read_office</c> marks them, <c>/read</c> had no way to) and a slide that
+    /// won't read is passed over; only a deck with none read is refused.
     /// </summary>
     public static (string? Text, bool Cut, string? Error) ReadAloud(WorkingDirectory files, string path, CancellationToken cancellationToken, OfficeLimits? limits = null)
     {
@@ -96,17 +108,37 @@ public static class OfficeReader
                 {
                     var slides = new SlidesReader(package!, main!, cancellationToken);
                     var sb = new StringBuilder();
-                    for (int n = 1; n <= slides.Count && sb.Length < WorkingDirectory.MaxReadChars; n++)
+                    OfficeReadException? failure = null;
+                    bool any = false;
+
+                    // On while there is room (review P11-08: ">=" marked a deck cut that ended exactly at the cap); the overflow is cut below.
+                    for (int n = 1; n <= slides.Count && sb.Length <= WorkingDirectory.MaxReadChars; n++)
                     {
-                        string spoken = SlidesReader.Aloud(slides.Read(n, notes: false, aloud: true));
+                        SlideText slide;
+                        try
+                        {
+                            slide = slides.Read(n, notes: false, aloud: true, limit: WorkingDirectory.MaxReadChars + 1 - sb.Length);
+                        }
+                        catch (OfficeReadException ex)
+                        {
+                            failure ??= ex;
+                            continue;
+                        }
+
+                        any = true;
+                        string spoken = slide.Hidden ? "" : SlidesReader.Aloud(slide);
                         if (spoken.Length > 0)
                         {
                             sb.Append(sb.Length > 0 ? "\n\n" : "").Append(spoken);
                         }
                     }
 
+                    if (!any && failure is not null)
+                    {
+                        return (null, false, Refusal(failure, display));
+                    }
+
                     text = sb.ToString();
-                    cut = sb.Length >= WorkingDirectory.MaxReadChars;
                 }
                 else
                 {
@@ -114,24 +146,32 @@ public static class OfficeReader
                 }
 
                 cut |= text.Length > WorkingDirectory.MaxReadChars;
-                text = TextCut.Safe(text, WorkingDirectory.MaxReadChars).Trim();
+                text = UntrustedText.Scrub(TextCut.Safe(text, WorkingDirectory.MaxReadChars)).Trim();
                 return text.Length == 0 ? (null, false, OfficeText.NothingToRead(display)) : (text, cut, null);
             }
-            catch (OfficeDamagedException ex)
+            catch (Exception ex) when (IsRefusal(ex))
             {
-                return (null, false, OfficeText.Damaged(display, ex.Part));
-            }
-            catch (OfficePartTooLargeException ex)
-            {
-                return (null, false, OfficeText.PartTooLarge(display, ex.Part));
-            }
-            catch (OfficeStreamLimitException ex)
-            {
-                return (null, false, OfficeText.PartTooLarge(display, ex.Part));
+                return (null, false, Refusal(ex, display));
             }
         }
     }
 
+    /// <summary>
+    /// The sentence for a read that failed (2026-10-28, review P6-03/P11-13: the one mapping both entry points share): damage, a part too
+    /// large (held whole or streamed), or the file itself failing to read (a share dropping, Office's range lock), as <c>Open</c> says it.
+    /// </summary>
+    public static string Refusal(Exception ex, string display)
+    {
+        ArgumentNullException.ThrowIfNull(ex);
+        return ex switch
+        {
+            OfficeDamagedException damaged => OfficeText.Damaged(display, damaged.Part),
+            OfficeReadException large => OfficeText.PartTooLarge(display, large.Part),
+            _ => FileText.Error(FileOutcome.Failed, display, "read", ex.Message),
+        };
+    }
+
+    private static bool IsRefusal(Exception ex) => ex is OfficeReadException or IOException or UnauthorizedAccessException;
     /// <summary>The file opened for reading, other programs' handles allowed; null with the refusal (outside the sandbox, missing, a folder, too large).</summary>
     private static FileStream? Open(WorkingDirectory files, string path, OfficeLimits limits, out string display, out string? refused)
     {
@@ -197,27 +237,20 @@ public static class OfficeReader
 
             if (actual != kind)
             {
-                return OfficeText.NotOffice(display);
+                return OfficeText.OtherKind(display, actual);
             }
 
-            return kind switch
+            string answer = kind switch
             {
                 OfficeKind.Word => Word(package!, main!, display, request, cancellationToken),
                 OfficeKind.Excel => new ExcelReader(package!, main!, cancellationToken).Read(display, request.Sheet, request.Range, request.Formulas, WorkingDirectory.MaxReadChars),
                 _ => Slides(package!, main!, display, request, cancellationToken),
             };
+            return UntrustedText.Scrub(answer);
         }
-        catch (OfficeDamagedException ex)
+        catch (Exception ex) when (IsRefusal(ex))
         {
-            return OfficeText.Damaged(display, ex.Part);
-        }
-        catch (OfficePartTooLargeException ex)
-        {
-            return OfficeText.PartTooLarge(display, ex.Part);
-        }
-        catch (OfficeStreamLimitException ex)
-        {
-            return OfficeText.PartTooLarge(display, ex.Part);
+            return Refusal(ex, display);
         }
     }
 
@@ -243,46 +276,60 @@ public static class OfficeReader
         }
 
         var package = OfficePackage.Open(stream, limits);
-        main = package.MainPart();
-        if (main is null)
+        bool keep = false;
+        try
         {
-            package.Dispose();
-            error = OfficeText.NotOffice(display);
-            return null;
+            main = package.MainPart();
+            if (main is null)
+            {
+                error = OfficeText.NotOffice(display);
+                return null;
+            }
+
+            string part = main;
+            var x = new OfficeXml();
+            var root = OfficePackage.Guard(part, () =>
+            {
+                using var reader = package.Streamed(part);
+                reader.MoveToContent();
+                return (Local: reader.LocalName, Ns: x.Key(reader.NamespaceURI));
+            });
+
+            OfficeKind? found = root switch
+            {
+                ("document", OfficeXml.W) => OfficeKind.Word,
+                ("workbook", OfficeXml.S) => OfficeKind.Excel,
+                ("presentation", OfficeXml.P) => OfficeKind.Slides,
+                _ => null,
+            };
+
+            if (found is null)
+            {
+                error = OfficeText.NotOffice(display);
+                return null;
+            }
+
+            kind = found.Value;
+            keep = true;
+            return package;
         }
-
-        string part = main;
-        var x = new OfficeXml();
-        var root = OfficePackage.Guard(part, () =>
+        finally
         {
-            using var reader = package.Streamed(part);
-            reader.MoveToContent();
-            return (Local: reader.LocalName, Ns: x.Key(reader.NamespaceURI));
-        });
-
-        OfficeKind? found = root switch
-        {
-            ("document", OfficeXml.W) => OfficeKind.Word,
-            ("workbook", OfficeXml.S) => OfficeKind.Excel,
-            ("presentation", OfficeXml.P) => OfficeKind.Slides,
-            _ => null,
-        };
-
-        if (found is null)
-        {
-            package.Dispose();
-            error = OfficeText.NotOffice(display);
-            return null;
+            // Disposed on every way out but the one that hands it on (2026-10-28, review P6-03: a throw from Guard leaked it).
+            if (!keep)
+            {
+                package.Dispose();
+            }
         }
-
-        kind = found.Value;
-        return package;
     }
 
     private static string Word(OfficePackage package, string main, string display, OfficeRequest request, CancellationToken cancellationToken)
     {
         int budget = WorkingDirectory.MaxReadChars;
-        var read = new WordReader(package, main, request.FromChar + budget + 1, aloud: false, cancellationToken).Read();
+
+        // Held at int.MaxValue (2026-10-28, review P1-15: a large from_char overflowed into a negative limit), PdfPageRange.LastOf's way.
+        int limit = (int)Math.Min((long)request.FromChar + budget + 1, int.MaxValue);
+        var read = new WordReader(package, main, limit, aloud: false, cancellationToken).Read();
         string text = read.Text;
         if (request.FromChar > 0 && request.FromChar >= text.Length)
         {
@@ -314,20 +361,32 @@ public static class OfficeReader
         }
 
         int budget = WorkingDirectory.MaxReadChars;
+
+        // A slide's text read to well past what one answer shows (review P5-03), so its cut and from_char still work.
+        int slideLimit = (int)Math.Min((long)request.FromChar + 4L * budget, int.MaxValue);
         var body = new StringBuilder();
         var shown = new List<int>();
-        string? note = null;
+        OfficeReadException? failure = null;
+        int read = 0;
         foreach (int number in asked)
         {
             string text;
             try
             {
-                text = SlidesReader.Render(reader.Read(number, request.Notes, aloud: false));
+                text = SlidesReader.Render(reader.Read(number, request.Notes, aloud: false, slideLimit));
+                read++;
             }
-            catch (OfficeDamagedException ex) when (shown.Count > 0)
+            catch (OfficeReadException ex)
             {
-                note = OfficeText.DamagedPast(ex.Part);
-                break;
+                // A slide that won't read is a line in its place, the rest read on (2026-10-28, review P2-04/P3-07: a damaged or oversized
+                // slide threw away every slide before it); it counts as shown, so it is never offered again as next.
+                failure ??= ex;
+                if (request.FromChar > 0)
+                {
+                    return Refusal(ex, display);
+                }
+
+                text = OfficeText.SlideNotRead(number, ex.Part, ex.TooLarge);
             }
 
             int skipped = 0;
@@ -342,7 +401,7 @@ public static class OfficeReader
                 text = text[skipped..];
             }
 
-            int room = budget - body.Length - 1;
+            int room = budget - body.Length - (body.Length > 0 ? 2 : 0);   // the "\n\n" before it (review P13-03)
             if (shown.Count > 0 && text.Length > room)
             {
                 break;
@@ -362,8 +421,13 @@ public static class OfficeReader
             shown.Add(number);
         }
 
+        if (failure is not null && read == 0)
+        {
+            return Refusal(failure, display);   // nothing read at all: the first refusal, not a page of "not read" lines
+        }
+
         var rest = asked.Skip(shown.Count).ToList();
         string? next = rest.Count == 0 ? null : PdfText.Spec(rest);
-        return OfficeText.SlidesHeader(display, shown, count, next) + "\n" + body + (note is null ? "" : "\n" + note);
+        return OfficeText.SlidesHeader(display, shown, count, next) + "\n" + body;
     }
 }

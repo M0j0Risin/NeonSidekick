@@ -119,8 +119,11 @@ public static class TestOffice
     public static string Li(string text, int numId, int level = 0) =>
         $"<w:p><w:pPr><w:numPr><w:ilvl w:val=\"{level}\"/><w:numId w:val=\"{numId}\"/></w:numPr></w:pPr><w:r><w:t>{text}</w:t></w:r></w:p>";
 
-    /// <summary>One sheet of a workbook: its name, its worksheet XML's content (inside <c>worksheet</c>), its state, or a chart sheet.</summary>
-    public sealed record SheetSpec(string Name, string Content, string? State = null, bool Chart = false, string? Raw = null);
+    /// <summary>
+    /// One sheet of a workbook: its name, its worksheet XML's content (inside <c>worksheet</c>), its state, or a chart sheet; <paramref name="Kind"/>
+    /// another relationship kind (<c>dialogsheet</c>, <c>xlMacrosheet</c>) for a sheet that isn't a worksheet (2026-10-28, review P5-11).
+    /// </summary>
+    public sealed record SheetSpec(string Name, string Content, string? State = null, bool Chart = false, string? Raw = null, string? Kind = null);
 
     /// <summary>A worksheet's <c>sheetData</c> rows, with an optional <c>dimension</c>.</summary>
     public static string SheetData(string rows, string? dimension = null, string cols = "") =>
@@ -146,9 +149,10 @@ public static class TestOffice
             var sheet = list[i];
             string id = "rIdSheet" + (i + 1);
             sb.Append($"<sheet name=\"{sheet.Name}\" sheetId=\"{i + 1}\" r:id=\"{id}\"{(sheet.State is null ? "" : $" state=\"{sheet.State}\"")}/>");
-            string target = sheet.Chart ? $"chartsheets/sheet{i + 1}.xml" : $"worksheets/sheet{i + 1}.xml";
-            rels.Add((id, sheet.Chart ? "chartsheet" : "worksheet", target));
-            parts.Add(("xl/" + target, sheet.Raw ?? (sheet.Chart ? $"<chartsheet xmlns=\"{d.S}\"/>" : $"<worksheet xmlns=\"{d.S}\" xmlns:r=\"{d.R}\">{sheet.Content}</worksheet>")));
+            string kind = sheet.Kind ?? (sheet.Chart ? "chartsheet" : "worksheet");
+            string target = $"{kind.ToLowerInvariant()}s/sheet{i + 1}.xml";
+            rels.Add((id, kind, target));
+            parts.Add(("xl/" + target, sheet.Raw ?? (kind == "worksheet" ? $"<worksheet xmlns=\"{d.S}\" xmlns:r=\"{d.R}\">{sheet.Content}</worksheet>" : $"<{kind} xmlns=\"{d.S}\"/>")));
         }
 
         sb.Append("</sheets>");

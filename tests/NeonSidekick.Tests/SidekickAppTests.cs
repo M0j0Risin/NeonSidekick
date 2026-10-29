@@ -1359,10 +1359,116 @@ public partial class SidekickAppTests : IDisposable
         Assert.Contains("[error] " + UndoText.UsageError, output);
         Assert.False(File.Exists(file));
         Assert.False(File.Exists(Path.Combine(Path.GetDirectoryName(file)!, "two.txt")));   // /rewind files
-        var note = _chat.Requests[2].SelectMany(m => m.Contents).Where(ConversationHistory.IsUndoNote).OfType<TextContent>().Single();
-        Assert.Contains("\"write a note\"", note.Text, StringComparison.Ordinal);
+        string note = _chat.Requests[2].Select(ConversationHistory.UndoNoteOf).Single(n => n is not null)!;
+        Assert.Contains("\"write a note\"", note, StringComparison.Ordinal);
         Assert.Contains("Neon: " + UndoText.NothingToPurge, output);
         Assert.Empty(_checkpoints.Records);
+    }
+
+    /// <summary>Headless sweeps the profile's file checkpoints at start, as the screen does at a profile's load (2026-10-28, review P3-10).</summary>
+    [Fact]
+    public async Task Headless_Startup_SweepsTheProfilesCheckpoints()
+    {
+        ServerOn1234("llama");
+        _checkpoints = new Fakes.FakeCheckpointStore();
+
+        await Headless("");
+
+        Assert.Equal([_settings.ProfileDirectory], _checkpoints.Swept);
+    }
+
+    /// <summary>
+    /// A turn that throws past the headless turn gives up its checkpoint, never holding the store till exit (2026-10-28, review P10-02): here
+    /// the output's reader goes away as the reply is written, so even the turn's own error line can't be written.
+    /// </summary>
+    [Fact]
+    public async Task Headless_ATurnThatThrows_AbandonsItsCheckpoint()
+    {
+        ServerOn1234("llama");
+        _checkpoints = new Fakes.FakeCheckpointStore();
+        _chat.Enqueue(FakeChatClient.Call("c1", "write_file", new Dictionary<string, object?> { ["path"] = "note.txt", ["content"] = "hello" }))
+            .EnqueueText("Never.");
+        var app = App(stdin: new StringReader("write a note\n"), stdout: new BreaksOn("Never."));
+
+        try
+        {
+            await app.RunAsync(SidekickOptions.None with { Headless = true }, CancellationToken.None);
+        }
+        catch (IOException)
+        {
+            // the throw goes on past the turn; what matters is the store let go
+        }
+
+        Assert.Single(_checkpoints.Begun);
+        Assert.Equal(1, _checkpoints.Abandoned);
+        Assert.Empty(_checkpoints.Records);
+    }
+
+    /// <summary>
+    /// A headless <c>/rewind files</c> that can't put everything back (a file open in another program, kept for another try) says so and
+    /// rewinds nothing: the conversation and the checkpoint stay (2026-10-28, review P4-04). A skipped conflict is a choice and goes ahead.
+    /// </summary>
+    [WindowsFact]
+    public async Task Headless_RewindFiles_NotAllBack_KeepsTheConversation()
+    {
+        ServerOn1234("llama");
+        _checkpoints = new Fakes.FakeCheckpointStore();
+        string file = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName, "note.txt");
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        File.WriteAllText(file, "before");
+        _chat.Enqueue(FakeChatClient.Call("c1", "write_file", new Dictionary<string, object?> { ["path"] = "note.txt", ["content"] = "hello", ["mode"] = "overwrite" }))
+            .EnqueueText("Written.")
+            .EnqueueText("Fine.")
+            .EnqueueText("After.");
+        FileStream? held = null;
+        _chat.BeforeUpdateOf = (request, _, _) =>
+        {
+            if (request == 2)
+            {
+                held ??= new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read);   // as Word holds a document
+            }
+
+            return Task.CompletedTask;
+        };
+
+        string output;
+        try
+        {
+            output = await Headless("write a note\nhow are you\n/rewind 2 files\nafter\n");
+        }
+        finally
+        {
+            held?.Dispose();
+        }
+
+        Assert.Contains("[notice] " + RewindText.NotAllBack, output);
+        Assert.Equal("hello", File.ReadAllText(file));
+        Assert.Single(_checkpoints.Records);
+        Assert.Contains(_chat.Requests[^1], m => m.Text == "write a note");
+    }
+
+    /// <summary>An output whose reader went away once <paramref name="text"/> is written: that write and every later one throws.</summary>
+    private sealed class BreaksOn(string text) : TextWriter
+    {
+        private readonly System.Text.StringBuilder _written = new();
+        private bool _broken;
+
+        public override System.Text.Encoding Encoding => System.Text.Encoding.UTF8;
+
+        public override void Write(char value)
+        {
+            if (_broken)
+            {
+                throw new IOException("The pipe has been ended.");
+            }
+
+            _written.Append(value);
+            if (_written.ToString().EndsWith(text, StringComparison.Ordinal))
+            {
+                _broken = true;
+                throw new IOException("The pipe has been ended.");
+            }
+        }
     }
 
     /// <summary>A headless <c>/test</c> run starts from a clean slate, as the screen's does (2026-09-30): the turn before it is forgotten.</summary>

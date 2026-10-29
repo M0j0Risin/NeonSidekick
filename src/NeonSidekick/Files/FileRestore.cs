@@ -22,15 +22,18 @@ public enum RestoreOutcome
     Failed,
 }
 
-/// <summary>One path a restore touches, under its checkpoint's root.</summary>
-public sealed record RestorePath(string Root, string Path)
+/// <summary>One path a restore touches, under its checkpoint's root; <paramref name="Folder"/> when the lists show it as a folder.</summary>
+public sealed record RestorePath(string Root, string Path, bool Folder = false)
 {
     /// <summary>The full path.</summary>
     public string Full => FileJournal.FullOf(Root, Path);
 }
 
 /// <summary>A path changed since the turn (the user's edit, a shell command): restoring it means writing over that change.</summary>
-/// <param name="KindChanged">A folder now where a file was, or a file where a folder was: always skipped, even under "restore over".</param>
+/// <param name="KindChanged">
+/// A folder now where a file was, or a file where a folder was, or a moved file changed since (its old bytes were never saved): always
+/// skipped, even under "restore over".
+/// </param>
 public sealed record RestoreConflict(RestorePath Where, bool KindChanged);
 
 /// <summary>One path's result, with the diff of what came back for a text file.</summary>
@@ -48,7 +51,8 @@ public sealed class RestorePlan
         CheckpointFound? stoppedAt,
         IReadOnlyList<RestorePath> paths,
         IReadOnlyList<RestoreConflict> conflicts,
-        IReadOnlySet<RestorePath> alreadyBack)
+        IReadOnlySet<RestorePath> alreadyBack,
+        PlanFacts facts)
     {
         Checkpoints = checkpoints;
         NoLongerKept = noLongerKept;
@@ -56,6 +60,7 @@ public sealed class RestorePlan
         Paths = paths;
         Conflicts = conflicts;
         AlreadyBack = alreadyBack;
+        Facts = facts;
     }
 
     /// <summary>The checkpoints the restore replays, newest first (both roots of a pair).</summary>
@@ -76,6 +81,14 @@ public sealed class RestorePlan
     /// <summary>The paths already holding what the restore would put there.</summary>
     public IReadOnlySet<RestorePath> AlreadyBack { get; }
 
+    internal PlanFacts Facts { get; }
+
+    /// <summary>
+    /// The paths the lists name (2026-10-28, review P7-04: one file in two new folders read "3 files"): <see cref="Paths"/> without a made folder
+    /// that holds another made path, and without a move's destination (the move is named by its source); folders marked for a trailing separator.
+    /// </summary>
+    public IReadOnlyList<RestorePath> Listed => Paths.Where(Facts.IsListed).Select(Facts.Shown).ToList();
+
     /// <summary>The checkpoint ids the replay covers (each once).</summary>
     public IReadOnlyList<string> Ids => Checkpoints.Select(c => c.Id).Distinct(StringComparer.Ordinal).ToList();
 
@@ -92,11 +105,46 @@ public sealed class RestorePlan
     public bool IsEmpty => Checkpoints.Count == 0;
 }
 
+/// <summary>What a plan's walk learned about each path, for the run and the lists (2026-10-28, the review's fixes of the replay).</summary>
+internal sealed class PlanFacts(IEqualityComparer<RestorePath> comparer)
+{
+    /// <summary>Each path's oldest entry: what the restore ends on.</summary>
+    public Dictionary<RestorePath, CheckpointEntry> Oldest { get; } = new(comparer);
+
+    /// <summary>The destinations of the plan's moves.</summary>
+    public HashSet<RestorePath> MoveEnds { get; } = new(comparer);
+
+    /// <summary>The paths an entry names as a folder.</summary>
+    public HashSet<RestorePath> Folders { get; } = new(comparer);
+
+    /// <summary>The made folders (Absent) holding another made path: left out of the lists.</summary>
+    public HashSet<RestorePath> Holders { get; } = new(comparer);
+
+    /// <summary>Whether the lists name the path: not a folder named by what's in it, not a move's destination (the move is named by its source).</summary>
+    public bool IsListed(RestorePath where) =>
+        !Holders.Contains(where)
+        && !(Oldest.TryGetValue(where, out var entry) && entry is { Op: CheckpointOp.Moved, To: { } to }
+            && WorkingDirectory.PathComparer.Equals(to, where.Path) && !IsCaseOnly(entry));
+
+    public RestorePath Shown(RestorePath where) => Folders.Contains(where) ? where with { Folder = true } : where;
+
+    /// <summary>Whether a move only changed its name's case.</summary>
+    public static bool IsCaseOnly(CheckpointEntry entry) =>
+        entry.Op == CheckpointOp.Moved && entry.To is { } to && !string.Equals(entry.Path, to, StringComparison.Ordinal)
+        && string.Equals(entry.Path, to, StringComparison.OrdinalIgnoreCase);
+}
+
 /// <summary>What a restore did.</summary>
 public sealed record RestoreReport(IReadOnlyList<RestoredFile> Files, bool Stopped, IReadOnlyList<string> Pictures)
 {
-    /// <summary>The checkpoint ids put back whole (spent): every one when the restore wasn't stopped.</summary>
+    /// <summary>The checkpoint ids put back whole (spent): every one when the restore wasn't stopped and nothing failed for a reason that may pass.</summary>
     public IReadOnlyList<string> Spent { get; init; } = [];
+
+    /// <summary>
+    /// Some files couldn't be put back for a reason that may pass (a file open elsewhere, the folder gone for now; 2026-10-28, review P1-09):
+    /// the checkpoints are kept, and <c>/undo</c> again tries them (what came back reads as already back).
+    /// </summary>
+    public bool Kept { get; init; }
 
     public int Count(RestoreOutcome outcome) => Files.Count(f => f.Outcome == outcome);
 }
@@ -104,9 +152,10 @@ public sealed record RestoreReport(IReadOnlyList<RestoredFile> Files, bool Stopp
 /// <summary>
 /// Puts files back from checkpoints (2026-10-28, the checkpoints plan): each checkpoint's op log replayed backwards, newest first, through a
 /// <see cref="WorkingDirectory"/> pinned at the checkpoint's root (<see cref="WorkingDirectory.PinnedAt"/>, so <see cref="WriteGuard"/> judges
-/// every path as the turn's tools were), never journaled. Conflicts are found up front (<see cref="Plan"/>); <see cref="Run"/> then sends a
-/// conflicting file to the bin before restoring over it, or skips it. Attributes, the Unix mode and the internet mark are set once per path at
-/// the end, from the oldest state restored. The token is read between files, never inside one; a stopped restore keeps its checkpoints.
+/// every path as the turn's tools were), never journaled. Conflicts are found up front (<see cref="Plan"/>) and asked again just before the
+/// writes (<see cref="Run"/>); a conflicting file goes to the bin only once its saved bytes are in hand, or is skipped. Attributes, the Unix
+/// mode and the internet mark are set once per path at the end, from the oldest state restored. The token is read between files, never inside
+/// one; a stopped restore keeps its checkpoints.
 /// </summary>
 public static class FileRestore
 {
@@ -114,15 +163,17 @@ public static class FileRestore
     public const int ListedFiles = 20;
 
     /// <summary>
-    /// Works out a restore of <paramref name="idsNewestFirst"/> (the turns' stamps): each id's checkpoints in every store, conflicts against
-    /// each path's after-state in the newest checkpoint touching it, and the paths already back.
+    /// Works out a restore of <paramref name="idsNewestFirst"/> (the turns' stamps): each id's checkpoints in every store (<paramref name="found"/>
+    /// when the caller already has them, one <c>Find</c> per <c>/undo</c>, 2026-10-28, review P1-12), conflicts against each path's after-state
+    /// in the newest checkpoint touching it, and the paths already back; one hash budget for the plan. <paramref name="cancellationToken"/>
+    /// stops it between paths (thrown).
     /// </summary>
-    public static RestorePlan Plan(ICheckpointStore store, string profileDirectory, IReadOnlyList<string> idsNewestFirst)
+    public static RestorePlan Plan(ICheckpointStore store, string profileDirectory, IReadOnlyList<string> idsNewestFirst, IReadOnlyList<CheckpointFound>? found = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(profileDirectory);
         ArgumentNullException.ThrowIfNull(idsNewestFirst);
-        var found = store.Find(profileDirectory, idsNewestFirst.ToList());
+        found ??= store.Find(profileDirectory, idsNewestFirst.ToList());
         var checkpoints = new List<CheckpointFound>();
         var gone = new List<string>();
         CheckpointFound? stopped = null;
@@ -144,16 +195,19 @@ public static class FileRestore
             checkpoints.AddRange(mine);
         }
 
-        return Work(checkpoints, gone, stopped);
+        return Work(checkpoints, gone, stopped, cancellationToken);
     }
 
-    private static RestorePlan Work(List<CheckpointFound> checkpoints, List<string> gone, CheckpointFound? stopped)
+    private static RestorePlan Work(IReadOnlyList<CheckpointFound> checkpoints, IReadOnlyList<string> gone, CheckpointFound? stopped, CancellationToken cancellationToken)
     {
         var comparer = new PathKeyComparer();
+        var facts = new PlanFacts(comparer);
         var paths = new List<RestorePath>();
         var seen = new HashSet<RestorePath>(comparer);
         var expected = new Dictionary<RestorePath, CheckpointState>(comparer);   // the newest checkpoint's after-state
         var target = new Dictionary<RestorePath, CheckpointState?>(comparer);    // the oldest entry's before-state (null = unknown)
+        var newest = new Dictionary<RestorePath, CheckpointEntry>(comparer);     // the first entry the replay meets
+        var caseOnly = new Dictionary<RestorePath, string>(comparer);            // a case-only move's old spelling
         foreach (var checkpoint in checkpoints)
         {
             var record = checkpoint.Record!;
@@ -169,43 +223,99 @@ public static class FileRestore
                 {
                     var where = new RestorePath(checkpoint.Root, path);
                     target[where] = before;
+                    facts.Oldest[where] = entry;
+                    newest.TryAdd(where, entry);
                     if (seen.Add(where))
                     {
                         paths.Add(where);
+                    }
+
+                    if ((entry.Directory && entry.Op != CheckpointOp.Link) || entry.Op == CheckpointOp.Folder)
+                    {
+                        facts.Folders.Add(where);
+                    }
+                }
+
+                if (entry.Op == CheckpointOp.Moved && entry.To is { } to)
+                {
+                    facts.MoveEnds.Add(new RestorePath(checkpoint.Root, to));
+                    if (PlanFacts.IsCaseOnly(entry))
+                    {
+                        caseOnly[new RestorePath(checkpoint.Root, entry.Path)] = entry.Path;
                     }
                 }
             }
         }
 
-        var conflicts = new List<RestoreConflict>();
-        var back = new HashSet<RestorePath>(comparer);
+        // The made folders that hold another made path (review P7-04): named by what's in them.
         foreach (var where in paths)
         {
-            long hashed = 0;
+            if (facts.Oldest.GetValueOrDefault(where) is { Op: CheckpointOp.Absent } && Parent(where) is { } parent
+                && facts.Oldest.GetValueOrDefault(parent) is { Op: CheckpointOp.Absent, Directory: true })
+            {
+                facts.Holders.Add(parent);
+            }
+        }
+
+        var conflicts = new List<RestoreConflict>();
+        var back = new HashSet<RestorePath>(comparer);
+        var roots = new Dictionary<string, bool>(WorkingDirectory.PathComparer);
+        long hashed = 0;   // one budget for the whole plan (review P1-12)
+        foreach (var where in paths)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            // A gone folder first (review P9-03): its paths all read Absent, which "already back" took for put back and spent.
+            if (!roots.TryGetValue(where.Root, out bool there))
+            {
+                there = Directory.Exists(where.Root);
+                roots[where.Root] = there;
+            }
+
+            if (!there)
+            {
+                continue;   // reported failed at the run
+            }
+
             var now = FileJournal.StateOf(where.Root, where.Path, ref hashed);
             var want = target.GetValueOrDefault(where);
-            if (want is not null && now.Matches(want))
+            // A case-only rename is back only under its old spelling (review P8-01): case-blind, the new name matched the old.
+            bool spelledBack = !caseOnly.TryGetValue(where, out string? old)
+                || string.Equals(FileJournal.RelativeOf(where.Root, where.Full), old, StringComparison.Ordinal);
+            if (want is not null && now.Matches(want) && spelledBack)
             {
                 back.Add(where);
                 continue;
             }
 
-            if (!Directory.Exists(where.Root))
-            {
-                continue;   // reported failed at the run
-            }
-
+            bool moved = newest.GetValueOrDefault(where) is { Op: CheckpointOp.Moved, Directory: false } move
+                && move.To is { } to && comparer.Equals(new RestorePath(where.Root, to), where) && !PlanFacts.IsCaseOnly(move);
             if (expected.TryGetValue(where, out var after) && now.Matches(after))
             {
+                // A moved file the turn changed after the move, unjournaled (review P8-02): its old bytes were never saved, so it can't go back.
+                if (moved && newest[where].Hash is { } hash && now.Kind == CheckpointKind.File
+                    && (now.Hash is { } current ? !string.Equals(current, hash, StringComparison.OrdinalIgnoreCase) : now.Size != newest[where].Size))
+                {
+                    conflicts.Add(new RestoreConflict(where, KindChanged: true));
+                }
+
                 continue;
             }
 
-            bool kindChanged = (now.Kind == CheckpointKind.Folder && want?.Kind is CheckpointKind.File or CheckpointKind.Link)
+            bool kindChanged = moved
+                || (now.Kind == CheckpointKind.Folder && want?.Kind is CheckpointKind.File or CheckpointKind.Link)
                 || (now.Kind is CheckpointKind.File or CheckpointKind.Link && want?.Kind == CheckpointKind.Folder);
             conflicts.Add(new RestoreConflict(where, kindChanged));
         }
 
-        return new RestorePlan(checkpoints, gone, stopped, paths, conflicts, back);
+        return new RestorePlan(checkpoints, gone, stopped, paths, conflicts, back, facts);
+    }
+
+    /// <summary>The path's parent under the same root, or null at the root.</summary>
+    private static RestorePath? Parent(RestorePath where)
+    {
+        int slash = where.Path.LastIndexOf('/');
+        return slash > 0 ? new RestorePath(where.Root, where.Path[..slash]) : null;
     }
 
     /// <summary>What each path an entry names held before it ran (null when unknown).</summary>
@@ -236,9 +346,12 @@ public static class FileRestore
 
     /// <summary>
     /// Replays <paramref name="plan"/>: each checkpoint newest first, its entries backwards, through <paramref name="directoryFor"/>'s pinned
-    /// working directory for its root. A conflict is skipped unless <paramref name="restoreOver"/>, which first sends the current file to
-    /// <paramref name="bin"/> (null: written over); a kind change is always skipped; a path already back is left alone. The project file is
-    /// allowed for its own write (the user ordered the restore). Pictures deleted or replaced are named for the strip to forget.
+    /// working directory for its root. The paths are judged again first (2026-10-28, review P4-02: an edit saved while a question was open was
+    /// written over): a path that became a conflict since is skipped whatever the answer, one no longer back is replayed. A conflict is skipped
+    /// unless <paramref name="restoreOver"/>, which sends the current file to <paramref name="bin"/> (null: written over) only once its saved
+    /// bytes are read (review P1-04); a kind change is always skipped; a path already back is left alone. The project file is allowed for the
+    /// replay's writes (the user ordered the restore; <see cref="WriteGuard.IsProjectFile"/> holds it to the live working folder). Pictures
+    /// deleted or replaced are named for the strip to forget.
     /// </summary>
     public static RestoreReport Run(
         RestorePlan plan,
@@ -251,123 +364,164 @@ public static class FileRestore
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(directoryFor);
-        var comparer = new PathKeyComparer();
-        var skip = new HashSet<RestorePath>(plan.AlreadyBack, comparer);
-        var outcome = new Dictionary<RestorePath, (RestoreOutcome Outcome, string Detail)>(comparer);
-        foreach (var conflict in plan.Conflicts)
+        RestorePlan now;
+        try
         {
-            if (conflict.KindChanged || !restoreOver)
+            now = Work(plan.Checkpoints, plan.NoLongerKept, plan.StoppedAt, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            return new RestoreReport([], Stopped: true, []);
+        }
+
+        var comparer = new PathKeyComparer();
+        var facts = now.Facts;
+        var asked = new HashSet<RestorePath>(plan.Conflicts.Where(c => !c.KindChanged).Select(c => c.Where), comparer);
+        var skip = new HashSet<RestorePath>(now.AlreadyBack, comparer);
+        var outcome = new Dictionary<RestorePath, Result>(comparer);
+        var toBin = new HashSet<RestorePath>(comparer);
+        foreach (var conflict in now.Conflicts)
+        {
+            if (conflict.KindChanged || !restoreOver || !asked.Contains(conflict.Where))
             {
                 skip.Add(conflict.Where);
-                outcome[conflict.Where] = (RestoreOutcome.Skipped, "");
+                outcome[conflict.Where] = new Result(RestoreOutcome.Skipped);
+            }
+            else
+            {
+                toBin.Add(conflict.Where);
             }
         }
 
-        foreach (var where in plan.AlreadyBack)
+        foreach (var where in now.AlreadyBack)
         {
-            outcome[where] = (RestoreOutcome.AlreadyBack, "");
+            outcome[where] = new Result(RestoreOutcome.AlreadyBack);
         }
 
-        var directories = new Dictionary<string, WorkingDirectory>(WorkingDirectory.PathComparer);
+        // A path whose oldest entry kept no bytes is left as it is, every entry of it (review P9-04: a newer entry was replayed, then reported
+        // "not kept").
+        foreach (var (where, entry) in facts.Oldest)
+        {
+            if (entry is { Op: CheckpointOp.Content, Blob: null } && !skip.Contains(where))
+            {
+                skip.Add(where);
+                outcome[where] = new Result(RestoreOutcome.NotSaved);
+            }
+        }
+
+        var directories = new Dictionary<string, WorkingDirectory?>(WorkingDirectory.PathComparer);
         WorkingDirectory? Dir(string root)
         {
-            if (!Directory.Exists(root))
-            {
-                return null;
-            }
-
             if (!directories.TryGetValue(root, out var directory))
             {
-                directory = directoryFor(root);
+                directory = Directory.Exists(root) ? directoryFor(root) : null;
                 directories[root] = directory;
             }
 
             return directory;
         }
 
-        // The texts before, for the diffs (the first files only).
+        // The texts before, for the diffs (review P7-07): the first files with text, or a deleted file coming back, never a folder.
         var before = new Dictionary<RestorePath, string?>(comparer);
-        foreach (var where in plan.Paths.Where(p => !skip.Contains(p)).Take(ListedFiles))
+        foreach (var where in now.Paths.Where(p => !skip.Contains(p)))
         {
-            before[where] = TextOf(where.Full);
-        }
-
-        // Restore over: the current file to the bin first, so a restore never destroys the user's edit.
-        if (restoreOver)
-        {
-            foreach (var conflict in plan.Conflicts.Where(c => !c.KindChanged))
+            if (before.Count >= ListedFiles)
             {
-                string full = conflict.Where.Full;
-                if (File.Exists(full) && !MovedTo(plan, conflict.Where) && Dir(conflict.Where.Root) is { } directory
-                    && directory.ResolveForRestore(conflict.Where.Path, linkItself: true, out string resolved) == FileOutcome.Ok)
-                {
-                    try
-                    {
-                        FileDeletes.Remove(resolved, isDirectory: false, isLink: WorkingDirectory.RealLinkTarget(resolved) is not null, bin);
-                    }
-                    catch (Exception ex) when (WorkingDirectory.IsFileFailure(ex))
-                    {
-                        skip.Add(conflict.Where);
-                        outcome[conflict.Where] = (RestoreOutcome.Failed, ex.Message);
-                    }
-                }
+                break;
+            }
+
+            if (TextOf(where.Full) is { } text)
+            {
+                before[where] = text;
+            }
+            else if (!File.Exists(where.Full) && !Directory.Exists(where.Full) && facts.Oldest.GetValueOrDefault(where) is { Op: CheckpointOp.Content, Blob: not null })
+            {
+                before[where] = null;
             }
         }
 
         var meta = new Dictionary<RestorePath, CheckpointEntry>(comparer);
         var pictures = new List<string>();
-        var spent = new List<string>();
         bool stopped = false;
-        foreach (var checkpoint in plan.Checkpoints)
+        using (WriteGuard.AllowProjectFile())
         {
-            var record = checkpoint.Record!;
-            var directory = Dir(checkpoint.Root);
-            foreach (var entry in Enumerable.Reverse(record.Entries))
+            foreach (var checkpoint in now.Checkpoints)
             {
-                if (cancellationToken.IsCancellationRequested)
+                var record = checkpoint.Record!;
+                var directory = Dir(checkpoint.Root);
+                foreach (var entry in Enumerable.Reverse(record.Entries))
                 {
-                    stopped = true;
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        stopped = true;
+                        break;
+                    }
+
+                    var where = new RestorePath(checkpoint.Root, entry.Path);
+                    var to = entry.To is { } t ? new RestorePath(checkpoint.Root, t) : null;
+                    if (skip.Contains(where) || (to is not null && skip.Contains(to)))
+                    {
+                        if (to is not null)
+                        {
+                            // Both ends of a move skipped together (review P2-01: the source was reported back when only the end was skipped).
+                            outcome.TryAdd(where, new Result(RestoreOutcome.Skipped));
+                            outcome.TryAdd(to, new Result(RestoreOutcome.Skipped));
+                        }
+
+                        continue;
+                    }
+
+                    if (outcome.TryGetValue(where, out var was) && was.Outcome == RestoreOutcome.Failed)
+                    {
+                        continue;   // a path that failed once is left as it stands
+                    }
+
+                    // A path the turns made: its contents in between never come back (review P6-07: each went to the bin as a phantom copy).
+                    if (entry.Op is CheckpointOp.Content or CheckpointOp.Link or CheckpointOp.Folder
+                        && facts.Oldest.GetValueOrDefault(where) is { Op: CheckpointOp.Absent } && !facts.MoveEnds.Contains(where))
+                    {
+                        continue;
+                    }
+
+                    if (directory is null)
+                    {
+                        Worst(outcome, where, new Result(RestoreOutcome.Failed, FileText.RestoreRootGone(checkpoint.Root), Retry: true));
+                        continue;
+                    }
+
+                    var result = Apply(directory, checkpoint, store, entry, bin, toBin.Remove(where), pictures);
+                    Worst(outcome, where, result);
+                    if (to is not null)
+                    {
+                        Worst(outcome, to, result);
+                    }
+
+                    if (entry.Op == CheckpointOp.Content && result.Outcome == RestoreOutcome.Restored)
+                    {
+                        meta[where] = entry;
+                    }
+                    else if (entry.Op == CheckpointOp.Moved && to is not null)
+                    {
+                        // The moved file's saved state goes with it (review P12-04: a rename then an overwrite lost its read-only flag).
+                        if (result.Outcome == RestoreOutcome.Restored && meta.Remove(to, out var carried))
+                        {
+                            meta[where] = carried;
+                        }
+                        else
+                        {
+                            meta.Remove(where);
+                        }
+                    }
+                    else if (entry.Op == CheckpointOp.Absent)
+                    {
+                        meta.Remove(where);
+                    }
+                }
+
+                if (stopped)
+                {
                     break;
                 }
-
-                var where = new RestorePath(checkpoint.Root, entry.Path);
-                var to = entry.To is { } t ? new RestorePath(checkpoint.Root, t) : null;
-                if (skip.Contains(where) || (to is not null && skip.Contains(to)))
-                {
-                    continue;
-                }
-
-                if (outcome.TryGetValue(where, out var was) && was.Outcome == RestoreOutcome.Failed)
-                {
-                    continue;   // a path that failed once is left as it stands
-                }
-
-                if (directory is null)
-                {
-                    outcome[where] = (RestoreOutcome.Failed, FileText.RestoreRootGone(checkpoint.Root));
-                    continue;
-                }
-
-                var result = Apply(directory, checkpoint, store, entry, bin, pictures);
-                outcome[where] = result;
-                if (to is not null)
-                {
-                    outcome[to] = result;
-                }
-
-                if (entry.Op == CheckpointOp.Content && result.Outcome == RestoreOutcome.Restored)
-                {
-                    meta[where] = entry;
-                }
-                else if (entry.Op is CheckpointOp.Absent or CheckpointOp.Moved)
-                {
-                    meta.Remove(where);
-                }
-            }
-
-            if (stopped)
-            {
-                break;
             }
         }
 
@@ -377,13 +531,12 @@ public static class FileRestore
             PutBackMeta(where.Full, entry);
         }
 
-        if (!stopped)
-        {
-            spent.AddRange(plan.Ids);
-        }
+        // A failure that may pass keeps the checkpoints (review P1-09): closed in Word, back online, /undo again finishes; what came back reads as back.
+        bool retry = outcome.Values.Any(r => r.Outcome == RestoreOutcome.Failed && r.Retry);
+        var spent = !stopped && !retry ? now.Ids : [];
 
         var files = new List<RestoredFile>();
-        foreach (var where in plan.Paths)
+        foreach (var where in now.Paths)
         {
             if (!outcome.TryGetValue(where, out var result))
             {
@@ -392,30 +545,50 @@ public static class FileRestore
                     continue;
                 }
 
-                result = (RestoreOutcome.Restored, "");
+                result = new Result(RestoreOutcome.Restored);
+            }
+
+            // Listed paths only (review P7-04), and any other whose outcome the user must see.
+            if (!facts.IsListed(where) && result.Outcome is RestoreOutcome.Restored or RestoreOutcome.AlreadyBack)
+            {
+                continue;
             }
 
             FileDiff? diff = null;
-            if (result.Outcome == RestoreOutcome.Restored && before.TryGetValue(where, out string? old) && TextOf(where.Full) is { } now)
+            if (result.Outcome == RestoreOutcome.Restored && before.TryGetValue(where, out string? old) && TextOf(where.Full) is { } text)
             {
-                diff = FileDiff.Of(where.Path, old, now);
+                diff = FileDiff.Of(where.Path, old, text);
             }
 
-            files.Add(new RestoredFile(where, result.Outcome, result.Detail, diff));
+            files.Add(new RestoredFile(facts.Shown(where), result.Outcome, result.Detail, diff));
         }
 
-        return new RestoreReport(files, stopped, pictures) { Spent = spent };
+        return new RestoreReport(files, stopped, pictures) { Spent = spent, Kept = retry && !stopped };
     }
 
-    /// <summary>Whether <paramref name="where"/> is a move's destination in the plan (moved back, never sent to the bin).</summary>
-    private static bool MovedTo(RestorePlan plan, RestorePath where) =>
-        plan.Checkpoints.Any(c => WorkingDirectory.PathComparer.Equals(c.Root, where.Root)
-            && c.Record!.Entries.Any(e => e.Op == CheckpointOp.Moved && WorkingDirectory.PathComparer.Equals(e.To, where.Path)));
+    /// <summary>One path's result; <paramref name="Retry"/> for a failure that may pass (review P1-09).</summary>
+    private readonly record struct Result(RestoreOutcome Outcome, string Detail = "", bool Retry = false);
 
-    private static (RestoreOutcome Outcome, string Detail) Apply(WorkingDirectory directory, CheckpointFound checkpoint, ICheckpointStore store, CheckpointEntry entry, IRecycleBin? bin, List<string> pictures)
+    /// <summary>A path's outcome kept at its worst (review P9-04: the last entry's won, an older "not kept" over a newer restore).</summary>
+    private static void Worst(Dictionary<RestorePath, Result> outcome, RestorePath where, Result result)
     {
-        bool project = IsProjectFile(directory, entry.Path) || (entry.To is { } t && IsProjectFile(directory, t));
-        using var allowed = project ? WriteGuard.AllowProjectFile() : null;
+        if (!outcome.TryGetValue(where, out var was) || Rank(result.Outcome) >= Rank(was.Outcome))
+        {
+            outcome[where] = result;
+        }
+    }
+
+    private static int Rank(RestoreOutcome outcome) => outcome switch
+    {
+        RestoreOutcome.AlreadyBack => 0,
+        RestoreOutcome.Restored => 1,
+        RestoreOutcome.NotSaved => 2,
+        RestoreOutcome.Skipped => 3,
+        _ => 4,
+    };
+
+    private static Result Apply(WorkingDirectory directory, CheckpointFound checkpoint, ICheckpointStore store, CheckpointEntry entry, IRecycleBin? bin, bool binFirst, List<string> pictures)
+    {
         try
         {
             switch (entry.Op)
@@ -424,30 +597,37 @@ public static class FileRestore
                 {
                     if (entry.Blob is not { } name)
                     {
-                        return (RestoreOutcome.NotSaved, "");
+                        return new Result(RestoreOutcome.NotSaved);
                     }
 
                     var resolved = directory.ResolveForRestore(entry.Path, linkItself: false, out string full);
                     if (resolved != FileOutcome.Ok)
                     {
-                        return (RestoreOutcome.Failed, FileText.RestoreRefused(resolved, entry.Path));
+                        return new Result(RestoreOutcome.Failed, FileText.RestoreRefused(resolved, entry.Path));
                     }
 
                     if (Directory.Exists(full))
                     {
-                        return (RestoreOutcome.Skipped, "");
+                        return new Result(RestoreOutcome.Skipped);
                     }
 
                     using var content = store.OpenBlob(checkpoint, name);
                     if (content is null)
                     {
-                        return (RestoreOutcome.Failed, FileText.RestoreBlobMissing);
+                        // Yours stays where it is (review P1-04): nothing went to the bin before the bytes were in hand.
+                        return new Result(RestoreOutcome.Failed, FileText.RestoreBlobMissing);
                     }
 
                     bool existed = File.Exists(full);
+                    if (binFirst && existed && directory.ResolveForRestore(entry.Path, linkItself: true, out string own) == FileOutcome.Ok)
+                    {
+                        // Restore over: your version to the bin now, right before the write.
+                        FileDeletes.Remove(own, isDirectory: false, isLink: WorkingDirectory.RealLinkTarget(own) is not null, bin);
+                    }
+
                     if (!directory.WriteRestored(full, content))
                     {
-                        return (RestoreOutcome.Failed, FileText.RestoreAppeared);
+                        return new Result(RestoreOutcome.Failed, FileText.RestoreAppeared, Retry: true);
                     }
 
                     if (existed)
@@ -455,7 +635,7 @@ public static class FileRestore
                         pictures.Add(full);
                     }
 
-                    return (RestoreOutcome.Restored, "");
+                    return new Result(RestoreOutcome.Restored);
                 }
 
                 case CheckpointOp.Absent:
@@ -463,17 +643,19 @@ public static class FileRestore
                     var resolved = directory.ResolveForRestore(entry.Path, linkItself: true, out string full);
                     if (resolved != FileOutcome.Ok)
                     {
-                        return (RestoreOutcome.Failed, FileText.RestoreRefused(resolved, entry.Path));
+                        return new Result(RestoreOutcome.Failed, FileText.RestoreRefused(resolved, entry.Path));
                     }
 
                     if (Directory.Exists(full) && WorkingDirectory.RealLinkTarget(full) is null)
                     {
-                        if (!Directory.EnumerateFileSystemEntries(full).Any())
+                        if (Directory.EnumerateFileSystemEntries(full).Any())
                         {
-                            Directory.Delete(full);
+                            // Something else is in it now (review P1-14): left, and said so.
+                            return new Result(RestoreOutcome.Skipped);
                         }
 
-                        return (RestoreOutcome.Restored, "");
+                        Directory.Delete(full);
+                        return new Result(RestoreOutcome.Restored);
                     }
 
                     if (File.Exists(full) || WorkingDirectory.RealLinkTarget(full) is not null)
@@ -482,7 +664,7 @@ public static class FileRestore
                         pictures.Add(full);
                     }
 
-                    return (RestoreOutcome.Restored, "");
+                    return new Result(RestoreOutcome.Restored);
                 }
 
                 case CheckpointOp.Moved:
@@ -491,23 +673,34 @@ public static class FileRestore
                     var to = directory.ResolveForRestore(entry.To!, linkItself: true, out string moved);
                     if (from != FileOutcome.Ok || to != FileOutcome.Ok)
                     {
-                        return (RestoreOutcome.Failed, FileText.RestoreRefused(from != FileOutcome.Ok ? from : to, entry.Path));
+                        return new Result(RestoreOutcome.Failed, FileText.RestoreRefused(from != FileOutcome.Ok ? from : to, entry.Path));
                     }
 
-                    bool caseOnly = string.Equals(original, moved, StringComparison.OrdinalIgnoreCase);
+                    // A case-only rename only where case is blind (review P3-09, the journal's and Transfer's rule): on a case-sensitive folder
+                    // the old spelling is another file, which the guard below keeps.
+                    string folder = Path.GetDirectoryName(original)!;
+                    bool caseOnly = string.Equals(original, moved, StringComparison.OrdinalIgnoreCase) && !CaseRule.IsSensitive(folder);
                     if (!File.Exists(moved) && !Directory.Exists(moved))
                     {
-                        return (RestoreOutcome.Failed, FileText.RestoreMovedGone(entry.To!));
+                        return new Result(RestoreOutcome.Failed, FileText.RestoreMovedGone(entry.To!));
                     }
 
                     if (!caseOnly && (File.Exists(original) || Directory.Exists(original)))
                     {
-                        return (RestoreOutcome.Skipped, "");
+                        return new Result(RestoreOutcome.Skipped);
                     }
 
-                    Directory.CreateDirectory(Path.GetDirectoryName(original)!);
-                    if (Directory.Exists(moved) && WorkingDirectory.RealLinkTarget(moved) is null)
+                    // A moved file changed since (review P8-02): its old bytes were never saved, so it isn't moved back as if it were the same.
+                    if (!entry.Directory && entry.Hash is { } hash && File.Exists(moved) && WorkingDirectory.RealLinkTarget(moved) is null
+                        && !string.Equals(FileJournal.HashOf(moved), hash, StringComparison.OrdinalIgnoreCase))
                     {
+                        return new Result(RestoreOutcome.Skipped);
+                    }
+
+                    Directory.CreateDirectory(folder);
+                    if (Directory.Exists(moved))
+                    {
+                        // A folder, or a junction or folder link moved as itself (review P3-08: File.Move refused a folder link).
                         Directory.Move(moved, original);
                     }
                     else
@@ -516,7 +709,7 @@ public static class FileRestore
                     }
 
                     pictures.Add(moved);
-                    return (RestoreOutcome.Restored, "");
+                    return new Result(RestoreOutcome.Restored);
                 }
 
                 case CheckpointOp.Folder:
@@ -524,16 +717,16 @@ public static class FileRestore
                     var resolved = directory.ResolveForRestore(entry.Path, linkItself: false, out string full);
                     if (resolved != FileOutcome.Ok)
                     {
-                        return (RestoreOutcome.Failed, FileText.RestoreRefused(resolved, entry.Path));
+                        return new Result(RestoreOutcome.Failed, FileText.RestoreRefused(resolved, entry.Path));
                     }
 
                     if (File.Exists(full))
                     {
-                        return (RestoreOutcome.Skipped, "");
+                        return new Result(RestoreOutcome.Skipped);
                     }
 
                     Directory.CreateDirectory(full);
-                    return (RestoreOutcome.Restored, "");
+                    return new Result(RestoreOutcome.Restored);
                 }
 
                 case CheckpointOp.Link:
@@ -541,42 +734,72 @@ public static class FileRestore
                     var resolved = directory.ResolveForRestore(entry.Path, linkItself: true, out string full);
                     if (resolved != FileOutcome.Ok)
                     {
-                        return (RestoreOutcome.Failed, FileText.RestoreRefused(resolved, entry.Path));
+                        return new Result(RestoreOutcome.Failed, FileText.RestoreRefused(resolved, entry.Path));
                     }
 
-                    if (File.Exists(full) || Directory.Exists(full))
+                    string? standing = WorkingDirectory.RealLinkTarget(full) is not null ? LinkTargetOf(full) : null;
+                    if (standing is not null && string.Equals(standing, entry.Target ?? "", StringComparison.Ordinal))
                     {
-                        return (RestoreOutcome.AlreadyBack, "");
+                        return new Result(RestoreOutcome.AlreadyBack);
+                    }
+
+                    if (standing is null && Directory.Exists(full))
+                    {
+                        return new Result(RestoreOutcome.Skipped);
+                    }
+
+                    if (standing is not null || File.Exists(full))
+                    {
+                        // A file written through the link replaced it (review P3-03): that file (or a link elsewhere) goes, the link comes back.
+                        FileDeletes.Remove(full, isDirectory: false, isLink: standing is not null, bin);
+                        pictures.Add(full);
                     }
 
                     Directory.CreateDirectory(Path.GetDirectoryName(full)!);
-                    if (entry.Directory)
+                    try
                     {
-                        Directory.CreateSymbolicLink(full, entry.Target ?? "");
+                        if (entry.Directory)
+                        {
+                            Directory.CreateSymbolicLink(full, entry.Target ?? "");
+                        }
+                        else
+                        {
+                            File.CreateSymbolicLink(full, entry.Target ?? "");
+                        }
                     }
-                    else
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException && (ex.HResult & 0xFFFF) == PrivilegeNotHeld)
                     {
-                        File.CreateSymbolicLink(full, entry.Target ?? "");
+                        // The user's pick (review P9-02): a clear failure that spends, no junction code.
+                        return new Result(RestoreOutcome.Failed, FileText.RestoreLinkNeedsPrivilege);
                     }
 
-                    return (RestoreOutcome.Restored, "");
+                    return new Result(RestoreOutcome.Restored);
                 }
             }
         }
         catch (Exception ex) when (WorkingDirectory.IsFileFailure(ex))
         {
             DiagnosticLog.Warn(FileJournal.Category, $"Could not put back {entry.Path}: {ex.Message}");
-            return (RestoreOutcome.Failed, ex.Message);
+            return new Result(RestoreOutcome.Failed, ex.Message, Retry: true);
         }
 
-        return (RestoreOutcome.Failed, "");
+        return new Result(RestoreOutcome.Failed);
     }
 
-    private static bool IsProjectFile(WorkingDirectory directory, string relative) =>
-        !relative.Contains('/', StringComparison.Ordinal)
-        && Llm.ProjectFile.FileNames.Any(name => string.Equals(relative.TrimEnd('.', ' '), name, StringComparison.OrdinalIgnoreCase));
+    /// <summary>Windows' <c>ERROR_PRIVILEGE_NOT_HELD</c>: making a link without the right to.</summary>
+    private const int PrivilegeNotHeld = 1314;
 
-    /// <summary>The saved attributes (read-only last), Unix mode and internet mark put back: the mark put on, or taken off when there was none.</summary>
+    private static string? LinkTargetOf(string full)
+    {
+        FileSystemInfo info = Directory.Exists(full) ? new DirectoryInfo(full) : new FileInfo(full);
+        return info.LinkTarget;
+    }
+
+    /// <summary>
+    /// The saved attributes (read-only last), Unix mode and internet mark put back: the mark put on, or taken off when there was none. On
+    /// Windows the four saved flags are set as they were, taken off too when they weren't (2026-10-28, review P8-06: a file that gained Hidden
+    /// kept it).
+    /// </summary>
     private static void PutBackMeta(string full, CheckpointEntry entry)
     {
         try
@@ -600,10 +823,11 @@ public static class FileRestore
                 File.SetUnixFileMode(full, (UnixFileMode)mode);
             }
 
-            var attributes = (FileAttributes)entry.Attributes & (FileAttributes.ReadOnly | FileAttributes.Hidden | FileAttributes.System | FileAttributes.Archive);
-            if (OperatingSystem.IsWindows() && attributes != 0)
+            const FileAttributes Saved = FileAttributes.ReadOnly | FileAttributes.Hidden | FileAttributes.System | FileAttributes.Archive;
+            if (OperatingSystem.IsWindows())
             {
-                File.SetAttributes(full, (File.GetAttributes(full) & ~(FileAttributes.Hidden | FileAttributes.System)) | attributes);
+                var attributes = (File.GetAttributes(full) & ~Saved) | ((FileAttributes)entry.Attributes & Saved);
+                File.SetAttributes(full, attributes == 0 ? FileAttributes.Normal : attributes);
             }
         }
         catch (Exception ex) when (WorkingDirectory.IsFileFailure(ex) || ex is FormatException)

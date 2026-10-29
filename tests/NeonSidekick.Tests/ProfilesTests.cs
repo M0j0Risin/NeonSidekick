@@ -313,6 +313,39 @@ public class ProfilesTests : IDisposable
         Assert.Equal(new[] { "neon" }, Profiles.List(_dir));
     }
 
+    /// <summary>
+    /// The delete clears read-only only in the file checkpoints (2026-10-28, review P12-03): a read-only file of the user's own still stops it
+    /// and stays read-only, while the checkpoints' read-only objects don't.
+    /// </summary>
+    [WindowsFact]
+    public void Delete_ClearsReadOnly_OnlyInTheCheckpoints()
+    {
+        Profiles.Create(_dir, "work", new AppSettingsData());
+        string profile = Profiles.Directory(_dir, "work");
+        string objects = Path.Combine(profile, NeonSidekick.Files.CheckpointStore.FolderName, "files-0.git", "objects");
+        Directory.CreateDirectory(objects);
+        string blob = Path.Combine(objects, "ab");
+        File.WriteAllText(blob, "x");
+        File.SetAttributes(blob, FileAttributes.ReadOnly);
+        string keep = Path.Combine(profile, "files", "keep.txt");
+        Directory.CreateDirectory(Path.GetDirectoryName(keep)!);
+        File.WriteAllText(keep, "mine");
+        File.SetAttributes(keep, FileAttributes.ReadOnly);
+        try
+        {
+            Assert.ThrowsAny<UnauthorizedAccessException>(() => Profiles.Delete(_dir, "work"));
+            Assert.True(File.Exists(keep));
+            Assert.True(File.GetAttributes(keep).HasFlag(FileAttributes.ReadOnly));
+        }
+        finally
+        {
+            File.SetAttributes(keep, FileAttributes.Normal);
+        }
+
+        Profiles.Delete(_dir, "work");
+        Assert.False(Directory.Exists(profile));
+    }
+
     [Fact]
     public void PresentSidekickFiles_ListsTheOnesThere_InOrder_AndNoneForAMissingDirectory()
     {

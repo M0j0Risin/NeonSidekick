@@ -20,7 +20,11 @@ public interface ICheckpointWriter
 /// <summary>One root's part of a turn's journal: its writer and its op log, in the writes' order.</summary>
 public sealed class JournalLog
 {
-    internal JournalLog(string root) => Root = root;
+    internal JournalLog(string root)
+    {
+        Root = root;
+        Recorded = new HashSet<string>(CaseRule.Comparer(root));
+    }
 
     /// <summary>The root's full path.</summary>
     public string Root { get; }
@@ -34,6 +38,18 @@ public sealed class JournalLog
 
     /// <summary>The bytes saved for this root this turn.</summary>
     public long SavedBytes { get; internal set; }
+
+    /// <summary>
+    /// The paths recorded this turn (2026-10-28, review P1-03/P1-08): a path's first state is the one a restore needs, so a second write to it
+    /// saves nothing more. Compared by the root's own case rule (<see cref="CaseRule.Comparer"/>), never the platform's; a move clears it.
+    /// </summary>
+    internal HashSet<string> Recorded { get; }
+}
+
+/// <summary>Where a journal stood before a hook (2026-10-28, review P4-03), so a write refused after it can take back what the hook added.</summary>
+internal readonly record struct JournalMark(FileJournal? Journal, int[]? Counts, long Saved, long[]? LogSaved)
+{
+    public static JournalMark None => default;
 }
 
 /// <summary>
@@ -43,9 +59,11 @@ public sealed class JournalLog
 /// <see cref="FileRestore"/> can replay it backwards. Ambient per tool call (<see cref="Enter"/>, beside <see cref="WriteGuard.Watch"/> in
 /// <c>Assistant</c>), never for the whole turn: a task the turn starts outside a tool (the key watcher, a chip's still, a mid-turn pane) is
 /// the user's, not the model's. A writer counts only when its own root equals one of the journal's (<see cref="WorkingDirectory.PathComparer"/>),
-/// so a share's, a vault's or a temp root is never journaled; the app's own writes (<see cref="WriteGuard.AsApp{T}"/>) aren't either.
-/// Nothing the journal does refuses or fails a write: a save that can't happen is <see cref="CheckpointEntry.NotSaved"/>, logged, and the
-/// write goes ahead. <see cref="Seal"/> ends it: a write after that is logged, not recorded, and marks the checkpoint incomplete.
+/// so a share's, a vault's or a temp root is never journaled; the app's own writes (<see cref="WriteGuard.AsApp{T}"/>) aren't either. Each path
+/// goes to the log of the longest root holding it (2026-10-28, review P10-04: an images folder inside the working folder was journaled twice),
+/// once per turn (review P1-08). Nothing the journal does refuses or fails a write: a save that can't happen is <see cref="CheckpointEntry.NotSaved"/>,
+/// logged, and the write goes ahead; a record that fails marks the checkpoint incomplete (review P1-07). <see cref="Seal"/> ends it: a write
+/// after that is logged, not recorded, and marks the checkpoint incomplete.
 /// </summary>
 public sealed class FileJournal
 {
@@ -58,8 +76,14 @@ public sealed class FileJournal
     /// <summary>The most bytes one turn saves (or the largest-file setting when higher, so one such file always fits).</summary>
     public const long MaxTurnBytes = 512L * 1024 * 1024;
 
-    /// <summary>The most bytes the seal hashes; the rest keep size and write time.</summary>
+    /// <summary>The most bytes one turn hashes in all (its moves and its seal), and one restore's plan; the rest keep size and write time.</summary>
     public const long MaxHashBytes = 512L * 1024 * 1024;
+
+    /// <summary>
+    /// The most bytes the seal hashes on the turn's own flow (2026-10-28, review P3-12, the user's pick: no spinner): past it a path keeps its
+    /// size and write time, which <see cref="CheckpointState.Matches"/> compares when a hash is missing.
+    /// </summary>
+    public const long MaxSealHashBytes = 64L * 1024 * 1024;
 
     /// <summary>A file at most this big is read whole; a bigger one is streamed into the store.</summary>
     public const long WholeReadBytes = 64L * 1024 * 1024;
@@ -71,16 +95,20 @@ public sealed class FileJournal
     public const string NoRoomReason = "no-room";
     public const string FailedReason = "failed";
 
-    private static readonly AsyncLocal<FileJournal?> s_current = new();
+    private static readonly AsyncLocal<Scope?> s_current = new();
 
     private readonly object _gate = new();
-    private readonly Dictionary<string, JournalLog> _logs = new(WorkingDirectory.PathComparer);
+    private readonly List<JournalLog> _logs = new();
+    private readonly HashSet<WorkingDirectory> _directories = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<string, string> _spellings = new(StringComparer.Ordinal);
     private readonly Func<string, ICheckpointWriter?> _open;
     private readonly Func<string, long> _freeSpace;
     private readonly long _largestFile;
+    private readonly int _maxEntries;
     private readonly List<string> _tools = new();
     private int _count;
     private long _saved;
+    private long _hashed;
     private long? _free;
     private bool _sealed;
     private bool _incomplete;
@@ -91,6 +119,12 @@ public sealed class FileJournal
     /// <param name="largestFileBytes">The <c>File checkpoints per file (MB)</c> setting in bytes.</param>
     /// <param name="freeSpace">The free bytes on a folder's drive (<see cref="DriveInfo.AvailableFreeSpace"/>; the tests' fake).</param>
     public FileJournal(string id, IEnumerable<string> roots, Func<string, ICheckpointWriter?> open, long largestFileBytes, Func<string, long>? freeSpace = null)
+        : this(id, roots, open, largestFileBytes, freeSpace, MaxEntries)
+    {
+    }
+
+    /// <param name="maxEntries">The entry cap (<see cref="MaxEntries"/>; lower in the tests).</param>
+    internal FileJournal(string id, IEnumerable<string> roots, Func<string, ICheckpointWriter?> open, long largestFileBytes, Func<string, long>? freeSpace, int maxEntries)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(roots);
@@ -98,10 +132,14 @@ public sealed class FileJournal
         _open = open ?? throw new ArgumentNullException(nameof(open));
         _largestFile = largestFileBytes;
         _freeSpace = freeSpace ?? DriveFree;
+        _maxEntries = maxEntries;
         foreach (string root in roots)
         {
             string full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
-            _logs.TryAdd(full, new JournalLog(full));
+            if (!_logs.Any(l => WorkingDirectory.PathComparer.Equals(l.Root, full)))
+            {
+                _logs.Add(new JournalLog(full));
+            }
         }
     }
 
@@ -109,14 +147,42 @@ public sealed class FileJournal
     public string Id { get; }
 
     /// <summary>The journal entered on this flow (one tool call), or null.</summary>
-    public static FileJournal? Current => s_current.Value;
+    public static FileJournal? Current => s_current.Value?.Journal;
 
-    /// <summary>The journal for the call inside (null = none); the previous one comes back on dispose.</summary>
+    /// <summary>
+    /// The journal for the call inside (null = none); the previous one comes back on dispose. A task the call starts carries the scope with
+    /// it (2026-10-28, review P4-11): once the call is over and the journal sealed, its writes are let go quietly, never kept nor warned of.
+    /// </summary>
     public static IDisposable Enter(FileJournal? journal)
     {
         var previous = s_current.Value;
-        s_current.Value = journal;
-        return new Closer(() => s_current.Value = previous);
+        var scope = journal is null ? null : new Scope(journal);
+        s_current.Value = scope;
+        return new Closer(() =>
+        {
+            if (scope is not null)
+            {
+                scope.Open = false;
+            }
+
+            s_current.Value = previous;
+        });
+    }
+
+    /// <summary>
+    /// The turn's own working directories (2026-10-28, review P11-02): one of them whose root no longer is a journal's (a <c>/cd</c> mid-turn)
+    /// marks the checkpoint incomplete instead of going unjournaled unseen.
+    /// </summary>
+    public void Watch(params WorkingDirectory[] directories)
+    {
+        ArgumentNullException.ThrowIfNull(directories);
+        lock (_gate)
+        {
+            foreach (var directory in directories)
+            {
+                _directories.Add(directory);
+            }
+        }
     }
 
     /// <summary>Each root's log (a copy of the list).</summary>
@@ -126,7 +192,7 @@ public sealed class FileJournal
         {
             lock (_gate)
             {
-                return _logs.Values.ToList();
+                return _logs.ToList();
             }
         }
     }
@@ -143,19 +209,7 @@ public sealed class FileJournal
         }
     }
 
-    /// <summary>Whether any root recorded an entry.</summary>
-    public bool HasEntries
-    {
-        get
-        {
-            lock (_gate)
-            {
-                return _logs.Values.Any(l => l.Entries.Count > 0);
-            }
-        }
-    }
-
-    /// <summary>Some of the turn's changes weren't kept: a write after the seal, or past <see cref="MaxEntries"/>.</summary>
+    /// <summary>Some of the turn's changes weren't kept: a write after the seal, past <see cref="MaxEntries"/>, a record or a store that failed.</summary>
     public bool Incomplete
     {
         get
@@ -163,18 +217,6 @@ public sealed class FileJournal
             lock (_gate)
             {
                 return _incomplete;
-            }
-        }
-    }
-
-    /// <summary>Whether the journal is sealed.</summary>
-    public bool Sealed
-    {
-        get
-        {
-            lock (_gate)
-            {
-                return _sealed;
             }
         }
     }
@@ -195,103 +237,216 @@ public sealed class FileJournal
     // ---- the hooks WorkingDirectory calls, after Resolve(forWrite) and before the disk is touched ----
 
     /// <summary>A file at <paramref name="full"/> is about to be written: its old bytes saved, or that it (and its missing folders) wasn't there.</summary>
-    internal static void Writing(WorkingDirectory directory, string full) => Hook(directory, (journal, log) => journal.RecordWrite(log, full));
+    internal static JournalMark Writing(WorkingDirectory directory, string full) =>
+        Hook(directory, journal => journal.LogFor(full) is { } log ? journal.RecordWrite(log, full) : null);
 
     /// <summary>A folder at <paramref name="full"/> (and its missing parents) is about to be made.</summary>
-    internal static void Making(WorkingDirectory directory, string full) => Hook(directory, (journal, log) => journal.RecordMissing(log, full, directory: true));
+    internal static JournalMark Making(WorkingDirectory directory, string full) =>
+        Hook(directory, journal => journal.LogFor(full) is { } log ? journal.RecordMissing(log, full, directory: true) : null);
 
     /// <summary><paramref name="from"/> is about to move to <paramref name="to"/>: a file in the way saved, the missing folders noted, the move recorded.</summary>
-    internal static void Moving(WorkingDirectory directory, string from, string to) => Hook(directory, (journal, log) => journal.RecordMove(log, from, to));
+    internal static JournalMark Moving(WorkingDirectory directory, string from, string to) =>
+        Hook(directory, journal => journal.RecordMove(from, to));
 
     /// <summary><paramref name="full"/> is about to be deleted: a file's bytes, a link, or a folder with everything in it.</summary>
-    internal static void Removing(WorkingDirectory directory, string full) => Hook(directory, (journal, log) => journal.RecordRemove(log, full));
+    internal static JournalMark Removing(WorkingDirectory directory, string full) =>
+        Hook(directory, journal => journal.LogFor(full) is { } log ? journal.RecordRemove(log, full) : null);
 
     /// <summary>Many paths are about to be written: the <paramref name="folders"/> made where missing, then each of <paramref name="files"/>.</summary>
-    internal static void Placing(WorkingDirectory directory, IEnumerable<string> folders, IEnumerable<string> files) => Hook(directory, (journal, log) =>
+    internal static JournalMark Placing(WorkingDirectory directory, IEnumerable<string> folders, IEnumerable<string> files) =>
+        Hook(directory, journal =>
+        {
+            journal.RecordPlacing(folders, files);
+            return null;
+        });
+
+    /// <summary>
+    /// A folder copied over the file <paramref name="file"/> in its way (2026-10-28, review P3-02): the file saved, the folder noted as made
+    /// (the file still stands at the hook, so <see cref="Placing"/> alone saw nothing missing), then its folders and files.
+    /// </summary>
+    internal static JournalMark Replacing(WorkingDirectory directory, string file, IEnumerable<string> folders, IEnumerable<string> files) =>
+        Hook(directory, journal =>
+        {
+            if (journal.LogFor(file) is { } log)
+            {
+                journal.RecordRemove(log, file);
+                journal.Add(log, new CheckpointEntry { Op = CheckpointOp.Absent, Path = journal.Relative(log, file), Directory = true }, force: true);
+            }
+
+            journal.RecordPlacing(folders, files);
+            return null;
+        });
+
+    /// <summary>
+    /// Takes back what a hook added (2026-10-28, review P4-03): the write it stood for was refused after it (a file appeared, a link moved),
+    /// so the journal never describes a write that didn't happen. A blob it saved stays for the prune.
+    /// </summary>
+    internal static void TakeBack(JournalMark mark)
     {
-        foreach (string folder in folders.OrderBy(f => f.Length))
-        {
-            journal.RecordMissing(log, folder, directory: true);
-        }
-
-        foreach (string file in files)
-        {
-            journal.RecordWrite(log, file);
-        }
-    });
-
-    private static void Hook(WorkingDirectory directory, Action<FileJournal, JournalLog> record)
-    {
-        if (s_current.Value is not { } journal || WriteGuard.InAppWrites)
-        {
-            return;
-        }
-
-        string root;
-        try
-        {
-            root = directory.Root;
-        }
-        catch (Exception ex) when (WorkingDirectory.IsFileFailure(ex))
+        if (mark.Journal is not { } journal || mark.Counts is not { } counts)
         {
             return;
         }
 
         lock (journal._gate)
         {
-            if (!journal._logs.TryGetValue(root, out var log))
+            for (int i = 0; i < counts.Length && i < journal._logs.Count; i++)
             {
-                return;
+                var log = journal._logs[i];
+                for (int at = log.Entries.Count - 1; at >= counts[i]; at--)
+                {
+                    log.Recorded.Remove(log.Entries[at].Path);
+                    log.Entries.RemoveAt(at);
+                    journal._count--;
+                }
+
+                log.SavedBytes = mark.LogSaved![i];
             }
 
+            journal._saved = mark.Saved;
+        }
+    }
+
+    private static JournalMark Hook(WorkingDirectory directory, Func<FileJournal, string?> record)
+    {
+        if (s_current.Value is not { } scope || WriteGuard.InAppWrites)
+        {
+            return JournalMark.None;
+        }
+
+        var journal = scope.Journal;
+        string root;
+        try
+        {
+            root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory.Root));
+        }
+        catch (Exception ex) when (WorkingDirectory.IsFileFailure(ex) || ex is ArgumentException or NotSupportedException)
+        {
+            return JournalMark.None;
+        }
+
+        lock (journal._gate)
+        {
             if (journal._sealed)
             {
+                if (!scope.Open)
+                {
+                    // A task a call started, writing after the turn ended: the user's now, not the turn's (review P4-11).
+                    DiagnosticLog.Debug(Category, $"A write under {root} after checkpoint {journal.Id}'s turn ended is not the turn's.");
+                    return JournalMark.None;
+                }
+
                 journal._incomplete = true;
                 DiagnosticLog.Warn(Category, $"A write under {root} came after checkpoint {journal.Id} was sealed; it isn't kept.");
-                return;
+                return JournalMark.None;
             }
 
+            if (!journal._logs.Any(l => WorkingDirectory.PathComparer.Equals(l.Root, root)))
+            {
+                if (journal._directories.Contains(directory))
+                {
+                    // The turn's own folder under another name now (review P11-02): its write can't be put back.
+                    journal._incomplete = true;
+                    DiagnosticLog.Warn(Category, $"The working folder {root} is no longer checkpoint {journal.Id}'s; its writes aren't kept.");
+                }
+
+                return JournalMark.None;
+            }
+
+            var mark = journal.MarkNow();
             try
             {
-                record(journal, log);
+                if (record(journal) is { } problem)
+                {
+                    journal._incomplete = true;
+                    DiagnosticLog.Warn(Category, problem);
+                }
             }
             catch (Exception ex)
             {
-                // Nothing the journal does fails a write (the plan's rule): logged, the write goes ahead.
+                // Nothing the journal does fails a write (the plan's rule): logged, the write goes ahead, the checkpoint incomplete (review P1-07).
+                journal._incomplete = true;
                 DiagnosticLog.Warn(Category, $"The journal could not record a write under {root}: {ex.Message}");
+            }
+
+            return mark;
+        }
+    }
+
+    private JournalMark MarkNow() => new(this, _logs.Select(l => l.Entries.Count).ToArray(), _saved, _logs.Select(l => l.SavedBytes).ToArray());
+
+    /// <summary>The log of the longest root holding <paramref name="full"/> (review P10-04: nested roots), or null when none does.</summary>
+    private JournalLog? LogFor(string full)
+    {
+        JournalLog? best = null;
+        foreach (var log in _logs)
+        {
+            if (WorkingDirectory.IsInside(log.Root, full) && (best is null || log.Root.Length > best.Root.Length))
+            {
+                best = log;
+            }
+        }
+
+        return best;
+    }
+
+    private void RecordPlacing(IEnumerable<string> folders, IEnumerable<string> files)
+    {
+        foreach (string folder in folders.OrderBy(f => f.Length))
+        {
+            if (LogFor(folder) is { } log)
+            {
+                RecordMissing(log, folder, directory: true);
+            }
+        }
+
+        foreach (string file in files)
+        {
+            if (LogFor(file) is { } log)
+            {
+                RecordWrite(log, file);
             }
         }
     }
 
-    private void RecordWrite(JournalLog log, string full)
+    private string? RecordWrite(JournalLog log, string full)
     {
         if (Directory.Exists(full))
         {
-            return;
+            return null;
         }
 
         if (WorkingDirectory.RealLinkTarget(full) is not null)
         {
             AddLink(log, full);
-            return;
+            return null;
         }
 
         if (File.Exists(full))
         {
             AddContent(log, full);
-            return;
+            return null;
         }
 
-        RecordMissing(log, full, directory: false);
+        return RecordMissing(log, full, directory: false);
     }
 
-    /// <summary>An <see cref="CheckpointOp.Absent"/> for each missing folder between the root and <paramref name="full"/>, outermost first, then for it.</summary>
-    private void RecordMissing(JournalLog log, string full, bool directory)
+    /// <summary>
+    /// An <see cref="CheckpointOp.Absent"/> for each missing folder between the root and <paramref name="full"/>, outermost first, then for it
+    /// unless <paramref name="self"/> is off (a move's destination: the move stands for it, review P13-01). A folder recorded this turn stops
+    /// the climb: its own ancestors were noted with it (review P1-03).
+    /// </summary>
+    private string? RecordMissing(JournalLog log, string full, bool directory, bool self = true)
     {
-        var missing = new List<string>();
-        for (string? at = Path.GetDirectoryName(full); at is not null && IsUnder(log.Root, at); at = Path.GetDirectoryName(at))
+        if (Capped())
         {
-            if (Directory.Exists(at) || File.Exists(at))
+            return null;
+        }
+
+        var missing = new List<string>();
+        for (string? at = Path.GetDirectoryName(full); at is not null && Below(log.Root, at); at = Path.GetDirectoryName(at))
+        {
+            if (Directory.Exists(at) || File.Exists(at) || log.Recorded.Contains(Relative(log, at)))
             {
                 break;
             }
@@ -302,17 +457,35 @@ public sealed class FileJournal
         missing.Reverse();
         foreach (string folder in missing)
         {
-            Add(log, new CheckpointEntry { Op = CheckpointOp.Absent, Path = RelativeOf(log.Root, folder), Directory = true });
+            Add(log, new CheckpointEntry { Op = CheckpointOp.Absent, Path = Relative(log, folder), Directory = true });
         }
 
-        if (!File.Exists(full) && !Directory.Exists(full))
+        if (self && !File.Exists(full) && !Directory.Exists(full))
         {
-            Add(log, new CheckpointEntry { Op = CheckpointOp.Absent, Path = RelativeOf(log.Root, full), Directory = directory });
+            Add(log, new CheckpointEntry { Op = CheckpointOp.Absent, Path = Relative(log, full), Directory = directory });
         }
+
+        return null;
     }
 
-    private void RecordMove(JournalLog log, string from, string to)
+    private string? RecordMove(string from, string to)
     {
+        var fromLog = LogFor(from);
+        var toLog = LogFor(to);
+        if (fromLog is null || toLog is null)
+        {
+            return null;
+        }
+
+        if (!ReferenceEquals(fromLog, toLog))
+        {
+            // Across two roots (review P10-04): the destination noted as made, the source saved as deleted; a folder's contents can't follow.
+            RecordWrite(toLog, to);
+            RecordRemove(fromLog, from);
+            return Directory.Exists(from) ? $"A folder moved between {fromLog.Root} and {toLog.Root} can't be put back whole." : null;
+        }
+
+        var log = fromLog;
         // A case-only rename where case is blind (Transfer's rule): the "existing" destination is the same file, nothing to save.
         bool caseOnly = !string.Equals(from, to, StringComparison.Ordinal) && string.Equals(from, to, StringComparison.OrdinalIgnoreCase)
             && !CaseRule.IsSensitive(Path.GetDirectoryName(to)!);
@@ -330,14 +503,7 @@ public sealed class FileJournal
                 }
             }
 
-            RecordMissing(log, to, directory: false);
-            // RecordMissing added an Absent for "to" itself, which the move stands for: take it back.
-            if (log.Entries.Count > 0 && log.Entries[^1] is { Op: CheckpointOp.Absent } last
-                && string.Equals(last.Path, RelativeOf(log.Root, to), StringComparison.Ordinal))
-            {
-                log.Entries.RemoveAt(log.Entries.Count - 1);
-                _count--;
-            }
+            RecordMissing(log, to, directory: false, self: false);
         }
 
         bool isDirectory = Directory.Exists(from) && WorkingDirectory.RealLinkTarget(from) is null;
@@ -347,49 +513,59 @@ public sealed class FileJournal
         {
             var info = new FileInfo(from);
             size = info.Length;
-            if (size <= _largestFile && !WorkingDirectory.IsOffline(from, info.Attributes))
+            // One budget for the turn's hashing, the moves' and the seal's (review P3-14): fifty 1 GB videos aren't read whole under the lock.
+            if (size <= _largestFile && _hashed + size <= MaxHashBytes && !WorkingDirectory.IsOffline(from, info.Attributes))
             {
+                _hashed += size;
                 hash = HashOf(from);
             }
         }
 
-        Add(log, new CheckpointEntry
+        if (Add(log, new CheckpointEntry
+            {
+                Op = CheckpointOp.Moved,
+                Path = Relative(log, from),
+                To = caseOnly ? CaseRelative(log, to) : Relative(log, to),
+                Directory = isDirectory,
+                Size = size,
+                Hash = hash,
+            }, force: true))
         {
-            Op = CheckpointOp.Moved,
-            Path = RelativeOf(log.Root, from),
-            To = caseOnly ? CaseRelative(log.Root, to) : RelativeOf(log.Root, to),
-            Directory = isDirectory,
-            Size = size,
-            Hash = hash,
-        });
+            // The paths under a move are other paths now: each recorded again at its next write, and every spelling read again.
+            log.Recorded.Clear();
+            _spellings.Clear();
+        }
+
+        return null;
     }
 
-    private void RecordRemove(JournalLog log, string full)
+    private string? RecordRemove(JournalLog log, string full)
     {
         if (WorkingDirectory.RealLinkTarget(full) is not null)
         {
             AddLink(log, full);
-            return;
+            return null;
         }
 
         if (File.Exists(full))
         {
             AddContent(log, full);
-            return;
+            return null;
         }
 
         if (!Directory.Exists(full))
         {
-            return;
+            return null;
         }
 
-        // A folder: itself, then everything in it, outer folders first, never through a link (a link inside goes as a link).
+        // A folder: itself, then everything in it, outer folders first, never through a link (a link inside goes as a link). The walk stops at
+        // the entry cap (review P1-13): nothing past it is probed under the lock.
         var pending = new Stack<string>();
         pending.Push(full);
-        while (pending.Count > 0)
+        while (pending.Count > 0 && !Capped())
         {
             string folder = pending.Pop();
-            Add(log, new CheckpointEntry { Op = CheckpointOp.Folder, Path = RelativeOf(log.Root, folder), Directory = true });
+            Add(log, new CheckpointEntry { Op = CheckpointOp.Folder, Path = Relative(log, folder), Directory = true });
             IEnumerable<string> children;
             try
             {
@@ -405,6 +581,11 @@ public sealed class FileJournal
             var subfolders = new List<string>();
             foreach (string child in children)
             {
+                if (Capped())
+                {
+                    break;
+                }
+
                 if (WorkingDirectory.RealLinkTarget(child) is not null)
                 {
                     AddLink(log, child);
@@ -424,15 +605,30 @@ public sealed class FileJournal
                 pending.Push(subfolders[i]);
             }
         }
+
+        // A deleted folder's names are gone: read again if made anew.
+        _spellings.Clear();
+        return null;
     }
 
     private void AddLink(JournalLog log, string full)
     {
+        if (Capped())
+        {
+            return;
+        }
+
+        string relative = Relative(log, full);
+        if (log.Recorded.Contains(relative))
+        {
+            return;
+        }
+
         FileSystemInfo info = Directory.Exists(full) ? new DirectoryInfo(full) : new FileInfo(full);
         Add(log, new CheckpointEntry
         {
             Op = CheckpointOp.Link,
-            Path = RelativeOf(log.Root, full),
+            Path = relative,
             Target = info.LinkTarget ?? "",
             Directory = (info.Attributes & FileAttributes.Directory) != 0,
         });
@@ -440,13 +636,27 @@ public sealed class FileJournal
 
     private void AddContent(JournalLog log, string full)
     {
+        // The cap and the path's first touch before any probe (review P1-13, P1-08): a big folder's delete past the cap reads nothing more.
+        if (Capped())
+        {
+            return;
+        }
+
+        string relative = Relative(log, full);
+        if (log.Recorded.Contains(relative))
+        {
+            return;
+        }
+
         var info = new FileInfo(full);
         var entry = new CheckpointEntry
         {
             Op = CheckpointOp.Content,
-            Path = RelativeOf(log.Root, full),
+            Path = relative,
             Size = info.Length,
             Attributes = (int)info.Attributes,
+            // Until the save says otherwise (review P10-03): a throw it didn't expect leaves a clean "not saved", never a missing blob.
+            NotSaved = FailedReason,
         };
 
         if (!OperatingSystem.IsWindows())
@@ -516,14 +726,24 @@ public sealed class FileJournal
             }
             else
             {
+                // The length the opened file has (review P11-07): a file still being written is saved as it stood, or not at all.
                 using var file = new FileStream(full, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-                using var hashing = new HashingStream(file);
-                blob = writer.Save(hashing, size);
+                long length = file.Length;
+                entry.Size = length;
+                using var hashing = new HashingStream(file, length);
+                blob = writer.Save(hashing, length);
                 entry.Hash = hashing.Hash();
+                if (file.Length != length || hashing.Passed != length)
+                {
+                    DiagnosticLog.Warn(Category, $"{entry.Path} changed while it was kept for checkpoint {Id}; it isn't kept.");
+                    entry.Hash = null;
+                    return FailedReason;
+                }
             }
 
             if (blob is null)
             {
+                entry.Hash = null;
                 return FailedReason;
             }
 
@@ -540,6 +760,7 @@ public sealed class FileJournal
         catch (Exception ex) when (WorkingDirectory.IsFileFailure(ex))
         {
             DiagnosticLog.Warn(Category, $"Could not keep {entry.Path} for checkpoint {Id}: {ex.Message}");
+            entry.Hash = null;
             return FailedReason;
         }
     }
@@ -549,7 +770,7 @@ public sealed class FileJournal
     {
         try
         {
-            string probe = _logs.Values.FirstOrDefault(l => l.Writer is IStoreLocated)?.Writer is IStoreLocated located ? located.StorePath : root;
+            string probe = _logs.FirstOrDefault(l => l.Writer is IStoreLocated)?.Writer is IStoreLocated located ? located.StorePath : root;
             _free ??= _freeSpace(probe);
             if (size <= _free.Value - WorkingDirectory.FreeSpaceReserve)
             {
@@ -565,6 +786,7 @@ public sealed class FileJournal
         }
     }
 
+    /// <summary>The root's writer, opened at its first entry; a store that won't open marks the checkpoint incomplete (2026-10-28, review P4-01).</summary>
     private ICheckpointWriter? WriterOf(JournalLog log)
     {
         if (!log.Opened)
@@ -578,16 +800,41 @@ public sealed class FileJournal
             {
                 DiagnosticLog.Warn(Category, $"Could not open the checkpoint store for {log.Root}: {ex.Message}");
             }
+
+            if (log.Writer is null)
+            {
+                _incomplete = true;
+            }
         }
 
         return log.Writer;
     }
 
-    private bool Add(JournalLog log, CheckpointEntry entry)
+    /// <summary>Whether the entry cap is reached (marking the checkpoint incomplete): checked before anything is probed (review P1-13).</summary>
+    private bool Capped()
     {
-        if (_count >= MaxEntries)
+        if (_count < _maxEntries)
         {
-            _incomplete = true;
+            return false;
+        }
+
+        _incomplete = true;
+        return true;
+    }
+
+    /// <summary>
+    /// One entry into the log, once per path per turn (review P1-08: each write to one file saved a whole copy); <paramref name="force"/> for
+    /// a move and the folder a copy puts over a file, which stand beside the path's first entry.
+    /// </summary>
+    private bool Add(JournalLog log, CheckpointEntry entry, bool force = false)
+    {
+        if (Capped())
+        {
+            return false;
+        }
+
+        if (!log.Recorded.Add(entry.Path) && !force)
+        {
             return false;
         }
 
@@ -599,23 +846,27 @@ public sealed class FileJournal
 
     /// <summary>
     /// Ends the journal: no write is recorded after it. Returns each root's after-state (what each path the log names holds now), hashing
-    /// at most <see cref="MaxHashBytes"/> in all; <paramref name="stop"/> (the app closing) stops the hashing at once and gives null.
+    /// at most <see cref="MaxSealHashBytes"/> on the turn's flow, within the turn's <see cref="MaxHashBytes"/>; <paramref name="stop"/> (the app
+    /// closing) stops the hashing at once and gives null.
     /// </summary>
     public IReadOnlyDictionary<string, List<CheckpointState>>? Seal(CancellationToken stop = default)
     {
         List<JournalLog> logs;
+        long hashed;
         lock (_gate)
         {
             _sealed = true;
-            logs = _logs.Values.Where(l => l.Entries.Count > 0).ToList();
+            logs = _logs.Where(l => l.Entries.Count > 0).ToList();
+            hashed = _hashed;
         }
 
+        long budget = Math.Min(MaxHashBytes, hashed + MaxSealHashBytes);
         var after = new Dictionary<string, List<CheckpointState>>(WorkingDirectory.PathComparer);
-        long hashed = 0;
         foreach (var log in logs)
         {
             var paths = new List<string>();
-            var seen = new HashSet<string>(WorkingDirectory.PathComparer);
+            // Spellings as the disk has them already (review P8-12): ordinal, so a case-only rename's new name keeps its own state.
+            var seen = new HashSet<string>(StringComparer.Ordinal);
             foreach (var entry in log.Entries)
             {
                 if (seen.Add(entry.Path))
@@ -637,16 +888,24 @@ public sealed class FileJournal
                     return null;
                 }
 
-                states.Add(StateOf(log.Root, path, ref hashed));
+                states.Add(StateOf(log.Root, path, ref hashed, budget));
             }
 
             after[log.Root] = states;
         }
 
+        lock (_gate)
+        {
+            _hashed = hashed;
+        }
+
         return after;
     }
 
-    /// <summary>What stands at <paramref name="relative"/> under <paramref name="root"/> now, a file hashed while <paramref name="hashed"/> stays under the budget.</summary>
+    /// <summary>
+    /// What stands at <paramref name="relative"/> under <paramref name="root"/> now, a file hashed while <paramref name="hashed"/> stays under
+    /// the budget, its write time always kept (2026-10-28, review P1-06), <see cref="CheckpointState.UnknownWritten"/> when it can't be read.
+    /// </summary>
     public static CheckpointState StateOf(string root, string relative, ref long hashed, long budget = MaxHashBytes)
     {
         ArgumentNullException.ThrowIfNull(root);
@@ -678,21 +937,19 @@ public sealed class FileJournal
             var file = new FileInfo(full);
             state.Kind = CheckpointKind.File;
             state.Size = file.Length;
+            state.Written = file.LastWriteTimeUtc.Ticks;
             if (hashed + file.Length <= budget && !WorkingDirectory.IsOffline(full, file.Attributes))
             {
                 hashed += file.Length;
                 state.Hash = HashOf(full);
-            }
-            else
-            {
-                state.Written = file.LastWriteTimeUtc.Ticks;
             }
         }
         catch (Exception ex) when (WorkingDirectory.IsFileFailure(ex))
         {
             // Unreadable now: kept as a file of unknown content, which a restore then counts as a conflict.
             state.Kind = CheckpointKind.File;
-            state.Written = -1;
+            state.Hash = null;
+            state.Written = CheckpointState.UnknownWritten;
         }
 
         return state;
@@ -727,11 +984,43 @@ public sealed class FileJournal
         return string.Join('/', parts);
     }
 
+    /// <summary>
+    /// <see cref="RelativeOf"/> with the folders' spellings kept for the turn (2026-10-28, review P2-13: every journaled path read every
+    /// ancestor folder again, under the lock); a move or a folder's delete clears them.
+    /// </summary>
+    private string Relative(JournalLog log, string full)
+    {
+        string? folder = Path.GetDirectoryName(full);
+        if (folder is null || !Below(log.Root, full))
+        {
+            return RelativeOf(log.Root, full);
+        }
+
+        string prefix;
+        if (WorkingDirectory.PathComparer.Equals(Path.TrimEndingDirectorySeparator(folder), log.Root))
+        {
+            prefix = "";
+        }
+        else
+        {
+            if (!_spellings.TryGetValue(folder, out string? spelled))
+            {
+                spelled = RelativeOf(log.Root, folder);
+                _spellings[folder] = spelled;
+            }
+
+            prefix = spelled + "/";
+        }
+
+        string name = Path.GetFileName(full);
+        return prefix + (OnDisk(folder, name) ?? name);
+    }
+
     /// <summary>A case-only rename's destination: the name as given (it isn't on the disk under that spelling yet), its folders as the disk spells them.</summary>
-    private static string CaseRelative(string root, string full)
+    private string CaseRelative(JournalLog log, string full)
     {
         string folder = Path.GetDirectoryName(full)!;
-        string parent = string.Equals(folder, root, StringComparison.OrdinalIgnoreCase) ? "" : RelativeOf(root, folder) + "/";
+        string parent = string.Equals(Path.TrimEndingDirectorySeparator(folder), log.Root, StringComparison.OrdinalIgnoreCase) ? "" : Relative(log, folder) + "/";
         return parent + Path.GetFileName(full);
     }
 
@@ -743,23 +1032,35 @@ public sealed class FileJournal
         return Path.GetFullPath(Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar)));
     }
 
+    /// <summary>
+    /// <paramref name="name"/> as <paramref name="folder"/> spells it: the exact name first (2026-10-28, review P9-01: the first case-blind
+    /// match took A.txt's bytes for a.txt), and in a case-sensitive folder the name as given, which is a different file from any other case.
+    /// </summary>
     private static string? OnDisk(string folder, string name)
     {
         try
         {
-            if (name.IndexOfAny(['*', '?']) >= 0 || !Directory.Exists(folder))
+            if (name.IndexOfAny(['*', '?']) >= 0 || !Directory.Exists(folder) || CaseRule.IsSensitive(folder))
             {
                 return null;
             }
 
+            string? blind = null;
             foreach (string entry in Directory.EnumerateFileSystemEntries(folder, name))
             {
                 string found = Path.GetFileName(entry);
-                if (string.Equals(found, name, StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(found, name, StringComparison.Ordinal))
                 {
                     return found;
                 }
+
+                if (blind is null && string.Equals(found, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    blind = found;
+                }
             }
+
+            return blind;
         }
         catch (Exception ex) when (WorkingDirectory.IsFileFailure(ex))
         {
@@ -769,14 +1070,22 @@ public sealed class FileJournal
         return null;
     }
 
-    private static bool IsUnder(string root, string path) =>
-        path.Length > root.Length && path.StartsWith(root, WorkingDirectory.PathComparer == StringComparer.Ordinal ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase)
-        && (path[root.Length] == Path.DirectorySeparatorChar || path[root.Length] == Path.AltDirectorySeparatorChar || root.EndsWith(Path.DirectorySeparatorChar));
+    /// <summary>Whether <paramref name="path"/> lies under <paramref name="root"/>, never the root itself (<see cref="WorkingDirectory.IsInside"/>'s rule).</summary>
+    private static bool Below(string root, string path) =>
+        WorkingDirectory.IsInside(root, path) && !WorkingDirectory.PathComparer.Equals(Path.TrimEndingDirectorySeparator(path), root);
 
     private static long DriveFree(string folder)
     {
         string? root = Path.GetPathRoot(Path.GetFullPath(folder));
         return string.IsNullOrEmpty(root) ? long.MaxValue : new DriveInfo(root).AvailableFreeSpace;
+    }
+
+    /// <summary>One <see cref="Enter"/>'s journal and whether its call is still running (review P4-11, <see cref="WriteGuard"/>'s pattern).</summary>
+    private sealed class Scope(FileJournal journal)
+    {
+        public FileJournal Journal { get; } = journal;
+
+        public volatile bool Open = true;
     }
 
     private sealed class Closer(Action close) : IDisposable
@@ -789,10 +1098,13 @@ public sealed class FileJournal
         }
     }
 
-    /// <summary>A read-only stream that hashes what passes through it (a big file saved streamed).</summary>
-    private sealed class HashingStream(Stream inner) : Stream
+    /// <summary>A read-only stream that hashes what passes through it (a big file saved streamed), never past <paramref name="length"/>.</summary>
+    private sealed class HashingStream(Stream inner, long length) : Stream
     {
         private readonly IncrementalHash _hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+
+        /// <summary>The bytes read through.</summary>
+        public long Passed { get; private set; }
 
         public string Hash() => Convert.ToHexString(_hash.GetHashAndReset());
 
@@ -802,14 +1114,15 @@ public sealed class FileJournal
 
         public override bool CanWrite => false;
 
-        public override long Length => inner.Length;
+        public override long Length => length;
 
-        public override long Position { get => inner.Position; set => throw new NotSupportedException(); }
+        public override long Position { get => Passed; set => throw new NotSupportedException(); }
 
         public override int Read(byte[] buffer, int offset, int count)
         {
-            int read = inner.Read(buffer, offset, count);
+            int read = inner.Read(buffer, offset, (int)Math.Min(count, length - Passed));
             _hash.AppendData(buffer, offset, read);
+            Passed += read;
             return read;
         }
 

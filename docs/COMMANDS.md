@@ -60,7 +60,7 @@ Elsewhere:
 | `/prompts <n>`, `/prompts save <text>`, `/prompts remove <n>` | Sends prompt *n* as if typed, saves the rest of the line (a pasted block too), or removes prompt *n*. |
 | `/prompts list [--clear]` | Prints the prompts, numbered; `--clear` removes them all after a yes. |
 | `/sessions [<id>]` | Lists the stored sessions, or restores one with its pictures (`#12` works too). |
-| `/sessions purge <id>\|all`, `/sessions purge older <age>` | Deletes one stored session, every one, or those older than an age (`30` days, `12h`, `1d 6h`). |
+| `/sessions purge <id>\|all`, `/sessions purge older <age>` | Deletes one stored session, every one, or those older than an age (`30` days, `12h`, `1d 6h`). Its file checkpoints go too, so those turns can't be undone. |
 | `/sessions title [<text>]`, `/rename [<name>]` | Renames the current session; alone, opens a box with its name. |
 | `/memory` | Lists the memories, to edit, disable (kept, never offered to the model), forget or add one. |
 | `/memory read-write\|read-only\|off\|on` | Sets *Memory mode* (`on` is read-write). |
@@ -179,7 +179,7 @@ Each purge asks first and follows *File deletes to Recycle bin*: to the Recycle 
 | `/stt [on\|off]` | Turns voice input on or off (*STT input*). |
 | `/stt wake [on\|off]` | Turns the wake word on or off; off turns the interrupt off too. |
 | `/stt interrupt [on\|off]` | Turns the wake-word interrupt during a spoken reply on or off; needs the wake word. |
-| `/read [<file> [<n>]\|<n>]` | Reads a text file, a PDF, a Word document or a PowerPoint deck aloud; alone it resumes, a number starts at that sentence ([keys](INTERFACE.md#the-input-line)). A PDF's first 40 pages are read with your browser, a repeated header or footer left out; a spreadsheet isn't read aloud. |
+| `/read [<file> [<n>]\|<n>]` | Reads a text file, a PDF, a Word document or a PowerPoint deck aloud; alone it resumes, a number starts at that sentence ([keys](INTERFACE.md#the-input-line)). A PDF's first 40 pages are read with your browser, a repeated header or footer left out; a deck's hidden slides are skipped, and a spreadsheet isn't read aloud. |
 
 ### Web and video
 

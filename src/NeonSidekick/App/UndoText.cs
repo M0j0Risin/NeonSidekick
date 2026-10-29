@@ -57,13 +57,43 @@ public static class UndoText
     /// <summary>The page's ids for the conflict card's choices, in row order.</summary>
     public static readonly IReadOnlyList<string> ConflictChoices = ["restore", "skip", "cancel"];
 
-    /// <summary>The typed question for conflicts without a pane.</summary>
-    public const string TypedConflictQuestion = "Restore over the files you changed since?";
+    /// <summary>
+    /// The typed conflict question without a pane (2026-10-28, review P7-02: a yes/no whose blank answer skipped, and Esc wrote over): three
+    /// answers, anything else cancels. Pinned.
+    /// </summary>
+    public const string TypedConflictChoice = "Restore over the files you changed since? r = restore over them, s = skip them, anything else = cancel";
 
-    /// <summary>The question: <c>↩️ Put back the files the last turn changed?</c>, or the last 3 turns'.</summary>
-    public static string Question(int turns) => turns == 1
-        ? NoticeGlyphs.Rewind + "Put back the files the last turn changed?"
-        : string.Create(CultureInfo.InvariantCulture, $"{NoticeGlyphs.Rewind}Put back the files the last {turns} turns changed?");
+    /// <summary>The spinner's label while <c>/undo</c> works out what it would put back (2026-10-28, review P1-12: off the screen's flow).</summary>
+    public const string Planning = "Looking at the file checkpoints";
+
+    /// <summary>
+    /// The question, quoting the turns it undoes (2026-10-28, review P4-07: "the last turn" read as the turn just before, when that one changed
+    /// nothing): <c>↩️ Put back the files "fix the parser" changed?</c>.
+    /// </summary>
+    public static string Question(IReadOnlyList<string> messages)
+    {
+        ArgumentNullException.ThrowIfNull(messages);
+        return NoticeGlyphs.Rewind + "Put back the files " + Quoted(messages) + " changed?";
+    }
+
+    /// <summary>
+    /// Above the question when newer turns' file checkpoints are gone (2026-10-28, review P1-10): <c>/undo</c> reaches past them.
+    /// </summary>
+    public static string NewerNotKept(int turns) =>
+        string.Create(CultureInfo.InvariantCulture, $"({NoticeGlyphs.Rewind}the files of the {(turns == 1 ? "newest turn" : turns + " newest turns")} that changed files are no longer kept, so this goes further back)");
+
+    /// <summary>
+    /// After a restore some files couldn't be put back for a reason that may pass (2026-10-28, review P1-09): the checkpoints stay.
+    /// </summary>
+    public const string KeptForRetry =
+        "Some files couldn't be put back (open in another program, or the folder is gone for now): their file checkpoints are kept, and " + Word + " again tries them.";
+
+    /// <summary>Turns' messages quoted for a question or the model's note: <c>"a" and "b"</c>, each its <see cref="Excerpt"/>.</summary>
+    public static string Quoted(IReadOnlyList<string> messages)
+    {
+        ArgumentNullException.ThrowIfNull(messages);
+        return string.Join(" and ", messages.Select(m => "\"" + Excerpt(m) + "\""));
+    }
 
     /// <summary>The first <see cref="FileRestore.ListedFiles"/> names, then <c>and 12 more</c>.</summary>
     public static IReadOnlyList<string> Listed(IReadOnlyList<string> names)
@@ -82,7 +112,8 @@ public static class UndoText
     {
         ArgumentNullException.ThrowIfNull(where);
         ArgumentNullException.ThrowIfNull(currentRoot);
-        return WorkingDirectory.PathComparer.Equals(where.Root, currentRoot) ? where.Path.Replace('/', Path.DirectorySeparatorChar) : where.Full;
+        string shown = WorkingDirectory.PathComparer.Equals(where.Root, currentRoot) ? where.Path.Replace('/', Path.DirectorySeparatorChar) : where.Full;
+        return where.Folder ? shown + Path.DirectorySeparatorChar : shown;
     }
 
     /// <summary>
@@ -96,11 +127,11 @@ public static class UndoText
         return string.Join('\n', [FilesHeading(names.Count) + " " + string.Join(", ", Listed(names)), .. Notes(plan, currentRoot, imagesRoot, untracked)]);
     }
 
-    /// <summary>The paths a restore puts back, as the lists show them.</summary>
+    /// <summary>The paths a restore puts back, as the lists show them (<see cref="RestorePlan.Listed"/>: a folder made for a file named by the file).</summary>
     public static IReadOnlyList<string> Names(RestorePlan plan, string currentRoot)
     {
         ArgumentNullException.ThrowIfNull(plan);
-        return plan.Paths.Select(p => Shown(p, currentRoot)).ToList();
+        return plan.Listed.Select(p => Shown(p, currentRoot)).ToList();
     }
 
     /// <summary>A caption's first words: <c>3 files:</c>.</summary>
@@ -215,6 +246,11 @@ public static class UndoText
             lines.Add(CouldNotPrefix + Shown(failed.Where, currentRoot) + (failed.Detail.Length > 0 ? ": " + failed.Detail : ""));
         }
 
+        if (report.Kept)
+        {
+            lines.Add(KeptForRetry);
+        }
+
         return lines;
     }
 
@@ -228,39 +264,43 @@ public static class UndoText
     }
 
     /// <summary>
-    /// The note the model gets ahead of the user's next message, pinned: which turns' file changes are undone (named by the start of
-    /// their messages), the files back, and those kept as they are.
+    /// One <c>/undo</c>'s clause of the model's note, pinned: which turns' file changes are undone (named by the start of their messages),
+    /// "partly" when some weren't (2026-10-28, review P6-01: a stopped or partial undo read as whole), the files back, those kept as they are,
+    /// and those that couldn't be put back.
     /// </summary>
-    public static string ModelNote(IReadOnlyList<string> messages, IReadOnlyList<string> restored, IReadOnlyList<string> kept)
+    public static string NoteClause(IReadOnlyList<string> messages, IReadOnlyList<string> restored, IReadOnlyList<string> kept, IReadOnlyList<string> notPutBack, bool partly)
     {
         ArgumentNullException.ThrowIfNull(messages);
         ArgumentNullException.ThrowIfNull(restored);
         ArgumentNullException.ThrowIfNull(kept);
-        string turns = string.Join(" and ", messages.Select(m => "\"" + Excerpt(m) + "\""));
-        string note = ConversationHistory.UndoNotePreamble + "the file changes you made answering " + turns + " are undone";
+        ArgumentNullException.ThrowIfNull(notPutBack);
+        string clause = "the file changes you made answering " + Quoted(messages) + (partly ? " are partly undone" : " are undone");
         if (restored.Count > 0)
         {
-            note += "; these files are back as they were before: " + string.Join(", ", Listed(restored));
+            clause += "; these files are back as they were before: " + string.Join(", ", Listed(restored));
         }
 
         if (kept.Count > 0)
         {
-            note += "; these were kept as they are: " + string.Join(", ", Listed(kept));
+            clause += "; these were kept as they are: " + string.Join(", ", Listed(kept));
         }
 
-        return note + "]";
+        if (notPutBack.Count > 0)
+        {
+            clause += "; these could not be put back and are as you left them: " + string.Join(", ", Listed(notPutBack));
+        }
+
+        return clause;
     }
 
-    /// <summary>Two notes before the next message, merged into one line.</summary>
-    public static string Merge(string? pending, string next)
+    /// <summary>
+    /// The note the model gets ahead of the user's next message, pinned: each pending <c>/undo</c>'s clause (<see cref="NoteClause"/>) in the
+    /// order run, joined by "then", in one bracket.
+    /// </summary>
+    public static string ModelNote(IReadOnlyList<string> clauses)
     {
-        ArgumentNullException.ThrowIfNull(next);
-        if (pending is null)
-        {
-            return next;
-        }
-
-        return pending.TrimEnd(']') + "; then " + next[ConversationHistory.UndoNotePreamble.Length..];
+        ArgumentNullException.ThrowIfNull(clauses);
+        return ConversationHistory.UndoNotePreamble + string.Join("; then ", clauses) + "]";
     }
 
     /// <summary>A turn's message as the note names it: its first line, about 40 characters.</summary>
@@ -284,9 +324,16 @@ public static class UndoText
     /// <summary>The spinner's label while stores are deleted.</summary>
     public const string Purging = "Purging file checkpoints";
 
-    /// <summary>The diagnostic line after a purge.</summary>
-    public static string PurgedLogLine(int stores, long bytes) =>
-        string.Create(CultureInfo.InvariantCulture, $"Purged {stores} file checkpoint store{(stores == 1 ? "" : "s")} ({bytes} bytes)");
+    /// <summary>The diagnostic line after a purge, with the stores claimed but not yet deleted (2026-10-28, review P13-02).</summary>
+    public static string PurgedLogLine(int stores, long bytes, int pending = 0) =>
+        string.Create(CultureInfo.InvariantCulture, $"Purged {stores} file checkpoint store{(stores == 1 ? "" : "s")} ({bytes} bytes){(pending > 0 ? $", {pending} still being deleted" : "")}");
+
+    /// <summary>
+    /// A purge stopped part-way (2026-10-28, review P13-02: their bytes were counted freed): the folders whose checkpoints are already out of
+    /// reach but not yet deleted, which the next start finishes.
+    /// </summary>
+    public static string PurgeStopped(IReadOnlyList<string> folders) =>
+        "Stopped: the file checkpoints of " + string.Join(", ", Listed(folders)) + " can no longer be put back; the next start finishes deleting them.";
 
     /// <summary>With nothing kept.</summary>
     public const string NothingToPurge = "(" + NoticeGlyphs.Rewind + "no file checkpoints are kept)";
@@ -299,8 +346,9 @@ public static class UndoText
     public static string PurgeLeft(IReadOnlyList<string> folders) =>
         "Left as they are (in use, or couldn't be deleted): " + string.Join(", ", Listed(folders));
 
+    /// <summary>Bytes as whole megabytes, rounded up: <c>0 MB</c> for none (2026-10-28, review P4-08: a purge of nothing said "1 MB").</summary>
     public static string Megabytes(long bytes) =>
-        Math.Max(1, (bytes + (1024 * 1024) - 1) / (1024 * 1024)).ToString("N0", CultureInfo.InvariantCulture) + " MB";
+        (bytes <= 0 ? 0 : (bytes + (1024 * 1024) - 1) / (1024 * 1024)).ToString("N0", CultureInfo.InvariantCulture) + " MB";
 
     private static string Files(int count) => count.ToString(CultureInfo.InvariantCulture) + (count == 1 ? " file" : " files");
 

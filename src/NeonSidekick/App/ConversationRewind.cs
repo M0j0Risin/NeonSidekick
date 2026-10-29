@@ -82,19 +82,30 @@ public static partial class ConversationRewind
     /// <summary>
     /// The text of a turn's user message as the user typed it: its text parts in order. A mid-turn compact's progress note is
     /// left out, both the tagged part and the plain part a restored session has
-    /// (<see cref="ConversationCompactor.TurnProgressPreamble"/>), and an <c>/undo</c> note the same way (2026-10-28, <see cref="ConversationHistory.IsUndoNote"/>). A <c>/claude</c> exchange's <c>[to Claude] </c> tag becomes
+    /// (<see cref="ConversationCompactor.TurnProgressPreamble"/>), and an <c>/undo</c> note ahead of the text (2026-10-28, <see cref="ConversationHistory.WithoutUndoNote"/>). A <c>/claude</c> exchange's <c>[to Claude] </c> tag becomes
     /// <c>/claude </c> again, and a <c>/cmd</c> run's tag the line that runs it again (2026-10-09). Picture labels (<c>[Image #1]</c>) stay in the text.
     /// </summary>
     public static string UserLine(ChatMessage message)
+    {
+        string text = TypedText(message);
+        return ClaudeText.HistoryUserPrompt(text) is { } prompt ? "/claude " + prompt : Shell.ShellText.CmdHistoryCommand(text) ?? text;
+    }
+
+    /// <summary>
+    /// The words the user's turn <paramref name="message"/> carries, as the model read them less what the app put there: no progress note,
+    /// no restored PDF, no <c>/undo</c> note. <see cref="UserLine"/> without its <c>/claude</c> and <c>/cmd</c> rewrite (2026-10-28, review
+    /// P12-08: the evidence search read the line's <c>/cmd …</c> spelling, not the words the model had).
+    /// </summary>
+    public static string TypedText(ChatMessage message)
     {
         ArgumentNullException.ThrowIfNull(message);
         // A restored session's attached PDF is a text part of its own, never what the user typed (2026-10-20, review: its whole text
         // went into the replay's user row and onto the line).
         string text = string.Concat(message.Contents
             .Where(c => c is TextContent text && !ConversationCompactor.IsTurnProgress(c) && !text.Text.StartsWith(ConversationCompactor.TurnProgressPreamble, StringComparison.Ordinal)
-                && ConversationHistory.RestoredDocumentPath(c) is null && !ConversationHistory.IsUndoNote(c))
+                && ConversationHistory.RestoredDocumentPath(c) is null)
             .Select(c => ((TextContent)c).Text));
-        return ClaudeText.HistoryUserPrompt(text) is { } prompt ? "/claude " + prompt : Shell.ShellText.CmdHistoryCommand(text) ?? text;
+        return ConversationHistory.WithoutUndoNote(message, text);
     }
 
     /// <summary>The pictures <paramref name="message"/> carries, in order: what the line takes back to the input.</summary>
@@ -198,7 +209,7 @@ public static partial class ConversationRewind
             }
 
             turns++;
-            claude |= ClaudeText.HistoryUserPrompt(message.Text) is not null;
+            claude |= ClaudeText.HistoryUserPrompt(ConversationHistory.WithoutUndoNote(message, message.Text)) is not null;
             first ??= ConversationHistory.TurnOrdinal(message);
             if (ConversationHistory.TurnCheckpoint(message) is { } id)
             {

@@ -28,6 +28,12 @@ public sealed class PdfPageRange
     /// <summary>Whether it runs to the end of the document (a part like <c>"5-"</c>).</summary>
     public bool OpenEnded => _parts.Any(p => p.To is null);
 
+    /// <summary>
+    /// The one page it names, when every part is that same page (<c>"3"</c>, <c>"3,3"</c>); null for anything more (2026-10-28, review
+    /// P1-02: <c>read_office</c> asked <c>Resolve(int.MaxValue)</c> to learn this, and <c>"1-"</c> filled a set with two billion numbers).
+    /// </summary>
+    public int? Single => _parts.All(p => p.To == p.From && p.From == _parts[0].From) ? _parts[0].From : null;
+
     /// <summary>Reads <paramref name="spec"/>; false with <paramref name="error"/> (a sentence naming the bad part) for anything else.</summary>
     public static bool TryParse(string spec, out PdfPageRange? range, out string error)
     {

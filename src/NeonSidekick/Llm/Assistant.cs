@@ -2556,7 +2556,12 @@ public sealed class Assistant
         var slot = new Files.ProjectFileSlot();
         (string Text, IReadOnlyList<ImageAttachment> Images, FileDiff? Diff, string? Shown) answer;
         var journal = Journal;
-        journal?.NoteTool(call.Name);
+        // A read-only tool never changes anything (2026-10-28, review P8-08): /undo's "Not undone:" named a read-only MCP tool or a shell
+        // command plan mode would allow, where /rewind's filtered list didn't.
+        if (!Plans.PlanTools.Allowed(call.Name))
+        {
+            journal?.NoteTool(call.Name);
+        }
         using (Files.WriteGuard.Watch(slot))
         using (Files.FileJournal.Enter(journal))
         {

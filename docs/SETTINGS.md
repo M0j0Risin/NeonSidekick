@@ -76,7 +76,7 @@ The app itself, this side of the connection.
 |---|---|---|
 | Session logging | Saves every turn to the profile's `sessions.db`, for `/sessions` to list, search and restore. | on |
 | Session save thinking | Saves each reply's thinking, so a resumed session can send it back under *LLM preserve thinking*. | off |
-| Session retention (days) | Deletes sessions older than this at startup (0–3650; 0 keeps them forever). | 0 (forever) |
+| Session retention (days) | Deletes sessions older than this at startup (0–3650; 0 keeps them forever). Their file checkpoints go too, so those turns can't be undone. | 0 (forever) |
 | Session naming mode | `model-written` asks the model for a title after the first turn; `first-line` uses your first line. | `model-written` |
 | Session show name | Which titles show above the input row: `all`, `model-written` (a name the model wrote or you typed) or `none`. | `all` |
 | Session tool | Offers the model `session_manager`, to search, list and read earlier sessions (never to restore or purge them). | on |
@@ -607,9 +607,9 @@ The file tools and the places beyond the working directory they reach.
 | Setting | What it does | Default |
 |---|---|---|
 | File tools | Offers the sandboxed file tools (read, write, patch, search, move, copy, zip, read_pdf, read_office, convert_to_pdf, pdf_edit…), which reach only the working directory. | off |
-| File deletes to Recycle bin | Deletes by `delete`, the picture windows, the Web UI and the purges (`/comfy`, `/camera`, `/screen`, `/splash`, `/pasted`, `/ha stills purge`) go to the Recycle bin (*File deletes to Trash* on a Mac). Gone for good: a file on a share or removable drive (a purge asks for good there), one too big for the bin, and a command's or script's deletes. | on |
+| File deletes to Recycle bin | Deletes by `delete`, `/undo` and `/rewind … files`, the picture windows, the Web UI and the purges (`/comfy`, `/camera`, `/screen`, `/splash`, `/pasted`, `/ha stills purge`) go to the Recycle bin (*File deletes to Trash* on a Mac). Gone for good: a file on a share or removable drive (a purge asks for good there), one too big for the bin, and a command's or script's deletes. | on |
 | File checkpoints | Keeps what the file tools change in each turn, so `/undo` and `/rewind … files` can put it back ([what's covered](TOOLS.md#undoing-file-changes)). Turned off, the kept ones can still be undone. | on |
-| File checkpoints keep (days) | Checkpoints older than this are cleared at startup (0–3650; 0 clears none by age). | 90 |
+| File checkpoints keep (days) | Checkpoints older than this are cleared when the profile loads, at startup or a switch (0–3650; 0 clears none by age). A gone working folder's are kept as long. | 90 |
 | File checkpoints max (MB) | The most one working folder's checkpoints may hold (100–102400); the oldest go first, the newest always stays. | 2,048 |
 | File checkpoints per file (MB) | The largest file a checkpoint keeps (1–2048); a bigger one is still changed but can't be put back. | 64 |
 | File /tree max entries | Entries `/tree` prints before it stops (1–10000). | 500 |

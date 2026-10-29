@@ -560,7 +560,7 @@ public sealed class SessionStore : IDisposable
     public bool Purge(long id)
     {
         bool purged;
-        var ids = new List<long>();
+        var ids = Purged is null ? null : new List<long>();   // read only for a listener (2026-10-28, review P10-06)
         lock (_gate)
         {
             purged = Delete("WHERE session_id = $id", "WHERE id = $id", ("$id", id), ids: ids) > 0;
@@ -575,9 +575,9 @@ public sealed class SessionStore : IDisposable
         return purged;
     }
 
-    private void RaisePurged(List<long> ids)
+    private void RaisePurged(List<long>? ids)
     {
-        if (ids.Count > 0)
+        if (ids is { Count: > 0 })
         {
             Purged?.Invoke(ids);
         }
@@ -587,7 +587,7 @@ public sealed class SessionStore : IDisposable
     public int PurgeOlderThan(DateTimeOffset cutoff)
     {
         int purged;
-        var ids = new List<long>();
+        var ids = Purged is null ? null : new List<long>();   // read only for a listener (2026-10-28, review P10-06)
         lock (_gate)
         {
             purged = Delete("WHERE session_id IN (SELECT id FROM sessions WHERE updated_at < $cutoff)", "WHERE updated_at < $cutoff", ("$cutoff", Stamp(cutoff)), "WHERE session_id IS NULL AND at < $cutoff", ids);
@@ -606,7 +606,7 @@ public sealed class SessionStore : IDisposable
     public int PurgeAll()
     {
         int purged;
-        var ids = new List<long>();
+        var ids = Purged is null ? null : new List<long>();   // read only for a listener (2026-10-28, review P10-06)
         lock (_gate)
         {
             purged = Delete("", "", null, ids: ids);

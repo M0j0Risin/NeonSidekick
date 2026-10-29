@@ -236,6 +236,9 @@ internal sealed partial class ChatScreen
     {
         SlashCommand.Camera when Camera.CameraCommand.Parse(args).Verb == Camera.CameraVerb.Purge => MidTurnClass.Deferred,
         SlashCommand.Undo when UndoText.Parse(args) is { Purge: true } => MidTurnClass.Deferred,   // 2026-10-28: a purge waits for the reply, never stops it
+        // A typo (2026-10-28, review P5-12): words /undo or /rewind can't read are their usage error after the reply, never a stopped reply.
+        SlashCommand.Undo when UndoText.Parse(args) is null => MidTurnClass.Deferred,
+        SlashCommand.Rewind when RewindText.ParseArgs(args) is null => MidTurnClass.Deferred,
         SlashCommand.Screen when NeonSidekick.Screen.ScreenText.IsPurgeWord(args) => MidTurnClass.Deferred,
         SlashCommand.Splash when args.Trim().Length > 0 => UI.SplashCommand.Parse(args) == UI.PictureFolderVerb.Purge ? MidTurnClass.Deferred : MidTurnClass.Quick,
         SlashCommand.Pasted => Images.PastedCommand.Parse(args) == UI.PictureFolderVerb.Purge ? MidTurnClass.Deferred : MidTurnClass.Quick,

@@ -1,7 +1,5 @@
 using System.Text;
 using System.Xml;
-using NeonSidekick.Files;
-using NeonSidekick.Sql;
 
 namespace NeonSidekick.Office;
 
@@ -17,13 +15,12 @@ public sealed record SlideText(int Number, string Title, bool Hidden, string Bod
 /// </summary>
 public sealed class SlidesReader
 {
-    private const int MaxCellChars = ExcelReader.MaxCellChars;
-
     private readonly OfficePackage _package;
     private readonly string _main;
     private readonly CancellationToken _cancellation;
     private readonly OfficeXml _x = new();
     private List<string?>? _slides;
+    private int _left = int.MaxValue;
 
     public SlidesReader(OfficePackage package, string main, CancellationToken cancellationToken)
     {
@@ -35,10 +32,14 @@ public sealed class SlidesReader
     /// <summary>How many slides the presentation lists.</summary>
     public int Count => Slides().Count;
 
-    /// <summary>Slide <paramref name="number"/> (1-based) read.</summary>
-    public SlideText Read(int number, bool notes, bool aloud)
+    /// <summary>
+    /// Slide <paramref name="number"/> (1-based) read, its text kept to about <paramref name="limit"/> characters (2026-10-28, review P5-03:
+    /// one huge run is never held whole; the reader reads on past the rest unkept).
+    /// </summary>
+    public SlideText Read(int number, bool notes, bool aloud, int limit = int.MaxValue)
     {
         _cancellation.ThrowIfCancellationRequested();
+        _left = Math.Max(limit, 1);
         string part = Slides()[number - 1] ?? throw new OfficeDamagedException(OfficePackage.Resolve(_main, "_rels/presentation.xml.rels"));
         var body = new List<string>();
         string title = "";
@@ -155,19 +156,7 @@ public sealed class SlidesReader
         if (ns == OfficeXml.Mc && reader.LocalName == "AlternateContent")
         {
             string found = title;
-            bool chosen = false;
-            OfficeXml.Children(reader, () =>
-            {
-                if (!chosen && _x.Is(reader, OfficeXml.Mc, "Choice"))
-                {
-                    chosen = true;
-                    OfficeXml.Children(reader, () => Shape(reader, part, body, aloud, ref found, titles));
-                }
-                else
-                {
-                    OfficeXml.Skip(reader);
-                }
-            });
+            _x.FirstChoice(reader, () => Shape(reader, part, body, aloud, ref found, titles));
             title = found;
             return;
         }
@@ -221,7 +210,7 @@ public sealed class SlidesReader
                     {
                         if (sub.NodeType == XmlNodeType.Element && sub.LocalName == "cNvPr" && alt.Length == 0)
                         {
-                            alt = AltText(sub);
+                            alt = OfficeXml.AltText(sub);
                         }
                     }
                 }
@@ -271,57 +260,48 @@ public sealed class SlidesReader
             lines.Add(sb.ToString().Trim());
         });
 
-    private void Paragraph(XmlReader reader, StringBuilder sb, bool aloud) =>
-        OfficeXml.Children(reader, () =>
+    private void Paragraph(XmlReader reader, StringBuilder sb, bool aloud) => OfficeXml.Children(reader, () => ParagraphChild(reader, sb, aloud));
+
+    private void ParagraphChild(XmlReader reader, StringBuilder sb, bool aloud)
+    {
+        string ns = _x.Key(reader.NamespaceURI);
+        if (ns == OfficeXml.A && reader.LocalName is "r" or "fld")
         {
-            string ns = _x.Key(reader.NamespaceURI);
-            if (ns == OfficeXml.A && reader.LocalName is "r" or "fld")
+            OfficeXml.Children(reader, () =>
             {
-                OfficeXml.Children(reader, () =>
+                if (_x.Is(reader, OfficeXml.A, "t"))
                 {
-                    if (_x.Is(reader, OfficeXml.A, "t"))
-                    {
-                        sb.Append(OfficeXml.Text(reader));
-                    }
-                    else
-                    {
-                        OfficeXml.Skip(reader);
-                    }
-                });
-                return;
-            }
-
-            if (ns == OfficeXml.A && reader.LocalName == "br")
-            {
-                sb.Append('\n');
-            }
-            else if (ns == OfficeXml.Mc && reader.LocalName == "AlternateContent")
-            {
-                bool chosen = false;
-                OfficeXml.Children(reader, () =>
-                {
-                    if (!chosen && _x.Is(reader, OfficeXml.Mc, "Choice"))
-                    {
-                        chosen = true;
-                        Paragraph(reader, sb, aloud);
-                    }
-                    else
-                    {
-                        OfficeXml.Skip(reader);
-                    }
-                });
-                return;
-            }
-            else if ((ns == OfficeXml.M && reader.LocalName is "oMath" or "oMathPara") || reader.LocalName == "m")
-            {
-                if (!aloud)
-                {
-                    sb.Append(sb.Length > 0 && !char.IsWhiteSpace(sb[^1]) ? " " : "").Append(OfficeText.Equation).Append(' ');
+                    string text = OfficeXml.Text(reader, _left);
+                    _left = Math.Max(_left - text.Length, 0);
+                    sb.Append(text);
                 }
-            }
+                else
+                {
+                    OfficeXml.Skip(reader);
+                }
+            });
+            return;
+        }
 
-            OfficeXml.Skip(reader);
-        });
+        if (ns == OfficeXml.A && reader.LocalName == "br")
+        {
+            sb.Append('\n');
+        }
+        else if (ns == OfficeXml.Mc && reader.LocalName == "AlternateContent")
+        {
+            _x.FirstChoice(reader, () => ParagraphChild(reader, sb, aloud));
+            return;
+        }
+        else if ((ns == OfficeXml.M && reader.LocalName is "oMath" or "oMathPara") || reader.LocalName == "m")
+        {
+            if (!aloud)
+            {
+                sb.Append(sb.Length > 0 && !char.IsWhiteSpace(sb[^1]) ? " " : "").Append(OfficeText.Equation).Append(' ');
+            }
+        }
+
+        OfficeXml.Skip(reader);
+    }
 
     /// <summary>A table, a chart, a diagram or an embedded object, by its graphic's kind.</summary>
     private void GraphicFrame(XmlReader reader, List<string> body, bool aloud)
@@ -343,7 +323,7 @@ public sealed class SlidesReader
                 string ns = _x.Key(sub.NamespaceURI);
                 if (sub.LocalName == "cNvPr" && ns == OfficeXml.P && alt.Length == 0)
                 {
-                    alt = AltText(sub);
+                    alt = OfficeXml.AltText(sub);
                 }
                 else if (ns == OfficeXml.A && sub.LocalName == "graphicData" && kind.Length == 0)
                 {
@@ -422,16 +402,16 @@ public sealed class SlidesReader
         var sb = new StringBuilder();
         for (int i = 0; i < rows.Count; i++)
         {
-            sb.Append(i == 0 ? "" : "\n").Append('|');
-            for (int c = 0; c < width; c++)
+            if (i > 0)
             {
-                string cell = c < rows[i].Count ? rows[i][c] : "";
-                sb.Append(' ').Append(SqlText.TableCell(cell.Length <= MaxCellChars ? cell : TextCut.Safe(cell, MaxCellChars) + "…")).Append(" |");
+                sb.Append('\n');
             }
 
+            OfficeXml.TableRow(sb, rows[i], width);
             if (i == 0)
             {
-                sb.Append("\n|").Append(string.Concat(Enumerable.Repeat(" --- |", width)));
+                sb.Append('\n');
+                OfficeXml.TableSeparator(sb, width);
             }
         }
 
@@ -478,12 +458,5 @@ public sealed class SlidesReader
         });
 
         return string.Join("\n", lines);
-    }
-
-    private static string AltText(XmlReader reader)
-    {
-        string described = reader.GetAttribute("descr") ?? "";
-        string titled = reader.GetAttribute("title") ?? "";
-        return (described.Length > 0 ? described : titled).Replace("\r\n", " ", StringComparison.Ordinal).Replace('\n', ' ').Replace('\r', ' ').Trim();
     }
 }

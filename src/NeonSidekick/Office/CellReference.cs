@@ -139,12 +139,19 @@ public static partial class CellReference
     /// <paramref name="text"/> as <c>range</c> gives it: the sheet named in front (null when none) and the block; <see cref="RangeProblem"/>
     /// says why not. Whole columns run over every row and whole rows over every column, for the caller to bound by the used range.
     /// </summary>
-    public static RangeProblem TryParseRange(string text, out string? sheet, out CellRange? range)
+    public static RangeProblem TryParseRange(string text, out string? sheet, out CellRange? range) => TryParseRange(text, out sheet, out range, out _);
+
+    /// <summary>
+    /// As <see cref="TryParseRange(string, out string?, out CellRange?)"/>, with <paramref name="body"/> the block as written after the sheet,
+    /// <c>$</c> signs dropped (2026-10-28, review P5-16: the reader split it again by hand, so a quoted sheet name holding <c>!</c> split
+    /// differently).
+    /// </summary>
+    public static RangeProblem TryParseRange(string text, out string? sheet, out CellRange? range, out string body)
     {
         ArgumentNullException.ThrowIfNull(text);
         sheet = null;
         range = null;
-        string body = text.Trim();
+        body = text.Trim();
         if (body.StartsWith('\''))
         {
             var name = new StringBuilder();
@@ -238,28 +245,6 @@ public static partial class CellReference
 
     /// <summary><c>Sheet1!A1:F200</c>, the sheet quoted when it must be.</summary>
     public static string WithSheet(string sheet, CellRange range) => QuoteSheet(sheet) + "!" + range;
-
-    /// <summary>Numbers as runs for reading: <c>4–6, 9</c>.</summary>
-    public static string Runs(IReadOnlyList<int> numbers, Func<int, string> name)
-    {
-        ArgumentNullException.ThrowIfNull(numbers);
-        ArgumentNullException.ThrowIfNull(name);
-        var parts = new List<string>();
-        int i = 0;
-        while (i < numbers.Count)
-        {
-            int start = numbers[i], end = start;
-            while (i + 1 < numbers.Count && numbers[i + 1] == end + 1)
-            {
-                end = numbers[++i];
-            }
-
-            parts.Add(start == end ? name(start) : name(start) + "–" + name(end));
-            i++;
-        }
-
-        return string.Join(", ", parts);
-    }
 
     [GeneratedRegex("^([A-Za-z]{1,3})([0-9]{1,7})$", RegexOptions.CultureInvariant)]
     private static partial Regex CellPattern();

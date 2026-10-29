@@ -39,6 +39,15 @@ public sealed class FakeCheckpointStore : ICheckpointStore
     /// <summary>When set, <see cref="Begin"/> fails (a store that can't be opened).</summary>
     public bool FailBegin { get; set; }
 
+    /// <summary>The roots whose <see cref="Begin"/> fails while the others open (2026-10-28, review P4-01).</summary>
+    public HashSet<string> FailBeginFor { get; } = new(WorkingDirectory.PathComparer);
+
+    /// <summary>How many times <see cref="Find"/> ran (2026-10-28, review P1-12: one per <c>/undo</c>).</summary>
+    public int Finds { get; private set; }
+
+    /// <summary>When set, <see cref="Find"/> waits for it first (a slow store, so a test can stop the planning).</summary>
+    public ManualResetEventSlim? FindGate { get; set; }
+
     public ICheckpointWriter? Begin(string profileDirectory, string root, string checkpointId)
     {
         lock (Records)
@@ -46,7 +55,7 @@ public sealed class FakeCheckpointStore : ICheckpointStore
             Begun.Add(root);
         }
 
-        return FailBegin ? null : new Writer(root, this);
+        return FailBegin || FailBeginFor.Contains(root) ? null : new Writer(root, this);
     }
 
     public void Commit(ICheckpointWriter writer, CheckpointRecord record, CheckpointLimits limits)
@@ -71,8 +80,10 @@ public sealed class FakeCheckpointStore : ICheckpointStore
 
     public IReadOnlyList<CheckpointFound> Find(string profileDirectory, IReadOnlyCollection<string> ids)
     {
+        FindGate?.Wait(TimeSpan.FromSeconds(30));
         lock (Records)
         {
+            Finds++;
             return Records.Where(r => ids.Contains(r.Id)).Select(r => new CheckpointFound(r.Id, r.Root, "fake:" + r.Root, r, CheckpointProblem.None)).ToList();
         }
     }
@@ -103,11 +114,12 @@ public sealed class FakeCheckpointStore : ICheckpointStore
         }
     }
 
-    public IReadOnlyList<CheckpointStoreInfo> Stores(string profileDirectory)
+    public IReadOnlyList<CheckpointStoreInfo> Stores(string profileDirectory, IReadOnlyCollection<string>? roots = null)
     {
         lock (Records)
         {
-            return Records.GroupBy(r => r.Root, WorkingDirectory.PathComparer)
+            return Records.Where(r => roots is null || roots.Contains(r.Root, WorkingDirectory.PathComparer))
+                .GroupBy(r => r.Root, WorkingDirectory.PathComparer)
                 .Select(g => new CheckpointStoreInfo(g.Key, "fake:" + g.Key, Math.Max(1, g.Sum(r => r.SavedBytes)), Busy: false)).ToList();
         }
     }
@@ -117,8 +129,10 @@ public sealed class FakeCheckpointStore : ICheckpointStore
         lock (Records)
         {
             Purges.Add(roots);
-            var gone = Stores(profileDirectory).Where(s => roots is null || roots.Contains(s.Root, WorkingDirectory.PathComparer)).ToList();
-            Records.RemoveAll(r => gone.Any(s => WorkingDirectory.PathComparer.Equals(s.Root, r.Root)));
+            var gone = Stores(profileDirectory, roots).ToList();
+            // The purged stores' twins go from the other stores too (2026-10-28, review L4: the real store's rule).
+            var ids = Records.Where(r => gone.Any(s => WorkingDirectory.PathComparer.Equals(s.Root, r.Root))).Select(r => r.Id).ToHashSet(StringComparer.Ordinal);
+            Records.RemoveAll(r => ids.Contains(r.Id));
             return new CheckpointPurgeResult(gone.Count, gone.Sum(s => s.Bytes), [], []);
         }
     }
@@ -136,6 +150,15 @@ public sealed class FakeCheckpointStore : ICheckpointStore
         lock (Records)
         {
             Renames.Add((oldProfileDirectory, newProfileDirectory));
+        }
+    }
+
+    /// <summary>Forgets every kept blob (a damaged store: the record is read, its bytes aren't there).</summary>
+    public void DropBlobs()
+    {
+        lock (Records)
+        {
+            _blobs.Clear();
         }
     }
 

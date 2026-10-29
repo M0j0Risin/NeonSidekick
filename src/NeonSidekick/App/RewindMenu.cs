@@ -27,10 +27,11 @@ internal sealed class RewindMenu
     /// <summary>
     /// The list over <paramref name="turns"/> with the cursor on <paramref name="cursor"/>. <paramref name="preview"/> says what a
     /// rewind to the picked turn would take, for the yes/no page; <paramref name="files"/> (2026-10-28) the files caption when the dropped turns
-    /// hold file checkpoints, which makes it the files choice, its cursor on Conversation and files with <paramref name="filesFirst"/>.
+    /// hold file checkpoints, worked out off the flow (review P1-12), which makes it the files choice: its cursor on Cancel, or on Conversation
+    /// and files with <paramref name="filesFirst"/> (review P7-01: Enter on the default dropped every checkpoint).
     /// Returns the turn confirmed with its files answer, or null when the list was closed.
     /// </summary>
-    public async Task<RewindChoice?> PickAsync(IReadOnlyList<RewindTurn> turns, int cursor, Func<RewindTurn, RewindCut> preview, CancellationToken cancellationToken, Func<RewindTurn, RewindCut, string?>? files = null, bool filesFirst = false)
+    public async Task<RewindChoice?> PickAsync(IReadOnlyList<RewindTurn> turns, int cursor, Func<RewindTurn, RewindCut> preview, CancellationToken cancellationToken, Func<RewindTurn, RewindCut, CancellationToken, Task<string?>>? files = null, bool filesFirst = false)
     {
         ArgumentNullException.ThrowIfNull(turns);
         ArgumentNullException.ThrowIfNull(preview);
@@ -53,7 +54,7 @@ internal sealed class RewindMenu
 
                 var turn = turns[row];
                 var cut = preview(turn);
-                if (files?.Invoke(turn, cut) is { } caption)
+                if (files is not null && await files(turn, cut, cancellationToken).ConfigureAwait(false) is { } caption)
                 {
                     if (await ChooseOnPaneAsync(turn, cut, caption, filesFirst, cancellationToken).ConfigureAwait(false) is { } withFiles)
                     {
@@ -114,20 +115,15 @@ internal sealed class RewindMenu
     }
 
     /// <summary>
-    /// A conflict question on the pane, the pane closed after (2026-10-28): <see cref="UndoText.ConflictRows"/>, true for Restore over them,
-    /// false for Skip them, null for Cancel or Esc.
+    /// A three-row question on the pane (2026-10-28, review P6-09: the conflict question and the files choice each copied the switch), the
+    /// pane closed after: the row picked, null for Esc. Callers put the cursor on the safe row (review P7-01, P7-02).
     /// </summary>
-    public async Task<bool?> ConflictAsync(string question, string caption, CancellationToken cancellationToken)
+    public async Task<int?> ThreeWayAsync(MenuPage page, int cursor, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(page);
         try
         {
-            var page = new MenuPage(question, UndoText.ConflictRows, UndoText.ConflictKeys) { Hotkeys = UndoText.ConflictHotkeys, Caption = caption, CaptionGrows = true };
-            return await _pane.PickAsync(page, 1, cancellationToken).ConfigureAwait(false) switch
-            {
-                { Row: 0 } => true,
-                { Row: 1 } => false,
-                _ => null,
-            };
+            return await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is { Row: var row } ? row : null;
         }
         finally
         {
@@ -135,21 +131,28 @@ internal sealed class RewindMenu
         }
     }
 
-    private async Task<bool?> ChooseOnPaneAsync(RewindTurn turn, RewindCut cut, string caption, bool filesFirst, CancellationToken cancellationToken)
+    /// <summary>A three-row answer: the first row true, the second false, the third or Esc null (nothing changes).</summary>
+    public static bool? ThreeWay(int? row) => row switch
     {
-        var choose = new MenuPage(RewindText.ConfirmPrompt(turn, cut), RewindText.FilesRows, RewindText.FilesKeys)
+        0 => true,
+        1 => false,
+        _ => null,
+    };
+
+    /// <summary>The files choice's page for <paramref name="turn"/>, <paramref name="caption"/> under its question.</summary>
+    public static MenuPage FilesPage(RewindTurn turn, RewindCut cut, string caption) =>
+        new(RewindText.ConfirmPrompt(turn, cut), RewindText.FilesRows, RewindText.FilesKeys)
         {
             Hotkeys = RewindText.FilesHotkeys,
             Caption = caption,
             CaptionGrows = true,
         };
-        return await _pane.PickAsync(choose, filesFirst ? 0 : 1, cancellationToken).ConfigureAwait(false) switch
-        {
-            { Row: 0 } => true,
-            { Row: 1 } => false,
-            _ => null,
-        };
-    }
+
+    /// <summary>The files choice's cursor: Cancel, or Conversation and files for <c>/rewind files</c> (review P7-01, P4-09).</summary>
+    public static int FilesCursor(bool filesFirst) => filesFirst ? 0 : 2;
+
+    private async Task<bool?> ChooseOnPaneAsync(RewindTurn turn, RewindCut cut, string caption, bool filesFirst, CancellationToken cancellationToken) =>
+        ThreeWay(await _pane.PickAsync(FilesPage(turn, cut, caption), FilesCursor(filesFirst), cancellationToken).ConfigureAwait(false) is { Row: var row } ? row : null);
 
     private async Task<bool> ConfirmOnPaneAsync(RewindTurn turn, RewindCut cut, CancellationToken cancellationToken)
     {

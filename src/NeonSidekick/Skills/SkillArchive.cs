@@ -138,8 +138,7 @@ public sealed class SkillArchive : IDisposable
     }
 
     /// <summary>Whether <paramref name="bytes"/> open as a zip: the local-header magic <c>PK\x03\x04</c>, or an empty archive's <c>PK\x05\x06</c>.</summary>
-    public static bool LooksLikeZip(ReadOnlySpan<byte> bytes) =>
-        bytes.Length >= 4 && bytes[0] == 'P' && bytes[1] == 'K' && ((bytes[2] == 3 && bytes[3] == 4) || (bytes[2] == 5 && bytes[3] == 6));
+    public static bool LooksLikeZip(ReadOnlySpan<byte> bytes) => Files.ZipHead.Looks(bytes, allowEmpty: true);
 
     /// <summary>The archive in <paramref name="bytes"/> (from <paramref name="url"/>), or null with the error (not a zip, unreadable, too many entries). Never throws.</summary>
     public static SkillArchive? TryOpen(byte[] bytes, out string? error, Uri? url = null)

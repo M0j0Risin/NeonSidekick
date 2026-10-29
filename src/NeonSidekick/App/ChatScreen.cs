@@ -4091,7 +4091,8 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The user's line the last turn of <paramref name="turn"/> opened with — the words the evidence search reads: what the user typed
-    /// (<see cref="ConversationRewind.UserLine"/> since 2026-10-28, so an <c>/undo</c> note or a progress note never joins the query).
+    /// (<see cref="ConversationRewind.TypedText"/> since 2026-10-28, so an <c>/undo</c> note or a progress note never joins the query, and
+    /// review P12-08: no <c>/claude</c> or <c>/cmd</c> rewrite of the line either).
     /// </summary>
     private static string LastUserLine(IReadOnlyList<ChatMessage> turn)
     {
@@ -4099,7 +4100,7 @@ internal sealed partial class ChatScreen
         {
             if (ConversationHistory.IsTurnStart(turn[i]))
             {
-                return ConversationRewind.UserLine(turn[i]);
+                return ConversationRewind.TypedText(turn[i]);
             }
         }
 
@@ -14870,7 +14871,7 @@ internal sealed partial class ChatScreen
                     return;
 
                 case ProfileActionKind.Rename:
-                    RenameProfile(action.Name, action.NewName);
+                    await RenameProfileAsync(action.Name, action.NewName).ConfigureAwait(false);
                     return;
 
                 case ProfileActionKind.Push or ProfileActionKind.Pull when action.Section == ProfileSection.All:
@@ -14964,6 +14965,8 @@ internal sealed partial class ChatScreen
 
         try
         {
+            // Every checkpoint commit and the sweep done first (2026-10-28, review P10-05): none writes into the folder as it goes.
+            await SettleCheckpointsAsync().ConfigureAwait(false);
             Profiles.Delete(home, target);
             _transcript.Notice(ProfileDeletedNotice(target));
         }
@@ -14980,9 +14983,10 @@ internal sealed partial class ChatScreen
     /// — the loaded one's directory is in use, switch first); the new name must be a valid one; and
     /// it must be free — the default always resolves, and names compare ignoring case, so
     /// <c>work</c> → <c>Work</c> is "already exists" too. No confirmation (nothing is lost), no
-    /// switch, no reconnect: the loaded profile did not change.
+    /// switch, no reconnect: the loaded profile did not change. Every checkpoint commit and the sweep finish first (2026-10-28, review P10-05),
+    /// and the records that follow the folder move only once it has (review P11-04).
     /// </summary>
-    private void RenameProfile(string name, string newName)
+    private async Task RenameProfileAsync(string name, string newName)
     {
         string home = _settings.StorageDirectory;
         if (Profiles.Resolve(home, name) is not { } target)
@@ -15009,18 +15013,21 @@ internal sealed partial class ChatScreen
             return;
         }
 
+        await SettleCheckpointsAsync().ConfigureAwait(false);
         try
         {
             Profiles.Rename(home, target, newName);
-            _skillRecords.RenameProfile(target, newName);   // its skill records follow it (2026-09-30)
-            // Its file checkpoints' stores for its own files and images folders follow the folders (2026-10-28, the checkpoints plan).
-            _checkpoints?.RenameProfile(Profiles.Directory(home, target), Profiles.Directory(home, newName));
-            _transcript.Notice(ProfileRenamedNotice(target, newName));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             _transcript.Error(ProfileRenameFailedError(ex.Message));
+            return;
         }
+
+        _skillRecords.RenameProfile(target, newName);   // its skill records follow it (2026-09-30)
+        // Its file checkpoints' stores for its own files and images folders follow the folders (2026-10-28, the checkpoints plan).
+        _checkpoints?.RenameProfile(Profiles.Directory(home, target), Profiles.Directory(home, newName));
+        _transcript.Notice(ProfileRenamedNotice(target, newName));
     }
 
     /// <summary>

@@ -47,6 +47,27 @@ public class ConversationCompactorTests
         Assert.True(plan.HasOlderTurns);
     }
 
+    /// <summary>
+    /// A summary keeps the compacted turns' file checkpoints, newest first, an earlier summary's after them (2026-10-28, review P2-06): a
+    /// compaction never takes <c>/undo</c>'s reach away.
+    /// </summary>
+    [Fact]
+    public void Summarised_KeepsTheCompactedTurnsCheckpoints_NewestFirst()
+    {
+        var earlier = User("[earlier summary]");
+        ConversationHistory.SetCheckpointList(earlier, ["old"]);
+        var messages = ThreeTurns();
+        messages.Insert(0, earlier);
+        ConversationHistory.SetTurnCheckpoint(messages[1], "one-id");
+        ConversationHistory.SetTurnCheckpoint(messages.First(m => m.Text == "two"), "two-id");
+        ConversationHistory.SetTurnCheckpoint(messages.First(m => m.Text == "three"), "three-id");
+
+        var compacted = ConversationCompactor.Summarised("the gist", ConversationCompactor.Split(messages, keepRecent: 1));
+
+        Assert.Equal(["two-id", "one-id", "old"], ConversationHistory.CheckpointList(compacted[0]));
+        Assert.Equal("three-id", ConversationHistory.TurnCheckpoint(compacted.First(m => m.Text == "three")));   // a kept turn keeps its own
+    }
+
     [Fact]
     public void Split_TwoTurns_LeavesTheFirstTurnOnly()
     {

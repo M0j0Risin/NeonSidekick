@@ -432,6 +432,12 @@ public static class FileText
 
     public static string RestoreMovedGone(string to) => $"'{Shown(to)}' is no longer there to move back";
 
+    /// <summary>
+    /// A link or junction that can't be made again without the right to make links (2026-10-28, review P9-02, the user's pick: a clear failure,
+    /// no junction code): Windows gives it to administrators and to Developer Mode.
+    /// </summary>
+    public const string RestoreLinkNeedsPrivilege = "making a link needs Developer Mode or an administrator here; make it again by hand";
+
     /// <summary>The sentence for a non-<see cref="FileOutcome.Ok"/> outcome; <paramref name="verb"/> names the operation for a failure.</summary>
     public static string Error(FileOutcome outcome, string path, string verb, string detail = "", string other = "")
     {

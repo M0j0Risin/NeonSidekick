@@ -246,6 +246,69 @@ public sealed class TextFileTests : IDisposable
         Assert.Equal("two", File.ReadAllText(Full("b.txt")));
     }
 
+    /// <summary>
+    /// A hard-linked file written from a stream that fails part-way keeps its bytes (2026-10-28, review P9-05: it was truncated before the
+    /// copy, so a failing source left it empty).
+    /// </summary>
+    [WindowsFact]
+    public void AHardLinkedFile_WrittenFromAFailingStream_KeepsItsBytes()
+    {
+        File.WriteAllText(Full("a.txt"), "one");
+        using (var child = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c mklink /H \"{Full("b.txt")}\" \"{Full("a.txt")}\"") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true })!)
+        {
+            child.StandardOutput.ReadToEnd();
+            child.WaitForExit();
+        }
+
+        if (!File.Exists(Full("b.txt")))
+        {
+            return;   // no hard links on this volume
+        }
+
+        Assert.ThrowsAny<IOException>(() => WorkingDirectory.WriteAtomically(Full("a.txt"), new FailingStream()));
+
+        Assert.Equal("one", File.ReadAllText(Full("a.txt")));
+        Assert.Equal("one", File.ReadAllText(Full("b.txt")));
+        Assert.Empty(Directory.GetFiles(_root, "*" + WorkingDirectory.TempSuffix));
+    }
+
+    /// <summary>A stream that gives a few bytes, then fails as a broken read does.</summary>
+    private sealed class FailingStream : Stream
+    {
+        private bool _given;
+
+        public override bool CanRead => true;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => false;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position { get => 0; set => throw new NotSupportedException(); }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            if (_given)
+            {
+                throw new IOException("the source broke");
+            }
+
+            _given = true;
+            buffer[offset] = (byte)'x';
+            return 1;
+        }
+
+        public override void Flush()
+        {
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
     [Fact]
     public void ATempSibling_IsShort_AndKnown()
     {

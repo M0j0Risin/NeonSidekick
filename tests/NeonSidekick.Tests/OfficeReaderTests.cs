@@ -441,7 +441,11 @@ public sealed class OfficeReaderTests
         Assert.Equal(OfficeText.Legacy("a.XLS"), OfficeReader.RefuseByName("a.XLS"));
         Assert.Equal(OfficeText.BinaryWorkbook("a.xlsb"), OfficeReader.RefuseByName("a.xlsb"));
         Assert.Equal(OfficeText.OpenDocument("a.odt"), OfficeReader.RefuseByName("a.odt"));
-        Assert.Equal(OfficeText.LockFile("dir/~$report.docx", "dir/report.docx"), OfficeReader.RefuseByName("dir/~$report.docx"));
+        // Word puts "~$" over a longer name's first characters (review P2-05): a six-letter tail may have lost one or two, a shorter one none.
+        Assert.Equal(OfficeText.LockFileOf("dir/~$report.docx", "report.docx"), OfficeReader.RefuseByName("dir/~$report.docx"));
+        Assert.Equal(OfficeText.LockFileOf("~$cument1.docx", "cument1.docx"), OfficeReader.RefuseByName("~$cument1.docx"));
+        Assert.Equal(OfficeText.LockFile("dir/~$notes.docx", "dir/notes.docx"), OfficeReader.RefuseByName("dir/~$notes.docx"));
+        Assert.Equal(OfficeText.LockFile("~$Quarterly Report.xlsx", "Quarterly Report.xlsx"), OfficeReader.RefuseByName("~$Quarterly Report.xlsx"));
         Assert.Equal(OfficeText.NotAnOfficePath("a.txt"), OfficeReader.RefuseByName("a.txt"));
         Assert.Null(OfficeReader.RefuseByName("a.ppsx"));
     }
@@ -453,7 +457,8 @@ public sealed class OfficeReaderTests
         Assert.Equal(OfficeText.Protected("p.docx"), Read(ole, "p.docx"));
         Assert.Equal(OfficeText.NotOffice("t.docx"), Read("just text"u8.ToArray(), "t.docx"));
         Assert.Equal(OfficeText.NotOffice("z.xlsx"), Read(Zip([("readme.txt", "hi")]), "z.xlsx"));
-        Assert.Equal(OfficeText.NotOffice("w.xlsx"), Read(Docx(P("x")), "w.xlsx"));   // a document under a workbook's name
+        Assert.Equal(OfficeText.OtherKind("w.xlsx", OfficeKind.Word), Read(Docx(P("x")), "w.xlsx"));   // a document under a workbook's name (review P12-06)
+        Assert.Contains("copy it to a .docx name", OfficeText.OtherKind("w.xlsx", OfficeKind.Word), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -508,16 +513,24 @@ public sealed class OfficeReaderTests
     [InlineData("a_x000D_b", "a\nb")]
     [InlineData("tab_x0009_here", "tab\there")]
     [InlineData("_x005F_x0041_", "_x0041_")]
-    [InlineData("esc_x001B_", "esc\uFFFD")]
-    [InlineData("c1_x0085_", "c1\uFFFD")]
+    [InlineData("esc_x001B_", "esc\u001B")]   // kept here; the answer's one Scrub replaces it (review P2-11)
+    [InlineData("c1_x0085_", "c1\u0085")]
     [InlineData("plain_text", "plain_text")]
-    public void Unescape_DecodesOoxmlEscapes_ScrubsControls(string raw, string expected) => Assert.Equal(expected, OfficeXml.Unescape(raw));
+    [InlineData("_xD83D__xDE00_!", "\U0001F600!")]   // a pair escaped as two (review P9-09)
+    [InlineData("lone_xD83D_", "lone\uFFFD")]
+    [InlineData("_xDE00_x", "\uFFFDx")]
+    public void Unescape_DecodesOoxmlEscapes_KeepsPairs(string raw, string expected) => Assert.Equal(expected, OfficeXml.Unescape(raw));
 
     [Theory]
     [InlineData(14, null, CellFormat.Date)]
     [InlineData(22, null, CellFormat.DateTime)]
     [InlineData(20, null, CellFormat.Time)]
-    [InlineData(46, null, CellFormat.Time)]
+    [InlineData(46, null, CellFormat.Elapsed)]   // [h]:mm:ss (review P2-03)
+    [InlineData(45, null, CellFormat.Time)]
+    [InlineData(164, "[h]:mm", CellFormat.Elapsed)]
+    [InlineData(164, "[mm]:ss", CellFormat.Elapsed)]
+    [InlineData(164, "[Red]0.00", CellFormat.General)]
+    [InlineData(164, "[>=100]0;0", CellFormat.General)]
     [InlineData(31, null, CellFormat.Date)]
     [InlineData(57, null, CellFormat.Date)]
     [InlineData(9, null, CellFormat.Percent)]
@@ -550,6 +563,312 @@ public sealed class OfficeReaderTests
         Assert.Equal(RangeProblem.None, CellReference.TryParseRange("C3:A1", out _, out range));
         Assert.Equal("A1:C3", range!.ToString());
         Assert.Equal(RangeProblem.Bad, CellReference.TryParseRange("'open!A1", out _, out _));
+    }
+
+    // ── the review of 2026-10-28: crafted files (W1) ────────────────────────
+
+    private static string Nest(string open, string close, int depth, string inner) =>
+        string.Concat(Enumerable.Repeat(open, depth)) + inner + string.Concat(Enumerable.Repeat(close, depth));
+
+    [Fact]
+    public void Word_NestedTooDeeply_IsDamage_NeverACrash_AndTheTextBeforeStands()
+    {
+        string deep = Nest("<w:sdt><w:sdtContent>", "</w:sdtContent></w:sdt>", 100_000, P("deep"));
+        Assert.Equal(OfficeText.Damaged("doc.docx", "word/document.xml"), Word(deep));
+        string after = Word(P("Kept before.") + deep);
+        Assert.Contains("Kept before.", after, StringComparison.Ordinal);
+        Assert.Contains(OfficeText.DamagedPast("word/document.xml"), after, StringComparison.Ordinal);
+        Assert.DoesNotContain("deep", after, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Word_TextBoxesNestedInDrawings_StopAtTheDepthCap()
+    {
+        string open = "<w:p><w:r><w:drawing><wp:anchor><a:graphic><a:graphicData uri=\"x\"><wps:wsp><wps:txbx><w:txbxContent>";
+        string close = "</w:txbxContent></wps:txbx></wps:wsp></a:graphicData></a:graphic></wp:anchor></w:drawing></w:r></w:p>";
+        string answer = Word(P("Top.") + Nest(open, close, 2_000, P("bottom")));
+        Assert.Contains("Top.", answer, StringComparison.Ordinal);
+        Assert.Contains(OfficeText.DamagedPast("word/document.xml"), answer, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Slides_GroupsNestedTooDeeply_AreOneSlidesDamage_TheOthersRead()
+    {
+        string group = "<p:grpSp><p:nvGrpSpPr><p:cNvPr id=\"5\" name=\"g\"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/>";
+        string answer = Read(Pptx([new(Shape("title", "One")), new(Nest(group, "</p:grpSp>", 100_000, Shape(null, "deep"))), new(Shape("title", "Three"))]), "deck.pptx");
+        Assert.StartsWith("deck.pptx (slides 1–3 of 3)\n", answer, StringComparison.Ordinal);
+        Assert.Contains("## Slide 1 — One", answer, StringComparison.Ordinal);
+        Assert.Contains(OfficeText.SlideNotRead(2, "ppt/slides/slide2.xml", tooLarge: false), answer, StringComparison.Ordinal);
+        Assert.Contains("## Slide 3 — Three", answer, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Word_AHugeRun_IsReadPastNotHeld_AndPagesOn()
+    {
+        string body = "<w:p><w:r><w:t>" + new string('x', 20_000_000) + "</w:t></w:r></w:p>";
+        string first = Word(body);
+        Assert.Matches(@"^doc\.docx \(Word document, characters 1–32,000; next: from_char 32000\)\n", first);
+        Assert.True(first.Length < WorkingDirectory.MaxReadChars + 200);
+        string second = Word(body, request: new OfficeRequest(FromChar: 32_000));
+        Assert.StartsWith("doc.docx (Word document, characters 32,001–", second, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Word_ALongTable_IsStreamed_TheNextReadGoesOnWithItsRows()
+    {
+        string rows = string.Concat(Enumerable.Range(0, 50_000).Select(i => $"<w:tr><w:tc><w:p><w:r><w:t>r{i}</w:t></w:r></w:p></w:tc></w:tr>"));
+        string body = "<w:tbl><w:tblGrid><w:gridCol/></w:tblGrid>" + rows + "</w:tbl>";
+        string first = Word(body);
+        Assert.Matches(@"^doc\.docx \(Word document, characters 1–32,000; next: from_char 32000\)\n\| r0 \|\n\| --- \|\n\| r1 \|", first);
+        string second = Word(body, request: new OfficeRequest(FromChar: 32_000));
+        Assert.DoesNotContain("| r0 |", second, StringComparison.Ordinal);
+        Assert.Matches(@"\| r[0-9]{4} \|", second);
+    }
+
+    [Fact]
+    public void AStreamedBody_PastTheBombRatio_StopsWithWhatItHas()
+    {
+        string body = P("Kept.") + string.Concat(Enumerable.Repeat("<w:p/>", 1_000_000)) + P("after");
+        string answer = Read(Docx(body), "doc.docx", limits: OfficeLimits.Default with { MaxWholePartBytes = 10_000 });
+        Assert.Contains("Kept.", answer, StringComparison.Ordinal);
+        Assert.Contains(OfficeText.RestTooLarge("word/document.xml"), answer, StringComparison.Ordinal);
+        Assert.DoesNotContain("after", answer, StringComparison.Ordinal);
+    }
+
+    // ── one error shape, partial output (W2) ────────────────────────────────
+
+    [Fact]
+    public void Word_BadStyles_TheBodyReadsWithTheBuiltInHeadings()
+    {
+        var file = Replace(Docx(P("Intro", "Heading1") + P("Body.")), "word/styles.xml", "<w:styles", CompressionLevel.Optimal);
+        string answer = Read(file, "doc.docx");
+        Assert.Contains("# Intro\n\nBody.", answer, StringComparison.Ordinal);
+        var badNumbering = Replace(Docx(Li("item", 2)), "word/numbering.xml", "<w:numbering", CompressionLevel.Optimal);
+        Assert.Contains("- item", Read(badNumbering, "doc.docx"), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Word_CommentsOverTheirCap_KeepTheBody()
+    {
+        var d = Transitional;
+        var file = Docx(P("Body stands."), parts: [("word/comments.xml", $"<w:comments xmlns:w=\"{d.W}\"><w:comment w:id=\"0\"><w:p><w:r><w:t>{new string('c', 5_000)}</w:t></w:r></w:p></w:comment></w:comments>")],
+            rels: [("rIdC", "comments", "comments.xml")]);
+        string answer = Read(file, "doc.docx", limits: OfficeLimits.Default with { MaxWholePartBytes = 3_000 });
+        Assert.Contains("Body stands.", answer, StringComparison.Ordinal);
+        Assert.Contains(OfficeText.RestTooLarge("word/comments.xml"), answer, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Slides_ADamagedOrOversizedSlide_IsALine_TheOthersRead()
+    {
+        var deck = Pptx([new(Shape("title", "One")), new(Shape("title", "Two")), new(Shape("title", "Three"))]);
+        string damaged = Read(Replace(deck, "ppt/slides/slide2.xml", "<p:sld", CompressionLevel.Optimal), "deck.pptx");
+        Assert.Contains("## Slide 1 — One\n\n" + OfficeText.SlideNotRead(2, "ppt/slides/slide2.xml", tooLarge: false) + "\n\n## Slide 3 — Three", damaged, StringComparison.Ordinal);
+        Assert.StartsWith("deck.pptx (slides 1–3 of 3)\n", damaged, StringComparison.Ordinal);   // never named again as next
+
+        var big = Pptx([new(Shape("title", "One")), new(Shape(null, new string('b', 60_000))), new(Shape("title", "Three"))]);
+        string large = Read(big, "deck.pptx", limits: OfficeLimits.Default with { MaxStreamedPartBytes = 20_000 });
+        Assert.Contains(OfficeText.SlideNotRead(2, "ppt/slides/slide2.xml", tooLarge: true), large, StringComparison.Ordinal);
+        Assert.Contains("## Slide 3 — Three", large, StringComparison.Ordinal);
+
+        var allBad = Replace(Pptx([new(Shape("title", "Only"))]), "ppt/slides/slide1.xml", "<p:sld", CompressionLevel.Optimal);
+        Assert.Equal(OfficeText.Damaged("deck.pptx", "ppt/slides/slide1.xml"), Read(allBad, "deck.pptx"));   // nothing read: the first refusal
+    }
+
+    private sealed class FailingStream(byte[] bytes) : MemoryStream(bytes, writable: false)
+    {
+        public override int Read(byte[] buffer, int offset, int count) => throw new IOException("the share went away");
+
+        public override int Read(Span<byte> buffer) => throw new IOException("the share went away");
+    }
+
+    [Fact]
+    public void AStreamThatFails_IsTheFilesReadError_NeverAnExceptionOut()
+    {
+        using var stream = new FailingStream(Docx(P("x")));
+        Assert.Equal(FileText.Error(FileOutcome.Failed, "doc.docx", "read", "the share went away"),
+            OfficeReader.Read(stream, "doc.docx", OfficeKind.Word, new OfficeRequest(), OfficeLimits.Default, CancellationToken.None));
+    }
+
+    // ── offsets, names, escapes (W4) ────────────────────────────────────────
+
+    [Fact]
+    public void Word_AHugeFromChar_IsPastTheText_NotANegativeLimit()
+    {
+        Assert.Equal(OfficeText.PastTheText("doc.docx", 5, int.MaxValue), Word(P("short"), request: new OfficeRequest(FromChar: int.MaxValue)));
+    }
+
+    [Fact]
+    public void Slides_TheSeparatorCounts_SoTheBodyStaysInTheBudget()
+    {
+        // Slide 1 renders 16,011 characters; slide 2 exactly fills the old room, one past the budget once "\n\n" is counted (review P13-03).
+        var deck = Pptx([new(Shape(null, new string('a', 16_000))), new(Shape(null, new string('b', 15_977)))]);
+        string answer = Read(deck, "deck.pptx");
+        Assert.StartsWith("deck.pptx (slide 1 of 2; next: slides \"2\")\n", answer, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Word_NumberingStyleLinksAndLevelOverrides_AreNumbered()
+    {
+        var d = Transitional;
+        string numbering = $"<w:numbering xmlns:w=\"{d.W}\">" +
+            "<w:abstractNum w:abstractNumId=\"1\"><w:numStyleLink w:val=\"MyList\"/></w:abstractNum>" +
+            "<w:abstractNum w:abstractNumId=\"2\"><w:styleLink w:val=\"MyList\"/><w:lvl w:ilvl=\"0\"><w:numFmt w:val=\"decimal\"/></w:lvl></w:abstractNum>" +
+            "<w:abstractNum w:abstractNumId=\"3\"><w:lvl w:ilvl=\"0\"><w:numFmt w:val=\"bullet\"/></w:lvl></w:abstractNum>" +
+            "<w:num w:numId=\"5\"><w:abstractNumId w:val=\"1\"/></w:num><w:num w:numId=\"6\"><w:abstractNumId w:val=\"2\"/></w:num>" +
+            "<w:num w:numId=\"7\"><w:abstractNumId w:val=\"3\"/><w:lvlOverride w:ilvl=\"0\"><w:lvl w:ilvl=\"0\"><w:numFmt w:val=\"decimal\"/></w:lvl></w:lvlOverride></w:num>" +
+            "<w:num w:numId=\"8\"><w:abstractNumId w:val=\"3\"/></w:num></w:numbering>";
+        string styles = WordStyles(d).Replace("</w:styles>", "<w:style w:type=\"numbering\" w:styleId=\"MyList\"><w:pPr><w:numPr><w:numId w:val=\"6\"/></w:numPr></w:pPr></w:style></w:styles>", StringComparison.Ordinal);
+        var file = Replace(Replace(Docx(Li("linked", 5) + Li("over", 7) + Li("plain", 8)), "word/numbering.xml", numbering, CompressionLevel.Optimal), "word/styles.xml", styles, CompressionLevel.Optimal);
+        string answer = Read(file, "doc.docx");
+        Assert.Contains("1. linked\n1. over\n- plain", answer, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Word_Hyperlink_EscapesItsTextAndUrl()
+    {
+        string answer = Word("<w:p><w:hyperlink r:id=\"rIdL\"><w:r><w:t>see [1] a\\b</w:t></w:r></w:hyperlink></w:p>",
+            rels: [("rIdL", "hyperlink!", "https://x.test/a b(c)&lt;d&gt;")]);
+        Assert.Contains(@"[see \[1\] a\\b](https://x.test/a%20b%28c%29%3Cd%3E)", answer, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheAnswer_IsScrubbedOnce_ALiteralC1ControlToo()
+    {
+        string answer = Word(P("csi\u009B[31m bidi‮end"));
+        Assert.DoesNotContain("\u009B", answer, StringComparison.Ordinal);
+        Assert.Contains("csi�[31m", answer, StringComparison.Ordinal);
+        Assert.Contains("bidi\\u202Eend", answer, StringComparison.Ordinal);
+    }
+
+    // ── Excel (E1–E4) ───────────────────────────────────────────────────────
+
+    private static string Block(int rows, int columns) =>
+        string.Concat(Enumerable.Range(1, rows).Select(r => Row(r, Enumerable.Range(1, columns).Select(c => Cell(CellReference.Cell(c, r), (r * 10 + c).ToString(System.Globalization.CultureInfo.InvariantCulture))).ToArray())));
+
+    [Fact]
+    public void Excel_AOneCellDimension_IsNotTrusted_AndAnExplicitRangeIsItsOwnBound()
+    {
+        SheetSpec[] sheets = [new("S", SheetData(Block(5, 3), "A1"))];
+        Assert.Contains("1. S: A1:C5", Book(sheets), StringComparison.Ordinal);
+        string range = Book(sheets, new OfficeRequest(Sheet: "S", Range: "B2:C3"));
+        Assert.StartsWith("book.xlsx (sheet S, B2:C3)\n", range, StringComparison.Ordinal);
+        Assert.Contains("| 2 | 22 | 23 |\n| 3 | 32 | 33 |", range, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Excel_Overview_PassesABlankCover_ForTheFirstSheetWithRows()
+    {
+        string answer = Book([new("Cover", SheetData("", "A1")), new("Data", SheetData(Block(2, 2), "A1:B2"))]);
+        Assert.Contains("1. Cover: empty\n2. Data: A1:B2", answer, StringComparison.Ordinal);
+        Assert.Contains("First rows of Data:\n| | A | B |", answer, StringComparison.Ordinal);
+        Assert.StartsWith("book.xlsx (Excel workbook, 2 sheets; showing Data!A1:B2", answer, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Excel_Overview_IsCapped_ManySheetsAndLongNames()
+    {
+        var sheets = Enumerable.Range(1, 400).Select(i => new SheetSpec("S" + i, SheetData(Row(1, Cell("A1", "1")), "A1"))).ToList();
+        string names = string.Concat(Enumerable.Range(1, 60).Select(i => $"<definedName name=\"N{i}{new string('n', 300)}\">S1!$A$1{new string('r', 300)}</definedName>"));
+        string answer = Book(sheets, definedNames: names);
+        Assert.True(answer.Length <= WorkingDirectory.MaxReadChars, answer.Length.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Contains("\n100. S100: A1\n" + OfficeText.More(300), answer, StringComparison.Ordinal);
+        Assert.Contains(OfficeText.More(10), answer, StringComparison.Ordinal);
+        Assert.Contains("First rows of S1:", answer, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Excel_ADefinedName_StaysOnOneLine()
+    {
+        string answer = Book(Grid, definedNames: "<definedName name=\"Odd\">'Q3 Sales'!$A$1&#10;=IGNORE</definedName>");
+        Assert.Contains("- Odd: 'Q3 Sales'!$A$1 =IGNORE\n", answer, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Excel_NoSuchSheet_NamesTheFirstFifty()
+    {
+        var sheets = Enumerable.Range(1, 300).Select(i => new SheetSpec("S" + i, SheetData("", "A1"))).ToList();
+        string answer = Book(sheets, new OfficeRequest(Sheet: "Nope"));
+        Assert.EndsWith("\"S50\" " + OfficeText.More(250), answer, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"S51\"", answer, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Excel_ATableCutByRowsAndColumns_NamesBoth()
+    {
+        string answer = Book([new("W", SheetData(Block(2_000, 50), "A1:AX2000"))], new OfficeRequest(Sheet: "W"));
+        Assert.Matches(@"^book\.xlsx \(sheet W, A1:AN(\d+) of used range A1:AX2000; next: range ""W!A\d+:AX2000""; the columns past these: range ""W!AO1:AX\1""\)\n", answer);
+    }
+
+    [Fact]
+    public void Excel_SheetKinds_ChartDialogAndMacro_NamedAsTheyAre()
+    {
+        SheetSpec[] sheets = [new("Data", SheetData(Row(1, Cell("A1", "1")), "A1")), new("Ch", "", Chart: true), new("Dlg", "", Kind: "dialogsheet"), new("Mac", "", Kind: "xlMacrosheet")];
+        string answer = Book(sheets);
+        Assert.Contains("2. Ch: chart sheet (not read)\n3. Dlg: dialog sheet (not read)\n4. Mac: macro sheet (not read)", answer, StringComparison.Ordinal);
+        Assert.Equal(OfficeText.NotReadSheet("Dlg", SheetKind.Dialog), Book(sheets, new OfficeRequest(Sheet: "Dlg")));
+        Assert.Equal("Error: Mac is a macro sheet, which isn't read", Book(sheets, new OfficeRequest(Sheet: "Mac")));
+    }
+
+    [Fact]
+    public void Excel_OptionalPiecesBroken_ReadAsGeneral_ADamagedSheetIsALine()
+    {
+        string answer = Book([new("S", SheetData(Row(1, Cell("A1", "42", s: 7)), "A1"))], new OfficeRequest(Sheet: "S"));
+        Assert.Contains("| 1 | 42 |", answer, StringComparison.Ordinal);   // a style index past cellXfs (review P2-08)
+
+        var badStyles = Replace(Xlsx([new("S", SheetData(Row(1, Cell("A1", "0.5", s: 1)), "A1"))], xfs: [0, 9]), "xl/styles.xml", "<styleSheet", CompressionLevel.Optimal);
+        Assert.Contains("| 1 | 0.5 |", Read(badStyles, "book.xlsx", new OfficeRequest(Sheet: "S")), StringComparison.Ordinal);
+
+        string overview = Book([new("Broken", "", Raw: $"<worksheet xmlns=\"{Transitional.S}\"><sheetData><row r=\"1\"><c r=\"A1\"><v>1</v></c>"), new("Good", SheetData(Row(1, Cell("A1", "5")), "A1"))]);
+        Assert.Contains("1. Broken: looks damaged (not read)\n2. Good: A1", overview, StringComparison.Ordinal);
+        Assert.Contains("First rows of Good:", overview, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Excel_APercentEncodedPartName_IsFound()
+    {
+        var d = Transitional;
+        var file = Zip(
+        [
+            ("_rels/.rels", Rels(d, ("rId1", "officeDocument", "xl/workbook.xml"))),
+            ("xl/workbook.xml", $"<workbook xmlns=\"{d.S}\" xmlns:r=\"{d.R}\"><sheets><sheet name=\"S\" sheetId=\"1\" r:id=\"rIdS\"/></sheets></workbook>"),
+            ("xl/_rels/workbook.xml.rels", Rels(d, ("rIdS", "worksheet", "worksheets/sheet%201.xml"))),
+            ("xl/worksheets/sheet%201.xml", $"<worksheet xmlns=\"{d.S}\">{SheetData(Row(1, Cell("A1", "7")), "A1")}</worksheet>"),
+        ]);
+        Assert.Contains("| 1 | 7 |", Read(file, "book.xlsx", new OfficeRequest(Sheet: "S")), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void NumberFormats_ElapsedDayZeroAndTheLastSerial()
+    {
+        Assert.Equal("36:00:00", NumberFormats.Format(1.5, CellFormat.Elapsed, false));
+        Assert.Equal("0:30:00", NumberFormats.Format(1.0 / 48, CellFormat.Elapsed, false));
+        Assert.Equal(NumberFormats.General(-1), NumberFormats.Format(-1, CellFormat.Elapsed, false));
+        Assert.Equal("09:00:00", NumberFormats.Format(0.375, CellFormat.DateTime, false));   // day 0 (review P9-10)
+        Assert.Equal("1900-01-00", NumberFormats.Format(0, CellFormat.Date, false));
+        Assert.Equal("1904-01-01", NumberFormats.Format(0, CellFormat.Date, true));
+        Assert.Equal("9999-12-31T00:00:00", NumberFormats.Format(NumberFormats.MaxSerial, CellFormat.DateTime, false));   // the last day (review P3-06)
+        double past = NumberFormats.MaxSerial - 1462 + 0.9999999999;   // rounds past 9999-12-31 counted from 1904
+        Assert.Equal(NumberFormats.General(past), NumberFormats.Format(past, CellFormat.DateTime, true));
+        string sheet = Book([new("S", SheetData(Row(1, Cell("A1", "1.25", s: 1)), "A1"))], new OfficeRequest(Sheet: "S"), xfs: [0, 164], codes: new Dictionary<int, string> { [164] = "[h]:mm" });
+        Assert.Contains("| 1 | 30:00:00 |", sheet, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ThePieces_ZipHeadRunsAndARangesBody()
+    {
+        Assert.True(ZipHead.Looks("PK\x03\x04"u8));
+        Assert.False(ZipHead.Looks("PK\x05\x06"u8));
+        Assert.True(ZipHead.Looks("PK\x05\x06"u8, allowEmpty: true));
+        Assert.True(NeonSidekick.Skills.SkillArchive.LooksLikeZip("PK\x05\x06"u8));
+        Assert.Equal("C–E, H", PdfText.Runs([3, 4, 5, 8], CellReference.Column));
+        Assert.Equal(RangeProblem.None, CellReference.TryParseRange("'a!b'!$B$2:$C$3", out string? sheet, out _, out string body));
+        Assert.Equal("a!b", sheet);
+        Assert.Equal("B2:C3", body);
+        Assert.True(PdfPageRange.TryParse("3,3", out var same, out _));
+        Assert.Equal(3, same!.Single);
+        Assert.True(PdfPageRange.TryParse("1-", out var open, out _));
+        Assert.Null(open!.Single);
     }
 
     private static byte[] Strip(byte[] zip, string entry) => Rebuild(zip, entry, null, CompressionLevel.Optimal);

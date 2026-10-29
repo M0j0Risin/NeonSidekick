@@ -107,9 +107,6 @@ public sealed class ModelStore
     /// <summary>Every GGUF file starts with these four bytes: "GGUF".</summary>
     private static readonly byte[] GgufMagic = { 0x47, 0x47, 0x55, 0x46 };
 
-    /// <summary>Every zip archive starts with a local file header: "PK\x03\x04".</summary>
-    private static readonly byte[] ZipMagic = { 0x50, 0x4B, 0x03, 0x04 };
-
     /// <summary>Every gzip stream starts with 1F 8B and, for deflate (the only method there is), 08.</summary>
     private static readonly byte[] GzipMagic = { 0x1F, 0x8B, 0x08 };
 
@@ -692,7 +689,7 @@ public sealed class ModelStore
         System.IO.Directory.Exists(directory) && FirstMissingFile(directory, requiredFiles) is null;
 
     /// <summary>Whether the file at <paramref name="path"/> starts with the zip local-header magic (<c>PK\x03\x04</c>). False for a missing, short or unreadable file.</summary>
-    public static bool LooksLikeZip(string path) => StartsWith(path, ZipMagic);
+    public static bool LooksLikeZip(string path) => Head(path) is { } head && Files.ZipHead.Looks(head);
 
     /// <summary>Whether the file at <paramref name="path"/> starts with the gzip magic (<c>1F 8B 08</c>). False for a missing, short or unreadable file.</summary>
     public static bool LooksLikeGzip(string path) => StartsWith(path, GzipMagic);
@@ -860,18 +857,21 @@ public sealed class ModelStore
     /// <summary>Whether the file at <paramref name="path"/> starts with the GGUF magic. False for a missing, short or unreadable file.</summary>
     public static bool LooksLikeGguf(string path) => StartsWith(path, GgufMagic);
 
-    private static bool StartsWith(string path, byte[] magic)
+    private static bool StartsWith(string path, byte[] magic) => Head(path) is { } head && head.AsSpan().StartsWith(magic);
+
+    /// <summary>The file's first four bytes (fewer for a short file); null for a missing or unreadable one.</summary>
+    private static byte[]? Head(string path)
     {
         try
         {
             using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-            Span<byte> head = stackalloc byte[4];
-            int read = stream.Read(head);
-            return read >= magic.Length && head[..magic.Length].SequenceEqual(magic);   // >=: gzip's magic is three bytes
+            var head = new byte[4];
+            int read = stream.ReadAtLeast(head, head.Length, throwOnEndOfStream: false);
+            return head[..read];
         }
         catch
         {
-            return false;
+            return null;
         }
     }
 

@@ -117,6 +117,47 @@ public sealed class ReadOfficeTests : IDisposable
     }
 
     [Fact]
+    public async Task FromChar_TakesOneSlide_AnOpenOrRepeatedRangeRefusedAtOnce()
+    {
+        Put("c.pptx", Pptx([new(Shape("title", "T")), new(Shape("title", "U")), new(Shape("title", "V"))]));
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        Assert.Equal(OfficeText.FromCharNeedsOneSlide, await Call(("path", "c.pptx"), ("slides", "1-"), ("from_char", 5)));   // review P1-02: never Resolve(int.MaxValue)
+        Assert.Equal(OfficeText.FromCharNeedsOneSlide, await Call(("path", "c.pptx"), ("slides", "1-99999,1-99999"), ("from_char", 5)));
+        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(5));
+        Assert.StartsWith("c.pptx (slide 3 of 3)", await Call(("path", "c.pptx"), ("slides", "3,3"), ("from_char", 1)), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ReadAloud_SkipsHiddenSlides_AndADeckThatJustFitsIsNotCut()
+    {
+        Put("d.pptx", Pptx([new(Shape("title", "Shown")), new(Shape("title", "Secret") + Shape(null, "hidden words"), Hidden: true), new(Shape(null, "Last"))]));
+        var (text, cut, error) = OfficeReader.ReadAloud(_files, "d.pptx", CancellationToken.None);
+        Assert.Null(error);
+        Assert.Equal("Shown.\n\nLast", text);   // review P7-10
+        Assert.False(cut);
+
+        Put("full.pptx", Pptx([new(Shape(null, new string('q', WorkingDirectory.MaxReadChars)))]));
+        (text, cut, _) = OfficeReader.ReadAloud(_files, "full.pptx", CancellationToken.None);
+        Assert.Equal(WorkingDirectory.MaxReadChars, text!.Length);
+        Assert.False(cut);   // review P11-08: exactly the cap is not cut
+        Put("over.pptx", Pptx([new(Shape(null, new string('q', WorkingDirectory.MaxReadChars))), new(Shape(null, "more"))]));
+        Assert.True(OfficeReader.ReadAloud(_files, "over.pptx", CancellationToken.None).Cut);
+    }
+
+    [Theory]
+    [InlineData("application/vnd.ms-excel.template.macroEnabled.12", true)]   // .xltm (review P8-11)
+    [InlineData("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet; charset=binary", true)]
+    [InlineData("APPLICATION/VND.MS-WORD.DOCUMENT.MACROENABLED.12", true)]
+    [InlineData("application/vnd.ms-powerpoint.addin.macroEnabled.12", false)]   // .ppam, which read_office refuses (review P11-09)
+    [InlineData("application/vnd.ms-excel.addin.macroEnabled.12", false)]
+    [InlineData("application/vnd.openxmlformats-officedocument.custom-properties+xml", false)]
+    public void IsOffice_TakesTheExactMediaTypes(string mediaType, bool office)
+    {
+        Assert.Equal(office, WebText.IsOffice("https://x.test/get?id=1", mediaType));
+        Assert.Equal(OfficeFile.Extensions.Count, OfficeFile.MediaTypes.Count);
+    }
+
+    [Fact]
     public async Task AWorkbookOpenElsewhere_StillReads()
     {
         Put("open.xlsx", Xlsx([new("S", SheetData("<row r=\"1\"><c r=\"A1\"><v>3</v></c></row>", "A1"))]));

@@ -76,8 +76,21 @@ public static class RewindText
     /// <summary>The page's ids for the files card's choices, in row order. Pinned.</summary>
     public static readonly IReadOnlyList<string> FilesChoices = ["files", "conversation", "cancel"];
 
-    /// <summary>The typed second question without a pane: yes puts the files back.</summary>
-    public const string TypedFilesQuestion = "Put back the files they changed too?";
+    /// <summary>
+    /// The typed files choice without a pane (2026-10-28, review P7-03: a yes/no whose blank answer rewound the conversation and dropped every
+    /// checkpoint): three answers, anything else cancels. Pinned.
+    /// </summary>
+    public const string TypedFilesChoice = "f = conversation and files, c = conversation only, anything else = cancel";
+
+    /// <summary>The files choice's caption line on what "conversation only" gives up (2026-10-28, review P7-03, a safety fact).</summary>
+    public const string ConversationOnlyNote = "Conversation only leaves the files as they are, and they can no longer be put back.";
+
+    /// <summary>
+    /// A rewind with files that didn't put everything back (2026-10-28, review P5-01: it cut the conversation and dropped every checkpoint
+    /// anyway): nothing rewound, the file checkpoints kept.
+    /// </summary>
+    public const string NotAllBack =
+        "Not every file came back, so the conversation stays as it was and its file checkpoints are kept: /rewind … files or /undo tries again.";
 
     /// <summary>
     /// One picker row as markup: the turn's number dimmed, two spaces, the first line of the message escaped (the pane cuts it
@@ -149,11 +162,14 @@ public static class RewindText
         return "What " + string.Join(", ", tools) + " changed stays as it is: rewinding does not undo it.";
     }
 
-    /// <summary>The tools of <paramref name="tools"/> the warning still names once files came back: those no file checkpoint covers.</summary>
-    public static IReadOnlyList<string> StayingAfterFiles(IReadOnlyList<string> tools)
+    /// <summary>
+    /// The tools of <paramref name="tools"/> the warning still names after a rewind with files: with <paramref name="allBack"/> those no file
+    /// checkpoint covers, otherwise every one (2026-10-28, review P5-07: a partial restore hid the file tools whose changes stayed).
+    /// </summary>
+    public static IReadOnlyList<string> StayingAfterFiles(IReadOnlyList<string> tools, bool allBack)
     {
         ArgumentNullException.ThrowIfNull(tools);
-        return tools.Where(t => !Files.CheckpointTools.Tracked.Contains(t)).ToList();
+        return allBack ? tools.Where(t => !Files.CheckpointTools.Tracked.Contains(t)).ToList() : tools;
     }
 
     /// <summary>The headless REPL's line with the dropped message, since there is no input row to take it back. Pinned.</summary>

@@ -979,9 +979,12 @@ public sealed partial class SidekickApp
         // The session store (2026-09-18): headless logs its turns and offers the tool like the
         // screen; no /sessions, no restore, the first line always the title.
         using var sessions = new Sessions.SessionStore(_settings.ProfileDirectory, _time);
+        // The profile's file checkpoints swept as the screen does at start-up (2026-10-28, review P3-10), finished before the first turn can
+        // open a store.
+        await CheckpointTurns.SweepAsync(_checkpoints, _settings.ProfileDirectory, Files.CheckpointLimits.From(EffectiveSettings)).ConfigureAwait(false);
         long? sessionId = null;
-        // The /undo note the next line's turn carries (2026-10-28, the checkpoints plan), as the screen keeps it; never a pass's turn.
-        string? undoNote = null;
+        // The /undo notes the next line's turn carries (2026-10-28, the checkpoints plan), as the screen keeps them; never a pass's turn.
+        var undoNotes = new UndoNotes();
         // The Claude conversation /claude resumes (2026-09-27), as the screen keeps it; dropped with the session.
         string? claudeSessionId = null;
         // The Claude Code server's session (2026-09-30), as the screen keeps it: minted at the first turn over it, dropped with the session.
@@ -1180,6 +1183,7 @@ public sealed partial class SidekickApp
             async Task ForgetConversationAsync()
             {
                 assistant?.History.Clear();
+                undoNotes.Clear();   // the conversation they described is gone (2026-10-28, review P5-02)
                 session.Usage.ResetConversation();
                 sessionId = null;
                 claudeSessionId = null;
@@ -1215,6 +1219,7 @@ public sealed partial class SidekickApp
                 }
 
                 assistant?.History.Clear();
+                undoNotes.Clear();   // review P5-02, as above
                 session.Usage.ResetConversation();
                 sessionId = null;
                 claudeSessionId = null;
@@ -1366,9 +1371,14 @@ public sealed partial class SidekickApp
 
                     var picked = held[^back];
                     // /rewind [n] files (2026-10-28, the checkpoints plan): the dropped turns' files put back first, conflicts skipped and printed.
-                    var report = await HeadlessRewindFilesAsync(ConversationRewind.Preview(session.History.Messages, picked.Start), rewindParsed.Files, files, images, cancellationToken).ConfigureAwait(false);
-                    undoNote = null;
+                    var (go, report, rewindPlan) = await HeadlessRewindFilesAsync(ConversationRewind.Preview(session.History.Messages, picked.Start), rewindParsed.Files, files, images, cancellationToken).ConfigureAwait(false);
+                    if (!go)
+                    {
+                        continue;
+                    }
+
                     var (cut, _) = ConversationRewind.Apply(session.History, picked, sessionId is null ? null : sessions, sessionId);
+                    undoNotes.Prune(session.History.Messages);
                     claudeServerSessionId = null;
                     if (cut.HadClaude)
                     {
@@ -1393,7 +1403,7 @@ public sealed partial class SidekickApp
                         await HeadlessRestoreLinesAsync(report, files.Root).ConfigureAwait(false);
                     }
 
-                    var staying = report is null ? cut.ChangingTools : RewindText.StayingAfterFiles(cut.ChangingTools);
+                    var staying = report is null || rewindPlan is null ? cut.ChangingTools : RewindText.StayingAfterFiles(cut.ChangingTools, CheckpointTurns.AllBack(rewindPlan, report));
                     if (staying.Count > 0)
                     {
                         await HeadlessNoticeLineAsync("[notice] " + RewindText.ChangesStayWarning(staying)).ConfigureAwait(false);
@@ -1415,16 +1425,11 @@ public sealed partial class SidekickApp
 
                     if (undo.Purge)
                     {
-                        await HeadlessPurgeCheckpointsAsync(undo.All, files, images, cancellationToken).ConfigureAwait(false);
+                        await HeadlessPurgeCheckpointsAsync(undo.All, files, cancellationToken).ConfigureAwait(false);
                         continue;
                     }
 
-                    if (await HeadlessUndoAsync(session.History.Messages, undo.Count, files, images, cancellationToken).ConfigureAwait(false) is { } undone)
-                    {
-                        undoNote = UndoText.Merge(undoNote, undone);
-                    }
-
-                    if (sessionId is { } undid)
+                    if (await HeadlessUndoAsync(session.History.Messages, undo.Count, files, images, undoNotes, cancellationToken).ConfigureAwait(false) && sessionId is { } undid)
                     {
                         sessions.SaveHistory(undid, Sessions.SessionHistory.ToJson(session.History.Messages, plan.ToStored(), planState.Executing, claudeSessionId, EffectiveSettings.SessionSaveThinking, claudeServerSessionId, advisorThreads: advisorThreads.Snapshot(), advisorSessions: advisorThreads.Sessions()));
                     }
@@ -1808,15 +1813,39 @@ public sealed partial class SidekickApp
                 // (its pinned folder's root is the working folder's).
                 bool passTurn = planState.Ralph is { Loop.InPass: true } || audit.InPass || plan.Reviewing;
                 Files.FileJournal? journal = null;
+                string? turnNote = null;
                 if (!passTurn)
                 {
-                    assistant.TurnNote = undoNote;
-                    undoNote = null;
-                    journal = CheckpointTurns.Begin(_checkpoints, EffectiveSettings, _settings.ProfileDirectory, [files.Root, images.Root]);
+                    // The notes stay pending until the turn has them in its message (2026-10-28, review U1).
+                    turnNote = undoNotes.Render();
+                    assistant.TurnNote = turnNote;
+                    journal = CheckpointTurns.Begin(_checkpoints, EffectiveSettings, _settings.ProfileDirectory, files, images);
                     assistant.Journal = journal;
                 }
 
-                var turn = await RunHeadlessTurnAsync(session, assistant, text, turnImages, cancellationToken).ConfigureAwait(false);
+                HeadlessTurn turn;
+                try
+                {
+                    turn = await RunHeadlessTurnAsync(session, assistant, text, turnImages, cancellationToken).ConfigureAwait(false);
+                }
+                catch
+                {
+                    // A turn that throws keeps no checkpoint and lets its stores go (2026-10-28, review P10-02: the lease held them till exit).
+                    if (journal is not null)
+                    {
+                        CheckpointTurns.Abandon(_checkpoints, journal);
+                    }
+
+                    assistant.Journal = null;
+                    assistant.TurnNote = null;
+                    throw;
+                }
+
+                if (turnNote is not null && assistant.TurnNote is null)
+                {
+                    undoNotes.Clear();
+                }
+
                 assistant.Journal = null;
                 assistant.TurnNote = null;
                 var sealedJournal = CheckpointTurns.Seal(_checkpoints, assistant.History, journal, withdrawn: false, cancellationToken);

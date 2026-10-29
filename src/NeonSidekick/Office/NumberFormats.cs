@@ -11,6 +11,9 @@ public enum CellFormat
     Time,
     DateTime,
     Percent,
+
+    /// <summary>A duration in total hours (<c>[h]:mm:ss</c>, built-in 46): 1.5 days reads <c>36:00:00</c> (2026-10-28, review P2-03).</summary>
+    Elapsed,
 }
 
 /// <summary>
@@ -38,14 +41,19 @@ public static class NumberFormats
         {
             9 or 10 => CellFormat.Percent,
             >= 14 and <= 17 => CellFormat.Date,
-            >= 18 and <= 21 or >= 45 and <= 47 => CellFormat.Time,
+            46 => CellFormat.Elapsed,
+            >= 18 and <= 21 or 45 or 47 => CellFormat.Time,
             22 => CellFormat.DateTime,
             >= 27 and <= 36 or >= 50 and <= 58 => CellFormat.Date,
             _ => CellFormat.General,
         };
     }
 
-    /// <summary>A custom code's kind: its first section, with quoted text, brackets and escaped characters left out.</summary>
+    /// <summary>
+    /// A custom code's kind: its first section, with quoted text, brackets and escaped characters left out. A bracket holding only h, m or s
+    /// letters (<c>[h]</c>, <c>[mm]</c>) makes it <see cref="CellFormat.Elapsed"/> (2026-10-28, review P2-03: <c>[h]:mm</c> read as a date and
+    /// <c>[h]:mm:ss</c> dropped whole days); a color, locale or condition bracket is still left out.
+    /// </summary>
     public static CellFormat ClassifyCode(string code)
     {
         ArgumentNullException.ThrowIfNull(code);
@@ -55,6 +63,7 @@ public static class NumberFormats
         }
 
         var kept = new StringBuilder();
+        bool elapsed = false;
         for (int i = 0; i < code.Length; i++)
         {
             char c = code[i];
@@ -73,6 +82,11 @@ public static class NumberFormats
             if (c == '[')
             {
                 int close = code.IndexOf(']', i + 1);
+                if (close > i + 1 && code.AsSpan(i + 1, close - i - 1).IndexOfAnyExcept("hHmMsS") < 0)
+                {
+                    elapsed = true;
+                }
+
                 i = close < 0 ? code.Length : close;
                 continue;
             }
@@ -92,7 +106,8 @@ public static class NumberFormats
         bool date = cleaned.Contains('y', StringComparison.Ordinal) || cleaned.Contains('d', StringComparison.Ordinal)
             || (cleaned.Contains('m', StringComparison.Ordinal) && !hours && !seconds);
         bool time = hours || seconds;
-        return date && time ? CellFormat.DateTime
+        return elapsed ? CellFormat.Elapsed
+            : date && time ? CellFormat.DateTime
             : date ? CellFormat.Date
             : time ? CellFormat.Time
             : cleaned.Contains('%', StringComparison.Ordinal) ? CellFormat.Percent
@@ -106,6 +121,10 @@ public static class NumberFormats
         {
             case CellFormat.Percent:
                 return General(value * 100) + "%";
+            case CellFormat.Elapsed when value is >= 0 and <= MaxSerial:
+                long total = (long)Math.Round(value * 86_400, MidpointRounding.AwayFromZero);
+                return (total / 3600).ToString(CultureInfo.InvariantCulture) + ":" + (total / 60 % 60).ToString("00", CultureInfo.InvariantCulture)
+                    + ":" + (total % 60).ToString("00", CultureInfo.InvariantCulture);
             case CellFormat.Date or CellFormat.Time or CellFormat.DateTime when value is >= 0 and <= MaxSerial && !double.IsNaN(value):
                 long days = (long)Math.Floor(value);
                 long seconds = (long)Math.Round((value - days) * 86_400, MidpointRounding.AwayFromZero);
@@ -119,6 +138,12 @@ public static class NumberFormats
                 if (format == CellFormat.Time)
                 {
                     return time;
+                }
+
+                if (!date1904 && days == 0)
+                {
+                    // Excel's day 0 (2026-10-28, review P9-10): a date shows 1900-01-00, a time in a date-time format its time alone.
+                    return format == CellFormat.Date && seconds == 0 ? "1900-01-00" : time;
                 }
 
                 if (Date(days, date1904) is not { } date)
@@ -137,7 +162,8 @@ public static class NumberFormats
 
     private static string? Date(long days, bool date1904)
     {
-        if (date1904 && days > MaxSerial - 1462)
+        // Past 9999-12-31 (2026-10-28, review P3-06: a fraction rounding up to the next day pushed the last serial past it, and DateOnly threw).
+        if (days > MaxSerial || (date1904 && days > MaxSerial - 1462))
         {
             return null;   // past 9999-12-31 counted from 1904
         }
