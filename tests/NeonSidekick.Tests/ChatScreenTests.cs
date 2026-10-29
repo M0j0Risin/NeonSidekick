@@ -4441,7 +4441,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("── Memory ── read-write, 0 facts remembered (in the prompt: recall_memory is off in /tools) ─", output);
         Assert.Contains("── Operating rules ── default ─", output);   // the group stands
         // The Tools tab leaves a disabled tool out (2026-09-26): the group counts what is left, the first row is the next tool, no note anywhere.
-        Assert.Matches(ToolsHeading("Files (14)", null, "search_files"), output);   // pdf_edit's, as on Windows (2026-10-17, the Mac pass)
+        Assert.Matches(ToolsHeading("Files (15)", null, "search_files"), output);   // pdf_edit's, as on Windows (2026-10-17, the Mac pass); read_office's, 2026-10-28
         Assert.Equal(0, CountOf(output, "not offered: switched off in /tools"));
         Assert.Matches(ToolsHeading("Memory (1)", null, "save_memory"), output);
         Assert.Matches(ToolsHeading("Web (6)", null, "web_search"), output);
@@ -5277,7 +5277,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Contains("  · Offered\n  ·   Camera (1)", output);   // the groups alphabetical since 2026-10-04
         Assert.Contains("  ·   Clock (3)\n  ·     get_current_time      on   ", output);
-        Assert.Contains("  ·   Files (15 of 16)\n", output);   // pdf_edit's, as on Windows (2026-10-17, the Mac pass)
+        Assert.Contains("  ·   Files (16 of 17)\n", output);   // pdf_edit's, as on Windows (2026-10-17, the Mac pass); read_office's, 2026-10-28
         Assert.Contains("  ·     zip                   off  ", output);
         Assert.Contains("  ·   Questions (1) (off: no pane)\n", output);
         Assert.Contains("  ·   Options\n  ·     $-mention enabled: on\n", output);
