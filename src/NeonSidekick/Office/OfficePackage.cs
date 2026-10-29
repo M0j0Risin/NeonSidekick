@@ -241,6 +241,49 @@ public sealed class OfficePackage : IDisposable
         return string.Join('/', parts);
     }
 
+    /// <summary>The entries' names as stored, in the zip's order (2026-10-29, the Office writing plan: what an added sheet's copy keeps).</summary>
+    public IReadOnlyList<string> StoredNames => [.. _zip.Entries.Select(e => e.FullName)];
+
+    /// <summary>The part name a stored entry name reads as: backslashes as slashes, no leading slash.</summary>
+    public static string PartOf(string stored) => (stored ?? throw new ArgumentNullException(nameof(stored))).Replace('\\', '/').TrimStart('/');
+
+    /// <summary>The name <paramref name="part"/> is stored under; null when the package doesn't hold it.</summary>
+    public string? StoredName(string part) => _entries.TryGetValue(part, out var entry) ? entry.FullName : null;
+
+    /// <summary>
+    /// The stored entry <paramref name="stored"/>'s bytes copied into <paramref name="destination"/>, counted as a streamed body is
+    /// (<see cref="OfficeLimits.MaxStreamedPartBytes"/> and the bomb's ratio), so a copy is held to the read's own limits (2026-10-29).
+    /// </summary>
+    public void CopyTo(string stored, Stream destination)
+    {
+        ArgumentNullException.ThrowIfNull(destination);
+        var entry = _zip.Entries.FirstOrDefault(e => e.FullName == stored) ?? throw new OfficeDamagedException(stored);
+        string part = PartOf(stored);
+        Guard(part, () =>
+        {
+            using var counted = Counted(part, entry, _limits.MaxStreamedPartBytes, streamed: true, ratioFrom: _limits.MaxWholePartBytes);
+            counted.CopyTo(destination);
+            return 0;
+        });
+    }
+
+    /// <summary>A part held whole, as bytes: the same caps as <see cref="Whole"/> (an appended workbook's parts to rewrite, 2026-10-29).</summary>
+    public byte[] Bytes(string part)
+    {
+        using var reader = Whole(part);
+        var entry = Entry(part);
+        return Guard(part, () =>
+        {
+            using var counted = Counted(part, entry, _limits.MaxWholePartBytes, streamed: false, ratioFrom: 0);
+            using var buffer = new MemoryStream();
+            counted.CopyTo(buffer);
+            return buffer.ToArray();
+        });
+    }
+
+    /// <summary>The readers' settings: no DTD, no resolver, comments and processing instructions left out, characters checked.</summary>
+    public static XmlReaderSettings ReaderSettings => Settings;
+
     public void Dispose() => _zip.Dispose();
 
     private static string RelsPartOf(string part)
@@ -276,6 +319,21 @@ public sealed class OfficePackage : IDisposable
         }
 
         return XmlReader.Create(new CountingStream(inner, part, cap, streamed, ratioFrom, entry.CompressedLength), Settings);
+    }
+
+    private static Stream Counted(string part, ZipArchiveEntry entry, long cap, bool streamed, long ratioFrom)
+    {
+        Stream inner;
+        try
+        {
+            inner = entry.Open();
+        }
+        catch (InvalidDataException ex)
+        {
+            throw new OfficeDamagedException(part, ex);
+        }
+
+        return new CountingStream(inner, part, cap, streamed, ratioFrom, entry.CompressedLength);
     }
 
     /// <summary>

@@ -287,6 +287,15 @@ public sealed record WriteResult(FileOutcome Outcome, string Relative, long Byte
 {
     /// <summary>What the write changed, for the transcript (2026-10-03, <see cref="FileDiff"/>); null for bytes, a failure, or a replaced file that was not text.</summary>
     public FileDiff? Diff { get; init; }
+
+    /// <summary>
+    /// A failure because another program holds the file (Windows' sharing or lock violation, 2026-10-29, the Office writing plan: a workbook
+    /// open in Excel), so the answer can say to close it there.
+    /// </summary>
+    public bool InUse { get; init; }
+
+    /// <summary>Whether <paramref name="ex"/> is Windows' sharing or lock violation (<c>0x80070020</c>/<c>0x80070021</c>).</summary>
+    public static bool IsInUse(Exception ex) => ex is IOException && ex.HResult is unchecked((int)0x80070020) or unchecked((int)0x80070021);
 }
 
 /// <summary>
@@ -365,7 +374,7 @@ public sealed class PendingWrite : IDisposable
         }
         catch (Exception ex) when (WorkingDirectory.IsFileFailure(ex))
         {
-            return new WriteResult(FileOutcome.Failed, Relative, 0, false, Detail: ex.Message);
+            return new WriteResult(FileOutcome.Failed, Relative, 0, false, Detail: ex.Message) { InUse = WriteResult.IsInUse(ex) };
         }
         finally
         {

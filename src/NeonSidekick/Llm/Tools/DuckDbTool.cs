@@ -205,7 +205,8 @@ public sealed class DuckDbQueryTool : DuckDbTool
             "sql": { "type": "string", "description": "One DuckDB read: SELECT (LIMIT n), WITH, VALUES, FROM-first, DESCRIBE, SUMMARIZE, PIVOT or EXPLAIN. No INSERT, UPDATE, DELETE, DDL, COPY, ATTACH, SET or second statement." },
             {{DatabaseProperty}},
             {{ParamsProperty}},
-            "max_rows": { "type": "integer", "description": "How many rows at most, 1 to 100000. Leave it out for the user's default." }
+            "max_rows": { "type": "integer", "description": "How many rows at most, 1 to 100000 (1 to 1048575 with to). Leave it out for the user's default (with to, every row)." },
+            {{ExportProperties}}
           },
           "required": ["sql"]
         }
@@ -220,7 +221,7 @@ public sealed class DuckDbQueryTool : DuckDbTool
     public override string Description =>
         "Runs one read-only statement on a DuckDB database and returns the rows as a table. " +
         "Bind values as $name through params rather than writing them into the text. " +
-        "The header says when more rows exist than were returned." + FilesSentence;
+        "The header says when more rows exist than were returned." + FilesSentence + ExportSentence;
 
     public override JsonElement JsonSchema => Schema;
 
@@ -231,15 +232,16 @@ public sealed class DuckDbQueryTool : DuckDbTool
         return Math.Clamp(effective.DuckDbQueryMaxRows, MinRows, MaxRows);
     }
 
-    public async Task<string> RunAsync(string sql, string? database, IReadOnlyList<SqlParameterValue> parameters, int? maxRows, CancellationToken cancellationToken)
+    /// <remarks><paramref name="export"/> (2026-10-29, the Office writing plan): every row to a workbook instead (<see cref="ServerTool{TAccess}.ExportAsync"/>).</remarks>
+    public async Task<string> RunAsync(string sql, string? database, IReadOnlyList<SqlParameterValue> parameters, int? maxRows, CancellationToken cancellationToken, ExportTarget? export = null)
     {
         ArgumentNullException.ThrowIfNull(sql);
         ArgumentNullException.ThrowIfNull(parameters);
         var effective = Effective;
-        int rows = maxRows ?? DefaultRows(effective);
-        if (rows < MinRows || rows > MaxRows)
+        int rows = export is null ? maxRows ?? DefaultRows(effective) : ExportRows(maxRows) ?? 0;
+        if (export is null ? rows < MinRows || rows > MaxRows : rows == 0)
         {
-            return SqlText.BadMaxRows(MinRows, MaxRows);
+            return export is null ? SqlText.BadMaxRows(MinRows, MaxRows) : SqlText.BadMaxRows(1, SqlExport.MaxRows);
         }
 
         string body = DuckDbReadOnlyGate.Body(sql);
@@ -260,8 +262,15 @@ public sealed class DuckDbQueryTool : DuckDbTool
         }
 
         string? root = sandbox?.Root;
+        if (export is not null)
+        {
+            int timeout = SqlExport.TimeoutFor(TimeoutSeconds(effective));
+            return await ExportAsync(export, Path.GetFileNameWithoutExtension(target.Name), rows, DuckDbAccess.TextCell,
+                (job, token) => Task.Run(() => DuckDbAccess.Export(target, prepared, parameters, job, rows, timeout, root, token), token), DuckDbText.Error, cancellationToken).ConfigureAwait(false);
+        }
+
         var run = await Task.Run(() => DuckDbAccess.Run(target, [prepared], parameters, rows, TimeoutSeconds(effective), root, cancellationToken), cancellationToken).ConfigureAwait(false);
-        return run.Outcome == SqlOutcome.Ok ? DuckDbText.Query(run, rows, SqlTool.ResultChars(effective)) : DuckDbText.Error(run);
+        return run.Outcome == SqlOutcome.Ok ? DuckDbText.Query(run, rows, SqlTool.ResultChars(effective), CanSave) : DuckDbText.Error(run);
     }
 
     protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
@@ -277,7 +286,12 @@ public sealed class DuckDbQueryTool : DuckDbTool
             return error;
         }
 
-        return await RunAsync(ToolArguments.ReadString(arguments, SqlArgument), Optional(arguments, DatabaseArgument), parameters, max, cancellationToken).ConfigureAwait(false);
+        if (ReadExport(arguments, out var export) is { } badExport)
+        {
+            return badExport;
+        }
+
+        return await RunAsync(ToolArguments.ReadString(arguments, SqlArgument), Optional(arguments, DatabaseArgument), parameters, max, cancellationToken, export).ConfigureAwait(false);
     }
 
     /// <summary><c>params</c> as <c>duckdb_query</c> and <c>duckdb_execute</c> take it: one object, each name read as DuckDB reads a <c>$name</c>; null with the <c>Error:</c> sentence.</summary>

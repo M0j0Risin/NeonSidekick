@@ -85,6 +85,7 @@ They need no server unless the row says so.
 | `/ad …` | Prints a card, an OU, a find or the domain from [Active Directory](TOOLS.md#active-directory), in columns; ticked domains only. `to:<file.csv or folder>` saves a list as a CSV in the working directory. |
 | `/shopping …` | The [shopping list](TOOLS.md#shopping-list); the bare word prints it, and `clear all` and `store remove` act without asking. |
 | `/print …`, `/pdf …` | [Print](TOOLS.md#printing) or [make a PDF](TOOLS.md#making-pdfs) of a file, a web page (`/pdf`) or the last reply, and `/pdf merge\|extract\|delete\|rotate` [edit PDFs](TOOLS.md#editing-pdfs); *Print action policy* doesn't apply. On a Mac, `/pdf` has only the `browser` engine. |
+| `/docx …` | [Makes a Word document](TOOLS.md#writing-office-files) of a Markdown or `.txt` file or the last reply; needs no server unless it is `reply`. |
 | `/test …` | Runs the [benchmark tests](COMMANDS.md#benchmark-tests), a `[notice]` per test. The listing and `history` need no server; a run does. |
 | `/prompts …`, `/browser save\|list\|unsave …` | The saved prompts and saved links: listed, printed, added (`/browser save` needs the address) or removed; `list --clear` empties a list without asking. Other `/browser` forms are errors. |
 | `/youtube …` | Searches (needs a *YouTube API key*) and lists playlists and saved videos (bare `/youtube` lists the saved ones); `list --clear` empties the list without asking. Playing a video is an error. |

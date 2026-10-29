@@ -5,6 +5,7 @@ using System.Globalization;
 using DuckDB.NET.Data;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Files;
+using NeonSidekick.Office;
 using NeonSidekick.Sql;
 
 namespace NeonSidekick.DuckDb;
@@ -330,6 +331,84 @@ public sealed class DuckDbAccess
     public static SqlRun Run(DuckDbTarget target, IReadOnlyList<DuckDbPrepared> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, string? root, CancellationToken cancellationToken) =>
         Run(target, statements, parameters, maxRows, timeoutSeconds, write: false, create: false, root, DuckDbReadLayers.All, cancellationToken);
 
+    /// <summary>
+    /// A query's rows written to a workbook (2026-10-29, the Office writing plan), on the calling thread: <see cref="Run"/>'s locked,
+    /// read-only, rolled-back read, the rows handed to <paramref name="export"/> instead of read into a grid — still through the wrapper
+    /// (every value as DuckDB writes it), typed back by the columns' types (<see cref="ExportCell"/>).
+    /// </summary>
+    public static SqlRun Export(DuckDbTarget target, DuckDbPrepared statement, IReadOnlyList<SqlParameterValue> parameters, SqlExportJob export, int maxRows, int timeoutSeconds, string? root, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(export);
+        return Run(target, [statement], parameters, maxRows, timeoutSeconds, write: false, create: false, root, DuckDbReadLayers.All, cancellationToken, export);
+    }
+
+    /// <summary>A cell of a wrapped read before the types are known (an EXPLAIN keeps it): DuckDB's text, NULL blank.</summary>
+    public static XlsxValue TextCell(DbDataReader reader, int ordinal)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+        return reader.IsDBNull(ordinal) ? XlsxValue.Blank : XlsxValue.OfText(Convert.ToString(reader.GetValue(ordinal), CultureInfo.InvariantCulture));
+    }
+
+    /// <summary>
+    /// The cell reader of a wrapped read whose columns are <paramref name="types"/> (2026-10-29): each value is DuckDB's text, read back
+    /// as the column's type — numbers by the 15-digit rule, booleans, a <c>DATE</c> a date, a <c>TIMESTAMP</c> a date-time, a <c>TIME</c> a
+    /// time — and anything that won't read so (an infinity, a time zone's timestamp, an interval, a list) the text as it is.
+    /// </summary>
+    public static SqlCellReader ExportCell(IReadOnlyList<Type> types)
+    {
+        ArgumentNullException.ThrowIfNull(types);
+        return (reader, ordinal) =>
+        {
+            if (reader.IsDBNull(ordinal))
+            {
+                return XlsxValue.Blank;
+            }
+
+            string text = Convert.ToString(reader.GetValue(ordinal), CultureInfo.InvariantCulture) ?? "";
+            var type = ordinal < types.Count ? types[ordinal] : typeof(string);
+            return FromText(text, type);
+        };
+    }
+
+    /// <summary>DuckDB's text of a value of <paramref name="type"/> (the driver's type of the column) as the sheet's cell.</summary>
+    public static XlsxValue FromText(string text, Type type)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(type);
+        if (type == typeof(bool))
+        {
+            return text switch { "true" => XlsxValue.OfBool(true), "false" => XlsxValue.OfBool(false), _ => XlsxValue.OfText(text) };
+        }
+
+        if (type == typeof(sbyte) || type == typeof(byte) || type == typeof(short) || type == typeof(ushort) || type == typeof(int) || type == typeof(uint)
+            || type == typeof(long) || type == typeof(ulong) || type == typeof(Int128) || type == typeof(UInt128) || type == typeof(System.Numerics.BigInteger)
+            || type == typeof(float) || type == typeof(double) || type == typeof(decimal))
+        {
+            return XlsxValue.OfNumberText(text);
+        }
+
+        if (type == typeof(DateOnly) || type == typeof(DateTime))
+        {
+            if (text.Length == 10 && DateOnly.TryParseExact(text, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+            {
+                return XlsxValue.OfDate(date);
+            }
+
+            return DateTime.TryParseExact(text, ["yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd HH:mm:ss.FFFFFFF"], CultureInfo.InvariantCulture, DateTimeStyles.None, out var when)
+                ? XlsxValue.OfDateTime(when)
+                : XlsxValue.OfText(text);
+        }
+
+        if (type == typeof(TimeOnly))
+        {
+            return TimeOnly.TryParseExact(text, ["HH:mm:ss", "HH:mm:ss.FFFFFFF"], CultureInfo.InvariantCulture, DateTimeStyles.None, out var time)
+                ? XlsxValue.OfTime(time)
+                : XlsxValue.OfText(text);
+        }
+
+        return XlsxValue.OfText(text);
+    }
+
     /// <summary>A read with only <paramref name="layers"/> under it: a test's way to prove each layer alone. Never the app's.</summary>
     internal static SqlRun RunWithLayers(DuckDbTarget target, IReadOnlyList<string> statements, string? root, DuckDbReadLayers layers) =>
         Run(target, [.. statements.Select(DuckDbPrepared.AsWritten)], [], 100, 30, write: false, create: false, root, layers, CancellationToken.None);
@@ -392,7 +471,7 @@ public sealed class DuckDbAccess
     /// <summary>How often the run's timer looks at the deadline and the token, and interrupts again once either is past (SQLite's).</summary>
     private static readonly TimeSpan InterruptRepeat = TimeSpan.FromMilliseconds(100);
 
-    private static SqlRun Run(DuckDbTarget target, IReadOnlyList<DuckDbPrepared> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, bool write, bool create, string? root, DuckDbReadLayers layers, CancellationToken cancellationToken)
+    private static SqlRun Run(DuckDbTarget target, IReadOnlyList<DuckDbPrepared> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, bool write, bool create, string? root, DuckDbReadLayers layers, CancellationToken cancellationToken, SqlExportJob? export = null)
     {
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(statements);
@@ -421,7 +500,7 @@ public sealed class DuckDbAccess
 
         try
         {
-            return RunOpen(target, statements, parameters, maxRows, timeoutSeconds, write, root, layers, watch, deadline, cancellationToken);
+            return RunOpen(target, statements, parameters, maxRows, timeoutSeconds, write, root, layers, watch, deadline, cancellationToken, export);
         }
         finally
         {
@@ -429,7 +508,7 @@ public sealed class DuckDbAccess
         }
     }
 
-    private static SqlRun RunOpen(DuckDbTarget target, IReadOnlyList<DuckDbPrepared> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, bool write, string? root, DuckDbReadLayers layers, Stopwatch watch, TimeSpan deadline, CancellationToken cancellationToken)
+    private static SqlRun RunOpen(DuckDbTarget target, IReadOnlyList<DuckDbPrepared> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, bool write, string? root, DuckDbReadLayers layers, Stopwatch watch, TimeSpan deadline, CancellationToken cancellationToken, SqlExportJob? export = null)
     {
         using var connection = new DuckDBConnection(ConnectionString(target, layers));
         try
@@ -501,16 +580,17 @@ public sealed class DuckDbAccess
                     }
 
                     current = statement;
+                    bool explain = DuckDbReadOnlyGate.IsExplain(statement.Sql);
+                    if (export is not null && !write && !explain)
+                    {
+                        export.Retype(ExportCell(ColumnTypes(connection, statement, parameters)));
+                    }
+
                     using var command = connection.CreateCommand();
                     bool returns = write && DuckDbReadOnlyGate.Returns(statement.Sql);
-                    command.CommandText = write || DuckDbReadOnlyGate.IsExplain(statement.Sql) ? statement.Sql : Wrapped(statement.Sql);
+                    command.CommandText = write || explain ? statement.Sql : Wrapped(statement.Sql);
                     command.UseStreamingMode = !write;
-                    foreach (string bind in DuckDbReadOnlyGate.Binds(statement.Sql))
-                    {
-                        var value = parameters.FirstOrDefault(p => string.Equals(p.Name, bind, StringComparison.Ordinal))
-                            ?? parameters.FirstOrDefault(p => string.Equals(p.Name, bind, StringComparison.OrdinalIgnoreCase));
-                        command.Parameters.Add(Bind(bind, value?.Value));
-                    }
+                    BindAll(command, statement, parameters);
 
                     if (write && !returns)
                     {
@@ -519,7 +599,9 @@ public sealed class DuckDbAccess
                     }
 
                     using var reader = command.ExecuteReader();
-                    var grid = SqlGrid.ReadAsync(reader, maxRows, CancellationToken.None, write ? ReadAnyCell : ReadCell).GetAwaiter().GetResult();
+                    var grid = export is not null && !write
+                        ? export.ReadAsync(reader, maxRows, CancellationToken.None).GetAwaiter().GetResult()
+                        : SqlGrid.ReadAsync(reader, maxRows, CancellationToken.None, write ? ReadAnyCell : ReadCell).GetAwaiter().GetResult();
                     grids.Add(grid);
                     if (returns)
                     {
@@ -575,6 +657,43 @@ public sealed class DuckDbAccess
         }
 
         return new SqlRun(SqlOutcome.Ok, "", target.Name, "", grids, watch.Elapsed) { Changes = changes };
+    }
+
+    /// <summary>Binds each <c>$name</c> <paramref name="statement"/> uses: params' value in its own case first, else any case; NULL when not given.</summary>
+    private static void BindAll(DuckDBCommand command, DuckDbPrepared statement, IReadOnlyList<SqlParameterValue> parameters)
+    {
+        foreach (string bind in DuckDbReadOnlyGate.Binds(statement.Sql))
+        {
+            var value = parameters.FirstOrDefault(p => string.Equals(p.Name, bind, StringComparison.Ordinal))
+                ?? parameters.FirstOrDefault(p => string.Equals(p.Name, bind, StringComparison.OrdinalIgnoreCase));
+            command.Parameters.Add(Bind(bind, value?.Value));
+        }
+    }
+
+    /// <summary>
+    /// An export's column types (2026-10-29): the statement run unwrapped for no rows, each column's type as the driver maps it; a type the
+    /// driver doesn't map is <see cref="string"/>, so its text stays text.
+    /// </summary>
+    private static Type[] ColumnTypes(DuckDBConnection connection, DuckDbPrepared statement, IReadOnlyList<SqlParameterValue> parameters)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT * FROM (\n" + statement.Sql + "\n) LIMIT 0";
+        BindAll(command, statement, parameters);
+        using var reader = command.ExecuteReader();
+        var types = new Type[reader.FieldCount];
+        for (int i = 0; i < types.Length; i++)
+        {
+            try
+            {
+                types[i] = reader.GetFieldType(i);
+            }
+            catch (Exception ex) when (ex is InvalidCastException or NotSupportedException or ArgumentException or InvalidOperationException)
+            {
+                types[i] = typeof(string);
+            }
+        }
+
+        return types;
     }
 
     /// <summary>A read as the reader takes it: every value as DuckDB writes it (newlines so a trailing <c>--</c> comment can't eat the parenthesis).</summary>

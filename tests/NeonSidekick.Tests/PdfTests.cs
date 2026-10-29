@@ -340,6 +340,8 @@ public sealed class PdfTests : IDisposable
     [InlineData("out/x.PDF", "notes.md", null, null, "out/x.PDF")]
     [InlineData("out/", "docs/notes.md", null, null, "out/notes.pdf")]
     [InlineData("folder", "notes.md", null, null, "folder/notes.pdf")]
+    [InlineData(null, ".neon/plans/x.md", null, null, "x.pdf")]   // a plan's PDF at the top: WriteGuard refuses .neon (2026-10-29)
+    [InlineData("out/", ".neon/audits/y.md", null, null, "out/y.pdf")]
     [InlineData(null, null, "https://www.example.com/docs/intro.html?x=1", null, "example.com-intro.pdf")]
     [InlineData(null, null, "https://example.com/", null, "example.com.pdf")]
     [InlineData(null, null, null, null, "reply-2026-10-03-1405.pdf")]

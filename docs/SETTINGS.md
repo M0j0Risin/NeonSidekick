@@ -606,7 +606,7 @@ The file tools and the places beyond the working directory they reach.
 
 | Setting | What it does | Default |
 |---|---|---|
-| File tools | Offers the sandboxed file tools (read, write, patch, search, move, copy, zip, read_pdf, read_office, convert_to_pdf, pdf_edit…), which reach only the working directory. | off |
+| File tools | Offers the sandboxed file tools (read, write, patch, search, move, copy, zip, read_pdf, read_office, convert_to_docx, convert_to_xlsx, convert_to_pdf, pdf_edit…), which reach only the working directory. A query's `to` needs it too. | off |
 | File deletes to Recycle bin | Deletes by `delete`, `/undo` and `/rewind … files`, the picture windows, the Web UI and the purges (`/comfy`, `/camera`, `/screen`, `/splash`, `/pasted`, `/ha stills purge`) go to the Recycle bin (*File deletes to Trash* on a Mac). Gone for good: a file on a share or removable drive (a purge asks for good there), one too big for the bin, and a command's or script's deletes. | on |
 | File checkpoints | Keeps what the file tools change in each turn, so `/undo` and `/rewind … files` can put it back ([what's covered](TOOLS.md#undoing-file-changes)). Turned off, the kept ones can still be undone. | on |
 | File checkpoints keep (days) | Checkpoints older than this are cleared when the profile loads, at startup or a switch (0–3650; 0 clears none by age). A gone working folder's are kept as long. | 90 |

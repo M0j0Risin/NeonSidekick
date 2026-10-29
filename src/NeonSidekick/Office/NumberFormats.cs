@@ -160,6 +160,29 @@ public static class NumberFormats
     /// <summary>A number with at most 15 significant digits, invariant.</summary>
     public static string General(double value) => value.ToString("G15", CultureInfo.InvariantCulture);
 
+    /// <summary>The first day the 1900 system's serials count right (2026-10-29, the Office writing plan): before it lies Lotus's phantom 29 Feb.</summary>
+    public static readonly DateTime FirstTrueSerialDay = new(1900, 3, 1);
+
+    /// <summary>
+    /// The serial Excel stores for <paramref name="value"/> (2026-10-29, the Office writing plan: the writing direction beside the reading
+    /// one, so both count the same days): whole days from 1899-12-30 (the 1900 system, from 1900-03-01 on, where Lotus's leap-day bug no
+    /// longer shifts them) or from 1904-01-01, the time of day as the fraction. Null for a day the system can't hold, which the writer
+    /// keeps as text. Pure.
+    /// </summary>
+    public static double? Serial(DateTime value, bool date1904)
+    {
+        if (date1904 ? value < new DateTime(1904, 1, 1) : value < FirstTrueSerialDay)
+        {
+            return null;
+        }
+
+        var origin = date1904 ? new DateTime(1904, 1, 1) : new DateTime(1899, 12, 30);
+        return (value.Ticks - origin.Ticks) / (double)TimeSpan.TicksPerDay;
+    }
+
+    /// <summary>A time of day or a duration as Excel's fraction of days (<c>0.5</c> is noon, <c>1.5</c> is 36 hours).</summary>
+    public static double Days(TimeSpan value) => value.Ticks / (double)TimeSpan.TicksPerDay;
+
     private static string? Date(long days, bool date1904)
     {
         // Past 9999-12-31 (2026-10-28, review P3-06: a fraction rounding up to the next day pushed the last serial past it, and DateOnly threw).

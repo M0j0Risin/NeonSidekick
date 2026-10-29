@@ -66,7 +66,7 @@ public sealed class FileToolsTests : IDisposable
     public void FileTools_AreTheFourteen_ThenTheImageTools_InOrder_AllQuiet()
     {
         Assert.Equal([.. FileToolNames.WithoutPdf, .. ImageToolNames.All], _tools.Select(t => t.Name));
-        Assert.Equal(14, ChatScreen.FileTools(_files, () => true, _ => { }, () => _settings).Count);   // read_office 2026-10-28; the three picture tools their own group since 2026-10-10 (sixteen from 2026-10-04: image_info and image_edit; fifteen until 2026-10-01, when restore went with File safe edits)
+        Assert.Equal(16, ChatScreen.FileTools(_files, () => true, _ => { }, () => _settings).Count);   // the Office converters 2026-10-29; read_office 2026-10-28; the three picture tools their own group since 2026-10-10 (sixteen from 2026-10-04: image_info and image_edit; fifteen until 2026-10-01, when restore went with File safe edits)
         Assert.Equal(3, ChatScreen.ImageTools(_files, () => _settings).Count);
         Assert.All(_tools, t => Assert.Contains(t.Name, ChatScreen.QuietTools));
         Assert.All(_tools, t => Assert.Contains("working directory", t.Description));
@@ -81,7 +81,7 @@ public sealed class FileToolsTests : IDisposable
     public void FileTools_OffWindows_HaveThePictureTools_OnlyWithCodecs()
     {
         Assert.Equal([.. FileToolNames.WithoutPdf, .. ImageToolNames.All], _tools.Select(t => t.Name));
-        Assert.Equal(Files.ImageCodecs.Available ? 17 : 14, _tools.Count);   // the picture tools' own group after the fourteen (2026-10-10; thirteen until read_office, 2026-10-28)
+        Assert.Equal(Files.ImageCodecs.Available ? 19 : 16, _tools.Count);   // the picture tools' own group after the sixteen (2026-10-10; thirteen until read_office, 2026-10-28; fourteen until the Office converters, 2026-10-29)
         Assert.Equal(Files.ImageCodecs.Available, _tools.Any(t => t.Name == ViewImageTool.ToolName));
         Assert.All(_tools, t => Assert.Contains(t.Name, ChatScreen.QuietTools));
         Assert.All(_tools, t => Assert.Contains("working directory", t.Description));

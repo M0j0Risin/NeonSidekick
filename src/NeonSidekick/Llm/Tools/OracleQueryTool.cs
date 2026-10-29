@@ -31,7 +31,8 @@ public sealed class OracleQueryTool : OracleTool
             "sql": { "type": "string", "description": "One Oracle SELECT (FETCH FIRST n ROWS ONLY, not TOP or LIMIT; no trailing ;); a WITH clause may lead it. No INSERT, UPDATE, DELETE, MERGE, PL/SQL, DDL, FOR UPDATE, NEXTVAL, @dblink or second statement." },
             {{ConnectionProperty}},
             "params": { "type": "object", "description": "Values for :name placeholders in the SQL, e.g. {\"id\": 101} for :id; strings, numbers, true, false or null." },
-            "max_rows": { "type": "integer", "description": "How many rows at most, 1 to 100000. Leave it out for the user's default." }
+            "max_rows": { "type": "integer", "description": "How many rows at most, 1 to 100000 (1 to 1048575 with to). Leave it out for the user's default (with to, every row)." },
+            {{ExportProperties}}
           },
           "required": ["sql"]
         }
@@ -46,7 +47,7 @@ public sealed class OracleQueryTool : OracleTool
     public override string Description =>
         "Runs one read-only Oracle SELECT on an Oracle connection and returns the rows as a table. " +
         "Only a single SELECT (or WITH … SELECT) is accepted; bind values as :name through params rather than writing them into the text. " +
-        "The header says when more rows exist than were returned.";
+        "The header says when more rows exist than were returned." + ExportSentence;
 
     public override JsonElement JsonSchema => Schema;
 
@@ -57,14 +58,15 @@ public sealed class OracleQueryTool : OracleTool
         return Math.Clamp(effective.OracleQueryMaxRows, MinRows, MaxRows);
     }
 
-    public async Task<string> RunAsync(string sql, string? connection, IReadOnlyList<SqlParameterValue> parameters, int? maxRows, CancellationToken cancellationToken)
+    /// <remarks><paramref name="export"/> (2026-10-29, the Office writing plan): every row to a workbook instead (<see cref="ServerTool{TAccess}.ExportAsync"/>).</remarks>
+    public async Task<string> RunAsync(string sql, string? connection, IReadOnlyList<SqlParameterValue> parameters, int? maxRows, CancellationToken cancellationToken, ExportTarget? export = null)
     {
         ArgumentNullException.ThrowIfNull(sql);
         ArgumentNullException.ThrowIfNull(parameters);
-        int rows = maxRows ?? DefaultRows(Effective);
-        if (rows < MinRows || rows > MaxRows)
+        int rows = export is null ? maxRows ?? DefaultRows(Effective) : ExportRows(maxRows) ?? 0;
+        if (export is null ? rows < MinRows || rows > MaxRows : rows == 0)
         {
-            return SqlText.BadMaxRows(MinRows, MaxRows);
+            return export is null ? SqlText.BadMaxRows(MinRows, MaxRows) : SqlText.BadMaxRows(1, SqlExport.MaxRows);
         }
 
         if (OracleReadOnlyGate.Check(sql) is { } refused)
@@ -78,8 +80,20 @@ public sealed class OracleQueryTool : OracleTool
             return outside;
         }
 
+        if (export is not null)
+        {
+            if (Oracle.Resolve(connection, out var unresolved) is not { } target)
+            {
+                return OracleText.Error(unresolved!);
+            }
+
+            int timeout = SqlExport.TimeoutFor(TimeoutSeconds(Effective));
+            return await ExportAsync(export, target.Name, rows, OracleAccess.ExportCell,
+                (job, token) => Oracle.ExportAsync(connection, body, parameters, job, rows, timeout, token), OracleText.Error, cancellationToken).ConfigureAwait(false);
+        }
+
         var run = await Oracle.RunAsync(connection, [body], parameters, rows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);
-        return run.Outcome == SqlOutcome.Ok ? OracleText.Query(run, rows, SqlTool.ResultChars(Effective)) : OracleText.Error(run);
+        return run.Outcome == SqlOutcome.Ok ? OracleText.Query(run, rows, SqlTool.ResultChars(Effective), CanSave) : OracleText.Error(run);
     }
 
     protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
@@ -106,7 +120,12 @@ public sealed class OracleQueryTool : OracleTool
             parameters = read;
         }
 
+        if (ReadExport(arguments, out var export) is { } badExport)
+        {
+            return badExport;
+        }
+
         string sql = ToolArguments.ReadString(arguments, SqlArgument);
-        return await RunAsync(sql, Optional(arguments, ConnectionArgument), parameters, max, cancellationToken).ConfigureAwait(false);
+        return await RunAsync(sql, Optional(arguments, ConnectionArgument), parameters, max, cancellationToken, export).ConfigureAwait(false);
     }
 }

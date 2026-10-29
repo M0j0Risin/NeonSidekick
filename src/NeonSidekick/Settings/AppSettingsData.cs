@@ -1965,7 +1965,8 @@ public sealed class AppSettingsData
     /// switch (<c>/files</c> went 2026-09-18). Off by default since 2026-09-29 (the user's call, with the other tool
     /// groups and the scan: a fresh profile offers the model nothing it did not turn on). No variable. Sixteen since 2026-10-14 (the PDF
     /// plan): <c>read_pdf</c> and <c>pdf_edit</c> joined, the picture tools having left for <see cref="ImageTools"/> on 2026-10-10.
-    /// Seventeen since 2026-10-28 (the Office plan): <c>read_office</c> joined.
+    /// Seventeen since 2026-10-28 (the Office plan): <c>read_office</c> joined. Nineteen since 2026-10-29 (the Office writing plan):
+    /// <c>convert_to_docx</c> and <c>convert_to_xlsx</c>.
     /// </summary>
     public bool FileTools { get; set; }
 

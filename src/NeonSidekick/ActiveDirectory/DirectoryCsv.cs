@@ -6,15 +6,6 @@ using NeonSidekick.Llm.Tools;
 
 namespace NeonSidekick.ActiveDirectory;
 
-/// <summary>
-/// Where a <c>to</c> save may write, asked per call (2026-10-15, the AD gaps plan, §1b): the working directory, or why not (the model's tools need
-/// *File tools* and no plan mode; a redacted twin has no root at all).
-/// </summary>
-public readonly record struct DirectorySaveRoot(WorkingDirectory? Root, string? Refusal)
-{
-    public static DirectorySaveRoot Refused(string why) => new(null, why);
-}
-
 /// <summary>A <c>to</c> checked before anything is read: the root, the path inside it, and whether the name was the caller's or is made up.</summary>
 public sealed record DirectorySaveTarget(WorkingDirectory Root, string Relative, bool Named);
 
@@ -116,21 +107,7 @@ public static class DirectoryCsv
     public static string NameFor(string question)
     {
         ArgumentNullException.ThrowIfNull(question);
-        var invalid = Path.GetInvalidFileNameChars().Concat(['/', '\\', ':', '*', '?', '"', '<', '>', '|']).ToHashSet();
-        var name = new StringBuilder();
-        foreach (char c in ("ad-" + question.Trim()).ToLowerInvariant())
-        {
-            name.Append(char.IsWhiteSpace(c) || invalid.Contains(c) || char.IsControl(c) ? '-' : c);
-        }
-
-        string text = name.ToString();
-        while (text.Contains("--", StringComparison.Ordinal))
-        {
-            text = text.Replace("--", "-", StringComparison.Ordinal);
-        }
-
-        text = text.Trim('-', '.');
-        return (text.Length > MaxNameChars ? text[..MaxNameChars].TrimEnd('-', '.') : text) + Extension;
+        return FileNames.Safe("ad-" + question, MaxNameChars) + Extension;   // the rule lifted to FileNames.Safe (2026-10-29)
     }
 
     /// <summary>

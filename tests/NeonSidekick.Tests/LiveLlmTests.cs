@@ -80,6 +80,43 @@ public class LiveLlmTests
     }
 
     /// <summary>
+    /// A model asked for a spreadsheet calls <c>convert_to_xlsx</c> with a table (2026-10-29, the Office writing plan): the tool's schema is
+    /// one a real model fills, and the workbook it makes passes the validator.
+    /// </summary>
+    [LiveLlmFact]
+    public async Task RealServer_MakesAWorkbook_ThroughConvertToXlsx()
+    {
+        var endpoint = LiveLlmServer.Endpoint!;
+        string root = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", "live-xlsx-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var files = new WorkingDirectory(() => root, TimeProvider.System);
+            using var client = new OpenAICompatibleChatClient(endpoint, TimeSpan.FromSeconds(180));
+            var assistant = new Assistant(client, new ConversationHistory(Assistant.DefaultSystemPrompt), new LlmTimeouts(TimeSpan.FromSeconds(180), TimeSpan.FromSeconds(240)))
+            {
+                Tools = [new Llm.Tools.ConvertToXlsxTool(files, TimeProvider.System)],
+            };
+
+            var results = new List<TurnEvent.ToolResult>();
+            await foreach (var evt in assistant.RunTurnAsync(
+                "Make a spreadsheet named fruit.xlsx with the columns Fruit and Price and three rows: apple 1.25, pear 0.8, plum 2. Use your tool."))
+            {
+                if (evt is TurnEvent.ToolResult r) results.Add(r);
+            }
+
+            var made = Assert.Single(results, r => r.Name == Llm.Tools.ConvertToXlsxTool.ToolName && r.Text.StartsWith("Made ", StringComparison.Ordinal));
+            string path = Assert.Single(Directory.GetFiles(root, "*.xlsx", SearchOption.AllDirectories));
+            Fakes.OfficeSchema.ValidWorkbook(File.ReadAllBytes(path));
+            Assert.Contains("3 rows × 2 columns", made.Text);
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { /* best effort */ }
+        }
+    }
+
+    /// <summary>
     /// <c>/test</c>'s reasoning and structured-output tests against the real server (2026-09-28): every one asked and
     /// judged, none an error — the verdicts are the model's, so not asserted — and the schema tests' <c>response_format</c>
     /// taken by the server.

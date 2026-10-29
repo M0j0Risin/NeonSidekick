@@ -298,9 +298,6 @@ public static class DirectoryText
     /// <summary>The detail of a Mac's held refusal: the KDC knew the account and gave no ticket (D3), read by <see cref="DirectoryErrors"/>.</summary>
     public const string NoTicketPrefix = "the KDC knew the account and gave no ticket";
 
-    /// <summary>A <c>to</c> save found closed by the time the answer came (2026-10-23, F7). Pinned.</summary>
-    public static string SaveClosedLate(string reason) => "Not saved: " + reason.Replace("Error: ", "", StringComparison.Ordinal);
-
     /// <summary>A <c>/ad</c> key word with no value (2026-10-23, V6). Pinned.</summary>
     public static string KeyNeedsValue(string key) => "/ad " + key + ": needs a value";
 
@@ -418,12 +415,6 @@ public static class DirectoryText
     public const string NameAnother = "; name another file";
 
     public static string ToNeedsCsv(string path) => $"Error: to '{path}' is neither a .csv file nor an existing folder in the working directory.";
-
-    public const string SaveNeedsFileTools = "Error: to saves a file, which needs File tools on (/tools › Files › File).";
-
-    public const string SaveInPlanMode = "Error: to saves a file, and plan mode writes no files.";
-
-    public const string SaveNotHere = "Error: to saves a file, which this caller may not do.";
 
     // ── the card's columns (also the CSV's header; pinned) ──────────────────
 

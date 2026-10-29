@@ -271,11 +271,13 @@ public sealed class MarkdownView : IRenderable
                 case TextRun run:
                     paragraph.Append(run.Text, flat ? baseStyle : RunStyle(run, baseStyle));
                     break;
-                case LinkRun link:
-                    paragraph.Append(link.Text.Length > 0 ? link.Text : link.Url, baseStyle ?? Theme.Assistant);
-                    if (link.Url.Length > 0 && !string.Equals(link.Url, link.Text, StringComparison.Ordinal))
+                case LinkRun or ImageRun:
+                    // A picture shows as the link it was (2026-10-29): its alt text and its address.
+                    var (text, url) = inline is LinkRun link ? (link.Text, link.Url) : (((ImageRun)inline).Alt, ((ImageRun)inline).Url);
+                    paragraph.Append(text.Length > 0 ? text : url, baseStyle ?? Theme.Assistant);
+                    if (url.Length > 0 && !string.Equals(url, text, StringComparison.Ordinal))
                     {
-                        paragraph.Append(" (" + link.Url + ")", Theme.MarkdownLinkUrl);
+                        paragraph.Append(" (" + url + ")", Theme.MarkdownLinkUrl);
                     }
 
                     break;

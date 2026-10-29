@@ -504,7 +504,8 @@ public class NeonHelpCatalogTests
         Assert.Contains("STT", Win("microphone"), StringComparison.Ordinal);
         Assert.Contains("Tool `net_trace`", Win("traceroute"), StringComparison.Ordinal);
         Assert.Contains("Setting Camera", Win("camera settings"), StringComparison.Ordinal);
-        foreach (string word in new[] { "docx", "xlsx", "pptx", "spreadsheet", "workbook" })   // 2026-10-28, the Office plan
+        Assert.Contains("Command /docx:", Win("docx"), StringComparison.Ordinal);   // 2026-10-29: an exact name beats the synonym
+        foreach (string word in new[] { "xlsx", "pptx", "spreadsheet", "workbook" })   // 2026-10-28, the Office plan
         {
             Assert.Contains("Tool `read_office`", Win(word), StringComparison.Ordinal);
         }

@@ -104,6 +104,32 @@ public static class FileText
     public static string PrunedStubSent(string argument) =>
         $"Error: {argument} is a pruned stub, not the text; read the file again (or load_skill) and send the whole text";
 
+    // A to save's root (2026-10-15, the AD gaps plan; moved from DirectoryText 2026-10-29, the Office writing plan, already generic, when the
+    // database exports took up SaveRoot).
+
+    /// <summary>A <c>to</c> save with *File tools* off. Pinned.</summary>
+    public const string SaveNeedsFileTools = "Error: to saves a file, which needs File tools on (/tools › Files › File).";
+
+    /// <summary>A <c>to</c> save in plan mode. Pinned.</summary>
+    public const string SaveInPlanMode = "Error: to saves a file, and plan mode writes no files.";
+
+    /// <summary>A <c>to</c> save by a caller with no root at all (a redacted twin). Pinned.</summary>
+    public const string SaveNotHere = "Error: to saves a file, which this caller may not do.";
+
+    /// <summary>A <c>to</c> save found closed by the time the answer came (2026-10-23, F7). Pinned.</summary>
+    public static string SaveClosedLate(string reason) => "Not saved: " + (reason ?? "").Replace("Error: ", "", StringComparison.Ordinal);
+
+    /// <summary>
+    /// <c>write_file</c> given an Office path it would only break (2026-10-29, the Office writing plan: XML text written into a <c>.docx</c> made
+    /// a file Word can't open): a Word or Excel kind points to its converter. Pinned.
+    /// </summary>
+    public static string OfficeNeedsConverter(string path, string tool) =>
+        $"Error: '{path}' is an Office file, which write_file would break; use {tool} to make it (from Markdown or a table)";
+
+    /// <summary><c>write_file</c> given a PowerPoint, legacy, binary-workbook or OpenDocument path, which no tool writes. Pinned.</summary>
+    public static string OfficeNotWritten(string path) =>
+        $"Error: '{path}' is an office document no tool writes; convert_to_docx and convert_to_xlsx make .docx and .xlsx files";
+
     /// <summary>An edit with no <c>new_text</c> at all (2026-10-17): read as <c>""</c>, it removed old_text. Pinned.</summary>
     public const string NewTextRequired = "Error: new_text is required: the text to put in place of old_text (\"\" removes it)";
     /// <summary>A <c>replace_all</c> whose result would be too big to read back (2026-10-22, review V2).</summary>

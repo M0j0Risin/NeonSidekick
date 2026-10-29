@@ -65,7 +65,7 @@ public sealed class OracleToolsTests
         Assert.Equal(["pattern", "connection"], Properties(Tool<OracleColumnsTool>()));
         Assert.Equal(["pattern"], Required(Tool<OracleColumnsTool>()));
         Assert.Equal(["connection", "table"], Properties(Tool<OracleIndexesTool>()));
-        Assert.Equal(["sql", "connection", "params", "max_rows"], Properties(Tool<OracleQueryTool>()));
+        Assert.Equal(["sql", "connection", "params", "max_rows", "to", "sheet", "overwrite"], Properties(Tool<OracleQueryTool>()));
         Assert.Equal(["sql", "connection", "params", "max_rows"], Properties(Tool<OracleExecuteTool>()));
         Assert.Equal(["sql"], Required(Tool<OracleQueryTool>()));
         Assert.Contains("FETCH FIRST", Tool<OracleQueryTool>().JsonSchema.GetProperty("properties").GetProperty("sql").GetProperty("description").GetString());

@@ -102,7 +102,7 @@ internal sealed partial class ChatScreen
         _taskTools = TaskTools(_tasks, _effective, ConfirmAdminAsync);
         var joined = joinedDomain ?? (() => DomainJoin.Current);
         _directory = new DirectoryAccess(directorySystem, () => DirectoryConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory, joined()), () => _effective().DirectoryDomainsOffered, joined, _time);
-        _directoryTools = DirectoryTools(_directory, saveRoot: DirectorySaveRootNow);
+        _directoryTools = DirectoryTools(_directory, saveRoot: SaveRootNow);
     }
 
     // ── The tools ───────────────────────────────────────────────────────────
@@ -135,7 +135,7 @@ internal sealed partial class ChatScreen
     /// working directory (2026-10-15, the AD gaps plan), asking <paramref name="saveRoot"/> per call; the twins never save (R16: the twins are
     /// <see cref="RedactedTwins.Of"/>'s).
     /// </summary>
-    public static IReadOnlyList<AIFunction> DirectoryTools(DirectoryAccess access, Func<DirectorySaveRoot>? saveRoot = null) =>
+    public static IReadOnlyList<AIFunction> DirectoryTools(DirectoryAccess access, Func<Files.SaveRoot>? saveRoot = null) =>
     [
         new AdUserTool(access),
         new AdGroupTool(access, saveRoot: saveRoot),
@@ -149,12 +149,12 @@ internal sealed partial class ChatScreen
     /// Where the model's <c>to</c> may write, asked per call (2026-10-15, the AD gaps plan, §1b): the working directory as it stands (it follows
     /// <c>/cwd</c>), only while *File tools* is on and plan mode is off. Shared with headless, which passes its own two answers.
     /// </summary>
-    public static DirectorySaveRoot DirectorySaveRootFor(bool fileTools, bool planMode, WorkingDirectory files) =>
-        !fileTools ? DirectorySaveRoot.Refused(DirectoryText.SaveNeedsFileTools)
-        : planMode ? DirectorySaveRoot.Refused(DirectoryText.SaveInPlanMode)
-        : new DirectorySaveRoot(files, null);
+    public static Files.SaveRoot SaveRootFor(bool fileTools, bool planMode, WorkingDirectory files) =>
+        !fileTools ? Files.SaveRoot.Refused(FileText.SaveNeedsFileTools)
+        : planMode ? Files.SaveRoot.Refused(FileText.SaveInPlanMode)
+        : new Files.SaveRoot(files, null);
 
-    private DirectorySaveRoot DirectorySaveRootNow() => DirectorySaveRootFor(_effective().FileTools, _plan.Active, _files);
+    private Files.SaveRoot SaveRootNow() => SaveRootFor(_effective().FileTools, _plan.Active, _files);
 
     public static readonly IReadOnlySet<string> NetworkToolNames = new HashSet<string>(StringComparer.Ordinal)
     {

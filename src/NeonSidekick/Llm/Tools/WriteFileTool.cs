@@ -93,6 +93,13 @@ public sealed class WriteFileTool : FileTool, IRefusesPrunedStubs
     public static (string Text, bool Done, FileDiff? Diff) Write(WorkingDirectory files, string path, string content, WriteMode mode)
     {
         ArgumentNullException.ThrowIfNull(files);
+        // An Office file is a zip of XML parts: text written over it is a broken document (2026-10-29, the Office writing plan). Word and
+        // Excel files point to their converter; a PowerPoint, legacy, binary-workbook or OpenDocument file to what no tool writes.
+        if (OfficeRefusal(path) is { } office)
+        {
+            return (office, false, null);
+        }
+
         if (mode == WriteMode.Append)
         {
             var appended = files.AppendText(path, content);
@@ -101,6 +108,18 @@ public sealed class WriteFileTool : FileTool, IRefusesPrunedStubs
 
         var wrote = files.WriteText(path, content, overwrite: mode == WriteMode.Overwrite);
         return (FileText.Wrote(wrote), wrote.Outcome == FileOutcome.Ok, wrote.Diff);
+    }
+
+    /// <summary>The refusal for writing text to an Office path, or null for any other path.</summary>
+    public static string? OfficeRefusal(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        return OfficeFile.Kind(path) switch
+        {
+            OfficeKind.Word => FileText.OfficeNeedsConverter(path, ConvertToDocxTool.ToolName),
+            OfficeKind.Excel => FileText.OfficeNeedsConverter(path, ConvertToXlsxTool.ToolName),
+            _ => OfficeFile.IsAnyOfficePath(path) ? FileText.OfficeNotWritten(path) : null,
+        };
     }
 
     protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)

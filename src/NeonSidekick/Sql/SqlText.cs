@@ -454,7 +454,8 @@ public static class SqlText
     /// <c>sql_query</c>'s answer: <c>N rows × M columns from connection/database (T ms)</c>, a sentence when the row
     /// cap or the text cap cut it, and the table.
     /// </summary>
-    public static string Query(SqlRun run, int maxRows, int maxChars)
+    /// <remarks><paramref name="canSave"/> (2026-10-29, the Office writing plan): a cut answer offers <c>to</c> while a save root is open (<see cref="SqlExport.SaveHint"/>).</remarks>
+    public static string Query(SqlRun run, int maxRows, int maxChars, bool canSave = false)
     {
         ArgumentNullException.ThrowIfNull(run);
         if (run.Grids.Count == 0)
@@ -471,7 +472,7 @@ public static class SqlText
             .Append(" (").Append(Millis(run.Elapsed)).Append(')');
         if (grid.More)
         {
-            header.Append(" — the first ").Append(Invariant(maxRows)).Append(" shown, more exist (narrow it with WHERE or TOP, or raise max_rows)");
+            header.Append(" — the first ").Append(Invariant(maxRows)).Append(" shown, more exist (narrow it with WHERE or TOP, or raise max_rows").Append(SqlExport.Hint(canSave)).Append(')');
         }
 
         if (shown < grid.Rows.Count)

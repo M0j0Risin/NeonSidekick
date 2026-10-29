@@ -352,6 +352,13 @@ public enum SlashCommand
     /// </summary>
     Pdf,
 
+    /// <summary>
+    /// <c>/docx</c> (2026-10-29, the Office writing plan): a Word document in the working directory — <c>/docx &lt;file.md|file.txt&gt;
+    /// [to=&lt;out.docx&gt;] [paper=letter|a4|legal] [landscape] [overwrite]</c>, <c>/docx reply</c> for the last reply
+    /// (<see cref="Office.DocxCommand"/>). The user's own hand: <c>convert_to_docx</c> without its <c>File tools</c> switch.
+    /// </summary>
+    Docx,
+
     /// <summary><c>/echo &lt;text&gt;</c>: the line printed as a reply and read aloud when speech is on — <c>/read</c>'s block and voice over typed text, never resumed (2026-09-17).</summary>
     Echo,
 
@@ -467,6 +474,7 @@ public static class SlashCommands
             new("/copy", "copy replies to the clipboard"),
             new("/cwd", "show or change the working directory"),
             new("/docker", "manage the Docker engine's containers"),
+            new("/docx", "make Word documents from Markdown"),
             new("/draft", "write the next message in your editor"),
             new("/echo", "print a line as a reply"),
             new(EventLog.EventLogCommand.Word, OperatingSystem.IsMacOS() ? "read this Mac's logs" : "read Windows' event logs"),   // a Mac's own since 2026-10-18
@@ -625,7 +633,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/undo", "/theme", "/mark", "/avatar", "/queue", "/sessions", "/rename", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/read", "/remember", "/memory", "/keycheck", "/cmd", "/msgclear", "/sys", "/usage", "/perfbar", "/homebar", "/toolbar", "/header", "/profile", "/prompts", "/timer", "/cwd", "/tree", "/vault", "/explore", "/browse", "/browser", "/open", "/terminal", "/shortcut", "/log", "/process", "/view", "/imagine", "/comfy", "/pasted", "/ha", "/docker", "/eventlog", "/net", "/services", "/tasks", "/ad", "/monitor", "/camera", "/screen", "/youtube", "/shopping", "/print", "/pdf", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/code-audit", "/botchat", "/claude", "/advisor", "/test", "/expand", "/collapse", "/find", "/window", "/skills", "/learn", "/about", "/webui", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/undo", "/theme", "/mark", "/avatar", "/queue", "/sessions", "/rename", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/read", "/remember", "/memory", "/keycheck", "/cmd", "/msgclear", "/sys", "/usage", "/perfbar", "/homebar", "/toolbar", "/header", "/profile", "/prompts", "/timer", "/cwd", "/tree", "/vault", "/explore", "/browse", "/browser", "/open", "/terminal", "/shortcut", "/log", "/process", "/view", "/imagine", "/comfy", "/pasted", "/ha", "/docker", "/eventlog", "/net", "/services", "/tasks", "/ad", "/monitor", "/camera", "/screen", "/youtube", "/shopping", "/print", "/pdf", "/docx", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/code-audit", "/botchat", "/claude", "/advisor", "/test", "/expand", "/collapse", "/find", "/window", "/skills", "/learn", "/about", "/webui", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -732,6 +740,7 @@ public static class SlashCommands
             "/shopping" => SlashCommand.Shopping,
             "/print" => SlashCommand.Print,
             "/pdf" => SlashCommand.Pdf,
+            "/docx" => SlashCommand.Docx,
             "/echo" => SlashCommand.Echo,
             "/queue" => SlashCommand.Queue,
             "/sessions" => SlashCommand.Session,
@@ -781,7 +790,7 @@ public static class SlashCommands
         or SlashCommand.Remember or SlashCommand.Memory or SlashCommand.Profile or SlashCommand.Prompts or SlashCommand.Timer
         or SlashCommand.Cwd or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Explore or SlashCommand.Open or SlashCommand.Browse or SlashCommand.Browser or SlashCommand.Terminal or SlashCommand.Shortcut or SlashCommand.Copy or SlashCommand.Session or SlashCommand.Rename or SlashCommand.GitUser
         or SlashCommand.Loop or SlashCommand.Plan or SlashCommand.CodeAudit or SlashCommand.BotChat or SlashCommand.Claude or SlashCommand.Advisor or SlashCommand.Cmd or SlashCommand.Queue or SlashCommand.Skills or SlashCommand.Test
-        or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.EventLog or SlashCommand.Net or SlashCommand.Services or SlashCommand.Tasks or SlashCommand.Ad or SlashCommand.Monitor or SlashCommand.Camera or SlashCommand.Screen or SlashCommand.YouTube or SlashCommand.Shopping or SlashCommand.Print or SlashCommand.Pdf or SlashCommand.Perf or SlashCommand.HomeBar or SlashCommand.Toolbar or SlashCommand.Header or SlashCommand.Rewind or SlashCommand.Undo
+        or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.EventLog or SlashCommand.Net or SlashCommand.Services or SlashCommand.Tasks or SlashCommand.Ad or SlashCommand.Monitor or SlashCommand.Camera or SlashCommand.Screen or SlashCommand.YouTube or SlashCommand.Shopping or SlashCommand.Print or SlashCommand.Pdf or SlashCommand.Docx or SlashCommand.Perf or SlashCommand.HomeBar or SlashCommand.Toolbar or SlashCommand.Header or SlashCommand.Rewind or SlashCommand.Undo
         or SlashCommand.Log or SlashCommand.Process or SlashCommand.Tools or SlashCommand.Settings or SlashCommand.Find or SlashCommand.WebUi
         or SlashCommand.Splash or SlashCommand.Pasted;   // 2026-10-18: view|thumbs|purge
 }

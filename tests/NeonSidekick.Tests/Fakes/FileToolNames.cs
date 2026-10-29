@@ -9,7 +9,8 @@ public static class FileToolNames
     /// Every file tool, the PDF converter and editor last: fourteen since 2026-10-10, when <c>view_image</c>, <c>image_info</c> and
     /// <c>image_edit</c> became a group of their own (<see cref="ImageToolNames"/>, the user's ask); fifteen since 2026-10-14, <c>read_pdf</c>
     /// after <c>read_file</c> (the PDF plan); sixteen later that day, <c>pdf_edit</c> after <c>convert_to_pdf</c>; seventeen since 2026-10-28,
-    /// <c>read_office</c> after <c>read_pdf</c> (the Office plan).
+    /// <c>read_office</c> after <c>read_pdf</c> (the Office plan); nineteen since 2026-10-29, <c>convert_to_docx</c> and <c>convert_to_xlsx</c>
+    /// after <c>open</c> (the Office writing plan).
     /// </summary>
     public static readonly string[] All =
     [
@@ -28,12 +29,14 @@ public static class FileToolNames
         ZipTool.ToolName,
         UnzipTool.ToolName,
         OpenTool.ToolName,
+        ConvertToDocxTool.ToolName,
+        ConvertToXlsxTool.ToolName,
         ConvertToPdfTool.ToolName,
         PdfEditTool.ToolName,
     ];
 
     /// <summary>
-    /// The fourteen (thirteen until <c>read_office</c>, 2026-10-28) <c>ChatScreen.FileTools</c> builds without a PDF converter, reader and editor (the tests that build the list alone;
+    /// The sixteen (thirteen until <c>read_office</c>, 2026-10-28; fourteen until the Office converters, 2026-10-29) <c>ChatScreen.FileTools</c> builds without a PDF converter, reader and editor (the tests that build the list alone;
     /// 2026-10-03). An explicit list since 2026-10-14 (the PDF plan's gap 33): <c>read_pdf</c> is optional too, and not last.
     /// </summary>
     public static readonly string[] WithoutPdf = [.. All.Where(n => n is not ConvertToPdfTool.ToolName and not ReadPdfTool.ToolName and not PdfEditTool.ToolName)];

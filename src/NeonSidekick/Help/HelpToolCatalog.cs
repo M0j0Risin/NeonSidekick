@@ -84,6 +84,8 @@ internal static class HelpToolCatalog
         T(ZipTool.ToolName, FilesGroup, SettingsField.FileTools, "Packs a file or folder under the working directory into a .zip archive.", setup: FileSetup),
         T(UnzipTool.ToolName, FilesGroup, SettingsField.FileTools, "Extracts a .zip archive under the working directory into a folder.", setup: FileSetup),
         T(OpenTool.ToolName, FilesGroup, SettingsField.FileTools, "Opens a file in the user's own editor or viewer, or a folder in the file manager, on their screen.", setup: FileSetup),
+        T(ConvertToDocxTool.ToolName, FilesGroup, SettingsField.FileTools, "Makes a Word document in the working directory from a Markdown or text file, or Markdown text.", setup: FileSetup),
+        T(ConvertToXlsxTool.ToolName, FilesGroup, SettingsField.FileTools, "Makes an Excel workbook in the working directory from a CSV, TSV or JSON file or a table, or adds a sheet to one.", setup: FileSetup),
         T(ConvertToPdfTool.ToolName, FilesGroup, SettingsField.FileTools, "Makes a PDF in the working directory from a file, a web page or Markdown text.", setup: BrowserSetup + ", or a printer engine as *PDF engine* says"),
         T(PdfEditTool.ToolName, FilesGroup, SettingsField.FileTools, "Edits PDFs in the working directory: merges, extracts, deletes or rotates pages, or fills a form, writing a new PDF.", setup: BrowserSetup),
         // GitLib
@@ -126,7 +128,7 @@ internal static class HelpToolCatalog
         T(SqlDescribeTool.ToolName, ToolsText.SqlTabTitle, SettingsField.SqlTools, "Describes one SQL Server table or view: columns, keys, joins and indexes.", setup: Conn("sql.json", "sql")),
         T(SqlRelationshipsTool.ToolName, ToolsText.SqlTabTitle, SettingsField.SqlTools, "Lists a SQL Server database's foreign keys as join paths.", setup: Conn("sql.json", "sql")),
         T(SqlIndexesTool.ToolName, ToolsText.SqlTabTitle, SettingsField.SqlTools, "Lists a SQL Server table's or database's indexes and how much each is used.", setup: Conn("sql.json", "sql")),
-        T(SqlQueryTool.ToolName, ToolsText.SqlTabTitle, SettingsField.SqlTools, "Runs one read-only T-SQL SELECT and gives back the rows.", setup: Conn("sql.json", "sql")),
+        T(SqlQueryTool.ToolName, ToolsText.SqlTabTitle, SettingsField.SqlTools, "Runs one read-only T-SQL SELECT and gives back the rows, or writes them all to an Excel workbook.", setup: Conn("sql.json", "sql")),
         T(SqlExecuteTool.ToolName, ToolsText.SqlTabTitle, SettingsField.SqlTools, "Runs one statement that changes a SQL Server database.", headless: false, pane: true, needs: [SettingsField.SqlMode], setup: ExecuteSetup),
         // Oracle
         T(OracleConnectionsTool.ToolName, ToolsText.OracleTabTitle, SettingsField.OracleTools, "Lists the Oracle connections the user has set up.", setup: Conn("oracle.json", "oracle")),
@@ -135,7 +137,7 @@ internal static class HelpToolCatalog
         T(OracleDescribeTool.ToolName, ToolsText.OracleTabTitle, SettingsField.OracleTools, "Describes one Oracle table or view: columns, keys, joins, indexes, checks and triggers.", setup: Conn("oracle.json", "oracle")),
         T(OracleRelationshipsTool.ToolName, ToolsText.OracleTabTitle, SettingsField.OracleTools, "Lists an Oracle schema's foreign keys as join paths.", setup: Conn("oracle.json", "oracle")),
         T(OracleIndexesTool.ToolName, ToolsText.OracleTabTitle, SettingsField.OracleTools, "Lists an Oracle table's or schema's indexes and their recorded use.", setup: Conn("oracle.json", "oracle")),
-        T(OracleQueryTool.ToolName, ToolsText.OracleTabTitle, SettingsField.OracleTools, "Runs one read-only Oracle SELECT and gives back the rows.", setup: Conn("oracle.json", "oracle")),
+        T(OracleQueryTool.ToolName, ToolsText.OracleTabTitle, SettingsField.OracleTools, "Runs one read-only Oracle SELECT and gives back the rows, or writes them all to an Excel workbook.", setup: Conn("oracle.json", "oracle")),
         T(OracleExecuteTool.ToolName, ToolsText.OracleTabTitle, SettingsField.OracleTools, "Runs one statement that changes an Oracle database.", headless: false, pane: true, needs: [SettingsField.OracleMode], setup: ExecuteSetup),
         // MySQL
         T(MySqlConnectionsTool.ToolName, ToolsText.MySqlTabTitle, SettingsField.MySqlTools, "Lists the MySQL and MariaDB connections the user has set up.", setup: Conn("mysql.json", "mysql")),
@@ -144,20 +146,20 @@ internal static class HelpToolCatalog
         T(MySqlDescribeTool.ToolName, ToolsText.MySqlTabTitle, SettingsField.MySqlTools, "Describes one MySQL table or view: columns, keys, joins, indexes, checks and triggers.", setup: Conn("mysql.json", "mysql")),
         T(MySqlRelationshipsTool.ToolName, ToolsText.MySqlTabTitle, SettingsField.MySqlTools, "Lists a MySQL database's foreign keys as join paths.", setup: Conn("mysql.json", "mysql")),
         T(MySqlIndexesTool.ToolName, ToolsText.MySqlTabTitle, SettingsField.MySqlTools, "Lists a MySQL table's or database's indexes and how much each is used.", setup: Conn("mysql.json", "mysql")),
-        T(MySqlQueryTool.ToolName, ToolsText.MySqlTabTitle, SettingsField.MySqlTools, "Runs one read-only SELECT on a MySQL or MariaDB connection and gives back the rows.", setup: Conn("mysql.json", "mysql")),
+        T(MySqlQueryTool.ToolName, ToolsText.MySqlTabTitle, SettingsField.MySqlTools, "Runs one read-only SELECT on a MySQL or MariaDB connection and gives back the rows, or writes them all to an Excel workbook.", setup: Conn("mysql.json", "mysql")),
         T(MySqlExecuteTool.ToolName, ToolsText.MySqlTabTitle, SettingsField.MySqlTools, "Runs one statement that changes a MySQL database.", headless: false, pane: true, needs: [SettingsField.MySqlMode], setup: ExecuteSetup),
         // SQLite
         T(SqliteDatabasesTool.ToolName, ToolsText.SqliteTabTitle, SettingsField.SqliteTools, "Lists the SQLite databases the user has named, and whether a database file in the working directory may be named by its path.", setup: SqliteSetup),
         T(SqliteTablesTool.ToolName, ToolsText.SqliteTabTitle, SettingsField.SqliteTools, "Lists a SQLite database's tables and views.", setup: SqliteSetup),
         T(SqliteDescribeTool.ToolName, ToolsText.SqliteTabTitle, SettingsField.SqliteTools, "Describes a SQLite table or view: columns, foreign keys, indexes and its CREATE statement.", setup: SqliteSetup),
-        T(SqliteQueryTool.ToolName, ToolsText.SqliteTabTitle, SettingsField.SqliteTools, "Runs one read-only SELECT on a SQLite database and gives back the rows.", setup: SqliteSetup),
+        T(SqliteQueryTool.ToolName, ToolsText.SqliteTabTitle, SettingsField.SqliteTools, "Runs one read-only SELECT on a SQLite database and gives back the rows, or writes them all to an Excel workbook.", setup: SqliteSetup),
         T(SqliteExecuteTool.ToolName, ToolsText.SqliteTabTitle, SettingsField.SqliteTools, "Runs one statement that changes a SQLite database.", headless: false, pane: true, needs: [SettingsField.SqliteMode],
             setup: "only the statement kinds *SQLite statements allowed* ticks; each new database file asks on the pane"),
         // DuckDB (2026-10-25)
         T(DuckDbDatabasesTool.ToolName, ToolsText.DuckDbTabTitle, SettingsField.DuckDbTools, "Lists the DuckDB databases the user has named, and whether DuckDB and data files in the working directory may be named by their paths.", setup: DuckDbSetup),
         T(DuckDbTablesTool.ToolName, ToolsText.DuckDbTabTitle, SettingsField.DuckDbTools, "Lists a DuckDB database's tables and views.", setup: DuckDbSetup),
         T(DuckDbDescribeTool.ToolName, ToolsText.DuckDbTabTitle, SettingsField.DuckDbTools, "Describes a DuckDB table or view: columns, keys, indexes and its CREATE statement.", setup: DuckDbSetup),
-        T(DuckDbQueryTool.ToolName, ToolsText.DuckDbTabTitle, SettingsField.DuckDbTools, "Runs one read-only SELECT on a DuckDB database, or over CSV, Parquet and JSON files in the working directory, and gives back the rows.", setup: DuckDbSetup),
+        T(DuckDbQueryTool.ToolName, ToolsText.DuckDbTabTitle, SettingsField.DuckDbTools, "Runs one read-only SELECT on a DuckDB database, or over CSV, Parquet and JSON files in the working directory, and gives back the rows, or writes them all to an Excel workbook.", setup: DuckDbSetup),
         T(DuckDbExecuteTool.ToolName, ToolsText.DuckDbTabTitle, SettingsField.DuckDbTools, "Runs one statement that changes a DuckDB database.", headless: false, pane: true, needs: [SettingsField.DuckDbMode],
             setup: "only the statement kinds *DuckDB statements allowed* ticks; each new database file asks on the pane"),
         // PostgreSQL
@@ -168,7 +170,7 @@ internal static class HelpToolCatalog
         T(PostgresDescribeTool.ToolName, ToolsText.PostgresTabTitle, SettingsField.PostgresTools, "Describes a PostgreSQL table or view: columns, foreign keys, indexes and checks.", setup: Conn("postgres.json", "postgres")),
         T(PostgresRelationshipsTool.ToolName, ToolsText.PostgresTabTitle, SettingsField.PostgresTools, "Lists a PostgreSQL schema's foreign keys as join paths.", setup: Conn("postgres.json", "postgres")),
         T(PostgresIndexesTool.ToolName, ToolsText.PostgresTabTitle, SettingsField.PostgresTools, "Lists a PostgreSQL schema's or table's indexes and how often each was scanned.", setup: Conn("postgres.json", "postgres")),
-        T(PostgresQueryTool.ToolName, ToolsText.PostgresTabTitle, SettingsField.PostgresTools, "Runs one read-only SELECT on a PostgreSQL connection and gives back the rows.", setup: Conn("postgres.json", "postgres")),
+        T(PostgresQueryTool.ToolName, ToolsText.PostgresTabTitle, SettingsField.PostgresTools, "Runs one read-only SELECT on a PostgreSQL connection and gives back the rows, or writes them all to an Excel workbook.", setup: Conn("postgres.json", "postgres")),
         T(PostgresExecuteTool.ToolName, ToolsText.PostgresTabTitle, SettingsField.PostgresTools, "Runs one statement that changes a PostgreSQL database.", headless: false, pane: true, needs: [SettingsField.PostgresMode], setup: ExecuteSetup),
         // UNC
         T(UncSharesTool.ToolName, ToolsText.UncTabTitle, SettingsField.UncTools, "Lists the network shares and outside folders the user has set up for the UNC tools.", setup: UncSetup),

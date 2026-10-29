@@ -724,6 +724,9 @@ internal sealed partial class ChatScreen
     private readonly WebAccess _web;
     private readonly PdfConverter _pdf;
 
+    /// <summary>The Word converter (2026-10-29, the Office writing plan): <c>convert_to_docx</c>'s and <c>/docx</c>'s one door.</summary>
+    private readonly Office.DocxConverter _docx;
+
     /// <summary>The PDFs read for the model (2026-10-14, the PDF plan's phase 1): <c>read_pdf</c>'s reader and its page-text cache.</summary>
     private readonly PdfReading _pdfReading;
     private readonly PdfEditing _pdfEditing;
@@ -1352,11 +1355,12 @@ internal sealed partial class ChatScreen
         // The print tools and /print (2026-09-28): the spooler the composition root hands in (none in tests); a model's print waits on the pane under ask.
         _print = new PrintService(printSpooler ?? NullPrintSpooler.Instance, _files, _effective, _time);
         _pdf = new PdfConverter(_web.Browser, _web.Fetcher, _print, _files, _effective, _time, botCheck: SolveBotCheckAsync);
+        _docx = new Office.DocxConverter(_files, _time);
         // The PDF reader (2026-10-14, the PDF plan): read_pdf's texts cached for the run, the web tools' browser reading them.
         _pdfReading = new PdfReading(_web.Browser, () => _web.Browser.Locate(_effective().WebBrowserPath));
         // The PDF editor (2026-10-14, the PDF plan's phase 4b): pdf_edit and /pdf's edits, pdf-lib in the same browser.
         _pdfEditing = new PdfEditing(_web.Browser, _files, () => _web.Browser.Locate(_effective().WebBrowserPath), _time);
-        _fileTools = FileTools(_files, () => WorkingDirectory.IsDefault(_effective().WorkingDirectory), _openFile, _effective, _unc, _pdf, _images, OpenPictureForModel, _pdfReading, _pdfEditing);
+        _fileTools = FileTools(_files, () => WorkingDirectory.IsDefault(_effective().WorkingDirectory), _openFile, _effective, _unc, _pdf, _images, OpenPictureForModel, _pdfReading, _pdfEditing, _time);
         _imageTools = ImageTools(_files, _effective, _images, () => _settings.ProfileSplashDirectory);
         _timers = new TimerBoard(time, SignalAlert);
         // The timer tone (2026-10-18, the user's ask): a device of its own from the app's playback factory; none in tests by default.
@@ -1374,19 +1378,19 @@ internal sealed partial class ChatScreen
         // The SQL tools (2026-09-23): the loaded profile's sql.json over the home's, read at every call, so a profile switch or an edit needs no rebuild.
         // Narrowed to the connections the profile offers (later that day): every tool, the rules and the %-mention see only those.
         _sql = new SqlAccess(() => SqlConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(_effective().SqlConnectionsOffered));
-        _sqlTools = SqlTools(_sql, _effective, AllowDatabaseWriteAsync);
+        _sqlTools = SqlTools(_sql, _effective, AllowDatabaseWriteAsync, SaveRootNow, _time);
         _oracle = new OracleAccess(() => OracleConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(_effective().OracleConnectionsOffered));
-        _oracleTools = OracleTools(_oracle, _effective, AllowDatabaseWriteAsync);
+        _oracleTools = OracleTools(_oracle, _effective, AllowDatabaseWriteAsync, SaveRootNow, _time);
         _mysql = new MySqlAccess(() => MySqlConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(_effective().MySqlConnectionsOffered));
-        _mysqlTools = MySqlTools(_mysql, _effective, AllowDatabaseWriteAsync);
+        _mysqlTools = MySqlTools(_mysql, _effective, AllowDatabaseWriteAsync, SaveRootNow, _time);
         _sqlite = new Sqlite.SqliteAccess(() => Sqlite.SqliteConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(_effective().SqliteDatabasesOffered), () => _effective().SqliteSandboxFiles ? _files : null, () => UntickedSqliteFiles(_settings.ProfileDirectory, _settings.StorageDirectory, _effective().SqliteDatabasesOffered));
         // sqlite_execute (2026-10-05) asks on the camera's allow pane, per file (AllowSqliteWriteAsync).
-        _sqliteTools = SqliteTools(_sqlite, _effective, AllowSqliteWriteAsync);
+        _sqliteTools = SqliteTools(_sqlite, _effective, AllowSqliteWriteAsync, SaveRootNow, _time);
         // The DuckDB tools (2026-10-25), SQLite's shape: duckdb_execute asks on the same allow pane, per file (AllowDuckDbWriteAsync).
         _duckDb = new DuckDb.DuckDbAccess(() => DuckDb.DuckDbConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(_effective().DuckDbDatabasesOffered), () => _effective().DuckDbSandboxFiles ? _files : null, () => UntickedDuckDbFiles(_settings.ProfileDirectory, _settings.StorageDirectory, _effective().DuckDbDatabasesOffered));
-        _duckDbTools = DuckDbTools(_duckDb, _effective, AllowDuckDbWriteAsync);
+        _duckDbTools = DuckDbTools(_duckDb, _effective, AllowDuckDbWriteAsync, SaveRootNow, _time);
         _postgres = new Postgres.PostgresAccess(() => Postgres.PostgresConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(_effective().PostgresConnectionsOffered));
-        _postgresTools = PostgresTools(_postgres, _effective, AllowDatabaseWriteAsync);
+        _postgresTools = PostgresTools(_postgres, _effective, AllowDatabaseWriteAsync, SaveRootNow, _time);
         // The UNC tools (2026-09-30), over the door built above.
         _uncTools = UncTools(_unc, _files, _effective);
         // The image tools (2026-09-24): the profile's comfy folder over the home's, rescanned at every call; the client made for the ComfyUI URL in force.
@@ -5640,6 +5644,10 @@ internal sealed partial class ChatScreen
                 // reply for the first word, the options after a target (2026-10-03); the path itself is ArgumentPaths'.
                 return PdfCommand.Complete(argText);
 
+            case SlashCommand.Docx:
+                // reply for the first word, the options after a target (2026-10-29), never /pdf's edit verbs; the path itself is ArgumentPaths'.
+                return Office.DocxCommand.Complete(argText);
+
             case SlashCommand.Test:
                 // The test ids, the group words, all and history (2026-09-28): one word, nothing after it.
                 return argText.Contains(' ', StringComparison.Ordinal) ? [] : MentionCompleter.Matches(TestChoices(), argText);
@@ -5823,7 +5831,7 @@ internal sealed partial class ChatScreen
     /// <c>/cwd</c>'s list of any drive's folders (2026-10-05), and <c>/open</c>'s files and <c>/browse</c>'s folders (2026-10-09). Pinned.
     /// </summary>
     public static bool TakesPathArgument(string command) =>
-        SlashCommands.Parse(command).Command is SlashCommand.Read or SlashCommand.View or SlashCommand.Print or SlashCommand.Pdf
+        SlashCommands.Parse(command).Command is SlashCommand.Read or SlashCommand.View or SlashCommand.Print or SlashCommand.Pdf or SlashCommand.Docx
             or SlashCommand.Tree or SlashCommand.Explore or SlashCommand.Terminal or SlashCommand.Vault or SlashCommand.Cwd
             or SlashCommand.Open or SlashCommand.Browse;
 
@@ -5856,6 +5864,12 @@ internal sealed partial class ChatScreen
         if (kind == SlashCommand.Pdf)
         {
             return IsPdfEditLine(argText) ? PdfEditPaths(argText, sources) : PrintPaths(argText, sources, PdfVerbs);
+        }
+
+        if (kind == SlashCommand.Docx)
+        {
+            // Any file, as for /pdf, with reply alone for a word (2026-10-29): /docx has no edit verbs.
+            return PrintPaths(argText, sources, [PdfCommand.ReplyWord]);
         }
 
         if (kind == SlashCommand.Cwd)
@@ -6679,15 +6693,18 @@ internal sealed partial class ChatScreen
     /// became a group of their own (<see cref="ImageTools"/>, the user's ask): thirteen since, fifteen with <c>read_pdf</c>
     /// (2026-10-14, given <paramref name="reading"/>) and <c>convert_to_pdf</c>, sixteen with <c>pdf_edit</c> after it (later that day,
     /// given <paramref name="editing"/>). Seventeen with <c>read_office</c> after them (2026-10-28, the Office plan, the user's pick), which
-    /// follows <c>read_pdf</c>'s place and stays in whether <paramref name="reading"/> is null or not: it needs no browser.
+    /// follows <c>read_pdf</c>'s place and stays in whether <paramref name="reading"/> is null or not: it needs no browser. Nineteen with
+    /// <c>convert_to_docx</c> and <c>convert_to_xlsx</c> after <c>open</c> (2026-10-29, the Office writing plan), always built (no browser either),
+    /// so <c>convert_to_pdf</c> and <c>pdf_edit</c> stay last.
     /// </summary>
     /// <param name="images">The profile's images folder (2026-10-09): the picture tools read (and <c>image_edit</c> writes) a full path there, and <c>search_files</c> and <c>file_info</c> read one (later that day, the user's call: the model could not list it to find the newest pictures); null = the working directory alone.</param>
     /// <param name="openPicture"><c>open</c>'s picture, opened where a double-click would (2026-10-11, <see cref="OpenTool"/>); null = the <paramref name="openFile"/> like any file (headless).</param>
     /// <param name="reading">The PDF reader (2026-10-14, the PDF plan's phase 1): adds <c>read_pdf</c> right after <c>read_file</c>; null = without it (the tests that count the rest, as <paramref name="pdf"/>).</param>
     /// <param name="editing">The PDF editor (2026-10-14, the PDF plan's phase 4b): adds <c>pdf_edit</c> last, after <c>convert_to_pdf</c>; null = without it.</param>
-    public static IReadOnlyList<AIFunction> FileTools(WorkingDirectory files, Func<bool> isDefault, Action<string> openFile, Func<AppSettingsData> effective, UncAccess? unc = null, PdfConverter? pdf = null, WorkingDirectory? images = null, Func<string, string>? openPicture = null, PdfReading? reading = null, PdfEditing? editing = null)
+    /// <param name="time">The Office converters' clock (2026-10-29): their default names and the files' times; the system's when null.</param>
+    public static IReadOnlyList<AIFunction> FileTools(WorkingDirectory files, Func<bool> isDefault, Action<string> openFile, Func<AppSettingsData> effective, UncAccess? unc = null, PdfConverter? pdf = null, WorkingDirectory? images = null, Func<string, string>? openPicture = null, PdfReading? reading = null, PdfEditing? editing = null, TimeProvider? time = null)
     {
-        var tools = new List<AIFunction>(17)
+        var tools = new List<AIFunction>(19)
         {
             new GetWorkingDirectoryTool(files, isDefault),
             new SearchFilesTool(files, effective, images),
@@ -6712,6 +6729,8 @@ internal sealed partial class ChatScreen
             new ZipTool(files),
             new UnzipTool(files),
             new OpenTool(files, openFile, unc, effective, openPicture, images),
+            new ConvertToDocxTool(files, new Office.DocxConverter(files, time)),
+            new ConvertToXlsxTool(files, time),
         ]);
 
         if (pdf is not null)
@@ -6886,7 +6905,8 @@ internal sealed partial class ChatScreen
     /// connections first, then the catalog from the database down to a table and its indexes, the query last. Each reads the settings
     /// in force at the call and <c>sql.json</c> afresh.
     /// </summary>
-    public static IReadOnlyList<AIFunction> SqlTools(SqlAccess sql, Func<AppSettingsData> effective, DatabaseWriteAllow? allow = null) => new AIFunction[]
+    /// <remarks><paramref name="saveRoot"/> and <paramref name="time"/> (2026-10-29, the Office writing plan): where the query's <c>to</c> may write, and the workbook's clock; null offers no <c>to</c>.</remarks>
+    public static IReadOnlyList<AIFunction> SqlTools(SqlAccess sql, Func<AppSettingsData> effective, DatabaseWriteAllow? allow = null, Func<Files.SaveRoot>? saveRoot = null, TimeProvider? time = null) => new AIFunction[]
     {
         new SqlConnectionsTool(sql, effective),
         new SqlTablesTool(sql, effective),
@@ -6894,7 +6914,7 @@ internal sealed partial class ChatScreen
         new SqlDescribeTool(sql, effective),
         new SqlRelationshipsTool(sql, effective),
         new SqlIndexesTool(sql, effective),
-        new SqlQueryTool(sql, effective),
+        new SqlQueryTool(sql, effective) { ExportRoot = saveRoot, Clock = time ?? TimeProvider.System },
         new SqlExecuteTool(sql, effective, allow),
     };
 
@@ -6938,7 +6958,8 @@ internal sealed partial class ChatScreen
     /// says so (headless too): the connections first, then the catalog from the schema down to a table and its indexes, the
     /// query last (<c>oracle_schemas</c> gone 2026-10-09 with the lock to each connection's schema). Each reads the settings in force at the call and <c>oracle.json</c> afresh.
     /// </summary>
-    public static IReadOnlyList<AIFunction> OracleTools(OracleAccess oracle, Func<AppSettingsData> effective, DatabaseWriteAllow? allow = null) => new AIFunction[]
+    /// <remarks><paramref name="saveRoot"/> and <paramref name="time"/> (2026-10-29, the Office writing plan): where the query's <c>to</c> may write, and the workbook's clock; null offers no <c>to</c>.</remarks>
+    public static IReadOnlyList<AIFunction> OracleTools(OracleAccess oracle, Func<AppSettingsData> effective, DatabaseWriteAllow? allow = null, Func<Files.SaveRoot>? saveRoot = null, TimeProvider? time = null) => new AIFunction[]
     {
         new OracleConnectionsTool(oracle, effective),
         new OracleTablesTool(oracle, effective),
@@ -6946,7 +6967,7 @@ internal sealed partial class ChatScreen
         new OracleDescribeTool(oracle, effective),
         new OracleRelationshipsTool(oracle, effective),
         new OracleIndexesTool(oracle, effective),
-        new OracleQueryTool(oracle, effective),
+        new OracleQueryTool(oracle, effective) { ExportRoot = saveRoot, Clock = time ?? TimeProvider.System },
         new OracleExecuteTool(oracle, effective, allow),
     };
 
@@ -6986,7 +7007,8 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>The MySQL tools (2026-09-30), <see cref="OracleTools"/>' twin, offered while <see cref="MySqlOffered"/> says so (headless too); <c>mysql_databases</c> gone 2026-10-09 with the lock to each connection's database.</summary>
-    public static IReadOnlyList<AIFunction> MySqlTools(MySqlAccess mysql, Func<AppSettingsData> effective, DatabaseWriteAllow? allow = null) => new AIFunction[]
+    /// <remarks><paramref name="saveRoot"/> and <paramref name="time"/> (2026-10-29, the Office writing plan): where the query's <c>to</c> may write, and the workbook's clock; null offers no <c>to</c>.</remarks>
+    public static IReadOnlyList<AIFunction> MySqlTools(MySqlAccess mysql, Func<AppSettingsData> effective, DatabaseWriteAllow? allow = null, Func<Files.SaveRoot>? saveRoot = null, TimeProvider? time = null) => new AIFunction[]
     {
         new MySqlConnectionsTool(mysql, effective),
         new MySqlTablesTool(mysql, effective),
@@ -6994,7 +7016,7 @@ internal sealed partial class ChatScreen
         new MySqlDescribeTool(mysql, effective),
         new MySqlRelationshipsTool(mysql, effective),
         new MySqlIndexesTool(mysql, effective),
-        new MySqlQueryTool(mysql, effective),
+        new MySqlQueryTool(mysql, effective) { ExportRoot = saveRoot, Clock = time ?? TimeProvider.System },
         new MySqlExecuteTool(mysql, effective, allow),
     };
 
@@ -7030,7 +7052,8 @@ internal sealed partial class ChatScreen
     /// the reads (<c>postgres_databases</c> gone 2026-10-09 with the lock to each connection's database), and <c>postgres_execute</c>
     /// (2026-10-05) behind <paramref name="allow"/> — null where nothing can ask, and there <see cref="PostgresToolsFor"/> never offers it.
     /// </summary>
-    public static IReadOnlyList<AIFunction> PostgresTools(Postgres.PostgresAccess postgres, Func<AppSettingsData> effective, DatabaseWriteAllow? allow = null) => new AIFunction[]
+    /// <remarks><paramref name="saveRoot"/> and <paramref name="time"/> (2026-10-29, the Office writing plan): where the query's <c>to</c> may write, and the workbook's clock; null offers no <c>to</c>.</remarks>
+    public static IReadOnlyList<AIFunction> PostgresTools(Postgres.PostgresAccess postgres, Func<AppSettingsData> effective, DatabaseWriteAllow? allow = null, Func<Files.SaveRoot>? saveRoot = null, TimeProvider? time = null) => new AIFunction[]
     {
         new PostgresConnectionsTool(postgres, effective),
         new PostgresSchemasTool(postgres, effective),
@@ -7039,7 +7062,7 @@ internal sealed partial class ChatScreen
         new PostgresDescribeTool(postgres, effective),
         new PostgresRelationshipsTool(postgres, effective),
         new PostgresIndexesTool(postgres, effective),
-        new PostgresQueryTool(postgres, effective),
+        new PostgresQueryTool(postgres, effective) { ExportRoot = saveRoot, Clock = time ?? TimeProvider.System },
         new PostgresExecuteTool(postgres, effective, allow),
     };
 
@@ -7079,12 +7102,13 @@ internal sealed partial class ChatScreen
     /// the four reads, and <c>sqlite_execute</c> (2026-10-05) behind <paramref name="allow"/> — null where nothing can ask, and there
     /// <see cref="SqliteToolsFor"/> never offers it. What a turn offers of them is <see cref="SqliteToolsFor"/>'s.
     /// </summary>
-    public static IReadOnlyList<AIFunction> SqliteTools(Sqlite.SqliteAccess sqlite, Func<AppSettingsData> effective, SqliteWriteAllow? allow) => new AIFunction[]
+    /// <remarks><paramref name="saveRoot"/> and <paramref name="time"/> (2026-10-29, the Office writing plan): where the query's <c>to</c> may write, and the workbook's clock; null offers no <c>to</c>.</remarks>
+    public static IReadOnlyList<AIFunction> SqliteTools(Sqlite.SqliteAccess sqlite, Func<AppSettingsData> effective, SqliteWriteAllow? allow, Func<Files.SaveRoot>? saveRoot = null, TimeProvider? time = null) => new AIFunction[]
     {
         new SqliteDatabasesTool(sqlite, effective),
         new SqliteTablesTool(sqlite, effective),
         new SqliteDescribeTool(sqlite, effective),
-        new SqliteQueryTool(sqlite, effective),
+        new SqliteQueryTool(sqlite, effective) { ExportRoot = saveRoot, Clock = time ?? TimeProvider.System },
         new SqliteExecuteTool(sqlite, effective, allow),
     };
 
@@ -7187,12 +7211,13 @@ internal sealed partial class ChatScreen
     /// reads, and <c>duckdb_execute</c> behind <paramref name="allow"/> — null where nothing can ask, and there <see cref="DuckDbToolsFor"/> never
     /// offers it.
     /// </summary>
-    public static IReadOnlyList<AIFunction> DuckDbTools(DuckDb.DuckDbAccess duckDb, Func<AppSettingsData> effective, DuckDbWriteAllow? allow) => new AIFunction[]
+    /// <remarks><paramref name="saveRoot"/> and <paramref name="time"/> (2026-10-29, the Office writing plan): where the query's <c>to</c> may write, and the workbook's clock; null offers no <c>to</c>.</remarks>
+    public static IReadOnlyList<AIFunction> DuckDbTools(DuckDb.DuckDbAccess duckDb, Func<AppSettingsData> effective, DuckDbWriteAllow? allow, Func<Files.SaveRoot>? saveRoot = null, TimeProvider? time = null) => new AIFunction[]
     {
         new DuckDbDatabasesTool(duckDb, effective),
         new DuckDbTablesTool(duckDb, effective),
         new DuckDbDescribeTool(duckDb, effective),
-        new DuckDbQueryTool(duckDb, effective),
+        new DuckDbQueryTool(duckDb, effective) { ExportRoot = saveRoot, Clock = time ?? TimeProvider.System },
         new DuckDbExecuteTool(duckDb, effective, allow),
     };
 
@@ -7417,6 +7442,8 @@ internal sealed partial class ChatScreen
         WebSaveLinkTool.ToolName,
         DownloadFileTool.ToolName,
         ConvertToPdfTool.ToolName,
+        ConvertToDocxTool.ToolName,   // 2026-10-29: the Markdown or table a call carries never reaches the transcript
+        ConvertToXlsxTool.ToolName,
         PdfEditTool.ToolName,
         SessionManagerTool.ToolName,
         GetCurrentTimeTool.ToolName,
@@ -14454,6 +14481,10 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.Pdf:
                 await HandlePdfAsync(args, cancellationToken).ConfigureAwait(false);
+                return false;
+
+            case SlashCommand.Docx:
+                await HandleDocxAsync(args, cancellationToken).ConfigureAwait(false);
                 return false;
 
             case SlashCommand.Copy:

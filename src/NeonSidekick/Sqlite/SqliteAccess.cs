@@ -4,6 +4,7 @@ using System.Globalization;
 using Microsoft.Data.Sqlite;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Files;
+using NeonSidekick.Office;
 using NeonSidekick.Sql;
 
 namespace NeonSidekick.Sqlite;
@@ -227,6 +228,60 @@ public sealed class SqliteAccess
     public static SqlRun Run(SqliteTarget target, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken) =>
         Run(target, statements, parameters, maxRows, timeoutSeconds, write: false, create: false, SqliteReadLayers.All, cancellationToken);
 
+    /// <summary>
+    /// A query's rows written to a workbook (2026-10-29, the Office writing plan), on the pool: <see cref="Run"/>'s read-only open,
+    /// <c>query_only</c> and rolled-back transaction, the rows handed to <paramref name="export"/> (typed by <see cref="ExportCell"/>)
+    /// instead of read into a grid.
+    /// </summary>
+    public async Task<SqlRun> ExportAsync(string? database, string statement, IReadOnlyList<SqlParameterValue> parameters, SqlExportJob export, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(export);
+        if (Resolve(database, out var refused) is not { } target)
+        {
+            return refused!;
+        }
+
+        return await Task.Run(() => Run(target, [statement], parameters, maxRows, timeoutSeconds, write: false, create: false, SqliteReadLayers.All, cancellationToken, export), cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// A SQLite cell for a workbook (2026-10-29): integers, reals, text and blobs by the common rules; text in a column declared
+    /// <c>DATE</c>, <c>DATETIME</c> or <c>TIMESTAMP</c> a date or date-time when it reads as ISO (SQLite keeps dates as text), else the
+    /// text as it is.
+    /// </summary>
+    public static XlsxValue ExportCell(DbDataReader reader, int ordinal)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+        if (!reader.IsDBNull(ordinal) && reader.GetValue(ordinal) is string text && DeclaredDate(reader.GetDataTypeName(ordinal)) is { } dateOnly)
+        {
+            if (dateOnly && DateOnly.TryParseExact(text.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+            {
+                return XlsxValue.OfDate(date);
+            }
+
+            if (DateTime.TryParseExact(text.Trim(), IsoDateTimes, CultureInfo.InvariantCulture, DateTimeStyles.None, out var when))
+            {
+                return XlsxValue.OfDateTime(when, dateColumn: dateOnly);
+            }
+
+            return XlsxValue.OfText(text);
+        }
+
+        return SqlExport.Typed(reader, ordinal, ReadCell);
+    }
+
+    /// <summary>The ISO forms SQLite's date functions write (and a <c>T</c> between), to the second or its fraction.</summary>
+    private static readonly string[] IsoDateTimes =
+        ["yyyy-MM-dd", "yyyy-MM-dd HH:mm", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd HH:mm:ss.FFFFFFF", "yyyy-MM-ddTHH:mm", "yyyy-MM-ddTHH:mm:ss", "yyyy-MM-ddTHH:mm:ss.FFFFFFF"];
+
+    /// <summary>True for a column declared a date, false for a date-time or timestamp, null for anything else.</summary>
+    private static bool? DeclaredDate(string? declared) => declared?.Trim().ToUpperInvariant() switch
+    {
+        "DATE" => true,
+        "DATETIME" or "TIMESTAMP" => false,
+        _ => null,
+    };
+
     /// <summary>A read with only <paramref name="layers"/> under it: a test's way to prove each layer alone (S14). Never the app's.</summary>
     internal static SqlRun RunWithLayers(SqliteTarget target, IReadOnlyList<string> statements, SqliteReadLayers layers) =>
         Run(target, statements, [], 100, 30, write: false, create: false, layers, CancellationToken.None);
@@ -285,7 +340,7 @@ public sealed class SqliteAccess
     /// The run: <paramref name="write"/> false is <c>sqlite_query</c>'s four layers (read-only open, <c>query_only</c>, a deferred
     /// transaction rolled back); true is <see cref="Execute"/>'s read-write open with neither.
     /// </summary>
-    private static SqlRun Run(SqliteTarget target, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, bool write, bool create, SqliteReadLayers layers, CancellationToken cancellationToken)
+    private static SqlRun Run(SqliteTarget target, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, bool write, bool create, SqliteReadLayers layers, CancellationToken cancellationToken, SqlExportJob? export = null)
     {
         ArgumentNullException.ThrowIfNull(target);
         if (!(write && create) && !File.Exists(target.FullPath))
@@ -385,7 +440,9 @@ public sealed class SqliteAccess
 
                     using (var reader = ExecuteWaiting(command, watch, deadline, cancellationToken))
                     {
-                        grids.Add(SqlGrid.ReadAsync(reader, maxRows, CancellationToken.None, ReadCell).GetAwaiter().GetResult());
+                        grids.Add(export is null
+                            ? SqlGrid.ReadAsync(reader, maxRows, CancellationToken.None, ReadCell).GetAwaiter().GetResult()
+                            : export.ReadAsync(reader, maxRows, CancellationToken.None).GetAwaiter().GetResult());
                     }
 
                     // A write's count once its reader is done (2026-10-05): a RETURNING made every change at its first step.

@@ -258,6 +258,211 @@ public static class OfficeText
     /// <summary><c>/read</c>'s read stopped by Esc before it spoke.</summary>
     public const string ReadAloudStopped = "(reading the Office file stopped)";
 
+    // ─── writing (2026-10-29, the Office writing plan) ─────────────────────────────
+
+    /// <summary>The log category of a write's one line.</summary>
+    public const string Category = "office";
+
+    /// <summary>A table with no columns. Pinned.</summary>
+    public const string NoColumns = "Error: the result has no columns, so there is nothing to write";
+
+    /// <summary>A table past Excel's last column. Pinned.</summary>
+    public static string TooManyColumns(int count) =>
+        $"Error: the result has {N(count)} columns, past Excel's {N(CellReference.MaxColumn)}; choose fewer columns";
+
+    /// <summary>A sheet name Excel refuses. Pinned.</summary>
+    public static string BadSheetName(string name) =>
+        $"Error: \"{name}\" can't name a sheet: at most 31 characters, none of : \\ / ? * [ ], no ' first or last, and not History";
+
+    /// <summary>An existing <c>.xlsx</c> that isn't a zip: an encrypted workbook is a compound file. Pinned.</summary>
+    public static string NotAWorkbook(string path, bool encrypted) => encrypted
+        ? $"Error: '{path}' is password-protected or encrypted, so no sheet can be added to it; give another file name, or overwrite: true to replace it with a new workbook"
+        : $"Error: '{path}' is not an Excel workbook, so no sheet can be added to it; give another file name, or overwrite: true to replace it with a new workbook";
+
+    /// <summary>A workbook saved as Strict Open XML. Pinned.</summary>
+    public static string StrictWorkbook(string path) =>
+        $"Error: '{path}' is saved as Strict Open XML, which no sheet is added to; save it in Excel as an ordinary Excel Workbook, or give another file name";
+
+    /// <summary>A workbook whose structure is protected. Pinned.</summary>
+    public static string StructureLocked(string path) =>
+        $"Error: '{path}' has its structure protected, so no sheet can be added or replaced; unprotect the workbook in Excel, or give another file name";
+
+    /// <summary>A chart sheet (or a sheet whose part is missing) named to be replaced. Pinned.</summary>
+    public static string NotAWorksheet(string path, string sheet, string suggestion) =>
+        $"Error: \"{sheet}\" in '{path}' is not a worksheet, so it isn't replaced; write to a new sheet, such as sheet \"{suggestion}\"";
+
+    /// <summary>A sheet with parts of its own (a chart, a table…) named to be replaced. Pinned.</summary>
+    public static string SheetNotPlain(string path, string sheet, string what, string suggestion) =>
+        $"Error: sheet \"{sheet}\" in '{path}' holds {what}, so it isn't replaced; write to a new sheet, such as sheet \"{suggestion}\"";
+
+    /// <summary>What a sheet's relationship of <paramref name="type"/> holds, in words.</summary>
+    public static string SheetPartName(string type)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        string kind = type[(type.LastIndexOf('/') + 1)..];
+        return kind switch
+        {
+            "drawing" => "a chart or a picture",
+            "table" => "a table",
+            "comments" or "vmlDrawing" or "threadedComment" => "comments",
+            "pivotTable" => "a pivot table",
+            "control" or "ctrlProp" => "a form control",
+            "oleObject" => "an embedded object",
+            _ => "parts of its own (" + kind + ")",
+        };
+    }
+
+    /// <summary>A sheet named that is already there, without <c>overwrite</c>. Pinned.</summary>
+    public static string SheetExists(string path, string sheet) =>
+        $"Error: '{path}' already has a sheet \"{sheet}\"; give overwrite: true to replace that sheet, or another sheet name";
+
+    /// <summary>An existing workbook named with no <c>sheet</c> and no <c>overwrite</c>. Pinned.</summary>
+    public static string WorkbookExists(string path) =>
+        $"Error: '{path}' already exists; give a sheet name to add a sheet to it, or overwrite: true to replace the whole file";
+
+    /// <summary>
+    /// A replace that failed because Excel or Word holds the file (Windows' sharing violation), put before the file system's own words.
+    /// Pinned.
+    /// </summary>
+    public static string OpenElsewhere(string path) => $"Error: '{path}' is open in another program; close it there and try again";
+
+    /// <summary>A write that failed: <see cref="OpenElsewhere"/> when another program holds the file, else the file system's sentence.</summary>
+    public static string WriteFailed(WriteResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        return result.InUse ? OpenElsewhere(result.Relative) : FileText.Error(result.Outcome, result.Relative, "write", result.Detail);
+    }
+
+    /// <summary>
+    /// A workbook written: <c>Made sales.xlsx (84 KB), sheet "Q3": 1,234 rows × 8 columns</c>, <c>Added sheet "Q3" to …</c>, <c>Replaced
+    /// sheet "Q3" in …</c> or <c>Replaced sales.xlsx …</c>; then the cells cut and the rows left out (2026-10-29, <c>PdfText.Made</c>'s shape).
+    /// </summary>
+    public static string Workbook(WriteResult result, WorkbookWrite mode, string sheet, SheetResult sheetResult)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        ArgumentNullException.ThrowIfNull(sheetResult);
+        string size = result.Relative + " (" + FileText.Size(result.Bytes) + ")";
+        string counts = Count(sheetResult.Rows, "row") + " × " + Count(sheetResult.Columns, "column");
+        string made = mode switch
+        {
+            WorkbookWrite.Added => $"Added sheet \"{sheet}\" to {size}: {counts}",
+            WorkbookWrite.ReplacedSheet => $"Replaced sheet \"{sheet}\" in {size}: {counts}",
+            _ => (result.Replaced ? "Replaced " : "Made ") + $"{size}, sheet \"{sheet}\": {counts}",
+        };
+        return made + Notes(sheetResult);
+    }
+
+    /// <summary>The notes after a workbook's sentence: cells cut at Excel's cap, rows past its last row.</summary>
+    public static string Notes(SheetResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        return (result.CutCells > 0 ? $"; {Count(result.CutCells, "cell")} cut at Excel's {N(XlsxValue.MaxChars)} characters" : "")
+            + (result.RowsCut ? $"; stopped at Excel's last row, so later rows are left out" : "");
+    }
+
+    /// <summary>
+    /// A Word document written: <c>Made report.docx (12 KB) from .neon/plans/x.md, 3 pictures</c>, or <c>Replaced …</c>; the pictures left as
+    /// their alt text counted too.
+    /// </summary>
+    public static string Document(WriteResult result, string source, int pictures, int missing)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        ArgumentNullException.ThrowIfNull(source);
+        return (result.Replaced ? "Replaced " : "Made ") + result.Relative + " (" + FileText.Size(result.Bytes) + ") from " + source
+            + (pictures > 0 ? ", " + Count(pictures, "picture") : "")
+            + (missing > 0 ? $"; {Count(missing, "picture")} not found or not usable, shown as [picture: alt]" : "");
+    }
+
+    /// <summary><c>convert_to_xlsx</c> given no source or two. Pinned.</summary>
+    public const string OneTableSource =
+        "Error: give exactly one of path (a .csv, .tsv or .json file) or columns with rows (your own table)";
+
+    /// <summary><c>columns</c> without <c>rows</c>, or <c>rows</c> without <c>columns</c>. Pinned.</summary>
+    public const string ColumnsAndRows = "Error: give columns (the header) and rows (an array of rows, each an array of cells) together";
+
+    /// <summary>A <c>convert_to_xlsx</c> source of another kind. Pinned.</summary>
+    public static string NotATableFile(string path) =>
+        $"Error: convert_to_xlsx reads .csv, .tsv and .json files, not '{path}'; for a database query, give the query tool's to instead";
+
+    /// <summary>A <c>columns</c> or <c>rows</c> that isn't the list it should be. Pinned.</summary>
+    public static string BadTableArgument(string argument) =>
+        $"Error: {argument} is not the list it takes: columns is an array of names, rows an array of rows, each an array of cells";
+
+    /// <summary>A row of the model's table longer than its header. Pinned.</summary>
+    public static string RowTooLong(int row, int cells, int columns) =>
+        $"Error: row {N(row)} has {N(cells)} cells but there are {Count(columns, "column")}; add column names or shorten the row";
+
+    /// <summary>A cell of the model's table that isn't a string, number, boolean or null. Pinned.</summary>
+    public static string BadCell(int row, int column) =>
+        $"Error: row {N(row)}, cell {N(column)} is not a string, number, true/false or null";
+
+    /// <summary>An empty source file. Pinned.</summary>
+    public static string EmptyTable(string path) => $"Error: '{path}' holds no rows, not even a header";
+
+    /// <summary>A JSON source that isn't an array of objects or of arrays. Pinned.</summary>
+    public static string BadJson(string path, string detail) =>
+        $"Error: '{path}' is not a JSON array of objects or of arrays ({detail})";
+
+    /// <summary>A JSON source past what is read whole. Pinned.</summary>
+    public static string JsonTooLarge(string path, long max) =>
+        $"Error: '{path}' is over {(max / (1024 * 1024)).ToString(CultureInfo.InvariantCulture)} MB, too large a JSON file; save it as CSV first";
+
+    /// <summary><c>sheet</c> or <c>overwrite</c> given with no <c>to</c> where <c>to</c> is what writes. Pinned.</summary>
+    public static string NeedsTo(string argument) => $"Error: {argument} goes with to (the .xlsx file or folder to write); give to as well";
+
+    /// <summary>A <c>to</c> ending in another document type than the tool writes. Pinned.</summary>
+    public static string WrongTarget(string to, string extension) =>
+        $"Error: '{to}' names another kind of file; this writes {extension} files, so end to in {extension} or give a folder";
+
+    /// <summary>A <c>to</c> naming Office's lock-file prefix. Pinned.</summary>
+    public static string ReservedName(string to) => $"Error: '{to}' starts with ~$, the name Office keeps for its lock files; choose another name";
+
+    /// <summary><c>convert_to_docx</c> given no source or two. Pinned.</summary>
+    public const string OneDocumentSource = "Error: give exactly one of path (a Markdown or text file) or markdown (your own text)";
+
+    /// <summary>A <c>convert_to_docx</c> or <c>/docx</c> source of another kind. Pinned.</summary>
+    public static string NotADocumentSource(string path) =>
+        $"Error: a Word document is made from Markdown (.md) or text (.txt), not '{path}'";
+
+    /// <summary>A Markdown source too long to convert, <c>PdfText.TooLarge</c>'s twin. Pinned.</summary>
+    public static string DocumentTooLarge(string path) =>
+        $"Error: {path} is over {(Printing.PrintText.MaxTextBytes / 1_000_000).ToString(CultureInfo.InvariantCulture)} MB, too long to make a Word document of";
+
+    /// <summary>Pictures past the document's budget, <c>PdfText.PicturesTooLarge</c>'s twin. Pinned.</summary>
+    public static string PicturesTooLarge(int mb) =>
+        $"Error: the pictures come to over {mb.ToString(CultureInfo.InvariantCulture)} MB, too much for one Word document";
+
+    /// <summary>A source with nothing in it to write. Pinned.</summary>
+    public static string EmptyDocument(string source) => $"Error: {source} holds nothing to put in a Word document";
+
+    /// <summary><c>/docx</c> given a web address. Pinned.</summary>
+    public const string NoWebSource = "Error: /docx makes a Word document of a Markdown or text file, or of the last reply, not a web page; " + DocxUsage;
+
+    /// <summary><c>/docx</c>'s forms. Pinned (the hint fits 119 cells).</summary>
+    public const string DocxUsage = "Usage: /docx <file> | reply [to=<out.docx>] [paper=letter|a4|legal] [landscape] [overwrite]";
+
+    /// <summary><c>/docx</c> given no reply to convert.</summary>
+    public const string NoReplyForDocx = "Error: there is no reply to make a Word document of yet";
+
+    /// <summary><c>/docx</c>'s spinner.</summary>
+    public const string Working = "Making a Word document";
+
+    /// <summary><c>/docx</c>'s completion notes.</summary>
+    public const string DocxReplyNote = "make a Word document of the last reply";
+
+    public const string DocxToNote = "to=out.docx, or a folder";
+
+    public const string DocxOverwriteNote = "replace a document already there";
+
+    public const string DocxLandscapeNote = "lay the pages out landscape";
+
+    /// <summary>The page footer's words around its fields: "Page X of Y".</summary>
+    public const string PageWord = "Page ";
+
+    public const string OfWord = " of ";
+
+    private static string Count(long count, string what) => count.ToString("N0", CultureInfo.InvariantCulture) + " " + what + (count == 1 ? "" : "s");
+
     private static string KindName(OfficeKind kind) => kind switch
     {
         OfficeKind.Word => "a Word document",

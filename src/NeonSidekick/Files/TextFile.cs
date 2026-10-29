@@ -48,6 +48,21 @@ public sealed class TextCodec
     /// <summary>The form read.</summary>
     public TextForm Form { get; }
 
+    /// <summary>How many bytes the byte-order mark takes: a streamed read starts past them.</summary>
+    public int MarkLength => _preamble.Length;
+
+    /// <summary>
+    /// The encoding for a streamed read (2026-10-29, the Office writing plan: a CSV read in two passes, never whole): this form, forgiving, so
+    /// a malformed byte past the judged head reads as U+FFFD rather than throwing, as <see cref="Decode"/> falls back.
+    /// </summary>
+    public Encoding StreamEncoding => Form switch
+    {
+        TextForm.Utf16Le or TextForm.Utf16Be => new UnicodeEncoding(Form == TextForm.Utf16Be, false),
+        TextForm.Utf32Le or TextForm.Utf32Be => new UTF32Encoding(Form == TextForm.Utf32Be, false),
+        TextForm.Legacy => _encoding,
+        _ => new UTF8Encoding(false),
+    };
+
     /// <summary>Whether the file began with a byte-order mark.</summary>
     public bool HasBom => _preamble.Length > 0;
 

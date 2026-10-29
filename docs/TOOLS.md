@@ -135,6 +135,8 @@ Under *File tools*. Paths are relative to the working directory; nothing outside
 | `zip` | `path, to?, overwrite?` | Packs a file or folder into a `.zip`, beside it by default under a free name (`overwrite` is for a named `to`). Hidden files and empty folders come along; up to 5,000 entries and 500 MB. |
 | `unzip` | `path, to?, overwrite?` | Extracts a `.zip` into a folder, all or nothing: up to 5,000 entries and 500 MB, no zip bomb. Every `.git` and guarded entry is left out and named. A downloaded archive's internet mark goes on every file, so Windows and macOS still warn. |
 | `open` | `path?, share?` | Opens a document, picture, PDF, audio, video or text file in its own program, a picture where *Image viewer* says, or a folder in Explorer (Finder on a Mac); `share` opens one on a UNC share. Programs, scripts, shortcuts, installers and unlisted types are refused; `/open` opens them. |
+| `convert_to_docx` | `path?, markdown?, title?, to?, overwrite?, paper?, landscape?` | A Word document from a Markdown or `.txt` file, or Markdown text ([Writing Office files](#writing-office-files)). |
+| `convert_to_xlsx` | `path?, columns?, rows?, to?, sheet?, overwrite?` | An Excel workbook from a CSV, TSV or JSON file or a table, or a sheet added to one ([Writing Office files](#writing-office-files)). |
 | `convert_to_pdf` | `path?, url?, markdown?, title?, to?, overwrite?, landscape?, paper?` | A PDF from a file, a web page (needs *Web tools*) or Markdown ([Making PDFs](#making-pdfs)). |
 | `pdf_edit` | `action, path?, paths?, pages?, angle?, fields?, flatten?, to?, overwrite?` | Merges, extracts, deletes or rotates pages, or fills in a form, into a new PDF ([Editing PDFs](#editing-pdfs)). |
 
@@ -176,6 +178,19 @@ With *File checkpoints* on, each turn keeps what the file tools changed, so `/un
 * **Not read:** headers and footers, a sheet's notes and comments, charts and pictures (a marker stands in), pivot caches, slide comments, and text a slide shows only from its layout. Macros never run.
 * **Refused, with what to do:** old `.doc`/`.xls`/`.ppt`, `.xlsb`, OpenDocument files, a password-protected or labeled file, and a damaged one. Up to 100 MB; a file open in Office still reads.
 * **Kept in:** nothing outside the file is opened or fetched (a linked picture or template stays a name). `share` reads one on an offered UNC share in place.
+
+#### Writing Office files
+
+`convert_to_xlsx` and `convert_to_docx` write Excel and Word files in the working directory; `/docx` makes a Word copy of a Markdown file or the last reply ([Commands](COMMANDS.md)).
+
+* **Workbooks:** a CSV, TSV or JSON file, or a table (`columns`, `rows`), becomes a new workbook, or a new sheet in one (`sheet`). `overwrite` replaces that sheet, or with no `sheet` the whole file.
+* **Values:** numbers, dates and true/false are typed; a column of codes with leading zeros stays text. A number past 15 digits is text, so nothing is rounded. No formula is ever written.
+* **Query results:** each database's `*_query` takes `to` (with `sheet` and `overwrite`) to write every row to a workbook, up to Excel's 1,048,575. The answer shows the first 5; the *… query max rows* settings cap only the chat's rows.
+* **Exports:** the read-only rules hold, the query may run 10 minutes, and Esc stops it; a stopped or failed export writes nothing. A PostgreSQL `timestamptz` column is UTC, and its header says so.
+* **Word:** headings, lists, quotes, code, tables, links and pictures from the working directory, without their location and camera data. A web picture shows as its alt text. The title heads each page, and the footer counts pages.
+* **Where:** beside the source, a `.neon/` plan or audit at the top of the working folder. Else a made name with the minute: Markdown text's title, `table-…`, or `query-<connection>-…`. `to` names a file or folder; an existing file is replaced only with `overwrite`.
+* **Not written:** `write_file` refuses an Office file and names the tool to use; PowerPoint and OpenDocument files can't be written. A macro, protected or encrypted workbook isn't changed, nor a sheet holding a chart or table.
+* **Undo:** `/undo` takes back what these tools and the exports wrote; `/docx` is your own act and keeps no checkpoint.
 
 #### Editing PDFs
 
@@ -786,9 +801,9 @@ Server families take a connection in `connection`, SQLite and DuckDB a database 
 | `sql_indexes` | `connection?, table?, schema?, missing?` | Indexes with columns, size and use (needs `VIEW SERVER STATE`); `missing` adds the optimizer's suggestions. |
 | `mysql_indexes` / `oracle_indexes` | `connection?, table?` | Indexes with key columns, estimates, and use where readable. |
 | `postgres_indexes` | `connection?, schema?, table?` | Indexes with their definition and scans. |
-| `sql_query` / `mysql_query` / `postgres_query` / `oracle_query` | `sql, connection?, params?, max_rows?` | One read-only `SELECT`; `params` is an object of values (`{"id": 43659}`). |
-| `sqlite_query` | `sql, database?, params?, max_rows?` | One read-only `SELECT`, `WITH` or `VALUES`. |
-| `duckdb_query` | `sql, database?, params?, max_rows?` | One read-only `SELECT` (or `FROM`, `DESCRIBE`, `SUMMARIZE`, `PIVOT`…), over a database, data files, or both. |
+| `sql_query` / `mysql_query` / `postgres_query` / `oracle_query` | `sql, connection?, params?, max_rows?, to?, sheet?, overwrite?` | One read-only `SELECT`; `params` is an object of values (`{"id": 43659}`). `to` writes every row to a workbook ([Writing Office files](#writing-office-files)). |
+| `sqlite_query` | `sql, database?, params?, max_rows?, to?, sheet?, overwrite?` | One read-only `SELECT`, `WITH` or `VALUES`; `to` as above. |
+| `duckdb_query` | `sql, database?, params?, max_rows?, to?, sheet?, overwrite?` | One read-only `SELECT` (or `FROM`, `DESCRIBE`, `SUMMARIZE`, `PIVOT`…), over a database, data files, or both; `to` as above. |
 | `sql_execute` / `mysql_execute` / `postgres_execute` / `oracle_execute` | `sql, connection?, params?, max_rows?` | [Read-write mode](#read-write-mode) only: one changing statement; answers with the rows changed and returned. |
 | `sqlite_execute` / `duckdb_execute` | `sql, database?, params?, max_rows?, create?` | The same; `create: true` makes a new database file. |
 
@@ -988,7 +1003,7 @@ Under *Print tools*. `/print` and these tools print on any installed printer; *P
 * **Pages:** US Letter by default (`paper` `a4` or `legal`), portrait unless `landscape`, an HTML file's own page size overridden; a web page keeps its own layout. A PDF made over 100 MB is not kept.
 * **What a print reaches:** a web page only its own host, at the address *Web browser network mode* approved; a redirect, frame or picture elsewhere (a CDN) prints missing. A file's page reaches no network. The Browser window's print after a bot check is not held this way.
 * **The engine** (*PDF engine*): Edge, Chrome, Brave or (on a Mac) Chromium. Without one, Microsoft Print to PDF draws Markdown, text and pictures in black and white (Windows only).
-* **Output:** beside the source (`example.com-intro.pdf` for a page) under a free name (`-2`, `-3`…), or a named `to`, which replaces a PDF only with `overwrite`. A page behind a bot check goes to [the Browser window](#the-browser-window), which prints the page you let through.
+* **Output:** beside the source (`example.com-intro.pdf` for a page; a `.neon/` plan or audit at the top of the working folder) under a free name (`-2`, `-3`…), or a named `to`, which replaces a PDF only with `overwrite`. A page behind a bot check goes to [the Browser window](#the-browser-window), which prints the page you let through.
 
 ## Home
 

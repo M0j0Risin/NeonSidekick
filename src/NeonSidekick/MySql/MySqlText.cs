@@ -193,7 +193,7 @@ public static class MySqlText
     public static string Unreadable(string type) => $"({type}: select it converted to text — CAST(… AS CHAR), ST_AsText)";
 
     /// <summary><c>mysql_query</c>'s answer: <c>N rows × M columns from connection/database (T ms)</c>, a sentence when a cap cut it, and the table.</summary>
-    public static string Query(SqlRun run, int maxRows, int maxChars)
+    public static string Query(SqlRun run, int maxRows, int maxChars, bool canSave = false)
     {
         ArgumentNullException.ThrowIfNull(run);
         if (run.Grids.Count == 0)
@@ -210,7 +210,7 @@ public static class MySqlText
             .Append(" (").Append(Millis(run.Elapsed)).Append(')');
         if (grid.More)
         {
-            header.Append(" — the first ").Append(Invariant(maxRows)).Append(" shown, more exist (narrow it with WHERE or LIMIT, or raise max_rows)");
+            header.Append(" — the first ").Append(Invariant(maxRows)).Append(" shown, more exist (narrow it with WHERE or LIMIT, or raise max_rows").Append(SqlExport.Hint(canSave)).Append(')');
         }
 
         if (shown < grid.Rows.Count)

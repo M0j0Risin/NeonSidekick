@@ -1,0 +1,310 @@
+using System.Globalization;
+using System.Text;
+using System.Text.Json;
+using Microsoft.Extensions.AI;
+using NeonSidekick.Files;
+using NeonSidekick.Llm;
+using NeonSidekick.Llm.Tools;
+using NeonSidekick.Office;
+using NeonSidekick.Plans;
+using NeonSidekick.Tests.Fakes;
+
+namespace NeonSidekick.Tests;
+
+/// <summary>
+/// The Office writers as the model and the user reach them (2026-10-29, the Office writing plan): <c>convert_to_xlsx</c> (a table, a CSV,
+/// TSV or JSON file; a sheet added or replaced; the target rules), <c>convert_to_docx</c>, <c>/docx</c>'s parsing and completion, and
+/// <c>write_file</c>'s refusal of an Office path.
+/// </summary>
+public sealed class OfficeToolsTests : IDisposable
+{
+    private readonly string _root = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", "officetools-" + Guid.NewGuid().ToString("N"));
+    private readonly ManualTimeProvider _time = new();
+    private readonly WorkingDirectory _files;
+    private readonly ConvertToXlsxTool _xlsx;
+    private readonly ConvertToDocxTool _docx;
+
+    public OfficeToolsTests()
+    {
+        Directory.CreateDirectory(_root);
+        _files = new WorkingDirectory(() => _root, _time);
+        _xlsx = new ConvertToXlsxTool(_files, _time);
+        _docx = new ConvertToDocxTool(_files, new DocxConverter(_files, _time));
+    }
+
+    public void Dispose()
+    {
+        try { Directory.Delete(_root, recursive: true); } catch { /* best effort */ }
+    }
+
+    private void Put(string relative, string text) => File.WriteAllText(Path.Combine(_root, relative), text, new UTF8Encoding(false));
+
+    private byte[] Bytes(string relative) => File.ReadAllBytes(Path.Combine(_root, relative));
+
+    private string Stamp => _time.GetLocalNow().ToString("yyyy-MM-dd-HHmm", CultureInfo.InvariantCulture);
+
+    private static JsonElement Json(string text)
+    {
+        using var document = JsonDocument.Parse(text);
+        return document.RootElement.Clone();
+    }
+
+    private static AIFunctionArguments Args(params (string Key, object? Value)[] pairs)
+    {
+        var arguments = new AIFunctionArguments();
+        foreach (var (key, value) in pairs)
+        {
+            arguments[key] = value;
+        }
+
+        return arguments;
+    }
+
+    private async Task<string> Xlsx(params (string, object?)[] pairs) => (string)(await _xlsx.InvokeAsync(Args(pairs)))!;
+
+    private async Task<string> Docx(params (string, object?)[] pairs) => (string)(await _docx.InvokeAsync(Args(pairs)))!;
+
+    private static string Sheets(byte[] book) => OfficeWriterTests.Read(book);
+
+    private static string Cells(byte[] book, string sheet) => OfficeWriterTests.Read(book, new OfficeRequest(Sheet: sheet));
+
+    // ── convert_to_xlsx ─────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ATable_MakesATypedWorkbook_NamedTableAndTheMinute()
+    {
+        string result = await Xlsx(("columns", Json("""["Name","Count","When","Ok"]""")), ("rows", Json("""[["a",1,"2026-10-29",true],["b",2.5,"2026-10-30",false],["c",null,"",true]]""")));
+        string name = "table-" + Stamp + ".xlsx";
+        Assert.StartsWith($"Made {name} (", result);
+        Assert.Contains("sheet \"Sheet1\": 3 rows × 4 columns", result);
+        byte[] book = Bytes(name);
+        OfficeSchema.ValidWorkbook(book);
+        string sheet = Part(book, "xl/worksheets/sheet1.xml");
+        Assert.Contains("<v>2.5</v>", sheet);
+        Assert.Contains("t=\"b\"", sheet);
+        Assert.DoesNotContain("<f>", sheet);
+        Assert.Contains("2026-10-30", Cells(book, "Sheet1"));
+    }
+
+    private static string Part(byte[] book, string name) => OfficeWriterTests.Part(book, name);
+
+    [Fact]
+    public async Task ACsv_GoesBesideIt_ItsSheetNamedForIt_ZipCodesStayText()
+    {
+        Directory.CreateDirectory(Path.Combine(_root, "data"));
+        Put("data/sales.csv", "zip,amount,note\n01234,10,\"a, b\"\n98765,20,\"line\nbreak\"\n");
+        string result = await Xlsx(("path", "data/sales.csv"));
+        Assert.StartsWith("Made " + Path.Combine("data", "sales.xlsx"), result);
+        Assert.Contains("sheet \"sales\": 2 rows × 3 columns", result);
+        byte[] book = Bytes("data/sales.xlsx");
+        OfficeSchema.ValidWorkbook(book);
+        string cells = Cells(book, "sales");
+        Assert.Contains("01234", cells);
+        Assert.Contains("a, b", cells);
+        Assert.Contains("<v>10</v>", Part(book, "xl/worksheets/sheet1.xml"));
+    }
+
+    [Fact]
+    public async Task TsvAndJson_AreTablesToo()
+    {
+        Put("t.tsv", "a\tb\n1\tx\n");
+        Put("objects.json", """[{"a":1,"b":"x"},{"a":2,"c":true}]""");
+        Put("arrays.json", """[["a","b"],[1,"x"]]""");
+        Assert.Contains("1 row × 2 columns", await Xlsx(("path", "t.tsv")));
+        Assert.Contains("2 rows × 3 columns", await Xlsx(("path", "objects.json")));
+        Assert.Contains("1 row × 2 columns", await Xlsx(("path", "arrays.json")));
+        OfficeSchema.ValidWorkbook(Bytes("objects.xlsx"));
+    }
+
+    [Fact]
+    public async Task ASheet_IsAdded_ThenReplacedOnlyWithOverwrite()
+    {
+        var columns = Json("""["a"]""");
+        Assert.StartsWith("Made book.xlsx", await Xlsx(("columns", columns), ("rows", Json("[[1]]")), ("to", "book.xlsx"), ("sheet", "One")));
+        Assert.StartsWith("Added sheet \"Two\" to book.xlsx", await Xlsx(("columns", columns), ("rows", Json("[[2]]")), ("to", "book.xlsx"), ("sheet", "Two")));
+        Assert.Equal(OfficeText.SheetExists("book.xlsx", "Two"), await Xlsx(("columns", columns), ("rows", Json("[[3]]")), ("to", "book.xlsx"), ("sheet", "two")));
+        Assert.StartsWith("Replaced sheet \"Two\" in book.xlsx", await Xlsx(("columns", columns), ("rows", Json("[[3],[4]]")), ("to", "book.xlsx"), ("sheet", "two"), ("overwrite", true)));
+        byte[] book = Bytes("book.xlsx");
+        OfficeSchema.ValidWorkbook(book);
+        string sheets = Sheets(book);
+        Assert.Contains("One", sheets);
+        Assert.Contains("Two", sheets);
+        Assert.Equal(OfficeText.WorkbookExists("book.xlsx"), await Xlsx(("columns", columns), ("rows", Json("[[5]]")), ("to", "book.xlsx")));
+        Assert.StartsWith("Replaced book.xlsx", await Xlsx(("columns", columns), ("rows", Json("[[5]]")), ("to", "book.xlsx"), ("overwrite", true)));
+        Assert.DoesNotContain("Two", Sheets(Bytes("book.xlsx")));
+    }
+
+    [Fact]
+    public async Task AFileThatIsNotAWorkbook_IsNeverAddedTo()
+    {
+        Put("fake.xlsx", "just text");
+        var columns = Json("""["a"]""");
+        Assert.StartsWith("Error:", await Xlsx(("columns", columns), ("rows", Json("[[1]]")), ("to", "fake.xlsx"), ("sheet", "S")));
+        Assert.Equal("just text", File.ReadAllText(Path.Combine(_root, "fake.xlsx")));
+        Assert.StartsWith("Replaced fake.xlsx", await Xlsx(("columns", columns), ("rows", Json("[[1]]")), ("to", "fake.xlsx"), ("overwrite", true)));
+        OfficeSchema.ValidWorkbook(Bytes("fake.xlsx"));
+    }
+
+    [Fact]
+    public async Task AnUnnamedDefault_NeverReplaces()
+    {
+        Put("t.csv", "a\n1\n");
+        Put("t.xlsx", "old");
+        Assert.StartsWith("Made t-2.xlsx", await Xlsx(("path", "t.csv")));
+        Assert.Equal("old", File.ReadAllText(Path.Combine(_root, "t.xlsx")));
+    }
+
+    [Theory]
+    [InlineData("out.xlsm")]
+    [InlineData("out.pdf")]
+    [InlineData("out.csv")]
+    [InlineData("~$out.xlsx")]
+    public async Task ATargetOfAnotherKind_IsRefused(string to)
+    {
+        Assert.StartsWith("Error:", await Xlsx(("columns", Json("""["a"]""")), ("rows", Json("[[1]]")), ("to", to)));
+        Assert.False(File.Exists(Path.Combine(_root, to)));
+    }
+
+    [Fact]
+    public async Task AnEnding_GetsXlsxAdded()
+    {
+        Assert.StartsWith("Made report.v2.xlsx", await Xlsx(("columns", Json("""["a"]""")), ("rows", Json("[[1]]")), ("to", "report.v2")));
+    }
+
+    [Fact]
+    public async Task TheArguments_AreChecked()
+    {
+        Put("notes.txt", "x");
+        Assert.Equal(OfficeText.OneTableSource, await Xlsx());
+        Assert.Equal(OfficeText.OneTableSource, await Xlsx(("path", "notes.txt"), ("columns", Json("""["a"]""")), ("rows", Json("[]"))));
+        Assert.Equal(OfficeText.ColumnsAndRows, await Xlsx(("columns", Json("""["a"]"""))));
+        Assert.Equal(OfficeText.NotATableFile("notes.txt"), await Xlsx(("path", "notes.txt")));
+        Assert.Equal(OfficeText.RowTooLong(1, 2, 1), await Xlsx(("columns", Json("""["a"]""")), ("rows", Json("[[1,2]]"))));
+        Assert.Equal(OfficeText.BadCell(1, 1), await Xlsx(("columns", Json("""["a"]""")), ("rows", Json("""[[{"x":1}]]"""))));
+        Assert.Equal(OfficeText.BadSheetName("a/b"), await Xlsx(("columns", Json("""["a"]""")), ("rows", Json("[[1]]")), ("sheet", "a/b")));
+        Assert.Equal(FileText.PrunedStubSent(ConvertToXlsxTool.RowsArgument), await Xlsx(("columns", Json("""["a"]""")), ("rows", Json($$"""[["{{ConversationCompactor.PrunedArgumentStub(500)}}"]]"""))));
+        Assert.Empty(Directory.GetFiles(_root, "*.xlsx"));
+    }
+
+    [Fact]
+    public async Task RowsSentAsText_AreReadAsJson()
+    {
+        Assert.Contains("1 row × 1 column", await Xlsx(("columns", Json("""["a"]""")), ("rows", "[[1]]")));
+    }
+
+    // ── convert_to_docx ─────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Markdown_MakesADocument_NamedByItsTitle()
+    {
+        string result = await Docx(("markdown", "# Hi\n\nThere"), ("title", "Status update"), ("paper", "a4"), ("landscape", true));
+        string name = "Status-update-" + Stamp + ".docx";
+        Assert.StartsWith("Made " + name, result);
+        byte[] file = Bytes(name);
+        OfficeSchema.ValidDocument(file);
+        Assert.Contains("w:orient=\"landscape\"", Part(file, "word/document.xml"));
+    }
+
+    [Fact]
+    public async Task TheDocxArguments_AreChecked()
+    {
+        Assert.Equal(OfficeText.OneDocumentSource, await Docx());
+        Assert.StartsWith("Error:", await Docx(("markdown", "x"), ("paper", "tabloid")));
+        Assert.StartsWith("Error:", await Docx(("markdown", "x"), ("landscape", "sideways")));
+        Assert.Equal(FileText.PrunedStubSent(ConvertToDocxTool.MarkdownArgument), await Docx(("markdown", ConversationCompactor.PrunedArgumentStub(500))));
+    }
+
+    [Fact]
+    public void TheDescriptions_SayTheyAreTheWay()
+    {
+        Assert.EndsWith("This is the way to make a Word document: never write .docx bytes yourself or run a script to make one.", ConvertToDocxTool.DescriptionText, StringComparison.Ordinal);
+        Assert.EndsWith("This is the way to make a spreadsheet: never write .xlsx bytes yourself or run a script to make one.", ConvertToXlsxTool.DescriptionText, StringComparison.Ordinal);
+        Assert.Equal(ConvertToDocxTool.DescriptionText, _docx.Description);
+        Assert.Equal(ConvertToXlsxTool.DescriptionText, _xlsx.Description);
+    }
+
+    [Fact]
+    public void TheConverters_AreQuiet_ChangeFiles_AndAreKept()
+    {
+        foreach (string name in new[] { ConvertToDocxTool.ToolName, ConvertToXlsxTool.ToolName })
+        {
+            Assert.Contains(name, App.ChatScreen.QuietTools);
+            Assert.Contains(name, PlanTools.Mutating);
+            Assert.Contains(name, CheckpointTools.Tracked);
+        }
+    }
+
+    // ── write_file ──────────────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("a.docx", ConvertToDocxTool.ToolName)]
+    [InlineData("a.DOCM", ConvertToDocxTool.ToolName)]
+    [InlineData("a.xlsx", ConvertToXlsxTool.ToolName)]
+    [InlineData("sub/a.xltx", ConvertToXlsxTool.ToolName)]
+    public void WriteFile_SendsWordAndExcelToTheirConverter(string path, string tool)
+    {
+        var (text, done, _) = WriteFileTool.Write(_files, path, "text", WriteMode.Create);
+        Assert.False(done);
+        Assert.Equal(FileText.OfficeNeedsConverter(path, tool), text);
+        Assert.False(File.Exists(Path.Combine(_root, path)));
+    }
+
+    [Theory]
+    [InlineData("a.pptx")]
+    [InlineData("a.doc")]
+    [InlineData("a.xlsb")]
+    [InlineData("a.odt")]
+    public void WriteFile_RefusesWhatNoToolWrites(string path)
+    {
+        Assert.Equal(FileText.OfficeNotWritten(path), WriteFileTool.Write(_files, path, "text", WriteMode.Overwrite).Text);
+        Assert.Null(WriteFileTool.OfficeRefusal("a.md"));
+    }
+
+    // ── /docx ───────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Docx_TakesTheLineAsPdfDoes()
+    {
+        Put("Q3 overwrite plan.md", "# Q3\n\nBody");
+        Put("merge", "x");
+        var converter = new DocxConverter(_files, _time);
+        Assert.Equal(OfficeText.DocxUsage, DocxCommand.Run(converter, "", () => null, CancellationToken.None));
+        Assert.Equal(OfficeText.NoWebSource, DocxCommand.Run(converter, "https://example.com/a.md", () => null, CancellationToken.None));
+        Assert.Equal(OfficeText.NoReplyForDocx, DocxCommand.Run(converter, "reply", () => " ", CancellationToken.None));
+        Assert.StartsWith("Made Q3 overwrite plan.docx", DocxCommand.Run(converter, "Q3 overwrite plan.md", () => null, CancellationToken.None));
+        Assert.Equal(OfficeText.NotADocumentSource("merge"), DocxCommand.Run(converter, "merge", () => null, CancellationToken.None));
+        Assert.StartsWith("Replaced Q3 overwrite plan.docx", DocxCommand.Run(converter, "Q3 overwrite plan.md overwrite", () => null, CancellationToken.None));
+        Assert.StartsWith("Made reply-" + Stamp + ".docx", DocxCommand.Run(converter, "reply", () => "Some **reply**", CancellationToken.None));
+        Assert.StartsWith("Error:", DocxCommand.Run(converter, "reply paper=huge", () => "x", CancellationToken.None));
+    }
+
+    [Fact]
+    public void Docx_WritesIntoNeon_ByTheUsersHand()
+    {
+        Directory.CreateDirectory(Path.Combine(_root, ".neon", "plans"));
+        Put(".neon/plans/x.md", "# Plan");
+        var converter = new DocxConverter(_files, _time);
+        Assert.StartsWith("Made x.docx", DocxCommand.Run(converter, ".neon/plans/x.md", () => null, CancellationToken.None));
+        Assert.True(File.Exists(Path.Combine(_root, "x.docx")));
+    }
+
+    [Fact]
+    public void DocxCompletion_OffersItsOwnOptions_NeverAnEditVerb()
+    {
+        Assert.Equal([PdfCommandWords.Reply], DocxCommand.Complete("").Select(i => i.Text));
+        Assert.Empty(DocxCommand.Complete("mer"));
+        var after = DocxCommand.Complete("plan.md ").Select(i => i.Text).ToList();
+        Assert.Contains("plan.md to=", after);
+        Assert.Contains("plan.md paper=a4", after);
+        Assert.Contains("plan.md landscape", after);
+        Assert.Contains("plan.md overwrite", after);
+        Assert.DoesNotContain(after, t => t.Contains("pages=", StringComparison.Ordinal) || t.Contains("angle=", StringComparison.Ordinal));
+        Assert.DoesNotContain("plan.md overwrite", DocxCommand.Complete("plan.md overwrite ").Select(i => i.Text));
+        Assert.Contains(DocxCommand.Complete("plan.md ").Select(i => i.Note), d => d == OfficeText.DocxToNote);
+    }
+
+    private static class PdfCommandWords
+    {
+        public const string Reply = Printing.PrintText.ReplyWord;
+    }
+}

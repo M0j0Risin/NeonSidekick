@@ -875,6 +875,7 @@ public sealed partial class SidekickApp
         // The printing door before the file tools (2026-10-03): convert_to_pdf makes its PDFs with the web tools' headless browser or Microsoft Print to PDF.
         var print = new Printing.PrintService(_printSpooler, files, () => EffectiveSettings, _time);
         var pdf = new Pdf.PdfConverter(_web.Browser, _web.Fetcher, print, files, () => EffectiveSettings, _time);
+        var docx = new Office.DocxConverter(files, _time);
         // The profile's images folder (2026-10-09): ComfyUI's pictures go there, and the picture tools reach it by full path.
         var images = BuildImagesDirectory();
         files.ImagesFolder = () => images.Root;
@@ -884,7 +885,7 @@ public sealed partial class SidekickApp
         var pdfReading = new Pdf.PdfReading(_web.Browser, () => _web.Browser.Locate(EffectiveSettings.WebBrowserPath));
         // pdf_edit (2026-10-14, the PDF plan's phase 4b): headless too, pdf-lib in the same browser.
         var pdfEditing = new Pdf.PdfEditing(_web.Browser, files, () => _web.Browser.Locate(EffectiveSettings.WebBrowserPath), _time);
-        var fileTools = ChatScreen.FileTools(files, () => WorkingDirectory.IsDefault(EffectiveSettings.WorkingDirectory), PersonaFile.OpenInEditor, () => EffectiveSettings, unc, pdf, images, reading: pdfReading, editing: pdfEditing);
+        var fileTools = ChatScreen.FileTools(files, () => WorkingDirectory.IsDefault(EffectiveSettings.WorkingDirectory), PersonaFile.OpenInEditor, () => EffectiveSettings, unc, pdf, images, reading: pdfReading, editing: pdfEditing, time: _time);
         // The picture tools (2026-10-10): their own group, Image tools the switch.
         var imageTools = ChatScreen.ImageTools(files, () => EffectiveSettings, images, () => _settings.ProfileSplashDirectory);
         // The skills need no console either (2026-09-16); the two settings decide per turn. The skill records (2026-09-30) are the home's.
@@ -897,26 +898,29 @@ public sealed partial class SidekickApp
         var gitTools = ChatScreen.GitTools(git, () => EffectiveSettings);
         var vault = new Obsidian.ObsidianVault(() => EffectiveSettings.ObsidianVault, _time) { ShoppingListGuard = () => ChatScreen.ShoppingListGuarded(EffectiveSettings) };
         var vaultTools = ChatScreen.ObsidianTools(vault, () => EffectiveSettings);
+        // Plan mode (2026-09-26), made here since the directory's to and the queries' to ask it (2026-10-15 the AD gaps plan, 2026-10-29 the Office writing plan).
+        var plan = new Plans.PlanSession();
+        Func<Files.SaveRoot> saveRoot = () => ChatScreen.SaveRootFor(EffectiveSettings.FileTools, plan.Active, files);
         var sql = new Sql.SqlAccess(() => Sql.SqlConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(EffectiveSettings.SqlConnectionsOffered));
         // sql_execute never headless (2026-10-05): no pane to allow a change on.
-        var sqlTools = ChatScreen.SqlToolsFor(ChatScreen.SqlTools(sql, () => EffectiveSettings, allow: null), EffectiveSettings, pane: false, sql.Catalog());
+        var sqlTools = ChatScreen.SqlToolsFor(ChatScreen.SqlTools(sql, () => EffectiveSettings, allow: null, saveRoot, _time), EffectiveSettings, pane: false, sql.Catalog());
         var oracle = new Oracle.OracleAccess(() => Oracle.OracleConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(EffectiveSettings.OracleConnectionsOffered));
         // oracle_execute never headless (2026-10-05): no pane to allow a change on.
-        var oracleTools = ChatScreen.OracleToolsFor(ChatScreen.OracleTools(oracle, () => EffectiveSettings, allow: null), EffectiveSettings, pane: false, oracle.Catalog());
+        var oracleTools = ChatScreen.OracleToolsFor(ChatScreen.OracleTools(oracle, () => EffectiveSettings, allow: null, saveRoot, _time), EffectiveSettings, pane: false, oracle.Catalog());
         var mysql = new MySql.MySqlAccess(() => MySql.MySqlConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(EffectiveSettings.MySqlConnectionsOffered));
         // mysql_execute never headless (2026-10-05): no pane to allow a change on.
-        var mysqlTools = ChatScreen.MySqlToolsFor(ChatScreen.MySqlTools(mysql, () => EffectiveSettings, allow: null), EffectiveSettings, pane: false, mysql.Catalog());
+        var mysqlTools = ChatScreen.MySqlToolsFor(ChatScreen.MySqlTools(mysql, () => EffectiveSettings, allow: null, saveRoot, _time), EffectiveSettings, pane: false, mysql.Catalog());
         // The SQLite tools (2026-10-04): no console needed, so headless has them too.
         var sqlite = new Sqlite.SqliteAccess(() => Sqlite.SqliteConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(EffectiveSettings.SqliteDatabasesOffered), () => EffectiveSettings.SqliteSandboxFiles ? files : null, () => ChatScreen.UntickedSqliteFiles(_settings.ProfileDirectory, _settings.StorageDirectory, EffectiveSettings.SqliteDatabasesOffered));
         // sqlite_execute (2026-10-05) never: every change waits for the user's allow on a pane, and headless has none.
-        var sqliteTools = ChatScreen.SqliteToolsFor(ChatScreen.SqliteTools(sqlite, () => EffectiveSettings, allow: null), EffectiveSettings, pane: false);
+        var sqliteTools = ChatScreen.SqliteToolsFor(ChatScreen.SqliteTools(sqlite, () => EffectiveSettings, allow: null, saveRoot, _time), EffectiveSettings, pane: false);
         // The DuckDB tools (2026-10-25), SQLite's way: the reads headless too, duckdb_execute never (no pane to allow a change on).
         var duckDb = new DuckDb.DuckDbAccess(() => DuckDb.DuckDbConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(EffectiveSettings.DuckDbDatabasesOffered), () => EffectiveSettings.DuckDbSandboxFiles ? files : null, () => ChatScreen.UntickedDuckDbFiles(_settings.ProfileDirectory, _settings.StorageDirectory, EffectiveSettings.DuckDbDatabasesOffered));
-        var duckDbTools = ChatScreen.DuckDbToolsFor(ChatScreen.DuckDbTools(duckDb, () => EffectiveSettings, allow: null), EffectiveSettings, pane: false);
+        var duckDbTools = ChatScreen.DuckDbToolsFor(ChatScreen.DuckDbTools(duckDb, () => EffectiveSettings, allow: null, saveRoot, _time), EffectiveSettings, pane: false);
         // The PostgreSQL tools (2026-10-04): no console needed, so headless has them too.
         var postgres = new Postgres.PostgresAccess(() => Postgres.PostgresConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(EffectiveSettings.PostgresConnectionsOffered));
         // postgres_execute never headless (2026-10-05): no pane to allow a change on, so the cut drops it whatever the mode.
-        var postgresTools = ChatScreen.PostgresToolsFor(ChatScreen.PostgresTools(postgres, () => EffectiveSettings, allow: null), EffectiveSettings, pane: false, postgres.Catalog());
+        var postgresTools = ChatScreen.PostgresToolsFor(ChatScreen.PostgresTools(postgres, () => EffectiveSettings, allow: null, saveRoot, _time), EffectiveSettings, pane: false, postgres.Catalog());
         // The UNC tools (2026-09-30): no console needed, so headless has them too; every change still needs UNC writes and a readwrite share.
         var uncTools = ChatScreen.UncTools(unc, files, () => EffectiveSettings);
         // The image tools (2026-09-24): no console needed, so headless has them too.
@@ -958,9 +962,7 @@ public sealed partial class SidekickApp
         var tasks = new Tasks.TaskAccess(_taskSystem, () => Tasks.TaskConfigFile.Family.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory), () => EffectiveSettings.TaskComputersOffered, _time);
         var taskTools = ChatScreen.TaskTools(tasks, () => EffectiveSettings, confirm: null);
         var directory = new ActiveDirectory.DirectoryAccess(_directorySystem, () => ActiveDirectory.DirectoryConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory, _joinedDomain()), () => EffectiveSettings.DirectoryDomainsOffered, _joinedDomain, _time);
-        // Plan mode (2026-09-26), made here since the directory's to asks it (2026-10-15, the AD gaps plan).
-        var plan = new Plans.PlanSession();
-        var directoryTools = ChatScreen.DirectoryTools(directory, saveRoot: () => ChatScreen.DirectorySaveRootFor(EffectiveSettings.FileTools, plan.Active, files));
+        var directoryTools = ChatScreen.DirectoryTools(directory, saveRoot: saveRoot);
         // The print tools (2026-09-28): no pane to ask on, so under ask (the default) the model's print is refused; /print works.
         var printTools = ChatScreen.PrintTools(print, confirm: null);
         // The shell tools (2026-09-21): headless has no pane to ask on, so the gate has no asker — under ask the
@@ -1674,6 +1676,14 @@ public sealed partial class SidekickApp
                 {
                     string pdfResult = await Pdf.PdfCommand.RunAsync(pdf, pdfArgs, () => LastReplyText(assistant?.History.Messages), cancellationToken, pdfEditing).ConfigureAwait(false);
                     await HeadlessLineAsync((pdfResult.StartsWith("Error:", StringComparison.Ordinal) ? "[error] " : "") + pdfResult).ConfigureAwait(false);
+                    continue;
+                }
+
+                // /docx (2026-10-29, the Office writing plan): ahead of the server check like /pdf — only /docx reply needs a reply.
+                if (SlashCommands.Parse(text) is (SlashCommand.Docx, var docxArgs))
+                {
+                    string docxResult = await Office.DocxCommand.RunAsync(docx, docxArgs, () => LastReplyText(assistant?.History.Messages), cancellationToken).ConfigureAwait(false);
+                    await HeadlessLineAsync((docxResult.StartsWith("Error:", StringComparison.Ordinal) ? "[error] " : "") + docxResult).ConfigureAwait(false);
                     continue;
                 }
 

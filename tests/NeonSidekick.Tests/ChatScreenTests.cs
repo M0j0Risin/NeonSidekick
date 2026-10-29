@@ -4036,7 +4036,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.DoesNotMatch(GroupHeading("Questions"), output);   // not offered: left out of the tab (2026-09-26)
-        Assert.Matches(ToolsHeading("Files (17)", null, "get_working_directory"), output);
+        Assert.Matches(ToolsHeading("Files (19)", null, "get_working_directory"), output);
         Assert.Matches(ToolsHeading("GitLib (11)", null, "gitlib_status"), output);   // between Files and Web (2026-09-20; the fixture opts every tool on; the tab's word since 2026-09-21)
         Assert.Matches(ToolsHeading("Web (6)", null, "web_search"), output);
         Assert.Matches(ToolsHeading("Sessions (1)", null, "session_manager"), output);   // 2026-09-18, ahead of the questions
@@ -4058,7 +4058,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.DoesNotMatch(GroupHeading("Questions"), output);   // not offered: left out of the tab (2026-09-26)
-        Assert.Matches(ToolsHeading("Files (17)", null, "get_working_directory"), output);   // pdf_edit's, as on Windows (2026-10-17, the Mac pass)
+        Assert.Matches(ToolsHeading("Files (19)", null, "get_working_directory"), output);   // pdf_edit's, as on Windows (2026-10-17, the Mac pass)
         Assert.Matches(ToolsHeading("GitLib (11)", null, "gitlib_status"), output);   // between Files and Web (2026-09-20; the fixture opts every tool on; the tab's word since 2026-09-21)
         Assert.Matches(ToolsHeading("Web (6)", null, "web_search"), output);
         Assert.Matches(ToolsHeading("Sessions (1)", null, "session_manager"), output);   // 2026-09-18, ahead of the questions
@@ -4225,7 +4225,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(Assistant.FileRule, prompt, StringComparison.Ordinal);   // the pane on: the Markdown rule and the ask rule ride too, so the rule alone is pinned here
         Assert.DoesNotContain(Assistant.FileRuleWithoutDelete, prompt, StringComparison.Ordinal);
         Assert.Contains(_chat.Requests[0], m => m.Contents.OfType<FunctionCallContent>().Any(c => c.CallId == Assistant.OpeningCwdCallId));   // the group stands: the cwd call rides
-        Assert.Matches(ToolsHeading("Files (17)", null, "get_working_directory"), output);   // the tab counts what is sent (2026-09-26); 13 until restore went, 2026-10-01; 13 again with convert_to_pdf, 2026-10-03; 13 with read_pdf, 2026-10-14; 14 with pdf_edit later that day; 16 with zip and unzip on, 2026-10-26; 17 with read_office, 2026-10-28
+        Assert.Matches(ToolsHeading("Files (19)", null, "get_working_directory"), output);   // the tab counts what is sent (2026-09-26); 13 until restore went, 2026-10-01; 13 again with convert_to_pdf, 2026-10-03; 13 with read_pdf, 2026-10-14; 14 with pdf_edit later that day; 16 with zip and unzip on, 2026-10-26; 17 with read_office, 2026-10-28; the Office converters, 2026-10-29
         Assert.Contains("── Operating rules ── default ─", output);
     }
 
@@ -4261,7 +4261,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(Assistant.FileRule, prompt, StringComparison.Ordinal);   // the pane on: the Markdown rule and the ask rule ride too, so the rule alone is pinned here
         Assert.DoesNotContain(Assistant.FileRuleWithoutDelete, prompt, StringComparison.Ordinal);
         Assert.Contains(_chat.Requests[0], m => m.Contents.OfType<FunctionCallContent>().Any(c => c.CallId == Assistant.OpeningCwdCallId));   // the group stands: the cwd call rides
-        Assert.Matches(ToolsHeading("Files (17)", null, "get_working_directory"), output);   // the tab counts what is sent (2026-09-26); 13 until restore went, 2026-10-01; 13 again with convert_to_pdf, 2026-10-03; one more with pdf_edit, as on Windows (2026-10-17, the Mac pass); 16 with zip and unzip on, 2026-10-26; 17 with read_office, 2026-10-28
+        Assert.Matches(ToolsHeading("Files (19)", null, "get_working_directory"), output);   // the tab counts what is sent (2026-09-26); 13 until restore went, 2026-10-01; 13 again with convert_to_pdf, 2026-10-03; one more with pdf_edit, as on Windows (2026-10-17, the Mac pass); 16 with zip and unzip on, 2026-10-26; 17 with read_office, 2026-10-28; the Office converters, 2026-10-29
         Assert.Contains("── Operating rules ── default ─", output);
     }
 
@@ -4290,7 +4290,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain(Assistant.FileRule, prompt, StringComparison.Ordinal);
         Assert.DoesNotContain("delete removes", prompt);
         Assert.Contains(_chat.Requests[0], m => m.Contents.OfType<FunctionCallContent>().Any(c => c.CallId == Assistant.OpeningCwdCallId));   // the group stands: the cwd call rides
-        Assert.Matches(ToolsHeading("Files (16)", null, "get_working_directory"), output);   // 12 until restore went, 2026-10-01; 12 again with convert_to_pdf, 2026-10-03; 12 with read_pdf, 2026-10-14; 13 with pdf_edit later that day; 15 with zip and unzip on, 2026-10-26; 16 with read_office, 2026-10-28
+        Assert.Matches(ToolsHeading("Files (18)", null, "get_working_directory"), output);   // 12 until restore went, 2026-10-01; 12 again with convert_to_pdf, 2026-10-03; 12 with read_pdf, 2026-10-14; 13 with pdf_edit later that day; 15 with zip and unzip on, 2026-10-26; 16 with read_office, 2026-10-28; the Office converters, 2026-10-29
         Assert.DoesNotContain("delete removes", output);
         // The pane wraps the rules, so the Prompt tab's text is pinned in SystemPromptSummaryTests.DeleteOff_TheRulesLoseTheDeleteClause_ThePromptAgrees.
     }
@@ -4321,7 +4321,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain(Assistant.FileRule, prompt, StringComparison.Ordinal);
         Assert.DoesNotContain("delete removes", prompt);
         Assert.Contains(_chat.Requests[0], m => m.Contents.OfType<FunctionCallContent>().Any(c => c.CallId == Assistant.OpeningCwdCallId));   // the group stands: the cwd call rides
-        Assert.Matches(ToolsHeading("Files (16)", null, "get_working_directory"), output);   // 12 until restore went, 2026-10-01; 12 again with convert_to_pdf, 2026-10-03; one more with pdf_edit, as on Windows (2026-10-17, the Mac pass); 15 with zip and unzip on, 2026-10-26; 16 with read_office, 2026-10-28
+        Assert.Matches(ToolsHeading("Files (18)", null, "get_working_directory"), output);   // 12 until restore went, 2026-10-01; 12 again with convert_to_pdf, 2026-10-03; one more with pdf_edit, as on Windows (2026-10-17, the Mac pass); 15 with zip and unzip on, 2026-10-26; 16 with read_office, 2026-10-28; the Office converters, 2026-10-29
         Assert.DoesNotContain("delete removes", output);
         // The pane wraps the rules, so the Prompt tab's text is pinned in SystemPromptSummaryTests.DeleteOff_TheRulesLoseTheDeleteClause_ThePromptAgrees.
     }
@@ -4416,7 +4416,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("── Memory ── read-write, 0 facts remembered (in the prompt: recall_memory is off in /tools) ─", output);
         Assert.Contains("── Operating rules ── default ─", output);   // the group stands
         // The Tools tab leaves a disabled tool out (2026-09-26): the group counts what is left, the first row is the next tool, no note anywhere.
-        Assert.Matches(ToolsHeading("Files (15)", null, "search_files"), output);
+        Assert.Matches(ToolsHeading("Files (17)", null, "search_files"), output);   // the Office converters, 2026-10-29
         Assert.Equal(0, CountOf(output, "not offered: switched off in /tools"));
         Assert.Matches(ToolsHeading("Memory (1)", null, "save_memory"), output);
         Assert.Matches(ToolsHeading("Web (6)", null, "web_search"), output);
@@ -4441,7 +4441,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("── Memory ── read-write, 0 facts remembered (in the prompt: recall_memory is off in /tools) ─", output);
         Assert.Contains("── Operating rules ── default ─", output);   // the group stands
         // The Tools tab leaves a disabled tool out (2026-09-26): the group counts what is left, the first row is the next tool, no note anywhere.
-        Assert.Matches(ToolsHeading("Files (15)", null, "search_files"), output);   // pdf_edit's, as on Windows (2026-10-17, the Mac pass); read_office's, 2026-10-28
+        Assert.Matches(ToolsHeading("Files (17)", null, "search_files"), output);   // pdf_edit's, as on Windows (2026-10-17, the Mac pass); read_office's, 2026-10-28; the Office converters, 2026-10-29
         Assert.Equal(0, CountOf(output, "not offered: switched off in /tools"));
         Assert.Matches(ToolsHeading("Memory (1)", null, "save_memory"), output);
         Assert.Matches(ToolsHeading("Web (6)", null, "web_search"), output);
@@ -5221,7 +5221,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Contains("  · Offered\n  ·   Camera (1)", output);   // the groups alphabetical since 2026-10-04
         Assert.Contains("  ·   Clock (3)\n  ·     get_current_time      on   ", output);
-        Assert.Contains("  ·   Files (16 of 17)\n", output);
+        Assert.Contains("  ·   Files (18 of 19)\n", output);   // the Office converters, 2026-10-29
         Assert.Contains("  ·     zip                   off  ", output);
         Assert.Contains("  ·   Questions (1) (off: no pane)\n", output);
         Assert.Contains("  ·   Options\n  ·     $-mention enabled: on\n", output);
@@ -5277,7 +5277,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Contains("  · Offered\n  ·   Camera (1)", output);   // the groups alphabetical since 2026-10-04
         Assert.Contains("  ·   Clock (3)\n  ·     get_current_time      on   ", output);
-        Assert.Contains("  ·   Files (16 of 17)\n", output);   // pdf_edit's, as on Windows (2026-10-17, the Mac pass); read_office's, 2026-10-28
+        Assert.Contains("  ·   Files (18 of 19)\n", output);   // pdf_edit's, as on Windows (2026-10-17, the Mac pass); read_office's, 2026-10-28; the Office converters, 2026-10-29
         Assert.Contains("  ·     zip                   off  ", output);
         Assert.Contains("  ·   Questions (1) (off: no pane)\n", output);
         Assert.Contains("  ·   Options\n  ·     $-mention enabled: on\n", output);
@@ -11164,7 +11164,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task WithGeometry_SysPromptOpensTheInfoPane_PromptThenTools_AndEscClosesIt()
     {
         _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full"; });   // the whole tab (2026-10-01)
-        _console.Profile.Height = 130;   // the Git group (2026-09-20) makes the Tools tab eleven rows taller; skill_editor's file-actions sentence (2026-09-27) a row more; convert_to_pdf (2026-10-03) more again; date_difference's years-and-months sentence (2026-10-05) a row more; the picture tools' saved-picture paths (2026-10-09) more; the images folder's path in search_files, file_info and view_image (later on 2026-10-09) more again
+        _console.Profile.Height = 140;   // the Office converters (2026-10-29) two rows more; the Git group (2026-09-20) makes the Tools tab eleven rows taller; skill_editor's file-actions sentence (2026-09-27) a row more; convert_to_pdf (2026-10-03) more again; date_difference's years-and-months sentence (2026-10-05) a row more; the picture tools' saved-picture paths (2026-10-09) more; the images folder's path in search_files, file_info and view_image (later on 2026-10-09) more again
         _geometry = new ScreenGeometry(() => null);
         PushLine("/sys");
         _console.Input.PushKey(Keys.Right);
@@ -11188,7 +11188,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(rule + "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n \n" + HeadingRow("── Clock · 3"), output);
         Assert.Matches(ToolsHeading("Clock (3)", null, "get_current_time"), output);
         Assert.Matches(ToolsHeading("Timers (3)", null, "start_timer"), output);
-        Assert.Matches(ToolsHeading("Files (17)", null, "get_working_directory"), output);
+        Assert.Matches(ToolsHeading("Files (19)", null, "get_working_directory"), output);
         Assert.Matches(ToolsHeading("GitLib (11)", null, "gitlib_status"), output);   // between Files and Web (2026-09-20; the fixture opts every tool on; the tab's word since 2026-09-21)
         Assert.Matches(ToolsHeading("Web (6)", null, "web_search"), output);
         Assert.Matches(ToolsHeading("Memory (2)", null, "save_memory"), output);
@@ -11205,7 +11205,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task WithGeometry_SysPromptOpensTheInfoPane_PromptThenTools_AndEscClosesIt_Unix()
     {
         _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full"; });   // the whole tab (2026-10-01)
-        _console.Profile.Height = 130;   // the Git group (2026-09-20) makes the Tools tab eleven rows taller; skill_editor's file-actions sentence (2026-09-27) a row more; convert_to_pdf (2026-10-03) more again; date_difference's years-and-months sentence (2026-10-05) a row more; the picture tools' saved-picture paths (2026-10-09) more; the images folder's path in search_files, file_info and view_image (later on 2026-10-09) more again
+        _console.Profile.Height = 140;   // the Office converters (2026-10-29) two rows more; the Git group (2026-09-20) makes the Tools tab eleven rows taller; skill_editor's file-actions sentence (2026-09-27) a row more; convert_to_pdf (2026-10-03) more again; date_difference's years-and-months sentence (2026-10-05) a row more; the picture tools' saved-picture paths (2026-10-09) more; the images folder's path in search_files, file_info and view_image (later on 2026-10-09) more again
         _geometry = new ScreenGeometry(() => null);
         PushLine("/sys");
         _console.Input.PushKey(Keys.Right);
@@ -11229,7 +11229,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(rule + "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n \n" + HeadingRow("── Clock · 3"), output);
         Assert.Matches(ToolsHeading("Clock (3)", null, "get_current_time"), output);
         Assert.Matches(ToolsHeading("Timers (3)", null, "start_timer"), output);
-        Assert.Matches(ToolsHeading("Files (17)", null, "get_working_directory"), output);   // pdf_edit's, as on Windows (2026-10-17, the Mac pass)
+        Assert.Matches(ToolsHeading("Files (19)", null, "get_working_directory"), output);   // pdf_edit's, as on Windows (2026-10-17, the Mac pass)
         Assert.Matches(ToolsHeading("GitLib (11)", null, "gitlib_status"), output);   // between Files and Web (2026-09-20; the fixture opts every tool on; the tab's word since 2026-09-21)
         Assert.Matches(ToolsHeading("Web (6)", null, "web_search"), output);
         Assert.Matches(ToolsHeading("Memory (2)", null, "save_memory"), output);
@@ -11337,7 +11337,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · Memory — read-write, directive (the list rides the opening recall_memory call)", output);
         Assert.DoesNotContain("Also sent", output);   // the system message alone since 2026-09-26
         Assert.DoesNotContain("Opening clock call", output);
-        Assert.Contains("  · Files (17)", output);
+        Assert.Contains("  · Files (19)", output);
         Assert.Contains("  ·   " + "read_file".PadRight(22) + "Reads a text file", output);
         Assert.DoesNotContain("Questions (1)", output);   // no pane, no ask_user: left out of the tool lines (2026-09-26)
         Assert.DoesNotContain(InfoPane.HintText, output);
@@ -11360,7 +11360,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · Memory — read-write, directive (the list rides the opening recall_memory call)", output);
         Assert.DoesNotContain("Also sent", output);   // the system message alone since 2026-09-26
         Assert.DoesNotContain("Opening clock call", output);
-        Assert.Contains("  · Files (17)", output);   // pdf_edit's, as on Windows (2026-10-17, the Mac pass)
+        Assert.Contains("  · Files (19)", output);   // pdf_edit's, as on Windows (2026-10-17, the Mac pass)
         Assert.Contains("  ·   " + "read_file".PadRight(22) + "Reads a text file", output);
         Assert.DoesNotContain("Questions (1)", output);   // no pane, no ask_user: left out of the tool lines (2026-09-26)
         Assert.DoesNotContain(InfoPane.HintText, output);

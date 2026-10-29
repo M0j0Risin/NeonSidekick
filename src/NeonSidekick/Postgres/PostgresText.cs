@@ -261,6 +261,9 @@ public static class PostgresText
 
     // ─── results ────────────────────────────────────────────────────────────────
 
+    /// <summary>What a timestamptz column's header adds in a workbook (2026-10-29, the Office writing plan): its cells hold UTC, as the chat's say.</summary>
+    public const string UtcColumn = " (UTC)";
+
     /// <summary>A value the client cannot read: its type, and how to read it anyway.</summary>
     public static string Unreadable(string type) => $"({type}: select it as text — CAST(… AS text) or …::text)";
 
@@ -271,7 +274,7 @@ public static class PostgresText
         return run.Database.Length == 0 ? run.Connection : run.Connection + "/" + run.Database;
     }
 
-    public static string Query(SqlRun run, int maxRows, int maxChars)
+    public static string Query(SqlRun run, int maxRows, int maxChars, bool canSave = false)
     {
         ArgumentNullException.ThrowIfNull(run);
         if (run.Grids.Count == 0)
@@ -288,7 +291,7 @@ public static class PostgresText
             .Append(" (").Append(Millis(run.Elapsed)).Append(')');
         if (grid.More)
         {
-            header.Append(" — the first ").Append(Invariant(maxRows)).Append(" shown, more exist (narrow it with WHERE or LIMIT, or raise max_rows)");
+            header.Append(" — the first ").Append(Invariant(maxRows)).Append(" shown, more exist (narrow it with WHERE or LIMIT, or raise max_rows").Append(SqlExport.Hint(canSave)).Append(')');
         }
 
         if (shown < grid.Rows.Count)

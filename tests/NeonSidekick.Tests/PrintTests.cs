@@ -163,6 +163,16 @@ public sealed class PrintTests : IDisposable
     }
 
     [Fact]
+    public void Markdown_APicture_PrintsAsItsLinkWould()
+    {
+        // ImageRun (2026-10-29): a print shows a picture's alt text and address, exactly as the link it was before.
+        var picture = Texts(Assert.Single(Markdown("A ![chart](https://example.com/c.png) here, and in a table:\n\n| a |\n|---|\n| ![x](y.png) |"))).Select(t => t.Text).ToList();
+        var link = Texts(Assert.Single(Markdown("A [chart](https://example.com/c.png) here, and in a table:\n\n| a |\n|---|\n| [x](y.png) |"))).Select(t => t.Text).ToList();
+        Assert.Equal(link, picture);
+        Assert.Contains(picture, t => t.Contains("example.com/c.png", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Markdown_WrapsProse_AtTheRightEdge_AndCutsAnOverlongWord()
     {
         var frame = PrintLayout.FrameOf(Letter);

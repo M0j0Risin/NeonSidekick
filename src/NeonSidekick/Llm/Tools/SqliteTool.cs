@@ -195,7 +195,8 @@ public sealed class SqliteQueryTool : SqliteTool
             "sql": { "type": "string", "description": "One SQLite SELECT (LIMIT n); a WITH clause may lead it. No INSERT, UPDATE, DELETE, DDL, PRAGMA, ATTACH or second statement." },
             {{DatabaseProperty}},
             "params": { "type": "object", "description": "Values for the named placeholders in the SQL (@name, :name, $name), each by its name, e.g. {\"id\": 101} for @id or :id; strings, numbers, true, false or null." },
-            "max_rows": { "type": "integer", "description": "How many rows at most, 1 to 100000. Leave it out for the user's default." }
+            "max_rows": { "type": "integer", "description": "How many rows at most, 1 to 100000 (1 to 1048575 with to). Leave it out for the user's default (with to, every row)." },
+            {{ExportProperties}}
           },
           "required": ["sql"]
         }
@@ -210,7 +211,7 @@ public sealed class SqliteQueryTool : SqliteTool
     public override string Description =>
         "Runs one read-only SELECT on a SQLite database and returns the rows as a table. " +
         "Only a single SELECT (or WITH … SELECT) is accepted; bind values as @name through params rather than writing them into the text. " +
-        "The header says when more rows exist than were returned.";
+        "The header says when more rows exist than were returned." + ExportSentence;
 
     public override JsonElement JsonSchema => Schema;
 
@@ -221,14 +222,15 @@ public sealed class SqliteQueryTool : SqliteTool
         return Math.Clamp(effective.SqliteQueryMaxRows, MinRows, MaxRows);
     }
 
-    public async Task<string> RunAsync(string sql, string? database, IReadOnlyList<SqlParameterValue> parameters, int? maxRows, CancellationToken cancellationToken)
+    /// <remarks><paramref name="export"/> (2026-10-29, the Office writing plan): every row to a workbook instead (<see cref="ServerTool{TAccess}.ExportAsync"/>).</remarks>
+    public async Task<string> RunAsync(string sql, string? database, IReadOnlyList<SqlParameterValue> parameters, int? maxRows, CancellationToken cancellationToken, ExportTarget? export = null)
     {
         ArgumentNullException.ThrowIfNull(sql);
         ArgumentNullException.ThrowIfNull(parameters);
-        int rows = maxRows ?? DefaultRows(Effective);
-        if (rows < MinRows || rows > MaxRows)
+        int rows = export is null ? maxRows ?? DefaultRows(Effective) : ExportRows(maxRows) ?? 0;
+        if (export is null ? rows < MinRows || rows > MaxRows : rows == 0)
         {
-            return SqlText.BadMaxRows(MinRows, MaxRows);
+            return export is null ? SqlText.BadMaxRows(MinRows, MaxRows) : SqlText.BadMaxRows(1, SqlExport.MaxRows);
         }
 
         if (SqliteReadOnlyGate.Check(sql) is { } refused)
@@ -236,8 +238,21 @@ public sealed class SqliteQueryTool : SqliteTool
             return refused;
         }
 
-        var run = await Files.RunAsync(database, [SqliteReadOnlyGate.Body(sql)], parameters, rows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);
-        return run.Outcome == SqlOutcome.Ok ? SqliteText.Query(run, rows, SqlTool.ResultChars(Effective)) : SqliteText.Error(run);
+        string body = SqliteReadOnlyGate.Body(sql);
+        if (export is not null)
+        {
+            if (Files.Resolve(database, out var unresolved) is not { } target)
+            {
+                return SqliteText.Error(unresolved!);
+            }
+
+            int timeout = SqlExport.TimeoutFor(TimeoutSeconds(Effective));
+            return await ExportAsync(export, Path.GetFileNameWithoutExtension(target.Name), rows, SqliteAccess.ExportCell,
+                (job, token) => Files.ExportAsync(database, body, parameters, job, rows, timeout, token), SqliteText.Error, cancellationToken).ConfigureAwait(false);
+        }
+
+        var run = await Files.RunAsync(database, [body], parameters, rows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);
+        return run.Outcome == SqlOutcome.Ok ? SqliteText.Query(run, rows, SqlTool.ResultChars(Effective), CanSave) : SqliteText.Error(run);
     }
 
     protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
@@ -253,7 +268,12 @@ public sealed class SqliteQueryTool : SqliteTool
             return error;
         }
 
-        return await RunAsync(ToolArguments.ReadString(arguments, SqlArgument), Optional(arguments, DatabaseArgument), parameters, max, cancellationToken).ConfigureAwait(false);
+        if (ReadExport(arguments, out var export) is { } badExport)
+        {
+            return badExport;
+        }
+
+        return await RunAsync(ToolArguments.ReadString(arguments, SqlArgument), Optional(arguments, DatabaseArgument), parameters, max, cancellationToken, export).ConfigureAwait(false);
     }
 
     /// <summary>

@@ -213,7 +213,7 @@ public static class DirectoryCommand
         {
             if (files?.Invoke() is not { } root)
             {
-                return Failed(DirectoryText.SaveNotHere);
+                return Failed(FileText.SaveNotHere);
             }
 
             var (checkedTarget, refused) = DirectoryCsv.Check(root, to, Question(line));

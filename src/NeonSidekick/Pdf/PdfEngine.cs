@@ -190,54 +190,18 @@ public static class PdfPlan
     /// or beside the source file, or at the top. Pure; <paramref name="isFolder"/> asks the sandbox. <paramref name="suffix"/> (2026-10-14,
     /// the PDF plan's gap 66: an edit names its file after its source's, <c>report-p2-5.pdf</c>) goes after a source file's name.
     /// </summary>
-    public static string OutputFor(string? to, string? sourceRelative, Uri? url, string? title, DateTimeOffset now, Func<string, bool> isFolder, string suffix = "")
-    {
-        ArgumentNullException.ThrowIfNull(isFolder);
-        string target = (to ?? "").Trim();
-        if (!IntoFolder(target, isFolder))
-        {
-            return WithPdf(target);
-        }
-
-        string name;
-        string folder;
-        if (sourceRelative is not null)
-        {
-            name = Path.GetFileNameWithoutExtension(sourceRelative) + suffix;
-            string? parent = Path.GetDirectoryName(sourceRelative);
-            folder = target.Length > 0 ? target : (string.IsNullOrEmpty(parent) ? "" : parent.Replace('\\', '/'));
-        }
-        else
-        {
-            name = url is not null ? UrlName(url) : Stamped(title, now);
-            folder = target;
-        }
-
-        folder = folder is "." ? "" : folder.TrimEnd('/', '\\');
-        string file = Llm.Tools.DownloadFileTool.Sanitise(name);
-        if (file.Length == 0)
-        {
-            file = Stamped(null, now);
-        }
-
-        return (folder.Length == 0 ? "" : folder + "/") + file + ".pdf";
-    }
+    public static string OutputFor(string? to, string? sourceRelative, Uri? url, string? title, DateTimeOffset now, Func<string, bool> isFolder, string suffix = "") =>
+        Files.OutputNames.For(to, sourceRelative, url, title, now, isFolder, Files.PdfFile.Extension, suffix: suffix);   // lifted 2026-10-29; a .neon source goes to the top
 
     /// <summary>
     /// Whether <paramref name="to"/> names a folder to make a name in rather than the file itself: blank, <c>.</c>, a trailing separator
     /// (a folder not made yet, too) or an existing folder. <see cref="OutputFor"/>'s test, and <c>pdf_edit</c>'s for whether a <c>to</c>
     /// is named (2026-10-20, review: <c>out/</c> was checked as the file <c>out/.pdf</c>, then written as a named file with no numbering).
     /// </summary>
-    public static bool IntoFolder(string? to, Func<string, bool> isFolder)
-    {
-        ArgumentNullException.ThrowIfNull(isFolder);
-        string target = (to ?? "").Trim();
-        return target.Length == 0 || target is "." || target.EndsWith('/') || target.EndsWith('\\') || isFolder(target);
-    }
+    public static bool IntoFolder(string? to, Func<string, bool> isFolder) => Files.OutputNames.IntoFolder(to, isFolder);
 
     /// <summary><paramref name="target"/> ending in <c>.pdf</c>: kept when it does, the extension added when it does not.</summary>
-    public static string WithPdf(string target) =>
-        target.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) ? target : target + ".pdf";
+    public static string WithPdf(string target) => Files.OutputNames.WithExtension(target, Files.PdfFile.Extension);
 
     /// <summary>A web page's file name: <c>example.com-docs-intro</c> from <c>https://example.com/docs/intro.html</c>.</summary>
     public static string UrlName(Uri url)
@@ -255,11 +219,5 @@ public static class PdfPlan
     }
 
     /// <summary>A name for Markdown text: the title (when it is not the reply's) or <c>reply</c>, and the time to the minute.</summary>
-    public static string Stamped(string? title, DateTimeOffset now)
-    {
-        string stem = string.IsNullOrWhiteSpace(title) || string.Equals(title.Trim(), Printing.PrintText.ReplyTitle, StringComparison.Ordinal)
-            ? "reply"
-            : Llm.Tools.DownloadFileTool.Sanitise(title.Trim().Replace(' ', '-'));
-        return (stem.Length == 0 ? "reply" : stem) + "-" + now.ToString("yyyy-MM-dd-HHmm", System.Globalization.CultureInfo.InvariantCulture);
-    }
+    public static string Stamped(string? title, DateTimeOffset now) => Files.OutputNames.Stamped(title, now);
 }

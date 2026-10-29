@@ -4,6 +4,7 @@ using System.Data.Common;
 using System.Diagnostics;
 using System.Globalization;
 using NeonSidekick.Diagnostics;
+using NeonSidekick.Office;
 using NeonSidekick.Sql;
 using Oracle.ManagedDataAccess.Client;
 using Oracle.ManagedDataAccess.Types;
@@ -122,7 +123,8 @@ public sealed class OracleAccess
     /// failed connect and a server error are outcomes; a cancelled token throws. The run's <see cref="SqlRun.Database"/> is the
     /// schema it worked in.
     /// </summary>
-    public async Task<SqlRun> RunAsync(string? name, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
+    /// <remarks><paramref name="export"/> (2026-10-29, the Office writing plan): the rows go to a workbook's sheet in place of the grid (<see cref="ExportAsync"/>).</remarks>
+    public async Task<SqlRun> RunAsync(string? name, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken, SqlExportJob? export = null)
     {
         ArgumentNullException.ThrowIfNull(statements);
         ArgumentNullException.ThrowIfNull(parameters);
@@ -191,7 +193,9 @@ public sealed class OracleAccess
                     }
 
                     await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-                    grids.Add(await SqlGrid.ReadAsync(reader, maxRows, cancellationToken, ReadCell).ConfigureAwait(false));
+                    grids.Add(export is null
+                        ? await SqlGrid.ReadAsync(reader, maxRows, cancellationToken, ReadCell).ConfigureAwait(false)
+                        : await export.ReadAsync(reader, maxRows, cancellationToken).ConfigureAwait(false));
                 }
             }
             finally
@@ -438,6 +442,57 @@ public sealed class OracleAccess
         catch (Exception ex) when (ex is not (DbException or OperationCanceledException or OutOfMemoryException))
         {
             return OracleText.Unreadable(reader.GetDataTypeName(ordinal));
+        }
+    }
+
+    /// <summary>
+    /// A query's rows written to a workbook (2026-10-29, the Office writing plan): <see cref="RunAsync"/>'s read-only session and rollback,
+    /// the rows handed to <paramref name="export"/> (typed by <see cref="ExportCell"/>) instead of read into a grid.
+    /// </summary>
+    public Task<SqlRun> ExportAsync(string? name, string statement, IReadOnlyList<SqlParameterValue> parameters, SqlExportJob export, int maxRows, int timeoutSeconds, CancellationToken cancellationToken) =>
+        RunAsync(name, [statement], parameters, maxRows, timeoutSeconds, cancellationToken, export ?? throw new ArgumentNullException(nameof(export)));
+
+    /// <summary>
+    /// An Oracle cell for a workbook (2026-10-29): a CLOB read to Excel's cap and a BLOB's bytes to the hex that fits, never whole; a time
+    /// zone's timestamp and an interval as the chat writes them (text: the offset is the value); a NUMBER past 15 digits text by its
+    /// provider value; dates, BINARY_DOUBLE and the rest by the common rules.
+    /// </summary>
+    public static XlsxValue ExportCell(DbDataReader reader, int ordinal)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+        try
+        {
+            if (reader is OracleDataReader oracle && !oracle.IsDBNull(ordinal))
+            {
+                switch (oracle.GetDataTypeName(ordinal))
+                {
+                    case "Clob" or "NClob":
+                        using (var clob = oracle.GetOracleClob(ordinal))
+                        {
+                            var buffer = new char[(int)Math.Min(clob.Length, XlsxValue.MaxChars + 1)];
+                            int read = buffer.Length == 0 ? 0 : clob.Read(buffer, 0, buffer.Length);
+                            return XlsxValue.OfText(new string(buffer, 0, read));
+                        }
+
+                    case "Blob":
+                        using (var blob = oracle.GetOracleBlob(ordinal))
+                        {
+                            int fit = (XlsxValue.MaxChars - 3) / 2;
+                            var buffer = new byte[(int)Math.Min(blob.Length, fit)];
+                            int read = buffer.Length == 0 ? 0 : blob.Read(buffer, 0, buffer.Length);
+                            return XlsxValue.OfBytes(buffer.AsSpan(0, read), more: blob.Length > fit);
+                        }
+
+                    case "TimeStampTZ" or "TimeStampLTZ" or "IntervalYM":
+                        return XlsxValue.OfText(ReadCell(reader, ordinal));
+                }
+            }
+
+            return SqlExport.Typed(reader, ordinal, ReadCell);
+        }
+        catch (Exception ex) when (ex is not (DbException or OperationCanceledException or OutOfMemoryException))
+        {
+            return XlsxValue.OfText(OracleText.Unreadable(reader.GetDataTypeName(ordinal)));
         }
     }
 

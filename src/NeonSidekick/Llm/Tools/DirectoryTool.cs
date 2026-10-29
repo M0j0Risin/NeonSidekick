@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using NeonSidekick.ActiveDirectory;
+using NeonSidekick.Files;
 
 namespace NeonSidekick.Llm.Tools;
 
@@ -18,7 +19,7 @@ public abstract class DirectoryTool : AIFunction, IRedactedTwin
     public const string ToArgument = "to";
     public const string LimitArgument = "limit";
 
-    protected DirectoryTool(DirectoryAccess access, bool forceRedacted, Func<DirectorySaveRoot>? saveRoot = null)
+    protected DirectoryTool(DirectoryAccess access, bool forceRedacted, Func<Files.SaveRoot>? saveRoot = null)
     {
         Access = access ?? throw new ArgumentNullException(nameof(access));
         ForceRedacted = forceRedacted;
@@ -30,7 +31,7 @@ public abstract class DirectoryTool : AIFunction, IRedactedTwin
     public bool ForceRedacted { get; }
 
     /// <summary>Where a <c>to</c> may write, asked per call; null (a twin's) refuses every save.</summary>
-    protected Func<DirectorySaveRoot>? SaveRoot { get; }
+    protected Func<Files.SaveRoot>? SaveRoot { get; }
 
     public abstract AIFunction AsRedacted();
 
@@ -79,10 +80,10 @@ public abstract class DirectoryTool : AIFunction, IRedactedTwin
         DirectorySaveTarget? target = null;
         if (Optional(arguments, ToArgument) is { } to)
         {
-            var root = SaveRoot?.Invoke() ?? DirectorySaveRoot.Refused(DirectoryText.SaveNotHere);
+            var root = SaveRoot?.Invoke() ?? Files.SaveRoot.Refused(FileText.SaveNotHere);
             if (root.Root is null)
             {
-                return root.Refusal ?? DirectoryText.SaveNotHere;
+                return root.Refusal ?? FileText.SaveNotHere;
             }
 
             var (checkedTarget, error) = DirectoryCsv.Check(root.Root, to, question);
@@ -112,8 +113,8 @@ public abstract class DirectoryTool : AIFunction, IRedactedTwin
         {
             // The save root judged again as the rows are written (2026-10-23, the admin review's F7: File tools switched off, or plan mode on,
             // during a 40 s search still wrote).
-            var now = SaveRoot?.Invoke() ?? DirectorySaveRoot.Refused(DirectoryText.SaveNotHere);
-            answer.Saved = now.Root is null ? DirectoryText.SaveClosedLate(now.Refusal ?? DirectoryText.SaveNotHere) : DirectoryCsv.Save(target, answer, answer.Partial);
+            var now = SaveRoot?.Invoke() ?? Files.SaveRoot.Refused(FileText.SaveNotHere);
+            answer.Saved = now.Root is null ? FileText.SaveClosedLate(now.Refusal ?? FileText.SaveNotHere) : DirectoryCsv.Save(target, answer, answer.Partial);
         }
 
         return DirectoryRender.ForModel(answer);
@@ -157,7 +158,7 @@ public sealed class AdUserTool(DirectoryAccess access, bool forceRedacted = fals
 }
 
 /// <summary><c>ad_group(name, nested?, members?, limit?, to?, domain?)</c> (2026-10-15): a group's members, direct or nested, and its card.</summary>
-public sealed class AdGroupTool(DirectoryAccess access, bool forceRedacted = false, Func<DirectorySaveRoot>? saveRoot = null) : DirectoryTool(access, forceRedacted, saveRoot)
+public sealed class AdGroupTool(DirectoryAccess access, bool forceRedacted = false, Func<Files.SaveRoot>? saveRoot = null) : DirectoryTool(access, forceRedacted, saveRoot)
 {
     public const string ToolName = "ad_group";
     public const string NestedArgument = "nested";
@@ -245,7 +246,7 @@ public sealed class AdComputerTool(DirectoryAccess access, bool forceRedacted = 
 }
 
 /// <summary><c>ad_find(kind, days?, words?, type?, field?, ou?, limit?, to?, domain?)</c> (2026-10-15): structured searches only — the model never writes a filter.</summary>
-public sealed class AdFindTool(DirectoryAccess access, bool forceRedacted = false, Func<DirectorySaveRoot>? saveRoot = null) : DirectoryTool(access, forceRedacted, saveRoot)
+public sealed class AdFindTool(DirectoryAccess access, bool forceRedacted = false, Func<Files.SaveRoot>? saveRoot = null) : DirectoryTool(access, forceRedacted, saveRoot)
 {
     public const string ToolName = "ad_find";
     public const string KindArgument = "kind";
@@ -319,7 +320,7 @@ public sealed class AdFindTool(DirectoryAccess access, bool forceRedacted = fals
 }
 
 /// <summary><c>ad_ou(ou?, limit?, to?, domain?)</c> (2026-10-15, the AD gaps plan, §4): the OU tree, or one OU's card and contents.</summary>
-public sealed class AdOuTool(DirectoryAccess access, bool forceRedacted = false, Func<DirectorySaveRoot>? saveRoot = null) : DirectoryTool(access, forceRedacted, saveRoot)
+public sealed class AdOuTool(DirectoryAccess access, bool forceRedacted = false, Func<Files.SaveRoot>? saveRoot = null) : DirectoryTool(access, forceRedacted, saveRoot)
 {
     public const string ToolName = "ad_ou";
     public const string OuArgument = "ou";

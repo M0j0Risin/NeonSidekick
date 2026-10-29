@@ -79,7 +79,7 @@ public static class WebCommands
         SlashCommand.Model, SlashCommand.Reasoning, SlashCommand.Tts, SlashCommand.Voice, SlashCommand.Remember, SlashCommand.Memory,
         SlashCommand.Timer, SlashCommand.Cwd, SlashCommand.Tree, SlashCommand.Vault, SlashCommand.Browser, SlashCommand.Prompts,
         SlashCommand.Plan, SlashCommand.CodeAudit, SlashCommand.Process, SlashCommand.Learn, SlashCommand.Imagine, SlashCommand.Comfy, SlashCommand.HomeAssistant,
-        SlashCommand.Docker, SlashCommand.EventLog, SlashCommand.Net, SlashCommand.Services, SlashCommand.Tasks, SlashCommand.Ad, SlashCommand.Monitor, SlashCommand.Camera, SlashCommand.Screen, SlashCommand.Shopping, SlashCommand.Print, SlashCommand.Pdf,
+        SlashCommand.Docker, SlashCommand.EventLog, SlashCommand.Net, SlashCommand.Services, SlashCommand.Tasks, SlashCommand.Ad, SlashCommand.Monitor, SlashCommand.Camera, SlashCommand.Screen, SlashCommand.Shopping, SlashCommand.Print, SlashCommand.Pdf, SlashCommand.Docx,
         SlashCommand.Rename, SlashCommand.Claude, SlashCommand.Advisor, SlashCommand.Test, SlashCommand.Avatar, SlashCommand.Loop,
         SlashCommand.MsgClear, SlashCommand.Mark,   // /mark (2026-10-18): the PC's rules, set from the page too
     };
@@ -139,7 +139,7 @@ public static class WebCommands
             SlashCommand.Help => text.Length > 0 ? WebCommandVerdict.Run : Pane(word, "/help <words>"),
             SlashCommand.Splash when text.Length > 0 => Pane(word, "/splash"),   // 2026-10-18: view|thumbs|purge are a window or a question on the PC
             SlashCommand.Clear or SlashCommand.New or SlashCommand.Splash or SlashCommand.Compact or SlashCommand.Remember or SlashCommand.Timer or SlashCommand.Mark
-                or SlashCommand.Claude or SlashCommand.Advisor or SlashCommand.Test or SlashCommand.Pdf or SlashCommand.Imagine => WebCommandVerdict.Run,
+                or SlashCommand.Claude or SlashCommand.Advisor or SlashCommand.Test or SlashCommand.Pdf or SlashCommand.Docx or SlashCommand.Imagine => WebCommandVerdict.Run,
             // 2026-10-16, the user's ask: the page shares the message history now, so it may clear it; the yes is asked on the page and the PC.
             SlashCommand.MsgClear => WebCommandVerdict.Run,
             SlashCommand.Rewind => WebCommandVerdict.Pick,

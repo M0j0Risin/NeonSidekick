@@ -642,8 +642,8 @@ public sealed partial class ActiveDirectoryTests
 
     private readonly List<string> _roots = [];
 
-    private Func<DirectorySaveRoot> Root(string root, bool fileTools = true, bool plan = false) =>
-        () => NeonSidekick.App.ChatScreen.DirectorySaveRootFor(fileTools, plan, new WorkingDirectory(() => root, _time));
+    private Func<Files.SaveRoot> Root(string root, bool fileTools = true, bool plan = false) =>
+        () => NeonSidekick.App.ChatScreen.SaveRootFor(fileTools, plan, new WorkingDirectory(() => root, _time));
 
     [Fact]
     public async Task To_WritesEveryRow_AndRefusesAnExistingFile()
@@ -675,9 +675,9 @@ public sealed partial class ActiveDirectoryTests
         string root = ToRoot();
         try
         {
-            Assert.Equal(DirectoryText.SaveNeedsFileTools, await Call(new AdFindTool(Access(), saveRoot: Root(root, fileTools: false)), ("kind", "disabled"), ("to", "x.csv")));
-            Assert.Equal(DirectoryText.SaveInPlanMode, await Call(new AdOuTool(Access(), saveRoot: Root(root, plan: true)), ("to", "x.csv")));
-            Assert.Equal(DirectoryText.SaveNotHere, await Call(new AdGroupTool(Access(), saveRoot: Root(root)).AsRedacted(), ("name", "Ops"), ("to", "x.csv")));
+            Assert.Equal(FileText.SaveNeedsFileTools, await Call(new AdFindTool(Access(), saveRoot: Root(root, fileTools: false)), ("kind", "disabled"), ("to", "x.csv")));
+            Assert.Equal(FileText.SaveInPlanMode, await Call(new AdOuTool(Access(), saveRoot: Root(root, plan: true)), ("to", "x.csv")));
+            Assert.Equal(FileText.SaveNotHere, await Call(new AdGroupTool(Access(), saveRoot: Root(root)).AsRedacted(), ("name", "Ops"), ("to", "x.csv")));
             Assert.Empty(_system.Filters);
             Assert.Empty(Directory.GetFiles(root));
         }

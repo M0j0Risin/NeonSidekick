@@ -51,7 +51,7 @@ public sealed class MySqlToolsTests
         Assert.Equal(["connection", "table"], Properties(Tool<MySqlRelationshipsTool>()));
         Assert.Equal(["pattern", "connection"], Properties(Tool<MySqlColumnsTool>()));
         Assert.Equal(["connection", "table"], Properties(Tool<MySqlIndexesTool>()));
-        Assert.Equal(["sql", "connection", "params", "max_rows"], Properties(Tool<MySqlQueryTool>()));
+        Assert.Equal(["sql", "connection", "params", "max_rows", "to", "sheet", "overwrite"], Properties(Tool<MySqlQueryTool>()));
         Assert.Equal(["sql", "connection", "params", "max_rows"], Properties(Tool<MySqlExecuteTool>()));
         Assert.Contains("LIMIT n", Tool<MySqlQueryTool>().JsonSchema.GetProperty("properties").GetProperty("sql").GetProperty("description").GetString());
     }

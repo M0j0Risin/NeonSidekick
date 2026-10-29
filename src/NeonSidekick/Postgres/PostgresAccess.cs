@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using NeonSidekick.Diagnostics;
+using NeonSidekick.Office;
 using NeonSidekick.Sql;
 using Npgsql;
 using NpgsqlTypes;
@@ -153,7 +154,8 @@ public sealed class PostgresAccess
     /// each bound only the <c>@names</c> it uses, all inside one read-only transaction that is rolled back. A timeout, a failed connect
     /// and a server error are outcomes; a cancelled token throws.
     /// </summary>
-    public async Task<SqlRun> RunAsync(string? name, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
+    /// <remarks><paramref name="export"/> (2026-10-29, the Office writing plan): the rows go to a workbook's sheet in place of the grid (<see cref="ExportAsync"/>).</remarks>
+    public async Task<SqlRun> RunAsync(string? name, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken, SqlExportJob? export = null)
     {
         ArgumentNullException.ThrowIfNull(statements);
         ArgumentNullException.ThrowIfNull(parameters);
@@ -220,7 +222,7 @@ public sealed class PostgresAccess
                         return new SqlRun(SqlOutcome.Timeout, timeoutSeconds.ToString(CultureInfo.InvariantCulture), target.Name, workIn, grids, watch.Elapsed);
                     }
 
-                    grids.Add(await ReadAsync(connection, transaction, statements[i], parameters, maxRows, left, last: i == statements.Count - 1, cancellationToken).ConfigureAwait(false));
+                    grids.Add(await ReadAsync(connection, transaction, statements[i], parameters, maxRows, left, last: i == statements.Count - 1, cancellationToken, export).ConfigureAwait(false));
                 }
             }
             finally
@@ -369,7 +371,7 @@ public sealed class PostgresAccess
     }
 
     /// <summary>One statement's rows: the <c>@names</c> it uses bound, read to the cap; the last statement cancelled on the server when more rows are left (its cancel answer then expected), so a huge result is not drained.</summary>
-    private static async Task<SqlGrid> ReadAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string sql, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, bool last, CancellationToken cancellationToken)
+    private static async Task<SqlGrid> ReadAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string sql, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, bool last, CancellationToken cancellationToken, SqlExportJob? export = null)
     {
         await using var command = new NpgsqlCommand(sql, connection, transaction) { CommandTimeout = timeoutSeconds + 5 };
         var named = PostgresReadOnlyGate.Binds(sql, parameters.Select(p => p.Name));
@@ -383,7 +385,9 @@ public sealed class PostgresAccess
         SqlGrid? grid = null;
         try
         {
-            grid = await SqlGrid.ReadAsync(reader, maxRows, cancellationToken, ReadCell).ConfigureAwait(false);
+            grid = export is null
+                ? await SqlGrid.ReadAsync(reader, maxRows, cancellationToken, ReadCell).ConfigureAwait(false)
+                : await export.ReadAsync(reader, maxRows, cancellationToken).ConfigureAwait(false);
             if (grid.More && last)
             {
                 command.Cancel();
@@ -416,6 +420,66 @@ public sealed class PostgresAccess
         bool b => new NpgsqlParameter(name, NpgsqlDbType.Boolean) { Value = b },
         var other => new NpgsqlParameter(name, other),
     };
+
+    /// <summary>
+    /// A query's rows written to a workbook (2026-10-29, the Office writing plan): <see cref="RunAsync"/>'s read-only transaction and
+    /// rollback, the rows handed to <paramref name="export"/> (typed by <see cref="ExportCell"/>, headed by <see cref="ExportHeader"/>)
+    /// instead of read into a grid.
+    /// </summary>
+    public Task<SqlRun> ExportAsync(string? name, string statement, IReadOnlyList<SqlParameterValue> parameters, SqlExportJob export, int maxRows, int timeoutSeconds, CancellationToken cancellationToken) =>
+        RunAsync(name, [statement], parameters, maxRows, timeoutSeconds, cancellationToken, export ?? throw new ArgumentNullException(nameof(export)));
+
+    /// <summary>
+    /// A PostgreSQL cell for a workbook (2026-10-29): an interval and money as the chat writes them (a month has no fixed length, and money
+    /// carries the server's currency), an array as <c>{a, b}</c>, a numeric past <see cref="decimal"/> or NaN as text; dates, timestamps and
+    /// the rest by the common rules. A timestamptz is its UTC value, the column's header saying so (<see cref="ExportHeader"/>). A
+    /// <c>±infinity</c> date or timestamp (Npgsql's <see cref="DateTime.MaxValue"/>/<see cref="DateTime.MinValue"/>) is the word, never a date in 9999.
+    /// </summary>
+    public static XlsxValue ExportCell(DbDataReader reader, int ordinal)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+        if (reader.IsDBNull(ordinal))
+        {
+            return XlsxValue.Blank;
+        }
+
+        if (reader.GetDataTypeName(ordinal) is "interval" or "money")
+        {
+            return XlsxValue.OfText(ReadCell(reader, ordinal));
+        }
+
+        var cell = SqlExport.Typed(reader, ordinal, ReadCell);
+        if (cell.Kind is XlsxKind.Date or XlsxKind.DateTime)
+        {
+            if (cell.When.Date == DateTime.MaxValue.Date)
+            {
+                return XlsxValue.OfText(Infinity);
+            }
+
+            if (cell.When == DateTime.MinValue)
+            {
+                return XlsxValue.OfText("-" + Infinity);
+            }
+        }
+
+        return cell;
+    }
+
+    /// <summary>PostgreSQL's word for a date past every other.</summary>
+    private const string Infinity = "infinity";
+
+    /// <summary>A column's header in a workbook: its name, and <see cref="PostgresText.UtcColumn"/> on a timestamptz, whose cells hold UTC.</summary>
+    public static string ExportHeader(DbDataReader reader, int ordinal)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+        string name = reader.GetName(ordinal);
+        if (string.IsNullOrEmpty(name))
+        {
+            name = SqlText.UnnamedColumn(ordinal);
+        }
+
+        return reader.GetDataTypeName(ordinal) == "timestamp with time zone" ? name + PostgresText.UtcColumn : name;
+    }
 
     /// <summary>One cell as text: <see cref="SqlText.Cell"/>, an array as <c>{a, b}</c>; a value the client cannot hold (a numeric past <see cref="decimal"/>) as <see cref="PostgresText.Unreadable"/>.</summary>
     private static string ReadCell(DbDataReader reader, int ordinal)

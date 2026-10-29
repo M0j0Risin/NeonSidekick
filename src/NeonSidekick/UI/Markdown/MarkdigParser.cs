@@ -222,6 +222,9 @@ public sealed class MarkdigParser : IMarkdownParser
                 case EmphasisInline emphasis:
                     Walk(emphasis, into, bold || emphasis.DelimiterCount >= 2, italic || emphasis.DelimiterCount == 1);
                     break;
+                case LinkInline { IsImage: true } image:
+                    Add(into, new ImageRun(PlainText(image), image.Url ?? ""));
+                    break;
                 case LinkInline link:
                     Add(into, new LinkRun(PlainText(link), link.Url ?? ""));
                     break;

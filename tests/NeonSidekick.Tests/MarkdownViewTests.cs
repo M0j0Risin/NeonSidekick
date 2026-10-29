@@ -229,6 +229,16 @@ public class MarkdownViewTests : IDisposable
     }
 
     [Fact]
+    public void APicture_ShowsAsItsLinkWould()
+    {
+        // ImageRun (2026-10-29, the Office writing plan): the parser keeps a picture apart for Word; the transcript draws it as the link it was.
+        var picture = Assert.Single(Render(MarkdownView.Of("see ![chart](https://example.com/c.png)")));
+        var link = Assert.Single(Render(MarkdownView.Of("see [chart](https://example.com/c.png)")));
+        Assert.Equal(Text(link), Text(picture));
+        Assert.Equal(link.Select(s => s.Style), picture.Select(s => s.Style));
+    }
+
+    [Fact]
     public void Autolink_ShowsTheUrlOnce()
     {
         Assert.Equal(new[] { "https://example.com" }, Lines("<https://example.com>"));

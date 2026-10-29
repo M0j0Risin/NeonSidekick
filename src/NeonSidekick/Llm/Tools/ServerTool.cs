@@ -1,4 +1,7 @@
+using System.Data.Common;
 using Microsoft.Extensions.AI;
+using NeonSidekick.Files;
+using NeonSidekick.Office;
 using NeonSidekick.Settings;
 using NeonSidekick.Sql;
 
@@ -24,6 +27,20 @@ public abstract class ServerTool<TAccess> : AIFunction where TAccess : class
     public const string ConnectionArgument = "connection";
     public const string TableArgument = "table";
 
+    /// <summary>The query tools' export (2026-10-29, the Office writing plan): the workbook to write every row to, its sheet, and a replace.</summary>
+    public const string ToArgument = "to";
+    public const string SheetArgument = "sheet";
+    public const string OverwriteArgument = "overwrite";
+
+    /// <summary>The three export properties every query tool's schema carries.</summary>
+    public const string ExportProperties =
+        "\"to\": { \"type\": \"string\", \"description\": \"An .xlsx path or folder (relative to the working directory) to write every row to instead of returning them; the answer then shows the first rows.\" }, " +
+        "\"sheet\": { \"type\": \"string\", \"description\": \"With to: the sheet's name; naming a new one adds it to an existing workbook. Default Query.\" }, " +
+        "\"overwrite\": { \"type\": \"boolean\", \"description\": \"With to: replace the sheet named, or with no sheet the whole file. Default false.\" }";
+
+    /// <summary>The sentence a query tool's description adds for <c>to</c>.</summary>
+    public const string ExportSentence = " Give to (an .xlsx path or folder) to write every row to a spreadsheet instead of returning them.";
+
     private readonly Func<AppSettingsData> _effective;
     private readonly AsyncLocal<AppSettingsData?> _call = new();
 
@@ -35,6 +52,19 @@ public abstract class ServerTool<TAccess> : AIFunction where TAccess : class
 
     /// <summary>The family's one door to its connections.</summary>
     protected TAccess Access { get; }
+
+    /// <summary>
+    /// Where an export may write (2026-10-29, the Office writing plan, the AD tools' <c>to</c> rule): the working directory while *File tools*
+    /// is on and plan mode off, else the refusal; judged before the query and again just before the file is put in place. Null: no
+    /// <c>to</c> here (a test's tool, the advisors').
+    /// </summary>
+    public Func<SaveRoot>? ExportRoot { get; init; }
+
+    /// <summary>The export's clock: a default name's minute and the file's times.</summary>
+    public TimeProvider Clock { get; init; } = TimeProvider.System;
+
+    /// <summary>Whether a save root is open now: a cut chat query's sentence then offers <c>to</c>.</summary>
+    protected bool CanSave => ExportRoot?.Invoke() is { Root: not null };
 
     /// <summary>The settings in force: the call's snapshot inside a model's call, else read now.</summary>
     protected AppSettingsData Effective => _call.Value ?? _effective();
@@ -63,6 +93,90 @@ public abstract class ServerTool<TAccess> : AIFunction where TAccess : class
 
     /// <summary>The tool's own call, its arguments read.</summary>
     protected abstract ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken);
+
+    /// <summary>What a query's <c>to</c> asks: the workbook, its sheet, and whether to replace.</summary>
+    public sealed record ExportTarget(string To, string? Sheet, bool Overwrite);
+
+    /// <summary>
+    /// The export's arguments read: the target, or null with no <c>to</c>; the refusal for an <c>overwrite</c> that is not a boolean, or a
+    /// <c>sheet</c> or <c>overwrite</c> sent with no <c>to</c> (they would otherwise be dropped, and the rows returned to the chat).
+    /// </summary>
+    protected static string? ReadExport(AIFunctionArguments arguments, out ExportTarget? export)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+        export = null;
+        if (!ToolArguments.TryReadBoolean(arguments, OverwriteArgument, out var overwrite, out string raw))
+        {
+            return FileText.BadBoolean(OverwriteArgument, raw);
+        }
+
+        string? sheet = Optional(arguments, SheetArgument);
+        if (Optional(arguments, ToArgument) is not { } to)
+        {
+            return sheet is not null ? OfficeText.NeedsTo(SheetArgument) : overwrite == true ? OfficeText.NeedsTo(OverwriteArgument) : null;
+        }
+
+        export = new ExportTarget(to, sheet, overwrite ?? false);
+        return null;
+    }
+
+    /// <summary>A query's row cap with <c>to</c>: 1 to Excel's last row, everything up to it when not given; null when out of range.</summary>
+    protected static int? ExportRows(int? maxRows) => maxRows switch
+    {
+        null => SqlExport.MaxRows,
+        >= 1 and <= SqlExport.MaxRows => maxRows,
+        _ => null,
+    };
+
+    /// <summary>
+    /// A query's rows written to a workbook (2026-10-29, the Office writing plan's export; the shared half, so the six families can't drift):
+    /// the save root and the target (the name, the sheet, what is there) judged before <paramref name="run"/> reaches the server; the rows
+    /// streamed into the pending file by the family's own session through a <see cref="SqlExportJob"/>; the save root judged again just
+    /// before the file is put in place (a late close discards it, <see cref="FileText.SaveClosedLate"/>); then the save sentence (the
+    /// transcript's note), the cut note, and the columns with the first rows. A failed or timed-out run writes nothing and says how many
+    /// rows it had read. <paramref name="name"/> is the connection's or database's, for a made-up file name.
+    /// </summary>
+    protected async Task<string> ExportAsync(ExportTarget export, string name, int maxRows, SqlCellReader cell, Func<SqlExportJob, CancellationToken, Task<SqlRun>> run,
+        Func<SqlRun, string> error, CancellationToken cancellationToken, Func<DbDataReader, int, string>? header = null)
+    {
+        ArgumentNullException.ThrowIfNull(export);
+        ArgumentNullException.ThrowIfNull(run);
+        ArgumentNullException.ThrowIfNull(error);
+        var root = ExportRoot?.Invoke() ?? SaveRoot.Refused(FileText.SaveNotHere);
+        if (root.Root is null)
+        {
+            return root.Refusal ?? FileText.SaveNotHere;
+        }
+
+        var request = new XlsxRequest(export.To, export.Sheet, export.Overwrite, null, "query-" + FileNames.Safe(name), SqlExportText.DefaultSheet);
+        using var target = XlsxTarget.Plan(root.Root, request, Clock, out string? refusal);
+        if (target is null)
+        {
+            return refusal!;
+        }
+
+        var sink = target.Begin(out refusal);
+        if (sink is null)
+        {
+            return refusal!;
+        }
+
+        var job = new SqlExportJob(sink, cell, header);
+        var result = await run(job, cancellationToken).ConfigureAwait(false);
+        if (job.Refusal is { } refused)
+        {
+            return refused;
+        }
+
+        if (result.Outcome != SqlOutcome.Ok)
+        {
+            return error(result) + SqlExportText.NotWritten(job.Rows, result.Outcome == SqlOutcome.Timeout);
+        }
+
+        var grid = result.Grids.Count > 0 ? result.Grids[0] : new SqlGrid([], [], false);
+        var (answer, _) = target.Commit(() => (ExportRoot?.Invoke() ?? SaveRoot.Refused(FileText.SaveNotHere)).Refusal);
+        return SqlExportText.Answer(answer, grid, maxRows);
+    }
 
     /// <summary>A string argument, or null when blank.</summary>
     protected static string? Optional(AIFunctionArguments arguments, string name) =>

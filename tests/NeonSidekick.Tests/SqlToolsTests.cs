@@ -64,7 +64,7 @@ public sealed class SqlToolsTests
         Assert.Equal(["connection", "table", "schema", "missing"], Properties(Tool<SqlIndexesTool>()));
         Assert.Empty(Required(Tool<SqlIndexesTool>()));
         Assert.Equal("boolean", Tool<SqlIndexesTool>().JsonSchema.GetProperty("properties").GetProperty("missing").GetProperty("type").GetString());
-        Assert.Equal(["sql", "connection", "params", "max_rows"], Properties(Tool<SqlQueryTool>()));
+        Assert.Equal(["sql", "connection", "params", "max_rows", "to", "sheet", "overwrite"], Properties(Tool<SqlQueryTool>()));
         Assert.Equal(["sql", "connection", "params", "max_rows"], Properties(Tool<SqlExecuteTool>()));
         Assert.Equal(["sql"], Required(Tool<SqlQueryTool>()));
         Assert.Equal("object", Tool<SqlQueryTool>().JsonSchema.GetProperty("properties").GetProperty("params").GetProperty("type").GetString());

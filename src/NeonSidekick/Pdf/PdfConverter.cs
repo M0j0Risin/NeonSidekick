@@ -407,7 +407,7 @@ public sealed class PdfConverter
     {
         var paper = request.Paper ?? PdfPaper.Default;
         string folder = source.Full is null ? _files.Root : System.IO.Path.GetDirectoryName(source.Full)!;
-        var inliner = new Inliner(_files, folder);
+        var inliner = new SandboxPictures(_files, folder, MaxInlineBytes);   // shared with convert_to_docx (2026-10-29)
         string html = source.Kind switch
         {
             PdfSourceKind.Picture => PdfHtml.Document(source.Display, PdfHtml.Picture(PdfHtml.DataUri(source.Bytes!, PdfHtml.ImageMediaType(source.Full!) ?? "image/png"), source.Display), paper, request.Landscape),
@@ -443,101 +443,5 @@ public sealed class PdfConverter
             PdfFileState.Unfinished => PdfText.PrinterUnfinished(PrintText.PrintToPdfPrinter),
             _ => PdfText.PrinterNotPdf(PrintText.PrintToPdfPrinter),
         };
-    }
-
-    /// <summary>
-    /// The files a page shows, read from the sandbox only: an address relative to <c>folder</c> (the source's own) or a
-    /// <c>file:</c> URL, judged by <see cref="WorkingDirectory.Resolve(string, bool, out string)"/>; a web address, a missing
-    /// file or one outside is null. Counts what it hands out against <see cref="MaxInlineBytes"/>.
-    /// </summary>
-    private sealed class Inliner(WorkingDirectory files, string folder)
-    {
-        private long _total;
-
-        public bool OverBudget { get; private set; }
-
-        /// <summary>A Markdown picture as a <c>data:</c> URI, or null.</summary>
-        public string? Picture(string address)
-        {
-            if (address.StartsWith("data:image/", StringComparison.OrdinalIgnoreCase))
-            {
-                return address;
-            }
-
-            string? full = Locate(address);
-            if (full is null || PdfHtml.ImageMediaType(full) is not { } type)
-            {
-                return null;
-            }
-
-            return Read(full, ImageFile.MaxFileBytes) is { } bytes ? PdfHtml.DataUri(bytes, type) : null;
-        }
-
-        /// <summary>A file an HTML page names, its bytes, or null.</summary>
-        public byte[]? Bytes(string address) => Locate(address) is { } full ? Read(full, ImageFile.MaxFileBytes) : null;
-
-        private string? Locate(string address)
-        {
-            string text = address.Trim();
-            int cut = text.IndexOfAny(['?', '#']);
-            if (cut >= 0)
-            {
-                text = text[..cut];
-            }
-
-            if (text.Length == 0)
-            {
-                return null;
-            }
-
-            string candidate;
-            if (Uri.TryCreate(text, UriKind.Absolute, out var uri) && !(text.Length > 1 && text[1] == ':'))
-            {
-                if (!uri.IsFile)
-                {
-                    return null;
-                }
-
-                candidate = uri.LocalPath;
-            }
-            else
-            {
-                try
-                {
-                    candidate = System.IO.Path.Combine(folder, Uri.UnescapeDataString(text).Replace('/', System.IO.Path.DirectorySeparatorChar));
-                }
-                catch (ArgumentException)
-                {
-                    return null;
-                }
-            }
-
-            return files.Resolve(candidate, forWrite: false, out string full) == FileOutcome.Ok && File.Exists(full) ? full : null;
-        }
-
-        private byte[]? Read(string full, long cap)
-        {
-            try
-            {
-                long length = new FileInfo(full).Length;
-                if (length > cap)
-                {
-                    return null;
-                }
-
-                if (_total + length > MaxInlineBytes)
-                {
-                    OverBudget = true;
-                    return null;
-                }
-
-                _total += length;
-                return RegularFiles.ReadAllBytes(full);
-            }
-            catch (Exception ex) when (WorkingDirectory.IsFileFailure(ex))
-            {
-                return null;
-            }
-        }
     }
 }

@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Text;
 using MySqlConnector;
 using NeonSidekick.Diagnostics;
+using NeonSidekick.Office;
 using NeonSidekick.Sql;
 
 namespace NeonSidekick.MySql;
@@ -112,7 +113,8 @@ public sealed class MySqlAccess
     /// inside one read-only transaction that is rolled back. A timeout, a failed connect and a server error are outcomes; a
     /// cancelled token throws. The run's <see cref="SqlRun.Database"/> is the database it worked in.
     /// </summary>
-    public async Task<SqlRun> RunAsync(string? name, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
+    /// <remarks><paramref name="export"/> (2026-10-29, the Office writing plan): the rows go to a workbook's sheet in place of the grid (<see cref="ExportAsync"/>).</remarks>
+    public async Task<SqlRun> RunAsync(string? name, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken, SqlExportJob? export = null)
     {
         ArgumentNullException.ThrowIfNull(statements);
         ArgumentNullException.ThrowIfNull(parameters);
@@ -177,7 +179,7 @@ public sealed class MySqlAccess
                         return new SqlRun(SqlOutcome.Timeout, timeoutSeconds.ToString(CultureInfo.InvariantCulture), target.Name, workIn, grids, watch.Elapsed);
                     }
 
-                    grids.Add(await ReadAsync(connection, transaction, sql, parameters, maxRows, left, cancellationToken).ConfigureAwait(false));
+                    grids.Add(await ReadAsync(connection, transaction, sql, parameters, maxRows, left, cancellationToken, export).ConfigureAwait(false));
                 }
             }
             finally
@@ -362,7 +364,7 @@ public sealed class MySqlAccess
     }
 
     /// <summary>One statement's rows: the parameters it names bound, read to the cap, the query killed on the server when more are left (its interrupt answer then expected, not an error).</summary>
-    private static async Task<SqlGrid> ReadAsync(MySqlConnection connection, MySqlTransaction transaction, string sql, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
+    private static async Task<SqlGrid> ReadAsync(MySqlConnection connection, MySqlTransaction transaction, string sql, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken, SqlExportJob? export = null)
     {
         await using var command = new MySqlCommand(sql, connection, transaction) { CommandTimeout = timeoutSeconds };
         foreach (var parameter in Bound(sql, parameters))
@@ -374,7 +376,9 @@ public sealed class MySqlAccess
         SqlGrid? grid = null;
         try
         {
-            grid = await SqlGrid.ReadAsync(reader, maxRows, cancellationToken, ReadCell).ConfigureAwait(false);
+            grid = export is null
+                ? await SqlGrid.ReadAsync(reader, maxRows, cancellationToken, ReadCell).ConfigureAwait(false)
+                : await export.ReadAsync(reader, maxRows, cancellationToken).ConfigureAwait(false);
             if (grid.More)
             {
                 command.Cancel();
@@ -470,6 +474,39 @@ public sealed class MySqlAccess
         {
             return MySqlText.Unreadable(reader.GetDataTypeName(ordinal));
         }
+    }
+
+    /// <summary>
+    /// A query's rows written to a workbook (2026-10-29, the Office writing plan): <see cref="RunAsync"/>'s read-only session, statement cap and
+    /// rollback, the rows handed to <paramref name="export"/> (typed by <see cref="ExportCell"/>) instead of read into a grid.
+    /// </summary>
+    public Task<SqlRun> ExportAsync(string? name, string statement, IReadOnlyList<SqlParameterValue> parameters, SqlExportJob export, int maxRows, int timeoutSeconds, CancellationToken cancellationToken) =>
+        RunAsync(name, [statement], parameters, maxRows, timeoutSeconds, cancellationToken, export ?? throw new ArgumentNullException(nameof(export)));
+
+    /// <summary>
+    /// A MySQL or MariaDB cell for a workbook (2026-10-29): a <c>DATE</c> or <c>DATETIME</c> a date or date-time (the connection reads them as
+    /// <see cref="MySqlDateTime"/>, so a zero date can't pass for a real one), a zero date as the chat writes it; the rest by the common
+    /// rules — <c>BIT</c> and unsigned <c>BIGINT</c> numbers within 15 digits, <c>TIME</c> a time or duration, a decimal past 15 digits
+    /// text. <c>TINYINT(1)</c> stays the number the chat shows (<c>TreatTinyAsBoolean</c> is off).
+    /// </summary>
+    public static XlsxValue ExportCell(DbDataReader reader, int ordinal)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+        try
+        {
+            if (!reader.IsDBNull(ordinal) && reader.GetValue(ordinal) is MySqlDateTime date)
+            {
+                return date.IsValidDateTime
+                    ? XlsxValue.OfDateTime(date.GetDateTime(), SqlExport.IsDateType(reader.GetDataTypeName(ordinal)))
+                    : XlsxValue.OfText(DateCell(date));
+            }
+        }
+        catch (Exception ex) when (ex is FormatException or OverflowException or InvalidCastException or MySqlConversionException)
+        {
+            // A value GetValue won't hand over (a decimal past decimal's range): the common rules read its provider value.
+        }
+
+        return SqlExport.Typed(reader, ordinal, ReadCell);
     }
 
     /// <summary>The server's message with its number — <c>Error 1146: Table 'shop.x' doesn't exist</c> is what the model needs to fix the text.</summary>

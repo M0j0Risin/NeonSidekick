@@ -13,6 +13,8 @@
 
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <!-- 2026-10-29, the Office writing plan: the written .xlsx and .docx files checked against the schemas here only; the app writes them by hand (AOT). -->
+    <PackageReference Include="DocumentFormat.OpenXml" Version="3.5.1" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="Spectre.Console.Testing" Version="0.57.2" />
     <PackageReference Include="xunit" Version="2.9.3" />

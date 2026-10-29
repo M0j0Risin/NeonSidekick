@@ -3,6 +3,7 @@ using System.Data.Common;
 using System.Diagnostics;
 using Microsoft.Data.SqlClient;
 using NeonSidekick.Diagnostics;
+using NeonSidekick.Office;
 
 namespace NeonSidekick.Sql;
 
@@ -241,7 +242,8 @@ public sealed class SqlAccess
     /// behind a table with more columns than the cap (they were reported as none). A model's query keeps the cancel. The reader runs with
     /// SequentialAccess (E6).
     /// </remarks>
-    public async Task<SqlRun> RunAsync(string? name, string sql, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken, bool keepLaterSets = false)
+    /// <remarks><paramref name="export"/> (2026-10-29, the Office writing plan): the rows go to a workbook's sheet in place of the grid (<see cref="ExportAsync"/>).</remarks>
+    public async Task<SqlRun> RunAsync(string? name, string sql, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken, bool keepLaterSets = false, SqlExportJob? export = null)
     {
         ArgumentNullException.ThrowIfNull(sql);
         ArgumentNullException.ThrowIfNull(parameters);
@@ -310,7 +312,9 @@ public sealed class SqlAccess
                             continue;
                         }
 
-                        var grid = await SqlGrid.ReadAsync(reader, maxRows, cancellationToken).ConfigureAwait(false);
+                        var grid = export is null
+                            ? await SqlGrid.ReadAsync(reader, maxRows, cancellationToken).ConfigureAwait(false)
+                            : await export.ReadAsync(reader, maxRows, cancellationToken).ConfigureAwait(false);
                         grids.Add(grid);
                         if (grid.More && !keepLaterSets)
                         {
@@ -344,6 +348,75 @@ public sealed class SqlAccess
         }
 
         return new SqlRun(SqlOutcome.Ok, "", target.Name, databaseName, grids, watch.Elapsed);
+    }
+
+    /// <summary>
+    /// A query's rows written to a workbook (2026-10-29, the Office writing plan): <see cref="RunAsync"/>'s session, transaction and rollback,
+    /// the reader's rows handed to <paramref name="export"/> (typed by <see cref="ExportCell"/>) instead of read into a grid.
+    /// </summary>
+    public Task<SqlRun> ExportAsync(string? name, string sql, IReadOnlyList<SqlParameterValue> parameters, SqlExportJob export, int maxRows, int timeoutSeconds, CancellationToken cancellationToken) =>
+        RunAsync(name, sql, parameters, maxRows, timeoutSeconds, cancellationToken, export: export ?? throw new ArgumentNullException(nameof(export)));
+
+    /// <summary>
+    /// A SQL Server cell for a workbook (2026-10-29): read once and in order, as SequentialAccess asks — text to Excel's cap through
+    /// <c>GetChars</c> and binary through <c>GetBytes</c>, never whole; a decimal or money by its provider value, past 15 digits text; a
+    /// <c>date</c> column's values dates and a <c>time</c> a time of day; anything else by the common rules. A value that won't read (a CLR
+    /// type the app carries no assembly for) is <see cref="SqlText.Unreadable"/>, never a second read.
+    /// </summary>
+    public static XlsxValue ExportCell(DbDataReader reader, int ordinal)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+        if (reader is not SqlDataReader sql)
+        {
+            return SqlExport.Typed(reader, ordinal, (r, i) => SqlText.Cell(r.GetValue(i)));
+        }
+
+        try
+        {
+            if (sql.IsDBNull(ordinal))
+            {
+                return XlsxValue.Blank;
+            }
+
+            var type = sql.GetFieldType(ordinal);
+            if (type == typeof(string))
+            {
+                var buffer = new char[XlsxValue.MaxChars + 1];
+                int read = (int)sql.GetChars(ordinal, 0, buffer, 0, buffer.Length);
+                return XlsxValue.OfText(new string(buffer, 0, read));
+            }
+
+            if (type == typeof(byte[]))
+            {
+                int fit = (XlsxValue.MaxChars - 3) / 2;
+                var buffer = new byte[fit + 1];
+                int read = (int)sql.GetBytes(ordinal, 0, buffer, 0, buffer.Length);
+                return XlsxValue.OfBytes(buffer.AsSpan(0, Math.Min(read, fit)), more: read > fit);
+            }
+
+            if (type == typeof(decimal))
+            {
+                return sql.GetProviderSpecificValue(ordinal) switch
+                {
+                    System.Data.SqlTypes.SqlDecimal d => XlsxValue.OfNumberText(d.ToString()),
+                    System.Data.SqlTypes.SqlMoney m => XlsxValue.OfDecimal(m.Value),
+                    var other => XlsxValue.OfNumberText(other?.ToString() ?? ""),
+                };
+            }
+
+            if (type == typeof(TimeSpan))
+            {
+                return XlsxValue.OfTimeSpan(sql.GetTimeSpan(ordinal));
+            }
+
+            object value = sql.GetValue(ordinal);
+            return SqlExport.IsScalar(value) ? XlsxValue.From(value, SqlExport.IsDateType(sql.GetDataTypeName(ordinal))) : XlsxValue.OfText(SqlText.Cell(value));
+        }
+        catch (Exception ex) when (ex is not (DbException or OperationCanceledException or OutOfMemoryException))
+        {
+            string type = reader.GetDataTypeName(ordinal);
+            return XlsxValue.OfText(SqlText.Unreadable(type[(type.LastIndexOf('.') + 1)..]));
+        }
     }
 
     /// <summary>

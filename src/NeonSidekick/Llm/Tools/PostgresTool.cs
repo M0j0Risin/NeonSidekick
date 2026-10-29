@@ -403,7 +403,8 @@ public sealed class PostgresQueryTool : PostgresTool
         "\"sql\": { \"type\": \"string\", \"description\": \"One PostgreSQL SELECT (LIMIT n); a WITH clause may lead it. No INSERT, UPDATE, DELETE, DDL, COPY, DO, SELECT INTO, FOR UPDATE or second statement.\" }, " +
         ConnectionProperty + ", " +
         "\"params\": { \"type\": \"object\", \"description\": \"Values for @name placeholders in the SQL, e.g. {\\\"id\\\": 101} for @id; strings, numbers, true, false or null.\" }, " +
-        "\"max_rows\": { \"type\": \"integer\", \"description\": \"How many rows at most, 1 to 100000. Leave it out for the user's default.\" } }, \"required\": [\"sql\"] }");
+        "\"max_rows\": { \"type\": \"integer\", \"description\": \"How many rows at most, 1 to 100000 (1 to 1048575 with to). Leave it out for the user's default (with to, every row).\" }, " +
+        ExportProperties + " }, \"required\": [\"sql\"] }");
 
     public PostgresQueryTool(PostgresAccess postgres, Func<AppSettingsData> effective) : base(postgres, effective)
     {
@@ -414,7 +415,7 @@ public sealed class PostgresQueryTool : PostgresTool
     public override string Description =>
         "Runs one read-only SELECT on a PostgreSQL connection and returns the rows as a table. " +
         "Only a single SELECT (or WITH … SELECT) is accepted; bind values as @name through params rather than writing them into the text. " +
-        "The header says when more rows exist than were returned.";
+        "The header says when more rows exist than were returned." + ExportSentence;
 
     public override JsonElement JsonSchema => Schema;
 
@@ -424,14 +425,15 @@ public sealed class PostgresQueryTool : PostgresTool
         return Math.Clamp(effective.PostgresQueryMaxRows, MinRows, MaxRows);
     }
 
-    public async Task<string> RunAsync(string sql, string? connection, IReadOnlyList<SqlParameterValue> parameters, int? maxRows, CancellationToken cancellationToken)
+    /// <remarks><paramref name="export"/> (2026-10-29, the Office writing plan): every row to a workbook instead (<see cref="ServerTool{TAccess}.ExportAsync"/>).</remarks>
+    public async Task<string> RunAsync(string sql, string? connection, IReadOnlyList<SqlParameterValue> parameters, int? maxRows, CancellationToken cancellationToken, ExportTarget? export = null)
     {
         ArgumentNullException.ThrowIfNull(sql);
         ArgumentNullException.ThrowIfNull(parameters);
-        int rows = maxRows ?? DefaultRows(Effective);
-        if (rows < MinRows || rows > MaxRows)
+        int rows = export is null ? maxRows ?? DefaultRows(Effective) : ExportRows(maxRows) ?? 0;
+        if (export is null ? rows < MinRows || rows > MaxRows : rows == 0)
         {
-            return SqlText.BadMaxRows(MinRows, MaxRows);
+            return export is null ? SqlText.BadMaxRows(MinRows, MaxRows) : SqlText.BadMaxRows(1, SqlExport.MaxRows);
         }
 
         if (PostgresReadOnlyGate.Check(sql) is { } refused)
@@ -445,8 +447,21 @@ public sealed class PostgresQueryTool : PostgresTool
             return outside;
         }
 
+        if (export is not null)
+        {
+            if (Server.Resolve(connection, out var unresolved) is not { } target)
+            {
+                return PostgresText.Error(unresolved!);
+            }
+
+            int timeout = SqlExport.TimeoutFor(TimeoutSeconds(Effective));
+            return await ExportAsync(export, target.Name, rows, PostgresAccess.ExportCell,
+                (job, token) => Server.ExportAsync(connection, body, parameters, job, rows, timeout, token), PostgresText.Error, cancellationToken,
+                PostgresAccess.ExportHeader).ConfigureAwait(false);
+        }
+
         var run = await Server.RunAsync(connection, [body], parameters, rows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);
-        return run.Outcome == SqlOutcome.Ok ? PostgresText.Query(run, rows, SqlTool.ResultChars(Effective)) : PostgresText.Error(run);
+        return run.Outcome == SqlOutcome.Ok ? PostgresText.Query(run, rows, SqlTool.ResultChars(Effective), CanSave) : PostgresText.Error(run);
     }
 
     protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
@@ -473,7 +488,12 @@ public sealed class PostgresQueryTool : PostgresTool
             parameters = read;
         }
 
-        return await RunAsync(ToolArguments.ReadString(arguments, SqlArgument), Optional(arguments, ConnectionArgument), parameters, max, cancellationToken).ConfigureAwait(false);
+        if (ReadExport(arguments, out var export) is { } badExport)
+        {
+            return badExport;
+        }
+
+        return await RunAsync(ToolArguments.ReadString(arguments, SqlArgument), Optional(arguments, ConnectionArgument), parameters, max, cancellationToken, export).ConfigureAwait(false);
     }
 }
 

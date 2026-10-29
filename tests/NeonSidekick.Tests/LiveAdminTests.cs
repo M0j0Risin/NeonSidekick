@@ -254,7 +254,7 @@ public sealed class LiveAdminTests : IDisposable
     public async Task Directory_SearchesBrowsesAndNests()
     {
         var access = DirectoryFromScratchHome();
-        Func<DirectorySaveRoot> root = () => new DirectorySaveRoot(new Files.WorkingDirectory(() => _root, TimeProvider.System), null);
+        Func<Files.SaveRoot> root = () => new Files.SaveRoot(new Files.WorkingDirectory(() => _root, TimeProvider.System), null);
         var find = new AdFindTool(access, saveRoot: root);
         Assert.Contains("⟪Neon/Engineering⟫", await Call(find, ("kind", "name"), ("words", "eng"), ("type", "ou")));
         Assert.Contains("⟪Company-wide mail list⟫", await Call(find, ("kind", "name"), ("words", "mail list"), ("type", "group")));

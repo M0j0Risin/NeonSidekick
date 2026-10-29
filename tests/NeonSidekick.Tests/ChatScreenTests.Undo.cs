@@ -57,6 +57,46 @@ public partial class ChatScreenTests
         Assert.Null(UndoNoteIn(_chat.Requests[1]));
     }
 
+    private static System.Text.Json.JsonElement Json(string text) => System.Text.Json.JsonDocument.Parse(text).RootElement.Clone();
+
+    [Fact]
+    public async Task Undo_TakesBackAWorkbookTheModelMade_AndRestoresOneItReplaced()
+    {
+        // The Office writers (2026-10-29): convert_to_xlsx writes through the working directory, so a turn's checkpoint holds it.
+        CheckpointsOn();
+        Directory.CreateDirectory(Path.GetDirectoryName(WorkFile("old.xlsx"))!);
+        File.WriteAllText(WorkFile("old.xlsx"), "not a workbook");
+        var table = new Dictionary<string, object?> { ["columns"] = Json("""["a"]"""), ["rows"] = Json("""[[1]]"""), ["to"] = "new.xlsx" };
+        var over = new Dictionary<string, object?> { ["columns"] = Json("""["b"]"""), ["rows"] = Json("""[[2]]"""), ["to"] = "old.xlsx", ["overwrite"] = true };
+        _chat.Enqueue(FakeChatClient.Call("c1", ConvertToXlsxTool.ToolName, table))
+            .Enqueue(FakeChatClient.Call("c2", ConvertToXlsxTool.ToolName, over))
+            .EnqueueText("Done.");
+        StepsWhenIdle(
+            Line("make the workbooks"),
+            Line("/undo"), Key(Keys.Char('y')), Key(Keys.Enter),
+            Line("/exit"));
+
+        await RunAsync();
+
+        Assert.False(File.Exists(WorkFile("new.xlsx")));
+        Assert.Equal("not a workbook", File.ReadAllText(WorkFile("old.xlsx")));
+    }
+
+    [Fact]
+    public async Task Docx_TheUsersOwnAct_LeavesNoCheckpoint()
+    {
+        CheckpointsOn();
+        Directory.CreateDirectory(Path.GetDirectoryName(WorkFile("notes.md"))!);
+        File.WriteAllText(WorkFile("notes.md"), "# Notes\n\nA line.\n");
+        StepsWhenIdle(Line("/docx notes.md"), Line("/undo"), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.True(File.Exists(WorkFile("notes.docx")));
+        Assert.Contains(UndoText.NothingToUndo, output);
+        Assert.Empty(_checkpoints!.Begun);
+    }
+
     [Fact]
     public async Task Undo_ANo_KeepsTheFiles_AndTheCheckpoint()
     {

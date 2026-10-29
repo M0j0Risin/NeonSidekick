@@ -33,4 +33,31 @@ internal sealed partial class ChatScreen
             _transcript.Notice(result);
         }
     }
+
+    /// <summary>
+    /// <c>/docx …</c> (2026-10-29, the Office writing plan): <see cref="Office.DocxCommand.RunAsync"/> under a spinner, its sentence a notice (a
+    /// failure's an error), as <see cref="HandlePdfAsync"/>. The user's own hand: no switch asked, nothing added to the conversation; it runs in
+    /// plan mode and with File tools off.
+    /// </summary>
+    private async Task HandleDocxAsync(string args, CancellationToken cancellationToken)
+    {
+        string result;
+        try
+        {
+            result = await _transcript.WithSpinnerAsync(Office.OfficeText.Working, () => Office.DocxCommand.RunAsync(_docx, args, () => _log.LastReply, cancellationToken)).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
+
+        if (result.StartsWith("Error:", StringComparison.Ordinal))
+        {
+            _transcript.Error(result);
+        }
+        else
+        {
+            _transcript.Notice(result);
+        }
+    }
 }

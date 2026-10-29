@@ -13,9 +13,10 @@ public static class CheckpointTools
     public static readonly IReadOnlySet<string> Tracked = new HashSet<string>(StringComparer.Ordinal)
     {
         "write_file", "patch_file", "create_directory", "move", "copy", "delete", "zip", "unzip",
-        "convert_to_pdf", "pdf_edit", "image_edit", "download_file", "generate_image", "unc_fetch",
+        "convert_to_pdf", "convert_to_docx", "convert_to_xlsx", "pdf_edit", "image_edit", "download_file", "generate_image", "unc_fetch",
         // stills and exports saved into the images folder or the working folder
         "camera_capture", "screen_capture", "ha_camera", "ad_user", "ad_group", "ad_computer", "ad_find", "ad_ou",
+        "sql_query", "oracle_query", "mysql_query", "postgres_query", "sqlite_query", "duckdb_query",
     };
 
     /// <summary>The changing tools whose file changes aren't kept, each with the kind the questions name.</summary>

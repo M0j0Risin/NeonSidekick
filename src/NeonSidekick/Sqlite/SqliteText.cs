@@ -225,7 +225,7 @@ public static class SqliteText
     // ─── results ────────────────────────────────────────────────────────────────
 
     /// <summary><c>sqlite_query</c>'s answer: <c>N rows × M columns from database (T ms)</c>, a sentence when a cap cut it, and the table.</summary>
-    public static string Query(SqlRun run, int maxRows, int maxChars)
+    public static string Query(SqlRun run, int maxRows, int maxChars, bool canSave = false)
     {
         ArgumentNullException.ThrowIfNull(run);
         if (run.Grids.Count == 0)
@@ -242,7 +242,7 @@ public static class SqliteText
             .Append(" (").Append(Millis(run.Elapsed)).Append(')');
         if (grid.More)
         {
-            header.Append(" — the first ").Append(Invariant(maxRows)).Append(" shown, more exist (narrow it with WHERE or LIMIT, or raise max_rows)");
+            header.Append(" — the first ").Append(Invariant(maxRows)).Append(" shown, more exist (narrow it with WHERE or LIMIT, or raise max_rows").Append(SqlExport.Hint(canSave)).Append(')');
         }
 
         if (shown < grid.Rows.Count)

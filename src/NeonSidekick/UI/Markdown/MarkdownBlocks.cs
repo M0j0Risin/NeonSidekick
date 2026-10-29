@@ -60,5 +60,11 @@ public sealed record TextRun(string Text, bool Bold = false, bool Italic = false
 /// <summary>A link: its text and its destination.</summary>
 public sealed record LinkRun(string Text, string Url) : MarkdownInline;
 
+/// <summary>
+/// A picture (<c>![alt](url)</c>, 2026-10-29, the Office writing plan: <c>convert_to_docx</c> embeds it): its alt text and its address. The
+/// transcript and prints show it exactly as the link it was before (<see cref="LinkRun"/>'s text), so neither changes.
+/// </summary>
+public sealed record ImageRun(string Alt, string Url) : MarkdownInline;
+
 /// <summary>A hard line break inside a paragraph.</summary>
 public sealed record HardBreak : MarkdownInline;

@@ -144,6 +144,11 @@ public static class HelpCommands
             new("/docker stats [<container>]", "Show the CPU, memory, network and disk use of one running container or all of them."),
             new("/docker start|stop|restart|pause|unpause <container>", "Act on one container, named by its name, a unique part of its name, or its id (4 or more leading characters). As your own command, it skips *Docker writes*, asks nothing, and every change is logged. Works while a reply runs."),
         ]),
+        new("/docx",
+        [
+            new("/docx <file> [to=<path>] [paper=letter|a4|legal] [landscape] [overwrite]", "Make a Word document of a Markdown or text file in the working directory, beside it unless `to=` names a file or folder (a plan or audit under `.neon` goes at the top); an existing document is replaced only with `overwrite`. Headings, lists, tables, links, quotes and code become Word's own, and pictures beside it go in without their metadata. A text file keeps its lines. The page shows the first `#` heading at the top and \"Page X of Y\" at the foot. Alone, `/docx` shows how to use it."),
+            new("/docx reply [<options>]", "Make a Word document of the last reply, formatted as Markdown."),
+        ]),
         new("/draft",
         [
             new("/draft", "Write the next message in your editor. It is sent when you save and close the file."),
