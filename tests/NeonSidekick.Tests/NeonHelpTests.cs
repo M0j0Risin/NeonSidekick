@@ -35,14 +35,15 @@ public class NeonHelpTests
 
     /// <summary>
     /// <i>File checkpoints</i>' help names the setting that decides where an undo's deletes go (2026-10-28, review P2-12: it said the
-    /// Recycle bin whatever <i>File deletes to Recycle bin</i> said), on both systems, and that skills aren't undone either.
+    /// Recycle bin whatever <i>File deletes to Recycle bin</i> said), on both systems, and that skills aren't undone either. The Windows text
+    /// read as written (2026-10-29, the Mac pass: <see cref="HelpSettings.Describe"/> is the Mac's own text on a Mac).
     /// </summary>
     [Fact]
     public void FileCheckpointsHelp_NamesTheBinSetting()
     {
-        Assert.Contains("*File deletes to Recycle bin*", HelpSettings.Describe(SettingsField.FileCheckpoints), StringComparison.Ordinal);
+        Assert.Contains("*File deletes to Recycle bin*", HelpSettings.DescribeAsWritten(SettingsField.FileCheckpoints), StringComparison.Ordinal);
         Assert.Contains("*File deletes to Trash*", NeonSidekick.Help.HelpMac.Settings[SettingsField.FileCheckpoints], StringComparison.Ordinal);
-        Assert.All(new[] { HelpSettings.Describe(SettingsField.FileCheckpoints), NeonSidekick.Help.HelpMac.Settings[SettingsField.FileCheckpoints] },
+        Assert.All(new[] { HelpSettings.DescribeAsWritten(SettingsField.FileCheckpoints), NeonSidekick.Help.HelpMac.Settings[SettingsField.FileCheckpoints] },
             text => Assert.Contains("deleted for good", text, StringComparison.Ordinal));
     }
 

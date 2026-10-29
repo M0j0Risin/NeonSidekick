@@ -862,13 +862,17 @@ public static class FileRestore
         return string.Create(CultureInfo.InvariantCulture, $"{report.Count(RestoreOutcome.Restored)} restored, {report.Count(RestoreOutcome.Skipped)} skipped, {report.Count(RestoreOutcome.NotSaved)} not saved, {report.Count(RestoreOutcome.Failed)} failed");
     }
 
-    /// <summary>Paths compared by root and relative path, the file system's way.</summary>
+    /// <summary>
+    /// Paths compared by root and relative path, the file system's way: the relative path by its root's <see cref="CaseRule"/> (2026-10-29, the
+    /// Mac pass: <see cref="WorkingDirectory.PathComparer"/> is ordinal off Windows, so on a Mac's case-blind volume a case-only rename's two
+    /// spellings were two paths and one file was reported put back twice).
+    /// </summary>
     private sealed class PathKeyComparer : IEqualityComparer<RestorePath>
     {
         public bool Equals(RestorePath? x, RestorePath? y) =>
-            x is not null && y is not null && WorkingDirectory.PathComparer.Equals(x.Root, y.Root) && WorkingDirectory.PathComparer.Equals(x.Path, y.Path);
+            x is not null && y is not null && WorkingDirectory.PathComparer.Equals(x.Root, y.Root) && CaseRule.Comparer(x.Root).Equals(x.Path, y.Path);
 
         public int GetHashCode(RestorePath obj) =>
-            HashCode.Combine(WorkingDirectory.PathComparer.GetHashCode(obj.Root), WorkingDirectory.PathComparer.GetHashCode(obj.Path));
+            HashCode.Combine(WorkingDirectory.PathComparer.GetHashCode(obj.Root), CaseRule.Comparer(obj.Root).GetHashCode(obj.Path));
     }
 }
