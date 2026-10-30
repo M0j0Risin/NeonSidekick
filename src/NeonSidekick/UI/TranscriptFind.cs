@@ -66,16 +66,19 @@ public sealed class TranscriptFind
         string unfoldedFor = "";
         List<TextFind.Hit> hits = [];
         int hit = -1;
+        int laidOut = -1;
 
         // The places again over the rows as they are now, the view on the newest (the one nearest the bottom). The typed /find
         // line that opened it is left out: it holds the words, and it is never what is looked for.
-        void Search()
+        // The rows, their layout and the pane's place are read together (2026-10-29, the resize review); the place comes back for Nearest.
+        TextFind.Hit Search()
         {
-            var rows = _pane.TranscriptRows();
+            var rows = _pane.TranscriptRows(out laidOut, out var place);
             int own = OwnLine(rows, _pane.UserGlyph());
             hits = TextFind.Matches(rows, find);
             hits.RemoveAll(found => found.Line >= own);
             hit = hits.Count - 1;
+            return place;
         }
 
         // The folds holding the text opened once for each text; true when any did (the rows moved).
@@ -92,11 +95,28 @@ public sealed class TranscriptFind
             return now.Count > 0;
         }
 
+        // The window can change width between the rows read and the find shown (2026-10-29, the resize review): the pane then refuses the
+        // stale row, and the places are found again near the place it moved its own find to — a few tries, then the pane's place stays.
         void Show()
         {
-            var at = hit >= 0 && hit < hits.Count ? hits[hit] : new TextFind.Hit(-1, -1);
-            _pane.ShowOverlay(new Markup(RowMarkup(find)), find.Length == 0 ? EmptyHint : Hint(hits.Count - hit, hits.Count), close: true);
-            _pane.ShowFind(find, at.Line, at.Start);
+            for (int tries = 0; ; tries++)
+            {
+                var at = hit >= 0 && hit < hits.Count ? hits[hit] : new TextFind.Hit(-1, -1);
+                _pane.ShowOverlay(new Markup(RowMarkup(find)), find.Length == 0 ? EmptyHint : Hint(hits.Count - hit, hits.Count), close: true);
+                if (_pane.ShowFind(find, at.Line, at.Start, laidOut) || tries == 2)
+                {
+                    return;
+                }
+
+                hit = Nearest(hits, Search());
+            }
+        }
+
+        // The rows moved since the last search (a resize, 2026-10-29): found again, the view on the one the pane moved its find to.
+        void Again()
+        {
+            var place = Search();
+            hit = Nearest(hits, place);
         }
 
         try
@@ -110,6 +130,15 @@ public sealed class TranscriptFind
                 if (input is null)
                 {
                     return;
+                }
+
+                if (_pane.LayoutVersion != laidOut && !SearchesAnyway(input))
+                {
+                    // The window changed width since the last search (2026-10-29): the rows moved, so the places are found again and the
+                    // view stays on the one the pane moved its find to — Enter and Shift+Enter walk on from what is shown — and the
+                    // "n of m" hint is drawn afresh (the resize review). Typing, Backspace and a paste search on their own.
+                    Again();
+                    Show();
                 }
 
                 if (input is InputEvent.Wheel wheel)
@@ -232,6 +261,15 @@ public sealed class TranscriptFind
         }
     }
 
+    /// <summary>The input searches the rows again on its own (2026-10-29, the resize review): typing, Backspace, a paste or a right-click's.</summary>
+    private static bool SearchesAnyway(InputEvent input) => input switch
+    {
+        InputEvent.Paste => true,
+        InputEvent.Click { Button: MouseButton.Right } => true,
+        InputEvent.Key { Info: var k } => k.Key == ConsoleKey.Backspace || InfoPane.FindChar(k) is not null,
+        _ => false,
+    };
+
     /// <summary>
     /// Where the typed <c>/find</c> line that opened the find starts — the last row with text, when it is one — else the row
     /// count: the rows from there on are not searched. Ctrl+F writes no line, so nothing is left out then. <paramref name="glyph"/>
@@ -251,6 +289,30 @@ public sealed class TranscriptFind
         }
 
         return rows.Count;
+    }
+
+    /// <summary>
+    /// The match at <paramref name="place"/> (2026-10-29, the pane's find after a re-layout, <see cref="ScreenPane.FindPlace"/>), else the
+    /// last one before it, else the first; the newest with no place. −1 with no matches.
+    /// </summary>
+    internal static int Nearest(IReadOnlyList<TextFind.Hit> hits, TextFind.Hit place)
+    {
+        if (hits.Count == 0 || place.Line < 0)
+        {
+            return hits.Count - 1;
+        }
+
+        int nearest = 0;
+        for (int i = 0; i < hits.Count; i++)
+        {
+            var found = hits[i];
+            if (found.Line < place.Line || (found.Line == place.Line && found.Start <= place.Start))
+            {
+                nearest = i;
+            }
+        }
+
+        return nearest;
     }
 
     /// <summary>The longest find (the info pane's).</summary>

@@ -564,6 +564,54 @@ public class TranscriptRendererTests : IDisposable
         }
     }
 
+    // ── A resize (2026-10-29) ───────────────────────────────────────────────
+
+    private static string[] RowTexts(ScreenPane pane) => pane.TranscriptRows().Select(row => TextFind.LineText(row).TrimEnd()).ToArray();
+
+    /// <summary>
+    /// A notice, an error and a <c>/cmd</c> line reach the store with what they were rendered from (<c>EndedLine</c>, <see cref="IReflowable"/>):
+    /// written narrow over two rows, a wider window lays each out on one again. A tool run's line is not one — it stays as written.
+    /// </summary>
+    [Fact]
+    public void ANoticeAnErrorAndShellOutput_AreLaidOutAgainWider_ARunsToolLineIsNot()
+    {
+        using var s = new Styled();
+        s.Console.Profile.Width = 40;
+        s.Tick();
+        string words = string.Join(" ", Enumerable.Range(1, 9).Select(i => $"word{i:00}"));
+        s.T.Notice(words);
+        s.T.Error(words);
+        s.T.ShellOutput(words, isError: false);
+        s.T.ToolCollapseCount = () => 1;
+        s.T.ToolNote(words);
+        Assert.Equal(8, RowTexts(s.Pane).Length);   // two rows each at 40 cells
+
+        s.Console.Profile.Width = 120;
+        s.Tick();
+        var rows = RowTexts(s.Pane);
+        Assert.Equal(5, rows.Length);
+        Assert.Equal(3, rows.Count(row => row.Contains("word01", StringComparison.Ordinal) && row.Contains("word09", StringComparison.Ordinal)));
+        Assert.DoesNotContain("word09", rows[3]);   // the tool line as it was written
+    }
+
+    /// <summary>The <c>/new</c> divider (<see cref="TranscriptRenderer.Rule"/>) spans the window after a resize, either way (2026-10-29).</summary>
+    [Fact]
+    public void TheNewDivider_FillsTheNewWidth_AfterAResize()
+    {
+        using var s = new Styled();
+        s.T.Rule();
+        s.Console.Profile.Width = 50;
+        s.Tick();
+        Assert.Equal(new string('─', 50), RowTexts(s.Pane)[0]);
+        // Its five gradient parts span the new width, so it was drawn for it — a wider rule cut at the edge keeps its first parts whole
+        // (the resize review, R66: the narrower rule drops a rule's overflow, so the text alone cannot tell).
+        Assert.Equal(Enumerable.Repeat(10, 5), s.Pane.TranscriptRows()[0].Select(segment => segment.Text.Length));
+        s.Console.Profile.Width = 100;
+        s.Tick();
+        Assert.Equal(new string('─', 100), RowTexts(s.Pane)[0]);
+        Assert.Equal(Enumerable.Repeat(20, 5), s.Pane.TranscriptRows()[0].Select(segment => segment.Text.Length));
+    }
+
     // ── Thinking (2026-09-26) ─────────────────────────────────────────────
 
     [Fact]

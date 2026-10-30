@@ -23,6 +23,10 @@ internal sealed class SectionRule : IRenderable
 
     private readonly FittedMarkup _head;
 
+    // The fill's style as the heading was built (2026-10-29): a heading in a transcript write may be rendered again on a resize,
+    // and must not take a theme picked since.
+    private readonly Style _rule = Theme.PaneRule;
+
     /// <param name="markup">What <see cref="Markup(string, string?, string?)"/> built.</param>
     public SectionRule(string markup)
     {
@@ -62,7 +66,7 @@ internal sealed class SectionRule : IRenderable
         if (fill > 0)
         {
             segments.Add(new Segment(" "));
-            segments.Add(new Segment(new string(ScreenPane.RuleGlyph, fill), Theme.PaneRule));
+            segments.Add(new Segment(new string(ScreenPane.RuleGlyph, fill), _rule));
         }
 
         return segments;

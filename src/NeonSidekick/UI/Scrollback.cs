@@ -30,14 +30,14 @@ namespace NeonSidekick.UI;
 /// an append at the end sets <see cref="TakeReshaped"/>: the pane then rebuilds the screen from here.</para>
 ///
 /// <para>Code blocks (later on 2026-09-22, the user's ask): a top-level code block of a styled reply
-/// is a group too (<see cref="BeginCodeGroup"/>), its label line the summary and its rows the
+/// is a group too (<see cref="BeginCodeGroup(int, IReadOnlyList{Segment})"/>), its label line the summary and its rows the
 /// members. It differs from a tool run in three ways: the summary always shows (the plain label
 /// until the block folds), it is measured by its source lines rather than its rows (a wrapped line
 /// counts once), and while it is live every member shows — the block streamed at full height and
 /// folds only once it is over. <see cref="ExpandAll"/> and <see cref="Toggle"/> are the runs'.</para>
 ///
 /// <para>Thinking (2026-09-26, the user's ask): the model's thinking block is a group too
-/// (<see cref="BeginThinkingGroup"/>), its header line the summary and its rows the members. It is a
+/// (<see cref="BeginThinkingGroup(IReadOnlyList{Segment})"/>), its header line the summary and its rows the members. It is a
 /// code block's kind — the header shows as drawn and every member streams while it is live — except
 /// that it keeps nothing: once over it always folds, to <c>▸ 💭 thought for 4.2s</c>, and unfolds as the
 /// runs do (a click, <see cref="ExpandAll"/>).</para>
@@ -48,11 +48,29 @@ namespace NeonSidekick.UI;
 /// the diff's rows. It is a code block's kind while live (every row shows, the summary as drawn) and stays live until the run it
 /// came in ends — with no run, until the next write of any kind (<see cref="EndGroup"/>); past its keep it then folds to
 /// <c>▸ Added 3 lines, removed 1 line · 14 rows</c>, and unfolds as the runs do. A run folded over it hides it whole.</para>
+///
+/// <para>A resize (2026-10-29, the user's report: the banner and the transcript did not follow one; the resize review's fixes the same
+/// day): a standalone write the pane can render again is kept as <em>one</em> line holding its own lines (<see cref="Line.Parts"/>) and
+/// the renderable (<see cref="Source"/>), laid out again at a new width, the newest first within <see cref="RenderBudget"/> and the rest
+/// once the size holds (<see cref="RenderPending"/>). Every other line remembers the width it was written at and, narrower, wraps by a
+/// cleaner rule than the terminal's (<see cref="Cut"/>). Rows the pane holds — the scroll, the find — follow as <see cref="Anchor"/>s.</para>
 /// </summary>
 public sealed class Scrollback
 {
     /// <summary>The most rows kept; whole lines are dropped from the front past it (a constant, not a setting).</summary>
     public const int MaxRows = 10_000;
+
+    /// <summary>
+    /// The most lines a write may have and still be rendered again on a resize (2026-10-29, the resize review): a write is one line
+    /// in the store, so the cap drops it whole — a longer one stays plain lines, wrapped by the narrower rule, as any reply is.
+    /// </summary>
+    public const int MaxSourceLines = 500;
+
+    /// <summary>
+    /// What <see cref="Render"/> answers for a source it will not render now (2026-10-29, the resize review: a container written under
+    /// another theme than the one in force): the store wraps it this time and keeps it. Compared by reference.
+    /// </summary>
+    public static readonly IReadOnlyList<Segment> NotNow = new List<Segment>().AsReadOnly();
 
     private readonly List<Line> _lines = new();
     private readonly List<SegmentLine> _rows = new();
@@ -61,6 +79,10 @@ public sealed class Scrollback
     private Group? _open;
     private int _nextGroup = 1;
     private bool _reshaped;
+
+    // The lines ever dropped from the front (2026-10-29, the resize review): a Place counts its lines from the first line the store
+    // ever held, so a mark taken before the cap moved (or a Clear) reads as gone, never as some other line.
+    private int _frontDropped;
 
     // The diffs still live (2026-10-04): they fold, past their keep, when the run they came in ends or the next write comes.
     private readonly List<Group> _liveDiffs = new();
@@ -101,6 +123,199 @@ public sealed class Scrollback
 
         /// <summary>The line is its <see cref="Fold"/>'s summary row (the diff's <see cref="Group.Summary"/>).</summary>
         public bool FoldHead;
+
+        /// <summary>
+        /// The width the line was written at (2026-10-29, the user's report: a narrowed window cut every line by the character —
+        /// rules spilled a stub, words broke, padding took rows): set by the append that opens it (an open line joined at another width
+        /// keeps the wider of the two, the resize review), and on a summary when its look is set. Narrower than it, the line is wrapped
+        /// by the cleaner rules (<see cref="Cut"/>); 0 (never set) keeps the exact cut.
+        /// </summary>
+        public int BornWidth;
+
+        /// <summary>The leading blank cells a narrowed picture line dropped at the cached width (2026-10-29): <see cref="PictureAt"/> adds them to a click's column.</summary>
+        public int Shift;
+
+        /// <summary>
+        /// A whole write's own lines at its <see cref="BornWidth"/> (2026-10-29, the resize review: a write spread over a head line and
+        /// lines of no rows lost rows in every partial re-wrap): the line is that write, closed; <see cref="Segments"/> stays empty. Null
+        /// for any other line.
+        /// </summary>
+        public List<List<Segment>>? Parts;
+
+        /// <summary>What <see cref="Parts"/> came from, to render again at another width; null once a render failed (the parts wrap then).</summary>
+        public Source? Reflow;
+    }
+
+    /// <summary>
+    /// A write the store can render again at another width (2026-10-29, the user's report: the banner and the transcript did not
+    /// follow a resize): the renderable it came from (a notice, a sent line, the banner — <c>ScreenPane</c> decides which) and the width
+    /// it was written at. At that width its line shows its own parts; at another, the rows the renderable gave there. One other width's
+    /// rows are kept, so a fold's re-layout renders nothing; none at its own width (the resize review: no copy kept at home).
+    /// </summary>
+    private sealed class Source(IRenderable renderable, int width)
+    {
+        public readonly IRenderable Renderable = renderable;
+        public readonly int Width = width;
+        public int CachedWidth = -1;
+
+        /// <summary>Its lines rendered at <see cref="CachedWidth"/>; null there when the render lost text (the parts wrap at that width).</summary>
+        public List<List<Segment>>? Cached;
+    }
+
+    /// <summary>A write that left its last line open (2026-10-29): kept for a source only if a bare line break closes that line next.</summary>
+    private sealed record Waiting(IRenderable Renderable, int Born, Line First);
+
+    /// <summary>
+    /// Renders a <see cref="Source"/> at a width (2026-10-29): the segments as a flow write of it there would give, null when it
+    /// failed — that source is then dropped for good and its parts wrap — or <see cref="NotNow"/>. <c>ScreenPane</c> sets it; without one,
+    /// sources do nothing and every line wraps from its segments.
+    /// </summary>
+    public Func<IRenderable, int, IReadOnlyList<Segment>?>? Render { get; set; }
+
+    // The write whose last line is open, waiting for a bare line break (2026-10-29).
+    private Waiting? _waiting;
+
+    // Sources rendered afresh (2026-10-29): a re-layout's count of them is the resize's Debug line (WidthChange.Rendered).
+    private int _rendered;
+
+    // Some source shows wrapped at the cached width for want of time (2026-10-29, the resize review): RenderPending has work.
+    private bool _pending;
+
+    // The shift each picture takes at the cached width (2026-10-29, the resize review): one for all its rows, by its span id.
+    private readonly Dictionary<int, int> _shifts = new();
+
+    /// <summary>
+    /// How long a re-layout at a new width spends rendering sources again, the newest first (2026-10-29: 10,000 notices took 0.8–1.4 s,
+    /// on the pane's tick under its gate — a drag froze the window). The ones it does not reach wrap by the cleaner rule at that width
+    /// (<see cref="Cut"/>) until <see cref="RenderPending"/> reaches them; the newest are the ones on the screen.
+    /// </summary>
+    public TimeSpan RenderBudget { get; set; } = TimeSpan.FromMilliseconds(20);
+
+    /// <summary>The clock <see cref="RenderBudget"/> is measured by (2026-10-29, the resize review): the pane's, so its tests' fake time never runs it out.</summary>
+    public TimeProvider Clock { get; set; } = TimeProvider.System;
+
+    /// <summary>Some source shows wrapped for want of time or theme: <see cref="RenderPending"/> has work (tests).</summary>
+    public bool Pending => _pending;
+
+    /// <summary>Marks every source not shown rendered as worth another try (2026-10-29, the resize review: the theme a container was written under is back).</summary>
+    public void MarkPending() => _pending = true;
+
+    /// <summary>
+    /// The sources a real width change shows re-rendered at <paramref name="width"/>, rendered now from the newest back while
+    /// <see cref="RenderBudget"/> lasts (2026-10-29); the rest wrap there until <see cref="RenderPending"/>.
+    /// </summary>
+    private void RenderNewestFirst(int width)
+    {
+        long started = Clock.GetTimestamp();
+        for (int i = _lines.Count - 1; i >= 0; i--)
+        {
+            if (_lines[i].Reflow is not { } source || source.Width == width || source.CachedWidth == width)
+            {
+                continue;
+            }
+
+            if (Clock.GetElapsedTime(started) >= RenderBudget)
+            {
+                _pending = true;
+                return;
+            }
+
+            RenderAt(_lines[i], source, width);
+        }
+    }
+
+    /// <summary>
+    /// The sources a re-layout left wrapped at the cached width, rendered now from the newest back (2026-10-29, the resize review: the
+    /// docs say the transcript is laid out again, and those past the budget never were): at least one, then while <see cref="RenderBudget"/>
+    /// lasts; the rows laid out again with the held places told (<see cref="Relaying"/>, <see cref="Relaid"/>). The pane calls it on a
+    /// tick the size held. True when the rows changed (the pane redraws).
+    /// </summary>
+    public bool RenderPending()
+    {
+        if (!_pending || Render is null || _width <= 0)
+        {
+            _pending = false;
+            return false;
+        }
+
+        _pending = false;
+        int rendered = _rendered;
+        long started = Clock.GetTimestamp();
+        bool any = false;
+        for (int i = _lines.Count - 1; i >= 0; i--)
+        {
+            if (_lines[i].Reflow is not { } source || source.Width == _width || source.CachedWidth == _width)
+            {
+                continue;
+            }
+
+            if (any && Clock.GetElapsedTime(started) >= RenderBudget)
+            {
+                _pending = true;
+                break;
+            }
+
+            RenderAt(_lines[i], source, _width);
+            any |= _lines[i].Reflow is { Cached: not null } && source.CachedWidth == _width;
+        }
+
+        if (!any)
+        {
+            return false;
+        }
+
+        Relaying?.Invoke();
+        Rebuild(_width);
+        _reshaped = true;
+        Relaid?.Invoke(new WidthChange(_width, _rendered - rendered, Clock.GetElapsedTime(started).TotalMilliseconds));
+        return true;
+    }
+
+    /// <summary>
+    /// <paramref name="source"/> rendered at <paramref name="width"/> into its cache (2026-10-29), split as an append splits. A failed render
+    /// drops it (its parts wrap); <see cref="NotNow"/> leaves it be; a render of a Spectre widget narrower than its own width that lost
+    /// letters or digits — a table crops or shows "…" rather than throw (the resize review) — is kept as "wrap the parts here".
+    /// </summary>
+    private void RenderAt(Line line, Source source, int width)
+    {
+        var segments = Render!(source.Renderable, width);
+        if (segments is null)
+        {
+            line.Reflow = null;
+            return;
+        }
+
+        if (ReferenceEquals(segments, NotNow))
+        {
+            return;
+        }
+
+        var lines = SplitLines(segments);
+        bool lost = source.Renderable is not IReflowable && width < source.Width && Letters(lines) < Letters(line.Parts!);
+        source.Cached = lost ? null : lines;
+        source.CachedWidth = width;
+        _rendered++;
+    }
+
+    /// <summary>The letters and digits in <paramref name="lines"/>: what a narrower table's render must keep (borders and "…" are neither).</summary>
+    private static int Letters(List<List<Segment>> lines)
+    {
+        int count = 0;
+        foreach (var line in lines)
+        {
+            foreach (var segment in line)
+            {
+                foreach (char c in segment.Text)
+                {
+                    if (char.IsLetterOrDigit(c))
+                    {
+                        count++;
+                    }
+                }
+            }
+        }
+
+        return count;
     }
 
     /// <summary>A tool run or a code block: its summary line, its members in order, how many stay while it runs, and its own expanded state (null = the store's <see cref="ExpandAll"/>).</summary>
@@ -119,10 +334,10 @@ public sealed class Scrollback
         public IReadOnlyList<Segment> Collapsed = Array.Empty<Segment>();
         public IReadOnlyList<Segment> Open = Array.Empty<Segment>();
 
-        /// <summary>A code block's group (<see cref="BeginCodeGroup"/>): the summary is its label, shown <see cref="Plain"/> until the block folds, and every member shows while it is live.</summary>
+        /// <summary>A code block's group (<see cref="BeginCodeGroup(int, IReadOnlyList{Segment})"/>): the summary is its label, shown <see cref="Plain"/> until the block folds, and every member shows while it is live.</summary>
         public bool Code;
 
-        /// <summary>A thinking block's group (<see cref="BeginThinkingGroup"/>): a code block's kind that is always over, so it folds the moment it ends.</summary>
+        /// <summary>A thinking block's group (<see cref="BeginThinkingGroup(IReadOnlyList{Segment})"/>): a code block's kind that is always over, so it folds the moment it ends.</summary>
         public bool Thinking;
 
         /// <summary>An edit's diff (<see cref="FoldSpec"/>, 2026-10-04): its summary is its head row as drawn until it folds, every row shows while it is live, and it is never the open group.</summary>
@@ -171,79 +386,110 @@ public sealed class Scrollback
         }
     }
 
-    /// <summary>A tool run is open: the next member joins it. An open code or thinking block is not one (<see cref="BeginCodeGroup"/>, <see cref="BeginThinkingGroup"/>).</summary>
+    /// <summary>A tool run is open: the next member joins it. An open code or thinking block is not one (<see cref="BeginCodeGroup(int, IReadOnlyList{Segment})"/>, <see cref="BeginThinkingGroup(IReadOnlyList{Segment})"/>).</summary>
     public bool GroupOpen => _open is { Streamed: false };
 
-    /// <summary>A code block's group is open (<see cref="BeginCodeGroup"/>): its next rows join it.</summary>
+    /// <summary>A code block's group is open (<see cref="BeginCodeGroup(int, IReadOnlyList{Segment})"/>): its next rows join it.</summary>
     public bool CodeGroupOpen => _open is { Code: true };
 
-    /// <summary>A thinking block's group is open (<see cref="BeginThinkingGroup"/>): its next rows join it.</summary>
+    /// <summary>A thinking block's group is open (<see cref="BeginThinkingGroup(IReadOnlyList{Segment})"/>): its next rows join it.</summary>
     public bool ThinkingGroupOpen => _open is { Thinking: true };
 
     /// <summary>The open code block's label line as drawn; empty without one.</summary>
     public IReadOnlyList<Segment> CodeGroupLabel => _open is { Code: true, Plain: { } plain } ? plain : Array.Empty<Segment>();
 
-    /// <summary>The rows at the cached width (0 before the first <see cref="Rows"/> or <see cref="Append"/>).</summary>
+    /// <summary>The rows at the cached width (0 before the first <see cref="Rows"/> or <see cref="Append(IReadOnlyList{Segment}, int)"/>).</summary>
     public int Count => _rows.Count;
 
     /// <summary>The logical lines kept (tests).</summary>
     public int LineCount => _lines.Count;
 
     /// <summary>
-    /// A place in the store (<see cref="Mark"/>, 2026-10-11): the lines before it, and of the open last line the segments and rows it
-    /// held — a picture's write leaves its last row open, and the next write joins it.
+    /// A place in the store (<see cref="Mark"/>, 2026-10-11): the lines before it — counted from the first line the store ever held since
+    /// 2026-10-29 (the resize review), so a mark the cap or a clear went past reads as gone — and of the open last line the segments and
+    /// rows it held — a picture's write leaves its last row open, and the next write joins it.
     /// </summary>
     public readonly record struct Place(int Lines, int Segments, int Rows);
 
     /// <summary>Where the next write starts, for <see cref="Since"/>: after the last line, or inside it while it is open.</summary>
-    public Place Mark => LastLineOpen ? new(_lines.Count - 1, _lines[^1].Segments.Count, _lines[^1].Rows) : new(_lines.Count, 0, 0);
+    public Place Mark => LastLineOpen
+        ? new(_frontDropped + _lines.Count - 1, _lines[^1].Segments.Count, _lines[^1].Rows)
+        : new(_frontDropped + _lines.Count, 0, 0);
 
     /// <summary>The last line has no line break after it yet: the flow cursor sits at its end, not on the row under it.</summary>
     public bool LastLineOpen => _lines.Count > 0 && !_lines[^1].Closed;
 
     /// <summary>
-    /// What was written since a <see cref="Mark"/> (<see cref="Since"/>, 2026-10-11): one flow write's segments, line breaks after
-    /// the closed lines — written where the mark stood, it joins an open line as the first did — and the <see cref="Rows"/> it added at
-    /// the width it was read at.
+    /// What was written since a <see cref="Mark"/> (<see cref="Since"/>, 2026-10-11) as the writes that put it back (2026-10-29): each
+    /// line's segments with a line break after a closed one — written where the mark stood, the first joins an open line as it did —
+    /// and the <see cref="Rows"/> they added at the width they were read at.
     /// </summary>
-    public sealed record Copied(IReadOnlyList<Segment> Segments, int Rows);
+    public sealed record Copied(IReadOnlyList<Chunk> Chunks, int Rows)
+    {
+        /// <summary>Every chunk's segments in order: the copy as one write (2026-10-11's shape).</summary>
+        public IReadOnlyList<Segment> Segments => [.. Chunks.SelectMany(chunk => chunk.Segments)];
+    }
 
     /// <summary>
-    /// What was written after <paramref name="mark"/> as one write that puts it back (2026-10-11, the welcome splash drawn first and
+    /// One write of a <see cref="Copied"/> (2026-10-29): its segments, a line break after a closed line, the renderable it came from if
+    /// any, and the width it was written at (<paramref name="Born"/>; 0 for the store's width), so the lines put back under a refitted
+    /// splash still follow a resize.
+    /// </summary>
+    public sealed record Chunk(IReadOnlyList<Segment> Segments, IRenderable? Source, int Born = 0);
+
+    /// <summary>
+    /// What was written after <paramref name="mark"/> as the writes that put it back (2026-10-11, the welcome splash drawn first and
     /// fitted again over the startup's lines, <c>ChatScreen.RefitSplash</c>). Null with nothing visible written, a mark the store no longer
-    /// holds (the cap dropped lines from the front since), or a line that folds (a tool run, a code or thinking block, a diff) or
-    /// holds a picture after it: neither survives a copy, so nothing is copied.
+    /// holds (the cap dropped lines from the front since), a line that folds (a tool run, a code or thinking block, a diff) or holds a
+    /// picture after it — neither survives a copy — or a line laid out other than as written (2026-10-29, the resize review: narrower than
+    /// its width, or a write rendered again — the terminal would show the copy as written, the store otherwise): nothing is copied.
     /// </summary>
     public Copied? Since(Place mark, int width)
     {
-        if (mark.Lines < 0 || mark.Lines >= _lines.Count || mark.Segments > _lines[mark.Lines].Segments.Count)
+        Layout(width);
+        int first = mark.Lines - _frontDropped;
+        if (first < 0 || first >= _lines.Count || mark.Segments > _lines[first].Segments.Count)
         {
             return null;
         }
 
-        Layout(width);
-        var segments = new List<Segment>();
+        var chunks = new List<Chunk>();
         int rows = 0;
-        for (int i = mark.Lines; i < _lines.Count; i++)
+        for (int i = first; i < _lines.Count; i++)
         {
             var line = _lines[i];
-            bool joined = i == mark.Lines && (mark.Segments > 0 || mark.Rows > 0);
-            if (line.Group is not null || line.Fold is not null || (!joined && line.Pictures is not null))
+            bool joined = i == first && (mark.Segments > 0 || mark.Rows > 0);
+            if (line.Group is not null || line.Fold is not null || (!joined && line.Pictures is not null)
+                || Narrowed(line, _width) || (line.Reflow is { } source && source.Width != _width))
             {
                 return null;
             }
 
-            segments.AddRange(joined ? line.Segments.Skip(mark.Segments) : line.Segments);
-            if (line.Closed)
+            var segments = new List<Segment>();
+            if (line.Parts is { } parts)
             {
-                segments.Add(Segment.LineBreak);
+                foreach (var part in parts)
+                {
+                    segments.AddRange(part);
+                    segments.Add(Segment.LineBreak);
+                }
+            }
+            else
+            {
+                segments.AddRange(joined ? line.Segments.Skip(mark.Segments) : line.Segments);
+                if (line.Closed)
+                {
+                    segments.Add(Segment.LineBreak);
+                }
             }
 
+            chunks.Add(new Chunk(segments, line.Reflow?.Renderable, line.BornWidth));
             rows += joined ? line.Rows - mark.Rows : line.Rows;
         }
 
         // Nothing to see (the break that closed a picture's open row, a blank line): nothing worth drawing the picture again for.
-        return segments.Any(s => !s.IsLineBreak && !string.IsNullOrWhiteSpace(s.Text)) ? new Copied(segments, Math.Max(0, rows)) : null;
+        bool visible = chunks.Any(chunk => chunk.Segments.Any(s => !s.IsLineBreak && !string.IsNullOrWhiteSpace(s.Text)));
+        return visible ? new Copied(chunks, Math.Max(0, rows)) : null;
     }
 
     /// <summary>The rows at <paramref name="width"/>, laid out afresh when the width changed.</summary>
@@ -281,12 +527,47 @@ public sealed class Scrollback
     /// <see cref="Append(IReadOnlyList{Segment}, int, bool, IReadOnlyList{IReadOnlyList{PictureSpan}}?)"/>, the lines it touches from
     /// <paramref name="fold"/>'s head on made a diff (2026-10-04): live until the run ends or, with none, the next write.
     /// </summary>
-    public int Append(IReadOnlyList<Segment> segments, int width, bool member, IReadOnlyList<IReadOnlyList<PictureSpan>>? pictures, FoldSpec? fold)
+    public int Append(IReadOnlyList<Segment> segments, int width, bool member, IReadOnlyList<IReadOnlyList<PictureSpan>>? pictures, FoldSpec? fold) =>
+        Append(segments, width, member, pictures, fold, null);
+
+    /// <summary>
+    /// <see cref="Append(IReadOnlyList{Segment}, int, bool, IReadOnlyList{IReadOnlyList{PictureSpan}}?, FoldSpec?)"/> with the renderable the
+    /// segments came from (2026-10-29, <see cref="Source"/>), written at <paramref name="width"/>.
+    /// </summary>
+    public int Append(IReadOnlyList<Segment> segments, int width, bool member, IReadOnlyList<IReadOnlyList<PictureSpan>>? pictures, FoldSpec? fold, IRenderable? source) =>
+        Append(segments, width, member, pictures, fold, source, 0);
+
+    /// <summary>
+    /// <see cref="Append(IReadOnlyList{Segment}, int, bool, IReadOnlyList{IReadOnlyList{PictureSpan}}?, FoldSpec?)"/>, laid out at
+    /// <paramref name="width"/>, the segments rendered at <paramref name="born"/> (2026-10-29, the resize review: the two can differ — a
+    /// width read once per write, a streaming reply kept at the width it began committing at; 0 for <paramref name="width"/>). The lines are
+    /// kept with <paramref name="source"/> — the renderable the segments came from — so they can be rendered again at another width
+    /// (<see cref="Source"/>): only a standalone write keeps it (no open line to join, not a tool run's member, no pictures, nothing that
+    /// folds, some text, at most <see cref="MaxSourceLines"/> lines), as one line. A write that leaves its last line open keeps it only if
+    /// the next append is a bare line break that closes that line.
+    /// </summary>
+    public int Append(IReadOnlyList<Segment> segments, int width, bool member, IReadOnlyList<IReadOnlyList<PictureSpan>>? pictures, FoldSpec? fold, IRenderable? source, int born)
     {
         ArgumentNullException.ThrowIfNull(segments);
         _picturing = pictures;
         _pictured = 0;
         Layout(width);
+        born = born > 0 ? born : _width;
+        bool visible = segments.Any(s => !s.IsControlCode);
+
+        // A waiting write is kept only by the bare break that closes its own open line; control codes alone leave it waiting (2026-10-29).
+        Waiting? closing = null;
+        if (_waiting is { } waiting && visible)
+        {
+            _waiting = null;
+            // Its lines are still the store's last (every other write, group or clear since dropped it), the last still open.
+            if (!member && BareBreak(segments) && LastLineOpen && _lines.LastIndexOf(waiting.First) >= 0)
+            {
+                closing = waiting;
+            }
+        }
+
+        bool standalone = source is not null && !LastLineOpen && !member && pictures is null && fold is null;
         if (member)
         {
             if (_open is null)
@@ -296,7 +577,7 @@ public sealed class Scrollback
                 _open = NewGroup(0, Array.Empty<Segment>());
             }
         }
-        else if (segments.Any(s => !s.IsControlCode))
+        else if (visible)
         {
             EndGroup();
         }
@@ -304,12 +585,14 @@ public sealed class Scrollback
         // The open line is wrapped again with what joins it: its rows leave the cache first.
         var touched = new List<Line>();
         Line? current = null;
+        Line? joined = null;
         if (LastLineOpen)
         {
             current = _lines[^1];
+            joined = current;
             _rows.RemoveRange(_rows.Count - current.Rows, current.Rows);
             touched.Add(current);
-            if (pictures is { Count: > 0 } && segments.Any(s => !s.IsControlCode))
+            if (pictures is { Count: > 0 } && visible)
             {
                 // A picture's first row joins the open line (later on 2026-09-24): the first spans are that line's.
                 var spans = pictures[_pictured++];
@@ -321,6 +604,132 @@ public sealed class Scrollback
         // A call's result joins its call's unit (2026-10-04, ContinueUnit): a run's keep count counts calls.
         _unitTaken = ContinueUnit && _open is { Units: > 0 };
 
+        foreach (var piece in Pieces(segments))
+        {
+            if (piece is null)
+            {
+                Close(ref current, touched);
+                continue;
+            }
+
+            current ??= Open(touched);
+            current.Segments.Add(piece);
+        }
+
+        _tagging = null;
+        _picturing = null;
+        foreach (var line in touched)
+        {
+            // An open line joined at another width keeps the wider (the resize review): narrower than either, it overflows.
+            line.BornWidth = line == joined && visible ? Math.Max(line.BornWidth, born) : line == joined ? line.BornWidth : born;
+        }
+
+        if (fold is { } spec)
+        {
+            MakeDiff(spec, touched);
+        }
+
+        if (standalone && touched.Count > 0)
+        {
+            if (!touched[^1].Closed)
+            {
+                if (touched.Count <= MaxSourceLines)
+                {
+                    _waiting = new Waiting(source!, born, touched[0]);
+                }
+            }
+            else if (Merged(touched, touched.Count, source!, born) is { } line)
+            {
+                touched = [line];
+            }
+        }
+        else if (closing is not null && touched is [var closed] && closed.Closed)
+        {
+            // The bare line break the waiting write was missing: its lines are one now, their rows out of the cache first.
+            int first = _lines.LastIndexOf(closing.First);
+            if (first >= 0)
+            {
+                int cached = 0;
+                for (int i = first; i < _lines.Count - 1; i++)
+                {
+                    cached += _lines[i].Rows;
+                }
+
+                _rows.RemoveRange(_rows.Count - cached, cached);
+                if (Merged(_lines.GetRange(first, _lines.Count - first), _lines.Count - first, closing.Renderable, closing.Born) is { } line)
+                {
+                    touched = [line];
+                }
+                else
+                {
+                    // Not worth a source after all (blank): its lines go back into the cache as they were.
+                    touched = _lines.GetRange(first, _lines.Count - first);
+                }
+            }
+        }
+
+        if (_width > 0 && touched.Any(line => line.Pictures is not null))
+        {
+            Shifts(touched, _width);
+        }
+
+        if (member && _open!.Folds)
+        {
+            // The fold moved (a member hid, the summary showed or grew): the run laid out again —
+            // the touched lines' rows are out of the cache already.
+            foreach (var line in touched)
+            {
+                line.Rows = 0;
+            }
+
+            Relayout(_open.Summary);
+            return Trim();
+        }
+
+        foreach (var line in touched)
+        {
+            line.Rows = Wrap(line, _width, _rows);
+        }
+
+        if (touched.Any(line => line.Reflow is { } kept && kept.Width != _width))
+        {
+            _pending = true;   // written at another width than the layout's (a resize between the render and here): render it there later
+        }
+
+        return Trim();
+    }
+
+    /// <summary>
+    /// The last <paramref name="count"/> lines (<paramref name="lines"/>, every one closed, no rows in the cache) made one line holding
+    /// them as its parts, kept with <paramref name="renderable"/> (2026-10-29, the resize review). Null, and nothing changed, when the
+    /// write is past <see cref="MaxSourceLines"/> or holds no text (a blank line is the same at every width).
+    /// </summary>
+    private Line? Merged(List<Line> lines, int count, IRenderable renderable, int born)
+    {
+        if (count > MaxSourceLines || !lines.Any(line => line.Segments.Any(s => !string.IsNullOrWhiteSpace(s.Text))))
+        {
+            return null;
+        }
+
+        var merged = new Line
+        {
+            Closed = true,
+            BornWidth = born,
+            Parts = lines.Select(line => line.Segments).ToList(),
+            Reflow = new Source(renderable, born),
+        };
+        _lines.RemoveRange(_lines.Count - count, count);
+        _lines.Add(merged);
+        return merged;
+    }
+
+    /// <summary>
+    /// One write's segments as the store reads them (2026-10-29, shared by <see cref="Append(IReadOnlyList{Segment}, int)"/> and a
+    /// source's render, so both split alike): control codes skipped, <c>\r</c> removed, the text between line breaks as pieces in
+    /// their styles, and null for each line break — a break segment, or a <c>\n</c> inside a text.
+    /// </summary>
+    private static IEnumerable<Segment?> Pieces(IReadOnlyList<Segment> segments)
+    {
         foreach (var segment in segments)
         {
             if (segment.IsControlCode)
@@ -330,7 +739,7 @@ public sealed class Scrollback
 
             if (segment.IsLineBreak)
             {
-                Close(ref current, touched);
+                yield return null;
                 continue;
             }
 
@@ -350,8 +759,7 @@ public sealed class Scrollback
 
                     if (piece.Length > 0)
                     {
-                        current ??= Open(touched);
-                        current.Segments.Add(new Segment(piece, segment.Style));
+                        yield return new Segment(piece, segment.Style);
                     }
                 }
 
@@ -360,47 +768,90 @@ public sealed class Scrollback
                     break;
                 }
 
-                Close(ref current, touched);
+                yield return null;
                 from = end + 1;
             }
         }
-
-        _tagging = null;
-        _picturing = null;
-        if (fold is { } spec)
-        {
-            MakeDiff(spec, touched);
-        }
-
-        if (member && _open!.Folds)
-        {
-            // The fold moved (a member hid, the summary showed or grew): the run laid out again —
-            // the touched lines' rows are out of the cache already.
-            foreach (var line in touched)
-            {
-                line.Rows = 0;
-            }
-
-            Relayout(_open.Summary);
-            return Trim();
-        }
-
-        foreach (var line in touched)
-        {
-            line.Rows = Wrap(line, width, _rows);
-        }
-
-        return Trim();
     }
 
-    /// <summary>Everything forgotten (the screen was cleared); the pane-wide <see cref="ExpandAll"/> stays.</summary>
+    /// <summary>
+    /// <paramref name="segments"/> split into lines by <see cref="Pieces"/> (2026-10-29): a line break closes the line (an empty one
+    /// when none is open), so a trailing break — <c>MarkupLine</c>'s — closes the last line rather than adding a blank one.
+    /// </summary>
+    private static List<List<Segment>> SplitLines(IReadOnlyList<Segment> segments)
+    {
+        var lines = new List<List<Segment>>();
+        List<Segment>? current = null;
+        foreach (var piece in Pieces(segments))
+        {
+            if (piece is null)
+            {
+                lines.Add(current ?? new List<Segment>());
+                current = null;
+            }
+            else
+            {
+                (current ??= new List<Segment>()).Add(piece);
+            }
+        }
+
+        if (current is not null)
+        {
+            lines.Add(current);
+        }
+
+        return lines;
+    }
+
+    /// <summary>The write is one line break and nothing else (<c>WriteLine()</c> after a <c>Write</c>): what a waiting write needs (2026-10-29).</summary>
+    private static bool BareBreak(IReadOnlyList<Segment> segments)
+    {
+        int breaks = 0;
+        foreach (var piece in Pieces(segments))
+        {
+            if (piece is not null || ++breaks > 1)
+            {
+                return false;
+            }
+        }
+
+        return breaks == 1;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="segments"/> would join the open last line where it is laid out narrower than written — a picture's last
+    /// row, cut at the edge (2026-10-29, the resize review): text joined there would follow the cut on the screen and the whole line in
+    /// the store, so the pane ends the row first. A write that starts with a line break only closes it.
+    /// </summary>
+    public bool JoinNeedsBreak(IReadOnlyList<Segment> segments)
+    {
+        ArgumentNullException.ThrowIfNull(segments);
+        if (!LastLineOpen || _width <= 0 || !Narrowed(_lines[^1], _width))
+        {
+            return false;
+        }
+
+        foreach (var piece in Pieces(segments))
+        {
+            return piece is not null;
+        }
+
+        return false;
+    }
+
+    /// <summary>Everything forgotten (the screen was cleared); the pane-wide <see cref="ExpandAll"/> stays. A mark from before it reads as gone.</summary>
     public void Clear()
     {
+        // One past the lines held: a mark taken at the very end, before the clear, would otherwise read as the first new line.
+        _frontDropped += _lines.Count + 1;
         _lines.Clear();
         _rows.Clear();
         _groups.Clear();
         _liveDiffs.Clear();
+        _shifts.Clear();
         _open = null;
+        _waiting = null;
+        _pending = false;
         _reshaped = false;
     }
 
@@ -414,6 +865,7 @@ public sealed class Scrollback
     public void BeginGroup(int keep, IReadOnlyList<Segment>? lead = null, bool absorbOpenLine = false)
     {
         EndGroup();
+        _waiting = null;
         if (LastLineOpen)
         {
             if (absorbOpenLine)
@@ -441,7 +893,14 @@ public sealed class Scrollback
     /// (<paramref name="expanded"/>); shown only while the run holds more than it keeps. Nothing
     /// without an open run.
     /// </summary>
-    public void SetGroupSummary(IReadOnlyList<Segment> collapsed, IReadOnlyList<Segment> expanded)
+    public void SetGroupSummary(IReadOnlyList<Segment> collapsed, IReadOnlyList<Segment> expanded) => SetGroupSummary(collapsed, expanded, 0, 0);
+
+    /// <summary>
+    /// <see cref="SetGroupSummary(IReadOnlyList{Segment}, IReadOnlyList{Segment})"/>, the store laid out at <paramref name="width"/> first
+    /// and the summary's look rendered at <paramref name="born"/> (2026-10-29, the resize review: the store's cached width can lag the
+    /// window's; 0 for the cached width).
+    /// </summary>
+    public void SetGroupSummary(IReadOnlyList<Segment> collapsed, IReadOnlyList<Segment> expanded, int width, int born)
     {
         ArgumentNullException.ThrowIfNull(collapsed);
         ArgumentNullException.ThrowIfNull(expanded);
@@ -450,8 +909,14 @@ public sealed class Scrollback
             return;
         }
 
+        if (width > 0)
+        {
+            Layout(width);
+        }
+
         group.Collapsed = collapsed.Where(s => !s.IsControlCode && !s.IsLineBreak).ToList();
         group.Open = expanded.Where(s => !s.IsControlCode && !s.IsLineBreak).ToList();
+        group.Summary.BornWidth = born > 0 ? born : Math.Max(0, _width);   // drawn at the window's width now (2026-10-29)
         if (group.Folds)
         {
             Relayout(group.Summary);
@@ -462,36 +927,51 @@ public sealed class Scrollback
     /// Opens a code block's group (the open group ended first; an open last line closed) whose
     /// summary is <paramref name="label"/> — the block's label line as drawn, laid out at once, so it
     /// takes its row now as any line would — folding past <paramref name="keep"/> source lines once
-    /// it is over (0 = never). <see cref="SetCodeGroupSummary"/> gives the folded look and the size.
+    /// it is over (0 = never). <see cref="SetCodeGroupSummary(IReadOnlyList{Segment}, IReadOnlyList{Segment}, int)"/> gives the folded look and the size.
     /// </summary>
-    public void BeginCodeGroup(int keep, IReadOnlyList<Segment> label) => BeginStreamedGroup(keep, label, thinking: false);
+    public void BeginCodeGroup(int keep, IReadOnlyList<Segment> label) => BeginStreamedGroup(keep, label, thinking: false, 0, 0);
+
+    /// <summary><see cref="BeginCodeGroup(int, IReadOnlyList{Segment})"/> laid out at <paramref name="width"/>, the label rendered at <paramref name="born"/> (2026-10-29, the resize review).</summary>
+    public void BeginCodeGroup(int keep, IReadOnlyList<Segment> label, int width, int born) => BeginStreamedGroup(keep, label, thinking: false, width, born);
 
     /// <summary>
     /// Opens a thinking block's group (the open group ended first; an open last line closed) whose
     /// summary is <paramref name="header"/> — the block's header line as drawn while it streams —
-    /// folding the moment it ends. <see cref="SetThinkingGroupSummary"/> gives the folded look.
+    /// folding the moment it ends. <see cref="SetThinkingGroupSummary(IReadOnlyList{Segment}, IReadOnlyList{Segment})"/> gives the folded look.
     /// </summary>
-    public void BeginThinkingGroup(IReadOnlyList<Segment> header) => BeginStreamedGroup(0, header, thinking: true);
+    public void BeginThinkingGroup(IReadOnlyList<Segment> header) => BeginStreamedGroup(0, header, thinking: true, 0, 0);
+
+    /// <summary><see cref="BeginThinkingGroup(IReadOnlyList{Segment})"/> laid out at <paramref name="width"/>, the header rendered at <paramref name="born"/> (2026-10-29, the resize review).</summary>
+    public void BeginThinkingGroup(IReadOnlyList<Segment> header, int width, int born) => BeginStreamedGroup(0, header, thinking: true, width, born);
 
     /// <summary>The open thinking block's summary folded (<paramref name="collapsed"/>) and unfolded (<paramref name="expanded"/>). Nothing without one.</summary>
-    public void SetThinkingGroupSummary(IReadOnlyList<Segment> collapsed, IReadOnlyList<Segment> expanded)
+    public void SetThinkingGroupSummary(IReadOnlyList<Segment> collapsed, IReadOnlyList<Segment> expanded) => SetThinkingGroupSummary(collapsed, expanded, 0, 0);
+
+    /// <summary><see cref="SetThinkingGroupSummary(IReadOnlyList{Segment}, IReadOnlyList{Segment})"/> laid out at <paramref name="width"/>, rendered at <paramref name="born"/> (2026-10-29).</summary>
+    public void SetThinkingGroupSummary(IReadOnlyList<Segment> collapsed, IReadOnlyList<Segment> expanded, int width, int born)
     {
         if (_open is { Thinking: true })
         {
-            SetGroupSummary(collapsed, expanded);
+            SetGroupSummary(collapsed, expanded, width, born);
         }
     }
 
-    private void BeginStreamedGroup(int keep, IReadOnlyList<Segment> label, bool thinking)
+    private void BeginStreamedGroup(int keep, IReadOnlyList<Segment> label, bool thinking, int width, int born)
     {
         ArgumentNullException.ThrowIfNull(label);
+        if (width > 0)
+        {
+            Layout(width);
+        }
+
         EndGroup();
+        _waiting = null;
         if (LastLineOpen)
         {
             _lines[^1].Closed = true;
         }
 
-        var summary = new Line { Closed = true, Member = -1 };
+        var summary = new Line { Closed = true, Member = -1, BornWidth = born > 0 ? born : Math.Max(0, _width) };
         var group = new Group(_nextGroup++, Math.Max(0, keep), summary, Array.Empty<Segment>())
         {
             Code = !thinking,
@@ -513,7 +993,10 @@ public sealed class Scrollback
     /// (<paramref name="expanded"/>), and its <paramref name="size"/> in source lines so far.
     /// Nothing without an open code block.
     /// </summary>
-    public void SetCodeGroupSummary(IReadOnlyList<Segment> collapsed, IReadOnlyList<Segment> expanded, int size)
+    public void SetCodeGroupSummary(IReadOnlyList<Segment> collapsed, IReadOnlyList<Segment> expanded, int size) => SetCodeGroupSummary(collapsed, expanded, size, 0, 0);
+
+    /// <summary><see cref="SetCodeGroupSummary(IReadOnlyList{Segment}, IReadOnlyList{Segment}, int)"/> laid out at <paramref name="width"/>, rendered at <paramref name="born"/> (2026-10-29).</summary>
+    public void SetCodeGroupSummary(IReadOnlyList<Segment> collapsed, IReadOnlyList<Segment> expanded, int size, int width, int born)
     {
         ArgumentNullException.ThrowIfNull(collapsed);
         ArgumentNullException.ThrowIfNull(expanded);
@@ -523,7 +1006,7 @@ public sealed class Scrollback
         }
 
         group.Size = size;
-        SetGroupSummary(collapsed, expanded);
+        SetGroupSummary(collapsed, expanded, width, born);
     }
 
     /// <summary>
@@ -571,8 +1054,9 @@ public sealed class Scrollback
 
     /// <summary>
     /// The picture at store row <paramref name="row"/>, column <paramref name="col"/> (later on 2026-09-24): the id of
-    /// the span covering it on a picture's line, or null. Only while the line takes one row — narrowed past a strip, the
-    /// line wraps and its tiles are no longer where they were drawn.
+    /// the span covering it on a picture's line, or null. Only while the line takes one row, which since 2026-10-29 it
+    /// always does once narrowed (<see cref="Cut"/>); the blank cells it dropped on the left (<see cref="Line.Shift"/>)
+    /// are added to the column, so a centered picture moved left still answers where it is drawn.
     /// </summary>
     public int? PictureAt(int row, int col)
     {
@@ -586,6 +1070,7 @@ public sealed class Scrollback
                     return null;
                 }
 
+                col += line.Shift;
                 foreach (var span in spans)
                 {
                     if (col >= span.Col && col < span.Col + span.Width)
@@ -955,6 +1440,12 @@ public sealed class Scrollback
         current = null;
     }
 
+    /// <summary>
+    /// The rows laid out at <paramref name="width"/> when it is not the cached one. A real width change (not the first layout, nor a fold's
+    /// re-layout at the same width, <c>_width = −1</c>) tells the pane before (<see cref="Relaying"/>, to take its anchors) and after
+    /// (<see cref="Relaid"/>), and renders sources again within <see cref="RenderBudget"/> — only a real change renders: a fold's re-layout
+    /// uses what is cached and wraps the rest (2026-10-29, the resize review).
+    /// </summary>
     private void Layout(int width)
     {
         width = Math.Max(1, width);
@@ -963,8 +1454,33 @@ public sealed class Scrollback
             return;
         }
 
+        bool real = _width > 0;
+        if (real)
+        {
+            Relaying?.Invoke();
+        }
+
+        int rendered = _rendered;
+        long started = Clock.GetTimestamp();
+        if (real && Render is not null)
+        {
+            RenderNewestFirst(width);
+        }
+
+        Rebuild(width);
+        if (real)
+        {
+            Relaid?.Invoke(new WidthChange(width, _rendered - rendered, Clock.GetElapsedTime(started).TotalMilliseconds));
+        }
+    }
+
+    /// <summary>Every row laid out afresh at <paramref name="width"/>, each picture's shift worked out first, the cap applied.</summary>
+    private void Rebuild(int width)
+    {
         _width = width;
         _rows.Clear();
+        _shifts.Clear();
+        Shifts(_lines, width);
         foreach (var line in _lines)
         {
             line.Rows = Wrap(line, width, _rows);
@@ -974,46 +1490,188 @@ public sealed class Scrollback
     }
 
     /// <summary>
+    /// The store laid out again (2026-10-29, <see cref="Relaid"/>): the width, how many writes were rendered again and how long it took
+    /// (the resize's Debug line). The rows the pane holds follow through the <see cref="Anchor"/>s it took at <see cref="Relaying"/>.
+    /// </summary>
+    public sealed record WidthChange(int Width, int Rendered, double Milliseconds);
+
+    /// <summary>
+    /// Told on every real width change, and when <see cref="RenderPending"/> changed the rows, <em>before</em> the rows go (2026-10-29,
+    /// the resize review): the pane takes an <see cref="Anchor"/> for each row it holds (the scroll, the find) while the old rows are
+    /// there to read. Not on the first layout, nor on a fold's re-layout.
+    /// </summary>
+    public Action? Relaying { get; set; }
+
+    /// <summary>
+    /// Told after the rows were laid out again (2026-10-29): any call can be the first at the new width — a flow write, a restore, a hit
+    /// test, a draw — so the store says so itself, and the pane moves what it holds to its anchors. Not on the first layout, nor on a
+    /// fold's re-layout at the same width.
+    /// </summary>
+    public Action<WidthChange>? Relaid { get; set; }
+
+    /// <summary>
+    /// A place in the transcript's text that survives a re-layout (2026-10-29, the resize review: a row offset drifted when a line took
+    /// more rows or fewer): the line, and how many of its characters — not white space, not a rule's — come before the place.
+    /// </summary>
+    public sealed class Anchor
+    {
+        internal Anchor(object line, int ink)
+        {
+            Line = line;
+            Ink = ink;
+        }
+
+        internal object Line { get; }
+
+        internal int Ink { get; }
+    }
+
+    /// <summary>Where an <see cref="Anchor"/> is now (2026-10-29): its row and character there, and its line's first row and row count.</summary>
+    public readonly record struct Spot(int Row, int Start, int First, int Count);
+
+    /// <summary>
+    /// The anchor for store row <paramref name="row"/> from character <paramref name="start"/> of its text (<see cref="TextFind.LineText"/>)
+    /// at the cached width; a row past the end clamps to the last, and an empty store gives none.
+    /// </summary>
+    public Anchor? Locate(int row, int start)
+    {
+        if (_rows.Count == 0)
+        {
+            return null;
+        }
+
+        row = Math.Clamp(row, 0, _rows.Count - 1);
+        int at = 0;
+        foreach (var line in _lines)
+        {
+            if (row < at + line.Rows)
+            {
+                int ink = 0;
+                for (int r = at; r < row; r++)
+                {
+                    ink += Ink(TextFind.LineText(_rows[r]), int.MaxValue);
+                }
+
+                ink += Ink(TextFind.LineText(_rows[row]), Math.Max(0, start));
+                return new Anchor(line, ink);
+            }
+
+            at += line.Rows;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Where <paramref name="anchor"/> is at the cached width: the row and character holding its next counted character (its line's last
+    /// row, at the end, when the line now holds fewer); (0, −1) for a line the cap dropped.
+    /// </summary>
+    public Spot Resolve(Anchor anchor)
+    {
+        ArgumentNullException.ThrowIfNull(anchor);
+        int at = 0;
+        foreach (var line in _lines)
+        {
+            if (line == anchor.Line)
+            {
+                int ink = 0;
+                for (int r = at; r < at + line.Rows; r++)
+                {
+                    string text = TextFind.LineText(_rows[r]);
+                    int here = Ink(text, int.MaxValue);
+                    if (ink + here > anchor.Ink)
+                    {
+                        return new Spot(r, Index(text, anchor.Ink - ink), at, line.Rows);
+                    }
+
+                    ink += here;
+                }
+
+                int last = Math.Max(at, at + line.Rows - 1);
+                return new Spot(Math.Min(last, Math.Max(0, _rows.Count - 1)), line.Rows > 0 && anchor.Ink == 0 ? 0 : -1, at, line.Rows);
+            }
+
+            at += line.Rows;
+        }
+
+        return new Spot(0, -1, 0, 0);
+    }
+
+    /// <summary>Whether <paramref name="c"/> counts for an anchor: not white space, not a box-drawing or block glyph (a rule, a border, the quote's bar).</summary>
+    private static bool Inked(char c) => !char.IsWhiteSpace(c) && c is not (>= '─' and <= '▟');
+
+    /// <summary>The counted characters of <paramref name="text"/> before index <paramref name="upTo"/>.</summary>
+    private static int Ink(string text, int upTo)
+    {
+        int ink = 0;
+        for (int i = 0; i < text.Length && i < upTo; i++)
+        {
+            if (Inked(text[i]))
+            {
+                ink++;
+            }
+        }
+
+        return ink;
+    }
+
+    /// <summary>The index in <paramref name="text"/> of its counted character number <paramref name="ink"/> (from 0).</summary>
+    private static int Index(string text, int ink)
+    {
+        for (int i = 0; i < text.Length; i++)
+        {
+            if (Inked(text[i]) && ink-- == 0)
+            {
+                return i;
+            }
+        }
+
+        return text.Length;
+    }
+
+    /// <summary>
     /// Whole lines off the front while the rows — or the lines, a folded run's hidden members taking
     /// none — exceed <see cref="MaxRows"/> (the last line always stays; a tool run goes whole, its
-    /// summary with its members); the rows dropped.
+    /// summary with its members; a re-renderable write is one line, so it goes whole too); the rows dropped.
     /// </summary>
     private int Trim()
     {
-        int dropped = 0;
-        while ((_rows.Count > MaxRows || _lines.Count > MaxRows) && _lines.Count > 1)
+        // The lines that go are counted first and removed together (2026-10-29: one at a time from the front was a move of every
+        // row left for each line — narrowing a full store, thousands of them, took a tick's worth of time on its own).
+        int lines = 0;
+        int rows = 0;
+        while ((_rows.Count - rows > MaxRows || _lines.Count - lines > MaxRows) && _lines.Count - lines > 1)
         {
             int count = 1;
-            if (_lines[0].Group is { } group)
+            if (_lines[lines].Group is { } group)
             {
-                while (count < _lines.Count && _lines[count].Group == group)
+                while (lines + count < _lines.Count && _lines[lines + count].Group == group)
                 {
                     count++;
                 }
 
-                if (count >= _lines.Count)
+                if (lines + count >= _lines.Count)
                 {
                     break;
                 }
 
                 _groups.Remove(group.Id);
             }
-            else if (_lines[0].Fold is { } diff)
+            else if (_lines[lines].Fold is { } diff)
             {
                 // A diff with no run goes whole too, its summary with its rows (2026-10-04).
-                while (count < _lines.Count && _lines[count].Fold == diff)
+                while (lines + count < _lines.Count && _lines[lines + count].Fold == diff)
                 {
                     count++;
                 }
 
-                if (count >= _lines.Count)
+                if (lines + count >= _lines.Count)
                 {
                     break;
                 }
             }
 
-            int rows = 0;
-            for (int i = 0; i < count; i++)
+            for (int i = lines; i < lines + count; i++)
             {
                 rows += _lines[i].Rows;
                 if (_lines[i] is { FoldHead: true, Fold: { } gone })
@@ -1023,13 +1681,28 @@ public sealed class Scrollback
                 }
             }
 
-            _rows.RemoveRange(0, rows);
-            _lines.RemoveRange(0, count);
-            dropped += rows;
+            lines += count;
         }
 
-        return dropped;
+        if (lines == 0)
+        {
+            return 0;
+        }
+
+        if (_waiting is { } waiting && _lines.IndexOf(waiting.First, 0, lines) >= 0)
+        {
+            _waiting = null;
+        }
+
+        _rows.RemoveRange(0, rows);
+        _lines.RemoveRange(0, lines);
+        _frontDropped += lines;
+        return rows;
     }
+
+    /// <summary>Whether <paramref name="line"/> is laid out by the narrower rule at <paramref name="width"/>: written wider, and closed or a picture's row (an open text line keeps the exact cut).</summary>
+    private static bool Narrowed(Line line, int width) =>
+        line.BornWidth > 0 && width < line.BornWidth && (line.Closed || line.Pictures is not null);
 
     /// <summary>
     /// <paramref name="line"/> wrapped at <paramref name="width"/> onto <paramref name="rows"/> with the
@@ -1039,11 +1712,462 @@ public sealed class Scrollback
     /// </summary>
     private int Wrap(Line line, int width, List<SegmentLine> rows)
     {
+        line.Shift = 0;
+        if (line.Parts is { } parts)
+        {
+            // A re-renderable write (2026-10-29): its own lines at its width, the rows rendered for this one when they are kept.
+            if (line.Reflow is { } source)
+            {
+                if (width == source.Width)
+                {
+                    source.Cached = null;
+                    source.CachedWidth = -1;
+                }
+                else if (source.CachedWidth == width && source.Cached is { } rendered)
+                {
+                    int added = 0;
+                    foreach (var part in rendered)
+                    {
+                        added += Cut(part, width, narrower: true, picture: false, rows, out _);
+                    }
+
+                    return added;
+                }
+            }
+
+            int taken = 0;
+            foreach (var part in parts)
+            {
+                taken += Cut(part, width, width < line.BornWidth, picture: false, rows, out _);
+            }
+
+            return taken;
+        }
+
         if (Shown(line) is not { } shown)
         {
             return 0;
         }
 
+        // The open last line is the exact cut — the next write joins it on the screen, counted from where it ends — unless it is a
+        // picture's row (the resize review): that stays one row, and the pane ends it before text joins (JoinNeedsBreak).
+        int forced = line.Pictures is [var span, ..] && _shifts.TryGetValue(span.Id, out int shared) ? shared : -1;
+        int count = Cut(shown, width, Narrowed(line, width), line.Pictures is not null, rows, out int shift, forced);
+        line.Shift = shift;
+        return count;
+    }
+
+    /// <summary>
+    /// The shift each narrowed picture among <paramref name="lines"/> takes at <paramref name="width"/> (2026-10-29, the resize review: each
+    /// row worked out its own, so a picture whose first row joined a label sheared): one for all its rows — the least padding any of them
+    /// has on the left, no more than the most any of them overflows.
+    /// </summary>
+    private void Shifts(IEnumerable<Line> lines, int width)
+    {
+        var seen = new Dictionary<int, (int Padding, int Over)>();
+        foreach (var line in lines)
+        {
+            if (line.Pictures is not [var span, ..] || !Narrowed(line, width))
+            {
+                continue;
+            }
+
+            int total = 0;
+            int padding = 0;
+            bool leading = true;
+            foreach (var segment in line.Segments)
+            {
+                foreach (char c in segment.Text)
+                {
+                    if (leading && c == ' ' && segment.Style.Background == Color.Default)
+                    {
+                        padding++;
+                    }
+                    else
+                    {
+                        leading = false;
+                    }
+                }
+
+                total += TextCells.Width(segment.Text);
+            }
+
+            int over = Math.Max(0, total - width);
+            seen[span.Id] = seen.TryGetValue(span.Id, out var was) ? (Math.Min(was.Padding, padding), Math.Max(was.Over, over)) : (padding, over);
+        }
+
+        foreach (var (id, (padding, over)) in seen)
+        {
+            _shifts[id] = Math.Min(padding, over);
+        }
+    }
+
+    /// <summary>
+    /// One cell of a line being cut (2026-10-29): a cluster — a text element with its selectors, modifiers and joined elements (the
+    /// resize review) — where it is in the line's joined text, its style and its cells.
+    /// </summary>
+    private readonly record struct Cell(string Source, int Start, int Length, Style Style, int Width)
+    {
+        /// <summary>A space or a tab (a tab is drawn as one space in a narrowed row).</summary>
+        public bool Blank => Length == 1 && Source[Start] is ' ' or '\t';
+
+        public char First => Source[Start];
+
+        /// <summary>An emoji: a space after it is never a break, so the glyph keeps its label (2026-10-29, the resize review).</summary>
+        public bool Emoji => Width == 2 && (char.IsSurrogate(First) || Source.AsSpan(Start, Length).Contains('️'));
+
+        public bool Letter => char.IsLetter(First);
+    }
+
+    /// <summary>A rule's glyph: a trailing run of it overflowing a narrowed line is dropped (an ASCII one only in a run of three or more).</summary>
+    private static bool RuleGlyph(char c) => c is ScreenPane.RuleGlyph or '─' or '━' or '═' or '-';
+
+    /// <summary>A bar a hanging indent repeats on its rows (the quote's, a table row's left border).</summary>
+    private static bool BarGlyph(char c) => c is '▎' or '│' or '┃' or '|';
+
+    /// <summary>
+    /// <paramref name="line"/> fitted to <paramref name="width"/> as the store lays out a closed line written at <paramref name="bornWidth"/>
+    /// (2026-10-29, the resize review: a streaming reply kept at the width it began committing at is drawn in a narrower window by the
+    /// same rule its committed rows are, so the screen and the store agree).
+    /// </summary>
+    internal static List<SegmentLine> Fit(IReadOnlyList<Segment> line, int width, int bornWidth)
+    {
+        ArgumentNullException.ThrowIfNull(line);
+        var rows = new List<SegmentLine>();
+        Cut(line, Math.Max(1, width), width < bornWidth, picture: false, rows, out _);
+        return rows;
+    }
+
+    /// <summary>
+    /// <paramref name="shown"/> onto <paramref name="rows"/> at <paramref name="width"/>: the terminal's exact cut (<see cref="Exact"/>),
+    /// unless <paramref name="narrower"/> and the line overflows (2026-10-29, the user's report). Then a picture line stays one row —
+    /// its unstyled blank cells on the left go first, up to the overflow or <paramref name="forced"/> (the picture's shared shift), and the
+    /// rest is cut at the edge — and any other line wraps by <see cref="WrapWords"/>.
+    /// </summary>
+    private static int Cut(IReadOnlyList<Segment> shown, int width, bool narrower, bool picture, List<SegmentLine> rows, out int shift, int forced = -1)
+    {
+        shift = 0;
+        if (!narrower)
+        {
+            return Exact(shown, width, rows);
+        }
+
+        // The cells first (the resize review): a line that fits is the exact cut's one row, with nothing laid out twice.
+        var text = new StringBuilder();
+        var styles = new List<Style>();
+        foreach (var segment in shown)
+        {
+            text.Append(segment.Text);
+            for (int i = 0; i < segment.Text.Length; i++)
+            {
+                styles.Add(segment.Style);
+            }
+        }
+
+        string all = text.ToString();
+        var cells = new List<Cell>();
+        int total = 0;
+        for (int i = 0; i < all.Length;)
+        {
+            int length = 1;
+            int cellWidth = all[i] == '\t' ? 1 : TextCells.ClusterWidth(all, i, out length);
+            length = Math.Max(1, length);
+            cells.Add(new Cell(all, i, length, styles[i], cellWidth));
+            total += cellWidth;
+            i += length;
+        }
+
+        if (total <= width && !(picture && forced > 0))
+        {
+            return Exact(shown, width, rows);   // a picture's row that fits still takes its picture's shift
+        }
+
+        return picture ? CutPicture(cells, total, width, rows, out shift, forced) : WrapWords(cells, total, width, rows);
+    }
+
+    /// <summary>A narrowed picture line (2026-10-29): <see cref="Cut"/>'s picture rule. Only a plain space with no background is padding — a pixel never is.</summary>
+    private static int CutPicture(List<Cell> cells, int total, int width, List<SegmentLine> rows, out int shift, int forced)
+    {
+        int want = forced >= 0 ? forced : total - width;
+        int first = 0;
+        shift = 0;
+        while (first < cells.Count && shift < want && cells[first].Blank && cells[first].Style.Background == Color.Default)
+        {
+            shift += cells[first].Width;
+            first++;
+        }
+
+        int col = 0;
+        int end = first;
+        while (end < cells.Count && col + cells[end].Width <= width)
+        {
+            col += cells[end].Width;
+            end++;
+        }
+
+        var row = new SegmentLine();
+        AddCells(row, cells, first, end);
+        rows.Add(row);
+        return 1;
+    }
+
+    /// <summary>
+    /// A narrowed line that is not a picture (2026-10-29): the blank cells and rule glyphs that overflow at its end dropped, its leading
+    /// blanks past half the width dropped (the resize review), then wrapped at the last space before the edge — never inside its hanging
+    /// indent, never right after an emoji — by the cell where a row has none. Each row after the first opens with the hanging indent: the
+    /// leading blanks, a marker with no letters (a bullet, <c>1.</c>, a lead glyph) and the blanks after it, no wider than half the width;
+    /// a bar marker (the quote's, a table border) is drawn again there, anything else as spaces.
+    /// </summary>
+    private static int WrapWords(List<Cell> cells, int total, int width, List<SegmentLine> rows)
+    {
+        int end = cells.Count;
+        while (total > width && end > 0 && Droppable(cells, end))
+        {
+            total -= cells[end - 1].Width;
+            end--;
+        }
+
+        int lead = 0;
+        while (lead < end && cells[lead].Blank)
+        {
+            lead++;
+        }
+
+        int from = Math.Max(0, lead - width / 2);   // leading blanks past half the width go: the first row holds the first word
+        int hang = Hang(cells, from, lead, end, width, out bool bar);
+        int indent = 0;
+        for (int i = from; i < hang; i++)
+        {
+            indent += cells[i].Width;
+        }
+
+        int start = from;
+        int added = 0;
+        while (from < end)
+        {
+            int prefix = added == 0 ? 0 : indent;
+            int room = width - prefix;
+            int col = 0;
+            int stop = from;
+            while (stop < end && col + cells[stop].Width <= room)
+            {
+                col += cells[stop].Width;
+                stop++;
+            }
+
+            int rowEnd;
+            int next;
+            if (stop == end)
+            {
+                rowEnd = next = end;
+            }
+            else if (stop == from)
+            {
+                // A character wider than the room: alone on its row, without the indent when that is what it needs (the resize review).
+                rowEnd = next = from + 1;
+                if (cells[from].Width <= width)
+                {
+                    prefix = 0;
+                }
+            }
+            else
+            {
+                // The last space before the edge, past the first word: not inside the hanging indent, not right after an emoji.
+                int after = added == 0 ? hang : from;
+                int space = -1;
+                for (int k = stop; space < 0 && k > after; k--)
+                {
+                    if (cells[k].Blank && !cells[k - 1].Blank && !cells[k - 1].Emoji)
+                    {
+                        space = k;
+                    }
+                }
+
+                if (space > from)
+                {
+                    rowEnd = space;
+                    next = space;
+                    while (next < end && cells[next].Blank)
+                    {
+                        next++;
+                    }
+                }
+                else
+                {
+                    rowEnd = next = stop;
+                }
+            }
+
+            while (next < end && cells[next].Blank)
+            {
+                next++;   // a row never opens with the blanks a cut left (an emoji's space)
+            }
+
+            var row = new SegmentLine();
+            if (prefix > 0)
+            {
+                if (bar)
+                {
+                    AddCells(row, cells, start, hang);
+                }
+                else
+                {
+                    row.Add(new Segment(new string(' ', indent)));
+                }
+            }
+
+            AddCells(row, cells, from, rowEnd);
+            rows.Add(row);
+            added++;
+            from = next;
+        }
+
+        if (added == 0)
+        {
+            rows.Add(new SegmentLine());
+            added = 1;
+        }
+
+        return added;
+    }
+
+    /// <summary>Whether the cell before <paramref name="end"/> may go when the line overflows: a blank, a box rule glyph, or an ASCII one in a run of three or more.</summary>
+    private static bool Droppable(List<Cell> cells, int end)
+    {
+        var cell = cells[end - 1];
+        if (cell.Blank)
+        {
+            return true;
+        }
+
+        if (cell.Length != 1 || !RuleGlyph(cell.First))
+        {
+            return false;
+        }
+
+        if (cell.First != '-')
+        {
+            return true;
+        }
+
+        int run = 0;
+        for (int i = end - 1; i >= 0 && cells[i].Length == 1 && cells[i].First == '-'; i--)
+        {
+            run++;
+        }
+
+        return run >= 3;
+    }
+
+    /// <summary>
+    /// Where a narrowed line's hanging indent ends (2026-10-29, the resize review): after the leading blanks from <paramref name="from"/> to
+    /// <paramref name="lead"/>, a marker of at most four cells with no space and no letter (digits only as <c>1.</c> or <c>12)</c>) and the
+    /// blanks after it; just the leading blanks when there is none, the line is only the marker, or it would be wider than half the width.
+    /// <paramref name="bar"/>: the marker is a bar, drawn again on every row.
+    /// </summary>
+    private static int Hang(List<Cell> cells, int from, int lead, int end, int width, out bool bar)
+    {
+        bar = false;
+        int m = lead;
+        int cells4 = 0;
+        while (m < end && !cells[m].Blank && !cells[m].Letter && cells4 + cells[m].Width <= 4)
+        {
+            cells4 += cells[m].Width;
+            m++;
+        }
+
+        bool marker = m > lead && m < end && cells[m].Blank && Marker(cells, lead, m);
+        int hang = lead;
+        if (marker)
+        {
+            int k = m;
+            while (k < end && cells[k].Blank)
+            {
+                k++;
+            }
+
+            if (k < end && Width(cells, from, k) <= width / 2)
+            {
+                hang = k;
+                bar = m - lead == 1 && BarGlyph(cells[lead].First);
+            }
+        }
+
+        return Width(cells, from, hang) <= width / 2 ? hang : from;
+    }
+
+    /// <summary>Whether cells <paramref name="from"/> to <paramref name="to"/> read as a marker: no digits, or digits closed by <c>.</c> or <c>)</c>.</summary>
+    private static bool Marker(List<Cell> cells, int from, int to)
+    {
+        bool digits = false;
+        for (int i = from; i < to; i++)
+        {
+            digits |= char.IsDigit(cells[i].First);
+        }
+
+        if (!digits)
+        {
+            return true;
+        }
+
+        for (int i = from; i < to - 1; i++)
+        {
+            if (!char.IsDigit(cells[i].First))
+            {
+                return false;
+            }
+        }
+
+        return cells[to - 1].First is '.' or ')' && to - from > 1;
+    }
+
+    /// <summary>The cells of <paramref name="cells"/> from <paramref name="from"/> to <paramref name="to"/>.</summary>
+    private static int Width(List<Cell> cells, int from, int to)
+    {
+        int width = 0;
+        for (int i = from; i < to; i++)
+        {
+            width += cells[i].Width;
+        }
+
+        return width;
+    }
+
+    /// <summary>Cells <paramref name="from"/> to <paramref name="to"/> onto <paramref name="row"/>, one segment per run of a style; a tab as a space.</summary>
+    private static void AddCells(SegmentLine row, List<Cell> cells, int from, int to)
+    {
+        var run = new StringBuilder();
+        var style = Style.Plain;
+        for (int i = from; i < to; i++)
+        {
+            if (run.Length > 0 && !cells[i].Style.Equals(style))
+            {
+                row.Add(new Segment(run.ToString(), style));
+                run.Clear();
+            }
+
+            style = cells[i].Style;
+            if (cells[i].First == '\t')
+            {
+                run.Append(' ');
+            }
+            else
+            {
+                run.Append(cells[i].Source, cells[i].Start, cells[i].Length);
+            }
+        }
+
+        if (run.Length > 0)
+        {
+            row.Add(new Segment(run.ToString(), style));
+        }
+    }
+
+    /// <summary>
+    /// <paramref name="shown"/> onto <paramref name="rows"/> with the terminal's rule: the exact cut <c>ScreenPane.Track</c> counts by.
+    /// </summary>
+    private static int Exact(IReadOnlyList<Segment> shown, int width, List<SegmentLine> rows)
+    {
         int added = 1;
         var row = new SegmentLine();
         int col = 0;

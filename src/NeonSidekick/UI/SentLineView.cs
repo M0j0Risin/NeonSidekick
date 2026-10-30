@@ -8,8 +8,10 @@ namespace NeonSidekick.UI;
 /// A sent line and its pastes' preview under it, one write (<see cref="ScreenPane.CommitInput"/>). A preview of more than
 /// <see cref="PreviewKeep"/> lines folds once the next thing is said (2026-10-04, the UI review: 25 lines stood inline under every
 /// long paste) to one summary row, <see cref="Summary"/>, and unfolds with the transcript's folds (Ctrl+O, <c>/expand</c>).
+/// <see cref="IReflowable"/> (2026-10-29): its markup is fixed when it is built, so a resize lays a sent line out again — one with
+/// no fold; a long paste's preview folds and keeps its rows.
 /// </summary>
-public sealed class SentLineView : IRenderable, IFoldLayout
+public sealed class SentLineView : IRenderable, IFoldLayout, IReflowable
 {
     /// <summary>The preview lines that stay unfolded. Pinned.</summary>
     public const int PreviewKeep = 5;

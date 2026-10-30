@@ -148,8 +148,8 @@ public sealed class TranscriptRenderer : INoticeSink
     /// window's whole width (no cap since 2026-09-16: the pane's rules span it, and a shorter
     /// banner rule over them looked cut), <see cref="DefaultRuleWidth"/> when the console reports
     /// none. The banner's rule and <c>/new</c>'s (<see cref="Rule"/>) share it, so the two never
-    /// differ. A rule already on the transcript keeps its printed width after a resize: the
-    /// transcript is append-only and the terminal owns its scrollback. Pure; pinned by tests.
+    /// differ. Both are worked out at the width they are rendered at, so a resize spans them across
+    /// the new width (<see cref="WidthMarkup"/>, 2026-10-29). Pure; pinned by tests.
     /// </summary>
     public static int RuleWidth(int consoleWidth) => consoleWidth > 0 ? consoleWidth : DefaultRuleWidth;
 
@@ -421,14 +421,16 @@ public sealed class TranscriptRenderer : INoticeSink
     /// <summary>
     /// The banner's sunset rule across the transcript (<c>/new</c>, 2026-09-16): a divider between
     /// the conversation that ended and the one that starts under it. Drawn at <see cref="RuleWidth"/>
-    /// of the console's width, on a line of its own — streamed text ahead of it is broken first.
+    /// of the width it is rendered at (<see cref="WidthMarkup"/>, 2026-10-29: a resize spans it across the
+    /// new width, in the gradient it was drawn with), on a line of its own — streamed text ahead of it is broken first.
     /// </summary>
     public void Rule()
     {
         Feed?.Add(WebUi.FeedKind.Separator, "");
         EndRun();
         BreakIfMidText();
-        _console.MarkupLine(Theme.Rule(RuleWidth(_console.Profile.Width)));
+        var stops = Theme.GradientStops.ToArray();
+        _console.Write(new WidthMarkup(width => Theme.Rule(width, stops)));
         _state = LineState.AtLineStart;
     }
 
@@ -1145,8 +1147,11 @@ public sealed class TranscriptRenderer : INoticeSink
         return new UI.Markdown.HangingIndent(prefix, new string(' ', TextCells.Width(prefix)), style, new Markup("[" + tag + "]" + inner[text..] + "[/]"));
     }
 
-    /// <summary>A renderable and a line break after it: a tool run's member must end with one.</summary>
-    private sealed class EndedLine(IRenderable inner) : IRenderable
+    /// <summary>
+    /// A renderable and a line break after it: a tool run's member must end with one. <see cref="IReflowable"/> (2026-10-29): every
+    /// caller wraps <see cref="Hanging"/>'s markup, so a notice, a warning or an error is laid out again on a resize.
+    /// </summary>
+    private sealed class EndedLine(IRenderable inner) : IRenderable, IReflowable
     {
         public Measurement Measure(RenderOptions options, int maxWidth) => inner.Measure(options, maxWidth);
 

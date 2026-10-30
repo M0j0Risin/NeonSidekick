@@ -117,6 +117,14 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     private int _pad;
     private int _lastWidth;
     private int _lastHeight;
+
+    // The size the transcript was last written at from the top (2026-10-29, the user's report: after a resize the banner and the
+    // transcript stayed as the terminal left them while the pane came back clean): set where the screen is built afresh — the
+    // constructor, Open, Clear and the tick's resize branch. The tick compares the window with this, not with _lastWidth/_lastHeight:
+    // every Draw sets those, so a draw at the new size before the tick (a flow write, a reply's commit, a key that grows the input)
+    // hid the change and the transcript was never rebuilt. _lastWidth/_lastHeight keep saying where the last draw put the pane.
+    private int _builtWidth;
+    private int _builtHeight;
     private bool _inAlternate;
 
     // The scroll: the store row at the top of the transcript region while the user has paged up,
@@ -629,7 +637,13 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             _blank = false;
             _lastWidth = Width;
             _lastHeight = Height;
-            _timer = time.CreateTimer(_ => OnTick(), null, Tick, Tick);
+            _builtWidth = _lastWidth;
+            _builtHeight = _lastHeight;
+            _store.Render = RenderSource;
+            _store.Relaying = OnRelaying;
+            _store.Relaid = OnRelaid;
+            _store.Clock = time;
+            _timer =time.CreateTimer(_ => OnTick(), null, Tick, Tick);
         }
     }
 
@@ -2331,6 +2345,8 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             _col = 0;
             _lineFull = false;
             _blank = true;
+            _builtWidth = Width;
+            _builtHeight = Height;
             DiagnosticLog.Debug(Category, AlternateEnteredLogLine(Width, Height));
         }
     }
@@ -2491,16 +2507,28 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     /// The transcript's rows at the window's width, a copy (2026-10-07, phase 5 of the UI round: the find looks through them);
     /// none while disabled.
     /// </summary>
-    public IReadOnlyList<SegmentLine> TranscriptRows()
+    public IReadOnlyList<SegmentLine> TranscriptRows() => TranscriptRows(out _, out _);
+
+    /// <summary>
+    /// <see cref="TranscriptRows()"/> with the <paramref name="version"/> of the layout they are (<see cref="LayoutVersion"/>) and the find's
+    /// <paramref name="place"/> in them (<see cref="FindPlace"/>), read together under the gate (2026-10-29, the resize review: read apart, a
+    /// re-layout between them paired new rows with an old place).
+    /// </summary>
+    public IReadOnlyList<SegmentLine> TranscriptRows(out int version, out TextFind.Hit place)
     {
         if (!Enabled)
         {
+            version = 0;
+            place = new TextFind.Hit(-1, -1);
             return [];
         }
 
         lock (_gate)
         {
-            return _store.Rows(Width).ToList();
+            var rows = _store.Rows(Width).ToList();
+            version = _layoutVersion;
+            place = new TextFind.Hit(_findRow, _findStart);
+            return rows;
         }
     }
 
@@ -2547,26 +2575,63 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     /// </summary>
     public void ShowFind(string find, int row, int start)
     {
+        lock (_gate)
+        {
+            ShowFind(find, row, start, Enabled ? LaidOutVersion() : 0);
+        }
+    }
+
+    /// <summary>
+    /// <see cref="ShowFind(string, int, int)"/> for rows read at layout <paramref name="version"/> (<see cref="TranscriptRows(out int, out TextFind.Hit)"/>):
+    /// false, and nothing shown, when the store was laid out again since (2026-10-29, the resize review: a row from the old layout set the
+    /// scroll to some other text) — the pane's own place, moved with the re-layout, stays on show, and the caller reads again.
+    /// </summary>
+    public bool ShowFind(string find, int row, int start, int version)
+    {
         ArgumentNullException.ThrowIfNull(find);
         if (!Enabled)
         {
-            return;
+            return true;
         }
 
         lock (_gate)
         {
+            if (LaidOutVersion() != version)
+            {
+                _find = find;
+                Redraw();
+                return false;
+            }
+
             _find = find;
             _findRow = row;
             _findStart = start;
             if (row >= 0)
             {
-                int region = ScrolledRegionRows;
-                int max = Math.Max(0, _store.Rows(Width).Count - region);
-                _top = Math.Clamp(row - region / 3, 0, max);
+                CenterOnFind();
             }
 
             Redraw();
+            return true;
         }
+    }
+
+    /// <summary>The layout's version once the store is at the window's width (under the gate): what a find's rows are checked against.</summary>
+    private int LaidOutVersion()
+    {
+        _store.Rows(Width);
+        return _layoutVersion;
+    }
+
+    /// <summary>
+    /// The region scrolled to put the find's row a third of the way down (<see cref="ShowFind(string, int, int)"/>), over the store's rows at
+    /// <paramref name="width"/> (0 for the window's; a re-layout passes its own, so a window that moved again meanwhile starts no other).
+    /// </summary>
+    private void CenterOnFind(int width = 0)
+    {
+        int region = ScrolledRegionRows;
+        int max = Math.Max(0, _store.Rows(width > 0 ? width : Width).Count - region);
+        _top = Math.Clamp(_findRow - region / 3, 0, max);
     }
 
     /// <summary>The find gone (<see cref="ShowFind"/>): the marks off and the region at the bottom again. Disabled, or no find: nothing.</summary>
@@ -2591,6 +2656,107 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             Redraw();
         }
     }
+
+    /// <summary>
+    /// Bumped each time the store is laid out again (2026-10-29): the transcript's find (<see cref="TranscriptFind"/>) holds its matches
+    /// as rows, and when this moved it finds them again from <see cref="FindPlace"/>. A plain read since the resize review (no layout as a
+    /// side effect): the tick lays the store out within a tick of a resize, and <see cref="ShowFind(string, int, int, int)"/> checks again.
+    /// </summary>
+    public int LayoutVersion
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _layoutVersion;
+            }
+        }
+    }
+
+    private int _layoutVersion;
+
+    /// <summary>The store row and character of the match the find is on (<see cref="ShowFind"/>), moved with a re-layout (2026-10-29); (−1, −1) with none.</summary>
+    public TextFind.Hit FindPlace
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return new TextFind.Hit(_findRow, _findStart);
+            }
+        }
+    }
+
+    // The scroll's and the find's places as text (2026-10-29, the resize review): taken while the old rows stand, resolved after.
+    private Scrollback.Anchor? _topAnchor;
+    private Scrollback.Anchor? _findAnchor;
+
+    /// <summary>The store is about to be laid out again (<see cref="Scrollback.Relaying"/>, under the gate): the rows the pane holds taken as anchors.</summary>
+    private void OnRelaying()
+    {
+        _topAnchor = _top >= 0 ? _store.Locate(_top, 0) : null;
+        _findAnchor = _find is { Length: > 0 } && _findRow >= 0 ? _store.Locate(_findRow, Math.Max(0, _findStart)) : null;
+    }
+
+    /// <summary>
+    /// The store laid out again (2026-10-29, <see cref="Scrollback.Relaid"/>; under the gate — every caller of the store holds it): the
+    /// scroll and the find's match moved to their anchors, the layout's version bumped, its cost logged. The match is the first of the
+    /// find's text in its line's rows at or after its anchor, else the last before it — a match the new cut split shows none (start −1) —
+    /// and the region follows it when it left (the resize review).
+    /// </summary>
+    private void OnRelaid(Scrollback.WidthChange change)
+    {
+        DiagnosticLog.Debug(Category, RelaidLogLine(change.Width, change.Rendered, change.Milliseconds));
+        _layoutVersion++;
+        if (_top >= 0 && _topAnchor is { } top)
+        {
+            _top = _store.Resolve(top).Row;
+        }
+
+        _topAnchor = null;
+        if (_findAnchor is not { } anchor || _find is not { Length: > 0 } find)
+        {
+            _findAnchor = null;
+            return;
+        }
+
+        _findAnchor = null;
+        var spot = _store.Resolve(anchor);
+        var rows = _store.Rows(change.Width);
+        _findRow = spot.Row;
+        _findStart = -1;
+        TextFind.Hit? before = null;
+        bool found = false;
+        for (int row = spot.First; !found && row < spot.First + spot.Count && row < rows.Count; row++)
+        {
+            foreach (var hit in TextFind.Matches([rows[row]], find))
+            {
+                if (row > spot.Row || (row == spot.Row && hit.Start >= Math.Max(0, spot.Start)))
+                {
+                    (_findRow, _findStart) = (row, hit.Start);
+                    found = true;
+                    break;
+                }
+
+                before = new TextFind.Hit(row, hit.Start);
+            }
+        }
+
+        if (!found && before is { } last)
+        {
+            (_findRow, _findStart) = (last.Line, last.Start);
+        }
+
+        int region = ScrolledRegionRows;
+        if (_top < 0 || _findRow < _top || _findRow >= _top + region)
+        {
+            CenterOnFind(change.Width);
+        }
+    }
+
+    /// <summary><c>Relaid at 120 cells: 14 writes rendered again in 3.2 ms</c>: what a width change cost the transcript (2026-10-29). Pinned.</summary>
+    public static string RelaidLogLine(int width, int rendered, double milliseconds) =>
+        string.Create(System.Globalization.CultureInfo.InvariantCulture, $"Relaid at {width} cells: {rendered} {(rendered == 1 ? "write" : "writes")} rendered again in {milliseconds:0.0} ms");
 
     /// <summary>A store row as the region paints it: with the find's places marked while one is shown (<see cref="ShowFind"/>).</summary>
     private List<Segment> FindMarked(IReadOnlyList<SegmentLine> rows, int row)
@@ -2690,11 +2856,14 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
 
             if (_modal > 0)
             {
-                var lines = RenderLines(_live, _inner, Width);
-                for (int i = _liveCommitted; i < lines.Count; i++)
+                var lines = RenderLines(_live, _inner, LayoutWidth);
+                for (int i = Math.Min(_liveCommitted, lines.Count); i < lines.Count; i++)
                 {
-                    _inner.Write(new SegmentList(lines[i]));
-                    _inner.WriteLine();
+                    foreach (var row in Fitted(lines[i]))
+                    {
+                        _inner.Write(new SegmentList(row));
+                        _inner.WriteLine();
+                    }
                 }
 
                 ForgetLive();
@@ -2933,7 +3102,9 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         lock (_gate)
         {
             // The run's header, ▸ 🛠️ 3 tool calls, spaced as the lines under it are (later on 2026-10-06, the user's report).
-            _store.SetGroupSummary(SpacedSegments(collapsed.GetSegments(_inner)), SpacedSegments(expanded.GetSegments(_inner)));
+            // One width for both looks and the store's layout (2026-10-29, the resize review).
+            int width = Width;
+            _store.SetGroupSummary(SpacedSegments(SegmentsAt(collapsed, width)), SpacedSegments(SegmentsAt(expanded, width)), width, width);
         }
     }
 
@@ -3032,8 +3203,9 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     /// </summary>
     private int? StoreRowAt(int y)
     {
-        if (!_drawn || _batch > 0 || _modal > 0 || _geometry?.CursorTop() is not int top)
+        if (!_drawn || _batch > 0 || _modal > 0 || ResizePending || _geometry?.CursorTop() is not int top)
         {
+            // A resize not rebuilt yet too (2026-10-29, the resize review): the store is at the new width, the screen the old one.
             return null;
         }
 
@@ -3094,16 +3266,116 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
                 return;
             }
 
-            var segments = SpacedSegments(renderable.GetSegments(_inner));
+            // The width read once (2026-10-29, the resize review: a resize between two reads gave segments of one width stored as born at
+            // another), rendered at it as Spectre's GetSegments would.
+            int width = Width;
+            var segments = SpacedSegments(SegmentsAt(renderable, width));
             // A picture's spans are known once it is rendered (later on 2026-09-24): the store tags its lines with them.
             var spans = pictures?.Spans;
             // A diff's fold (2026-10-04): the store makes its lines a group that folds once the run is over.
             var fold = renderable is IFoldLayout { Fold: { } layout }
-                ? new Scrollback.FoldSpec(layout.Head, layout.Keep, layout.Size, SpacedSegments(layout.Collapsed.GetSegments(_inner)), SpacedSegments(layout.Expanded.GetSegments(_inner)))
+                ? new Scrollback.FoldSpec(layout.Head, layout.Keep, layout.Size, SpacedSegments(SegmentsAt(layout.Collapsed, width)), SpacedSegments(SegmentsAt(layout.Expanded, width)))
                 : null;
-            FlowLocked(segments, member, spans, fold);
+            // What a resize can render again (2026-10-29): the store keeps it only on a standalone write; a container with the palette in force.
+            var source = !member && pictures is null && fold is null && Reflowable(renderable) ? Themed.Bind(renderable) : null;
+            FlowLocked(() => EmitAs(segments, member, spans, fold, source, width));
         }
     }
+
+    /// <summary>
+    /// <paramref name="renderable"/>'s segments at <paramref name="width"/> as Spectre's <c>GetSegments</c> gives them at the console's width
+    /// (2026-10-29, the resize review, read from its source): the options from the console, its render pipeline, each renderable rendered,
+    /// the runs merged.
+    /// </summary>
+    private List<Segment> SegmentsAt(IRenderable renderable, int width)
+    {
+        var options = RenderOptions.Create(_inner, _inner.Profile.Capabilities);
+        var segments = new List<Segment>();
+        foreach (var processed in _inner.Pipeline.Process(options, [renderable]))
+        {
+            foreach (var segment in processed.Render(options, width))
+            {
+                // Spectre's merge (internal to it): a text run joins the one before it in the same style.
+                if (segments.Count > 0 && segments[^1] is { IsLineBreak: false, IsControlCode: false } last
+                    && !segment.IsLineBreak && !segment.IsControlCode && last.Style.Equals(segment.Style))
+                {
+                    segments[^1] = new Segment(last.Text + segment.Text, last.Style);
+                }
+                else
+                {
+                    segments.Add(segment);
+                }
+            }
+        }
+
+        return segments;
+    }
+
+    /// <summary>
+    /// A container kept with the palette in force when it was written (2026-10-29, the resize review: a <see cref="Grid"/> or a
+    /// <see cref="Table"/> holds styles resolved then, a re-render under another theme mixed two palettes in one write). It renders again
+    /// only while that palette is back in force (<see cref="RenderSource"/>); meanwhile the store wraps it.
+    /// </summary>
+    private sealed class Themed(IRenderable inner, ThemePalette palette) : IRenderable
+    {
+        public IRenderable Inner { get; } = inner;
+
+        public ThemePalette Palette { get; } = palette;
+
+        /// <summary><paramref name="renderable"/> bound to <see cref="Theme.Current"/> when it is a container; as it is otherwise.</summary>
+        public static IRenderable Bind(IRenderable renderable) =>
+            renderable is Grid or Table or Panel or Rows or Padder ? new Themed(renderable, Theme.Current) : renderable;
+
+        public Measurement Measure(RenderOptions options, int maxWidth) => Inner.Measure(options, maxWidth);
+
+        public IEnumerable<Segment> Render(RenderOptions options, int maxWidth) => Inner.Render(options, maxWidth);
+    }
+
+    /// <summary>
+    /// A flow write the store may render again at another width (2026-10-29, the user's report: the banner and the transcript did
+    /// not follow a resize): Spectre's own pure widgets — <c>MarkupLine</c> arrives as a <see cref="Paragraph"/> — and its containers,
+    /// trusted without a look inside, so a custom child that reads state while it renders must not be put in one that goes to the
+    /// flow; and every type marked <see cref="IReflowable"/>. Plain type tests, nothing by name (NativeAOT).
+    /// </summary>
+    public static bool Reflowable(IRenderable renderable) =>
+        renderable is Markup or Paragraph or Text or Rule or Grid or Table or Panel or Rows or Padder or IReflowable;
+
+    /// <summary>
+    /// <paramref name="source"/> rendered at <paramref name="width"/> as a flow write of it there would be (2026-10-29, the store's
+    /// <see cref="Scrollback.Render"/>): Spectre's <c>GetSegments</c> at that width (the console's capabilities, the same options; its
+    /// merge of runs in one style is internal to Spectre and changes nothing drawn), then <see cref="SpacedSegments"/>. It runs on the tick under the gate, so a render that throws —
+    /// a table at a very narrow width — is logged and answered with null: the store drops that source and wraps its lines. A container
+    /// written under another palette than the one in force is not rendered now (<see cref="Themed"/>, <see cref="Scrollback.NotNow"/>).
+    /// </summary>
+    private IReadOnlyList<Segment>? RenderSource(IRenderable source, int width)
+    {
+        if (source is Themed themed)
+        {
+            if (!ReferenceEquals(themed.Palette, Theme.Current) && !themed.Palette.Equals(Theme.Current))
+            {
+                return Scrollback.NotNow;
+            }
+
+            source = themed.Inner;
+        }
+
+        try
+        {
+            var options = new RenderOptions(_inner.Profile.Capabilities, new Size(width, Height));
+            return SpacedSegments(source.Render(options, width));
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            // The type and the message on one line, the exception's stack beside it (the resize review).
+            string message = e.GetType().Name + ": " + e.Message.ReplaceLineEndings(" ");
+            DiagnosticLog.Write(DiagnosticLevel.Debug, Category, RenderFailedLogLine(width, message), e);
+            return null;
+        }
+    }
+
+    /// <summary><c>Re-render at 12 cells failed: …</c>: a transcript write that could not be laid out at a new width (2026-10-29). Pinned.</summary>
+    public static string RenderFailedLogLine(int width, string message) =>
+        string.Create(System.Globalization.CultureInfo.InvariantCulture, $"Re-render at {width} cells failed: {message}");
 
     /// <summary>
     /// Where the transcript's next write starts (2026-10-11): a mark for <see cref="LinesSince"/>, read right after the welcome splash
@@ -3153,19 +3425,27 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
                 return;
             }
 
-            FlowLocked([.. lines.Segments], member: false, spans: null, fold: null);
+            // Write by write, each with the renderable it came from and the width it was written at (2026-10-29): the lines put back
+            // still follow a resize.
+            FlowLocked(() =>
+            {
+                foreach (var chunk in lines.Chunks)
+                {
+                    EmitAs([.. chunk.Segments], member: false, source: chunk.Source, born: chunk.Born);
+                }
+            });
         }
     }
 
-    /// <summary>One flow write's segments out, under the gate: <see cref="WriteFlow"/>'s and <see cref="Rewrite"/>'s.</summary>
-    private void FlowLocked(List<Segment> segments, bool member, IReadOnlyList<IReadOnlyList<PictureSpan>>? spans, Scrollback.FoldSpec? fold)
+    /// <summary>The flow writes <paramref name="emit"/> makes (<see cref="EmitAs"/>), with the lift, the restore and the draw around them, under the gate.</summary>
+    private void FlowLocked(Action emit)
     {
         if (_top >= 0)
         {
             // Scrolled: the store takes it, the screen shows the window; the count below changed
             // (and a run that folded above it redraws the window).
             FlushLive();
-            EmitAs(segments, member, spans, fold);
+            emit();
             if (_store.Reshaped)
             {
                 Redraw();
@@ -3187,7 +3467,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         Lift();
         RestoreFlow();
         FlushLive();
-        EmitAs(segments, member, spans, fold);
+        emit();
         if (_batch == 0)
         {
             Draw();
@@ -3205,9 +3485,24 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     /// </summary>
     private void Emit(List<Segment> segments)
     {
+        if (_store.JoinNeedsBreak(segments))
+        {
+            // The open row is a picture's, laid out narrower than written (2026-10-29, the resize review): the screen shows it cut at the
+            // edge, the store whole, so text joined to it would land in different places — the row is ended first, in both.
+            Emit([Segment.LineBreak]);
+        }
+
         if (_top >= 0)
         {
             Store(segments);
+            return;
+        }
+
+        if (_bornWidth > Width && _pictureSpans is null)
+        {
+            // A row of a reply kept at the width it began committing at, the window narrower now (2026-10-29, the resize review): the store
+            // takes the row whole and lays it out by the narrower rule, and the screen gets the same rows (Scrollback.Fit), each ended.
+            EmitFitted(segments, _bornWidth);
             return;
         }
 
@@ -3215,12 +3510,67 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         Track(segments);
     }
 
+    /// <summary>
+    /// <paramref name="segments"/>, written at <paramref name="born"/>, to the screen as the store lays them out at the window's width
+    /// (<see cref="Emit"/>'s narrower path): each closed line's rows by <see cref="Scrollback.Fit"/>, each ended; an open last line as is (the
+    /// store cuts an open line exactly, as the terminal does). Counted, then stored whole.
+    /// </summary>
+    private void EmitFitted(List<Segment> segments, int born)
+    {
+        var line = new List<Segment>();
+        foreach (var segment in segments)
+        {
+            if (segment.IsControlCode)
+            {
+                continue;
+            }
+
+            if (!segment.IsLineBreak)
+            {
+                line.Add(segment);
+                continue;
+            }
+
+            if (_col > 0 && line.Count == 0)
+            {
+                // The break that ends a row already on the screen.
+                _inner.Write(new SegmentList([segment]));
+                Count([segment]);
+                continue;
+            }
+
+            foreach (var row in Scrollback.Fit(line, Width, born))
+            {
+                var ended = new List<Segment>(row) { Segment.LineBreak };
+                _inner.Write(new SegmentList(ended));
+                Count(ended);
+            }
+
+            line.Clear();
+        }
+
+        if (line.Count > 0)
+        {
+            _inner.Write(new SegmentList(line));
+            Count(line);
+        }
+
+        Store(segments);
+    }
+
     /// <summary><see cref="Emit"/> with the store told whether the segments are a tool run's line, where pictures are and what folds.</summary>
-    private void EmitAs(List<Segment> segments, bool member, IReadOnlyList<IReadOnlyList<PictureSpan>>? pictures = null, Scrollback.FoldSpec? fold = null)
+    private void EmitAs(List<Segment> segments, bool member, IReadOnlyList<IReadOnlyList<PictureSpan>>? pictures = null, Scrollback.FoldSpec? fold = null, IRenderable? source = null, int born = 0)
     {
         _member = member;
         _pictureSpans = pictures;
         _foldSpec = fold;
+        _source = source;
+        int was = _bornWidth;
+        if (born > 0)
+        {
+            _bornWidth = born;
+        }
+
         try
         {
             Emit(segments);
@@ -3230,8 +3580,17 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             _member = false;
             _pictureSpans = null;
             _foldSpec = null;
+            _source = null;
+            _bornWidth = was;
         }
     }
+
+    // Set around EmitAs for a write the store may render again at another width (2026-10-29, Reflowable).
+    private IRenderable? _source;
+
+    // The width the segments being written were rendered at, 0 for the window's (2026-10-29, the resize review): a write's width read
+    // once, a streaming reply's commit width (_liveWidth).
+    private int _bornWidth;
 
     // Set around EmitAs for a picture's write (later on 2026-09-24): the spans the store tags its lines with.
     private IReadOnlyList<IReadOnlyList<PictureSpan>>? _pictureSpans;
@@ -3249,7 +3608,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     private void Store(List<Segment> segments)
     {
         _store.ContinueUnit = _member && _sameUnit;
-        int dropped = _store.Append(segments, Width, _member, _pictureSpans, _foldSpec);
+        int dropped = _store.Append(segments, Width, _member, _pictureSpans, _foldSpec, _source, _bornWidth);
         _store.ContinueUnit = false;
         if (_top >= 0 && dropped > 0)
         {
@@ -3327,6 +3686,8 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             _top = -1;
             _blank = false;
             _flowCut = false;
+            _builtWidth = Width;
+            _builtHeight = Height;
             ForgetLive();
             hadCompanion = _companion is not null;
             StopCompanionLocked();   // the welcome splash's robot goes with the screen (2026-10-20)
@@ -5440,7 +5801,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
                 _inner.WriteLine();
             }
 
-            _liveCount = _live is null ? 0 : Math.Max(0, LiveLayout(w, region).Count - _liveCommitted);
+            _liveCount = LiveRowsLeft(region);
             _pad = 0;
         }
         else
@@ -5481,15 +5842,32 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             }
             else if (_live is not null)
             {
-                var lines = ReplyLayout(w, out var open, out int through, out int folding);
+                // Laid out at the width its first commit was (2026-10-29, the user's pick in the resize review): the committed count is
+                // always read against the layout it was taken on, and each row is drawn fitted to the window (Fitted).
+                int lw = LayoutWidth;
+                var lines = ReplyLayout(lw, out var open, out int through, out int folding);
                 _liveFolded = folding;
                 int skip = Math.Min(_liveCommitted, lines.Count);
+                var fitted = new List<SegmentLine>?[lines.Count];
+                int left = 0;
+                for (int i = skip; i < lines.Count; i++)
+                {
+                    fitted[i] = Fitted(lines[i]);
+                    left += fitted[i]!.Count;
+                }
 
                 // A code block still streaming keeps its label in the slot with its window (2026-09-27):
                 // the excess commit stops at it, as a thinking block keeps its header. A closed one past
-                // its keep goes in whole at once (through), and folds.
+                // its keep goes in whole at once (through), and folds. Whole layout rows go until what is left fits.
                 int hold = open?.LabelRow ?? lines.Count;
-                int excess = Math.Max(Math.Min(lines.Count - skip - region, hold - skip), through - skip);
+                int upTo = skip;
+                while (upTo < hold && left > region)
+                {
+                    left -= fitted[upTo]!.Count;
+                    upTo++;
+                }
+
+                int excess = Math.Max(upTo, Math.Min(through, lines.Count)) - skip;
                 if (excess > 0)
                 {
                     if (_overpaint)
@@ -5499,7 +5877,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
                     }
 
                     EndFlowRow();
-                    CommitLiveRows(lines, skip, skip + excess, w, final: false);
+                    CommitLiveRows(lines, skip, skip + excess, lw, final: false);
                     if (skip + excess == through && _liveCodeSpan >= 0)
                     {
                         // The closed block is over: it folds now, not when the reply speaks again.
@@ -5521,12 +5899,28 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
                     }
                 }
 
-                live = lines.GetRange(skip, lines.Count - skip);
+                live = new List<SegmentLine>();
+                int body = 0;
+                for (int i = skip; i < lines.Count; i++)
+                {
+                    if (open is not null && i == open.BodyRow)
+                    {
+                        body = live.Count;
+                    }
+
+                    live.AddRange(fitted[i]!);
+                }
+
+                if (open is not null && open.BodyRow >= lines.Count)
+                {
+                    body = live.Count;
+                }
+
                 if (open is not null && live.Count > region)
                 {
                     // A region under the label and the window: the window's top rows go, the label stays
-                    // while there is room for it and one row more.
-                    int label = Math.Max(0, open.BodyRow - skip);
+                    // while there is room for it and one row more (counted in the rows drawn, the layout's row map above).
+                    int label = open.BodyRow < skip ? 0 : body;
                     if (region >= label + 1)
                     {
                         live.RemoveRange(label, live.Count - region);
@@ -5869,6 +6263,47 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         _liveRows = 0;
         _blank = true;
         _drawn = false;
+        if (Width != _builtWidth || Height != _builtHeight)
+        {
+            // The draw after this rebuilds the screen at the window's size (2026-10-29, the resize review): the tick's resize is done.
+            MarkBuilt(Width, Height);
+        }
+    }
+
+    /// <summary>
+    /// The screen is (about to be) rebuilt at <paramref name="w"/> by <paramref name="h"/> (2026-10-29, the resize review: the tick's resize
+    /// and a scrolled draw's full rebuild share it): a Hints bar row held blank goes with it (2026-10-14), and a held height counted over
+    /// another height is set afresh by the page on show.
+    /// </summary>
+    private void MarkBuilt(int w, int h)
+    {
+        _hintsCollapseDue = true;
+        if (h != _builtHeight)
+        {
+            _paneFloor = 0;
+        }
+
+        _builtWidth = w;
+        _builtHeight = h;
+    }
+
+    /// <summary>The window is not the size the screen was built at: a resize the tick has not rebuilt for yet (2026-10-29, the resize review).</summary>
+    private bool ResizePending => Width != _builtWidth || Height != _builtHeight;
+
+    // The palette the tick last saw (2026-10-29, the resize review): a change marks the store's held-back containers worth a render.
+    private ThemePalette? _seenPalette;
+
+    /// <summary>The store's <see cref="Scrollback.RenderBudget"/> (tests: a spent budget, then <see cref="Scrollback.RenderPending"/> on a tick).</summary>
+    internal TimeSpan RenderBudget
+    {
+        get => _store.RenderBudget;
+        set
+        {
+            lock (_gate)
+            {
+                _store.RenderBudget = value;
+            }
+        }
     }
 
     /// <summary>
@@ -5882,11 +6317,12 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             return;
         }
 
-        var lines = RenderLines(_live, _inner, Width);
-        if (lines.Count > _liveCommitted)
+        var lines = RenderLines(_live, _inner, LayoutWidth);
+        int committed = _liveCommitted;
+        if (lines.Count > committed)
         {
             EndFlowRow();
-            CommitLiveRows(lines, _liveCommitted, lines.Count, Width, final: true);
+            CommitLiveRows(lines, committed, lines.Count, LayoutWidth, final: true);
         }
         else if (_liveCodeSpan >= 0)
         {
@@ -5910,6 +6346,40 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             ? ThinkingBlock.Tail(RenderLines(thinking.LiveView(), _inner, width), region)
             : ReplyLayout(width, out _, out _, out _);
     }
+
+    /// <summary>The live block's rows not yet committed as the window draws them, for the rows-below count while scrolled; 0 with none.</summary>
+    private int LiveRowsLeft(int region)
+    {
+        if (_live is null)
+        {
+            return 0;
+        }
+
+        var lines = LiveLayout(LayoutWidth, region);
+        int left = 0;
+        for (int i = _liveCommitted; i < lines.Count; i++)
+        {
+            left += Fitted(lines[i]).Count;
+        }
+
+        return left;
+    }
+
+    /// <summary>
+    /// The width the live block is laid out at (2026-10-29, the user's pick in the resize review): the width of its first commit once a
+    /// row of it is in the flow — so the committed count stays exact through a resize — the window's before.
+    /// </summary>
+    private int LayoutWidth => _liveWidth > 0 ? _liveWidth : Width;
+
+    // The width the live block's first commit laid it out at, 0 before (2026-10-29, LayoutWidth); cleared by ForgetLive.
+    private int _liveWidth;
+
+    /// <summary>
+    /// One row of the live layout as the window draws it (2026-10-29): fitted by the store's narrower rule (<see cref="Scrollback.Fit"/>)
+    /// while the window is narrower than <see cref="LayoutWidth"/>, so the slot shows what the store will hold once committed; as is otherwise.
+    /// </summary>
+    private List<SegmentLine> Fitted(SegmentLine row) =>
+        LayoutWidth > Width ? Scrollback.Fit(row, Width, LayoutWidth) : [row];
 
     /// <summary>
     /// The live block laid out at <paramref name="width"/> for the slot (the thinking aside). A reply
@@ -5953,6 +6423,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     {
         _live = null;
         _liveCommitted = 0;
+        _liveWidth = 0;
         _liveDirty = false;
         _liveCount = 0;
         _liveCodeSpan = -1;
@@ -5976,6 +6447,26 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     /// not read as the span's label (a reply the parse laid out differently) is a plain row.
     /// </summary>
     private void CommitLiveRows(List<SegmentLine> lines, int from, int to, int width, bool final)
+    {
+        // The block keeps this width from its first commit on (2026-10-29, LayoutWidth), and its rows go to the store as written at it.
+        if (_liveWidth == 0)
+        {
+            _liveWidth = width;
+        }
+
+        int was = _bornWidth;
+        _bornWidth = width;
+        try
+        {
+            CommitLiveRowsAt(lines, from, to, width, final);
+        }
+        finally
+        {
+            _bornWidth = was;
+        }
+    }
+
+    private void CommitLiveRowsAt(List<SegmentLine> lines, int from, int to, int width, bool final)
     {
         if (_live is ThinkingBlock thinking)
         {
@@ -6004,7 +6495,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             {
                 if (i == from)
                 {
-                    _store.SetCodeGroupSummary(CodeSummary(_store.CodeGroupLabel, span, expanded: false), CodeSummary(_store.CodeGroupLabel, span, expanded: true), span.SourceLines);
+                    _store.SetCodeGroupSummary(CodeSummary(_store.CodeGroupLabel, span, expanded: false), CodeSummary(_store.CodeGroupLabel, span, expanded: true), span.SourceLines, Width, BornWidth);
                 }
 
                 var segments = new List<Segment>(lines[i].Count + 1);
@@ -6040,13 +6531,8 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             if (i == 0)
             {
                 var segments = new List<Segment>(lines[0]);
-                _store.BeginThinkingGroup(segments);
-                if (_top < 0)
-                {
-                    segments.Add(Segment.LineBreak);
-                    _inner.Write(new SegmentList(segments));
-                    Count(segments);
-                }
+                _store.BeginThinkingGroup(segments, Width, BornWidth);
+                WriteSummaryRow(segments);
             }
             else if (_store.ThinkingGroupOpen)
             {
@@ -6078,21 +6564,40 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         var elapsed = thinking.Elapsed ?? TimeSpan.Zero;
         _store.SetThinkingGroupSummary(
             [new Segment(ThinkingFoldText.Summary(elapsed, expanded: false, thinking.Text), Theme.DimText)],
-            [new Segment(ThinkingFoldText.Summary(elapsed, expanded: true, thinking.Text), Theme.DimText)]);
+            [new Segment(ThinkingFoldText.Summary(elapsed, expanded: true, thinking.Text), Theme.DimText)],
+            Width,
+            BornWidth);
         _store.EndGroup();
     }
 
-    /// <summary>The label row of a code block into the flow as its group's summary: stored by <see cref="Scrollback.BeginCodeGroup"/>, written and counted at the bottom.</summary>
+    /// <summary>The label row of a code block into the flow as its group's summary: stored by <see cref="Scrollback.BeginCodeGroup(int, IReadOnlyList{Segment})"/>, written and counted at the bottom.</summary>
     private void EmitCodeLabel(SegmentLine row, int keep, CodeSpan span)
     {
         var segments = new List<Segment>(row);
-        _store.BeginCodeGroup(keep, segments);
-        _store.SetCodeGroupSummary(CodeSummary(segments, span, expanded: false), CodeSummary(segments, span, expanded: true), span.SourceLines);
-        if (_top < 0)
+        _store.BeginCodeGroup(keep, segments, Width, BornWidth);
+        _store.SetCodeGroupSummary(CodeSummary(segments, span, expanded: false), CodeSummary(segments, span, expanded: true), span.SourceLines, Width, BornWidth);
+        WriteSummaryRow(segments);
+    }
+
+    /// <summary>The width the segments being written were rendered at (2026-10-29): <see cref="_bornWidth"/>, the window's without one.</summary>
+    private int BornWidth => _bornWidth > 0 ? _bornWidth : Width;
+
+    /// <summary>
+    /// A group's summary row (a code label, a thinking header) the store already took, written and counted at the bottom — fitted as the
+    /// store lays it out when it was written wider than the window (2026-10-29, the resize review); nothing while scrolled.
+    /// </summary>
+    private void WriteSummaryRow(List<Segment> row)
+    {
+        if (_top >= 0)
         {
-            segments.Add(Segment.LineBreak);
-            _inner.Write(new SegmentList(segments));
-            Count(segments);
+            return;
+        }
+
+        foreach (var fitted in BornWidth > Width ? Scrollback.Fit(row, Width, BornWidth) : [new SegmentLine(row)])
+        {
+            var ended = new List<Segment>(fitted) { Segment.LineBreak };
+            _inner.Write(new SegmentList(ended));
+            Count(ended);
         }
     }
 
@@ -7479,11 +7984,14 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
 
             int w = Width;
             int h = Height;
-            if (w != _lastWidth || h != _lastHeight)
+            if (w != _builtWidth || h != _builtHeight || w != _lastWidth || h != _lastHeight)
             {
                 // The alternate buffer is not reflowed: the screen is rebuilt from the store — the
                 // window again, or the flow's tail — from the top row (a move past it stops there).
-                DiagnosticLog.Debug(Category, ResizedLogLine(_lastWidth, _lastHeight, w, h));
+                // Against the built size, not the last draw's (2026-10-29): a draw at the new size before
+                // this tick must not hide the change. The climb still starts from where that draw put the pane.
+                // Against the last draw's too (the resize review): A built, a draw at B, back at A — that draw left B's rows.
+                DiagnosticLog.Debug(Category, ResizedLogLine(_builtWidth, _builtHeight, w, h));
                 BeginSync();
                 Lift();
                 _inner.Cursor.Move(CursorDirection.Up, Math.Max(h, _lastHeight));
@@ -7493,13 +8001,29 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
                 _row = 0;
                 _col = 0;
                 _lineFull = false;
-                _hintsCollapseDue = true;   // a resize redraws all: a Hints bar row held blank goes with it (2026-10-14)
-                if (h != _lastHeight)
+                MarkBuilt(w, h);
+                Draw();
+                EndSync();
+                return;
+            }
+
+            if (!ReferenceEquals(Theme.Current, _seenPalette))
+            {
+                // Another palette (2026-10-29, the resize review): the containers written under it, wrapped meanwhile, may render again.
+                if (_seenPalette is not null && !Theme.Current.Equals(_seenPalette))
                 {
-                    // The held height was counted over the old height (2026-10-14): the page on show sets it afresh.
-                    _paneFloor = 0;
+                    _store.MarkPending();
                 }
 
+                _seenPalette = Theme.Current;
+            }
+
+            if (_store.Pending && _store.RenderPending())
+            {
+                // The writes a re-layout left wrapped for want of time, rendered now the size holds (2026-10-29, the resize review) —
+                // ahead of a growing reply's branch, which returns on every tick it grows. The draw takes the live block with it.
+                BeginSync();
+                Lift();
                 Draw();
                 EndSync();
                 return;
@@ -7515,7 +8039,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
                 if (_drawnScrolled)
                 {
                     // Scrolled: the block is not drawn; its rows count on the scroll's row (the busy row's frame moves on its own).
-                    _liveCount = _live is null ? 0 : Math.Max(0, LiveLayout(w, RegionRows(_paneRows)).Count - _liveCommitted);
+                    _liveCount = LiveRowsLeft(RegionRows(_paneRows));
                     _liveDirty = false;
                     RedrawScrollRow();
                     if (_busyLabel is not null)

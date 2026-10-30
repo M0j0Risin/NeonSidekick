@@ -146,6 +146,58 @@ public class TranscriptFindTests : IDisposable
         Assert.Equal("type = find · Esc = done", TranscriptFind.EmptyHint);
     }
 
+    /// <summary>
+    /// A resize under the find (2026-10-29): the rows move, so the find bar finds its places again and walks on from the one shown —
+    /// Enter goes to the next older match, not to a row number from before the resize (where other text is now).
+    /// </summary>
+    [Fact]
+    public async Task AfterAResize_EnterGoesOlder_FromTheMatchOnShow()
+    {
+        using var pane = Pane();
+        pane.Show();
+        for (int i = 1; i <= 40; i++)
+        {
+            string word = i is 5 or 20 or 30 ? "apple" : "line";
+            pane.Write(new Markup($"{word} {i:00} with words enough to wrap at thirty cells" + Environment.NewLine));
+        }
+
+        var shown = new List<string>();
+        var steps = new Queue<ConsoleKeyInfo[]>([[Keys.Char('a'), Keys.Char('p'), Keys.Char('p'), Keys.Char('l'), Keys.Char('e')], [Keys.Enter], [Keys.Enter], [Keys.Escape]]);
+        var input = new ScriptedInput();
+        input.OnWait = () =>
+        {
+            var place = pane.FindPlace;
+            shown.Add(place.Line >= 0 ? TextFind.LineText(pane.TranscriptRows()[place.Line]) : "");
+            if (steps.Count == 2)
+            {
+                _console.Profile.Width = 30;   // between the two Enters
+                _time.Advance(ScreenPane.Tick);   // the tick rebuilds for it, as it does within a tick of any resize
+            }
+
+            if (steps.TryDequeue(out var keys))
+            {
+                input.Push(keys);
+            }
+        };
+
+        await new TranscriptFind(pane, new KeySource(input, TimeSpan.FromMilliseconds(1))).RunAsync("", CancellationToken.None);
+
+        Assert.StartsWith("apple 30", shown[1]);   // typed: the newest
+        Assert.StartsWith("apple 20", shown[2]);   // Enter: older
+        Assert.StartsWith("apple 05", shown[3]);   // the resize, then Enter: older again, from 20
+    }
+
+    [Fact]
+    public void Nearest_IsTheMatchAtThePlace_ElseTheLastBefore_ElseTheFirst()
+    {
+        List<TextFind.Hit> hits = [new(2, 0), new(5, 3), new(5, 9), new(8, 1)];
+        Assert.Equal(2, TranscriptFind.Nearest(hits, new TextFind.Hit(5, 9)));
+        Assert.Equal(1, TranscriptFind.Nearest(hits, new TextFind.Hit(5, 4)));
+        Assert.Equal(0, TranscriptFind.Nearest(hits, new TextFind.Hit(1, 0)));
+        Assert.Equal(3, TranscriptFind.Nearest(hits, new TextFind.Hit(-1, -1)));   // no place: the newest
+        Assert.Equal(-1, TranscriptFind.Nearest([], new TextFind.Hit(5, 9)));
+    }
+
     /// <summary>The words given up front open the folded run that holds them at once, and the end of the find folds it again.</summary>
     [Fact]
     public async Task GivenWords_OpenTheFoldHoldingThem_AndTheEndFoldsItAgain()

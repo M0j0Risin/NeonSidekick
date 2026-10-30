@@ -395,9 +395,12 @@ public static class Theme
         var sb = new StringBuilder();
         const int segments = 5;
         int per = Math.Max(1, width / segments);
+        int used = 0;
         for (int s = 0; s < segments; s++)
         {
-            int count = (s == segments - 1) ? width - s * per : per;
+            // Exactly width cells at every width (2026-10-29, the resize review: under 5 cells the parts of one cell each ran past it).
+            int count = (s == segments - 1) ? width - used : Math.Min(per, width - used);
+            used += Math.Max(0, count);
             if (count <= 0)
             {
                 continue;

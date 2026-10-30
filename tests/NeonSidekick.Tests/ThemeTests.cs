@@ -60,6 +60,28 @@ public class ThemeTests
         Assert.Equal(string.Empty, Theme.Rule(0));
     }
 
+    /// <summary>Under five cells too (2026-10-29, the resize review: a rule at 2 cells drew 4), and a width not divisible by five keeps its remainder.</summary>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    [InlineData(7)]
+    public void Rule_IsExactlyItsWidth_AtSmallWidths(int width)
+    {
+        Assert.Equal(width, Theme.Rule(width).Count(c => c == '─'));
+    }
+
+    /// <summary>A width-made line measures what it draws there (2026-10-29, the resize review), so a container sizes it right.</summary>
+    [Fact]
+    public void WidthMarkup_MeasuresItsMarkupAtTheWidth()
+    {
+        using var console = new Spectre.Console.Testing.TestConsole();
+        var options = Spectre.Console.Rendering.RenderOptions.Create(console, console.Profile.Capabilities);
+        var measured = ((Spectre.Console.Rendering.IRenderable)new WidthMarkup(width => new string('x', width / 2))).Measure(options, 20);
+        Assert.Equal(10, measured.Max);
+    }
+
     [Fact]
     public void AccentMarkup_EscapesText()
     {

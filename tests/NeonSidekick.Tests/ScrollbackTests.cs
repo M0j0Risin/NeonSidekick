@@ -476,7 +476,10 @@ public class ScrollbackTests
         Assert.Equal(new[] { "before", "  ▾ E", "    c1", "    c2", " " }, Texts(store.Rows(40)));
     }
 
-    /// <summary>A picture's lines carry its tiles' columns (later on 2026-09-24): a click finds the tile under it, not the gap, not another line — and nothing once the line wraps.</summary>
+    /// <summary>
+    /// A picture's lines carry its tiles' columns (later on 2026-09-24): a click finds the tile under it, not the gap, not another line.
+    /// Narrower than the strip, its lines stay one row each, cut at the edge (2026-10-29), so the tile still answers.
+    /// </summary>
     [Fact]
     public void Pictures_TagTheirLines_AndAClickFindsTheTile()
     {
@@ -492,8 +495,8 @@ public class ScrollbackTests
         Assert.Equal(8, store.PictureAt(2, 6));
         Assert.Null(store.PictureAt(2, 9));        // past the last tile
         Assert.Null(store.PictureAt(3, 0));        // after
-        store.Rows(5);                             // narrower than the strip: its lines wrap
-        Assert.Null(store.PictureAt(1, 3));
+        Assert.Equal(new[] { "text", "aaaa ", "aaaa ", "after" }, Texts(store.Rows(5)));   // narrower than the strip: cut, one row each
+        Assert.Equal(7, store.PictureAt(1, 3));
     }
 
     // ── Diffs (2026-10-04) ──────────────────────────────────────────────────
@@ -658,5 +661,473 @@ public class ScrollbackTests
         store.BeginGroup(1);
         store.Append(Segments("tool line\n"), 10, member: true);
         Assert.Null(store.Since(mark, 10));   // a tool run's line does not survive a copy
+    }
+
+    // ── A resize (2026-10-29) ───────────────────────────────────────────────
+
+    /// <summary><paramref name="renderable"/> rendered at <paramref name="width"/> as the pane's render does (the console's capabilities, the width as the room).</summary>
+    private static List<Segment> RenderAt(IRenderable renderable, int width, bool unicode = true)
+    {
+        using var console = new Spectre.Console.Testing.TestConsole();
+        console.Profile.Capabilities.Unicode = unicode;
+        return renderable.Render(new RenderOptions(console.Profile.Capabilities, new Size(width, 20)), width).ToList();
+    }
+
+    /// <summary>A store that renders its sources again (<see cref="Scrollback.Render"/>), as the pane's does.</summary>
+    private static Scrollback Reflowing() => new() { Render = (renderable, width) => RenderAt(renderable, width) };
+
+    /// <summary>A renderable that gives what <paramref name="render"/> says at each width.</summary>
+    private sealed class Sized(Func<int, List<Segment>> render) : IRenderable
+    {
+        public int Renders { get; private set; }
+
+        public Measurement Measure(RenderOptions options, int maxWidth) => new(1, maxWidth);
+
+        public IEnumerable<Segment> Render(RenderOptions options, int maxWidth)
+        {
+            Renders++;
+            return render(maxWidth);
+        }
+    }
+
+    /// <summary>Two lines narrower than 10 cells, one wider: a source whose re-render shows.</summary>
+    private static Sized TwoWhenNarrow(string end = "\n") => new(w => w < 10 ? Segments("x\ny" + end) : Segments("xy" + end));
+
+    [Fact]
+    public void Narrower_DropsTheBlanksAndRuleThatOverflow_AndWrapsAtWords_UnderTheIndent()
+    {
+        var store = new Scrollback();
+        store.Append([new Segment("abc"), new Segment(new string(' ', 12), new Style(background: Color.Blue)), Segment.LineBreak], 15);
+        store.Append(Segments(new string(ScreenPane.RuleGlyph, 15) + "\n"), 15);
+        store.Append(Segments("  one two three\n"), 15);
+        store.Append(Segments("abcdefghijklmno\n"), 15);
+        string[] written = ["abc" + new string(' ', 12), new string(ScreenPane.RuleGlyph, 15), "  one two three", "abcdefghijklmno"];
+        Assert.Equal(written, Texts(store.Rows(15)));
+
+        // The slab ends at the edge, the rule spans it, a word goes whole to the next row under the indent, a row with no space cuts.
+        Assert.Equal(["abc       ", new string(ScreenPane.RuleGlyph, 10), "  one two", "  three", "abcdefghij", "klmno"], Texts(store.Rows(10)));
+        Assert.Equal(written, Texts(store.Rows(20)));   // wider: as written
+        Assert.Equal(written, Texts(store.Rows(15)));   // and exactly the rows again at its own width
+    }
+
+    [Fact]
+    public void Narrower_TheOpenLastLine_KeepsTheExactCut()
+    {
+        var store = new Scrollback();
+        store.Append(Segments("  one two three"), 15);
+        Assert.Equal(["  one two ", "three"], Texts(store.Rows(10)));   // the next write joins it where the screen left off
+    }
+
+    [Fact]
+    public void ARunsSummary_SetAtOneWidth_WrapsAtWordsNarrower_OneSetBeforeAnyWidth_KeepsTheExactCut()
+    {
+        var store = new Scrollback();
+        store.Append(Segments("before\n"), 30);
+        store.BeginGroup(1);
+        store.Append(Segments("  m1\n"), 30, member: true);
+        store.Append(Segments("  m2\n"), 30, member: true);
+        store.SetGroupSummary(Segments("  > tools read_file write_file"), Segments("  v tools read_file write_file"));
+        store.EndGroup();
+        Assert.Equal(["before", "  > tools read_file write_file"], Texts(store.Rows(30)));
+        Assert.Equal(["before", "  > tools read_file", "    write_file"], Texts(store.Rows(20)));   // under the text after its marker
+
+        var early = new Scrollback();
+        early.BeginGroup(1);
+        early.SetGroupSummary(Segments("  > tools read_file write_file"), Segments("  v tools read_file write_file"));
+        early.Append(Segments("  m1\n"), 30, member: true);
+        early.Append(Segments("  m2\n"), 30, member: true);
+        early.EndGroup();
+        Assert.Equal(["  > tools read_file ", "write_file"], Texts(early.Rows(20)));
+    }
+
+    /// <summary>
+    /// A centered picture narrowed (<see cref="CenteredPicture"/>, Spectre's <see cref="Canvas"/>): every line stays one row and loses
+    /// only its padding first — every pixel cell is still there — in both of the canvas's looks: half blocks, or background-colored
+    /// spaces without Unicode. A click still finds it where it is drawn now.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ACenteredPicture_Narrowed_LosesItsPaddingFirst_AndAClickStillFindsIt(bool unicode)
+    {
+        var picture = new CenteredPicture(new ImageThumbnail(4, 4, Enumerable.Repeat(Color.Red, 16).ToArray()), 9);
+        var segments = RenderAt(picture, 20, unicode);
+        var store = new Scrollback();
+        store.Append(segments, 20, member: false, picture.Spans);
+        store.Append(Segments("\n"), 20);   // its last row closed, as the transcript's next line does
+        int cells = unicode ? 4 : 8;   // a pixel column is a half block, or two spaces
+
+        var rows = store.Rows(cells);
+        Assert.Equal(picture.Spans.Count, rows.Count);
+        foreach (var row in rows)
+        {
+            var drawn = row.SelectMany(s => s.Text.Select(c => (Char: c, s.Style))).ToList();
+            Assert.Equal(cells, drawn.Count);
+            Assert.All(drawn, cell => Assert.True(cell.Char != ' ' || cell.Style.Background != Color.Default));
+        }
+
+        Assert.Equal(9, store.PictureAt(0, 2));
+    }
+
+    [Fact]
+    public void ASource_IsRenderedAgainAtANewWidth_AndIsItsOwnSegmentsAtItsWidth()
+    {
+        var store = Reflowing();
+        var source = new Markup("one two three four five six seven" + Environment.NewLine);
+        store.Append(RenderAt(source, 40), 40, member: false, null, null, source);
+        store.Append(Segments("after\n"), 40);
+        var mark = store.Mark;
+        var written = Texts(store.Rows(40));
+        Assert.Equal(["one two three four five six seven", "after"], written.Select(t => t.TrimEnd()));
+
+        Assert.Equal(["one two three", "four five six", "seven", "after"], Texts(store.Rows(14)).Select(t => t.TrimEnd()));
+        Assert.Equal(2, store.LineCount);   // the line count never changes: marks and groups read the store as before
+        Assert.Equal(mark, store.Mark);
+        Assert.Equal(written, Texts(store.Rows(40)));
+    }
+
+    /// <summary>A <c>MarkupLine</c>'s shape — <c>\n</c> inside, <c>\r\n</c> at the end — splits as an append splits: no <c>\r</c> cell, no blank row after.</summary>
+    [Fact]
+    public void ASource_ThatEndsWithACarriageReturnAndBreak_RendersNoStrayCellOrRow()
+    {
+        var store = Reflowing();
+        var source = TwoWhenNarrow("\r\n");
+        store.Append(Segments("xy\r\n"), 20, member: false, null, null, source);
+        Assert.Equal(["xy"], Texts(store.Rows(20)));
+        Assert.Equal(["x", "y"], Texts(store.Rows(5)));
+
+        // One other width's rows are kept while laid out there; none at its own width (the resize review), so going home and back
+        // renders once more.
+        int renders = source.Renders;
+        store.Rows(5);
+        Assert.Equal(renders, source.Renders);
+        store.Rows(20);
+        store.Rows(5);
+        Assert.Equal(renders + 1, source.Renders);
+    }
+
+    [Fact]
+    public void AWaitingSource_IsKeptByABareBreak_AndDroppedByAnythingElse()
+    {
+        var store = Reflowing();
+        store.Append(Segments("xy"), 20, member: false, null, null, TwoWhenNarrow(""));
+        Assert.Equal(["xy"], Texts(store.Rows(5)));   // open: the exact cut, unused while it waits
+        store.Append(Segments("\r\n"), 20);
+        Assert.Equal(["x", "y"], Texts(store.Rows(5)));
+
+        store = Reflowing();
+        store.Append(Segments("xy"), 20, member: false, null, null, TwoWhenNarrow(""));
+        store.Append(Segments("z\n"), 20);
+        Assert.Equal(["xyz"], Texts(store.Rows(5)));
+
+        store = Reflowing();
+        store.Append(Segments("xy"), 20, member: false, null, null, TwoWhenNarrow(""));
+        store.BeginGroup(0);
+        Assert.Equal(["xy"], Texts(store.Rows(5)));
+
+        store = Reflowing();
+        store.Append(Segments("xy"), 20, member: false, null, null, TwoWhenNarrow(""));
+        store.BeginGroup(0, Segments("•"), absorbOpenLine: true);
+        Assert.Empty(store.Rows(5));
+
+        store = Reflowing();
+        store.Append(Segments("xy"), 20, member: false, null, null, TwoWhenNarrow(""));
+        store.BeginCodeGroup(0, Segments("lbl"));
+        Assert.Equal(["xy", "lbl"], Texts(store.Rows(5)));
+    }
+
+    [Fact]
+    public void ASource_IsKeptOnlyOnAStandaloneWrite()
+    {
+        var store = Reflowing();
+        store.Append(Segments("open"), 20);
+        store.Append(Segments("xy\n"), 20, member: false, null, null, TwoWhenNarrow());   // joins an open line
+        store.BeginGroup(0);
+        store.Append(Segments("xy\n"), 20, member: true, null, null, TwoWhenNarrow());    // a tool run's line
+        store.EndGroup();
+        IReadOnlyList<PictureSpan> none = [];
+        store.Append(Segments("xy\n"), 20, member: false, [none], null, TwoWhenNarrow());  // pictures
+        Assert.Equal(["openxy", "xy", "xy"], Texts(store.Rows(9)));
+    }
+
+    /// <summary>
+    /// A source the render budget does not reach wraps on its own at that width until <see cref="Scrollback.RenderPending"/> renders it
+    /// there — at least one per call, the budget spent or not — with the held places told before and after (the resize review, R4).
+    /// </summary>
+    [Fact]
+    public void ASource_PastTheRenderBudget_WrapsOnItsOwn_UntilRenderPending()
+    {
+        var store = Reflowing();
+        var source = new Sized(w => w < 10 ? Segments("AB\nCD\n") : Segments("ab cd\n"));
+        store.Append(Segments("ab cd\n"), 20, member: false, null, null, source);
+        store.RenderBudget = TimeSpan.Zero;
+        Assert.Equal(["ab", "cd"], Texts(store.Rows(4)));   // the narrower rule: at the word
+        Assert.Equal(0, source.Renders);
+        Assert.True(store.Pending);
+
+        int relaying = 0;
+        int relaid = 0;
+        store.Relaying = () => relaying++;
+        store.Relaid = _ => relaid++;
+        Assert.True(store.RenderPending());
+        Assert.Equal(["AB", "CD"], Texts(store.Rows(4)));
+        Assert.Equal((1, 1, 1), (source.Renders, relaying, relaid));
+        Assert.False(store.Pending);
+        Assert.False(store.RenderPending());   // nothing left: no re-layout
+        Assert.Equal(1, relaid);
+    }
+
+    [Fact]
+    public void ASourceWhoseRenderFails_IsDroppedForGood_ItsLinesWrapOnTheirOwn()
+    {
+        var store = new Scrollback { Render = (_, _) => null };
+        store.Append(Segments("xy\n"), 20, member: false, null, null, TwoWhenNarrow());
+        Assert.Equal(["xy"], Texts(store.Rows(5)));
+        store.Render = (renderable, width) => RenderAt(renderable, width);
+        Assert.Equal(["xy"], Texts(store.Rows(6)));
+    }
+
+    [Fact]
+    public void TheCap_DropsASourceWhole_AndCountsItsRows()
+    {
+        var store = Reflowing();
+        store.Append(Segments("a\nb\nc\n"), 20, member: false, null, null, new Sized(w => w < 10 ? Segments("A\nB\nC\nD\n") : Segments("a\nb\nc\n")));
+        Assert.Equal(["A", "B", "C", "D"], Texts(store.Rows(5)));
+        Assert.Equal(1, store.LineCount);   // one write, one line (the resize review)
+
+        // One row past the cap: the write goes whole, the rows dropped are the four it took.
+        int dropped = 0;
+        for (int i = 0; i < Scrollback.MaxRows - 3; i++)
+        {
+            dropped += store.Append(Segments("x\n"), 5);
+        }
+
+        Assert.Equal(4, dropped);
+        Assert.Equal(["x", "x"], Texts(store.Rows(5)).Take(2));
+        Assert.Equal(Scrollback.MaxRows - 3, store.Rows(20).Count);
+    }
+
+    [Fact]
+    public void Since_CarriesASourceWithItsLines()
+    {
+        var store = Reflowing();
+        store.Append(Segments("start\n"), 20);
+        var mark = store.Mark;
+        var source = TwoWhenNarrow();
+        store.Append(Segments("xy\n"), 20, member: false, null, null, source);
+        store.Append(Segments("plain\n"), 20);
+
+        var copied = store.Since(mark, 20)!;
+        Assert.Equal(2, copied.Chunks.Count);
+        Assert.Same(source, copied.Chunks[0].Source);
+        Assert.Equal("xy", string.Concat(copied.Chunks[0].Segments.Where(s => !s.IsLineBreak).Select(s => s.Text)));
+        Assert.Null(copied.Chunks[1].Source);
+        Assert.Equal(copied.Segments.Count, copied.Chunks.Sum(c => c.Segments.Count));
+        Assert.Equal(20, copied.Chunks[0].Born);
+    }
+
+    // ── The resize review (2026-10-29) ──────────────────────────────────────
+
+    [Fact]
+    public void ATwoLineSource_IsOneLine_AndAFoldBelowItKeepsItsRows()
+    {
+        var store = Reflowing();
+        var source = new Markup("one two three four" + Environment.NewLine + "five six seven eight" + Environment.NewLine);
+        store.Append(RenderAt(source, 40), 40, member: false, null, null, source);
+        Assert.Equal(1, store.LineCount);
+        store.BeginGroup(1);
+        store.Append(Segments("  m1\n"), 40, member: true);
+        store.Append(Segments("  m2\n"), 40, member: true);
+        store.SetGroupSummary(Segments("  > two"), Segments("  v two"));
+        store.EndGroup();
+
+        var narrow = Texts(store.Rows(10));
+        Assert.Equal(["one two", "three four", "five six", "seven", "eight"], narrow.Take(5).Select(t => t.TrimEnd()));
+        int id = store.GroupAtRow(narrow.Length - 1)!.Value;
+        Assert.True(store.Toggle(id));
+        Assert.True(store.Toggle(id));
+        Assert.Equal(narrow, Texts(store.Rows(10)));   // the partial re-layout from the summary on loses none of the write's rows
+    }
+
+    [Fact]
+    public void AWaitingSource_ClosedByAMembersBreak_IsNotKept_AControlCodeLeavesItWaiting()
+    {
+        var store = Reflowing();
+        store.Append(Segments("xy"), 20, member: false, null, null, TwoWhenNarrow(""));
+        store.Append(Segments("\n"), 20, member: true);
+        Assert.Equal("xy", Texts(store.Rows(5))[0]);
+
+        store = Reflowing();
+        store.Append(Segments("xy"), 20, member: false, null, null, TwoWhenNarrow(""));
+        store.Append([Segment.Control("\u001b[0m")], 20);
+        store.Append(Segments("\n"), 20);
+        Assert.Equal(["x", "y"], Texts(store.Rows(5)));
+    }
+
+    [Fact]
+    public void ABlankWrite_AndOnePastTheLineCap_KeepNoSource()
+    {
+        var store = Reflowing();
+        var blank = new Sized(_ => Segments("   \n"));
+        store.Append(Segments("   \n"), 20, member: false, null, null, blank);
+        store.Rows(5);
+        Assert.Equal(0, blank.Renders);
+
+        var lines = string.Concat(Enumerable.Repeat("a\n", Scrollback.MaxSourceLines + 1));
+        var big = new Sized(_ => Segments(lines));
+        store.Append(Segments(lines), 20, member: false, null, null, big);
+        Assert.Equal(Scrollback.MaxSourceLines + 2, store.LineCount);   // plain lines
+        store.Rows(6);
+        Assert.Equal(0, big.Renders);
+    }
+
+    [Fact]
+    public void AnAnchor_InTheMiddleOfALine_FollowsANarrowingAndAWidening()
+    {
+        var store = new Scrollback();
+        string words = string.Join(' ', Enumerable.Range(1, 40).Select(i => "w" + i.ToString("00", System.Globalization.CultureInfo.InvariantCulture)));
+        store.Append(Segments("before\n", words + "\n", "after\n"), 80);
+
+        (int Row, int Start) Find(IReadOnlyList<SegmentLine> rows, string word)
+        {
+            for (int r = 0; r < rows.Count; r++)
+            {
+                int at = Text(rows[r]).IndexOf(word, StringComparison.Ordinal);
+                if (at >= 0)
+                {
+                    return (r, at);
+                }
+            }
+
+            return (-1, -1);
+        }
+
+        var place = Find(store.Rows(80), "w20");
+        var anchor = store.Locate(place.Row, place.Start)!;
+        foreach (int width in (int[])[20, 13, 120, 80])
+        {
+            var rows = store.Rows(width);
+            var spot = store.Resolve(anchor);
+            Assert.Equal(Find(rows, "w20"), (spot.Row, spot.Start));
+            Assert.Equal(1, spot.First);
+        }
+    }
+
+    [Fact]
+    public void Locate_ClampsPastTheEnd_GivesNoneEmpty_AndAClearedLineResolvesNowhere()
+    {
+        var store = new Scrollback();
+        Assert.Null(store.Locate(0, 0));
+        store.Append(Segments("one\n", "two\n"), 20);
+        store.Rows(20);
+        var last = store.Locate(99, 0)!;
+        Assert.Equal(1, store.Resolve(last).Row);
+
+        store.Clear();
+        store.Append(Segments("new\n"), 20);
+        store.Rows(20);
+        Assert.Equal(-1, store.Resolve(last).Start);
+    }
+
+    [Fact]
+    public void ARender_ThatLosesLetters_WrapsTheWrittenLines_AndIsNotTriedAgainThere()
+    {
+        var store = Reflowing();
+        var cropped = new Sized(w => w < 10 ? Segments("ab…\n") : Segments("abcdef\n"));   // a table crops rather than throw
+        store.Append(Segments("abcdef\n"), 20, member: false, null, null, cropped);
+        Assert.Equal(["abcde", "f"], Texts(store.Rows(5)));
+        store.Rows(20);
+        store.Rows(5);
+        Assert.Equal(2, cropped.Renders);   // home drops the answer with the copy; the same width alone never asks again
+        store.Rows(5);
+        Assert.Equal(2, cropped.Renders);
+    }
+
+    [Fact]
+    public void NotNow_WrapsTheSourceThisTime_AndKeepsItForRenderPending()
+    {
+        var store = new Scrollback { Render = (_, _) => Scrollback.NotNow };
+        var source = TwoWhenNarrow();
+        store.Append(Segments("xy\n"), 20, member: false, null, null, source);
+        Assert.Equal(["xy"], Texts(store.Rows(5)));
+        store.Render = (renderable, width) => RenderAt(renderable, width);
+        store.MarkPending();
+        Assert.True(store.RenderPending());
+        Assert.Equal(["x", "y"], Texts(store.Rows(5)));
+    }
+
+    [Fact]
+    public void Since_ALineLaidOutNarrowerThanWritten_CopiesNothing_AndAMarkPastAClearIsGone()
+    {
+        var store = new Scrollback();
+        var mark = store.Mark;
+        store.Append(Segments("aaa bbb ccc\n"), 20);
+        Assert.NotNull(store.Since(mark, 20));
+        Assert.Null(store.Since(mark, 5));
+
+        var cleared = store.Mark;
+        store.Clear();
+        store.Append(Segments("new\n"), 20);
+        Assert.Null(store.Since(cleared, 20));
+        Assert.Null(store.Since(mark, 20));
+    }
+
+    [Fact]
+    public void Narrower_KeepsAJoinerInAnotherSegment_WithItsEmoji()
+    {
+        var store = new Scrollback();
+        store.Append([new Segment("ab 👍"), new Segment("️", new Style(Color.Red)), new Segment(" cd ef\n")], 20);
+        var rows = Texts(store.Rows(6));
+        Assert.All(rows, row => Assert.False(row.StartsWith('️')));
+        Assert.Contains(rows, row => row.Contains("👍️", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("• one two three four", "• one two", "  three four")]
+    [InlineData("▎ one two three four", "▎ one two", "▎ three four")]
+    [InlineData("12. one two three", "12. one", "    two")]
+    [InlineData("The one two three", "The one two", "three")]
+    [InlineData("a\tbb cc dd", "a bb", "cc dd")]
+    public void Narrower_HangsUnderAMarker_RepeatsABar_AndDrawsATabAsASpace(string line, string first, string second)
+    {
+        var store = new Scrollback();
+        store.Append(Segments(line + "\n"), 30);
+        int width = line.Contains('\t') ? 6 : line.StartsWith("12", StringComparison.Ordinal) ? 10 : 12;
+        Assert.Equal([first, second], Texts(store.Rows(width)).Take(2));
+    }
+
+    [Fact]
+    public void Narrower_AtTwoCells_KeepsAnEmojiWithNoBlankRow()
+    {
+        var store = new Scrollback();
+        store.Append(Segments("👍 ok\n"), 20);
+        Assert.Equal(["👍", "ok"], Texts(store.Rows(2)));
+    }
+
+    [Fact]
+    public void ANarrowedPicture_ShiftsEveryRowAlike()
+    {
+        var pixel = new Style(background: Color.Red);
+        var segments = new List<Segment>
+        {
+            new("  "), new("    ", pixel), Segment.LineBreak,
+            new("    "), new("    ", pixel),
+        };
+        IReadOnlyList<IReadOnlyList<PictureSpan>> spans = [[new PictureSpan(2, 4, 9)], [new PictureSpan(4, 4, 9)]];
+        var store = new Scrollback();
+        store.Append(segments, 10, member: false, spans);
+        store.Append(Segments("\n"), 10);
+        Assert.Equal(["    ", "      "], Texts(store.Rows(6)));   // both lose two blanks: the picture keeps its shape
+        Assert.Equal(9, store.PictureAt(0, 0));
+        Assert.Equal(9, store.PictureAt(1, 2));
+        Assert.Null(store.PictureAt(1, 1));
+    }
+
+    [Fact]
+    public void Fit_IsTheStoresNarrowerRule()
+    {
+        var line = Segments("  one two three");
+        Assert.Equal(["  one two", "  three"], Texts(Scrollback.Fit(line, 10, 15)));
+        Assert.Equal(["  one two ", "three"], Texts(Scrollback.Fit(line, 10, 0)));   // no born width: the exact cut
     }
 }

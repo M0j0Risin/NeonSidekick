@@ -2029,6 +2029,448 @@ public partial class ScreenPaneTests : IDisposable
         Assert.Equal(0, pane.Padding);
     }
 
+    /// <summary>
+    /// A draw at the new size before the tick (2026-10-29, the user's report: after a resize the banner and the transcript stayed
+    /// as the terminal left them): a flow write, or a key that grows the input, lands after the window changed but before the
+    /// tick saw it. The tick still erases from the top and writes the store's tail back, and its log names the size the
+    /// screen was built at.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AResize_DrawnFirst_IsStillRebuiltOnTheTick(bool key)
+    {
+        _console.EmitAnsiSequences();
+        using var pane = Pane();
+        pane.Show();
+        pane.BeginInput();
+        pane.Write(new Markup("hello" + Environment.NewLine));
+        pane.Write(new Markup("world" + Environment.NewLine));
+
+        _console.Profile.Width = 30;
+        if (key)
+        {
+            pane.ShowInput(new string('x', 40), 40);   // two input rows at 30 wide: a draw at the new size
+        }
+        else
+        {
+            pane.Write(new Markup("again" + Environment.NewLine));   // a flow write draws the pane at 30 wide
+        }
+
+        var lines = new List<string>();
+        Action<NeonSidekick.Diagnostics.DiagnosticEvent> capture = e => { if (e.Message.StartsWith("Resized ", StringComparison.Ordinal)) lines.Add(e.Message); };
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += capture;
+        int mark = Output.Length;
+        try
+        {
+            _time.Advance(ScreenPane.Tick);
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
+        }
+
+        Assert.Equal([ScreenPane.ResizedLogLine(40, 10, 30, 10)], lines);
+        Assert.Contains("\e[J", Output[mark..]);                                                   // erased from the top
+        Assert.Contains("hello\nworld\n" + (key ? "" : "again\n"), Strip(Output[mark..]));        // the store's tail written back
+
+        // Rebuilt once: the next tick at the same size leaves the screen alone.
+        mark = Output.Length;
+        _time.Advance(ScreenPane.Tick);
+        Assert.Equal(mark, Output.Length);
+    }
+
+    /// <summary>What the store may render again (2026-10-29): Spectre's pure widgets and containers, and the types marked <see cref="IReflowable"/> — nothing else.</summary>
+    [Fact]
+    public void Reflowable_IsSpectresPureWidgets_AndTheMarkedTypes()
+    {
+        IRenderable[] yes =
+        [
+            new Markup("x"), new Text("x"), new Paragraph("x"), new Spectre.Console.Rule(), new Grid(), new Table(), new Panel("x"),
+            new Rows(new Text("x")), new Padder(new Text("x")), new WidthMarkup(_ => "x"), new SentLineView("x", ""),
+        ];
+        Assert.All(yes, renderable => Assert.True(ScreenPane.Reflowable(renderable), renderable.GetType().Name));
+        Assert.False(ScreenPane.Reflowable(new ReplyBlock("x", glyph: true)));
+        Assert.False(ScreenPane.Reflowable(new CenteredPicture(new ImageThumbnail(1, 1, [Color.Red]), 1)));
+        Assert.False(ScreenPane.Reflowable(new ThinkingBlock("x")));
+    }
+
+    /// <summary>The store's rows as text (<see cref="ScreenPane.TranscriptRows"/>), each without its trailing blanks.</summary>
+    private static string[] RowTexts(ScreenPane pane) => pane.TranscriptRows().Select(row => TextFind.LineText(row).TrimEnd()).ToArray();
+
+    /// <summary>
+    /// A width-fitted line (<see cref="WidthMarkup"/>: the banner's rule, the <c>/new</c> divider; 2026-10-29) spans the window after
+    /// a resize, narrower with no stub on a row of its own, wider to the new edge — on the screen the tick rebuilds and in the store.
+    /// </summary>
+    [Fact]
+    public void AWidthFittedLine_SpansTheNewWidth_AfterAResize_BothWays()
+    {
+        _console.EmitAnsiSequences();
+        using var pane = Pane();
+        pane.Open();
+        pane.Show();
+        pane.Write(new WidthMarkup(width => new string('=', width)));
+        pane.Write(new Markup("after" + Environment.NewLine));
+
+        _console.Profile.Width = 30;
+        int mark = Output.Length;
+        _time.Advance(ScreenPane.Tick);
+        Assert.Contains(new string('=', 30) + "\nafter\n", Strip(Output[mark..]));
+        Assert.Equal([new string('=', 30), "after"], RowTexts(pane));
+
+        _console.Profile.Width = 50;
+        mark = Output.Length;
+        _time.Advance(ScreenPane.Tick);
+        Assert.Contains(new string('=', 50) + "\nafter\n", Strip(Output[mark..]));
+        Assert.Equal([new string('=', 50), "after"], RowTexts(pane));
+    }
+
+    /// <summary>
+    /// A <c>MarkupLine</c> notice and a sent line are laid out again at a narrower width (2026-10-29): every word whole on a row —
+    /// the old cut by the character broke <c>charlie</c> at 20 cells.
+    /// </summary>
+    [Fact]
+    public void ANoticeAndASentLine_WrapAtWords_AfterANarrowerResize()
+    {
+        const string words = "alphabet bravo charlie delta echo foxtrot";
+        using var pane = Pane();
+        pane.Open();
+        pane.Show();
+        pane.MarkupLine(words);
+        pane.BeginInput();
+        pane.CommitInput(words);
+
+        _console.Profile.Width = 20;
+        _time.Advance(ScreenPane.Tick);
+        var rows = RowTexts(pane);
+        Assert.True(rows.Length >= 6, string.Join("|", rows));
+        Assert.All(words.Split(' '), word => Assert.Equal(2, rows.Count(row => row.Split(' ').Contains(word))));
+        Assert.All(rows, row => Assert.True(TextCells.Width(row) <= 20, row));
+    }
+
+    /// <summary>Twelve lines of 32 cells: one row each at 40 cells, two at 20 (<c>line 05 aaaa bbbb</c> over <c>cccc dddd eeee</c>).</summary>
+    private ScreenPane LongLines()
+    {
+        var pane = Pane();
+        pane.Open();
+        pane.Show();
+        for (int i = 1; i <= 12; i++)
+        {
+            pane.Write(new Markup($"line {i:00} aaaa bbbb cccc dddd eeee" + Environment.NewLine));
+        }
+
+        return pane;
+    }
+
+    /// <summary>A resize while scrolled keeps the same text at the region's top (2026-10-29): the anchor follows its line's rows.</summary>
+    [Fact]
+    public void AResize_WhileScrolled_KeepsTheSameTextAtTheTop()
+    {
+        _console.EmitAnsiSequences();
+        using var pane = LongLines();
+        pane.ScrollBy(-100);
+        pane.ScrollBy(4);
+        Assert.Equal(4, pane.ScrollTop);   // line 05
+
+        _console.Profile.Width = 20;
+        int mark = Output.Length;
+        _time.Advance(ScreenPane.Tick);
+        Assert.Equal(8, pane.ScrollTop);   // lines 01–04 take two rows each now
+        Assert.StartsWith("line 05", RowTexts(pane)[pane.ScrollTop]);
+        Assert.Contains("line 05 aaaa bbbb \ncccc dddd eeee\nline 06", Strip(Output[mark..]));   // Spectre's wrap keeps the space it broke at
+    }
+
+    /// <summary>A flow write is the first call at the new width, before the tick (2026-10-29): the store moves the anchor itself (Relaid).</summary>
+    [Fact]
+    public void AFlowWrite_AtTheNewWidth_BeforeTheTick_StillMovesTheAnchor()
+    {
+        using var pane = LongLines();
+        pane.ScrollBy(-100);
+        pane.ScrollBy(4);
+
+        _console.Profile.Width = 20;
+        pane.Write(new Markup("new" + Environment.NewLine));
+        Assert.Equal(8, pane.ScrollTop);
+        Assert.StartsWith("line 05", RowTexts(pane)[pane.ScrollTop]);
+    }
+
+    /// <summary>
+    /// The find's match moves to an earlier row of its own line on a wider window (2026-10-29): the find is on it still, by the row and
+    /// the character it starts at now.
+    /// </summary>
+    [Fact]
+    public void AFindMatch_ThatMovesUpItsLine_OnAWiderWindow_IsStillTheOneMarked()
+    {
+        _console.Profile.Width = 20;
+        using var pane = Pane();
+        pane.Open();
+        pane.Show();
+        pane.Write(new Markup("first" + Environment.NewLine));
+        pane.Write(new Markup("aaaa bbbb cccc dddd target" + Environment.NewLine));
+        Assert.Equal(["first", "aaaa bbbb cccc dddd", "target"], RowTexts(pane));
+        pane.ShowFind("target", 2, 0);
+
+        _console.Profile.Width = 40;
+        _time.Advance(ScreenPane.Tick);
+        Assert.Equal(["first", "aaaa bbbb cccc dddd target"], RowTexts(pane));
+        Assert.Equal(new TextFind.Hit(1, 20), pane.FindPlace);
+    }
+
+    /// <summary>The open last line joined after a resize (2026-10-29): it was cut exactly, so the screen and the store agree once the next write joins it.</summary>
+    [Fact]
+    public void AnOpenLine_JoinedAfterAResize_MatchesTheStore()
+    {
+        using var pane = Pane();
+        pane.Open();
+        pane.Show();
+        pane.Write(new Markup("first" + Environment.NewLine));
+        pane.Write(new Markup("abc"));
+
+        _console.Profile.Width = 20;
+        _time.Advance(ScreenPane.Tick);
+        pane.Write(new Markup("def" + Environment.NewLine));
+        Assert.Equal(["first", "abcdef"], RowTexts(pane));
+        Assert.Equal(2, pane.FlowRow);
+    }
+
+    /// <summary>Throws narrower than 30 cells: a write that cannot be laid out at a small width.</summary>
+    private sealed class Fussy : IRenderable, IReflowable
+    {
+        public Measurement Measure(RenderOptions options, int maxWidth) => new(1, maxWidth);
+
+        public IEnumerable<Segment> Render(RenderOptions options, int maxWidth) =>
+            maxWidth < 30 ? throw new InvalidOperationException("too narrow") : [new Segment(maxWidth > 50 ? "fussy wide" : "fussy line"), Segment.LineBreak];
+    }
+
+    /// <summary>A re-render that throws on the tick is logged and its write wraps its own segments from then on (2026-10-29): nothing escapes the timer.</summary>
+    [Fact]
+    public void ARenderThatThrows_OnAResize_IsLogged_AndTheLineWrapsItsOwn()
+    {
+        using var pane = Pane();
+        pane.Open();
+        pane.Show();
+        pane.Write(new Fussy());
+
+        var lines = new List<string>();
+        Action<NeonSidekick.Diagnostics.DiagnosticEvent> capture = e => { if (e.Category == ScreenPane.Category) lines.Add(e.Message); };
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += capture;
+        try
+        {
+            _console.Profile.Width = 20;
+            _time.Advance(ScreenPane.Tick);
+            _console.Profile.Width = 60;
+            _time.Advance(ScreenPane.Tick);
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
+        }
+
+        Assert.Contains(ScreenPane.RenderFailedLogLine(20, "InvalidOperationException: too narrow"), lines);
+        Assert.Contains(lines, line => line.StartsWith("Relaid at 20 cells: 0 writes rendered again in ", StringComparison.Ordinal));
+        Assert.Equal(["fussy line"], RowTexts(pane));   // dropped for good: at 60 a render would say "fussy wide" (the resize review, R67)
+    }
+
+    /// <summary>
+    /// A long reply streaming through a narrower and then a wider resize (2026-10-29, the user's pick): its top rows were committed
+    /// at one width and counted against a layout at another — narrower repeated lines, wider lost them. Since the resize review the
+    /// reply keeps the width of its first commit: every word shows exactly once and in order, and the blank row between two paragraphs is kept.
+    /// </summary>
+    [Fact]
+    public void ALongReply_StreamingThroughResizes_LosesNothing_RepeatsNothing()
+    {
+        static string Paragraph(int p) => string.Join(" ", Enumerable.Range(1, 12).Select(w => $"p{p}w{w:00}"));
+        static string Reply(int paragraphs) => string.Join("\n\n", Enumerable.Range(1, paragraphs).Select(Paragraph));
+
+        using var pane = Pane();
+        pane.Open();
+        pane.Show();
+        pane.SetLive(new ReplyBlock(Reply(3), glyph: true));
+        _time.Advance(ScreenPane.Tick);
+        Assert.True(pane.LiveCommitted > 0);
+
+        _console.Profile.Width = 30;
+        pane.SetLive(new ReplyBlock(Reply(5), glyph: true));
+        _time.Advance(ScreenPane.Tick);
+        _console.Profile.Width = 55;
+        pane.SetLive(new ReplyBlock(Reply(7), glyph: true));
+        _time.Advance(ScreenPane.Tick);
+        pane.SetLive(new ReplyBlock(Reply(8), glyph: true));
+        pane.CommitLive();
+
+        var rows = RowTexts(pane);
+        var words = rows.SelectMany(row => row.Split(' ', StringSplitOptions.RemoveEmptyEntries)).Where(word => word.StartsWith('p')).ToList();
+        var expected = Enumerable.Range(1, 8).SelectMany(p => Paragraph(p).Split(' ')).ToList();
+        Assert.Equal(expected, words);   // each once, in order
+        for (int p = 1; p < 8; p++)
+        {
+            int last = Array.FindLastIndex(rows, row => row.Contains($"p{p}w12", StringComparison.Ordinal));
+            int next = Array.FindIndex(rows, row => row.Contains($"p{p + 1}w01", StringComparison.Ordinal));
+            Assert.True(next > last + 1 && rows[(last + 1)..next].Any(row => row.Length == 0), string.Join("|", rows));
+        }
+    }
+
+    // ── The resize review (2026-10-29) ──────────────────────────────────────
+
+    /// <summary>Built at A, drawn at B before the tick, back at A (R1): the screen holds B's rows, so the tick still rebuilds.</summary>
+    [Fact]
+    public void AResize_AndBack_BeforeTheTick_IsStillRebuilt()
+    {
+        _console.EmitAnsiSequences();
+        using var pane = Pane();
+        pane.Show();
+        pane.Write(new Markup("hello" + Environment.NewLine));
+        _console.Profile.Width = 30;
+        pane.Write(new Markup("world" + Environment.NewLine));   // drawn at 30
+        _console.Profile.Width = 40;
+        int mark = Output.Length;
+        _time.Advance(ScreenPane.Tick);
+        Assert.Contains("\e[J", Output[mark..]);
+        Assert.Contains("hello\nworld\n", Strip(Output[mark..]));
+    }
+
+    /// <summary>One long write scrolled into its middle (R22): its text stays at the region's top narrower and wider, by its anchor.</summary>
+    [Fact]
+    public void AResize_InTheMiddleOfALongWrite_KeepsItsTextAtTheTop()
+    {
+        using var pane = Pane();
+        pane.Open();
+        pane.Show();
+        pane.Write(new Markup(string.Join("\n", Enumerable.Range(1, 30).Select(i => $"row {i:00} aaaa bbbb cccc dddd eeee")) + Environment.NewLine));
+        pane.ScrollBy(-100);
+        pane.ScrollBy(15);
+        Assert.StartsWith("row 16", RowTexts(pane)[pane.ScrollTop]);
+
+        foreach (int width in (int[])[20, 33, 40])
+        {
+            _console.Profile.Width = width;
+            _time.Advance(ScreenPane.Tick);
+            Assert.StartsWith("row 16", RowTexts(pane)[pane.ScrollTop]);
+        }
+    }
+
+    /// <summary>A find near the region's foot pushed out of it by a narrowing (R63): the region follows it.</summary>
+    [Fact]
+    public void AFind_PushedOutOfTheRegion_ByANarrowing_IsShownAgain()
+    {
+        using var pane = LongLines();
+        pane.ShowFind("line 12", 11, 0);
+        _console.Profile.Width = 20;
+        _time.Advance(ScreenPane.Tick);
+        var place = pane.FindPlace;
+        Assert.StartsWith("line 12", RowTexts(pane)[place.Line]);
+        Assert.Equal(0, place.Start);
+        Assert.InRange(place.Line - pane.ScrollTop, 0, 5);
+    }
+
+    /// <summary>Rows read before a re-layout (R64): the find they name is refused, the pane's own place kept, and rows read after are shown.</summary>
+    [Fact]
+    public void ShowFind_WithAStaleVersion_IsRefused_AndTheFreshOneIsShown()
+    {
+        using var pane = LongLines();
+        pane.ShowFind("line 06", 5, 0);
+        var stale = pane.TranscriptRows(out int version, out var place);
+        Assert.Equal(new TextFind.Hit(5, 0), place);
+
+        _console.Profile.Width = 20;
+        Assert.False(pane.ShowFind("line 05", 4, 0, version));
+        Assert.Equal(new TextFind.Hit(10, 0), pane.FindPlace);   // "line 06" where it is now, two rows a line
+
+        var rows = pane.TranscriptRows(out version, out place);
+        Assert.Equal(new TextFind.Hit(10, 0), place);
+        Assert.True(pane.ShowFind("line 05", 8, 0, version));
+        Assert.StartsWith("line 05", TextFind.LineText(rows[pane.FindPlace.Line]));
+        Assert.NotEqual(stale.Count, rows.Count);
+    }
+
+    /// <summary>
+    /// Writes a re-layout left wrapped for want of time (R4, R25): rendered at the new width on the ticks after, at least one each,
+    /// with the pane's own clock never running the budget out by itself.
+    /// </summary>
+    [Fact]
+    public void Writes_PastTheRenderBudget_AreRenderedOnTheTicksAfter()
+    {
+        using var pane = Pane();
+        pane.Open();
+        pane.Show();
+        pane.Write(new WidthMarkup(width => new string('=', width)));
+        pane.Write(new WidthMarkup(width => new string('+', width)));
+        pane.RenderBudget = TimeSpan.Zero;
+
+        _console.Profile.Width = 30;
+        _time.Advance(ScreenPane.Tick);
+        Assert.Equal([new string('=', 30), new string('=', 10), new string('+', 30), new string('+', 10)], RowTexts(pane));
+        _time.Advance(ScreenPane.Tick);
+        _time.Advance(ScreenPane.Tick);
+        Assert.Equal([new string('=', 30), new string('+', 30)], RowTexts(pane));
+    }
+
+    /// <summary>A container written under one palette (R10): not rendered again under another, wrapped meanwhile, and rendered once it is back.</summary>
+    [Fact]
+    public void AContainer_UnderAnotherPalette_IsRenderedAgain_OnceItsPaletteIsBack()
+    {
+        using var theme = new ThemeScope();
+        using var pane = Pane();
+        pane.Open();
+        pane.Show();
+        var grid = new Grid().AddColumn().AddColumn();
+        grid.AddRow(new Text("left"), new Text("one two three four five six"));
+        pane.Write(grid);
+
+        Theme.Use(ShippedThemes.Netrunner);
+        _console.Profile.Width = 20;
+        _time.Advance(ScreenPane.Tick);
+        _time.Advance(ScreenPane.Tick);
+        var wrapped = pane.TranscriptRows().Select(TextFind.LineText).ToArray();
+        Assert.False(wrapped[1].StartsWith(' '), string.Join("|", wrapped));   // the written row cut at its words
+
+        Theme.Use(ShippedThemes.Synthwave);
+        _time.Advance(ScreenPane.Tick);
+        var rendered = pane.TranscriptRows().Select(TextFind.LineText).ToArray();
+        Assert.True(rendered[1].StartsWith(' '), string.Join("|", rendered));   // the grid's own layout: under its second column
+    }
+
+    /// <summary>A picture's open last row laid out narrower than written (R32): text written next starts a row of its own, on the screen and in the store.</summary>
+    [Fact]
+    public void Text_AfterANarrowedPicturesOpenRow_StartsARowOfItsOwn()
+    {
+        using var pane = Pane();
+        pane.Open();
+        pane.Show();
+        var picture = new CenteredPicture(new ImageThumbnail(4, 4, Enumerable.Repeat(Color.Red, 16).ToArray()), 9);
+        pane.WritePictures(picture);
+        int pictureRows = RowTexts(pane).Length;
+
+        _console.Profile.Width = 5;   // the picture's centered rows narrowed; "after" fits
+        _time.Advance(ScreenPane.Tick);
+        pane.Write(new Markup("after" + Environment.NewLine));
+        var rows = RowTexts(pane);
+        Assert.Equal("after", rows[^1]);
+        Assert.Equal(pictureRows + 1, rows.Length);
+    }
+
+    /// <summary>The splash's refit puts lines back write by write with the width each was written at (R2, R20): narrower, they wrap as written.</summary>
+    [Fact]
+    public void Rewrite_PutsEachWriteBack_WithItsWidth()
+    {
+        using var pane = Pane();
+        pane.Open();
+        pane.Show();
+        var mark = pane.StoreMark;
+        pane.MarkupLine("alpha bravo charlie delta echo foxtrot golf");
+        pane.Write(new Markup("plain" + Environment.NewLine));
+        var copied = pane.LinesSince(mark)!;
+        Assert.Equal([40, 40], copied.Chunks.Select(chunk => chunk.Born));
+
+        pane.Clear(home: true);
+        pane.Rewrite(copied);
+        _console.Profile.Width = 20;
+        _time.Advance(ScreenPane.Tick);
+        var rows = RowTexts(pane);
+        Assert.All(rows, row => Assert.True(row.Length <= 20, row));
+        Assert.Equal("plain", rows[^1]);
+    }
+
     // ── The alternate buffer and the scroll ─────────────────────────────────
 
     [WindowsFact]
@@ -4744,6 +5186,9 @@ public partial class ScreenPaneTests : IDisposable
         Assert.Equal("Alternate buffer entered (240×60)", ScreenPane.AlternateEnteredLogLine(240, 60));
         Assert.Equal("Alternate buffer left", ScreenPane.AlternateLeftLogLine);
         Assert.Equal("Resized 240×60 → 200×50", ScreenPane.ResizedLogLine(240, 60, 200, 50));
+        Assert.Equal("Relaid at 120 cells: 14 writes rendered again in 3.2 ms", ScreenPane.RelaidLogLine(120, 14, 3.24));
+        Assert.Equal("Relaid at 80 cells: 1 write rendered again in 0.0 ms", ScreenPane.RelaidLogLine(80, 1, 0));
+        Assert.Equal("Re-render at 12 cells failed: too narrow", ScreenPane.RenderFailedLogLine(12, "too narrow"));
     }
 
     // ── The toolbar (2026-09-21) ────────────────────────────────────────────

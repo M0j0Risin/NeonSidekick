@@ -120,11 +120,14 @@ public partial class ScreenPaneTests
         var (pane, _, _) = PaneWithCompanion();
         using (pane)
         {
+            var mark = pane.StoreMark;
             Frame();
             pane.Write(new Text("a startup line\n"));
 
             Assert.Equal(2, pane.FlowRow);   // the banner and the line: nothing of the companion in the flow
-            Assert.DoesNotContain(pane.LinesSince(new Scrollback.Place(0, 0, 0))?.Segments ?? [], s => s.Text.Contains('▀'));
+            var copied = pane.LinesSince(mark);
+            Assert.NotNull(copied);
+            Assert.DoesNotContain(copied.Segments, s => s.Text.Contains('▀'));
         }
     }
 

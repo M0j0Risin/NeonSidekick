@@ -236,7 +236,8 @@ public sealed partial class ScreenPane
     /// <summary>One frame (see the class's summary). Under the gate.</summary>
     private void CompanionFrameLocked(ICompanion companion)
     {
-        bool current = Width == _lastWidth && Height == _lastHeight;
+        // Nor while the tick has a resize to rebuild for (2026-10-29, the resize review): a draw at the new size before it left the old rows.
+        bool current = Width == _lastWidth && Height == _lastHeight && !ResizePending;
         int cursorRow = Height - 1 - LastRowBelowCursor;
         if (_companionAt is { } at && current)
         {

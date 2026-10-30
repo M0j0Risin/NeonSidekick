@@ -2497,6 +2497,24 @@ public partial class SidekickAppTests : IDisposable
         Assert.EndsWith("  …ick\\src", Markup.Remove(SidekickApp.BannerTitleMarkup("1.2.3", @"D:\Repo\NeonSidekick\src", 35 + SidekickApp.BannerPathGap + SidekickApp.BannerPathMinCells)));   // exactly the minimum room
     }
 
+    /// <summary>
+    /// The title line for any width (2026-10-29, the banner laid out again on a resize): <see cref="SidekickApp.BannerTitleMarkup"/>'s
+    /// line at each width, and the theme it was taken under kept — a theme picked since does not change a banner already drawn.
+    /// </summary>
+    [Fact]
+    public void BannerTitleAt_IsTheLineAtEachWidth_InTheThemeItWasTakenUnder()
+    {
+        using var theme = new ThemeScope();
+        var title = SidekickApp.BannerTitleAt("1.2.3", @"D:\Repo\NeonSidekick");
+        string at80 = SidekickApp.BannerTitleMarkup("1.2.3", @"D:\Repo\NeonSidekick", 80);
+        Assert.Equal(at80, title(80));
+        Assert.Equal(SidekickApp.BannerTitleMarkup("1.2.3", @"D:\Repo\NeonSidekick", 50), title(50));
+
+        Theme.Use(ShippedThemes.Cyberpunk);
+        Assert.NotEqual(at80, SidekickApp.BannerTitleMarkup("1.2.3", @"D:\Repo\NeonSidekick", 80));   // the theme changes a new line…
+        Assert.Equal(at80, title(80));                                                                // …not one already taken
+    }
+
     [Theory]
     [InlineData(null, 40, "")]
     [InlineData("", 40, "")]

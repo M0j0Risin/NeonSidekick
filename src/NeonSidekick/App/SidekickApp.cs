@@ -720,7 +720,10 @@ public sealed partial class SidekickApp
     /// level, the window title the profile, <c>/settings</c> the URL and any override. The keys are
     /// the pane's hint row, not the banner's. The banner is a flow write, so the path is the one at
     /// the draw — startup, <c>/clear</c>, a profile switch, the splash dismissal —; a <c>/cwd</c>
-    /// change shows at the next of those (the user's call over a rewrite in place).
+    /// change shows at the next of those (the user's call over a rewrite in place). The title line and
+    /// the rule are fitted to the width they are rendered at (<see cref="WidthMarkup"/>, 2026-10-29), so a
+    /// resize moves the path back to the right edge and spans the rule across the new width; the path and
+    /// the gradient are the ones taken at the draw.
     /// </summary>
     public void RenderBanner() => RenderBanner(_console);
 
@@ -734,10 +737,11 @@ public sealed partial class SidekickApp
         string? directory = effective.ShowWorkingDirectory
             ? ScreenPane.HomeTilde(WorkingDirectory.Resolve(effective.WorkingDirectory, _settings.ProfileDirectory), UserProfileFolder)   // ~ for the profile (2026-10-04)
             : null;
-        int width = Width();
+        var title = BannerTitleAt(Version, directory);
+        var stops = Theme.GradientStops.ToArray();
         console.WriteLine();
-        console.MarkupLine(BannerTitleMarkup(Version, directory, width));
-        console.MarkupLine(Theme.Rule(width));
+        console.Write(new WidthMarkup(title));
+        console.Write(new WidthMarkup(width => Theme.Rule(width, stops)));
         console.WriteLine();
     }
 
@@ -756,19 +760,25 @@ public sealed partial class SidekickApp
     /// at the right edge of a line <paramref name="width"/> cells wide, cut from the front to fit
     /// (<see cref="BannerPath"/>). Without one the line is the title and the version alone. Pure; pinned.
     /// </summary>
-    public static string BannerTitleMarkup(string version, string? workingDirectory, int width)
+    public static string BannerTitleMarkup(string version, string? workingDirectory, int width) => BannerTitleAt(version, workingDirectory)(width);
+
+    /// <summary>
+    /// <see cref="BannerTitleMarkup"/> for any width (2026-10-29, the banner laid out again on a resize): the gradient title, the
+    /// version and the dim color taken now, the path's cut and the padding worked out per width — so a banner already drawn keeps
+    /// the theme and the directory it was drawn with.
+    /// </summary>
+    public static Func<int, string> BannerTitleAt(string version, string? workingDirectory)
     {
         ArgumentNullException.ThrowIfNull(version);
         string versionText = "  v" + version;
         string left = Theme.GradientMarkup(BannerTitle) + Theme.DimMarkup(versionText);
         int leftCells = TextCells.Width(BannerTitle) + TextCells.Width(versionText);
-        string path = BannerPath(workingDirectory, width - leftCells - BannerPathGap);
-        if (path.Length == 0)
+        var dim = Theme.Dim;
+        return width =>
         {
-            return left;
-        }
-
-        return left + new string(' ', width - leftCells - TextCells.Width(path)) + Theme.DimMarkup(path);
+            string path = BannerPath(workingDirectory, width - leftCells - BannerPathGap);
+            return path.Length == 0 ? left : left + new string(' ', width - leftCells - TextCells.Width(path)) + Theme.ColorMarkup(dim, path);
+        };
     }
 
     /// <summary>
@@ -3573,7 +3583,4 @@ public void ViewerBrowsed(string path) => _screen?.ViewerBrowsed(path);
         SettingsField.DockerEnginePipe => _environment.DockerPipe is not null ? EnvironmentOverrides.DockerPipeVariable : null,
         _ => null,
     };
-
-    /// <summary>The banner rule's width: <see cref="TranscriptRenderer.RuleWidth"/>, shared with the transcript's own rule (<c>/new</c>).</summary>
-    private int Width() => TranscriptRenderer.RuleWidth(_console.Profile.Width);
 }
