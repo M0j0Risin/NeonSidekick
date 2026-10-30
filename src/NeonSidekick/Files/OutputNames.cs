@@ -6,8 +6,9 @@ namespace NeonSidekick.Files;
 /// A converter's output name (2026-10-29, the Office writing plan; <c>PdfPlan.OutputFor</c>'s rule of 2026-10-03, lifted so <c>.pdf</c>,
 /// <c>.docx</c> and <c>.xlsx</c> are named one way): a <c>to</c> naming a file is kept, its extension added when it has another ending
 /// (<c>report.v2</c> → <c>report.v2.xlsx</c>); otherwise a name is made — the source's stem beside it (a source under <c>.neon/</c>, a plan
-/// or an audit, at the top of the working folder, since <c>WriteGuard</c> refuses <c>.neon</c>), a web page's host and last segment, or a
-/// title (else <paramref name="fallbackStem"/>) and the minute — inside the folder <c>to</c> names, beside the source, or at the top. Pure.
+/// or an audit, at the top of the working folder, since <c>WriteGuard</c> refuses <c>.neon</c> and <c>.git</c> at any depth), a web page's
+/// host and last segment, or a title (else <paramref name="fallbackStem"/>) and the minute — inside the folder <c>to</c> names, beside the
+/// source, or at the top. Pure.
 /// </summary>
 public static class OutputNames
 {
@@ -62,21 +63,27 @@ public static class OutputNames
         return target.EndsWith(extension, StringComparison.OrdinalIgnoreCase) ? target : target + extension;
     }
 
-    /// <summary>A name for text with no file: the title (when not the reply's) or <paramref name="fallbackStem"/>, and the time to the minute.</summary>
+    /// <summary>
+    /// A name for text with no file: the title (when not the reply's) or <paramref name="fallbackStem"/>, and the time to the minute. The
+    /// title is made file-safe as <see cref="FileNames.Safe"/> makes words, its case kept (2026-10-29, review P5-4: a slash kept only what
+    /// followed it, and a long title ran past the path's limit).
+    /// </summary>
     public static string Stamped(string? title, DateTimeOffset now, string fallbackStem = "reply")
     {
         string stem = string.IsNullOrWhiteSpace(title) || string.Equals(title.Trim(), Printing.PrintText.ReplyTitle, StringComparison.Ordinal)
             ? fallbackStem
-            : Llm.Tools.DownloadFileTool.Sanitise(title.Trim().Replace(' ', '-'));
+            : FileNames.Safe(title, lowerCase: false);
         return (stem.Length == 0 ? fallbackStem : stem) + "-" + now.ToString("yyyy-MM-dd-HHmm", CultureInfo.InvariantCulture);
     }
 
-    /// <summary>Whether <paramref name="relative"/> lies under the working folder's <c>.neon</c> (any case, either separator).</summary>
+    /// <summary>
+    /// Whether the file at <paramref name="relative"/> lies in a folder nothing may be written beside: a <c>.neon</c> or <c>.git</c> at any
+    /// depth (<see cref="WriteGuard.GuardedFolder"/>, any case, either separator).
+    /// </summary>
     public static bool UnderNeon(string relative)
     {
         ArgumentNullException.ThrowIfNull(relative);
-        string first = relative.Replace('\\', '/').TrimStart('/').Split('/')[0];
-        return first.Equals(WriteGuard.NeonFolderName, StringComparison.OrdinalIgnoreCase);
+        return WriteGuard.GuardedFolder(Path.GetDirectoryName(relative.Replace('\\', '/')) ?? "") is not null;
     }
 
     /// <summary>

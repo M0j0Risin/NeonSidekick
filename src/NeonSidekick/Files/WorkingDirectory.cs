@@ -294,8 +294,44 @@ public sealed record WriteResult(FileOutcome Outcome, string Relative, long Byte
     /// </summary>
     public bool InUse { get; init; }
 
-    /// <summary>Whether <paramref name="ex"/> is Windows' sharing or lock violation (<c>0x80070020</c>/<c>0x80070021</c>).</summary>
-    public static bool IsInUse(Exception ex) => ex is IOException && ex.HResult is unchecked((int)0x80070020) or unchecked((int)0x80070021);
+    /// <summary>
+    /// Whether <paramref name="ex"/> is Windows' sharing or lock violation (<c>0x80070020</c>/<c>0x80070021</c>), or <c>ReplaceFile</c>'s
+    /// own three (<c>0x497</c>–<c>0x499</c>: unable to remove, move or remove the backup of the replaced file, 2026-10-29, review P1-5: a
+    /// workbook open in Excel failed the replace with one of them, and the answer said "could not write" in place of "close it in Excel").
+    /// </summary>
+    public static bool IsInUse(Exception ex) => ex is IOException
+        && ex.HResult is unchecked((int)0x80070020) or unchecked((int)0x80070021) or unchecked((int)0x80070497) or unchecked((int)0x80070498) or unchecked((int)0x80070499);
+
+    /// <summary>
+    /// <see cref="IsInUse(Exception)"/>, or an access denial at <paramref name="full"/> that isn't the read-only refusal and whose file can't be
+    /// opened alone now (2026-10-29, review P1-5: the move over a file Excel holds is denied, not a sharing violation). Windows only; false elsewhere.
+    /// </summary>
+    public static bool IsInUse(Exception ex, string full)
+    {
+        if (IsInUse(ex))
+        {
+            return true;
+        }
+
+        if (!OperatingSystem.IsWindows() || ex is not UnauthorizedAccessException || ex.Message == FileText.ReadOnlyDetail)
+        {
+            return false;
+        }
+
+        try
+        {
+            using var alone = new FileStream(full, FileMode.Open, FileAccess.Read, FileShare.None);
+            return false;
+        }
+        catch (IOException probe) when (IsInUse(probe))
+        {
+            return true;
+        }
+        catch (Exception probe) when (WorkingDirectory.IsFileFailure(probe))
+        {
+            return false;
+        }
+    }
 }
 
 /// <summary>
@@ -312,11 +348,14 @@ public sealed class PendingWrite : IDisposable
     private readonly bool _overwrite;
     private readonly bool _preserve;
     private readonly FileStream _stream;
+    private readonly JournalMark _mark;
     private bool _done;
 
-    internal PendingWrite(string full, string display, bool overwrite, bool preserve)
+    /// <param name="mark">What the checkpoint journal recorded for this write, taken back when the write never lands (2026-10-29, review P2-8).</param>
+    internal PendingWrite(string full, string display, bool overwrite, bool preserve, JournalMark mark = default)
     {
         _full = full;
+        _mark = mark;
         _overwrite = overwrite;
         _preserve = preserve;
         Relative = display;
@@ -336,7 +375,8 @@ public sealed class PendingWrite : IDisposable
     /// there), <see cref="FileOutcome.Exists"/> when one appeared meanwhile and <c>overwrite</c> was not given, or
     /// <see cref="FileOutcome.Failed"/> with the file system's message. The temporary file goes either way. A <paramref name="mark"/>
     /// (<see cref="MarkOfTheWeb.ForDownload"/>) goes on the file once it is in place (2026-10-23, the Mac pass: a download came unmarked);
-    /// a volume that takes none leaves it unmarked, said in the log.
+    /// a volume that takes none leaves it unmarked, said in the log. A write that doesn't land takes back what the journal recorded for it
+    /// (2026-10-29, review P2-8), as <see cref="WorkingDirectory.WriteBytes"/> does, so <c>/undo</c> never lists a change that didn't happen.
     /// </summary>
     public WriteResult Commit(byte[]? mark = null)
     {
@@ -349,6 +389,7 @@ public sealed class PendingWrite : IDisposable
             bool existed = File.Exists(_full);
             if (existed && !_overwrite)
             {
+                FileJournal.TakeBack(_mark);
                 return new WriteResult(FileOutcome.Exists, Relative, 0, false);
             }
 
@@ -357,6 +398,7 @@ public sealed class PendingWrite : IDisposable
             {
                 if (!WorkingDirectory.MoveTempNew(_temp, _full))
                 {
+                    FileJournal.TakeBack(_mark);
                     return new WriteResult(FileOutcome.Exists, Relative, 0, false);
                 }
             }
@@ -374,7 +416,8 @@ public sealed class PendingWrite : IDisposable
         }
         catch (Exception ex) when (WorkingDirectory.IsFileFailure(ex))
         {
-            return new WriteResult(FileOutcome.Failed, Relative, 0, false, Detail: ex.Message) { InUse = WriteResult.IsInUse(ex) };
+            FileJournal.TakeBack(_mark);
+            return new WriteResult(FileOutcome.Failed, Relative, 0, false, Detail: ex.Message) { InUse = WriteResult.IsInUse(ex, _full) };
         }
         finally
         {
@@ -382,6 +425,7 @@ public sealed class PendingWrite : IDisposable
         }
     }
 
+    /// <summary>The temporary file deleted; a write never committed takes back its journal entry (2026-10-29, review P2-8).</summary>
     public void Dispose()
     {
         _stream.Dispose();
@@ -389,6 +433,7 @@ public sealed class PendingWrite : IDisposable
         {
             _done = true;
             WorkingDirectory.DeleteQuietly(_temp);
+            FileJournal.TakeBack(_mark);
         }
     }
 }
@@ -2664,9 +2709,18 @@ public sealed class WorkingDirectory
                 return new WriteResult(FileOutcome.Exists, display, 0, false);
             }
 
-            PrepareWrite(() => FileJournal.Writing(this, full), full);
-            Directory.CreateDirectory(Path.GetDirectoryName(full)!);
-            pending = new PendingWrite(full, display, overwrite, _options.PreserveOnReplace);
+            var mark = PrepareWrite(() => FileJournal.Writing(this, full), full);
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+                pending = new PendingWrite(full, display, overwrite, _options.PreserveOnReplace, mark);
+            }
+            catch (Exception ex) when (IsFileFailure(ex))
+            {
+                FileJournal.TakeBack(mark);
+                throw;
+            }
+
             return new WriteResult(FileOutcome.Ok, display, 0, existed);
         }
         catch (Exception ex) when (IsFileFailure(ex))

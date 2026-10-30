@@ -271,15 +271,12 @@ public sealed class MarkdownView : IRenderable
                 case TextRun run:
                     paragraph.Append(run.Text, flat ? baseStyle : RunStyle(run, baseStyle));
                     break;
-                case LinkRun or ImageRun:
-                    // A picture shows as the link it was (2026-10-29): its alt text and its address.
-                    var (text, url) = inline is LinkRun link ? (link.Text, link.Url) : (((ImageRun)inline).Alt, ((ImageRun)inline).Url);
-                    paragraph.Append(text.Length > 0 ? text : url, baseStyle ?? Theme.Assistant);
-                    if (url.Length > 0 && !string.Equals(url, text, StringComparison.Ordinal))
-                    {
-                        paragraph.Append(" (" + url + ")", Theme.MarkdownLinkUrl);
-                    }
-
+                case LinkRun link:
+                    AppendLink(link.Text, link.Url);
+                    break;
+                case ImageRun image:
+                    // A picture shows as the link it was (2026-10-29): its alt text and its address, or its link's.
+                    AppendLink(image.Alt, image.Shown);
                     break;
                 case HardBreak:
                     paragraph.Append("\n", baseStyle);
@@ -288,6 +285,16 @@ public sealed class MarkdownView : IRenderable
         }
 
         return paragraph;
+
+        // One shape for a link and a picture (2026-10-29, review P6-9: one case re-tested and cast the picture twice).
+        void AppendLink(string text, string url)
+        {
+            paragraph.Append(text.Length > 0 ? text : url, baseStyle ?? Theme.Assistant);
+            if (url.Length > 0 && !string.Equals(url, text, StringComparison.Ordinal))
+            {
+                paragraph.Append(" (" + url + ")", Theme.MarkdownLinkUrl);
+            }
+        }
     }
 
     /// <summary>A run's style: code wins, then the emphasis over the base colour (the quote's) or the body's.</summary>

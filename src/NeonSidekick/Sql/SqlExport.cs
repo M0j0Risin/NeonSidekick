@@ -1,34 +1,49 @@
 using System.Data.Common;
 using System.Globalization;
 using System.Numerics;
+using NeonSidekick.Files;
 using NeonSidekick.Office;
 
 namespace NeonSidekick.Sql;
 
-/// <summary>A cell read for a workbook: the family's typed reader of one column of the current row.</summary>
-public delegate XlsxValue SqlCellReader(DbDataReader reader, int ordinal);
+/// <summary>
+/// A cell read for a workbook: the family's typed reader of one column of the current row. <paramref name="typeName"/> is the column's
+/// type name, read once per result set (2026-10-29, review P4-8: asked per cell, it cost a provider call each).
+/// </summary>
+public delegate XlsxValue SqlCellReader(DbDataReader reader, int ordinal, string? typeName);
 
 /// <summary>
 /// A query's rows streamed into a workbook's sheet (2026-10-29, the Office writing plan's export, the six query tools' <c>to</c>): in place of
 /// <see cref="SqlGrid.ReadAsync"/>, inside the family's own read-only session, so the gates, the session and the rollback are the chat's.
 /// Each row goes straight to the <see cref="ISheetRows"/> (a <c>SheetWriter</c> over the pending file), so memory stays flat; the grid it
 /// hands back holds the columns and the first <see cref="SqlExport.PreviewRows"/> rows as the chat would show them, and
-/// <see cref="SqlGrid.More"/> when the cap stopped it (read one row past, as the chat does). A sheet that won't take the columns stops the
-/// read with <see cref="Refusal"/> set, never a throw the family's catch could turn into a server's error.
+/// <see cref="SqlGrid.More"/> when the cap stopped it (read one row past, as the chat does). The sheet is begun only when the first result
+/// set arrives (2026-10-29, review P2-8: a query that failed to connect or parse had already copied the workbook and left a checkpoint
+/// entry). A sheet that won't begin or take the columns stops the read with <see cref="Refusal"/> set, never a throw the family's catch
+/// could turn into a server's error.
 /// </summary>
 public sealed class SqlExportJob
 {
-    private readonly ISheetRows _sink;
+    private readonly Func<(ISheetRows? Sink, string? Refusal)> _begin;
     private SqlCellReader _cell;
     private readonly Func<DbDataReader, int, string>? _header;
 
+    /// <param name="begin">The sheet begun (the pending file opened): the rows' sink, or null with the refusal. Called once, inside the session.</param>
     /// <param name="header">A column's header when the family adds to its name (PostgreSQL's <c> (UTC)</c>); null for the name.</param>
-    public SqlExportJob(ISheetRows sink, SqlCellReader cell, Func<DbDataReader, int, string>? header = null)
+    public SqlExportJob(Func<(ISheetRows? Sink, string? Refusal)> begin, SqlCellReader cell, Func<DbDataReader, int, string>? header = null)
     {
-        _sink = sink ?? throw new ArgumentNullException(nameof(sink));
+        _begin = begin ?? throw new ArgumentNullException(nameof(begin));
         _cell = cell ?? throw new ArgumentNullException(nameof(cell));
         _header = header;
     }
+
+    /// <summary>A job over a sheet already begun.</summary>
+    public SqlExportJob(ISheetRows sink, SqlCellReader cell, Func<DbDataReader, int, string>? header = null)
+        : this(Already(sink ?? throw new ArgumentNullException(nameof(sink))), cell, header)
+    {
+    }
+
+    private static Func<(ISheetRows?, string?)> Already(ISheetRows sink) => () => (sink, null);
 
     /// <summary>
     /// The cell reader replaced once the family knows the columns' types: DuckDB reads every value as text (its wrapper) and learns the
@@ -62,11 +77,24 @@ public sealed class SqlExportJob
         }
 
         Read = true;
+        var (sink, refused) = _begin();
+        if (sink is null)
+        {
+            Refusal = refused ?? FileText.SaveNotHere;
+            return new SqlGrid(columns, [], false);
+        }
+
         var headers = _header is null ? columns : [.. columns.Select((c, i) => _header(reader, i))];
-        Refusal = _sink.Begin(headers);
+        Refusal = sink.Begin(headers);
         if (Refusal is not null)
         {
             return new SqlGrid(columns, [], false);
+        }
+
+        var types = new string?[columns.Length];
+        for (int i = 0; i < types.Length; i++)
+        {
+            types[i] = reader.GetDataTypeName(i);
         }
 
         var preview = new List<string[]>();
@@ -82,10 +110,10 @@ public sealed class SqlExportJob
 
             for (int i = 0; i < row.Length; i++)
             {
-                row[i] = _cell(reader, i);
+                row[i] = _cell(reader, i, types[i]);
             }
 
-            if (!_sink.Add(row))
+            if (!sink.Add(row))
             {
                 more = true;
                 break;
@@ -121,48 +149,81 @@ public static class SqlExport
     /// <summary>An export's timeout: the larger of the family's *Query timeout* and <see cref="MinTimeoutSeconds"/>.</summary>
     public static int TimeoutFor(int setting) => Math.Max(setting, MinTimeoutSeconds);
 
-    /// <summary>The clause a cut chat query's "more exist" adds while a save root is open, so the model learns <c>to</c> when it helps.</summary>
-    public const string SaveHint = ", or write them all to a spreadsheet with to";
-
-    /// <summary>The hint when <paramref name="canSave"/>, else nothing: the six families' cut sentences end with it.</summary>
-    public static string Hint(bool canSave) => canSave ? SaveHint : "";
+    /// <summary>
+    /// A made-up workbook name's stem for a connection or database <paramref name="name"/>: <c>query-&lt;name&gt;</c>, or <c>query</c> when
+    /// nothing of the name is fit for a file name (2026-10-29, review P3-12: a name of symbols alone made <c>query-.xlsx</c>).
+    /// </summary>
+    public static string FileStem(string? name) => FileNames.Safe(name ?? "") is { Length: > 0 } safe ? "query-" + safe : "query";
 
     /// <summary>Whether a column's type name says a date alone (<c>date</c> in any case): its midnight values are dates, not date-times.</summary>
     public static bool IsDateType(string? typeName) => string.Equals(typeName?.Trim(), "date", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// A cell by the common rules: NULL is blank; a value of a type the sheet holds (numbers, booleans, text, dates and times, bytes, GUIDs)
-    /// typed by <see cref="XlsxValue.From"/>, a date column's midnight a date; anything else (an array, a provider's own type) the family's
-    /// own text through <paramref name="fallback"/>. A value the provider can't hand over (past <see cref="decimal"/>) is its provider value's
-    /// text, by the 15-digit rule when it is a number.
+    /// typed by <see cref="XlsxValue.From"/>, a date column's midnight a date (<paramref name="typeName"/>; null when no column of the family
+    /// holds a date alone); anything else (an array, a provider's own type) the family's export text through <paramref name="text"/>, never
+    /// the chat's clipped cell (2026-10-29, review P5-1: an array was cut at the chat's 500 characters and scrubbed). A value the provider
+    /// can't hand over (past <see cref="decimal"/>) is its provider value's text, by the 15-digit rule when it is a number.
     /// </summary>
-    public static XlsxValue Typed(DbDataReader reader, int ordinal, Func<DbDataReader, int, string> fallback)
+    public static XlsxValue Typed(DbDataReader reader, int ordinal, string? typeName, Func<object, string> text)
     {
         ArgumentNullException.ThrowIfNull(reader);
-        ArgumentNullException.ThrowIfNull(fallback);
+        ArgumentNullException.ThrowIfNull(text);
         try
         {
-            if (reader.IsDBNull(ordinal))
-            {
-                return XlsxValue.Blank;
-            }
-
-            object value = reader.GetValue(ordinal);
-            return IsScalar(value) ? XlsxValue.From(value, IsDateType(reader.GetDataTypeName(ordinal))) : XlsxValue.OfText(fallback(reader, ordinal));
+            return reader.IsDBNull(ordinal) ? XlsxValue.Blank : FromValue(reader.GetValue(ordinal), typeName, text);
         }
         catch (Exception ex) when (ex is InvalidCastException or OverflowException)
         {
-            try
-            {
-                string text = reader.GetProviderSpecificValue(ordinal)?.ToString() ?? "";
-                return XlsxValue.OfNumberText(text);
-            }
-            catch (Exception inner) when (inner is not (DbException or OperationCanceledException or OutOfMemoryException))
-            {
-                return XlsxValue.OfText(fallback(reader, ordinal));
-            }
+            return FromProvider(reader, ordinal, typeName);
         }
     }
+
+    /// <summary>A value already read (MySQL's, judged for its zero dates first) by <see cref="Typed"/>'s rules.</summary>
+    public static XlsxValue FromValue(object? value, string? typeName, Func<object, string> text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return value is null or DBNull ? XlsxValue.Blank
+            : IsScalar(value) ? XlsxValue.From(value, IsDateType(typeName))
+            : XlsxValue.OfText(text(value));
+    }
+
+    /// <summary>A value GetValue won't hand over: its provider value's invariant text, by the 15-digit rule; the type's name when that fails too.</summary>
+    public static XlsxValue FromProvider(DbDataReader reader, int ordinal, string? typeName)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+        try
+        {
+            return XlsxValue.OfNumberText(InvariantText(reader.GetProviderSpecificValue(ordinal)));
+        }
+        catch (Exception inner) when (inner is not (DbException or OperationCanceledException or OutOfMemoryException))
+        {
+            return XlsxValue.OfText(SqlExportText.Unreadable(typeName));
+        }
+    }
+
+    /// <summary>
+    /// A value's text for a cell, in full and culture-free (2026-10-29, review P1-11: a provider's own number type wrote the culture's
+    /// separators): dates and times as ISO, bytes as hex, a double round-trip, anything formattable invariant, else its own text. The
+    /// cell's cap is <see cref="XlsxValue.OfText"/>'s.
+    /// </summary>
+    public static string InvariantText(object? value) => value switch
+    {
+        null or DBNull => "",
+        string s => s,
+        bool b => b ? "true" : "false",
+        DateTime d => d.ToString(d.TimeOfDay == TimeSpan.Zero ? "yyyy-MM-dd" : "yyyy-MM-dd HH:mm:ss.FFFFFFF", CultureInfo.InvariantCulture),
+        DateTimeOffset o => o.ToString("yyyy-MM-dd HH:mm:ss.FFFFFFF zzz", CultureInfo.InvariantCulture),
+        DateOnly d => d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+        TimeOnly t => t.ToString("HH:mm:ss.FFFFFFF", CultureInfo.InvariantCulture),
+        TimeSpan t => t.ToString("c", CultureInfo.InvariantCulture),
+        byte[] bytes => "0x" + Convert.ToHexString(bytes, 0, Math.Min(bytes.Length, (XlsxValue.MaxChars - 3) / 2 + 1)),
+        Guid g => g.ToString("D", CultureInfo.InvariantCulture),
+        double f => f.ToString("R", CultureInfo.InvariantCulture),
+        float f => f.ToString("R", CultureInfo.InvariantCulture),
+        IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
+        var other => other.ToString() ?? "",
+    };
 
     /// <summary>Whether <paramref name="value"/> is a kind the sheet types itself; anything else goes as the family's text.</summary>
     public static bool IsScalar(object? value) => value is null or DBNull or string or bool or double or float or Half or decimal or byte or sbyte

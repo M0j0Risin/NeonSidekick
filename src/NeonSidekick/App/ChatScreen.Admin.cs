@@ -156,6 +156,20 @@ internal sealed partial class ChatScreen
 
     private Files.SaveRoot SaveRootNow() => SaveRootFor(_effective().FileTools, _plan.Active, _files);
 
+    /// <summary>
+    /// Where a query's <c>to</c> may write: <see cref="SaveRootFor"/>, and only while <c>convert_to_xlsx</c> is on (2026-10-29, review P3-3:
+    /// a user who turned the workbook tool off still had workbooks written by the queries).
+    /// </summary>
+    public static Files.SaveRoot QuerySaveRootFor(AppSettingsData settings, bool planMode, WorkingDirectory files)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        return settings.ToolsDisabled.Contains(Llm.Tools.ConvertToXlsxTool.ToolName, StringComparer.Ordinal)
+            ? Files.SaveRoot.Refused(FileText.SaveNeedsXlsx)
+            : SaveRootFor(settings.FileTools, planMode, files);
+    }
+
+    private Files.SaveRoot QuerySaveRootNow() => QuerySaveRootFor(_effective(), _plan.Active, _files);
+
     public static readonly IReadOnlySet<string> NetworkToolNames = new HashSet<string>(StringComparer.Ordinal)
     {
         NetDnsTool.ToolName, NetPingTool.ToolName, NetTraceTool.ToolName, NetPortTool.ToolName, NetTlsTool.ToolName, NetCertsTool.ToolName,

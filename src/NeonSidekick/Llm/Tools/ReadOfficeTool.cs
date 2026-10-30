@@ -58,7 +58,7 @@ public sealed class ReadOfficeTool : FileTool
         "Reads a Word (.docx), Excel (.xlsx) or PowerPoint (.pptx) file under the working directory (the user's cwd / current directory) as text. " +
         "Word: the document as Markdown. Excel: without sheet, its sheets with their used ranges and the first rows; sheet and range read cells as a table. " +
         "PowerPoint: the slides with their titles; notes: true adds the speaker notes. " +
-        "A long answer comes back in part, its header naming what to ask for next. read_file cannot read an Office file; convert_to_docx and convert_to_xlsx write them.";
+        "A long answer comes back in part, its header naming what to ask for next. read_file cannot read an Office file.";
 
     private const string ShareDescription = " With share, or a full \\\\server\\share path, it reads one on that UNC share where it is.";
 

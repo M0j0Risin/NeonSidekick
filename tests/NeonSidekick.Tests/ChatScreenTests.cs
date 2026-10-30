@@ -4026,7 +4026,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task WithGeometry_SysPromptWithAskOff_SaysSo_OnTheToolsTab()
     {
         _settings.Update(d => { d.TtsOutput = false; d.AskUser = false; d.MenuMaxHeight = "full"; });   // the whole tab (2026-10-01)
-        _console.Profile.Height = 126;   // the Git group (2026-09-20) makes the Tools tab eleven rows taller; image_edit's and image_info's lossless-strip lines (2026-10-05) a few more; read_office (2026-10-28) a few more
+        _console.Profile.Height = 132;   // the Git group (2026-09-20) makes the Tools tab eleven rows taller; image_edit's and image_info's lossless-strip lines (2026-10-05) a few more; read_office (2026-10-28) a few more; convert_to_xlsx's and convert_to_docx's longer descriptions (2026-10-29, review P2-6) a few more
         _geometry = new ScreenGeometry(() => null);
         PushLine("/sys");
         _console.Input.PushKey(Keys.Right);

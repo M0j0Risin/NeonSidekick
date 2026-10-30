@@ -12,8 +12,15 @@ namespace NeonSidekick.Llm.Tools;
 /// writes, through <see cref="DocxConverter"/> (shared with <c>/docx</c>), never the model's own bytes. One of the file tools, so *File
 /// tools* rules it; quiet, so the Markdown a call carries never reaches the transcript. Not in plan mode.
 /// </summary>
-public sealed class ConvertToDocxTool : FileTool
+public sealed class ConvertToDocxTool : FileTool, IRefusesPrunedStubs
 {
+    /// <inheritdoc/>
+    /// <remarks>
+    /// The Markdown is the tool's own to refuse (2026-10-29, review P7-10): its <see cref="FileText.PrunedStubSent"/> names the argument, where
+    /// the generic refusal didn't reach the model.
+    /// </remarks>
+    public IReadOnlyCollection<string> StubArguments { get; } = [MarkdownArgument];
+
     public const string ToolName = "convert_to_docx";
 
     public const string MarkdownArgument = "markdown";
@@ -29,7 +36,7 @@ public sealed class ConvertToDocxTool : FileTool
           "properties": {
             "path": { "type": "string", "description": "The Markdown (.md) or text (.txt) file to make a Word document of, relative to the working directory." },
             "markdown": { "type": "string", "description": "Markdown text to make a Word document of, instead of path: a report or notes written for it." },
-            "title": { "type": "string", "description": "With markdown: the document's title, shown at the top of each page and used to name the file." },
+            "title": { "type": "string", "description": "The document's title, shown at the top of each page; with markdown it names the file too. Default: the first # heading." },
             "to": { "type": "string", "description": "The .docx path or folder, relative to the working directory. Default: beside the source file with .docx, or at the top for markdown." },
             "overwrite": { "type": "boolean", "description": "Replace a document that is already there. Default false." },
             "paper": { "type": "string", "enum": ["letter", "a4", "legal"], "description": "The paper size. Default letter." },

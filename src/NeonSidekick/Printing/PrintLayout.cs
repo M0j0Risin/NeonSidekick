@@ -329,7 +329,7 @@ public static class PrintLayout
             {
                 TextRun run => run.Text,
                 LinkRun link => LinkText(link.Text, link.Url),
-                ImageRun image => LinkText(image.Alt, image.Url),
+                ImageRun image => LinkText(image.Alt, image.Shown),
                 HardBreak => " ",
                 _ => "",
             });
@@ -570,7 +570,7 @@ public static class PrintLayout
                         runs.Add((LinkText(link.Text, link.Url), baseFont with { Italic = true }));
                         break;
                     case ImageRun image:
-                        runs.Add((LinkText(image.Alt, image.Url), baseFont with { Italic = true }));
+                        runs.Add((LinkText(image.Alt, image.Shown), baseFont with { Italic = true }));
                         break;
                     case HardBreak:
                         runs.Add(("\n", baseFont));

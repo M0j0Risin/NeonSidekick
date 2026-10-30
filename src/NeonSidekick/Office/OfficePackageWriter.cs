@@ -66,8 +66,11 @@ public sealed class OfficePackageWriter : IDisposable
         return writer;
     }
 
-    /// <summary>A new part's bytes (a picture, a copied entry): the stream to fill and dispose before the next part is begun.</summary>
-    public Stream Raw(string name, string? contentType)
+    /// <summary>
+    /// A new part's bytes (a picture, a copied entry): the stream to fill and dispose before the next part is begun. <paramref name="level"/>
+    /// lets a copy store what is compressed already (2026-10-29, review P6-5).
+    /// </summary>
+    public Stream Raw(string name, string? contentType, CompressionLevel level = CompressionLevel.Optimal)
     {
         ArgumentNullException.ThrowIfNull(name);
         ObjectDisposedException.ThrowIf(_finished, this);
@@ -76,7 +79,7 @@ public sealed class OfficePackageWriter : IDisposable
             _overrides.Add((name, contentType));
         }
 
-        var entry = _zip.CreateEntry(name, CompressionLevel.Optimal);
+        var entry = _zip.CreateEntry(name, level);
         entry.LastWriteTime = _now.ToLocalTime() < new DateTimeOffset(1980, 1, 2, 0, 0, 0, TimeSpan.Zero) ? new DateTimeOffset(1980, 1, 2, 0, 0, 0, TimeSpan.Zero) : _now;
         return entry.Open();
     }

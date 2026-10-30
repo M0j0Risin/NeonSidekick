@@ -21,7 +21,7 @@ public sealed class SqlQueryTool : SqlTool
     public const int MinRows = AppSettingsData.MinSqlQueryMaxRows;
     public const int MaxRows = AppSettingsData.MaxSqlQueryMaxRows;
 
-    private static readonly JsonElement Schema = ToolSchema.Parse(
+    private static readonly (JsonElement Export, JsonElement Plain) Schemas = QuerySchemas(
         $$"""
         {
           "type": "object",
@@ -45,9 +45,9 @@ public sealed class SqlQueryTool : SqlTool
     public override string Description =>
         "Runs one read-only T-SQL SELECT on a SQL Server connection and returns the rows as a table. " +
         "Only a single SELECT (or WITH … SELECT) is accepted; bind values as @name through params rather than writing them into the text. " +
-        "The header says when more rows exist than were returned." + ExportSentence;
+        "The header says when more rows exist than were returned." + SaveSentence;
 
-    public override JsonElement JsonSchema => Schema;
+    public override JsonElement JsonSchema => QuerySchema(Schemas);
 
     /// <summary>The row cap a call without <c>max_rows</c> gets: the setting, clamped.</summary>
     public static int DefaultRows(AppSettingsData effective)
@@ -129,10 +129,9 @@ public sealed class SqlQueryTool : SqlTool
     {
         ArgumentNullException.ThrowIfNull(sql);
         ArgumentNullException.ThrowIfNull(parameters);
-        int rows = export is null ? maxRows ?? DefaultRows(Effective) : ExportRows(maxRows) ?? 0;
-        if (export is null ? rows < MinRows || rows > MaxRows : rows == 0)
+        if (RowCap(export, maxRows, DefaultRows(Effective), MinRows, MaxRows, out int rows) is { } badRows)
         {
-            return export is null ? SqlText.BadMaxRows(MinRows, MaxRows) : SqlText.BadMaxRows(1, SqlExport.MaxRows);
+            return badRows;
         }
 
         if ((SqlReadOnlyGate.Check(sql) ?? await OutsideAsync(sql, connection, cancellationToken).ConfigureAwait(false)) is { } refused)
@@ -147,9 +146,8 @@ public sealed class SqlQueryTool : SqlTool
                 return SqlText.Error(unresolved!);
             }
 
-            int timeout = SqlExport.TimeoutFor(TimeoutSeconds(Effective));
-            return await ExportAsync(export, target.Name, rows, SqlAccess.ExportCell,
-                (job, token) => Sql.ExportAsync(connection, sql, parameters, job, rows, timeout, token), SqlText.Error, cancellationToken).ConfigureAwait(false);
+            return await ExportAsync(export, target.Name, rows, maxRows, TimeoutSeconds(Effective), SqlAccess.ExportCell,
+                (job, timeout, token) => Sql.ExportAsync(connection, sql, parameters, job, rows, timeout, token), SqlText.Error, cancellationToken).ConfigureAwait(false);
         }
 
         var run = await Sql.RunAsync(connection, sql, parameters, rows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);

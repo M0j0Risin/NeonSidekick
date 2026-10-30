@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.IO.Compression;
 using System.Xml;
 using NeonSidekick.Files;
 
@@ -30,6 +31,12 @@ public sealed class WorkbookAppender : IWorkbookJob
     /// <summary>A replaced sheet's relationships that belong to its old cells alone and go with them.</summary>
     private static readonly string[] Droppable = ["printerSettings", "hyperlink"];
 
+    /// <summary>
+    /// What the bold header font keeps of the workbook's first font (2026-10-29, review P1-14b: an underline, a strike or an outline came along
+    /// with the size and the face).
+    /// </summary>
+    private static readonly HashSet<string> HeaderFontParts = new(StringComparer.Ordinal) { "sz", "color", "name", "family", "charset", "scheme" };
+
     private readonly string _display;
     private readonly string _main;
     private readonly string _mainStored;
@@ -43,6 +50,8 @@ public sealed class WorkbookAppender : IWorkbookJob
     private readonly byte[]? _styles;
     private readonly List<string> _stored;
     private readonly Dictionary<string, string> _partOf = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _overrides;
+    private string _ownStylesPart = "";
     private readonly List<int> _formatIds;
     private readonly int _fontCount;
     private readonly int _xfCount;
@@ -81,6 +90,8 @@ public sealed class WorkbookAppender : IWorkbookJob
         _rels = _relsStored is null ? null : source.Bytes(relsPart);
         _typesStored = source.StoredName("[Content_Types].xml") ?? throw new OfficeDamagedException("[Content_Types].xml");
         _types = source.Bytes("[Content_Types].xml");
+        // Read here, so damage is a refusal before anything is written (2026-10-29, review P7-1), and every part it names counts as taken.
+        _overrides = OfficePackage.Guard("[Content_Types].xml", () => OverridesOf(_types));
         _stylesPart = source.Related(main, "styles");
         _calcChainPart = source.Related(main, "calcChain");
         _styles = _stylesPart is null ? null : source.Bytes(_stylesPart);
@@ -102,11 +113,20 @@ public sealed class WorkbookAppender : IWorkbookJob
     /// The workbook in <paramref name="existing"/> (left open, read until <see cref="Finish"/> or disposal) judged and read; null with the
     /// refusal when it can't be added to. <paramref name="display"/> names it in the refusals.
     /// </summary>
-    public static WorkbookAppender? Open(Stream existing, string display, OfficeLimits limits, out string? refusal)
+    public static WorkbookAppender? Open(Stream existing, string display, OfficeLimits limits, out string? refusal) =>
+        Open(existing, display, limits, out refusal, out _);
+
+    /// <summary>
+    /// As <see cref="Open(Stream, string, OfficeLimits, out string?)"/>, saying whether the refusal is that the file is no workbook at all (no
+    /// workbook part, another document's root, damaged past reading): such a file is replaced whole with <c>overwrite</c>, as one that isn't a
+    /// zip (2026-10-29, review P2-2: a <c>.xlsx</c> that was really a Word file was refused even with <c>overwrite: true</c>).
+    /// </summary>
+    public static WorkbookAppender? Open(Stream existing, string display, OfficeLimits limits, out string? refusal, out bool notAWorkbook)
     {
         ArgumentNullException.ThrowIfNull(existing);
         ArgumentNullException.ThrowIfNull(limits);
         refusal = null;
+        notAWorkbook = false;
         if (existing.Length > limits.MaxFileBytes)
         {
             refusal = OfficeText.TooBig(display, limits.MaxFileBytes);
@@ -118,6 +138,7 @@ public sealed class WorkbookAppender : IWorkbookJob
         existing.Position = 0;
         if (!OfficeFile.LooksLikeZip(head[..read]))
         {
+            notAWorkbook = true;
             refusal = OfficeText.NotAWorkbook(display, OfficeFile.LooksLikeCompoundFile(head[..read]));
             return null;
         }
@@ -129,6 +150,7 @@ public sealed class WorkbookAppender : IWorkbookJob
             string? main = package.MainPart();
             if (main is null)
             {
+                notAWorkbook = true;
                 refusal = OfficeText.NotAWorkbook(display, encrypted: false);
                 return null;
             }
@@ -138,6 +160,7 @@ public sealed class WorkbookAppender : IWorkbookJob
             bool strict = false;
             bool isWorkbook = false;
             bool locked = false;
+            bool reserved = false;
             bool date1904 = false;
             var sheets = new List<WorkbookSheet>();
             var rels = package.Rels(main);
@@ -160,9 +183,15 @@ public sealed class WorkbookAppender : IWorkbookJob
                         date1904 = OfficeXml.On(x.Attr(reader, "date1904"), false);
                         OfficeXml.Skip(reader);
                     }
+                    else if (x.Is(reader, OfficeXml.S, "fileSharing"))
+                    {
+                        // A password to modify (2026-10-29, review P4-5): Excel opens it read-only without one, so it is not written over.
+                        reserved = x.Attr(reader, "reservationPassword") is not null || x.Attr(reader, "hashValue") is not null || x.Attr(reader, "algorithmName") is not null;
+                        OfficeXml.Skip(reader);
+                    }
                     else if (x.Is(reader, OfficeXml.S, "workbookProtection"))
                     {
-                        locked = OfficeXml.On(x.Attr(reader, "lockStructure"), false);
+                        locked = OfficeXml.On(x.Attr(reader, "lockStructure"), false) || OfficeXml.On(x.Attr(reader, "lockRevision"), false);
                         OfficeXml.Skip(reader);
                     }
                     else if (x.Is(reader, OfficeXml.S, "sheets"))
@@ -200,7 +229,14 @@ public sealed class WorkbookAppender : IWorkbookJob
 
             if (!isWorkbook)
             {
+                notAWorkbook = true;
                 refusal = OfficeText.NotAWorkbook(display, encrypted: false);
+                return null;
+            }
+
+            if (reserved)
+            {
+                refusal = OfficeText.WriteReserved(display);
                 return null;
             }
 
@@ -216,6 +252,7 @@ public sealed class WorkbookAppender : IWorkbookJob
         }
         catch (Exception ex) when (ex is OfficeReadException or IOException or UnauthorizedAccessException)
         {
+            notAWorkbook = ex is OfficeDamagedException;
             refusal = OfficeReader.Refusal(ex, display);
             return null;
         }
@@ -241,12 +278,55 @@ public sealed class WorkbookAppender : IWorkbookJob
         try
         {
             var own = _source!.Rels(sheet.Part).Where(r => !Droppable.Any(r.Is)).ToList();
-            return own.Count == 0 ? null : OfficeText.SheetNotPlain(_display, sheet.Name, OfficeText.SheetPartName(own[0].Type), suggestion);
+            if (own.Count > 0)
+            {
+                return OfficeText.SheetNotPlain(_display, sheet.Name, OfficeText.SheetPartName(own[0].Type), suggestion);
+            }
+
+            return Protected(_source, sheet.Part) ? OfficeText.SheetProtected(_display, sheet.Name, suggestion) : null;
         }
         catch (OfficeReadException ex)
         {
             return OfficeReader.Refusal(ex, _display);
         }
+    }
+
+    /// <summary>
+    /// Whether the sheet in <paramref name="part"/> is protected (<c>sheetProtection sheet="1"</c>), read as a stream with its cells skipped
+    /// (2026-10-29, review P4-5: a replace dropped the protection with the cells).
+    /// </summary>
+    private static bool Protected(OfficePackage source, string part) => OfficePackage.Guard(part, () =>
+    {
+        var x = new OfficeXml();
+        bool found = false;
+        using var reader = source.Streamed(part);
+        reader.MoveToContent();
+        OfficeXml.Children(reader, () =>
+        {
+            if (x.Is(reader, OfficeXml.S, "sheetProtection"))
+            {
+                found |= OfficeXml.On(x.Attr(reader, "sheet"), false);
+            }
+
+            OfficeXml.Skip(reader);
+        });
+        return found;
+    });
+
+    /// <summary>The part names <c>[Content_Types].xml</c>'s overrides name, without the leading <c>/</c>.</summary>
+    private static HashSet<string> OverridesOf(byte[] types)
+    {
+        var parts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        using var reader = XmlReader.Create(new MemoryStream(types, writable: false), OfficePackage.ReaderSettings);
+        while (reader.Read())
+        {
+            if (reader.NodeType == XmlNodeType.Element && reader.LocalName == "Override" && reader.GetAttribute("PartName") is { } name)
+            {
+                parts.Add(name.TrimStart('/'));
+            }
+        }
+
+        return parts;
     }
 
     /// <summary>
@@ -272,17 +352,7 @@ public sealed class WorkbookAppender : IWorkbookJob
         {
             _sheetName = name;
             _position = Sheets.Count;
-            string folder = _main.Contains('/', StringComparison.Ordinal) ? _main[..(_main.LastIndexOf('/') + 1)] : "";
-            var taken = new HashSet<string>(_partOf.Values, StringComparer.OrdinalIgnoreCase);
-            for (int n = 1; ; n++)
-            {
-                string candidate = folder + "worksheets/sheet" + n.ToString(CultureInfo.InvariantCulture) + ".xml";
-                if (!taken.Contains(candidate) && !taken.Contains(RelsPartOf(candidate)))
-                {
-                    _sheetPart = candidate;
-                    break;
-                }
-            }
+            _sheetPart = FreePart("worksheets/sheet", 1);
 
             var ids = new HashSet<string>(_workbookRels.Select(r => r.Id), StringComparer.OrdinalIgnoreCase);
             for (int n = 1; ; n++)
@@ -297,6 +367,12 @@ public sealed class WorkbookAppender : IWorkbookJob
         }
 
         _firstFormat = Math.Max(ExcelWriter.FirstFormatId, _formatIds.Count == 0 ? 0 : _formatIds.Max() + 1);
+        if (_stylesPart is null)
+        {
+            // A free name (2026-10-29, review P1-14a: a stray styles.xml with no relationship to it made a second entry of that name).
+            _ownStylesPart = FreePart("styles", 0);
+        }
+
         try
         {
             _package = new OfficePackageWriter(output, time);
@@ -311,7 +387,7 @@ public sealed class WorkbookAppender : IWorkbookJob
 
             foreach (string stored in _stored.Where(s => !skip.Contains(s)))
             {
-                using var target = _package.Raw(stored, null);
+                using var target = _package.Raw(stored, null, CopyLevel(source.Stored(stored)));
                 if (!stored.EndsWith('/'))
                 {
                     source.CopyTo(stored, target);
@@ -319,13 +395,15 @@ public sealed class WorkbookAppender : IWorkbookJob
             }
 
             int header;
-            using (var w = _package.Part(_stylesPart is null ? StylesPartFor(_main) : source.StoredName(_stylesPart)!, null))
+            string stylesStored = _stylesPart is null ? _ownStylesPart : source.StoredName(_stylesPart)!;
+            header = OfficePackage.Guard(stylesStored, () =>
             {
-                header = WriteStyles(w);
-            }
+                using var w = _package!.Part(stylesStored, null);
+                return WriteStyles(w);
+            });
 
             _sheetXml = _package.Part(_replace ? source.StoredName(_sheetPart)! : _sheetPart, null);
-            _sheet = new SheetWriter(_sheetXml, new SheetStyles(header, header + 1, header + 2, header + 3, header + 4), Date1904, selected: false);
+            _sheet = new SheetWriter(_sheetXml, new SheetStyles(header, header + 1, header + 2, header + 3, header + 4, header + 5), Date1904, selected: false);
             return null;
         }
         catch (Exception ex) when (ex is OfficeReadException or IOException or UnauthorizedAccessException)
@@ -339,20 +417,26 @@ public sealed class WorkbookAppender : IWorkbookJob
         var package = _package ?? throw new InvalidOperationException("Start comes first.");
         var result = Sheet.Finish();
         _sheetXml!.Dispose();
-        using (var w = package.Part(_mainStored, null))
+        // Each rewrite's damage is the part's (2026-10-29, review P7-1): an OfficeDamagedException both callers answer, never a raw XmlException.
+        OfficePackage.Guard(_mainStored, () =>
         {
+            using var w = package.Part(_mainStored, null);
             WriteWorkbook(w, result.FilterRange);
-        }
-
-        using (var w = package.Part(_relsStored ?? RelsPartOf(_main), null))
+            return 0;
+        });
+        string rels = _relsStored ?? RelsPartOf(_main);
+        OfficePackage.Guard(rels, () =>
         {
+            using var w = package.Part(rels, null);
             WriteRels(w);
-        }
-
-        using (var w = package.Part(_typesStored, null))
+            return 0;
+        });
+        OfficePackage.Guard(_typesStored, () =>
         {
+            using var w = package.Part(_typesStored, null);
             WriteTypes(w);
-        }
+            return 0;
+        });
 
         package.Dispose();
         _source?.Dispose();
@@ -374,7 +458,29 @@ public sealed class WorkbookAppender : IWorkbookJob
         return slash < 0 ? "_rels/" + part + ".rels" : part[..slash] + "/_rels/" + part[(slash + 1)..] + ".rels";
     }
 
-    private static string StylesPartFor(string main) => (main.Contains('/', StringComparison.Ordinal) ? main[..(main.LastIndexOf('/') + 1)] : "") + "styles.xml";
+    /// <summary>
+    /// A part beside the workbook, <paramref name="stem"/> and a number from <paramref name="from"/> (0: none the first time), whose name, its
+    /// relationships' name and no override of <c>[Content_Types].xml</c> is taken, ignoring case.
+    /// </summary>
+    private string FreePart(string stem, int from)
+    {
+        string folder = _main.Contains('/', StringComparison.Ordinal) ? _main[..(_main.LastIndexOf('/') + 1)] : "";
+        var taken = new HashSet<string>(_partOf.Values, StringComparer.OrdinalIgnoreCase);
+        taken.UnionWith(_overrides);
+        for (int n = from; ; n++)
+        {
+            if (n == 1 && from == 0)
+            {
+                continue;   // styles.xml, then styles2.xml
+            }
+
+            string candidate = folder + stem + (n == 0 ? "" : n.ToString(CultureInfo.InvariantCulture)) + ".xml";
+            if (!taken.Contains(candidate) && !taken.Contains(RelsPartOf(candidate)))
+            {
+                return candidate;
+            }
+        }
+    }
 
     /// <summary>The target of a part beside the workbook, as its relationships write it.</summary>
     private string TargetOf(string part)
@@ -443,7 +549,7 @@ public sealed class WorkbookAppender : IWorkbookJob
         return (formats, fonts, xfs, first);
     }
 
-    /// <summary>The styles, theirs with ours appended; the header's <c>cellXfs</c> index, the four formats' after it.</summary>
+    /// <summary>The styles, theirs with ours appended; the header's <c>cellXfs</c> index, the four formats' and the whole number's after it.</summary>
     private int WriteStyles(XmlWriter w)
     {
         // A workbook with no styles, or none with fonts and cell formats to add to, gets ours whole: its cells name no format of theirs.
@@ -484,7 +590,7 @@ public sealed class WorkbookAppender : IWorkbookJob
             return reader.LocalName switch
             {
                 "fonts" => Started(reader, w, _fontCount + 1),
-                "cellXfs" => Started(reader, w, _xfCount + 1 + ExcelWriter.FormatCodes.Count),
+                "cellXfs" => Started(reader, w, _xfCount + 2 + ExcelWriter.FormatCodes.Count),
                 _ => XmlCopyStep.Copy,
             };
         }, (local, ns, depth) =>
@@ -503,7 +609,7 @@ public sealed class WorkbookAppender : IWorkbookJob
                     w.WriteStartElement("font", ns);
                     w.WriteStartElement("b", ns);
                     w.WriteEndElement();
-                    foreach (var (name, space, attributes) in _firstFont.Where(f => f.Local != "b"))
+                    foreach (var (name, space, attributes) in _firstFont.Where(f => HeaderFontParts.Contains(f.Local)))
                     {
                         XmlCopy.Write(w, name, space, attributes, "");
                     }
@@ -517,11 +623,20 @@ public sealed class WorkbookAppender : IWorkbookJob
                         ExcelWriter.Xf(w, _firstFormat + i, 0);
                     }
 
+                    ExcelWriter.Xf(w, ExcelWriter.IntegerFormatId, 0);
+
                     break;
             }
         });
         return header;
     }
+
+    /// <summary>
+    /// How a copied entry is compressed (2026-10-29, review P6-5: every one was deflated again at Optimal): stored when it barely compressed
+    /// (a picture, an embedded file: its own compression already), else Fastest, since its bytes were the source's choice to begin with.
+    /// </summary>
+    public static CompressionLevel CopyLevel((long Length, long Compressed)? sizes) =>
+        sizes is { Length: > 0 } s && s.Compressed >= s.Length * 0.95 ? CompressionLevel.NoCompression : CompressionLevel.Fastest;
 
     private static XmlCopyStep Started(XmlReader reader, XmlWriter w, int count)
     {
@@ -549,6 +664,9 @@ public sealed class WorkbookAppender : IWorkbookJob
     private void WriteWorkbook(XmlWriter w, string filterRange)
     {
         bool namesWritten = false;
+        // A replaced sheet marks the workbook to recalculate on open (2026-10-29, review P4-1: another sheet's formulas over it kept their old
+        // values until a change); calcPr follows definedNames in CT_Workbook, so one is written there when the workbook has none.
+        bool calcDone = !_replace;
         var keys = new OfficeXml();
         XmlCopy.Rewrite(_workbook, w, reader =>
         {
@@ -584,6 +702,19 @@ public sealed class WorkbookAppender : IWorkbookJob
                 WriteNames(w, reader.NamespaceURI, [], filterRange);
             }
 
+            if (main && !calcDone && reader.LocalName == "calcPr")
+            {
+                calcDone = true;
+                XmlCopy.Start(reader, w, FullCalc);
+                return XmlCopyStep.Started;
+            }
+
+            if (main && !calcDone && namesWritten && AfterDefinedNames.Contains(reader.LocalName))
+            {
+                calcDone = true;
+                WriteCalc(w, reader.NamespaceURI);
+            }
+
             return XmlCopyStep.Copy;
         }, (local, ns, depth) =>
         {
@@ -596,12 +727,30 @@ public sealed class WorkbookAppender : IWorkbookJob
                 w.WriteAttributeString(rPrefix, "id", OfficePackageWriter.RNs, _sheetRelId);
                 w.WriteEndElement();
             }
-            else if (depth == 0 && !namesWritten)
+            else if (depth == 0)
             {
-                namesWritten = true;
-                WriteNames(w, ns, [], filterRange);
+                if (!namesWritten)
+                {
+                    namesWritten = true;
+                    WriteNames(w, ns, [], filterRange);
+                }
+
+                if (!calcDone)
+                {
+                    calcDone = true;
+                    WriteCalc(w, ns);
+                }
             }
         });
+    }
+
+    private static readonly Dictionary<string, string> FullCalc = new(StringComparer.Ordinal) { ["fullCalcOnLoad"] = "1" };
+
+    private static void WriteCalc(XmlWriter w, string ns)
+    {
+        w.WriteStartElement("calcPr", ns);
+        w.WriteAttributeString("fullCalcOnLoad", "1");
+        w.WriteEndElement();
     }
 
     /// <summary>The defined names: theirs (a replaced sheet's filter name left out), then the new sheet's filter name.</summary>
@@ -678,7 +827,7 @@ public sealed class WorkbookAppender : IWorkbookJob
                 n++;
             }
 
-            Rel("rId" + n.ToString(CultureInfo.InvariantCulture), "styles", TargetOf(StylesPartFor(_main)));
+            Rel("rId" + n.ToString(CultureInfo.InvariantCulture), "styles", TargetOf(_ownStylesPart));
         }
     }
 
@@ -716,7 +865,7 @@ public sealed class WorkbookAppender : IWorkbookJob
 
             if (_stylesPart is null)
             {
-                Override(StylesPartFor(_main), ExcelWriter.StylesType);
+                Override(_ownStylesPart, ExcelWriter.StylesType);
             }
         });
     }

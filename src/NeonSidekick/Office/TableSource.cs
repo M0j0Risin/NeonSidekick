@@ -65,7 +65,7 @@ public sealed partial class ColumnJudge
         var s = _columns[column];
         s.Any = true;
         string text = cell.Text.Trim();
-        s.Number &= cell.Kind == RawKind.Number ? XlsxValue.SignificantDigits(cell.Text) <= XlsxValue.MaxDigits : cell.Kind == RawKind.Text && IsNumberText(text);
+        s.Number &= cell.Kind == RawKind.Number ? XlsxValue.TryExcelNumber(cell.Text, out _) : cell.Kind == RawKind.Text && IsNumberText(text);
         s.Bool &= cell.Kind == RawKind.Bool || (cell.Kind == RawKind.Text && (text.Equals("true", StringComparison.OrdinalIgnoreCase) || text.Equals("false", StringComparison.OrdinalIgnoreCase)));
         bool date = cell.Kind == RawKind.Text && System.DateTime.TryParseExact(text, DateFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out _);
         s.Date &= date;
@@ -110,27 +110,35 @@ public sealed partial class ColumnJudge
         return XlsxValue.OfText(cell.Text);
     }
 
-    /// <summary>Whether <paramref name="text"/> is a number the judge takes: invariant, no <c>+</c>, no leading zero, at most 15 digits.</summary>
-    public static bool IsNumberText(string text) => NumberPattern().IsMatch(text) && XlsxValue.SignificantDigits(text) <= XlsxValue.MaxDigits;
+    /// <summary>
+    /// Whether <paramref name="text"/> is a number the judge takes: invariant, no <c>+</c>, no leading zero, and one Excel holds without losing
+    /// a digit (<see cref="XlsxValue.TryExcelNumber"/>: at most 15 digits, no exponent past a double's range).
+    /// </summary>
+    public static bool IsNumberText(string text) => NumberPattern().IsMatch(text) && XlsxValue.TryExcelNumber(text, out _);
 
     [GeneratedRegex(@"^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][-+]?[0-9]{1,3})?$", RegexOptions.CultureInvariant)]
     private static partial Regex NumberPattern();
 }
 
+/// <summary>A CSV that ends inside a quoted field; <see cref="Row"/> is the record the quote opened in, the header row 1.</summary>
+public sealed class UnclosedQuoteException(int row) : Exception("a quote never closes, from row " + row.ToString(CultureInfo.InvariantCulture))
+{
+    public int Row { get; } = row;
+}
+
 /// <summary>
 /// The tables <c>convert_to_xlsx</c> reads (2026-10-29, the Office writing plan): CSV (RFC 4180; Excel's <c>sep=X</c> first line honored and
-/// dropped, else a header with no comma but a <c>;</c> read as semicolons, as European-locale exports are) and TSV (split on tabs, no quotes:
-/// IANA's TSV holds no tab in a field) streamed in two passes — the columns judged, then written — with no cap but Excel's rows; JSON (an
-/// array of objects, keys the header in first-seen order, or of arrays, the first the header) read whole up to <see cref="MaxJsonBytes"/>.
-/// Ragged rows are padded; a row longer than the header adds columns. A file is decoded as <c>read_file</c> decodes it.
+/// dropped, else a header with more <c>;</c> than <c>,</c> outside quotes read as semicolons, as European-locale exports are) and TSV (split on
+/// tabs, no quotes: IANA's TSV holds no tab in a field) streamed in two passes — the columns judged, then written — with no cap but Excel's
+/// rows; JSON (an array of objects, keys the header in first-seen order, or of arrays, the first the header) read whole up to
+/// <see cref="MaxJsonBytes"/>. Ragged rows are padded; a row longer than the header adds columns. A file is decoded as <c>read_file</c>
+/// decodes it, its encoding judged over the whole file once. A field stops growing past Excel's cell cap and a record past its last column
+/// (2026-10-29, review P4-2: one unclosed quote read the rest of a large file into one string).
 /// </summary>
 public static class TableSource
 {
     /// <summary>The largest JSON file read whole.</summary>
     public const long MaxJsonBytes = 64L * 1024 * 1024;
-
-    /// <summary>How much of a file's head judges its encoding.</summary>
-    private const int HeadBytes = 64 * 1024;
 
     /// <summary>Whether <paramref name="path"/> names a table <c>convert_to_xlsx</c> reads, by its extension (any case).</summary>
     public static bool IsTablePath(string path) =>
@@ -149,30 +157,34 @@ public static class TableSource
             return Json(full, display, sheet, cancellationToken);
         }
 
+        // Its length and time now, held against both passes (2026-10-29, review P1-16: a file still being saved was judged on one text and
+        // written from another), and its encoding judged once for both.
+        var stamp = Stamp(full);
+        var codec = Codec(full);
         bool tsv = extension == ".tsv";
         char delimiter = '\t';
         bool skipFirst = false;
         if (!tsv)
         {
-            using var probe = OpenText(full);
-            string? first = probe.ReadLine();
-            if (first is not null && first.StartsWith("sep=", StringComparison.OrdinalIgnoreCase) && first.Length == 5)
+            using var probe = OpenText(full, codec);
+            string first = FirstLine(probe);
+            if (first.StartsWith("sep=", StringComparison.OrdinalIgnoreCase) && first.Length == 5)
             {
                 delimiter = first[4];
                 skipFirst = true;
             }
             else
             {
-                delimiter = first is not null && !first.Contains(',', StringComparison.Ordinal) && first.Contains(';', StringComparison.Ordinal) ? ';' : ',';
+                delimiter = Delimiter(first);
             }
         }
 
         IEnumerable<List<string>> Records()
         {
-            using var reader = OpenText(full);
+            using var reader = OpenText(full, codec);
             if (skipFirst)
             {
-                reader.ReadLine();
+                FirstLine(reader);
             }
 
             foreach (var record in tsv ? Lines(reader) : Delimited(reader, delimiter))
@@ -181,23 +193,103 @@ public static class TableSource
             }
         }
 
-        return Rows(Records, display, sheet, cancellationToken);
+        try
+        {
+            return Rows(Records, display, sheet, cancellationToken, () => Stamp(full) == stamp);
+        }
+        catch (UnclosedQuoteException ex)
+        {
+            return OfficeText.UnclosedQuote(display, ex.Row);
+        }
+    }
+
+    /// <summary>The file's length and last write time, what <see cref="Write"/> holds the passes to.</summary>
+    private static (long Length, DateTime Written) Stamp(string full)
+    {
+        var info = new FileInfo(full);
+        return (info.Length, info.LastWriteTimeUtc);
+    }
+
+    /// <summary>The longest first line <see cref="FirstLine"/> holds: a header past it is judged on its start.</summary>
+    private const int FirstLineChars = 64 * 1024;
+
+    /// <summary>The first line, to its end or <see cref="FirstLineChars"/>; the rest of a longer one is read and dropped.</summary>
+    private static string FirstLine(TextReader reader)
+    {
+        var line = new StringBuilder();
+        int c;
+        while ((c = reader.Read()) >= 0 && c is not '\r' and not '\n')
+        {
+            if (line.Length < FirstLineChars)
+            {
+                line.Append((char)c);
+            }
+        }
+
+        if (c == '\r' && reader.Peek() == '\n')
+        {
+            reader.Read();
+        }
+
+        return line.ToString();
+    }
+
+    /// <summary>
+    /// A CSV's delimiter from its first line: <c>;</c> only when more of them than of <c>,</c> stand outside quotes, so a tie (none of
+    /// either included) stays <c>,</c> (2026-10-29, review P1-16: <c>"Smith, J";Age</c> held a comma inside quotes and was read as commas).
+    /// </summary>
+    public static char Delimiter(string firstLine)
+    {
+        ArgumentNullException.ThrowIfNull(firstLine);
+        int commas = 0;
+        int semicolons = 0;
+        bool quoted = false;
+        foreach (char ch in firstLine)
+        {
+            if (ch == '"')
+            {
+                quoted = !quoted;
+            }
+            else if (!quoted && ch == ',')
+            {
+                commas++;
+            }
+            else if (!quoted && ch == ';')
+            {
+                semicolons++;
+            }
+        }
+
+        return semicolons > commas ? ';' : ',';
+    }
+
+    /// <summary>The file's encoding, judged over all of it.</summary>
+    public static TextCodec Codec(string full)
+    {
+        using var stream = RegularFiles.OpenRead(full, FileShare.ReadWrite | FileShare.Delete);
+        return TextFile.Detect(stream);
     }
 
     /// <summary>
     /// Records from <paramref name="records"/> (opened once to judge, once to write; the first the header) into <paramref name="sheet"/>:
-    /// null when done, else the refusal.
+    /// null when done, else the refusal. The judging pass stops one record past <paramref name="maxRows"/> (2026-10-29, review P4-4: a file
+    /// past Excel's last row was judged to its end, and its unwritten rows could turn a column to text), so the sheet still says it was cut;
+    /// the writing pass takes no more records than the judging pass saw, and <paramref name="unchanged"/>, when given, is asked before and
+    /// after it (review P1-16): a source that changed meanwhile is refused, nothing written.
     /// </summary>
-    public static string? Rows(Func<IEnumerable<List<string>>> records, string display, ISheetRows sheet, CancellationToken cancellationToken)
+    public static string? Rows(Func<IEnumerable<List<string>>> records, string display, ISheetRows sheet, CancellationToken cancellationToken,
+        Func<bool>? unchanged = null, int maxRows = SheetWriter.MaxDataRows)
     {
         ArgumentNullException.ThrowIfNull(records);
         ArgumentNullException.ThrowIfNull(sheet);
         var judge = new ColumnJudge();
         List<string>? header = null;
         int width = 0;
+        long seen = 0;
         foreach (var record in records())
         {
             cancellationToken.ThrowIfCancellationRequested();
+            seen++;
             if (header is null)
             {
                 header = record;
@@ -210,6 +302,11 @@ public static class TableSource
             {
                 judge.Observe(c, new RawCell(record[c]));
             }
+
+            if (seen > (long)maxRows + 1)
+            {
+                break;
+            }
         }
 
         if (header is null)
@@ -217,18 +314,27 @@ public static class TableSource
             return OfficeText.EmptyTable(display);
         }
 
+        if (unchanged is not null && !unchanged())
+        {
+            return OfficeText.ChangedWhileRead(display);
+        }
+
         if (sheet.Begin([.. header, .. Enumerable.Repeat("", width - header.Count)]) is { } refused)
         {
             return refused;
         }
 
-        bool first = true;
+        long written = 0;
         foreach (var record in records())
         {
-            if (first)
+            if (++written == 1)
             {
-                first = false;
                 continue;
+            }
+
+            if (written > seen)
+            {
+                break;
             }
 
             cancellationToken.ThrowIfCancellationRequested();
@@ -238,7 +344,7 @@ public static class TableSource
             }
         }
 
-        return null;
+        return unchanged is not null && !unchanged() ? OfficeText.ChangedWhileRead(display) : null;
     }
 
     /// <summary>
@@ -326,7 +432,7 @@ public static class TableSource
             var root = document.RootElement;
             if (root.ValueKind != JsonValueKind.Array)
             {
-                return OfficeText.BadJson(display, "the top level is not an array");
+                return OfficeText.BadJson(display, OfficeText.JsonNotArray);
             }
 
             var items = root.EnumerateArray().ToList();
@@ -337,20 +443,40 @@ public static class TableSource
 
             if (items.TrueForAll(i => i.ValueKind == JsonValueKind.Object))
             {
+                // One pass over each item's properties, a key's column found by a dictionary (2026-10-29, review P4-6: TryGetProperty per
+                // key per item walked every property, quadratic in a wide object). A repeated key's last value wins, as TryGetProperty's did.
                 var keys = new List<string>();
-                var seen = new HashSet<string>(StringComparer.Ordinal);
+                var column = new Dictionary<string, int>(StringComparer.Ordinal);
+                var rows = new List<IReadOnlyList<RawCell>>(items.Count);
                 foreach (var item in items)
                 {
+                    var cells = new List<RawCell>(keys.Count);
                     foreach (var property in item.EnumerateObject())
                     {
-                        if (seen.Add(property.Name))
+                        if (!column.TryGetValue(property.Name, out int c))
                         {
+                            c = keys.Count;
+                            column.Add(property.Name, c);
                             keys.Add(property.Name);
                         }
+
+                        while (cells.Count <= c)
+                        {
+                            cells.Add(new RawCell("", RawKind.Null));
+                        }
+
+                        cells[c] = Cell(property.Value);
                     }
+
+                    rows.Add(cells);
                 }
 
-                var rows = items.Select(item => (IReadOnlyList<RawCell>)[.. keys.Select(k => item.TryGetProperty(k, out var v) ? Cell(v) : new RawCell("", RawKind.Null))]).ToList();
+                if (keys.Count == 0)
+                {
+                    // Objects with no keys: no header to write (review P7-9: the writer's "the result has no columns").
+                    return OfficeText.EmptyTable(display);
+                }
+
                 return Cells(keys, rows, sheet, cancellationToken);
             }
 
@@ -363,34 +489,17 @@ public static class TableSource
                 return Cells(header, rows, sheet, cancellationToken);
             }
 
-            return OfficeText.BadJson(display, "its items are not all objects or all arrays");
+            return OfficeText.BadJson(display, OfficeText.JsonMixedItems);
         }
     }
 
     /// <summary>A text file opened for reading as <c>read_file</c> decodes it: the encoding judged from its head, the mark skipped, bad bytes U+FFFD.</summary>
-    public static StreamReader OpenText(string full)
+    public static StreamReader OpenText(string full, TextCodec? codec = null)
     {
         var stream = RegularFiles.OpenRead(full, FileShare.ReadWrite | FileShare.Delete);
         try
         {
-            byte[] head = new byte[(int)Math.Min(HeadBytes, stream.Length)];
-            stream.ReadExactly(head);
-            int keep = head.Length;
-
-            // A head cut through a UTF-8 character isn't judged invalid for it.
-            if (stream.Length > head.Length)
-            {
-                for (int back = 0; back <= 3 && keep - back > 0; back++)
-                {
-                    if (System.Text.Unicode.Utf8.IsValid(head.AsSpan(0, keep - back)))
-                    {
-                        keep -= back;
-                        break;
-                    }
-                }
-            }
-
-            var codec = TextFile.Detect(head.AsSpan(0, keep));
+            codec ??= TextFile.Detect(stream);
             stream.Position = codec.MarkLength;
             return new StreamReader(stream, codec.StreamEncoding, detectEncodingFromByteOrderMarks: false, bufferSize: 64 * 1024);
         }
@@ -401,7 +510,34 @@ public static class TableSource
         }
     }
 
-    /// <summary>RFC 4180 records: quoted fields with doubled quotes and line breaks inside, CR, LF or CRLF ends.</summary>
+    /// <summary>A field's text: one character past Excel's cap is kept, so the cell is cut and counted, the rest read and dropped.</summary>
+    private const int FieldChars = XlsxValue.MaxChars + 1;
+
+    /// <summary>A record's fields: one past Excel's last column is kept, so the sheet refuses it, the rest read and dropped.</summary>
+    private const int RecordFields = CellReference.MaxColumn + 1;
+
+    private static void Append(StringBuilder field, char ch)
+    {
+        if (field.Length < FieldChars)
+        {
+            field.Append(ch);
+        }
+    }
+
+    private static void End(List<string> record, StringBuilder field)
+    {
+        if (record.Count < RecordFields)
+        {
+            record.Add(field.ToString());
+        }
+
+        field.Clear();
+    }
+
+    /// <summary>
+    /// RFC 4180 records: quoted fields with doubled quotes and line breaks inside, CR, LF or CRLF ends. A quote still open at the end is
+    /// <see cref="UnclosedQuoteException"/>, naming the record it opened in.
+    /// </summary>
     public static IEnumerable<List<string>> Delimited(TextReader reader, char delimiter)
     {
         ArgumentNullException.ThrowIfNull(reader);
@@ -409,6 +545,7 @@ public static class TableSource
         var field = new StringBuilder();
         bool quoted = false;
         bool any = false;
+        int number = 1;
         int c;
         while ((c = reader.Read()) >= 0)
         {
@@ -420,7 +557,7 @@ public static class TableSource
                     if (reader.Peek() == '"')
                     {
                         reader.Read();
-                        field.Append('"');
+                        Append(field, '"');
                     }
                     else
                     {
@@ -429,7 +566,7 @@ public static class TableSource
                 }
                 else
                 {
-                    field.Append(ch);
+                    Append(field, ch);
                 }
 
                 continue;
@@ -442,8 +579,7 @@ public static class TableSource
             }
             else if (ch == delimiter)
             {
-                record.Add(field.ToString());
-                field.Clear();
+                End(record, field);
                 any = true;
             }
             else if (ch is '\r' or '\n')
@@ -455,7 +591,60 @@ public static class TableSource
 
                 if (any || field.Length > 0 || record.Count > 0)
                 {
-                    record.Add(field.ToString());
+                    End(record, field);
+                    yield return record;
+                    number++;
+                }
+
+                record = [];
+                field.Clear();
+                any = false;
+            }
+            else
+            {
+                Append(field, ch);
+                any = true;
+            }
+        }
+
+        if (quoted)
+        {
+            throw new UnclosedQuoteException(number);
+        }
+
+        if (any || field.Length > 0 || record.Count > 0)
+        {
+            End(record, field);
+            yield return record;
+        }
+    }
+
+    /// <summary>TSV records: one a line, split on tabs, nothing quoted; blank lines skipped. Read a character at a time under the same caps.</summary>
+    public static IEnumerable<List<string>> Lines(TextReader reader)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+        var record = new List<string>();
+        var field = new StringBuilder();
+        bool any = false;
+        int c;
+        while ((c = reader.Read()) >= 0)
+        {
+            char ch = (char)c;
+            if (ch == '\t')
+            {
+                End(record, field);
+                any = true;
+            }
+            else if (ch is '\r' or '\n')
+            {
+                if (ch == '\r' && reader.Peek() == '\n')
+                {
+                    reader.Read();
+                }
+
+                if (any)
+                {
+                    End(record, field);
                     yield return record;
                 }
 
@@ -465,29 +654,15 @@ public static class TableSource
             }
             else
             {
-                field.Append(ch);
+                Append(field, ch);
                 any = true;
             }
         }
 
-        if (any || field.Length > 0 || record.Count > 0)
+        if (any)
         {
-            record.Add(field.ToString());
+            End(record, field);
             yield return record;
-        }
-    }
-
-    /// <summary>TSV records: one a line, split on tabs, nothing quoted; blank lines skipped.</summary>
-    public static IEnumerable<List<string>> Lines(TextReader reader)
-    {
-        ArgumentNullException.ThrowIfNull(reader);
-        string? line;
-        while ((line = reader.ReadLine()) is not null)
-        {
-            if (line.Length > 0)
-            {
-                yield return [.. line.Split('\t')];
-            }
         }
     }
 }

@@ -32,7 +32,14 @@ public sealed class SandboxPictures(WorkingDirectory files, string folder, long 
     }
 
     /// <summary>A file a page names, its bytes, or null (missing, outside, over <see cref="ImageFile.MaxFileBytes"/> or the budget).</summary>
-    public byte[]? Bytes(string address) => Locate(address) is { } full ? Read(full, ImageFile.MaxFileBytes) : null;
+    public byte[]? Bytes(string address) => Bytes(address, accept: null);
+
+    /// <summary>
+    /// <see cref="Bytes(string)"/> for only the files <paramref name="accept"/> takes by their path, judged before anything is read or counted
+    /// (2026-10-29, review P3-1: a document's WebP and video links spent the budget though none could be embedded).
+    /// </summary>
+    public byte[]? Bytes(string address, Func<string, bool>? accept) =>
+        Locate(address) is { } full && (accept is null || accept(full)) ? Read(full, ImageFile.MaxFileBytes) : null;
 
     /// <summary>
     /// Bytes from elsewhere (a <c>data:</c> picture decoded) counted against the same caps: false when over a picture's cap or the budget,

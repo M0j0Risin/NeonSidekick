@@ -82,6 +82,21 @@ public class ConversationRewindTests : IDisposable
     }
 
     [Fact]
+    public void AQueryThatSavedAWorkbook_ChangesSomething_AQueryThatReadDoesNot()
+    {
+        // 2026-10-29, review P5-8: plan mode keeps the queries (they read), but one with to wrote a file.
+        static FunctionCallContent Query(object? to) =>
+            new("q", "sqlite_query", to is null ? new Dictionary<string, object?> { ["sql"] = "SELECT 1" } : new Dictionary<string, object?> { ["sql"] = "SELECT 1", ["to"] = to });
+        Assert.False(ConversationRewind.Changes(Query(null)));
+        Assert.False(ConversationRewind.Changes(Query(" ")));
+        Assert.True(ConversationRewind.Changes(Query("out.xlsx")));
+        Assert.True(ConversationRewind.Changes(Query(System.Text.Json.JsonDocument.Parse("\"out.xlsx\"").RootElement.Clone())));
+        Assert.True(ConversationRewind.Changes(new FunctionCallContent("a", "ad_find", new Dictionary<string, object?> { ["to"] = "users.csv" })));
+        Assert.False(ConversationRewind.Changes(new FunctionCallContent("r", "read_file", new Dictionary<string, object?> { ["to"] = "x" })));
+        Assert.True(ConversationRewind.Changes(new FunctionCallContent("w", "write_file", null)));
+    }
+
+    [Fact]
     public void Preview_NamesTheChangingTools_TheClaudeThreads_AndTheFirstOrdinal()
     {
         var history = ThreeTurns();

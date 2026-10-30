@@ -12,9 +12,10 @@ namespace NeonSidekick.Office;
 /// What to make a Word document of (2026-10-29, the Office writing plan, <see cref="PdfRequest"/>'s twin): exactly one of a sandbox
 /// <paramref name="Path"/> (Markdown or text) or <paramref name="Markdown"/> text (the reply, the model's own) under <paramref name="Title"/>;
 /// where it goes (<paramref name="To"/>: a file, a folder, or blank for beside the source), whether it may replace a file there, and the page.
-/// <paramref name="ByUser"/>: the user's own <c>/docx</c>, whose write takes the app's pass (<see cref="WriteGuard.AppWrites"/>).
+/// <paramref name="ByUser"/>: the user's own <c>/docx</c>, whose write takes the app's pass (<see cref="WriteGuard.AppWrites"/>);
+/// <paramref name="FromReply"/>: its <c>reply</c>, the Markdown being the last reply (named and said as "Reply" when it has no heading).
 /// </summary>
-public sealed record DocxRequest(string? Path = null, string? Markdown = null, string? Title = null, string? To = null, bool Overwrite = false, bool Landscape = false, PdfPaperSize? Paper = null, bool ByUser = false);
+public sealed record DocxRequest(string? Path = null, string? Markdown = null, string? Title = null, string? To = null, bool Overwrite = false, bool Landscape = false, PdfPaperSize? Paper = null, bool ByUser = false, bool FromReply = false);
 
 /// <summary>
 /// The one home of a Word conversion (2026-10-29, the Office writing plan, <see cref="PdfConverter"/>'s twin): <c>convert_to_docx</c>,
@@ -52,13 +53,20 @@ public sealed class DocxConverter
             return OfficeText.OneDocumentSource;
         }
 
+        // The target's name judged before the source is read and parsed (2026-10-29, review P5-13).
+        if (OutputNames.Refusal(request.To, Extension, _files.IsExistingDirectory) is { } refusal)
+        {
+            return refusal;
+        }
+
         var clock = Stopwatch.StartNew();
+        string? given = string.IsNullOrWhiteSpace(request.Title) ? null : request.Title.Trim();
         string display;
         string? sourceFull = null;
         string text;
         if (request.Markdown is not null)
         {
-            display = string.IsNullOrWhiteSpace(request.Title) ? PrintText.ReplyTitle : request.Title.Trim();
+            display = request.FromReply ? PrintText.ReplyTitle : given ?? OfficeText.YourMarkdown;
             text = request.Markdown;
         }
         else if (Read(request.Path!, out sourceFull, out display, out string? error) is { } read)
@@ -78,17 +86,20 @@ public sealed class DocxConverter
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        string? given = string.IsNullOrWhiteSpace(request.Title) ? null : request.Title.Trim();
-        string? header = sourceFull is null ? given ?? WordWriter.FirstHeading(document) : WordWriter.FirstHeading(document);
+        // One rule for every source (2026-10-29, review P2-9, P5-6, P5-7, P7-3): a given title heads the pages, else the first # heading;
+        // Markdown text is named by it too (a file keeps its own name), and said by it when it has no title. The reply's text is "Reply"
+        // and named reply-… without one.
+        string? heading = WordWriter.FirstHeading(document);
+        string? header = given ?? heading;
         string? title = header ?? (sourceFull is null ? null : System.IO.Path.GetFileNameWithoutExtension(sourceFull));
-
-        if (OutputNames.Refusal(request.To, Extension, _files.IsExistingDirectory) is { } refusal)
+        if (request.Markdown is not null && !request.FromReply && given is null && heading is not null)
         {
-            return refusal;
+            display = heading;
         }
 
         string? sourceRelative = sourceFull is null ? null : display;
-        string target = OutputNames.For(request.To, sourceRelative, null, given, _time.GetLocalNow(), _files.IsExistingDirectory, Extension);
+        string target = OutputNames.For(request.To, sourceRelative, null, sourceFull is null ? header : null, _time.GetLocalNow(), _files.IsExistingDirectory, Extension,
+            fallbackStem: request.FromReply ? "reply" : "document");
         // An unnamed default never replaces a file (convert_to_pdf's rule, review R2): the first free name, and overwrite is for a named to
         // alone; the user's own /docx with overwrite still replaces its default file.
         bool named = !OutputNames.IntoFolder(request.To, _files.IsExistingDirectory);
@@ -129,7 +140,7 @@ public sealed class DocxConverter
             }
             catch (Exception ex) when (WorkingDirectory.IsFileFailure(ex) || ex is System.Xml.XmlException)
             {
-                return FileText.CouldNot("make a Word document of", display, ex.Message);
+                return FileText.CouldNot(OfficeText.MakeDocumentVerb, display, ex.Message);
             }
         }
     }
@@ -234,6 +245,10 @@ public sealed class DocxConverter
     /// against the same caps (bad base64 is the placeholder), anything else found in the sandbox by <paramref name="pictures"/>. Nothing is
     /// fetched from the web.
     /// </summary>
+    /// <summary>Whether a picture file's name is one Word embeds (PNG, JPEG, GIF); <see cref="WordPicture.From"/> judges the bytes after.</summary>
+    private static bool IsEmbeddable(string full) =>
+        Images.ImageFormats.ByExtension(full) is { } format && (format == Images.ImageFormats.Png || format == Images.ImageFormats.Jpeg || format == Images.ImageFormats.Gif);
+
     private static WordPicture? Picture(SandboxPictures pictures, string address, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -253,7 +268,7 @@ public sealed class DocxConverter
         }
         else
         {
-            bytes = pictures.Bytes(address);
+            bytes = pictures.Bytes(address, IsEmbeddable);
         }
 
         return bytes is null ? null : WordPicture.From(bytes);

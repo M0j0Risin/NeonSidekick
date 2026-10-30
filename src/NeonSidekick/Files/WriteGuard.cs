@@ -143,18 +143,9 @@ public static class WriteGuard
         string judged = OperatingSystem.IsMacOS() ? full.Normalize(NormalizationForm.FormC) : full;
         string judgedRoot = OperatingSystem.IsMacOS() ? root.Normalize(NormalizationForm.FormC) : root;
         string relative = WorkingDirectory.IsInside(judgedRoot, judged) ? WorkingDirectory.Under(judgedRoot, judged) : "";
-        foreach (string part in relative.Split(WorkingDirectory.Separators, StringSplitOptions.RemoveEmptyEntries))
+        if (GuardedFolder(relative) is { } folder)
         {
-            string bare = part.TrimEnd('.', ' ');
-            if (string.Equals(bare, WorkingDirectory.GitFolderName, StringComparison.OrdinalIgnoreCase))
-            {
-                return FileOutcome.GitProtected;
-            }
-
-            if (string.Equals(bare, NeonFolderName, StringComparison.OrdinalIgnoreCase))
-            {
-                return FileOutcome.NeonFilesProtected;
-            }
+            return folder;
         }
 
         var facts = s_facts;
@@ -191,6 +182,31 @@ public static class WriteGuard
         if (role == WriteRole.Write && (shoppingGuarded ?? facts?.ShoppingGuarded)?.Invoke() == true && Shopping.ShoppingFileGuard.IsShoppingListName(full))
         {
             return FileOutcome.ShoppingList;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The refusal a path under the root earns by its names alone: a <c>.git</c> or <c>.neon</c> at any depth (trailing dots and spaces
+    /// dropped, as Windows drops them), else null. Pure; <see cref="Judge"/>'s first test, and what a converter's made name asks
+    /// (2026-10-29, review P5-3: <c>OutputNames</c> asked only the first folder, so <c>app/.neon/plans/x.md</c> wrote beside itself).
+    /// </summary>
+    public static FileOutcome? GuardedFolder(string relative)
+    {
+        ArgumentNullException.ThrowIfNull(relative);
+        foreach (string part in relative.Split(WorkingDirectory.Separators, StringSplitOptions.RemoveEmptyEntries))
+        {
+            string bare = part.TrimEnd('.', ' ');
+            if (string.Equals(bare, WorkingDirectory.GitFolderName, StringComparison.OrdinalIgnoreCase))
+            {
+                return FileOutcome.GitProtected;
+            }
+
+            if (string.Equals(bare, NeonFolderName, StringComparison.OrdinalIgnoreCase))
+            {
+                return FileOutcome.NeonFilesProtected;
+            }
         }
 
         return null;

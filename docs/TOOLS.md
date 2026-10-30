@@ -183,13 +183,15 @@ With *File checkpoints* on, each turn keeps what the file tools changed, so `/un
 
 `convert_to_xlsx` and `convert_to_docx` write Excel and Word files in the working directory; `/docx` makes a Word copy of a Markdown file or the last reply ([Commands](COMMANDS.md)).
 
-* **Workbooks:** a CSV, TSV or JSON file, or a table (`columns`, `rows`), becomes a new workbook, or a new sheet in one (`sheet`). `overwrite` replaces that sheet, or with no `sheet` the whole file.
-* **Values:** numbers, dates and true/false are typed; a column of codes with leading zeros stays text. A number past 15 digits is text, so nothing is rounded. No formula is ever written.
-* **Query results:** each database's `*_query` takes `to` (with `sheet` and `overwrite`) to write every row to a workbook, up to Excel's 1,048,575. The answer shows the first 5; the *… query max rows* settings cap only the chat's rows.
-* **Exports:** the read-only rules hold, the query may run 10 minutes, and Esc stops it; a stopped or failed export writes nothing. A PostgreSQL `timestamptz` column is UTC, and its header says so.
-* **Word:** headings, lists, quotes, code, tables, links and pictures from the working directory, without their location and camera data. A web picture shows as its alt text. The title heads each page, and the footer counts pages.
-* **Where:** beside the source, a `.neon/` plan or audit at the top of the working folder. Else a made name with the minute: Markdown text's title, `table-…`, or `query-<connection>-…`. `to` names a file or folder; an existing file is replaced only with `overwrite`.
-* **Not written:** `write_file` refuses an Office file and names the tool to use; PowerPoint and OpenDocument files can't be written. A macro, protected or encrypted workbook isn't changed, nor a sheet holding a chart or table.
+* **Workbooks:** a CSV, TSV or JSON file, or a table (`columns`, `rows`), becomes a new workbook, or a new sheet in one (`to` and `sheet`). `overwrite` replaces that sheet, or with no `sheet` the whole file.
+* **Values:** numbers, dates and true/false are typed; codes with leading zeros stay text, and a long ID shows every digit. Past 15 digits a number is text; no formula is written.
+* **Query results:** while *File tools* and `convert_to_xlsx` are on, each database's `*_query` takes `to` (with `sheet` and `overwrite`) and writes every row, up to Excel's 1,048,575. The answer shows the first 5.
+* **Exports:** the read-only rules hold, and Esc stops an export; a stopped or failed one writes nothing. A PostgreSQL `timestamptz` column is UTC, and its header says so.
+* **Saved meanwhile:** a workbook saved in another program while a sheet is being added is left as it is, and the answer says to run it again.
+* **Word:** headings, lists, quotes, code, tables, links and pictures from the working directory, without their location and camera data. A web picture shows as its alt text; the title heads each page.
+* **Where:** beside the source (a plan or audit under `.neon/` at the top), or where `to` names a file or folder. A file there is replaced only with `overwrite`.
+* **Made names:** Markdown text's title or first heading, `table-…` or `query-<connection>-…`, with the minute.
+* **Not written:** `write_file` refuses an Office file and names the tool to use; nothing writes PowerPoint or OpenDocument. A macro, protected or encrypted workbook isn't changed, nor a protected sheet or one holding a chart or table.
 * **Undo:** `/undo` takes back what these tools and the exports wrote; `/docx` is your own act and keeps no checkpoint.
 
 #### Editing PDFs

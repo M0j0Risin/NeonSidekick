@@ -78,7 +78,7 @@ public sealed class UncWriteTool : UncTool, IRefusesPrunedStubs
         FileDiff? diff = null;
         string text = await WriteAsync(ReadShare(arguments), path, action, (files, relative) =>
         {
-            var (sentence, done, changed) = WriteFileTool.Write(files, relative, content, mode);
+            var (sentence, done, changed) = WriteFileTool.Write(files, relative, content, mode, onShare: true);
             diff = done ? changed : null;
             return (sentence, done);
         }, cancellationToken).ConfigureAwait(false);

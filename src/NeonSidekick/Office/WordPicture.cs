@@ -4,9 +4,10 @@ namespace NeonSidekick.Office;
 
 /// <summary>
 /// A picture ready to go in a Word document (2026-10-29, the Office writing plan): its bytes with no metadata, its format and its upright
-/// size in pixels. <see cref="From"/> is the one door: the format judged from the bytes, a turned photo's pixels turned, the rest stripped.
+/// size in pixels, and the dots per inch its file recorded (0 for none: 96 is taken, 2026-10-29, review P6-4). <see cref="From"/> is the one
+/// door: the format judged from the bytes, a turned photo's pixels turned, the rest stripped.
 /// </summary>
-public sealed record WordPicture(byte[] Bytes, ImageFormat Format, int Width, int Height)
+public sealed record WordPicture(byte[] Bytes, ImageFormat Format, int Width, int Height, double Dpi = 0)
 {
     /// <summary>
     /// <paramref name="bytes"/> made fit for a document, or null for the placeholder. Only PNG, JPEG and GIF, judged from the bytes
@@ -26,9 +27,11 @@ public sealed record WordPicture(byte[] Bytes, ImageFormat Format, int Width, in
             return null;
         }
 
+        // Read from the bytes as given: the strip may drop the EXIF that holds it, and a re-encode keeps none.
+        double dpi = MetadataStripper.Dpi(bytes) ?? 0;
         if ((MetadataStripper.ExifOrientation(bytes) ?? 1) <= 1 && MetadataStripper.Strip(bytes).Result is { } stripped)
         {
-            return new WordPicture(stripped.Bytes, format, info.Width, info.Height);
+            return new WordPicture(stripped.Bytes, format, info.Width, info.Height, dpi);
         }
 
         if (bytes.LongLength > ImageEditor.MaxSourceBytes || (long)info.Width * info.Height > ImageEditor.MaxPixels)
@@ -37,6 +40,6 @@ public sealed record WordPicture(byte[] Bytes, ImageFormat Format, int Width, in
         }
 
         var (made, _) = ImageEditor.Apply(bytes, new ImageEditRequest(), format);
-        return made is null ? null : new WordPicture(made.Bytes, made.Format, made.Width, made.Height);
+        return made is null ? null : new WordPicture(made.Bytes, made.Format, made.Width, made.Height, dpi);
     }
 }

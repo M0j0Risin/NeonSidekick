@@ -247,12 +247,12 @@ public sealed class SqliteAccess
     /// <summary>
     /// A SQLite cell for a workbook (2026-10-29): integers, reals, text and blobs by the common rules; text in a column declared
     /// <c>DATE</c>, <c>DATETIME</c> or <c>TIMESTAMP</c> a date or date-time when it reads as ISO (SQLite keeps dates as text), else the
-    /// text as it is.
+    /// text as it is. An empty string is an empty text cell, not a blank (2026-10-29, review P3-4).
     /// </summary>
-    public static XlsxValue ExportCell(DbDataReader reader, int ordinal)
+    public static XlsxValue ExportCell(DbDataReader reader, int ordinal, string? typeName)
     {
         ArgumentNullException.ThrowIfNull(reader);
-        if (!reader.IsDBNull(ordinal) && reader.GetValue(ordinal) is string text && DeclaredDate(reader.GetDataTypeName(ordinal)) is { } dateOnly)
+        if (!reader.IsDBNull(ordinal) && reader.GetValue(ordinal) is string text && DeclaredDate(typeName) is { } dateOnly)
         {
             if (dateOnly && DateOnly.TryParseExact(text.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
             {
@@ -267,20 +267,35 @@ public sealed class SqliteAccess
             return XlsxValue.OfText(text);
         }
 
-        return SqlExport.Typed(reader, ordinal, ReadCell);
+        return SqlExport.Typed(reader, ordinal, typeName, SqlExport.InvariantText);
     }
 
     /// <summary>The ISO forms SQLite's date functions write (and a <c>T</c> between), to the second or its fraction.</summary>
     private static readonly string[] IsoDateTimes =
         ["yyyy-MM-dd", "yyyy-MM-dd HH:mm", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd HH:mm:ss.FFFFFFF", "yyyy-MM-ddTHH:mm", "yyyy-MM-ddTHH:mm:ss", "yyyy-MM-ddTHH:mm:ss.FFFFFFF"];
 
-    /// <summary>True for a column declared a date, false for a date-time or timestamp, null for anything else.</summary>
-    private static bool? DeclaredDate(string? declared) => declared?.Trim().ToUpperInvariant() switch
+    private static readonly char[] Spaces = [' ', '\t', '\r', '\n'];
+
+    /// <summary>
+    /// True for a column declared a date, false for a date-time or timestamp, null for anything else (2026-10-29, review P5-11: a size or
+    /// precision, extra spaces and the other engines' spellings — <c>DATETIME2(3)</c>, <c>TIMESTAMP WITH TIME ZONE</c> — read as no date).
+    /// </summary>
+    public static bool? DeclaredDate(string? declared)
     {
-        "DATE" => true,
-        "DATETIME" or "TIMESTAMP" => false,
-        _ => null,
-    };
+        if (declared is null)
+        {
+            return null;
+        }
+
+        int paren = declared.IndexOf('(', StringComparison.Ordinal);
+        string type = string.Join(' ', (paren >= 0 ? declared[..paren] : declared).Split(Spaces, StringSplitOptions.RemoveEmptyEntries));
+        return type.ToUpperInvariant() switch
+        {
+            "DATE" => true,
+            "DATETIME" or "DATETIME2" or "SMALLDATETIME" or "TIMESTAMP" or "TIMESTAMP WITH TIME ZONE" or "TIMESTAMP WITHOUT TIME ZONE" => false,
+            _ => null,
+        };
+    }
 
     /// <summary>A read with only <paramref name="layers"/> under it: a test's way to prove each layer alone (S14). Never the app's.</summary>
     internal static SqlRun RunWithLayers(SqliteTarget target, IReadOnlyList<string> statements, SqliteReadLayers layers) =>

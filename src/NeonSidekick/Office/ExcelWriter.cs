@@ -41,6 +41,9 @@ public sealed class ExcelWriter : IWorkbookJob
     /// <summary>The four number formats, in <see cref="SheetStyles"/>' order after the header: date, date-time, time, duration.</summary>
     public static readonly IReadOnlyList<string> FormatCodes = ["yyyy-mm-dd", "yyyy-mm-dd hh:mm:ss", "hh:mm:ss", "[h]:mm:ss"];
 
+    /// <summary>Excel's built-in format 1, <c>0</c>: a whole number with every digit. Built in, so no <c>numFmt</c> declares it.</summary>
+    public const int IntegerFormatId = 1;
+
     private const string Ns = SheetWriter.Ns;
     private const string SheetPart = "xl/worksheets/sheet1.xml";
 
@@ -63,7 +66,7 @@ public sealed class ExcelWriter : IWorkbookJob
         }
 
         _sheetXml = _package.Part(SheetPart, SheetWriter.ContentType);
-        Sheet = new SheetWriter(_sheetXml, new SheetStyles(1, 2, 3, 4, 5), date1904: false, selected: true);
+        Sheet = new SheetWriter(_sheetXml, new SheetStyles(1, 2, 3, 4, 5, 6), date1904: false, selected: true);
     }
 
     public SheetWriter Sheet { get; }
@@ -173,7 +176,7 @@ public sealed class ExcelWriter : IWorkbookJob
         w.WriteEndElement();
     }
 
-    /// <summary>The styles part: <c>cellXfs</c> 0 plain, 1 the bold header, 2–5 the four formats.</summary>
+    /// <summary>The styles part: <c>cellXfs</c> 0 plain, 1 the bold header, 2–5 the four formats, 6 a whole number in full (built-in format 1, <c>0</c>).</summary>
     public static void WriteStyles(XmlWriter w)
     {
         ArgumentNullException.ThrowIfNull(w);
@@ -224,13 +227,15 @@ public sealed class ExcelWriter : IWorkbookJob
         w.WriteEndElement();
         w.WriteEndElement();
         w.WriteStartElement("cellXfs", Ns);
-        w.WriteAttributeString("count", (2 + FormatCodes.Count).ToString(System.Globalization.CultureInfo.InvariantCulture));
+        w.WriteAttributeString("count", (3 + FormatCodes.Count).ToString(System.Globalization.CultureInfo.InvariantCulture));
         Xf(w, 0, 0);
         Xf(w, 0, 1);
         for (int i = 0; i < FormatCodes.Count; i++)
         {
             Xf(w, FirstFormatId + i, 0);
         }
+
+        Xf(w, IntegerFormatId, 0);
 
         w.WriteEndElement();
         w.WriteStartElement("cellStyles", Ns);

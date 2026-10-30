@@ -1360,7 +1360,7 @@ internal sealed partial class ChatScreen
         _pdfReading = new PdfReading(_web.Browser, () => _web.Browser.Locate(_effective().WebBrowserPath));
         // The PDF editor (2026-10-14, the PDF plan's phase 4b): pdf_edit and /pdf's edits, pdf-lib in the same browser.
         _pdfEditing = new PdfEditing(_web.Browser, _files, () => _web.Browser.Locate(_effective().WebBrowserPath), _time);
-        _fileTools = FileTools(_files, () => WorkingDirectory.IsDefault(_effective().WorkingDirectory), _openFile, _effective, _unc, _pdf, _images, OpenPictureForModel, _pdfReading, _pdfEditing, _time);
+        _fileTools = FileTools(_files, () => WorkingDirectory.IsDefault(_effective().WorkingDirectory), _openFile, _effective, _unc, _pdf, _images, OpenPictureForModel, _pdfReading, _pdfEditing, _time, _docx);   // one converter for the tool and /docx (review P1-18)
         _imageTools = ImageTools(_files, _effective, _images, () => _settings.ProfileSplashDirectory);
         _timers = new TimerBoard(time, SignalAlert);
         // The timer tone (2026-10-18, the user's ask): a device of its own from the app's playback factory; none in tests by default.
@@ -1378,19 +1378,19 @@ internal sealed partial class ChatScreen
         // The SQL tools (2026-09-23): the loaded profile's sql.json over the home's, read at every call, so a profile switch or an edit needs no rebuild.
         // Narrowed to the connections the profile offers (later that day): every tool, the rules and the %-mention see only those.
         _sql = new SqlAccess(() => SqlConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(_effective().SqlConnectionsOffered));
-        _sqlTools = SqlTools(_sql, _effective, AllowDatabaseWriteAsync, SaveRootNow, _time);
+        _sqlTools = SqlTools(_sql, _effective, AllowDatabaseWriteAsync, QuerySaveRootNow, _time);
         _oracle = new OracleAccess(() => OracleConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(_effective().OracleConnectionsOffered));
-        _oracleTools = OracleTools(_oracle, _effective, AllowDatabaseWriteAsync, SaveRootNow, _time);
+        _oracleTools = OracleTools(_oracle, _effective, AllowDatabaseWriteAsync, QuerySaveRootNow, _time);
         _mysql = new MySqlAccess(() => MySqlConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(_effective().MySqlConnectionsOffered));
-        _mysqlTools = MySqlTools(_mysql, _effective, AllowDatabaseWriteAsync, SaveRootNow, _time);
+        _mysqlTools = MySqlTools(_mysql, _effective, AllowDatabaseWriteAsync, QuerySaveRootNow, _time);
         _sqlite = new Sqlite.SqliteAccess(() => Sqlite.SqliteConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(_effective().SqliteDatabasesOffered), () => _effective().SqliteSandboxFiles ? _files : null, () => UntickedSqliteFiles(_settings.ProfileDirectory, _settings.StorageDirectory, _effective().SqliteDatabasesOffered));
         // sqlite_execute (2026-10-05) asks on the camera's allow pane, per file (AllowSqliteWriteAsync).
-        _sqliteTools = SqliteTools(_sqlite, _effective, AllowSqliteWriteAsync, SaveRootNow, _time);
+        _sqliteTools = SqliteTools(_sqlite, _effective, AllowSqliteWriteAsync, QuerySaveRootNow, _time);
         // The DuckDB tools (2026-10-25), SQLite's shape: duckdb_execute asks on the same allow pane, per file (AllowDuckDbWriteAsync).
         _duckDb = new DuckDb.DuckDbAccess(() => DuckDb.DuckDbConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(_effective().DuckDbDatabasesOffered), () => _effective().DuckDbSandboxFiles ? _files : null, () => UntickedDuckDbFiles(_settings.ProfileDirectory, _settings.StorageDirectory, _effective().DuckDbDatabasesOffered));
-        _duckDbTools = DuckDbTools(_duckDb, _effective, AllowDuckDbWriteAsync, SaveRootNow, _time);
+        _duckDbTools = DuckDbTools(_duckDb, _effective, AllowDuckDbWriteAsync, QuerySaveRootNow, _time);
         _postgres = new Postgres.PostgresAccess(() => Postgres.PostgresConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(_effective().PostgresConnectionsOffered));
-        _postgresTools = PostgresTools(_postgres, _effective, AllowDatabaseWriteAsync, SaveRootNow, _time);
+        _postgresTools = PostgresTools(_postgres, _effective, AllowDatabaseWriteAsync, QuerySaveRootNow, _time);
         // The UNC tools (2026-09-30), over the door built above.
         _uncTools = UncTools(_unc, _files, _effective);
         // The image tools (2026-09-24): the profile's comfy folder over the home's, rescanned at every call; the client made for the ComfyUI URL in force.
@@ -5826,7 +5826,7 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// Whether <paramref name="command"/>'s argument is a path its own list completes: there a mention character stays the
     /// argument list's (2026-09-30), since the command takes a bare path. The file lists of <see cref="ArgumentPaths"/>
-    /// (<c>/read</c>, <c>/view</c>, <c>/print</c>, <c>/pdf</c>), and the folder lists of <c>/tree</c>, <c>/explore</c>, <c>/terminal</c> and <c>/vault</c>
+    /// (<c>/read</c>, <c>/view</c>, <c>/print</c>, <c>/pdf</c>, <c>/docx</c> since 2026-10-29), and the folder lists of <c>/tree</c>, <c>/explore</c>, <c>/terminal</c> and <c>/vault</c>
     /// (later on 2026-09-30, the review's catch: a JS sandbox's <c>@types</c> folder opened the @ list under <c>/tree @ty</c>), and
     /// <c>/cwd</c>'s list of any drive's folders (2026-10-05), and <c>/open</c>'s files and <c>/browse</c>'s folders (2026-10-09). Pinned.
     /// </summary>
@@ -5868,8 +5868,10 @@ internal sealed partial class ChatScreen
 
         if (kind == SlashCommand.Docx)
         {
-            // Any file, as for /pdf, with reply alone for a word (2026-10-29): /docx has no edit verbs.
-            return PrintPaths(argText, sources, [PdfCommand.ReplyWord]);
+            // Folders and what /docx makes a document of, with reply alone for a word (2026-10-29): /docx has no edit verbs. The list is
+            // filtered before PrintPaths, so its closes and its reply fallback judge the same list (review P3-10: a picture was offered).
+            var docx = sources.AnyFiles is { } any ? sources with { AnyFiles = text => DocxSources(any(text)) } : sources;
+            return PrintPaths(argText, docx, [PdfCommand.ReplyWord]);
         }
 
         if (kind == SlashCommand.Cwd)
@@ -6071,6 +6073,10 @@ internal sealed partial class ChatScreen
 
         return found;
     }
+
+    /// <summary><paramref name="found"/>'s folders and Markdown or text files, what <c>/docx</c> converts.</summary>
+    private static MentionResult DocxSources(MentionResult found) =>
+        found with { Paths = [.. found.Paths.Where(p => p.EndsWith('/') || Office.DocxConverter.IsSource(p))] };
 
     /// <summary>The words <c>/print</c> takes in place of a path.</summary>
     private static readonly string[] PrintVerbs = [PrintText.ReplyWord, PrintText.PrintersWord];
@@ -6702,7 +6708,7 @@ internal sealed partial class ChatScreen
     /// <param name="reading">The PDF reader (2026-10-14, the PDF plan's phase 1): adds <c>read_pdf</c> right after <c>read_file</c>; null = without it (the tests that count the rest, as <paramref name="pdf"/>).</param>
     /// <param name="editing">The PDF editor (2026-10-14, the PDF plan's phase 4b): adds <c>pdf_edit</c> last, after <c>convert_to_pdf</c>; null = without it.</param>
     /// <param name="time">The Office converters' clock (2026-10-29): their default names and the files' times; the system's when null.</param>
-    public static IReadOnlyList<AIFunction> FileTools(WorkingDirectory files, Func<bool> isDefault, Action<string> openFile, Func<AppSettingsData> effective, UncAccess? unc = null, PdfConverter? pdf = null, WorkingDirectory? images = null, Func<string, string>? openPicture = null, PdfReading? reading = null, PdfEditing? editing = null, TimeProvider? time = null)
+    public static IReadOnlyList<AIFunction> FileTools(WorkingDirectory files, Func<bool> isDefault, Action<string> openFile, Func<AppSettingsData> effective, UncAccess? unc = null, PdfConverter? pdf = null, WorkingDirectory? images = null, Func<string, string>? openPicture = null, PdfReading? reading = null, PdfEditing? editing = null, TimeProvider? time = null, Office.DocxConverter? docx = null)
     {
         var tools = new List<AIFunction>(19)
         {
@@ -6729,7 +6735,7 @@ internal sealed partial class ChatScreen
             new ZipTool(files),
             new UnzipTool(files),
             new OpenTool(files, openFile, unc, effective, openPicture, images),
-            new ConvertToDocxTool(files, new Office.DocxConverter(files, time)),
+            new ConvertToDocxTool(files, docx ?? new Office.DocxConverter(files, time)),
             new ConvertToXlsxTool(files, time),
         ]);
 

@@ -453,34 +453,69 @@ public sealed class OracleAccess
         RunAsync(name, [statement], parameters, maxRows, timeoutSeconds, cancellationToken, export ?? throw new ArgumentNullException(nameof(export)));
 
     /// <summary>
-    /// An Oracle cell for a workbook (2026-10-29): a CLOB read to Excel's cap and a BLOB's bytes to the hex that fits, never whole; a time
-    /// zone's timestamp and an interval as the chat writes them (text: the offset is the value); a NUMBER past 15 digits text by its
-    /// provider value; dates, BINARY_DOUBLE and the rest by the common rules.
+    /// An Oracle cell for a workbook (2026-10-29): a CLOB read to Excel's cap and a BLOB's, BFILE's or LONG RAW's bytes to the hex that fits,
+    /// a LONG to the cap (2026-10-29, review P5-5: they went through the chat's clipped text; a LONG and a LONG RAW are fetched whole with
+    /// the row, as in the chat, and only the cell is capped); a time zone's timestamp and an interval as the chat writes them (text: the
+    /// offset is the value); a NUMBER past 15 digits text by its provider value; BINARY_DOUBLE and the rest by the common rules. A DATE is
+    /// always a date-time, midnight too: Oracle's DATE holds a time (review P1-7: its type name "Date" read as a date alone). A LOB is read
+    /// until the buffer is full or the LOB ends (review P1-8: one read may return fewer).
     /// </summary>
-    public static XlsxValue ExportCell(DbDataReader reader, int ordinal)
+    public static XlsxValue ExportCell(DbDataReader reader, int ordinal, string? typeName)
     {
         ArgumentNullException.ThrowIfNull(reader);
         try
         {
             if (reader is OracleDataReader oracle && !oracle.IsDBNull(ordinal))
             {
-                switch (oracle.GetDataTypeName(ordinal))
+                int fit = (XlsxValue.MaxChars - 3) / 2;
+                switch (typeName)
                 {
                     case "Clob" or "NClob":
                         using (var clob = oracle.GetOracleClob(ordinal))
                         {
                             var buffer = new char[(int)Math.Min(clob.Length, XlsxValue.MaxChars + 1)];
-                            int read = buffer.Length == 0 ? 0 : clob.Read(buffer, 0, buffer.Length);
+                            int read = 0;
+                            while (read < buffer.Length && clob.Read(buffer, read, buffer.Length - read) is > 0 and var got)
+                            {
+                                read += got;
+                            }
+
                             return XlsxValue.OfText(new string(buffer, 0, read));
                         }
 
                     case "Blob":
                         using (var blob = oracle.GetOracleBlob(ordinal))
                         {
-                            int fit = (XlsxValue.MaxChars - 3) / 2;
                             var buffer = new byte[(int)Math.Min(blob.Length, fit)];
-                            int read = buffer.Length == 0 ? 0 : blob.Read(buffer, 0, buffer.Length);
+                            int read = blob.ReadAtLeast(buffer, buffer.Length, throwOnEndOfStream: false);
                             return XlsxValue.OfBytes(buffer.AsSpan(0, read), more: blob.Length > fit);
+                        }
+
+                    case "BFile":
+                        using (var file = oracle.GetOracleBFile(ordinal))
+                        {
+                            if (!file.IsOpen)
+                            {
+                                file.OpenFile();
+                            }
+
+                            var buffer = new byte[(int)Math.Min(file.Length, fit)];
+                            int read = file.ReadAtLeast(buffer, buffer.Length, throwOnEndOfStream: false);
+                            return XlsxValue.OfBytes(buffer.AsSpan(0, read), more: file.Length > fit);
+                        }
+
+                    case "LongRaw":
+                        {
+                            var buffer = new byte[fit + 1];
+                            int read = (int)oracle.GetBytes(ordinal, 0, buffer, 0, buffer.Length);
+                            return XlsxValue.OfBytes(buffer.AsSpan(0, Math.Min(read, fit)), more: read > fit);
+                        }
+
+                    case "Long":
+                        {
+                            var buffer = new char[XlsxValue.MaxChars + 1];
+                            int read = (int)oracle.GetChars(ordinal, 0, buffer, 0, buffer.Length);
+                            return XlsxValue.OfText(new string(buffer, 0, read));
                         }
 
                     case "TimeStampTZ" or "TimeStampLTZ" or "IntervalYM":
@@ -488,11 +523,11 @@ public sealed class OracleAccess
                 }
             }
 
-            return SqlExport.Typed(reader, ordinal, ReadCell);
+            return SqlExport.Typed(reader, ordinal, typeName: null, SqlExport.InvariantText);
         }
         catch (Exception ex) when (ex is not (DbException or OperationCanceledException or OutOfMemoryException))
         {
-            return XlsxValue.OfText(OracleText.Unreadable(reader.GetDataTypeName(ordinal)));
+            return XlsxValue.OfText(OracleText.Unreadable(typeName ?? reader.GetDataTypeName(ordinal)));
         }
     }
 

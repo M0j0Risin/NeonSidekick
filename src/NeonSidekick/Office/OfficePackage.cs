@@ -59,6 +59,7 @@ public sealed class OfficePackage : IDisposable
     private readonly ZipArchive _zip;
     private readonly OfficeLimits _limits;
     private readonly Dictionary<string, ZipArchiveEntry> _entries = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, ZipArchiveEntry> _stored = new(StringComparer.Ordinal);
     private readonly Dictionary<string, IReadOnlyList<OfficeRel>> _rels = new(StringComparer.OrdinalIgnoreCase);
 
     private OfficePackage(ZipArchive zip, OfficeLimits limits)
@@ -67,6 +68,9 @@ public sealed class OfficePackage : IDisposable
         _limits = limits;
         foreach (var entry in zip.Entries)
         {
+            // By its exact stored name, the first of a repeated one (2026-10-29, review P1-12: a copy searched every entry per entry).
+            _stored.TryAdd(entry.FullName, entry);
+
             // Under its name as stored and its percent-escapes undone too (2026-10-28, review P11-01): Resolve undoes a relationship's
             // escapes, so a part stored as "sheet%201.xml" was never found and its sheet dropped.
             string name = entry.FullName.Replace('\\', '/').TrimStart('/');
@@ -157,14 +161,23 @@ public sealed class OfficePackage : IDisposable
     /// </summary>
     public XmlReader Whole(string part)
     {
-        var entry = Entry(part);
+        var entry = CheckWhole(part, Entry(part));
+        return Reader(part, entry, _limits.MaxWholePartBytes, streamed: false, ratioFrom: 0);
+    }
+
+    /// <summary>
+    /// <paramref name="entry"/> when its header allows holding it whole: <see cref="OfficePartTooLargeException"/> past the cap or a bomb's
+    /// ratio. The count as it inflates catches a header that lies.
+    /// </summary>
+    private ZipArchiveEntry CheckWhole(string part, ZipArchiveEntry entry)
+    {
         if (entry.Length > _limits.MaxWholePartBytes
             || (entry.Length > WorkingDirectory.BombEntryBytes && entry.CompressedLength > 0 && entry.Length / entry.CompressedLength > WorkingDirectory.MaxCompressionRatio))
         {
             throw new OfficePartTooLargeException(part);
         }
 
-        return Reader(part, entry, _limits.MaxWholePartBytes, streamed: false, ratioFrom: 0);
+        return entry;
     }
 
     /// <summary>
@@ -251,13 +264,20 @@ public sealed class OfficePackage : IDisposable
     public string? StoredName(string part) => _entries.TryGetValue(part, out var entry) ? entry.FullName : null;
 
     /// <summary>
+    /// The stored entry's sizes as its header gives them: what a copy judges its compression by (2026-10-29, review P6-5: a picture already
+    /// compressed was deflated again at the slowest level). Null when the package holds no such entry.
+    /// </summary>
+    public (long Length, long Compressed)? Stored(string stored) =>
+        _stored.TryGetValue(stored, out var entry) ? (entry.Length, entry.CompressedLength) : null;
+
+    /// <summary>
     /// The stored entry <paramref name="stored"/>'s bytes copied into <paramref name="destination"/>, counted as a streamed body is
     /// (<see cref="OfficeLimits.MaxStreamedPartBytes"/> and the bomb's ratio), so a copy is held to the read's own limits (2026-10-29).
     /// </summary>
     public void CopyTo(string stored, Stream destination)
     {
         ArgumentNullException.ThrowIfNull(destination);
-        var entry = _zip.Entries.FirstOrDefault(e => e.FullName == stored) ?? throw new OfficeDamagedException(stored);
+        var entry = _stored.TryGetValue(stored, out var found) ? found : throw new OfficeDamagedException(stored);
         string part = PartOf(stored);
         Guard(part, () =>
         {
@@ -267,11 +287,13 @@ public sealed class OfficePackage : IDisposable
         });
     }
 
-    /// <summary>A part held whole, as bytes: the same caps as <see cref="Whole"/> (an appended workbook's parts to rewrite, 2026-10-29).</summary>
+    /// <summary>
+    /// A part held whole, as bytes: the same caps as <see cref="Whole"/> (an appended workbook's parts to rewrite, 2026-10-29), judged once
+    /// (review P1-13: an XML reader was opened, and its first buffer inflated, only for the check).
+    /// </summary>
     public byte[] Bytes(string part)
     {
-        using var reader = Whole(part);
-        var entry = Entry(part);
+        var entry = CheckWhole(part, Entry(part));
         return Guard(part, () =>
         {
             using var counted = Counted(part, entry, _limits.MaxWholePartBytes, streamed: false, ratioFrom: 0);

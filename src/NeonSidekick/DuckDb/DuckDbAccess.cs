@@ -343,7 +343,7 @@ public sealed class DuckDbAccess
     }
 
     /// <summary>A cell of a wrapped read before the types are known (an EXPLAIN keeps it): DuckDB's text, NULL blank.</summary>
-    public static XlsxValue TextCell(DbDataReader reader, int ordinal)
+    public static XlsxValue TextCell(DbDataReader reader, int ordinal, string? typeName)
     {
         ArgumentNullException.ThrowIfNull(reader);
         return reader.IsDBNull(ordinal) ? XlsxValue.Blank : XlsxValue.OfText(Convert.ToString(reader.GetValue(ordinal), CultureInfo.InvariantCulture));
@@ -357,7 +357,7 @@ public sealed class DuckDbAccess
     public static SqlCellReader ExportCell(IReadOnlyList<Type> types)
     {
         ArgumentNullException.ThrowIfNull(types);
-        return (reader, ordinal) =>
+        return (reader, ordinal, _) =>
         {
             if (reader.IsDBNull(ordinal))
             {
@@ -380,13 +380,21 @@ public sealed class DuckDbAccess
             return text switch { "true" => XlsxValue.OfBool(true), "false" => XlsxValue.OfBool(false), _ => XlsxValue.OfText(text) };
         }
 
+        if (type == typeof(float) || type == typeof(double))
+        {
+            // A double is what Excel stores, so its 17 digits are no loss (2026-10-29, review P5-2: by the decimal rule it went to text).
+            return double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out double real) ? XlsxValue.OfDouble(real) : XlsxValue.OfText(text);
+        }
+
         if (type == typeof(sbyte) || type == typeof(byte) || type == typeof(short) || type == typeof(ushort) || type == typeof(int) || type == typeof(uint)
             || type == typeof(long) || type == typeof(ulong) || type == typeof(Int128) || type == typeof(UInt128) || type == typeof(System.Numerics.BigInteger)
-            || type == typeof(float) || type == typeof(double) || type == typeof(decimal))
+            || type == typeof(decimal))
         {
             return XlsxValue.OfNumberText(text);
         }
 
+        // A fraction past .NET's seven digits (TIMESTAMP_NS, TIME_NS) cut to seven, so the value reads (2026-10-29, review P5-10).
+        text = SevenDigits(text);
         if (type == typeof(DateOnly) || type == typeof(DateTime))
         {
             if (text.Length == 10 && DateOnly.TryParseExact(text, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
@@ -407,6 +415,27 @@ public sealed class DuckDbAccess
         }
 
         return XlsxValue.OfText(text);
+    }
+
+    /// <summary>A time's fraction past seven digits cut to seven (the rest is below a tick); any other text as it is. Pure.</summary>
+    public static string SevenDigits(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        int dot = text.LastIndexOf('.');
+        if (dot < 0 || text.Length - dot - 1 <= 7 || text.IndexOf(':', StringComparison.Ordinal) < 0)
+        {
+            return text;
+        }
+
+        for (int i = dot + 1; i < text.Length; i++)
+        {
+            if (!char.IsAsciiDigit(text[i]))
+            {
+                return text;
+            }
+        }
+
+        return text[..(dot + 8)];
     }
 
     /// <summary>A read with only <paramref name="layers"/> under it: a test's way to prove each layer alone. Never the app's.</summary>
@@ -583,7 +612,7 @@ public sealed class DuckDbAccess
                     bool explain = DuckDbReadOnlyGate.IsExplain(statement.Sql);
                     if (export is not null && !write && !explain)
                     {
-                        export.Retype(ExportCell(ColumnTypes(connection, statement, parameters)));
+                        export.Retype(ExportCell(ExportTypes(connection, statement, parameters)));
                     }
 
                     using var command = connection.CreateCommand();
@@ -674,6 +703,23 @@ public sealed class DuckDbAccess
     /// An export's column types (2026-10-29): the statement run unwrapped for no rows, each column's type as the driver maps it; a type the
     /// driver doesn't map is <see cref="string"/>, so its text stays text.
     /// </summary>
+    /// <summary>
+    /// The columns' types for an export, or none (every cell DuckDB's text) when the statement's no-rows run fails (2026-10-29, review P1-3:
+    /// its error was thrown before the real run, and a failure the real run would not have had stopped the export). An interrupt still stops it.
+    /// </summary>
+    private static IReadOnlyList<Type> ExportTypes(DuckDBConnection connection, DuckDbPrepared statement, IReadOnlyList<SqlParameterValue> parameters)
+    {
+        try
+        {
+            return ColumnTypes(connection, statement, parameters);
+        }
+        catch (Exception ex) when (!IsInterrupt(ex) && ex is not OutOfMemoryException)
+        {
+            DiagnosticLog.Debug(DuckDbConfigFile.Category, "export types not read: " + ex.GetType().Name);
+            return [];
+        }
+    }
+
     private static Type[] ColumnTypes(DuckDBConnection connection, DuckDbPrepared statement, IReadOnlyList<SqlParameterValue> parameters)
     {
         using var command = connection.CreateCommand();

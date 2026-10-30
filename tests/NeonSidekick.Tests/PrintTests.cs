@@ -170,6 +170,10 @@ public sealed class PrintTests : IDisposable
         var link = Texts(Assert.Single(Markdown("A [chart](https://example.com/c.png) here, and in a table:\n\n| a |\n|---|\n| [x](y.png) |"))).Select(t => t.Text).ToList();
         Assert.Equal(link, picture);
         Assert.Contains(picture, t => t.Contains("example.com/c.png", StringComparison.Ordinal));
+        // A linked picture (review P3-2) prints as the link it was.
+        var linked = Texts(Assert.Single(Markdown("A [![chart](c.png)](https://example.com/home) here"))).Select(t => t.Text).ToList();
+        var plain = Texts(Assert.Single(Markdown("A [chart](https://example.com/home) here"))).Select(t => t.Text).ToList();
+        Assert.Equal(plain, linked);
     }
 
     [Fact]

@@ -1,5 +1,7 @@
+using System.Buffers;
 using System.Data;
 using System.Data.Common;
+using System.Data.SqlTypes;
 using System.Diagnostics;
 using Microsoft.Data.SqlClient;
 using NeonSidekick.Diagnostics;
@@ -361,14 +363,15 @@ public sealed class SqlAccess
     /// A SQL Server cell for a workbook (2026-10-29): read once and in order, as SequentialAccess asks — text to Excel's cap through
     /// <c>GetChars</c> and binary through <c>GetBytes</c>, never whole; a decimal or money by its provider value, past 15 digits text; a
     /// <c>date</c> column's values dates and a <c>time</c> a time of day; anything else by the common rules. A value that won't read (a CLR
-    /// type the app carries no assembly for) is <see cref="SqlText.Unreadable"/>, never a second read.
+    /// type the app carries no assembly for) is <see cref="SqlText.Unreadable"/>, never a second read. The buffers are the shared pool's
+    /// (2026-10-29, review P1-10: 64 KB a text cell, allocated per cell of every row).
     /// </summary>
-    public static XlsxValue ExportCell(DbDataReader reader, int ordinal)
+    public static XlsxValue ExportCell(DbDataReader reader, int ordinal, string? typeName)
     {
         ArgumentNullException.ThrowIfNull(reader);
         if (reader is not SqlDataReader sql)
         {
-            return SqlExport.Typed(reader, ordinal, (r, i) => SqlText.Cell(r.GetValue(i)));
+            return SqlExport.Typed(reader, ordinal, typeName, SqlExport.InvariantText);
         }
 
         try
@@ -381,43 +384,58 @@ public sealed class SqlAccess
             var type = sql.GetFieldType(ordinal);
             if (type == typeof(string))
             {
-                var buffer = new char[XlsxValue.MaxChars + 1];
-                int read = (int)sql.GetChars(ordinal, 0, buffer, 0, buffer.Length);
-                return XlsxValue.OfText(new string(buffer, 0, read));
+                char[] buffer = ArrayPool<char>.Shared.Rent(XlsxValue.MaxChars + 1);
+                try
+                {
+                    int read = (int)sql.GetChars(ordinal, 0, buffer, 0, XlsxValue.MaxChars + 1);
+                    return read == 0 ? XlsxValue.EmptyText : XlsxValue.OfText(new string(buffer, 0, read));
+                }
+                finally
+                {
+                    ArrayPool<char>.Shared.Return(buffer);
+                }
             }
 
             if (type == typeof(byte[]))
             {
                 int fit = (XlsxValue.MaxChars - 3) / 2;
-                var buffer = new byte[fit + 1];
-                int read = (int)sql.GetBytes(ordinal, 0, buffer, 0, buffer.Length);
-                return XlsxValue.OfBytes(buffer.AsSpan(0, Math.Min(read, fit)), more: read > fit);
-            }
-
-            if (type == typeof(decimal))
-            {
-                return sql.GetProviderSpecificValue(ordinal) switch
+                byte[] buffer = ArrayPool<byte>.Shared.Rent(fit + 1);
+                try
                 {
-                    System.Data.SqlTypes.SqlDecimal d => XlsxValue.OfNumberText(d.ToString()),
-                    System.Data.SqlTypes.SqlMoney m => XlsxValue.OfDecimal(m.Value),
-                    var other => XlsxValue.OfNumberText(other?.ToString() ?? ""),
-                };
+                    int read = (int)sql.GetBytes(ordinal, 0, buffer, 0, fit + 1);
+                    return XlsxValue.OfBytes(buffer.AsSpan(0, Math.Min(read, fit)), more: read > fit);
+                }
+                finally
+                {
+                    ArrayPool<byte>.Shared.Return(buffer);
+                }
             }
 
-            if (type == typeof(TimeSpan))
-            {
-                return XlsxValue.OfTimeSpan(sql.GetTimeSpan(ordinal));
-            }
-
-            object value = sql.GetValue(ordinal);
-            return SqlExport.IsScalar(value) ? XlsxValue.From(value, SqlExport.IsDateType(sql.GetDataTypeName(ordinal))) : XlsxValue.OfText(SqlText.Cell(value));
+            object value = type == typeof(decimal) ? sql.GetProviderSpecificValue(ordinal)
+                : type == typeof(TimeSpan) ? sql.GetTimeSpan(ordinal)
+                : sql.GetValue(ordinal);
+            return ExportValue(value, typeName);
         }
         catch (Exception ex) when (ex is not (DbException or OperationCanceledException or OutOfMemoryException))
         {
-            string type = reader.GetDataTypeName(ordinal);
+            string type = typeName ?? reader.GetDataTypeName(ordinal);
             return XlsxValue.OfText(SqlText.Unreadable(type[(type.LastIndexOf('.') + 1)..]));
         }
     }
+
+    /// <summary>
+    /// A SQL Server value read for a workbook, as a cell (2026-10-29, review P3-13: the per-type rules apart from the sealed reader, so they
+    /// are tested): a decimal's provider value by its exact digits (past 15 text), money as its decimal, a <c>time</c> a time of day, a
+    /// <c>date</c> column's values dates, anything the sheet can't type as its invariant text. Pure.
+    /// </summary>
+    public static XlsxValue ExportValue(object? value, string? typeName) => value switch
+    {
+        null or DBNull or INullable { IsNull: true } => XlsxValue.Blank,
+        SqlDecimal d => XlsxValue.OfNumberText(d.ToString()),
+        SqlMoney m => XlsxValue.OfDecimal(m.Value),
+        INullable other => XlsxValue.OfNumberText(SqlExport.InvariantText(other)),
+        _ => SqlExport.FromValue(value, typeName, SqlExport.InvariantText),
+    };
 
     /// <summary>
     /// <c>sql_execute</c>'s run (2026-10-05, <c>SQL mode</c> <c>read-write</c>): one statement the write gate passed, on a connection

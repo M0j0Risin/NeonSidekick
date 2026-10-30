@@ -40,6 +40,12 @@ public readonly record struct XlsxValue(XlsxKind Kind, double Number = 0, string
 
     public static readonly XlsxValue Blank = new(XlsxKind.Blank);
 
+    /// <summary>
+    /// An empty string, which is not NULL (2026-10-29, review P3-4: a database's <c>''</c> and its NULL both came out blank): an empty text
+    /// cell. A CSV's empty field stays <see cref="Blank"/> through <see cref="OfText"/>, since CSV can't tell the two apart.
+    /// </summary>
+    public static readonly XlsxValue EmptyText = new(XlsxKind.Text, Text: "");
+
     /// <summary>Text, cut at <see cref="MaxChars"/>; null or empty is a blank cell.</summary>
     public static XlsxValue OfText(string? text)
     {
@@ -75,13 +81,41 @@ public readonly record struct XlsxValue(XlsxKind Kind, double Number = 0, string
         return SignificantDigits(text) <= MaxDigits ? new XlsxValue(XlsxKind.Number, (double)value, text) : OfText(text);
     }
 
-    /// <summary>A number already in invariant text (a reader's own spelling): by the decimal rule when it parses, else text.</summary>
+    /// <summary>A number already in invariant text (a reader's own spelling): a number by <see cref="TryExcelNumber"/>, else text.</summary>
     public static XlsxValue OfNumberText(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        return decimal.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out decimal exact) ? OfDecimal(exact)
-            : double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out double value) && SignificantDigits(text) <= MaxDigits ? OfDouble(value)
-            : OfText(text);
+        return TryExcelNumber(text, out var number) ? number : OfText(text);
+    }
+
+    /// <summary>
+    /// <paramref name="text"/> as a number Excel holds without losing a digit (2026-10-29, review P1-2/P2-5: <c>1e-30</c> parsed as a decimal
+    /// 0, <c>1e400</c> as infinity, both written as numbers): the decimal when its digits are the text's own, within 15; else the double
+    /// when it is finite, not a zero the text's digits aren't, and the text has at most 15 digits; else false (the text stays text). Pure.
+    /// </summary>
+    public static bool TryExcelNumber(string text, out XlsxValue value)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        int digits = SignificantDigits(text);
+        if (decimal.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out decimal exact))
+        {
+            string written = exact.ToString(CultureInfo.InvariantCulture);
+            if (SignificantDigits(written) == digits && digits <= MaxDigits)
+            {
+                value = new XlsxValue(XlsxKind.Number, (double)exact, written);
+                return true;
+            }
+        }
+
+        if (digits <= MaxDigits && double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out double real) && double.IsFinite(real)
+            && (real != 0 || digits == 0))
+        {
+            value = OfDouble(real);
+            return true;
+        }
+
+        value = default;
+        return false;
     }
 
     public static XlsxValue OfDate(DateOnly value) => new(XlsxKind.Date, When: value.ToDateTime(TimeOnly.MinValue));
@@ -117,6 +151,7 @@ public readonly record struct XlsxValue(XlsxKind Kind, double Number = 0, string
     public static XlsxValue From(object? value, bool dateColumn = false) => value switch
     {
         null or DBNull => Blank,
+        string { Length: 0 } => EmptyText,
         string s => OfText(s),
         bool b => OfBool(b),
         double d => OfDouble(d),

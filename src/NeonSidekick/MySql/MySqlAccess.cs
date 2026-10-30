@@ -489,24 +489,32 @@ public sealed class MySqlAccess
     /// rules — <c>BIT</c> and unsigned <c>BIGINT</c> numbers within 15 digits, <c>TIME</c> a time or duration, a decimal past 15 digits
     /// text. <c>TINYINT(1)</c> stays the number the chat shows (<c>TreatTinyAsBoolean</c> is off).
     /// </summary>
-    public static XlsxValue ExportCell(DbDataReader reader, int ordinal)
+    public static XlsxValue ExportCell(DbDataReader reader, int ordinal, string? typeName)
     {
         ArgumentNullException.ThrowIfNull(reader);
         try
         {
-            if (!reader.IsDBNull(ordinal) && reader.GetValue(ordinal) is MySqlDateTime date)
+            if (reader.IsDBNull(ordinal))
+            {
+                return XlsxValue.Blank;
+            }
+
+            // Read once (2026-10-29, review P4-8): the zero-date judgment and the common rules share the value.
+            object value = reader.GetValue(ordinal);
+            if (value is MySqlDateTime date)
             {
                 return date.IsValidDateTime
-                    ? XlsxValue.OfDateTime(date.GetDateTime(), SqlExport.IsDateType(reader.GetDataTypeName(ordinal)))
+                    ? XlsxValue.OfDateTime(date.GetDateTime(), SqlExport.IsDateType(typeName))
                     : XlsxValue.OfText(DateCell(date));
             }
+
+            return SqlExport.FromValue(value, typeName, SqlExport.InvariantText);
         }
         catch (Exception ex) when (ex is FormatException or OverflowException or InvalidCastException or MySqlConversionException)
         {
-            // A value GetValue won't hand over (a decimal past decimal's range): the common rules read its provider value.
+            // A value GetValue won't hand over (a decimal past decimal's range): its provider value.
+            return SqlExport.FromProvider(reader, ordinal, typeName);
         }
-
-        return SqlExport.Typed(reader, ordinal, ReadCell);
     }
 
     /// <summary>The server's message with its number — <c>Error 1146: Table 'shop.x' doesn't exist</c> is what the model needs to fix the text.</summary>

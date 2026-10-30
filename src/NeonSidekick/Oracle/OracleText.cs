@@ -203,7 +203,7 @@ public static class OracleText
             .Append(" (").Append(Millis(run.Elapsed)).Append(')');
         if (grid.More)
         {
-            header.Append(" — the first ").Append(Invariant(maxRows)).Append(" shown, more exist (narrow it with WHERE or FETCH FIRST, or raise max_rows").Append(SqlExport.Hint(canSave)).Append(')');
+            header.Append(" — the first ").Append(Invariant(maxRows)).Append(" shown, more exist (narrow it with WHERE or FETCH FIRST, or raise max_rows").Append(SqlExportText.Hint(canSave)).Append(')');
         }
 
         if (shown < grid.Rows.Count)

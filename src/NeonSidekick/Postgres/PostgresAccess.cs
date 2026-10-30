@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics;
@@ -433,9 +434,14 @@ public sealed class PostgresAccess
     /// A PostgreSQL cell for a workbook (2026-10-29): an interval and money as the chat writes them (a month has no fixed length, and money
     /// carries the server's currency), an array as <c>{a, b}</c>, a numeric past <see cref="decimal"/> or NaN as text; dates, timestamps and
     /// the rest by the common rules. A timestamptz is its UTC value, the column's header saying so (<see cref="ExportHeader"/>). A
-    /// <c>±infinity</c> date or timestamp (Npgsql's <see cref="DateTime.MaxValue"/>/<see cref="DateTime.MinValue"/>) is the word, never a date in 9999.
+    /// <c>±infinity</c> date or timestamp (Npgsql's <see cref="DateTime.MaxValue"/>/<see cref="DateTime.MinValue"/>, exactly) is the word,
+    /// never a date in 9999 (2026-10-29, review P1-1: a real 9999-12-31 12:00 read as infinity too; a real 0001-01-01 00:00 still can't be
+    /// told from <c>-infinity</c>). A <c>date</c> column is the exception: Npgsql hands its <c>infinity</c> as 9999-12-31 at midnight (the live
+    /// run of 2026-10-29), so there that day is the word, and a real 9999-12-31 date reads infinity too, the lesser harm than a
+    /// date in 9999 for every open-ended row. A timetz is its time and offset as text (review P6-3: it came on a dummy date in year 1). Arrays, bit
+    /// strings and hstore are written in full to the cell's cap (<see cref="ExportText"/>).
     /// </summary>
-    public static XlsxValue ExportCell(DbDataReader reader, int ordinal)
+    public static XlsxValue ExportCell(DbDataReader reader, int ordinal, string? typeName)
     {
         ArgumentNullException.ThrowIfNull(reader);
         if (reader.IsDBNull(ordinal))
@@ -443,15 +449,20 @@ public sealed class PostgresAccess
             return XlsxValue.Blank;
         }
 
-        if (reader.GetDataTypeName(ordinal) is "interval" or "money")
+        if (typeName is "interval" or "money")
         {
             return XlsxValue.OfText(ReadCell(reader, ordinal));
         }
 
-        var cell = SqlExport.Typed(reader, ordinal, ReadCell);
+        if (typeName == TimeTzType && reader.GetValue(ordinal) is DateTimeOffset timetz)
+        {
+            return XlsxValue.OfText(TimeTz(timetz));
+        }
+
+        var cell = SqlExport.Typed(reader, ordinal, typeName, ExportText);
         if (cell.Kind is XlsxKind.Date or XlsxKind.DateTime)
         {
-            if (cell.When.Date == DateTime.MaxValue.Date)
+            if (cell.When == DateTime.MaxValue || (typeName == DateType && cell.When == DateTime.MaxValue.Date))
             {
                 return XlsxValue.OfText(Infinity);
             }
@@ -467,6 +478,65 @@ public sealed class PostgresAccess
 
     /// <summary>PostgreSQL's word for a date past every other.</summary>
     private const string Infinity = "infinity";
+
+    /// <summary>The type name Npgsql gives a <c>date</c> column.</summary>
+    private const string DateType = "date";
+
+    /// <summary>The type name Npgsql gives a <c>timetz</c> column.</summary>
+    private const string TimeTzType = "time with time zone";
+
+    /// <summary>A timetz as PostgreSQL writes one: the time and its offset (Npgsql hands it on a dummy date, which is no part of it).</summary>
+    public static string TimeTz(DateTimeOffset value) => value.ToString("HH:mm:ss.FFFFFFFzzz", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// A value the sheet can't type, as PostgreSQL would write it, in full to the cell's cap (2026-10-29, review P5-1: the chat's text cut
+    /// it at 500 characters): an array as <c>{a, b}</c>, a bit string as its 0s and 1s, an hstore as <c>"k"=>"v"</c>; anything else its
+    /// invariant text.
+    /// </summary>
+    public static string ExportText(object value) => value switch
+    {
+        Array array and not byte[] => ExportArrayText(array),
+        BitArray bits => Bits(bits),
+        IEnumerable<KeyValuePair<string, string?>> hstore => Hstore(hstore),
+        _ => SqlExport.InvariantText(value),
+    };
+
+    /// <summary>An array as <see cref="ArrayText"/> writes it, unclipped and unscrubbed, built no further than the cell's cap.</summary>
+    public static string ExportArrayText(Array array)
+    {
+        ArgumentNullException.ThrowIfNull(array);
+        var sb = new StringBuilder();
+        AppendDimension(sb, array, 0, new int[array.Rank], ExportElement, XlsxValue.MaxChars);
+        return sb.ToString();
+    }
+
+    private static string ExportElement(object? item) => item switch
+    {
+        null or DBNull => SqlText.Null,
+        DateTime { Kind: DateTimeKind.Utc } utc => SqlExport.InvariantText(utc) + " UTC",
+        _ => SqlExport.InvariantText(item),
+    };
+
+    /// <summary>A bit string as PostgreSQL writes one: its bits in order, 0 and 1.</summary>
+    public static string Bits(BitArray bits)
+    {
+        ArgumentNullException.ThrowIfNull(bits);
+        var chars = new char[bits.Length];
+        for (int i = 0; i < chars.Length; i++)
+        {
+            chars[i] = bits[i] ? '1' : '0';
+        }
+
+        return new string(chars);
+    }
+
+    /// <summary>An hstore as PostgreSQL writes one: <c>"k"=>"v", "n"=>NULL</c>, quotes and backslashes escaped.</summary>
+    public static string Hstore(IEnumerable<KeyValuePair<string, string?>> pairs)
+    {
+        ArgumentNullException.ThrowIfNull(pairs);
+        static string Quoted(string text) => "\"" + text.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
+        return string.Join(", ", pairs.Select(p => Quoted(p.Key) + "=>" + (p.Value is null ? SqlText.Null : Quoted(p.Value))));
+    }
 
     /// <summary>A column's header in a workbook: its name, and <see cref="PostgresText.UtcColumn"/> on a timestamptz, whose cells hold UTC.</summary>
     public static string ExportHeader(DbDataReader reader, int ordinal)
@@ -493,10 +563,12 @@ public sealed class PostgresAccess
 
             object value = reader.GetValue(ordinal);
             // A timestamptz comes back as UTC (Npgsql's DateTime of Kind Utc): said so, since the cell alone would not (2026-10-04).
+            // A timetz is its time and offset, not the dummy date Npgsql puts it on (2026-10-29, review P6-3).
             return value switch
             {
                 Array array and not byte[] => ArrayText(array),
                 DateTime { Kind: DateTimeKind.Utc } utc => SqlText.Cell(utc) + " UTC",
+                DateTimeOffset timetz when reader.GetDataTypeName(ordinal) == TimeTzType => TimeTz(timetz),
                 _ => SqlText.Cell(value),
             };
         }
@@ -515,18 +587,28 @@ public sealed class PostgresAccess
     {
         ArgumentNullException.ThrowIfNull(array);
         var sb = new StringBuilder();
-        bool cut = !AppendDimension(sb, array, 0, new int[array.Rank]);
+        bool cut = !AppendDimension(sb, array, 0, new int[array.Rank], ChatElement, SqlText.MaxCellChars * 2);
         string text = sb.ToString();
         return cut ? SqlText.Cell(Files.TextCut.Safe(text, SqlText.MaxCellChars)) + SqlText.MoreChars(SqlText.MaxCellChars) : SqlText.Cell(text);
     }
 
-    /// <summary>One dimension's elements into <paramref name="sb"/>; false when the text grew past the build limit and was stopped.</summary>
-    private static bool AppendDimension(StringBuilder sb, Array array, int dimension, int[] index)
+    private static string ChatElement(object? item) => item switch
+    {
+        null or DBNull => SqlText.Null,
+        DateTime { Kind: DateTimeKind.Utc } utc => SqlText.Cell(utc) + " UTC",
+        _ => SqlText.Cell(item),
+    };
+
+    /// <summary>
+    /// One dimension's elements into <paramref name="sb"/>, each written by <paramref name="element"/>; false when the text grew past
+    /// <paramref name="limit"/> and was stopped.
+    /// </summary>
+    private static bool AppendDimension(StringBuilder sb, Array array, int dimension, int[] index, Func<object?, string> element, int limit)
     {
         sb.Append('{');
         for (int k = array.GetLowerBound(dimension); k <= array.GetUpperBound(dimension); k++)
         {
-            if (sb.Length > SqlText.MaxCellChars * 2)
+            if (sb.Length > limit)
             {
                 return false;
             }
@@ -539,19 +621,14 @@ public sealed class PostgresAccess
             index[dimension] = k;
             if (dimension + 1 < array.Rank)
             {
-                if (!AppendDimension(sb, array, dimension + 1, index))
+                if (!AppendDimension(sb, array, dimension + 1, index, element, limit))
                 {
                     return false;
                 }
             }
             else
             {
-                sb.Append(array.GetValue(index) switch
-                {
-                    null or DBNull => SqlText.Null,
-                    DateTime { Kind: DateTimeKind.Utc } utc => SqlText.Cell(utc) + " UTC",
-                    var item => SqlText.Cell(item),
-                });
+                sb.Append(element(array.GetValue(index)));
             }
         }
 

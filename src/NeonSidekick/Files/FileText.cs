@@ -110,6 +110,9 @@ public static class FileText
     /// <summary>A <c>to</c> save with *File tools* off. Pinned.</summary>
     public const string SaveNeedsFileTools = "Error: to saves a file, which needs File tools on (/tools › Files › File).";
 
+    /// <summary>A query's <c>to</c> with <c>convert_to_xlsx</c> turned off (2026-10-29, review P3-3). Pinned.</summary>
+    public const string SaveNeedsXlsx = "Error: to writes a workbook, which needs convert_to_xlsx on (/tools › Offered).";
+
     /// <summary>A <c>to</c> save in plan mode. Pinned.</summary>
     public const string SaveInPlanMode = "Error: to saves a file, and plan mode writes no files.";
 
@@ -120,13 +123,23 @@ public static class FileText
     public static string SaveClosedLate(string reason) => "Not saved: " + (reason ?? "").Replace("Error: ", "", StringComparison.Ordinal);
 
     /// <summary>
+    /// A <c>to</c> save whose working folder changed while the rows were written (2026-10-29, review P7-7: the file went into the old folder
+    /// under a path named for the new one). Pinned.
+    /// </summary>
+    public const string SaveMovedLate = "Not saved: the working folder changed while the rows were written; run the query again";
+
+    /// <summary>
     /// <c>write_file</c> given an Office path it would only break (2026-10-29, the Office writing plan: XML text written into a <c>.docx</c> made
     /// a file Word can't open): a Word or Excel kind points to its converter. Pinned.
     /// </summary>
     public static string OfficeNeedsConverter(string path, string tool) =>
         $"Error: '{path}' is an Office file, which write_file would break; use {tool} to make it (from Markdown or a table)";
 
-    /// <summary><c>write_file</c> given a PowerPoint, legacy, binary-workbook or OpenDocument path, which no tool writes. Pinned.</summary>
+    /// <summary><c>unc_write</c> given a <c>.docx</c> or <c>.xlsx</c> path (2026-10-29, review P1-9): the converter writes locally only. Pinned.</summary>
+    public static string OfficeOnShare(string path, string tool) =>
+        $"Error: '{path}' is an Office file, which unc_write would break; make it in the working directory with {tool}, then unc_put it there";
+
+    /// <summary><c>write_file</c> given a PowerPoint, legacy, macro, template, binary-workbook or OpenDocument path, which no tool writes. Pinned.</summary>
     public static string OfficeNotWritten(string path) =>
         $"Error: '{path}' is an office document no tool writes; convert_to_docx and convert_to_xlsx make .docx and .xlsx files";
 

@@ -20,7 +20,8 @@ public sealed record RewindTurn(int Number, int Start, string Text, int ToolCall
 /// <list type="bullet">
 /// <item><paramref name="Turns"/>: how many turns go.</item>
 /// <item><paramref name="ChangingTools"/>: every tool those turns called that changes something, in the order first called.
-/// "Changes something" means every tool plan mode drops (<see cref="PlanTools.Allowed"/>), so an MCP tool counts too.
+/// "Changes something" means every tool plan mode drops (<see cref="PlanTools.Allowed"/>), so an MCP tool counts too, and a tracked tool
+/// that saved a file with <c>to</c> (a query's workbook, a directory listing; 2026-10-29, review P5-8: the queries read, so plan mode keeps them).
 /// Rewinding does not undo what they did.</item>
 /// <item><paramref name="HadClaude"/>: a <c>/claude</c> exchange was among them.</item>
 /// <item><paramref name="FirstOrdinal"/>: the store ordinal of the first stamped turn
@@ -218,7 +219,7 @@ public static partial class ConversationRewind
         }
 
         var calls = Calls(messages, start, messages.Count).ToList();
-        var changing = calls.Select(c => c.Name).Where(name => !PlanTools.Allowed(name)).Distinct(StringComparer.Ordinal).ToList();
+        var changing = calls.Where(Changes).Select(c => c.Name).Distinct(StringComparer.Ordinal).ToList();
         bool advisors = calls.Any(c => string.Equals(c.Name, NeonAdvisorTool.ToolName, StringComparison.Ordinal));
         bool keptStamped = false;
         for (int i = 0; i < start && !keptStamped; i++)
@@ -326,6 +327,23 @@ public static partial class ConversationRewind
     }
 
     /// <summary>The model's calls in <paramref name="messages"/>[<paramref name="from"/>..<paramref name="to"/>), the seeded opening pairs left out.</summary>
+    /// <summary>Whether a call changed something: a tool plan mode drops, or a tracked tool given a <c>to</c>.</summary>
+    public static bool Changes(FunctionCallContent call)
+    {
+        ArgumentNullException.ThrowIfNull(call);
+        if (!PlanTools.Allowed(call.Name))
+        {
+            return true;
+        }
+
+        return Files.CheckpointTools.Tracked.Contains(call.Name) && call.Arguments?.TryGetValue("to", out var to) == true && to switch
+        {
+            string text => !string.IsNullOrWhiteSpace(text),
+            System.Text.Json.JsonElement { ValueKind: System.Text.Json.JsonValueKind.String } json => !string.IsNullOrWhiteSpace(json.GetString()),
+            _ => false,
+        };
+    }
+
     private static IEnumerable<FunctionCallContent> Calls(IReadOnlyList<ChatMessage> messages, int from, int to)
     {
         for (int i = from; i < to; i++)

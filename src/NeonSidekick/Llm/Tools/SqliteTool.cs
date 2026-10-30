@@ -187,7 +187,7 @@ public sealed class SqliteQueryTool : SqliteTool
     public const int MinRows = AppSettingsData.MinSqlQueryMaxRows;
     public const int MaxRows = AppSettingsData.MaxSqlQueryMaxRows;
 
-    private static readonly JsonElement Schema = ToolSchema.Parse(
+    private static readonly (JsonElement Export, JsonElement Plain) Schemas = QuerySchemas(
         $$"""
         {
           "type": "object",
@@ -211,9 +211,9 @@ public sealed class SqliteQueryTool : SqliteTool
     public override string Description =>
         "Runs one read-only SELECT on a SQLite database and returns the rows as a table. " +
         "Only a single SELECT (or WITH … SELECT) is accepted; bind values as @name through params rather than writing them into the text. " +
-        "The header says when more rows exist than were returned." + ExportSentence;
+        "The header says when more rows exist than were returned." + SaveSentence;
 
-    public override JsonElement JsonSchema => Schema;
+    public override JsonElement JsonSchema => QuerySchema(Schemas);
 
     /// <summary>The row cap a call without <c>max_rows</c> gets: the setting, clamped.</summary>
     public static int DefaultRows(AppSettingsData effective)
@@ -227,10 +227,9 @@ public sealed class SqliteQueryTool : SqliteTool
     {
         ArgumentNullException.ThrowIfNull(sql);
         ArgumentNullException.ThrowIfNull(parameters);
-        int rows = export is null ? maxRows ?? DefaultRows(Effective) : ExportRows(maxRows) ?? 0;
-        if (export is null ? rows < MinRows || rows > MaxRows : rows == 0)
+        if (RowCap(export, maxRows, DefaultRows(Effective), MinRows, MaxRows, out int rows) is { } badRows)
         {
-            return export is null ? SqlText.BadMaxRows(MinRows, MaxRows) : SqlText.BadMaxRows(1, SqlExport.MaxRows);
+            return badRows;
         }
 
         if (SqliteReadOnlyGate.Check(sql) is { } refused)
@@ -246,9 +245,8 @@ public sealed class SqliteQueryTool : SqliteTool
                 return SqliteText.Error(unresolved!);
             }
 
-            int timeout = SqlExport.TimeoutFor(TimeoutSeconds(Effective));
-            return await ExportAsync(export, Path.GetFileNameWithoutExtension(target.Name), rows, SqliteAccess.ExportCell,
-                (job, token) => Files.ExportAsync(database, body, parameters, job, rows, timeout, token), SqliteText.Error, cancellationToken).ConfigureAwait(false);
+            return await ExportAsync(export, Path.GetFileNameWithoutExtension(target.Name), rows, maxRows, TimeoutSeconds(Effective), SqliteAccess.ExportCell,
+                (job, timeout, token) => Files.ExportAsync(database, body, parameters, job, rows, timeout, token), SqliteText.Error, cancellationToken).ConfigureAwait(false);
         }
 
         var run = await Files.RunAsync(database, [body], parameters, rows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);

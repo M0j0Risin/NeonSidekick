@@ -272,7 +272,7 @@ public static class OfficeText
 
     /// <summary>A sheet name Excel refuses. Pinned.</summary>
     public static string BadSheetName(string name) =>
-        $"Error: \"{name}\" can't name a sheet: at most 31 characters, none of : \\ / ? * [ ], no ' first or last, and not History";
+        $"Error: \"{name}\" can't name a sheet: at most 31 characters, none of : \\ / ? * [ ], no control characters, no ' first or last, and not History";
 
     /// <summary>An existing <c>.xlsx</c> that isn't a zip: an encrypted workbook is a compound file. Pinned.</summary>
     public static string NotAWorkbook(string path, bool encrypted) => encrypted
@@ -282,6 +282,14 @@ public static class OfficeText
     /// <summary>A workbook saved as Strict Open XML. Pinned.</summary>
     public static string StrictWorkbook(string path) =>
         $"Error: '{path}' is saved as Strict Open XML, which no sheet is added to; save it in Excel as an ordinary Excel Workbook, or give another file name";
+
+    /// <summary>A workbook saved with a password to modify (Excel's write reservation, 2026-10-29, review P4-5). Pinned.</summary>
+    public static string WriteReserved(string path) =>
+        $"Error: '{path}' has a password to modify, so no sheet can be added or replaced; save it in Excel without one, or give another file name";
+
+    /// <summary>A protected sheet named to be replaced (2026-10-29, review P4-5: its protection was dropped with its cells). Pinned.</summary>
+    public static string SheetProtected(string path, string sheet, string suggestion) =>
+        $"Error: sheet \"{sheet}\" in '{path}' is protected, so it isn't replaced; unprotect it in Excel, or write to a new sheet, such as sheet \"{suggestion}\"";
 
     /// <summary>A workbook whose structure is protected. Pinned.</summary>
     public static string StructureLocked(string path) =>
@@ -316,6 +324,19 @@ public static class OfficeText
     public static string SheetExists(string path, string sheet) =>
         $"Error: '{path}' already has a sheet \"{sheet}\"; give overwrite: true to replace that sheet, or another sheet name";
 
+    /// <summary>
+    /// A workbook saved elsewhere while a sheet was added or replaced in a copy of it (2026-10-29, review P2-1: putting the copy in place
+    /// lost that save). Pinned.
+    /// </summary>
+    public static string ChangedMeanwhile(string path) =>
+        $"Error: '{path}' changed while the rows were written (saved in another program?), so it was left as it is; run it again";
+
+    /// <summary>What a workbook failure names when it has no path yet.</summary>
+    public const string TheWorkbook = "the workbook";
+
+    /// <summary>Where a zip or XML that won't parse is, when no part is named.</summary>
+    public const string ThePackage = "the package";
+
     /// <summary>An existing workbook named with no <c>sheet</c> and no <c>overwrite</c>. Pinned.</summary>
     public static string WorkbookExists(string path) =>
         $"Error: '{path}' already exists; give a sheet name to add a sheet to it, or overwrite: true to replace the whole file";
@@ -346,11 +367,17 @@ public static class OfficeText
         string made = mode switch
         {
             WorkbookWrite.Added => $"Added sheet \"{sheet}\" to {size}: {counts}",
-            WorkbookWrite.ReplacedSheet => $"Replaced sheet \"{sheet}\" in {size}: {counts}",
+            WorkbookWrite.ReplacedSheet => $"Replaced sheet \"{sheet}\" in {size}: {counts}" + Recalculates,
             _ => (result.Replaced ? "Replaced " : "Made ") + $"{size}, sheet \"{sheet}\": {counts}",
         };
         return made + Notes(sheetResult);
     }
+
+    /// <summary>
+    /// What a replaced sheet adds (2026-10-29, review P4-1): the workbook is marked to recalculate, so other sheets' formulas over it update
+    /// when Excel opens it; read_office shows their last saved values until then. Pinned.
+    /// </summary>
+    public const string Recalculates = "; formulas recalculate when Excel opens it";
 
     /// <summary>The notes after a workbook's sentence: cells cut at Excel's cap, rows past its last row.</summary>
     public static string Notes(SheetResult result)
@@ -396,8 +423,37 @@ public static class OfficeText
     public static string BadCell(int row, int column) =>
         $"Error: row {N(row)}, cell {N(column)} is not a string, number, true/false or null";
 
+    /// <summary>A row of the model's table that isn't an array of cells (2026-10-29, review P6-2: it was told its first cell was bad). Pinned.</summary>
+    public static string RowNotArray(int row) => $"Error: row {N(row)} is not an array of cells; each row is an array, in the columns' order";
+
+    /// <summary>The model's table with <c>columns: []</c> (2026-10-29, review P7-9: it was told "the result" had no columns). Pinned.</summary>
+    public const string NoTableColumns = "Error: columns is empty; give the table's column names, one for each cell of a row";
+
     /// <summary>An empty source file. Pinned.</summary>
     public static string EmptyTable(string path) => $"Error: '{path}' holds no rows, not even a header";
+
+    /// <summary>
+    /// A CSV whose quote never closes (2026-10-29, review P4-2: the rest of the file was read as one field). <paramref name="row"/> counts
+    /// the header as row 1. Pinned.
+    /// </summary>
+    public static string UnclosedQuote(string path, int row) =>
+        $"Error: '{path}' opens a quote in row {N(row)} (the header is row 1) that never closes, so it can't be read as CSV; fix that quote and try again";
+
+    /// <summary>A source file changed between the pass that judged its columns and the pass that wrote them (2026-10-29, review P1-16). Pinned.</summary>
+    public static string ChangedWhileRead(string path) =>
+        $"Error: '{path}' changed while it was read (still being saved?), so no workbook was written; try again once it is saved";
+
+    /// <summary><see cref="BadJson"/>'s detail for a top level that isn't an array (2026-10-29, review P3-8: inline before).</summary>
+    public const string JsonNotArray = "the top level is not an array";
+
+    /// <summary><see cref="BadJson"/>'s detail for items of mixed kinds.</summary>
+    public const string JsonMixedItems = "its items are not all objects or all arrays";
+
+    /// <summary>The verb of <c>convert_to_xlsx</c>'s <see cref="FileText.CouldNot"/>.</summary>
+    public const string MakeWorkbookOf = "make a workbook of";
+
+    /// <summary>What <c>convert_to_xlsx</c> calls the model's own table in a sentence.</summary>
+    public const string TableNoun = "the table";
 
     /// <summary>A JSON source that isn't an array of objects or of arrays. Pinned.</summary>
     public static string BadJson(string path, string detail) =>
@@ -434,6 +490,12 @@ public static class OfficeText
 
     /// <summary>A source with nothing in it to write. Pinned.</summary>
     public static string EmptyDocument(string source) => $"Error: {source} holds nothing to put in a Word document";
+
+    /// <summary>What a Word document made of the model's own Markdown, untitled and headingless, is made from (2026-10-29, review P7-3: "Reply").</summary>
+    public const string YourMarkdown = "your Markdown";
+
+    /// <summary>The verb of a Word conversion's <see cref="FileText.CouldNot"/> (2026-10-29, review P3-8: inline before).</summary>
+    public const string MakeDocumentVerb = "make a Word document of";
 
     /// <summary><c>/docx</c> given a web address. Pinned.</summary>
     public const string NoWebSource = "Error: /docx makes a Word document of a Markdown or text file, or of the last reply, not a web page; " + DocxUsage;

@@ -88,14 +88,14 @@ public sealed class WriteFileTool : FileTool, IRefusesPrunedStubs
 
     /// <summary>
     /// The write and its sentence, with what it changed for the transcript (2026-10-03, <see cref="FileDiff"/>); shared with
-    /// <c>unc_write</c>, whose sandbox is a share's.
+    /// <c>unc_write</c>, whose sandbox is a share's (<paramref name="onShare"/>: an Office file is made locally, then put there).
     /// </summary>
-    public static (string Text, bool Done, FileDiff? Diff) Write(WorkingDirectory files, string path, string content, WriteMode mode)
+    public static (string Text, bool Done, FileDiff? Diff) Write(WorkingDirectory files, string path, string content, WriteMode mode, bool onShare = false)
     {
         ArgumentNullException.ThrowIfNull(files);
         // An Office file is a zip of XML parts: text written over it is a broken document (2026-10-29, the Office writing plan). Word and
         // Excel files point to their converter; a PowerPoint, legacy, binary-workbook or OpenDocument file to what no tool writes.
-        if (OfficeRefusal(path) is { } office)
+        if (OfficeRefusal(path, onShare) is { } office)
         {
             return (office, false, null);
         }
@@ -110,16 +110,24 @@ public sealed class WriteFileTool : FileTool, IRefusesPrunedStubs
         return (FileText.Wrote(wrote), wrote.Outcome == FileOutcome.Ok, wrote.Diff);
     }
 
-    /// <summary>The refusal for writing text to an Office path, or null for any other path.</summary>
-    public static string? OfficeRefusal(string path)
+    /// <summary>
+    /// The refusal for writing text to an Office path, or null for any other path. Only <c>.docx</c> and <c>.xlsx</c> name their converter,
+    /// the only files they make (2026-10-29, review P1-9: a <c>.docm</c> or <c>.xltx</c> was sent to a tool that refuses it); on a share
+    /// (<paramref name="onShare"/>), where no converter writes, the converter is named with <c>unc_put</c>.
+    /// </summary>
+    public static string? OfficeRefusal(string path, bool onShare = false)
     {
         ArgumentNullException.ThrowIfNull(path);
-        return OfficeFile.Kind(path) switch
+        string ending = Path.GetExtension(path.Trim());
+        string? converter = ending.Equals(Office.DocxConverter.Extension, StringComparison.OrdinalIgnoreCase) ? ConvertToDocxTool.ToolName
+            : ending.Equals(Office.XlsxTarget.Extension, StringComparison.OrdinalIgnoreCase) ? ConvertToXlsxTool.ToolName
+            : null;
+        if (converter is not null)
         {
-            OfficeKind.Word => FileText.OfficeNeedsConverter(path, ConvertToDocxTool.ToolName),
-            OfficeKind.Excel => FileText.OfficeNeedsConverter(path, ConvertToXlsxTool.ToolName),
-            _ => OfficeFile.IsAnyOfficePath(path) ? FileText.OfficeNotWritten(path) : null,
-        };
+            return onShare ? FileText.OfficeOnShare(path, converter) : FileText.OfficeNeedsConverter(path, converter);
+        }
+
+        return OfficeFile.IsAnyOfficePath(path) ? FileText.OfficeNotWritten(path) : null;
     }
 
     protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)

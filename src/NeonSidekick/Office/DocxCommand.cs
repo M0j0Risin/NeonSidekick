@@ -44,7 +44,7 @@ public static class DocxCommand
                 return OfficeText.NoReplyForDocx;
             }
 
-            request = new DocxRequest(Markdown: reply, Title: PrintText.ReplyTitle, ByUser: true);
+            request = new DocxRequest(Markdown: reply, ByUser: true, FromReply: true);
         }
         else
         {
@@ -72,27 +72,6 @@ public static class DocxCommand
         }
 
         string head = argText[..(cut + 1)];
-        var items = new List<CompletionItem>();
-        if (!head.Contains(PdfText.ToWord, StringComparison.OrdinalIgnoreCase))
-        {
-            items.Add(new CompletionItem(head + PdfText.ToWord, OfficeText.DocxToNote));
-        }
-
-        if (!head.Contains(PdfText.PaperWord, StringComparison.OrdinalIgnoreCase))
-        {
-            items.AddRange(PdfPaper.Names.Select(n => new CompletionItem(head + PdfText.PaperWord + n, n + " paper")));
-        }
-
-        if (!head.Contains(" " + PrintText.LandscapeWord, StringComparison.OrdinalIgnoreCase))
-        {
-            items.Add(new CompletionItem(head + PrintText.LandscapeWord, OfficeText.DocxLandscapeNote));
-        }
-
-        if (!head.Contains(" " + PdfText.OverwriteWord, StringComparison.OrdinalIgnoreCase))
-        {
-            items.Add(new CompletionItem(head + PdfText.OverwriteWord, OfficeText.DocxOverwriteNote));
-        }
-
-        return MentionCompleter.Matches(items, argText);
+        return MentionCompleter.Matches(PdfCommand.OptionItems(head, layout: true, OfficeText.DocxToNote, OfficeText.DocxLandscapeNote, OfficeText.DocxOverwriteNote), argText);
     }
 }

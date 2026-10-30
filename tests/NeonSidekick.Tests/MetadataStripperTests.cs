@@ -181,6 +181,54 @@ internal static class StripFixtures
 /// <summary><see cref="MetadataStripper"/> (2026-10-05): each container walked, what goes, what stays to the byte, and what is refused.</summary>
 public sealed class MetadataStripperTests
 {
+    // ── the resolution a Word picture is sized by (2026-10-29, review P6-4) ──
+
+    private static byte[] Jfif(byte units, int density) =>
+        [0xFF, 0xD8, .. StripFixtures.Segment(0xE0, [.. "JFIF\0"u8, 1, 1, units, (byte)(density >> 8), (byte)density, (byte)(density >> 8), (byte)density, 0, 0]), 0xFF, 0xD9];
+
+    /// <summary>A JPEG holding only an EXIF block: IFD0's XResolution (a RATIONAL) and, when given, its ResolutionUnit.</summary>
+    private static byte[] ExifOnly(uint resolution, ushort? unit)
+    {
+        var tiff = new List<byte>("II*\0"u8.ToArray());
+        void U16(int v) { tiff.Add((byte)v); tiff.Add((byte)(v >> 8)); }
+        void U32(long v) { for (int i = 0; i < 4; i++) { tiff.Add((byte)(v >> (8 * i))); } }
+        int entries = unit is null ? 1 : 2;
+        U32(8);
+        U16(entries);
+        U16(0x011A); U16(5); U32(1); U32(8 + 2 + (entries * 12) + 4);
+        if (unit is { } u)
+        {
+            U16(0x0128); U16(3); U32(1); U16(u); U16(0);
+        }
+
+        U32(0);
+        U32(resolution);
+        U32(1);
+        return [0xFF, 0xD8, .. StripFixtures.Segment(0xE1, [.. "Exif\0\0"u8, .. tiff]), 0xFF, 0xD9];
+    }
+
+    private static byte[] PngPhys(uint perUnit, byte unit) =>
+    [
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+        .. StripFixtures.Chunk("pHYs", [(byte)(perUnit >> 24), (byte)(perUnit >> 16), (byte)(perUnit >> 8), (byte)perUnit, (byte)(perUnit >> 24), (byte)(perUnit >> 16), (byte)(perUnit >> 8), (byte)perUnit, unit]),
+        .. StripFixtures.Chunk("IEND", []),
+    ];
+
+    [Fact]
+    public void Dpi_IsReadFromJfif_Exif_AndPhys()
+    {
+        Assert.Equal(300, MetadataStripper.Dpi(Jfif(1, 300)));
+        Assert.Equal(254, Math.Round(MetadataStripper.Dpi(Jfif(2, 100))!.Value));
+        Assert.Equal(300, MetadataStripper.Dpi(ExifOnly(300, 2)));
+        Assert.Equal(300, MetadataStripper.Dpi(ExifOnly(300, null)));   // inches by default
+        Assert.Equal(300, Math.Round(MetadataStripper.Dpi(ExifOnly(118, 3))!.Value));   // per centimeter
+        Assert.Null(MetadataStripper.Dpi(ExifOnly(300, 1)));   // no unit
+        Assert.Equal(300, Math.Round(MetadataStripper.Dpi(PngPhys(11811, 1))!.Value));
+        Assert.Null(MetadataStripper.Dpi(PngPhys(11811, 0)));
+        // A JFIF with units 0 (ImageIO's) falls through to its EXIF; nothing recorded is null.
+        Assert.Null(MetadataStripper.Dpi(Jfif(0, 72)));
+        Assert.Null(MetadataStripper.Dpi([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, .. StripFixtures.Chunk("IEND", [])]));
+    }
     private static StripResult Strip(byte[] source, int orientation = 1)
     {
         var (result, error) = MetadataStripper.Strip(source, orientation);

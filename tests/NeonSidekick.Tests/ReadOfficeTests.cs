@@ -173,7 +173,7 @@ public sealed class ReadOfficeTests : IDisposable
         Assert.Contains(ReadOfficeTool.ToolName, ChatScreen.QuietTools);
         Assert.Contains(ReadOfficeTool.ToolName, AuditTools.Always);
         Assert.Equal(ReadOfficeTool.BaseDescription, _tool.Description);
-        Assert.EndsWith("read_file cannot read an Office file; convert_to_docx and convert_to_xlsx write them.", ReadOfficeTool.BaseDescription, StringComparison.Ordinal);
+        Assert.EndsWith("read_file cannot read an Office file.", ReadOfficeTool.BaseDescription, StringComparison.Ordinal);   // the writers' names left out (2026-10-29, review P7-6)
         Assert.True(ReadOfficeTool.BaseDescription.Length <= ReadPdfTool.BaseDescription.Length, "no longer than read_pdf's");
         var tools = ChatScreen.FileTools(_files, () => true, _ => { }, () => _settings);
         Assert.Equal(ReadFileTool.ToolName, tools[tools.ToList().FindIndex(t => t.Name == ReadOfficeTool.ToolName) - 1].Name);   // read_pdf left out without a reader

@@ -116,6 +116,23 @@ public sealed class OfficeWriterTests
         Assert.Equal(31, SheetName.Fit(new string('x', 40), [new string('x', 31)]).Length);
     }
 
+    [Fact]
+    public void AnEmoji_NamesASheet_AndNoCutSplitsOne()
+    {
+        // 2026-10-29, review P2-7 and P3-11.
+        Assert.False(SheetName.Problem("Sales 📈"));
+        Assert.True(SheetName.Problem("half \uD83D"));
+        Assert.True(SheetName.Problem("tab\there"));
+        Assert.Equal("Sales 📈", SheetName.Fit("Sales 📈", []));
+        Assert.Equal("half -", SheetName.Fit("half \uD83D", []));
+        string thirty = new string('x', 30) + "📈";   // the pair at 30-31: a cut at 31 drops it whole
+        Assert.Equal(new string('x', 30), SheetName.Fit(thirty, []));
+        string near = new string('x', 26) + "📈" + "yy";   // " (2)" makes room at 27: the pair at 26-27 goes whole
+        Assert.Equal(new string('x', 26) + " (2)", SheetName.Fit(near, [near]));
+        Assert.Equal(new string('a', 59), FileNames.Safe(new string('a', 59) + "📈"));
+        Assert.Equal("Weekly-Notes", FileNames.Safe("Weekly Notes", lowerCase: false));
+    }
+
     // ── a new workbook ──────────────────────────────────────────────────────
 
     [Fact]
@@ -134,7 +151,7 @@ public sealed class OfficeWriterTests
         string sheet = Part(book, "xl/worksheets/sheet1.xml");
         Assert.Contains("<pane ySplit=\"1\" topLeftCell=\"A2\" activePane=\"bottomLeft\" state=\"frozen\" />", sheet, StringComparison.Ordinal);
         Assert.Contains("numberStoredAsText=\"1\"", sheet, StringComparison.Ordinal);
-        Assert.Contains("<ignoredError sqref=\"A2:A3\"", sheet, StringComparison.Ordinal);
+        Assert.Contains("<ignoredError sqref=\"A1:A3\"", sheet, StringComparison.Ordinal);
         Assert.DoesNotContain("<dimension", sheet, StringComparison.Ordinal);
         Assert.Contains("_xlnm._FilterDatabase\" localSheetId=\"0\" hidden=\"1\">'Data'!$A$1:$F$3<", Part(book, "xl/workbook.xml"), StringComparison.Ordinal);
     }
@@ -173,6 +190,77 @@ public sealed class OfficeWriterTests
         Assert.Contains("| 2 | 18:00:00 | 36:00:00 |", Read(book, new OfficeRequest(Sheet: "Data")), StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("1.5e2", "150")]
+    [InlineData("0.000", "0.000")]
+    [InlineData("12.50", "12.50")]
+    [InlineData("1e-30", "1E-30")]
+    [InlineData("-0.25", "-0.25")]
+    public void ANumberThatKeepsItsDigits_IsANumber(string text, string written)
+    {
+        // 2026-10-29, review P1-2/P2-5.
+        Assert.True(XlsxValue.TryExcelNumber(text, out var value));
+        Assert.Equal((XlsxKind.Number, written), (value.Kind, value.Text));
+    }
+
+    [Theory]
+    [InlineData("1e400")]
+    [InlineData("-1e400")]
+    [InlineData("1e-400")]
+    [InlineData("1234567890123456")]
+    [InlineData("0.1000000000000000000000000000001")]
+    [InlineData("abc")]
+    public void ANumberThatWouldLoseDigits_StaysText(string text)
+    {
+        Assert.False(XlsxValue.TryExcelNumber(text, out _));
+        Assert.Equal((XlsxKind.Text, text), (XlsxValue.OfNumberText(text).Kind, XlsxValue.OfNumberText(text).Text));
+        var judge = new ColumnJudge();
+        judge.Observe(0, new RawCell(text));
+        Assert.Equal(XlsxKind.Text, judge.Convert(0, new RawCell(text)).Kind);
+        var json = new ColumnJudge();
+        json.Observe(0, new RawCell(text, RawKind.Number));
+        Assert.Equal(XlsxKind.Text, json.Convert(0, new RawCell(text, RawKind.Number)).Kind);
+    }
+
+    [Fact]
+    public void ALargeWholeNumber_ShowsEveryDigit_InANewAndAnAddedSheet()
+    {
+        // 2026-10-29, review P6-1: General shows a 13-digit barcode as 4.00638E+12.
+        byte[] book = NewBook(["Code", "Price", "Small"], [[XlsxValue.From(4006381333931L), XlsxValue.From(123456789012.5m), XlsxValue.From(10_000_000_000L)]]);
+        OfficeSchema.ValidWorkbook(book);
+        string sheet = Part(book, "xl/worksheets/sheet1.xml");
+        Assert.Contains("<c r=\"A2\" s=\"6\"><v>4006381333931</v>", sheet, StringComparison.Ordinal);
+        Assert.Contains("<c r=\"B2\"><v>", sheet, StringComparison.Ordinal);   // a fraction: General
+        Assert.Contains("<c r=\"C2\"><v>", sheet, StringComparison.Ordinal);   // 11 digits: General shows them all
+        Assert.Equal("1", XfFormat(book, 6));
+        Assert.Contains("| 2 | 4006381333931 |", Read(book, new OfficeRequest(Sheet: "Data")), StringComparison.Ordinal);
+
+        byte[] added = Append(book, "More", replace: false, out _, out _, fill: rows => rows.Add([XlsxValue.From(4006381333931L), XlsxValue.Blank]));
+        OfficeSchema.ValidWorkbook(added);
+        string more = Part(added, "xl/worksheets/sheet2.xml");
+        var style = System.Text.RegularExpressions.Regex.Match(more, "<c r=\"A2\" s=\"(\\d+)\"><v>4006381333931</v>");
+        Assert.True(style.Success, more);
+        Assert.Equal("1", XfFormat(added, int.Parse(style.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture)));
+    }
+
+    /// <summary>The number format of <c>cellXfs</c>' xf at <paramref name="index"/>.</summary>
+    private static string? XfFormat(byte[] book, int index)
+    {
+        var styles = System.Xml.Linq.XDocument.Parse(Part(book, "xl/styles.xml"));
+        System.Xml.Linq.XNamespace s = SheetWriter.Ns;
+        return styles.Root!.Element(s + "cellXfs")!.Elements(s + "xf").ElementAt(index).Attribute("numFmtId")?.Value;
+    }
+
+    [Fact]
+    public void ALongDuration_IsWideEnough_AndANumericHeader_IsWaived()
+    {
+        // 2026-10-29, review P2-12 and P6-7.
+        byte[] book = NewBook(["D", "2024"], [[XlsxValue.From(TimeSpan.FromHours(1000)), T("x")]]);
+        string sheet = Part(book, "xl/worksheets/sheet1.xml");
+        Assert.Contains("<col min=\"1\" max=\"1\" width=\"10\" customWidth=\"1\" />", sheet, StringComparison.Ordinal);
+        Assert.Contains("<ignoredError sqref=\"B1:B2\"", sheet, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Rows_StreamToTheStream_BeforeTheLastIsAdded()
     {
@@ -180,7 +268,7 @@ public sealed class OfficeWriterTests
         using var writer = new ExcelWriter(sink, "S", Clock);
         writer.Sheet.Begin(["n"]);
         long before = sink.Length;
-        for (int i = 0; i < SheetWriter.WidthRows + 3 * SheetWriter.FlushRows; i++)
+        for (int i = 0; i < SheetWriter.WidthRows + 20_000; i++)
         {
             writer.Sheet.Add([XlsxValue.From(i)]);
         }
@@ -313,7 +401,7 @@ public sealed class OfficeWriterTests
         Assert.Contains("<numFmts count=\"4\"><numFmt numFmtId=\"164\" formatCode=\"yyyy-mm-dd\" />", styles, StringComparison.Ordinal);
         Assert.Contains("<fonts count=\"2\" x14ac:knownFonts=\"1\">", styles, StringComparison.Ordinal);
         Assert.Contains("<font><b /><sz val=\"11\" /><color theme=\"1\" /><name val=\"Aptos Narrow\" />", styles, StringComparison.Ordinal);
-        Assert.Contains("<cellXfs count=\"7\">", styles, StringComparison.Ordinal);
+        Assert.Contains("<cellXfs count=\"8\">", styles, StringComparison.Ordinal);   // theirs, the header, four formats, a whole number (P6-1)
         Assert.DoesNotContain("calcChain", Part(book, "[Content_Types].xml"), StringComparison.Ordinal);
         Assert.DoesNotContain("calcChain", Part(book, "xl/_rels/workbook.xml.rels"), StringComparison.Ordinal);
         Assert.Null(new ZipArchive(new MemoryStream(book)).GetEntry("xl/calcChain.xml"));
@@ -380,5 +468,125 @@ public sealed class OfficeWriterTests
         using var appender = WorkbookAppender.Open(input, "book.xlsx", new OfficeLimits(100_000_000, 1_000_000, 1_500_000), out _)!;
         string? copied = appender.Start(new MemoryStream(), "N", null, Clock);
         Assert.Equal(OfficeText.PartTooLarge("book.xlsx", "xl/media/bomb.xml"), copied);
+    }
+
+    // ── 2026-10-29, the review's appending fixes ─────────────────────────────
+
+    /// <summary><paramref name="book"/> with one entry's text changed, or an entry of bytes added (stored as is).</summary>
+    internal static byte[] Patched(byte[] book, string name, Func<string, string>? change = null, byte[]? add = null)
+    {
+        var stream = new MemoryStream();
+        stream.Write(book);
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var entry = zip.GetEntry(name);
+            if (change is not null)
+            {
+                string text;
+                using (var reader = new StreamReader(entry!.Open()))
+                {
+                    text = reader.ReadToEnd();
+                }
+
+                entry.Delete();
+                using var writer = new StreamWriter(zip.CreateEntry(name).Open());
+                writer.Write(change(text));
+            }
+            else if (add is not null)
+            {
+                entry?.Delete();
+                using var target = zip.CreateEntry(name, CompressionLevel.NoCompression).Open();
+                target.Write(add);
+            }
+        }
+
+        return stream.ToArray();
+    }
+
+    [Fact]
+    public void ACopiedPicture_IsStored_NotDeflatedAgain()
+    {
+        // P6-5.
+        var noise = new byte[8192];
+        new Random(1).NextBytes(noise);
+        byte[] book = Patched(ExcelLike(), "xl/media/image1.png", add: noise);
+        byte[] added = Append(book, "New", replace: false, out _, out string? refusal);
+        Assert.Null(refusal);
+        var entry = new ZipArchive(new MemoryStream(added)).GetEntry("xl/media/image1.png")!;
+        Assert.Equal(entry.Length, entry.CompressedLength);
+        Assert.Equal(CompressionLevel.NoCompression, WorkbookAppender.CopyLevel((100, 99)));
+        Assert.Equal(CompressionLevel.Fastest, WorkbookAppender.CopyLevel((100, 10)));
+        Assert.Equal(CompressionLevel.Fastest, WorkbookAppender.CopyLevel(null));
+    }
+
+    [Fact]
+    public void AStrayStylesPart_IsNotWrittenTwice()
+    {
+        // P1-14a: a styles.xml no relationship names is still taken.
+        byte[] book = Patched(ExcelLike(), "xl/_rels/workbook.xml.rels", rels => System.Text.RegularExpressions.Regex.Replace(rels, "<Relationship Id=\"rId5\"[^>]*/>", ""));
+        byte[] added = Append(book, "New", replace: false, out _, out string? refusal);
+        Assert.Null(refusal);
+        var zip = new ZipArchive(new MemoryStream(added));
+        Assert.Single(zip.Entries, e => e.FullName == "xl/styles.xml");
+        Assert.NotNull(zip.GetEntry("xl/styles2.xml"));
+        Assert.Contains("Target=\"styles2.xml\"", Part(added, "xl/_rels/workbook.xml.rels"), StringComparison.Ordinal);
+        Assert.Contains("PartName=\"/xl/styles2.xml\"", Part(added, "[Content_Types].xml"), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheHeaderFont_TakesTheFace_NotTheUnderline()
+    {
+        // P1-14b.
+        byte[] book = Patched(ExcelLike(), "xl/styles.xml", styles => styles.Replace("<font><sz val=\"11\"/>", "<font><u/><strike/><sz val=\"11\"/>", StringComparison.Ordinal));
+        byte[] added = Append(book, "New", replace: false, out _, out _);
+        string styles = Part(added, "xl/styles.xml");
+        Assert.Contains("<font><b /><sz val=\"11\" /><color theme=\"1\" /><name val=\"Aptos Narrow\" /><family val=\"2\" /><scheme val=\"minor\" /></font>", styles, StringComparison.Ordinal);
+        Assert.Contains("<font><u /><strike />", styles, StringComparison.Ordinal);   // theirs as it was
+    }
+
+    [Fact]
+    public void AReplacedSheet_RecalculatesOnOpen_AnAddedOneLeavesItAsItWas()
+    {
+        // P4-1: a formula over the replaced cells kept its old value.
+        byte[] replaced = Append(ExcelLike(), "Plain", replace: true, out _, out string? refusal);
+        Assert.Null(refusal);
+        OfficeSchema.ValidWorkbook(replaced);
+        Assert.Contains("<calcPr calcId=\"191029\" fullCalcOnLoad=\"1\" />", Part(replaced, "xl/workbook.xml"), StringComparison.Ordinal);
+        Assert.DoesNotContain("fullCalcOnLoad", Part(Append(ExcelLike(), "New", replace: false, out _, out _), "xl/workbook.xml"), StringComparison.Ordinal);
+        // A workbook with no calcPr gets one after definedNames.
+        byte[] ours = Append(NewBook(["A"], [[T("x")]]), "Data", replace: true, out _, out refusal);
+        Assert.Null(refusal);
+        OfficeSchema.ValidWorkbook(ours);
+        Assert.Contains("</definedNames><calcPr fullCalcOnLoad=\"1\" />", Part(ours, "xl/workbook.xml"), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void APasswordToModify_ARevisionLock_AndAProtectedSheet_AreNotWrittenOver()
+    {
+        // P4-5.
+        byte[] reserved = Patched(ExcelLike(), "xl/workbook.xml", w => w.Replace("<workbookPr", "<fileSharing userName=\"x\" reservationPassword=\"CC3D\"/><workbookPr", StringComparison.Ordinal));
+        Append(reserved, "New", replace: false, out _, out string? refusal);
+        Assert.Equal(OfficeText.WriteReserved("book.xlsx"), refusal);
+        byte[] recommended = Patched(ExcelLike(), "xl/workbook.xml", w => w.Replace("<workbookPr", "<fileSharing readOnlyRecommended=\"1\"/><workbookPr", StringComparison.Ordinal));
+        Append(recommended, "New", replace: false, out _, out refusal);
+        Assert.Null(refusal);
+        byte[] revision = Patched(ExcelLike(locked: true), "xl/workbook.xml", w => w.Replace("lockStructure", "lockRevision", StringComparison.Ordinal));
+        Append(revision, "New", replace: false, out _, out refusal);
+        Assert.Equal(OfficeText.StructureLocked("book.xlsx"), refusal);
+        byte[] guarded = Patched(ExcelLike(), "xl/worksheets/sheet1.xml", w => w.Replace("</sheetData></worksheet>", "</sheetData><sheetProtection sheet=\"1\" objects=\"1\"/></worksheet>", StringComparison.Ordinal));
+        Append(guarded, "Plain", replace: true, out _, out refusal);
+        Assert.Equal(OfficeText.SheetProtected("book.xlsx", "Plain", "Plain new"), refusal);
+        Append(guarded, "Beside", replace: false, out _, out refusal);   // a sheet beside it is fine
+        Assert.Null(refusal);
+    }
+
+    [Fact]
+    public void ADamagedContentTypesPart_IsARefusal_BeforeAnythingIsWritten()
+    {
+        // P7-1.
+        byte[] book = Patched(ExcelLike(), "[Content_Types].xml", _ => "<Types");
+        Append(book, "New", replace: false, out var opened, out string? refusal);
+        Assert.Null(opened);
+        Assert.Equal(OfficeText.Damaged("book.xlsx", "[Content_Types].xml"), refusal);
     }
 }

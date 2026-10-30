@@ -61,10 +61,16 @@ public sealed record TextRun(string Text, bool Bold = false, bool Italic = false
 public sealed record LinkRun(string Text, string Url) : MarkdownInline;
 
 /// <summary>
-/// A picture (<c>![alt](url)</c>, 2026-10-29, the Office writing plan: <c>convert_to_docx</c> embeds it): its alt text and its address. The
-/// transcript and prints show it exactly as the link it was before (<see cref="LinkRun"/>'s text), so neither changes.
+/// A picture (<c>![alt](url)</c>, 2026-10-29, the Office writing plan: <c>convert_to_docx</c> embeds it): its alt text and its address, and
+/// the link it sits in when it is the whole of one (<c>[![alt](img.png)](url)</c>, review P3-2: it was flattened to a link and never
+/// embedded). The transcript and prints show it exactly as the link it was before (<see cref="LinkRun"/>'s text, the link's target when
+/// there is one), so neither changes.
 /// </summary>
-public sealed record ImageRun(string Alt, string Url) : MarkdownInline;
+public sealed record ImageRun(string Alt, string Url, string? Link = null) : MarkdownInline
+{
+    /// <summary>Where the transcript and prints point: the link around the picture, else the picture's own address.</summary>
+    public string Shown => Link ?? Url;
+}
 
 /// <summary>A hard line break inside a paragraph.</summary>
 public sealed record HardBreak : MarkdownInline;

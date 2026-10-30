@@ -48,7 +48,7 @@ From top to bottom:
 * **Enter** sends; Ctrl+Enter starts a new line. ↑/↓ step through earlier messages and move through a wrapped draft.
 * **Copy and paste:** Ctrl+A or a drag selects, Ctrl+C copies, Ctrl+X cuts. A right-click on the input line, or Alt+V, pastes, pictures too.
 * **Ctrl+C** with nothing selected stops the speech, else cancels the reply; twice at an idle line, it exits.
-* **Lists:** `/` commands, `@` files, `#` skills, `$` tools, `%` database connections, `^` ComfyUI workflows, `*` UNC shares; inside a command's text too, except in `/read`, `/view`, `/print` and `/pdf` ([Completion lists](#completion-lists)).
+* **Lists:** `/` commands, `@` files, `#` skills, `$` tools, `%` database connections, `^` ComfyUI workflows, `*` UNC shares; inside a command's text too, except in `/read`, `/view`, `/print`, `/pdf` and `/docx` ([Completion lists](#completion-lists)).
 * **Drop a picture** from the picture strip or the transcript onto the input row to attach it (**🖼️ drop on line**).
 * **During a reply** Enter queues the message. Esc stops the speech, then closes an open list, then cancels the reply; it never clears your draft.
 * **At the idle line** Esc clears the draft (↑ brings it back); Esc twice on an empty line opens `/rewind`.
@@ -687,7 +687,7 @@ With *Web UI commands* on (off by default), the page sends slash commands too. T
 
 | Kind | Commands | On the page |
 |---|---|---|
-| Run | `/new`, `/clear`, `/splash`, `/compact`, `/plan …` (`/plan ralph` too), `/mark <color>`, `/code-audit …`, `/claude`, `/advisor`, `/help <words>`, `/imagine`, `/loop …`, `/learn [<note>]`, `/test …`, `/pdf …`, `/print <file\|reply>`, `/avatar <emoji>\|clear`, `/remember`, `/timer …`, `/rename <name>`, `/tts on\|off`, `/stt on\|off`, `/memory <mode>`, `/cwd`, `/model <id>`, `/reasoning <level>`, `/ha …` (not `stills`), `/docker …`, `/shopping …`, `/prompts list\|save\|remove\|<n>`, `/browser save\|unsave`, `/msgclear`, `/undo [<n>]` | Their lines; the status row shows its spinner while it runs |
+| Run | `/new`, `/clear`, `/splash`, `/compact`, `/plan …` (`/plan ralph` too), `/mark <color>`, `/code-audit …`, `/claude`, `/advisor`, `/help <words>`, `/imagine`, `/loop …`, `/learn [<note>]`, `/test …`, `/pdf …`, `/docx …`, `/print <file\|reply>`, `/avatar <emoji>\|clear`, `/remember`, `/timer …`, `/rename <name>`, `/tts on\|off`, `/stt on\|off`, `/memory <mode>`, `/cwd`, `/model <id>`, `/reasoning <level>`, `/ha …` (not `stills`), `/docker …`, `/shopping …`, `/prompts list\|save\|remove\|<n>`, `/browser save\|unsave`, `/msgclear`, `/undo [<n>]` | Their lines; the status row shows its spinner while it runs |
 | Pick | `/model`, `/reasoning`, `/rewind [<n>]`, `/plan open [--chat]` | A card with the choices, the one in use marked, a filter for a long list |
 | List | `/ha states`, `/docker logs`, `/eventlog …`, `/net …`, `/services …`, `/tasks …`, `/ad …`, `/code-audit open`, `/print`, `/print printers`, `/camera list`, `/screen list`, `/tree` (needs *File tools*), `/vault` (needs *Obsidian tools*), `/process`, `/comfy status`, `/comfy offered` | A card with the lines; Close |
 | Never | `/exit`, `/webui`, `/cmd`, `/profile`, `/plan edit`, `/cwd <path>`, `/sessions`, `/skills`, `/youtube` (bare and `list` point at the YouTube tab), `/queue`, `/botchat`, `/sampling`, `/server`, `/usage` | Refused: they run at the PC only |

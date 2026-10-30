@@ -225,6 +225,9 @@ public sealed class MarkdigParser : IMarkdownParser
                 case LinkInline { IsImage: true } image:
                     Add(into, new ImageRun(PlainText(image), image.Url ?? ""));
                     break;
+                case LinkInline link when OnlyPicture(link) is { } picture:
+                    Add(into, new ImageRun(PlainText(picture), picture.Url ?? "", link.Url ?? ""));
+                    break;
                 case LinkInline link:
                     Add(into, new LinkRun(PlainText(link), link.Url ?? ""));
                     break;
@@ -261,6 +264,25 @@ public sealed class MarkdigParser : IMarkdownParser
     }
 
     /// <summary>The text of a link as typed, its own emphasis dropped: a link is one unit on the screen.</summary>
+    /// <summary>The one picture a link holds with nothing else but spaces beside it, or null (2026-10-29, review P3-2).</summary>
+    private static LinkInline? OnlyPicture(LinkInline link)
+    {
+        LinkInline? picture = null;
+        foreach (var inline in link)
+        {
+            if (inline is LinkInline { IsImage: true } image && picture is null)
+            {
+                picture = image;
+            }
+            else if (inline is not LiteralInline literal || !literal.Content.IsEmptyOrWhitespace())
+            {
+                return null;
+            }
+        }
+
+        return picture;
+    }
+
     private static string PlainText(ContainerInline container)
     {
         var text = new System.Text.StringBuilder();

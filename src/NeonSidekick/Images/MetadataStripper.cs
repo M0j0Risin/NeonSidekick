@@ -194,6 +194,123 @@ public static class MetadataStripper
         }
     }
 
+    /// <summary>
+    /// The resolution a picture's file records, in dots per inch (2026-10-29, review P6-4, for a Word picture's size): a JPEG's JFIF APP0 in
+    /// inches or centimeters, else its EXIF <c>XResolution</c> by <c>ResolutionUnit</c> (ImageIO and Photoshop leave the APP0's units 0, see
+    /// <see cref="JfifInches"/>); a PNG's <c>pHYs</c> in meters, else its EXIF. Null when none is recorded or the unit is none.
+    /// </summary>
+    public static double? Dpi(byte[] bytes)
+    {
+        ArgumentNullException.ThrowIfNull(bytes);
+        try
+        {
+            return ContainerOf(bytes) switch
+            {
+                StripContainer.Jpeg => JfifDpi(bytes) ?? TiffDpi(JpegExif(bytes).Span),
+                StripContainer.Png => PngDpi(bytes) ?? TiffDpi(PngExif(bytes).Span),
+                _ => null,
+            };
+        }
+        catch (Exception e) when (e is ArgumentOutOfRangeException or IndexOutOfRangeException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>A JPEG's leading JFIF APP0's X density, when its units are inches (1) or centimeters (2).</summary>
+    private static double? JfifDpi(byte[] s)
+    {
+        if (s.Length < 18 || s[2] != 0xFF || s[3] != 0xE0 || !s.AsSpan(6, 5).SequenceEqual("JFIF\0"u8))
+        {
+            return null;
+        }
+
+        int x = (s[14] << 8) | s[15];
+        return x == 0 ? null : s[13] switch { 1 => x, 2 => x * 2.54, _ => null };
+    }
+
+    /// <summary>A PNG's <c>pHYs</c> X pixels per unit, when the unit is the meter (1); it comes before the first IDAT.</summary>
+    private static double? PngDpi(byte[] s)
+    {
+        int p = PngSignature.Length;
+        while (p + 12 <= s.Length)
+        {
+            uint length = BinaryPrimitives.ReadUInt32BigEndian(s.AsSpan(p));
+            if (length > int.MaxValue || p + 12L + length > s.Length)
+            {
+                break;
+            }
+
+            var type = s.AsSpan(p + 4, 4);
+            if (type.SequenceEqual("IDAT"u8))
+            {
+                break;
+            }
+
+            if (type.SequenceEqual("pHYs"u8) && length == 9)
+            {
+                uint x = BinaryPrimitives.ReadUInt32BigEndian(s.AsSpan(p + 8));
+                return x > 0 && s[p + 16] == 1 ? x * 0.0254 : null;
+            }
+
+            p += 12 + (int)length;
+        }
+
+        return null;
+    }
+
+    /// <summary>IFD0's <c>XResolution</c> (0x011A, a RATIONAL) by its <c>ResolutionUnit</c> (0x0128: 2 inches, the default; 3 centimeters; 1 none).</summary>
+    private static double? TiffDpi(ReadOnlySpan<byte> tiff)
+    {
+        if (tiff.Length < 8)
+        {
+            return null;
+        }
+
+        bool little = tiff[0] == (byte)'I' && tiff[1] == (byte)'I';
+        if (!little && !(tiff[0] == (byte)'M' && tiff[1] == (byte)'M'))
+        {
+            return null;
+        }
+
+        ushort U16(ReadOnlySpan<byte> b) => little ? BinaryPrimitives.ReadUInt16LittleEndian(b) : BinaryPrimitives.ReadUInt16BigEndian(b);
+        uint U32(ReadOnlySpan<byte> b) => little ? BinaryPrimitives.ReadUInt32LittleEndian(b) : BinaryPrimitives.ReadUInt32BigEndian(b);
+        uint ifd0 = U32(tiff[4..]);
+        if (ifd0 > (uint)tiff.Length - 2)
+        {
+            return null;
+        }
+
+        double? x = null;
+        int unit = 2;
+        int count = U16(tiff[(int)ifd0..]);
+        for (int i = 0; i < count; i++)
+        {
+            long at = ifd0 + 2L + (i * 12L);
+            if (at + 12 > tiff.Length)
+            {
+                break;
+            }
+
+            var entry = tiff[(int)at..];
+            ushort tag = U16(entry);
+            if (tag == 0x011A && U16(entry[2..]) == 5)
+            {
+                uint offset = U32(entry[8..]);
+                if (offset <= (uint)tiff.Length - 8 && U32(tiff[((int)offset + 4)..]) is var den and > 0)
+                {
+                    x = U32(tiff[(int)offset..]) / (double)den;
+                }
+            }
+            else if (tag == 0x0128)
+            {
+                unit = U16(entry[8..]);
+            }
+        }
+
+        return x is > 0 ? unit switch { 2 => x, 3 => x * 2.54, _ => null } : null;
+    }
+
     private static ReadOnlyMemory<byte> JpegExif(byte[] s)
     {
         int p = 2;

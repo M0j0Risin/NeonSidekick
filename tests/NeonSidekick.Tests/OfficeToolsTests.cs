@@ -192,6 +192,189 @@ public sealed class OfficeToolsTests : IDisposable
         Assert.Contains("1 row × 1 column", await Xlsx(("columns", Json("""["a"]""")), ("rows", "[[1]]")));
     }
 
+    [Fact]
+    public async Task TheTablesArguments_SayWhatIsWrong()
+    {
+        // 2026-10-29, review P2-3/P5-12, P6-2, P7-9.
+        Assert.Contains("1 row × 1 column", await Xlsx(("columns", """["a,b"]"""), ("rows", "[[1]]"), ("to", "one.xlsx")));   // a JSON array as text: one name
+        Assert.Equal(OfficeText.BadTableArgument(ConvertToXlsxTool.ColumnsArgument), await Xlsx(("columns", Json("[1]")), ("rows", Json("[[1]]"))));
+        Assert.Equal(OfficeText.NoTableColumns, await Xlsx(("columns", Json("[]")), ("rows", Json("[[1]]"))));
+        Assert.Equal(OfficeText.RowNotArray(2), await Xlsx(("columns", Json("""["a"]""")), ("rows", Json("[[1], 2]"))));
+        Put("keyless.json", "[{}, {}]");
+        Assert.Equal(OfficeText.EmptyTable("keyless.json"), await Xlsx(("path", "keyless.json")));
+        Put("mixed.json", "[{}, []]");
+        Assert.Equal(OfficeText.BadJson("mixed.json", OfficeText.JsonMixedItems), await Xlsx(("path", "mixed.json")));
+        Put("object.json", "{}");
+        Assert.Equal(OfficeText.BadJson("object.json", OfficeText.JsonNotArray), await Xlsx(("path", "object.json")));
+        Assert.Single(Directory.GetFiles(_root, "*.xlsx"));
+    }
+
+    [Fact]
+    public async Task AQuoteThatNeverCloses_IsNamedByItsRow_AndALongFieldIsCut()
+    {
+        // 2026-10-29, review P4-2.
+        Put("open.csv", "a,b\n1,2\n\"3,4\n5,6\n");
+        Assert.Equal(OfficeText.UnclosedQuote("open.csv", 3), await Xlsx(("path", "open.csv")));
+        Assert.Empty(Directory.GetFiles(_root, "*.xlsx"));
+
+        Put("long.csv", "a,b\n" + new string('x', 40_000) + ",1\n");
+        Assert.StartsWith("Made long.xlsx", await Xlsx(("path", "long.csv")));
+        var field = TableSource.Delimited(new StringReader("\"" + new string('y', 40_000) + "\",2"), ',').Single();
+        Assert.Equal((XlsxValue.MaxChars + 1, "2"), (field[0].Length, field[1]));
+        var tsv = TableSource.Lines(new StringReader("a\t" + new string('z', 40_000) + "\r\n\r\nb\tc")).ToList();
+        Assert.Equal(2, tsv.Count);   // the blank line skipped
+        Assert.Equal(XlsxValue.MaxChars + 1, tsv[0][1].Length);
+        var wide = TableSource.Delimited(new StringReader(new string(',', CellReference.MaxColumn + 50)), ',').Single();
+        Assert.Equal(CellReference.MaxColumn + 1, wide.Count);
+    }
+
+    [Theory]
+    [InlineData("a,b", ',')]
+    [InlineData("a;b", ';')]
+    [InlineData("\"Smith, J\";Age", ';')]
+    [InlineData("a;b,c", ',')]
+    [InlineData("a;b;c,d", ';')]
+    [InlineData("", ',')]
+    public void TheDelimiter_IsCountedOutsideQuotes_ATieStaysComma(string first, char expected)
+    {
+        // 2026-10-29, review P1-16.
+        Assert.Equal(expected, TableSource.Delimiter(first));
+    }
+
+    [Fact]
+    public void TheEncoding_IsJudgedOverTheWholeFile()
+    {
+        // 2026-10-29, review P4-3: ASCII past the 64 KB head, then a Windows-1252 é.
+        var late = new List<byte>(Encoding.ASCII.GetBytes("name\n" + new string('a', 70_000) + "\ncaf"));
+        late.Add(0xE9);
+        Assert.NotEqual(TextForm.Utf8, TextFile.Detect(new MemoryStream([.. late])).Form);
+        // A UTF-8 character across the 64 KB read is still UTF-8.
+        byte[] straddle = Encoding.UTF8.GetBytes(new string('a', 64 * 1024 - 1) + "é and more");
+        var stream = new MemoryStream(straddle);
+        Assert.Equal(TextForm.Utf8, TextFile.Detect(stream).Form);
+        Assert.Equal(0, stream.Position);
+    }
+
+    /// <summary>A sheet that counts what it is given and is full after <paramref name="room"/> rows.</summary>
+    private sealed class CountingSheet(int room) : ISheetRows
+    {
+        public bool Begun { get; private set; }
+
+        public int Added { get; private set; }
+
+        public string? Begin(IReadOnlyList<string> columns)
+        {
+            Begun = true;
+            return null;
+        }
+
+        public bool Add(IReadOnlyList<XlsxValue> row) => ++Added <= room;
+    }
+
+    [Fact]
+    public void TheJudgingPass_StopsPastTheLastRow_AndAChangedSourceIsRefused()
+    {
+        // 2026-10-29, review P4-4 and P1-16.
+        int read = 0;
+        IEnumerable<List<string>> Endless()
+        {
+            for (int i = 0; ; i++)
+            {
+                read++;
+                yield return [i.ToString(CultureInfo.InvariantCulture)];
+            }
+        }
+
+        var sheet = new CountingSheet(3);
+        Assert.Null(TableSource.Rows(Endless, "x.csv", sheet, CancellationToken.None, maxRows: 3));
+        Assert.Equal(4, sheet.Added);   // the fourth row refused: the sheet says it was cut
+        Assert.True(read <= 10, read.ToString(CultureInfo.InvariantCulture));
+
+        var before = new CountingSheet(10);
+        Assert.Equal(OfficeText.ChangedWhileRead("x.csv"), TableSource.Rows(() => Endless().Take(3), "x.csv", before, CancellationToken.None, () => false));
+        Assert.False(before.Begun);
+        int asked = 0;
+        var after = new CountingSheet(10);
+        Assert.Equal(OfficeText.ChangedWhileRead("x.csv"), TableSource.Rows(() => Endless().Take(3), "x.csv", after, CancellationToken.None, () => ++asked == 1));
+        Assert.Equal(2, after.Added);
+        // A longer file the second time is written only as far as the first pass judged it.
+        int pass = 0;
+        var grown = new CountingSheet(10);
+        Assert.Null(TableSource.Rows(() => Endless().Take(++pass == 1 ? 3 : 6), "x.csv", grown, CancellationToken.None));
+        Assert.Equal(2, grown.Added);
+    }
+
+    [Fact]
+    public async Task JsonObjects_TakeEachKeysLastValue_InFirstSeenOrder()
+    {
+        // 2026-10-29, review P4-6.
+        Put("people.json", """[{"b": 1, "a": 2}, {"c": 3, "b": 4, "b": 5}]""");
+        Assert.Contains("2 rows × 3 columns", await Xlsx(("path", "people.json")));
+        string read = Cells(Bytes("people.xlsx"), "people");
+        Assert.Contains("| b | a | c |", read, StringComparison.Ordinal);
+        Assert.Contains("| 5 |", read, StringComparison.Ordinal);
+        Assert.DoesNotContain("| 4 |", read, StringComparison.Ordinal);
+    }
+
+    [WindowsFact]
+    public async Task AWorkbookHeldShut_IsASentence_NotAToolError()
+    {
+        // 2026-10-29, review P7-1: Plan opens the workbook to add to; what it throws is now the tool's answer.
+        await Xlsx(("columns", Json("""["a"]""")), ("rows", Json("[[1]]")), ("to", "held.xlsx"));
+        using (new FileStream(Path.Combine(_root, "held.xlsx"), FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+        {
+            string answer = await Xlsx(("columns", Json("""["a"]""")), ("rows", Json("[[2]]")), ("to", "held.xlsx"), ("sheet", "More"));
+            Assert.False(string.IsNullOrWhiteSpace(answer));
+            Assert.DoesNotContain("Made", answer, StringComparison.Ordinal);
+        }
+    }
+
+    [WindowsFact]
+    public async Task AWorkbookOpenInExcel_IsSaidToBeOpen_WhenReplaced()
+    {
+        // 2026-10-29, review P1-5: Excel holds its file ReadWrite and shares Read, so the replace fails with an access denial, which was
+        // read as "access denied" rather than "close it there".
+        await Xlsx(("columns", Json("""["a"]""")), ("rows", Json("[[1]]")), ("to", "open.xlsx"));
+        byte[] before = Bytes("open.xlsx");
+        using (new FileStream(Path.Combine(_root, "open.xlsx"), FileMode.Open, FileAccess.ReadWrite, FileShare.Read))
+        {
+            Assert.Equal(OfficeText.OpenElsewhere("open.xlsx"), await Xlsx(("columns", Json("""["a"]""")), ("rows", Json("[[2]]")), ("to", "open.xlsx"), ("overwrite", true)));
+        }
+
+        Assert.Equal(before, Bytes("open.xlsx"));
+        Assert.Single(Directory.GetFiles(_root));   // no temp sibling left
+    }
+
+    [Fact]
+    public void NoToolsSchema_TypesAPropertyAsAList()
+    {
+        // 2026-10-29, review P7-2: some servers' grammars refuse "type": [..]; every file tool and a query tool's two schemas say one type.
+        foreach (var tool in App.ChatScreen.FileTools(_files, () => true, _ => { }, () => new Settings.AppSettingsData()))
+        {
+            NoListType(tool.JsonSchema, tool.Name);
+        }
+    }
+
+    /// <summary>Fails when <paramref name="node"/> holds a <c>"type"</c> given as a list.</summary>
+    internal static void NoListType(JsonElement node, string tool)
+    {
+        if (node.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var property in node.EnumerateObject())
+            {
+                Assert.False(property.Name == "type" && property.Value.ValueKind == JsonValueKind.Array, tool);
+                NoListType(property.Value, tool);
+            }
+        }
+        else if (node.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in node.EnumerateArray())
+            {
+                NoListType(item, tool);
+            }
+        }
+    }
+
     // ── convert_to_docx ─────────────────────────────────────────────────────
 
     [Fact]
@@ -238,9 +421,9 @@ public sealed class OfficeToolsTests : IDisposable
 
     [Theory]
     [InlineData("a.docx", ConvertToDocxTool.ToolName)]
-    [InlineData("a.DOCM", ConvertToDocxTool.ToolName)]
+    [InlineData("a.DOCX", ConvertToDocxTool.ToolName)]
     [InlineData("a.xlsx", ConvertToXlsxTool.ToolName)]
-    [InlineData("sub/a.xltx", ConvertToXlsxTool.ToolName)]
+    [InlineData("sub/a.xlsx", ConvertToXlsxTool.ToolName)]
     public void WriteFile_SendsWordAndExcelToTheirConverter(string path, string tool)
     {
         var (text, done, _) = WriteFileTool.Write(_files, path, "text", WriteMode.Create);
@@ -254,10 +437,34 @@ public sealed class OfficeToolsTests : IDisposable
     [InlineData("a.doc")]
     [InlineData("a.xlsb")]
     [InlineData("a.odt")]
+    [InlineData("a.DOCM")]   // the converters make .docx and .xlsx only (2026-10-29, review P1-9)
+    [InlineData("sub/a.xltx")]
+    [InlineData("a.xlsm")]
     public void WriteFile_RefusesWhatNoToolWrites(string path)
     {
         Assert.Equal(FileText.OfficeNotWritten(path), WriteFileTool.Write(_files, path, "text", WriteMode.Overwrite).Text);
         Assert.Null(WriteFileTool.OfficeRefusal("a.md"));
+    }
+
+    [Fact]
+    public void UncWrite_SendsAnOfficeFile_ThroughTheWorkingDirectory()
+    {
+        // 2026-10-29, review P1-9: no converter writes on a share.
+        Assert.Equal(FileText.OfficeOnShare("r.docx", ConvertToDocxTool.ToolName), WriteFileTool.OfficeRefusal("r.docx", onShare: true));
+        Assert.Equal(FileText.OfficeOnShare("r.xlsx", ConvertToXlsxTool.ToolName), WriteFileTool.Write(_files, "r.xlsx", "x", WriteMode.Create, onShare: true).Text);
+        Assert.Equal(FileText.OfficeNotWritten("r.pptx"), WriteFileTool.OfficeRefusal("r.pptx", onShare: true));
+    }
+
+    [Fact]
+    public async Task ConvertToDocx_RefusesAPrunedStub_InItsOwnWords()
+    {
+        // 2026-10-29, review P7-10: the assistant's generic refusal had answered first.
+        string stub = ConversationCompactor.PrunedArgumentStub(8_402);
+        var (answer, _) = await Assistant.InvokeToolAsync([_docx], new FunctionCallContent("c1", ConvertToDocxTool.ToolName, new Dictionary<string, object?> { [ConvertToDocxTool.MarkdownArgument] = stub }), CancellationToken.None);
+        Assert.Equal(FileText.PrunedStubSent(ConvertToDocxTool.MarkdownArgument), answer);
+        var (title, _) = await Assistant.InvokeToolAsync([_docx], new FunctionCallContent("c2", ConvertToDocxTool.ToolName, new Dictionary<string, object?> { [ConvertToDocxTool.MarkdownArgument] = "x", [ConvertToDocxTool.TitleArgument] = stub }), CancellationToken.None);
+        Assert.Equal(App.CompactionText.PrunedStubSentResult(ConvertToDocxTool.TitleArgument), title);
+        Assert.Empty(Directory.GetFiles(_root, "*.docx"));
     }
 
     // ── /docx ───────────────────────────────────────────────────────────────
@@ -286,6 +493,76 @@ public sealed class OfficeToolsTests : IDisposable
         var converter = new DocxConverter(_files, _time);
         Assert.StartsWith("Made x.docx", DocxCommand.Run(converter, ".neon/plans/x.md", () => null, CancellationToken.None));
         Assert.True(File.Exists(Path.Combine(_root, "x.docx")));
+        // A .neon deeper down goes to the top as well (2026-10-29, review P5-3).
+        Directory.CreateDirectory(Path.Combine(_root, "app", ".neon", "plans"));
+        Put("app/.neon/plans/y.md", "# Plan");
+        Assert.StartsWith("Made y.docx", DocxCommand.Run(converter, "app/.neon/plans/y.md", () => null, CancellationToken.None));
+        Assert.True(File.Exists(Path.Combine(_root, "y.docx")));
+    }
+
+    [Fact]
+    public async Task ADocumentsTitle_IsItsFirstHeading_ForEverySource()
+    {
+        // 2026-10-29, review P2-9, P5-6, P5-7, P7-3.
+        var converter = new DocxConverter(_files, _time);
+        string reply = DocxCommand.Run(converter, "reply", () => "# Weekly notes\n\nBody", CancellationToken.None);
+        Assert.StartsWith("Made Weekly-notes-" + Stamp + ".docx", reply);
+        Assert.EndsWith("from " + Printing.PrintText.ReplyTitle, reply);
+        Assert.Contains("Weekly notes", OfficeWriterTests.Part(Bytes("Weekly-notes-" + Stamp + ".docx"), "word/header1.xml"));
+
+        Assert.Equal($"Made Plan-A-{Stamp}.docx", (await Docx(("markdown", "# Plan A\n\nBody"))).Split(" (")[0]);
+        Assert.EndsWith("from Plan A", await Docx(("markdown", "# Plan A\n\nAgain")));
+        string plain = await Docx(("markdown", "No heading here"));
+        Assert.StartsWith($"Made document-{Stamp}.docx", plain);
+        Assert.EndsWith("from " + OfficeText.YourMarkdown, plain);
+        Assert.Equal(OfficeText.EmptyDocument(OfficeText.YourMarkdown), converter.Convert(new DocxRequest(Markdown: " \n\n "), CancellationToken.None));
+
+        Put("notes.txt", "line one");
+        Assert.StartsWith("Made notes.docx", await Docx(("path", "notes.txt"), ("title", "Field notes")));
+        Assert.Contains("Field notes", OfficeWriterTests.Part(Bytes("notes.docx"), "word/header1.xml"));
+
+        // A title with a slash and a long one make a safe name, their case kept (review P5-4).
+        Assert.Equal("Sales-2025-26-Review-" + Stamp, Files.OutputNames.Stamped("Sales 2025/26 Review", _time.GetLocalNow()));
+        Assert.Equal(60 + 1 + Stamp.Length, Files.OutputNames.Stamped(new string('a', 250), _time.GetLocalNow()).Length);
+    }
+
+    [Fact]
+    public async Task ABadTarget_IsRefused_BeforeTheSourceIsRead()
+    {
+        // 2026-10-29, review P5-13: a missing source no longer hides a wrong to.
+        Assert.Equal(OfficeText.WrongTarget("out.xlsx", DocxConverter.Extension), await Docx(("path", "missing.md"), ("to", "out.xlsx")));
+    }
+
+    [Fact]
+    public void DocxPaths_OfferOnlyWhatItConverts_AndReplyWhenNothingElseFits()
+    {
+        // 2026-10-29, review P3-10.
+        var sources = new App.ChatScreen.ArgumentSources(() => [], "default", [], _ => [], _ => new MentionResult(FileOutcome.Ok, [], false), _ => new MentionResult(FileOutcome.Ok, [], false))
+        {
+            AnyFiles = prefix => new MentionResult(FileOutcome.Ok, new[] { "docs/", "report.png", "report.md", "notes.txt" }.Where(p => p.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)).ToList(), false),
+        };
+        Assert.Equal(["docs/", "report.md", "notes.txt"], App.ChatScreen.ArgumentPaths("/docx", "", sources)!.Paths);
+        Assert.Equal(["report.md"], App.ChatScreen.ArgumentPaths("/docx", "rep", sources)!.Paths);
+        Assert.Null(App.ChatScreen.ArgumentPaths("/docx", "re", new App.ChatScreen.ArgumentSources(() => [], "default", [], _ => [], _ => new MentionResult(FileOutcome.Ok, [], false), _ => new MentionResult(FileOutcome.Ok, [], false))
+        {
+            AnyFiles = prefix => new MentionResult(FileOutcome.Ok, new[] { "report.png" }.Where(p => p.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)).ToList(), false),
+        }));   // only a picture starts so: the word list, which offers reply
+        Assert.Equal([PdfCommandWords.Reply], DocxCommand.Complete("re").Select(i => i.Text));
+    }
+
+    [Fact]
+    public void ThePdfAndDocxOptionLists_AreOneList_WithTheirOwnNotes()
+    {
+        // 2026-10-29, review P1-19.
+        var pdf = Pdf.PdfCommand.Complete("plan.md ").ToList();
+        var docx = DocxCommand.Complete("plan.md ").ToList();
+        Assert.Equal(pdf.Select(i => i.Text), docx.Select(i => i.Text));
+        Assert.Equal(Pdf.PdfText.ToNote, pdf[0].Note);
+        Assert.Equal(OfficeText.DocxToNote, docx[0].Note);
+        Assert.Contains(pdf, i => i.Note == Pdf.PdfText.PaperNote("a4"));
+        Assert.Contains(pdf, i => i.Note == Pdf.PdfText.LandscapeNote);
+        Assert.Equal(Pdf.PdfText.OverwriteNote, pdf[^1].Note);
+        Assert.Equal(OfficeText.DocxOverwriteNote, docx[^1].Note);
     }
 
     [Fact]

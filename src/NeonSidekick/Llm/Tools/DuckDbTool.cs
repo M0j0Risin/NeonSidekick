@@ -197,7 +197,7 @@ public sealed class DuckDbQueryTool : DuckDbTool
     /// <summary>The <c>params</c> property both query tools carry.</summary>
     public const string ParamsProperty = "\"params\": { \"type\": \"object\", \"description\": \"Values for the named placeholders in the SQL ($name), each by its name, e.g. {\\\"id\\\": 101} for $id; strings, numbers, true, false or null.\" }";
 
-    private static readonly JsonElement Schema = ToolSchema.Parse(
+    private static readonly (JsonElement Export, JsonElement Plain) Schemas = QuerySchemas(
         $$"""
         {
           "type": "object",
@@ -221,9 +221,9 @@ public sealed class DuckDbQueryTool : DuckDbTool
     public override string Description =>
         "Runs one read-only statement on a DuckDB database and returns the rows as a table. " +
         "Bind values as $name through params rather than writing them into the text. " +
-        "The header says when more rows exist than were returned." + FilesSentence + ExportSentence;
+        "The header says when more rows exist than were returned." + FilesSentence + SaveSentence;
 
-    public override JsonElement JsonSchema => Schema;
+    public override JsonElement JsonSchema => QuerySchema(Schemas);
 
     /// <summary>The row cap a call without <c>max_rows</c> gets: the setting, clamped.</summary>
     public static int DefaultRows(AppSettingsData effective)
@@ -238,10 +238,9 @@ public sealed class DuckDbQueryTool : DuckDbTool
         ArgumentNullException.ThrowIfNull(sql);
         ArgumentNullException.ThrowIfNull(parameters);
         var effective = Effective;
-        int rows = export is null ? maxRows ?? DefaultRows(effective) : ExportRows(maxRows) ?? 0;
-        if (export is null ? rows < MinRows || rows > MaxRows : rows == 0)
+        if (RowCap(export, maxRows, DefaultRows(effective), MinRows, MaxRows, out int rows) is { } badRows)
         {
-            return export is null ? SqlText.BadMaxRows(MinRows, MaxRows) : SqlText.BadMaxRows(1, SqlExport.MaxRows);
+            return badRows;
         }
 
         string body = DuckDbReadOnlyGate.Body(sql);
@@ -264,9 +263,8 @@ public sealed class DuckDbQueryTool : DuckDbTool
         string? root = sandbox?.Root;
         if (export is not null)
         {
-            int timeout = SqlExport.TimeoutFor(TimeoutSeconds(effective));
-            return await ExportAsync(export, Path.GetFileNameWithoutExtension(target.Name), rows, DuckDbAccess.TextCell,
-                (job, token) => Task.Run(() => DuckDbAccess.Export(target, prepared, parameters, job, rows, timeout, root, token), token), DuckDbText.Error, cancellationToken).ConfigureAwait(false);
+            return await ExportAsync(export, Path.GetFileNameWithoutExtension(target.Name), rows, maxRows, TimeoutSeconds(effective), DuckDbAccess.TextCell,
+                (job, timeout, token) => Task.Run(() => DuckDbAccess.Export(target, prepared, parameters, job, rows, timeout, root, token), token), DuckDbText.Error, cancellationToken).ConfigureAwait(false);
         }
 
         var run = await Task.Run(() => DuckDbAccess.Run(target, [prepared], parameters, rows, TimeoutSeconds(effective), root, cancellationToken), cancellationToken).ConfigureAwait(false);

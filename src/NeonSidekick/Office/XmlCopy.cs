@@ -84,16 +84,32 @@ public static class XmlCopy
         ArgumentNullException.ThrowIfNull(reader);
         ArgumentNullException.ThrowIfNull(w);
         w.WriteStartElement(reader.Prefix, reader.LocalName, reader.NamespaceURI);
+        HashSet<string>? seen = replace is null ? null : new(StringComparer.Ordinal);
         if (reader.MoveToFirstAttribute())
         {
             do
             {
-                string value = replace is not null && reader.NamespaceURI.Length == 0 && replace.TryGetValue(reader.LocalName, out string? instead) ? instead : reader.Value;
+                string value = reader.Value;
+                if (replace is not null && reader.NamespaceURI.Length == 0 && replace.TryGetValue(reader.LocalName, out string? instead))
+                {
+                    value = instead;
+                    seen!.Add(reader.LocalName);
+                }
+
                 w.WriteAttributeString(reader.Prefix, reader.LocalName, reader.NamespaceURI, value);
             }
             while (reader.MoveToNextAttribute());
 
             reader.MoveToElement();
+        }
+
+        // A key the element didn't carry is added (2026-10-29, review P4-1: a calcPr with no fullCalcOnLoad).
+        foreach (var (key, value) in replace ?? new Dictionary<string, string>())
+        {
+            if (!seen!.Contains(key))
+            {
+                w.WriteAttributeString(key, value);
+            }
         }
     }
 

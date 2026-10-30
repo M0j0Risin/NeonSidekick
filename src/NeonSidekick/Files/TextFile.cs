@@ -188,6 +188,57 @@ public static class TextFile
         return System.Text.Unicode.Utf8.IsValid(bytes) ? TextCodec.Utf8 : TextCodec.Legacy(s_legacy.Value);
     }
 
+    /// <summary>
+    /// <see cref="Detect(ReadOnlySpan{byte})"/> over a whole stream, for a file read in full rather than judged by its head (2026-10-29,
+    /// review P4-3: a CSV whose first 64 KB were plain ASCII and whose later rows held Windows-1252 accents read them as U+FFFD): a mark or
+    /// a UTF-16 pattern in the head decides as before, else UTF-8 only when every byte of the stream is. Reads to the end; the stream is
+    /// left where it started.
+    /// </summary>
+    public static TextCodec Detect(Stream stream)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        long start = stream.Position;
+        byte[] buffer = new byte[64 * 1024];
+        try
+        {
+            int read = stream.ReadAtLeast(buffer, buffer.Length, throwOnEndOfStream: false);
+            var head = buffer.AsSpan(0, read);
+            if (Marked(head) is { } marked)
+            {
+                return marked;
+            }
+
+            if (Utf16Pattern(head) is { } bigEndian)
+            {
+                return TextCodec.Utf16(bigEndian, bom: false);
+            }
+
+            // GetChars keeps a character cut between two reads for the next (GetCharCount keeps no state, so it would judge the cut
+            // bytes alone, and never see an unfinished last character).
+            var decoder = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true).GetDecoder();
+            char[] chars = new char[buffer.Length + 4];
+            try
+            {
+                while (read > 0)
+                {
+                    decoder.GetChars(buffer.AsSpan(0, read), chars, flush: false);
+                    read = stream.Read(buffer);
+                }
+
+                decoder.GetChars([], chars, flush: true);
+                return TextCodec.Utf8;
+            }
+            catch (DecoderFallbackException)
+            {
+                return TextCodec.Legacy(s_legacy.Value);
+            }
+        }
+        finally
+        {
+            stream.Position = start;
+        }
+    }
+
     private static TextCodec? Marked(ReadOnlySpan<byte> bytes)
     {
         if (bytes.Length >= 4 && bytes[0] == 0xFF && bytes[1] == 0xFE && bytes[2] == 0 && bytes[3] == 0)

@@ -46,6 +46,39 @@ public sealed class FileJournalTests : IDisposable
     }
 
     [Fact]
+    public void APendingWriteNeverCommitted_LeavesNoEntry()
+    {
+        // 2026-10-29, review P2-8: an export refused or stopped before its commit left a checkpoint step for a file never written.
+        File.WriteAllText(_rig.PathOf("kept.txt"), "old");
+        _rig.Turn(files =>
+        {
+            Assert.Equal(FileOutcome.Ok, files.BeginWrite("gone.txt", overwrite: false, out var pending).Outcome);
+            pending!.Dispose();
+            Assert.Equal(FileOutcome.Ok, files.BeginWrite("kept.txt", overwrite: true, out var replace).Outcome);
+            replace!.Dispose();
+            Assert.Equal(FileOutcome.Ok, files.BeginWrite("late.txt", overwrite: false, out var raced).Outcome);
+            File.WriteAllText(_rig.PathOf("late.txt"), "someone else's");
+            Assert.Equal(FileOutcome.Exists, raced!.Commit().Outcome);
+        });
+
+        Assert.True(_rig.Journal!.Logs.All(l => l.Entries.Count == 0));
+        Assert.Equal("old", File.ReadAllText(_rig.PathOf("kept.txt")));
+    }
+
+    [Fact]
+    public void ACommittedPendingWrite_IsJournaled()
+    {
+        _rig.Turn(files =>
+        {
+            Assert.Equal(FileOutcome.Ok, files.BeginWrite("made.txt", overwrite: false, out var pending).Outcome);
+            pending!.Stream.WriteByte((byte)'x');
+            Assert.Equal(FileOutcome.Ok, pending.Commit().Outcome);
+        });
+
+        Assert.Contains(Assert.Single(_rig.Journal!.Logs).Entries, e => e is { Op: CheckpointOp.Absent, Path: "made.txt" });
+    }
+
+    [Fact]
     public void TheAppsOwnWrites_AreNotJournaled()
     {
         _rig.Turn(files => WriteGuard.AsApp(() => files.WriteText("app.txt", "x", overwrite: false)));

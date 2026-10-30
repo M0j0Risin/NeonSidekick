@@ -28,9 +28,9 @@ public sealed class ConvertToXlsxTool : FileTool
           "properties": {
             "path": { "type": "string", "description": "A .csv, .tsv or .json file to make a workbook of, relative to the working directory. JSON is an array of objects or of arrays." },
             "columns": { "type": "array", "items": { "type": "string" }, "description": "Instead of path: your own table's column names." },
-            "rows": { "type": "array", "items": { "type": "array", "items": { "type": ["string", "number", "boolean", "null"] } }, "description": "With columns: the rows, each an array of cells in the columns' order." },
+            "rows": { "type": "array", "items": { "type": "array", "items": { "type": "string" } }, "description": "With columns: the rows, each an array of cells in the columns' order; each cell as text or a JSON value. Numbers, true/false and dates are typed by column." },
             "to": { "type": "string", "description": "The .xlsx path or folder, relative to the working directory. Default: beside the source file, or table-<date>.xlsx at the top." },
-            "sheet": { "type": "string", "description": "The sheet's name. Naming a new sheet in an existing workbook adds it; naming one there replaces it with overwrite. Default: the file's name." },
+            "sheet": { "type": "string", "description": "The sheet's name. With to naming an existing .xlsx, a new sheet name adds it; naming one there replaces it with overwrite. Default: the source file's name, or Sheet1 for columns and rows." },
             "overwrite": { "type": "boolean", "description": "Replace the sheet named, or with no sheet the whole file. Default false." }
           }
         }
@@ -48,7 +48,7 @@ public sealed class ConvertToXlsxTool : FileTool
     /// <summary>The description. Pinned.</summary>
     public const string DescriptionText =
         "Makes an Excel workbook (.xlsx) in the working directory from a table you have (columns and rows) or a CSV, TSV or JSON file (path). " +
-        "Numbers, dates and true/false columns are typed; nothing is ever a formula. Give sheet to add a sheet to an existing workbook. " +
+        "Numbers, dates and true/false columns are typed; nothing is ever a formula. Give to (an existing .xlsx) and sheet to add a sheet to it. " +
         "For a database query's rows, use the query tool's to instead. " +
         "This is the way to make a spreadsheet: never write .xlsx bytes yourself or run a script to make one.";
 
@@ -120,12 +120,24 @@ public sealed class ConvertToXlsxTool : FileTool
         }
 
         string defaultSheet = sourceRelative is null ? "Sheet1" : Path.GetFileNameWithoutExtension(sourceRelative);
-        using var target = XlsxTarget.Plan(Files, new XlsxRequest(to, sheet, overwrite, sourceRelative, "table", defaultSheet), _time, out string? refusal);
+        XlsxTarget? target;
+        string? refusal;
+        try
+        {
+            // Plan opens a workbook to add to, so damage there is a sentence too (2026-10-29, review P7-1: it escaped as a tool error).
+            target = XlsxTarget.Plan(Files, new XlsxRequest(to, sheet, overwrite, sourceRelative, "table", defaultSheet), _time, out refusal);
+        }
+        catch (Exception ex) when (XlsxTarget.Failure(ex))
+        {
+            return XlsxTarget.FailureText(ex, to);
+        }
+
         if (target is null)
         {
             return refusal!;
         }
 
+        using var planned = target;
         try
         {
             var sink = target.Begin(out refusal);
@@ -139,9 +151,12 @@ public sealed class ConvertToXlsxTool : FileTool
                 : TableSource.Cells(header!, rows!, sink, cancellationToken);
             return failed ?? target.Commit().Answer;
         }
-        catch (Exception ex) when (WorkingDirectory.IsFileFailure(ex) || ex is OfficeReadException)
+        catch (Exception ex) when (XlsxTarget.Failure(ex))
         {
-            return ex is OfficeReadException read ? OfficeReader.Refusal(read, target.Relative) : FileText.CouldNot("make a workbook of", sourceRelative ?? "the table", ex.Message);
+            // The workbook's damage names the workbook; a file system failure names what was being made into one.
+            return WorkingDirectory.IsFileFailure(ex)
+                ? FileText.CouldNot(OfficeText.MakeWorkbookOf, sourceRelative ?? OfficeText.TableNoun, ex.Message)
+                : XlsxTarget.FailureText(ex, target.Relative);
         }
     }
 
@@ -153,9 +168,34 @@ public sealed class ConvertToXlsxTool : FileTool
     {
         header = [];
         rows = [];
-        if (!ToolArguments.TryReadStringList(arguments, ColumnsArgument, out var columns, out string raw))
+        // The array as sent first, then a list of names however else it came (2026-10-29, review P2-3/P5-12: a JSON array sent as a string
+        // was split on commas, so ["a,b"] became two columns).
+        List<string> columns;
+        if (Element(arguments, ColumnsArgument) is { ValueKind: JsonValueKind.Array } names)
+        {
+            columns = [];
+            foreach (var name in names.EnumerateArray())
+            {
+                if (name.ValueKind != JsonValueKind.String)
+                {
+                    return OfficeText.BadTableArgument(ColumnsArgument);
+                }
+
+                columns.Add(name.GetString()!);
+            }
+        }
+        else if (ToolArguments.TryReadStringList(arguments, ColumnsArgument, out var listed, out _))
+        {
+            columns = [.. listed];
+        }
+        else
         {
             return OfficeText.BadTableArgument(ColumnsArgument);
+        }
+
+        if (columns.Count == 0)
+        {
+            return OfficeText.NoTableColumns;
         }
 
         foreach (string column in columns)
@@ -178,7 +218,7 @@ public sealed class ConvertToXlsxTool : FileTool
             number++;
             if (row.ValueKind != JsonValueKind.Array)
             {
-                return OfficeText.BadCell(number, 1);
+                return OfficeText.RowNotArray(number);
             }
 
             var cells = new List<RawCell>();
@@ -219,16 +259,19 @@ public sealed class ConvertToXlsxTool : FileTool
             return null;
         }
 
-        string? text = sent switch
+        string? text;
+        switch (sent)
         {
-            JsonElement { ValueKind: JsonValueKind.String } s => s.GetString(),
-            JsonElement element => null,
-            string s => s,
-            _ => null,
-        };
-        if (sent is JsonElement { ValueKind: not JsonValueKind.String } direct)
-        {
-            return direct;
+            case JsonElement { ValueKind: JsonValueKind.String } quoted:
+                text = quoted.GetString();
+                break;
+            case JsonElement direct:
+                return direct;
+            case string plain:
+                text = plain;
+                break;
+            default:
+                return null;
         }
 
         if (text is null)

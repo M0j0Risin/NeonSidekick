@@ -236,6 +236,10 @@ public class MarkdownViewTests : IDisposable
         var link = Assert.Single(Render(MarkdownView.Of("see [chart](https://example.com/c.png)")));
         Assert.Equal(Text(link), Text(picture));
         Assert.Equal(link.Select(s => s.Style), picture.Select(s => s.Style));
+        // A linked picture (review P3-2, now an ImageRun with its link) reads as the link it was.
+        var linked = Assert.Single(Render(MarkdownView.Of("see [![chart](c.png)](https://example.com/home)")));
+        var plain = Assert.Single(Render(MarkdownView.Of("see [chart](https://example.com/home)")));
+        Assert.Equal(Text(plain), Text(linked));
     }
 
     [Fact]

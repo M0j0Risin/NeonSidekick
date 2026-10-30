@@ -1,3 +1,5 @@
+using System.Collections;
+using System.Data.SqlTypes;
 using System.Globalization;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
@@ -173,23 +175,33 @@ public sealed class QueryExportTests : IDisposable
     [Fact]
     public async Task ACanceledExport_LeavesNoFile()
     {
+        // 2026-10-29, review P6-8: canceled mid-stream, not before the run, so the temp sibling a stop could leave behind would show.
         using var canceled = new CancellationTokenSource();
-        await canceled.CancelAsync();
-        var tool = Sqlite();
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => tool.RunAsync("SELECT * FROM things", "shop.db", [], null, canceled.Token, new ServerTool<SqliteAccess>.ExportTarget("gone.xlsx", null, false)));
-        Assert.Empty(Workbooks());
+        canceled.CancelAfter(150);
+        const string Many = "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 5000000) SELECT i, 'row ' || i AS name FROM n";
+        try
+        {
+            string answer = await Sqlite().RunAsync(Many, "shop.db", [], null, canceled.Token, new ServerTool<SqliteAccess>.ExportTarget("gone.xlsx", null, false));
+            Assert.DoesNotContain("Made", answer, StringComparison.Ordinal);
+        }
+        catch (OperationCanceledException)
+        {
+            // what a stop between rows throws
+        }
+
+        Assert.All(Directory.GetFiles(_root), f => Assert.StartsWith("shop.db", Path.GetFileName(f), StringComparison.Ordinal));
     }
 
     [Fact]
     public async Task ACutChatQuery_OffersTo_OnlyWhileARootIsOpen()
     {
         string open = await Sqlite().RunAsync("SELECT id FROM things", "shop.db", [], 1, CancellationToken.None);
-        Assert.Contains("raise max_rows" + SqlExport.SaveHint + ")", open);
+        Assert.Contains("raise max_rows" + SqlExportText.SaveHint + ")", open);
         string closed = await Sqlite(canSave: false).RunAsync("SELECT id FROM things", "shop.db", [], 1, CancellationToken.None);
         Assert.Contains("raise max_rows)", closed);
-        Assert.DoesNotContain(SqlExport.SaveHint, closed);
+        Assert.DoesNotContain(SqlExportText.SaveHint, closed);
         _saveRoot = SaveRoot.Refused(FileText.SaveInPlanMode);
-        Assert.DoesNotContain(SqlExport.SaveHint, await Sqlite().RunAsync("SELECT id FROM things", "shop.db", [], 1, CancellationToken.None));
+        Assert.DoesNotContain(SqlExportText.SaveHint, await Sqlite().RunAsync("SELECT id FROM things", "shop.db", [], 1, CancellationToken.None));
     }
 
     [Fact]
@@ -199,6 +211,165 @@ public sealed class QueryExportTests : IDisposable
         Assert.Equal(600, SqlExport.TimeoutFor(600));
         Assert.Equal(900, SqlExport.TimeoutFor(900));
         Assert.Equal("server-instance", FileNames.Safe("server\\instance"));
+        // 2026-10-29, review P3-12: a name with nothing file-safe in it makes query, not query-.
+        Assert.Equal("query-shop", SqlExport.FileStem("shop"));
+        Assert.Equal("query", SqlExport.FileStem("***"));
+        Assert.Equal("query", SqlExport.FileStem(null));
+    }
+
+    // ── the export's lifecycle (2026-10-29, review P2-8, P1-4, P2-1, P7-7, P2-4, P1-17) ──
+
+    /// <summary>The shared export with a run the test writes: what a family's session does, without a server.</summary>
+    private sealed class ExportProbe() : ServerTool<object>(new object(), () => new AppSettingsData())
+    {
+        public override string Name => "probe_query";
+
+        protected override string? RetiredArgument => null;
+
+        protected override string RetiredRefusal => "";
+
+        protected override ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) => ValueTask.FromResult<object?>(null);
+
+        public static string? Cap(ExportTarget? export, int? given, out int rows) => RowCap(export, given, 100, 1, 1000, out rows);
+
+        public Task<string> Export(string to, string? sheet, Func<SqlExportJob, Task<SqlRun>> run, bool overwrite = false) =>
+            ExportAsync(new ExportTarget(to, sheet, overwrite), "probe", 10, null, 30,
+                (r, i, _) => XlsxValue.From(r.GetValue(i)), (job, _, token) => run(job), r => "Error: " + r.Detail, CancellationToken.None);
+    }
+
+    private ExportProbe Probe(Func<SaveRoot>? root = null) => new() { ExportRoot = root ?? (() => _saveRoot), Clock = _time };
+
+    private static SqlRun Ok() => new(SqlOutcome.Ok, "", "probe", "", [], TimeSpan.Zero);
+
+    private static async Task<SqlRun> Rows(SqlExportJob job, params int[] values)
+    {
+        var grid = await job.ReadAsync(new FakeDataReader(["n"], ["int"], [.. values.Select(v => new object?[] { v })]), 10, CancellationToken.None);
+        return new SqlRun(SqlOutcome.Ok, "", "probe", "", [grid], TimeSpan.Zero);
+    }
+
+    [Fact]
+    public async Task AQueryThatFails_BeginsNoWorkbook()
+    {
+        // The run fails before any result set: nothing is copied or begun, so the existing workbook and the folder are as they were.
+        Assert.StartsWith("Made book.xlsx", await Probe().Export("book.xlsx", null, job => Rows(job, 1)));
+        byte[] before = Bytes("book.xlsx");
+        string failed = await Probe().Export("book.xlsx", "More", _ => Task.FromResult(new SqlRun(SqlOutcome.Failed, "no such table", "probe", "", [], TimeSpan.Zero)));
+        Assert.Equal("Error: no such table" + SqlExportText.NotWritten(0, timedOut: false), failed);
+        Assert.Equal(before, Bytes("book.xlsx"));
+        Assert.Equal(["book.xlsx", "shop.db"], Directory.GetFiles(_root).Select(f => Path.GetFileName(f)).Order(StringComparer.Ordinal).ToArray());
+    }
+
+    [Fact]
+    public async Task AStatementWithNoResultSet_WritesNothing()
+    {
+        Assert.Equal(SqlExportText.NoResultSet, await Probe().Export("none.xlsx", null, _ => Task.FromResult(Ok())));
+        Assert.Empty(Workbooks());
+    }
+
+    [Fact]
+    public async Task AWorkbookSavedElsewhereMeanwhile_IsLeftAsItIs()
+    {
+        Assert.StartsWith("Made book.xlsx", await Probe().Export("book.xlsx", null, job => Rows(job, 1)));
+        string full = Path.Combine(_root, "book.xlsx");
+        byte[] saved = [];
+        string answer = await Probe().Export("book.xlsx", "Added", async job =>
+        {
+            var run = await Rows(job, 2, 3);
+            // Excel for Mac saves while the rows are written: the copy is of the old file.
+            File.SetLastWriteTimeUtc(full, File.GetLastWriteTimeUtc(full).AddMinutes(1));
+            saved = File.ReadAllBytes(full);
+            return run;
+        });
+        Assert.Equal(OfficeText.ChangedMeanwhile("book.xlsx"), answer);
+        Assert.Equal(saved, Bytes("book.xlsx"));
+        Assert.DoesNotContain("Added", OfficeWriterTests.Read(Bytes("book.xlsx")));
+    }
+
+    [Fact]
+    public async Task AWorkingFolderMovedMeanwhile_WritesNothing()
+    {
+        string other = Path.Combine(_root, "other");
+        Directory.CreateDirectory(other);
+        int asked = 0;
+        var moved = new SaveRoot(new WorkingDirectory(() => other, _time), null);
+        string answer = await Probe(() => ++asked == 1 ? _saveRoot : moved).Export("moved.xlsx", null, job => Rows(job, 1));
+        Assert.Equal(FileText.SaveMovedLate, answer);
+        Assert.Empty(Workbooks());
+    }
+
+    [Fact]
+    public async Task AWorkbookThatIsNoWorkbook_IsReplacedWhole_OnlyWithOverwrite()
+    {
+        // 2026-10-29, review P2-2: a zip that holds no workbook (a Word file named .xlsx).
+        using (var zip = new System.IO.Compression.ZipArchive(File.Create(Path.Combine(_root, "word.xlsx")), System.IO.Compression.ZipArchiveMode.Create))
+        {
+            using var writer = new StreamWriter(zip.CreateEntry("word/document.xml").Open());
+            writer.Write("<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"/>");
+        }
+
+        Assert.StartsWith("Error:", await Probe().Export("word.xlsx", "S", job => Rows(job, 1)));
+        string replaced = await Probe().Export("word.xlsx", "S", job => Rows(job, 1), overwrite: true);
+        Assert.StartsWith("Replaced word.xlsx", replaced);
+        OfficeSchema.ValidWorkbook(Bytes("word.xlsx"));
+    }
+
+    [Fact]
+    public void TheRowCap_WithTo_RunsOnePastExcelsLastRow_WhenNoneIsGiven()
+    {
+        var to = new ServerTool<object>.ExportTarget("x.xlsx", null, false);
+        Assert.Null(ExportProbe.Cap(to, null, out int rows));
+        Assert.Equal(SqlExport.MaxRows + 1, rows);
+        Assert.Null(ExportProbe.Cap(to, 5, out rows));
+        Assert.Equal(5, rows);
+        Assert.Equal(SqlText.BadMaxRows(1, SqlExport.MaxRows), ExportProbe.Cap(to, 0, out _));
+        Assert.Null(ExportProbe.Cap(null, null, out rows));
+        Assert.Equal(100, rows);
+        Assert.Equal(SqlText.BadMaxRows(1, 1000), ExportProbe.Cap(null, 1001, out _));
+        // A cut the sheet made itself (none given) says nothing of max_rows: the save sentence says Excel's last row.
+        var grid = new SqlGrid(["n"], [["1"]], true);
+        Assert.DoesNotContain("max_rows", SqlExportText.Answer("Made x.xlsx", grid, given: null));
+        Assert.Contains("stopped at max_rows (1)", SqlExportText.Answer("Made x.xlsx", grid, given: 1));
+    }
+
+    [Fact]
+    public void TheSchema_OffersTo_OnlyWhileASaveIsOpen()
+    {
+        // 2026-10-29, review P1-20.
+        static bool HasTo(AIFunction tool) => tool.JsonSchema.GetProperty("properties").TryGetProperty("to", out _);
+        Assert.True(HasTo(Sqlite()));
+        Assert.Contains(ServerTool<SqliteAccess>.ExportSentence, Sqlite().Description);
+        Assert.False(HasTo(Sqlite(canSave: false)));
+        Assert.DoesNotContain(ServerTool<SqliteAccess>.ExportSentence, Sqlite(canSave: false).Description);
+        _saveRoot = SaveRoot.Refused(FileText.SaveInPlanMode);
+        var refused = Sqlite();
+        Assert.False(HasTo(refused));
+        Assert.DoesNotContain("with to", refused.JsonSchema.GetProperty("properties").GetProperty("max_rows").GetProperty("description").GetString());
+        OfficeToolsTests.NoListType(Sqlite().JsonSchema, "export");   // review P7-2
+        OfficeToolsTests.NoListType(refused.JsonSchema, "plain");
+    }
+
+    [Fact]
+    public void AQuerysTo_NeedsConvertToXlsxOn()
+    {
+        // 2026-10-29, review P3-3.
+        var on = new AppSettingsData { FileTools = true };
+        Assert.NotNull(App.ChatScreen.QuerySaveRootFor(on, planMode: false, _files).Root);
+        var off = new AppSettingsData { FileTools = true, ToolsDisabled = [ConvertToXlsxTool.ToolName] };
+        Assert.Equal(FileText.SaveNeedsXlsx, App.ChatScreen.QuerySaveRootFor(off, planMode: false, _files).Refusal);
+        Assert.Equal(FileText.SaveInPlanMode, App.ChatScreen.QuerySaveRootFor(on, planMode: true, _files).Refusal);
+    }
+
+    [Fact]
+    public async Task AnEmptyString_IsAnEmptyTextCell_NotABlank()
+    {
+        // 2026-10-29, review P3-4.
+        await Invoke(Sqlite(), ("sql", "SELECT '' AS e, NULL AS n"), ("database", "shop.db"), ("to", "empty.xlsx"));
+        string sheet = Part(Bytes("empty.xlsx"), "xl/worksheets/sheet1.xml");
+        Assert.Contains("<c r=\"A2\" t=\"inlineStr\">", sheet);
+        Assert.DoesNotContain("r=\"B2\"", sheet);
+        Assert.Equal(XlsxKind.Text, XlsxValue.From("").Kind);
+        Assert.Equal(XlsxKind.Blank, XlsxValue.OfText("").Kind);   // a CSV's empty field: CSV can't tell the two apart
+        Assert.Equal("", SqlExport.Show(XlsxValue.EmptyText));
     }
 
     // ── DuckDB in process ───────────────────────────────────────────────────
@@ -252,7 +423,7 @@ public sealed class QueryExportTests : IDisposable
     private static XlsxValue Cell(SqlCellReader cell, FakeDataReader reader, int ordinal = 0)
     {
         Assert.True(reader.Read());
-        return cell(reader, ordinal);
+        return cell(reader, ordinal, reader.GetDataTypeName(ordinal));
     }
 
     [Fact]
@@ -271,6 +442,103 @@ public sealed class QueryExportTests : IDisposable
         past.ProviderValues[(0, 0)] = "123456789012345678901234567890";
         var cell = Cell(PostgresAccess.ExportCell, past);
         Assert.Equal((XlsxKind.Text, "123456789012345678901234567890"), (cell.Kind, cell.Text));
+    }
+
+    [Fact]
+    public void Postgres_InfinityIsTheEnds_ARealLastDayAtNoonIsADate()
+    {
+        // 2026-10-29, review P1-1: 9999-12-31 at noon is a real date-time, not infinity. A date column's infinity comes as the last day
+        // at midnight (the live run), so there that day is the word; a timestamp at that midnight stays a date.
+        var noon = Cell(PostgresAccess.ExportCell, new FakeDataReader(["t"], ["timestamp without time zone"], [new DateTime(9999, 12, 31, 12, 0, 0)]));
+        Assert.Equal(XlsxKind.DateTime, noon.Kind);
+        Assert.Equal("infinity", Cell(PostgresAccess.ExportCell, new FakeDataReader(["d"], ["date"], [new DateTime(9999, 12, 31)])).Text);
+        Assert.Equal("infinity", Cell(PostgresAccess.ExportCell, new FakeDataReader(["d"], ["date"], [DateTime.MaxValue])).Text);
+        var midnight = Cell(PostgresAccess.ExportCell, new FakeDataReader(["t"], ["timestamp without time zone"], [new DateTime(9999, 12, 31)]));
+        Assert.NotEqual(XlsxKind.Text, midnight.Kind);
+    }
+
+    [Fact]
+    public void Postgres_TimetzIsItsTimeAndOffset()
+    {
+        // 2026-10-29, review P6-3: Npgsql hands a timetz on 0001-01-02.
+        var timetz = new DateTimeOffset(1, 1, 2, 9, 0, 0, TimeSpan.FromHours(2));
+        var cell = Cell(PostgresAccess.ExportCell, new FakeDataReader(["t"], ["time with time zone"], [timetz]));
+        Assert.Equal((XlsxKind.Text, "09:00:00+02:00"), (cell.Kind, cell.Text));
+    }
+
+    [Fact]
+    public void Postgres_ArraysBitsAndHstore_AreWrittenWhole()
+    {
+        // 2026-10-29, review P5-1: the chat's text cut an array at 500 characters.
+        int[] numbers = [.. Enumerable.Range(0, 5000)];
+        var array = Cell(PostgresAccess.ExportCell, new FakeDataReader(["a"], ["integer[]"], [numbers]));
+        Assert.Equal("{" + string.Join(", ", numbers) + "}", array.Text);
+        Assert.False(array.Cut);
+        var huge = Cell(PostgresAccess.ExportCell, new FakeDataReader(["a"], ["integer[]"], [Enumerable.Range(0, 20_000).ToArray()]));
+        Assert.True(huge.Cut);
+        Assert.Equal(XlsxValue.MaxChars, huge.Text!.Length);
+        var bits = new BitArray([true, false, true, true]);
+        Assert.Equal("1011", Cell(PostgresAccess.ExportCell, new FakeDataReader(["b"], ["bit varying"], [bits])).Text);
+        var hstore = new Dictionary<string, string?> { ["a"] = "1", ["q\"x"] = null };
+        Assert.Equal("\"a\"=>\"1\", \"q\\\"x\"=>NULL", Cell(PostgresAccess.ExportCell, new FakeDataReader(["h"], ["hstore"], [hstore])).Text);
+        Assert.Equal("{2009-01-07 13:05:09 UTC, NULL}", PostgresAccess.ExportArrayText(new DateTime?[] { new DateTime(2009, 1, 7, 13, 5, 9, DateTimeKind.Utc), null }));
+    }
+
+    [Fact]
+    public void Oracle_ADateAtMidnight_IsADateTime()
+    {
+        // 2026-10-29, review P1-7: Oracle's DATE holds a time; its type name "Date" read as a date alone.
+        var cell = Cell(Oracle.OracleAccess.ExportCell, new FakeDataReader(["d"], ["Date"], [new DateTime(2026, 10, 29)]));
+        Assert.Equal(XlsxKind.DateTime, cell.Kind);
+    }
+
+    [Fact]
+    public void SqlServerValues_TypeByTheirProviderValue()
+    {
+        // 2026-10-29, review P3-13: the per-type rules apart from the sealed reader.
+        Assert.Equal((XlsxKind.Number, "12.50"), Pair(SqlAccess.ExportValue(new SqlDecimal(12.50m), "decimal")));
+        Assert.Equal(XlsxKind.Text, SqlAccess.ExportValue(SqlDecimal.Parse("12345678901234567890.5"), "decimal").Kind);
+        Assert.Equal(XlsxKind.Number, SqlAccess.ExportValue(new SqlMoney(3.25m), "money").Kind);
+        Assert.Equal(XlsxKind.Blank, SqlAccess.ExportValue(SqlDecimal.Null, "decimal").Kind);
+        Assert.Equal(XlsxKind.Time, SqlAccess.ExportValue(TimeSpan.FromHours(8), "time").Kind);
+        Assert.Equal(XlsxKind.Date, SqlAccess.ExportValue(new DateTime(2026, 10, 29), "date").Kind);
+        Assert.Equal(XlsxKind.DateTime, SqlAccess.ExportValue(new DateTime(2026, 10, 29), "datetime2").Kind);
+        Assert.Equal(XlsxKind.Text, SqlAccess.ExportValue("", "nvarchar").Kind);
+        // 2026-10-29, review P1-11: a provider's own type is its invariant text.
+        Assert.Equal("1.5", SqlExport.InvariantText(new Formatted(1.5)));
+    }
+
+    private static (XlsxKind, string?) Pair(XlsxValue value) => (value.Kind, value.Text);
+
+    private sealed class Formatted(double value) : IFormattable
+    {
+        public string ToString(string? format, IFormatProvider? formatProvider) => value.ToString(formatProvider);
+    }
+
+    [Fact]
+    public void Sqlite_DeclaredDates_ReadThroughSizesAndSpacing()
+    {
+        // 2026-10-29, review P5-11.
+        Assert.Equal(true, SqliteAccess.DeclaredDate(" date "));
+        Assert.Equal(false, SqliteAccess.DeclaredDate("DATETIME2(3)"));
+        Assert.Equal(false, SqliteAccess.DeclaredDate("smalldatetime"));
+        Assert.Equal(false, SqliteAccess.DeclaredDate("TIMESTAMP  WITH TIME ZONE"));
+        Assert.Equal(false, SqliteAccess.DeclaredDate("timestamp without time zone"));
+        Assert.Null(SqliteAccess.DeclaredDate("TEXT"));
+        Assert.Null(SqliteAccess.DeclaredDate(null));
+    }
+
+    [Fact]
+    public void DuckDb_DoublesAreNumbers_AndNanosecondsRead()
+    {
+        // 2026-10-29, review P5-2 and P5-10.
+        var real = DuckDbAccess.FromText("0.30000000000000004", typeof(double));
+        Assert.Equal((XlsxKind.Number, 0.30000000000000004), (real.Kind, real.Number));
+        Assert.Equal(XlsxKind.DateTime, DuckDbAccess.FromText("2026-10-29 13:45:00.123456789", typeof(DateTime)).Kind);
+        Assert.Equal(XlsxKind.Time, DuckDbAccess.FromText("08:30:00.123456789", typeof(TimeOnly)).Kind);
+        Assert.Equal("2026-10-29 13:45:00.1234567", DuckDbAccess.SevenDigits("2026-10-29 13:45:00.123456789"));
+        Assert.Equal("12.123456789", DuckDbAccess.SevenDigits("12.123456789"));   // no time: as it is
+        Assert.Equal("10:00:00.123456789+02", DuckDbAccess.SevenDigits("10:00:00.123456789+02"));
     }
 
     [Fact]
@@ -307,7 +575,7 @@ public sealed class QueryExportTests : IDisposable
     {
         var reader = new FakeDataReader(["n"], ["int"], [1], [2], [3], [4], [5], [6]);
         var sink = new RecordingRows(reader);
-        var job = new SqlExportJob(sink, (r, i) => XlsxValue.From(r.GetValue(i)));
+        var job = new SqlExportJob(sink, (r, i, _) => XlsxValue.From(r.GetValue(i)));
         var grid = await job.ReadAsync(reader, 4, CancellationToken.None);
         Assert.Equal([1, 2, 3, 4], sink.ReadsAtAdd);   // row n reached the sheet before row n + 1 was read
         Assert.True(grid.More);

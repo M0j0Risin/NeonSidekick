@@ -23,7 +23,7 @@ public sealed class OracleQueryTool : OracleTool
     public const int MinRows = AppSettingsData.MinSqlQueryMaxRows;
     public const int MaxRows = AppSettingsData.MaxSqlQueryMaxRows;
 
-    private static readonly JsonElement Schema = ToolSchema.Parse(
+    private static readonly (JsonElement Export, JsonElement Plain) Schemas = QuerySchemas(
         $$"""
         {
           "type": "object",
@@ -47,9 +47,9 @@ public sealed class OracleQueryTool : OracleTool
     public override string Description =>
         "Runs one read-only Oracle SELECT on an Oracle connection and returns the rows as a table. " +
         "Only a single SELECT (or WITH … SELECT) is accepted; bind values as :name through params rather than writing them into the text. " +
-        "The header says when more rows exist than were returned." + ExportSentence;
+        "The header says when more rows exist than were returned." + SaveSentence;
 
-    public override JsonElement JsonSchema => Schema;
+    public override JsonElement JsonSchema => QuerySchema(Schemas);
 
     /// <summary>The row cap a call without <c>max_rows</c> gets: the setting, clamped.</summary>
     public static int DefaultRows(AppSettingsData effective)
@@ -63,10 +63,9 @@ public sealed class OracleQueryTool : OracleTool
     {
         ArgumentNullException.ThrowIfNull(sql);
         ArgumentNullException.ThrowIfNull(parameters);
-        int rows = export is null ? maxRows ?? DefaultRows(Effective) : ExportRows(maxRows) ?? 0;
-        if (export is null ? rows < MinRows || rows > MaxRows : rows == 0)
+        if (RowCap(export, maxRows, DefaultRows(Effective), MinRows, MaxRows, out int rows) is { } badRows)
         {
-            return export is null ? SqlText.BadMaxRows(MinRows, MaxRows) : SqlText.BadMaxRows(1, SqlExport.MaxRows);
+            return badRows;
         }
 
         if (OracleReadOnlyGate.Check(sql) is { } refused)
@@ -87,9 +86,8 @@ public sealed class OracleQueryTool : OracleTool
                 return OracleText.Error(unresolved!);
             }
 
-            int timeout = SqlExport.TimeoutFor(TimeoutSeconds(Effective));
-            return await ExportAsync(export, target.Name, rows, OracleAccess.ExportCell,
-                (job, token) => Oracle.ExportAsync(connection, body, parameters, job, rows, timeout, token), OracleText.Error, cancellationToken).ConfigureAwait(false);
+            return await ExportAsync(export, target.Name, rows, maxRows, TimeoutSeconds(Effective), OracleAccess.ExportCell,
+                (job, timeout, token) => Oracle.ExportAsync(connection, body, parameters, job, rows, timeout, token), OracleText.Error, cancellationToken).ConfigureAwait(false);
         }
 
         var run = await Oracle.RunAsync(connection, [body], parameters, rows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);

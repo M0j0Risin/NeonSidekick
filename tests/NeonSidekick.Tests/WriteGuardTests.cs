@@ -37,6 +37,20 @@ public sealed class WriteGuardTests : IDisposable
 
     // ── .git and .neon: the path alone decides, facts or none ─────────────────
 
+    [Theory]
+    [InlineData(".neon/plans/x.md", FileOutcome.NeonFilesProtected)]
+    [InlineData("app/.neon/x.md", FileOutcome.NeonFilesProtected)]
+    [InlineData("app\\.NEON. \\x.md", FileOutcome.NeonFilesProtected)]
+    [InlineData("sub/.git/config", FileOutcome.GitProtected)]
+    [InlineData("app/neon/x.md", null)]
+    [InlineData("", null)]
+    public void AGuardedFolder_IsFoundAtAnyDepth(string relative, FileOutcome? expected)
+    {
+        // 2026-10-29, review P5-3.
+        Assert.Equal(expected, WriteGuard.GuardedFolder(relative));
+        Assert.Equal(expected is not null, OutputNames.UnderNeon(relative));
+    }
+
     [Fact]
     public void Git_IsNeverWritten_MovedOrRenamed_ButAProjectHoldingOneMoves()
     {

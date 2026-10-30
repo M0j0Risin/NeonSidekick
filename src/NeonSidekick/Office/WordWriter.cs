@@ -47,6 +47,11 @@ public sealed class WordWriter
 
     private const long EmuPerPixel = 9525;
 
+    private const double EmuPerInch = 914400;
+
+    /// <summary>A table cell's left and right margins together (<c>tblCellMar</c>'s 108 each), what a picture in a cell gives up.</summary>
+    private const int CellMargins = 216;
+
     private readonly OfficePackageWriter _package;
     private readonly WordPage _page;
     private readonly string? _title;
@@ -232,7 +237,7 @@ public sealed class WordWriter
                     Paragraph(null, place, number, []);
                 }
 
-                Table(table);
+                Table(table, place);
                 break;
         }
     }
@@ -266,19 +271,25 @@ public sealed class WordWriter
 
     private void Paragraph(string? style, Place place, (int NumId, int Level)? number, IReadOnlyList<MarkdownInline> inlines)
     {
-        StartParagraph(style, place, number);
-        Inlines(inlines, default);
+        int left = StartParagraph(style, place, number);
+        Inlines(inlines, default, TextWidth(_page) - left);
         _w.WriteEndElement();
     }
 
-    /// <summary>A <c>w:p</c> begun with its properties: the style, the list numbering, and the indent of its list and quote depth.</summary>
-    private void StartParagraph(string? style, Place place, (int NumId, int Level)? number)
+    /// <summary>
+    /// A <c>w:p</c> begun with its properties: the style, the list numbering, a quote's bar, and the indent of its list and quote depth;
+    /// the left indent it wrote, in twentieths of a point, so a picture in it fits what is left (2026-10-29, review P2-10: a picture in a
+    /// list item or a quote ran past the right margin). A heading keeps its list or quote indent, and a paragraph of another style inside
+    /// a quote (a heading, code, a list item) draws the quote's bar itself (review P3-6: <c>&gt; ## h</c> sat at the margin, unmarked).
+    /// </summary>
+    private int StartParagraph(string? style, Place place, (int NumId, int Level)? number)
     {
         _w.WriteStartElement("w", "p", W);
-        bool indent = place.Indent > 0 && style is not ("Heading1" or "Heading2" or "Heading3" or "Heading4" or "Heading5" or "Heading6");
+        bool indent = place.Indent > 0;
+        bool bar = place.Quotes > 0 && style is not ("Quote" or "Rule");
         if (style is null && number is null && !indent)
         {
-            return;
+            return 0;
         }
 
         _w.WriteStartElement("w", "pPr", W);
@@ -295,28 +306,41 @@ public sealed class WordWriter
             _w.WriteEndElement();
         }
 
+        if (bar)
+        {
+            // The Quote style's own bar; pBdr comes between numPr and ind in CT_PPr.
+            _w.WriteStartElement("w", "pBdr", W);
+            Border("left", "12", "8", "BFBFBF");
+            _w.WriteEndElement();
+        }
+
+        int left = 0;
         if (number is { } numbered)
         {
             // The numbering's own indent, moved in by any quotes around the list.
+            left = (numbered.Level + 1 + place.Quotes) * Step;
             _w.WriteStartElement("w", "ind", W);
-            Attr("left", ((numbered.Level + 1 + place.Quotes) * Step).ToString(CultureInfo.InvariantCulture));
+            Attr("left", left.ToString(CultureInfo.InvariantCulture));
             Attr("hanging", "360");
             _w.WriteEndElement();
         }
         else if (indent)
         {
+            left = place.Indent;
             _w.WriteStartElement("w", "ind", W);
-            Attr("left", place.Indent.ToString(CultureInfo.InvariantCulture));
+            Attr("left", left.ToString(CultureInfo.InvariantCulture));
             _w.WriteEndElement();
         }
 
         _w.WriteEndElement();
+        return left;
     }
 
     /// <summary>The run properties a stretch of text carries.</summary>
     private readonly record struct Look(bool Bold, bool Italic, bool Code, bool Link);
 
-    private void Inlines(IReadOnlyList<MarkdownInline> inlines, Look outer)
+    /// <summary>A paragraph's runs; <paramref name="room"/> the width a picture may take, in twentieths of a point.</summary>
+    private void Inlines(IReadOnlyList<MarkdownInline> inlines, Look outer, int room)
     {
         foreach (var inline in inlines)
         {
@@ -329,7 +353,7 @@ public sealed class WordWriter
                     Link(link, outer);
                     break;
                 case ImageRun image:
-                    Picture(image);
+                    Picture(image, room);
                     break;
                 case HardBreak:
                     _w.WriteStartElement("w", "r", W);
@@ -340,27 +364,52 @@ public sealed class WordWriter
         }
     }
 
-    /// <summary>Whether a link's target may be a hyperlink: <c>http</c>, <c>https</c> or <c>mailto</c>, nothing else.</summary>
-    public static bool IsLinkable(string url) =>
-        Uri.TryCreate(url.Trim(), UriKind.Absolute, out var uri)
-        && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeMailto);
+    /// <summary>
+    /// A link's target when it may be a hyperlink (<c>http</c>, <c>https</c> or <c>mailto</c>, nothing else), escaped as a relationship
+    /// holds it: spaces and accents percent-encoded, a non-ASCII host in its IDN form (2026-10-29, review P1-6: the raw text made Word
+    /// report unreadable content). False for any other target.
+    /// </summary>
+    public static bool TryLinkable(string url, out string target)
+    {
+        ArgumentNullException.ThrowIfNull(url);
+        target = "";
+        if (!Uri.TryCreate(url.Trim(), UriKind.Absolute, out var uri)
+            || !(uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeMailto))
+        {
+            return false;
+        }
+
+        target = uri.AbsoluteUri;
+        if (uri.Scheme != Uri.UriSchemeMailto && !uri.IdnHost.Equals(uri.Host, StringComparison.OrdinalIgnoreCase))
+        {
+            target = new UriBuilder(uri) { Host = uri.IdnHost }.Uri.AbsoluteUri;
+        }
+
+        return true;
+    }
 
     private void Link(LinkRun link, Look outer)
     {
         string text = link.Text.Length > 0 ? link.Text : link.Url;
         string url = link.Url.Trim();
-        if (!IsLinkable(url))
+        if (!TryLinkable(url, out string target))
         {
             Text(url.Length == 0 || url == text ? text : text + " (" + url + ")", outer with { Code = false, Link = false });
             return;
         }
 
-        string id = _package.NextId(DocumentPart);
-        _package.Relate(DocumentPart, id, "hyperlink", XlsxValue.XmlSafe(url), external: true);
-        _w.WriteStartElement("w", "hyperlink", W);
-        _w.WriteAttributeString("r", "id", OfficePackageWriter.RNs, id);
+        StartHyperlink(target);
         Text(text, outer with { Code = false, Link = true });
         _w.WriteEndElement();
+    }
+
+    /// <summary>A <c>w:hyperlink</c> begun to <paramref name="target"/> (already <see cref="TryLinkable"/>'s), its relationship made.</summary>
+    private void StartHyperlink(string target)
+    {
+        string id = _package.NextId(DocumentPart);
+        _package.Relate(DocumentPart, id, "hyperlink", XlsxValue.XmlSafe(target), external: true);
+        _w.WriteStartElement("w", "hyperlink", W);
+        _w.WriteAttributeString("r", "id", OfficePackageWriter.RNs, id);
     }
 
     /// <summary>
@@ -430,7 +479,7 @@ public sealed class WordWriter
         _w.WriteEndElement();
     }
 
-    private void Picture(ImageRun image)
+    private void Picture(ImageRun image, int room)
     {
         string alt = XlsxValue.XmlSafe(image.Alt.Trim());
         // One part per address: a picture shown twice is embedded once.
@@ -458,7 +507,14 @@ public sealed class WordWriter
 
         var (rel, picture) = hit;
         _pictures++;
-        var (cx, cy) = Fit(picture.Width, picture.Height);
+        // A linked picture opens its link from Word (2026-10-29, review P3-2); any other target leaves it a plain picture.
+        string? linkTarget = image.Link is { } link && TryLinkable(link, out string target) ? target : null;
+        if (linkTarget is not null)
+        {
+            StartHyperlink(linkTarget);
+        }
+
+        var (cx, cy) = Fit(picture.Width, picture.Height, _page, room, picture.Dpi);
         int id = ++_drawingId;
         string number = id.ToString(CultureInfo.InvariantCulture);
         _w.WriteStartElement("w", "r", W);
@@ -529,6 +585,10 @@ public sealed class WordWriter
         _w.WriteEndElement();
         _w.WriteEndElement();
         _w.WriteEndElement();
+        if (linkTarget is not null)
+        {
+            _w.WriteEndElement();
+        }
     }
 
     private void Extent(string prefix, string name, string ns, long cx, long cy)
@@ -539,32 +599,53 @@ public sealed class WordWriter
         _w.WriteEndElement();
     }
 
-    /// <summary>A picture's size in EMUs at 96 dpi, shrunk (sides in proportion) to the text's width and height.</summary>
-    public (long Cx, long Cy) Fit(int width, int height) => Fit(width, height, _page);
+    /// <summary>The width between the margins, in twentieths of a point.</summary>
+    public static int TextWidth(WordPage page) => PageSize(page).Width - 2 * Margin;
 
-    /// <inheritdoc cref="Fit(int, int)"/>
-    public static (long Cx, long Cy) Fit(int width, int height, WordPage page)
+    /// <summary>A picture's size in EMUs at 96 dpi, shrunk (sides in proportion) to the text's width and height.</summary>
+    public static (long Cx, long Cy) Fit(int width, int height, WordPage page) => Fit(width, height, page, int.MaxValue, 0);
+
+    /// <summary>
+    /// A picture's size in EMUs at its own <paramref name="dpi"/> (96 when it records none, 2026-10-29, review P6-4: a 300-dpi scan came out
+    /// three times its print size), shrunk in proportion to <paramref name="room"/> (twentieths of a point; the text's width at most) and the
+    /// text's height.
+    /// </summary>
+    public static (long Cx, long Cy) Fit(int width, int height, WordPage page, int room, double dpi)
     {
-        var (pageWidth, pageHeight) = PageSize(page);
-        long maxX = (pageWidth - 2 * Margin) * EmuPerTwip;
+        var (_, pageHeight) = PageSize(page);
+        long maxX = Math.Max(1, Math.Min(room, TextWidth(page))) * EmuPerTwip;
         long maxY = (pageHeight - 2 * Margin) * EmuPerTwip;
-        long cx = Math.Max(1, width) * EmuPerPixel;
-        long cy = Math.Max(1, height) * EmuPerPixel;
-        double scale = Math.Min(1.0, Math.Min(maxX / (double)cx, maxY / (double)cy));
+        double perPixel = dpi > 1 ? EmuPerInch / dpi : EmuPerPixel;
+        double cx = Math.Max(1, width) * perPixel;
+        double cy = Math.Max(1, height) * perPixel;
+        double scale = Math.Min(1.0, Math.Min(maxX / cx, maxY / cy));
         return (Math.Max(1, (long)(cx * scale)), Math.Max(1, (long)(cy * scale)));
     }
 
-    /// <summary>A table: full width, bordered, the header row bold and repeated on each page, each column aligned as the Markdown says.</summary>
-    private void Table(TableBlock table)
+    /// <summary>
+    /// A table: the width its list or quote leaves, moved in as far (2026-10-29, review P3-5: one in a list item spanned the page from the
+    /// margin), bordered, the header row bold and repeated on each page, each column aligned as the Markdown says.
+    /// </summary>
+    private void Table(TableBlock table, Place place)
     {
         int columns = Math.Max(1, Math.Max(table.Header.Cells.Count, table.Rows.Count == 0 ? 0 : table.Rows.Max(r => r.Cells.Count)));
-        int width = (PageSize(_page).Width - 2 * Margin) / columns;
+        int available = Math.Max(columns * 2 * CellMargins, TextWidth(_page) - place.Indent);
+        int width = available / columns;
         _w.WriteStartElement("w", "tbl", W);
         _w.WriteStartElement("w", "tblPr", W);
         _w.WriteStartElement("w", "tblW", W);
-        Attr("w", "5000");
-        Attr("type", "pct");
+        Attr("w", (width * columns).ToString(CultureInfo.InvariantCulture));
+        Attr("type", "dxa");
         _w.WriteEndElement();
+        if (place.Indent > 0)
+        {
+            // After tblW, before tblBorders, in CT_TblPr's order.
+            _w.WriteStartElement("w", "tblInd", W);
+            Attr("w", place.Indent.ToString(CultureInfo.InvariantCulture));
+            Attr("type", "dxa");
+            _w.WriteEndElement();
+        }
+
         _w.WriteStartElement("w", "tblBorders", W);
         foreach (string side in new[] { "top", "left", "bottom", "right", "insideH", "insideV" })
         {
@@ -643,7 +724,7 @@ public sealed class WordWriter
             _w.WriteEndElement();
             if (i < row.Cells.Count)
             {
-                Inlines(row.Cells[i].Inlines, new Look(header, false, false, false));
+                Inlines(row.Cells[i].Inlines, new Look(header, false, false, false), width - CellMargins);
             }
 
             _w.WriteEndElement();

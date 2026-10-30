@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Xml;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Files;
 
@@ -33,6 +34,7 @@ public sealed class XlsxTarget : IDisposable
     private FileStream? _existing;
     private PendingWrite? _pending;
     private IWorkbookJob? _job;
+    private (long Length, DateTime Written)? _stamp;
 
     private XlsxTarget(WorkingDirectory files, TimeProvider time, string relative, bool replaceFile, string sheet)
     {
@@ -57,6 +59,27 @@ public sealed class XlsxTarget : IDisposable
 
     /// <summary>The workbook's date system: an added sheet's dates match the workbook's.</summary>
     public bool Date1904 => _appender?.Date1904 ?? false;
+
+    /// <summary>
+    /// Whether <paramref name="ex"/> is a workbook that won't read or write (2026-10-29, review P1-4/P7-1: the one filter the query tools'
+    /// export and <c>convert_to_xlsx</c> share): the file system failing, a part damaged or too large, XML or a zip that won't parse. Never a
+    /// driver's error: the export wraps the plan, the begin and the commit, not the query's run.
+    /// </summary>
+    public static bool Failure(Exception ex) =>
+        WorkingDirectory.IsFileFailure(ex) || ex is OfficeReadException or XmlException or InvalidDataException;
+
+    /// <summary>The sentence for a <see cref="Failure"/>: damage or a part too large as the readers say it, else the file system's words.</summary>
+    public static string FailureText(Exception ex, string? display)
+    {
+        ArgumentNullException.ThrowIfNull(ex);
+        string name = string.IsNullOrWhiteSpace(display) ? OfficeText.TheWorkbook : display;
+        return ex switch
+        {
+            OfficeReadException read => OfficeReader.Refusal(read, name),
+            XmlException or InvalidDataException => OfficeText.Damaged(name, OfficeText.ThePackage),
+            _ => FileText.CouldNot("write", name, ex.Message),
+        };
+    }
 
     /// <summary>The write judged: the target, or null with the refusal. Nothing is written yet.</summary>
     public static XlsxTarget? Plan(WorkingDirectory files, XlsxRequest request, TimeProvider time, out string? refusal)
@@ -144,9 +167,16 @@ public sealed class XlsxTarget : IDisposable
                 return new XlsxTarget(files, time, relative, replaceFile: true, Office.SheetName.Fit(request.DefaultSheet, []));
             }
 
-            var appender = WorkbookAppender.Open(existing, relative, OfficeLimits.Default, out refusal);
+            var appender = WorkbookAppender.Open(existing, relative, OfficeLimits.Default, out refusal, out bool notAWorkbook);
             if (appender is null)
             {
+                if (notAWorkbook && request.Overwrite)
+                {
+                    // A zip that is no workbook (a Word file named .xlsx, a damaged package): replaced whole when asked, as one that isn't a zip.
+                    refusal = null;
+                    return new XlsxTarget(files, time, relative, replaceFile: true, Office.SheetName.Fit(sheet, []));
+                }
+
                 return null;
             }
 
@@ -162,7 +192,13 @@ public sealed class XlsxTarget : IDisposable
             }
 
             keep = true;
-            return new XlsxTarget(files, time, relative, replaceFile: true, there?.Name ?? sheet) { _appender = appender, _replaced = there, _existing = existing };
+            return new XlsxTarget(files, time, relative, replaceFile: true, there?.Name ?? sheet)
+            {
+                _appender = appender,
+                _replaced = there,
+                _existing = existing,
+                _stamp = Stamp(files, relative),
+            };
         }
         finally
         {
@@ -219,7 +255,15 @@ public sealed class XlsxTarget : IDisposable
         if (stillOpen?.Invoke() is { } closed)
         {
             _pending!.Dispose();
-            return (FileText.SaveClosedLate(closed), sheet);
+            return (closed == FileText.SaveMovedLate ? closed : FileText.SaveClosedLate(closed), sheet);
+        }
+
+        if (_appender is not null && Stamp(_files, Relative) != _stamp)
+        {
+            // Saved elsewhere while the rows were written (Excel for Mac holds no lock, a sync client): the copy is of the old file, so
+            // putting it in place would lose that save (2026-10-29, review P2-1).
+            _pending!.Dispose();
+            return (OfficeText.ChangedMeanwhile(Relative), sheet);
         }
 
         var result = _pending!.Commit();
@@ -231,6 +275,10 @@ public sealed class XlsxTarget : IDisposable
         DiagnosticLog.Debug(OfficeText.Category, $"xlsx {Mode} {result.Relative}: {sheet.Rows.ToString(CultureInfo.InvariantCulture)} rows × {sheet.Columns.ToString(CultureInfo.InvariantCulture)} columns, {result.Bytes.ToString(CultureInfo.InvariantCulture)} bytes, {_clock.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture)} ms");
         return (OfficeText.Workbook(result, Mode, SheetName, sheet), sheet);
     }
+
+    /// <summary>The workbook's length and last write, or null when it is gone.</summary>
+    private static (long Length, DateTime Written)? Stamp(WorkingDirectory files, string relative) =>
+        files.TryStamp(relative) is { } stamp ? (stamp.Length, stamp.Written) : null;
 
     public void Dispose()
     {

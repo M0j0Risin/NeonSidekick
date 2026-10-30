@@ -109,4 +109,74 @@ public sealed class LiveQueryExportTests : IDisposable
         Assert.Contains(">infinity<", sheet);
         Assert.DoesNotContain("2026-10-29", sheet);
     }
+
+    /// <summary>Row 2's cell in <paramref name="column"/>: its whole <c>&lt;c&gt;</c> element.</summary>
+    private static string Cell(string sheet, string column) =>
+        System.Text.RegularExpressions.Regex.Match(sheet, "<c r=\"" + column + "2\".*?</c>").Value;
+
+    [LivePostgresFact]
+    public async Task Postgres_InfinityIsTheEnds_ALastDayAtNoonIsADate_AndATimetzIsText()
+    {
+        // 2026-10-29, review P1-1 and P6-3, against Npgsql as it is.
+        var catalog = new PostgresCatalog([new PostgresNamedConnection("live", LivePostgres.Config!, "test")], []);
+        var tools = ChatScreen.PostgresTools(new PostgresAccess(() => catalog), () => new AppSettingsData { PostgresTools = true }, saveRoot: Root);
+        string result = await Invoke<PostgresQueryTool>(tools,
+            ("sql", "SELECT 'infinity'::date AS di, '9999-12-31'::date AS dl, 'infinity'::timestamp AS ti, '9999-12-31 12:00'::timestamp AS tl, " +
+                "'-infinity'::timestamp AS tm, TIMETZ '13:45:00+02' AS tz"),
+            ("to", "ends.xlsx"));
+        Assert.StartsWith("Made ends.xlsx (", result);
+        string sheet = Sheet("ends.xlsx");
+        Assert.Contains(">infinity<", Cell(sheet, "A"));
+        Assert.Contains(">infinity<", Cell(sheet, "C"));
+        Assert.Contains("<v>", Cell(sheet, "D"));   // a real date-time
+        Assert.Contains(">-infinity<", Cell(sheet, "E"));
+        Assert.Contains(">13:45:00+02:00<", Cell(sheet, "F"));
+        Assert.True(Cell(sheet, "B").Length > 0, sheet);
+    }
+
+    /// <summary>A table of one 40 KB LONG RAW, made once (a read-only read of a table made seconds ago is ORA-01466, so it waits after).</summary>
+    private static async Task LongRawFixture()
+    {
+        using var connection = new global::Oracle.ManagedDataAccess.Client.OracleConnection(Environment.GetEnvironmentVariable(LiveOracle.Variable));
+        connection.Open();
+        using (var count = new global::Oracle.ManagedDataAccess.Client.OracleCommand("SELECT COUNT(*) FROM user_tables WHERE table_name = 'NS_LONGRAW'", connection))
+        {
+            if (Convert.ToInt32(count.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture) > 0)
+            {
+                return;
+            }
+        }
+
+        using (var create = new global::Oracle.ManagedDataAccess.Client.OracleCommand("CREATE TABLE ns_longraw (id NUMBER(10), b LONG RAW)", connection))
+        {
+            create.ExecuteNonQuery();
+        }
+
+        using (var insert = new global::Oracle.ManagedDataAccess.Client.OracleCommand("INSERT INTO ns_longraw (id, b) VALUES (1, :b)", connection))
+        {
+            insert.Parameters.Add("b", global::Oracle.ManagedDataAccess.Client.OracleDbType.LongRaw).Value = Enumerable.Repeat((byte)0xAB, 40_000).ToArray();
+            insert.ExecuteNonQuery();
+        }
+
+        await Task.Delay(5_000);
+    }
+
+    [LiveOracleFact]
+    public async Task Oracle_ALongClob_ALongRaw_AndAMidnightDate()
+    {
+        // 2026-10-29, review P1-7, P1-8, P5-5.
+        await LongRawFixture();
+        var catalog = new OracleCatalog([new OracleNamedConnection("free", LiveOracle.Config!, "test")], []);
+        var tools = ChatScreen.OracleTools(new OracleAccess(() => catalog), () => new AppSettingsData { OracleTools = true }, saveRoot: Root);
+        string result = await Invoke<OracleQueryTool>(tools,
+            ("sql", "SELECT DATE '2026-10-29' AS d, RPAD(TO_CLOB('y'), 40000, 'y') AS c, b FROM ns_longraw WHERE id = 1"),
+            ("to", "long.xlsx"));
+        Assert.StartsWith("Made long.xlsx (", result);
+        string sheet = Sheet("long.xlsx");
+        Assert.StartsWith("<c r=\"A2\" s=\"3\"><v>", Cell(sheet, "A"));   // a date-time: Oracle's DATE holds a time
+        Assert.Contains(new string('y', XlsxValue.MaxChars - 1) + "…", Cell(sheet, "B"));
+        string raw = Cell(sheet, "C");
+        Assert.Contains("0xABAB", raw);
+        Assert.Contains("…", raw);
+    }
 }

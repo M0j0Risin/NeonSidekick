@@ -17,8 +17,11 @@ public interface ISheetRows
     bool Add(IReadOnlyList<XlsxValue> row);
 }
 
-/// <summary>The style indexes (<c>cellXfs</c>) a sheet's cells use: the bold header, a date, a date-time, a time, a duration.</summary>
-public sealed record SheetStyles(int Header, int Date, int DateTime, int Time, int Duration);
+/// <summary>
+/// The style indexes (<c>cellXfs</c>) a sheet's cells use: the bold header, a date, a date-time, a time, a duration, and a whole number written
+/// with every digit (format <c>0</c>, 2026-10-29, review P6-1: a 13-digit barcode showed as <c>4.00638E+12</c> in General).
+/// </summary>
+public sealed record SheetStyles(int Header, int Date, int DateTime, int Time, int Duration, int Integer);
 
 /// <summary>What a written sheet holds: its data rows and columns, the cells cut at Excel's cap, whether rows were left out past Excel's last row, and its filter's range.</summary>
 public sealed record SheetResult(long Rows, int Columns, long CutCells, bool RowsCut, string FilterRange);
@@ -43,8 +46,8 @@ public sealed class SheetWriter : ISheetRows
     /// <summary>How many rows the column widths are judged from.</summary>
     public const int WidthRows = 200;
 
-    /// <summary>How many rows go by between flushes, so the bytes reach the file as they are written.</summary>
-    public const int FlushRows = 1000;
+    /// <summary>The least a whole number is written with format <c>0</c>: General shows 11 digits and more in E notation.</summary>
+    public const double IntegerFrom = 1e11;
 
     private readonly XmlWriter _w;
     private readonly SheetStyles _styles;
@@ -54,6 +57,7 @@ public sealed class SheetWriter : ISheetRows
     private string[] _columns = [];
     private double[] _widths = [];
     private bool[] _digitText = [];
+    private string[] _letters = [];
     private bool _started;
     private bool _open;
     private long _rows;
@@ -93,7 +97,10 @@ public sealed class SheetWriter : ISheetRows
         _started = true;
         _columns = Unique(columns);
         _widths = [.. _columns.Select(c => Width(c) + 2.0)];   // the filter's button
-        _digitText = new bool[_columns.Length];
+        // A header that reads as a number ("2024") is text too, so its green triangle is waived with the column's (2026-10-29, review P6-7).
+        _digitText = [.. _columns.Select(LooksNumeric)];
+        // Each column's letters made once, not per cell (2026-10-29, review P4-7).
+        _letters = [.. Enumerable.Range(1, _columns.Length).Select(CellReference.Column)];
         return null;
     }
 
@@ -120,7 +127,7 @@ public sealed class SheetWriter : ISheetRows
                 _cut++;
             }
 
-            if (cells[c] is { Kind: XlsxKind.Text, Text: { } text } && LooksNumeric(text))
+            if (!_digitText[c] && cells[c] is { Kind: XlsxKind.Text, Text: { } text } && LooksNumeric(text))
             {
                 _digitText[c] = true;
             }
@@ -143,12 +150,9 @@ public sealed class SheetWriter : ISheetRows
             return true;
         }
 
+        // No flush per so many rows (2026-10-29, review P6-6): the writer's own buffer reaches the file as it fills, and each flush made the
+        // zip's deflater end a block early. Finish flushes once.
         WriteRow(cells, _rows + 1);
-        if (_rows % FlushRows == 0)
-        {
-            _w.Flush();
-        }
-
         return true;
     }
 
@@ -166,7 +170,7 @@ public sealed class SheetWriter : ISheetRows
         }
 
         _w.WriteEndElement();   // sheetData
-        string last = CellReference.Column(_columns.Length);
+        string last = _letters[^1];
         string filter = "A1:" + last + (_rows + 1).ToString(CultureInfo.InvariantCulture);
         _w.WriteStartElement("autoFilter", Ns);
         _w.WriteAttributeString("ref", filter);
@@ -178,8 +182,8 @@ public sealed class SheetWriter : ISheetRows
         }
 
         _w.WriteEndElement();
-        var ranges = Enumerable.Range(0, _columns.Length).Where(c => _digitText[c])
-            .Select(c => CellReference.Column(c + 1) + "2:" + CellReference.Column(c + 1) + (_rows + 1).ToString(CultureInfo.InvariantCulture)).ToList();
+        string end = (_rows + 1).ToString(CultureInfo.InvariantCulture);
+        var ranges = Enumerable.Range(0, _columns.Length).Where(c => _digitText[c]).Select(c => _letters[c] + "1:" + _letters[c] + end).ToList();
         if (ranges.Count > 0)
         {
             _w.WriteStartElement("ignoredErrors", Ns);
@@ -240,7 +244,7 @@ public sealed class SheetWriter : ISheetRows
         _w.WriteAttributeString("r", "1");
         for (int c = 0; c < _columns.Length; c++)
         {
-            Cell(c, 1, new XlsxValue(XlsxKind.Text, Text: _columns[c]), _styles.Header);
+            Cell(c, "1", new XlsxValue(XlsxKind.Text, Text: _columns[c]), _styles.Header);
         }
 
         _w.WriteEndElement();
@@ -255,20 +259,21 @@ public sealed class SheetWriter : ISheetRows
 
     private void WriteRow(XlsxValue[] cells, long row)
     {
+        string number = row.ToString(CultureInfo.InvariantCulture);
         _w.WriteStartElement("row", Ns);
-        _w.WriteAttributeString("r", row.ToString(CultureInfo.InvariantCulture));
+        _w.WriteAttributeString("r", number);
         for (int c = 0; c < cells.Length; c++)
         {
             if (cells[c].Kind != XlsxKind.Blank)
             {
-                Cell(c, row, cells[c], null);
+                Cell(c, number, cells[c], null);
             }
         }
 
         _w.WriteEndElement();
     }
 
-    private void Cell(int column, long row, XlsxValue value, int? style)
+    private void Cell(int column, string row, XlsxValue value, int? style)
     {
         // A date the workbook's system can't hold is its ISO text (before 1900-03-01, Lotus's leap-day bug).
         if (value.Kind is XlsxKind.Date or XlsxKind.DateTime && NumberFormats.Serial(value.When, _date1904) is null)
@@ -277,13 +282,14 @@ public sealed class SheetWriter : ISheetRows
         }
 
         _w.WriteStartElement("c", Ns);
-        _w.WriteAttributeString("r", CellReference.Column(column + 1) + row.ToString(CultureInfo.InvariantCulture));
+        _w.WriteAttributeString("r", _letters[column] + row);
         int? s = style ?? value.Kind switch
         {
             XlsxKind.Date => _styles.Date,
             XlsxKind.DateTime => _styles.DateTime,
             XlsxKind.Time => _styles.Time,
             XlsxKind.Duration => _styles.Duration,
+            XlsxKind.Number when IsLargeWhole(value.Number) => _styles.Integer,
             _ => null,
         };
         if (s is { } index)
@@ -322,6 +328,9 @@ public sealed class SheetWriter : ISheetRows
         _w.WriteEndElement();
     }
 
+    /// <summary>A whole number General would show in E notation.</summary>
+    public static bool IsLargeWhole(double number) => Math.Abs(number) >= IntegerFrom && number == Math.Floor(number);
+
     private static string IsoText(XlsxValue value) =>
         value.Kind == XlsxKind.Date || value.When.TimeOfDay == TimeSpan.Zero
             ? value.When.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
@@ -335,7 +344,10 @@ public sealed class SheetWriter : ISheetRows
         XlsxKind.Bool => 5,
         XlsxKind.Date => 10,
         XlsxKind.DateTime => 19,
-        XlsxKind.Time or XlsxKind.Duration => 8,
+        XlsxKind.Time => 8,
+        // [h]:mm:ss: the hours' digits and ":mm:ss" (2026-10-29, review P2-12: a 1,000-hour duration showed as ####).
+        XlsxKind.Duration => Math.Floor(value.Number * 24).ToString(CultureInfo.InvariantCulture).Length + 6,
+        XlsxKind.Number when IsLargeWhole(value.Number) => value.Number.ToString("0", CultureInfo.InvariantCulture).Length,
         _ => NumberFormats.General(value.Number).Length,
     };
 

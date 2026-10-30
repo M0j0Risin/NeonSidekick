@@ -98,6 +98,16 @@ public static class PdfText
 
     public const string ReplyNote = "make a PDF of the last reply";
 
+    /// <summary><c>/pdf</c>'s option notes (2026-10-29, review P1-19: inline in its completion before, beside <c>/docx</c>'s in OfficeText).</summary>
+    public const string ToNote = "to=out.pdf, or a folder";
+
+    public const string LandscapeNote = "turn the page sideways";
+
+    public const string OverwriteNote = "replace a PDF already there";
+
+    /// <summary>The note beside a <c>paper=</c> choice, <c>/pdf</c>'s and <c>/docx</c>'s.</summary>
+    public static string PaperNote(string paper) => paper + " paper";
+
     /// <summary>An edit verb's line in <c>/pdf</c>'s word list (2026-10-14).</summary>
     public static string VerbNote(string verb) => verb switch
     {

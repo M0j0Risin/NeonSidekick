@@ -281,29 +281,40 @@ public static class PdfCommand
             return MentionCompleter.Matches(EditOptions(head, first.ToLowerInvariant()), argText);
         }
 
+        bool web = IsWebAddress(first);   // the parse's own test (2026-10-27, the review)
+        return MentionCompleter.Matches(OptionItems(head, layout: !web, PdfText.ToNote, PdfText.LandscapeNote, PdfText.OverwriteNote), argText);
+    }
+
+    /// <summary>
+    /// A converter's options not given yet after <paramref name="head"/>: <c>to=</c>, then (with <paramref name="layout"/>) the papers and
+    /// <c>landscape</c>, then <c>overwrite</c>, each with its note. <c>/pdf</c>'s and <c>/docx</c>'s one list (2026-10-29, review P1-19: two
+    /// copies drifted).
+    /// </summary>
+    public static List<CompletionItem> OptionItems(string head, bool layout, string toNote, string landscapeNote, string overwriteNote)
+    {
+        ArgumentNullException.ThrowIfNull(head);
         var items = new List<CompletionItem>();
         if (!head.Contains(PdfText.ToWord, StringComparison.OrdinalIgnoreCase))
         {
-            items.Add(new CompletionItem(head + PdfText.ToWord, "to=out.pdf, or a folder"));
+            items.Add(new CompletionItem(head + PdfText.ToWord, toNote));
         }
 
-        bool web = IsWebAddress(first);   // the parse's own test (2026-10-27, the review)
-        if (!web && !head.Contains(PdfText.PaperWord, StringComparison.OrdinalIgnoreCase))
+        if (layout && !head.Contains(PdfText.PaperWord, StringComparison.OrdinalIgnoreCase))
         {
-            items.AddRange(PdfPaper.Names.Select(n => new CompletionItem(head + PdfText.PaperWord + n, n + " paper")));
+            items.AddRange(PdfPaper.Names.Select(n => new CompletionItem(head + PdfText.PaperWord + n, PdfText.PaperNote(n))));
         }
 
-        if (!web && !head.Contains(" " + PrintText.LandscapeWord, StringComparison.OrdinalIgnoreCase))
+        if (layout && !head.Contains(" " + PrintText.LandscapeWord, StringComparison.OrdinalIgnoreCase))
         {
-            items.Add(new CompletionItem(head + PrintText.LandscapeWord, "turn the page sideways"));
+            items.Add(new CompletionItem(head + PrintText.LandscapeWord, landscapeNote));
         }
 
         if (!head.Contains(" " + PdfText.OverwriteWord, StringComparison.OrdinalIgnoreCase))
         {
-            items.Add(new CompletionItem(head + PdfText.OverwriteWord, "replace a PDF already there"));
+            items.Add(new CompletionItem(head + PdfText.OverwriteWord, overwriteNote));
         }
 
-        return MentionCompleter.Matches(items, argText);
+        return items;
     }
 
     // An edit's options not given yet (2026-10-14): pages= for all but a merge, the turns for rotate, then to= and overwrite.
@@ -320,16 +331,7 @@ public static class PdfCommand
             items.AddRange(PdfEditPlan.Angles.Select(a => new CompletionItem(head + AngleWord + a.ToString(System.Globalization.CultureInfo.InvariantCulture), "turn " + a.ToString(System.Globalization.CultureInfo.InvariantCulture) + "° clockwise")));
         }
 
-        if (!head.Contains(PdfText.ToWord, StringComparison.OrdinalIgnoreCase))
-        {
-            items.Add(new CompletionItem(head + PdfText.ToWord, "to=out.pdf, or a folder"));
-        }
-
-        if (!head.Contains(" " + PdfText.OverwriteWord, StringComparison.OrdinalIgnoreCase))
-        {
-            items.Add(new CompletionItem(head + PdfText.OverwriteWord, "replace a PDF already there"));
-        }
-
+        items.AddRange(OptionItems(head, layout: false, PdfText.ToNote, PdfText.LandscapeNote, PdfText.OverwriteNote));
         return items;
     }
 }

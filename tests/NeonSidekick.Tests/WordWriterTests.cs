@@ -158,6 +158,49 @@ public sealed class WordWriterTests : IDisposable
     }
 
     [Fact]
+    public void APicture_FitsTheRoomItsListQuoteOrCellLeaves_AndATableIsMovedIn()
+    {
+        // 2026-10-29, review P2-10, P3-5, P3-6.
+        var wide = new WordPicture(StripFixtures.Png(), ImageFormats.Png, 4000, 100);
+        string markdown = "- ![a](w.png)\n\n> ![b](w.png)\n\n| h |\n|---|\n| ![c](w.png) |\n\n- item\n\n  | h |\n  |---|\n  | x |\n\n> ## Quoted heading\n";
+        byte[] file = Write(markdown, picture: _ => wide);
+        OfficeSchema.ValidDocument(file);
+        string body = Part(file, "word/document.xml");
+        var extents = System.Text.RegularExpressions.Regex.Matches(body, "<wp:extent cx=\"(\\d+)\"").Select(m => long.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture)).ToList();
+        int text = WordWriter.TextWidth(new WordPage());
+        Assert.Equal([(text - 720) * 635L, (text - 720) * 635L, (text - 216) * 635L], extents);
+        Assert.Contains("<w:tblInd w:w=\"720\" w:type=\"dxa\" />", body, StringComparison.Ordinal);
+        Assert.Contains("<w:pStyle w:val=\"Heading2\" /><w:pBdr><w:left w:val=\"single\" w:sz=\"12\" w:space=\"8\" w:color=\"BFBFBF\" /></w:pBdr><w:ind w:left=\"720\" />", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void APicturesOwnDpi_SizesIt()
+    {
+        // 2026-10-29, review P6-4: 300 pixels at 300 dpi is an inch.
+        Assert.Equal((914400L, 914400L), WordWriter.Fit(300, 300, new WordPage(), int.MaxValue, 300));
+        Assert.Equal((300 * 9525L, 300 * 9525L), WordWriter.Fit(300, 300, new WordPage(), int.MaxValue, 0));
+        Assert.Equal(1000 * 635L, WordWriter.Fit(4000, 100, new WordPage(), 1000, 0).Cx);
+    }
+
+    [Fact]
+    public void NestedBlocks_PassTheValidator()
+    {
+        // 2026-10-29, review P3-13: pictures in a table, a list, a quote and a link; a heading, code and a table as a list item's first
+        // block; a list in a quote; a heading in a quote.
+        var picture = new WordPicture(StripFixtures.Png(), ImageFormats.Png, 16, 16);
+        const string Nested =
+            "| a | b |\n|---|---|\n| ![p](x.png) | [![q](x.png)](https://example.com) |\n\n" +
+            "- ![r](x.png) in a list\n- # Heading item\n-     code item\n- | t |\n  |---|\n  | 1 |\n\n" +
+            "> ![s](x.png) quoted\n>\n> - listed in a quote\n>   1. and numbered\n>\n> ## A quoted heading\n>\n> ```\n> code in a quote\n> ```\n";
+        byte[] file = Write(Nested, header: "Nested", picture: _ => picture);
+        OfficeSchema.ValidDocument(file);
+        string text = ReadBack(file);
+        Assert.Contains("Heading item", text);
+        Assert.Contains("listed in a quote", text);
+        Assert.Contains("code in a quote", text);
+    }
+
+    [Fact]
     public void ABigPicture_IsFittedToTheTextWidth_InProportion()
     {
         var (cx, cy) = WordWriter.Fit(4000, 2000, new WordPage());
@@ -217,6 +260,52 @@ public sealed class WordWriterTests : IDisposable
         Assert.Equal((20, 40), (picture.Width, picture.Height));
         Assert.Null(MetadataStripper.ExifOrientation(picture.Bytes) is > 1 ? picture : null);
         Assert.Equal((20, 40), (ImageEditor.Info(picture.Bytes)!.Width, ImageEditor.Info(picture.Bytes)!.Height));
+    }
+
+    [Fact]
+    public void APictureWordCantEmbed_IsNeverRead_SoItSpendsNoBudget()
+    {
+        // 2026-10-29, review P3-1.
+        byte[] png = StripFixtures.Png();
+        Put("big.webp", new byte[png.Length * 4]);
+        Put("small.png", png);
+        var pictures = new SandboxPictures(_files, _root, budget: png.Length * 2);
+        static bool OnlyPng(string full) => full.EndsWith(".png", StringComparison.OrdinalIgnoreCase);
+        Assert.Null(pictures.Bytes("big.webp", OnlyPng));
+        Assert.False(pictures.OverBudget);
+        Assert.Equal(png, pictures.Bytes("small.png", OnlyPng));
+        Assert.Null(pictures.Bytes("big.webp"));   // read with no filter, it is counted, and over
+        Assert.True(pictures.OverBudget);
+    }
+
+    [Fact]
+    public void ALinkedPicture_IsEmbedded_InsideItsHyperlink()
+    {
+        // 2026-10-29, review P3-2.
+        var picture = new WordPicture(StripFixtures.Png(), ImageFormats.Png, 16, 16);
+        byte[] file = Write("[![logo](x.png)](https://example.com/home) and [ ![spaced](x.png) ](https://example.com/b)", picture: _ => picture);
+        OfficeSchema.ValidDocument(file);
+        string body = Part(file, "word/document.xml");
+        Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(body, "<w:hyperlink r:id=\"rId\\d+\"><w:r><w:drawing>").Count);
+        Assert.Contains("Target=\"https://example.com/home\"", Part(file, "word/_rels/document.xml.rels"), StringComparison.Ordinal);
+        // A picture in a link to another kind of target stays a plain picture.
+        byte[] local = Write("[![logo](x.png)](notes.md)", picture: _ => picture);
+        OfficeSchema.ValidDocument(local);
+        Assert.DoesNotContain("<w:hyperlink", Part(local, "word/document.xml"), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ALinksTarget_IsEscaped_AsARelationshipHoldsIt()
+    {
+        // 2026-10-29, review P1-6.
+        byte[] file = Write("[a](<https://example.com/a b/é>) and [b](https://bücher.example/x)");
+        OfficeSchema.ValidDocument(file);
+        string rels = Part(file, "word/_rels/document.xml.rels");
+        Assert.Contains("Target=\"https://example.com/a%20b/%C3%A9\"", rels, StringComparison.Ordinal);
+        Assert.Contains("Target=\"https://xn--bcher-kva.example/x\"", rels, StringComparison.Ordinal);
+        Assert.False(WordWriter.TryLinkable("file:///c:/x", out _));
+        Assert.True(WordWriter.TryLinkable("mailto:a@example.com", out string mail));
+        Assert.Equal("mailto:a@example.com", mail);
     }
 
     [Fact]

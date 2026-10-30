@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Text.Json;
 using Microsoft.Extensions.AI;
 using NeonSidekick.Files;
 using NeonSidekick.Office;
@@ -40,6 +41,37 @@ public abstract class ServerTool<TAccess> : AIFunction where TAccess : class
 
     /// <summary>The sentence a query tool's description adds for <c>to</c>.</summary>
     public const string ExportSentence = " Give to (an .xlsx path or folder) to write every row to a spreadsheet instead of returning them.";
+
+    /// <summary>What <c>max_rows</c>' text says of <c>to</c>, left out of the schema with no <c>to</c>.</summary>
+    public const string MaxRowsWithTo = " (1 to 1048575 with to)";
+
+    /// <summary>What <c>max_rows</c>' default says of <c>to</c>, left out of the schema with no <c>to</c>.</summary>
+    public const string EveryRowWithTo = " (with to, every row)";
+
+    /// <summary>
+    /// A query tool's two schemas from its one text (2026-10-29, review P1-20: <c>to</c> was offered in plan mode and with *File tools* off,
+    /// and each call was refused): with the export's properties, and without them and <c>max_rows</c>' words of <c>to</c>.
+    /// </summary>
+    protected static (JsonElement Export, JsonElement Plain) QuerySchemas(string json)
+    {
+        ArgumentNullException.ThrowIfNull(json);
+        int at = json.IndexOf(ExportProperties, StringComparison.Ordinal);
+        if (at < 0)
+        {
+            throw new ArgumentException("The schema carries no export properties.", nameof(json));
+        }
+
+        int comma = json.LastIndexOf(',', at);
+        string plain = (json[..comma] + json[(at + ExportProperties.Length)..])
+            .Replace(MaxRowsWithTo, "", StringComparison.Ordinal).Replace(EveryRowWithTo, "", StringComparison.Ordinal);
+        return (ToolSchema.Parse(json), ToolSchema.Parse(plain));
+    }
+
+    /// <summary>The schema in force: with <c>to</c> while a save root is open (read fresh per request, so plan mode and *File tools* follow).</summary>
+    protected JsonElement QuerySchema((JsonElement Export, JsonElement Plain) schemas) => CanSave ? schemas.Export : schemas.Plain;
+
+    /// <summary><see cref="ExportSentence"/> while a save root is open, else nothing.</summary>
+    protected string SaveSentence => CanSave ? ExportSentence : "";
 
     private readonly Func<AppSettingsData> _effective;
     private readonly AsyncLocal<AppSettingsData?> _call = new();
@@ -120,52 +152,83 @@ public abstract class ServerTool<TAccess> : AIFunction where TAccess : class
         return null;
     }
 
-    /// <summary>A query's row cap with <c>to</c>: 1 to Excel's last row, everything up to it when not given; null when out of range.</summary>
-    protected static int? ExportRows(int? maxRows) => maxRows switch
+    /// <summary>
+    /// A query's row cap (2026-10-29, review P1-17: the six tools each spelled it out): without <c>to</c>, <paramref name="given"/> or
+    /// <paramref name="defaultRows"/> within <paramref name="min"/>–<paramref name="max"/>; with it, 1 to Excel's last row when given, and when
+    /// not, one row past it (review P2-4), so the sheet itself stops and the answer says "Excel's last row", not "max_rows". Null when it
+    /// fits, else the refusal.
+    /// </summary>
+    protected static string? RowCap(ExportTarget? export, int? given, int defaultRows, int min, int max, out int rows)
     {
-        null => SqlExport.MaxRows,
-        >= 1 and <= SqlExport.MaxRows => maxRows,
-        _ => null,
-    };
+        if (export is null)
+        {
+            rows = given ?? defaultRows;
+            return rows < min || rows > max ? SqlText.BadMaxRows(min, max) : null;
+        }
+
+        rows = given ?? SqlExport.MaxRows + 1;
+        return given is < 1 or > SqlExport.MaxRows ? SqlText.BadMaxRows(1, SqlExport.MaxRows) : null;
+    }
 
     /// <summary>
     /// A query's rows written to a workbook (2026-10-29, the Office writing plan's export; the shared half, so the six families can't drift):
-    /// the save root and the target (the name, the sheet, what is there) judged before <paramref name="run"/> reaches the server; the rows
-    /// streamed into the pending file by the family's own session through a <see cref="SqlExportJob"/>; the save root judged again just
-    /// before the file is put in place (a late close discards it, <see cref="FileText.SaveClosedLate"/>); then the save sentence (the
-    /// transcript's note), the cut note, and the columns with the first rows. A failed or timed-out run writes nothing and says how many
-    /// rows it had read. <paramref name="name"/> is the connection's or database's, for a made-up file name.
+    /// the save root and the target (the name, the sheet, what is there) judged before <paramref name="run"/> reaches the server; the
+    /// workbook begun only when the first result set arrives (review P2-8: a query that fails to connect or parse copies nothing and leaves
+    /// no checkpoint entry); the rows streamed into the pending file by the family's own session through a <see cref="SqlExportJob"/>; the
+    /// save root judged again just before the file is put in place (a late close, or the working folder moved, discards it); then the save
+    /// sentence (the transcript's note), the cut note, and the columns with the first rows. A failed or timed-out run writes nothing and says
+    /// how many rows it had read. A workbook that won't read or write is answered, never thrown (review P1-4); the run's own errors stay the
+    /// family's. <paramref name="name"/> is the connection's or database's, for a made-up file name; <paramref name="given"/> the call's own
+    /// <c>max_rows</c>, which the cut note names only when it was given.
     /// </summary>
-    protected async Task<string> ExportAsync(ExportTarget export, string name, int maxRows, SqlCellReader cell, Func<SqlExportJob, CancellationToken, Task<SqlRun>> run,
-        Func<SqlRun, string> error, CancellationToken cancellationToken, Func<DbDataReader, int, string>? header = null)
+    protected async Task<string> ExportAsync(ExportTarget export, string name, int rows, int? given, int timeoutSetting, SqlCellReader cell,
+        Func<SqlExportJob, int, CancellationToken, Task<SqlRun>> run, Func<SqlRun, string> error, CancellationToken cancellationToken,
+        Func<DbDataReader, int, string>? header = null)
     {
         ArgumentNullException.ThrowIfNull(export);
         ArgumentNullException.ThrowIfNull(run);
         ArgumentNullException.ThrowIfNull(error);
         var root = ExportRoot?.Invoke() ?? SaveRoot.Refused(FileText.SaveNotHere);
-        if (root.Root is null)
+        if (root.Root is not { } files)
         {
             return root.Refusal ?? FileText.SaveNotHere;
         }
 
-        var request = new XlsxRequest(export.To, export.Sheet, export.Overwrite, null, "query-" + FileNames.Safe(name), SqlExportText.DefaultSheet);
-        using var target = XlsxTarget.Plan(root.Root, request, Clock, out string? refusal);
+        string folder = files.Root;
+        var request = new XlsxRequest(export.To, export.Sheet, export.Overwrite, null, SqlExport.FileStem(name), SqlExportText.DefaultSheet);
+        XlsxTarget? planned;
+        string? refusal;
+        try
+        {
+            planned = XlsxTarget.Plan(files, request, Clock, out refusal);
+        }
+        catch (Exception ex) when (XlsxTarget.Failure(ex))
+        {
+            return XlsxTarget.FailureText(ex, export.To);
+        }
+
+        using var target = planned;
         if (target is null)
         {
             return refusal!;
         }
 
-        var sink = target.Begin(out refusal);
-        if (sink is null)
+        var job = new SqlExportJob(() =>
         {
-            return refusal!;
-        }
-
-        var job = new SqlExportJob(sink, cell, header);
-        var result = await run(job, cancellationToken).ConfigureAwait(false);
-        if (job.Refusal is { } refused)
+            // Inside the family's session: a workbook that won't copy is the job's refusal, never a throw its catch would call the server's.
+            try
+            {
+                return (target.Begin(out string? refused), refused);
+            }
+            catch (Exception ex) when (XlsxTarget.Failure(ex))
+            {
+                return (null, XlsxTarget.FailureText(ex, target.Relative));
+            }
+        }, cell, header);
+        var result = await run(job, SqlExport.TimeoutFor(timeoutSetting), cancellationToken).ConfigureAwait(false);
+        if (job.Refusal is { } refusedRows)
         {
-            return refused;
+            return refusedRows;
         }
 
         if (result.Outcome != SqlOutcome.Ok)
@@ -173,9 +236,39 @@ public abstract class ServerTool<TAccess> : AIFunction where TAccess : class
             return error(result) + SqlExportText.NotWritten(job.Rows, result.Outcome == SqlOutcome.Timeout);
         }
 
+        if (!job.Read)
+        {
+            return SqlExportText.NoResultSet;
+        }
+
         var grid = result.Grids.Count > 0 ? result.Grids[0] : new SqlGrid([], [], false);
-        var (answer, _) = target.Commit(() => (ExportRoot?.Invoke() ?? SaveRoot.Refused(FileText.SaveNotHere)).Refusal);
-        return SqlExportText.Answer(answer, grid, maxRows);
+        string answer;
+        try
+        {
+            (answer, _) = target.Commit(() => StillOpen(folder));
+        }
+        catch (Exception ex) when (XlsxTarget.Failure(ex))
+        {
+            return XlsxTarget.FailureText(ex, target.Relative) + SqlExportText.NotWritten(job.Rows, timedOut: false);
+        }
+
+        return SqlExportText.Answer(answer, grid, given);
+    }
+
+    /// <summary>
+    /// The save root asked again just before the file is put in place: its refusal, or <see cref="FileText.SaveMovedLate"/> when the working
+    /// folder is another than the one the export began in (2026-10-29, review P7-7: a <c>/cwd</c> mid-export wrote into the old folder and
+    /// answered a path relative to the new one); null when it may go.
+    /// </summary>
+    private string? StillOpen(string folder)
+    {
+        var now = ExportRoot?.Invoke() ?? SaveRoot.Refused(FileText.SaveNotHere);
+        if (now.Root is not { } files)
+        {
+            return now.Refusal ?? FileText.SaveNotHere;
+        }
+
+        return string.Equals(files.Root, folder, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal) ? null : FileText.SaveMovedLate;
     }
 
     /// <summary>A string argument, or null when blank.</summary>
