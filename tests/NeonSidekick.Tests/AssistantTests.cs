@@ -2363,6 +2363,140 @@ public class AssistantTests
         Assert.Equal(Assistant.CutOffByOutputLimitResult("echo"), results[1].Text);
     }
 
+    // ── A call that streams past its ceiling (2026-10-29, session 832) ────────
+
+    [Fact]
+    public void RunawayTexts_ArePinned()
+    {
+        Assert.Equal("Stopped: the model's call to present_audit ran past 200,000 characters, more than it ever takes, so nothing ran. It was likely repeating itself; ask again.", Assistant.RunawayNotice("present_audit", 200_000));
+        Assert.Equal("Arguments for tool 'present_audit' passed 200,412 characters (its ceiling is 200,000); the request was stopped.", Assistant.RunawayLogLine("present_audit", 200_412, 200_000));
+        Assert.Equal(", 212,400 argument chars for present_audit", Assistant.ArgumentsLogTail(new TurnEvent.ToolWriting("present_audit", 212_400)));
+        Assert.Equal("", Assistant.ArgumentsLogTail(null));
+    }
+
+    /// <summary>A call's arguments streamed in pieces past a 2,000 ceiling (9, 809, 1,609, 2,409), as session 832's present_audit retry, then the call that never came.</summary>
+    private static ChatResponseUpdate[] RunawayStream(string callId) =>
+    [
+        FakeChatClient.ArgumentDelta(0, callId, "echo", "{\"text\":\""),
+        FakeChatClient.ArgumentDelta(0, null, null, new string('x', 800)),
+        FakeChatClient.ArgumentDelta(0, null, null, new string('x', 800)),
+        FakeChatClient.ArgumentDelta(0, null, null, new string('x', 800)),
+        FakeChatClient.Call(callId, "echo", new Dictionary<string, object?> { ["text"] = "never" }),
+    ];
+
+    [Fact]
+    public async Task Runaway_StopsTheRequest_AndEndsTheTurnOnAnError_WithNothingRun()
+    {
+        var echo = new EchoTool();
+        var (client, history, assistant) = Build(new AIFunction[] { new CeilingTool(echo, 2_000) }, new ManualTimeProvider());
+        client.Enqueue([FakeChatClient.Text("Reporting."), .. RunawayStream("c1")]);
+        var (lines, capture) = LogCapture("Llm", Assistant.TurnCategory);
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += capture;
+        List<TurnEvent> events;
+        try
+        {
+            events = await Run(assistant, "x");
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
+        }
+
+        // Read up to the delta that passed the ceiling, never the rest, and asked nothing more.
+        Assert.Equal(1 + 4, client.Yielded);
+        Assert.Single(client.Requests);
+        Assert.Empty(echo.Received);
+        Assert.Equal(new TurnEvent.ToolWriting("echo", 9), Assert.Single(events.OfType<TurnEvent.ToolWriting>()));
+        Assert.DoesNotContain(events, e => e is TurnEvent.ToolCall or TurnEvent.ToolResult);
+        Assert.Equal(new TurnEvent.Notice(Assistant.RunawayNotice("echo", 2_000), IsError: true), events[^1]);
+        Assert.Equal(["Reporting."], Deltas(events));
+
+        // The text so far kept, no call in the history for the next turn to carry.
+        Assert.Equal("Reporting.", history.Messages[^1].Text);
+        Assert.DoesNotContain(history.Messages, m => m.Contents.OfType<FunctionCallContent>().Any());
+        Assert.Contains(lines, e => e.Message == Assistant.RunawayLogLine("echo", 2_409, 2_000));
+
+        // The turn's closing line: a guard stopped it, and what it wrote was a call's arguments.
+        Assert.Contains(lines, e => e.Message == Assistant.TurnEndedLogLine(1, TimeSpan.Zero, 1, 0, "Reporting.".Length, Assistant.TurnStopped, 2_409));
+    }
+
+    /// <summary>A long call under its ceiling runs; its one piece is one progress, named and sized.</summary>
+    [Fact]
+    public async Task Runaway_ALongCallUnderTheCeiling_StillRuns()
+    {
+        var echo = new EchoTool();
+        var (client, _, assistant) = Build(new AIFunction[] { new CeilingTool(echo, 5_000) });
+        client.Enqueue(
+            FakeChatClient.ArgumentDelta(0, "c1", "echo", "{\"text\":\"" + new string('x', 4_000) + "\"}"),
+            FakeChatClient.Call("c1", "echo", new Dictionary<string, object?> { ["text"] = "whole" }));
+        client.EnqueueText("ok");
+
+        var events = await Run(assistant, "x");
+
+        Assert.Equal(["whole"], echo.Received);
+        Assert.Equal(new TurnEvent.ToolWriting("echo", 4_011), Assert.Single(events.OfType<TurnEvent.ToolWriting>()));
+    }
+
+    /// <summary>A tool that declares no ceiling is never stopped, however long its call: only the tool knows what it takes.</summary>
+    [Fact]
+    public async Task Runaway_AToolWithoutACeiling_IsNeverStopped()
+    {
+        var echo = new EchoTool();
+        var (client, _, assistant) = Build(new AIFunction[] { echo });
+        client.Enqueue(RunawayStream("c1"));
+        client.EnqueueText("ok");
+
+        var events = await Run(assistant, "x");
+
+        Assert.Equal(["never"], echo.Received);
+        Assert.DoesNotContain(events, e => e is TurnEvent.Notice { IsError: true });
+    }
+
+    [Fact]
+    public async Task Runaway_AnEscMidArguments_LogsWhatWasStreaming()
+    {
+        var (client, _, assistant) = Build(new AIFunction[] { new EchoTool() });
+        using var cts = new CancellationTokenSource();
+        client.Enqueue(RunawayStream("c1"));
+        client.BeforeUpdate = (i, _) =>
+        {
+            if (i == 2) cts.Cancel();
+            return Task.CompletedTask;
+        };
+        var (lines, capture) = LogCapture("Llm");
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += capture;
+        try
+        {
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Run(assistant, "x", cts.Token));
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
+        }
+
+        Assert.Contains(lines, e => e.Message.StartsWith("Request 1 canceled after ", StringComparison.Ordinal) && e.Message.EndsWith(": 0 chars received" + Assistant.ArgumentsLogTail(new TurnEvent.ToolWriting("echo", 809)), StringComparison.Ordinal));
+    }
+
+    /// <summary>A reset after a call's arguments streamed is no oversized request (their chunks carry no content): no pictures come out, no retry.</summary>
+    [Fact]
+    public async Task ARequestThatDrops_AfterACallsArguments_IsNotRetriedAsOversized()
+    {
+        var (client, history, assistant) = Build(new AIFunction[] { new EchoTool() });
+        Pictures(history, 4);
+        assistant.PictureBudget = new PictureBudget(0, 0);
+        client.Enqueue(RunawayStream("c1"));
+        client.ThrowAt = 2;
+        client.Failure = ConnectionReset();
+
+        var events = await Run(assistant, "and now?");
+
+        Assert.Single(client.Requests);
+        Assert.Equal(4, PicturesIn(client.Requests[0]));
+        var error = Assert.IsType<TurnEvent.Notice>(events[^1]);
+        Assert.True(error.IsError);
+        Assert.DoesNotContain(Assistant.OversizedRequestHint(1_600_000, 4), error.Text, StringComparison.Ordinal);
+    }
+
     // ── Room for the next reply (2026-10-18) ─────────────────────────────────
 
     /// <summary>
@@ -3125,6 +3259,7 @@ public class AssistantTests
         Assert.Equal("Turn 1 started: \"hi\"", Assistant.TurnStartedLogLine(1, "hi", 0, 0));
         Assert.Equal("Turn 3 ended after 12.4 s: 2 requests, 3 tool calls, 512 chars, completed", Assistant.TurnEndedLogLine(3, TimeSpan.FromSeconds(12.41), 2, 3, 512, Assistant.TurnCompleted));
         Assert.Equal("Turn 1 ended after 0.0 s: 1 request, 1 tool call, 0 chars, stopped", Assistant.TurnEndedLogLine(1, TimeSpan.Zero, 1, 1, 0, Assistant.TurnStopped));
+        Assert.Equal("Turn 1 ended after 0.0 s: 1 request, 0 tool calls, 0 chars, 212,400 argument chars, stopped", Assistant.TurnEndedLogLine(1, TimeSpan.Zero, 1, 0, 0, Assistant.TurnStopped, 212_400));
         Assert.Equal(["completed", "stopped", "failed", "canceled"], new[] { Assistant.TurnCompleted, Assistant.TurnStopped, Assistant.TurnFailed, Assistant.TurnCancelled });
         Assert.Equal("Request 2: 14 messages, 19 tools, reasoning medium", Assistant.RequestLogLine(2, 14, 19, ReasoningEffort.Medium));
         Assert.Equal("Request 1: 1 message, no tools, reasoning default", Assistant.RequestLogLine(1, 1, 0, null));

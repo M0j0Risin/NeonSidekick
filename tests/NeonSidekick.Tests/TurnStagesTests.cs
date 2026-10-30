@@ -125,6 +125,46 @@ public sealed class TurnStagesTests
         Assert.Throws<ArgumentNullException>(() => new TurnStages(false, new Random(1)).Advance(null!));
     }
 
+    /// <summary>
+    /// 2026-10-29, session 832: a call being written names itself (not "thinking"), with its size once it shows; one verb for the call (a
+    /// fun one under the setting, kept across its sizes), never the tool stage (its clock would restart at each size), and the call's own
+    /// name once it is whole.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ACallBeingWritten_ReadsAsWritingTheTool_ThenTheToolsName(bool funVerbs)
+    {
+        var stages = new TurnStages(funVerbs, new Random(7));
+        stages.Start();
+
+        string named = stages.Advance(new TurnEvent.ToolWriting("present_audit", 0))!;
+        Assert.EndsWith(" present_audit", named, StringComparison.Ordinal);
+        string verb = named[..^" present_audit".Length];
+        if (funVerbs)
+        {
+            Assert.Contains(verb, ThinkingVerbs.All);
+        }
+        else
+        {
+            Assert.Equal(TurnStages.WritingLabel, verb);
+        }
+
+        Assert.False(stages.InTool);
+        Assert.Equal(TurnStages.ToolWritingLabel("present_audit", 41_000, verb), stages.Advance(new TurnEvent.ToolWriting("present_audit", 41_000)));
+        Assert.False(stages.InTool);
+        Assert.Equal("present_audit", stages.Advance(Call("present_audit")));
+        Assert.True(stages.InTool);
+    }
+
+    [Fact]
+    public void TheWritingLabel_ShowsTheSize_FromItsThreshold()
+    {
+        Assert.Equal(TurnStages.WritingLabel + " present_audit", TurnStages.ToolWritingLabel("present_audit", ToolArgumentWatch.CountShownFrom - 1));
+        Assert.StartsWith(TurnStages.WritingLabel + " present_audit (" + UsageText.CompactNumber(ToolArgumentWatch.CountShownFrom), TurnStages.ToolWritingLabel("present_audit", ToolArgumentWatch.CountShownFrom), StringComparison.Ordinal);
+        Assert.Contains(UsageText.CompactNumber(41_000), TurnStages.ToolWritingLabel("present_audit", 41_000), StringComparison.Ordinal);
+    }
+
     [Fact]
     public void AMidTurnCompact_ReadsAsTheCompactsSpinner_ThenThinkingAgain()
     {

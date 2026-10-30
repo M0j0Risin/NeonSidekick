@@ -213,4 +213,18 @@ public class TokenUsageTests
         Assert.Equal(TimeSpan.FromMilliseconds(500), new TokenUsage(0, 100, 100, 1, TimeSpan.FromMilliseconds(500), TimeSpan.Zero).AverageToFirstToken);
         Assert.Null(TokenUsage.Zero.AverageToFirstToken);
     }
+
+    /// <summary>A call's arguments are the server answering (2026-10-29): their chunks carry no content, yet the dropped-request check must see them.</summary>
+    [Fact]
+    public void StreamClock_ACallsArgumentChunk_IsTheServerAnswering()
+    {
+        var time = new ManualTimeProvider();
+        var clock = new StreamClock(time);
+        clock.Observe(new ChatResponseUpdate(ChatRole.Assistant, new List<AIContent>()));
+        Assert.Null(clock.First);
+
+        time.Advance(TimeSpan.FromSeconds(1));
+        clock.Observe(FakeChatClient.ArgumentDelta(0, "c1", "echo", "{"));
+        Assert.Equal(time.GetTimestamp(), clock.First);
+    }
 }

@@ -1180,6 +1180,32 @@ public sealed class Assistant
     }
 
     /// <summary>
+    /// The error a turn ends on when a call streamed past its tool's ceiling (2026-10-29, session 832: a <c>present_audit</c> retry wrote
+    /// 60,259 tokens of arguments for seven minutes): the request was dropped and nothing ran; the user asks again. Pinned.
+    /// </summary>
+    public static string RunawayNotice(string name, int ceiling) =>
+        string.Create(CultureInfo.InvariantCulture, $"Stopped: the model's call to {name} ran past {ceiling:N0} characters, more than it ever takes, so nothing ran. It was likely repeating itself; ask again.");
+
+    /// <summary>The <c>--log</c> line for a call stopped past its ceiling (2026-10-29). Pinned.</summary>
+    internal static string RunawayLogLine(string name, long chars, int ceiling) =>
+        string.Create(CultureInfo.InvariantCulture, $"Arguments for tool '{name}' passed {chars:N0} characters (its ceiling is {ceiling:N0}); the request was stopped.");
+
+    /// <summary>
+    /// The tail a canceled or failed request's log line gets when a tool call was streaming (2026-10-29: session 832's line said only
+    /// "0 chars received" for seven minutes of a call's arguments): the call written last and its own characters,
+    /// <c>, 212,400 argument chars for present_audit</c>; none before any call. Pinned.
+    /// </summary>
+    internal static string ArgumentsLogTail(TurnEvent.ToolWriting? latest) =>
+        latest is not { } call ? "" : string.Create(CultureInfo.InvariantCulture, $", {call.Chars:N0} argument chars for {call.Name}");
+
+    /// <summary>The tool <paramref name="name"/> names, exactly and ordinally (a namespaced or re-cased name is an unknown tool), or null.</summary>
+    internal static AIFunction? FindTool(IReadOnlyList<AIFunction> tools, string name) =>
+        tools.FirstOrDefault(t => string.Equals(t.Name, name, StringComparison.Ordinal));
+
+    /// <summary>The arguments' ceiling of the tool named <paramref name="name"/>: its own (<see cref="IArgumentCeiling"/>), or null for none.</summary>
+    private int? ArgumentCeiling(string name) => FindTool(_tools, name) is IArgumentCeiling own ? own.MaxArgumentChars : null;
+
+    /// <summary>
     /// One summary the mid-turn guard may make (2026-09-28): what the summariser reads, its prompt and closing line,
     /// how the new history is built from the summary, and the two protected counts <c>LLM compact show summary</c> names.
     /// </summary>
@@ -1656,6 +1682,10 @@ public sealed class Assistant
             long sent = _time.GetTimestamp();
             var clock = new StreamClock(_time, Meter);
 
+            // The tool calls as they stream (2026-10-29, session 832): the busy row's "writing <tool>", and a call past its tool's ceiling stopped.
+            var watch = new ToolArgumentWatch(ArgumentCeiling, _time);
+            ToolArgumentWatch.Runaway? runaway = null;
+
             // A turn cancelled before its request (2026-09-25: the /botchat ESC that ends the chat can land as the next bot's
             // turn opens) asks nothing: the server never sees a request its caller has already given up on.
             cancellationToken.ThrowIfCancellationRequested();
@@ -1747,6 +1777,19 @@ public sealed class Assistant
                             log.Chars += text.Length;
                             yield return new TurnEvent.TextDelta(text);
                         }
+
+                        if (watch.Observe(update) is { } writing)
+                        {
+                            yield return writing;
+                        }
+
+                        // A call past its ceiling (2026-10-29): the stream is left here, which disposes it and drops the request, as
+                        // an Esc does; not a cancelled token, which the catch above would read as the model's failure.
+                        if (watch.Over is { } over)
+                        {
+                            runaway = over;
+                            break;
+                        }
                     }
                 }
             }
@@ -1756,6 +1799,7 @@ public sealed class Assistant
             }
 
             clock.End();
+            log.ArgumentChars += watch.Chars;
 
             // A reply that ends in "<" was held back as a possible tag; it is text after all.
             string held = filter.Flush();
@@ -1796,13 +1840,13 @@ public sealed class Assistant
 
                 if (cancelled)
                 {
-                    DiagnosticLog.Debug(Category, RequestCancelledLogLine(iteration, _time.GetElapsedTime(sent), partial.Length));
+                    DiagnosticLog.Debug(Category, RequestCancelledLogLine(iteration, _time.GetElapsedTime(sent), partial.Length) + ArgumentsLogTail(watch.Latest));
                     cancellationToken.ThrowIfCancellationRequested();
                 }
 
                 string explained = ExplainFailure(failure!, lastUsage);
                 bool hinted = false;
-                DiagnosticLog.Info(Category, "Model call failed: " + explained);
+                DiagnosticLog.Info(Category, "Model call failed: " + explained + ArgumentsLogTail(watch.Latest));
                 if (clock.First is null && partial.Length == 0 && sentPictures > 0 && LooksLikeOversizedRequest(failure!))
                 {
                     // A request with pictures dropped before a byte came back (2026-10-03): most likely its size. Once a
@@ -1839,12 +1883,29 @@ public sealed class Assistant
                 yield break;
             }
 
+            // A call stopped past its ceiling (2026-10-29) ends the turn as a failed request does: the text so far kept, the call never
+            // yielded (the adapter yields calls only when the stream ends), nor any before it in the reply, so none runs and the history
+            // holds none. The user asks again; no answer goes back for the model to retry on its own.
+            if (runaway is not null)
+            {
+                if (partial.Length > 0)
+                {
+                    _history.AddAssistant(partial.ToString());
+                }
+
+                DiagnosticLog.Info(Category, RunawayLogLine(runaway.Name, runaway.Chars, runaway.Ceiling));
+                log.Ending = TurnStopped;
+                yield return new TurnEvent.Notice(RunawayNotice(runaway.Name, runaway.Ceiling), IsError: true);
+                yield break;
+            }
+
             var response = updates.ToChatResponse();
 
             // The reply ended at its length limit (2026-10-18): a call whose arguments then fail to parse was cut off, not malformed.
             // SGLang keeps "length" beside parsed tool calls (it rewrites only "stop"), llama-server says it too, and the Anthropic and
             // Responses streams map their output caps to it.
             bool cutOff = response.FinishReason == ChatFinishReason.Length;
+
             if (filter.SawOrphanClose || filter.SawBlock)
             {
                 // The model produced the tags, but they go back as content next time and prime it
@@ -2072,11 +2133,14 @@ public sealed class Assistant
 
         public int Chars { get; set; }
 
+        /// <summary>The tool calls' arguments' characters as they streamed (2026-10-29: a turn spent writing a call read "0 chars").</summary>
+        public long ArgumentChars { get; set; }
+
         /// <summary>How the turn ended; <see cref="TurnFailed"/> until the loop says otherwise (a model error, a throw), <see cref="TurnCancelled"/> whenever the token was cancelled.</summary>
         public string Ending { get; set; } = TurnFailed;
 
         public void Dispose() =>
-            DiagnosticLog.Info(TurnCategory, TurnEndedLogLine(_number, _time.GetElapsedTime(_started), Requests, ToolCalls, Chars, _token.IsCancellationRequested ? TurnCancelled : Ending));
+            DiagnosticLog.Info(TurnCategory, TurnEndedLogLine(_number, _time.GetElapsedTime(_started), Requests, ToolCalls, Chars, _token.IsCancellationRequested ? TurnCancelled : Ending, ArgumentChars));
     }
 
     /// <summary>The log category of the turn's opening and closing lines (the screen's reason line too), so a run reads off <c>Turn:</c>.</summary>
@@ -2109,9 +2173,12 @@ public sealed class Assistant
         return string.Create(CultureInfo.InvariantCulture, $"Turn {number} started: {LogText.Quoted(text)}{tail}");
     }
 
-    /// <summary>The turn's closing line: <c>Turn 3 ended after 12.4 s: 2 requests, 3 tool calls, 512 chars, completed</c>. Pinned.</summary>
-    public static string TurnEndedLogLine(int number, TimeSpan elapsed, int requests, int toolCalls, int chars, string ending) =>
-        string.Create(CultureInfo.InvariantCulture, $"Turn {number} ended after {elapsed.TotalSeconds:F1} s: {Plural(requests, "request")}, {Plural(toolCalls, "tool call")}, {chars} chars, {ending}");
+    /// <summary>
+    /// The turn's closing line: <c>Turn 3 ended after 12.4 s: 2 requests, 3 tool calls, 512 chars, completed</c>, with the tool calls'
+    /// arguments as they streamed before the ending when there were any (2026-10-29): <c>512 chars, 41,000 argument chars, completed</c>. Pinned.
+    /// </summary>
+    public static string TurnEndedLogLine(int number, TimeSpan elapsed, int requests, int toolCalls, int chars, string ending, long argumentChars = 0) =>
+        string.Create(CultureInfo.InvariantCulture, $"Turn {number} ended after {elapsed.TotalSeconds:F1} s: {Plural(requests, "request")}, {Plural(toolCalls, "tool call")}, {chars} chars, {(argumentChars > 0 ? argumentChars.ToString("N0", CultureInfo.InvariantCulture) + " argument chars, " : "")}{ending}");
 
     /// <summary>The thinking one streamed update carried (<see cref="TextReasoningContent"/>, joined), or empty.</summary>
     internal static string ReasoningText(ChatResponseUpdate update) =>
@@ -2568,7 +2635,7 @@ public sealed class Assistant
             answer = await InvokeToolWithDiffAsync(_tools, call, cancellationToken).ConfigureAwait(false);
         }
 
-        if (slot.Path is not { } refused || ProjectFileAsk is not { } ask || !_tools.Any(t => string.Equals(t.Name, NeonSidekick.Llm.Tools.AskUserTool.ToolName, StringComparison.Ordinal)))
+        if (slot.Path is not { } refused || ProjectFileAsk is not { } ask || FindTool(_tools, NeonSidekick.Llm.Tools.AskUserTool.ToolName) is null)
         {
             return answer;
         }
@@ -2613,7 +2680,7 @@ public sealed class Assistant
         // Exact, ordinal: a namespaced or re-cased name is an unknown tool, and the model is told so.
         // A model's mistake is the Error: result, logged at Info — never a Warning on the transcript
         // (the 🛠️ echo already shows it in a turn; a reflection's shows nowhere but the log).
-        var tool = tools.FirstOrDefault(t => string.Equals(t.Name, call.Name, StringComparison.Ordinal));
+        var tool = FindTool(tools, call.Name);
         if (tool is null)
         {
             DiagnosticLog.Info(Category, $"The model called unknown tool '{call.Name}'.");
@@ -2867,6 +2934,10 @@ public sealed class Assistant
     /// serialisation is off and that call throws at runtime. Values arrive as <see cref="JsonElement"/> from the server or
     /// plain CLR primitives from a direct caller; anything else falls back to its string form.
     /// This is a diagnostic record, not a round-trip format.</para>
+    /// <para>The default encoder writes a quote, an apostrophe and a plus as <c>\u0022</c>, <c>\u0027</c> and <c>\u002B</c>, and on the wire
+    /// (<see cref="OpenAICompatibleChatClient.AssistantWithThinking"/>) they reach the server so. Harmless, checked 2026-10-29 after session 832's
+    /// runaway call: llama.cpp b11258's <c>/apply-template</c> with Qwen3.8's template parses the arguments and writes them out again, so the
+    /// model reads plain JSON either way. Left as it is.</para>
     /// </summary>
     internal static string SerializeArguments(IEnumerable<KeyValuePair<string, object?>>? arguments)
     {

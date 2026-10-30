@@ -1299,6 +1299,43 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(0, _playback.Started);
     }
 
+    /// <summary>
+    /// 2026-10-29: a call's progress (the busy row's "writing read_file") is the first wait still, as the whole call was before it, so an
+    /// ESC while the model writes its opening call withdraws the message rather than cancelling a reply.
+    /// </summary>
+    [Fact]
+    public async Task Turn_EscapeWhileTheFirstCallIsWritten_StillWithdrawsTheMessage()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _geometry = new ScreenGeometry(() => null);   // the pane: without it the first wait never saw a call's progress
+        _chat.Enqueue(
+            FakeChatClient.ArgumentDelta(0, "c1", "read_file", "{\"path\":"),
+            FakeChatClient.ArgumentDelta(0, null, null, "\"a.txt\"}"),
+            FakeChatClient.Call("c1", "read_file", new Dictionary<string, object?> { ["path"] = "a.txt" }));
+        _chat.EnqueueText("Two.");
+        _chat.BeforeUpdate = async (i, ct) =>
+        {
+            if (i == 1 && _chat.Requests.Count == 1)
+            {
+                // The call is named and streaming; nothing else came back.
+                _scripted!.Push(Keys.Escape);
+                while (!ct.IsCancellationRequested)
+                {
+                    await Task.Delay(5, CancellationToken.None);
+                }
+            }
+        };
+        StepsWhenIdle(Line("hi"), Key(Keys.Enter), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(TurnStages.ToolWritingLabel("read_file", 8), output);   // the busy row named the call
+        Assert.Contains(ChatScreen.WithdrawnNotice, output);
+        Assert.DoesNotContain(ChatScreen.InterruptedNotice, output);
+        Assert.Equal(2, _chat.Requests.Count);
+        Assert.Equal("hi", UserText(_chat.Requests[1]));   // Single: the withdrawn copy left the history
+    }
+
     /// <summary>The restored draft is the token form: a pasted block comes back as its label and expands again on the re-send.</summary>
     [Fact]
     public async Task Turn_EscapeBeforeTheFirstEvent_WithAPastedBlock_RestoresTheToken()

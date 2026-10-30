@@ -130,6 +130,44 @@ public class UsageStreamTests
         Assert.Equal("echo", updates[call].Contents.OfType<FunctionCallContent>().Single().Name);
     }
 
+    /// <summary>
+    /// 2026-10-29, session 832 through the real SDK: a call whose arguments never end (a body that stays open) is stopped past its tool's
+    /// ceiling, the response let go, and the turn ends on the error with nothing asked again.
+    /// </summary>
+    [Fact]
+    public async Task ARunawayCall_IsStopped_TheBodyLetGo_AndTheTurnEndsOnTheError()
+    {
+        var live = new LiveStream();
+        live.Write(Head + "\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\"},\"logprobs\":null,\"finish_reason\":null}]}\n\n");
+        live.Write(Head + "\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"echo\",\"arguments\":\"{\\\"text\\\":\\\"\"}}]},\"logprobs\":null,\"finish_reason\":null}]}\n\n");
+        for (int i = 0; i < 40; i++)
+        {
+            live.Write(Head + "\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"" + new string('x', 100) + "\"}}]},\"logprobs\":null,\"finish_reason\":null}]}\n\n");
+        }
+
+        var stub = new StubHttpMessageHandler().Map("http://127.0.0.1:1234/v1/chat/completions", (_, _) =>
+        {
+            var content = new StreamContent(live);
+            content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/event-stream");
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = content });
+        });
+        using var http = new HttpClient(stub);
+        using var client = new OpenAICompatibleChatClient(Endpoint(), TimeSpan.FromSeconds(5), http);
+        var echo = new EchoTool();
+        var assistant = new Assistant(client, new ConversationHistory("sys"), new LlmTimeouts(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10)), [new CeilingTool(echo, 2_000)]);
+
+        var events = new List<TurnEvent>();
+        await foreach (var evt in assistant.RunTurnAsync("q"))
+        {
+            events.Add(evt);
+        }
+
+        Assert.True(live.Disposed);
+        Assert.Single(stub.Requests);
+        Assert.Empty(echo.Received);
+        Assert.Equal(new TurnEvent.Notice(Assistant.RunawayNotice("echo", 2_000), IsError: true), events[^1]);
+    }
+
     private static ChatTokenUsage Parse(string json) =>
         ModelReaderWriter.Read<ChatTokenUsage>(BinaryData.FromString(json), ModelReaderWriterOptions.Json)!;
 

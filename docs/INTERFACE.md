@@ -286,6 +286,9 @@ The row under the hints bar (*Status bar*). [Bar checklists](#bar-checklists) mo
 
 * **Left by default:** **Status** (🔊 🎤 👂 ✋, 🧠, 🏷️…), **Spinner** (during a reply, with its clock and **Esc to stop**; always on), **Queued**, **Timers** (⏰ countdowns, ⏱️ stopwatches), **Reading** (`/read`, `/echo`) and **Usage** (context and tokens).
 * **Right by default:** **Model** (name and reasoning icon) and **Working directory** (off by default). During a reply the busy row keeps the same sides.
+* **The spinner's word** follows the reply: `thinking`, `writing` for its text, `writing present_audit` while the model writes a tool call, then the tool's name while it runs.
+* **A call's size**, `(41.0k chars)`, shows past 1,000 characters when the server sends the call as it's written. Some servers send it whole, and some connections show nothing of it until it's done.
+* **A runaway `present_audit` call** (the model repeating itself as it writes) is stopped, and the reply ends on an error.
 * **Narrow window:** the model's name and the path shrink, then go; then the right group gives way, then the left. The spinner goes last.
 * **Background setups** (an embedded model's download, MCP servers connecting, the voice models' first load) show 📥, 🔌, 🎙️ or 🔈 while the input line stays yours.
 * **A Ralph loop** leads the Status section with 🔁, its step and its pass (`🔁 step 2/5 · pass 3`); the hints bar says Esc stops it and typing pauses it.

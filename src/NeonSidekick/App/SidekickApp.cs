@@ -2643,8 +2643,9 @@ public sealed partial class SidekickApp
         {
             while (await events.MoveNextAsync().ConfigureAwait(false))
             {
-                // The model's thinking is the TUI's to show (LLM show thinking, 2026-09-26): stdout carries the reply alone.
-                if (events.Current is TurnEvent.ThinkingDelta)
+                // The model's thinking is the TUI's to show (LLM show thinking, 2026-09-26), and so is a call's progress (2026-10-29): stdout
+                // carries the reply alone.
+                if (events.Current is TurnEvent.ThinkingDelta or TurnEvent.ToolWriting)
                 {
                     continue;
                 }

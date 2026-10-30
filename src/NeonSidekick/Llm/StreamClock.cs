@@ -7,8 +7,9 @@ namespace NeonSidekick.Llm;
 /// kept a copy of the stamps, and they drifted). Started as the request goes; told each streamed update (<see cref="Observe"/>); asked for
 /// the request's usage at the end (<see cref="Stamp"/>).
 /// <list type="bullet">
-/// <item><see cref="First"/>: the first update with any content or a <see cref="StreamProgress.Marker"/> — the server took the request (the
-/// dropped-request check: a marker says so too, the review's R15).</item>
+/// <item><see cref="First"/>: the first update with any content, a <see cref="StreamProgress.Marker"/> or a chunk of tool-call deltas — the
+/// server took the request (the dropped-request check: a marker says so too, the review's R15, and so do a call's arguments, whose chunks
+/// carry no content, 2026-10-29).</item>
 /// <item>The decode runs from the first update that shows the model producing (<see cref="StreamProgress.Shows"/>) to the last one that
 /// does, so the trailing usage chunk and a count the client estimates after the stream stay out of it (R34).</item>
 /// <item>The live meter ticks for an update that carries something, never for a bare marker: it counts tokens, and a marker is none (R19).</item>
@@ -33,7 +34,7 @@ public sealed class StreamClock
         _sent = _time.GetTimestamp();
     }
 
-    /// <summary>When the server first answered with anything (a content, even <c>""</c>, or a marker); null while it hasn't.</summary>
+    /// <summary>When the server first answered with anything (a content, even <c>""</c>, a marker or a call's arguments); null while it hasn't.</summary>
     public long? First { get; private set; }
 
     /// <summary>How many updates showed the model producing: one alone is a burst, no decode to time.</summary>
@@ -48,7 +49,7 @@ public sealed class StreamClock
         ArgumentNullException.ThrowIfNull(update);
         long now = _time.GetTimestamp();
         bool marker = StreamProgress.IsMarker(update);
-        if (First is null && (update.Contents.Count > 0 || marker))
+        if (First is null && (update.Contents.Count > 0 || marker || StreamProgress.Shows(update)))
         {
             First = now;
         }

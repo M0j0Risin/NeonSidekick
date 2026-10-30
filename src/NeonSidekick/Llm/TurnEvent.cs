@@ -30,6 +30,14 @@ public abstract record TurnEvent
     /// </summary>
     public sealed record ThinkingDelta(string Text) : TurnEvent;
 
+    /// <summary>
+    /// The model is writing a call to <paramref name="Name"/> (2026-10-29, session 832: seven minutes of a call's arguments read as
+    /// "thinking"): raised as the request's first call is named, then at most once a <see cref="ToolArgumentWatch.ProgressInterval"/> as the call
+    /// being written or its size changes (<paramref name="Chars"/>, its arguments' characters so far; 0 while the server holds them back, as SGLang does). Progress for the busy row alone: never in the history,
+    /// the transcript, the session log or <c>/copy</c>; a host that does not show it skips it. The <see cref="ToolCall"/> follows once the call is whole.
+    /// </summary>
+    public sealed record ToolWriting(string Name, long Chars) : TurnEvent;
+
     /// <summary>The model asked for a tool; raised before it is invoked.</summary>
     public sealed record ToolCall(string Name, string CallId, string ArgumentsJson) : TurnEvent;
 

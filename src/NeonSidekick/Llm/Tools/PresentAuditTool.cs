@@ -42,10 +42,28 @@ public sealed record AuditCallReport(
 /// was written before the size check, so a call refused as full had still changed it). A secret-looking file's finding takes no evidence
 /// (<see cref="AuditScopes.LooksSecret"/>, <see cref="AuditText.SecretEvidenceResult"/>).</para>
 /// </summary>
-public sealed partial class PresentAuditTool : AIFunction, IRefusesPrunedStubs
+public sealed partial class PresentAuditTool : AIFunction, IRefusesPrunedStubs, IArgumentCeiling
 {
     /// <inheritdoc/>
     public IReadOnlyCollection<string> StubArguments { get; } = [.. ListArguments, SummaryArgument];
+
+    /// <summary>
+    /// The part of the arguments' ceiling every call gets (2026-10-29, session 832's runaway retry): <see cref="AuditText.MaxFindingsPerCall"/>
+    /// findings at their field caps, the summary and the notes come to about 62k characters, doubled for JSON's escapes and rounded up.
+    /// </summary>
+    public const int FixedArgumentChars = 150_000;
+
+    /// <summary>
+    /// The part of the ceiling each file in the audit's scope adds (the review of e7f741e8: a fixed 200k stopped a big repository's honest
+    /// pass, the lists having no count cap): one covered path and one checked line at <see cref="MaxNoteChars"/>, doubled for escapes.
+    /// </summary>
+    public const int PerScopeFileChars = 700;
+
+    /// <summary>
+    /// The arguments' ceiling: <see cref="FixedArgumentChars"/> and <see cref="PerScopeFileChars"/> for each file in the scope, so past it the
+    /// model is repeating itself, not reporting. Read as a call is named, so the audit running then sets it.
+    /// </summary>
+    public int MaxArgumentChars => FixedArgumentChars + PerScopeFileChars * (_session.Scope?.Files.Count ?? 0);
 
     public const string ToolName = "present_audit";
 

@@ -16627,7 +16627,11 @@ internal sealed partial class ChatScreen
         {
             await foreach (var evt in assistant.RunTurnAsync(text, images, cancellationToken).ConfigureAwait(false))
             {
-                events.Add(evt);
+                // A call's progress (2026-10-29) is the live spinner's; replayed later it would only flash past.
+                if (evt is not TurnEvent.ToolWriting)
+                {
+                    events.Add(evt);
+                }
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -17706,15 +17710,22 @@ internal sealed partial class ChatScreen
 
         // The opening calls' events come first and at once; the spinner stays over the model's
         // wait behind them, and they are shown after it, above the glyph. Without the pane the
-        // thinking is not shown (2026-09-26): Spectre's spinner stays over it too, as it always did.
+        // thinking is not shown (2026-09-26): Spectre's spinner stays over it too, as it always did. A call's progress
+        // (2026-10-29) is the wait still, as the whole call was before it: the pane's label names the call, and an ESC
+        // still withdraws the message.
         async Task<bool> FirstWaitAsync()
         {
             bool next = await NextAsync().ConfigureAwait(false);
-            while (next && (Assistant.IsOpeningEvent(events.Current) || (busy is null && events.Current is TurnEvent.ThinkingDelta)))
+            while (next && (Assistant.IsOpeningEvent(events.Current) || events.Current is TurnEvent.ToolWriting || (busy is null && events.Current is TurnEvent.ThinkingDelta)))
             {
                 if (Assistant.IsOpeningEvent(events.Current))
                 {
                     opening.Add(events.Current);
+                }
+                else if (busy is not null && events.Current is TurnEvent.ToolWriting && stages.Advance(events.Current) is { } stage)
+                {
+                    _toolStage = stages.InTool;
+                    busy.SetLabel(stage);
                 }
 
                 next = await NextAsync().ConfigureAwait(false);
@@ -18531,9 +18542,10 @@ internal sealed partial class ChatScreen
             _transcript.CountToolCall(counted.Name);
         }
 
-        if (evt is not TurnEvent.ThinkingDelta)
+        if (evt is not (TurnEvent.ThinkingDelta or TurnEvent.ToolWriting))
         {
-            // The thinking block is over; the next one (after a tool call) counts its own time.
+            // The thinking block is over; the next one (after a tool call) counts its own time. A call's progress
+            // (2026-10-29) writes nothing, so a server's reasoning on either side of it stays one block.
             _thinkingSince = null;
             thoughts.End();
         }

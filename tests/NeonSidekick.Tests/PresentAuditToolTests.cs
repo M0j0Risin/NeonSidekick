@@ -499,4 +499,17 @@ public sealed class PresentAuditToolTests : IDisposable
         Assert.DoesNotContain("A1 SQL", directive);
         Assert.Contains("- Settled findings (ticked in the report): 1;", directive);
     }
+
+    /// <summary>
+    /// The arguments' ceiling grows with the audit's scope (the review of e7f741e8: a fixed 200k stopped a big repository's honest pass), and
+    /// is the fixed part alone with no audit running.
+    /// </summary>
+    [Fact]
+    public void TheArgumentCeiling_GrowsWithTheScope()
+    {
+        int files = _audit.Scope!.Files.Count;
+        Assert.True(files > 0);
+        Assert.Equal(PresentAuditTool.FixedArgumentChars + PresentAuditTool.PerScopeFileChars * files, ((IArgumentCeiling)_tool).MaxArgumentChars);
+        Assert.Equal(PresentAuditTool.FixedArgumentChars, new PresentAuditTool(new AuditSession(_box.Files), _box.Files, _box.Time).MaxArgumentChars);
+    }
 }

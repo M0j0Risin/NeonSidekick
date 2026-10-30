@@ -171,3 +171,9 @@ public static class ToolAnswers
         _ => (string)answer!,
     };
 }
+
+/// <summary>A tool with its own arguments' ceiling (<see cref="IArgumentCeiling"/>, as present_audit; 2026-10-29), around any other.</summary>
+public sealed class CeilingTool(AIFunction inner, int max) : DelegatingAIFunction(inner), IArgumentCeiling
+{
+    public int MaxArgumentChars => max;
+}
