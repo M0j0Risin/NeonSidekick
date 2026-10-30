@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using NeonSidekick.App;
+using NeonSidekick.Files;
 using NeonSidekick.Llm.Tools;
 using NeonSidekick.Plans;
 using NeonSidekick.Tests.Fakes;
@@ -863,20 +864,18 @@ public partial class ChatScreenTests
         Directory.CreateDirectory(Path.GetDirectoryName(RalphLockFile)!);
         File.WriteAllText(RalphLockFile, "pid: 999999\nstarted: 2026-10-18T09:00:00.0000000+00:00\n");
         RalphFixture(Line("/plan ralph add-guide"), Yes, Line("/exit"));
-        var idle = Scripted().OnWait!;
-        bool seamSet = false;
-        Scripted().OnWait = () =>
+        // One liveness seam for every lock (2026-10-30, review F78): the screen's own went.
+        var alive = OwnerLock.LiveOwner;
+        OwnerLock.LiveOwner = owner => owner.ProcessId == 999999 || alive(owner);
+        string output;
+        try
         {
-            if (!seamSet && _running is not null)
-            {
-                seamSet = true;
-                _running.RalphLockAlive = _ => true;
-            }
-
-            idle();
-        };
-
-        string output = await RunAsync();
+            output = await RunAsync();
+        }
+        finally
+        {
+            OwnerLock.LiveOwner = alive;
+        }
 
         Assert.Empty(_chat.Requests);
         Assert.Contains(RalphText.LockedError(PlanPath), output);
@@ -1075,8 +1074,8 @@ public partial class ChatScreenTests
         Directory.CreateDirectory(Path.GetDirectoryName(RalphLockFile)!);
         File.WriteAllText(RalphLockFile, "pid: 999999\nstarted: 2026-10-18T09:00:00.0000000+00:00\n");
         RalphFixture(Line("/plan open add-guide"), Line("/exit"));
-        var alive = RalphLog.LiveOwner;
-        RalphLog.LiveOwner = owner => owner.ProcessId == 999999;
+        var alive = OwnerLock.LiveOwner;
+        OwnerLock.LiveOwner = owner => owner.ProcessId == 999999;
         string output;
         try
         {
@@ -1084,7 +1083,7 @@ public partial class ChatScreenTests
         }
         finally
         {
-            RalphLog.LiveOwner = alive;
+            OwnerLock.LiveOwner = alive;
         }
 
         Assert.Contains(RalphText.LockedError(PlanPath), output);

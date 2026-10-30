@@ -2368,10 +2368,37 @@ public class AssistantTests
     [Fact]
     public void RunawayTexts_ArePinned()
     {
-        Assert.Equal("Stopped: the model's call to present_audit ran past 200,000 characters, more than it ever takes, so nothing ran. It was likely repeating itself; ask again.", Assistant.RunawayNotice("present_audit", 200_000));
-        Assert.Equal("Arguments for tool 'present_audit' passed 200,412 characters (its ceiling is 200,000); the request was stopped.", Assistant.RunawayLogLine("present_audit", 200_412, 200_000));
+        Assert.Equal("Stopped: the model's call to present_audit ran past 200,000 characters, more than it ever takes, so nothing ran. It was likely repeating itself.", TurnText.RunawayNotice("present_audit", 200_000));
+        Assert.Equal("Arguments for tool 'present_audit' passed 200,412 characters (its ceiling is 200,000); the request was stopped.", TurnText.RunawayLogLine("present_audit", 200_412, 200_000));
         Assert.Equal(", 212,400 argument chars for present_audit", Assistant.ArgumentsLogTail(new TurnEvent.ToolWriting("present_audit", 212_400)));
         Assert.Equal("", Assistant.ArgumentsLogTail(null));
+    }
+
+    /// <summary>"Ask again." follows a notice that asks for it, outside a loop's pass only (2026-10-30, review F96).</summary>
+    [Fact]
+    public void AskAgain_FollowsTheNotice_OutsideALoopsPass()
+    {
+        var stopped = new TurnEvent.Notice(TurnText.RunawayNotice("echo", 2_000), IsError: true, AskAgain: true);
+        Assert.Equal(stopped.Text + " Ask again.", TurnText.Shown(stopped, loopPass: false));
+        Assert.Equal(stopped.Text, TurnText.Shown(stopped, loopPass: true));
+        Assert.Equal("Model error: x", TurnText.Shown(new TurnEvent.Notice("Model error: x", IsError: true), loopPass: false));
+    }
+
+    /// <summary>
+    /// What the server reported before a call was stopped still counts (2026-10-30, review F30: the stop skipped the turn's usage sum).
+    /// </summary>
+    [Fact]
+    public async Task Runaway_ReportsTheUsageTheServerSentBeforeIt()
+    {
+        var (client, _, assistant) = Build(new AIFunction[] { new CeilingTool(new EchoTool(), 2_000) }, new ManualTimeProvider());
+        client.Enqueue([FakeChatClient.Usage(120, 30), .. RunawayStream("c1")]);
+
+        var events = await Run(assistant, "x");
+
+        var usage = Assert.Single(events.OfType<TurnEvent.Usage>()).Tokens;
+        Assert.Equal((120, 30), (usage.Input, usage.Output));
+        Assert.True(events.IndexOf(events.OfType<TurnEvent.Usage>().Single()) < events.Count - 1);   // before the notice that ends the turn
+        Assert.IsType<TurnEvent.Notice>(events[^1]);
     }
 
     /// <summary>A call's arguments streamed in pieces past a 2,000 ceiling (9, 809, 1,609, 2,409), as session 832's present_audit retry, then the call that never came.</summary>
@@ -2408,13 +2435,14 @@ public class AssistantTests
         Assert.Empty(echo.Received);
         Assert.Equal(new TurnEvent.ToolWriting("echo", 9), Assert.Single(events.OfType<TurnEvent.ToolWriting>()));
         Assert.DoesNotContain(events, e => e is TurnEvent.ToolCall or TurnEvent.ToolResult);
-        Assert.Equal(new TurnEvent.Notice(Assistant.RunawayNotice("echo", 2_000), IsError: true), events[^1]);
+        Assert.Equal(new TurnEvent.Notice(TurnText.RunawayNotice("echo", 2_000), IsError: true, AskAgain: true), events[^1]);
+        Assert.DoesNotContain(events, e => e is TurnEvent.Usage);   // the fake reported none: no event, never zeros (F30)
         Assert.Equal(["Reporting."], Deltas(events));
 
         // The text so far kept, no call in the history for the next turn to carry.
         Assert.Equal("Reporting.", history.Messages[^1].Text);
         Assert.DoesNotContain(history.Messages, m => m.Contents.OfType<FunctionCallContent>().Any());
-        Assert.Contains(lines, e => e.Message == Assistant.RunawayLogLine("echo", 2_409, 2_000));
+        Assert.Contains(lines, e => e.Message == TurnText.RunawayLogLine("echo", 2_409, 2_000));
 
         // The turn's closing line: a guard stopped it, and what it wrote was a call's arguments.
         Assert.Contains(lines, e => e.Message == Assistant.TurnEndedLogLine(1, TimeSpan.Zero, 1, 0, "Reporting.".Length, Assistant.TurnStopped, 2_409));

@@ -71,6 +71,24 @@ public class TranscriptFindTests : IDisposable
         Assert.False(pane.OverlayOpen);
     }
 
+    /// <summary>
+    /// What searches on its own after a re-layout (2026-10-30, review F66): typing, Backspace with text to erase, a paste the find takes. Not
+    /// Backspace on an empty find, a paste it refuses, nor a right-click (its clipboard may be empty) — each of those finds again first.
+    /// </summary>
+    [Fact]
+    public void SearchesAnyway_OnlyForAnInputThatSearches()
+    {
+        Assert.True(TranscriptFind.SearchesAnyway(new InputEvent.Key(Keys.Char('a')), ""));
+        Assert.True(TranscriptFind.SearchesAnyway(new InputEvent.Key(Keys.Backspace), "ap"));
+        Assert.True(TranscriptFind.SearchesAnyway(new InputEvent.Paste("ple"), "ap"));
+
+        Assert.False(TranscriptFind.SearchesAnyway(new InputEvent.Key(Keys.Backspace), ""));
+        Assert.False(TranscriptFind.SearchesAnyway(new InputEvent.Paste("\n"), "ap"));
+        Assert.False(TranscriptFind.SearchesAnyway(new InputEvent.Paste("x"), new string('a', MenuFilter.MaxLength)));
+        Assert.False(TranscriptFind.SearchesAnyway(new InputEvent.Click(5, 5, MouseButton.Right), "ap"));
+        Assert.False(TranscriptFind.SearchesAnyway(new InputEvent.Key(Keys.Enter), "ap"));
+    }
+
     /// <summary>Forty lines, "apple" on the 5th and the 30th (store rows 4 and 29).</summary>
     private static void Fill(ScreenPane pane)
     {

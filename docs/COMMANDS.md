@@ -448,7 +448,7 @@ Its settings are on `/settings` › [Automation](SETTINGS.md#automation).
   * **More passes…:** the reviewer page when advisors are offered.
   * **Keep report**, or **Discard report** after a yes (to the Recycle bin, the Trash on a Mac, when *File deletes to Recycle bin* is on).
 * **Picking up again:** `/code-audit open` lists the reports (`stopped`, `fixing 3/7`, `fixed`…); `fix` and `resume` take the newest without a name, and say which. While `/botchat` runs, a form that would start passes is refused (`open` waits for the chat's end).
-* **The lock:** a `<name>.lock` beside the report keeps a second Neon Sidekick off it while it's audited: the other can't start, resume, fix or discard it, and lists it as `running elsewhere`.
+* **The lock:** a `<name>.lock` beside the report keeps a second Neon Sidekick off it while it's audited: the other can't start, resume, fix or discard it, and lists it as `running elsewhere`. When its holder can't be checked, the refusal names the lock to delete if nothing runs it.
   * A lock another PC wrote names that PC and the file to delete if its run is gone.
 
 ### Bot conversations

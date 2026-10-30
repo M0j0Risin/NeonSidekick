@@ -80,6 +80,12 @@ public sealed class CheckpointEntry
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? NotSaved { get; set; }
 
+    /// <summary>
+    /// A later write to the path counted on this entry for its first state (2026-10-30, review F104): a hook taken back keeps it, since the
+    /// later write recorded nothing of its own. The turn's only, never in the JSON (internal, so the source-generated context never sees it).
+    /// </summary>
+    internal bool Relied { get; set; }
+
     /// <summary>A copy (2026-10-28, review P11-12): the commit names its blobs on its own, never on the journal's live entries.</summary>
     public CheckpointEntry Clone() => (CheckpointEntry)MemberwiseClone();
 }

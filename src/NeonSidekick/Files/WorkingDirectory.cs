@@ -359,6 +359,8 @@ public sealed class PendingWrite : IDisposable
         _overwrite = overwrite;
         _preserve = preserve;
         Relative = display;
+        // A crash's temps in the export's folder go first, as every other write's do (2026-10-30, review F88: an export never swept).
+        WorkingDirectory.SweepStaleTemps(Path.GetDirectoryName(full)!);
         _temp = WorkingDirectory.TempSibling(full);
         _stream = new FileStream(_temp, FileMode.CreateNew, FileAccess.Write, FileShare.None, 64 * 1024, useAsync: true);
         WorkingDirectory.HideTemp(_temp);
@@ -5296,7 +5298,8 @@ public sealed class WorkingDirectory
 
     /// <summary>
     /// The temp siblings in <paramref name="folder"/> older than <see cref="StaleTemp"/> deleted (2026-10-22, review P7: a crash's were never
-    /// swept, and were searched, zipped, copied and counted ever after). Each write sweeps its own folder; there is no walk at start. Best effort.
+    /// swept, and were searched, zipped, copied and counted ever after). No recursive walk: each write's folder, and the working folder's top
+    /// level at launch and after a <c>/cwd</c> (<see cref="SweepRoot"/>). Best effort.
     /// </summary>
     internal static void SweepStaleTemps(string folder)
     {
@@ -5313,6 +5316,32 @@ public sealed class WorkingDirectory
         catch (Exception ex) when (IsFileFailure(ex) || ex is System.Security.SecurityException)
         {
         }
+    }
+
+    /// <summary>
+    /// The root's top level swept of stale temps (2026-10-30, review F88: a crash's beside a file nobody wrote again stayed): at launch, off
+    /// the caller's thread (<paramref name="inline"/> false), and after a <c>/cwd</c>. The root is read on the caller's thread; one that can't be
+    /// read sweeps nothing.
+    /// </summary>
+    internal Task SweepRoot(bool inline = false)
+    {
+        string root;
+        try
+        {
+            root = Root;
+        }
+        catch (Exception ex) when (IsFileFailure(ex) || ex is ArgumentException or NotSupportedException)
+        {
+            return Task.CompletedTask;
+        }
+
+        if (inline)
+        {
+            SweepStaleTemps(root);
+            return Task.CompletedTask;
+        }
+
+        return Task.Run(() => SweepStaleTemps(root));
     }
 
     /// <summary>Whether a file name is a temp sibling's (<see cref="TempSibling"/>): a crash's leftover, never the user's file.</summary>

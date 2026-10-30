@@ -83,7 +83,7 @@ public sealed class LiveQueryExportTests : IDisposable
         var tools = ChatScreen.OracleTools(new OracleAccess(() => catalog), () => new AppSettingsData { OracleTools = true }, saveRoot: Root);
         string result = await Invoke<OracleQueryTool>(tools,
             ("sql", "SELECT DATE '2026-10-29' AS d, CAST(12345678901234567.89 AS NUMBER(20,2)) AS big, TIMESTAMP '2026-10-30 08:00:00 +02:00' AS tz, " +
-                "TO_CLOB(RPAD('y', 3000, 'y')) AS c FROM dual"),
+                "TO_CLOB(RPAD('y', 3000, 'y')) AS c, INTERVAL '2 03:04:05' DAY TO SECOND AS ds FROM dual"),
             ("to", "ora.xlsx"));
         Assert.StartsWith("Made ora.xlsx (", result);
         string sheet = Sheet("ora.xlsx");
@@ -91,6 +91,7 @@ public sealed class LiveQueryExportTests : IDisposable
         Assert.Contains("+02:00", sheet);
         Assert.Contains(new string('y', 3000), sheet);
         Assert.DoesNotContain("2026-10-29", sheet);
+        Assert.Contains(">2.03:04:05<", Cell(sheet, "E"));   // a day interval as the chat writes it (2026-10-30, review F49)
     }
 
     [LivePostgresFact]
@@ -132,6 +133,31 @@ public sealed class LiveQueryExportTests : IDisposable
         Assert.Contains(">-infinity<", Cell(sheet, "E"));
         Assert.Contains(">13:45:00+02:00<", Cell(sheet, "F"));
         Assert.True(Cell(sheet, "B").Length > 0, sheet);
+    }
+
+    /// <summary>
+    /// Money a number, a month's interval as PostgreSQL writes it, NaN and the infinities as words, a numeric past decimal by its exact digits
+    /// (2026-10-30, review F16 and F117, against Npgsql as it is: each but money wrote the can't-be-read placeholder).
+    /// </summary>
+    [LivePostgresFact]
+    public async Task Postgres_MoneyIntervalsNaNAndLongNumerics()
+    {
+        var catalog = new PostgresCatalog([new PostgresNamedConnection("live", LivePostgres.Config!, "test")], []);
+        var tools = ChatScreen.PostgresTools(new PostgresAccess(() => catalog), () => new AppSettingsData { PostgresTools = true }, saveRoot: Root);
+        string result = await Invoke<PostgresQueryTool>(tools,
+            ("sql", "SELECT 12.34::money AS m, interval '1 month 2 days' AS i, interval '1 day 2 hours' AS j, 'NaN'::numeric AS nan, " +
+                "'-Infinity'::numeric AS ninf, 1e40::numeric AS huge, 12345678901234567890123456789012.5::numeric AS long"),
+            ("to", "pgnum.xlsx"));
+        Assert.StartsWith("Made pgnum.xlsx (", result);
+        string sheet = Sheet("pgnum.xlsx");
+        Assert.Contains("<v>12.34</v>", Cell(sheet, "A"));
+        Assert.Contains(">1 mon 2 days<", Cell(sheet, "B"));
+        Assert.Contains(">1 day 02:00:00<", Cell(sheet, "C"));
+        Assert.Contains(">NaN<", Cell(sheet, "D"));
+        Assert.Contains(">-Infinity<", Cell(sheet, "E"));
+        Assert.Contains("<v>", Cell(sheet, "F"));   // 1e40: one significant digit, so a number
+        Assert.Contains(">12345678901234567890123456789012.5<", Cell(sheet, "G"));
+        Assert.DoesNotContain("can't be read", sheet);
     }
 
     /// <summary>A table of one 40 KB LONG RAW, made once (a read-only read of a table made seconds ago is ORA-01466, so it waits after).</summary>

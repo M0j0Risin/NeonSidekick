@@ -46,8 +46,12 @@ public sealed class JournalLog
     internal HashSet<string> Recorded { get; }
 }
 
-/// <summary>Where a journal stood before a hook (2026-10-28, review P4-03), so a write refused after it can take back what the hook added.</summary>
-internal readonly record struct JournalMark(FileJournal? Journal, int[]? Counts, long Saved, long[]? LogSaved)
+/// <summary>
+/// What a hook added to a journal (2026-10-28, review P4-03), so a write refused after it can take back exactly that: each entry by its log's
+/// index, and the bytes it saved (0 for one not saved). The entries themselves, not where the log stood (2026-10-30, review F104): an export
+/// holds its mark while other writes mark and take back, and a cut to the old counts took their entries too.
+/// </summary>
+internal readonly record struct JournalMark(FileJournal? Journal, IReadOnlyList<(int Log, CheckpointEntry Entry, long Bytes)>? Added)
 {
     public static JournalMark None => default;
 }
@@ -106,6 +110,9 @@ public sealed class FileJournal
     private readonly long _largestFile;
     private readonly int _maxEntries;
     private readonly List<string> _tools = new();
+
+    // Each log's entry count when the running hook began (F104): an entry before it is an earlier hook's, which a skip relies on.
+    private int[]? _hookCounts;
     private int _count;
     private long _saved;
     private long _hashed;
@@ -279,31 +286,37 @@ public sealed class FileJournal
 
     /// <summary>
     /// Takes back what a hook added (2026-10-28, review P4-03): the write it stood for was refused after it (a file appeared, a link moved),
-    /// so the journal never describes a write that didn't happen. A blob it saved stays for the prune.
+    /// so the journal never describes a write that didn't happen. A blob it saved stays for the prune. Only the hook's own entries, wherever
+    /// they sit now, whatever was recorded or taken back since (2026-10-30, review F104); one a later write relied on stays, with its bytes.
     /// </summary>
     internal static void TakeBack(JournalMark mark)
     {
-        if (mark.Journal is not { } journal || mark.Counts is not { } counts)
+        if (mark.Journal is not { } journal || mark.Added is not { } added)
         {
             return;
         }
 
         lock (journal._gate)
         {
-            for (int i = 0; i < counts.Length && i < journal._logs.Count; i++)
+            for (int i = added.Count - 1; i >= 0; i--)
             {
-                var log = journal._logs[i];
-                for (int at = log.Entries.Count - 1; at >= counts[i]; at--)
+                var (at, entry, bytes) = added[i];
+                var log = journal._logs[at];
+                int index = log.Entries.FindLastIndex(e => ReferenceEquals(e, entry));
+                if (entry.Relied || index < 0)
                 {
-                    log.Recorded.Remove(log.Entries[at].Path);
-                    log.Entries.RemoveAt(at);
-                    journal._count--;
+                    continue;
                 }
 
-                log.SavedBytes = mark.LogSaved![i];
+                log.Entries.RemoveAt(index);
+                journal._count--;
+                log.SavedBytes -= bytes;
+                journal._saved -= bytes;
+                if (!log.Entries.Exists(e => log.Recorded.Comparer.Equals(e.Path, entry.Path)))
+                {
+                    log.Recorded.Remove(entry.Path);
+                }
             }
-
-            journal._saved = mark.Saved;
         }
     }
 
@@ -353,7 +366,8 @@ public sealed class FileJournal
                 return JournalMark.None;
             }
 
-            var mark = journal.MarkNow();
+            int[] counts = journal._logs.Select(l => l.Entries.Count).ToArray();
+            journal._hookCounts = counts;
             try
             {
                 if (record(journal) is { } problem)
@@ -368,12 +382,48 @@ public sealed class FileJournal
                 journal._incomplete = true;
                 DiagnosticLog.Warn(Category, $"The journal could not record a write under {root}: {ex.Message}");
             }
+            finally
+            {
+                journal._hookCounts = null;
+            }
 
-            return mark;
+            return journal.AddedSince(counts);
         }
     }
 
-    private JournalMark MarkNow() => new(this, _logs.Select(l => l.Entries.Count).ToArray(), _saved, _logs.Select(l => l.SavedBytes).ToArray());
+    /// <summary>
+    /// The mark of the entries each log gained past <paramref name="counts"/>, under the gate (F104). A content's bytes count when its save
+    /// succeeded (<see cref="CheckpointEntry.NotSaved"/> null), as <see cref="Save"/> counts them; a failed save set its size without.
+    /// </summary>
+    private JournalMark AddedSince(int[] counts)
+    {
+        var added = new List<(int, CheckpointEntry, long)>();
+        for (int i = 0; i < _logs.Count; i++)
+        {
+            var entries = _logs[i].Entries;
+            for (int at = i < counts.Length ? counts[i] : 0; at < entries.Count; at++)
+            {
+                var entry = entries[at];
+                added.Add((i, entry, entry.Op == CheckpointOp.Content && entry.NotSaved is null ? entry.Size : 0));
+            }
+        }
+
+        return new JournalMark(this, added);
+    }
+
+    /// <summary>
+    /// A path the turn recorded already, so this write records nothing: its newest entry, when an earlier hook added it, is now relied on
+    /// (F104) and stays if that hook is taken back. One the running hook added itself isn't: taking it back takes the whole write back.
+    /// </summary>
+    private void Rely(JournalLog log, string relative)
+    {
+        int index = log.Entries.FindLastIndex(e => log.Recorded.Comparer.Equals(e.Path, relative));
+        int logIndex = _logs.IndexOf(log);
+        if (index >= 0 && (_hookCounts is not { } counts || logIndex >= counts.Length || index < counts[logIndex]))
+        {
+            log.Entries[index].Relied = true;
+        }
+    }
 
     /// <summary>The log of the longest root holding <paramref name="full"/> (review P10-04: nested roots), or null when none does.</summary>
     private JournalLog? LogFor(string full)
@@ -621,6 +671,7 @@ public sealed class FileJournal
         string relative = Relative(log, full);
         if (log.Recorded.Contains(relative))
         {
+            Rely(log, relative);
             return;
         }
 
@@ -645,6 +696,7 @@ public sealed class FileJournal
         string relative = Relative(log, full);
         if (log.Recorded.Contains(relative))
         {
+            Rely(log, relative);
             return;
         }
 
@@ -835,6 +887,7 @@ public sealed class FileJournal
 
         if (!log.Recorded.Add(entry.Path) && !force)
         {
+            Rely(log, entry.Path);
             return false;
         }
 

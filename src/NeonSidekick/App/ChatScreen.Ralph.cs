@@ -51,8 +51,6 @@ internal sealed partial class ChatScreen
     private readonly FinishStepTool _finishStep;
     private readonly IRalphVerifier _ralphVerifier;
 
-    /// <summary>Whether a lock's owner still runs (a seam for the tests: by default the process and its start time, <see cref="RalphLog.OwnerAlive"/>).</summary>
-    internal Func<LockOwner, bool> RalphLockAlive { get; set; } = RalphLog.OwnerAlive;
 
     /// <summary>
     /// The loop's working directory and repository, pinned to the folder it started in (2026-10-19, the second review: <see cref="_files"/> follows
@@ -384,7 +382,7 @@ internal sealed partial class ChatScreen
 
         // The folder from the lock on (2026-10-19, the second review): everything the loop writes and checks is this one's, whatever the settings say later.
         var files = _files.PinnedAt(_files.Root);
-        if (!RalphLog.TryLock(files, path, RalphLog.Me, RalphLockAlive, out string? lockRefusal))
+        if (!RalphLog.TryLock(files, path, RalphLog.Me, OwnerLock.LiveOwner, out string? lockRefusal))
         {
             _plan.ClearApproval();
             _transcript.Error(lockRefusal ?? RalphLog.LockError(files, path));
@@ -572,7 +570,7 @@ internal sealed partial class ChatScreen
                     break;
                 }
 
-                if (!RalphLog.StillHeld(files, path, RalphLockAlive))
+                if (!RalphLog.StillHeld(files, path, OwnerLock.LiveOwner))
                 {
                     stop = RalphStop.Locked;
                     break;

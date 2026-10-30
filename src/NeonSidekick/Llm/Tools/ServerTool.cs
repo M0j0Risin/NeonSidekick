@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using NeonSidekick.Files;
@@ -42,29 +43,28 @@ public abstract class ServerTool<TAccess> : AIFunction where TAccess : class
     /// <summary>The sentence a query tool's description adds for <c>to</c>.</summary>
     public const string ExportSentence = " Give to (an .xlsx path or folder) to write every row to a spreadsheet instead of returning them.";
 
-    /// <summary>What <c>max_rows</c>' text says of <c>to</c>, left out of the schema with no <c>to</c>.</summary>
-    public const string MaxRowsWithTo = " (1 to 1048575 with to)";
-
-    /// <summary>What <c>max_rows</c>' default says of <c>to</c>, left out of the schema with no <c>to</c>.</summary>
-    public const string EveryRowWithTo = " (with to, every row)";
+    /// <summary>A query's row cap in a schema's words: <see cref="AppSettingsData.MaxSqlQueryMaxRows"/>, never a literal of its own (review F55).</summary>
+    protected static string MaxRowsWords => AppSettingsData.MaxSqlQueryMaxRows.ToString(CultureInfo.InvariantCulture);
 
     /// <summary>
-    /// A query tool's two schemas from its one text (2026-10-29, review P1-20: <c>to</c> was offered in plan mode and with *File tools* off,
-    /// and each call was refused): with the export's properties, and without them and <c>max_rows</c>' words of <c>to</c>.
+    /// A query tool's last members: <c>max_rows</c>, and with <paramref name="export"/> its words of <c>to</c> (Excel's last row,
+    /// <see cref="SheetWriter.MaxDataRows"/>) and <see cref="ExportProperties"/> (2026-10-30, review F55: the caps were literals, and the
+    /// plain schema was cut out of the export one by exact strings).
     /// </summary>
-    protected static (JsonElement Export, JsonElement Plain) QuerySchemas(string json)
+    protected static string QueryMembers(bool export) =>
+        "\"max_rows\": { \"type\": \"integer\", \"description\": \"How many rows at most, 1 to " + MaxRowsWords
+        + (export ? " (1 to " + SheetWriter.MaxDataRows.ToString(CultureInfo.InvariantCulture) + " with to)" : "")
+        + ". Leave it out for the user's default" + (export ? " (with to, every row)" : "") + ".\" }"
+        + (export ? ", " + ExportProperties : "");
+
+    /// <summary>
+    /// A query tool's two schemas (2026-10-29, review P1-20: <c>to</c> was offered in plan mode and with *File tools* off, and each call was
+    /// refused): <paramref name="json"/> given <see cref="QueryMembers"/> with the export, and without it.
+    /// </summary>
+    protected static (JsonElement Export, JsonElement Plain) QuerySchemas(Func<string, string> json)
     {
         ArgumentNullException.ThrowIfNull(json);
-        int at = json.IndexOf(ExportProperties, StringComparison.Ordinal);
-        if (at < 0)
-        {
-            throw new ArgumentException("The schema carries no export properties.", nameof(json));
-        }
-
-        int comma = json.LastIndexOf(',', at);
-        string plain = (json[..comma] + json[(at + ExportProperties.Length)..])
-            .Replace(MaxRowsWithTo, "", StringComparison.Ordinal).Replace(EveryRowWithTo, "", StringComparison.Ordinal);
-        return (ToolSchema.Parse(json), ToolSchema.Parse(plain));
+        return (ToolSchema.Parse(json(QueryMembers(export: true))), ToolSchema.Parse(json(QueryMembers(export: false))));
     }
 
     /// <summary>The schema in force: with <c>to</c> while a save root is open (read fresh per request, so plan mode and *File tools* follow).</summary>
@@ -224,7 +224,7 @@ public abstract class ServerTool<TAccess> : AIFunction where TAccess : class
             {
                 return (null, XlsxTarget.FailureText(ex, target.Relative));
             }
-        }, cell, header);
+        }, cell, header, ex => XlsxTarget.FailureText(ex, target.Relative));
         var result = await run(job, SqlExport.TimeoutFor(timeoutSetting), cancellationToken).ConfigureAwait(false);
         if (job.Refusal is { } refusedRows)
         {
@@ -268,7 +268,7 @@ public abstract class ServerTool<TAccess> : AIFunction where TAccess : class
             return now.Refusal ?? FileText.SaveNotHere;
         }
 
-        return string.Equals(files.Root, folder, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal) ? null : FileText.SaveMovedLate;
+        return Plans.RalphSnapshot.SameRoot(files.Root, folder) ? null : FileText.SaveMovedLate;
     }
 
     /// <summary>A string argument, or null when blank.</summary>

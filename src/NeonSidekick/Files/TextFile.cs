@@ -239,6 +239,31 @@ public static class TextFile
         }
     }
 
+    /// <summary>The single-byte code page's codec: what a file that is neither marked nor UTF-8 reads as.</summary>
+    public static TextCodec LegacyCodec => TextCodec.Legacy(s_legacy.Value);
+
+    /// <summary>
+    /// What the head of <paramref name="stream"/> alone decides (2026-10-30, review F22: the table reader judged UTF-8 in a pass of its own): a
+    /// mark or a UTF-16 pattern in the first 64 KB, else null — UTF-8 or the legacy code page, which only every byte can tell. The stream is
+    /// left where it started.
+    /// </summary>
+    public static TextCodec? DetectHead(Stream stream)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        long start = stream.Position;
+        byte[] buffer = new byte[64 * 1024];
+        try
+        {
+            int read = stream.ReadAtLeast(buffer, buffer.Length, throwOnEndOfStream: false);
+            var head = buffer.AsSpan(0, read);
+            return Marked(head) ?? (Utf16Pattern(head) is { } bigEndian ? TextCodec.Utf16(bigEndian, bom: false) : null);
+        }
+        finally
+        {
+            stream.Position = start;
+        }
+    }
+
     private static TextCodec? Marked(ReadOnlySpan<byte> bytes)
     {
         if (bytes.Length >= 4 && bytes[0] == 0xFF && bytes[1] == 0xFE && bytes[2] == 0 && bytes[3] == 0)

@@ -132,7 +132,7 @@ public sealed class TranscriptFind
                     return;
                 }
 
-                if (_pane.LayoutVersion != laidOut && !SearchesAnyway(input))
+                if (_pane.LayoutVersion != laidOut && !SearchesAnyway(input, find))
                 {
                     // The window changed width since the last search (2026-10-29): the rows moved, so the places are found again and the
                     // view stays on the one the pane moved its find to — Enter and Shift+Enter walk on from what is shown — and the
@@ -261,12 +261,16 @@ public sealed class TranscriptFind
         }
     }
 
-    /// <summary>The input searches the rows again on its own (2026-10-29, the resize review): typing, Backspace, a paste or a right-click's.</summary>
-    private static bool SearchesAnyway(InputEvent input) => input switch
+    /// <summary>
+    /// The input searches the rows again on its own (2026-10-29, the resize review): typing, Backspace with something to erase, a paste
+    /// that adds to <paramref name="find"/>. Not Backspace on an empty find, a paste the find refuses, nor a right-click (2026-10-30,
+    /// review F66: each went on without a search, the hint left counting the old rows) — a right-click's clipboard is read once, below,
+    /// so it is searched first and again if it adds anything.
+    /// </summary>
+    internal static bool SearchesAnyway(InputEvent input, string find) => input switch
     {
-        InputEvent.Paste => true,
-        InputEvent.Click { Button: MouseButton.Right } => true,
-        InputEvent.Key { Info: var k } => k.Key == ConsoleKey.Backspace || InfoPane.FindChar(k) is not null,
+        InputEvent.Paste paste => MenuFilter.Pasted(find, paste.Text) is not null,
+        InputEvent.Key { Info: var k } => k.Key == ConsoleKey.Backspace ? find.Length > 0 : InfoPane.FindChar(k) is not null,
         _ => false,
     };
 

@@ -3,6 +3,7 @@ using Microsoft.Extensions.AI;
 using NeonSidekick.App;
 using NeonSidekick.Audits;
 using NeonSidekick.Files;
+using NeonSidekick.Llm;
 using NeonSidekick.Llm.Tools;
 using NeonSidekick.Plans;
 using NeonSidekick.Tests.Fakes;
@@ -366,6 +367,34 @@ public partial class ChatScreenTests
         Assert.Single(_chat.Requests);
         Assert.Contains(AuditText.StopNotice(PlanGapStop.Stopped, Path.GetFileNameWithoutExtension(AuditPath), 1), output);
         Assert.Equal(AuditStatus.Stopped, AuditReportNow.Header.Status);
+    }
+
+    /// <summary>
+    /// A present_audit call streamed past its ceiling in a pass (2026-10-30, review F96): the stop sentence and the audit's own resume line,
+    /// never "ask again" (the user resumes the audit, not the turn), and the report keeps no finding from it.
+    /// </summary>
+    [Fact]
+    public async Task CodeAudit_ARunawayReport_StopsThePass_WithTheResumeLine_NotAskAgain()
+    {
+        AuditFixture(Line("/code-audit src security"), Line("/exit"));
+        int ceiling = PresentAuditTool.FixedArgumentChars + PresentAuditTool.PerScopeFileChars;   // the scope is one file
+        var stream = new List<ChatResponseUpdate> { FakeChatClient.ArgumentDelta(0, "a1", PresentAuditTool.ToolName, "{\"findings\":[") };
+        for (int i = 0; i <= ceiling / 1_000; i++)
+        {
+            stream.Add(FakeChatClient.ArgumentDelta(0, null, null, new string('x', 1_000)));
+        }
+
+        stream.Add(FindingCall("a1"));
+        _chat.Enqueue([.. stream]);
+
+        string output = await RunAsync();
+
+        Assert.Single(_chat.Requests);
+        string stopped = TurnText.RunawayNotice(PresentAuditTool.ToolName, ceiling);
+        Assert.Contains(stopped, output);
+        Assert.DoesNotContain(stopped + TurnText.AskAgain, output);
+        Assert.Contains("/code-audit resume " + Path.GetFileNameWithoutExtension(AuditPath), output);
+        Assert.Empty(AuditReportNow.Open);
     }
 
     [Fact]

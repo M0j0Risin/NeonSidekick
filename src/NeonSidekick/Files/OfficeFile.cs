@@ -138,7 +138,11 @@ public static class OfficeFile
         }
     }
 
-    private static string Extension(string path) => string.IsNullOrWhiteSpace(path) ? "" : Path.GetExtension(path.Trim().TrimEnd('/', '\\'));
+    /// <summary>
+    /// The extension of <paramref name="path"/> as Windows opens it: trailing dots and spaces dropped (2026-10-30, review F14: <c>budget.xlsx.</c>
+    /// and <c>old.doc.</c> got past every Office check, then opened as the file they name).
+    /// </summary>
+    internal static string Extension(string path) => string.IsNullOrWhiteSpace(path) ? "" : Path.GetExtension(path.Trim().TrimEnd('/', '\\', '.', ' '));
 
     private static bool Has(IReadOnlyList<string> list, string extension) => list.Any(e => e.Equals(extension, StringComparison.OrdinalIgnoreCase));
 }

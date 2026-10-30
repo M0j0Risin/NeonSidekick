@@ -49,19 +49,6 @@ public class TranscriptRendererTests : IDisposable
         Assert.True(_t.AtLineStart);
     }
 
-    [Theory]
-    [InlineData(0, 80)]
-    [InlineData(-1, 80)]
-    [InlineData(50, 50)]
-    [InlineData(120, 120)]
-    [InlineData(240, 240)]
-    public void RuleWidth_IsTheConsoleWidth_Or80WithoutOne(int consoleWidth, int expected)
-    {
-        // No cap: the pane's rules span the window, and the banner's and /new's match them.
-        Assert.Equal(expected, TranscriptRenderer.RuleWidth(consoleWidth));
-        Assert.Equal(80, TranscriptRenderer.DefaultRuleWidth);
-    }
-
     [Fact]
     public void LongDelta_IsNotFolded()
     {

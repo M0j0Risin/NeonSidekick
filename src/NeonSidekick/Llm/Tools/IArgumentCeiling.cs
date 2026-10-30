@@ -3,7 +3,7 @@ namespace NeonSidekick.Llm.Tools;
 /// <summary>
 /// A tool that knows how long its arguments can honestly get (2026-10-29, session 832: a <c>present_audit</c> retry streamed 60,259 tokens of
 /// arguments). Past <see cref="MaxArgumentChars"/> of streamed arguments the turn stops the request (<see cref="ToolArgumentWatch"/>) and ends
-/// on <see cref="Assistant.RunawayNotice"/>; a tool without one is never stopped.
+/// on <see cref="TurnText.RunawayNotice"/>; a tool without one is never stopped.
 /// </summary>
 public interface IArgumentCeiling
 {

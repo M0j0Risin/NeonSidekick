@@ -518,7 +518,8 @@ public sealed class OracleAccess
                             return XlsxValue.OfText(new string(buffer, 0, read));
                         }
 
-                    case "TimeStampTZ" or "TimeStampLTZ" or "IntervalYM":
+                    // INTERVAL DAY TO SECOND too (2026-10-30, review F49: the doc promised it, but it fell through to a duration).
+                    case "TimeStampTZ" or "TimeStampLTZ" or "IntervalYM" or "IntervalDS":
                         return XlsxValue.OfText(ReadCell(reader, ordinal));
                 }
             }

@@ -35,9 +35,6 @@ public sealed class ToolArgumentWatch
     /// <summary>The shortest gap between two labels after a request's first: the call being written changes the busy row at most once a second.</summary>
     public static readonly TimeSpan ProgressInterval = TimeSpan.FromSeconds(1);
 
-    /// <summary>The name a call goes by on the busy row while no chunk has named it. Pinned.</summary>
-    public const string UnnamedCall = "(unnamed)";
-
     /// <summary>The first call whose streamed arguments passed its tool's ceiling: what the turn ends on.</summary>
     public sealed record Runaway(string Name, long Chars, int Ceiling);
 
@@ -56,8 +53,11 @@ public sealed class ToolArgumentWatch
     private readonly Func<string, int?> _ceiling;
     private readonly TimeProvider _time;
     private readonly Dictionary<int, Call> _calls = [];
-    private TurnEvent.ToolWriting? _shown;
+    private (string Name, long Chars)? _shown;
     private long? _lastShown;
+
+    // The call written last (2026-10-30, review F70: a record was built for it on every delta, and read only by a failed request's log line).
+    private Call? _latest;
 
     /// <param name="ceiling">A tool's ceiling by its name (<see cref="Tools.IArgumentCeiling"/>), null for none; read as a call is named.</param>
     /// <param name="time">The clock <see cref="ProgressInterval"/> is kept on.</param>
@@ -73,7 +73,7 @@ public sealed class ToolArgumentWatch
     public Runaway? Over { get; private set; }
 
     /// <summary>The call written last and its own characters, shown or not, or null before any; for the request's log lines.</summary>
-    public TurnEvent.ToolWriting? Latest { get; private set; }
+    public TurnEvent.ToolWriting? Latest => _latest is { } call ? new TurnEvent.ToolWriting(call.Name ?? TurnText.UnnamedCall, call.Chars) : null;
 
     /// <summary>Every call's arguments' characters so far, for the turn's closing log line.</summary>
     public long Chars { get; private set; }
@@ -91,7 +91,7 @@ public sealed class ToolArgumentWatch
             return null;
         }
 
-        TurnEvent.ToolWriting? candidate = null;
+        Call? candidate = null;
         foreach (var delta in deltas)
         {
             if (!_calls.TryGetValue(delta.Index, out var call))
@@ -114,10 +114,10 @@ public sealed class ToolArgumentWatch
                 call.Streamed += piece;
             }
 
-            Latest = new TurnEvent.ToolWriting(call.Name ?? UnnamedCall, call.Chars);
+            _latest = call;
             if (call.Name is not null || call.Chars >= CountShownFrom)
             {
-                candidate = Latest;
+                candidate = call;
             }
 
             // A tool's own ceiling only (an unnamed call has none), against what streamed.
@@ -127,14 +127,21 @@ public sealed class ToolArgumentWatch
             }
         }
 
-        long now = _time.GetTimestamp();
-        if (candidate is null || candidate == _shown || (_lastShown is { } last && _time.GetElapsedTime(last, now) < ProgressInterval))
+        // The candidate's values now: a later delta in the update can only be its own call's, which only grows it.
+        if (candidate is null)
         {
             return null;
         }
 
-        _shown = candidate;
+        var seen = (candidate.Name ?? TurnText.UnnamedCall, candidate.Chars);
+        long now = _time.GetTimestamp();
+        if (seen == _shown || (_lastShown is { } last && _time.GetElapsedTime(last, now) < ProgressInterval))
+        {
+            return null;
+        }
+
+        _shown = seen;
         _lastShown = now;
-        return candidate;
+        return new TurnEvent.ToolWriting(seen.Item1, seen.Chars);
     }
 }

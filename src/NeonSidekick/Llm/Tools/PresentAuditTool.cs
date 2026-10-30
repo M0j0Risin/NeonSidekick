@@ -176,10 +176,11 @@ public sealed partial class PresentAuditTool : AIFunction, IRefusesPrunedStubs, 
             return AuditText.WorkdirMovedResult;
         }
 
-        // Another NeonSidekick took the report's lock over (2026-10-29): its read-merge-save would overwrite that one's findings, so nothing is written.
+        // Another NeonSidekick took the report's lock over (2026-10-29): its read-merge-save would overwrite that one's findings, so nothing is written,
+        // and the pass is told to end as a move tells it (2026-10-30, review F73: "could not be saved" read as a retry).
         if (!_session.StillHolds())
         {
-            return AuditText.CouldNotSaveResult(AuditText.LockedError(path));
+            return AuditText.LockLostResult;
         }
 
         // 1. The report read fresh: an edit made in an editor meanwhile (a tick, a reworded detail, a finding deleted) survives. The report is the
@@ -662,7 +663,7 @@ public sealed partial class PresentAuditTool : AIFunction, IRefusesPrunedStubs, 
         report.Header = report.Header with { Passes = AuditText.PassesLine(pass, cleanNow, coverage.Read, coverage.Scope) };
 
         // 7. The size, 8. the save: a refusal or a failure records nothing.
-        if (AuditFiles.Save(reports, path, report, _time.GetLocalNow()) is { } failed)
+        if (_session.Save(path, report, _time.GetLocalNow(), reports) is { } failed)
         {
             return failed == AuditText.ReportFullResult ? failed : AuditText.CouldNotSaveResult(failed);
         }

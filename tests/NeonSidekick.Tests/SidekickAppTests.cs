@@ -416,6 +416,33 @@ public partial class SidekickAppTests : IDisposable
         Assert.Contains("[error] " + NeonSidekick.Printing.PrintText.NoReply, output);
     }
 
+    /// <summary><c>/docx</c> headless makes its copy with no server, and a failure is an <c>[error]</c> line (2026-10-30, review F99).</summary>
+    [Fact]
+    public async Task Headless_Docx_MakesAWordCopy_WithoutAServer()
+    {
+        string folder = Path.Combine(_dir, "docx");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, "notes.md"), "# Notes\n\nBody");
+
+        string output = await Headless("/docx notes.md\n/docx nope.md\n/docx reply\n", options: SidekickOptions.None with { WorkingDirectory = folder });
+
+        Assert.Contains("Made notes.docx", output);
+        Assert.True(File.Exists(Path.Combine(folder, "notes.docx")));
+        Assert.Contains("[error] " + FileText.Missing("nope.md"), output);
+        Assert.Contains("[error] " + NeonSidekick.Office.OfficeText.NoReplyForDocx, output);
+        Assert.DoesNotContain(SidekickApp.HeadlessNoAssistantReply, output);
+    }
+
+    /// <summary><c>/sessions export</c> headless is an <c>[error]</c> line, never a message to the model (2026-10-30, review F60); it needs no server.</summary>
+    [Fact]
+    public async Task Headless_SessionsExport_IsAnErrorLine()
+    {
+        string output = await Headless("/sessions export\n/sessions EXPORT 3 html\n");
+
+        Assert.Equal(2, output.Split("[error] " + NeonSidekick.Sessions.SessionText.ExportScreenOnlyError).Length - 1);
+        Assert.DoesNotContain(SidekickApp.HeadlessNoAssistantReply, output);
+    }
+
     [Fact]
     public void LastReplyText_IsTheNewestAssistantText()
     {

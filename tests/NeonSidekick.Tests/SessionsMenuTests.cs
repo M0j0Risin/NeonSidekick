@@ -21,7 +21,7 @@ public class SessionsMenuTests : IDisposable
     private Task<(string? Notice, string? Error)> Export(long id, SessionExportFormat format, CancellationToken cancellationToken)
     {
         _exported.Add((id, format));
-        return Task.FromResult(_exportError is { } error ? ((string?)null, (string?)error) : (ChatScreen.SessionExportedNotice(id, "x.html"), (string?)null));
+        return Task.FromResult(_exportError is { } error ? ((string?)null, (string?)error) : (SessionText.ExportedNotice(id, "x.html"), (string?)null));
     }
 
     public SessionsMenuTests()
@@ -325,9 +325,12 @@ public class SessionsMenuTests : IDisposable
 
         var summary = _store.Summary(a)!;
         Assert.Contains("\n" + Titled(SessionsMenu.RowTitle(summary) + " › " + SessionsMenu.ExportWord) + "\n", _console.Output);
-        Assert.Contains("HTML     " + ChatScreen.SessionExportHtmlNote, _console.Output);
+        Assert.Contains("HTML     " + SessionText.ExportHtmlNote, _console.Output);
         Assert.Equal([(a, SessionExportFormat.Html)], _exported);
-        Assert.Contains("  · " + ChatScreen.SessionExportedNotice(a, "x.html") + "\n", _console.Output);
+        Assert.Contains("  · " + SessionText.ExportedNotice(a, "x.html") + "\n", _console.Output);
+        // The status line says the export is at work before its result (2026-10-30, review F101: a behavior, where a pin held the words).
+        int exporting = _console.Output.IndexOf("  · " + SessionsMenu.ExportingNotice, StringComparison.Ordinal);
+        Assert.InRange(exporting, 0, _console.Output.IndexOf("  · " + SessionText.ExportedNotice(a, "x.html"), StringComparison.Ordinal) - 1);
         Assert.Equal(1, _store.Count);   // the list stays
         pane.Dispose();
     }
@@ -374,7 +377,6 @@ public class SessionsMenuTests : IDisposable
         Assert.Equal("(💬 that is this conversation)", SessionsMenu.CurrentNotice);
         Assert.Equal(new[] { "restore", "rename", "export", "purge" }, SessionsMenu.RowWords);
         Assert.Equal(new[] { "Markdown", "HTML" }, SessionsMenu.FormatWords);
-        Assert.Equal("(💬 Exporting the session…)", SessionsMenu.ExportingNotice);
         Assert.Equal(SessionsMenu.Title + " › #12 x [y]", SessionsMenu.RowTitle(summary));
         Assert.Equal("[#9A8BB8]#12  2026-09-11 14:05  12 turns[/]  x [[y]]", SessionsMenu.RowMarkup(summary, false, ManualTimeProvider.DefaultZone));
         Assert.Equal("[#9A8BB8]#12  2026-09-11 14:05  12 turns[/]  x [[y]]  [#9A8BB8]this conversation[/]", SessionsMenu.RowMarkup(summary, true, ManualTimeProvider.DefaultZone));
@@ -387,8 +389,8 @@ public class SessionsMenuTests : IDisposable
         Assert.Equal("restore  [#9A8BB8]load it into the transcript and go on from there[/]", SessionsMenu.RowPageRow("restore"));
         Assert.Equal("rename   [#9A8BB8]give it a new title[/]", SessionsMenu.RowPageRow("rename"));
         Assert.Equal("export   [#9A8BB8]write it to a Markdown or HTML file in the working folder[/]", SessionsMenu.RowPageRow("export"));
-        Assert.Equal("Markdown [#9A8BB8]" + ChatScreen.SessionExportMarkdownNote + "[/]", SessionsMenu.FormatRow("Markdown"));
-        Assert.Equal("HTML     [#9A8BB8]" + ChatScreen.SessionExportHtmlNote + "[/]", SessionsMenu.FormatRow("HTML"));
+        Assert.Equal("Markdown [#9A8BB8]" + SessionText.ExportMarkdownNote + "[/]", SessionsMenu.FormatRow("Markdown"));
+        Assert.Equal("HTML     [#9A8BB8]" + SessionText.ExportHtmlNote + "[/]", SessionsMenu.FormatRow("HTML"));
         Assert.Equal("purge    [#9A8BB8]remove it and its turns for good[/]", SessionsMenu.RowPageRow("purge"));
         Assert.Equal("💬 Purge session #12 \"x [y]\" (12 turns)?", SessionsMenu.PurgePrompt(summary));
         Assert.Equal("(🗑️ purged session #12)", SessionsMenu.PurgedNotice(12));

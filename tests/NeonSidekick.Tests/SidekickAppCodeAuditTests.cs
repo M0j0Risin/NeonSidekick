@@ -93,6 +93,50 @@ public partial class SidekickAppTests
     }
 
     [Fact]
+    public async Task Headless_CodeAudit_AMoveWithTheLockTakenOver_WritesNothing()
+    {
+        // 2026-10-30, review F111: the moved path merged the sidecar and saved the header without checking the hold.
+        ServerOn1234("llama");
+        HeadlessAuditFiles();
+        string elsewhere = Path.Combine(_settings.ProfileDirectory, "elsewhere");
+        Directory.CreateDirectory(elsewhere);
+        _chat.Enqueue(FakeChatClient.Call("r1", ReadFileTool.ToolName, new Dictionary<string, object?> { ["path"] = "src/a.cs" }));
+        _chat.Enqueue(HeadlessAuditCall("a1", "{\"findings\":[{\"severity\":\"high\",\"dimension\":\"security\",\"file\":\"src/a.cs\",\"line\":3,\"title\":\"SQL built from input\",\"detail\":\"Joined.\"}]}"));
+        _chat.EnqueueText("Pass 1.");
+        string? path = null;
+        string? before = null;
+        _chat.BeforeUpdateOf = (request, update, _) =>
+        {
+            if (request == 1 && update == 0)
+            {
+                path = HeadlessAuditPath;
+                string lockFile = Path.Combine(HeadlessAuditRoot, AuditFiles.LockPathFor(path).Replace('/', Path.DirectorySeparatorChar));
+                File.WriteAllText(lockFile, "pid: 424242\nstarted: 2026-10-29T09:00:00.0000000+00:00\n");
+                before = File.ReadAllText(Path.Combine(HeadlessAuditRoot, path.Replace('/', Path.DirectorySeparatorChar)));
+                _settings.Update(d => d.WorkingDirectory = elsewhere);
+            }
+
+            return Task.CompletedTask;
+        };
+        var alive = OwnerLock.LiveOwner;
+        OwnerLock.LiveOwner = owner => owner.ProcessId == 424242 || owner == OwnerLock.Me;
+        string output;
+        try
+        {
+            output = await Headless("/code-audit src\n");
+        }
+        finally
+        {
+            OwnerLock.LiveOwner = alive;
+        }
+
+        Assert.Equal(3, _chat.Requests.Count);
+        Assert.Contains(AuditText.LockLostNotice(Path.GetFileNameWithoutExtension(path!)), output);
+        Assert.Equal(before, File.ReadAllText(Path.Combine(HeadlessAuditRoot, path!.Replace('/', Path.DirectorySeparatorChar))));
+        Assert.False(File.Exists(Path.Combine(HeadlessAuditRoot, AuditFiles.CoveragePath(path).Replace('/', Path.DirectorySeparatorChar))));
+    }
+
+    [Fact]
     public async Task Headless_CodeAudit_NoLimitMeansTheMost_AndAdvisorConfirmFallsBack()
     {
         ServerOn1234("llama");

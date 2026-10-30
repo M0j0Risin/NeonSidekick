@@ -541,6 +541,18 @@ public sealed class LivePostgresTests
         Assert.Contains("| public |", (string)(await tools.OfType<PostgresSchemasTool>().Single().InvokeAsync(new AIFunctionArguments()))!);
     }
 
+    /// <summary>
+    /// The chat reads an interval as PostgreSQL writes it, a month's too, as a workbook does (2026-10-30, the user's call after review F16:
+    /// a month's was "can't be read", a day's <c>1.02:00:00</c>).
+    /// </summary>
+    [LivePostgresFact]
+    public async Task TheQuery_ReadsIntervals_AsPostgresWritesThem()
+    {
+        string result = await Invoke<PostgresQueryTool>(("sql", "SELECT interval '1 month 2 days' AS m, interval '1 day 2 hours' AS d, interval '-1 day 01:00' AS n, NULL::interval AS z"));
+        Assert.Contains("| 1 mon 2 days | 1 day 02:00:00 | -1 days +01:00:00 | " + SqlText.Null + " |", result);
+        Assert.DoesNotContain("can't be read", result);
+    }
+
     [LivePostgresFact]
     public async Task TheQuery_BindsReadsTypesAndCaps()
     {

@@ -1180,17 +1180,6 @@ public sealed class Assistant
     }
 
     /// <summary>
-    /// The error a turn ends on when a call streamed past its tool's ceiling (2026-10-29, session 832: a <c>present_audit</c> retry wrote
-    /// 60,259 tokens of arguments for seven minutes): the request was dropped and nothing ran; the user asks again. Pinned.
-    /// </summary>
-    public static string RunawayNotice(string name, int ceiling) =>
-        string.Create(CultureInfo.InvariantCulture, $"Stopped: the model's call to {name} ran past {ceiling:N0} characters, more than it ever takes, so nothing ran. It was likely repeating itself; ask again.");
-
-    /// <summary>The <c>--log</c> line for a call stopped past its ceiling (2026-10-29). Pinned.</summary>
-    internal static string RunawayLogLine(string name, long chars, int ceiling) =>
-        string.Create(CultureInfo.InvariantCulture, $"Arguments for tool '{name}' passed {chars:N0} characters (its ceiling is {ceiling:N0}); the request was stopped.");
-
-    /// <summary>
     /// The tail a canceled or failed request's log line gets when a tool call was streaming (2026-10-29: session 832's line said only
     /// "0 chars received" for seven minutes of a call's arguments): the call written last and its own characters,
     /// <c>, 212,400 argument chars for present_audit</c>; none before any call. Pinned.
@@ -1885,7 +1874,7 @@ public sealed class Assistant
 
             // A call stopped past its ceiling (2026-10-29) ends the turn as a failed request does: the text so far kept, the call never
             // yielded (the adapter yields calls only when the stream ends), nor any before it in the reply, so none runs and the history
-            // holds none. The user asks again; no answer goes back for the model to retry on its own.
+            // holds none. The user asks again (the host says so outside a loop's pass); no answer goes back for the model to retry on its own.
             if (runaway is not null)
             {
                 if (partial.Length > 0)
@@ -1893,9 +1882,24 @@ public sealed class Assistant
                     _history.AddAssistant(partial.ToString());
                 }
 
-                DiagnosticLog.Info(Category, RunawayLogLine(runaway.Name, runaway.Chars, runaway.Ceiling));
+                // What the server reported before the stop still counts (2026-10-30, review F30: the break skipped the sum below). No
+                // report, no event, as there.
+                var spent = TokenUsage.Zero;
+                foreach (var reported in updates.SelectMany(u => u.Contents).OfType<UsageContent>())
+                {
+                    spent += TokenUsage.From(reported.Details, TimeSpan.Zero, TimeSpan.Zero);
+                }
+
+                spent = clock.Stamp(spent);
+                if (!spent.IsEmpty)
+                {
+                    DiagnosticLog.Debug(Category, UsageLogLine(spent));
+                    yield return new TurnEvent.Usage(spent);
+                }
+
+                DiagnosticLog.Info(Category, TurnText.RunawayLogLine(runaway.Name, runaway.Chars, runaway.Ceiling));
                 log.Ending = TurnStopped;
-                yield return new TurnEvent.Notice(RunawayNotice(runaway.Name, runaway.Ceiling), IsError: true);
+                yield return new TurnEvent.Notice(TurnText.RunawayNotice(runaway.Name, runaway.Ceiling), IsError: true, AskAgain: true);
                 yield break;
             }
 

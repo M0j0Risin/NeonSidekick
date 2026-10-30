@@ -187,7 +187,7 @@ public sealed class SqliteQueryTool : SqliteTool
     public const int MinRows = AppSettingsData.MinSqlQueryMaxRows;
     public const int MaxRows = AppSettingsData.MaxSqlQueryMaxRows;
 
-    private static readonly (JsonElement Export, JsonElement Plain) Schemas = QuerySchemas(
+    private static readonly (JsonElement Export, JsonElement Plain) Schemas = QuerySchemas(members =>
         $$"""
         {
           "type": "object",
@@ -195,8 +195,7 @@ public sealed class SqliteQueryTool : SqliteTool
             "sql": { "type": "string", "description": "One SQLite SELECT (LIMIT n); a WITH clause may lead it. No INSERT, UPDATE, DELETE, DDL, PRAGMA, ATTACH or second statement." },
             {{DatabaseProperty}},
             "params": { "type": "object", "description": "Values for the named placeholders in the SQL (@name, :name, $name), each by its name, e.g. {\"id\": 101} for @id or :id; strings, numbers, true, false or null." },
-            "max_rows": { "type": "integer", "description": "How many rows at most, 1 to 100000 (1 to 1048575 with to). Leave it out for the user's default (with to, every row)." },
-            {{ExportProperties}}
+            {{members}}
           },
           "required": ["sql"]
         }
@@ -246,7 +245,7 @@ public sealed class SqliteQueryTool : SqliteTool
             }
 
             return await ExportAsync(export, Path.GetFileNameWithoutExtension(target.Name), rows, maxRows, TimeoutSeconds(Effective), SqliteAccess.ExportCell,
-                (job, timeout, token) => Files.ExportAsync(database, body, parameters, job, rows, timeout, token), SqliteText.Error, cancellationToken).ConfigureAwait(false);
+                (job, timeout, token) => SqliteAccess.ExportAsync(target, body, parameters, job, rows, timeout, token), SqliteText.Error, cancellationToken).ConfigureAwait(false);
         }
 
         var run = await Files.RunAsync(database, [body], parameters, rows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);
@@ -325,7 +324,7 @@ public sealed partial class SqliteExecuteTool : SqliteTool
             "sql": { "type": "string", "description": "One SQLite statement of a kind this tool's description lists (RETURNING allowed). No ATTACH, BEGIN/COMMIT or second statement." },
             {{DatabaseProperty}},
             "params": { "type": "object", "description": "Values for the named placeholders in the SQL (@name, :name, $name), each by its name, e.g. {\"id\": 101} for @id or :id; strings, numbers, true, false or null." },
-            "max_rows": { "type": "integer", "description": "How many returned rows (RETURNING, PRAGMA) to show at most, 1 to 100000. Leave it out for the user's default." },
+            "max_rows": { "type": "integer", "description": "How many returned rows (RETURNING, PRAGMA) to show at most, 1 to {{MaxRowsWords}}. Leave it out for the user's default." },
             "create": { "type": "boolean", "description": "true to create a new database file at \"database\", a path in the working directory ending .db, .sqlite, .sqlite3 or .db3 (its folder must exist); only when the description says creating is allowed. An existing file is just opened." }
           },
           "required": ["sql"]

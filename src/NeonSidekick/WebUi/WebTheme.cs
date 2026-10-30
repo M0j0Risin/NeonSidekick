@@ -84,10 +84,13 @@ public static class WebTheme
 
     /// <summary>
     /// <paramref name="text"/> safe inside a CSS comment: every <c>*/</c> gone, however nested (2026-10-19, the review: one pass turned <c>**//</c>
-    /// back into <c>*/</c>, and a user theme's name closed the comment in a sheet served before sign-in).
+    /// back into <c>*/</c>, and a user theme's name closed the comment in a sheet served before sign-in). Since 2026-10-30 (review F40) every
+    /// <c>&lt;</c> and <c>&gt;</c> goes too: a session export's sheet sits in the page's own <c>&lt;style&gt;</c>, which a <c>&lt;/style&gt;</c> in
+    /// a theme's name would close.
     /// </summary>
     internal static string CommentSafe(string text)
     {
+        text = text.Replace("<", "", StringComparison.Ordinal).Replace(">", "", StringComparison.Ordinal);
         while (text.Contains("*/", StringComparison.Ordinal))
         {
             text = text.Replace("*/", "", StringComparison.Ordinal);

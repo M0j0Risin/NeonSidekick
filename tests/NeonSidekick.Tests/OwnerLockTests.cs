@@ -111,10 +111,21 @@ public sealed class OwnerLockTests : IDisposable
         Directory.CreateDirectory(Folder);
         var torn = new List<string>();
         using var stop = new CancellationTokenSource();
+        using var pause = new ManualResetEventSlim();
+        using var paused = new ManualResetEventSlim();
+        using var resume = new ManualResetEventSlim();
         var reader = Task.Run(() =>
         {
             while (!stop.IsCancellationRequested)
             {
+                if (pause.IsSet)
+                {
+                    resume.Reset();
+                    paused.Set();
+                    resume.Wait();
+                    continue;
+                }
+
                 try
                 {
                     using var stream = new FileStream(LockFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
@@ -139,10 +150,19 @@ public sealed class OwnerLockTests : IDisposable
             start.Set();
             var taken = await Task.WhenAll(takes);
             var holder = Assert.Single(taken, t => t.Item2 == LockTake.Taken).owner;
+
+            // The reader paused, its handle closed, before the unlock (2026-10-30, review F47): on a volume without POSIX delete an open handle
+            // keeps the unlocked file delete-pending, the next round's publish finds the name taken, and every racer reads held.
+            paused.Reset();
+            pause.Set();
+            Assert.True(paused.Wait(TimeSpan.FromSeconds(30)));
             OwnerLock.Unlock(_files, Lock, holder);
+            pause.Reset();
+            resume.Set();
         }
 
         await stop.CancelAsync();
+        resume.Set();
         await reader;
         Assert.Empty(torn);
         Assert.Empty(Directory.EnumerateFiles(Folder));   // every temp file gone, the last lock let go
@@ -154,7 +174,7 @@ public sealed class OwnerLockTests : IDisposable
     /// </summary>
     [Theory]
     [InlineData(0, (int)OwnerLock.PublishOutcome.Published)]
-    [InlineData(17, (int)OwnerLock.PublishOutcome.NotTaken)]      // EEXIST: held
+    [InlineData(17, (int)OwnerLock.PublishOutcome.Exists)]        // EEXIST: one there (2026-10-30, review F75)
     [InlineData(13, (int)OwnerLock.PublishOutcome.NotTaken)]      // EACCES
     [InlineData(2, (int)OwnerLock.PublishOutcome.NotTaken)]       // ENOENT
     [InlineData(1, (int)OwnerLock.PublishOutcome.Unsupported)]    // EPERM (Linux's link on FAT)
@@ -228,6 +248,115 @@ public sealed class OwnerLockTests : IDisposable
             Assert.Equal(["report.lock"], Directory.EnumerateFiles(Folder).Select(Path.GetFileName));
             File.WriteAllText(LockFile, "pid: 999\nstarted: " + stale.Started.ToString("O", System.Globalization.CultureInfo.InvariantCulture) + "\n");
         }
+    }
+
+    /// <summary>
+    /// A publish refused because a lock stood there, that lock gone by the read, every time (2026-10-30, review F75): another taker's race, held,
+    /// never "can't be written"; every publish failing with no lock there is still unwritable.
+    /// </summary>
+    [Fact]
+    public void APublishRefusedByALockGoneByTheRead_IsHeld_NotUnwritable()
+    {
+        Directory.CreateDirectory(Folder);
+        var publish = OwnerLock.PublishCall;
+        try
+        {
+            OwnerLock.PublishCall = (_, _) => OwnerLock.PublishOutcome.Exists;
+            Assert.Equal(LockTake.Held, OwnerLock.TryLock(_files, Lock, new LockOwner(100, T0), _ => true));
+            OwnerLock.PublishCall = (_, _) => OwnerLock.PublishOutcome.NotTaken;
+            Assert.Equal(LockTake.Unwritable, OwnerLock.TryLock(_files, Lock, new LockOwner(100, T0), _ => true));
+        }
+        finally
+        {
+            OwnerLock.PublishCall = publish;
+        }
+    }
+
+    /// <summary>A lock past 4 KB, or whose host or machine isn't a name, is unreadable: held, never taken over as "not a lock" (2026-10-30, review F85).</summary>
+    [Theory]
+    [InlineData("big")]
+    [InlineData("host")]
+    [InlineData("machine")]
+    public void AnOversizedOrMalformedLock_IsHeld_AndLeftAsItIs(string kind)
+    {
+        Directory.CreateDirectory(Folder);
+        const string head = "pid: 12\nstarted: 2026-10-29T09:00:00.0000000+00:00\n";
+        string text = kind switch
+        {
+            "big" => head + new string('x', 5000) + "\n",
+            "host" => head + "host: evil\u001b[2Jhost\n",
+            _ => head + "machine: a b\n",
+        };
+        File.WriteAllText(LockFile, text);
+
+        Assert.Equal(LockTake.Held, OwnerLock.TryLock(_files, Lock, new LockOwner(34, T0), _ => false));
+        Assert.True(OwnerLock.HeldElsewhere(_files, Lock, out var owner));
+        Assert.Null(owner);
+        Assert.Equal(text, File.ReadAllText(LockFile));
+    }
+
+    [Fact]
+    public void AHostWithLettersBeyondAscii_IsAName() => Assert.True(OwnerLock.IsName("Café-Mac.local"));
+
+    /// <summary>
+    /// A take-over guard names its owner (2026-10-30, review F38): a live one of this machine is never removed for its age; one that can't be judged
+    /// here (another machine's) goes once minutes old.
+    /// </summary>
+    [Fact]
+    public void ALiveTakersGuard_IsNeverRemovedForItsAge_AndAForeignOne_GoesAfterTheMargin()
+    {
+        var stale = new LockOwner(77, T0);
+        var live = new LockOwner(88, T0);
+        Assert.Equal(LockTake.Taken, OwnerLock.TryLock(_files, Lock, stale, _ => true));
+        string guard = LockFile + ".takeover";
+
+        File.WriteAllText(guard, OwnerLock.TextOf(live));
+        File.SetLastWriteTimeUtc(guard, DateTime.UtcNow.AddMinutes(-1));
+        Assert.Equal(LockTake.Held, OwnerLock.TryLock(_files, Lock, new LockOwner(99, T0), owner => owner == live));
+        Assert.True(File.Exists(guard));
+
+        File.WriteAllText(guard, OwnerLock.TextOf(live with { Host = "OTHER-PC" }));
+        File.SetLastWriteTimeUtc(guard, DateTime.UtcNow.AddMinutes(-10));
+        Assert.Equal(LockTake.Held, OwnerLock.TryLock(_files, Lock, new LockOwner(99, T0), owner => owner == live));
+        Assert.False(File.Exists(guard));
+        Assert.Equal(LockTake.Taken, OwnerLock.TryLock(_files, Lock, new LockOwner(99, T0), owner => owner == live));
+    }
+
+    /// <summary>
+    /// The machine id decides foreign (2026-10-30, review F41: a Mac's host name changes with the network): a lock with this machine's id under
+    /// another host name is this machine's, one with another id is foreign, and one with no id falls back to the host.
+    /// </summary>
+    [Fact]
+    public void TheMachineId_DecidesForeign_OverTheHostName()
+    {
+        const string id = "11111111-2222-3333-4444-555555555555";
+        using (OwnerLock.MachineIdForTests(id))
+        {
+            Assert.Equal(id, OwnerLock.Me.Machine);
+            Assert.False(new LockOwner(5, T0, "OLD-NAME", id).Foreign);
+            Assert.True(new LockOwner(5, T0, Environment.MachineName, "99999999-2222-3333-4444-555555555555").Foreign);
+            Assert.True(new LockOwner(5, T0, "OTHER-PC").Foreign);
+
+            // This process's own lock reads back as itself, machine id and all, so it never locks itself out.
+            Assert.Equal(LockTake.Taken, OwnerLock.TryLock(_files, Lock, OwnerLock.Me, _ => true));
+            Assert.Equal(OwnerLock.Me, OwnerLock.ReadOwner(_files, Lock));
+            Assert.Equal(LockTake.Taken, OwnerLock.TryLock(_files, Lock, OwnerLock.Me, _ => true));
+            OwnerLock.Unlock(_files, Lock, OwnerLock.Me);
+            Assert.False(File.Exists(LockFile));
+        }
+
+        Assert.Null(OwnerLock.Me.Machine);
+    }
+
+    /// <summary>The home's machine id is made once and read back the same.</summary>
+    [Fact]
+    public void TheMachineIdFile_IsMadeOnce()
+    {
+        string home = Path.Combine(_dir, "home");
+        string? first = OwnerLock.ReadOrCreateMachineId(home);
+        Assert.NotNull(first);
+        Assert.Equal(first, OwnerLock.ReadOrCreateMachineId(home));
+        Assert.Equal(first, File.ReadAllText(Path.Combine(home, OwnerLock.MachineIdFileName)).Trim());
     }
 
     [Fact]

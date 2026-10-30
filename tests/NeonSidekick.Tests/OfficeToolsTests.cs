@@ -145,6 +145,43 @@ public sealed class OfficeToolsTests : IDisposable
         OfficeSchema.ValidWorkbook(Bytes("fake.xlsx"));
     }
 
+    /// <summary>
+    /// TOOLS.md's promise holds even with <c>overwrite</c> and no sheet (2026-10-30, review F93: the whole file was replaced unread): an
+    /// encrypted (compound-file) workbook, one with a protected sheet, one with a password to modify and one with macros are each left as they are.
+    /// </summary>
+    [Theory]
+    [InlineData("encrypted")]
+    [InlineData("protected")]
+    [InlineData("reserved")]
+    [InlineData("macro")]
+    [InlineData("macroType")]
+    public async Task AProtectedWorkbook_IsNeverReplacedWhole(string kind)
+    {
+        byte[] book = kind switch
+        {
+            "encrypted" => [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1, 0, 0],
+            "protected" => OfficeWriterTests.Patched(OfficeWriterTests.ExcelLike(), "xl/worksheets/sheet1.xml",
+                w => w.Replace("</sheetData></worksheet>", "</sheetData><sheetProtection sheet=\"1\"/></worksheet>", StringComparison.Ordinal)),
+            "reserved" => OfficeWriterTests.Patched(OfficeWriterTests.ExcelLike(), "xl/workbook.xml",
+                w => w.Replace("<workbookPr", "<fileSharing userName=\"x\" reservationPassword=\"CC3D\"/><workbookPr", StringComparison.Ordinal)),
+            "macro" => OfficeWriterTests.Patched(OfficeWriterTests.ExcelLike(), "xl/vbaProject.bin", add: [1, 2, 3]),
+            _ => OfficeWriterTests.Patched(OfficeWriterTests.ExcelLike(), "[Content_Types].xml",
+                t => t.Replace("spreadsheetml.sheet.main+xml", "ms-excel.sheet.macroEnabled.main+xml", StringComparison.Ordinal)),
+        };
+        File.WriteAllBytes(Path.Combine(_root, "book.xlsx"), book);
+
+        string result = await Xlsx(("columns", Json("""["a"]""")), ("rows", Json("[[1]]")), ("to", "book.xlsx"), ("overwrite", true));
+
+        Assert.StartsWith("Error:", result);
+        Assert.DoesNotContain("overwrite: true", result);
+        Assert.Equal(book, Bytes("book.xlsx"));
+        if (kind is "macro" or "macroType")
+        {
+            Assert.Equal(OfficeText.MacroWorkbook("book.xlsx"), result);
+            Assert.Equal(OfficeText.MacroWorkbook("book.xlsx"), await Xlsx(("columns", Json("""["a"]""")), ("rows", Json("[[1]]")), ("to", "book.xlsx"), ("sheet", "New")));
+        }
+    }
+
     [Fact]
     public async Task AnUnnamedDefault_NeverReplaces()
     {
@@ -304,6 +341,101 @@ public sealed class OfficeToolsTests : IDisposable
         Assert.Equal(2, grown.Added);
     }
 
+    /// <summary>A sheet that keeps its header and every row it takes, full after <paramref name="room"/> rows.</summary>
+    private sealed class KeepingSheet(int room) : ISheetRows
+    {
+        public IReadOnlyList<string> Columns { get; private set; } = [];
+
+        public List<IReadOnlyList<XlsxValue>> Rows { get; } = [];
+
+        public int Offered { get; private set; }
+
+        public string? Begin(IReadOnlyList<string> columns)
+        {
+            Columns = columns;
+            return null;
+        }
+
+        public bool Add(IReadOnlyList<XlsxValue> row)
+        {
+            if (++Offered > room)
+            {
+                return false;
+            }
+
+            Rows.Add([.. row]);
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// The record past the cap is counted for the cut but never judged nor widens the sheet (2026-10-30, review F114): a numeric column whose
+    /// only text sits there stays numeric, and the sheet is as wide as the rows it holds.
+    /// </summary>
+    [Fact]
+    public void TheRecordPastTheCap_IsNeverJudged_NorWidensTheSheet()
+    {
+        List<List<string>> records = [["n"], ["1"], ["2"], ["3"], ["text", "more", "fields"]];
+        var sheet = new KeepingSheet(3);
+
+        Assert.Null(TableSource.Rows(() => records, "x.csv", sheet, CancellationToken.None, maxRows: 3));
+
+        Assert.Equal(["n"], sheet.Columns);
+        Assert.All(sheet.Rows, row => Assert.Equal(XlsxKind.Number, row[0].Kind));
+        Assert.Equal(4, sheet.Offered);   // the fourth refused: the sheet says it was cut
+    }
+
+    /// <summary>
+    /// An exponent counts only after a point or with a sign (2026-10-30, review F44): Python's, R's and Excel's own output is numeric, codes
+    /// like <c>1E10</c> stay text.
+    /// </summary>
+    [Theory]
+    [InlineData("1e-05", true)]
+    [InlineData("1e+20", true)]
+    [InlineData("1.5E10", true)]
+    [InlineData("1.00E+10", true)]
+    [InlineData("1E10", false)]
+    [InlineData("2E05", false)]
+    [InlineData("7e3", false)]
+    [InlineData("12.5", true)]
+    public void AnExponent_CountsAfterAPointOrWithASign(string text, bool number) => Assert.Equal(number, ColumnJudge.IsNumberText(text));
+
+    /// <summary>
+    /// A CSV whose head is plain ASCII and whose 50,000th row holds a Windows-1252 accent reads the accent right, its <c>sep=</c> line still
+    /// honored (2026-10-30, review F22: the UTF-8 judgment moved into the judging pass, which starts again in the legacy code page).
+    /// </summary>
+    [Fact]
+    public async Task ALegacyAccentFarIntoACsv_ReadsRight_AndKeepsItsSeparator()
+    {
+        var text = new StringBuilder("sep=;\nname;n\n");
+        for (int i = 0; i < 50_000; i++)
+        {
+            text.Append("row").Append(i.ToString(CultureInfo.InvariantCulture)).Append(";1\n");
+        }
+
+        byte[] bytes = [.. Encoding.ASCII.GetBytes(text.ToString()), .. Encoding.Latin1.GetBytes("café;2\n")];
+        File.WriteAllBytes(Path.Combine(_root, "far.csv"), bytes);
+
+        string result = await Xlsx(("path", "far.csv"));
+
+        Assert.Contains("50,001 rows × 2 columns", result);
+        string sheet = Part(Bytes("far.xlsx"), "xl/worksheets/sheet1.xml");
+        Assert.Contains("café", sheet, StringComparison.Ordinal);
+        Assert.DoesNotContain("�", sheet, StringComparison.Ordinal);
+    }
+
+    /// <summary>A JSON file read whole judges its encoding over every byte (2026-10-30, review F46: the doc said "from its head"; this holds the rule).</summary>
+    [Fact]
+    public async Task ALegacyAccentPastAJsonsHead_ReadsRight()
+    {
+        string padding = new('x', 70 * 1024);
+        byte[] bytes = [.. Encoding.ASCII.GetBytes("[{\"pad\":\"" + padding + "\",\"name\":\"a\"},{\"pad\":\"y\",\"name\":\""), .. Encoding.Latin1.GetBytes("café"), .. Encoding.ASCII.GetBytes("\"}]")];
+        File.WriteAllBytes(Path.Combine(_root, "far.json"), bytes);
+
+        Assert.Contains("2 rows × 2 columns", await Xlsx(("path", "far.json")));
+        Assert.Contains("café", Cells(Bytes("far.xlsx"), "far"), StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task JsonObjects_TakeEachKeysLastValue_InFirstSeenOrder()
     {
@@ -446,6 +578,16 @@ public sealed class OfficeToolsTests : IDisposable
         Assert.Null(WriteFileTool.OfficeRefusal("a.md"));
     }
 
+    /// <summary>Trailing dots and spaces don't hide an Office ending (2026-10-30, review F14): Windows drops them when it opens the file.</summary>
+    [Fact]
+    public void WriteFile_AnEndingWithTrailingDotsOrSpaces_IsStillOffice()
+    {
+        Assert.Equal(FileText.OfficeNeedsConverter("budget.xlsx.", ConvertToXlsxTool.ToolName), WriteFileTool.OfficeRefusal("budget.xlsx."));
+        Assert.Equal(FileText.OfficeNeedsConverter("notes.docx .", ConvertToDocxTool.ToolName), WriteFileTool.OfficeRefusal("notes.docx ."));
+        Assert.Equal(FileText.OfficeNotWritten("old.doc."), WriteFileTool.OfficeRefusal("old.doc."));
+        Assert.Equal(OfficeKind.Word, OfficeFile.Kind("notes.docx"));   // a plain path reads as before
+    }
+
     [Fact]
     public void UncWrite_SendsAnOfficeFile_ThroughTheWorkingDirectory()
     {
@@ -483,6 +625,47 @@ public sealed class OfficeToolsTests : IDisposable
         Assert.StartsWith("Replaced Q3 overwrite plan.docx", DocxCommand.Run(converter, "Q3 overwrite plan.md overwrite", () => null, CancellationToken.None));
         Assert.StartsWith("Made reply-" + Stamp + ".docx", DocxCommand.Run(converter, "reply", () => "Some **reply**", CancellationToken.None));
         Assert.StartsWith("Error:", DocxCommand.Run(converter, "reply paper=huge", () => "x", CancellationToken.None));
+    }
+
+    /// <summary>The last reply is read on the caller's thread, before the conversion goes to the pool (2026-10-30, review F17).</summary>
+    [Fact]
+    public async Task DocxReply_ReadsTheReply_OnTheCallersThread()
+    {
+        int caller = Environment.CurrentManagedThreadId;
+        int? readOn = null;
+        var run = DocxCommand.RunAsync(new DocxConverter(_files, _time), "reply", () =>
+        {
+            readOn = Environment.CurrentManagedThreadId;
+            return "Some reply";
+        }, CancellationToken.None);
+        Assert.Equal(caller, readOn);
+        Assert.StartsWith("Made reply-" + Stamp + ".docx", await run);
+        Assert.Equal(OfficeText.DocxUsage, await DocxCommand.RunAsync(new DocxConverter(_files, _time), "", () => throw new InvalidOperationException("not read"), CancellationToken.None));
+    }
+
+    /// <summary>
+    /// A canceled <c>convert_to_docx</c> returns at once and leaves no file, and the writer stops at the next block (2026-10-30, review F52:
+    /// the conversion ran on the turn's thread with Esc checked only at a picture).
+    /// </summary>
+    [Fact]
+    public async Task ACanceledDocx_LeavesNoFile_AndTheWriterStopsAtTheNextBlock()
+    {
+        using var canceled = new CancellationTokenSource();
+        await canceled.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await _docx.InvokeAsync(Args([("markdown", "# Gone\n\nBody")]), canceled.Token));
+        Assert.Empty(Directory.GetFiles(_root, "*.docx"));
+
+        using var midway = new CancellationTokenSource();
+        int blocks = 0;
+        var document = new UI.Markdown.MarkdigParser().Parse("![a](a.png)\n\nOne\n\nTwo\n\nThree");
+        using var sink = new MemoryStream();
+        Assert.Throws<OperationCanceledException>(() => WordWriter.Write(sink, document, new WordPage(Pdf.PdfPaper.Default, false), null, null, _ =>
+        {
+            blocks++;
+            midway.Cancel();
+            return null;
+        }, _time, midway.Token));
+        Assert.Equal(1, blocks);
     }
 
     [Fact]

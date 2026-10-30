@@ -23,7 +23,7 @@ public sealed class MySqlExecuteTool : MySqlTool
         "\"sql\": { \"type\": \"string\", \"description\": \"One MySQL statement of a kind this tool's description lists. No START TRANSACTION/COMMIT, SET, GRANT, LOAD DATA or second statement.\" }, " +
         ConnectionProperty + ", " +
         "\"params\": { \"type\": \"object\", \"description\": \"Values for @name placeholders in the SQL, e.g. {\\\"id\\\": 101} for @id; strings, numbers, true, false or null.\" }, " +
-        "\"max_rows\": { \"type\": \"integer\", \"description\": \"How many returned rows to show at most, 1 to 100000. Leave it out for the user's default.\" } }, \"required\": [\"sql\"] }");
+        "\"max_rows\": { \"type\": \"integer\", \"description\": \"How many returned rows to show at most, 1 to " + MaxRowsWords + ". Leave it out for the user's default.\" } }, \"required\": [\"sql\"] }");
 
     private readonly DatabaseWriteAllow? _allow;
 

@@ -118,7 +118,7 @@ public sealed class WriteFileTool : FileTool, IRefusesPrunedStubs
     public static string? OfficeRefusal(string path, bool onShare = false)
     {
         ArgumentNullException.ThrowIfNull(path);
-        string ending = Path.GetExtension(path.Trim());
+        string ending = OfficeFile.Extension(path);   // trailing dots and spaces dropped, as Windows drops them (2026-10-30, review F14)
         string? converter = ending.Equals(Office.DocxConverter.Extension, StringComparison.OrdinalIgnoreCase) ? ConvertToDocxTool.ToolName
             : ending.Equals(Office.XlsxTarget.Extension, StringComparison.OrdinalIgnoreCase) ? ConvertToXlsxTool.ToolName
             : null;

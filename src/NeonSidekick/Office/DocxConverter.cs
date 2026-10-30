@@ -99,7 +99,7 @@ public sealed class DocxConverter
 
         string? sourceRelative = sourceFull is null ? null : display;
         string target = OutputNames.For(request.To, sourceRelative, null, sourceFull is null ? header : null, _time.GetLocalNow(), _files.IsExistingDirectory, Extension,
-            fallbackStem: request.FromReply ? "reply" : "document");
+            fallbackStem: request.FromReply ? OfficeText.ReplyStem : OfficeText.DocumentStem);
         // An unnamed default never replaces a file (convert_to_pdf's rule, review R2): the first free name, and overwrite is for a named to
         // alone; the user's own /docx with overwrite still replaces its default file.
         bool named = !OutputNames.IntoFolder(request.To, _files.IsExistingDirectory);
@@ -123,7 +123,7 @@ public sealed class DocxConverter
                 string folder = sourceFull is null ? _files.Root : System.IO.Path.GetDirectoryName(sourceFull)!;
                 var pictures = new SandboxPictures(_files, folder, PdfConverter.MaxInlineBytes);
                 var page = new WordPage(request.Paper ?? PdfPaper.Default, request.Landscape);
-                var stats = WordWriter.Write(pending.Stream, document, page, header, title, address => Picture(pictures, address, cancellationToken), _time);
+                var stats = WordWriter.Write(pending.Stream, document, page, header, title, address => Picture(pictures, address, cancellationToken), _time, cancellationToken);
                 if (pictures.OverBudget)
                 {
                     return OfficeText.PicturesTooLarge((int)(PdfConverter.MaxInlineBytes / 1_000_000));
@@ -240,15 +240,15 @@ public sealed class DocxConverter
         }
     }
 
+    /// <summary>Whether a picture file's name is one Word embeds (PNG, JPEG, GIF); <see cref="WordPicture.From"/> judges the bytes after.</summary>
+    private static bool IsEmbeddable(string full) =>
+        Images.ImageFormats.ByExtension(full) is { } format && (format == Images.ImageFormats.Png || format == Images.ImageFormats.Jpeg || format == Images.ImageFormats.Gif);
+
     /// <summary>
     /// A picture's address → the picture, or null for the placeholder: a <c>data:image/png|jpeg|gif;base64,…</c> address decoded and counted
     /// against the same caps (bad base64 is the placeholder), anything else found in the sandbox by <paramref name="pictures"/>. Nothing is
     /// fetched from the web.
     /// </summary>
-    /// <summary>Whether a picture file's name is one Word embeds (PNG, JPEG, GIF); <see cref="WordPicture.From"/> judges the bytes after.</summary>
-    private static bool IsEmbeddable(string full) =>
-        Images.ImageFormats.ByExtension(full) is { } format && (format == Images.ImageFormats.Png || format == Images.ImageFormats.Jpeg || format == Images.ImageFormats.Gif);
-
     private static WordPicture? Picture(SandboxPictures pictures, string address, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();

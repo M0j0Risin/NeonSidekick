@@ -456,6 +456,9 @@ public static class RalphText
     /// </summary>
     public static string LockUnsupportedError(string path, string lockPath) =>
         $"A Ralph loop can't run {path} here: its folder's drive can't create {lockPath} safely (no hard links or exclusive renames, as on exFAT); move the project to the Mac's own disk";
+
+    /// <summary>The lock couldn't be written (a read-only drive, a folder that can't be made): never "another is running it" (2026-10-30, review F74). Pinned.</summary>
+    public static string LockWriteError(string lockPath) => $"Could not write {lockPath}, so the Ralph loop didn't start";
     public static string NotRunnableError(string path, PlanStatus status) => $"{path} is {PlanDocument.Word(status)}: a Ralph loop runs a plan that is not done or canceled";
     public static string BadPassesError(string word) =>
         $"'{word}' passes: a Ralph loop takes {N(Settings.AppSettingsData.MinRalphLoopPasses)} to {N(Settings.AppSettingsData.MaxRalphLoopPasses)}, 0 for three a step";

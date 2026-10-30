@@ -168,7 +168,22 @@ internal sealed partial class ChatScreen
             : SaveRootFor(settings.FileTools, planMode, files);
     }
 
-    private Files.SaveRoot QuerySaveRootNow() => QuerySaveRootFor(_effective(), _plan.Active, _files);
+    /// <summary>
+    /// <see cref="QuerySaveRootFor"/> as the screen stands, worked out again only when a setting changed or plan mode flipped (2026-10-30, review
+    /// F61: each query tool's schema, description and save sentence asked, and each ask copied the settings). Its other inputs are the
+    /// launch's flags and variables, fixed; the working folder is the lazy <see cref="_files"/> an allowed root holds.
+    /// </summary>
+    private Files.SaveRoot QuerySaveRootNow()
+    {
+        bool plan = _plan.Active;
+        return _queryRoot.Get((Volatile.Read(ref _settingsVersion), plan), () => QuerySaveRootFor(_effective(), plan, _files));
+    }
+
+    /// <summary><see cref="QuerySaveRootNow"/>'s answer, kept by the settings' version and plan mode.</summary>
+    private readonly KeyedMemo<(int Version, bool Plan), Files.SaveRoot> _queryRoot = new();
+
+    /// <summary>Bumped by every settings change, from any thread (the Web UI's too): <see cref="QuerySaveRootNow"/>'s key.</summary>
+    private int _settingsVersion;
 
     public static readonly IReadOnlySet<string> NetworkToolNames = new HashSet<string>(StringComparer.Ordinal)
     {

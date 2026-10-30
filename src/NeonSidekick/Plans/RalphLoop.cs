@@ -140,11 +140,12 @@ public sealed record RalphSnapshot(
     public static string? FinalCheckOf(string? final, string? verify, bool finalOnly) => final ?? (finalOnly ? verify : null);
 
     /// <summary>
-    /// Whether two working-directory roots are the same folder (case aside on Windows): a loop runs only where it was started, and a paused one
-    /// resumes only there (2026-10-19, the review: its approved commands are that folder's).
+    /// Whether two working-directory roots are the same folder (case aside on Windows and macOS, whose default volumes ignore it; 2026-10-30,
+    /// review F91: a <c>/cwd</c> typed in another case on a Mac ended an audit as moved): a loop runs only where it was started, and a paused
+    /// one resumes only there (2026-10-19, the review: its approved commands are that folder's).
     /// </summary>
     public static bool SameRoot(string? a, string? b) =>
-        a is not null && b is not null && string.Equals(a, b, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+        a is not null && b is not null && string.Equals(a, b, OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 }
 
 /// <summary>What the next pass works on (<see cref="RalphLoop.Next"/>).</summary>

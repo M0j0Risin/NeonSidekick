@@ -17,22 +17,34 @@ public static class DocxCommand
     public static string Run(DocxConverter converter, string args, Func<string?> lastReply, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(converter);
+        var request = Prepare(args, lastReply, out string? answer);
+        return request is null ? answer! : converter.Convert(request, cancellationToken);
+    }
+
+    /// <summary>
+    /// <see cref="Run"/> with only the conversion off the caller's thread, so the screen's spinner keeps turning while a long plan and its
+    /// pictures are written. The line is parsed and <paramref name="lastReply"/> read here, on the caller's thread (2026-10-30, review F17: both
+    /// ran on the pool, reading the screen's transcript and headless's history from a thread that doesn't own them).
+    /// </summary>
+    public static Task<string> RunAsync(DocxConverter converter, string args, Func<string?> lastReply, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(converter);
+        var request = Prepare(args, lastReply, out string? answer);
+        return request is null ? Task.FromResult(answer!) : Task.Run(() => converter.Convert(request, cancellationToken), cancellationToken);
+    }
+
+    /// <summary>The request one <c>/docx</c> line asks for, or null with the answer that ends it here (usage, a refusal, no reply).</summary>
+    private static DocxRequest? Prepare(string args, Func<string?> lastReply, out string? answer)
+    {
         ArgumentNullException.ThrowIfNull(args);
         ArgumentNullException.ThrowIfNull(lastReply);
         var parsed = PdfCommand.Parse(args);
-        if (parsed.Error is not null)
+        answer = parsed.Error
+            ?? (parsed.Target.Length == 0 ? OfficeText.DocxUsage : null)
+            ?? (PdfCommand.IsWebAddress(parsed.Target) ? OfficeText.NoWebSource : null);
+        if (answer is not null)
         {
-            return parsed.Error;
-        }
-
-        if (parsed.Target.Length == 0)
-        {
-            return OfficeText.DocxUsage;
-        }
-
-        if (PdfCommand.IsWebAddress(parsed.Target))
-        {
-            return OfficeText.NoWebSource;
+            return null;
         }
 
         DocxRequest request;
@@ -41,7 +53,8 @@ public static class DocxCommand
             string? reply = lastReply();
             if (string.IsNullOrWhiteSpace(reply))
             {
-                return OfficeText.NoReplyForDocx;
+                answer = OfficeText.NoReplyForDocx;
+                return null;
             }
 
             request = new DocxRequest(Markdown: reply, ByUser: true, FromReply: true);
@@ -51,12 +64,8 @@ public static class DocxCommand
             request = new DocxRequest(Path: parsed.Target, ByUser: true);
         }
 
-        return converter.Convert(request with { To = parsed.To, Overwrite = parsed.Overwrite, Landscape = parsed.Landscape, Paper = parsed.Paper }, cancellationToken);
+        return request with { To = parsed.To, Overwrite = parsed.Overwrite, Landscape = parsed.Landscape, Paper = parsed.Paper };
     }
-
-    /// <summary><see cref="Run"/> off the caller's thread: the screen's spinner keeps turning while a long plan and its pictures are written.</summary>
-    public static Task<string> RunAsync(DocxConverter converter, string args, Func<string?> lastReply, CancellationToken cancellationToken) =>
-        Task.Run(() => Run(converter, args, lastReply, cancellationToken), cancellationToken);
 
     /// <summary>
     /// <c>/docx</c>'s word list: <c>reply</c> for the first word, then — once a target and a space are typed — <c>to=</c>, <c>paper=</c>,

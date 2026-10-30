@@ -392,6 +392,30 @@ public sealed class PdfTests : IDisposable
         Assert.Contains("<strong>hi</strong>", _browser.PdfPages[^1], StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A <c>data:</c> picture is decoded, held to the page's types and counted against the caps (2026-10-30, review F92): an unknown type and
+    /// a broken body are the placeholder, an SVG is kept, and one past the budget sets it over (which refuses the PDF).
+    /// </summary>
+    [Fact]
+    public async Task ADataPicture_IsDecodedTypedAndCounted()
+    {
+        var pictures = new SandboxPictures(_files, _root, budget: 10);
+        Assert.Null(pictures.Picture("data:image/x-foo;base64,AAAA"));
+        Assert.Null(pictures.Picture("data:image/png;base64,not base64!"));
+        Assert.Null(pictures.Picture("data:text/html;base64,AAAA"));
+        Assert.Equal("data:image/png;base64,AAAA", pictures.Picture("data:IMAGE/PNG;charset=x;base64, AAAA"));
+        Assert.Equal("data:image/svg+xml;base64," + System.Convert.ToBase64String(Encoding.UTF8.GetBytes("<svg/>")), pictures.Picture("data:image/svg+xml,%3Csvg%2F%3E"));
+        Assert.False(pictures.OverBudget);
+        Assert.Null(pictures.Picture("data:image/png;base64,AAAAAAAA"));   // 3 + 6 bytes so far: 6 more passes 10
+        Assert.True(pictures.OverBudget);
+
+        // Through the converter: the placeholder for a bad one, the picture written again for a good one.
+        string result = await Convert(new PdfRequest(Markdown: "![bad](data:image/x-foo;base64,AAAA) ![good](data:image/png;base64,AAAA)"));
+        Assert.StartsWith("Made", result, StringComparison.Ordinal);
+        Assert.Contains("[image: bad]", _browser.PdfPages[^1], StringComparison.Ordinal);
+        Assert.Contains("data:image/png;base64,AAAA", _browser.PdfPages[^1], StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task AnHtmlFile_IsCleanedBeforeTheBrowserSeesIt()
     {

@@ -165,6 +165,68 @@ public sealed class FileJournalTests : IDisposable
         Assert.Equal(1, log.SavedBytes);
     }
 
+    /// <summary>
+    /// An export's write held open while another write is recorded, then refused: only the export's entry goes, the other's and its bytes
+    /// stay (2026-10-30, review F104: the take-back cut every log to where it stood at the export's start).
+    /// </summary>
+    [Fact]
+    public void ATakeBack_LeavesAWriteRecordedAfterItsMark()
+    {
+        File.WriteAllText(_rig.PathOf("a.txt"), "aa");
+        File.WriteAllText(_rig.PathOf("b.txt"), "bbb");
+        _rig.Turn(files =>
+        {
+            Assert.Equal(FileOutcome.Ok, files.BeginWrite("a.txt", overwrite: true, out var export).Outcome);
+            Assert.Equal(FileOutcome.Ok, files.WriteText("b.txt", "new", overwrite: true).Outcome);
+            export!.Dispose();
+        });
+
+        var log = Assert.Single(_rig.Journal!.Logs);
+        Assert.Equal("b.txt", Assert.Single(log.Entries).Path);
+        Assert.Equal(3, log.SavedBytes);
+    }
+
+    /// <summary>Two held writes taken back out of order (F104): both entries go, a write between them stays, and the bytes add up.</summary>
+    [Fact]
+    public void TwoTakeBacks_OutOfOrder_RemoveTheirOwnEntriesOnly()
+    {
+        File.WriteAllText(_rig.PathOf("a.txt"), "a");
+        File.WriteAllText(_rig.PathOf("b.txt"), "bb");
+        File.WriteAllText(_rig.PathOf("c.txt"), "cccc");
+        _rig.Turn(files =>
+        {
+            Assert.Equal(FileOutcome.Ok, files.BeginWrite("a.txt", overwrite: true, out var first).Outcome);
+            Assert.Equal(FileOutcome.Ok, files.BeginWrite("b.txt", overwrite: true, out var second).Outcome);
+            Assert.Equal(FileOutcome.Ok, files.WriteText("c.txt", "new", overwrite: true).Outcome);
+            first!.Dispose();
+            second!.Dispose();
+        });
+
+        var log = Assert.Single(_rig.Journal!.Logs);
+        Assert.Equal("c.txt", Assert.Single(log.Entries).Path);
+        Assert.Equal(4, log.SavedBytes);
+    }
+
+    /// <summary>
+    /// A held write's path written again meanwhile, which recorded nothing of its own (F104): the held write taken back keeps the path's
+    /// entry, so the undo still puts back what was there before both.
+    /// </summary>
+    [Fact]
+    public void ATakeBack_KeepsAnEntryALaterWriteReliedOn()
+    {
+        File.WriteAllText(_rig.PathOf("p.txt"), "original");
+        string id = _rig.Turn(files =>
+        {
+            Assert.Equal(FileOutcome.Ok, files.BeginWrite("p.txt", overwrite: true, out var export).Outcome);
+            Assert.Equal(FileOutcome.Ok, files.WriteText("p.txt", "changed", overwrite: true).Outcome);
+            export!.Dispose();
+        });
+
+        Assert.Equal("p.txt", Assert.Single(Assert.Single(_rig.Journal!.Logs).Entries).Path);
+        _rig.Undo(false, id);
+        Assert.Equal("original", File.ReadAllText(_rig.PathOf("p.txt")));
+    }
+
     [Fact]
     public void AWriteAMoveAndAWriteAgain_UndoToTheOriginal_AndNoMovedFile()
     {

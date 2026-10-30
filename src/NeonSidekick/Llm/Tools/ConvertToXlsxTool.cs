@@ -31,7 +31,7 @@ public sealed class ConvertToXlsxTool : FileTool
             "rows": { "type": "array", "items": { "type": "array", "items": { "type": "string" } }, "description": "With columns: the rows, each an array of cells in the columns' order; each cell as text or a JSON value. Numbers, true/false and dates are typed by column." },
             "to": { "type": "string", "description": "The .xlsx path or folder, relative to the working directory. Default: beside the source file, or table-<date>.xlsx at the top." },
             "sheet": { "type": "string", "description": "The sheet's name. With to naming an existing .xlsx, a new sheet name adds it; naming one there replaces it with overwrite. Default: the source file's name, or Sheet1 for columns and rows." },
-            "overwrite": { "type": "boolean", "description": "Replace the sheet named, or with no sheet the whole file. Default false." }
+            "overwrite": { "type": "boolean", "description": "Only with to: replace the sheet named, or with no sheet the whole file (a name the tool makes up never replaces one). Default false." }
           }
         }
         """);
@@ -119,13 +119,13 @@ public sealed class ConvertToXlsxTool : FileTool
             return bad;
         }
 
-        string defaultSheet = sourceRelative is null ? "Sheet1" : Path.GetFileNameWithoutExtension(sourceRelative);
+        string defaultSheet = sourceRelative is null ? OfficeText.DefaultSheet : Path.GetFileNameWithoutExtension(sourceRelative);
         XlsxTarget? target;
         string? refusal;
         try
         {
             // Plan opens a workbook to add to, so damage there is a sentence too (2026-10-29, review P7-1: it escaped as a tool error).
-            target = XlsxTarget.Plan(Files, new XlsxRequest(to, sheet, overwrite, sourceRelative, "table", defaultSheet), _time, out refusal);
+            target = XlsxTarget.Plan(Files, new XlsxRequest(to, sheet, overwrite, sourceRelative, OfficeText.TableStem, defaultSheet), _time, out refusal);
         }
         catch (Exception ex) when (XlsxTarget.Failure(ex))
         {

@@ -266,6 +266,44 @@ public sealed class TransferTests : IDisposable
         Assert.True(File.Exists(fresh));
     }
 
+    /// <summary>A write held open for an export sweeps a crash's temps in its folder first (2026-10-30, review F88); a fresh one stays.</summary>
+    [Fact]
+    public void AnExportStarting_SweepsItsFolder()
+    {
+        Directory.CreateDirectory(Full("out"));
+        string stale = Path.Combine(Full("out"), WorkingDirectory.TempPrefix + new string('d', 32) + WorkingDirectory.TempSuffix);
+        string fresh = Path.Combine(Full("out"), WorkingDirectory.TempPrefix + new string('e', 32) + WorkingDirectory.TempSuffix);
+        File.WriteAllText(stale, "old");
+        File.WriteAllText(fresh, "new");
+        File.SetLastWriteTimeUtc(stale, DateTime.UtcNow - WorkingDirectory.StaleTemp - TimeSpan.FromMinutes(5));
+
+        Assert.Equal(FileOutcome.Ok, _files.BeginWrite("out/rows.csv", overwrite: false, out var pending).Outcome);
+        pending!.Dispose();
+
+        Assert.False(File.Exists(stale));
+        Assert.True(File.Exists(fresh));
+    }
+
+    /// <summary>The launch's and a <c>/cwd</c>'s sweep (F88): the working folder's top level, never a walk below it.</summary>
+    [Fact]
+    public async Task SweepRoot_TakesTheTopLevelsStaleTemps_NotTheFoldersBelow()
+    {
+        Directory.CreateDirectory(Full("sub"));
+        string top = Path.Combine(_root, WorkingDirectory.TempPrefix + new string('f', 32) + WorkingDirectory.TempSuffix);
+        string below = Path.Combine(Full("sub"), WorkingDirectory.TempPrefix + new string('f', 32) + WorkingDirectory.TempSuffix);
+        foreach (string path in new[] { top, below })
+        {
+            File.WriteAllText(path, "old");
+            File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddHours(-2));
+        }
+
+        await _files.SweepRoot();
+
+        Assert.False(File.Exists(top));
+        Assert.True(File.Exists(below));
+        await new WorkingDirectory(() => Path.Combine(_root, "missing"), new ManualTimeProvider()).SweepRoot(inline: true);   // no folder, no throw
+    }
+
     /// <summary>A restore's new file from a stream sweeps a crash's temps and never writes over one that appeared (2026-10-28, review P6-08).</summary>
     [Fact]
     public void ANewFileFromAStream_SweepsStaleTemps_AndNeverWritesOverOneThatAppeared()

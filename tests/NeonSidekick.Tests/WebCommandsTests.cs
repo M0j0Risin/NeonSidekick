@@ -85,6 +85,8 @@ public sealed class WebCommandsTests
     [InlineData("/test grid", WebCommandKind.Run)]
     [InlineData("/pdf notes.md", WebCommandKind.Run)]
     [InlineData("/pdf merge a.pdf b.pdf", WebCommandKind.Run)]
+    [InlineData("/docx notes.md", WebCommandKind.Run)]   // 2026-10-30, review F99
+    [InlineData("/docx reply", WebCommandKind.Run)]
     [InlineData("/print reply", WebCommandKind.Run)]
     [InlineData("/avatar 🦊", WebCommandKind.Run)]
     [InlineData("/avatar clear", WebCommandKind.Run)]

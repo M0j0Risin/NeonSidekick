@@ -121,7 +121,7 @@ public sealed class AuditFilesTests : IDisposable
     {
         string path = Save("x", DateTimeOffset.UtcNow);
         AuditFiles.MergeCoverage(_box.Files, path, ["a.cs"]);
-        Assert.Equal(FileOutcome.Ok, AuditFiles.Discard(_box.Files, path).Outcome);
+        Assert.Equal(FileOutcome.Ok, AuditFiles.Discard(_box.Files, path, out _).Outcome);
         Assert.False(AuditFiles.Exists(_box.Files, path));
         Assert.False(AuditFiles.Exists(_box.Files, AuditFiles.CoveragePath(path)));
     }
@@ -164,20 +164,98 @@ public sealed class AuditFilesTests : IDisposable
     {
         string ours = Save("ours", DateTimeOffset.UtcNow);
         Assert.Equal(LockTake.Taken, OwnerLock.TryLock(_box.Files, AuditFiles.LockPathFor(ours), OwnerLock.Me, OwnerLock.LiveOwner));
-        Assert.Equal(FileOutcome.Ok, AuditFiles.Discard(_box.Files, ours).Outcome);
+        Assert.Equal(FileOutcome.Ok, AuditFiles.Discard(_box.Files, ours, out _).Outcome);
         Assert.False(AuditFiles.Exists(_box.Files, AuditFiles.LockPathFor(ours)));
 
         string stale = Save("stale", DateTimeOffset.UtcNow);
         WriteLock(stale, 77);
-        Assert.Equal(FileOutcome.Ok, AuditFiles.Discard(_box.Files, stale).Outcome);
+        Assert.Equal(FileOutcome.Ok, AuditFiles.Discard(_box.Files, stale, out _).Outcome);
         Assert.False(AuditFiles.Exists(_box.Files, AuditFiles.LockPathFor(stale)));
 
         string held = Save("held", DateTimeOffset.UtcNow);
+        AuditFiles.MergeCoverage(_box.Files, held, ["a.cs"]);
         WriteLock(held, OtherPid);
-        Assert.Equal(AuditText.LockedError(held), AuditFiles.HeldElsewhere(_box.Files, held));   // the caller refuses on this first
-        AuditFiles.Discard(_box.Files, held);
+        Assert.Equal(AuditText.LockedError(held), AuditFiles.HeldElsewhere(_box.Files, held));
+        // Refused by the discard itself, holding the lock across the deletes (2026-10-30, review F1): nothing goes.
+        Assert.NotEqual(FileOutcome.Ok, AuditFiles.Discard(_box.Files, held, out string? refusal).Outcome);
+        Assert.Equal(AuditText.LockedError(held), refusal);
+        Assert.True(AuditFiles.Exists(_box.Files, held));
+        Assert.True(AuditFiles.Exists(_box.Files, AuditFiles.CoveragePath(held)));
         Assert.True(AuditFiles.Exists(_box.Files, AuditFiles.LockPathFor(held)));
     });
+
+    /// <summary>A fix's read, mark and save under the lock (2026-10-30, review F2): refused while another holds it; this process's own lock stays.</summary>
+    [Fact]
+    public void WithLock_RefusesWhileAnotherHoldsIt_AndLeavesThisProcesssOwnLockHeld() => WithOtherAlive(() =>
+    {
+        string held = Save("held", DateTimeOffset.UtcNow);
+        WriteLock(held, OtherPid);
+        bool ran = false;
+        Assert.False(AuditFiles.WithLock(_box.Files, held, () => ran = true, out string? refusal));
+        Assert.False(ran);
+        Assert.Equal(AuditText.LockedError(held), refusal);
+
+        string free = Save("free", DateTimeOffset.UtcNow);
+        Assert.True(AuditFiles.WithLock(_box.Files, free, () => ran = OwnerLock.ReadOwner(_box.Files, AuditFiles.LockPathFor(free)) == OwnerLock.Me, out refusal));
+        Assert.True(ran);   // held while it ran
+        Assert.Null(refusal);
+        Assert.False(AuditFiles.Exists(_box.Files, AuditFiles.LockPathFor(free)));   // and let go after
+
+        string ours = Save("ours", DateTimeOffset.UtcNow);
+        Assert.Equal(LockTake.Taken, OwnerLock.TryLock(_box.Files, AuditFiles.LockPathFor(ours), OwnerLock.Me, OwnerLock.LiveOwner));
+        Assert.True(AuditFiles.WithLock(_box.Files, ours, () => { }, out _));
+        Assert.Equal(OwnerLock.Me, OwnerLock.ReadOwner(_box.Files, AuditFiles.LockPathFor(ours)));
+    });
+
+    /// <summary>A bare resume or fix picks the newest report no other NeonSidekick is auditing (2026-10-30, review F4).</summary>
+    [Fact]
+    public void Newest_SkipsAReportRunningElsewhere() => WithOtherAlive(() =>
+    {
+        string older = Save("older", DateTimeOffset.UtcNow.AddHours(-1), AuditStatus.Stopped);
+        string newer = Save("newer", DateTimeOffset.UtcNow, AuditStatus.Auditing);
+        WriteLock(newer, OtherPid);
+        Assert.Equal(older, AuditFiles.Newest(AuditFiles.List(_box.Files))!.Path);
+
+        File.Delete(_box.Full(older));
+        Assert.Null(AuditFiles.Newest(AuditFiles.List(_box.Files)));
+    });
+
+    /// <summary>
+    /// A lock that can't be read, or that names a process whose start time can't be read, names the lock to delete (2026-10-30, review F76/F86).
+    /// </summary>
+    [Fact]
+    public void ALockThatCantBeChecked_NamesTheLockToDelete() => WithOtherAlive(() =>
+    {
+        string path = Save("x", DateTimeOffset.UtcNow);
+        string lockPath = AuditFiles.LockPathFor(path);
+        _box.Write(lockPath, "pid: 5\nhost: bad\u0007host\n");
+        Assert.Equal(AuditText.UncheckedLockError(path, lockPath), AuditFiles.HeldElsewhere(_box.Files, path));
+
+        WriteLock(path, OtherPid);
+        var check = OwnerLock.CannotCheck;
+        OwnerLock.CannotCheck = owner => owner.ProcessId == OtherPid;
+        try
+        {
+            Assert.Equal(AuditText.UncheckedLockError(path, lockPath), AuditFiles.HeldElsewhere(_box.Files, path));
+        }
+        finally
+        {
+            OwnerLock.CannotCheck = check;
+        }
+    });
+
+    /// <summary>
+    /// A name typed in another case resolves to the report's own spelling (2026-10-30, review F82: on a case-blind file system the lock held under the
+    /// typed spelling and the running audit's read as two). Windows' file system is case-blind too, so the path is reachable here.
+    /// </summary>
+    [WindowsFact]
+    public void Resolve_ANameInAnotherCase_GivesTheSpellingOnDisk()
+    {
+        const string path = ".neon/audits/Mixed-Case.md";
+        _box.Write(path, "# Code audit\n");
+        Assert.Equal(path, AuditFiles.Resolve(_box.Files, "mixed-case"));
+        Assert.Equal(path, AuditFiles.Resolve(_box.Files, "MIXED-CASE.md"));
+    }
 
     [Fact]
     public void List_AnAuditingReportAnotherAppHolds_ListsAsRunningElsewhere() => WithOtherAlive(() =>

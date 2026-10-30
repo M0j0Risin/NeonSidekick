@@ -140,19 +140,6 @@ public sealed class TranscriptRenderer : INoticeSink
     /// <summary>Tool arguments and results are cut to this many characters on the transcript.</summary>
     public const int ToolTextLimit = 200;
 
-    /// <summary>The rule's width on a console that reports none (a redirected stdout).</summary>
-    public const int DefaultRuleWidth = 80;
-
-    /// <summary>
-    /// The width of a sunset rule on a console <paramref name="consoleWidth"/> cells wide: the
-    /// window's whole width (no cap since 2026-09-16: the pane's rules span it, and a shorter
-    /// banner rule over them looked cut), <see cref="DefaultRuleWidth"/> when the console reports
-    /// none. The banner's rule and <c>/new</c>'s (<see cref="Rule"/>) share it, so the two never
-    /// differ. Both are worked out at the width they are rendered at, so a resize spans them across
-    /// the new width (<see cref="WidthMarkup"/>, 2026-10-29). Pure; pinned by tests.
-    /// </summary>
-    public static int RuleWidth(int consoleWidth) => consoleWidth > 0 ? consoleWidth : DefaultRuleWidth;
-
     private enum LineState
     {
         AtLineStart,
@@ -420,9 +407,9 @@ public sealed class TranscriptRenderer : INoticeSink
 
     /// <summary>
     /// The banner's sunset rule across the transcript (<c>/new</c>, 2026-09-16): a divider between
-    /// the conversation that ended and the one that starts under it. Drawn at <see cref="RuleWidth"/>
-    /// of the width it is rendered at (<see cref="WidthMarkup"/>, 2026-10-29: a resize spans it across the
-    /// new width, in the gradient it was drawn with), on a line of its own — streamed text ahead of it is broken first.
+    /// the conversation that ended and the one that starts under it. Drawn across the whole width it is rendered at (no cap since
+    /// 2026-09-16, as the pane's rules; <see cref="WidthMarkup"/>, 2026-10-29: a resize spans it across the new width, in the gradient it
+    /// was drawn with), on a line of its own — streamed text ahead of it is broken first.
     /// </summary>
     public void Rule()
     {

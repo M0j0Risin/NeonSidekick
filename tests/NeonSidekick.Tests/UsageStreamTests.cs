@@ -165,7 +165,7 @@ public class UsageStreamTests
         Assert.True(live.Disposed);
         Assert.Single(stub.Requests);
         Assert.Empty(echo.Received);
-        Assert.Equal(new TurnEvent.Notice(Assistant.RunawayNotice("echo", 2_000), IsError: true), events[^1]);
+        Assert.Equal(new TurnEvent.Notice(TurnText.RunawayNotice("echo", 2_000), IsError: true, AskAgain: true), events[^1]);
     }
 
     private static ChatTokenUsage Parse(string json) =>

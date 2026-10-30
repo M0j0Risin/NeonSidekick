@@ -37,14 +37,18 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// <c>/docx …</c> (2026-10-29, the Office writing plan): <see cref="Office.DocxCommand.RunAsync"/> under a spinner, its sentence a notice (a
     /// failure's an error), as <see cref="HandlePdfAsync"/>. The user's own hand: no switch asked, nothing added to the conversation; it runs in
-    /// plan mode and with File tools off.
+    /// plan mode and with File tools off. Its converter is built per call over the working folder as it is now, and the last reply read here, on
+    /// the screen's thread (2026-10-30, review F17: the shared converter's folder was read lazily on the pool, so a folder changed meanwhile
+    /// took the copy; the model's <c>convert_to_docx</c> keeps <see cref="_docx"/>, as a turn runs in one folder).
     /// </summary>
     private async Task HandleDocxAsync(string args, CancellationToken cancellationToken)
     {
+        var converter = new Office.DocxConverter(_files.PinnedAt(_files.Root), _time);
+        string? lastReply = _log.LastReply;
         string result;
         try
         {
-            result = await _transcript.WithSpinnerAsync(Office.OfficeText.Working, () => Office.DocxCommand.RunAsync(_docx, args, () => _log.LastReply, cancellationToken)).ConfigureAwait(false);
+            result = await _transcript.WithSpinnerAsync(Office.OfficeText.Working, () => Office.DocxCommand.RunAsync(converter, args, () => lastReply, cancellationToken)).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

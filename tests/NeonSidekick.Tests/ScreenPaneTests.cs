@@ -2208,7 +2208,8 @@ public partial class ScreenPaneTests : IDisposable
         pane.Write(new Markup("first" + Environment.NewLine));
         pane.Write(new Markup("aaaa bbbb cccc dddd target" + Environment.NewLine));
         Assert.Equal(["first", "aaaa bbbb cccc dddd", "target"], RowTexts(pane));
-        pane.ShowFind("target", 2, 0);
+        pane.TranscriptRows(out int version, out _);
+        pane.ShowFind("target", 2, 0, version);
 
         _console.Profile.Width = 40;
         _time.Advance(ScreenPane.Tick);
@@ -2354,7 +2355,8 @@ public partial class ScreenPaneTests : IDisposable
     public void AFind_PushedOutOfTheRegion_ByANarrowing_IsShownAgain()
     {
         using var pane = LongLines();
-        pane.ShowFind("line 12", 11, 0);
+        pane.TranscriptRows(out int version, out _);
+        pane.ShowFind("line 12", 11, 0, version);
         _console.Profile.Width = 20;
         _time.Advance(ScreenPane.Tick);
         var place = pane.FindPlace;
@@ -2368,8 +2370,9 @@ public partial class ScreenPaneTests : IDisposable
     public void ShowFind_WithAStaleVersion_IsRefused_AndTheFreshOneIsShown()
     {
         using var pane = LongLines();
-        pane.ShowFind("line 06", 5, 0);
-        var stale = pane.TranscriptRows(out int version, out var place);
+        pane.TranscriptRows(out int version, out _);
+        pane.ShowFind("line 06", 5, 0, version);
+        var stale = pane.TranscriptRows(out version, out var place);
         Assert.Equal(new TextFind.Hit(5, 0), place);
 
         _console.Profile.Width = 20;
@@ -2469,6 +2472,310 @@ public partial class ScreenPaneTests : IDisposable
         var rows = RowTexts(pane);
         Assert.All(rows, row => Assert.True(row.Length <= 20, row));
         Assert.Equal("plain", rows[^1]);
+    }
+
+    // ── The review of 2026-10-30 ────────────────────────────────────────────
+
+    /// <summary>
+    /// The flow rows the plain output since <paramref name="mark"/> draws at <paramref name="width"/>, by the terminal's deferred wrap, on from
+    /// <paramref name="lead"/> (the text already on the cursor's row), up to the pane's rule, the padding's blank rows left off: what the
+    /// screen shows of a write, held against the store's rows (2026-10-30, review F24/F25/F109/F112).
+    /// </summary>
+    private List<string> Drawn(int mark, int width, string lead = "")
+    {
+        var rows = new List<string>();
+        var row = new System.Text.StringBuilder(lead);
+        int col = TextCells.Width(lead);
+        bool full = col >= width;
+        string text = Strip(Output[mark..]);
+        for (int i = 0; i < text.Length;)
+        {
+            if (text[i] is '\n' or '\r')
+            {
+                if (text[i] == '\n')
+                {
+                    rows.Add(row.ToString());
+                    row.Clear();
+                    col = 0;
+                    full = false;
+                }
+
+                i++;
+                continue;
+            }
+
+            int cells = TextCells.ElementWidth(text, i, out int length);
+            length = Math.Max(1, length);
+            if (full || col + cells > width)
+            {
+                rows.Add(row.ToString());
+                row.Clear();
+                col = 0;
+            }
+
+            row.Append(text, i, length);
+            col += cells;
+            full = col >= width;
+            i += length;
+        }
+
+        rows.Add(row.ToString());
+        int rule = rows.FindIndex(r => r.StartsWith(new string(ScreenPane.RuleGlyph, 3), StringComparison.Ordinal));
+        if (rule >= 0)
+        {
+            rows.RemoveRange(rule, rows.Count - rule);
+        }
+
+        while (rows.Count > 0 && rows[^1].Trim().Length == 0)
+        {
+            rows.RemoveAt(rows.Count - 1);
+        }
+
+        return rows.Select(r => r.TrimEnd()).ToList();
+    }
+
+    /// <summary>A 4×4 red picture, centered: two rows.</summary>
+    private static CenteredPicture Red(int id) => new(new ImageThumbnail(4, 4, Enumerable.Repeat(Color.Red, 16).ToArray()), id);
+
+    /// <summary>A picture that narrows the window while it renders: a resize between a write's render and its emit (F25).</summary>
+    private sealed class NarrowingPicture(CenteredPicture inner, Action narrow) : IRenderable, IPictureLayout
+    {
+        public IReadOnlyList<IReadOnlyList<PictureSpan>> Spans => inner.Spans;
+
+        public Measurement Measure(RenderOptions options, int maxWidth) => inner.Measure(options, maxWidth);
+
+        public IEnumerable<Segment> Render(RenderOptions options, int maxWidth)
+        {
+            var segments = inner.Render(options, maxWidth).ToList();
+            narrow();
+            return segments;
+        }
+    }
+
+    /// <summary>A write the window narrowed under while it rendered (F25): a picture, drawn as the store lays it out, one row a line.</summary>
+    [Fact]
+    public void APicture_TheWindowNarrowedUnderAsItRendered_IsDrawnAsTheStoreLaysItOut()
+    {
+        _console.Profile.Capabilities.Unicode = true;
+        using var pane = Pane();
+        pane.Open();
+        pane.Show();
+        pane.Write(new Markup("first" + Environment.NewLine));
+        int mark = Output.Length;
+        pane.WritePictures(new NarrowingPicture(Red(9), () => _console.Profile.Width = 20));
+
+        var drawn = Drawn(mark, 20);
+        Assert.Equal(2, drawn.Count);
+        Assert.Equal(RowTexts(pane)[^2..], drawn);
+    }
+
+    /// <summary>
+    /// A picture after a narrowed picture's open row (F109): the break that ends that row carries none of the new picture's spans, so each
+    /// picture's rows still name it.
+    /// </summary>
+    [Fact]
+    public void APicture_AfterANarrowedPicturesOpenRow_LeavesThatRowItsOwn()
+    {
+        _console.Profile.Capabilities.Unicode = true;
+        _cursorTop = 100;
+        using var pane = Pane();
+        pane.Show();
+        pane.WritePictures(Red(9));
+        _console.Profile.Width = 8;
+        _time.Advance(ScreenPane.Tick);
+        pane.WritePictures(Red(7));
+
+        var ids = Enumerable.Range(0, 120).Select(y => pane.PictureAt(2, y)).Where(id => id is not null).ToList();
+        Assert.Equal([9, 9, 7, 7], ids);
+    }
+
+    /// <summary>A write whose head row folds once its run is over (an edit's diff's shape).</summary>
+    private sealed class Folding(string text) : IRenderable, IFoldLayout
+    {
+        public FoldLayout? Fold => new(0, 1, 3, new Markup("folded"), new Markup("unfolded"));
+
+        public Measurement Measure(RenderOptions options, int maxWidth) => new(1, maxWidth);
+
+        public IEnumerable<Segment> Render(RenderOptions options, int maxWidth) => ((IRenderable)new Markup(text)).Render(options, maxWidth);
+    }
+
+    /// <summary>A diff after a narrowed picture's open row is one diff (F109): the break that ends the row is no fold of its own.</summary>
+    [Fact]
+    public void ADiff_AfterANarrowedPicturesOpenRow_IsOneDiff()
+    {
+        _console.Profile.Capabilities.Unicode = true;
+        using var pane = Pane();
+        pane.Open();
+        pane.Show();
+        pane.WritePictures(Red(9));
+        _console.Profile.Width = 8;
+        _time.Advance(ScreenPane.Tick);
+        pane.Write(new Folding("d1\nd2\nd3\n"));
+        pane.Write(new Markup("after" + Environment.NewLine));
+
+        Assert.Single(RowTexts(pane), row => row == "folded");
+        Assert.Equal("after", RowTexts(pane)[^1]);
+    }
+
+    /// <summary>
+    /// An open line written wider, closed after a narrowing (F112/F24): a head within one row is joined where it stands, drawn as the store
+    /// lays it out, with no redraw.
+    /// </summary>
+    [Fact]
+    public void AnOpenLine_ClosedAfterANarrowing_JoinsWhereItStands_WhenItsHeadFitsARow()
+    {
+        using var pane = Pane();
+        pane.Open();
+        pane.Show();
+        pane.Write(new Markup("abc"));
+        _console.Profile.Width = 20;
+        _time.Advance(ScreenPane.Tick);
+
+        int mark = Output.Length;
+        pane.Write(new RawText(" def ghi jkl mnopqr stu\n"));   // raw: a Markup would wrap itself at the window first
+        Assert.Equal(["abc def ghi jkl", "mnopqr stu"], RowTexts(pane));
+        Assert.Equal(RowTexts(pane), Drawn(mark, 20, "abc"));
+        Assert.DoesNotContain("abc", Strip(Output[mark..]));   // the head stays as drawn
+    }
+
+    /// <summary>
+    /// An open line whose head took two rows, closed after a narrowing (F112): the narrower rule cuts the head elsewhere, so the flow is
+    /// written again from the store once, and the screen reads as the store.
+    /// </summary>
+    [Fact]
+    public void AnOpenLine_ClosedAfterANarrowing_IsWrittenAgain_WhenItsHeadIsCutElsewhere()
+    {
+        using var pane = Pane();
+        pane.Open();
+        pane.Show();
+        pane.Write(new Markup("aaaa " + new string('b', 18)));
+        _console.Profile.Width = 20;
+        _time.Advance(ScreenPane.Tick);
+
+        int mark = Output.Length;
+        pane.Write(new Markup(" cc" + Environment.NewLine));
+        var rows = RowTexts(pane);
+        Assert.Equal(["aaaa", new string('b', 18), "cc"], rows);
+        Assert.Contains(string.Join("\n", rows) + "\n", Strip(Output[mark..]));
+    }
+
+    /// <summary>A line narrowed at startup is copied for the splash's refit with its width (F26), and put back as the store lays it out.</summary>
+    [Fact]
+    public void LinesSince_ANarrowedLine_IsPutBackAsTheStoreLaysItOut()
+    {
+        using var pane = Pane();
+        pane.Open();
+        pane.Show();
+        var mark = pane.StoreMark;
+        pane.Write(new RawText("alpha bravo charlie delta echo foxtrot golf\n"));
+        _console.Profile.Width = 20;
+        _time.Advance(ScreenPane.Tick);
+        var copied = Assert.IsType<Scrollback.Copied>(pane.LinesSince(mark));
+        Assert.Equal([40], copied.Chunks.Select(chunk => chunk.Born));
+        var stored = RowTexts(pane);
+
+        pane.Clear(home: true);
+        int at = Output.Length;
+        pane.Rewrite(copied);
+        Assert.Equal(stored, RowTexts(pane));
+        Assert.Equal(stored, Drawn(at, 20));
+    }
+
+    /// <summary>A write rendered again at a width is, run for run, what a first write of it there is (F19): the console's options and pipeline.</summary>
+    [Fact]
+    public void AWriteRenderedAgain_IsRunForRunAFirstWriteThere()
+    {
+        const string markup = "[red]ab[/][red]cd[/] ef";
+        using var pane = Pane();
+        pane.Open();
+        pane.Show();
+        pane.Write(new Markup(markup + Environment.NewLine));
+        _console.Profile.Width = 20;
+        _time.Advance(ScreenPane.Tick);
+
+        using var other = new TestConsole().Interactive();
+        other.Profile.Width = 20;
+        other.Profile.Height = 10;
+        using var fresh = new ScreenPane(other, new ScreenGeometry(() => null, () => null), _time);
+        fresh.Open();
+        fresh.Show();
+        fresh.Write(new Markup(markup + Environment.NewLine));
+
+        static string Runs(IReadOnlyList<SegmentLine> rows) => string.Join("|", rows.SelectMany(row => row.Select(s => s.Text + "@" + s.Style.Foreground.ToMarkup())));
+        Assert.Equal(Runs(fresh.TranscriptRows()), Runs(pane.TranscriptRows()));
+    }
+
+    /// <summary>A titled overlay's held height taken at another height (F29): built at 10, drawn at 40, built at 10 again — the hold starts afresh.</summary>
+    [Fact]
+    public void TheHeldHeight_TakenAtAnotherHeight_StartsAfresh_WhenBuiltAgain()
+    {
+        using var pane = Pane();
+        pane.Open();
+        pane.Show();
+        pane.ShowOverlay(TallOverlay(), "hint", close: true);
+        _console.Profile.Height = 40;
+        pane.Write(new Markup("drawn at 40" + Environment.NewLine));
+        Assert.True(pane.HeldFloor > 10, pane.HeldFloor.ToString(CultureInfo.InvariantCulture));
+
+        _console.Profile.Height = 10;
+        _time.Advance(ScreenPane.Tick);
+        Assert.InRange(pane.HeldFloor, 0, 10);
+    }
+
+    /// <summary>A find whose line the cap trimmed in a re-layout (F113): no match is current, never row 0.</summary>
+    [Fact]
+    public void AFind_WhoseLineTheCapTrimmed_HasNoCurrentMatch()
+    {
+        using var pane = Pane();
+        pane.Open();
+        pane.Show();
+        pane.Write(new RawText(string.Concat(Enumerable.Range(0, 6000).Select(i => "row " + i.ToString("0000", CultureInfo.InvariantCulture) + " aaaa bbbb cccc dddd eeee\n"))));
+        var rows = pane.TranscriptRows(out int version, out _);
+        Assert.Equal(6000, rows.Count);
+        Assert.True(pane.ShowFind("row 0000", 0, 0, version));
+
+        _console.Profile.Width = 20;
+        _time.Advance(ScreenPane.Tick);
+        Assert.Equal(new TextFind.Hit(-1, -1), pane.FindPlace);
+    }
+
+    /// <summary>A write rendered again above the screen's rows (F32): laid out at the new width with no draw.</summary>
+    [Fact]
+    public void AWriteRenderedAgain_AboveTheScreen_IsNotDrawn()
+    {
+        using var pane = Pane();
+        pane.Open();
+        pane.Show();
+        pane.Write(new WidthMarkup(width => new string('=', width)));
+        for (int i = 1; i <= 12; i++)
+        {
+            pane.Write(new RawText("line " + i.ToString(CultureInfo.InvariantCulture) + "\n"));
+        }
+
+        pane.RenderBudget = TimeSpan.Zero;
+        _console.Profile.Width = 30;
+        _time.Advance(ScreenPane.Tick);   // rebuilt, the rule wrapped for want of time
+        int mark = Output.Length;
+        _time.Advance(ScreenPane.Tick);   // rendered again, far above the screen
+        Assert.Equal(new string('=', 30), RowTexts(pane)[0]);
+        Assert.Equal(mark, Output.Length);
+    }
+
+    /// <summary>A width-fitted line parses its markup once for a measure and a render (F71), and a new text at the same width is the one rendered.</summary>
+    [Fact]
+    public void AWidthFittedLine_ParsesOncePerText()
+    {
+        char fill = '=';
+        var line = new WidthMarkup(width => new string(fill, width));
+        var options = RenderOptions.Create(_console, _console.Profile.Capabilities);
+        ((IRenderable)line).Measure(options, 10);
+        ((IRenderable)line).Render(options, 10).ToList();
+        Assert.Equal(1, line.Parses);
+
+        fill = '+';
+        var text = string.Concat(((IRenderable)line).Render(options, 10).Where(s => !s.IsLineBreak).Select(s => s.Text));
+        Assert.Equal(new string('+', 10), text);
+        Assert.Equal(2, line.Parses);
     }
 
     // ── The alternate buffer and the scroll ─────────────────────────────────

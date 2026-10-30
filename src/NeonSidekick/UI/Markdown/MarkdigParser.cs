@@ -263,7 +263,6 @@ public sealed class MarkdigParser : IMarkdownParser
         }
     }
 
-    /// <summary>The text of a link as typed, its own emphasis dropped: a link is one unit on the screen.</summary>
     /// <summary>The one picture a link holds with nothing else but spaces beside it, or null (2026-10-29, review P3-2).</summary>
     private static LinkInline? OnlyPicture(LinkInline link)
     {
@@ -283,6 +282,7 @@ public sealed class MarkdigParser : IMarkdownParser
         return picture;
     }
 
+    /// <summary>The text of a link as typed, its own emphasis dropped: a link is one unit on the screen.</summary>
     private static string PlainText(ContainerInline container)
     {
         var text = new System.Text.StringBuilder();

@@ -112,11 +112,13 @@ public sealed partial class ColumnJudge
 
     /// <summary>
     /// Whether <paramref name="text"/> is a number the judge takes: invariant, no <c>+</c>, no leading zero, and one Excel holds without losing
-    /// a digit (<see cref="XlsxValue.TryExcelNumber"/>: at most 15 digits, no exponent past a double's range).
+    /// a digit (<see cref="XlsxValue.TryExcelNumber"/>: at most 15 digits, no exponent past a double's range). An exponent counts only after a
+    /// decimal point or with a sign (2026-10-30, review F44: codes like <c>1E10</c> and <c>2E05</c> turned a column into numbers); Python's
+    /// <c>1e-05</c>, R's <c>1e+10</c> and Excel's <c>1.00E+10</c> all sign theirs.
     /// </summary>
     public static bool IsNumberText(string text) => NumberPattern().IsMatch(text) && XlsxValue.TryExcelNumber(text, out _);
 
-    [GeneratedRegex(@"^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][-+]?[0-9]{1,3})?$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^-?(0|[1-9][0-9]*)(\.[0-9]+)?((?:(?<=\.[0-9]+)[eE][-+]?|[eE][-+])[0-9]{1,3})?$", RegexOptions.CultureInvariant)]
     private static partial Regex NumberPattern();
 }
 
@@ -158,15 +160,44 @@ public static class TableSource
         }
 
         // Its length and time now, held against both passes (2026-10-29, review P1-16: a file still being saved was judged on one text and
-        // written from another), and its encoding judged once for both.
+        // written from another), and its encoding judged once for both: a mark or a UTF-16 pattern by the head, else UTF-8 read strictly by the
+        // judging pass, which starts again in the legacy code page at the first byte that isn't (2026-10-30, review F22: a whole read of its
+        // own did that first). Nothing is written before the judging pass ends, so a restart leaves no trace.
         var stamp = Stamp(full);
-        var codec = Codec(full);
+        TextCodec? head;
+        using (var stream = RegularFiles.OpenRead(full, FileShare.ReadWrite | FileShare.Delete))
+        {
+            head = TextFile.DetectHead(stream);
+        }
+
+        var codec = head ?? TextCodec.Utf8;
+        bool strict = head is null;
         bool tsv = extension == ".tsv";
+        while (true)
+        {
+            try
+            {
+                return ReadDelimited(full, display, sheet, codec, strict, tsv, () => Stamp(full) == stamp, cancellationToken);
+            }
+            catch (DecoderFallbackException) when (strict)
+            {
+                codec = TextFile.LegacyCodec;
+                strict = false;
+            }
+        }
+    }
+
+    /// <summary>
+    /// <see cref="Write"/>'s CSV or TSV in <paramref name="codec"/>: the delimiter probed, then <see cref="Rows"/>. With <paramref name="strict"/>
+    /// the probe and the judging pass throw <see cref="DecoderFallbackException"/> at a byte that isn't UTF-8; the writing pass never does.
+    /// </summary>
+    private static string? ReadDelimited(string full, string display, ISheetRows sheet, TextCodec codec, bool strict, bool tsv, Func<bool> unchanged, CancellationToken cancellationToken)
+    {
         char delimiter = '\t';
         bool skipFirst = false;
         if (!tsv)
         {
-            using var probe = OpenText(full, codec);
+            using var probe = OpenText(full, codec, strict);
             string first = FirstLine(probe);
             if (first.StartsWith("sep=", StringComparison.OrdinalIgnoreCase) && first.Length == 5)
             {
@@ -179,9 +210,11 @@ public static class TableSource
             }
         }
 
+        int opened = 0;
         IEnumerable<List<string>> Records()
         {
-            using var reader = OpenText(full, codec);
+            // The first opening is the judging pass: strict when asked. The writing pass reads forgivingly, as before.
+            using var reader = OpenText(full, codec, strict && opened++ == 0);
             if (skipFirst)
             {
                 FirstLine(reader);
@@ -195,7 +228,7 @@ public static class TableSource
 
         try
         {
-            return Rows(Records, display, sheet, cancellationToken, () => Stamp(full) == stamp);
+            return Rows(Records, display, sheet, cancellationToken, unchanged);
         }
         catch (UnclosedQuoteException ex)
         {
@@ -263,13 +296,6 @@ public static class TableSource
         return semicolons > commas ? ';' : ',';
     }
 
-    /// <summary>The file's encoding, judged over all of it.</summary>
-    public static TextCodec Codec(string full)
-    {
-        using var stream = RegularFiles.OpenRead(full, FileShare.ReadWrite | FileShare.Delete);
-        return TextFile.Detect(stream);
-    }
-
     /// <summary>
     /// Records from <paramref name="records"/> (opened once to judge, once to write; the first the header) into <paramref name="sheet"/>:
     /// null when done, else the refusal. The judging pass stops one record past <paramref name="maxRows"/> (2026-10-29, review P4-4: a file
@@ -297,15 +323,17 @@ public static class TableSource
                 continue;
             }
 
+            // The record past the cap is counted, so the sheet says it was cut, but never judged nor widens the sheet (2026-10-30, review F114:
+            // its text could turn a column the written rows hold as numbers into text, and its length add empty columns).
+            if (seen > (long)maxRows + 1)
+            {
+                break;
+            }
+
             width = Math.Max(width, record.Count);
             for (int c = 0; c < record.Count; c++)
             {
                 judge.Observe(c, new RawCell(record[c]));
-            }
-
-            if (seen > (long)maxRows + 1)
-            {
-                break;
             }
         }
 
@@ -493,15 +521,20 @@ public static class TableSource
         }
     }
 
-    /// <summary>A text file opened for reading as <c>read_file</c> decodes it: the encoding judged from its head, the mark skipped, bad bytes U+FFFD.</summary>
-    public static StreamReader OpenText(string full, TextCodec? codec = null)
+    /// <summary>
+    /// A text file opened for reading as <c>read_file</c> decodes it: the encoding judged over the whole file when none is given
+    /// (<see cref="TextFile.Detect(Stream)"/>; the comment said "from its head" until 2026-10-30, review F46), the mark skipped, bad bytes U+FFFD —
+    /// or, with <paramref name="strict"/> and UTF-8, a <see cref="DecoderFallbackException"/> (<see cref="Write"/>'s judging pass, review F22).
+    /// </summary>
+    public static StreamReader OpenText(string full, TextCodec? codec = null, bool strict = false)
     {
         var stream = RegularFiles.OpenRead(full, FileShare.ReadWrite | FileShare.Delete);
         try
         {
             codec ??= TextFile.Detect(stream);
             stream.Position = codec.MarkLength;
-            return new StreamReader(stream, codec.StreamEncoding, detectEncodingFromByteOrderMarks: false, bufferSize: 64 * 1024);
+            var encoding = strict && codec.Form is TextForm.Utf8 or TextForm.Utf8Bom ? new UTF8Encoding(false, throwOnInvalidBytes: true) : codec.StreamEncoding;
+            return new StreamReader(stream, encoding, detectEncodingFromByteOrderMarks: false, bufferSize: 64 * 1024);
         }
         catch
         {

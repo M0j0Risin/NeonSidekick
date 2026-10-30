@@ -108,6 +108,7 @@ internal static class HelpFiles
             new(HelpFileScope.Home, Join(Skills.SkillRecordStore.FolderName, Skills.SkillRecordStore.FileName), "the skills' records: when each was made, changed and last used", "`/skills`"),
             new(HelpFileScope.Home, Comfy.ComfyWorkflowCatalog.DirectoryName + "/", "the global ComfyUI workflows", "`/comfy`"),
             new(HelpFileScope.Home, Diagnostics.CrashReport.FileName, "what the app writes when it crashes"),
+            new(HelpFileScope.Home, Files.OwnerLock.MachineIdFileName, "this computer's id, made once, which the plan and audit locks name to tell this computer from another"),
             new(HelpFileScope.Home, Viewer.VideoPage.FolderName + "/", "the video window's browser data (YouTube's cookies) and the page it plays from"),
             new(HelpFileScope.Home, Viewer.BrowserPage.FolderName + "/", "no longer used (each profile has its own); you may delete it"),
             new(HelpFileScope.Profile, Profiles.FileName, "the profile's settings", "`/settings`"),

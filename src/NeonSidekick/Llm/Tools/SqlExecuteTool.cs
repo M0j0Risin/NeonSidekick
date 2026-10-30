@@ -25,7 +25,7 @@ public sealed class SqlExecuteTool : SqlTool
             "sql": { "type": "string", "description": "One T-SQL statement of a kind this tool's description lists (OUTPUT allowed). No BEGIN TRAN/COMMIT, SET, USE, GRANT, dynamic SQL or second statement; no GO." },
             {{ConnectionProperty}},
             "params": { "type": "object", "description": "Values for @name placeholders in the SQL, e.g. {\"id\": 43659} for @id; strings, numbers, true, false or null." },
-            "max_rows": { "type": "integer", "description": "How many returned rows (OUTPUT, a procedure's results) to show at most, 1 to 100000. Leave it out for the user's default." }
+            "max_rows": { "type": "integer", "description": "How many returned rows (OUTPUT, a procedure's results) to show at most, 1 to {{MaxRowsWords}}. Leave it out for the user's default." }
           },
           "required": ["sql"]
         }

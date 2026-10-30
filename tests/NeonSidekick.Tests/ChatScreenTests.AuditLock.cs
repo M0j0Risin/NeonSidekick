@@ -152,10 +152,64 @@ public partial class ChatScreenTests
 
         Assert.Equal(3, _chat.Requests.Count);   // no second pass
         Assert.Contains(AuditText.LockLostNotice(Path.GetFileNameWithoutExtension(path!)), output);
-        Assert.Contains(_chat.Requests[2], m => m.Contents.OfType<FunctionResultContent>().Any(r => r.Result?.ToString() == AuditText.CouldNotSaveResult(AuditText.LockedError(path!))));
+        Assert.Contains(_chat.Requests[2], m => m.Contents.OfType<FunctionResultContent>().Any(r => r.Result?.ToString() == AuditText.LockLostResult));
         Assert.Equal(before, File.ReadAllText(Path.Combine(AuditRoot, path!)));   // the report as the other app has it
         Assert.False(File.Exists(Path.Combine(AuditRoot, NeonSidekick.Audits.AuditFiles.CoveragePath(path!).Replace('/', Path.DirectorySeparatorChar))));
         Assert.True(File.Exists(AuditLockFile(path!)));   // the other's
         Assert.DoesNotContain(AuditText.DoneKeys(hasFix: true), output);
+    });
+
+    [Fact]
+    public Task CodeAudit_AMoveWithTheLockTakenOver_SavesNothing() => WithOtherAuditAppAsync(async () =>
+    {
+        // 2026-10-30, review F111: the moved branch ended the audit without checking the hold, and saved the header over the other app's report.
+        string elsewhere = Path.Combine(_settings.ProfileDirectory, "elsewhere");
+        Directory.CreateDirectory(elsewhere);
+        AuditFixture(Line("/code-audit src security"), Line("/exit"));
+        _chat.Enqueue(ReadCall("r1"));        // 0: pass 1 reads the file
+        _chat.Enqueue(FindingCall("a1"));     // 1: another app takes the lock and the folder moves first; then present_audit
+        _chat.EnqueueText("Pass 1 done.");    // 2
+        string? path = null;
+        string? before = null;
+        _chat.BeforeUpdateOf = (request, update, _) =>
+        {
+            if (request == 1 && update == 0)
+            {
+                path = NeonSidekick.Audits.AuditFiles.List(AuditFiles()).Single().Path;
+                File.Delete(AuditLockFile(path));
+                WriteOtherAuditLock(path);
+                before = File.ReadAllText(Path.Combine(AuditRoot, path));
+                _settings.Update(d => d.WorkingDirectory = elsewhere);
+            }
+
+            return Task.CompletedTask;
+        };
+
+        string output = await RunAsync();
+
+        Assert.Equal(3, _chat.Requests.Count);   // no second pass
+        Assert.Contains(AuditText.LockLostNotice(Path.GetFileNameWithoutExtension(path!)), output);
+        Assert.Equal(before, File.ReadAllText(Path.Combine(AuditRoot, path!)));   // the header never saved over the other's report
+        Assert.False(File.Exists(Path.Combine(AuditRoot, NeonSidekick.Audits.AuditFiles.CoveragePath(path!).Replace('/', Path.DirectorySeparatorChar))));
+        Assert.True(File.Exists(AuditLockFile(path!)));
+    });
+
+    [Fact]
+    public Task CodeAudit_ABareResume_PicksTheNewestReportNotRunningElsewhere() => WithOtherAuditAppAsync(async () =>
+    {
+        // 2026-10-30, review F4: the newest was picked, then refused as running elsewhere, while an older free one stood there.
+        AuditFixture(Line("/code-audit resume"), Line("/exit"));
+        string older = SaveStoppedAuditReport();
+        var now = _time.GetLocalNow().AddMinutes(5);
+        string newer = NeonSidekick.Audits.AuditFiles.Choose(AuditFiles(), "web", now);
+        Assert.Null(NeonSidekick.Audits.AuditFiles.Save(AuditFiles(), newer,
+            new AuditReport { Label = "web", Header = new AuditHeader(AuditStatus.Auditing, "1 pass", "src/", AuditFocus.Dimensions, "", "model", 1, now, now) }, now));
+        WriteOtherAuditLock(newer);
+        _chat.EnqueueText("Pass 1.");
+
+        string output = await RunAsync();
+
+        Assert.Contains(AuditText.ResumedNotice(Path.GetFileNameWithoutExtension(older), newest: true), output);
+        Assert.DoesNotContain(AuditText.LockedError(newer), output);
     });
 }

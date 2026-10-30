@@ -35,7 +35,7 @@ public sealed class ConvertToPdfTool : FileTool
             "markdown": { "type": "string", "description": "Markdown text to make a PDF of, instead of path: a report or notes written for the PDF." },
             "title": { "type": "string", "description": "With markdown: the document's title, shown at the top of each page and used to name the file." },
             "to": { "type": "string", "description": "The PDF's path or folder, relative to the working directory. Default: beside the source file with .pdf, or at the top for a url or markdown." },
-            "overwrite": { "type": "boolean", "description": "Replace a PDF that is already there. Default false." },
+            "overwrite": { "type": "boolean", "description": "Only with to: replace a PDF that is already there (a name the tool makes up never replaces one). Default false." },
             "landscape": { "type": "boolean", "description": "Lay the pages out landscape. Default false. Not for a url." },
             "paper": { "type": "string", "enum": ["letter", "a4", "legal"], "description": "The paper size. Default letter. Not for a url." }
           }

@@ -56,11 +56,15 @@ public sealed class AuditSession
     /// <summary>
     /// A report's lock as this session holds it: the working directory pinned where it was taken (a working-folder change mid-audit still lets go
     /// of the right one), the report, the lock, and whether the drive couldn't hold one (<see cref="LockTake.Unsupported"/>: the audit runs
-    /// unlocked, and nothing is let go).
+    /// unlocked, and nothing is let go). <paramref name="Stamp"/> (2026-10-30, review F72): the report's length and write time after this
+    /// process's last save of it, so a lock that went is taken back only over a report nobody else wrote since.
     /// </summary>
-    private sealed record HeldLock(WorkingDirectory Files, string Report, string LockPath, bool Unlocked)
+    private sealed record HeldLock(WorkingDirectory Files, string Report, string LockPath, bool Unlocked, (long Length, DateTime Written)? Stamp = null)
     {
         public bool Same(HeldLock other) => RalphSnapshot.SameRoot(Files.Root, other.Files.Root) && AuditPath.Comparer.Equals(LockPath, other.LockPath);
+
+        /// <summary>Whether this is the lock of <paramref name="report"/> saved through <paramref name="files"/>.</summary>
+        public bool Holds(WorkingDirectory files, string report) => RalphSnapshot.SameRoot(Files.Root, files.Root) && AuditPath.Comparer.Equals(Report, report);
     }
 
     /// <summary>The running audit's lock; null between audits (or one started with no hold).</summary>
@@ -117,7 +121,10 @@ public sealed class AuditSession
     /// with <paramref name="error"/> while another live NeonSidekick holds it, or when it can't be written. A refused hold leaves the running audit
     /// and its lock as they were. The caller calls <see cref="Start"/> next, or <see cref="Release"/> when its step fails.
     /// </summary>
-    public bool Hold(string path, out string? error, out string? notice)
+    public bool Hold(string path, out string? error, out string? notice) => Take(path, out error, out notice) is LockTake.Taken or LockTake.Unsupported;
+
+    /// <summary><see cref="Hold"/>, with what the take found (a fresh start tries another name on <see cref="LockTake.Held"/>).</summary>
+    private LockTake Take(string path, out string? error, out string? notice)
     {
         ArgumentNullException.ThrowIfNull(path);
         error = null;
@@ -125,29 +132,109 @@ public sealed class AuditSession
         Release();
         var files = _files.PinnedAt(_files.Root);
         string lockPath = AuditFiles.LockPathFor(path);
-        var before = OwnerLock.ReadOwner(files, lockPath);
-        switch (OwnerLock.TryLock(files, lockPath, OwnerLock.Me, OwnerLock.LiveOwner))
+        var take = OwnerLock.TryLock(files, lockPath, OwnerLock.Me, OwnerLock.LiveOwner);
+        switch (take)
         {
             case LockTake.Taken:
                 _pending = new HeldLock(files, path, lockPath, Unlocked: false);
-                DiagnosticLog.Info(LogCategory, before is { } stale && stale != OwnerLock.Me
-                    ? $"code audit: took over {lockPath}, left by pid {N(stale.ProcessId)}" + (stale.Host is { } h ? " on " + h : "")
-                    : $"code audit: locked {lockPath}");
-                return true;
+                DiagnosticLog.Info(LogCategory, $"code audit: locked {lockPath}");
+                break;
             case LockTake.Unsupported:
                 _pending = new HeldLock(files, path, lockPath, Unlocked: true);
                 notice = AuditText.UnlockedNotice(path);
                 DiagnosticLog.Info(LogCategory, $"code audit: {lockPath} can't be held on its drive; running unlocked");
-                return true;
+                break;
             case LockTake.Unwritable:
                 error = AuditText.LockWriteError(lockPath);
                 DiagnosticLog.Info(LogCategory, $"code audit: refused {path}: {lockPath} couldn't be written");
-                return false;
+                break;
             default:
-                OwnerLock.HeldElsewhere(files, lockPath, out var owner);
-                error = AuditFiles.LockError(path, lockPath, owner);
-                DiagnosticLog.Info(LogCategory, $"code audit: refused {path}: locked by " + (owner is { } o ? "pid " + N(o.ProcessId) + (o.Host is { } host ? " on " + host : "") : "an unreadable lock"));
-                return false;
+                error = AuditFiles.HeldError(files, path);
+                DiagnosticLog.Info(LogCategory, $"code audit: refused {path}: {lockPath} is held");
+                break;
+        }
+
+        return take;
+    }
+
+    /// <summary>
+    /// A start or resume begun under the report's lock (2026-10-30, review F80: the screen's start and resume and headless each spelled the
+    /// hold-step-release dance out): the lock held (<see cref="Hold"/>), then <paramref name="step"/> run with the report's path, which writes
+    /// the report and calls <see cref="Start"/>, its loop the answer. A step that answers null or throws lets the hold go. Null with
+    /// <paramref name="error"/> when the hold was refused; <paramref name="notice"/> the unlocked drive's warning, to say once begun.
+    /// <paramref name="another"/> (a fresh start's next free name, review F3): tried, up to three names in all, while the lock of the one chosen is
+    /// held by another NeonSidekick that chose it meanwhile.
+    /// </summary>
+    public PlanGapLoop? Begin(string path, Func<string, PlanGapLoop?> step, out string? error, out string? notice, Func<string>? another = null)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(step);
+        var take = Take(path, out error, out notice);
+        for (int tries = 1; take == LockTake.Held && another is not null && tries < 3; tries++)
+        {
+            path = another();
+            take = Take(path, out error, out notice);
+        }
+
+        if (take is not (LockTake.Taken or LockTake.Unsupported))
+        {
+            return null;
+        }
+
+        PlanGapLoop? loop = null;
+        try
+        {
+            loop = step(path);
+        }
+        finally
+        {
+            if (loop is null)
+            {
+                Release();
+            }
+        }
+
+        return loop;
+    }
+
+    /// <summary>
+    /// <paramref name="report"/> saved at <paramref name="path"/> through <paramref name="files"/> (<see cref="Files"/> when null), as
+    /// <see cref="AuditFiles.Save(WorkingDirectory, string, AuditReport, DateTimeOffset)"/>, its stamp kept for the lock that holds it
+    /// (<see cref="Saved"/>). Every save of a report this session may hold goes through here.
+    /// </summary>
+    public string? Save(string path, AuditReport report, DateTimeOffset now, WorkingDirectory? files = null)
+    {
+        files ??= Files;
+        string? failed = AuditFiles.Save(files, path, report, now, out var stamp);
+        if (failed is null)
+        {
+            Saved(files, path, stamp);
+        }
+
+        return failed;
+    }
+
+    /// <summary>
+    /// The report at <paramref name="path"/> saved by this process just now (2026-10-30, review F72): the running or pending lock that holds it keeps
+    /// <paramref name="stamp"/>, so <see cref="StillHolds"/> tells this process's own save from another's write. A null stamp leaves the old one,
+    /// and a lock that went is then not taken back: the safe side.
+    /// </summary>
+    internal void Saved(WorkingDirectory files, string path, (long Length, DateTime Written)? stamp)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+        if (stamp is null)
+        {
+            return;
+        }
+
+        if (_pending is { } pending && pending.Holds(files, path))
+        {
+            _pending = pending with { Stamp = stamp };
+        }
+
+        if (_held is { } held && held.Holds(files, path))
+        {
+            _held = held with { Stamp = stamp };
         }
     }
 
@@ -168,9 +255,12 @@ public sealed class AuditSession
     }
 
     /// <summary>
-    /// Whether the running audit still holds its report (2026-10-29): this process's lock still, or taken back when it went; false only while another
-    /// live NeonSidekick holds it, and the audit then stops writing. True with no lock to hold (none taken, or a drive that holds none), and when
-    /// a lock that went can't be written again: the report's own save then says what failed.
+    /// Whether the running audit still holds its report (2026-10-29): this process's lock still, or taken back when it went (a sync client or a hand
+    /// deleted it); false while another live NeonSidekick holds it, and the audit then stops writing. True with no lock to hold (none taken, or a
+    /// drive that holds none), and when a lock that went can't be written again: the report's own save then says what failed.
+    /// <para>2026-10-30, review F5 and F72: the lock is read first, and this process's own is held with no take (each check was a take). One that
+    /// is missing or stale is taken back only while the report is as this process last saved it (<see cref="Saved"/>): another NeonSidekick that
+    /// took it over, wrote and let go left no lock, and the take-back then overwrote its findings. One that can't be read counts as another's.</para>
     /// </summary>
     public bool StillHolds()
     {
@@ -179,14 +269,28 @@ public sealed class AuditSession
             return true;
         }
 
-        bool holds = OwnerLock.TryLock(held.Files, held.LockPath, OwnerLock.Me, OwnerLock.LiveOwner) != LockTake.Held;
-        if (!holds)
+        var owner = OwnerLock.ReadOwner(held.Files, held.LockPath);
+        if (owner == OwnerLock.Me)
         {
-            DiagnosticLog.Info(LogCategory, $"code audit: lost {held.LockPath} to another NeonSidekick");
+            return true;
         }
 
-        return holds;
+        string? lost = owner is not null && OwnerLock.LiveOwner(owner) ? "another NeonSidekick holds it"
+            : owner is null && AuditFiles.Exists(held.Files, held.LockPath) ? "it can't be read"
+            : !Unchanged(held) ? "the report changed since this audit last saved it"
+            : OwnerLock.TryLock(held.Files, held.LockPath, OwnerLock.Me, OwnerLock.LiveOwner) == LockTake.Held ? "another NeonSidekick took it"
+            : null;
+        if (lost is not null)
+        {
+            DiagnosticLog.Info(LogCategory, $"code audit: lost {held.LockPath}: {lost}");
+        }
+
+        return lost is null;
     }
+
+    /// <summary>Whether the report is as this process last saved it: the length and write time <see cref="Saved"/> kept.</summary>
+    private static bool Unchanged(HeldLock held) =>
+        held.Stamp is { } saved && held.Files.TryStamp(held.Report) is { } now && now.Length == saved.Length && now.Written == saved.Written;
 
     private static void Let(HeldLock held)
     {

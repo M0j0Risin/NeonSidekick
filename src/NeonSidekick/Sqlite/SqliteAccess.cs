@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Data.Common;
 using System.Diagnostics;
 using System.Globalization;
@@ -241,18 +242,31 @@ public sealed class SqliteAccess
             return refused!;
         }
 
-        return await Task.Run(() => Run(target, [statement], parameters, maxRows, timeoutSeconds, write: false, create: false, SqliteReadLayers.All, cancellationToken, export), cancellationToken).ConfigureAwait(false);
+        return await ExportAsync(target, statement, parameters, export, maxRows, timeoutSeconds, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// <see cref="ExportAsync(string?, string, IReadOnlyList{SqlParameterValue}, SqlExportJob, int, int, CancellationToken)"/> on a database
+    /// already resolved (2026-10-30, review F54: the tool resolved it for the workbook's name, and the run resolved it again).
+    /// </summary>
+    public static Task<SqlRun> ExportAsync(SqliteTarget target, string statement, IReadOnlyList<SqlParameterValue> parameters, SqlExportJob export, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(export);
+        return Task.Run(() => Run(target, [statement], parameters, maxRows, timeoutSeconds, write: false, create: false, SqliteReadLayers.All, cancellationToken, export), cancellationToken);
     }
 
     /// <summary>
     /// A SQLite cell for a workbook (2026-10-29): integers, reals, text and blobs by the common rules; text in a column declared
     /// <c>DATE</c>, <c>DATETIME</c> or <c>TIMESTAMP</c> a date or date-time when it reads as ISO (SQLite keeps dates as text), else the
-    /// text as it is. An empty string is an empty text cell, not a blank (2026-10-29, review P3-4).
+    /// text as it is. An empty string is an empty text cell, not a blank (2026-10-29, review P3-4; in a date column too since 2026-10-30,
+    /// review F42). Only a date column's value is read here; any other goes straight to <see cref="SqlExport.Typed"/>, which reads it once
+    /// (review F105: every cell was read twice).
     /// </summary>
     public static XlsxValue ExportCell(DbDataReader reader, int ordinal, string? typeName)
     {
         ArgumentNullException.ThrowIfNull(reader);
-        if (!reader.IsDBNull(ordinal) && reader.GetValue(ordinal) is string text && DeclaredDate(typeName) is { } dateOnly)
+        if (DeclaredDateOf(typeName) is { } dateOnly && !reader.IsDBNull(ordinal) && reader.GetValue(ordinal) is string text)
         {
             if (dateOnly && DateOnly.TryParseExact(text.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
             {
@@ -264,11 +278,42 @@ public sealed class SqliteAccess
                 return XlsxValue.OfDateTime(when, dateColumn: dateOnly);
             }
 
-            return XlsxValue.OfText(text);
+            return XlsxValue.OfDbText(text);
         }
 
         return SqlExport.Typed(reader, ordinal, typeName, SqlExport.InvariantText);
     }
+
+    /// <summary>
+    /// <see cref="DeclaredDate"/> remembered by the type name (2026-10-30, review F105: it was worked out per cell; a database has few type
+    /// names, and two exports may run at once). An expression column (no name) is answered straight away; past
+    /// <see cref="DeclaredDateNames"/> names nothing more is kept.
+    /// </summary>
+    private static bool? DeclaredDateOf(string? declared)
+    {
+        if (declared is null)
+        {
+            return null;
+        }
+
+        if (s_declaredDates.TryGetValue(declared, out bool? known))
+        {
+            return known;
+        }
+
+        bool? judged = DeclaredDate(declared);
+        if (s_declaredDates.Count < DeclaredDateNames)
+        {
+            s_declaredDates.TryAdd(declared, judged);
+        }
+
+        return judged;
+    }
+
+    /// <summary>The most type names <see cref="DeclaredDateOf"/> keeps.</summary>
+    private const int DeclaredDateNames = 256;
+
+    private static readonly ConcurrentDictionary<string, bool?> s_declaredDates = new(StringComparer.Ordinal);
 
     /// <summary>The ISO forms SQLite's date functions write (and a <c>T</c> between), to the second or its fraction.</summary>
     private static readonly string[] IsoDateTimes =

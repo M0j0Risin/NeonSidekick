@@ -208,6 +208,23 @@ public static class AuditText
     public static string LockedOnHostError(string path, string host, string lockPath) =>
         $"NeonSidekick on {host} is auditing {path}; wait for it to end, or delete {lockPath} if it crashed";
 
+    /// <summary>
+    /// The lock can't be read, or names a process of this machine whose start time can't be read (another user's, an elevated one): it may be a
+    /// crash's, so the lock to delete is named (2026-10-30, review F76/F86: it said "wait" for good).
+    /// </summary>
+    public static string UncheckedLockError(string path, string lockPath) =>
+        $"{path} is held by a process this app can't check: if no NeonSidekick is running it, delete {lockPath}";
+
+    /// <summary>
+    /// <c>present_audit</c>'s answer once the report's lock is lost (2026-10-30, review F73): nothing recorded, and the pass told to end, as
+    /// <see cref="WorkdirMovedResult"/>.
+    /// </summary>
+    public const string LockLostResult = "Error: another NeonSidekick took over this report, so nothing was recorded; the audit stops after this pass. Reply with one short line and call no more tools.";
+
+    /// <summary>A bare resume or fix with every readable report held by another NeonSidekick (2026-10-30, review F4): the newest one named.</summary>
+    public static string OnlyElsewhereNotice(string name) =>
+        $"{Glyph} Every report here is running elsewhere ({name} is the newest); wait for it to end, or name another.";
+
     /// <summary>The lock couldn't be written (its folder can't be made, a read-only drive): the audit isn't started, never "another is auditing". Pinned.</summary>
     public static string LockWriteError(string lockPath) => $"Could not write {lockPath}, so the audit didn't start";
 

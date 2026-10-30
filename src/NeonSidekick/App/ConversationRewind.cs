@@ -219,8 +219,8 @@ public static partial class ConversationRewind
         }
 
         var calls = Calls(messages, start, messages.Count).ToList();
-        var changing = calls.Where(Changes).Select(c => c.Name).Distinct(StringComparer.Ordinal).ToList();
-        bool advisors = calls.Any(c => string.Equals(c.Name, NeonAdvisorTool.ToolName, StringComparison.Ordinal));
+        var changing = calls.Where(c => Changes(c.Call, c.Result)).Select(c => c.Call.Name).Distinct(StringComparer.Ordinal).ToList();
+        bool advisors = calls.Any(c => string.Equals(c.Call.Name, NeonAdvisorTool.ToolName, StringComparison.Ordinal));
         bool keptStamped = false;
         for (int i = 0; i < start && !keptStamped; i++)
         {
@@ -326,9 +326,12 @@ public static partial class ConversationRewind
         return starts;
     }
 
-    /// <summary>The model's calls in <paramref name="messages"/>[<paramref name="from"/>..<paramref name="to"/>), the seeded opening pairs left out.</summary>
-    /// <summary>Whether a call changed something: a tool plan mode drops, or a tracked tool given a <c>to</c>.</summary>
-    public static bool Changes(FunctionCallContent call)
+    /// <summary>
+    /// Whether a call changed something: a tool plan mode drops, whatever it answered (a <c>run_command</c> that changed files can still
+    /// answer "Error: exit code 1"), or a tracked tool given a <c>to</c> whose <paramref name="result"/> isn't a refusal (2026-10-30, review
+    /// F58: a query refused its export in plan mode was listed as a change). No result (a turn stopped mid-call) counts, the safe side.
+    /// </summary>
+    public static bool Changes(FunctionCallContent call, FunctionResultContent? result)
     {
         ArgumentNullException.ThrowIfNull(call);
         if (!PlanTools.Allowed(call.Name))
@@ -336,16 +339,44 @@ public static partial class ConversationRewind
             return true;
         }
 
-        return Files.CheckpointTools.Tracked.Contains(call.Name) && call.Arguments?.TryGetValue("to", out var to) == true && to switch
+        bool named = Files.CheckpointTools.Tracked.Contains(call.Name) && call.Arguments?.TryGetValue("to", out var to) == true && to switch
         {
             string text => !string.IsNullOrWhiteSpace(text),
             System.Text.Json.JsonElement { ValueKind: System.Text.Json.JsonValueKind.String } json => !string.IsNullOrWhiteSpace(json.GetString()),
             _ => false,
         };
+        return named && !(ResultText(result)?.StartsWith("Error:", StringComparison.Ordinal) ?? false);
     }
 
-    private static IEnumerable<FunctionCallContent> Calls(IReadOnlyList<ChatMessage> messages, int from, int to)
+    /// <summary>A call's answer as text: a string, or a JSON string (a restored session's); null for none or any other shape.</summary>
+    private static string? ResultText(FunctionResultContent? result) => result?.Result switch
     {
+        string text => text,
+        System.Text.Json.JsonElement { ValueKind: System.Text.Json.JsonValueKind.String } json => json.GetString(),
+        _ => null,
+    };
+
+    /// <summary>
+    /// The model's calls in <paramref name="messages"/>[<paramref name="from"/>..<paramref name="to"/>), the seeded opening pairs left out, each
+    /// with its result from the same range (the same call id), or null when it has none.
+    /// </summary>
+    private static IEnumerable<(FunctionCallContent Call, FunctionResultContent? Result)> Calls(IReadOnlyList<ChatMessage> messages, int from, int to)
+    {
+        var results = new Dictionary<string, FunctionResultContent>(StringComparer.Ordinal);
+        for (int i = from; i < to; i++)
+        {
+            if (messages[i].Role == ChatRole.Tool)
+            {
+                foreach (var content in messages[i].Contents)
+                {
+                    if (content is FunctionResultContent result && result.CallId is { } id)
+                    {
+                        results.TryAdd(id, result);
+                    }
+                }
+            }
+        }
+
         for (int i = from; i < to; i++)
         {
             if (messages[i].Role != ChatRole.Assistant)
@@ -357,7 +388,7 @@ public static partial class ConversationRewind
             {
                 if (content is FunctionCallContent call && !Assistant.IsOpeningCallId(call.CallId))
                 {
-                    yield return call;
+                    yield return (call, call.CallId is { } id && results.TryGetValue(id, out var result) ? result : null);
                 }
             }
         }

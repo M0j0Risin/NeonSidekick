@@ -90,7 +90,7 @@ You need an Apple Silicon Mac (M1 or later). Unpack the Mac package as the [READ
 * **Paths.** `/cwd` completes a path starting with `/` but lists no network volumes, so typing never waits on a server. `/cwd ~` goes to the profile's `files/` folder, not your home folder.
 * **Dot-files** show in listings and searches; only items hidden with `chflags hidden`, and `.git` folders, are skipped.
 * **Deletes go to the Trash.** *File deletes to Recycle bin* reads *File deletes to Trash*; a volume with no Trash (a network or FAT volume) deletes directly.
-* **Ralph loops and code audits on exFAT.** A plan on an exFAT drive (or a share that takes neither hard links nor exclusive renames) can't take its `ralph.lock` safely, so `/plan ralph` refuses it. FAT32 and the Mac's own disk work. `/code-audit` runs there anyway, with a warning that a second Neon Sidekick could write the same report.
+* **Ralph loops and code audits on exFAT.** There (or on a share with neither hard links nor exclusive renames) `/plan ralph` refuses, and `/code-audit` runs with a warning: a second Neon Sidekick could write the same report.
 * **Printing** goes through CUPS onto the printer's default paper, in Helvetica Neue and Menlo, so a printout may wrap a little differently. A PDF goes as it is (no landscape).
 * **Office files don't print.** Word, Excel and other such files are refused; print them from the program that made them.
 

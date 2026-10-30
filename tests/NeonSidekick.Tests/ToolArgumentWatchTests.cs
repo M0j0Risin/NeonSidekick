@@ -76,7 +76,21 @@ public class ToolArgumentWatchTests
         Assert.Equal(Writing("present_audit", 20), watch.Observe(FakeChatClient.ArgumentDelta(0, "c1", "present_audit", Chars(10))));
 
         var other = Watch();
-        Assert.Equal(Writing(ToolArgumentWatch.UnnamedCall, ToolArgumentWatch.CountShownFrom), other.Observe(FakeChatClient.ArgumentDelta(0, null, null, Chars(ToolArgumentWatch.CountShownFrom))));
+        Assert.Equal(Writing(TurnText.UnnamedCall, ToolArgumentWatch.CountShownFrom), other.Observe(FakeChatClient.ArgumentDelta(0, null, null, Chars(ToolArgumentWatch.CountShownFrom))));
+    }
+
+    /// <summary>
+    /// A chunk with two pieces of one call shows its size after both (2026-10-30, review F70: the shown event is built once, after the
+    /// update); the same size again shows nothing, however long after.
+    /// </summary>
+    [Fact]
+    public void AChunkWithTwoPiecesOfOneCall_ShowsItsSizeAfterBoth_AndAnUnchangedSizeNothing()
+    {
+        var watch = Watch();
+        Assert.Equal(Writing("present_audit", 11), watch.Observe(FakeChatClient.ArgumentDeltas((0, "c1", "present_audit", "{"), (0, null, null, Chars(10)))));
+        _time.Advance(ToolArgumentWatch.ProgressInterval);
+        Assert.Null(watch.Observe(FakeChatClient.ArgumentDelta(0, null, null, "")));
+        Assert.Equal(Writing("present_audit", 11), watch.Latest);
     }
 
     /// <summary>One chunk naming several calls (a server that sends them whole) shows the last.</summary>

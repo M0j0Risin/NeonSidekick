@@ -774,14 +774,20 @@ public static partial class RalphLog
     /// <summary>
     /// <see cref="TryLock(WorkingDirectory, string, LockOwner, Func{LockOwner, bool})"/>, <paramref name="refusal"/> the error sentence when it
     /// failed for want of an atomic publish on the plan's volume (<see cref="RalphText.LockUnsupportedError"/>, later on 2026-10-20, the code review),
-    /// not because another holds it; null otherwise (the caller then says <see cref="LockError"/>).
+    /// or because it couldn't be written (<see cref="RalphText.LockWriteError"/>, 2026-10-30, review F74: said "another is running it"), not because
+    /// another holds it; null otherwise (the caller then says <see cref="LockError"/>).
     /// </summary>
     public static bool TryLock(WorkingDirectory files, string planPath, LockOwner me, Func<LockOwner, bool> alive, out string? refusal)
     {
         ArgumentNullException.ThrowIfNull(planPath);
         string path = LockPathFor(planPath);
         var take = OwnerLock.TryLock(files, path, me, alive);
-        refusal = take == LockTake.Unsupported ? RalphText.LockUnsupportedError(planPath, path) : null;
+        refusal = take switch
+        {
+            LockTake.Unsupported => RalphText.LockUnsupportedError(planPath, path),
+            LockTake.Unwritable => RalphText.LockWriteError(path),
+            _ => null,
+        };
         return take == LockTake.Taken;
     }
 
@@ -789,21 +795,20 @@ public static partial class RalphLog
     /// Whether a running loop still holds <paramref name="planPath"/>'s lock, asked at each pass's top (2026-10-20, a review: the lock was read only as
     /// the loop began, so a pass that deleted it, every tool being kept, let a second instance start the same plan while the first ran on): this
     /// process's still, or taken again when it went; false while another live process holds it (the loop stops, <see cref="RalphStop.Locked"/>).
+    /// A lock that went and can't be written again counts as held (2026-10-30, review F74), as the audit's <c>StillHolds</c> has it: the plan's own
+    /// writes then say what failed.
     /// </summary>
-    public static bool StillHeld(WorkingDirectory files, string planPath, Func<LockOwner, bool> alive) => TryLock(files, planPath, Me, alive);
+    public static bool StillHeld(WorkingDirectory files, string planPath, Func<LockOwner, bool> alive)
+    {
+        ArgumentNullException.ThrowIfNull(planPath);
+        return OwnerLock.TryLock(files, LockPathFor(planPath), Me, alive) != LockTake.Held;
+    }
 
     /// <summary>The lock let go when it is <paramref name="me"/>'s (a stop, a profile switch, the app's exit).</summary>
     public static void Unlock(WorkingDirectory files, string planPath, LockOwner me)
     {
         ArgumentNullException.ThrowIfNull(planPath);
         OwnerLock.Unlock(files, LockPathFor(planPath), me);
-    }
-
-    /// <summary>Whether a lock's owner still runs, for <see cref="HeldElsewhere"/> (a seam for the tests, <see cref="OwnerLock.LiveOwner"/>'s).</summary>
-    internal static Func<LockOwner, bool> LiveOwner
-    {
-        get => OwnerLock.LiveOwner;
-        set => OwnerLock.LiveOwner = value;
     }
 
     /// <summary>

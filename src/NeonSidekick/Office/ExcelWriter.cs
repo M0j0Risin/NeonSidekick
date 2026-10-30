@@ -155,6 +155,49 @@ public sealed class ExcelWriter : IWorkbookJob
         w.WriteEndElement();
     }
 
+    /// <summary>
+    /// The two fills Excel requires first (<c>none</c>, <c>gray125</c>); a workbook's styles with none get them too (2026-10-30, review F18),
+    /// since every cell format here names fill 0.
+    /// </summary>
+    public static void DefaultFills(XmlWriter w)
+    {
+        ArgumentNullException.ThrowIfNull(w);
+        foreach (string pattern in new[] { "none", "gray125" })
+        {
+            w.WriteStartElement("fill", Ns);
+            w.WriteStartElement("patternFill", Ns);
+            w.WriteAttributeString("patternType", pattern);
+            w.WriteEndElement();
+            w.WriteEndElement();
+        }
+    }
+
+    /// <summary>An empty border, the one every cell format here names (border 0).</summary>
+    public static void DefaultBorder(XmlWriter w)
+    {
+        ArgumentNullException.ThrowIfNull(w);
+        w.WriteStartElement("border", Ns);
+        foreach (string side in new[] { "left", "right", "top", "bottom", "diagonal" })
+        {
+            w.WriteStartElement(side, Ns);
+            w.WriteEndElement();
+        }
+
+        w.WriteEndElement();
+    }
+
+    /// <summary>The cell style format every cell format here names (<c>xfId</c> 0).</summary>
+    public static void DefaultStyleXf(XmlWriter w)
+    {
+        ArgumentNullException.ThrowIfNull(w);
+        w.WriteStartElement("xf", Ns);
+        w.WriteAttributeString("numFmtId", "0");
+        w.WriteAttributeString("fontId", "0");
+        w.WriteAttributeString("fillId", "0");
+        w.WriteAttributeString("borderId", "0");
+        w.WriteEndElement();
+    }
+
     /// <summary>A Calibri 11 font, bold when asked.</summary>
     public static void Font(XmlWriter w, bool bold)
     {
@@ -196,35 +239,15 @@ public sealed class ExcelWriter : IWorkbookJob
         w.WriteEndElement();
         w.WriteStartElement("fills", Ns);
         w.WriteAttributeString("count", "2");
-        foreach (string pattern in new[] { "none", "gray125" })
-        {
-            w.WriteStartElement("fill", Ns);
-            w.WriteStartElement("patternFill", Ns);
-            w.WriteAttributeString("patternType", pattern);
-            w.WriteEndElement();
-            w.WriteEndElement();
-        }
-
+        DefaultFills(w);
         w.WriteEndElement();
         w.WriteStartElement("borders", Ns);
         w.WriteAttributeString("count", "1");
-        w.WriteStartElement("border", Ns);
-        foreach (string side in new[] { "left", "right", "top", "bottom", "diagonal" })
-        {
-            w.WriteStartElement(side, Ns);
-            w.WriteEndElement();
-        }
-
-        w.WriteEndElement();
+        DefaultBorder(w);
         w.WriteEndElement();
         w.WriteStartElement("cellStyleXfs", Ns);
         w.WriteAttributeString("count", "1");
-        w.WriteStartElement("xf", Ns);
-        w.WriteAttributeString("numFmtId", "0");
-        w.WriteAttributeString("fontId", "0");
-        w.WriteAttributeString("fillId", "0");
-        w.WriteAttributeString("borderId", "0");
-        w.WriteEndElement();
+        DefaultStyleXf(w);
         w.WriteEndElement();
         w.WriteStartElement("cellXfs", Ns);
         w.WriteAttributeString("count", (3 + FormatCodes.Count).ToString(System.Globalization.CultureInfo.InvariantCulture));

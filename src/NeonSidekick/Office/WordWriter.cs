@@ -56,6 +56,9 @@ public sealed class WordWriter
     private readonly WordPage _page;
     private readonly string? _title;
     private readonly Func<string, WordPicture?> _picture;
+
+    /// <summary>Checked before each block (2026-10-30, review F52: Esc reached only a picture's read, so a long text ran to its end).</summary>
+    private CancellationToken _cancellation;
     private readonly List<(int Abstract, int Level, int Start)> _lists = [];
     private readonly Dictionary<string, (string Rel, WordPicture Picture)?> _pictureRels = new(StringComparer.Ordinal);
     private readonly List<(string Part, WordPicture Picture)> _pictureParts = [];
@@ -91,14 +94,16 @@ public sealed class WordWriter
     /// <param name="header">The page header's title (the given title, else the first <c>#</c> heading); null for no header.</param>
     /// <param name="title">The document's <c>dc:title</c>.</param>
     /// <param name="picture">A picture's address → the picture, or null for its placeholder.</param>
-    public static WordStats Write(Stream output, MarkdownDocument document, WordPage page, string? header, string? title, Func<string, WordPicture?> picture, TimeProvider time)
+    /// <param name="cancellationToken">Checked before each block; a canceled write throws and leaves <paramref name="output"/> unfinished.</param>
+    public static WordStats Write(Stream output, MarkdownDocument document, WordPage page, string? header, string? title, Func<string, WordPicture?> picture, TimeProvider time,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(output);
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(page);
         ArgumentNullException.ThrowIfNull(picture);
         ArgumentNullException.ThrowIfNull(time);
-        var writer = new WordWriter(output, page, header, picture, time);
+        var writer = new WordWriter(output, page, header, picture, time) { _cancellation = cancellationToken };
         try
         {
             writer.WriteAll(document, title);
@@ -187,6 +192,7 @@ public sealed class WordWriter
     {
         foreach (var block in blocks)
         {
+            _cancellation.ThrowIfCancellationRequested();
             Block(block, place, number: null);
         }
     }

@@ -46,6 +46,12 @@ public readonly record struct XlsxValue(XlsxKind Kind, double Number = 0, string
     /// </summary>
     public static readonly XlsxValue EmptyText = new(XlsxKind.Text, Text: "");
 
+    /// <summary>
+    /// A database's text: <see cref="EmptyText"/> for <c>''</c>, else <see cref="OfText"/> (2026-10-30, review F15/F42: DuckDB's cells and
+    /// SQLite's date-column text still went through <see cref="OfText"/>, so their <c>''</c> came out blank like a NULL).
+    /// </summary>
+    public static XlsxValue OfDbText(string text) => text.Length == 0 ? EmptyText : OfText(text);
+
     /// <summary>Text, cut at <see cref="MaxChars"/>; null or empty is a blank cell.</summary>
     public static XlsxValue OfText(string? text)
     {

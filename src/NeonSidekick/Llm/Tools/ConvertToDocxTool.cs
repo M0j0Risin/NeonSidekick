@@ -38,7 +38,7 @@ public sealed class ConvertToDocxTool : FileTool, IRefusesPrunedStubs
             "markdown": { "type": "string", "description": "Markdown text to make a Word document of, instead of path: a report or notes written for it." },
             "title": { "type": "string", "description": "The document's title, shown at the top of each page; with markdown it names the file too. Default: the first # heading." },
             "to": { "type": "string", "description": "The .docx path or folder, relative to the working directory. Default: beside the source file with .docx, or at the top for markdown." },
-            "overwrite": { "type": "boolean", "description": "Replace a document that is already there. Default false." },
+            "overwrite": { "type": "boolean", "description": "Only with to: replace a document that is already there (a name the tool makes up never replaces one). Default false." },
             "paper": { "type": "string", "enum": ["letter", "a4", "legal"], "description": "The paper size. Default letter." },
             "landscape": { "type": "boolean", "description": "Lay the pages out landscape. Default false." }
           }
@@ -105,6 +105,13 @@ public sealed class ConvertToDocxTool : FileTool, IRefusesPrunedStubs
             Overwrite: overwrite,
             Landscape: landscape,
             Paper: paper);
-        return new(_docx.Convert(request, cancellationToken));
+        return new(ConvertAsync(request, cancellationToken));
     }
+
+    /// <summary>
+    /// The conversion off the turn's thread, so Esc returns the turn at once (2026-10-30, review F52, as <c>image_edit</c> does): the pool's
+    /// run stops at its next block or picture and drops its unfinished file.
+    /// </summary>
+    private async Task<object?> ConvertAsync(DocxRequest request, CancellationToken cancellationToken) =>
+        await Task.Run(() => _docx.Convert(request, cancellationToken), cancellationToken).WaitAsync(cancellationToken).ConfigureAwait(false);
 }

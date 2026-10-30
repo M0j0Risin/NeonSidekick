@@ -19,22 +19,30 @@ public delegate XlsxValue SqlCellReader(DbDataReader reader, int ordinal, string
 /// hands back holds the columns and the first <see cref="SqlExport.PreviewRows"/> rows as the chat would show them, and
 /// <see cref="SqlGrid.More"/> when the cap stopped it (read one row past, as the chat does). The sheet is begun only when the first result
 /// set arrives (2026-10-29, review P2-8: a query that failed to connect or parse had already copied the workbook and left a checkpoint
-/// entry). A sheet that won't begin or take the columns stops the read with <see cref="Refusal"/> set, never a throw the family's catch
-/// could turn into a server's error.
+/// entry). A sheet that won't begin or take the columns, or a file that fails under a row (a full disk), stops the read with
+/// <see cref="Refusal"/> set, never a throw the family's catch could turn into a server's error (2026-10-30, review F103), and the grid says
+/// <see cref="SqlGrid.More"/>, so the family cancels the rest rather than draining it (review F53).
 /// </summary>
 public sealed class SqlExportJob
 {
     private readonly Func<(ISheetRows? Sink, string? Refusal)> _begin;
     private SqlCellReader _cell;
     private readonly Func<DbDataReader, int, string>? _header;
+    private readonly Func<Exception, string>? _failed;
 
     /// <param name="begin">The sheet begun (the pending file opened): the rows' sink, or null with the refusal. Called once, inside the session.</param>
     /// <param name="header">A column's header when the family adds to its name (PostgreSQL's <c> (UTC)</c>); null for the name.</param>
-    public SqlExportJob(Func<(ISheetRows? Sink, string? Refusal)> begin, SqlCellReader cell, Func<DbDataReader, int, string>? header = null)
+    /// <param name="failed">
+    /// The refusal for a file failure (<see cref="XlsxTarget.Failure"/>) while the sheet takes the columns or a row, worded with the workbook's
+    /// name; null lets it throw.
+    /// </param>
+    public SqlExportJob(Func<(ISheetRows? Sink, string? Refusal)> begin, SqlCellReader cell, Func<DbDataReader, int, string>? header = null,
+        Func<Exception, string>? failed = null)
     {
         _begin = begin ?? throw new ArgumentNullException(nameof(begin));
         _cell = cell ?? throw new ArgumentNullException(nameof(cell));
         _header = header;
+        _failed = failed;
     }
 
     /// <summary>A job over a sheet already begun.</summary>
@@ -76,19 +84,29 @@ public sealed class SqlExportJob
             return new SqlGrid(columns, [], false);
         }
 
+        // A refusal says More (2026-10-30, review F53: false told the families the set was read to its end, so their dispose drained every
+        // row of it before the answer came back).
         Read = true;
         var (sink, refused) = _begin();
         if (sink is null)
         {
             Refusal = refused ?? FileText.SaveNotHere;
-            return new SqlGrid(columns, [], false);
+            return new SqlGrid(columns, [], true);
         }
 
         var headers = _header is null ? columns : [.. columns.Select((c, i) => _header(reader, i))];
-        Refusal = sink.Begin(headers);
+        try
+        {
+            Refusal = sink.Begin(headers);
+        }
+        catch (Exception ex) when (_failed is not null && XlsxTarget.Failure(ex))
+        {
+            Refusal = _failed(ex);
+        }
+
         if (Refusal is not null)
         {
-            return new SqlGrid(columns, [], false);
+            return new SqlGrid(columns, [], true);
         }
 
         var types = new string?[columns.Length];
@@ -113,7 +131,19 @@ public sealed class SqlExportJob
                 row[i] = _cell(reader, i, types[i]);
             }
 
-            if (!sink.Add(row))
+            bool added;
+            try
+            {
+                added = sink.Add(row);
+            }
+            catch (Exception ex) when (_failed is not null && XlsxTarget.Failure(ex))
+            {
+                Refusal = _failed(ex);
+                more = true;
+                break;
+            }
+
+            if (!added)
             {
                 more = true;
                 break;

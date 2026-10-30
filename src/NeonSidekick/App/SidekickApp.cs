@@ -847,6 +847,9 @@ public sealed partial class SidekickApp
     /// correct exit for a piped run. Diagnostics of Warning and above are forwarded to the same
     /// writer on their own lines; the raw echo is off while this mode owns stdout.
     /// </summary>
+    /// <summary>Headless's launch sweep of the working folder's stale temps (2026-10-30, review F88); kept so a test can wait for it.</summary>
+    internal Task? LaunchSweep { get; private set; }
+
     private async Task<int> RunHeadlessAsync(CancellationToken cancellationToken)
     {
         bool previousEcho = DiagnosticLog.EchoToConsole;
@@ -873,6 +876,7 @@ public sealed partial class SidekickApp
         // The file tools need no console, so headless has them; the editor opener is the real one.
         // The setting File tools decides per turn, like Web tools; the clock alone is standing.
         var files = BuildWorkingDirectory();
+        LaunchSweep = files.SweepRoot();
         // The SQLite databases no file tool changes and the shell police guards while the SQLite tools are on (2026-10-05); DuckDB's while its are (2026-10-25).
         files.Databases = () => ChatScreen.DatabaseGuardFor(EffectiveSettings, _settings.ProfileDirectory, _settings.StorageDirectory);
         files.ServerDatabases = () => Shell.ServerDatabasePolice.For(EffectiveSettings, _settings.ProfileDirectory, _settings.StorageDirectory);
@@ -1698,6 +1702,16 @@ public sealed partial class SidekickApp
                     continue;
                 }
 
+                // /sessions export (2026-10-30, review F60): the screen's alone, so an [error] line rather than a message to the model. A bare
+                // /sessions still goes on as the text it is (HEADLESS.md).
+                if (SlashCommands.Parse(text) is (SlashCommand.Session, var sessionsArgs)
+                    && sessionsArgs.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries) is [var sessionsVerb, ..]
+                    && sessionsVerb.Equals(ChatScreen.SessionExportWord, StringComparison.OrdinalIgnoreCase))
+                {
+                    await HeadlessLineAsync("[error] " + Sessions.SessionText.ExportScreenOnlyError).ConfigureAwait(false);
+                    continue;
+                }
+
                 // /test (2026-09-28): ahead of the server check, since the listing and the saved runs need no LLM; a run refuses without one.
                 if (SlashCommands.Parse(text) is (SlashCommand.Test, var testArgs))
                 {
@@ -1847,7 +1861,7 @@ public sealed partial class SidekickApp
                 HeadlessTurn turn;
                 try
                 {
-                    turn = await RunHeadlessTurnAsync(session, assistant, text, turnImages, cancellationToken).ConfigureAwait(false);
+                    turn = await RunHeadlessTurnAsync(session, assistant, text, turnImages, planState.Ralph is { Loop.InPass: true } || audit.InPass, cancellationToken).ConfigureAwait(false);
                 }
                 catch
                 {
@@ -2628,11 +2642,11 @@ public sealed partial class SidekickApp
     /// </summary>
     private readonly record struct HeadlessTurn(string Reply, TurnTrace Trace, bool Cancelled, bool Failed = false);
 
-    private Task<HeadlessTurn> RunHeadlessTurnAsync(LlmSession session, Assistant assistant, string text, CancellationToken cancellationToken) =>
-        RunHeadlessTurnAsync(session, assistant, text, [], cancellationToken);
-
-    /// <summary><see cref="RunHeadlessTurnAsync(LlmSession, Assistant, string, CancellationToken)"/> with pictures (2026-10-18, a plan's reference pictures).</summary>
-    private async Task<HeadlessTurn> RunHeadlessTurnAsync(LlmSession session, Assistant assistant, string text, IReadOnlyList<ImageAttachment> images, CancellationToken cancellationToken)
+    /// <summary>
+    /// One headless turn with pictures (2026-10-18, a plan's reference pictures). <paramref name="loopPass"/>: an audit or Ralph pass, whose
+    /// own stop line says how to go on (2026-10-30, review F96: a stopped call's notice leaves out "ask again" there).
+    /// </summary>
+    private async Task<HeadlessTurn> RunHeadlessTurnAsync(LlmSession session, Assistant assistant, string text, IReadOnlyList<ImageAttachment> images, bool loopPass, CancellationToken cancellationToken)
     {
         await using var events = assistant.RunTurnAsync(text, images, cancellationToken).GetAsyncEnumerator(cancellationToken);
         bool prefixed = false;
@@ -2675,7 +2689,7 @@ public sealed partial class SidekickApp
                         break;
                     case TurnEvent.Notice notice:
                         failed |= notice.IsError;
-                        await HeadlessNoticeLineAsync((notice.IsError ? "[error] " : "[notice] ") + notice.Text).ConfigureAwait(false);
+                        await HeadlessNoticeLineAsync((notice.IsError ? "[error] " : "[notice] ") + TurnText.Shown(notice, loopPass)).ConfigureAwait(false);
                         break;
                     case TurnEvent.Usage usage:
                         // Tallied for the automatic compact's share; nothing is printed.

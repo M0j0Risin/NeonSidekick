@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Net;
+using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Extensions.AI;
 using NeonSidekick.Diagnostics;
@@ -74,12 +75,13 @@ public static class SessionExport
             title.Replace(c, ' ');
         }
 
-        return OutputNames.Stamped(title.ToString(), TimeZoneInfo.ConvertTime(summary.StartedAt, zone), "session");
+        return OutputNames.Stamped(title.ToString(), TimeZoneInfo.ConvertTime(summary.StartedAt, zone), SessionText.ExportStem);
     }
 
     /// <summary>
-    /// <paramref name="text"/> as plain Markdown text: a backslash before each character that would make it something else (<c>\ ` * _ [ ] &lt; &gt; # |</c>),
-    /// for the app's own lines — the title and the facts — so "Fix the *bug* in [x]" shows as typed. Pure.
+    /// <paramref name="text"/> as plain Markdown text: a backslash before each character that would make it something else (<c>\ ` * _ [ ] &lt; &gt; # |</c>,
+    /// and since 2026-10-30 <c>$ = ~ &amp; %</c>, review F50: Obsidian read <c>$…$</c> as math, <c>==</c> and <c>~~</c> as marks, <c>&amp;amp;</c> as an
+    /// entity and <c>%%</c> as a comment), for the app's own lines — the title and the facts — so "Fix the *bug* in [x]" shows as typed. Pure.
     /// </summary>
     public static string MarkdownText(string text)
     {
@@ -87,7 +89,7 @@ public static class SessionExport
         var escaped = new StringBuilder(text.Length + 8);
         foreach (char c in text)
         {
-            if (c is '\\' or '`' or '*' or '_' or '[' or ']' or '<' or '>' or '#' or '|')
+            if (c is '\\' or '`' or '*' or '_' or '[' or ']' or '<' or '>' or '#' or '|' or '$' or '=' or '~' or '&' or '%')
             {
                 escaped.Append('\\');
             }
@@ -101,7 +103,8 @@ public static class SessionExport
     /// <summary>
     /// The export of <paramref name="record"/> in <paramref name="format"/>: times in <paramref name="zone"/>, an HTML page's colors from
     /// <paramref name="palette"/>, a Markdown note's picture links into <paramref name="pictureFolder"/> (the folder's name beside the note). A history
-    /// that won't parse exports without pictures (logged); the text, from the rows, is whole either way. Pure but for that log line.
+    /// that won't parse exports without pictures (logged); the text, from the rows, is whole either way. The whole document as a string, for the
+    /// tests and small callers; <see cref="Write"/> streams the same text (<see cref="Emit"/>). Pure but for the log lines.
     /// </summary>
     public static SessionExportDocument Build(SessionRecord record, SessionExportFormat format, TimeZoneInfo zone, ThemePalette palette, string pictureFolder)
     {
@@ -109,8 +112,37 @@ public static class SessionExport
         ArgumentNullException.ThrowIfNull(zone);
         ArgumentNullException.ThrowIfNull(palette);
         ArgumentNullException.ThrowIfNull(pictureFolder);
+        var pictures = new List<ExportPicture>();
+        using var text = new StringWriter(CultureInfo.InvariantCulture);
+        Emit(record, format, zone, palette, pictureFolder, text, (name, bytes) =>
+        {
+            pictures.Add(new ExportPicture(name, bytes.ToArray()));
+            return null;
+        });
+        return new SessionExportDocument(text.ToString(), pictures);
+    }
+
+    /// <summary>
+    /// The export written into <paramref name="output"/> a turn at a time (2026-10-30, review F84: the whole document, its base64 copies and its bytes
+    /// were built in memory, about three times a picture-heavy session's pictures on top of the loaded record): a Markdown note's pictures handed to
+    /// <paramref name="picture"/> as they come, an HTML page's encoded straight into the output in slices. Null, or the error <paramref name="picture"/>
+    /// answered, which stops the export there.
+    /// </summary>
+    private static string? Emit(SessionRecord record, SessionExportFormat format, TimeZoneInfo zone, ThemePalette palette, string pictureFolder, TextWriter output,
+        Func<string, ReadOnlyMemory<byte>, string?> picture)
+    {
         var byRow = Pictures(record);
-        return format == SessionExportFormat.Html ? Html(record, zone, palette, byRow) : Markdown(record, zone, byRow, pictureFolder);
+
+        // The export counts what it writes (2026-10-30, review F9): the front matter and the facts line both say the rows exported, where the
+        // stored count (the highest ordinal) could differ from them.
+        var summary = record.Summary with { Turns = record.Turns.Count };
+        if (summary.Turns != record.Summary.Turns)
+        {
+            DiagnosticLog.Info(ChatScreen.AppCategory, "session export: " + SessionText.Id(summary.Id) + " stores " + SessionText.Turns(record.Summary.Turns)
+                + " but loaded " + record.Turns.Count.ToString(CultureInfo.InvariantCulture) + " rows; the export says the rows");
+        }
+
+        return format == SessionExportFormat.Html ? Html(record, summary, zone, palette, byRow, output) : Markdown(record, summary, zone, byRow, pictureFolder, output, picture);
     }
 
     /// <summary>The stored history's pictures by row; none when the history is empty or won't parse.</summary>
@@ -125,24 +157,30 @@ public static class SessionExport
         {
             return RestoredPictures.ByRow(RestoredPictures.Turns(SessionHistory.FromJsonWhole(record.HistoryJson, out _)));
         }
-        catch (Exception ex) when (ex is System.Text.Json.JsonException or FormatException)
+        // A part the chat types refuse (a stored media type that isn't one, 2026-10-30, review F10) is an ArgumentException: no pictures either.
+        catch (Exception ex) when (ex is System.Text.Json.JsonException or FormatException or ArgumentException)
         {
             DiagnosticLog.Warn(ChatScreen.AppCategory, "session export: " + SessionText.Id(record.Summary.Id) + "'s history wouldn't parse, so it goes without pictures: " + ex.Message);
             return [];
         }
     }
 
-    /// <summary>The facts line as the pane's footer says it: <c>#12 · started … · last … · 14 turns · qwen3</c>, the model left out when none.</summary>
-    public static string Facts(SessionSummary summary, TimeZoneInfo zone)
+    /// <summary>
+    /// The facts line as the pane's footer says it: <c>#12 · started … · last … · 14 turns · qwen3</c>, the model left out when none; without the id
+    /// when <paramref name="withId"/> is false, which is the footer's own line (2026-10-30, review F68: the two lists were kept in step by hand).
+    /// </summary>
+    public static string Facts(SessionSummary summary, TimeZoneInfo zone, bool withId = true)
     {
         ArgumentNullException.ThrowIfNull(summary);
-        var facts = new List<string>
+        var facts = new List<string>(5);
+        if (withId)
         {
-            SessionText.Id(summary.Id),
-            SessionText.ExportStarted + " " + SessionText.Moment(summary.StartedAt, zone),
-            SessionText.ExportLast + " " + SessionText.Moment(summary.UpdatedAt, zone),
-            SessionText.Turns(summary.Turns),
-        };
+            facts.Add(SessionText.Id(summary.Id));
+        }
+
+        facts.Add(SessionText.ExportStarted + " " + SessionText.Moment(summary.StartedAt, zone));
+        facts.Add(SessionText.ExportLast + " " + SessionText.Moment(summary.UpdatedAt, zone));
+        facts.Add(SessionText.Turns(summary.Turns));
         if (!string.IsNullOrWhiteSpace(summary.Model))
         {
             facts.Add(summary.Model);
@@ -159,82 +197,155 @@ public static class SessionExport
     private static string ToolLine(SessionTurn turn, Func<string, string> name) =>
         UI.TranscriptRenderer.ToolGlyph.TrimStart() + SessionText.ToolCallsNote(turn.ToolCalls) + (turn.ToolNames.Count > 0 ? ": " + string.Join(", ", turn.ToolNames.Distinct(StringComparer.Ordinal).Select(name)) : "");
 
+    /// <summary>
+    /// <paramref name="text"/> as one Markdown code span (2026-10-30, review F89: a tool name with a backtick closed its span, and what followed read as
+    /// Markdown): fenced by one backtick more than its longest run, padded with a space where CommonMark would otherwise eat one or join the fence,
+    /// its line breaks spaces. Pure.
+    /// </summary>
+    public static string CodeSpan(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        text = text.ReplaceLineEndings(" ");
+        int longest = 0;
+        int run = 0;
+        foreach (char c in text)
+        {
+            run = c == '`' ? run + 1 : 0;
+            longest = Math.Max(longest, run);
+        }
+
+        string fence = new('`', longest + 1);
+        bool pad = text.Length > 0 && (text[0] == '`' || text[^1] == '`' || (text[0] == ' ' && text[^1] == ' ' && text.Trim().Length > 0));
+        return pad ? fence + " " + text + " " + fence : fence + text + fence;
+    }
+
     /// <summary>An ISO 8601 moment with its offset, in <paramref name="zone"/>.</summary>
     private static string Iso(DateTimeOffset at, TimeZoneInfo zone) => TimeZoneInfo.ConvertTime(at, zone).ToString("yyyy-MM-dd'T'HH:mm:sszzz", CultureInfo.InvariantCulture);
 
     /// <summary>A front-matter value: one line, quoted as YAML needs it.</summary>
     private static string Scalar(string value) => SkillFrontmatter.Scalar(value.ReplaceLineEndings(" "));
 
+    /// <summary>One picture as the export shows it: its file name (<c>turn-3-2.png</c>), the media type it is embedded as, its alt text and its bytes.</summary>
+    private sealed record ShownPicture(string Name, string MediaType, string Alt, ReadOnlyMemory<byte> Bytes);
+
+    /// <summary>
+    /// One turn's pictures named as both writers name them (2026-10-30, review F69: each writer had its own copy of the rule): <c>turn-N-k</c> with
+    /// <c>k</c> counting across the turn in the order shown (the imagined, the user's own, then the tools' after the tool line), the extension from a
+    /// media type <see cref="ImageFile"/> knows, else from the bytes (review F48: a stored type went into the page as it was). A picture that won't
+    /// read is left out, logged, and the turn says so (review F10), never the export failing whole.
+    /// </summary>
+    private sealed class TurnPictureNames(long session, int number)
+    {
+        private int _k;
+
+        /// <summary>Whether a picture of this turn was left out.</summary>
+        public bool Dropped { get; private set; }
+
+        public ShownPicture? Next(DataContent picture)
+        {
+            try
+            {
+                var bytes = picture.Data;
+                string extension = ImageFile.ExtensionFor(picture.MediaType ?? "", bytes.Span);
+                string name = "turn-" + number.ToString(CultureInfo.InvariantCulture) + "-" + (_k + 1).ToString(CultureInfo.InvariantCulture) + extension;
+
+                // The alt text is a file name at most, never a folder (a dropped picture's path is full), split on either OS's separator (review F39).
+                string alt = ConversationHistory.PicturePath(picture) is { } path ? FileNames.LastPart(path) : name;
+                var shown = new ShownPicture(name, PdfHtml.ImageMediaType(extension) ?? "image/png", alt, bytes);
+                _k++;
+                return shown;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                Dropped = true;
+                DiagnosticLog.Warn(ChatScreen.AppCategory, "session export: " + SessionText.Id(session) + " turn " + number.ToString(CultureInfo.InvariantCulture)
+                    + " leaves a picture out that wouldn't read: " + ex.Message);
+                return null;
+            }
+        }
+    }
+
     // ── Markdown ─────────────────────────────────────────────────────────────
 
-    private static SessionExportDocument Markdown(SessionRecord record, TimeZoneInfo zone, Dictionary<int, TurnPictures> byRow, string folder)
+    private static string? Markdown(SessionRecord record, SessionSummary summary, TimeZoneInfo zone, Dictionary<int, TurnPictures> byRow, string folder, TextWriter md,
+        Func<string, ReadOnlyMemory<byte>, string?> write)
     {
-        var summary = record.Summary;
         string title = SessionText.DisplayTitle(summary);
-        var md = new StringBuilder();
-        md.Append("---\n")
-            .Append("title: ").Append(Scalar(title)).Append('\n')
-            .Append("session: ").Append(summary.Id.ToString(CultureInfo.InvariantCulture)).Append('\n')
-            .Append("started: ").Append(Iso(summary.StartedAt, zone)).Append('\n')
-            .Append("updated: ").Append(Iso(summary.UpdatedAt, zone)).Append('\n')
-            .Append("turns: ").Append(record.Turns.Count.ToString(CultureInfo.InvariantCulture)).Append('\n');
+        md.Write("---\n");
+        md.Write("title: " + Scalar(title) + "\n");
+        md.Write("session: " + summary.Id.ToString(CultureInfo.InvariantCulture) + "\n");
+        md.Write("started: " + Iso(summary.StartedAt, zone) + "\n");
+        md.Write("updated: " + Iso(summary.UpdatedAt, zone) + "\n");
+        md.Write("turns: " + summary.Turns.ToString(CultureInfo.InvariantCulture) + "\n");
         if (!string.IsNullOrWhiteSpace(summary.Model))
         {
-            md.Append("model: ").Append(Scalar(summary.Model)).Append('\n');
+            md.Write("model: " + Scalar(summary.Model) + "\n");
         }
 
-        md.Append("tags: [").Append(Tag).Append("]\n---\n\n")
-            .Append("# ").Append(MarkdownText(title.ReplaceLineEndings(" "))).Append("\n\n")
-            .Append(MarkdownText(Facts(summary, zone))).Append('\n');
-        var pictures = new List<ExportPicture>();
+        md.Write("tags: [" + Tag + "]\n---\n\n");
+        md.Write("# " + MarkdownText(title.ReplaceLineEndings(" ")) + "\n\n");
+        md.Write(MarkdownText(Facts(summary, zone)) + "\n");
         for (int i = 0; i < record.Turns.Count; i++)
         {
             var turn = record.Turns[i];
             int number = i + 1;
-            int k = 0;
-            void Links(IReadOnlyList<DataContent> shown)
+            var names = new TurnPictureNames(summary.Id, number);
+            string? Links(IReadOnlyList<DataContent> pictures)
             {
-                foreach (var picture in shown)
+                foreach (var picture in pictures)
                 {
-                    byte[] bytes = picture.Data.ToArray();
-                    string name = "turn-" + number.ToString(CultureInfo.InvariantCulture) + "-" + (++k).ToString(CultureInfo.InvariantCulture)
-                        + ImageFile.ExtensionFor(picture.MediaType ?? "", bytes);
-                    pictures.Add(new ExportPicture(name, bytes));
-                    md.Append("\n![](<").Append(folder).Append('/').Append(name).Append(">)\n");
+                    if (names.Next(picture) is not { } shown)
+                    {
+                        continue;
+                    }
+
+                    if (write(shown.Name, shown.Bytes) is { } error)
+                    {
+                        return error;
+                    }
+
+                    md.Write("\n![](<" + folder + "/" + shown.Name + ">)\n");
                 }
+
+                return null;
             }
 
             var shown = byRow.GetValueOrDefault(turn.Ordinal);
-            md.Append(i == 0 ? "\n" : "\n---\n\n").Append("## ").Append(TurnHeading(number, turn, zone)).Append("\n\n")
-                .Append(ChatLog.Quote(PasteBlocks.WithoutSavedPaths(turn.UserText))).Append('\n');
-            if (shown is not null)
+            md.Write(i == 0 ? "\n" : "\n---\n\n");
+            md.Write("## " + TurnHeading(number, turn, zone) + "\n\n");
+            md.Write(ChatLog.Quote(PasteBlocks.WithoutSavedPaths(turn.UserText)) + "\n");
+            if (shown is not null && (Links(shown.Imagined) ?? Links(shown.Own)) is { } ownError)
             {
-                Links(shown.Imagined);
-                Links(shown.Own);
+                return ownError;
             }
 
             if (turn.ToolCalls > 0)
             {
-                md.Append('\n').Append(ToolLine(turn, n => "`" + n + "`")).Append('\n');
+                md.Write("\n" + ToolLine(turn, CodeSpan) + "\n");
             }
 
-            if (shown is not null)
+            if (shown is not null && Links(shown.Tools) is { } toolError)
             {
-                Links(shown.Tools);
+                return toolError;
+            }
+
+            if (names.Dropped)
+            {
+                md.Write("\n_" + SessionText.ExportPictureDroppedNote + "_\n");
             }
 
             if (turn.ReplyText.Trim().Length > 0)
             {
-                md.Append('\n').Append(turn.ReplyText.ReplaceLineEndings("\n").TrimEnd()).Append('\n');
+                md.Write("\n" + turn.ReplyText.ReplaceLineEndings("\n").TrimEnd() + "\n");
             }
 
             if (turn.Cancelled)
             {
-                md.Append("\n_").Append(SessionText.ExportCancelledNote).Append("_\n");
+                md.Write("\n_" + SessionText.ExportCancelledNote + "_\n");
             }
         }
 
-        return new SessionExportDocument(md.ToString(), pictures);
+        return null;
     }
 
     // ── HTML ─────────────────────────────────────────────────────────────────
@@ -320,40 +431,54 @@ public static class SessionExport
         return css.ToString();
     }
 
-    private static SessionExportDocument Html(SessionRecord record, TimeZoneInfo zone, ThemePalette palette, Dictionary<int, TurnPictures> byRow)
+    /// <summary>The bytes a picture's base64 is encoded from at a time: a multiple of 3, so the slices join into one clean run (review F84).</summary>
+    internal const int Base64Slice = 48 * 1024;
+
+    /// <summary><paramref name="bytes"/> as base64 into <paramref name="output"/>, <see cref="Base64Slice"/> bytes at a time through one reused buffer.</summary>
+    private static void WriteBase64(TextWriter output, ReadOnlySpan<byte> bytes)
     {
-        var summary = record.Summary;
+        char[] buffer = new char[Base64Slice / 3 * 4];
+        for (int at = 0; at < bytes.Length; at += Base64Slice)
+        {
+            Convert.TryToBase64Chars(bytes.Slice(at, Math.Min(Base64Slice, bytes.Length - at)), buffer, out int written);
+            output.Write(buffer, 0, written);
+        }
+    }
+
+    private static string? Html(SessionRecord record, SessionSummary summary, TimeZoneInfo zone, ThemePalette palette, Dictionary<int, TurnPictures> byRow, TextWriter html)
+    {
         string title = SessionText.DisplayTitle(summary).ReplaceLineEndings(" ");
-        var html = new StringBuilder(4096);
         // Opened as PdfHtml.Document opens its page: the charset first (the file is UTF-8 with no BOM, so a page read from disk never guesses).
-        html.Append("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n")
-            .Append(PdfHtml.PolicyMeta).Append('\n')
-            .Append("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n")
-            .Append("<title>").Append(WebUtility.HtmlEncode(title)).Append("</title>\n")
-            .Append("<style>\n").Append(ThemeSheet(palette)).Append(Stylesheet).Append("\n</style>\n</head>\n<body>\n")
-            .Append("<header>\n<h1>").Append(WebUtility.HtmlEncode(title)).Append("</h1>\n<p class=\"facts\">").Append(WebUtility.HtmlEncode(Facts(summary, zone))).Append("</p>\n</header>\n");
+        html.Write("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n");
+        html.Write(PdfHtml.PolicyMeta + "\n");
+        html.Write("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n");
+        html.Write("<title>" + WebUtility.HtmlEncode(title) + "</title>\n");
+        html.Write("<style>\n" + ThemeSheet(palette) + Stylesheet + "\n</style>\n</head>\n<body>\n");
+        html.Write("<header>\n<h1>" + WebUtility.HtmlEncode(title) + "</h1>\n<p class=\"facts\">" + WebUtility.HtmlEncode(Facts(summary, zone)) + "</p>\n</header>\n");
         for (int i = 0; i < record.Turns.Count; i++)
         {
             var turn = record.Turns[i];
             var shown = byRow.GetValueOrDefault(turn.Ordinal);
             int number = i + 1;
-            int k = 0;
+            var names = new TurnPictureNames(summary.Id, number);
             void Images(IReadOnlyList<DataContent> pictures)
             {
                 foreach (var picture in pictures)
                 {
-                    byte[] bytes = picture.Data.ToArray();
-                    string mediaType = picture.MediaType is { Length: > 0 } type ? type : "image/png";
-                    k++;
-                    // The alt text is a file name at most, never a folder (a dropped picture's path is full).
-                    string alt = ConversationHistory.PicturePath(picture) is { } path ? Path.GetFileName(path)
-                        : "turn-" + number.ToString(CultureInfo.InvariantCulture) + "-" + k.ToString(CultureInfo.InvariantCulture) + ImageFile.ExtensionFor(mediaType, bytes);
-                    html.Append("<img src=\"").Append(PdfHtml.DataUri(bytes, mediaType)).Append("\" alt=\"").Append(WebUtility.HtmlEncode(alt)).Append("\">\n");
+                    if (names.Next(picture) is not { } image)
+                    {
+                        continue;
+                    }
+
+                    // The media type is one of the page's own (F48), and base64 needs no encoding; the type goes through the encoder all the same.
+                    html.Write("<img src=\"data:" + WebUtility.HtmlEncode(image.MediaType) + ";base64,");
+                    WriteBase64(html, image.Bytes.Span);
+                    html.Write("\" alt=\"" + WebUtility.HtmlEncode(image.Alt) + "\">\n");
                 }
             }
 
-            html.Append("<section class=\"turn\">\n<h2>").Append(WebUtility.HtmlEncode(TurnHeading(number, turn, zone))).Append("</h2>\n")
-                .Append("<div class=\"user\">").Append(WebUtility.HtmlEncode(PasteBlocks.WithoutSavedPaths(turn.UserText).ReplaceLineEndings("\n"))).Append("</div>\n");
+            html.Write("<section class=\"turn\">\n<h2>" + WebUtility.HtmlEncode(TurnHeading(number, turn, zone)) + "</h2>\n");
+            html.Write("<div class=\"user\">" + WebUtility.HtmlEncode(PasteBlocks.WithoutSavedPaths(turn.UserText).ReplaceLineEndings("\n")) + "</div>\n");
             if (shown is not null)
             {
                 Images(shown.Imagined);
@@ -362,7 +487,7 @@ public static class SessionExport
 
             if (turn.ToolCalls > 0)
             {
-                html.Append("<p class=\"tools\">").Append(WebUtility.HtmlEncode(ToolLine(turn, n => n))).Append("</p>\n");
+                html.Write("<p class=\"tools\">" + WebUtility.HtmlEncode(ToolLine(turn, n => n)) + "</p>\n");
             }
 
             if (shown is not null)
@@ -370,99 +495,176 @@ public static class SessionExport
                 Images(shown.Tools);
             }
 
+            if (names.Dropped)
+            {
+                html.Write("<p class=\"note\">" + WebUtility.HtmlEncode(SessionText.ExportPictureDroppedNote) + "</p>\n");
+            }
+
             if (turn.ReplyText.Trim().Length > 0)
             {
-                html.Append("<div class=\"reply\">\n").Append(PdfHtml.Markdown(turn.ReplyText, _ => null, WebUiMarkdown.SafeLink)).Append("</div>\n");
+                html.Write("<div class=\"reply\">\n" + PdfHtml.Markdown(turn.ReplyText, _ => null, WebUiMarkdown.SafeLink) + "</div>\n");
             }
 
             if (turn.Cancelled)
             {
-                html.Append("<p class=\"note\">").Append(WebUtility.HtmlEncode(SessionText.ExportCancelledNote)).Append("</p>\n");
+                html.Write("<p class=\"note\">" + WebUtility.HtmlEncode(SessionText.ExportCancelledNote) + "</p>\n");
             }
 
-            html.Append("</section>\n");
+            html.Write("</section>\n");
         }
 
-        html.Append("</body>\n</html>\n");
-        return new SessionExportDocument(html.ToString(), []);
+        html.Write("</body>\n</html>\n");
+        return null;
     }
 
     // ── The writer ───────────────────────────────────────────────────────────
 
     /// <summary>
     /// <paramref name="record"/> exported into <paramref name="files"/>' working folder: the written file's path relative to it, else the error
-    /// sentence. Named <see cref="Stem"/> + the extension, made free (<see cref="WorkingDirectory.FirstFree"/>: a re-export is <c>-2</c>, never a
-    /// replace); a Markdown note's pictures folder named after the final stem, made free too. The app's own write (<see cref="WriteGuard.AsApp"/>):
-    /// UTF-8 bytes with no BOM, no character cap. The pictures first, the document last; when the document fails, the pictures just written go again.
+    /// sentence. Named <see cref="Stem"/> + the extension, the note and its pictures folder sharing one free stem (<see cref="FreeStem"/>: a
+    /// re-export is <c>-2</c>, never a replace). The app's own write (<see cref="WriteGuard.AsApp"/>): UTF-8 with no BOM, no character cap,
+    /// streamed into a temporary file a turn at a time (review F84) and put in place last; each picture written as the note reaches it. When
+    /// anything fails, the pictures just written go again and the note never lands.
     /// </summary>
     public static (string? Path, string? Error) Write(WorkingDirectory files, SessionRecord record, SessionExportFormat format, TimeZoneInfo zone, ThemePalette palette) =>
         Write(files, record, format, zone, palette, null);
 
-    /// <summary><see cref="Write(WorkingDirectory, SessionRecord, SessionExportFormat, TimeZoneInfo, ThemePalette)"/>, the document's write a seam for the tests.</summary>
-    internal static (string? Path, string? Error) Write(WorkingDirectory files, SessionRecord record, SessionExportFormat format, TimeZoneInfo zone, ThemePalette palette, Func<string, byte[], WriteResult>? writeDocument)
+    /// <summary><see cref="Write(WorkingDirectory, SessionRecord, SessionExportFormat, TimeZoneInfo, ThemePalette)"/>, the document's commit a seam for the tests.</summary>
+    internal static (string? Path, string? Error) Write(WorkingDirectory files, SessionRecord record, SessionExportFormat format, TimeZoneInfo zone, ThemePalette palette,
+        Func<PendingWrite, WriteResult>? commit, Func<Stream, TextWriter>? writer = null)
     {
         ArgumentNullException.ThrowIfNull(files);
         ArgumentNullException.ThrowIfNull(record);
-        string stem = Stem(record.Summary, zone);
-        var (document, refused) = Free(files, stem + Extension(format));
-        if (document is null)
+        ArgumentNullException.ThrowIfNull(zone);
+        ArgumentNullException.ThrowIfNull(palette);
+        string extension = Extension(format);
+        var (stem, refused) = FreeStem(files, Stem(record.Summary, zone), extension, format == SessionExportFormat.Markdown);
+        if (stem is null)
         {
-            return (null, FileText.Error(refused, stem + Extension(format), "write", ""));
+            return (null, FileText.Error(refused, Stem(record.Summary, zone) + extension, "write", ""));
         }
 
-        string finalStem = Path.GetFileNameWithoutExtension(document);
-        string folder = "";
-        if (format == SessionExportFormat.Markdown)
+        string document = stem + extension;
+        string folder = format == SessionExportFormat.Markdown ? stem + PicturesSuffix : "";
+        PendingWrite? pending = null;
+        var begun = WriteGuard.AsApp(() => files.BeginWrite(document, overwrite: false, out pending));
+        if (begun.Outcome != FileOutcome.Ok || pending is null)
         {
-            string parent = Path.GetDirectoryName(document)?.Replace('\\', '/') ?? "";
-            string wanted = (parent.Length > 0 ? parent + "/" : "") + finalStem + PicturesSuffix;
-            folder = Free(files, wanted).Path ?? wanted;
+            return (null, FileText.Error(begun.Outcome, document, "write", begun.Detail));
         }
 
-        var built = Build(record, format, zone, palette, Path.GetFileName(folder));
         var written = new List<string>();
-        foreach (var picture in built.Pictures)
+        long pictureBytes = 0;
+        string? Picture(string name, ReadOnlyMemory<byte> bytes)
         {
-            string path = folder + "/" + picture.Name;
-            var result = WriteGuard.AsApp(() => files.WriteBytes(path, picture.Bytes, overwrite: false));
+            string path = folder + "/" + name;
+            var result = WriteGuard.AsApp(() => files.WriteBytes(path, ArrayOf(bytes), overwrite: false));
             if (result.Outcome != FileOutcome.Ok)
             {
-                Undo(files, written, folder);
-                return (null, FileText.Error(result.Outcome, path, "write", result.Detail));
+                return FileText.Error(result.Outcome, path, "write", result.Detail);
             }
 
             written.Add(path);
+            pictureBytes += bytes.Length;
+            return null;
         }
 
-        byte[] bytes = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(built.Text);
-        var write = writeDocument ?? ((path, data) => files.WriteBytes(path, data, overwrite: false));
-        var saved = WriteGuard.AsApp(() => write(document, bytes));
-        if (saved.Outcome != FileOutcome.Ok)
+        using (pending)
         {
-            Undo(files, written, folder);
-            return (null, FileText.Error(saved.Outcome, document, "write", saved.Detail));
+            WriteResult saved;
+            try
+            {
+                // Left open: Commit reads the stream's length and closes it itself.
+                string? error;
+                using (var text = writer?.Invoke(pending.Stream) ?? new StreamWriter(pending.Stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), 64 * 1024, leaveOpen: true))
+                {
+                    error = Emit(record, format, zone, palette, folder, text, Picture);
+                    text.Flush();
+                }
+
+                if (error is not null)
+                {
+                    Undo(files, written, folder);
+                    return (null, error);
+                }
+
+                saved = commit?.Invoke(pending) ?? pending.Commit();
+            }
+            catch
+            {
+                Undo(files, written, folder);
+                throw;
+            }
+
+            // A file that appeared at the name meanwhile is a failure too: the export never writes over one.
+            if (saved.Outcome != FileOutcome.Ok)
+            {
+                Undo(files, written, folder);
+                return (null, FileText.Error(saved.Outcome, document, "write", saved.Detail));
+            }
+
+            DiagnosticLog.Info(ChatScreen.AppCategory, "session export: " + SessionText.Id(record.Summary.Id) + " " + (format == SessionExportFormat.Html ? "html" : "md") + " → " + document
+                + ", " + written.Count.ToString(CultureInfo.InvariantCulture) + (written.Count == 1 ? " picture, " : " pictures, ")
+                + ((saved.Bytes + pictureBytes + 1023) / 1024).ToString(CultureInfo.InvariantCulture) + " KB");
+            return (document, null);
         }
-
-        DiagnosticLog.Info(ChatScreen.AppCategory, "session export: " + SessionText.Id(record.Summary.Id) + " " + (format == SessionExportFormat.Html ? "html" : "md") + " → " + document
-            + ", " + built.Pictures.Count.ToString(CultureInfo.InvariantCulture) + (built.Pictures.Count == 1 ? " picture, " : " pictures, ")
-            + ((bytes.Length + built.Pictures.Sum(p => (long)p.Bytes.Length) + 1023) / 1024).ToString(CultureInfo.InvariantCulture) + " KB");
-        return (document, null);
     }
 
-    /// <summary>The first free relative path for <paramref name="relative"/>, or null and the refusal when the working folder refuses it.</summary>
-    private static (string? Path, FileOutcome Refused) Free(WorkingDirectory files, string relative)
+    /// <summary><paramref name="bytes"/>' own array when it is one whole, else a copy (the stored pictures are whole arrays, so no copy as a rule).</summary>
+    private static byte[] ArrayOf(ReadOnlyMemory<byte> bytes) =>
+        MemoryMarshal.TryGetArray(bytes, out var segment) && segment.Array is { } array && segment.Offset == 0 && segment.Count == array.Length ? array : bytes.ToArray();
+
+    /// <summary>
+    /// The first stem free for both the note and, with <paramref name="withPictures"/>, its <c>&lt;stem&gt;-pictures</c> folder (2026-10-30, review F7:
+    /// each was made free on its own, through a numbering that split a dotted title at its last dot): <paramref name="stem"/>, then <c>-2</c>, <c>-3</c>…;
+    /// null and the refusal when the working folder refuses the name.
+    /// </summary>
+    private static (string? Stem, FileOutcome Refused) FreeStem(WorkingDirectory files, string stem, string extension, bool withPictures)
     {
-        string full = "";
-        var outcome = WriteGuard.AsApp(() => files.Resolve(relative, forWrite: true, out full));
-        return outcome != FileOutcome.Ok ? (null, outcome) : (files.Relative(WorkingDirectory.FirstFree(full)).Replace('\\', '/'), FileOutcome.Ok);
+        for (int n = 1; ; n++)
+        {
+            string candidate = n == 1 ? stem : stem + "-" + n.ToString(CultureInfo.InvariantCulture);
+            string note = "";
+            var outcome = WriteGuard.AsApp(() => files.Resolve(candidate + extension, forWrite: true, out note));
+            if (outcome != FileOutcome.Ok)
+            {
+                return (null, outcome);
+            }
+
+            if (File.Exists(note) || Directory.Exists(note))
+            {
+                continue;
+            }
+
+            if (withPictures)
+            {
+                string folder = "";
+                outcome = WriteGuard.AsApp(() => files.Resolve(candidate + PicturesSuffix, forWrite: true, out folder));
+                if (outcome != FileOutcome.Ok)
+                {
+                    return (null, outcome);
+                }
+
+                if (File.Exists(folder) || Directory.Exists(folder))
+                {
+                    continue;
+                }
+            }
+
+            return (candidate, FileOutcome.Ok);
+        }
     }
 
-    /// <summary>The pictures written so far removed again, and their folder when it is left empty.</summary>
+    /// <summary>
+    /// The pictures written so far removed again, and their folder when it is left empty; resolved as the app's own, as they were written (2026-10-30,
+    /// review F6: a place only the app may write refused the undo, and the pictures stayed).
+    /// </summary>
     private static void Undo(WorkingDirectory files, List<string> written, string folder)
     {
         foreach (string path in written)
         {
-            if (files.Resolve(path, forWrite: true, out string full) == FileOutcome.Ok)
+            string full = "";
+            if (WriteGuard.AsApp(() => files.Resolve(path, forWrite: true, out full)) == FileOutcome.Ok)
             {
                 try
                 {
@@ -475,7 +677,8 @@ public static class SessionExport
             }
         }
 
-        if (folder.Length > 0 && files.Resolve(folder, forWrite: true, out string dir) == FileOutcome.Ok)
+        string dir = "";
+        if (folder.Length > 0 && WriteGuard.AsApp(() => files.Resolve(folder, forWrite: true, out dir)) == FileOutcome.Ok)
         {
             try
             {

@@ -49,7 +49,7 @@ public sealed class StreamClock
         ArgumentNullException.ThrowIfNull(update);
         long now = _time.GetTimestamp();
         bool marker = StreamProgress.IsMarker(update);
-        if (First is null && (update.Contents.Count > 0 || marker || StreamProgress.Shows(update)))
+        if (First is null && (update.Contents.Count > 0 || StreamProgress.Shows(update)))
         {
             First = now;
         }

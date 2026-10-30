@@ -115,7 +115,7 @@ public sealed class PresentAuditToolTests : IDisposable
         OwnerLock.LiveOwner = owner => owner.ProcessId == 424242;
         try
         {
-            Assert.Equal(AuditText.CouldNotSaveResult(AuditText.LockedError(_path)), Report1(FindingJson()));
+            Assert.Equal(AuditText.LockLostResult, Report1(FindingJson()));   // the pass told to end (2026-10-30, review F73)
         }
         finally
         {

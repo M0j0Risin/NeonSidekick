@@ -1,5 +1,7 @@
 using NeonSidekick.App;
 using NeonSidekick.Sessions;
+using NeonSidekick.Tests.Fakes;
+using NeonSidekick.UI;
 
 namespace NeonSidekick.Tests;
 
@@ -24,8 +26,8 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         string stem = ExportStem(id);
-        Assert.Contains(ChatScreen.SessionExportedNotice(id, stem + ".md"), output);
-        Assert.Contains(ChatScreen.SessionExportedNotice(id, stem + "-2.md"), output);
+        Assert.Contains(SessionText.ExportedNotice(id, stem + ".md"), output);
+        Assert.Contains(SessionText.ExportedNotice(id, stem + "-2.md"), output);
         Assert.True(File.Exists(Path.Combine(ExportsFolder, stem + "-pictures", "turn-1-1.png")));
         Assert.True(File.Exists(Path.Combine(ExportsFolder, stem + "-2-pictures", "turn-2-1.png")));
         Assert.Contains("title: look", File.ReadAllText(Path.Combine(ExportsFolder, stem + ".md")));
@@ -41,7 +43,7 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         string stem = ExportStem(1);
-        Assert.Contains(ChatScreen.SessionExportedNotice(1, stem + ".html"), output);
+        Assert.Contains(SessionText.ExportedNotice(1, stem + ".html"), output);
         Assert.Contains("<p>Hello.</p>", File.ReadAllText(Path.Combine(ExportsFolder, stem + ".html")));
         Assert.Single(Directory.EnumerateFileSystemEntries(ExportsFolder));
     }
@@ -81,7 +83,59 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.Contains(ChatScreen.SessionNotSavedNotice, output);
-        Assert.Contains(ChatScreen.SessionExportedNotice(id, ExportStem(id) + ".md"), output);
+        Assert.Contains(SessionText.NotSavedNotice, output);
+        Assert.Contains(SessionText.ExportedNotice(id, ExportStem(id) + ".md"), output);
+    }
+
+    /// <summary>
+    /// The working folder moved after the export began (2026-10-30, review F8): the note, its pictures and the notice's path all stay in the
+    /// folder the export started in.
+    /// </summary>
+    [Fact]
+    public async Task Session_Export_TheFolderMovedMidExport_KeepsTheNoteAndItsPicturesTogether()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        long id = SeedPictureSession();
+        string stem = ExportStem(id);
+        string elsewhere = Path.Combine(_dir, "elsewhere");
+        Directory.CreateDirectory(elsewhere);
+        _sessionLoad = loaded =>
+        {
+            _settings.Update(d => d.WorkingDirectory = elsewhere);
+            using var store = OpenSessions();
+            return store.Load(loaded);
+        };
+        StepsWhenIdle(Line("/sessions export " + id), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(SessionText.ExportedNotice(id, stem + ".md"), output);
+        Assert.True(File.Exists(Path.Combine(ExportsFolder, stem + ".md")));
+        Assert.True(File.Exists(Path.Combine(ExportsFolder, stem + "-pictures", "turn-1-1.png")));
+        Assert.Empty(Directory.EnumerateFileSystemEntries(elsewhere));
+    }
+
+    /// <summary>
+    /// An export that throws is an error line on the slash form and on the Sessions pane alike (2026-10-30, review F10/F11: the pane awaited
+    /// the export bare), logged, and the pane stays open.
+    /// </summary>
+    [Fact]
+    public async Task Session_Export_ALoadThatThrows_IsAnError_OnTheSlashFormAndThePane()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        long id = SeedSession();
+        _sessionLoad = _ => throw new InvalidOperationException("the disk went away");
+        StepsWhenIdle(
+            Line("/sessions export " + id),
+            Line("/sessions"), Key(Keys.Enter), Key(Keys.Down), Key(Keys.Down), Key(Keys.Enter), Key(Keys.Enter),   // the row page's export, Markdown
+            Key(Keys.Escape),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Equal(2, output.Split("  ✗ " + SessionText.ExportFailedError(id)).Length - 1);
+        Assert.False(Directory.Exists(ExportsFolder) && Directory.EnumerateFileSystemEntries(ExportsFolder).Any());
     }
 }

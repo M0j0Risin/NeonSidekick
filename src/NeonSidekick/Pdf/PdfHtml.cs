@@ -57,6 +57,16 @@ public static class PdfHtml
         return ImageTypes.TryGetValue(Path.GetExtension(path), out var type) ? type : null;
     }
 
+    /// <summary>
+    /// Whether <paramref name="mediaType"/> (<c>image/png</c>, any case, no parameters) is one a page may inline (2026-10-30, review F92: a
+    /// <c>data:</c> picture is held to the same list as a file).
+    /// </summary>
+    public static bool IsImageMediaType(string mediaType)
+    {
+        ArgumentNullException.ThrowIfNull(mediaType);
+        return ImageTypes.Values.Contains(mediaType, StringComparer.OrdinalIgnoreCase);
+    }
+
     /// <summary>A <c>data:</c> URI of <paramref name="bytes"/>.</summary>
     public static string DataUri(byte[] bytes, string mediaType)
     {

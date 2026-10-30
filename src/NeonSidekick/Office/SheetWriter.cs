@@ -49,6 +49,12 @@ public sealed class SheetWriter : ISheetRows
     /// <summary>The least a whole number is written with format <c>0</c>: General shows 11 digits and more in E notation.</summary>
     public const double IntegerFrom = 1e11;
 
+    /// <summary>
+    /// Where format <c>0</c> stops (2026-10-30, review F43: 6.02214076e23 was written as 24 digits of noise, 1.5e300 as three hundred): past 15
+    /// digits a double holds no more whole digits worth showing, so General's E notation is the honest form. P6-1's "12–15 digits".
+    /// </summary>
+    public const double IntegerTo = 1e15;
+
     private readonly XmlWriter _w;
     private readonly SheetStyles _styles;
     private readonly bool _date1904;
@@ -118,16 +124,17 @@ public sealed class SheetWriter : ISheetRows
             return false;
         }
 
-        var cells = new XlsxValue[_columns.Length];
-        for (int c = 0; c < cells.Length; c++)
+        // Read in place, a short row padded and a long one cut as it is read (2026-10-30, review F107: every row was copied first); only a held
+        // row is copied, since a caller may reuse its buffer.
+        for (int c = 0; c < _columns.Length; c++)
         {
-            cells[c] = c < row.Count ? row[c] : XlsxValue.Blank;
-            if (cells[c].Cut)
+            var cell = CellOf(row, c);
+            if (cell.Cut)
             {
                 _cut++;
             }
 
-            if (!_digitText[c] && cells[c] is { Kind: XlsxKind.Text, Text: { } text } && LooksNumeric(text))
+            if (!_digitText[c] && cell is { Kind: XlsxKind.Text, Text: { } text } && LooksNumeric(text))
             {
                 _digitText[c] = true;
             }
@@ -136,6 +143,12 @@ public sealed class SheetWriter : ISheetRows
         _rows++;
         if (!_open)
         {
+            var cells = new XlsxValue[_columns.Length];
+            for (int c = 0; c < cells.Length; c++)
+            {
+                cells[c] = CellOf(row, c);
+            }
+
             _held.Add(cells);
             foreach (var (value, c) in cells.Select((v, c) => (v, c)))
             {
@@ -152,9 +165,12 @@ public sealed class SheetWriter : ISheetRows
 
         // No flush per so many rows (2026-10-29, review P6-6): the writer's own buffer reaches the file as it fills, and each flush made the
         // zip's deflater end a block early. Finish flushes once.
-        WriteRow(cells, _rows + 1);
+        WriteRow(row, _rows + 1);
         return true;
     }
+
+    /// <summary>Column <paramref name="c"/> of <paramref name="row"/>, blank past its end.</summary>
+    private static XlsxValue CellOf(IReadOnlyList<XlsxValue> row, int c) => c < row.Count ? row[c] : XlsxValue.Blank;
 
     /// <summary>The sheet's end: whatever was held written, then the filter, margins and ignored errors.</summary>
     public SheetResult Finish()
@@ -257,16 +273,18 @@ public sealed class SheetWriter : ISheetRows
         _held.Clear();
     }
 
-    private void WriteRow(XlsxValue[] cells, long row)
+    /// <summary>One row's cells, the sheet's columns of <paramref name="cells"/> (a short row blank past its end, a long one cut).</summary>
+    private void WriteRow(IReadOnlyList<XlsxValue> cells, long row)
     {
         string number = row.ToString(CultureInfo.InvariantCulture);
         _w.WriteStartElement("row", Ns);
         _w.WriteAttributeString("r", number);
-        for (int c = 0; c < cells.Length; c++)
+        for (int c = 0; c < _columns.Length; c++)
         {
-            if (cells[c].Kind != XlsxKind.Blank)
+            var cell = CellOf(cells, c);
+            if (cell.Kind != XlsxKind.Blank)
             {
-                Cell(c, number, cells[c], null);
+                Cell(c, number, cell, null);
             }
         }
 
@@ -328,8 +346,8 @@ public sealed class SheetWriter : ISheetRows
         _w.WriteEndElement();
     }
 
-    /// <summary>A whole number General would show in E notation.</summary>
-    public static bool IsLargeWhole(double number) => Math.Abs(number) >= IntegerFrom && number == Math.Floor(number);
+    /// <summary>A whole number General would show in E notation, short of where its digits run out (<see cref="IntegerTo"/>).</summary>
+    public static bool IsLargeWhole(double number) => Math.Abs(number) is >= IntegerFrom and < IntegerTo && number == Math.Floor(number);
 
     private static string IsoText(XlsxValue value) =>
         value.Kind == XlsxKind.Date || value.When.TimeOfDay == TimeSpan.Zero

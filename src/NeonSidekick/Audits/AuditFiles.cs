@@ -78,11 +78,19 @@ public static class AuditFiles
     /// <paramref name="report"/> written to <paramref name="path"/>, its <c>updated:</c> stamped <paramref name="now"/> (and <c>created:</c> once):
     /// null when done, else the sentence (<see cref="AuditText.ReportFullResult"/> past the size, <c>FileText</c>'s for a write that failed).
     /// </summary>
-    public static string? Save(WorkingDirectory files, string path, AuditReport report, DateTimeOffset now)
+    public static string? Save(WorkingDirectory files, string path, AuditReport report, DateTimeOffset now) => Save(files, path, report, now, out _);
+
+    /// <summary>
+    /// <see cref="Save(WorkingDirectory, string, AuditReport, DateTimeOffset)"/>, <paramref name="stamp"/> the file's length and write time just
+    /// after (null when it failed, or the stamp couldn't be read): what <see cref="AuditSession.Saved"/> keeps, so a lock that went is taken back
+    /// only over a report nobody else wrote since (2026-10-30, review F72).
+    /// </summary>
+    public static string? Save(WorkingDirectory files, string path, AuditReport report, DateTimeOffset now, out (long Length, DateTime Written)? stamp)
     {
         ArgumentNullException.ThrowIfNull(files);
         ArgumentNullException.ThrowIfNull(path);
         ArgumentNullException.ThrowIfNull(report);
+        stamp = null;
         report.Header = report.Header with { Created = report.Header.Created ?? now, Updated = now, NextId = report.NextIdNumber };
         string text = report.Render();
         if (text.Length > WorkingDirectory.MaxWriteChars)
@@ -91,7 +99,13 @@ public static class AuditFiles
         }
 
         var written = WriteGuard.AsApp(() => files.WriteText(path, text, overwrite: true));
-        return written.Outcome == FileOutcome.Ok ? null : FileText.Error(written.Outcome, path, "write", written.Detail);
+        if (written.Outcome != FileOutcome.Ok)
+        {
+            return FileText.Error(written.Outcome, path, "write", written.Detail);
+        }
+
+        stamp = files.TryStamp(path) is { } after ? (after.Length, after.Written) : null;
+        return null;
     }
 
     /// <summary>
@@ -123,7 +137,44 @@ public static class AuditFiles
         }
 
         string path = Folder + "/" + bare + PlanSlug.Extension;
-        return Exists(files, path) ? path : null;
+        return Exists(files, path) ? OnDisk(files, path) : null;
+    }
+
+    /// <summary>
+    /// <paramref name="path"/> in the spelling its file has on disk (2026-10-30, review F82: on a case-blind file system a name typed in another case
+    /// found the report, and the lock held under the typed spelling and the running audit's then read as two, so a resume let go of its own lock).
+    /// The path as given when the folder can't be listed or holds no such name.
+    /// </summary>
+    private static string OnDisk(WorkingDirectory files, string path)
+    {
+        if (files.Resolve(Folder, forWrite: false, out string folder) != FileOutcome.Ok)
+        {
+            return path;
+        }
+
+        string name = Path.GetFileName(path);
+        try
+        {
+            foreach (string full in Directory.EnumerateFiles(folder, "*" + PlanSlug.Extension))
+            {
+                string found = Path.GetFileName(full);
+                if (string.Equals(found, name, StringComparison.Ordinal))
+                {
+                    return path;
+                }
+
+                if (string.Equals(found, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    name = found;
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return path;
+        }
+
+        return Folder + "/" + name;
     }
 
     /// <summary>
@@ -191,12 +242,73 @@ public static class AuditFiles
     {
         ArgumentNullException.ThrowIfNull(files);
         string lockPath = LockPathFor(reportPath);
-        return OwnerLock.HeldElsewhere(files, lockPath, out var owner) ? LockError(reportPath, lockPath, owner) : null;
+        return OwnerLock.HeldElsewhere(files, lockPath, out var owner) ? LockError(reportPath, lockPath, owner, unreadable: owner is null) : null;
     }
 
-    /// <summary>The refusal for a lock another holds: <see cref="AuditText.LockedOnHostError"/> for another machine's, else <see cref="AuditText.LockedError"/>.</summary>
-    public static string LockError(string reportPath, string lockPath, LockOwner? owner) =>
-        owner is { Foreign: true, Host: { } host } ? AuditText.LockedOnHostError(reportPath, host, lockPath) : AuditText.LockedError(reportPath);
+    /// <summary>
+    /// The refusal for a lock another holds: <see cref="AuditText.LockedOnHostError"/> for another machine's; <see cref="AuditText.UncheckedLockError"/>
+    /// for one that can't be read (<paramref name="unreadable"/>) or whose owner's start time can't be read (2026-10-30, review F76/F86); else
+    /// <see cref="AuditText.LockedError"/>.
+    /// </summary>
+    public static string LockError(string reportPath, string lockPath, LockOwner? owner, bool unreadable = false) =>
+        owner is { Foreign: true, Host: { } host } ? AuditText.LockedOnHostError(reportPath, host, lockPath)
+        : unreadable || (owner is not null && OwnerLock.CannotCheck(owner)) ? AuditText.UncheckedLockError(reportPath, lockPath)
+        : AuditText.LockedError(reportPath);
+
+    /// <summary>The refusal for <paramref name="reportPath"/>'s lock as it stands now, read once more (a take that came back held).</summary>
+    internal static string HeldError(WorkingDirectory files, string reportPath)
+    {
+        string lockPath = LockPathFor(reportPath);
+        var owner = OwnerLock.ReadOwner(files, lockPath);
+        return LockError(reportPath, lockPath, owner, unreadable: owner is null && Exists(files, lockPath));
+    }
+
+    /// <summary>
+    /// <paramref name="act"/> run while holding <paramref name="reportPath"/>'s lock (2026-10-30, review F2: a fix checked the lock, then read,
+    /// marked and saved the report, and another NeonSidekick starting an audit in between had its findings overwritten): false with
+    /// <paramref name="refusal"/> and nothing run while another holds it. A lock this process already held (its own audit of the report) stays
+    /// held after; one taken here goes. A drive that holds no lock, or a lock that can't be written, runs <paramref name="act"/> unlocked, as before
+    /// (a save that fails says so itself).
+    /// </summary>
+    public static bool WithLock(WorkingDirectory files, string reportPath, Action act, out string? refusal)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+        ArgumentNullException.ThrowIfNull(reportPath);
+        ArgumentNullException.ThrowIfNull(act);
+        refusal = null;
+        string lockPath = LockPathFor(reportPath);
+        bool ours = OwnerLock.ReadOwner(files, lockPath) == OwnerLock.Me;
+        var take = OwnerLock.TryLock(files, lockPath, OwnerLock.Me, OwnerLock.LiveOwner);
+        if (take == LockTake.Held)
+        {
+            refusal = HeldError(files, reportPath);
+            return false;
+        }
+
+        try
+        {
+            act();
+        }
+        finally
+        {
+            if (take == LockTake.Taken && !ours)
+            {
+                OwnerLock.Unlock(files, lockPath, OwnerLock.Me);
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// The report a bare <c>/code-audit resume|fix</c> picks: the newest that reads whole and that no other NeonSidekick is auditing (2026-10-30,
+    /// review F4: the newest was picked, then refused as running elsewhere, while an older free one stood there). Null with none.
+    /// </summary>
+    public static AuditListing? Newest(IReadOnlyList<AuditListing> listings)
+    {
+        ArgumentNullException.ThrowIfNull(listings);
+        return listings.FirstOrDefault(r => !r.Unreadable && !r.Elsewhere);
+    }
 
     // ── The coverage sidecar ─────────────────────────────────────────────────
 
@@ -313,27 +425,41 @@ public static class AuditFiles
 
     /// <summary>
     /// The report and its sidecar deleted (through <see cref="WorkingDirectory.Delete"/>, the Recycle bin when the setting says): the report's result.
-    /// The sidecar goes only with the report (2026-10-20, a review: a report that would not go kept its place with its coverage gone). Its lock goes
-    /// too when it is this process's or stale (2026-10-29), taken over first so a new holder's is never removed; one another live NeonSidekick
-    /// holds is the caller's to refuse before (<see cref="HeldElsewhere"/>), and stays.
+    /// The sidecar goes only with the report (2026-10-20, a review: a report that would not go kept its place with its coverage gone). Done holding
+    /// the report's lock, taken first (2026-10-30, review F1: the caller checked, then this deleted and only then took the lock, so a resume elsewhere
+    /// in between lost its report): while another live NeonSidekick holds it nothing is deleted and <paramref name="refusal"/> says so, the result
+    /// <see cref="FileOutcome.Failed"/>. The lock goes after. A drive that holds no lock, or a lock that can't be written, deletes unlocked.
     /// </summary>
-    public static DeleteResult Discard(WorkingDirectory files, string path)
+    public static DeleteResult Discard(WorkingDirectory files, string path, out string? refusal)
     {
         ArgumentNullException.ThrowIfNull(files);
         ArgumentNullException.ThrowIfNull(path);
-        var result = WriteGuard.AsApp(() => files.Delete(path));
-        if (result.Outcome == FileOutcome.Ok && Exists(files, CoveragePath(path)))
-        {
-            WriteGuard.AsApp(() => files.Delete(CoveragePath(path)));
-        }
-
+        refusal = null;
         string lockPath = LockPathFor(path);
-        if (result.Outcome == FileOutcome.Ok && Exists(files, lockPath) && OwnerLock.TryLock(files, lockPath, OwnerLock.Me, OwnerLock.LiveOwner) == LockTake.Taken)
+        var take = OwnerLock.TryLock(files, lockPath, OwnerLock.Me, OwnerLock.LiveOwner);
+        if (take == LockTake.Held)
         {
-            OwnerLock.Unlock(files, lockPath, OwnerLock.Me);
+            refusal = HeldError(files, path);
+            return new DeleteResult(FileOutcome.Failed, path, IsDirectory: false, refusal);
         }
 
-        return result;
+        try
+        {
+            var result = WriteGuard.AsApp(() => files.Delete(path));
+            if (result.Outcome == FileOutcome.Ok && Exists(files, CoveragePath(path)))
+            {
+                WriteGuard.AsApp(() => files.Delete(CoveragePath(path)));
+            }
+
+            return result;
+        }
+        finally
+        {
+            if (take == LockTake.Taken)
+            {
+                OwnerLock.Unlock(files, lockPath, OwnerLock.Me);
+            }
+        }
     }
 
     private static DateTimeOffset WrittenAt(string full)

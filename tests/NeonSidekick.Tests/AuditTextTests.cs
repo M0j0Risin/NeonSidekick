@@ -189,6 +189,5 @@ public sealed class AuditTextTests
         Assert.Equal("Could not write .neon/audits/a.lock, so the audit didn't start", AuditText.LockWriteError(".neon/audits/a.lock"));
         Assert.Contains("another NeonSidekick could write this report too", AuditText.UnlockedNotice(".neon/audits/a.md"), StringComparison.Ordinal);
         Assert.StartsWith(AuditText.Glyph + " The code audit stopped: another NeonSidekick took over a.", AuditText.LockLostNotice("a"), StringComparison.Ordinal);
-        Assert.Equal("running elsewhere", AuditText.ElsewhereStatus);
     }
 }

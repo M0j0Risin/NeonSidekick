@@ -122,17 +122,9 @@ internal sealed partial class ChatScreen
         var focus = parsed.Focus ?? AuditFocus.Normalize(effective.CodeAuditFocus);
         var reviewer = parsed.Reviewer ?? PlanReviewer.Model;
         var now = _time.GetLocalNow();
-        string path = AuditFiles.Choose(_files, scope.NameLabel, now);
-        // The report's lock before it is first written (2026-10-29): another NeonSidekick choosing the same name meanwhile is refused.
-        if (!_audit.Hold(path, out string? lockError, out string? unlocked))
-        {
-            _transcript.Error(lockError!);
-            return false;
-        }
-
-        PlanGapLoop loop;
-        bool begun = false;
-        try
+        // The report's lock before it is first written (2026-10-29): another NeonSidekick choosing the same name meanwhile is refused, and the next
+        // free name tried (2026-10-30, review F3).
+        var loop = _audit.Begin(AuditFiles.Choose(_files, scope.NameLabel, now), chosen =>
         {
             var report = new AuditReport
             {
@@ -141,24 +133,26 @@ internal sealed partial class ChatScreen
                     PlanText.ReviewerWord(reviewer), 1, now, now),
                 CoverageScope = scope.Files.Count + scope.MoreFiles,
             };
-            if (AuditFiles.Save(_files, path, report, now) is { } failed)
+            if (_audit.Save(chosen, report, now, _files) is { } failed)
             {
                 _transcript.Error(failed.StartsWith("Error: ", StringComparison.Ordinal) ? failed[7..] : failed);
-                return false;
+                return null;
             }
 
             int limit = parsed.Passes ?? effective.CodeAuditPasses;
-            loop = _audit.Start(path, scope, focus, parsed.Brief, reviewer, limit, effective.CodeAuditCleanPasses);
-            begun = true;
-        }
-        finally
+            return _audit.Start(chosen, scope, focus, parsed.Brief, reviewer, limit, effective.CodeAuditCleanPasses);
+        }, out string? lockError, out string? unlocked, another: () => AuditFiles.Choose(_files, scope.NameLabel, now));
+        if (loop is null)
         {
-            if (!begun)
+            if (lockError is not null)
             {
-                _audit.Release();
+                _transcript.Error(lockError);
             }
+
+            return false;
         }
 
+        string path = _audit.Path!;
         if (unlocked is not null)
         {
             _transcript.Notice(unlocked, NoticeTone.Warn);
@@ -204,12 +198,13 @@ internal sealed partial class ChatScreen
         newest = name is null;
         if (name is null)
         {
-            if (AuditFiles.List(_files, _audit.Path).FirstOrDefault(r => !r.Unreadable) is { } first)
+            var listings = AuditFiles.List(_files, _audit.Path);
+            if (AuditFiles.Newest(listings) is { } first)
             {
                 return first.Path;
             }
 
-            _transcript.Notice(AuditText.NoReportsNotice);
+            _transcript.Notice(listings.FirstOrDefault(r => r.Elsewhere) is { } held ? AuditText.OnlyElsewhereNotice(held.Name) : AuditText.NoReportsNotice);
             return null;
         }
 
@@ -259,43 +254,35 @@ internal sealed partial class ChatScreen
         }
 
         // The report's lock before the fresh read (2026-10-29), so the copy saved back is one no other NeonSidekick is writing.
-        if (!_audit.Hold(path, out string? lockError, out string? unlocked))
-        {
-            _transcript.Error(lockError!);
-            return false;
-        }
-
-        PlanGapLoop loop;
-        PlanReviewer who;
-        bool begun = false;
-        try
+        var who = PlanReviewer.Model;
+        var loop = _audit.Begin(path, held =>
         {
             // The report as it stands after the listing (2026-10-20, a review: the copy read before it was saved back, so a finding ticked or edited in
             // an editor while the spinner ran was lost).
-            if (AuditFiles.Read(_files, path) is not { } fresh)
+            if (AuditFiles.Read(_files, held) is not { } fresh)
             {
-                _transcript.Error(AuditText.ReportUnreadable(path));
-                return false;
+                _transcript.Error(AuditText.ReportUnreadable(held));
+                return null;
             }
 
-            report = fresh;
-            who = reviewer ?? PlanText.ParseReviewer(report.Header.Reviewer) ?? PlanReviewer.Model;
-            report.Header = report.Header with { Status = AuditStatus.Auditing, Reviewer = PlanText.ReviewerWord(who) };
-            if (AuditFiles.Save(_files, path, report, _time.GetLocalNow()) is { } failed)
+            who = reviewer ?? PlanText.ParseReviewer(fresh.Header.Reviewer) ?? PlanReviewer.Model;
+            fresh.Header = fresh.Header with { Status = AuditStatus.Auditing, Reviewer = PlanText.ReviewerWord(who) };
+            if (_audit.Save(held, fresh, _time.GetLocalNow(), _files) is { } failed)
             {
                 _transcript.Error(failed.StartsWith("Error: ", StringComparison.Ordinal) ? failed[7..] : failed);
-                return false;
+                return null;
             }
 
-            loop = _audit.Start(path, scope, report.Header.Focus, report.Header.Brief, who, passes ?? effective.CodeAuditPasses, effective.CodeAuditCleanPasses);
-            begun = true;
-        }
-        finally
+            return _audit.Start(held, scope, fresh.Header.Focus, fresh.Header.Brief, who, passes ?? effective.CodeAuditPasses, effective.CodeAuditCleanPasses);
+        }, out string? lockError, out string? unlocked);
+        if (loop is null)
         {
-            if (!begun)
+            if (lockError is not null)
             {
-                _audit.Release();
+                _transcript.Error(lockError);
             }
+
+            return false;
         }
 
         if (unlocked is not null)
@@ -370,37 +357,47 @@ internal sealed partial class ChatScreen
     /// <summary>Fix via plan: the report marked fixing, then plan mode entered on its open findings (<see cref="EnterPlanAsync"/>).</summary>
     private async Task<bool> FixAuditReportAsync(string path, bool newest, CancellationToken cancellationToken)
     {
-        // Another NeonSidekick auditing it (2026-10-29): its saves would put this one's "fixing" back. A check, not a hold: fix saves once.
-        if (AuditFiles.HeldElsewhere(_files, path) is { } locked)
-        {
-            _transcript.Error(locked);
-            return false;
-        }
-
-        if (AuditFiles.Read(_files, path) is not { } report)
-        {
-            _transcript.Error(AuditText.ReportUnreadable(path));
-            return false;
-        }
-
+        // Another NeonSidekick auditing it (2026-10-29): its saves would put this one's "fixing" back. Read, marked and saved holding the lock
+        // (2026-10-30, review F2: a check, then the read and the save, let an audit started elsewhere in between have its findings overwritten).
         string name = System.IO.Path.GetFileNameWithoutExtension(path);
-        var open = report.Open.Select(f => f.Id).ToList();
-        if (open.Count == 0)
+        List<string> open = [];
+        string? problem = null;
+        if (!AuditFiles.WithLock(_files, path, () =>
         {
-            _transcript.Error(AuditText.NoOpenFindings(name));
+            if (AuditFiles.Read(_files, path) is not { } report)
+            {
+                problem = AuditText.ReportUnreadable(path);
+                return;
+            }
+
+            open = report.Open.Select(f => f.Id).ToList();
+            if (open.Count == 0)
+            {
+                problem = AuditText.NoOpenFindings(name);
+                return;
+            }
+
+            if (!_effective().LlmOfferTools || _session.Assistant is null)
+            {
+                problem = !_effective().LlmOfferTools ? PlanText.NeedsToolsError : NoAssistantError;
+                return;
+            }
+
+            report.Header = report.Header with { Status = AuditStatus.Fixing };
+            if (_audit.Save(path, report, _time.GetLocalNow(), _files) is { } failed)
+            {
+                _transcript.Warning(failed);
+            }
+        }, out string? locked))
+        {
+            _transcript.Error(locked!);
             return false;
         }
 
-        if (!_effective().LlmOfferTools || _session.Assistant is null)
+        if (problem is not null)
         {
-            _transcript.Error(!_effective().LlmOfferTools ? PlanText.NeedsToolsError : NoAssistantError);
+            _transcript.Error(problem);
             return false;
-        }
-
-        report.Header = report.Header with { Status = AuditStatus.Fixing };
-        if (AuditFiles.Save(_files, path, report, _time.GetLocalNow()) is { } failed)
-        {
-            _transcript.Warning(failed);
         }
 
         _transcript.Notice(AuditText.FixingNotice(name, newest));
@@ -618,25 +615,37 @@ internal sealed partial class ChatScreen
             _transcript.Notice(line);
         }
 
-        coverage ??= _audit.Coverage();
-        int clean = reason == PlanGapStop.Converged ? loop.CleanPasses : loop.PassClean ? loop.CleanCount : 0;
-        if (!lockLost && AuditFiles.Read(files, path) is { } report)
+        // Every end that saves checks the hold just before (2026-10-30, review F111: a move or a pass not sent ended here unchecked, and saved the
+        // header over a report another NeonSidekick had taken over); a loss is as lockLost, its notice said.
+        if (!lockLost && !_audit.StillHolds())
         {
-            report.CoverageRead = coverage.Read;
-            report.CoverageScope = coverage.Scope;
-            report.Header = report.Header with
+            _transcript.Notice(AuditText.LockLostNotice(name));
+            lockLost = true;
+        }
+
+        int clean = reason == PlanGapStop.Converged ? loop.CleanPasses : loop.PassClean ? loop.CleanCount : 0;
+        if (!lockLost)
+        {
+            // The coverage only when something is written (2026-10-30, review F79: worked out for a lost lock too, and dropped).
+            coverage ??= _audit.Coverage();
+            if (AuditFiles.Read(files, path) is { } report)
             {
-                Status = reason == PlanGapStop.Converged ? AuditStatus.Converged : AuditStatus.Stopped,
-                Passes = AuditText.PassesLine(loop.Pass, clean, coverage.Read, coverage.Scope, reason),
-            };
-            if (AuditFiles.Save(files, path, report, _time.GetLocalNow()) is { } failed)
-            {
-                _transcript.Warning(failed);
+                report.CoverageRead = coverage.Read;
+                report.CoverageScope = coverage.Scope;
+                report.Header = report.Header with
+                {
+                    Status = reason == PlanGapStop.Converged ? AuditStatus.Converged : AuditStatus.Stopped,
+                    Passes = AuditText.PassesLine(loop.Pass, clean, coverage.Read, coverage.Scope, reason),
+                };
+                if (_audit.Save(path, report, _time.GetLocalNow(), files) is { } failed)
+                {
+                    _transcript.Warning(failed);
+                }
             }
         }
 
         _audit.Stop();
-        if (moved || lockLost)
+        if (moved || lockLost || coverage is null)
         {
             return null;
         }
@@ -709,14 +718,15 @@ internal sealed partial class ChatScreen
                     return false;
                 }
 
-                // Another NeonSidekick resumed it while the pane was up (2026-10-29): its report stays.
-                if (AuditFiles.HeldElsewhere(_files, path) is { } locked)
+                // Another NeonSidekick resumed it while the pane was up (2026-10-29): its report stays. Refused by the discard itself, which holds the
+                // lock across the deletes (2026-10-30, review F1).
+                var deleted = AuditFiles.Discard(_files, path, out string? locked);
+                if (locked is not null)
                 {
                     _transcript.Error(locked);
                     return false;
                 }
 
-                var deleted = AuditFiles.Discard(_files, path);
                 if (deleted.Outcome != FileOutcome.Ok)
                 {
                     _transcript.Error(FileText.Error(deleted.Outcome, path, "delete", deleted.Detail));

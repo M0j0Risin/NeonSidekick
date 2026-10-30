@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Collections;
 using System.Data;
 using System.Data.Common;
@@ -431,8 +432,11 @@ public sealed class PostgresAccess
         RunAsync(name, [statement], parameters, maxRows, timeoutSeconds, cancellationToken, export ?? throw new ArgumentNullException(nameof(export)));
 
     /// <summary>
-    /// A PostgreSQL cell for a workbook (2026-10-29): an interval and money as the chat writes them (a month has no fixed length, and money
-    /// carries the server's currency), an array as <c>{a, b}</c>, a numeric past <see cref="decimal"/> or NaN as text; dates, timestamps and
+    /// A PostgreSQL cell for a workbook (2026-10-29): an interval as PostgreSQL writes it (<see cref="IntervalText"/>: a month has no fixed
+    /// length), an array as <c>{a, b}</c>, a numeric past <see cref="decimal"/> its exact digits (<see cref="NumericText"/>; text past 15) and
+    /// NaN or an infinity as the word; money a number, as Npgsql hands it (2026-10-30, review F16/F117, the live run: money came as a bare
+    /// decimal with no currency, so the text it was written as carried nothing more, while a month's interval, NaN and a numeric past
+    /// <see cref="decimal"/> all wrote the can't-be-read placeholder); dates, timestamps and
     /// the rest by the common rules. A timestamptz is its UTC value, the column's header saying so (<see cref="ExportHeader"/>). A
     /// <c>±infinity</c> date or timestamp (Npgsql's <see cref="DateTime.MaxValue"/>/<see cref="DateTime.MinValue"/>, exactly) is the word,
     /// never a date in 9999 (2026-10-29, review P1-1: a real 9999-12-31 12:00 read as infinity too; a real 0001-01-01 00:00 still can't be
@@ -449,9 +453,21 @@ public sealed class PostgresAccess
             return XlsxValue.Blank;
         }
 
-        if (typeName is "interval" or "money")
+        if (typeName == IntervalType)
         {
-            return XlsxValue.OfText(ReadCell(reader, ordinal));
+            return XlsxValue.OfText(ExportInterval(reader, ordinal));
+        }
+
+        if (typeName == NumericType)
+        {
+            try
+            {
+                return SqlExport.FromValue(reader.GetValue(ordinal), typeName, ExportText);
+            }
+            catch (Exception ex) when (ex is InvalidCastException or OverflowException)
+            {
+                return ExportNumeric(reader, ordinal);
+            }
         }
 
         if (typeName == TimeTzType && reader.GetValue(ordinal) is DateTimeOffset timetz)
@@ -474,6 +490,197 @@ public sealed class PostgresAccess
         }
 
         return cell;
+    }
+
+    /// <summary>The type name Npgsql gives an <c>interval</c> column.</summary>
+    private const string IntervalType = "interval";
+
+    /// <summary>The type name Npgsql gives a <c>numeric</c> column.</summary>
+    private const string NumericType = "numeric";
+
+    /// <summary>An interval cell for a workbook (<see cref="ReadInterval"/>), the can't-be-read placeholder when it won't read.</summary>
+    private static string ExportInterval(DbDataReader reader, int ordinal) => ReadInterval(reader, ordinal) ?? SqlExportText.Unreadable(IntervalType);
+
+    /// <summary>
+    /// An interval cell as PostgreSQL writes it: read whole (a month part won't read as a <see cref="TimeSpan"/>), else as the
+    /// <see cref="TimeSpan"/> the reader hands over; null when neither reads. The chat's and the workbook's one reading (2026-10-30, the
+    /// user's call after review F16: a month's interval was "can't be read" in the chat, a day's <c>1.02:00:00</c>).
+    /// </summary>
+    private static string? ReadInterval(DbDataReader reader, int ordinal)
+    {
+        try
+        {
+            return IntervalText(reader.GetFieldValue<NpgsqlInterval>(ordinal));
+        }
+        catch (InvalidCastException)
+        {
+            // Not Npgsql's reader (a test's): the TimeSpan below.
+        }
+
+        try
+        {
+            return reader.GetValue(ordinal) is TimeSpan span
+                ? IntervalText(new NpgsqlInterval(0, span.Days, (span.Ticks - span.Days * TimeSpan.TicksPerDay) / (TimeSpan.TicksPerMillisecond / 1000)))
+                : null;
+        }
+        catch (Exception ex) when (ex is InvalidCastException or OverflowException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// An interval as PostgreSQL writes it (its default <c>IntervalStyle</c>, <c>postgres</c>): <c>1 year 2 mons 3 days 04:05:06.5</c>,
+    /// a field after a negative one signed (<c>-1 days +01:00:00</c>), <c>00:00:00</c> for none. Pure.
+    /// </summary>
+    public static string IntervalText(NpgsqlInterval value)
+    {
+        var sb = new StringBuilder();
+        bool before = false;
+        void Part(long amount, string unit)
+        {
+            if (amount == 0)
+            {
+                return;
+            }
+
+            sb.Append(sb.Length > 0 ? " " : "").Append(before && amount > 0 ? "+" : "").Append(amount.ToString(CultureInfo.InvariantCulture))
+                .Append(' ').Append(unit).Append(amount != 1 ? "s" : "");
+            before = amount < 0;
+        }
+
+        Part(value.Months / 12, "year");
+        Part(value.Months % 12, "mon");
+        Part(value.Days, "day");
+        long time = value.Time;
+        if (time != 0 || sb.Length == 0)
+        {
+            ulong whole = time < 0 ? (ulong)-time : (ulong)time;
+            ulong micro = whole % 1_000_000, seconds = whole / 1_000_000;
+            sb.Append(sb.Length > 0 ? " " : "").Append(time < 0 ? "-" : before ? "+" : "")
+                .Append((seconds / 3600).ToString("00", CultureInfo.InvariantCulture)).Append(':')
+                .Append((seconds / 60 % 60).ToString("00", CultureInfo.InvariantCulture)).Append(':')
+                .Append((seconds % 60).ToString("00", CultureInfo.InvariantCulture));
+            if (micro != 0)
+            {
+                sb.Append('.').Append(micro.ToString("000000", CultureInfo.InvariantCulture).TrimEnd('0'));
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// A numeric cell <see cref="DbDataReader.GetValue"/> won't hand over (NaN, an infinity, past <see cref="decimal"/>), read from its
+    /// wire form (<see cref="NumericText"/>): the word as text, a number by the 15-digit rule; else the provider value's text
+    /// (<see cref="SqlExport.FromProvider"/>, which writes the can't-be-read placeholder when that fails too).
+    /// </summary>
+    private static XlsxValue ExportNumeric(DbDataReader reader, int ordinal)
+    {
+        try
+        {
+            long length = reader.GetBytes(ordinal, 0, null, 0, 0);
+            if (length is > 0 and <= MaxNumericBytes)
+            {
+                var wire = new byte[length];
+                if (reader.GetBytes(ordinal, 0, wire, 0, wire.Length) == length && NumericText(wire) is { } text)
+                {
+                    return text is NumericNaN or NumericInfinity or "-" + NumericInfinity ? XlsxValue.OfText(text) : XlsxValue.OfNumberText(text);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is InvalidCastException or NotSupportedException or InvalidOperationException or IndexOutOfRangeException)
+        {
+            // A reader that holds no wire form (a test's): the provider value below.
+        }
+
+        return SqlExport.FromProvider(reader, ordinal, NumericType);
+    }
+
+    /// <summary>The longest numeric wire form read: past it a cell's digits are beyond its cap anyway.</summary>
+    private const int MaxNumericBytes = 64 * 1024;
+
+    private const string NumericNaN = "NaN";
+    private const string NumericInfinity = "Infinity";
+
+    /// <summary>
+    /// A numeric's text from its binary wire form (four 16-bit fields — digit count, weight, sign, display scale — then base-10000
+    /// digits), as PostgreSQL writes it: <c>NaN</c>, <c>Infinity</c>, <c>-Infinity</c>, or every digit to its scale. Null when the bytes
+    /// aren't one. Pure.
+    /// </summary>
+    public static string? NumericText(ReadOnlySpan<byte> wire)
+    {
+        if (wire.Length < 8)
+        {
+            return null;
+        }
+
+        int count = BinaryPrimitives.ReadInt16BigEndian(wire);
+        int weight = BinaryPrimitives.ReadInt16BigEndian(wire[2..]);
+        ushort sign = BinaryPrimitives.ReadUInt16BigEndian(wire[4..]);
+        int scale = BinaryPrimitives.ReadUInt16BigEndian(wire[6..]) & 0x3FFF;
+        switch (sign)
+        {
+            case 0xC000:
+                return NumericNaN;
+            case 0xD000:
+                return NumericInfinity;
+            case 0xF000:
+                return "-" + NumericInfinity;
+            case 0x0000 or 0x4000:
+                break;
+            default:
+                return null;
+        }
+
+        if (count < 0 || wire.Length != 8 + 2 * count)
+        {
+            return null;
+        }
+
+        var digits = new int[count];
+        for (int i = 0; i < count; i++)
+        {
+            digits[i] = BinaryPrimitives.ReadInt16BigEndian(wire[(8 + 2 * i)..]);
+            if (digits[i] is < 0 or > 9999)
+            {
+                return null;
+            }
+        }
+
+        int Group(int index) => index >= 0 && index < count ? digits[index] : 0;
+        var sb = new StringBuilder();
+        if (sign == 0x4000)
+        {
+            sb.Append('-');
+        }
+
+        if (weight < 0)
+        {
+            sb.Append('0');
+        }
+        else
+        {
+            sb.Append(Group(0).ToString(CultureInfo.InvariantCulture));
+            for (int g = 1; g <= weight; g++)
+            {
+                sb.Append(Group(g).ToString("0000", CultureInfo.InvariantCulture));
+            }
+        }
+
+        if (scale > 0)
+        {
+            sb.Append('.');
+            int start = sb.Length;
+            for (int g = weight + 1; sb.Length - start < scale; g++)
+            {
+                sb.Append(Group(g).ToString("0000", CultureInfo.InvariantCulture));
+            }
+
+            sb.Length = start + scale;
+        }
+
+        return sb.ToString();
     }
 
     /// <summary>PostgreSQL's word for a date past every other.</summary>
@@ -559,6 +766,12 @@ public sealed class PostgresAccess
             if (reader.IsDBNull(ordinal))
             {
                 return SqlText.Null;
+            }
+
+            // An interval as PostgreSQL writes it, a month's too (2026-10-30, the user's call after review F16), as the workbook has it.
+            if (reader.GetDataTypeName(ordinal) == IntervalType)
+            {
+                return ReadInterval(reader, ordinal) is { } interval ? SqlText.Cell(interval) : PostgresText.Unreadable(IntervalType);
             }
 
             object value = reader.GetValue(ordinal);

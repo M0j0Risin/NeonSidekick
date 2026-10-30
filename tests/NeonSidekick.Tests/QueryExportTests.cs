@@ -348,6 +348,111 @@ public sealed class QueryExportTests : IDisposable
         OfficeToolsTests.NoListType(refused.JsonSchema, "plain");
     }
 
+    /// <summary>
+    /// Every family's plain schema carries no export word, and both name the caps by their constants (2026-10-30, review F55: the schemas
+    /// spelled them out, and the plain one was cut from the export one by exact strings).
+    /// </summary>
+    [Fact]
+    public void EveryFamilysPlainSchema_HasNoExportWords_AndTheCapsAreTheConstants()
+    {
+        AIFunction[] Tools(Func<SaveRoot>? root) =>
+        [
+            App.ChatScreen.SqlTools(new SqlAccess(() => new SqlCatalog([], [])), () => new AppSettingsData(), saveRoot: root).OfType<SqlQueryTool>().Single(),
+            App.ChatScreen.MySqlTools(new MySql.MySqlAccess(() => new MySql.MySqlCatalog([], [])), () => new AppSettingsData { MySqlTools = true }, saveRoot: root).OfType<MySqlQueryTool>().Single(),
+            App.ChatScreen.OracleTools(new Oracle.OracleAccess(() => new Oracle.OracleCatalog([], [])), () => new AppSettingsData { OracleTools = true }, saveRoot: root).OfType<OracleQueryTool>().Single(),
+            App.ChatScreen.PostgresTools(new Postgres.PostgresAccess(() => new Postgres.PostgresCatalog([], [])), () => new AppSettingsData { PostgresTools = true }, saveRoot: root).OfType<PostgresQueryTool>().Single(),
+            new SqliteQueryTool(new SqliteAccess(() => SqliteCatalog.Empty, () => _files), () => _settings) { ExportRoot = root },
+            new DuckDbQueryTool(new DuckDbAccess(() => DuckDbCatalog.Empty, () => _files), () => _settings) { ExportRoot = root },
+        ];
+
+        string cap = AppSettingsData.MaxSqlQueryMaxRows.ToString(CultureInfo.InvariantCulture);
+        foreach (var tool in Tools(null))
+        {
+            var properties = tool.JsonSchema.GetProperty("properties");
+            Assert.False(properties.TryGetProperty("to", out _), tool.Name);
+            Assert.False(properties.TryGetProperty("sheet", out _), tool.Name);
+            Assert.False(properties.TryGetProperty("overwrite", out _), tool.Name);
+            Assert.Equal($"How many rows at most, 1 to {cap}. Leave it out for the user's default.", properties.GetProperty("max_rows").GetProperty("description").GetString());
+        }
+
+        foreach (var tool in Tools(() => _saveRoot))
+        {
+            var properties = tool.JsonSchema.GetProperty("properties");
+            Assert.True(properties.TryGetProperty("to", out _), tool.Name);
+            Assert.Contains($"1 to {cap} (1 to {SheetWriter.MaxDataRows.ToString(CultureInfo.InvariantCulture)} with to)", properties.GetProperty("max_rows").GetProperty("description").GetString(), StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// An export runs on the database the tool resolved, though the connection file names another by the time the run starts (2026-10-30,
+    /// review F54: the run resolved it again). The save root is asked between the two, so it moves the entry.
+    /// </summary>
+    [Fact]
+    public async Task AnExport_RunsOnTheDatabaseResolvedFirst()
+    {
+        string other = Path.Combine(_root, "other.db");
+        using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = other, Pooling = false }.ConnectionString))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "CREATE TABLE things (name TEXT); INSERT INTO things VALUES ('elsewhere');";
+            command.ExecuteNonQuery();
+        }
+
+        bool moved = false;
+        SqliteCatalog Catalog() => new([new("shop", new() { Path = moved ? other : Path.Combine(_root, "shop.db") }, "sqlite.json")], []);
+        var tool = new SqliteQueryTool(new SqliteAccess(Catalog, () => _files), () => _settings)
+        {
+            ExportRoot = () =>
+            {
+                moved = true;
+                return _saveRoot;
+            },
+            Clock = _time,
+        };
+
+        string result = await Invoke(tool, ("sql", "SELECT name FROM things ORDER BY id"), ("database", "shop"), ("to", "pinned.xlsx"));
+        Assert.StartsWith("Made pinned.xlsx", result);
+        Assert.True(moved);
+        string cells = Cells(Bytes("pinned.xlsx"), "Query");
+        Assert.Contains("| a |", cells);
+        Assert.DoesNotContain("elsewhere", cells);
+    }
+
+    /// <summary>
+    /// With <c>convert_to_xlsx</c> off the query tools are offered their plain schema: no <c>to</c>, <c>sheet</c> or save sentence
+    /// (2026-10-30, review F102, guarding P1-20).
+    /// </summary>
+    [Fact]
+    public void WithConvertToXlsxOff_TheQueryIsOfferedNoTo()
+    {
+        var off = new AppSettingsData { FileTools = true, ToolsDisabled = [ConvertToXlsxTool.ToolName] };
+        var tool = new SqliteQueryTool(new SqliteAccess(() => SqliteCatalog.Empty, () => _files), () => _settings)
+        {
+            ExportRoot = () => App.ChatScreen.QuerySaveRootFor(off, planMode: false, _files),
+        };
+        var properties = tool.JsonSchema.GetProperty("properties");
+        Assert.False(properties.TryGetProperty("to", out _));
+        Assert.False(properties.TryGetProperty("sheet", out _));
+        Assert.DoesNotContain(ServerTool<SqliteAccess>.ExportSentence, tool.Description);
+    }
+
+    /// <summary>The save root's memo works it out once per key, again when the settings' version or plan mode moves (2026-10-30, review F61).</summary>
+    [Fact]
+    public void TheQuerySaveRoot_IsWorkedOutOncePerSettingsVersionAndPlanMode()
+    {
+        var memo = new App.KeyedMemo<(int, bool), string>();
+        int computed = 0;
+        string Get(int version, bool plan) => memo.Get((version, plan), () => $"{++computed}");
+        Assert.Equal("1", Get(0, false));
+        Assert.Equal("1", Get(0, false));
+        Assert.Equal("1", Get(0, false));
+        Assert.Equal("2", Get(0, true));    // plan mode flipped
+        Assert.Equal("3", Get(1, true));    // a setting changed (a /cwd, a tool switched off)
+        Assert.Equal("3", Get(1, true));
+        Assert.Equal(3, computed);
+    }
+
     [Fact]
     public void AQuerysTo_NeedsConvertToXlsxOn()
     {
@@ -370,6 +475,35 @@ public sealed class QueryExportTests : IDisposable
         Assert.Equal(XlsxKind.Text, XlsxValue.From("").Kind);
         Assert.Equal(XlsxKind.Blank, XlsxValue.OfText("").Kind);   // a CSV's empty field: CSV can't tell the two apart
         Assert.Equal("", SqlExport.Show(XlsxValue.EmptyText));
+    }
+
+    /// <summary>
+    /// The same in a SQLite <c>DATE</c> column and in DuckDB, whose cells are text first (2026-10-30, review F15/F42); a date column's other
+    /// cells still read as dates, and its non-date text as text.
+    /// </summary>
+    [Fact]
+    public async Task AnEmptyString_IsEmptyText_InADateColumnAndInDuckDb()
+    {
+        using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = Path.Combine(_root, "shop.db"), Pooling = false }.ConnectionString))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "CREATE TABLE days (d DATE, n DATE); INSERT INTO days VALUES ('', NULL); INSERT INTO days VALUES ('2026-10-30', 'soon');";
+            command.ExecuteNonQuery();
+        }
+
+        await Invoke(Sqlite(), ("sql", "SELECT d, n FROM days"), ("database", "shop.db"), ("to", "days.xlsx"));
+        string sheet = Part(Bytes("days.xlsx"), "xl/worksheets/sheet1.xml");
+        Assert.Contains("<c r=\"A2\" t=\"inlineStr\">", sheet);
+        Assert.DoesNotContain("r=\"B2\"", sheet);
+        Assert.Contains("| 3 | 2026-10-30 | soon |", Cells(Bytes("days.xlsx"), "Query"));
+
+        await Invoke(DuckDb(), ("sql", "SELECT '' AS e, NULL AS n"), ("to", "duck-empty.xlsx"));
+        string duck = Part(Bytes("duck-empty.xlsx"), "xl/worksheets/sheet1.xml");
+        Assert.Contains("<c r=\"A2\" t=\"inlineStr\">", duck);
+        Assert.DoesNotContain("r=\"B2\"", duck);
+        Assert.Equal(XlsxKind.Text, DuckDbAccess.FromText("", typeof(string)).Kind);
+        Assert.Equal(XlsxKind.Text, DuckDbAccess.FromText("", typeof(DateOnly)).Kind);
     }
 
     // ── DuckDB in process ───────────────────────────────────────────────────
@@ -542,10 +676,13 @@ public sealed class QueryExportTests : IDisposable
     }
 
     [Fact]
-    public void Postgres_IntervalMoneyAndInfinity_AreText_TimestamptzSaysUtc()
+    public void Postgres_IntervalAndInfinity_AreText_MoneyANumber_TimestamptzSaysUtc()
     {
-        Assert.Equal(XlsxKind.Text, Cell(PostgresAccess.ExportCell, new FakeDataReader(["i"], ["interval"], [TimeSpan.FromHours(30)])).Kind);
-        Assert.Equal(XlsxKind.Text, Cell(PostgresAccess.ExportCell, new FakeDataReader(["m"], ["money"], [12.5m])).Kind);
+        Assert.Equal("1 day 06:00:00", Cell(PostgresAccess.ExportCell, new FakeDataReader(["i"], ["interval"], [TimeSpan.FromHours(30)])).Text);
+        // Money comes as a bare decimal (2026-10-30, review F16's live run): a number.
+        Assert.Equal(XlsxKind.Number, Cell(PostgresAccess.ExportCell, new FakeDataReader(["m"], ["money"], [12.5m])).Kind);
+        Assert.Equal(XlsxKind.Number, Cell(PostgresAccess.ExportCell, new FakeDataReader(["n"], ["numeric"], [12.5m])).Kind);
+        Assert.Equal(SqlExportText.Unreadable("numeric"), Cell(PostgresAccess.ExportCell, new FakeDataReader(["n"], ["numeric"], [new InvalidCastException()])).Text);
         Assert.Equal("infinity", Cell(PostgresAccess.ExportCell, new FakeDataReader(["t"], ["timestamp without time zone"], [DateTime.MaxValue])).Text);
         Assert.Equal("-infinity", Cell(PostgresAccess.ExportCell, new FakeDataReader(["t"], ["date"], [DateOnly.MinValue])).Text);
         Assert.Equal(XlsxKind.Date, Cell(PostgresAccess.ExportCell, new FakeDataReader(["d"], ["date"], [new DateOnly(2026, 10, 29)])).Kind);
@@ -555,6 +692,37 @@ public sealed class QueryExportTests : IDisposable
         Assert.Equal("at" + PostgresText.UtcColumn, PostgresAccess.ExportHeader(utc, 0));
         Assert.Equal("plain", PostgresAccess.ExportHeader(utc, 1));
     }
+
+    /// <summary>
+    /// A numeric's wire form read as PostgreSQL writes it (2026-10-30, review F117; the bytes are the live run's): NaN and the infinities as
+    /// words, a numeric past <see cref="decimal"/> every digit.
+    /// </summary>
+    [Theory]
+    [InlineData("00000000C0000000", "NaN")]
+    [InlineData("00000000D0000020", "Infinity")]
+    [InlineData("00000000F0000020", "-Infinity")]
+    [InlineData("0001000A000000000001", "10000000000000000000000000000000000000000")]
+    [InlineData("000900070000000104D2162E23340D801ED204D2162E23341388", "12345678901234567890123456789012.5")]
+    [InlineData("0001FFFF4000000404D2", "-0.1234")]       // weight -1: the point first
+    [InlineData("0002FFFE000000060005", null)]            // two digits named, one there: not one
+    [InlineData("00000000000000020000", null)]
+    [InlineData("0000000000000002", "0.00")]
+    [InlineData("000100000000000000070000", null)]
+    [InlineData("0001000000000000000C", "12")]
+    public void Postgres_NumericWireText(string hex, string? text) => Assert.Equal(text, PostgresAccess.NumericText(Convert.FromHexString(hex)));
+
+    /// <summary>An interval as PostgreSQL's default style writes it (2026-10-30, review F16: a month's interval wrote the placeholder).</summary>
+    [Theory]
+    [InlineData(1, 2, 0L, "1 mon 2 days")]
+    [InlineData(0, 1, 7_200_000_000L, "1 day 02:00:00")]
+    [InlineData(14, 0, 0L, "1 year 2 mons")]
+    [InlineData(0, 0, 0L, "00:00:00")]
+    [InlineData(-1, 0, 0L, "-1 mons")]
+    [InlineData(0, -1, 3_600_000_000L, "-1 days +01:00:00")]
+    [InlineData(0, 0, 1_500_000L, "00:00:01.5")]
+    [InlineData(0, 0, -108_000_000_000L, "-30:00:00")]
+    public void Postgres_IntervalText(int months, int days, long micros, string text) =>
+        Assert.Equal(text, PostgresAccess.IntervalText(new NpgsqlTypes.NpgsqlInterval(months, days, micros)));
 
     [Fact]
     public void MySql_ADateIsADate_AZeroDateIsText()
@@ -584,6 +752,54 @@ public sealed class QueryExportTests : IDisposable
         // A second result set is not exported (every gate allows one statement).
         var again = await job.ReadAsync(new FakeDataReader(["m"], ["int"], [9]), 4, CancellationToken.None);
         Assert.Empty(again.Rows);
+    }
+
+    /// <summary>
+    /// A sheet that won't begin or take the columns stops the read with More set, so the family cancels the rest rather than draining it
+    /// (2026-10-30, review F53).
+    /// </summary>
+    [Fact]
+    public async Task ARefusedSheet_ReadsNoRow_AndSaysMore()
+    {
+        var refused = new FakeDataReader(["n"], ["int"], [1], [2], [3]);
+        var none = new SqlExportJob(() => (null, "Error: no"), (r, i, _) => XlsxValue.From(r.GetValue(i)));
+        var grid = await none.ReadAsync(refused, 10, CancellationToken.None);
+        Assert.Equal(("Error: no", true, 0), (none.Refusal, grid.More, refused.Reads));
+
+        var columns = new FakeDataReader(["n"], ["int"], [1], [2], [3]);
+        var wide = new SqlExportJob(new ThrowingRows(begin: "Error: too many columns"), (r, i, _) => XlsxValue.From(r.GetValue(i)));
+        grid = await wide.ReadAsync(columns, 10, CancellationToken.None);
+        Assert.Equal(("Error: too many columns", true, 0), (wide.Refusal, grid.More, columns.Reads));
+    }
+
+    /// <summary>
+    /// A file failure under a row (a full disk) is the workbook's sentence and stops the read there, never a throw the family's catch would
+    /// call the server's error (2026-10-30, review F103).
+    /// </summary>
+    [Fact]
+    public async Task AFileFailureMidStream_IsTheWorkbooksSentence_AndStopsTheRead()
+    {
+        var reader = new FakeDataReader(["n"], ["int"], [1], [2], [3], [4], [5]);
+        var job = new SqlExportJob(() => (new ThrowingRows(failAt: 2), null), (r, i, _) => XlsxValue.From(r.GetValue(i)), failed: ex => "Error: book.xlsx: " + ex.Message);
+        var grid = await job.ReadAsync(reader, 10, CancellationToken.None);
+        Assert.Equal("Error: book.xlsx: disk full", job.Refusal);
+        Assert.True(grid.More);
+        Assert.Equal(2, reader.Reads);
+        Assert.Equal(1, job.Rows);
+
+        // A job with no wording lets it throw, as before.
+        var bare = new SqlExportJob(new ThrowingRows(failAt: 1), (r, i, _) => XlsxValue.From(r.GetValue(i)));
+        await Assert.ThrowsAsync<IOException>(() => bare.ReadAsync(new FakeDataReader(["n"], ["int"], [1]), 10, CancellationToken.None));
+    }
+
+    /// <summary>A sheet that refuses its columns with <paramref name="begin"/>, or throws a disk-full <see cref="IOException"/> at row <paramref name="failAt"/>.</summary>
+    private sealed class ThrowingRows(string? begin = null, int failAt = 0) : ISheetRows
+    {
+        private int _rows;
+
+        public string? Begin(IReadOnlyList<string> columns) => begin;
+
+        public bool Add(IReadOnlyList<XlsxValue> row) => ++_rows == failAt ? throw new IOException("disk full") : true;
     }
 
     private sealed class RecordingRows(FakeDataReader reader) : ISheetRows

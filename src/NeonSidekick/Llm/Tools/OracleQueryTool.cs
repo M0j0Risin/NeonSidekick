@@ -23,7 +23,7 @@ public sealed class OracleQueryTool : OracleTool
     public const int MinRows = AppSettingsData.MinSqlQueryMaxRows;
     public const int MaxRows = AppSettingsData.MaxSqlQueryMaxRows;
 
-    private static readonly (JsonElement Export, JsonElement Plain) Schemas = QuerySchemas(
+    private static readonly (JsonElement Export, JsonElement Plain) Schemas = QuerySchemas(members =>
         $$"""
         {
           "type": "object",
@@ -31,8 +31,7 @@ public sealed class OracleQueryTool : OracleTool
             "sql": { "type": "string", "description": "One Oracle SELECT (FETCH FIRST n ROWS ONLY, not TOP or LIMIT; no trailing ;); a WITH clause may lead it. No INSERT, UPDATE, DELETE, MERGE, PL/SQL, DDL, FOR UPDATE, NEXTVAL, @dblink or second statement." },
             {{ConnectionProperty}},
             "params": { "type": "object", "description": "Values for :name placeholders in the SQL, e.g. {\"id\": 101} for :id; strings, numbers, true, false or null." },
-            "max_rows": { "type": "integer", "description": "How many rows at most, 1 to 100000 (1 to 1048575 with to). Leave it out for the user's default (with to, every row)." },
-            {{ExportProperties}}
+            {{members}}
           },
           "required": ["sql"]
         }
@@ -86,8 +85,11 @@ public sealed class OracleQueryTool : OracleTool
                 return OracleText.Error(unresolved!);
             }
 
+            // The run on the entry resolved here, never a second read of the file (2026-10-30, review F54: an edit between the two could
+            // name the workbook after one connection and read another).
+            var pinned = Oracle.Pinned(target);
             return await ExportAsync(export, target.Name, rows, maxRows, TimeoutSeconds(Effective), OracleAccess.ExportCell,
-                (job, timeout, token) => Oracle.ExportAsync(connection, body, parameters, job, rows, timeout, token), OracleText.Error, cancellationToken).ConfigureAwait(false);
+                (job, timeout, token) => pinned.ExportAsync(target.Name, body, parameters, job, rows, timeout, token), OracleText.Error, cancellationToken).ConfigureAwait(false);
         }
 
         var run = await Oracle.RunAsync(connection, [body], parameters, rows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);

@@ -33,7 +33,7 @@ The screen, the input line, panes, keys, the bars and the app's own windows. Bac
 
 From top to bottom:
 
-* **The transcript**, under the banner (*Show header*). PgUp/PgDn scroll it; Ctrl+Home and Ctrl+End go to its top and bottom. When the window is resized, the banner, notices, `/cmd` output and sent lines are laid out again at the new width: the ones on screen first while you drag, the rest once you stop. Replies, tool lines and very long writes wrap at word boundaries when it's narrower, and a reply that's still streaming keeps the width it started at.
+* **The transcript**, under the banner (*Show header*). PgUp/PgDn scroll it and Ctrl+Home/Ctrl+End jump to its ends; a resize lays it out again at the new width.
 * **The picture strip**, while there are ComfyUI pictures: its 🎞️ opens the [picture viewer](#the-picture-viewer), × closes the strip.
 * **The upper rule:** the session's name (a double-click renames it), **⤡** (a click folds or unfolds everything, like Ctrl+O), and a 🎞️ that brings a closed picture strip back.
 * **[The input line](#the-input-line).** A dim ☺ at its right end opens the emoji picker (*Emoji picker*).

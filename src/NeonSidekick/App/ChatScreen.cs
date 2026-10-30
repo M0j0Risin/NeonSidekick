@@ -1309,6 +1309,7 @@ internal sealed partial class ChatScreen
         _settings.Changed += saved => Volatile.Write(ref _hintBar, StatusBarStateOf(saved));
         // The toolbar's 🛠️ worked out again at the next idle line (2026-10-16): a change from anywhere, the Web UI's thread too.
         _settings.Changed += _ => _toolsOfferedDirty = true;
+        _settings.Changed += _ => Interlocked.Increment(ref _settingsVersion);   // the query save root again (review F61)
         _effective = effective ?? throw new ArgumentNullException(nameof(effective));
         _overriddenBy = overriddenBy ?? throw new ArgumentNullException(nameof(overriddenBy));
         _session = session ?? throw new ArgumentNullException(nameof(session));
@@ -5191,8 +5192,6 @@ internal sealed partial class ChatScreen
     public const string SessionExportWord = "export";
     public const string SessionMarkdownWord = "md";
     public const string SessionHtmlWord = "html";
-    public const string SessionExportMarkdownNote = "a Markdown note, its pictures in a folder beside it";
-    public const string SessionExportHtmlNote = "one HTML page in your theme, its pictures inside";
     public const string SessionPurgeAllNote = "purge every session: /sessions purge all";
     public const string SessionPurgeOlderNote = "purge the sessions older than an age: /sessions purge older <age> (30 = days, 12h, 90m, 1d 6h)";
 
@@ -5489,7 +5488,7 @@ internal sealed partial class ChatScreen
                     string rest = argText[(SessionExportWord.Length + 1)..];
                     int gap = rest.IndexOf(' ');
                     string head = SessionExportWord + " " + (gap > 0 && TryParseSessionId(rest[..gap], out _) ? rest[..(gap + 1)] : "");
-                    var exports = new List<CompletionItem> { new(head + SessionMarkdownWord, SessionExportMarkdownNote), new(head + SessionHtmlWord, SessionExportHtmlNote) };
+                    var exports = new List<CompletionItem> { new(head + SessionMarkdownWord, SessionText.ExportMarkdownNote), new(head + SessionHtmlWord, SessionText.ExportHtmlNote) };
                     if (head.Length == SessionExportWord.Length + 1)
                     {
                         exports.AddRange(sessions.Select(item => new CompletionItem(SessionExportWord + " " + item.Text, item.Note)));
@@ -8300,12 +8299,6 @@ internal sealed partial class ChatScreen
 
     public const string SessionNoneYetNotice = "(" + NoticeGlyphs.Session + "no session yet: send a message first)";
 
-    /// <summary>A bare <c>/sessions export</c> while <c>Session logging</c> is off and nothing was saved (2026-10-30). Pinned.</summary>
-    public const string SessionNotSavedNotice = "(" + NoticeGlyphs.Session + "this conversation isn't saved: Session logging is off; /sessions export <id> exports a stored one)";
-
-    /// <summary>An export written (2026-10-30): <c>(💬 exported session #12 to Notes-2026-10-30-0912.md)</c>, the path relative to the working folder.</summary>
-    public static string SessionExportedNotice(long id, string path) => $"({NoticeGlyphs.Session}exported session {SessionText.Id(id)} to {path})";
-
     /// <summary>
     /// The <c>/sessions</c> grammar: nothing = the pane; <c>12</c> or <c>#12</c> = restore; <c>purge 12</c>,
     /// <c>purge older 30</c> (or <c>12h</c>, <c>90m</c>, <c>1d 6h</c>: the rest of the line is one
@@ -8456,23 +8449,14 @@ internal sealed partial class ChatScreen
         {
             if (_sessionId is not { } current)
             {
-                _transcript.Notice(_effective().SessionLogging ? SessionNoneYetNotice : SessionNotSavedNotice);
+                _transcript.Notice(_effective().SessionLogging ? SessionNoneYetNotice : SessionText.NotSavedNotice);
                 return;
             }
 
             id = current;
         }
 
-        (string? Notice, string? Error) result;
-        try
-        {
-            result = await _transcript.WithSpinnerAsync(SessionText.ExportingSpinner, () => ExportSessionCoreAsync(id, format, cancellationToken)).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            return;
-        }
-
+        var result = await _transcript.WithSpinnerAsync(SessionText.ExportingSpinner, () => ExportSessionCoreAsync(id, format, cancellationToken)).ConfigureAwait(false);
         if (result.Error is { } error)
         {
             _transcript.Error(error);
@@ -8484,26 +8468,46 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// The export without a spinner, which the Sessions pane's <c>export</c> row awaits too: the theme and the zone read here on the screen's
-    /// thread, the load, build and write on the pool. A cancel before the write leaves nothing; once writing starts it finishes.
+    /// The export without a spinner, which the Sessions pane's <c>export</c> row awaits too: the theme, the zone and the working folder read here
+    /// on the screen's thread, the load, build and write on the pool. A cancel before the write leaves nothing; once writing starts it finishes.
+    /// Both callers share its guard (2026-10-30, review F10/F11: the pane awaited it bare, so a throw ended the pane): a cancel answers nothing at
+    /// all, any other failure the error sentence, logged. The folder is pinned (review F8: a <c>/cwd</c> meanwhile moved the note's folder, its
+    /// pictures' and the notice's apart).
     /// </summary>
-    private Task<(string? Notice, string? Error)> ExportSessionCoreAsync(long id, SessionExportFormat format, CancellationToken cancellationToken)
+    private async Task<(string? Notice, string? Error)> ExportSessionCoreAsync(long id, SessionExportFormat format, CancellationToken cancellationToken)
     {
         var palette = Theme.Current;
         var zone = _time.LocalTimeZone;
-        return Task.Run<(string? Notice, string? Error)>(() =>
+        var files = _files.PinnedAt(_files.Root);
+        var load = SessionLoadForTests ?? _sessions.Load;
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (_sessions.Load(id) is not { } record)
+            return await Task.Run<(string? Notice, string? Error)>(() =>
             {
-                return (null, SessionMissingError(id));
-            }
+                cancellationToken.ThrowIfCancellationRequested();
+                if (load(id) is not { } record)
+                {
+                    return (null, SessionMissingError(id));
+                }
 
-            cancellationToken.ThrowIfCancellationRequested();
-            var (path, error) = SessionExport.Write(_files, record, format, zone, palette);
-            return path is not null ? (SessionExportedNotice(id, path), null) : (null, error);
-        }, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                var (path, error) = SessionExport.Write(files, record, format, zone, palette);
+                return path is not null ? (SessionText.ExportedNotice(id, path), null) : (null, error);
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return (null, null);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Error(AppCategory, "session export: " + SessionText.Id(id) + " failed", ex);
+            return (null, SessionText.ExportFailedError(id));
+        }
     }
+
+    /// <summary>The export's load in place of the store's, for the tests: a gate, a throw, or a record the store doesn't hold (2026-10-30, review F8/F10/F11).</summary>
+    internal Func<long, SessionRecord?>? SessionLoadForTests { get; set; }
 
     /// <summary>
     /// The bare <c>/sessions title</c> (2026-09-28), which a double-click on the upper rule's session name runs (the user's
@@ -9628,6 +9632,14 @@ internal sealed partial class ChatScreen
     {
         var action = ParseCwdArgs(args);
         var effective = _effective();
+
+        // A folder moved to: what was read is forgotten, and a crash's temps in its top level go (2026-10-30, review F88).
+        void Moved()
+        {
+            ForgetReading();
+            _ = _files.SweepRoot(inline: true);
+        }
+
         switch (action.Kind)
         {
             case CwdActionKind.Show:
@@ -9640,7 +9652,7 @@ internal sealed partial class ChatScreen
             case CwdActionKind.Reset:
                 if (_menu.TrySaveWorkingDirectory(""))
                 {
-                    ForgetReading();
+                    Moved();
                 }
 
                 break;
@@ -9658,7 +9670,7 @@ internal sealed partial class ChatScreen
                 }
                 else if (_menu.TrySaveWorkingDirectory(picked))
                 {
-                    ForgetReading();
+                    Moved();
                 }
 
                 break;
@@ -9666,7 +9678,7 @@ internal sealed partial class ChatScreen
             default:
                 if (_menu.TrySaveWorkingDirectory(action.Path))
                 {
-                    ForgetReading();
+                    Moved();
                 }
 
                 break;
@@ -11617,6 +11629,9 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>Runs until <c>/exit</c>, the keyboard going away, or <paramref name="cancellationToken"/>. Always 0.</summary>
+    /// <summary>The launch's sweep of the working folder's stale temps (F88); kept so a test can wait for it.</summary>
+    internal Task? LaunchSweep { get; private set; }
+
     public async Task<int> RunAsync(CancellationToken cancellationToken)
     {
         bool previousEcho = DiagnosticLog.EchoToConsole;
@@ -11646,6 +11661,8 @@ internal sealed partial class ChatScreen
             ReconcileWebUi();
             // The watch pictures a double-click left behind (2026-10-02): cleared as the profile loads, in case watch mode never stopped cleanly.
             ClearWatchFolder();
+            // A crash's temps in the working folder's top level (2026-10-30, review F88), off the screen's thread.
+            LaunchSweep = _files.SweepRoot();
             // Another writer's changes to the profile's file (2026-10-26, the review's R24), shown at the loop top (TakeOutsideChangesAsync).
             _outsideTimer = _time.CreateTimer(static state => ((ChatScreen)state!).PollOutsideChanges(), this, OutsideChangesPoll, OutsideChangesPoll);
 
@@ -18848,10 +18865,10 @@ internal sealed partial class ChatScreen
                 _transcript.ToolResult(result.Name, result.Text);
                 break;
             case TurnEvent.Notice notice when notice.IsError:
-                _transcript.Error(notice.Text);
+                _transcript.Error(TurnText.Shown(notice, InRalphPass || _audit.InPass));
                 break;
             case TurnEvent.Notice notice:
-                _transcript.Notice(notice.Text);
+                _transcript.Notice(TurnText.Shown(notice, InRalphPass || _audit.InPass));
                 break;
             case TurnEvent.Usage usage when !_botTurnRunning:
                 _session.Usage.Add(usage.Tokens);

@@ -43,8 +43,8 @@ internal sealed class SessionsMenu
     public const string PurgeWord = "purge";
 
     // The export's format page (2026-10-30). Pinned.
-    public const string MarkdownWord = "Markdown";
-    public const string HtmlWord = "HTML";
+    public const string MarkdownWord = SessionText.ExportMarkdownWord;
+    public const string HtmlWord = SessionText.ExportHtmlWord;
     public static readonly IReadOnlyList<string> FormatWords = [MarkdownWord, HtmlWord];
 
     /// <summary>The status line while an export is written.</summary>
@@ -121,28 +121,13 @@ internal sealed class SessionsMenu
     /// <summary>
     /// The footer under the list for <paramref name="session"/> (2026-10-07): its whole title, then
     /// <c>started 2026-10-07 09:12 · last 2026-10-07 14:40 · 14 turns · qwen3 · this conversation</c>, the model left out when none
-    /// was stored. Pinned.
+    /// was stored. The facts are an export's facts line without its id (<see cref="SessionExport.Facts"/>, 2026-10-30, review F68). Pinned.
     /// </summary>
     public static MenuFooter Footer(SessionSummary session, bool current, TimeZoneInfo zone)
     {
         ArgumentNullException.ThrowIfNull(session);
-        var facts = new List<string>
-        {
-            SessionText.ExportStarted + " " + SessionText.Moment(session.StartedAt, zone),
-            SessionText.ExportLast + " " + SessionText.Moment(session.UpdatedAt, zone),
-            SessionText.Turns(session.Turns),
-        };
-        if (!string.IsNullOrWhiteSpace(session.Model))
-        {
-            facts.Add(session.Model);
-        }
-
-        if (current)
-        {
-            facts.Add(CurrentNote);
-        }
-
-        return new MenuFooter(SessionText.DisplayTitle(session), string.Join(" · ", facts));
+        string facts = SessionExport.Facts(session, zone, withId: false);
+        return new MenuFooter(SessionText.DisplayTitle(session), current ? facts + " · " + CurrentNote : facts);
     }
 
     /// <summary>Whether <paramref name="session"/> stays under <paramref name="filter"/>: its title or its model holds it (2026-10-07).</summary>
@@ -157,12 +142,12 @@ internal sealed class SessionsMenu
     {
         RestoreWord => "load it into the transcript and go on from there",
         RenameWord => "give it a new title",
-        ExportWord => "write it to a Markdown or HTML file in the working folder",
+        ExportWord => SessionText.ExportRowNote,
         _ => "remove it and its turns for good",
     });
 
     /// <summary>The export's format page rows (2026-10-30): the word padded to nine, the file it makes dim after it.</summary>
-    public static string FormatRow(string word) => Markup.Escape(word.PadRight(9)) + Theme.DimMarkup(word == HtmlWord ? ChatScreen.SessionExportHtmlNote : ChatScreen.SessionExportMarkdownNote);
+    public static string FormatRow(string word) => Markup.Escape(word.PadRight(9)) + Theme.DimMarkup(word == HtmlWord ? SessionText.ExportHtmlNote : SessionText.ExportMarkdownNote);
 
     /// <summary>The no-pane fallback: <c>1. #12 · 2026-09-18 14:05 · 12 turns · Title</c> per session.</summary>
     public static IReadOnlyList<string> ListLines(IReadOnlyList<SessionSummary> sessions, long? current, TimeZoneInfo zone)

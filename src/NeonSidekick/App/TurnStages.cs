@@ -48,6 +48,9 @@ internal sealed class TurnStages
     private readonly Random _random;
     private Stage _stage;
     private string? _lastVerb;
+
+    // The label shown last, from any stage (2026-10-30, review F21): a call's label that reads the same is not shown again.
+    private string? _shown;
     private string? _callName;
     private string _callVerb = WritingLabel;
 
@@ -67,18 +70,32 @@ internal sealed class TurnStages
     public string Start()
     {
         _stage = Stage.Thinking;
-        return Word(ChatScreen.ThinkingLabel);
+        return _shown = Word(ChatScreen.ThinkingLabel);
     }
 
     /// <summary>
-    /// The label after <paramref name="evt"/>, null when the stage did not change: the first text
+    /// The label after <paramref name="evt"/>, null when the stage did not change — or a call being written reads as already shown (its
+    /// size under <see cref="ToolArgumentWatch.CountShownFrom"/>, 2026-10-30, review F21): the first text
     /// of a stretch is <see cref="WritingLabel"/>, a call being written <see cref="ToolWritingLabel"/> at each progress, a tool call its name, a tool result the thinking
     /// stage again (the next request's wait starts there), a mid-turn compact
-    /// <see cref="CompactionText.CompactingLabel"/> and the thinking stage once it is done (2026-09-28), usage and notices nothing.
+    /// <see cref="CompactionText.CompactingLabel"/> and the thinking stage once it is done (2026-09-28), thinking after a call being written
+    /// the thinking stage (2026-10-30, review F77), usage and notices nothing.
     /// </summary>
     public string? Advance(TurnEvent evt)
     {
         ArgumentNullException.ThrowIfNull(evt);
+        if (Next(evt) is not { } label)
+        {
+            return null;
+        }
+
+        _shown = label;
+        return label;
+    }
+
+    /// <summary><see cref="Advance"/>'s label before it is noted as shown.</summary>
+    private string? Next(TurnEvent evt)
+    {
         switch (evt)
         {
             case TurnEvent.TextDelta when _stage != Stage.Writing:
@@ -94,7 +111,13 @@ internal sealed class TurnStages
                     _callVerb = Word(WritingLabel);
                 }
 
-                return ToolWritingLabel(writing.Name, writing.Chars, _callVerb);
+                string label = ToolWritingLabel(writing.Name, writing.Chars, _callVerb);
+                return string.Equals(label, _shown, StringComparison.Ordinal) ? null : label;
+            case TurnEvent.ThinkingDelta when _stage == Stage.CallWriting:
+                // The model thinks again after writing a call (2026-10-30, review F77): its thinking, not the call, is what runs. After
+                // text, thinking stays "writing", as it always did.
+                _stage = Stage.Thinking;
+                return Word(ChatScreen.ThinkingLabel);
             case TurnEvent.ToolCall call:
                 _stage = Stage.Tool;
                 return string.Equals(call.Name, GenerateImageTool.ToolName, StringComparison.Ordinal) ? ComfyText.GeneratingLabelFor(InputImages(call.ArgumentsJson))

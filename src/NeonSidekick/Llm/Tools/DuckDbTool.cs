@@ -197,7 +197,7 @@ public sealed class DuckDbQueryTool : DuckDbTool
     /// <summary>The <c>params</c> property both query tools carry.</summary>
     public const string ParamsProperty = "\"params\": { \"type\": \"object\", \"description\": \"Values for the named placeholders in the SQL ($name), each by its name, e.g. {\\\"id\\\": 101} for $id; strings, numbers, true, false or null.\" }";
 
-    private static readonly (JsonElement Export, JsonElement Plain) Schemas = QuerySchemas(
+    private static readonly (JsonElement Export, JsonElement Plain) Schemas = QuerySchemas(members =>
         $$"""
         {
           "type": "object",
@@ -205,8 +205,7 @@ public sealed class DuckDbQueryTool : DuckDbTool
             "sql": { "type": "string", "description": "One DuckDB read: SELECT (LIMIT n), WITH, VALUES, FROM-first, DESCRIBE, SUMMARIZE, PIVOT or EXPLAIN. No INSERT, UPDATE, DELETE, DDL, COPY, ATTACH, SET or second statement." },
             {{DatabaseProperty}},
             {{ParamsProperty}},
-            "max_rows": { "type": "integer", "description": "How many rows at most, 1 to 100000 (1 to 1048575 with to). Leave it out for the user's default (with to, every row)." },
-            {{ExportProperties}}
+            {{members}}
           },
           "required": ["sql"]
         }
@@ -338,7 +337,7 @@ public sealed class DuckDbExecuteTool : DuckDbTool
             "sql": { "type": "string", "description": "One DuckDB statement of a kind this tool's description lists (RETURNING allowed). No COPY, ATTACH, SET, BEGIN/COMMIT or second statement." },
             {{DatabaseProperty}},
             {{DuckDbQueryTool.ParamsProperty}},
-            "max_rows": { "type": "integer", "description": "How many returned rows (RETURNING) to show at most, 1 to 100000. Leave it out for the user's default." },
+            "max_rows": { "type": "integer", "description": "How many returned rows (RETURNING) to show at most, 1 to {{MaxRowsWords}}. Leave it out for the user's default." },
             "create": { "type": "boolean", "description": "true to create a new database file at \"database\", a path in the working directory ending .duckdb or .ddb (its folder must exist); only when the description says creating is allowed. An existing file is just opened." }
           },
           "required": ["sql"]

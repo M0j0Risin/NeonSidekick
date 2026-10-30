@@ -55,6 +55,9 @@ public sealed class WorkbookAppender : IWorkbookJob
     private readonly List<int> _formatIds;
     private readonly int _fontCount;
     private readonly int _xfCount;
+    private readonly int _fillCount;
+    private readonly int _borderCount;
+    private readonly int _styleXfCount;
     private readonly List<(string Local, string Ns, List<(string Prefix, string Local, string Ns, string Value)> Attributes)> _firstFont;
     private readonly IReadOnlyList<OfficeRel> _workbookRels;
     private OfficePackage? _source;
@@ -95,7 +98,7 @@ public sealed class WorkbookAppender : IWorkbookJob
         _stylesPart = source.Related(main, "styles");
         _calcChainPart = source.Related(main, "calcChain");
         _styles = _stylesPart is null ? null : source.Bytes(_stylesPart);
-        (_formatIds, _fontCount, _xfCount, _firstFont) = _styles is null ? ([], 0, 0, []) : ScanStyles(_styles, _stylesPart!);
+        (_formatIds, _fontCount, _xfCount, _fillCount, _borderCount, _styleXfCount, _firstFont) = _styles is null ? ([], 0, 0, 0, 0, 0, []) : ScanStyles(_styles, _stylesPart!);
     }
 
     /// <summary>The workbook's sheets, in their order.</summary>
@@ -246,6 +249,18 @@ public sealed class WorkbookAppender : IWorkbookJob
                 return null;
             }
 
+            if (HoldsMacros(package))
+            {
+                refusal = OfficeText.MacroWorkbook(display);
+                return null;
+            }
+
+            if (UnsafeEntry(package) is { } unsafeEntry)
+            {
+                refusal = OfficeText.BadEntryName(display, unsafeEntry);
+                return null;
+            }
+
             var appender = new WorkbookAppender(package, display, main, date1904, sheets, workbook);
             package = null;
             return appender;
@@ -259,6 +274,62 @@ public sealed class WorkbookAppender : IWorkbookJob
         finally
         {
             package?.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Whether the package holds macros (2026-10-30, review F93: TOOLS.md promises a macro workbook isn't changed, and nothing looked): a
+    /// <c>vbaProject.bin</c> part anywhere, or a macro-enabled content type in <c>[Content_Types].xml</c>.
+    /// </summary>
+    private static bool HoldsMacros(OfficePackage package)
+    {
+        if (package.StoredNames.Any(name => name.EndsWith("vbaProject.bin", StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+
+        return package.StoredName("[Content_Types].xml") is not null
+            && System.Text.Encoding.UTF8.GetString(package.Bytes("[Content_Types].xml")).Contains("macroEnabled", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The first entry that makes the package unsafe to copy (2026-10-30, review F62/F83/F90): a name repeated, exactly or in another case, once
+    /// read as the reader reads it (a backslash a slash, a leading slash gone), or one with a <c>..</c> segment or a drive letter. The reader
+    /// kept the first of a repeat and the copy wrote both; a name reaching outside the package is no part. Null when every name is sound.
+    /// </summary>
+    private static string? UnsafeEntry(OfficePackage package)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string stored in package.StoredNames)
+        {
+            string part = OfficePackage.PartOf(stored);
+            bool drive = part.Length >= 2 && part[1] == ':' && char.IsAsciiLetter(part[0]);
+            if (!seen.Add(part) || drive || part.Split('/').Contains(".."))
+            {
+                return stored;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Why the workbook can't be replaced whole (2026-10-30, review F93: <c>overwrite</c> with no sheet replaced a protected workbook
+    /// unread): a protected sheet; null when none is. <see cref="Open(Stream, string, OfficeLimits, out string?, out bool)"/> has already
+    /// refused a password to modify, a protected structure and macros.
+    /// </summary>
+    public string? ReplaceWholeProblem()
+    {
+        var source = _source ?? throw new ObjectDisposedException(nameof(WorkbookAppender));
+        try
+        {
+            return Sheets.FirstOrDefault(s => s.Worksheet && s.Part is not null && Protected(source, s.Part)) is { } sheet
+                ? OfficeText.ProtectedSheetInside(_display, sheet.Name)
+                : null;
+        }
+        catch (OfficeReadException ex)
+        {
+            return OfficeReader.Refusal(ex, _display);
         }
     }
 
@@ -376,18 +447,20 @@ public sealed class WorkbookAppender : IWorkbookJob
         try
         {
             _package = new OfficePackageWriter(output, time);
-            var skip = new HashSet<string>(StringComparer.Ordinal) { _mainStored, _typesStored };
+            // Every entry goes out under its part name (2026-10-30, review F62/F83/F90): a backslash or a leading slash, which the reader takes,
+            // is never written back, and the skip set compares those names ignoring case, as the reader finds parts (Open refused a repeat).
+            var skip = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { OfficePackage.PartOf(_mainStored), OfficePackage.PartOf(_typesStored) };
             foreach (string? stored in new[] { _relsStored, _stylesPart is null ? null : source.StoredName(_stylesPart), _calcChainPart is null ? null : source.StoredName(_calcChainPart), _droppedSheetRels, _replace ? source.StoredName(_sheetPart) : null })
             {
                 if (stored is not null)
                 {
-                    skip.Add(stored);
+                    skip.Add(OfficePackage.PartOf(stored));
                 }
             }
 
-            foreach (string stored in _stored.Where(s => !skip.Contains(s)))
+            foreach (string stored in _stored.Where(s => !skip.Contains(OfficePackage.PartOf(s))))
             {
-                using var target = _package.Raw(stored, null, CopyLevel(source.Stored(stored)));
+                using var target = _package.Raw(OfficePackage.PartOf(stored), null, CopyLevel(source.Stored(stored)));
                 if (!stored.EndsWith('/'))
                 {
                     source.CopyTo(stored, target);
@@ -395,14 +468,14 @@ public sealed class WorkbookAppender : IWorkbookJob
             }
 
             int header;
-            string stylesStored = _stylesPart is null ? _ownStylesPart : source.StoredName(_stylesPart)!;
+            string stylesStored = OfficePackage.PartOf(_stylesPart is null ? _ownStylesPart : source.StoredName(_stylesPart)!);
             header = OfficePackage.Guard(stylesStored, () =>
             {
                 using var w = _package!.Part(stylesStored, null);
                 return WriteStyles(w);
             });
 
-            _sheetXml = _package.Part(_replace ? source.StoredName(_sheetPart)! : _sheetPart, null);
+            _sheetXml = _package.Part(OfficePackage.PartOf(_replace ? source.StoredName(_sheetPart)! : _sheetPart), null);
             _sheet = new SheetWriter(_sheetXml, new SheetStyles(header, header + 1, header + 2, header + 3, header + 4, header + 5), Date1904, selected: false);
             return null;
         }
@@ -420,11 +493,11 @@ public sealed class WorkbookAppender : IWorkbookJob
         // Each rewrite's damage is the part's (2026-10-29, review P7-1): an OfficeDamagedException both callers answer, never a raw XmlException.
         OfficePackage.Guard(_mainStored, () =>
         {
-            using var w = package.Part(_mainStored, null);
+            using var w = package.Part(OfficePackage.PartOf(_mainStored), null);
             WriteWorkbook(w, result.FilterRange);
             return 0;
         });
-        string rels = _relsStored ?? RelsPartOf(_main);
+        string rels = OfficePackage.PartOf(_relsStored ?? RelsPartOf(_main));
         OfficePackage.Guard(rels, () =>
         {
             using var w = package.Part(rels, null);
@@ -433,7 +506,7 @@ public sealed class WorkbookAppender : IWorkbookJob
         });
         OfficePackage.Guard(_typesStored, () =>
         {
-            using var w = package.Part(_typesStored, null);
+            using var w = package.Part(OfficePackage.PartOf(_typesStored), null);
             WriteTypes(w);
             return 0;
         });
@@ -489,12 +562,19 @@ public sealed class WorkbookAppender : IWorkbookJob
         return part.StartsWith(folder, StringComparison.Ordinal) ? part[folder.Length..] : "/" + part;
     }
 
-    private static (List<int> Formats, int Fonts, int Xfs, List<(string, string, List<(string, string, string, string)>)> FirstFont) ScanStyles(byte[] styles, string part)
+    /// <summary>
+    /// The styles part counted: its number formats' ids, and how many fonts, cell formats, fills, borders and cell style formats it holds (the
+    /// last three since 2026-10-30, review F18, so <see cref="WriteStyles"/> knows which collections it must add), and its first font's parts.
+    /// </summary>
+    private static (List<int> Formats, int Fonts, int Xfs, int Fills, int Borders, int StyleXfs, List<(string, string, List<(string, string, string, string)>)> FirstFont) ScanStyles(byte[] styles, string part)
     {
         var x = new OfficeXml();
         var formats = new List<int>();
         int fonts = 0;
         int xfs = 0;
+        int fills = 0;
+        int borders = 0;
+        int styleXfs = 0;
         var first = new List<(string, string, List<(string, string, string, string)>)>();
         OfficePackage.Guard(part, () =>
         {
@@ -531,11 +611,19 @@ public sealed class WorkbookAppender : IWorkbookJob
                         }
                     });
                 }
-                else if (x.Is(reader, OfficeXml.S, "cellXfs"))
+                else if (x.Is(reader, OfficeXml.S, "cellXfs") || x.Is(reader, OfficeXml.S, "fills") || x.Is(reader, OfficeXml.S, "borders") || x.Is(reader, OfficeXml.S, "cellStyleXfs"))
                 {
+                    string collection = reader.LocalName;
                     OfficeXml.Children(reader, () =>
                     {
-                        xfs++;
+                        switch (collection)
+                        {
+                            case "cellXfs": xfs++; break;
+                            case "fills": fills++; break;
+                            case "borders": borders++; break;
+                            default: styleXfs++; break;
+                        }
+
                         OfficeXml.Skip(reader);
                     });
                 }
@@ -546,89 +634,146 @@ public sealed class WorkbookAppender : IWorkbookJob
             });
             return 0;
         });
-        return (formats, fonts, xfs, first);
+        return (formats, fonts, xfs, fills, borders, styleXfs, first);
     }
 
-    /// <summary>The styles, theirs with ours appended; the header's <c>cellXfs</c> index, the four formats' and the whole number's after it.</summary>
+    /// <summary>The collections <see cref="WriteStyles"/> adds to or makes, in CT_Stylesheet's order (2026-10-30, review F18).</summary>
+    private static readonly string[] StyleCollections = ["numFmts", "fonts", "fills", "borders", "cellStyleXfs", "cellXfs"];
+
+    /// <summary>Every child of CT_Stylesheet in its order: a missing collection is made before the first element that comes after it.</summary>
+    private static readonly string[] StyleOrder = [.. StyleCollections, "cellStyles", "dxfs", "tableStyles", "colors", "extLst"];
+
+    /// <summary>
+    /// The styles, theirs with ours appended; the header's <c>cellXfs</c> index, the four formats' and the whole number's after it. Never
+    /// replaced whole (2026-10-30, review F18/F116: a part without fonts or cell formats was swapped for ours, dropping its <c>dxfs</c>, which
+    /// conditional formats name by index): a missing collection is made in its place in CT_Stylesheet's order, an empty one gets the defaults
+    /// the added cell formats point at (a plain font and cell format, the <c>none</c> and <c>gray125</c> fills, an empty border, a cell style
+    /// format), and everything else — <c>cellStyles</c>, <c>dxfs</c>, <c>tableStyles</c>, colors, extensions — is kept as it is.
+    /// </summary>
     private int WriteStyles(XmlWriter w)
     {
-        // A workbook with no styles, or none with fonts and cell formats to add to, gets ours whole: its cells name no format of theirs.
-        if (_styles is null || _fontCount == 0 || _xfCount == 0)
+        if (_styles is null)
         {
             WriteOwnStyles(w);
             return 1;
         }
 
-        int header = _xfCount;
-        bool formatsWritten = false;
+        bool plainFont = _fontCount == 0;
+        bool plainXf = _xfCount == 0;
+        int headerFont = plainFont ? 1 : _fontCount;
+        int header = plainXf ? 1 : _xfCount;
+        var written = new HashSet<string>(StringComparer.Ordinal);
         var keys = new OfficeXml();
+
+        // Each collection's count once ours are in.
+        int CountOf(string collection) => collection switch
+        {
+            "numFmts" => _formatIds.Count + ExcelWriter.FormatCodes.Count,
+            "fonts" => _fontCount + (plainFont ? 2 : 1),
+            "fills" => _fillCount == 0 ? 2 : _fillCount,
+            "borders" => _borderCount == 0 ? 1 : _borderCount,
+            "cellStyleXfs" => _styleXfCount == 0 ? 1 : _styleXfCount,
+            _ => _xfCount + (plainXf ? 1 : 0) + 2 + ExcelWriter.FormatCodes.Count,
+        };
+
+        // The collections that come before position `before` and aren't there, made whole.
+        void Missing(int before, string ns)
+        {
+            for (int i = 0; i < Math.Min(before, StyleCollections.Length); i++)
+            {
+                string collection = StyleCollections[i];
+                if (written.Add(collection))
+                {
+                    w.WriteStartElement(collection, ns);
+                    w.WriteAttributeString("count", CountOf(collection).ToString(CultureInfo.InvariantCulture));
+                    Fill(w, collection, ns, plainFont, plainXf, headerFont);
+                    w.WriteEndElement();
+                }
+            }
+        }
+
         XmlCopy.Rewrite(_styles, w, reader =>
         {
-            if (reader.Depth != 1 || keys.Key(reader.NamespaceURI) != OfficeXml.S)
+            if (reader.Depth != 1 || keys.Key(reader.NamespaceURI) != OfficeXml.S || Array.IndexOf(StyleOrder, reader.LocalName) is not (>= 0 and var at))
             {
                 return XmlCopyStep.Copy;
             }
 
-            string ns = reader.NamespaceURI;
-            if (reader.LocalName == "numFmts")
+            Missing(at, reader.NamespaceURI);
+            if (at >= StyleCollections.Length || !written.Add(reader.LocalName))
             {
-                formatsWritten = true;
-                XmlCopy.Start(reader, w, Count(_formatIds.Count + ExcelWriter.FormatCodes.Count));
-                return XmlCopyStep.Started;
+                return XmlCopyStep.Copy;
             }
 
-            if (!formatsWritten)
-            {
-                // numFmts comes first of all (CT_Stylesheet): made here, before the first element after it.
-                formatsWritten = true;
-                w.WriteStartElement("numFmts", ns);
-                w.WriteAttributeString("count", ExcelWriter.FormatCodes.Count.ToString(CultureInfo.InvariantCulture));
-                WriteFormats(w);
-                w.WriteEndElement();
-            }
-
-            return reader.LocalName switch
-            {
-                "fonts" => Started(reader, w, _fontCount + 1),
-                "cellXfs" => Started(reader, w, _xfCount + 2 + ExcelWriter.FormatCodes.Count),
-                _ => XmlCopyStep.Copy,
-            };
+            return Started(reader, w, CountOf(reader.LocalName));
         }, (local, ns, depth) =>
         {
-            if (depth != 1)
+            if (depth == 0)
             {
+                // A stylesheet whose children all come earlier, or that has none: what is still missing goes last.
+                Missing(StyleCollections.Length, ns);
                 return;
             }
 
-            switch (local)
+            if (depth == 1 && keys.Key(ns) == OfficeXml.S)
             {
-                case "numFmts":
-                    WriteFormats(w);
-                    break;
-                case "fonts":
-                    w.WriteStartElement("font", ns);
-                    w.WriteStartElement("b", ns);
-                    w.WriteEndElement();
-                    foreach (var (name, space, attributes) in _firstFont.Where(f => HeaderFontParts.Contains(f.Local)))
-                    {
-                        XmlCopy.Write(w, name, space, attributes, "");
-                    }
-
-                    w.WriteEndElement();
-                    break;
-                case "cellXfs":
-                    ExcelWriter.Xf(w, 0, _fontCount);
-                    for (int i = 0; i < ExcelWriter.FormatCodes.Count; i++)
-                    {
-                        ExcelWriter.Xf(w, _firstFormat + i, 0);
-                    }
-
-                    ExcelWriter.Xf(w, ExcelWriter.IntegerFormatId, 0);
-
-                    break;
+                Fill(w, local, ns, plainFont, plainXf, headerFont);
             }
         });
         return header;
+    }
+
+    /// <summary>
+    /// What one of <see cref="StyleCollections"/> gets at its end: the formats, the header font (after a plain one when it had none), the default
+    /// fills, border and cell style format when it had none, and the cell formats (after a plain one when it had none).
+    /// </summary>
+    private void Fill(XmlWriter w, string local, string ns, bool plainFont, bool plainXf, int headerFont)
+    {
+        switch (local)
+        {
+            case "numFmts":
+                WriteFormats(w);
+                break;
+            case "fonts":
+                if (plainFont)
+                {
+                    ExcelWriter.Font(w, bold: false);
+                }
+
+                w.WriteStartElement("font", ns);
+                w.WriteStartElement("b", ns);
+                w.WriteEndElement();
+                foreach (var (name, space, attributes) in _firstFont.Where(f => HeaderFontParts.Contains(f.Local)))
+                {
+                    XmlCopy.Write(w, name, space, attributes, "");
+                }
+
+                w.WriteEndElement();
+                break;
+            case "fills" when _fillCount == 0:
+                ExcelWriter.DefaultFills(w);
+                break;
+            case "borders" when _borderCount == 0:
+                ExcelWriter.DefaultBorder(w);
+                break;
+            case "cellStyleXfs" when _styleXfCount == 0:
+                ExcelWriter.DefaultStyleXf(w);
+                break;
+            case "cellXfs":
+                if (plainXf)
+                {
+                    ExcelWriter.Xf(w, 0, 0);
+                }
+
+                ExcelWriter.Xf(w, 0, headerFont);
+                for (int i = 0; i < ExcelWriter.FormatCodes.Count; i++)
+                {
+                    ExcelWriter.Xf(w, _firstFormat + i, 0);
+                }
+
+                ExcelWriter.Xf(w, ExcelWriter.IntegerFormatId, 0);
+                break;
+        }
     }
 
     /// <summary>
@@ -654,7 +799,7 @@ public sealed class WorkbookAppender : IWorkbookJob
         }
     }
 
-    /// <summary>A new workbook's styles part, the one shape both share: its header is <c>cellXfs</c> 1, its formats from 164.</summary>
+    /// <summary>A new workbook's styles part, the one shape both share: its header is <c>cellXfs</c> 1, its formats from 164. Only for a workbook with no styles part.</summary>
     private void WriteOwnStyles(XmlWriter w)
     {
         _firstFormat = ExcelWriter.FirstFormatId;

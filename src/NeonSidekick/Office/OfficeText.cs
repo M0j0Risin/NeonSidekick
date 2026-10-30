@@ -274,10 +274,28 @@ public static class OfficeText
     public static string BadSheetName(string name) =>
         $"Error: \"{name}\" can't name a sheet: at most 31 characters, none of : \\ / ? * [ ], no control characters, no ' first or last, and not History";
 
-    /// <summary>An existing <c>.xlsx</c> that isn't a zip: an encrypted workbook is a compound file. Pinned.</summary>
+    /// <summary>
+    /// An existing <c>.xlsx</c> that isn't a zip: an encrypted workbook is a compound file, and since 2026-10-30 (review F93) it isn't
+    /// replaced with <c>overwrite</c> either, so its refusal offers only another name. Pinned.
+    /// </summary>
     public static string NotAWorkbook(string path, bool encrypted) => encrypted
-        ? $"Error: '{path}' is password-protected or encrypted, so no sheet can be added to it; give another file name, or overwrite: true to replace it with a new workbook"
+        ? $"Error: '{path}' is password-protected or encrypted, so it isn't changed; give another file name"
         : $"Error: '{path}' is not an Excel workbook, so no sheet can be added to it; give another file name, or overwrite: true to replace it with a new workbook";
+
+    /// <summary>
+    /// A package with an entry repeated (in any case) or naming a place outside it, never copied (2026-10-30, review F62/F83/F90); the file is
+    /// left as it is. Pinned.
+    /// </summary>
+    public static string BadEntryName(string path, string entry) =>
+        $"Error: '{path}' is damaged (its entry \"{entry}\" is repeated or points outside the package), so it was left as it is; save it again in Excel, or give another file name";
+
+    /// <summary>A workbook holding macros, never added to or replaced (2026-10-30, review F93). Pinned.</summary>
+    public static string MacroWorkbook(string path) =>
+        $"Error: '{path}' holds macros, so it isn't changed; give another file name";
+
+    /// <summary>A workbook named to be replaced whole that has a protected sheet (2026-10-30, review F93). Pinned.</summary>
+    public static string ProtectedSheetInside(string path, string sheet) =>
+        $"Error: sheet \"{sheet}\" in '{path}' is protected, so the workbook isn't replaced; unprotect it in Excel, give a sheet name to add a sheet, or give another file name";
 
     /// <summary>A workbook saved as Strict Open XML. Pinned.</summary>
     public static string StrictWorkbook(string path) =>
@@ -333,6 +351,18 @@ public static class OfficeText
 
     /// <summary>What a workbook failure names when it has no path yet.</summary>
     public const string TheWorkbook = "the workbook";
+
+    // The names the writers make up, here since 2026-10-30 (review F51).
+
+    /// <summary>A sheet's name when none is given and no file names it, and what a name with nothing left falls back to.</summary>
+    public const string DefaultSheet = "Sheet1";
+
+    /// <summary>A made-up workbook's stem for rows with no source file: <c>table-2026-10-30-0912.xlsx</c>.</summary>
+    public const string TableStem = "table";
+
+    /// <summary>A made-up Word file's stem: <c>reply-…</c> for the reply, <c>document-…</c> for Markdown with no file or title.</summary>
+    public const string ReplyStem = "reply";
+    public const string DocumentStem = "document";
 
     /// <summary>Where a zip or XML that won't parse is, when no part is named.</summary>
     public const string ThePackage = "the package";

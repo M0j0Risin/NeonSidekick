@@ -52,8 +52,12 @@ public abstract record TurnEvent
     /// </summary>
     public sealed record ToolResult(string Name, string CallId, string Text, IReadOnlyList<ImageAttachment>? Images = null, FileDiff? Diff = null, string? Shown = null) : TurnEvent;
 
-    /// <summary>Something the user should see that is not reply text: a timeout, a server error, an iteration cap.</summary>
-    public sealed record Notice(string Text, bool IsError) : TurnEvent;
+    /// <summary>
+    /// Something the user should see that is not reply text: a timeout, a server error, an iteration cap. <paramref name="AskAgain"/>: the
+    /// host adds <see cref="TurnText.AskAgain"/> unless a loop's pass runs (2026-10-30, review F96: a stopped call in an audit pass said
+    /// "ask again" over the audit's own resume line).
+    /// </summary>
+    public sealed record Notice(string Text, bool IsError, bool AskAgain = false) : TurnEvent;
 
     /// <summary>
     /// What one model request cost, raised after its stream completed and before its tool calls

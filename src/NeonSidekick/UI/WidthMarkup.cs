@@ -21,13 +21,35 @@ public sealed class WidthMarkup : IRenderable, IReflowable
         _markup = markup ?? throw new ArgumentNullException(nameof(markup));
     }
 
+    // The last markup parsed, by its text (2026-10-30, review F71: Measure and Render parsed the same line twice). Keyed on the text the
+    // factory gives, not on the width: it can read the theme, and a theme switch renders the line again at the same width.
+    private (string Text, Markup Parsed)? _parsed;
+
+    /// <summary>The markup parses this has made (tests: Measure then Render at one width makes one).</summary>
+    internal int Parses { get; private set; }
+
     /// <summary>The line's markup for <paramref name="maxWidth"/> measured (2026-10-29, the resize review: a fixed 1..max mis-sized it in a container).</summary>
-    public Measurement Measure(RenderOptions options, int maxWidth) => ((IRenderable)new Markup(_markup(maxWidth))).Measure(options, maxWidth);
+    public Measurement Measure(RenderOptions options, int maxWidth) => ((IRenderable)Parsed(maxWidth)).Measure(options, maxWidth);
 
     public IEnumerable<Segment> Render(RenderOptions options, int maxWidth)
     {
-        var segments = ((IRenderable)new Markup(_markup(maxWidth))).Render(options, maxWidth).ToList();
+        var segments = ((IRenderable)Parsed(maxWidth)).Render(options, maxWidth).ToList();
         segments.Add(Segment.LineBreak);
         return segments;
+    }
+
+    /// <summary>The factory's markup for <paramref name="maxWidth"/>, parsed once per text.</summary>
+    private Markup Parsed(int maxWidth)
+    {
+        string text = _markup(maxWidth);
+        if (_parsed is { } kept && kept.Text == text)
+        {
+            return kept.Parsed;
+        }
+
+        var markup = new Markup(text);
+        Parses++;
+        _parsed = (text, markup);
+        return markup;
     }
 }

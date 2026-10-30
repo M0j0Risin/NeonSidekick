@@ -21,7 +21,7 @@ public sealed class SqlQueryTool : SqlTool
     public const int MinRows = AppSettingsData.MinSqlQueryMaxRows;
     public const int MaxRows = AppSettingsData.MaxSqlQueryMaxRows;
 
-    private static readonly (JsonElement Export, JsonElement Plain) Schemas = QuerySchemas(
+    private static readonly (JsonElement Export, JsonElement Plain) Schemas = QuerySchemas(members =>
         $$"""
         {
           "type": "object",
@@ -29,8 +29,7 @@ public sealed class SqlQueryTool : SqlTool
             "sql": { "type": "string", "description": "One T-SQL SELECT (TOP, not LIMIT); a WITH … CTE may lead it. No INSERT, UPDATE, DELETE, EXEC, DDL or second statement." },
             {{ConnectionProperty}},
             "params": { "type": "object", "description": "Values for @name placeholders in the SQL, e.g. {\"id\": 43659} for @id; strings, numbers, true, false or null." },
-            "max_rows": { "type": "integer", "description": "How many rows at most, 1 to 100000 (1 to 1048575 with to). Leave it out for the user's default (with to, every row)." },
-            {{ExportProperties}}
+            {{members}}
           },
           "required": ["sql"]
         }
@@ -146,8 +145,11 @@ public sealed class SqlQueryTool : SqlTool
                 return SqlText.Error(unresolved!);
             }
 
+            // The run on the entry resolved here, never a second read of the file (2026-10-30, review F54: an edit between the two could
+            // name the workbook after one connection and read another).
+            var pinned = Sql.Pinned(target);
             return await ExportAsync(export, target.Name, rows, maxRows, TimeoutSeconds(Effective), SqlAccess.ExportCell,
-                (job, timeout, token) => Sql.ExportAsync(connection, sql, parameters, job, rows, timeout, token), SqlText.Error, cancellationToken).ConfigureAwait(false);
+                (job, timeout, token) => pinned.ExportAsync(target.Name, sql, parameters, job, rows, timeout, token), SqlText.Error, cancellationToken).ConfigureAwait(false);
         }
 
         var run = await Sql.RunAsync(connection, sql, parameters, rows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);

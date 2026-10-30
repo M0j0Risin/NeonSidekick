@@ -346,7 +346,7 @@ public sealed partial class PasteBlocks
         ArgumentNullException.ThrowIfNull(text);
         string pictures = SavedLabelPattern().Replace(text, "[Image #$1]");
         return SentDocumentPattern().Replace(pictures, m => Pdf.PdfText.DocumentLabel(
-            int.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture), Path.GetFileName(m.Groups[2].Value.Trim())));
+            int.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture), Files.FileNames.LastPart(m.Groups[2].Value.Trim())));
     }
 
     [GeneratedRegex(@"\[Image #(\d+), saved as [^\]\r\n]*\]", RegexOptions.CultureInvariant)]

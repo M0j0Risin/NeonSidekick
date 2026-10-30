@@ -164,6 +164,10 @@ if (!Profiles.Exists(home, profile))
 
 using var settings = new AppSettings(home, profile);
 
+// This machine's id for the plan and audit locks (2026-10-30, review F41: a Mac's host name changes with the network, and its own lock then read
+// as another machine's): <home>/machine-id, made once, set before anything reads OwnerLock.Me.
+NeonSidekick.Files.OwnerLock.UseMachineId(NeonSidekick.Files.OwnerLock.ReadOrCreateMachineId(home));
+
 // A Mac's UNC shares (2026-10-11): one set of mounts for the run, every UncAccess's, unmounted at every exit below and in
 // OnClosing; what an app that is gone left mounted is swept off the start's path.
 if (OperatingSystem.IsMacOS())

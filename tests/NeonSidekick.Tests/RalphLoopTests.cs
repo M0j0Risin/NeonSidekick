@@ -31,6 +31,20 @@ public sealed class RalphLoopTests
     public void CapFor_IsThreeAStep_OrTheSetting_PlusTheFinalFix(int setting, int remaining, bool final, int expected) =>
         Assert.Equal(expected, RalphLoop.CapFor(setting, remaining, final));
 
+    /// <summary>
+    /// One folder whatever the case on Windows and macOS (2026-10-30, review F91: a <c>/cwd</c> typed in another case on a Mac ended an
+    /// audit as moved and refused an export); exact elsewhere.
+    /// </summary>
+    [Fact]
+    public void SameRoot_IsCaseBlind_OnWindowsAndMacOs()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "Work");
+        Assert.True(RalphSnapshot.SameRoot(root, root));
+        Assert.Equal(OperatingSystem.IsWindows() || OperatingSystem.IsMacOS(), RalphSnapshot.SameRoot(root, root.ToLowerInvariant()));
+        Assert.False(RalphSnapshot.SameRoot(root, root + "2"));
+        Assert.False(RalphSnapshot.SameRoot(null, root));
+    }
+
     [Fact]
     public void Next_WorksTheFirstUntickedStep_AndAStepThatStands_MovesOn()
     {

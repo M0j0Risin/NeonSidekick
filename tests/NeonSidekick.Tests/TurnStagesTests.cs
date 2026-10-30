@@ -157,6 +157,35 @@ public sealed class TurnStagesTests
         Assert.True(stages.InTool);
     }
 
+    /// <summary>A call's label that reads the same (its size not shown yet) changes nothing on the busy row (2026-10-30, review F21).</summary>
+    [Fact]
+    public void ACallsLabel_ThatReadsTheSame_IsShownOnce()
+    {
+        var stages = new TurnStages(funVerbs: false, new Random(7));
+        stages.Start();
+        Assert.Equal(TurnStages.ToolWritingLabel("present_audit", 12), stages.Advance(new TurnEvent.ToolWriting("present_audit", 12)));
+        Assert.Null(stages.Advance(new TurnEvent.ToolWriting("present_audit", 640)));
+        Assert.Equal(TurnStages.ToolWritingLabel("present_audit", 41_000), stages.Advance(new TurnEvent.ToolWriting("present_audit", 41_000)));
+        Assert.Null(stages.Advance(new TurnEvent.ToolWriting("present_audit", 41_000)));
+    }
+
+    /// <summary>Thinking after a call being written is the thinking stage; after text it stays writing, as it was (2026-10-30, review F77).</summary>
+    [Fact]
+    public void ThinkingAfterACallBeingWritten_ReadsAsThinking_AfterTextNothing()
+    {
+        var thinking = new TurnEvent.ThinkingDelta("hmm");
+        var stages = new TurnStages(funVerbs: false, new Random(7));
+        stages.Start();
+        Assert.NotNull(stages.Advance(new TurnEvent.ToolWriting("present_audit", 12)));
+        Assert.Equal("thinking", stages.Advance(thinking));
+        Assert.Null(stages.Advance(thinking));
+        // The same call again after the thinking: its label comes back.
+        Assert.Equal(TurnStages.ToolWritingLabel("present_audit", 12), stages.Advance(new TurnEvent.ToolWriting("present_audit", 12)));
+
+        Assert.Equal("writing", stages.Advance(Text));
+        Assert.Null(stages.Advance(thinking));
+    }
+
     [Fact]
     public void TheWritingLabel_ShowsTheSize_FromItsThreshold()
     {

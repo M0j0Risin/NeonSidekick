@@ -87,13 +87,38 @@ public class ConversationRewindTests : IDisposable
         // 2026-10-29, review P5-8: plan mode keeps the queries (they read), but one with to wrote a file.
         static FunctionCallContent Query(object? to) =>
             new("q", "sqlite_query", to is null ? new Dictionary<string, object?> { ["sql"] = "SELECT 1" } : new Dictionary<string, object?> { ["sql"] = "SELECT 1", ["to"] = to });
-        Assert.False(ConversationRewind.Changes(Query(null)));
-        Assert.False(ConversationRewind.Changes(Query(" ")));
-        Assert.True(ConversationRewind.Changes(Query("out.xlsx")));
-        Assert.True(ConversationRewind.Changes(Query(System.Text.Json.JsonDocument.Parse("\"out.xlsx\"").RootElement.Clone())));
-        Assert.True(ConversationRewind.Changes(new FunctionCallContent("a", "ad_find", new Dictionary<string, object?> { ["to"] = "users.csv" })));
-        Assert.False(ConversationRewind.Changes(new FunctionCallContent("r", "read_file", new Dictionary<string, object?> { ["to"] = "x" })));
-        Assert.True(ConversationRewind.Changes(new FunctionCallContent("w", "write_file", null)));
+        Assert.False(ConversationRewind.Changes(Query(null), null));
+        Assert.False(ConversationRewind.Changes(Query(" "), null));
+        Assert.True(ConversationRewind.Changes(Query("out.xlsx"), null));
+        Assert.True(ConversationRewind.Changes(Query(System.Text.Json.JsonDocument.Parse("\"out.xlsx\"").RootElement.Clone()), null));
+        Assert.True(ConversationRewind.Changes(new FunctionCallContent("a", "ad_find", new Dictionary<string, object?> { ["to"] = "users.csv" }), null));
+        Assert.False(ConversationRewind.Changes(new FunctionCallContent("r", "read_file", new Dictionary<string, object?> { ["to"] = "x" }), null));
+        Assert.True(ConversationRewind.Changes(new FunctionCallContent("w", "write_file", null), null));
+    }
+
+    /// <summary>
+    /// A refused export isn't a change, a written one is; a tool plan mode drops counts whatever it answered (2026-10-30, review F58).
+    /// </summary>
+    [Fact]
+    public void ARefusedExport_IsNoChange_AWrittenOneIs()
+    {
+        var call = new FunctionCallContent("q", "sqlite_query", new Dictionary<string, object?> { ["sql"] = "SELECT 1", ["to"] = "out.xlsx" });
+        Assert.False(ConversationRewind.Changes(call, new FunctionResultContent("q", FileText.SaveInPlanMode)));
+        Assert.False(ConversationRewind.Changes(call, new FunctionResultContent("q", System.Text.Json.JsonDocument.Parse("\"Error: no\"").RootElement.Clone())));
+        Assert.True(ConversationRewind.Changes(call, new FunctionResultContent("q", "Made out.xlsx (3 KB)")));
+        Assert.True(ConversationRewind.Changes(new FunctionCallContent("c", "run_command", null), new FunctionResultContent("c", "Error: exit code 1")));
+
+        var written = new ConversationHistory("s");
+        written.AddUser("export it");
+        written.AddMessage(new ChatMessage(ChatRole.Assistant, [call, new FunctionCallContent("q2", "sqlite_query", new Dictionary<string, object?> { ["sql"] = "SELECT 2", ["to"] = "two.xlsx" })]));
+        written.AddToolResults([new FunctionResultContent("q", FileText.SaveInPlanMode), new FunctionResultContent("q2", "Made two.xlsx (3 KB)")]);
+        Assert.Equal(["sqlite_query"], ConversationRewind.Preview(written.Messages, 0).ChangingTools);
+
+        var refused = new ConversationHistory("s");
+        refused.AddUser("export it");
+        refused.AddMessage(new ChatMessage(ChatRole.Assistant, [call]));
+        refused.AddToolResults([new FunctionResultContent("q", FileText.SaveInPlanMode)]);
+        Assert.Empty(ConversationRewind.Preview(refused.Messages, 0).ChangingTools);
     }
 
     [Fact]

@@ -290,8 +290,39 @@ public static class SessionText
     public const string ExportStarted = "started";
     public const string ExportLast = "last";
 
-    /// <summary>The note under a turn the keys cut short.</summary>
-    public const string ExportCancelledNote = "(cancelled)";
+    /// <summary>The note under a turn the keys cut short (American spelling since 2026-10-30, review F98).</summary>
+    public const string ExportCancelledNote = "(canceled)";
+
+    /// <summary>The note under a turn a picture of which wouldn't read, so the export left it out (2026-10-30, review F10).</summary>
+    public const string ExportPictureDroppedNote = "(a picture that couldn't be read is left out)";
+
+    // The export's words on the screen, moved here from ChatScreen and SessionsMenu on 2026-10-30 (review F100).
+
+    /// <summary>An export's stem when its title leaves nothing to name the file by (2026-10-30, review F51): <c>session-2026-10-30-0912.md</c>.</summary>
+    public const string ExportStem = "session";
+
+    /// <summary>The two formats' words on the Sessions pane's format page.</summary>
+    public const string ExportMarkdownWord = "Markdown";
+    public const string ExportHtmlWord = "HTML";
+
+    /// <summary>What each format makes: the format page's rows and the <c>/sessions export</c> completions.</summary>
+    public const string ExportMarkdownNote = "a Markdown note, its pictures in a folder beside it";
+    public const string ExportHtmlNote = "one HTML page in your theme, its pictures inside";
+
+    /// <summary>The Sessions pane's row page: what <c>export</c> does.</summary>
+    public const string ExportRowNote = "write it to a Markdown or HTML file in the working folder";
+
+    /// <summary>A bare <c>/sessions export</c> while <c>Session logging</c> is off and nothing was saved (2026-10-30).</summary>
+    public const string NotSavedNotice = "(" + App.NoticeGlyphs.Session + "this conversation isn't saved: Session logging is off; /sessions export <id> exports a stored one)";
+
+    /// <summary>An export written (2026-10-30): <c>(💬 exported session #12 to Notes-2026-10-30-0912.md)</c>, the path relative to the working folder.</summary>
+    public static string ExportedNotice(long id, string path) => $"({App.NoticeGlyphs.Session}exported session {Id(id)} to {path})";
+
+    /// <summary>An export that failed for a reason no file names (2026-10-30, review F10): the error sentence, the detail in the log.</summary>
+    public static string ExportFailedError(long id) => $"Couldn't export session {Id(id)}; the log has the details.";
+
+    /// <summary>Headless <c>/sessions export</c> (2026-10-30, review F60): the export is the screen's, so headless says so and never sends it to the model.</summary>
+    public const string ExportScreenOnlyError = "/sessions export works on the screen only.";
 
     /// <summary>The replay's tool line under a restored user row: <c>1 tool call</c> / <c>3 tool calls</c>.</summary>
     public static string ToolCallsNote(int calls) => calls.ToString(CultureInfo.InvariantCulture) + (calls == 1 ? " tool call" : " tool calls");

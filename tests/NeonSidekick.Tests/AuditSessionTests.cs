@@ -148,20 +148,125 @@ public sealed class AuditSessionTests : IDisposable
         Assert.DoesNotContain("Another NeonSidekick", error, StringComparison.Ordinal);
     }
 
+    private void SaveReport(string report) =>
+        Assert.Null(_audit.Save(report, new AuditReport { Label = "x", Header = new AuditHeader(AuditStatus.Auditing, "", "", AuditFocus.Dimensions, "", "model", 1, null, null) }, _box.Time.GetLocalNow()));
+
+    private void DeleteLock(string report) => File.Delete(Path.Combine(_box.Root, AuditFiles.LockPathFor(report).Replace('/', Path.DirectorySeparatorChar)));
+
     [Fact]
     public void StillHolds_IsFalseOnlyWhileAnotherLiveAppHoldsIt()
     {
         Hold(A);
+        SaveReport(A);
         Start(A);
-        File.Delete(Path.Combine(_box.Root, ".neon", "audits", "a.lock"));
-        Assert.True(_audit.StillHolds());   // gone: taken back
+        DeleteLock(A);
+        Assert.True(_audit.StillHolds());   // gone, the report as this process saved it: taken back
         Assert.True(Locked(A));
 
-        File.Delete(Path.Combine(_box.Root, ".neon", "audits", "a.lock"));
+        DeleteLock(A);
         WriteOtherLock(A);
         Assert.False(_audit.StillHolds());
         _audit.Stop();
         Assert.True(Locked(A));   // the other's lock stays
+    }
+
+    /// <summary>
+    /// Another NeonSidekick took the lock over, wrote the report and let go (2026-10-30, review F72): the lock is gone, but the report changed since
+    /// this process's last save, so it isn't taken back, and the other's report stays as written.
+    /// </summary>
+    [Fact]
+    public void ALockTakenOverWrittenAndLetGo_IsNotTakenBack()
+    {
+        Hold(A);
+        SaveReport(A);
+        Start(A);
+
+        DeleteLock(A);
+        WriteOtherLock(A);
+        string full = Path.Combine(_box.Root, ".neon", "audits", "a.md");
+        File.AppendAllText(full, "\nthe other's findings\n");
+        File.SetLastWriteTimeUtc(full, File.GetLastWriteTimeUtc(full).AddSeconds(5));
+        DeleteLock(A);
+
+        Assert.False(_audit.StillHolds());
+        Assert.False(Locked(A));
+        Assert.EndsWith("the other's findings\n", File.ReadAllText(full), StringComparison.Ordinal);
+    }
+
+    /// <summary>A lock deleted right after this process's own save (the stamp follows every save, review F72) is taken back.</summary>
+    [Fact]
+    public void ALockDeletedAfterThisProcesssOwnSave_IsTakenBack()
+    {
+        Hold(A);
+        SaveReport(A);
+        Start(A);
+        SaveReport(A);   // present_audit's save, through the session
+        DeleteLock(A);
+        Assert.True(_audit.StillHolds());
+        Assert.Equal(OwnerLock.Me, OwnerLock.ReadOwner(_box.Files, AuditFiles.LockPathFor(A)));
+    }
+
+    /// <summary>A lock that can't be read mid-audit counts as another's (review F72): lost, and left as it is.</summary>
+    [Fact]
+    public void AnUnreadableLockMidAudit_IsLost()
+    {
+        Hold(A);
+        SaveReport(A);
+        Start(A);
+        _box.Write(AuditFiles.LockPathFor(A), "pid: 5\nhost: not a name\n");
+        Assert.False(_audit.StillHolds());
+        Assert.True(Locked(A));
+    }
+
+    /// <summary>
+    /// A fresh start whose chosen name another NeonSidekick locked meanwhile takes the next free one (2026-10-30, review F3); a step that answers
+    /// no loop lets the hold go (F80).
+    /// </summary>
+    [Fact]
+    public void Begin_TriesTheNextName_WhenTheChosenOnesLockIsHeld_AndAFailedStepLetsGo()
+    {
+        WriteOtherLock(A);
+        string? begun = null;
+        var loop = _audit.Begin(A, chosen =>
+        {
+            begun = chosen;
+            SaveReport(chosen);
+            return _audit.Start(chosen, _scope, AuditFocus.Dimensions, "", PlanReviewer.Model, 5, 2);
+        }, out string? error, out _, another: () => B);
+        Assert.NotNull(loop);
+        Assert.Null(error);
+        Assert.Equal(B, begun);
+        Assert.True(Locked(B));
+        _audit.Stop();
+
+        Assert.Null(_audit.Begin(B, _ => null, out error, out _));
+        Assert.Null(error);
+        Assert.False(Locked(B));
+
+        Assert.Null(_audit.Begin(A, _ => throw new InvalidOperationException("never run"), out error, out _));
+        Assert.Equal(AuditText.LockedError(A), error);
+    }
+
+    /// <summary>A lock naming a process whose start time can't be read names the lock to delete (2026-10-30, review F76/F86).</summary>
+    [Fact]
+    public void Hold_OfALockWhoseOwnerCantBeChecked_NamesTheLock()
+    {
+        WriteOtherLock(A);
+        var check = OwnerLock.CannotCheck;
+        OwnerLock.CannotCheck = owner => owner.ProcessId == OtherPid;
+        try
+        {
+            Assert.False(_audit.Hold(A, out string? error, out _));
+            Assert.Equal(AuditText.UncheckedLockError(A, AuditFiles.LockPathFor(A)), error);
+        }
+        finally
+        {
+            OwnerLock.CannotCheck = check;
+        }
+
+        _box.Write(AuditFiles.LockPathFor(A), "pid: 5\nhost: not a name\n");
+        Assert.False(_audit.Hold(A, out string? unreadable, out _));
+        Assert.Equal(AuditText.UncheckedLockError(A, AuditFiles.LockPathFor(A)), unreadable);
     }
 
     [Fact]

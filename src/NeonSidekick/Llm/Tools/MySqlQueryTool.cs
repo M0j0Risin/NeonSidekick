@@ -22,7 +22,7 @@ public sealed class MySqlQueryTool : MySqlTool
     public const int MinRows = AppSettingsData.MinSqlQueryMaxRows;
     public const int MaxRows = AppSettingsData.MaxSqlQueryMaxRows;
 
-    private static readonly (JsonElement Export, JsonElement Plain) Schemas = QuerySchemas(
+    private static readonly (JsonElement Export, JsonElement Plain) Schemas = QuerySchemas(members =>
         $$"""
         {
           "type": "object",
@@ -30,8 +30,7 @@ public sealed class MySqlQueryTool : MySqlTool
             "sql": { "type": "string", "description": "One MySQL SELECT (LIMIT n, not TOP); a WITH clause may lead it. No INSERT, UPDATE, DELETE, DDL, CALL, INTO, FOR UPDATE, /*! */ comments or second statement." },
             {{ConnectionProperty}},
             "params": { "type": "object", "description": "Values for @name placeholders in the SQL, e.g. {\"id\": 101} for @id; strings, numbers, true, false or null." },
-            "max_rows": { "type": "integer", "description": "How many rows at most, 1 to 100000 (1 to 1048575 with to). Leave it out for the user's default (with to, every row)." },
-            {{ExportProperties}}
+            {{members}}
           },
           "required": ["sql"]
         }
@@ -85,8 +84,11 @@ public sealed class MySqlQueryTool : MySqlTool
                 return MySqlText.Error(unresolved!);
             }
 
+            // The run on the entry resolved here, never a second read of the file (2026-10-30, review F54: an edit between the two could
+            // name the workbook after one connection and read another).
+            var pinned = Server.Pinned(target);
             return await ExportAsync(export, target.Name, rows, maxRows, TimeoutSeconds(Effective), MySqlAccess.ExportCell,
-                (job, timeout, token) => Server.ExportAsync(connection, body, parameters, job, rows, timeout, token), MySqlText.Error, cancellationToken).ConfigureAwait(false);
+                (job, timeout, token) => pinned.ExportAsync(target.Name, body, parameters, job, rows, timeout, token), MySqlText.Error, cancellationToken).ConfigureAwait(false);
         }
 
         var run = await Server.RunAsync(connection, [body], parameters, rows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);

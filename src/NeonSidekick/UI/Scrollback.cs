@@ -150,7 +150,7 @@ public sealed class Scrollback
     /// A write the store can render again at another width (2026-10-29, the user's report: the banner and the transcript did not
     /// follow a resize): the renderable it came from (a notice, a sent line, the banner — <c>ScreenPane</c> decides which) and the width
     /// it was written at. At that width its line shows its own parts; at another, the rows the renderable gave there. One other width's
-    /// rows are kept, so a fold's re-layout renders nothing; none at its own width (the resize review: no copy kept at home).
+    /// rows are kept, so a fold's re-layout renders nothing — and, since 2026-10-30 (review F33), going home and back renders nothing either.
     /// </summary>
     private sealed class Source(IRenderable renderable, int width)
     {
@@ -228,9 +228,11 @@ public sealed class Scrollback
     /// The sources a re-layout left wrapped at the cached width, rendered now from the newest back (2026-10-29, the resize review: the
     /// docs say the transcript is laid out again, and those past the budget never were): at least one, then while <see cref="RenderBudget"/>
     /// lasts; the rows laid out again with the held places told (<see cref="Relaying"/>, <see cref="Relaid"/>). The pane calls it on a
-    /// tick the size held. True when the rows changed (the pane redraws).
+    /// tick the size held. True when the screen must be drawn again: some line it rendered has a row in the last <paramref name="tailRows"/>
+    /// — what the bottom's flow shows — or the pane is <paramref name="scrolled"/> (its window moves with its anchor). A line wholly above
+    /// the tail changes nothing on the screen (2026-10-30, review F32: every such tick redrew it).
     /// </summary>
-    public bool RenderPending()
+    public bool RenderPending(int tailRows = int.MaxValue, bool scrolled = true)
     {
         if (!_pending || Render is null || _width <= 0)
         {
@@ -242,6 +244,8 @@ public sealed class Scrollback
         int rendered = _rendered;
         long started = Clock.GetTimestamp();
         bool any = false;
+        bool attempted = false;
+        var laid = new List<Line>();
         for (int i = _lines.Count - 1; i >= 0; i--)
         {
             if (_lines[i].Reflow is not { } source || source.Width == _width || source.CachedWidth == _width)
@@ -249,14 +253,21 @@ public sealed class Scrollback
                 continue;
             }
 
-            if (any && Clock.GetElapsedTime(started) >= RenderBudget)
+            // At least one try a call, then while the budget lasts (2026-10-30, review F28: gated on a render that cached rows, a run of
+            // renders that lost text or were put off never met the budget and all ran in one tick).
+            if (attempted && Clock.GetElapsedTime(started) >= RenderBudget)
             {
                 _pending = true;
                 break;
             }
 
             RenderAt(_lines[i], source, _width);
-            any |= _lines[i].Reflow is { Cached: not null } && source.CachedWidth == _width;
+            attempted = true;
+            if (_lines[i].Reflow is { Cached: not null } && source.CachedWidth == _width)
+            {
+                any = true;
+                laid.Add(_lines[i]);
+            }
         }
 
         if (!any)
@@ -266,9 +277,28 @@ public sealed class Scrollback
 
         Relaying?.Invoke();
         Rebuild(_width);
-        _reshaped = true;
+        bool shown = scrolled || InTail(laid, tailRows);
+        _reshaped |= shown;
         Relaid?.Invoke(new WidthChange(_width, _rendered - rendered, Clock.GetElapsedTime(started).TotalMilliseconds));
-        return true;
+        return shown;
+    }
+
+    /// <summary>Whether any of <paramref name="lines"/> has a row among the last <paramref name="tailRows"/> at the cached width.</summary>
+    private bool InTail(List<Line> lines, int tailRows)
+    {
+        var wanted = new HashSet<Line>(lines);
+        int below = 0;
+        for (int i = _lines.Count - 1; i >= 0 && below < tailRows; i--)
+        {
+            if (wanted.Contains(_lines[i]) && _lines[i].Rows > 0)
+            {
+                return true;
+            }
+
+            below += _lines[i].Rows;
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -409,15 +439,37 @@ public sealed class Scrollback
     /// 2026-10-29 (the resize review), so a mark the cap or a clear went past reads as gone — and of the open last line the segments and
     /// rows it held — a picture's write leaves its last row open, and the next write joins it.
     /// </summary>
-    public readonly record struct Place(int Lines, int Segments, int Rows);
+    public readonly record struct Place(int Lines, int Segments, int Rows)
+    {
+        /// <summary>
+        /// The line the mark leans on (2026-10-30, review F27: a waiting write merged into one line moved every later index, and a mark
+        /// taken inside it named another line): the open line it sits in, or the line before it; null in an empty store.
+        /// </summary>
+        internal object? Anchor { get; init; }
+
+        /// <summary>Where <see cref="Anchor"/> stood, counted as <see cref="Lines"/> is.</summary>
+        internal int AnchorAt { get; init; }
+    }
 
     /// <summary>Where the next write starts, for <see cref="Since"/>: after the last line, or inside it while it is open.</summary>
     public Place Mark => LastLineOpen
-        ? new(_frontDropped + _lines.Count - 1, _lines[^1].Segments.Count, _lines[^1].Rows)
-        : new(_frontDropped + _lines.Count, 0, 0);
+        ? new(_frontDropped + _lines.Count - 1, _lines[^1].Segments.Count, _lines[^1].Rows) { Anchor = _lines[^1], AnchorAt = _frontDropped + _lines.Count - 1 }
+        : new(_frontDropped + _lines.Count, 0, 0) { Anchor = _lines.Count > 0 ? _lines[^1] : null, AnchorAt = _frontDropped + _lines.Count - 1 };
 
     /// <summary>The last line has no line break after it yet: the flow cursor sits at its end, not on the row under it.</summary>
     public bool LastLineOpen => _lines.Count > 0 && !_lines[^1].Closed;
+
+    /// <summary>The open last line's rows at the cached width, 0 without one (2026-10-30, review F24: the rows a write joining it finds on the screen).</summary>
+    internal int OpenLineRows => LastLineOpen ? _lines[^1].Rows : 0;
+
+    /// <summary>
+    /// The open last line was written wider than <paramref name="width"/> (2026-10-30, review F112): a write that closes it lays it out by the
+    /// narrower rule, so the pane draws the store's rows for it.
+    /// </summary>
+    internal bool OpenLineWiderThan(int width) => LastLineOpen && _lines[^1].BornWidth > width;
+
+    /// <summary>The screen no longer shows the store's rows (2026-10-30, review F112): the pane's next draw writes the flow again from here.</summary>
+    internal void MarkReshaped() => _reshaped = true;
 
     /// <summary>
     /// What was written since a <see cref="Mark"/> (<see cref="Since"/>, 2026-10-11) as the writes that put it back (2026-10-29): each
@@ -441,8 +493,9 @@ public sealed class Scrollback
     /// What was written after <paramref name="mark"/> as the writes that put it back (2026-10-11, the welcome splash drawn first and
     /// fitted again over the startup's lines, <c>ChatScreen.RefitSplash</c>). Null with nothing visible written, a mark the store no longer
     /// holds (the cap dropped lines from the front since), a line that folds (a tool run, a code or thinking block, a diff) or holds a
-    /// picture after it — neither survives a copy — or a line laid out other than as written (2026-10-29, the resize review: narrower than
-    /// its width, or a write rendered again — the terminal would show the copy as written, the store otherwise): nothing is copied.
+    /// picture after it — neither survives a copy — or a write rendered again at another width (2026-10-29, the resize review: the
+    /// terminal would show the copy as written, the store otherwise), or a mark a merge moved (2026-10-30, <see cref="Place.Anchor"/>):
+    /// nothing is copied. A narrowed text line is copied with its width (<see cref="Chunk.Born"/>).
     /// </summary>
     public Copied? Since(Place mark, int width)
     {
@@ -453,14 +506,24 @@ public sealed class Scrollback
             return null;
         }
 
+        // A merge since that took in the mark's line, or ran at or before it, moved or replaced it (2026-10-30, review F27): gone, as a
+        // dropped mark is. One wholly after it leaves it be.
+        int anchorAt = mark.AnchorAt - _frontDropped;
+        if (mark.Anchor is not null && (anchorAt < 0 || anchorAt >= _lines.Count || !ReferenceEquals(_lines[anchorAt], mark.Anchor)))
+        {
+            return null;
+        }
+
         var chunks = new List<Chunk>();
         int rows = 0;
         for (int i = first; i < _lines.Count; i++)
         {
             var line = _lines[i];
             bool joined = i == first && (mark.Segments > 0 || mark.Rows > 0);
+            // A narrowed text line is copied with the width it was written at (2026-10-30, review F26: refusing it skipped the splash's
+            // refit after any narrowing at startup): put back at that width, it goes the narrower path on the screen and in the store.
             if (line.Group is not null || line.Fold is not null || (!joined && line.Pictures is not null)
-                || Narrowed(line, _width) || (line.Reflow is { } source && source.Width != _width))
+                || (Narrowed(line, _width) && line.Pictures is not null) || (line.Reflow is { } source && source.Width != _width))
             {
                 return null;
             }
@@ -670,7 +733,7 @@ public sealed class Scrollback
 
         if (_width > 0 && touched.Any(line => line.Pictures is not null))
         {
-            Shifts(touched, _width);
+            touched = ShiftPictures(touched);
         }
 
         if (member && _open!.Folds)
@@ -697,6 +760,46 @@ public sealed class Scrollback
         }
 
         return Trim();
+    }
+
+    /// <summary>
+    /// The shift of each picture <paramref name="touched"/> holds, worked out over every row of it (2026-10-30, review F110: over the
+    /// touched rows alone, a narrowing that closed a picture's last row gave that row a shift its earlier rows did not have — a shear).
+    /// A picture's rows are the store's last lines, so its earlier rows sit just before the touched ones; when its shift changed they
+    /// are taken out of the cache and come back to be wrapped again, and the pane redraws (<see cref="Reshaped"/>). The lines to wrap,
+    /// in order.
+    /// </summary>
+    private List<Line> ShiftPictures(List<Line> touched)
+    {
+        var ids = new HashSet<int>();
+        foreach (var line in touched)
+        {
+            if (line.Pictures is [var span, ..])
+            {
+                ids.Add(span.Id);
+            }
+        }
+
+        int first = _lines.LastIndexOf(touched[0]);
+        int from = first;
+        while (from > 0 && _lines[from - 1].Pictures is [var span, ..] && ids.Contains(span.Id))
+        {
+            from--;
+        }
+
+        var before = ids.ToDictionary(id => id, id => _shifts.TryGetValue(id, out int shift) ? shift : -1);
+        Shifts(_lines.Skip(from), _width);
+        if (from == first || ids.All(id => (_shifts.TryGetValue(id, out int shift) ? shift : -1) == before[id]))
+        {
+            return touched;
+        }
+
+        // Their rows are the cache's last: the touched lines' are out of it already.
+        var earlier = _lines.GetRange(from, first - from);
+        int cached = earlier.Sum(line => line.Rows);
+        _rows.RemoveRange(_rows.Count - cached, cached);
+        _reshaped = true;
+        return [.. earlier, .. touched];
     }
 
     /// <summary>
@@ -1546,13 +1649,14 @@ public sealed class Scrollback
         {
             if (row < at + line.Rows)
             {
+                string head = TextFind.LineText(_rows[at]);
                 int ink = 0;
                 for (int r = at; r < row; r++)
                 {
-                    ink += Ink(TextFind.LineText(_rows[r]), int.MaxValue);
+                    ink += Ink(TextFind.LineText(_rows[r]), int.MaxValue, r == at ? null : head);
                 }
 
-                ink += Ink(TextFind.LineText(_rows[row]), Math.Max(0, start));
+                ink += Ink(TextFind.LineText(_rows[row]), Math.Max(0, start), row == at ? null : head);
                 return new Anchor(line, ink);
             }
 
@@ -1574,14 +1678,16 @@ public sealed class Scrollback
         {
             if (line == anchor.Line)
             {
+                string? head = line.Rows > 0 ? TextFind.LineText(_rows[at]) : null;
                 int ink = 0;
                 for (int r = at; r < at + line.Rows; r++)
                 {
                     string text = TextFind.LineText(_rows[r]);
-                    int here = Ink(text, int.MaxValue);
+                    string? first = r == at ? null : head;
+                    int here = Ink(text, int.MaxValue, first);
                     if (ink + here > anchor.Ink)
                     {
-                        return new Spot(r, Index(text, anchor.Ink - ink), at, line.Rows);
+                        return new Spot(r, Index(text, anchor.Ink - ink, RepeatedBar(first, text)), at, line.Rows);
                     }
 
                     ink += here;
@@ -1600,11 +1706,14 @@ public sealed class Scrollback
     /// <summary>Whether <paramref name="c"/> counts for an anchor: not white space, not a box-drawing or block glyph (a rule, a border, the quote's bar).</summary>
     private static bool Inked(char c) => !char.IsWhiteSpace(c) && c is not (>= '─' and <= '▟');
 
-    /// <summary>The counted characters of <paramref name="text"/> before index <paramref name="upTo"/>.</summary>
-    private static int Ink(string text, int upTo)
+    /// <summary>
+    /// The counted characters of <paramref name="text"/> before index <paramref name="upTo"/>; on a line's later row (<paramref name="first"/>
+    /// its first row's text), not the ASCII bar a narrowed line repeats there (<see cref="RepeatedBar"/>).
+    /// </summary>
+    private static int Ink(string text, int upTo, string? first = null)
     {
         int ink = 0;
-        for (int i = 0; i < text.Length && i < upTo; i++)
+        for (int i = RepeatedBar(first, text); i < text.Length && i < upTo; i++)
         {
             if (Inked(text[i]))
             {
@@ -1615,10 +1724,34 @@ public sealed class Scrollback
         return ink;
     }
 
-    /// <summary>The index in <paramref name="text"/> of its counted character number <paramref name="ink"/> (from 0).</summary>
-    private static int Index(string text, int ink)
+    /// <summary>
+    /// Where the text of a line's later row starts counting (2026-10-30, review F64: a narrowed <c>| a | b |</c> line repeats its ASCII bar on
+    /// every row, so the same place counted one more character per row above it at one width than at another): past the leading blanks and
+    /// <c>|</c> that open <paramref name="first"/> (its first row) when <paramref name="text"/> opens with the same; 0 otherwise. The box
+    /// bars are never counted (<see cref="Inked"/>).
+    /// </summary>
+    private static int RepeatedBar(string? first, string text)
     {
-        for (int i = 0; i < text.Length; i++)
+        if (first is null)
+        {
+            return 0;
+        }
+
+        int lead = 0;
+        while (lead < first.Length && first[lead] == ' ')
+        {
+            lead++;
+        }
+
+        return lead < first.Length && first[lead] == '|' && text.Length > lead && text.AsSpan(0, lead + 1).SequenceEqual(first.AsSpan(0, lead + 1))
+            ? lead + 1
+            : 0;
+    }
+
+    /// <summary>The index in <paramref name="text"/> of its counted character number <paramref name="ink"/> (from 0), counting from <paramref name="from"/>.</summary>
+    private static int Index(string text, int ink, int from = 0)
+    {
+        for (int i = from; i < text.Length; i++)
         {
             if (Inked(text[i]) && ink-- == 0)
             {
@@ -1715,15 +1848,12 @@ public sealed class Scrollback
         line.Shift = 0;
         if (line.Parts is { } parts)
         {
-            // A re-renderable write (2026-10-29): its own lines at its width, the rows rendered for this one when they are kept.
+            // A re-renderable write (2026-10-29): its own lines at its width, the rows rendered for this one when they are kept. The other
+            // width's rows stay while it is home (2026-10-30, review F33: maximize and restore rendered every source again each way); one
+            // copy per source, no more rows than the cap lets the store hold at that width.
             if (line.Reflow is { } source)
             {
-                if (width == source.Width)
-                {
-                    source.Cached = null;
-                    source.CachedWidth = -1;
-                }
-                else if (source.CachedWidth == width && source.Cached is { } rendered)
+                if (width != source.Width && source.CachedWidth == width && source.Cached is { } rendered)
                 {
                     int added = 0;
                     foreach (var part in rendered)
@@ -1813,10 +1943,19 @@ public sealed class Scrollback
 
         public char First => Source[Start];
 
-        /// <summary>An emoji: a space after it is never a break, so the glyph keeps its label (2026-10-29, the resize review).</summary>
-        public bool Emoji => Width == 2 && (char.IsSurrogate(First) || Source.AsSpan(Start, Length).Contains('️'));
+        /// <summary>
+        /// An emoji: a space after it is never a break, so the glyph keeps its label (2026-10-29, the resize review). Told by a variation
+        /// selector or a symbol past the BMP, not by two cells (2026-10-30, review F63: Terminal.app draws a selector sequence in one,
+        /// <see cref="TextCells.NarrowSelectorSequences"/>); a letter past the BMP (𝐀) is none.
+        /// </summary>
+        public bool Emoji => Source.AsSpan(Start, Length).Contains('️')
+            || (Rune.DecodeFromUtf16(Source.AsSpan(Start, Length), out var rune, out _) == System.Buffers.OperationStatus.Done
+                && !rune.IsBmp && Rune.GetUnicodeCategory(rune) == System.Globalization.UnicodeCategory.OtherSymbol);
 
-        public bool Letter => char.IsLetter(First);
+        /// <summary>The cluster's first character is a letter, read as a whole rune (2026-10-30, review F65: a letter past the BMP is two chars).</summary>
+        public bool Letter => Rune.DecodeFromUtf16(Source.AsSpan(Start, Length), out var rune, out _) == System.Buffers.OperationStatus.Done
+            ? Rune.IsLetter(rune)
+            : char.IsLetter(First);
     }
 
     /// <summary>A rule's glyph: a trailing run of it overflowing a narrowed line is dropped (an ASCII one only in a run of three or more).</summary>

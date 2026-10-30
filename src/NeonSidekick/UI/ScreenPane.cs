@@ -2571,20 +2571,10 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     /// region paints is marked (<see cref="TextFind.Mark"/>), the one at store row <paramref name="row"/> from character
     /// <paramref name="start"/> as the current one, and the region scrolled to put that row a third of the way down. While a find
     /// is shown the region is painted from the store even at its last window (where it would be the bottom's flow, unmarked); a
-    /// <paramref name="row"/> of −1 leaves the view where it is. Disabled: nothing.
-    /// </summary>
-    public void ShowFind(string find, int row, int start)
-    {
-        lock (_gate)
-        {
-            ShowFind(find, row, start, Enabled ? LaidOutVersion() : 0);
-        }
-    }
-
-    /// <summary>
-    /// <see cref="ShowFind(string, int, int)"/> for rows read at layout <paramref name="version"/> (<see cref="TranscriptRows(out int, out TextFind.Hit)"/>):
-    /// false, and nothing shown, when the store was laid out again since (2026-10-29, the resize review: a row from the old layout set the
-    /// scroll to some other text) — the pane's own place, moved with the re-layout, stays on show, and the caller reads again.
+    /// <paramref name="row"/> of −1 leaves the view where it is. Disabled: nothing. The rows are read at layout <paramref name="version"/>
+    /// (<see cref="TranscriptRows(out int, out TextFind.Hit)"/>): false, and nothing shown, when the store was laid out again since
+    /// (2026-10-29, the resize review: a row from the old layout set the scroll to some other text) — the pane's own place, moved with the
+    /// re-layout, stays on show, and the caller reads again.
     /// </summary>
     public bool ShowFind(string find, int row, int start, int version)
     {
@@ -2624,7 +2614,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>
-    /// The region scrolled to put the find's row a third of the way down (<see cref="ShowFind(string, int, int)"/>), over the store's rows at
+    /// The region scrolled to put the find's row a third of the way down (<see cref="ShowFind"/>), over the store's rows at
     /// <paramref name="width"/> (0 for the window's; a re-layout passes its own, so a window that moved again meanwhile starts no other).
     /// </summary>
     private void CenterOnFind(int width = 0)
@@ -2660,7 +2650,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     /// <summary>
     /// Bumped each time the store is laid out again (2026-10-29): the transcript's find (<see cref="TranscriptFind"/>) holds its matches
     /// as rows, and when this moved it finds them again from <see cref="FindPlace"/>. A plain read since the resize review (no layout as a
-    /// side effect): the tick lays the store out within a tick of a resize, and <see cref="ShowFind(string, int, int, int)"/> checks again.
+    /// side effect): it can lag a resize the tick has not laid out yet, which <see cref="ShowFind"/> checks against the store itself.
     /// </summary>
     public int LayoutVersion
     {
@@ -2722,6 +2712,15 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
 
         _findAnchor = null;
         var spot = _store.Resolve(anchor);
+        if (spot.Count == 0)
+        {
+            // Its line is gone — the cap trimmed it (2026-10-30, review F113: the match was set to row 0, some other text): no match is
+            // current, and the find counts its matches again from the newest.
+            _findRow = -1;
+            _findStart = -1;
+            return;
+        }
+
         var rows = _store.Rows(change.Width);
         _findRow = spot.Row;
         _findStart = -1;
@@ -3342,8 +3341,8 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>
     /// <paramref name="source"/> rendered at <paramref name="width"/> as a flow write of it there would be (2026-10-29, the store's
-    /// <see cref="Scrollback.Render"/>): Spectre's <c>GetSegments</c> at that width (the console's capabilities, the same options; its
-    /// merge of runs in one style is internal to Spectre and changes nothing drawn), then <see cref="SpacedSegments"/>. It runs on the tick under the gate, so a render that throws —
+    /// <see cref="Scrollback.Render"/>): <see cref="SegmentsAt"/> at that width, as the first write rendered it, then
+    /// <see cref="SpacedSegments"/>. It runs on the tick under the gate, so a render that throws —
     /// a table at a very narrow width — is logged and answered with null: the store drops that source and wraps its lines. A container
     /// written under another palette than the one in force is not rendered now (<see cref="Themed"/>, <see cref="Scrollback.NotNow"/>).
     /// </summary>
@@ -3361,8 +3360,9 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
 
         try
         {
-            var options = new RenderOptions(_inner.Profile.Capabilities, new Size(width, Height));
-            return SpacedSegments(source.Render(options, width));
+            // As the first write rendered it (2026-10-30, review F19: options of its own skipped the console's pipeline, so a source at its
+            // own width could come back other than it was written).
+            return SpacedSegments(SegmentsAt(source, width));
         }
         catch (Exception e) when (e is not OutOfMemoryException)
         {
@@ -3488,74 +3488,169 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         if (_store.JoinNeedsBreak(segments))
         {
             // The open row is a picture's, laid out narrower than written (2026-10-29, the resize review): the screen shows it cut at the
-            // edge, the store whole, so text joined to it would land in different places — the row is ended first, in both.
-            Emit([Segment.LineBreak]);
+            // edge, the store whole, so text joined to it would land in different places — the row is ended first, in both. The break is
+            // the bare break (2026-10-30, review F109): the write's pictures, fold and source are its own, so they wait for it — they gave
+            // the picture's row the next picture's spans, and made the break a diff of its own. A member stays one: a break that only
+            // closes the open line opens no member, and a plain one would end the run.
+            var (spans, fold, source) = (_pictureSpans, _foldSpec, _source);
+            (_pictureSpans, _foldSpec, _source) = (null, null, null);
+            try
+            {
+                Emit([Segment.LineBreak]);
+            }
+            finally
+            {
+                (_pictureSpans, _foldSpec, _source) = (spans, fold, source);
+            }
         }
 
+        // The window's width read once for the whole write (2026-10-30, review F25: the fit, the count and the store each read it, and a
+        // resize between them laid the write out at one width on the screen and another in the store).
+        int width = Width;
         if (_top >= 0)
         {
-            Store(segments);
+            Store(segments, width);
             return;
         }
 
-        if (_bornWidth > Width && _pictureSpans is null)
+        if (_bornWidth > width || _store.OpenLineWiderThan(width))
         {
-            // A row of a reply kept at the width it began committing at, the window narrower now (2026-10-29, the resize review): the store
-            // takes the row whole and lays it out by the narrower rule, and the screen gets the same rows (Scrollback.Fit), each ended.
-            EmitFitted(segments, _bornWidth);
+            // Rendered wider than the window (a reply kept at the width it began committing at, a write the window narrowed under, a
+            // picture: 2026-10-29, the resize review; 2026-10-30, F25), or joining an open line that was (F112): the store lays it out by
+            // the narrower rule, and the screen gets the store's rows.
+            EmitFitted(segments, width);
             return;
         }
 
         _inner.Write(new SegmentList(segments));
-        Track(segments);
+        Track(segments, width);
     }
 
     /// <summary>
-    /// <paramref name="segments"/>, written at <paramref name="born"/>, to the screen as the store lays them out at the window's width
-    /// (<see cref="Emit"/>'s narrower path): each closed line's rows by <see cref="Scrollback.Fit"/>, each ended; an open last line as is (the
-    /// store cuts an open line exactly, as the terminal does). Counted, then stored whole.
+    /// <paramref name="segments"/> to the screen as the store lays them out at <paramref name="width"/> (<see cref="Emit"/>'s narrower path):
+    /// stored first, then the store's own rows drawn (2026-10-30, review F24/F25/F112: fitted apart, a write joining an open line, a picture's
+    /// shared shift and an open line closed by a narrower rule each read one way on the screen and another in the store). The open line's
+    /// rows are on the screen already, the cursor at their end; the new rows follow when the store's first rows still read as drawn. When
+    /// they don't — the narrower rule cut the open line elsewhere, or a fold moved rows above — nothing is written and the store is marked
+    /// reshaped: the draw after this write puts the flow back from the store.
     /// </summary>
-    private void EmitFitted(List<Segment> segments, int born)
+    private void EmitFitted(List<Segment> segments, int width)
     {
-        var line = new List<Segment>();
-        foreach (var segment in segments)
+        var laid = _store.Rows(width);
+        int open = _store.OpenLineRows;
+        int start = laid.Count - open;
+        var head = new List<SegmentLine>(open);
+        for (int i = start; i < laid.Count; i++)
         {
-            if (segment.IsControlCode)
-            {
-                continue;
-            }
-
-            if (!segment.IsLineBreak)
-            {
-                line.Add(segment);
-                continue;
-            }
-
-            if (_col > 0 && line.Count == 0)
-            {
-                // The break that ends a row already on the screen.
-                _inner.Write(new SegmentList([segment]));
-                Count([segment]);
-                continue;
-            }
-
-            foreach (var row in Scrollback.Fit(line, Width, born))
-            {
-                var ended = new List<Segment>(row) { Segment.LineBreak };
-                _inner.Write(new SegmentList(ended));
-                Count(ended);
-            }
-
-            line.Clear();
+            head.Add(laid[i]);
         }
 
-        if (line.Count > 0)
+        bool reshaped = _store.Reshaped;
+        start -= Store(segments, width);
+        var rows = _store.Rows(width);
+        if ((_store.Reshaped && !reshaped) || start < 0 || rows.Count < start + open || !Continues(rows, start, head, out int skip))
         {
-            _inner.Write(new SegmentList(line));
-            Count(line);
+            _store.MarkReshaped();
+            return;
         }
 
-        Store(segments);
+        // The row the cursor stands on (the open line's last) gets the rest of its row; each row after goes on a row of its own.
+        int join = start + Math.Max(0, open - 1);
+        for (int i = join; i < rows.Count; i++)
+        {
+            var row = new List<Segment>();
+            if (i > join)
+            {
+                row.Add(Segment.LineBreak);
+            }
+
+            row.AddRange(i == join && open > 0 ? After(rows[i], skip) : rows[i]);
+            if (row.Count > 0)
+            {
+                _inner.Write(new SegmentList(row));
+                Count(row, width);
+            }
+        }
+
+        if (!_store.LastLineOpen && rows.Count > start)
+        {
+            List<Segment> end = [Segment.LineBreak];
+            _inner.Write(new SegmentList(end));
+            Count(end, width);
+        }
+    }
+
+    /// <summary>A row's text as written, and as the eye reads it: its trailing blanks with no background left off (2026-10-30, <see cref="EmitFitted"/>).</summary>
+    private static (string Written, string Seen) Read(SegmentLine row)
+    {
+        var text = new System.Text.StringBuilder();
+        int seen = 0;
+        foreach (var segment in row)
+        {
+            text.Append(segment.Text);
+            int end = segment.Style.Background != Color.Default ? segment.Text.Length : segment.Text.TrimEnd(' ').Length;
+            if (end > 0)
+            {
+                seen = text.Length - segment.Text.Length + end;
+            }
+        }
+
+        return (text.ToString(), text.ToString(0, seen));
+    }
+
+    /// <summary>
+    /// Whether the store's rows from <paramref name="start"/> read as the open line's rows on the screen (<paramref name="head"/>): each but
+    /// the last reading the same, the last one the start of its row as written — the cursor stands at its end — or the whole row once the
+    /// blanks it ended with are dropped. <paramref name="skip"/>: the characters of that row already drawn.
+    /// </summary>
+    private static bool Continues(IReadOnlyList<SegmentLine> rows, int start, List<SegmentLine> head, out int skip)
+    {
+        skip = 0;
+        for (int k = 0; k < head.Count; k++)
+        {
+            var drawn = Read(head[k]);
+            var now = Read(rows[start + k]);
+            if (k < head.Count - 1)
+            {
+                if (now.Seen != drawn.Seen)
+                {
+                    return false;
+                }
+            }
+            else if (now.Written.StartsWith(drawn.Written, StringComparison.Ordinal))
+            {
+                skip = drawn.Written.Length;
+            }
+            else if (now.Seen == drawn.Seen)
+            {
+                skip = now.Written.Length;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary><paramref name="row"/> from its character <paramref name="skip"/> on.</summary>
+    private static List<Segment> After(SegmentLine row, int skip)
+    {
+        var rest = new List<Segment>();
+        foreach (var segment in row)
+        {
+            if (skip >= segment.Text.Length)
+            {
+                skip -= segment.Text.Length;
+                continue;
+            }
+
+            rest.Add(skip == 0 ? segment : new Segment(segment.Text[skip..], segment.Style));
+            skip = 0;
+        }
+
+        return rest;
     }
 
     /// <summary><see cref="Emit"/> with the store told whether the segments are a tool run's line, where pictures are and what folds.</summary>
@@ -3604,16 +3699,18 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     // The tool write joins the run's last unit (WriteToolLine's sameUnit, 2026-10-04).
     private bool _sameUnit;
 
-    /// <summary>The segments into the store; a scrolled anchor follows the rows the cap dropped.</summary>
-    private void Store(List<Segment> segments)
+    /// <summary>The segments into the store at <paramref name="width"/>; a scrolled anchor follows the rows the cap dropped, which it returns.</summary>
+    private int Store(List<Segment> segments, int width)
     {
         _store.ContinueUnit = _member && _sameUnit;
-        int dropped = _store.Append(segments, Width, _member, _pictureSpans, _foldSpec, _source, _bornWidth);
+        int dropped = _store.Append(segments, width, _member, _pictureSpans, _foldSpec, _source, _bornWidth);
         _store.ContinueUnit = false;
         if (_top >= 0 && dropped > 0)
         {
             _top = Math.Max(0, _top - dropped);
         }
+
+        return dropped;
     }
 
     /// <summary>
@@ -5525,17 +5622,19 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         }
     }
 
-    /// <summary>Segments written to the console at the flow cursor: counted, and kept in the store.</summary>
-    private void Track(List<Segment> segments)
+    /// <summary>Segments written to the console at the flow cursor: counted, and kept in the store, both at <paramref name="width"/>.</summary>
+    private void Track(List<Segment> segments, int width)
     {
-        Count(segments);
-        Store(segments);
+        Count(segments, width);
+        Store(segments, width);
     }
 
-    /// <summary>Counts the rows and cells the segments took, with the terminal's deferred wrap (the store wraps by the same rule).</summary>
-    private void Count(List<Segment> segments)
+    /// <summary>Counts the rows and cells the segments took at the window's width (<see cref="Count(List{Segment}, int)"/>).</summary>
+    private void Count(List<Segment> segments) => Count(segments, Width);
+
+    /// <summary>Counts the rows and cells the segments took at <paramref name="w"/>, with the terminal's deferred wrap (the store wraps by the same rule).</summary>
+    private void Count(List<Segment> segments, int w)
     {
-        int w = Width;
         foreach (var segment in segments)
         {
             if (segment.IsControlCode)
@@ -6278,13 +6377,26 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     private void MarkBuilt(int w, int h)
     {
         _hintsCollapseDue = true;
-        if (h != _builtHeight)
+        if (h != _builtHeight || h != _lastHeight)
         {
+            // Against the last draw's height too (2026-10-30, review F29): built at A, drawn at B, back at A — the floor was held at B.
             _paneFloor = 0;
         }
 
         _builtWidth = w;
         _builtHeight = h;
+    }
+
+    /// <summary>The height a titled overlay is held at (tests, 2026-10-30, review F29).</summary>
+    internal int HeldFloor
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _paneFloor;
+            }
+        }
     }
 
     /// <summary>The window is not the size the screen was built at: a resize the tick has not rebuilt for yet (2026-10-29, the resize review).</summary>
@@ -8018,7 +8130,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
                 _seenPalette = Theme.Current;
             }
 
-            if (_store.Pending && _store.RenderPending())
+            if (_store.Pending && _store.RenderPending(RegionRows(_paneRows), _top >= 0))
             {
                 // The writes a re-layout left wrapped for want of time, rendered now the size holds (2026-10-29, the resize review) —
                 // ahead of a growing reply's branch, which returns on every tick it grows. The draw takes the live block with it.

@@ -146,10 +146,12 @@ public sealed class XlsxTarget : IDisposable
             existing.Position = 0;
             if (!OfficeFile.LooksLikeZip(head[..read]))
             {
-                // Not really a workbook: never added to, replaced whole only when asked.
-                if (!request.Overwrite)
+                // Not a zip: never added to. A compound file is an encrypted (or a legacy) workbook, which TOOLS.md promises isn't changed, so it
+                // is refused even with overwrite (2026-10-30, review F93); anything else (text named .xlsx) is replaced whole when asked.
+                bool encrypted = OfficeFile.LooksLikeCompoundFile(head[..read]);
+                if (!request.Overwrite || encrypted)
                 {
-                    refusal = OfficeText.NotAWorkbook(relative, OfficeFile.LooksLikeCompoundFile(head[..read]));
+                    refusal = OfficeText.NotAWorkbook(relative, encrypted);
                     return null;
                 }
 
@@ -162,6 +164,23 @@ public sealed class XlsxTarget : IDisposable
                 {
                     refusal = OfficeText.WorkbookExists(relative);
                     return null;
+                }
+
+                // Replaced whole only when nothing in it is protected (2026-10-30, review F93): read through the appender's own checks — a password
+                // to modify, a protected structure, macros — and each sheet's protection, then let go before the write starts. A zip that is no
+                // workbook at all is replaced, as one that isn't a zip.
+                using (var scanned = WorkbookAppender.Open(existing, relative, OfficeLimits.Default, out refusal, out bool noWorkbook))
+                {
+                    if (scanned is null && !noWorkbook)
+                    {
+                        return null;
+                    }
+
+                    refusal = scanned?.ReplaceWholeProblem();
+                    if (refusal is not null)
+                    {
+                        return null;
+                    }
                 }
 
                 return new XlsxTarget(files, time, relative, replaceFile: true, Office.SheetName.Fit(request.DefaultSheet, []));
@@ -211,13 +230,13 @@ public sealed class XlsxTarget : IDisposable
 
     /// <summary>
     /// The write begun: the pending file opened and the workbook's sheet ready for rows; null with the refusal (the target changed since,
-    /// a part that won't copy). <paramref name="byUser"/> writes with the app's pass (<see cref="WriteGuard.AsApp"/>).
+    /// a part that won't copy). Always the model's write: no caller is the user's own hand (2026-10-30, review F56 dropped the unused
+    /// <c>byUser</c> and its <see cref="WriteGuard.AsApp"/> pass).
     /// </summary>
-    public ISheetRows? Begin(out string? refusal, bool byUser = false)
+    public ISheetRows? Begin(out string? refusal)
     {
         refusal = null;
-        PendingWrite? pending = null;
-        var begun = byUser ? WriteGuard.AsApp(() => _files.BeginWrite(Relative, ReplaceFile, out pending)) : _files.BeginWrite(Relative, ReplaceFile, out pending);
+        var begun = _files.BeginWrite(Relative, ReplaceFile, out var pending);
         if (pending is null)
         {
             refusal = FileText.Error(begun.Outcome, begun.Relative, "write", begun.Detail);

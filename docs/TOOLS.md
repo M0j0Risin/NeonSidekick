@@ -188,10 +188,10 @@ With *File checkpoints* on, each turn keeps what the file tools changed, so `/un
 * **Query results:** while *File tools* and `convert_to_xlsx` are on, each database's `*_query` takes `to` (with `sheet` and `overwrite`) and writes every row, up to Excel's 1,048,575. The answer shows the first 5.
 * **Exports:** the read-only rules hold, and Esc stops an export; a stopped or failed one writes nothing. A PostgreSQL `timestamptz` column is UTC, and its header says so.
 * **Saved meanwhile:** a workbook saved in another program while a sheet is being added is left as it is, and the answer says to run it again.
-* **Word:** headings, lists, quotes, code, tables, links and pictures from the working directory, without their location and camera data. A web picture shows as its alt text; the title heads each page.
-* **Where:** beside the source (a plan or audit under `.neon/` at the top), or where `to` names a file or folder. A file there is replaced only with `overwrite`.
+* **Word:** headings, lists, quotes, code, tables, links and pictures from the working directory, without their location and camera data. A web picture shows as its alt text; the title, or the first `#` heading, heads each page.
+* **Where:** beside the source (a plan or audit under `.neon/` at the top), or where `to` names a file or folder. Only a file `to` names is replaced, and only with `overwrite`.
 * **Made names:** Markdown text's title or first heading, `table-…` or `query-<connection>-…`, with the minute.
-* **Not written:** `write_file` refuses an Office file and names the tool to use; nothing writes PowerPoint or OpenDocument. A macro, protected or encrypted workbook isn't changed, nor a protected sheet or one holding a chart or table.
+* **Not written:** `write_file` refuses an Office file and names the tool to use; nothing writes PowerPoint or OpenDocument. A macro, protected, encrypted or damaged workbook isn't changed, nor a protected sheet or one holding a chart or table.
 * **Undo:** `/undo` takes back what these tools and the exports wrote; `/docx` is your own act and keeps no checkpoint.
 
 #### Editing PDFs

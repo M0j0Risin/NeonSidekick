@@ -327,11 +327,15 @@ public partial class ChatScreenTests : IDisposable
         var screen = new ChatScreen(_console, _settings, () => _settings.Current, _overriddenBy, _session, _speech, _keys, _voice, _openFile ?? _openedFiles.Add, RenderScreen, _time, _geometry, environment: TestPath.Read, mouse: _mouse, copyToClipboard: CopyToClipboard, random: _random, clipboardImage: _clipboardImage, web: _web, setTitle: _titles.Add, externalSkills: Path.Combine(_dir, "agents-skills"), holdWheel: _holdWheel, splash: _splash, editDraft: _editDraft, mcp: _mcp, logFile: _logFile, comfyClient: _comfyClient, openImage: _openImage, claude: _claudeCli, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, printSpooler: _printSpooler, perfSource: () => _perfSource, haClient: _haClient, haWire: _haWire, dockerClient: _dockerClient, camera: _cameraSystem, showShot: _shotsShown.Add, liveView: _liveView, openLogWindow: _openLogWindow, openLogWindowBehind: _openLogWindowBehind, openViewerBehind: _openViewerBehind, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: _openTerminal ?? _openedTerminals.Add, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, openDockerLogWindow: _openDockerLogWindow, closeDockerLogWindow: _closeDockerLogWindow, videoPlayer: _videoPlayer, browserWindow: _browserWindow, webUiHost: _webUiHost, eventLogSystem: _eventLogSystem, unifiedLog: _unifiedLog, macLogPlaces: _macLogPlaces, recycleBin: _recycleBin, checkpoints: _checkpoints, pinger: _pinger, serviceSystem: _serviceSystem, taskSystem: _taskSystem, directorySystem: _directorySystem, joinedDomain: () => null, tonePlayback: _ => _tonePlayback, ralphVerifier: _ralphVerifier, monitorSystem: _monitorSystem, monitorsQuick: true);
         screen.UserProfileFolder = _userProfile;
         screen.ToolbarItemHere = _toolbarHere;
+        screen.SessionLoadForTests = _sessionLoad;
         _running = screen;
         int code = await screen.RunAsync(cancellationToken);
         Assert.Equal(0, code);
         return Output;
     }
+
+    /// <summary>The export's load in place of the store's (2026-10-30, review F8/F10/F11); null (the default) = the store.</summary>
+    private Func<long, SessionRecord?>? _sessionLoad;
 
     /// <summary>The picture the input line's own paste finds on the clipboard; null (the default) = none.</summary>
     private Func<byte[]?>? _clipboardImage;
@@ -2128,7 +2132,7 @@ public partial class ChatScreenTests : IDisposable
 
         // No wipe: the marker /clear would print is absent, the first reply is still above the boundary.
         Assert.Equal(0, Refreshes(output));
-        string rule = new string('─', TranscriptRenderer.RuleWidth(240));
+        string rule = new string('─', 240);
         string boundary = rule + "\n  · " + ChatScreen.NewConversationNotice + "\n";
         Assert.Equal(1, Count(output, boundary));
         int at = output.IndexOf(boundary, StringComparison.Ordinal);
@@ -6611,6 +6615,41 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + SystemPromptSummary.NoToolsLine(false), output);
         Assert.DoesNotMatch(GroupHeading("Clock"), output);
         Assert.DoesNotMatch(GroupHeading("Memory"), output);
+    }
+
+    /// <summary>
+    /// A crash's temps in the working folder's top level go at launch, and in the new folder's after a <c>/cwd</c> (2026-10-30, review F88);
+    /// another instance's fresh temp stays.
+    /// </summary>
+    [Fact]
+    public async Task Launch_AndCwd_SweepTheFoldersStaleTemps()
+    {
+        static string Temp(string folder, char c, bool stale)
+        {
+            Directory.CreateDirectory(folder);
+            string path = Path.Combine(folder, WorkingDirectory.TempPrefix + new string(c, 32) + WorkingDirectory.TempSuffix);
+            File.WriteAllText(path, "x");
+            File.SetLastWriteTimeUtc(path, stale ? DateTime.UtcNow.AddHours(-2) : DateTime.UtcNow);
+            return path;
+        }
+
+        string home = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        string elsewhere = Path.Combine(_dir, "elsewhere");
+        string atLaunch = Temp(home, 'a', stale: true);
+        string fresh = Temp(home, 'b', stale: false);
+        string afterCwd = Temp(elsewhere, 'c', stale: true);
+        StepsWhenIdle(input =>
+        {
+            Assert.True(File.Exists(afterCwd));
+            PushLine(input, "/cwd " + elsewhere);
+        }, Line("/exit"));
+
+        await RunAsync();
+        await _running!.LaunchSweep!;
+
+        Assert.False(File.Exists(atLaunch));
+        Assert.True(File.Exists(fresh));
+        Assert.False(File.Exists(afterCwd));
     }
 
     [Fact]
@@ -25049,7 +25088,7 @@ public partial class ChatScreenTests : IDisposable
         var sources = Sources() with { Sessions = () => [new("#12", "Vosk wiring"), new("#7", "Dinner")] };
 
         Assert.Equal(
-            [new CompletionItem("export md", ChatScreen.SessionExportMarkdownNote), new CompletionItem("export html", ChatScreen.SessionExportHtmlNote), new CompletionItem("export #12", "Vosk wiring"), new CompletionItem("export #7", "Dinner")],
+            [new CompletionItem("export md", SessionText.ExportMarkdownNote), new CompletionItem("export html", SessionText.ExportHtmlNote), new CompletionItem("export #12", "Vosk wiring"), new CompletionItem("export #7", "Dinner")],
             ChatScreen.ArgumentItems("/sessions", "export ", sources));
         Assert.Equal(["export html"], Texts(ChatScreen.ArgumentItems("/sessions", "export h", sources)));
         Assert.Equal(["export #12 md", "export #12 html"], Texts(ChatScreen.ArgumentItems("/sessions", "export #12 ", sources)));
@@ -25097,8 +25136,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("all", ChatScreen.SessionAllWord);
         Assert.Equal("title", ChatScreen.SessionTitleWord);
         Assert.Equal(("export", "md", "html"), (ChatScreen.SessionExportWord, ChatScreen.SessionMarkdownWord, ChatScreen.SessionHtmlWord));
-        Assert.Equal("(💬 this conversation isn't saved: Session logging is off; /sessions export <id> exports a stored one)", ChatScreen.SessionNotSavedNotice);
-        Assert.Equal("(💬 exported session #12 to Notes-2026-10-30-0912.md)", ChatScreen.SessionExportedNotice(12, "Notes-2026-10-30-0912.md"));
+        Assert.Equal("(💬 exported session #12 to Notes-2026-10-30-0912.md)", SessionText.ExportedNotice(12, "Notes-2026-10-30-0912.md"));
         Assert.True(ChatScreen.TryParseSessionId("#5", out long id) && id == 5);
         Assert.False(ChatScreen.TryParseSessionId("#", out _));
         Assert.False(ChatScreen.TryParseSessionId("5.0", out _));

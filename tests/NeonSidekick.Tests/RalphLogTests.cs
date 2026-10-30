@@ -268,6 +268,21 @@ public sealed class RalphLogTests : IDisposable
         Assert.Contains("at the checkpoint the user chose redo: use the existing parser", RalphLog.RecentNotes(log, "Write the body"));
     }
 
+    /// <summary>
+    /// A lock that can't be written (its folder can't be made) is refused with its own sentence, never "another is running it" (2026-10-30,
+    /// review F74), and a running loop whose lock went and can't be written again keeps running.
+    /// </summary>
+    [Fact]
+    public void AnUnwritableLock_IsRefusedAsAWriteError_AndKeepsARunningLoop()
+    {
+        Directory.CreateDirectory(Path.Combine(_dir, ".neon", "plans"));
+        File.WriteAllText(Path.Combine(_dir, ".neon", "plans", "guide"), "a file where the plan's folder would go");
+
+        Assert.False(RalphLog.TryLock(_files, Plan, RalphLog.Me, _ => true, out string? refusal));
+        Assert.Equal(RalphText.LockWriteError(RalphLog.LockPathFor(Plan)), refusal);
+        Assert.True(RalphLog.StillHeld(_files, Plan, _ => true));
+    }
+
     [Fact]
     public void APlanLockedByAnotherLiveProcess_IsNeverWritten_ThisProcesssOwnOrAStaleOneIs()
     {
@@ -276,21 +291,21 @@ public sealed class RalphLogTests : IDisposable
         Assert.Equal(FileOutcome.Ok, WriteGuard.AsApp(() => _files.WriteText(Plan, PlanDocument.Render(new PlanHeader(PlanStatus.Incomplete, 1, T0, T0, "Guide"), "Guide", "## Steps\n- [ ] One\n"), overwrite: true)).Outcome);
         var other = new LockOwner(424242, T0);
         Assert.True(RalphLog.TryLock(_files, Plan, other, _ => false));
-        var alive = RalphLog.LiveOwner;
+        var alive = OwnerLock.LiveOwner;
         try
         {
-            RalphLog.LiveOwner = owner => owner == other;
+            OwnerLock.LiveOwner = owner => owner == other;
             Assert.Equal(RalphText.LockedError(Plan), RalphLog.HeldElsewhere(_files, Plan));
             Assert.Equal(RalphText.LockedError(Plan), PlanFiles.MarkFile(_files, Plan, PlanStatus.Draft, T0, "Guide"));
             Assert.Equal(PlanStatus.Incomplete, PlanDocument.TryParse(File.ReadAllText(Path.Combine(_dir, ".neon", "plans", "guide.md")))!.Status);
 
-            RalphLog.LiveOwner = _ => false;   // its owner gone: stale
+            OwnerLock.LiveOwner = _ => false;   // its owner gone: stale
             Assert.Null(RalphLog.HeldElsewhere(_files, Plan));
             Assert.Null(PlanFiles.MarkFile(_files, Plan, PlanStatus.Draft, T0, "Guide"));
         }
         finally
         {
-            RalphLog.LiveOwner = alive;
+            OwnerLock.LiveOwner = alive;
         }
 
         File.Delete(Path.Combine(_dir, ".neon", "plans", "guide", RalphLog.LockName));

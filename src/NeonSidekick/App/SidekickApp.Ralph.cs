@@ -331,7 +331,7 @@ public sealed partial class SidekickApp
         // The folder from the lock on (2026-10-19, the second review): everything the loop writes and checks is this one's.
         files = files.PinnedAt(files.Root);
         var owner = RalphLog.Me;
-        if (!RalphLog.TryLock(files, path, owner, RalphLog.OwnerAlive, out string? lockRefusal))
+        if (!RalphLog.TryLock(files, path, owner, OwnerLock.LiveOwner, out string? lockRefusal))
         {
             await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + (lockRefusal ?? RalphLog.LockError(files, path))).ConfigureAwait(false);
             return;
@@ -493,7 +493,7 @@ public sealed partial class SidekickApp
                 return;
             }
 
-            if (!RalphLog.StillHeld(files, path, RalphLog.OwnerAlive))
+            if (!RalphLog.StillHeld(files, path, OwnerLock.LiveOwner))
             {
                 await HeadlessRalphEndAsync(state, files, RalphStop.Locked).ConfigureAwait(false);
                 return;

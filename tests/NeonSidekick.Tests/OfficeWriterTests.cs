@@ -133,6 +133,20 @@ public sealed class OfficeWriterTests
         Assert.Equal("Weekly-Notes", FileNames.Safe("Weekly Notes", lowerCase: false));
     }
 
+    /// <summary>
+    /// Ends trimmed until neither a space nor an apostrophe is left (2026-10-30, review F45), and a character XML can't hold is refused and made
+    /// fit (review F115: U+FFFF passed and broke the workbook's XML).
+    /// </summary>
+    [Fact]
+    public void ASheetName_LosesEveryEndApostrophe_AndNoNonXmlCharacter()
+    {
+        Assert.Equal("Data", SheetName.Fit(" ' 'Data' ' ", []));
+        Assert.True(SheetName.Problem("Data￿"));
+        Assert.True(SheetName.Problem("Data\u0001"));
+        Assert.False(SheetName.Problem("Sales 📈"));
+        Assert.Equal("Data-", SheetName.Fit("Data￿", []));
+    }
+
     // ── a new workbook ──────────────────────────────────────────────────────
 
     [Fact]
@@ -241,6 +255,50 @@ public sealed class OfficeWriterTests
         var style = System.Text.RegularExpressions.Regex.Match(more, "<c r=\"A2\" s=\"(\\d+)\"><v>4006381333931</v>");
         Assert.True(style.Success, more);
         Assert.Equal("1", XfFormat(added, int.Parse(style.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture)));
+    }
+
+    /// <summary>
+    /// Only a whole number under 10^15 gets the integer format (2026-10-30, review F43: 6.02214076e23 showed as 602214076000000000000000 and
+    /// 1.5e300 as three hundred digits); past it General's exponent is the honest form.
+    /// </summary>
+    [Fact]
+    public void AHugeWholeNumber_StaysGeneral()
+    {
+        Assert.True(SheetWriter.IsLargeWhole(123456789012));
+        Assert.True(SheetWriter.IsLargeWhole(-999_999_999_999_999));
+        Assert.False(SheetWriter.IsLargeWhole(6.02214076e23));
+        Assert.False(SheetWriter.IsLargeWhole(1.5e300));
+        Assert.False(SheetWriter.IsLargeWhole(1e15));
+        string sheet = Part(NewBook(["N", "M"], [[XlsxValue.OfNumberText("6.02214076e23"), XlsxValue.OfNumberText("123456789012")]]), "xl/worksheets/sheet1.xml");
+        Assert.Contains("<c r=\"A2\"><v>", sheet, StringComparison.Ordinal);
+        Assert.Contains("<c r=\"B2\" s=\"6\"><v>", sheet, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A short row is blank past its end and a long one cut at the header's width, alike before and after the widths are set (2026-10-30, review
+    /// F107: rows are read in place now, not copied first).
+    /// </summary>
+    [Fact]
+    public void ShortAndLongRows_WriteTheHeadersColumns_BeforeAndAfterTheWidths()
+    {
+        var rows = new List<XlsxValue[]>();
+        for (int i = 0; i < SheetWriter.WidthRows + 5; i++)
+        {
+            rows.Add(i % 2 == 0 ? [T("short")] : [T("a"), T("b"), T("past")]);
+        }
+
+        byte[] book = NewBook(["A", "B"], rows);
+        OfficeSchema.ValidWorkbook(book);
+        string sheet = Part(book, "xl/worksheets/sheet1.xml");
+        Assert.DoesNotContain("past", sheet, StringComparison.Ordinal);
+        Assert.DoesNotContain("r=\"C", sheet, StringComparison.Ordinal);
+        // Row r holds rows[r - 2]: rows 2 and 3 were held for the widths, 202 and 203 written straight through.
+        string held = Read(book, new OfficeRequest(Sheet: "Data", Range: "A2:B3"));
+        string open = Read(book, new OfficeRequest(Sheet: "Data", Range: "A202:B203"));
+        Assert.Contains("| 2 | short |  |", held, StringComparison.Ordinal);
+        Assert.Contains("| 3 | a | b |", held, StringComparison.Ordinal);
+        Assert.Contains("| 202 | short |  |", open, StringComparison.Ordinal);
+        Assert.Contains("| 203 | a | b |", open, StringComparison.Ordinal);
     }
 
     /// <summary>The number format of <c>cellXfs</c>' xf at <paramref name="index"/>.</summary>
@@ -578,6 +636,97 @@ public sealed class OfficeWriterTests
         Assert.Equal(OfficeText.SheetProtected("book.xlsx", "Plain", "Plain new"), refusal);
         Append(guarded, "Beside", replace: false, out _, out refusal);   // a sheet beside it is fine
         Assert.Null(refusal);
+    }
+
+    /// <summary>
+    /// A styles part missing collections is added to, never replaced (2026-10-30, review F18/F116: one with no fonts or cell formats was swapped
+    /// for ours and lost its <c>dxfs</c>, which a conditional format names by index): each missing collection is made in CT_Stylesheet's order,
+    /// the defaults the added formats point at are there, and the package validates.
+    /// </summary>
+    [Theory]
+    [InlineData("<dxfs count=\"1\"><dxf><font><b/></font></dxf></dxfs>")]
+    [InlineData("<fonts count=\"1\"><font><sz val=\"10\"/></font></fonts><cellXfs count=\"1\"><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\"/></cellXfs><dxfs count=\"1\"><dxf><font><b/></font></dxf></dxfs>")]
+    [InlineData("<fills count=\"0\"/><dxfs count=\"1\"><dxf><font><b/></font></dxf></dxfs><extLst/>")]
+    [InlineData("")]
+    public void AStylesPartMissingCollections_IsAddedTo_InOrder_AndKeepsItsDxfs(string children)
+    {
+        const string s = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        string styles = children.Length == 0 ? $"<styleSheet xmlns=\"{s}\"/>" : $"<styleSheet xmlns=\"{s}\">{children}</styleSheet>";
+        byte[] book = Patched(ExcelLike(), "xl/styles.xml", _ => styles);
+        book = Patched(book, "xl/worksheets/sheet1.xml", w => w.Replace(" s=\"1\"", "", StringComparison.Ordinal).Replace("</sheetData></worksheet>",
+            "</sheetData><conditionalFormatting sqref=\"A1\"><cfRule type=\"cellIs\" dxfId=\"0\" priority=\"1\" operator=\"greaterThan\"><formula>0</formula></cfRule></conditionalFormatting></worksheet>", StringComparison.Ordinal));
+
+        byte[] added = Append(book, "New", replace: false, out _, out string? refusal);
+
+        Assert.Null(refusal);
+        OfficeSchema.ValidWorkbook(added);
+        string written = Part(added, "xl/styles.xml");
+        int at = -1;
+        foreach (string collection in new[] { "<numFmts", "<fonts", "<fills", "<borders", "<cellStyleXfs", "<cellXfs" })
+        {
+            int next = written.IndexOf(collection, StringComparison.Ordinal);
+            Assert.True(next > at, collection + " in order: " + written);
+            at = next;
+        }
+
+        Assert.Contains("<patternFill patternType=\"gray125\" />", written, StringComparison.Ordinal);
+        if (children.Contains("dxfs", StringComparison.Ordinal))
+        {
+            Assert.Contains("<dxfs count=\"1\"><dxf><font><b /></font></dxf></dxfs>", written, StringComparison.Ordinal);
+            Assert.True(written.IndexOf("<dxfs", StringComparison.Ordinal) > at);
+        }
+
+        Assert.Contains("| 2 | x | 1904-01-02 |", Read(added, new OfficeRequest(Sheet: "New")), StringComparison.Ordinal);
+    }
+
+    /// <summary>ExcelLike's entries as name and text, with <paramref name="extra"/> added, zipped again.</summary>
+    private static byte[] WithEntries(params (string, string)[] extra)
+    {
+        var parts = new List<(string, string)>();
+        using (var zip = new ZipArchive(new MemoryStream(ExcelLike()), ZipArchiveMode.Read))
+        {
+            foreach (var entry in zip.Entries)
+            {
+                using var reader = new StreamReader(entry.Open());
+                parts.Add((entry.FullName, reader.ReadToEnd()));
+            }
+        }
+
+        parts.AddRange(extra);
+        return TestOffice.Zip(parts);
+    }
+
+    /// <summary>
+    /// A package with a repeated entry (exactly or in another case) or one naming a place outside it is refused, nothing copied (2026-10-30, review
+    /// F62/F83/F90); a backslash or a leading slash, which the reader takes, is written back as the part's own name.
+    /// </summary>
+    [Theory]
+    [InlineData("xl/media/a.png", "xl/media/a.png")]
+    [InlineData("xl/media/a.png", "XL/Media/A.PNG")]
+    [InlineData("xl/media/a.png", "xl\\media\\a.png")]
+    [InlineData("../evil.xml", null)]
+    [InlineData("xl/../../evil.xml", null)]
+    [InlineData("C:/evil.xml", null)]
+    public void ARepeatedOrEscapingEntry_IsRefused(string first, string? second)
+    {
+        byte[] book = second is null ? WithEntries((first, "x")) : WithEntries((first, "x"), (second, "y"));
+
+        Append(book, "New", replace: false, out var opened, out string? refusal);
+
+        Assert.Null(opened);
+        Assert.Equal(OfficeText.BadEntryName("book.xlsx", second ?? first), refusal);
+    }
+
+    [Fact]
+    public void ABackslashedEntry_IsCopiedUnderItsPartName()
+    {
+        byte[] added = Append(WithEntries(("xl\\media\\b.png", "x"), ("/xl/media/c.png", "y")), "New", replace: false, out _, out string? refusal);
+
+        Assert.Null(refusal);
+        var names = new ZipArchive(new MemoryStream(added)).Entries.Select(e => e.FullName).ToList();
+        Assert.Contains("xl/media/b.png", names);
+        Assert.Contains("xl/media/c.png", names);
+        Assert.DoesNotContain(names, n => n.Contains('\\', StringComparison.Ordinal) || n.StartsWith('/'));
     }
 
     [Fact]
