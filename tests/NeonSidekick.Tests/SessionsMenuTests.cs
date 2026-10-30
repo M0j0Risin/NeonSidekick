@@ -13,7 +13,16 @@ public class SessionsMenuTests : IDisposable
     private readonly ManualTimeProvider _time = new();
     private readonly SessionStore _store;
     private readonly List<long> _purged = new();
+    private readonly List<(long Id, SessionExportFormat Format)> _exported = new();
+    private string? _exportError;
     private long? _current;
+
+    /// <summary>The screen's exporter, faked: the call kept, its notice (or <see cref="_exportError"/>) handed back.</summary>
+    private Task<(string? Notice, string? Error)> Export(long id, SessionExportFormat format, CancellationToken cancellationToken)
+    {
+        _exported.Add((id, format));
+        return Task.FromResult(_exportError is { } error ? ((string?)null, (string?)error) : (ChatScreen.SessionExportedNotice(id, "x.html"), (string?)null));
+    }
 
     public SessionsMenuTests()
     {
@@ -54,7 +63,7 @@ public class SessionsMenuTests : IDisposable
     {
         var pane = new ScreenPane(_console, null, _time);
         var keys = new KeySource(_console.Input, TimeSpan.FromMilliseconds(1));
-        return new SessionsMenu(_store, () => _current, new TranscriptRenderer(_console), new MenuPane(pane, keys), new InputLine(pane, keys), _time, _purged.Add);
+        return new SessionsMenu(_store, () => _current, new TranscriptRenderer(_console), new MenuPane(pane, keys), new InputLine(pane, keys), _time, _purged.Add, Export);
     }
 
     /// <summary>The menu over a pane with geometry: the list is a level of the pane, every notice its status line.</summary>
@@ -63,7 +72,7 @@ public class SessionsMenuTests : IDisposable
         _console.Profile.Height = 40;
         var pane = new ScreenPane(_console, new ScreenGeometry(() => null), _time) { Hint = () => "idle" };
         var keys = new KeySource(_console.Input, TimeSpan.FromMilliseconds(1));
-        var menu = new SessionsMenu(_store, () => _current, new TranscriptRenderer(pane), new MenuPane(pane, keys), new InputLine(pane, keys), _time, _purged.Add);
+        var menu = new SessionsMenu(_store, () => _current, new TranscriptRenderer(pane), new MenuPane(pane, keys), new InputLine(pane, keys), _time, _purged.Add, Export);
         pane.Show();
         return (menu, pane);
     }
@@ -156,7 +165,7 @@ public class SessionsMenuTests : IDisposable
 
         Assert.Equal(a, await menu.ShowAsync(CancellationToken.None));
 
-        HeldRows.AssertContains("\n" + Titled(SessionsMenu.RowTitle(_store.Load(a)!.Summary)) + "\n \n▸ restore  load it into the transcript and go on from there\n  rename   give it a new title\n  purge    remove it and its turns for good\n", Rule(100) + "\n" + SessionsMenu.RowKeys + "\n", _console.Output);
+        HeldRows.AssertContains("\n" + Titled(SessionsMenu.RowTitle(_store.Load(a)!.Summary)) + "\n \n▸ restore  load it into the transcript and go on from there\n  rename   give it a new title\n  export   write it to a Markdown or HTML file in the working folder\n  purge    remove it and its turns for good\n", Rule(100) + "\n" + SessionsMenu.RowKeys + "\n", _console.Output);
         Assert.False(pane.OverlayOpen);
         Assert.Equal(b, _store.List(0)[0].Id);   // nothing changed in the store
         pane.Dispose();
@@ -191,7 +200,7 @@ public class SessionsMenuTests : IDisposable
         Assert.Null(await menu.ShowAsync(CancellationToken.None));
 
         // The slot under the row page with the edit keys (the pre-filled title is typed into it in place, not part of the draw).
-        HeldRows.AssertContains("\n▸ rename   give it a new title\n  purge    remove it and its turns for good\n", "› \n" + Rule(100) + "\n" + SettingsMenu.EditKeys, _console.Output);
+        HeldRows.AssertContains("\n▸ rename   give it a new title\n  export   write it to a Markdown or HTML file in the working folder\n  purge    remove it and its turns for good\n", "› \n" + Rule(100) + "\n" + SettingsMenu.EditKeys, _console.Output);
         Assert.Contains("\n" + Titled(SessionsMenu.Title) + "\n  · " + SessionsMenu.RenamedNotice("Vosk notes") + "\n▸ " + Row(a, "2026-09-11 14:05", 1, "Vosk notes") + "\n", _console.Output);
         var summary = _store.Load(a)!.Summary;
         Assert.Equal(("Vosk notes", TitleSource.User), (summary.Title, summary.TitleSource));
@@ -304,6 +313,43 @@ public class SessionsMenuTests : IDisposable
     }
 
     [Fact]
+    public async Task OnThePane_ExportAsksTheFormat_UnderTheRowPage_AndSaysTheNoticeOnTheStatusLine()
+    {
+        long a = Seed("first");
+        var (menu, pane) = PaneMenu();
+        Push(Keys.Enter, Keys.Down, Keys.Down, Keys.Enter);   // the row page's export
+        Push(Keys.Down, Keys.Enter);                          // HTML
+        Push(Keys.Escape);
+
+        Assert.Null(await menu.ShowAsync(CancellationToken.None));
+
+        var summary = _store.Summary(a)!;
+        Assert.Contains("\n" + Titled(SessionsMenu.RowTitle(summary) + " › " + SessionsMenu.ExportWord) + "\n", _console.Output);
+        Assert.Contains("HTML     " + ChatScreen.SessionExportHtmlNote, _console.Output);
+        Assert.Equal([(a, SessionExportFormat.Html)], _exported);
+        Assert.Contains("  · " + ChatScreen.SessionExportedNotice(a, "x.html") + "\n", _console.Output);
+        Assert.Equal(1, _store.Count);   // the list stays
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task OnThePane_ExportEsc_WritesNothing_AndAnErrorIsTheStatusLine()
+    {
+        long a = Seed("first");
+        var (menu, pane) = PaneMenu();
+        Push(Keys.Enter, Keys.Down, Keys.Down, Keys.Enter, Keys.Escape);   // export, then Esc on the format page
+        Push(Keys.Enter, Keys.Down, Keys.Down, Keys.Enter, Keys.Enter);    // back on the list: export again, Markdown
+        Push(Keys.Escape);
+        _exportError = "Could not write x.md: no";
+
+        Assert.Null(await menu.ShowAsync(CancellationToken.None));
+
+        Assert.Equal([(a, SessionExportFormat.Markdown)], _exported);
+        Assert.Contains("  ✗ " + _exportError, _console.Output);
+        pane.Dispose();
+    }
+
+    [Fact]
     public async Task OnThePane_MidTurn_TheListShows_AndAPickIsRefused()
     {
         long a = Seed("first");
@@ -326,7 +372,9 @@ public class SessionsMenuTests : IDisposable
         Assert.Equal(SettingsMenu.PickKeys, SessionsMenu.RowKeys);
         Assert.Equal("(💬 no sessions)", SessionsMenu.EmptyNotice);
         Assert.Equal("(💬 that is this conversation)", SessionsMenu.CurrentNotice);
-        Assert.Equal(new[] { "restore", "rename", "purge" }, SessionsMenu.RowWords);
+        Assert.Equal(new[] { "restore", "rename", "export", "purge" }, SessionsMenu.RowWords);
+        Assert.Equal(new[] { "Markdown", "HTML" }, SessionsMenu.FormatWords);
+        Assert.Equal("(💬 Exporting the session…)", SessionsMenu.ExportingNotice);
         Assert.Equal(SessionsMenu.Title + " › #12 x [y]", SessionsMenu.RowTitle(summary));
         Assert.Equal("[#9A8BB8]#12  2026-09-11 14:05  12 turns[/]  x [[y]]", SessionsMenu.RowMarkup(summary, false, ManualTimeProvider.DefaultZone));
         Assert.Equal("[#9A8BB8]#12  2026-09-11 14:05  12 turns[/]  x [[y]]  [#9A8BB8]this conversation[/]", SessionsMenu.RowMarkup(summary, true, ManualTimeProvider.DefaultZone));
@@ -338,6 +386,9 @@ public class SessionsMenuTests : IDisposable
         Assert.Equal("[#9A8BB8]#12  2026-09-11 14:05  12 turns[/]  x [[y]]", SessionsMenu.RowMarkup(summary, false, ManualTimeProvider.DefaultZone, 3, 8));
         Assert.Equal("restore  [#9A8BB8]load it into the transcript and go on from there[/]", SessionsMenu.RowPageRow("restore"));
         Assert.Equal("rename   [#9A8BB8]give it a new title[/]", SessionsMenu.RowPageRow("rename"));
+        Assert.Equal("export   [#9A8BB8]write it to a Markdown or HTML file in the working folder[/]", SessionsMenu.RowPageRow("export"));
+        Assert.Equal("Markdown [#9A8BB8]" + ChatScreen.SessionExportMarkdownNote + "[/]", SessionsMenu.FormatRow("Markdown"));
+        Assert.Equal("HTML     [#9A8BB8]" + ChatScreen.SessionExportHtmlNote + "[/]", SessionsMenu.FormatRow("HTML"));
         Assert.Equal("purge    [#9A8BB8]remove it and its turns for good[/]", SessionsMenu.RowPageRow("purge"));
         Assert.Equal("💬 Purge session #12 \"x [y]\" (12 turns)?", SessionsMenu.PurgePrompt(summary));
         Assert.Equal("(🗑️ purged session #12)", SessionsMenu.PurgedNotice(12));

@@ -103,6 +103,32 @@ public sealed class PresentAuditToolTests : IDisposable
     }
 
     [Fact]
+    public void AReportAnotherLiveAppTookOver_IsNeverWritten()
+    {
+        // 2026-10-29, the audit lock: two apps on one report each saved the whole file, and one overwrote the other's findings.
+        Assert.True(_audit.Hold(_path, out _, out _));
+        _loop = Start(_audit.Scope!);
+        Read();
+        string before = File.ReadAllText(_box.Full(_path));
+        File.WriteAllText(_box.Full(AuditFiles.LockPathFor(_path)), "pid: 424242\nstarted: 2026-10-29T09:00:00.0000000+00:00\n");
+        var alive = OwnerLock.LiveOwner;
+        OwnerLock.LiveOwner = owner => owner.ProcessId == 424242;
+        try
+        {
+            Assert.Equal(AuditText.CouldNotSaveResult(AuditText.LockedError(_path)), Report1(FindingJson()));
+        }
+        finally
+        {
+            OwnerLock.LiveOwner = alive;
+        }
+
+        Assert.Equal(before, File.ReadAllText(_box.Full(_path)));
+        Assert.Empty(_reported);
+        _audit.Stop();
+        Assert.True(File.Exists(_box.Full(AuditFiles.LockPathFor(_path))));   // the other's
+    }
+
+    [Fact]
     public void ASecretLookingFile_TakesNoEvidence()
     {
         // 2026-10-19, the review: the quote went into the report verbatim, redacted only by pattern.

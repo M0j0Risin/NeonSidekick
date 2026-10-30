@@ -215,19 +215,19 @@ public static class ToolsText
     /// <summary>The SQL tools' tab and group (2026-09-23), after Obsidian, before MySQL, since 2026-10-03 (the user's order; after ComfyUI, before Git (native), from 2026-09-27).</summary>
     public const string SqlTabTitle = "SQL";
 
-    /// <summary>The Oracle tools' tab and group (2026-09-30), after MySQL, before Claude, since 2026-10-03 (the user's order; right after SQL before): the database tabs together.</summary>
+    /// <summary>The Oracle tools' tab and group (2026-09-30), after MySQL, before Claude, since 2026-10-03 (the user's order; right after SQL before): the database tabs together. After PostgreSQL, before SQLite, since 2026-10-29 (the user's order).</summary>
     public const string OracleTabTitle = "Oracle";
 
     /// <summary>The MySQL tools' tab and group (2026-09-30), after SQL, before Oracle, since 2026-10-03 (the user's order; after Oracle before): the database tabs together.</summary>
     public const string MySqlTabTitle = "MySQL";
 
-    /// <summary>The SQLite tools' tab and group (2026-10-04), after MySQL, before Oracle.</summary>
+    /// <summary>The SQLite tools' tab and group (2026-10-04), after MySQL, before Oracle; after Oracle, before DuckDB, since 2026-10-29 (the user's order).</summary>
     public const string SqliteTabTitle = "SQLite";
 
-    /// <summary>The DuckDB tools' menu and group (2026-10-25), after SQLite on Databases. Pinned.</summary>
+    /// <summary>The DuckDB tools' menu and group (2026-10-25), after SQLite on Databases (the strip's last since 2026-10-29, the user's order). Pinned.</summary>
     public const string DuckDbTabTitle = "DuckDB";
 
-    /// <summary>The PostgreSQL tools' tab and group (2026-10-04), after SQLite, before Oracle; "Postgres" on the strip from then until 2026-10-10, "PostgreSQL" since (the user's ask: the product's name, as its rows say it).</summary>
+    /// <summary>The PostgreSQL tools' tab and group (2026-10-04), after SQLite, before Oracle; "Postgres" on the strip from then until 2026-10-10, "PostgreSQL" since (the user's ask: the product's name, as its rows say it). After MySQL, before Oracle, since 2026-10-29 (the user's order).</summary>
     public const string PostgresTabTitle = "PostgreSQL";
 
     /// <summary>The UNC tools' tab and group (2026-09-30), after Files, before Print, since 2026-10-03 (the user's order; after MySQL, before Docker, until then).</summary>
@@ -281,7 +281,7 @@ public static class ToolsText
     /// <summary>The tab that holds the Ask, Web, Shell and Options menus (2026-10-10, the user's ask): after Offered, before Files, each a tab of its own until then (Options the strip's last). "Standard" until later that day (the user's call). Web, Shell, Timers, Ask, Options since 2026-10-16 (the user's order; Network to Admin); Web, Shell, Clock, Timers, Ask, Help, Options since 2026-10-18 (the user's asks: the standing groups' switches). Pinned.</summary>
     public const string CoreTabTitle = "Core";
 
-    /// <summary>The tab that holds the database menus (2026-10-09, the user's call): SQL, MySQL, SQLite, Postgres and Oracle, each a tab of its own until then; DuckDB after SQLite since 2026-10-25.</summary>
+    /// <summary>The tab that holds the database menus (2026-10-09, the user's call): SQL, MySQL, SQLite, Postgres and Oracle, each a tab of its own until then; DuckDB after SQLite since 2026-10-25. SQL, MySQL, PostgreSQL, Oracle, SQLite, DuckDB since 2026-10-29 (the user's order).</summary>
     public const string DatabaseTabTitle = "Databases";   // "Database" until later on 2026-10-10 (the user's ask)
 
     /// <summary>The tab that holds the device menus (2026-10-09, the user's call): Print, Camera and Screen since 2026-10-10 (ComfyUI and YouTube on Integrations since, the user's ask), each a tab of its own until 2026-10-09. "Media" until later on 2026-10-10 (the user's call). Camera, Screen, Print since 2026-10-16 (the user's order); Monitors between Screen and Print since later on 2026-10-23 (the user's ask, off Home; Windows only). Pinned.</summary>
@@ -325,7 +325,7 @@ public static class ToolsText
     /// one for a plain tab, its rows the tab's; more for a group tab — <see cref="CoreTabTitle"/> (later on 2026-10-10), <see cref="FilesTabTitle"/>, <see cref="AppsTabTitle"/> (2026-10-10),
     /// <see cref="DatabaseTabTitle"/>, <see cref="DevicesTabTitle"/> and <see cref="HomeTabTitle"/> (2026-10-11) — whose menus are sub-tabs on a second strip (<see cref="ToolsMenu"/>). Pinned.
     /// </summary>
-    public static readonly IReadOnlyList<IReadOnlyList<int>> TabMenus = [[1, 2, 28, 23, 0, 29, 20], [3, 4, 5, 19], [15, 17, 18, 9], [24, 22, 25, 26, 27], [10, 11, 12, 31, 13, 14], [7, 8, 30, 6], [16, 21]];
+    public static readonly IReadOnlyList<IReadOnlyList<int>> TabMenus = [[1, 2, 28, 23, 0, 29, 20], [3, 4, 5, 19], [15, 17, 18, 9], [24, 22, 25, 26, 27], [10, 11, 13, 14, 12, 31], [7, 8, 30, 6], [16, 21]];
 
     /// <summary>
     /// The menus whose family only Windows has (2026-10-22, the user's ask): Services and Tasks — a Mac has no Service Control Manager or

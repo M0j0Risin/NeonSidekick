@@ -459,15 +459,7 @@ public static class PlanReferences
     private static string Hash(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
 
     /// <summary>The extension a picture is saved with: its media type's, else what its bytes say.</summary>
-    private static string ExtensionFor(PlanPicture picture) => picture.MediaType.ToLowerInvariant() switch
-    {
-        "image/png" => ".png",
-        "image/jpeg" or "image/jpg" => ".jpg",
-        "image/gif" => ".gif",
-        "image/webp" => ".webp",
-        "image/bmp" => ".bmp",
-        _ => ImageFile.ExtensionOf(picture.Bytes),
-    };
+    private static string ExtensionFor(PlanPicture picture) => ImageFile.ExtensionFor(picture.MediaType, picture.Bytes);
 
     private static string MediaTypeOf(byte[] data) => ImageFile.ExtensionOf(data) switch
     {

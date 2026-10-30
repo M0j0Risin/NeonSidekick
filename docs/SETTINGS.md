@@ -784,7 +784,7 @@ See [Active Directory](TOOLS.md#active-directory). Read-only, always. On a Mac: 
 
 ### Databases
 
-The five database families. Each is read-only unless you choose `read-write` and the connection's entry allows it; see [How the database tools work](TOOLS.md#how-the-database-tools-work).
+The six database families. Each is read-only unless you choose `read-write` and the connection's entry allows it; see [How the database tools work](TOOLS.md#how-the-database-tools-work).
 
 * **Statement kinds** (the *… statements allowed* checklists): changing data, deleting, creating, changing structure, dropping, upkeep, procedures and triggers (for SQLite and DuckDB, settings), and reading.
 * **A statement** needs the kind of every change in it; with none ticked, the `_execute` tool isn't offered.
@@ -824,38 +824,6 @@ The other database tabs work like this one, over `mysql.json`, `sqlite.json`, `d
 | MySQL connections (profile) | As *SQL connections (profile)*. | — |
 | MySQL connections (global) | As *SQL connections (global)*. | — |
 
-#### SQLite
-
-| Setting | What it does | Default |
-|---|---|---|
-| SQLite tools | Offers the SQLite tools (databases, tables, describe, query) over the databases `sqlite.json` names. While on, the shell and file tools keep out of SQLite files ([SQLite](TOOLS.md#sqlite)). | off |
-| SQLite mode | `read-only`: the tools only read. `read-write`: `sqlite_execute` too, one change per call, each asking you first. | `read-only` |
-| SQLite statements allowed | Under `read-write`, the kinds of statement `sqlite_execute` may run (a checklist). | changing data, creating, reading |
-| SQLite databases offered | Which databases of `sqlite.json` the model sees; none until you tick it. | empty |
-| SQLite sandbox files | The model may also open any SQLite file in the working directory by its path, and create one there. | on |
-| SQLite add/edit database | The wizard for a new or saved database; its test opens the file read-only and counts the tables. | — |
-| SQLite %-mention enabled | Lists the SQLite databases in the `%` list too. | on |
-| SQLite max rows | As *SQL max rows*, for `sqlite_query`. | 100 |
-| SQLite query timeout (s) | How long one statement may run before it is stopped (1–600). | 30 |
-| SQLite databases (profile) | Opens this profile's `sqlite.json` in your editor. | — |
-| SQLite databases (global) | Opens the global `sqlite.json` in your editor. | — |
-
-#### DuckDB
-
-| Setting | What it does | Default |
-|---|---|---|
-| DuckDB tools | Offers the DuckDB tools (databases, tables, describe, query) over the databases `duckdb.json` names and the working directory's data files. While on, the shell and file tools keep out of DuckDB files ([DuckDB](TOOLS.md#duckdb)). | off |
-| DuckDB mode | `read-only`: the tools only read. `read-write`: `duckdb_execute` too, one change per call, each asking you first. | `read-only` |
-| DuckDB statements allowed | Under `read-write`, the kinds of statement `duckdb_execute` may run (a checklist). | changing data, creating, reading |
-| DuckDB databases offered | Which databases of `duckdb.json` the model sees; none until you tick it. | empty |
-| DuckDB sandbox files | The model may also read the working directory's DuckDB, CSV, Parquet and JSON files by their paths, and create a database there. | on |
-| DuckDB add/edit database | The wizard for a new or saved database; its test opens the file read-only and counts the tables. | — |
-| DuckDB %-mention enabled | Lists the DuckDB databases in the `%` list too. | on |
-| DuckDB max rows | As *SQL max rows*, for `duckdb_query`. | 100 |
-| DuckDB query timeout (s) | How long one statement may run before it is stopped (1–600). | 30 |
-| DuckDB databases (profile) | Opens this profile's `duckdb.json` in your editor. | — |
-| DuckDB databases (global) | Opens the global `duckdb.json` in your editor. | — |
-
 #### PostgreSQL
 
 | Setting | What it does | Default |
@@ -887,6 +855,38 @@ The other database tabs work like this one, over `mysql.json`, `sqlite.json`, `d
 | Oracle query timeout (s) | How long one statement may run on the server (1–600). | 30 |
 | Oracle connections (profile) | As *SQL connections (profile)*. | — |
 | Oracle connections (global) | As *SQL connections (global)*. | — |
+
+#### SQLite
+
+| Setting | What it does | Default |
+|---|---|---|
+| SQLite tools | Offers the SQLite tools (databases, tables, describe, query) over the databases `sqlite.json` names. While on, the shell and file tools keep out of SQLite files ([SQLite](TOOLS.md#sqlite)). | off |
+| SQLite mode | `read-only`: the tools only read. `read-write`: `sqlite_execute` too, one change per call, each asking you first. | `read-only` |
+| SQLite statements allowed | Under `read-write`, the kinds of statement `sqlite_execute` may run (a checklist). | changing data, creating, reading |
+| SQLite databases offered | Which databases of `sqlite.json` the model sees; none until you tick it. | empty |
+| SQLite sandbox files | The model may also open any SQLite file in the working directory by its path, and create one there. | on |
+| SQLite add/edit database | The wizard for a new or saved database; its test opens the file read-only and counts the tables. | — |
+| SQLite %-mention enabled | Lists the SQLite databases in the `%` list too. | on |
+| SQLite max rows | As *SQL max rows*, for `sqlite_query`. | 100 |
+| SQLite query timeout (s) | How long one statement may run before it is stopped (1–600). | 30 |
+| SQLite databases (profile) | Opens this profile's `sqlite.json` in your editor. | — |
+| SQLite databases (global) | Opens the global `sqlite.json` in your editor. | — |
+
+#### DuckDB
+
+| Setting | What it does | Default |
+|---|---|---|
+| DuckDB tools | Offers the DuckDB tools (databases, tables, describe, query) over the databases `duckdb.json` names and the working directory's data files. While on, the shell and file tools keep out of DuckDB files ([DuckDB](TOOLS.md#duckdb)). | off |
+| DuckDB mode | `read-only`: the tools only read. `read-write`: `duckdb_execute` too, one change per call, each asking you first. | `read-only` |
+| DuckDB statements allowed | Under `read-write`, the kinds of statement `duckdb_execute` may run (a checklist). | changing data, creating, reading |
+| DuckDB databases offered | Which databases of `duckdb.json` the model sees; none until you tick it. | empty |
+| DuckDB sandbox files | The model may also read the working directory's DuckDB, CSV, Parquet and JSON files by their paths, and create a database there. | on |
+| DuckDB add/edit database | The wizard for a new or saved database; its test opens the file read-only and counts the tables. | — |
+| DuckDB %-mention enabled | Lists the DuckDB databases in the `%` list too. | on |
+| DuckDB max rows | As *SQL max rows*, for `duckdb_query`. | 100 |
+| DuckDB query timeout (s) | How long one statement may run before it is stopped (1–600). | 30 |
+| DuckDB databases (profile) | Opens this profile's `duckdb.json` in your editor. | — |
+| DuckDB databases (global) | Opens the global `duckdb.json` in your editor. | — |
 
 ### Devices
 

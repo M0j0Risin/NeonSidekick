@@ -141,7 +141,7 @@ internal static class HelpFiles
             new(HelpFileScope.Profile, Comfy.ComfyWorkflowCatalog.DirectoryName + "/", "this profile's ComfyUI workflows", "`/comfy`"),
             new(HelpFileScope.Profile, Viewer.BrowserPage.FolderName + "/", "the Browser window's browser data (cookies, cache)", "`/browser`"),
             new(HelpFileScope.WorkingFolder, Plans.PlanSlug.Folder + "/", "the plans, a folder each holding `ralph.md`, `ralph.lock` and the reference pictures", "`/plan`"),
-            new(HelpFileScope.WorkingFolder, Audits.AuditFiles.Folder + "/", "the code audits' reports, `<name>.md` and `<name>.coverage.txt`", "`/code-audit`"),
+            new(HelpFileScope.WorkingFolder, Audits.AuditFiles.Folder + "/", "the code audits' reports, `<name>.md` and `<name>.coverage.txt`, and `<name>.lock` while one is audited", "`/code-audit`"),
             new(HelpFileScope.WorkingFolder, Shell.ShellText.SpillFolderName.Replace('\\', '/') + "/", "a cut command's whole output, `<id>.log`, for `read_file`"),
         ]);
         return rows;

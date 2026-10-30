@@ -8,7 +8,8 @@ namespace NeonSidekick.Audits;
 /// <summary>
 /// One report as <c>/code-audit open</c> lists it (2026-10-18): its path, status, the open findings by severity and their count, the settled
 /// count, the passes line, the last update, whether every finding is ticked, whether it could not be read whole, and whether it is the
-/// audit running now (an <c>auditing</c> report with no live loop lists as stopped).
+/// audit running now (an <c>auditing</c> report with no live loop lists as stopped). <paramref name="Elsewhere"/> (2026-10-29): another live
+/// NeonSidekick holds its lock, so it lists as running elsewhere instead.
 /// </summary>
 public sealed record AuditListing(
     string Path,
@@ -20,7 +21,8 @@ public sealed record AuditListing(
     DateTimeOffset? Updated,
     bool Fixed,
     bool Unreadable = false,
-    bool Live = false)
+    bool Live = false,
+    bool Elsewhere = false)
 {
     /// <summary>The name the commands take: the file name without <c>.neon/audits/</c> or <c>.md</c>.</summary>
     public string Name => System.IO.Path.GetFileNameWithoutExtension(Path);
@@ -40,6 +42,9 @@ public static class AuditFiles
 
     /// <summary>The coverage sidecar's ending, in place of <c>.md</c>.</summary>
     public const string CoverageExtension = ".coverage.txt";
+
+    /// <summary>The lock's ending, in place of <c>.md</c> (2026-10-29).</summary>
+    public const string LockExtension = ".lock";
 
     /// <summary>The first free path for <paramref name="label"/> and <paramref name="now"/>'s date: <c>src-web-2026-10-18</c>, then <c>-2</c>…</summary>
     public static string Choose(WorkingDirectory files, string label, DateTimeOffset now)
@@ -156,12 +161,42 @@ public static class AuditFiles
 
             var report = AuditReport.Parse(text);
             var updated = report.HasHeader ? report.Header.Updated : null;
-            listings.Add((new AuditListing(path, report.Header.Status, report.OpenBySeverity(), report.OpenCount, report.SettledCount, report.Header.Passes, updated, report.Fixed, Live: live),
+            // The lock is read only for an auditing report no loop here runs, so the listing stays one read a report otherwise.
+            bool elsewhere = !live && report.Header.Status == AuditStatus.Auditing && OwnerLock.HeldElsewhere(files, LockPathFor(path), out _);
+            listings.Add((new AuditListing(path, report.Header.Status, report.OpenBySeverity(), report.OpenCount, report.SettledCount, report.Header.Passes, updated, report.Fixed, Live: live, Elsewhere: elsewhere),
                 updated ?? WrittenAt(full)));
         }
 
         return listings.OrderByDescending(l => l.Order).ThenBy(l => l.Listing.Path, StringComparer.Ordinal).Select(l => l.Listing).ToList();
     }
+
+    // ── The lock ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The lock beside <paramref name="reportPath"/>: <c>x.lock</c> for <c>x.md</c> (2026-10-29: two apps auditing one report each saved the whole
+    /// file, and one overwrote the other's findings). Made as the Ralph loop's is (<see cref="OwnerLock"/>); <see cref="AuditSession"/> holds it.
+    /// </summary>
+    public static string LockPathFor(string reportPath)
+    {
+        ArgumentNullException.ThrowIfNull(reportPath);
+        string bare = reportPath.EndsWith(PlanSlug.Extension, StringComparison.OrdinalIgnoreCase) ? reportPath[..^PlanSlug.Extension.Length] : reportPath;
+        return bare + LockExtension;
+    }
+
+    /// <summary>
+    /// The error sentence when another live NeonSidekick holds <paramref name="reportPath"/>'s lock (or it can't be read), else null: what a fix
+    /// and a discard ask first. Another machine's lock names that machine and where the lock is.
+    /// </summary>
+    public static string? HeldElsewhere(WorkingDirectory files, string reportPath)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+        string lockPath = LockPathFor(reportPath);
+        return OwnerLock.HeldElsewhere(files, lockPath, out var owner) ? LockError(reportPath, lockPath, owner) : null;
+    }
+
+    /// <summary>The refusal for a lock another holds: <see cref="AuditText.LockedOnHostError"/> for another machine's, else <see cref="AuditText.LockedError"/>.</summary>
+    public static string LockError(string reportPath, string lockPath, LockOwner? owner) =>
+        owner is { Foreign: true, Host: { } host } ? AuditText.LockedOnHostError(reportPath, host, lockPath) : AuditText.LockedError(reportPath);
 
     // ── The coverage sidecar ─────────────────────────────────────────────────
 
@@ -278,7 +313,9 @@ public static class AuditFiles
 
     /// <summary>
     /// The report and its sidecar deleted (through <see cref="WorkingDirectory.Delete"/>, the Recycle bin when the setting says): the report's result.
-    /// The sidecar goes only with the report (2026-10-20, a review: a report that would not go kept its place with its coverage gone).
+    /// The sidecar goes only with the report (2026-10-20, a review: a report that would not go kept its place with its coverage gone). Its lock goes
+    /// too when it is this process's or stale (2026-10-29), taken over first so a new holder's is never removed; one another live NeonSidekick
+    /// holds is the caller's to refuse before (<see cref="HeldElsewhere"/>), and stays.
     /// </summary>
     public static DeleteResult Discard(WorkingDirectory files, string path)
     {
@@ -288,6 +325,12 @@ public static class AuditFiles
         if (result.Outcome == FileOutcome.Ok && Exists(files, CoveragePath(path)))
         {
             WriteGuard.AsApp(() => files.Delete(CoveragePath(path)));
+        }
+
+        string lockPath = LockPathFor(path);
+        if (result.Outcome == FileOutcome.Ok && Exists(files, lockPath) && OwnerLock.TryLock(files, lockPath, OwnerLock.Me, OwnerLock.LiveOwner) == LockTake.Taken)
+        {
+            OwnerLock.Unlock(files, lockPath, OwnerLock.Me);
         }
 
         return result;
@@ -307,8 +350,10 @@ public static class AuditFiles
 
     /// <summary>
     /// Whether a report's name is taken: its file, or a sidecar left behind (2026-10-20, a review: a report deleted by hand left its
-    /// <c>.coverage.txt</c>, and a new audit of the same name took its coverage as its own).
+    /// <c>.coverage.txt</c>, and a new audit of the same name took its coverage as its own), or a lock another live NeonSidekick holds (2026-10-29:
+    /// one that has just chosen the name and not saved yet). A stale lock doesn't take a name: the next audit of it takes the lock over.
     /// </summary>
     private static bool Taken(WorkingDirectory files, string path) =>
-        files.Resolve(path, forWrite: false, out string full) != FileOutcome.Ok || File.Exists(full) || Directory.Exists(full) || Exists(files, CoveragePath(path));
+        files.Resolve(path, forWrite: false, out string full) != FileOutcome.Ok || File.Exists(full) || Directory.Exists(full) || Exists(files, CoveragePath(path))
+        || OwnerLock.HeldElsewhere(files, LockPathFor(path), out _);
 }

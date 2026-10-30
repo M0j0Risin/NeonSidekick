@@ -73,7 +73,7 @@ It's one app for research, IT and admin work such as Active Directory, event log
 
 ### Conversations, memory & skills
 * **Profiles:** each has its own settings, persona, emoji avatar (`/avatar`), memory, sessions and working directory (the folder the model works in).
-* **Sessions:** resume, search and learn from past conversations.
+* **Sessions:** resume, search and learn from past conversations, or export one to Markdown or HTML.
 * **Memory:** facts you can edit, added to every conversation.
 * **Project notes:** reads the working directory's `NEON.md`, else `AGENTS.md`, else `CLAUDE.md`, so a project's own rules come along.
 * **Context control:** compaction keeps the conversation inside the model's window; `/compact` and `/rewind` do it by hand, and `/sys` shows what the model is sent.

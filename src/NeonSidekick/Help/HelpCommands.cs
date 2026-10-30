@@ -441,6 +441,7 @@ public static class HelpCommands
             new("/sessions purge <id>|all", "Delete one stored session, or every one."),
             new("/sessions purge older <age>", "Delete the sessions older than an age: a number of days (`30`) or a duration (`12h`, `90m`, `2 hours`, `1d 6h`)."),
             new("/sessions title [<text>]", "Rename the current session; alone, it opens a box with the current name (as a double-click on the name above the input row does). Works while a reply runs."),
+            new("/sessions export [<id>] [md|html]", "Write a session (this one without an id) to Markdown with Obsidian properties and its pictures in a folder beside it, or to one HTML page in your theme. It goes into the working folder and never replaces a file; a session's `export` on the pane does the same."),
         ]),
         new("/settings",
         [

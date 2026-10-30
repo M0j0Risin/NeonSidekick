@@ -62,6 +62,13 @@ public sealed partial class SidekickApp
                 return null;
             }
 
+            // Another NeonSidekick auditing it (2026-10-29), as on the screen: a check, not a hold.
+            if (AuditFiles.HeldElsewhere(files, fixPath) is { } locked)
+            {
+                await HeadlessErrorAsync(locked).ConfigureAwait(false);
+                return null;
+            }
+
             if (AuditFiles.Read(files, fixPath) is not { } fixing)
             {
                 await HeadlessErrorAsync(AuditText.ReportUnreadable(fixPath)).ConfigureAwait(false);
@@ -173,47 +180,78 @@ public sealed partial class SidekickApp
         }
 
         var now = _time.GetLocalNow();
-        if (parsed.Verb == AuditVerb.Resume)
-        {
-            // Read again after the listing (2026-10-20, a review: a report gone or cut meanwhile threw past the null-forgiving read).
-            if (AuditFiles.Read(files, path) is not { } report)
-            {
-                await HeadlessErrorAsync(AuditText.ReportUnreadable(path)).ConfigureAwait(false);
-                return null;
-            }
-
-            report.Header = report.Header with { Status = AuditStatus.Auditing, Reviewer = PlanText.ReviewerWord(reviewer) };
-            if (AuditFiles.Save(files, path, report, now) is { } failed)
-            {
-                await HeadlessErrorAsync(failed).ConfigureAwait(false);
-                return null;
-            }
-
-            await HeadlessNoticeLineAsync("[notice] " + AuditText.ResumedNotice(Path.GetFileNameWithoutExtension(path), parsed.Name is null)).ConfigureAwait(false);
-            if (scope.Cut)
-            {
-                await HeadlessNoticeLineAsync("[notice] " + AuditText.ScopeCutNotice).ConfigureAwait(false);
-            }
-        }
-        else
+        if (parsed.Verb != AuditVerb.Resume)
         {
             path = AuditFiles.Choose(files, scope.NameLabel, now);
-            var report = new AuditReport
+        }
+
+        // The report's lock before it is written (2026-10-29), as on the screen; a resume's before its fresh read.
+        if (!audit.Hold(path, out string? lockError, out string? unlocked))
+        {
+            await HeadlessErrorAsync(lockError!).ConfigureAwait(false);
+            return null;
+        }
+
+        PlanGapLoop loop;
+        bool begun = false;
+        try
+        {
+            if (parsed.Verb == AuditVerb.Resume)
             {
-                Label = scope.Label,
-                Header = new AuditHeader(AuditStatus.Auditing, AuditText.PassesLine(0, 0, 0, scope.Files.Count + scope.MoreFiles), scope.Words, focus, brief, PlanText.ReviewerWord(reviewer), 1, now, now),
-                CoverageScope = scope.Files.Count + scope.MoreFiles,
-            };
-            if (AuditFiles.Save(files, path, report, now) is { } failed)
+                // Read again after the listing (2026-10-20, a review: a report gone or cut meanwhile threw past the null-forgiving read).
+                if (AuditFiles.Read(files, path) is not { } report)
+                {
+                    await HeadlessErrorAsync(AuditText.ReportUnreadable(path)).ConfigureAwait(false);
+                    return null;
+                }
+
+                report.Header = report.Header with { Status = AuditStatus.Auditing, Reviewer = PlanText.ReviewerWord(reviewer) };
+                if (AuditFiles.Save(files, path, report, now) is { } failed)
+                {
+                    await HeadlessErrorAsync(failed).ConfigureAwait(false);
+                    return null;
+                }
+
+                await HeadlessNoticeLineAsync("[notice] " + AuditText.ResumedNotice(Path.GetFileNameWithoutExtension(path), parsed.Name is null)).ConfigureAwait(false);
+                if (scope.Cut)
+                {
+                    await HeadlessNoticeLineAsync("[notice] " + AuditText.ScopeCutNotice).ConfigureAwait(false);
+                }
+            }
+            else
             {
-                await HeadlessErrorAsync(failed).ConfigureAwait(false);
-                return null;
+                var report = new AuditReport
+                {
+                    Label = scope.Label,
+                    Header = new AuditHeader(AuditStatus.Auditing, AuditText.PassesLine(0, 0, 0, scope.Files.Count + scope.MoreFiles), scope.Words, focus, brief, PlanText.ReviewerWord(reviewer), 1, now, now),
+                    CoverageScope = scope.Files.Count + scope.MoreFiles,
+                };
+                if (AuditFiles.Save(files, path, report, now) is { } failed)
+                {
+                    await HeadlessErrorAsync(failed).ConfigureAwait(false);
+                    return null;
+                }
+            }
+
+            // confirm's clean count kept when the fallback above made the model the reviewer, as the gap review's.
+            int clean = named == PlanReviewer.Confirm ? Math.Max(2, EffectiveSettings.CodeAuditCleanPasses) : EffectiveSettings.CodeAuditCleanPasses;
+            loop = audit.Start(path, scope, focus, brief, reviewer, HeadlessGapLimit(limit), clean);
+            begun = true;
+        }
+        finally
+        {
+            // A refusal or a throw between the hold and the start (2026-10-29, as Ralph's headless start): the lock never outlives it.
+            if (!begun)
+            {
+                audit.Release();
             }
         }
 
-        // confirm's clean count kept when the fallback above made the model the reviewer, as the gap review's.
-        int clean = named == PlanReviewer.Confirm ? Math.Max(2, EffectiveSettings.CodeAuditCleanPasses) : EffectiveSettings.CodeAuditCleanPasses;
-        var loop = audit.Start(path, scope, focus, brief, reviewer, HeadlessGapLimit(limit), clean);
+        if (unlocked is not null)
+        {
+            await HeadlessNoticeLineAsync("[notice] " + unlocked).ConfigureAwait(false);
+        }
+
         if (parsed.Verb == AuditVerb.Start)
         {
             await HeadlessNoticeLineAsync("[notice] " + AuditText.StartedNotice(scope.Label, scope.Files.Count, scope.MoreFiles, scope.Skipped, audit.Focus, loop.Limit, path, scope.Cut)).ConfigureAwait(false);
@@ -256,6 +294,15 @@ public sealed partial class SidekickApp
         bool moved = audit.Moved;
         string root = audit.Root!;
         files = audit.Files;
+        if (!moved && !audit.StillHolds())
+        {
+            // Another NeonSidekick took the report's lock over (2026-10-29), as on the screen: nothing more written, the sidecar included.
+            lines.Add(AuditText.LockLostNotice(audit.Name));
+            loop.Next(false, userSpoke: false, null, meter);
+            lines.AddRange(AuditText.ReviewSummaryLines(loop.History, PlanGapStop.Stopped, loop.CleanPasses, audit.Focus));
+            audit.Stop();
+            return null;
+        }
         // The coverage once (2026-10-20, a review), and the pass recorded on a move too, as on the screen; a failed turn is no pass that ended on its
         // own (2026-10-20, a review: headless counted it as one, and kept sending passes to a server that was down).
         var coverage = audit.Coverage();

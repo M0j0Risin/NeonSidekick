@@ -219,12 +219,18 @@ public enum SessionActionKind
     /// <summary><c>title</c> alone (2026-09-28): the rename box on the pane, the current title in it — what a double-click on the upper rule's session name runs.</summary>
     TitlePane,
 
+    /// <summary><c>export [&lt;id&gt;] [md|html]</c> (2026-10-30): <c>Id</c> the session (0 = the one on screen), <c>Format</c> the file it becomes (Markdown unless <c>html</c>).</summary>
+    Export,
+
     /// <summary>Anything the grammar does not cover; <c>ChatScreen.SessionUsageError</c>.</summary>
     Invalid,
 }
 
-/// <summary>The parsed <c>/sessions</c> argument; <paramref name="Id"/> for a restore or a purge, <paramref name="Age"/> for <see cref="SessionActionKind.PurgeOlder"/>, <paramref name="Text"/> for <see cref="SessionActionKind.Title"/>.</summary>
-public readonly record struct SessionAction(SessionActionKind Kind, long Id = 0, TimeSpan Age = default, string Text = "");
+/// <summary>
+/// The parsed <c>/sessions</c> argument; <paramref name="Id"/> for a restore, a purge or an export, <paramref name="Age"/> for <see cref="SessionActionKind.PurgeOlder"/>,
+/// <paramref name="Text"/> for <see cref="SessionActionKind.Title"/>, <paramref name="Format"/> for <see cref="SessionActionKind.Export"/>.
+/// </summary>
+public readonly record struct SessionAction(SessionActionKind Kind, long Id = 0, TimeSpan Age = default, string Text = "", SessionExportFormat Format = SessionExportFormat.Markdown);
 
 /// <summary>What a <c>/timer</c> argument asks for. Top-level like <see cref="ProfileAction"/>, so the test project can pin the grammar.</summary>
 public enum TimerActionKind
@@ -5182,6 +5188,11 @@ internal sealed partial class ChatScreen
     public const string SessionOlderWord = "older";
     public const string SessionAllWord = "all";
     public const string SessionTitleWord = "title";
+    public const string SessionExportWord = "export";
+    public const string SessionMarkdownWord = "md";
+    public const string SessionHtmlWord = "html";
+    public const string SessionExportMarkdownNote = "a Markdown note, its pictures in a folder beside it";
+    public const string SessionExportHtmlNote = "one HTML page in your theme, its pictures inside";
     public const string SessionPurgeAllNote = "purge every session: /sessions purge all";
     public const string SessionPurgeOlderNote = "purge the sessions older than an age: /sessions purge older <age> (30 = days, 12h, 90m, 1d 6h)";
 
@@ -5190,6 +5201,7 @@ internal sealed partial class ChatScreen
     [
         new(SessionPurgeWord, "purge a session: /sessions purge <id> | older <days> | all"),
         new(SessionTitleWord, "rename this session: /sessions title [<text>] (alone: a box with the title in it)"),
+        new(SessionExportWord, "write a session to a file: /sessions export [<id>] [md|html] (this one without an id)"),
     ];
 
     /// <summary>The line a double-click on the upper rule's session name runs (2026-09-28): the bare <c>/sessions title</c>, the rename box. Pinned.</summary>
@@ -5469,6 +5481,21 @@ internal sealed partial class ChatScreen
                 if (argText.StartsWith(SessionTitleWord + " ", StringComparison.OrdinalIgnoreCase))
                 {
                     return [];
+                }
+
+                if (argText.StartsWith(SessionExportWord + " ", StringComparison.OrdinalIgnoreCase))
+                {
+                    // The second level (2026-10-30): the two formats (this session), then an id; after an id, its two formats.
+                    string rest = argText[(SessionExportWord.Length + 1)..];
+                    int gap = rest.IndexOf(' ');
+                    string head = SessionExportWord + " " + (gap > 0 && TryParseSessionId(rest[..gap], out _) ? rest[..(gap + 1)] : "");
+                    var exports = new List<CompletionItem> { new(head + SessionMarkdownWord, SessionExportMarkdownNote), new(head + SessionHtmlWord, SessionExportHtmlNote) };
+                    if (head.Length == SessionExportWord.Length + 1)
+                    {
+                        exports.AddRange(sessions.Select(item => new CompletionItem(SessionExportWord + " " + item.Text, item.Note)));
+                    }
+
+                    return MentionCompleter.Matches(exports, argText);
                 }
 
                 return MentionCompleter.Matches(sessions.Concat(SessionVerbs).ToList(), argText);
@@ -6410,7 +6437,7 @@ internal sealed partial class ChatScreen
         // A purged session takes its file checkpoints with it (2026-10-28): subscribed before the retention purge below.
         _sessions.Purged += OnSessionsPurged;
         _sessionTools = SessionTools(_sessions, _effective, () => _sessionId, _time);
-        _sessionsMenu = new SessionsMenu(_sessions, () => _sessionId, _flow, _menuPane, _input, _time, id => { if (_sessionId == id) { ForgetSession(left: false); } });
+        _sessionsMenu = new SessionsMenu(_sessions, () => _sessionId, _flow, _menuPane, _input, _time, id => { if (_sessionId == id) { ForgetSession(left: false); } }, ExportSessionCoreAsync);
         PurgeExpiredSessions();
         // The file checkpoints' sweep (2026-10-28): the age rule, gone folders' stores, purges a close cut short; in the background.
         SweepCheckpoints();
@@ -8248,7 +8275,7 @@ internal sealed partial class ChatScreen
 
     // ── /sessions (2026-09-18) ──────────────────────────────────────────────
 
-    public const string SessionUsageError = "/sessions lists the sessions, or /sessions <id> | purge <id> | purge older <age> | purge all | title <text>";
+    public const string SessionUsageError = "/sessions lists the sessions, or /sessions <id> | purge <id> | purge older <age> | purge all | title <text> | export [<id>] [md|html]";
 
     public static string SessionMissingError(long id) => $"No session {SessionText.Id(id)}; /sessions lists them.";
 
@@ -8273,11 +8300,17 @@ internal sealed partial class ChatScreen
 
     public const string SessionNoneYetNotice = "(" + NoticeGlyphs.Session + "no session yet: send a message first)";
 
+    /// <summary>A bare <c>/sessions export</c> while <c>Session logging</c> is off and nothing was saved (2026-10-30). Pinned.</summary>
+    public const string SessionNotSavedNotice = "(" + NoticeGlyphs.Session + "this conversation isn't saved: Session logging is off; /sessions export <id> exports a stored one)";
+
+    /// <summary>An export written (2026-10-30): <c>(💬 exported session #12 to Notes-2026-10-30-0912.md)</c>, the path relative to the working folder.</summary>
+    public static string SessionExportedNotice(long id, string path) => $"({NoticeGlyphs.Session}exported session {SessionText.Id(id)} to {path})";
+
     /// <summary>
     /// The <c>/sessions</c> grammar: nothing = the pane; <c>12</c> or <c>#12</c> = restore; <c>purge 12</c>,
     /// <c>purge older 30</c> (or <c>12h</c>, <c>90m</c>, <c>1d 6h</c>: the rest of the line is one
     /// <see cref="SessionText.TryParseAge"/> age, 2026-09-21), <c>purge all</c>; <c>title</c> and the
-    /// rest of the line, or <c>title</c> alone for the rename box (2026-09-28; the usage error until then).
+    /// rest of the line, or <c>title</c> alone for the rename box (2026-09-28; the usage error until then); <c>export</c>, an id and <c>md</c>|<c>html</c> (2026-10-30).
     /// Case-insensitive words; an id is a positive whole number. Pure; pinned by tests.
     /// </summary>
     public static SessionAction ParseSessionArgs(string args)
@@ -8298,6 +8331,11 @@ internal sealed partial class ChatScreen
 
             string title = text[SessionTitleWord.Length..].Trim();
             return title.Length > 0 ? new(SessionActionKind.Title, Text: title) : new(SessionActionKind.Invalid);
+        }
+
+        if (tokens[0].Equals(SessionExportWord, StringComparison.OrdinalIgnoreCase))
+        {
+            return ParseExportArgs(tokens);
         }
 
         if (tokens.Length == 1)
@@ -8322,6 +8360,35 @@ internal sealed partial class ChatScreen
             default:
                 return new(SessionActionKind.Invalid);
         }
+    }
+
+    /// <summary><c>export</c>, <c>export 12</c>, <c>export html</c>, <c>export #12 html</c> (2026-10-30): the id first when there is one, the format last; anything else the usage error.</summary>
+    private static SessionAction ParseExportArgs(string[] tokens)
+    {
+        long id = 0;
+        int next = 1;
+        if (next < tokens.Length && TryParseSessionId(tokens[next], out long given))
+        {
+            id = given;
+            next++;
+        }
+
+        var format = SessionExportFormat.Markdown;
+        if (next < tokens.Length)
+        {
+            if (tokens[next].Equals(SessionHtmlWord, StringComparison.OrdinalIgnoreCase))
+            {
+                format = SessionExportFormat.Html;
+            }
+            else if (!tokens[next].Equals(SessionMarkdownWord, StringComparison.OrdinalIgnoreCase))
+            {
+                return new(SessionActionKind.Invalid);
+            }
+
+            next++;
+        }
+
+        return next == tokens.Length ? new(SessionActionKind.Export, id, Format: format) : new(SessionActionKind.Invalid);
     }
 
     /// <summary><c>12</c> or <c>#12</c>, a positive whole number.</summary>
@@ -8367,12 +8434,75 @@ internal sealed partial class ChatScreen
             case SessionActionKind.TitlePane:
                 await RenameSessionAsync(cancellationToken).ConfigureAwait(false);
                 break;
+            case SessionActionKind.Export:
+                await ExportSessionAsync(action.Id, action.Format, cancellationToken).ConfigureAwait(false);
+                break;
             default:
                 _transcript.Error(SessionUsageError);
                 break;
         }
 
         DrainDiagnostics();
+    }
+
+    /// <summary>
+    /// <c>/sessions export</c> (2026-10-30, plan i-want-to-plan-effervescent-adleman): the session (the one on screen without an id) written
+    /// into the working folder under a spinner, its path a notice. A session with many pictures is megabytes of base64 and Markdig per turn,
+    /// so the work runs off the screen's thread (<see cref="ExportSessionCoreAsync"/>). An id works whether <c>Session logging</c> is on or off.
+    /// </summary>
+    private async Task ExportSessionAsync(long id, SessionExportFormat format, CancellationToken cancellationToken)
+    {
+        if (id == 0)
+        {
+            if (_sessionId is not { } current)
+            {
+                _transcript.Notice(_effective().SessionLogging ? SessionNoneYetNotice : SessionNotSavedNotice);
+                return;
+            }
+
+            id = current;
+        }
+
+        (string? Notice, string? Error) result;
+        try
+        {
+            result = await _transcript.WithSpinnerAsync(SessionText.ExportingSpinner, () => ExportSessionCoreAsync(id, format, cancellationToken)).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
+
+        if (result.Error is { } error)
+        {
+            _transcript.Error(error);
+        }
+        else if (result.Notice is { } notice)
+        {
+            _transcript.Notice(notice);
+        }
+    }
+
+    /// <summary>
+    /// The export without a spinner, which the Sessions pane's <c>export</c> row awaits too: the theme and the zone read here on the screen's
+    /// thread, the load, build and write on the pool. A cancel before the write leaves nothing; once writing starts it finishes.
+    /// </summary>
+    private Task<(string? Notice, string? Error)> ExportSessionCoreAsync(long id, SessionExportFormat format, CancellationToken cancellationToken)
+    {
+        var palette = Theme.Current;
+        var zone = _time.LocalTimeZone;
+        return Task.Run<(string? Notice, string? Error)>(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (_sessions.Load(id) is not { } record)
+            {
+                return (null, SessionMissingError(id));
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            var (path, error) = SessionExport.Write(_files, record, format, zone, palette);
+            return path is not null ? (SessionExportedNotice(id, path), null) : (null, error);
+        }, cancellationToken);
     }
 
     /// <summary>
@@ -8476,7 +8606,7 @@ internal sealed partial class ChatScreen
             DiagnosticLog.Info(SessionsCategory, SessionRestoredLogLine(record.Summary.Id, record.Summary.Turns));
             var pictures = RestoredPictures.Turns(messages);
             var box = ReplayPictures(pictures);
-            var byRow = PicturesByRow(pictures);
+            var byRow = RestoredPictures.ByRow(pictures);
             foreach (var turn in record.Turns)
             {
                 ReplayTurn(turn.UserText, turn.ReplyText, turn.ToolCalls, styled, byRow.GetValueOrDefault(turn.Ordinal), box);
@@ -11969,6 +12099,8 @@ internal sealed partial class ChatScreen
             _timers.Dispose();
             // A Ralph loop's lock goes with the app (2026-10-18): a later run takes it over at once.
             StopRalphOnReset();
+            // A code audit's lock too (2026-10-29), quietly: the report lists as stopped, and resume picks it up.
+            _audit.Stop();
             _tones.Dispose();
             _readSeekTimer?.Dispose();
             _outsideTimer?.Dispose();

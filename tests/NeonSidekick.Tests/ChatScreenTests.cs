@@ -25025,12 +25025,44 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(new SessionAction(kind, id, TimeSpan.FromMinutes(ageMinutes), text), ChatScreen.ParseSessionArgs(args));
     }
 
+    /// <summary><c>export [&lt;id&gt;] [md|html]</c> (2026-10-30): the id first when there is one, the format last; anything else the usage error.</summary>
+    [Theory]
+    [InlineData("export", SessionActionKind.Export, 0, false)]
+    [InlineData("export 12", SessionActionKind.Export, 12, false)]
+    [InlineData("EXPORT #12 html", SessionActionKind.Export, 12, true)]
+    [InlineData("export html", SessionActionKind.Export, 0, true)]
+    [InlineData("export #3 md", SessionActionKind.Export, 3, false)]
+    [InlineData("export MD", SessionActionKind.Export, 0, false)]
+    [InlineData("export pdf", SessionActionKind.Invalid, 0, false)]
+    [InlineData("export html 12", SessionActionKind.Invalid, 0, false)]
+    [InlineData("export 12 html now", SessionActionKind.Invalid, 0, false)]
+    [InlineData("export 0", SessionActionKind.Invalid, 0, false)]
+    public void ParseSessionArgs_Export_IsPinned(string args, SessionActionKind kind, long id, bool html)
+    {
+        var expected = kind == SessionActionKind.Export ? new SessionAction(kind, id, Format: html ? SessionExportFormat.Html : SessionExportFormat.Markdown) : new SessionAction(kind);
+        Assert.Equal(expected, ChatScreen.ParseSessionArgs(args));
+    }
+
+    [Fact]
+    public void ArgumentItems_SessionExport_TheFormatsThenTheIds_AndAfterAnIdItsFormats()
+    {
+        var sources = Sources() with { Sessions = () => [new("#12", "Vosk wiring"), new("#7", "Dinner")] };
+
+        Assert.Equal(
+            [new CompletionItem("export md", ChatScreen.SessionExportMarkdownNote), new CompletionItem("export html", ChatScreen.SessionExportHtmlNote), new CompletionItem("export #12", "Vosk wiring"), new CompletionItem("export #7", "Dinner")],
+            ChatScreen.ArgumentItems("/sessions", "export ", sources));
+        Assert.Equal(["export html"], Texts(ChatScreen.ArgumentItems("/sessions", "export h", sources)));
+        Assert.Equal(["export #12 md", "export #12 html"], Texts(ChatScreen.ArgumentItems("/sessions", "export #12 ", sources)));
+        Assert.Equal(["export 7 html"], Texts(ChatScreen.ArgumentItems("/sessions", "export 7 h", sources)));
+        Assert.Empty(ChatScreen.ArgumentItems("/sessions", "export #12 html", sources));   // typed in full: Enter sends
+    }
+
     [Fact]
     public void ArgumentItems_Session_TheIdsThenTheVerbs_PurgeOpensAllOlderAndTheIds()
     {
         var sources = Sources() with { Sessions = () => [new("#12", "Vosk wiring (" + SessionsMenu.CurrentNote + ")"), new("#7", "Dinner")] };
 
-        Assert.Equal(["#12", "#7", "purge", "title"], Texts(ChatScreen.ArgumentItems("/sessions", "", sources)));
+        Assert.Equal(["#12", "#7", "purge", "title", "export"], Texts(ChatScreen.ArgumentItems("/sessions", "", sources)));
         Assert.Equal(["#12"], Texts(ChatScreen.ArgumentItems("/sessions", "#1", sources)));
         Assert.Empty(ChatScreen.ArgumentItems("/sessions", "#7", sources));   // typed in full: Enter sends
         Assert.Equal([new CompletionItem("purge all", ChatScreen.SessionPurgeAllNote), new CompletionItem("purge older", ChatScreen.SessionPurgeOlderNote), new CompletionItem("purge #12", "Vosk wiring (" + SessionsMenu.CurrentNote + ")"), new CompletionItem("purge #7", "Dinner")], ChatScreen.ArgumentItems("/sessions", "purge ", sources));
@@ -25038,7 +25070,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(ChatScreen.ArgumentItems("/sessions", "purge #7", sources));
         Assert.Empty(ChatScreen.ArgumentItems("/sessions", "purge older 3", sources));
         Assert.Empty(ChatScreen.ArgumentItems("/sessions", "title My", sources));   // free text
-        Assert.Equal(["purge", "title"], Texts(ChatScreen.ArgumentItems("/sessions", "", Sources())));   // no store wired: the verbs alone
+        Assert.Equal(["purge", "title", "export"], Texts(ChatScreen.ArgumentItems("/sessions", "", Sources())));   // no store wired: the verbs alone
         Assert.Equal("Vosk wiring", ChatScreen.SessionNote(new SessionSummary(12, ManualTimeProvider.DefaultUtcNow, ManualTimeProvider.DefaultUtcNow, "Vosk wiring", TitleSource.FirstLine, "llama", 1), null));
         Assert.Equal("Vosk wiring (this conversation)", ChatScreen.SessionNote(new SessionSummary(12, ManualTimeProvider.DefaultUtcNow, ManualTimeProvider.DefaultUtcNow, "Vosk wiring", TitleSource.FirstLine, "llama", 1), 12));
     }
@@ -25047,7 +25079,7 @@ public partial class ChatScreenTests : IDisposable
     public void SessionSentences_ArePinned()
     {
         var summary = new SessionSummary(12, ManualTimeProvider.DefaultUtcNow, ManualTimeProvider.DefaultUtcNow, "Vosk wiring", TitleSource.FirstLine, "llama", 12);
-        Assert.Equal("/sessions lists the sessions, or /sessions <id> | purge <id> | purge older <age> | purge all | title <text>", ChatScreen.SessionUsageError);
+        Assert.Equal("/sessions lists the sessions, or /sessions <id> | purge <id> | purge older <age> | purge all | title <text> | export [<id>] [md|html]", ChatScreen.SessionUsageError);
         Assert.Equal("No session #12; /sessions lists them.", ChatScreen.SessionMissingError(12));
         Assert.Equal("Could not restore session #12: bad json", ChatScreen.SessionRestoreFailedError(12, "bad json"));
         Assert.Equal("(💬 restored session #12 \"Vosk wiring\" · 12 turns · 2026-09-11 14:05)", ChatScreen.SessionRestoredNotice(summary, ManualTimeProvider.DefaultZone));
@@ -25064,6 +25096,9 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("older", ChatScreen.SessionOlderWord);
         Assert.Equal("all", ChatScreen.SessionAllWord);
         Assert.Equal("title", ChatScreen.SessionTitleWord);
+        Assert.Equal(("export", "md", "html"), (ChatScreen.SessionExportWord, ChatScreen.SessionMarkdownWord, ChatScreen.SessionHtmlWord));
+        Assert.Equal("(💬 this conversation isn't saved: Session logging is off; /sessions export <id> exports a stored one)", ChatScreen.SessionNotSavedNotice);
+        Assert.Equal("(💬 exported session #12 to Notes-2026-10-30-0912.md)", ChatScreen.SessionExportedNotice(12, "Notes-2026-10-30-0912.md"));
         Assert.True(ChatScreen.TryParseSessionId("#5", out long id) && id == 5);
         Assert.False(ChatScreen.TryParseSessionId("#", out _));
         Assert.False(ChatScreen.TryParseSessionId("5.0", out _));

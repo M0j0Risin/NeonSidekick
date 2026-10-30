@@ -1,4 +1,5 @@
 using Microsoft.Extensions.AI;
+using NeonSidekick.Diagnostics;
 using NeonSidekick.Files;
 using NeonSidekick.Plans;
 
@@ -19,6 +20,10 @@ public sealed record AuditCoverage(int Read, int Scope, IReadOnlyList<string> Un
 /// (<see cref="PlanGapLoop"/>, reused: "gaps" are any change to the findings), the report, the scope, the focus and the brief. Written on the
 /// turn task (<c>present_audit</c>) and on the idle loop, never both at once, as <see cref="PlanSession"/>. Never kept in the session row: a
 /// report left <c>auditing</c> after a restart lists as stopped, and <c>/code-audit resume</c> picks it up.
+/// <para>It holds the report's lock too (2026-10-29, <see cref="AuditFiles.LockPathFor"/>: two apps auditing one report each saved the whole file,
+/// and one overwrote the other's findings): <see cref="Hold"/> takes it for a start or resume about to begin (a pending hold), <see cref="Start"/>
+/// makes it the running audit's, <see cref="Release"/> lets a pending one go when that start fails, and <see cref="Stop"/> lets go of both. The
+/// running audit's and a pending one are kept apart because a start or resume can come while another audit of this screen still runs.</para>
 /// </summary>
 public sealed class AuditSession
 {
@@ -47,6 +52,24 @@ public sealed class AuditSession
 
     /// <summary>Bumped by <see cref="Changed"/>: a directive built before it is stale.</summary>
     private int _version;
+
+    /// <summary>
+    /// A report's lock as this session holds it: the working directory pinned where it was taken (a working-folder change mid-audit still lets go
+    /// of the right one), the report, the lock, and whether the drive couldn't hold one (<see cref="LockTake.Unsupported"/>: the audit runs
+    /// unlocked, and nothing is let go).
+    /// </summary>
+    private sealed record HeldLock(WorkingDirectory Files, string Report, string LockPath, bool Unlocked)
+    {
+        public bool Same(HeldLock other) => RalphSnapshot.SameRoot(Files.Root, other.Files.Root) && AuditPath.Comparer.Equals(LockPath, other.LockPath);
+    }
+
+    /// <summary>The running audit's lock; null between audits (or one started with no hold).</summary>
+    private HeldLock? _held;
+
+    /// <summary>A lock taken for a start or resume that hasn't begun yet.</summary>
+    private HeldLock? _pending;
+
+    private const string LogCategory = NeonSidekick.App.ChatScreen.AppCategory;
 
     /// <summary>The working directory the report and its coverage sidecar are read and written through: pinned to <see cref="Root"/> while one runs.</summary>
     public WorkingDirectory Files => _pinned ?? _files;
@@ -85,16 +108,119 @@ public sealed class AuditSession
     /// <summary>The strip's pass while one is under way: <c>2/5</c>, <c>2</c> with no limit; null otherwise.</summary>
     public string? StripPass => Running is { Pending: false } loop ? AuditText.StripPass(loop.Pass, loop.Limit) : null;
 
+    /// <summary>The lock the running audit holds, relative to the folder it was taken in; null with none (or on a drive that can't hold one).</summary>
+    public string? HeldLockPath => _held is { Unlocked: false } held ? held.LockPath : null;
+
+    /// <summary>
+    /// The lock of the report at <paramref name="path"/> taken for a start or resume about to begin (2026-10-29): true when taken (free, stale, or
+    /// this process's already), or when its drive can't hold one (<paramref name="notice"/> then says it runs unprotected, the user's call); false
+    /// with <paramref name="error"/> while another live NeonSidekick holds it, or when it can't be written. A refused hold leaves the running audit
+    /// and its lock as they were. The caller calls <see cref="Start"/> next, or <see cref="Release"/> when its step fails.
+    /// </summary>
+    public bool Hold(string path, out string? error, out string? notice)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        error = null;
+        notice = null;
+        Release();
+        var files = _files.PinnedAt(_files.Root);
+        string lockPath = AuditFiles.LockPathFor(path);
+        var before = OwnerLock.ReadOwner(files, lockPath);
+        switch (OwnerLock.TryLock(files, lockPath, OwnerLock.Me, OwnerLock.LiveOwner))
+        {
+            case LockTake.Taken:
+                _pending = new HeldLock(files, path, lockPath, Unlocked: false);
+                DiagnosticLog.Info(LogCategory, before is { } stale && stale != OwnerLock.Me
+                    ? $"code audit: took over {lockPath}, left by pid {N(stale.ProcessId)}" + (stale.Host is { } h ? " on " + h : "")
+                    : $"code audit: locked {lockPath}");
+                return true;
+            case LockTake.Unsupported:
+                _pending = new HeldLock(files, path, lockPath, Unlocked: true);
+                notice = AuditText.UnlockedNotice(path);
+                DiagnosticLog.Info(LogCategory, $"code audit: {lockPath} can't be held on its drive; running unlocked");
+                return true;
+            case LockTake.Unwritable:
+                error = AuditText.LockWriteError(lockPath);
+                DiagnosticLog.Info(LogCategory, $"code audit: refused {path}: {lockPath} couldn't be written");
+                return false;
+            default:
+                OwnerLock.HeldElsewhere(files, lockPath, out var owner);
+                error = AuditFiles.LockError(path, lockPath, owner);
+                DiagnosticLog.Info(LogCategory, $"code audit: refused {path}: locked by " + (owner is { } o ? "pid " + N(o.ProcessId) + (o.Host is { } host ? " on " + host : "") : "an unreadable lock"));
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// A pending hold let go (its start failed or threw); never the running audit's own lock, which a refused resume of that same audit must not
+    /// unlock. Nothing for a drive that holds no lock.
+    /// </summary>
+    public void Release()
+    {
+        if (_pending is { } pending)
+        {
+            _pending = null;
+            if (_held is not { } held || !held.Same(pending))
+            {
+                Let(pending);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether the running audit still holds its report (2026-10-29): this process's lock still, or taken back when it went; false only while another
+    /// live NeonSidekick holds it, and the audit then stops writing. True with no lock to hold (none taken, or a drive that holds none), and when
+    /// a lock that went can't be written again: the report's own save then says what failed.
+    /// </summary>
+    public bool StillHolds()
+    {
+        if (_held is not { Unlocked: false } held)
+        {
+            return true;
+        }
+
+        bool holds = OwnerLock.TryLock(held.Files, held.LockPath, OwnerLock.Me, OwnerLock.LiveOwner) != LockTake.Held;
+        if (!holds)
+        {
+            DiagnosticLog.Info(LogCategory, $"code audit: lost {held.LockPath} to another NeonSidekick");
+        }
+
+        return holds;
+    }
+
+    private static void Let(HeldLock held)
+    {
+        if (!held.Unlocked)
+        {
+            OwnerLock.Unlock(held.Files, held.LockPath, OwnerLock.Me);
+        }
+    }
+
+    private static string N(int value) => value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
     /// <summary>
     /// A fresh loop over the report at <paramref name="path"/>: <paramref name="reviewer"/>, at most <paramref name="limit"/> passes (0 for no
     /// limit), ending on <paramref name="cleanPasses"/> clean passes in a row, the confirming passes rotating through the focus. One already
-    /// running is replaced.
+    /// running is replaced: a pending hold on this report becomes the running one, and the replaced audit's lock goes when it names another.
     /// </summary>
     public PlanGapLoop Start(string path, AuditScope scope, IReadOnlyList<string> focus, string brief, PlanReviewer reviewer, int limit, int cleanPasses)
     {
         ArgumentNullException.ThrowIfNull(path);
         ArgumentNullException.ThrowIfNull(scope);
         ArgumentNullException.ThrowIfNull(focus);
+        var promoted = _pending is { } pending && AuditPath.Comparer.Equals(pending.Report, path) ? pending : null;
+        if (_held is { } running && (promoted is null || !running.Same(promoted)))
+        {
+            Let(running);
+        }
+
+        _held = promoted;
+        if (promoted is null)
+        {
+            Release();
+        }
+
+        _pending = null;
         Path = path;
         Root = _files.Root;
         _pinned = _files.PinnedAt(Root);
@@ -113,9 +239,16 @@ public sealed class AuditSession
         _turnState = null;
     }
 
-    /// <summary>The audit over, however it ended: everything forgotten (the report stays).</summary>
+    /// <summary>The audit over, however it ended: everything forgotten (the report stays), its lock and any pending one let go.</summary>
     public void Stop()
     {
+        Release();
+        if (_held is { } held)
+        {
+            _held = null;
+            Let(held);
+        }
+
         Running = null;
         Path = null;
         Root = null;

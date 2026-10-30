@@ -52,7 +52,7 @@ internal sealed partial class ChatScreen
     private readonly IRalphVerifier _ralphVerifier;
 
     /// <summary>Whether a lock's owner still runs (a seam for the tests: by default the process and its start time, <see cref="RalphLog.OwnerAlive"/>).</summary>
-    internal Func<RalphLog.LockOwner, bool> RalphLockAlive { get; set; } = RalphLog.OwnerAlive;
+    internal Func<LockOwner, bool> RalphLockAlive { get; set; } = RalphLog.OwnerAlive;
 
     /// <summary>
     /// The loop's working directory and repository, pinned to the folder it started in (2026-10-19, the second review: <see cref="_files"/> follows

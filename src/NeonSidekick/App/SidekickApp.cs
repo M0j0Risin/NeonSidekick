@@ -1954,6 +1954,8 @@ public sealed partial class SidekickApp
             _liveSession = null;
             // A Ralph loop's lock goes with the run (2026-10-18).
             HeadlessRalphDrop(planState, files);
+            // A code audit's lock too (2026-10-29): the report lists as stopped, and resume picks it up.
+            audit.Stop();
             // Docker server stop on exit (2026-10-02): off by default, the container keeps running.
             foreach (string stopped in await StopDockerAtExitAsync(session, DockerExitBudget).ConfigureAwait(false))
             {

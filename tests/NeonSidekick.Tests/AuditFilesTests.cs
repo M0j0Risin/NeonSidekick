@@ -126,6 +126,74 @@ public sealed class AuditFilesTests : IDisposable
         Assert.False(AuditFiles.Exists(_box.Files, AuditFiles.CoveragePath(path)));
     }
 
+    // ── The lock (2026-10-29) ──
+
+    private const int OtherPid = 424242;
+
+    private void WriteLock(string report, int pid) =>
+        _box.Write(AuditFiles.LockPathFor(report), "pid: " + pid.ToString(System.Globalization.CultureInfo.InvariantCulture) + "\nstarted: 2026-10-29T09:00:00.0000000+00:00\n");
+
+    /// <summary>Runs <paramref name="body"/> with <see cref="OtherPid"/> as another live NeonSidekick and every other owner but this one gone.</summary>
+    private static void WithOtherAlive(Action body)
+    {
+        var alive = OwnerLock.LiveOwner;
+        OwnerLock.LiveOwner = owner => owner.ProcessId == OtherPid || owner == OwnerLock.Me;
+        try
+        {
+            body();
+        }
+        finally
+        {
+            OwnerLock.LiveOwner = alive;
+        }
+    }
+
+    [Fact]
+    public void Choose_SkipsANameAnotherLiveAppHasLocked_AndReusesAStaleOne() => WithOtherAlive(() =>
+    {
+        var day = new DateTimeOffset(2026, 10, 29, 9, 0, 0, TimeSpan.Zero);
+        WriteLock(".neon/audits/tree-2026-10-29.md", OtherPid);
+        Assert.Equal(".neon/audits/tree-2026-10-29-2.md", AuditFiles.Choose(_box.Files, "tree", day));
+
+        WriteLock(".neon/audits/tree-2026-10-29.md", 77);   // its owner gone
+        Assert.Equal(".neon/audits/tree-2026-10-29.md", AuditFiles.Choose(_box.Files, "tree", day));
+    });
+
+    [Fact]
+    public void Discard_RemovesOurLockAndAStaleOne_ButNeverALiveOthers() => WithOtherAlive(() =>
+    {
+        string ours = Save("ours", DateTimeOffset.UtcNow);
+        Assert.Equal(LockTake.Taken, OwnerLock.TryLock(_box.Files, AuditFiles.LockPathFor(ours), OwnerLock.Me, OwnerLock.LiveOwner));
+        Assert.Equal(FileOutcome.Ok, AuditFiles.Discard(_box.Files, ours).Outcome);
+        Assert.False(AuditFiles.Exists(_box.Files, AuditFiles.LockPathFor(ours)));
+
+        string stale = Save("stale", DateTimeOffset.UtcNow);
+        WriteLock(stale, 77);
+        Assert.Equal(FileOutcome.Ok, AuditFiles.Discard(_box.Files, stale).Outcome);
+        Assert.False(AuditFiles.Exists(_box.Files, AuditFiles.LockPathFor(stale)));
+
+        string held = Save("held", DateTimeOffset.UtcNow);
+        WriteLock(held, OtherPid);
+        Assert.Equal(AuditText.LockedError(held), AuditFiles.HeldElsewhere(_box.Files, held));   // the caller refuses on this first
+        AuditFiles.Discard(_box.Files, held);
+        Assert.True(AuditFiles.Exists(_box.Files, AuditFiles.LockPathFor(held)));
+    });
+
+    [Fact]
+    public void List_AnAuditingReportAnotherAppHolds_ListsAsRunningElsewhere() => WithOtherAlive(() =>
+    {
+        string path = Save("x", DateTimeOffset.UtcNow, AuditStatus.Auditing);
+        WriteLock(path, OtherPid);
+        var listing = AuditFiles.List(_box.Files).Single();
+        Assert.True(listing.Elsewhere);
+        Assert.Equal(AuditText.ElsewhereStatus, AuditText.StatusLabel(listing));
+        Assert.StartsWith(AuditText.ElsewhereStatus, AuditText.CompletionNote(listing), StringComparison.Ordinal);
+        Assert.Contains(AuditText.ElsewhereStatus, AuditText.ListLine(listing), StringComparison.Ordinal);
+
+        WriteLock(path, 77);   // stale: stopped
+        Assert.Equal("stopped", AuditText.StatusLabel(AuditFiles.List(_box.Files).Single()));
+    });
+
     [Fact]
     public void Save_RefusesAReportPastTheCap_BeforeWriting()
     {

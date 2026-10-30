@@ -508,6 +508,24 @@ public static class ImageFile
         : ".png";
 
     /// <summary>
+    /// The extension a picture is saved with: its media type's (png, jpeg/jpg, gif, webp, bmp), else what its bytes say (<see cref="ExtensionOf"/>).
+    /// Lifted out of the plan's references on 2026-10-29 so a session export names its pictures the same way. Pinned.
+    /// </summary>
+    public static string ExtensionFor(string mediaType, ReadOnlySpan<byte> bytes)
+    {
+        ArgumentNullException.ThrowIfNull(mediaType);
+        return mediaType.ToLowerInvariant() switch
+        {
+            "image/png" => ".png",
+            "image/jpeg" or "image/jpg" => ".jpg",
+            "image/gif" => ".gif",
+            "image/webp" => ".webp",
+            "image/bmp" => ".bmp",
+            _ => ExtensionOf(bytes),
+        };
+    }
+
+    /// <summary>
     /// What a re-encoded image is sent as: JPEG for a JPEG or WebP source (a photo), PNG for the rest (a drawing, a screenshot, a
     /// TIFF). On a Mac a HEIC/HEIF or AVIF source is a photo too (2026-10-07). Pinned.
     /// </summary>

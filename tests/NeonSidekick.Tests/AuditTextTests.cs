@@ -177,4 +177,18 @@ public sealed class AuditTextTests
         Assert.Equal(AuditSeverity.Critical, lines[0].Severity);
         Assert.Equal("  … and 5 more in r.md", lines[^1].Line);
     }
+
+    [Fact]
+    public void TheLockSentences_SayWhoHoldsIt_AndWhatToDo()
+    {
+        // 2026-10-29, the audit lock: the app's strings say NeonSidekick, as the Ralph loop's lock does.
+        Assert.Equal("Another NeonSidekick is auditing .neon/audits/a.md; wait for it to end", AuditText.LockedError(".neon/audits/a.md"));
+        string host = AuditText.LockedOnHostError(".neon/audits/a.md", "OTHER-PC", ".neon/audits/a.lock");
+        Assert.Contains("OTHER-PC", host, StringComparison.Ordinal);
+        Assert.Contains("delete .neon/audits/a.lock", host, StringComparison.Ordinal);
+        Assert.Equal("Could not write .neon/audits/a.lock, so the audit didn't start", AuditText.LockWriteError(".neon/audits/a.lock"));
+        Assert.Contains("another NeonSidekick could write this report too", AuditText.UnlockedNotice(".neon/audits/a.md"), StringComparison.Ordinal);
+        Assert.StartsWith(AuditText.Glyph + " The code audit stopped: another NeonSidekick took over a.", AuditText.LockLostNotice("a"), StringComparison.Ordinal);
+        Assert.Equal("running elsewhere", AuditText.ElsewhereStatus);
+    }
 }

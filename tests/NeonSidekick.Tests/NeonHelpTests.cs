@@ -270,7 +270,7 @@ public class NeonHelpTests
     {
         string text = Invoke("/tools database");
 
-        Assert.StartsWith("Tab /tools › Databases: " + HelpText.MenusTab(["SQL", "MySQL", "SQLite", "DuckDB", "PostgreSQL", "Oracle"]) + "\n- SQL: SQL tools, SQL mode, ", text, StringComparison.Ordinal);
+        Assert.StartsWith("Tab /tools › Databases: " + HelpText.MenusTab(["SQL", "MySQL", "PostgreSQL", "Oracle", "SQLite", "DuckDB"]) + "\n- SQL: SQL tools, SQL mode, ", text, StringComparison.Ordinal);
         Assert.Contains("\n- Oracle: Oracle tools, ", text);
         Assert.EndsWith("\nAsk for one menu (/tools sql) for its rows' defaults and what each does.", text, StringComparison.Ordinal);
         Assert.Equal("the menus Print, Camera (a second row of tabs under the tab; ←/→ step through them)", HelpText.MenusTab(["Print", "Camera"]));

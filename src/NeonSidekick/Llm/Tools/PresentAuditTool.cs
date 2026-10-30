@@ -176,6 +176,12 @@ public sealed partial class PresentAuditTool : AIFunction, IRefusesPrunedStubs, 
             return AuditText.WorkdirMovedResult;
         }
 
+        // Another NeonSidekick took the report's lock over (2026-10-29): its read-merge-save would overwrite that one's findings, so nothing is written.
+        if (!_session.StillHolds())
+        {
+            return AuditText.CouldNotSaveResult(AuditText.LockedError(path));
+        }
+
         // 1. The report read fresh: an edit made in an editor meanwhile (a tick, a reworded detail, a finding deleted) survives. The report is the
         // audit's own folder's (_session.Files, pinned as it started); the code it cites is read through the working directory, the model's.
         var reports = _session.Files;

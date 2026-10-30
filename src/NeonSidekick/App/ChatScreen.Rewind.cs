@@ -205,7 +205,7 @@ internal sealed partial class ChatScreen
             var box = ReplayPictures(pictures);
             if (_sessionId is { } id && _sessions.Load(id) is { } record)
             {
-                var byRow = PicturesByRow(pictures);
+                var byRow = RestoredPictures.ByRow(pictures);
                 foreach (var stored in record.Turns)
                 {
                     ReplayTurn(stored.UserText, stored.ReplyText, stored.ToolCalls, styled, byRow.GetValueOrDefault(stored.Ordinal), box);
@@ -336,21 +336,6 @@ internal sealed partial class ChatScreen
         }
 
         _log.Add(userText, replyText);
-    }
-
-    /// <summary>The turns' pictures by the store row each turn wrote (<see cref="TurnPictures.Ordinal"/>); a turn never stamped has none to find (a session saved before 2026-09-30).</summary>
-    private static Dictionary<int, TurnPictures> PicturesByRow(IReadOnlyList<TurnPictures> turns)
-    {
-        var byRow = new Dictionary<int, TurnPictures>();
-        foreach (var turn in turns)
-        {
-            if (turn.Ordinal is { } ordinal)
-            {
-                byRow[ordinal] = turn;
-            }
-        }
-
-        return byRow;
     }
 
     /// <summary>A restored turn's pictures as thumbnails at <paramref name="box"/>, as <see cref="ToolThumbnails"/> draws a live one's; without a box, offered to the Web UI's page alone.</summary>

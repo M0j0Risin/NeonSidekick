@@ -10,8 +10,9 @@ namespace NeonSidekick.App;
 /// turn count dim, then the title, the conversation on screen marked. Enter or a double-click on a
 /// row opens the row page under the list (<see cref="RowTitle"/>): <c>restore</c> hands the id back
 /// to the screen (the pane closed; <see cref="ChatScreen"/> replays it), <c>rename</c> reads a new
-/// title in the pane's input slot (<see cref="MenuPane.EditAsync"/>), <c>purge</c> removes the row
-/// after a yes/no confirmation kept under the list (the <see cref="SkillsMenu"/> shape). Mid-turn —
+/// title in the pane's input slot (<see cref="MenuPane.EditAsync"/>), <c>export</c> asks Markdown or HTML
+/// and writes the session into the working folder (2026-10-30, the user's ask; <c>/sessions export</c>'s writer), <c>purge</c>
+/// removes the row after a yes/no confirmation kept under the list (the <see cref="SkillsMenu"/> shape). Mid-turn —
 /// the pane opens on the watcher task while a reply runs — the list shows and any pick is refused
 /// (<see cref="SettingsMenu.NotWhileReplyRunsNotice"/>). Every notice goes to the pane's status line
 /// while it is open, else to the transcript. Without the pane the list prints as numbered lines and
@@ -38,13 +39,22 @@ internal sealed class SessionsMenu
 
     public const string RestoreWord = "restore";
     public const string RenameWord = "rename";
+    public const string ExportWord = "export";
     public const string PurgeWord = "purge";
+
+    // The export's format page (2026-10-30). Pinned.
+    public const string MarkdownWord = "Markdown";
+    public const string HtmlWord = "HTML";
+    public static readonly IReadOnlyList<string> FormatWords = [MarkdownWord, HtmlWord];
+
+    /// <summary>The status line while an export is written.</summary>
+    public const string ExportingNotice = "(" + NoticeGlyphs.Session + SessionText.ExportingSpinner + "…)";
 
     /// <summary>What a declined confirmation says on the status line: the transcript's word.</summary>
     public const string KeptNotice = ChatScreen.KeptNotice;
 
     /// <summary>The row page's rows, in order; the picked index is read against it.</summary>
-    public static readonly IReadOnlyList<string> RowWords = [RestoreWord, RenameWord, PurgeWord];
+    public static readonly IReadOnlyList<string> RowWords = [RestoreWord, RenameWord, ExportWord, PurgeWord];
 
     private readonly SessionStore _store;
     private readonly Func<long?> _current;
@@ -53,6 +63,7 @@ internal sealed class SessionsMenu
     private readonly InputLine _input;
     private readonly TimeProvider _time;
     private readonly Action<long> _purged;
+    private readonly Func<long, SessionExportFormat, CancellationToken, Task<(string? Notice, string? Error)>> _export;
 
     /// <param name="store">The profile's store; the list is read when the pane opens and again after every change.</param>
     /// <param name="current">The session on screen (marked in the list, never restored); null before its first turn.</param>
@@ -61,7 +72,9 @@ internal sealed class SessionsMenu
     /// <param name="input">The line the rename is typed on, in the pane's slot.</param>
     /// <param name="time">The clock whose local zone the moments are shown in.</param>
     /// <param name="purged">Told the id of every session purged here, so the screen can forget the current one.</param>
-    public SessionsMenu(SessionStore store, Func<long?> current, INoticeSink transcript, MenuPane pane, InputLine input, TimeProvider time, Action<long> purged)
+    /// <param name="export">Writes a session to a file: the screen's <c>/sessions export</c> without its spinner; its notice or error goes on the status line.</param>
+    public SessionsMenu(SessionStore store, Func<long?> current, INoticeSink transcript, MenuPane pane, InputLine input, TimeProvider time, Action<long> purged,
+        Func<long, SessionExportFormat, CancellationToken, Task<(string? Notice, string? Error)>> export)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _current = current ?? throw new ArgumentNullException(nameof(current));
@@ -70,6 +83,7 @@ internal sealed class SessionsMenu
         _input = input ?? throw new ArgumentNullException(nameof(input));
         _time = time ?? throw new ArgumentNullException(nameof(time));
         _purged = purged ?? throw new ArgumentNullException(nameof(purged));
+        _export = export ?? throw new ArgumentNullException(nameof(export));
     }
 
     /// <summary>Where a notice goes: the pane's status line while the list is open there, else the transcript.</summary>
@@ -114,8 +128,8 @@ internal sealed class SessionsMenu
         ArgumentNullException.ThrowIfNull(session);
         var facts = new List<string>
         {
-            "started " + SessionText.Moment(session.StartedAt, zone),
-            "last " + SessionText.Moment(session.UpdatedAt, zone),
+            SessionText.ExportStarted + " " + SessionText.Moment(session.StartedAt, zone),
+            SessionText.ExportLast + " " + SessionText.Moment(session.UpdatedAt, zone),
             SessionText.Turns(session.Turns),
         };
         if (!string.IsNullOrWhiteSpace(session.Model))
@@ -143,8 +157,12 @@ internal sealed class SessionsMenu
     {
         RestoreWord => "load it into the transcript and go on from there",
         RenameWord => "give it a new title",
+        ExportWord => "write it to a Markdown or HTML file in the working folder",
         _ => "remove it and its turns for good",
     });
+
+    /// <summary>The export's format page rows (2026-10-30): the word padded to nine, the file it makes dim after it.</summary>
+    public static string FormatRow(string word) => Markup.Escape(word.PadRight(9)) + Theme.DimMarkup(word == HtmlWord ? ChatScreen.SessionExportHtmlNote : ChatScreen.SessionExportMarkdownNote);
 
     /// <summary>The no-pane fallback: <c>1. #12 · 2026-09-18 14:05 · 12 turns · Title</c> per session.</summary>
     public static IReadOnlyList<string> ListLines(IReadOnlyList<SessionSummary> sessions, long? current, TimeZoneInfo zone)
@@ -379,6 +397,11 @@ internal sealed class SessionsMenu
             case RenameWord:
                 return await EditTitleAsync(page, row, session, cancellationToken).ConfigureAwait(false) is null ? RowOutcome.Nothing : RowOutcome.Changed;
 
+            case ExportWord:
+                await ExportAsync(session, cancellationToken).ConfigureAwait(false);
+                return RowOutcome.Nothing;
+
+            case PurgeWord:
             default:
                 if (!await ConfirmAsync(PurgePrompt(session), cancellationToken).ConfigureAwait(false))
                 {
@@ -397,6 +420,32 @@ internal sealed class SessionsMenu
                 }
 
                 return RowOutcome.Changed;
+        }
+    }
+
+    /// <summary>
+    /// The row page's <c>export</c> (2026-10-30): Markdown or HTML on a page under the row's, then the screen's writer awaited, the
+    /// status line saying it is at work and then the path or the error. Esc on the format page writes nothing. The list stays open.
+    /// </summary>
+    private async Task ExportAsync(SessionSummary session, CancellationToken cancellationToken)
+    {
+        var page = new MenuPage(RowTitle(session) + " › " + ExportWord, FormatWords.Select(FormatRow).ToList(), RowKeys);
+        var picked = await _pane.PickAsync(page, 0, cancellationToken).ConfigureAwait(false);
+        if (picked is not { Row: var row })
+        {
+            return;
+        }
+
+        var format = FormatWords[Math.Clamp(row, 0, FormatWords.Count - 1)] == HtmlWord ? SessionExportFormat.Html : SessionExportFormat.Markdown;
+        Sink.Notice(ExportingNotice);
+        var (notice, error) = await _export(session.Id, format, cancellationToken).ConfigureAwait(false);
+        if (error is not null)
+        {
+            Sink.Error(error);
+        }
+        else if (notice is not null)
+        {
+            Sink.Notice(notice);
         }
     }
 

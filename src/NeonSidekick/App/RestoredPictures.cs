@@ -93,6 +93,25 @@ public static class RestoredPictures
         return turns;
     }
 
+    /// <summary>
+    /// The turns' pictures by the store row each turn wrote (<see cref="TurnPictures.Ordinal"/>); a turn never stamped has none to find (a session
+    /// saved before 2026-09-30). Shared by the restore, <c>/rewind</c> and the session export (2026-10-29).
+    /// </summary>
+    public static Dictionary<int, TurnPictures> ByRow(IReadOnlyList<TurnPictures> turns)
+    {
+        ArgumentNullException.ThrowIfNull(turns);
+        var byRow = new Dictionary<int, TurnPictures>();
+        foreach (var turn in turns)
+        {
+            if (turn.Ordinal is { } ordinal)
+            {
+                byRow[ordinal] = turn;
+            }
+        }
+
+        return byRow;
+    }
+
     /// <summary>A user message's pictures split into the user's own and <c>/imagine</c>'s (the class's rule).</summary>
     private static (IReadOnlyList<DataContent> Own, IReadOnlyList<DataContent> Imagined) Split(ChatMessage message)
     {

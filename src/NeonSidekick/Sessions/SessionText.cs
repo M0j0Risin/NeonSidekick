@@ -278,6 +278,21 @@ public static class SessionText
         return Id(session.Id) + " · " + Moment(session.UpdatedAt, zone) + " · " + Turns(session.Turns) + " · " + session.Title;
     }
 
+    // ---- the export (2026-10-29, /sessions export) ----
+
+    /// <summary>The spinner's words while a session is written out, and the pane's status line meanwhile.</summary>
+    public const string ExportingSpinner = "Exporting the session";
+
+    /// <summary>A turn's heading word in an export: <c>Turn 3 · 2026-10-29 14:05</c>.</summary>
+    public const string ExportTurnWord = "Turn";
+
+    /// <summary>The facts line's words before the start and the last turn, as the pane's footer says them.</summary>
+    public const string ExportStarted = "started";
+    public const string ExportLast = "last";
+
+    /// <summary>The note under a turn the keys cut short.</summary>
+    public const string ExportCancelledNote = "(cancelled)";
+
     /// <summary>The replay's tool line under a restored user row: <c>1 tool call</c> / <c>3 tool calls</c>.</summary>
     public static string ToolCallsNote(int calls) => calls.ToString(CultureInfo.InvariantCulture) + (calls == 1 ? " tool call" : " tool calls");
 

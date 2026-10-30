@@ -62,6 +62,7 @@ Elsewhere:
 | `/sessions [<id>]` | Lists the stored sessions, or restores one with its pictures (`#12` works too). |
 | `/sessions purge <id>\|all`, `/sessions purge older <age>` | Deletes one stored session, every one, or those older than an age (`30` days, `12h`, `1d 6h`). Its file checkpoints go too, so those turns can't be undone. |
 | `/sessions title [<text>]`, `/rename [<name>]` | Renames the current session; alone, opens a box with its name. |
+| `/sessions export [<id>] [md\|html]` | Writes a session (this one without an id) to a Markdown file with Obsidian properties, its pictures in a folder beside it, or one HTML page in your theme. Into the working folder; never overwrites. |
 | `/memory` | Lists the memories, to edit, disable (kept, never offered to the model), forget or add one. |
 | `/memory read-write\|read-only\|off\|on` | Sets *Memory mode* (`on` is read-write). |
 | `/memory forget\|edit` | Forgets every memory after a yes, or opens `memory.json` in your editor. |
@@ -447,6 +448,8 @@ Its settings are on `/settings` › [Automation](SETTINGS.md#automation).
   * **More passes…:** the reviewer page when advisors are offered.
   * **Keep report**, or **Discard report** after a yes (to the Recycle bin, the Trash on a Mac, when *File deletes to Recycle bin* is on).
 * **Picking up again:** `/code-audit open` lists the reports (`stopped`, `fixing 3/7`, `fixed`…); `fix` and `resume` take the newest without a name, and say which. While `/botchat` runs, a form that would start passes is refused (`open` waits for the chat's end).
+* **The lock:** a `<name>.lock` beside the report keeps a second Neon Sidekick off it while it's audited: the other can't start, resume, fix or discard it, and lists it as `running elsewhere`.
+  * A lock another PC wrote names that PC and the file to delete if its run is gone.
 
 ### Bot conversations
 

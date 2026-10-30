@@ -9,7 +9,8 @@ namespace NeonSidekick.Tests;
 
 /// <summary>
 /// The Ralph log beside the plan (2026-10-18, <see cref="RalphLog"/>): written and read back, tolerant of hand edits, the check's output cut,
-/// scrubbed and redacted, the learned facts merged and capped, the notes a pass gets, the pass count, and the lock.
+/// scrubbed and redacted, the learned facts merged and capped, the notes a pass gets, the pass count, and the lock's Ralph words
+/// (its machinery in <see cref="OwnerLockTests"/> since 2026-10-29).
 /// </summary>
 public sealed class RalphLogTests : IDisposable
 {
@@ -152,8 +153,8 @@ public sealed class RalphLogTests : IDisposable
     [Fact]
     public void TheLock_RefusesAnotherLiveProcess_TakesOverAStaleOne_AndIsLetGo()
     {
-        var me = new RalphLog.LockOwner(100, T0);
-        var other = new RalphLog.LockOwner(200, T0.AddHours(-1));
+        var me = new LockOwner(100, T0);
+        var other = new LockOwner(200, T0.AddHours(-1));
 
         Assert.True(RalphLog.TryLock(_files, Plan, other, _ => true));
         Assert.False(RalphLog.TryLock(_files, Plan, me, _ => true));          // the other is alive
@@ -165,87 +166,6 @@ public sealed class RalphLogTests : IDisposable
         Assert.False(File.Exists(Path.Combine(_dir, ".neon", "plans", "guide", RalphLog.LockName)));
     }
 
-    [Fact]
-    public async Task TheLock_RacedFor_IsTakenByOne_AndLeavesNoTempFiles()
-    {
-        // 2026-10-19, the review: read-then-write let two instances starting together both take it.
-        var owners = Enumerable.Range(1, 8).Select(i => new RalphLog.LockOwner(1000 + i, T0)).ToList();
-        using var start = new ManualResetEventSlim();
-        var takes = owners.Select(owner => Task.Run(() => { start.Wait(); return RalphLog.TryLock(_files, Plan, owner, _ => true); })).ToList();
-        start.Set();
-        bool[] taken = await Task.WhenAll(takes);
-
-        Assert.Single(taken, t => t);
-        string folder = Path.Combine(_dir, ".neon", "plans", "guide");
-        Assert.Equal([RalphLog.LockName], Directory.EnumerateFiles(folder).Select(Path.GetFileName));
-
-        File.WriteAllText(Path.Combine(folder, RalphLog.LockName), "not a lock");   // garbage: no owner, taken over (a lock is never half written)
-        Assert.True(RalphLog.TryLock(_files, Plan, owners[0], _ => true));
-    }
-
-    [Fact]
-    public async Task TheLock_IsNeverReadHalfWritten_WhileItIsRacedFor()
-    {
-        // 2026-10-20, the code review: created in place, a lock could be read empty or half written, which counted as held for a few seconds
-        // and then as garbage a second taker removed. Published whole now, by a hard link (a move on Windows), so a reader finds it whole or
-        // not at all, and the racers' temp files never outlive their takes.
-        string folder = Path.Combine(_dir, ".neon", "plans", "guide");
-        string lockFile = Path.Combine(folder, RalphLog.LockName);
-        Directory.CreateDirectory(folder);
-        var torn = new List<string>();
-        using var stop = new CancellationTokenSource();
-        var reader = Task.Run(() =>
-        {
-            while (!stop.IsCancellationRequested)
-            {
-                try
-                {
-                    using var stream = new FileStream(lockFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-                    string text = new StreamReader(stream).ReadToEnd();
-                    if (!text.StartsWith("pid: ", StringComparison.Ordinal) || !text.Contains("\nstarted: ", StringComparison.Ordinal) || !text.EndsWith('\n'))
-                    {
-                        torn.Add(text);
-                    }
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                {
-                    // Not there (between a take and an unlock), or held a moment on Windows: never a torn read.
-                }
-            }
-        });
-
-        for (int round = 0; round < 30; round++)
-        {
-            var owners = Enumerable.Range(1, 6).Select(i => new RalphLog.LockOwner(round * 10 + i, T0)).ToList();
-            using var start = new ManualResetEventSlim();
-            var takes = owners.Select(owner => Task.Run(() => { start.Wait(); return (owner, RalphLog.TryLock(_files, Plan, owner, _ => true)); })).ToList();
-            start.Set();
-            var taken = await Task.WhenAll(takes);
-            var holder = Assert.Single(taken, t => t.Item2).owner;
-            RalphLog.Unlock(_files, Plan, holder);
-        }
-
-        await stop.CancelAsync();
-        await reader;
-        Assert.Empty(torn);
-        Assert.Empty(Directory.EnumerateFiles(folder));   // every temp file gone, the last lock let go
-    }
-
-    /// <summary>
-    /// What a publishing call's errno means (later on 2026-10-20, the code review: a volume with no hard links fell back to a racy move): EEXIST and
-    /// the rest are not taken, the volume's "no such call" answers are unsupported.
-    /// </summary>
-    [Theory]
-    [InlineData(0, (int)RalphLog.PublishOutcome.Published)]
-    [InlineData(17, (int)RalphLog.PublishOutcome.NotTaken)]      // EEXIST: held
-    [InlineData(13, (int)RalphLog.PublishOutcome.NotTaken)]      // EACCES
-    [InlineData(2, (int)RalphLog.PublishOutcome.NotTaken)]       // ENOENT
-    [InlineData(1, (int)RalphLog.PublishOutcome.Unsupported)]    // EPERM (Linux's link on FAT)
-    [InlineData(45, (int)RalphLog.PublishOutcome.Unsupported)]   // macOS's ENOTSUP (exFAT, FAT32's link)
-    [InlineData(102, (int)RalphLog.PublishOutcome.Unsupported)]  // macOS's EOPNOTSUPP
-    [InlineData(95, (int)RalphLog.PublishOutcome.Unsupported)]   // Linux's EOPNOTSUPP
-    public void ThePublishsErrno_IsRead(int errno, int outcome) => Assert.Equal((RalphLog.PublishOutcome)outcome, RalphLog.PublishOutcomeOf(errno));
-
     /// <summary>
     /// A volume with no hard links (later on 2026-10-20, the code review): on a Mac the exclusive rename takes the lock (FAT32 measured so), and one
     /// that takes neither refuses the start with its own sentence, never a move two instances could both win and never "another is running".
@@ -253,24 +173,24 @@ public sealed class RalphLogTests : IDisposable
     [UnixFact]
     public void TheLock_OnAVolumeWithoutHardLinks_TakesTheExclusiveRename_OrIsRefused()
     {
-        var link = RalphLog.LinkCall;
-        var rename = RalphLog.RenameExclusiveCall;
+        var link = OwnerLock.LinkCall;
+        var rename = OwnerLock.RenameExclusiveCall;
         string lockFile = Path.Combine(_dir, ".neon", "plans", "guide", RalphLog.LockName);
         try
         {
-            RalphLog.LinkCall = (_, _) => 45;   // ENOTSUP, as FAT32 and exFAT answer
+            OwnerLock.LinkCall = (_, _) => 45;   // ENOTSUP, as FAT32 and exFAT answer
             if (OperatingSystem.IsMacOS())
             {
-                Assert.True(RalphLog.TryLock(_files, Plan, new RalphLog.LockOwner(100, T0), _ => true, out string? none));   // the real renamex_np
+                Assert.True(RalphLog.TryLock(_files, Plan, new LockOwner(100, T0), _ => true, out string? none));   // the real renamex_np
                 Assert.Null(none);
-                Assert.False(RalphLog.TryLock(_files, Plan, new RalphLog.LockOwner(200, T0), _ => true, out none));          // held: EEXIST
+                Assert.False(RalphLog.TryLock(_files, Plan, new LockOwner(200, T0), _ => true, out none));          // held: EEXIST
                 Assert.Null(none);
                 Assert.Equal(RalphText.LockedError(Plan), RalphLog.LockError(_files, Plan));
-                RalphLog.Unlock(_files, Plan, new RalphLog.LockOwner(100, T0));
+                RalphLog.Unlock(_files, Plan, new LockOwner(100, T0));
             }
 
-            RalphLog.RenameExclusiveCall = (_, _) => 45;   // exFAT: neither
-            Assert.False(RalphLog.TryLock(_files, Plan, new RalphLog.LockOwner(100, T0), _ => true, out string? refusal));
+            OwnerLock.RenameExclusiveCall = (_, _) => 45;   // exFAT: neither
+            Assert.False(RalphLog.TryLock(_files, Plan, new LockOwner(100, T0), _ => true, out string? refusal));
             Assert.Equal(RalphText.LockUnsupportedError(Plan, RalphLog.LockPathFor(Plan)), refusal);
             Assert.False(File.Exists(lockFile));
             Assert.Empty(Directory.EnumerateFiles(Path.GetDirectoryName(lockFile)!));   // the temp file gone too
@@ -280,73 +200,14 @@ public sealed class RalphLogTests : IDisposable
 
             // A stale lock there already (an older build moved it in): its take-over guard can't be published either, the same refusal.
             File.WriteAllText(lockFile, "pid: 12\n");
-            Assert.False(RalphLog.TryLock(_files, Plan, new RalphLog.LockOwner(100, T0), _ => false, out refusal));
+            Assert.False(RalphLog.TryLock(_files, Plan, new LockOwner(100, T0), _ => false, out refusal));
             Assert.Equal(RalphText.LockUnsupportedError(Plan, RalphLog.LockPathFor(Plan)), refusal);
         }
         finally
         {
-            RalphLog.LinkCall = link;
-            RalphLog.RenameExclusiveCall = rename;
+            OwnerLock.LinkCall = link;
+            OwnerLock.RenameExclusiveCall = rename;
         }
-    }
-
-    /// <summary>The Mac's exclusive rename itself, on the temp volume: a free name taken (the temp file moved), a taken one left as it was (EEXIST).</summary>
-    [MacFact]
-    public void TheExclusiveRename_TakesAFreeName_AndNeverReplacesOne()
-    {
-        Directory.CreateDirectory(_dir);
-        string a = Path.Combine(_dir, "a.tmp"), b = Path.Combine(_dir, "b.tmp"), target = Path.Combine(_dir, "x.lock");
-        File.WriteAllText(a, "first");
-        File.WriteAllText(b, "second");
-
-        Assert.Equal(0, RalphLog.RenameExclusive(a, target));
-        Assert.False(File.Exists(a));
-        Assert.Equal(17, RalphLog.RenameExclusive(b, target));   // EEXIST
-        Assert.Equal("first", File.ReadAllText(target));
-        Assert.True(File.Exists(b));
-    }
-
-    [Fact]
-    public void ALockWithNoStart_IsTakenOverAtOnce_WhenItsOwnerIsGone()
-    {
-        // Whole as written (no lock is read before its text is there), so a "pid: 12" alone is a lock its writer meant: its owner gone, it goes.
-        string folder = Path.Combine(_dir, ".neon", "plans", "guide");
-        string lockFile = Path.Combine(folder, RalphLog.LockName);
-        Directory.CreateDirectory(folder);
-        File.WriteAllText(lockFile, "pid: 12");
-        Assert.False(RalphLog.TryLock(_files, Plan, new RalphLog.LockOwner(34, T0), _ => true));   // alive: held
-        Assert.True(RalphLog.TryLock(_files, Plan, new RalphLog.LockOwner(34, T0), _ => false));
-        Assert.Equal([RalphLog.LockName], Directory.EnumerateFiles(folder).Select(Path.GetFileName));
-    }
-
-    [Fact]
-    public async Task AStaleLock_TakenOverByMany_IsTakenByOne_AndLeavesNoStrayFiles()
-    {
-        // 2026-10-19, the third review: the stale lock was read, then deleted, so one taker could delete another's fresh lock and both ran.
-        var stale = new RalphLog.LockOwner(999, T0.AddHours(-1));
-        Assert.True(RalphLog.TryLock(_files, Plan, stale, _ => true));
-        for (int round = 0; round < 20; round++)
-        {
-            var owners = Enumerable.Range(1, 8).Select(i => new RalphLog.LockOwner(round * 100 + i, T0)).ToList();
-            using var start = new ManualResetEventSlim();
-            // Only the stale owner is gone: every taker sees it as stale, and every other taker as alive.
-            var takes = owners.Select(owner => Task.Run(() => { start.Wait(); return RalphLog.TryLock(_files, Plan, owner, held => held != stale); })).ToList();
-            start.Set();
-            bool[] taken = await Task.WhenAll(takes);
-
-            Assert.Single(taken, t => t);
-            string folder = Path.Combine(_dir, ".neon", "plans", "guide");
-            Assert.Equal([RalphLog.LockName], Directory.EnumerateFiles(folder).Select(Path.GetFileName));
-            File.WriteAllText(Path.Combine(folder, RalphLog.LockName), "pid: 999\nstarted: " + stale.Started.ToString("O", System.Globalization.CultureInfo.InvariantCulture) + "\n");
-        }
-    }
-
-    [Fact]
-    public void OwnerAlive_ThisProcess_IsAlive_AndAGoneOne_IsNot()
-    {
-        Assert.True(RalphLog.OwnerAlive(RalphLog.Me));
-        Assert.False(RalphLog.OwnerAlive(RalphLog.Me with { Started = RalphLog.Me.Started.AddMinutes(-5) }));   // its id, reused
-        Assert.False(RalphLog.OwnerAlive(new RalphLog.LockOwner(int.MaxValue - 7, T0)));
     }
 
     [Fact]
@@ -413,7 +274,7 @@ public sealed class RalphLogTests : IDisposable
         // 2026-10-19, the fourth review: the lock was read only as a loop started, so a second instance's /plan open, revision or approve wrote
         // the plan the first one's loop was running.
         Assert.Equal(FileOutcome.Ok, WriteGuard.AsApp(() => _files.WriteText(Plan, PlanDocument.Render(new PlanHeader(PlanStatus.Incomplete, 1, T0, T0, "Guide"), "Guide", "## Steps\n- [ ] One\n"), overwrite: true)).Outcome);
-        var other = new RalphLog.LockOwner(424242, T0);
+        var other = new LockOwner(424242, T0);
         Assert.True(RalphLog.TryLock(_files, Plan, other, _ => false));
         var alive = RalphLog.LiveOwner;
         try
@@ -478,7 +339,7 @@ public sealed class RalphLogTests : IDisposable
         Assert.True(File.Exists(lockFile));
 
         File.Delete(lockFile);
-        Assert.True(RalphLog.TryLock(_files, Plan, new RalphLog.LockOwner(4242, T0), _ => true));
+        Assert.True(RalphLog.TryLock(_files, Plan, new LockOwner(4242, T0), _ => true));
         Assert.False(RalphLog.StillHeld(_files, Plan, _ => true));
         Assert.Equal("🔁 Ralph loop stopped: another NeonSidekick took over .neon/plans/guide.md (1 of 3 steps done); it runs the plan now.",
             RalphText.StopNotice(RalphStop.Locked, Plan, 1, 3));
@@ -488,14 +349,14 @@ public sealed class RalphLogTests : IDisposable
     public void ALockAnotherMachineWrote_IsNeverTakenForStale_AndItsErrorNamesTheMachine()
     {
         // 2026-10-20, a review: a plan in a shared folder, locked by a pid on another PC, read here as a gone process and taken over.
-        var foreign = new RalphLog.LockOwner(int.MaxValue - 7, T0, "OTHER-PC");
+        var foreign = new LockOwner(int.MaxValue - 7, T0, "OTHER-PC");
         Assert.True(foreign.Foreign);
         Assert.True(RalphLog.OwnerAlive(foreign));
         Assert.True(RalphLog.TryLock(_files, Plan, foreign, _ => true));
 
-        Assert.False(RalphLog.TryLock(_files, Plan, new RalphLog.LockOwner(100, T0), RalphLog.OwnerAlive));
+        Assert.False(RalphLog.TryLock(_files, Plan, new LockOwner(100, T0), RalphLog.OwnerAlive));
         Assert.Equal(RalphText.LockedOnHostError(Plan, "OTHER-PC", RalphLog.LockPathFor(Plan)), RalphLog.LockError(_files, Plan));
-        Assert.False(new RalphLog.LockOwner(1, T0).Foreign);   // a lock the previous build wrote: this machine's
+        Assert.False(new LockOwner(1, T0).Foreign);   // a lock the previous build wrote: this machine's
         Assert.False(RalphLog.Me.Foreign);
     }
 

@@ -199,6 +199,29 @@ public static class AuditText
     /// <summary><c>present_audit</c>'s answer once the working directory changed under the audit: nothing recorded. Pinned.</summary>
     public const string WorkdirMovedResult = "Error: the working directory changed during the audit, so nothing was recorded; the audit stops after this pass. Reply with one short line and call no more tools.";
 
+    // ── The report's lock (2026-10-29: two apps on one report each saved the whole file, and one overwrote the other's findings) ──
+
+    /// <summary>Another live NeonSidekick holds the report's lock: a start, resume, fix or discard refused. Pinned.</summary>
+    public static string LockedError(string path) => $"Another NeonSidekick is auditing {path}; wait for it to end";
+
+    /// <summary>The lock was written on another machine (a shared or synced folder): its host named, and the lock to delete if that one crashed. Pinned.</summary>
+    public static string LockedOnHostError(string path, string host, string lockPath) =>
+        $"NeonSidekick on {host} is auditing {path}; wait for it to end, or delete {lockPath} if it crashed";
+
+    /// <summary>The lock couldn't be written (its folder can't be made, a read-only drive): the audit isn't started, never "another is auditing". Pinned.</summary>
+    public static string LockWriteError(string lockPath) => $"Could not write {lockPath}, so the audit didn't start";
+
+    /// <summary>The report's drive can't hold a lock (exFAT): the audit runs anyway, unprotected (the user's call). Pinned.</summary>
+    public static string UnlockedNotice(string path) =>
+        $"{Glyph} This drive can't hold a lock for {path}, so another NeonSidekick could write this report too.";
+
+    /// <summary>Another NeonSidekick took the report's lock over mid-audit (a stale-looking lock, a hand delete): this one stops and writes no more. Pinned.</summary>
+    public static string LockLostNotice(string name) =>
+        $"{Glyph} The code audit stopped: another NeonSidekick took over {name}. The report is that one's to write now.";
+
+    /// <summary>A listed report another live NeonSidekick is auditing now (instead of <c>stopped</c>).</summary>
+    public const string ElsewhereStatus = "running elsewhere";
+
     /// <summary>Headless (2026-10-18): no confirm to ask on, so every advisor call would be refused.</summary>
     public const string ConfirmFallbackNotice = Glyph + " Advisor confirm is on and headless cannot ask, so the model audits alone.";
 
@@ -722,7 +745,10 @@ public static class AuditText
         return $"  {listing.Name} — {StatusLabel(listing)} · {SeverityCounts(listing.Open)}" + (listing.Passes.Length > 0 ? " · " + listing.Passes : "") + when;
     }
 
-    /// <summary>A listed report's status: its header's word, <c>stopped</c> for an auditing one with no live loop, <c>fixing 3/7</c>, <c>fixed</c>.</summary>
+    /// <summary>
+    /// A listed report's status: its header's word, <c>stopped</c> for an auditing one with no live loop (<see cref="ElsewhereStatus"/> when another
+    /// NeonSidekick holds its lock, 2026-10-29), <c>fixing 3/7</c>, <c>fixed</c>.
+    /// </summary>
     public static string StatusLabel(AuditListing listing)
     {
         ArgumentNullException.ThrowIfNull(listing);
@@ -739,6 +765,7 @@ public static class AuditText
         return listing.Status switch
         {
             AuditStatus.Fixing => $"fixing {N(listing.Settled)}/{N(listing.Settled + listing.OpenCount)}",
+            AuditStatus.Auditing when !listing.Live && listing.Elsewhere => ElsewhereStatus,
             AuditStatus.Auditing when !listing.Live => AuditReport.StatusWord(AuditStatus.Stopped),
             _ => AuditReport.StatusWord(listing.Status),
         };

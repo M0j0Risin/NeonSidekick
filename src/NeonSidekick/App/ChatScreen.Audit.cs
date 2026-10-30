@@ -123,21 +123,47 @@ internal sealed partial class ChatScreen
         var reviewer = parsed.Reviewer ?? PlanReviewer.Model;
         var now = _time.GetLocalNow();
         string path = AuditFiles.Choose(_files, scope.NameLabel, now);
-        var report = new AuditReport
+        // The report's lock before it is first written (2026-10-29): another NeonSidekick choosing the same name meanwhile is refused.
+        if (!_audit.Hold(path, out string? lockError, out string? unlocked))
         {
-            Label = scope.Label,
-            Header = new AuditHeader(AuditStatus.Auditing, AuditText.PassesLine(0, 0, 0, scope.Files.Count + scope.MoreFiles), scope.Words, focus, parsed.Brief,
-                PlanText.ReviewerWord(reviewer), 1, now, now),
-            CoverageScope = scope.Files.Count + scope.MoreFiles,
-        };
-        if (AuditFiles.Save(_files, path, report, now) is { } failed)
-        {
-            _transcript.Error(failed.StartsWith("Error: ", StringComparison.Ordinal) ? failed[7..] : failed);
+            _transcript.Error(lockError!);
             return false;
         }
 
-        int limit = parsed.Passes ?? effective.CodeAuditPasses;
-        var loop = _audit.Start(path, scope, focus, parsed.Brief, reviewer, limit, effective.CodeAuditCleanPasses);
+        PlanGapLoop loop;
+        bool begun = false;
+        try
+        {
+            var report = new AuditReport
+            {
+                Label = scope.Label,
+                Header = new AuditHeader(AuditStatus.Auditing, AuditText.PassesLine(0, 0, 0, scope.Files.Count + scope.MoreFiles), scope.Words, focus, parsed.Brief,
+                    PlanText.ReviewerWord(reviewer), 1, now, now),
+                CoverageScope = scope.Files.Count + scope.MoreFiles,
+            };
+            if (AuditFiles.Save(_files, path, report, now) is { } failed)
+            {
+                _transcript.Error(failed.StartsWith("Error: ", StringComparison.Ordinal) ? failed[7..] : failed);
+                return false;
+            }
+
+            int limit = parsed.Passes ?? effective.CodeAuditPasses;
+            loop = _audit.Start(path, scope, focus, parsed.Brief, reviewer, limit, effective.CodeAuditCleanPasses);
+            begun = true;
+        }
+        finally
+        {
+            if (!begun)
+            {
+                _audit.Release();
+            }
+        }
+
+        if (unlocked is not null)
+        {
+            _transcript.Notice(unlocked, NoticeTone.Warn);
+        }
+
         MarkAuditBaseline();
         images = AuditPictures(images);
         _transcript.Notice(AuditText.StartedNotice(scope.Label, scope.Files.Count, scope.MoreFiles, scope.Skipped, focus, loop.Limit, path, scope.Cut));
@@ -232,24 +258,51 @@ internal sealed partial class ChatScreen
             return false;
         }
 
-        // The report as it stands after the listing (2026-10-20, a review: the copy read before it was saved back, so a finding ticked or edited in
-        // an editor while the spinner ran was lost).
-        if (AuditFiles.Read(_files, path) is not { } fresh)
+        // The report's lock before the fresh read (2026-10-29), so the copy saved back is one no other NeonSidekick is writing.
+        if (!_audit.Hold(path, out string? lockError, out string? unlocked))
         {
-            _transcript.Error(AuditText.ReportUnreadable(path));
+            _transcript.Error(lockError!);
             return false;
         }
 
-        report = fresh;
-        var who = reviewer ?? PlanText.ParseReviewer(report.Header.Reviewer) ?? PlanReviewer.Model;
-        report.Header = report.Header with { Status = AuditStatus.Auditing, Reviewer = PlanText.ReviewerWord(who) };
-        if (AuditFiles.Save(_files, path, report, _time.GetLocalNow()) is { } failed)
+        PlanGapLoop loop;
+        PlanReviewer who;
+        bool begun = false;
+        try
         {
-            _transcript.Error(failed.StartsWith("Error: ", StringComparison.Ordinal) ? failed[7..] : failed);
-            return false;
+            // The report as it stands after the listing (2026-10-20, a review: the copy read before it was saved back, so a finding ticked or edited in
+            // an editor while the spinner ran was lost).
+            if (AuditFiles.Read(_files, path) is not { } fresh)
+            {
+                _transcript.Error(AuditText.ReportUnreadable(path));
+                return false;
+            }
+
+            report = fresh;
+            who = reviewer ?? PlanText.ParseReviewer(report.Header.Reviewer) ?? PlanReviewer.Model;
+            report.Header = report.Header with { Status = AuditStatus.Auditing, Reviewer = PlanText.ReviewerWord(who) };
+            if (AuditFiles.Save(_files, path, report, _time.GetLocalNow()) is { } failed)
+            {
+                _transcript.Error(failed.StartsWith("Error: ", StringComparison.Ordinal) ? failed[7..] : failed);
+                return false;
+            }
+
+            loop = _audit.Start(path, scope, report.Header.Focus, report.Header.Brief, who, passes ?? effective.CodeAuditPasses, effective.CodeAuditCleanPasses);
+            begun = true;
+        }
+        finally
+        {
+            if (!begun)
+            {
+                _audit.Release();
+            }
         }
 
-        var loop = _audit.Start(path, scope, report.Header.Focus, report.Header.Brief, who, passes ?? effective.CodeAuditPasses, effective.CodeAuditCleanPasses);
+        if (unlocked is not null)
+        {
+            _transcript.Notice(unlocked, NoticeTone.Warn);
+        }
+
         MarkAuditBaseline();
         images = AuditPictures(images);
         if (said)
@@ -317,6 +370,13 @@ internal sealed partial class ChatScreen
     /// <summary>Fix via plan: the report marked fixing, then plan mode entered on its open findings (<see cref="EnterPlanAsync"/>).</summary>
     private async Task<bool> FixAuditReportAsync(string path, bool newest, CancellationToken cancellationToken)
     {
+        // Another NeonSidekick auditing it (2026-10-29): its saves would put this one's "fixing" back. A check, not a hold: fix saves once.
+        if (AuditFiles.HeldElsewhere(_files, path) is { } locked)
+        {
+            _transcript.Error(locked);
+            return false;
+        }
+
         if (AuditFiles.Read(_files, path) is not { } report)
         {
             _transcript.Error(AuditText.ReportUnreadable(path));
@@ -503,6 +563,14 @@ internal sealed partial class ChatScreen
             return EndAudit(loop, PlanGapStop.Stopped, moved: true);   // the user's own /cwd: no stop tone (2026-10-22, a review)
         }
 
+        if (!_audit.StillHolds())
+        {
+            // Another NeonSidekick took the report's lock over (2026-10-29): its files are that one's to write now, the sidecar included.
+            _transcript.Notice(AuditText.LockLostNotice(_audit.Name));
+            loop.Next(false, false, null, PlanMeter());
+            return EndAudit(loop, PlanGapStop.Stopped, lockLost: true);
+        }
+
         bool onItsOwn = outcome == TurnOutcome.Continue && !_lastTurnCancelled && !_lastTurnFailed;
         // The coverage worked out once for the merge, the notice and the end (2026-10-20, a review: three times, each a read of the sidecar and a
         // look at every scope file).
@@ -535,8 +603,10 @@ internal sealed partial class ChatScreen
     /// <see cref="AppSettingsData.CodeAuditStopTone"/> rings for every stop the user didn't cause (2026-10-21, <see cref="PlanGapLoop.TakeRing"/>):
     /// <paramref name="passFailed"/> (the pass's turn failed, or was never sent) counts as such a <see cref="PlanGapStop.Stopped"/>; a move does not
     /// (2026-10-22, a review: it is the user's own <c>/cwd</c>, and the setting's help says a stop you caused never rings).
+    /// <paramref name="lockLost"/> (2026-10-29: another NeonSidekick took the report's lock over, its own notice said): as a move, and nothing written,
+    /// the report being that one's now.
     /// </summary>
-    private AuditAfterTurn? EndAudit(PlanGapLoop loop, PlanGapStop reason, bool moved = false, AuditCoverage? coverage = null, bool passFailed = false)
+    private AuditAfterTurn? EndAudit(PlanGapLoop loop, PlanGapStop reason, bool moved = false, AuditCoverage? coverage = null, bool passFailed = false, bool lockLost = false)
     {
         RingStopTone(loop, reason, passFailed, _effective().CodeAuditStopTone);
 
@@ -550,7 +620,7 @@ internal sealed partial class ChatScreen
 
         coverage ??= _audit.Coverage();
         int clean = reason == PlanGapStop.Converged ? loop.CleanPasses : loop.PassClean ? loop.CleanCount : 0;
-        if (AuditFiles.Read(files, path) is { } report)
+        if (!lockLost && AuditFiles.Read(files, path) is { } report)
         {
             report.CoverageRead = coverage.Read;
             report.CoverageScope = coverage.Scope;
@@ -566,7 +636,7 @@ internal sealed partial class ChatScreen
         }
 
         _audit.Stop();
-        if (moved)
+        if (moved || lockLost)
         {
             return null;
         }
@@ -636,6 +706,13 @@ internal sealed partial class ChatScreen
                 if (!await ConfirmAsync(AuditText.DiscardQuestion(path), cancellationToken).ConfigureAwait(false))
                 {
                     _transcript.Notice(AuditText.KeptNotice(name));
+                    return false;
+                }
+
+                // Another NeonSidekick resumed it while the pane was up (2026-10-29): its report stays.
+                if (AuditFiles.HeldElsewhere(_files, path) is { } locked)
+                {
+                    _transcript.Error(locked);
                     return false;
                 }
 

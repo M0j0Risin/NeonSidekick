@@ -13,7 +13,7 @@ Settings in *italics* are in [SETTINGS.md](SETTINGS.md), with their values and d
 - [Files](#files): [File](#file), [Image](#image), [UNC shares and outside folders](#unc-shares-and-outside-folders), [GitLib](#gitlib)
 - [Apps](#apps): [Docker](#docker), [ComfyUI](#comfyui), [YouTube](#youtube), [Obsidian](#obsidian)
 - [Admin](#admin): [Network](#network), [Event logs](#event-logs), [Services](#services), [Scheduled tasks](#scheduled-tasks), [Active Directory](#active-directory)
-- [Databases](#databases): [How the database tools work](#how-the-database-tools-work), [SQL Server](#sql-server), [MySQL and MariaDB](#mysql-and-mariadb), [SQLite](#sqlite), [DuckDB](#duckdb), [PostgreSQL](#postgresql), [Oracle](#oracle)
+- [Databases](#databases): [How the database tools work](#how-the-database-tools-work), [SQL Server](#sql-server), [MySQL and MariaDB](#mysql-and-mariadb), [PostgreSQL](#postgresql), [Oracle](#oracle), [SQLite](#sqlite), [DuckDB](#duckdb)
 - [Devices](#devices): [Camera](#camera), [Screen](#screen), [Monitors](#monitors), [Printing](#printing)
 - [Home](#home): [Home Assistant](#home-assistant), [Shopping list](#shopping-list)
 - [Set elsewhere](#set-elsewhere): [Memory](#memory), [Skills](#skills), [Sessions](#sessions), [Advisors](#advisors), [Plan](#plan), [Ralph loop](#ralph-loop)
@@ -722,7 +722,7 @@ While *Service tools*, *Task tools*, *Directory tools* or *Event log tools* is o
 
 ### How the database tools work
 
-Six families: SQL Server, MySQL/MariaDB, SQLite, DuckDB, PostgreSQL and Oracle. Each has its tab under `/tools` › Databases and its switch (*SQL tools*, *MySQL tools*, *SQLite tools*, *DuckDB tools*, *PostgreSQL tools*, *Oracle tools*).
+Six families: SQL Server, MySQL/MariaDB, PostgreSQL, Oracle, SQLite and DuckDB. Each has its tab under `/tools` › Databases and its switch (*SQL tools*, *MySQL tools*, *PostgreSQL tools*, *Oracle tools*, *SQLite tools*, *DuckDB tools*).
 
 They only read unless you turn on [read-write mode](#read-write-mode).
 
@@ -856,47 +856,6 @@ Server families take a connection in `connection`, SQLite and DuckDB a database 
 * A server whose own `sql_mode` reads strings differently is set back for the session; if that doesn't hold, nothing runs.
 * In a `CREATE PROCEDURE` or `TRIGGER` body, a column or label named `begin` or `end` must be in backticks.
 
-### SQLite
-
-The SQLite tools read database **files**: no server, no password. Changes need only *SQLite mode*.
-
-* **A database** is a name from `sqlite.json` (a relative `path` counts from that file's `configs` folder) or, with *SQLite sandbox files* on, any file in the working directory.
-* *SQLite add/edit database* tests one by opening it read-only.
-
-```json
-{ "databases": { "chinook": { "path": "D:\\data\\chinook.db", "description": "The music store sample" } } }
-```
-
-* `params` binds `@name`, `:name`, `$name` or `#name`; positional `?` is refused.
-* **Reading** opens the file read-only, whatever the mode; a statement past *SQLite query timeout (s)*, or stopped with Esc, is interrupted. **Always refused:** `ATTACH`/`DETACH`, `VACUUM INTO`, `writable_schema`, `sqlite_dbpage`, `load_extension()`, setting `schema_version`, and the pragmas that reach the whole app (`soft_heap_limit`, `hard_heap_limit`, `temp_store_directory`, `data_store_directory`).
-* **The rest of the app keeps out** while *SQLite tools* is on:
-  * The shell police refuses a command or script that reaches SQLite.
-  * The file tools never change a database file: one ending `.db`, `.db3`, `.sqlite`, `.sqlite3`, `.s3db`, `.sl3`, `.sl2` or `.sqlitedb`, any file that starts as a SQLite database, their journals, or one `sqlite.json` names. Nor do they delete or move a folder holding one. Reading and copying one still work.
-* **Creating a database:** `create: true` needs `create` ticked and *SQLite sandbox files* on; the file ends `.db`, `.sqlite`, `.sqlite3` or `.db3`, in an existing folder of the working directory. If the statement fails, the file is removed.
-
-### DuckDB
-
-The DuckDB tools read DuckDB database **files** and the CSV, Parquet and JSON files of the working directory: no server, no password. Changes need only *DuckDB mode*.
-
-* **A database** is a name from `duckdb.json` (a relative `path` counts from that file's `configs` folder) or, with *DuckDB sandbox files* on, any DuckDB file in the working directory. Leave `database` out to query data files alone.
-* *DuckDB add/edit database* tests one by opening it read-only.
-
-```json
-{ "databases": { "lake": { "path": "D:\data\lake.duckdb", "description": "Sales history" } } }
-```
-
-* **Data files** are read by path (`FROM 'data/sales.csv'`) or with a reader (`read_csv`, `read_parquet`, `read_json`, `read_text`, `read_blob`). A pattern works inside a reader and within one folder (`read_csv('data/*.csv')`); `**` is refused.
-* **Only the working directory's files**, and only while *DuckDB sandbox files* is on. A path outside it, or a link leading out, is refused; so is a quoted table name that reads like a file and names none.
-* `params` binds `$name`; positional `?` and `$1` are refused.
-* **Reading** opens the file read-only, whatever the mode; a statement past *DuckDB query timeout (s)*, or stopped with Esc, is interrupted.
-* **DuckDB's own folder rule** holds every file it opens to the working directory. That covers a view or macro stored in a database file, which the app's own path check never sees.
-* **Nothing is ever installed or loaded**: no extension, no secret, no setting changed. A query may use up to a quarter of the computer's memory, and up to 10 GB of temporary disk space.
-* **Always refused:** `ATTACH`/`DETACH`, `COPY`, `EXPORT`/`IMPORT`, `INSTALL`/`LOAD`, `SET`, SQL handed over as text (`query()`, `PREPARE`), `glob()`, and moving a sequence in a read.
-* **The rest of the app keeps out** while *DuckDB tools* is on:
-  * The shell police refuses a command or script that reaches DuckDB.
-  * The file tools never change a DuckDB file: one ending `.duckdb` or `.ddb`, any file that starts as a DuckDB database, its `.wal`, or one `duckdb.json` names. Reading and copying one still work.
-* **Creating a database:** `create: true` needs `create` ticked and *DuckDB sandbox files* on; the file ends `.duckdb` or `.ddb`, in an existing folder of the working directory. If the statement fails, the file is removed. Load a data file with `CREATE TABLE t AS SELECT * FROM 'data.csv'`.
-
 ### PostgreSQL
 
 `postgres.json`.
@@ -943,6 +902,47 @@ The DuckDB tools read DuckDB database **files** and the CSV, Parquet and JSON fi
 * Refused, for example: `FOR UPDATE`, database links, `UTL_HTTP`/`UTL_FILE`/`DBMS_SQL`/`DBMS_METADATA`, `CONTAINERS()`, and whole-database views (`ALL_*`, `DBA_*`, `CDB_*`, `V$`, `UNIFIED_AUDIT_TRAIL`); `USER_*` views work.
 * A server version the app can't read is refused rather than read without the session layer.
 * A CLOB or BLOB shows its start and length; object types (`SDO_GEOMETRY`, `XMLTYPE`) need converting to text.
+
+### SQLite
+
+The SQLite tools read database **files**: no server, no password. Changes need only *SQLite mode*.
+
+* **A database** is a name from `sqlite.json` (a relative `path` counts from that file's `configs` folder) or, with *SQLite sandbox files* on, any file in the working directory.
+* *SQLite add/edit database* tests one by opening it read-only.
+
+```json
+{ "databases": { "chinook": { "path": "D:\\data\\chinook.db", "description": "The music store sample" } } }
+```
+
+* `params` binds `@name`, `:name`, `$name` or `#name`; positional `?` is refused.
+* **Reading** opens the file read-only, whatever the mode; a statement past *SQLite query timeout (s)*, or stopped with Esc, is interrupted. **Always refused:** `ATTACH`/`DETACH`, `VACUUM INTO`, `writable_schema`, `sqlite_dbpage`, `load_extension()`, setting `schema_version`, and the pragmas that reach the whole app (`soft_heap_limit`, `hard_heap_limit`, `temp_store_directory`, `data_store_directory`).
+* **The rest of the app keeps out** while *SQLite tools* is on:
+  * The shell police refuses a command or script that reaches SQLite.
+  * The file tools never change a database file: one ending `.db`, `.db3`, `.sqlite`, `.sqlite3`, `.s3db`, `.sl3`, `.sl2` or `.sqlitedb`, any file that starts as a SQLite database, their journals, or one `sqlite.json` names. Nor do they delete or move a folder holding one. Reading and copying one still work.
+* **Creating a database:** `create: true` needs `create` ticked and *SQLite sandbox files* on; the file ends `.db`, `.sqlite`, `.sqlite3` or `.db3`, in an existing folder of the working directory. If the statement fails, the file is removed.
+
+### DuckDB
+
+The DuckDB tools read DuckDB database **files** and the CSV, Parquet and JSON files of the working directory: no server, no password. Changes need only *DuckDB mode*.
+
+* **A database** is a name from `duckdb.json` (a relative `path` counts from that file's `configs` folder) or, with *DuckDB sandbox files* on, any DuckDB file in the working directory. Leave `database` out to query data files alone.
+* *DuckDB add/edit database* tests one by opening it read-only.
+
+```json
+{ "databases": { "lake": { "path": "D:\data\lake.duckdb", "description": "Sales history" } } }
+```
+
+* **Data files** are read by path (`FROM 'data/sales.csv'`) or with a reader (`read_csv`, `read_parquet`, `read_json`, `read_text`, `read_blob`). A pattern works inside a reader and within one folder (`read_csv('data/*.csv')`); `**` is refused.
+* **Only the working directory's files**, and only while *DuckDB sandbox files* is on. A path outside it, or a link leading out, is refused; so is a quoted table name that reads like a file and names none.
+* `params` binds `$name`; positional `?` and `$1` are refused.
+* **Reading** opens the file read-only, whatever the mode; a statement past *DuckDB query timeout (s)*, or stopped with Esc, is interrupted.
+* **DuckDB's own folder rule** holds every file it opens to the working directory. That covers a view or macro stored in a database file, which the app's own path check never sees.
+* **Nothing is ever installed or loaded**: no extension, no secret, no setting changed. A query may use up to a quarter of the computer's memory, and up to 10 GB of temporary disk space.
+* **Always refused:** `ATTACH`/`DETACH`, `COPY`, `EXPORT`/`IMPORT`, `INSTALL`/`LOAD`, `SET`, SQL handed over as text (`query()`, `PREPARE`), `glob()`, and moving a sequence in a read.
+* **The rest of the app keeps out** while *DuckDB tools* is on:
+  * The shell police refuses a command or script that reaches DuckDB.
+  * The file tools never change a DuckDB file: one ending `.duckdb` or `.ddb`, any file that starts as a DuckDB database, its `.wal`, or one `duckdb.json` names. Reading and copying one still work.
+* **Creating a database:** `create: true` needs `create` ticked and *DuckDB sandbox files* on; the file ends `.duckdb` or `.ddb`, in an existing folder of the working directory. If the statement fails, the file is removed. Load a data file with `CREATE TABLE t AS SELECT * FROM 'data.csv'`.
 
 ## Devices
 

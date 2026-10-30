@@ -32,6 +32,24 @@ public class ImageFileTests : IDisposable
 
     private static bool IsJpeg(byte[] bytes) => bytes.Length > 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF;
 
+    /// <summary>A picture's extension (2026-10-29, lifted out of the plan's references for the session export): its media type's, else its bytes'.</summary>
+    [Theory]
+    [InlineData("image/png", ".png")]
+    [InlineData("IMAGE/JPEG", ".jpg")]
+    [InlineData("image/jpg", ".jpg")]
+    [InlineData("image/gif", ".gif")]
+    [InlineData("image/webp", ".webp")]
+    [InlineData("image/bmp", ".bmp")]
+    public void ExtensionFor_GoesByTheMediaType(string mediaType, string extension) => Assert.Equal(extension, ImageFile.ExtensionFor(mediaType, [1, 2, 3]));
+
+    [Fact]
+    public void ExtensionFor_AnotherType_GoesByTheBytes()
+    {
+        Assert.Equal(".jpg", ImageFile.ExtensionFor("image/x-unknown", [0xFF, 0xD8, 0xFF, 0xE0]));
+        Assert.Equal(".bmp", ImageFile.ExtensionFor("", "BM\0\0"u8));
+        Assert.Equal(".png", ImageFile.ExtensionFor("application/octet-stream", BlackPng(1, 1)));
+    }
+
     /// <summary>A black 8-bit RGB PNG built by hand: one IDAT of deflated zeros, so a huge picture is a small file. With <paramref name="alpha"/> RGBA (all transparent).</summary>
     internal static byte[] BlackPng(int width, int height, bool alpha = false)
     {

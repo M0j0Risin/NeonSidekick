@@ -24,7 +24,7 @@ public partial class ToolsMenuTests
     [Fact]
     public void TheSubStrips_ArePinned()
     {
-        Assert.Equal("         │ ↳ SQL · MySQL · SQLite · DuckDB · PostgreSQL · Oracle ", SubStrip(ToolsText.DatabaseTabTitle));
+        Assert.Equal("         │ ↳ SQL · MySQL · PostgreSQL · Oracle · SQLite · DuckDB ", SubStrip(ToolsText.DatabaseTabTitle));
         Assert.Equal(OperatingSystem.IsWindows() ? "         │ ↳ Camera · Screen · Monitors · Print " : "         │ ↳ Camera · Screen · Print ", SubStrip(ToolsText.DevicesTabTitle));   // Monitors later on 2026-10-23 (Windows only);   // the user's order since 2026-10-16; ComfyUI and YouTube on Integrations since 2026-10-10
         Assert.Equal("         │ ↳ File · Image · UNC · GitLib ", SubStrip(ToolsText.FilesTabTitle));   // 2026-10-10; Image later that day; Obsidian to Apps on 2026-10-17
         Assert.Equal("         │ ↳ Docker · ComfyUI · YouTube · Obsidian ", SubStrip(ToolsText.AppsTabTitle));   // EventLog 2026-10-15 until later that day (Admin); 2026-10-10; ClaudeCode first until later that day; HomeAssistant until 2026-10-11
@@ -93,17 +93,17 @@ public partial class ToolsMenuTests
     public async Task OnThePane_TheArrowsWalkEveryMenu_FromOneGroupIntoTheNext_AndBack()
     {
         var (menu, pane, _) = PaneMenu();
-        Push(ToTab(ToolsText.OracleTabTitle));      // Database's last menu
+        Push(ToTab(ToolsText.DuckDbTabTitle));      // Database's last menu (Oracle until 2026-10-29, the user's order)
         Push(Keys.Right);                           // Devices' first, Camera (Print until 2026-10-16)
-        Push(Keys.Left);                            // Oracle again
+        Push(Keys.Left);                            // DuckDB again
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
-        string oracle = Strips(ToolsText.DatabaseTabTitle) + HeadingOver(ToolsText.OracleTabTitle, SettingsField.OracleTools) + "▸ " + SettingsMenu.FieldName(SettingsField.OracleTools) + "  ";
+        string duckDb = Strips(ToolsText.DatabaseTabTitle) + HeadingOver(ToolsText.DuckDbTabTitle, SettingsField.DuckDbTools) + "▸ " + SettingsMenu.FieldName(SettingsField.DuckDbTools) + "  ";
         string camera = Strips(ToolsText.DevicesTabTitle) + HeadingOver(ToolsText.CameraTabTitle, SettingsField.CameraTools) + "▸ " + SettingsMenu.FieldName(SettingsField.CameraTools) + "  ";
         Assert.Contains(camera, Output);
-        Assert.True(Output.LastIndexOf(oracle, StringComparison.Ordinal) > Output.IndexOf(camera, StringComparison.Ordinal));
+        Assert.True(Output.LastIndexOf(duckDb, StringComparison.Ordinal) > Output.IndexOf(camera, StringComparison.Ordinal));
         pane.Dispose();
     }
 
@@ -150,7 +150,7 @@ public partial class ToolsMenuTests
         var titles = ToolsText.TabMenus[TabIndex(ToolsText.DatabaseTabTitle) - 1].Select(m => ToolsText.MenuTitles[m]).ToList();
         var (_, places) = InfoPane.SubStripLayout(ToolsText.Label, titles, 240);
         input.Push(ToTab(ToolsText.DatabaseTabTitle));
-        input.PushClick(places[4].Column + 1, 101);     // Postgres (after DuckDB since 2026-10-25)
+        input.PushClick(places[2].Column + 1, 101);     // Postgres (after MySQL since 2026-10-29, the user's order; after DuckDB from 2026-10-25)
         input.Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
@@ -206,12 +206,12 @@ public partial class ToolsMenuTests
         int database = TabIndex(ToolsText.DatabaseTabTitle);
         int media = TabIndex(ToolsText.DevicesTabTitle);
         var subs = new int[ToolsText.TabTitles.Count];
-        subs[database] = 5;   // Oracle (4 until DuckDB, 2026-10-25)
+        subs[database] = 3;   // Oracle (after PostgreSQL since 2026-10-29, the user's order; 5 from DuckDB, 2026-10-25)
         var page = ToolsMenu.Page(ToolsText.OfferedRows(Facts()), saved, settings, database, subs: subs);
 
-        Assert.Equal(["SQL", "MySQL", "SQLite", "DuckDB", "PostgreSQL", "Oracle"], page.Tabs![database].SubTabs!.Select(t => t.Title));
+        Assert.Equal(["SQL", "MySQL", "PostgreSQL", "Oracle", "SQLite", "DuckDB"], page.Tabs![database].SubTabs!.Select(t => t.Title));
         Assert.Equal(OperatingSystem.IsWindows() ? ["Camera", "Screen", "Monitors", "Print"] : ["Camera", "Screen", "Print"], page.Tabs[media].SubTabs!.Select(t => t.Title));   // Monitors later on 2026-10-23;   // the user's order since 2026-10-16; ComfyUI and YouTube on Integrations since 2026-10-10
-        Assert.Equal(5, page.Sub);
+        Assert.Equal(3, page.Sub);
         Assert.Equal(TabFields(ToolsText.OracleTabTitle).Count + SettingsMenu.ToolsMenuSections[ToolsText.MenuIndex(ToolsText.OracleTabTitle)].Count, page.Rows.Count);   // its headings too (2026-10-10)
         Assert.Null(page.Tabs[database].Shown.Footer!(0));   // the first heading says nothing
         Assert.Equal(SettingsMenu.FieldFooter(SettingsField.OracleTools).Text, page.Tabs[database].Shown.Footer!(1)!.Text);
