@@ -7326,7 +7326,7 @@ public partial class ChatScreenTests : IDisposable
     [InlineData("push allowed work now", ProfileActionKind.Invalid, "", ProfileSection.All, false)]
     [InlineData("push allowed work overwrite please", ProfileActionKind.Invalid, "", ProfileSection.All, false)]
     [InlineData("push keys work --all", ProfileActionKind.Invalid, "", ProfileSection.All, false)]
-    [InlineData("push commands work", ProfileActionKind.Invalid, "", ProfileSection.All, false)]   // the word allowed's until 2026-10-13 (the user's ask)
+    [InlineData("push commands work", ProfileActionKind.Push, "work", ProfileSection.CustomCommands, false)]   // the custom commands since 2026-10-30; the word allowed's until 2026-10-13 (the user's ask), then nobody's
     [InlineData("push mcp work", ProfileActionKind.Push, "work", ProfileSection.Mcp, false)]   // 2026-10-25, the user's ask
     [InlineData("PULL Mcp work Overwrite", ProfileActionKind.Pull, "work", ProfileSection.Mcp, true)]
     [InlineData("push links work", ProfileActionKind.Push, "work", ProfileSection.Links, false)]
@@ -11141,6 +11141,7 @@ public partial class ChatScreenTests : IDisposable
         _geometry = new ScreenGeometry(() => null);
         PushLine("/help");
         _console.Input.PushKey(Keys.Right);   // Advanced, since later on 2026-09-27
+        _console.Input.PushKey(Keys.Right);   // Custom, since 2026-10-30
         _console.Input.PushKey(Keys.Right);   // Keys
         _console.Input.PushKey(Keys.Escape);
         PushLine("/exit");
@@ -11150,16 +11151,16 @@ public partial class ChatScreenTests : IDisposable
         // Nothing in the transcript: the list is in the pane, under the rule, with its own hint.
         Assert.DoesNotContain("  · Commands:", output);
         string rule = new(ScreenPane.RuleGlyph, 240);
-        Assert.Contains(rule + "\n" + Titled(InfoPane.Title + " │ Basic · Advanced · Keys ") + "\n \n/about ", output);   // the basic tab first, A to Z (later on 2026-09-27; one Commands tab from /about until then; /clear first until /about joined it, 2026-10-03)
+        Assert.Contains(rule + "\n" + Titled(InfoPane.Title + " │ Basic · Advanced · Custom · Keys ") + "\n \n/about ", output);   // the basic tab first, A to Z (later on 2026-09-27; one Commands tab from /about until then; /clear first until /about joined it, 2026-10-03)
         Assert.Contains(HelpRows(Entry("/sessions"))[0], output);   // the label column is the widest label of all, the description column the longest description
         Assert.Contains(HelpRows(Entry("/sessions"))[1], output);   // and its further forms stacked under the first (2026-10-05)
         // → the advanced tab: the rest, A to Z, in the same label column.
-        Assert.Contains(rule + "\n" + Titled(InfoPane.Title + " │ Basic · Advanced · Keys ") + "\n \n/ad ", output);   // /ad first since later still on 2026-10-15 (the admin-tools plan); /advisor from 2026-10-10, /botchat until then; /about first until 2026-10-03, when it moved to the basic tab
+        Assert.Contains(rule + "\n" + Titled(InfoPane.Title + " │ Basic · Advanced · Custom · Keys ") + "\n \n/ad ", output);   // /ad first since later still on 2026-10-15 (the admin-tools plan); /advisor from 2026-10-10, /botchat until then; /about first until 2026-10-03, when it moved to the basic tab
         Assert.Contains(HelpRow("/timer", Entry("/timer").Summary) + new string(' ', SlashCommands.DescriptionWidth + SlashCommands.HelpColumnGap - Entry("/timer").Summary.Length) + "/timer [<duration> [<name>]]", output);
         Assert.Contains("\n" + new string(' ', SlashCommands.LabelWidth + SlashCommands.DescriptionWidth + 2 * SlashCommands.HelpColumnGap) + "/timer stop <name>|all", output);
         AssertPaneEnds(output, rule + "\n" + InfoPane.HintText);   // the pane's keys on the Hints bar (2026-10-14)
         // → showed the Keys tab, with the keys that apply (voice off: no push-to-talk row).
-        Assert.Contains(rule + "\n" + Titled(InfoPane.Title + " │ Basic · Advanced · Keys ") + "\n \nEnter", output);
+        Assert.Contains(rule + "\n" + Titled(InfoPane.Title + " │ Basic · Advanced · Custom · Keys ") + "\n \nEnter", output);
         // The label column follows the widest key ("Ctrl+Backspace / Delete", 23 cells, since 2026-10-04; on a Mac, 2026-10-07,
         // "Ctrl+Left / Right", Option+Delete standing for it) + the gap of 2.
         int width = ChatScreen.KeyRows(false, ConsoleKey.F4, false, "").Max(r => r.Key.Length) + 2;
@@ -11173,7 +11174,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Matches(@"\nCtrl\+H {" + (width - 6) + @"}open the help {2,}/help\s*\n", keys);
         Assert.Equal(column, keys.Split('\n').Single(l => l.StartsWith("Ctrl+Alt+Q ", StringComparison.Ordinal)).IndexOf("/queue clear", StringComparison.Ordinal));
         Assert.Matches(@"\nCtrl\+L {" + (width - 6) + @"}cancel a background learning turn\s*\n", keys);
-        Assert.DoesNotContain("F4", output[output.IndexOf("Help │ Basic · Advanced · Keys", StringComparison.Ordinal)..]);
+        Assert.DoesNotContain("F4", output[output.IndexOf("Help │ Basic · Advanced · Custom · Keys", StringComparison.Ordinal)..]);
         // ESC: the normal pane again, and the next line is read as usual.
         Assert.EndsWith(rule + "\n" + InputLine.PromptGlyph + ChatScreen.InputPlaceholder + "\n" + rule + "\n" + Row(ChatScreen.HintLine(null)) + "\n", output);
     }
@@ -11872,7 +11873,7 @@ public partial class ChatScreenTests : IDisposable
 
         string settings = "\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Automation · Voice ") + "\n";
         string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Core · Files · Apps · Admin · Databases · Devices · Home ") + "\n";
-        string help = "\n" + Titled(InfoPane.Title + " │ Basic · Advanced · Keys ") + "\n";
+        string help = "\n" + Titled(InfoPane.Title + " │ Basic · Advanced · Custom · Keys ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
         string skills = "\n" + Titled(SkillsText.Label + " │ Offered · Reflection · Options ") + "\n";
@@ -11960,7 +11961,7 @@ public partial class ChatScreenTests : IDisposable
 
         string settings = "\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Automation · Voice ") + "\n";
         string tools = "\n" + Titled(ToolsText.Label + " │ Offered · Core · Files · Apps · Admin · Databases · Devices · Home ") + "\n";
-        string help = "\n" + Titled(InfoPane.Title + " │ Basic · Advanced · Keys ") + "\n";
+        string help = "\n" + Titled(InfoPane.Title + " │ Basic · Advanced · Custom · Keys ") + "\n";
         string sys = "\n" + Titled(SystemPromptSummary.Label + " │ Prompt · Tools ") + "\n";
         string sessions = "\n" + Titled(SessionsMenu.Title) + "\n";
         string skills = "\n" + Titled(SkillsText.Label + " │ Offered · Reflection · Options ") + "\n";
@@ -12595,7 +12596,7 @@ public partial class ChatScreenTests : IDisposable
         string[] advanced = CommandsTabLines(advanced: true);
         var basicEntries = SlashCommands.HelpEntries.Where(SlashCommands.IsBasic).ToArray();
         var advancedEntries = SlashCommands.HelpEntries.Where(e => !SlashCommands.IsBasic(e)).ToArray();
-        Assert.Equal(36, basicEntries.Length);   // /undo 2026-10-28; /mark and /theme 2026-10-25; /prompts 2026-10-13; /avatar 2026-10-11; /msgclear 2026-10-10; /wake gone 2026-10-09 (into /stt); /rename 2026-10-05; seven more from the advanced tab on 2026-10-03, the user's pick; /terminal later that day
+        Assert.Equal(37, basicEntries.Length);   // /commands 2026-10-30; /undo 2026-10-28; /mark and /theme 2026-10-25; /prompts 2026-10-13; /avatar 2026-10-11; /msgclear 2026-10-10; /wake gone 2026-10-09 (into /stt); /rename 2026-10-05; seven more from the advanced tab on 2026-10-03, the user's pick; /terminal later that day
         Assert.Equal(SlashCommands.HelpEntries.Count, basicEntries.Length + advancedEntries.Length);
         // Three columns since 2026-10-05 (the user's ask): label, description, forms — each further form on a line of its own.
         Assert.Equal(basicEntries.SelectMany(HelpRows), basic.Select(l => l.TrimEnd()));
@@ -12603,7 +12604,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Equal(
         [
-            "/about", "/avatar", "/clear", "/compact", "/copy", "/cwd", "/draft", "/exit", "/explore", "/help", "/mark", "/memory", "/model", "/msgclear", "/new", "/perfbar",
+            "/about", "/avatar", "/clear", "/commands", "/compact", "/copy", "/cwd", "/draft", "/exit", "/explore", "/help", "/mark", "/memory", "/model", "/msgclear", "/new", "/perfbar",
             "/profile", "/prompts", "/queue", "/reasoning", "/remember", "/rename", "/rewind", "/server", "/sessions", "/settings", "/skills", "/stt", "/sys", "/terminal", "/theme",
             "/toolbar", "/tools", "/tree", "/tts", "/undo",
         ], basicEntries.Select(e => e.Command));
@@ -15838,7 +15839,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("\n" + Titled(InfoPane.Title + " │ Basic · Advanced · Keys ") + "\n", output);
+        Assert.Contains("\n" + Titled(InfoPane.Title + " │ Basic · Advanced · Custom · Keys ") + "\n", output);
         Assert.Contains("three.", output);
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
         Assert.Single(_chat.Requests);
@@ -19413,7 +19414,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(Titled(InfoPane.Title + " │ Basic · Advanced · Keys ") + "\n \n/about ", output);   // /clear first until 2026-10-03
+        Assert.Contains(Titled(InfoPane.Title + " │ Basic · Advanced · Custom · Keys ") + "\n \n/about ", output);   // /clear first until 2026-10-03
         Assert.DoesNotContain("› /help", output);
         Assert.Empty(_chat.Requests);
     }
@@ -25255,8 +25256,8 @@ public partial class ChatScreenTests : IDisposable
         // push and pull (2026-09-28): every profile but the loaded one, default included (the user's call); nothing after the name.
         // The section words first (2026-10-09), then after a section the names, and after a list section's name overwrite.
         Assert.Equal(["pull", "push"], Texts(ChatScreen.ArgumentItems("/profile", "pu", sources)));
-        Assert.Equal(["push keys", "push servers", "push homeassistant", "push toolbar", "push perfbar", "push statusbar", "push barorder", "push allowed", "push history", "push memory", "push prompts", "push mcp", "push links", "push videos", "push monitors", "push skills", "push policestrings", "push persona", "push operata", "push vocalia", "push avatar user", "push avatar model", "push chef", "push work"], Texts(ChatScreen.ArgumentItems("/profile", "push ", sources)));
-        Assert.Equal(["pull keys", "pull servers", "pull homeassistant", "pull toolbar", "pull perfbar", "pull statusbar", "pull barorder", "pull allowed", "pull history", "pull memory", "pull prompts", "pull mcp", "pull links", "pull videos", "pull monitors", "pull skills", "pull policestrings", "pull persona", "pull operata", "pull vocalia", "pull avatar user", "pull avatar model", "pull chef", "pull neon"], Texts(ChatScreen.ArgumentItems("/profile", "pull ", Sources(loaded: "work"))));
+        Assert.Equal(["push keys", "push servers", "push homeassistant", "push toolbar", "push perfbar", "push statusbar", "push barorder", "push allowed", "push history", "push memory", "push prompts", "push mcp", "push links", "push videos", "push monitors", "push skills", "push commands", "push policestrings", "push persona", "push operata", "push vocalia", "push avatar user", "push avatar model", "push chef", "push work"], Texts(ChatScreen.ArgumentItems("/profile", "push ", sources)));
+        Assert.Equal(["pull keys", "pull servers", "pull homeassistant", "pull toolbar", "pull perfbar", "pull statusbar", "pull barorder", "pull allowed", "pull history", "pull memory", "pull prompts", "pull mcp", "pull links", "pull videos", "pull monitors", "pull skills", "pull commands", "pull policestrings", "pull persona", "pull operata", "pull vocalia", "pull avatar user", "pull avatar model", "pull chef", "pull neon"], Texts(ChatScreen.ArgumentItems("/profile", "pull ", Sources(loaded: "work"))));
         // The sections of 2026-10-25: mcp's overwrite has its own note, the lists the list note, and skills takes none.
         Assert.Equal([new CompletionItem("push mcp work overwrite", ChatScreen.ProfileMcpOverwriteNote)], ChatScreen.ArgumentItems("/profile", "push mcp work ", sources));
         Assert.Equal([new CompletionItem("pull videos chef overwrite", ChatScreen.ProfileSectionOverwriteNote)], ChatScreen.ArgumentItems("/profile", "pull videos chef ", sources));
@@ -25457,7 +25458,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("settings: neon → gonzo", ChatScreen.ProfileCopyNote(ChatScreen.ProfileSettingsSubject, "neon", "gonzo"));   // 2026-10-10
         Assert.Equal("settings: neon ← larry", ChatScreen.ProfilePullNote(ChatScreen.ProfileSettingsSubject, "larry", "neon"));   // 2026-10-16: a pull reads into the loaded profile
         Assert.Equal(
-            ["API keys", "server settings", "Home Assistant settings", "toolbar setup", "performance bar setup", "Status bar setup", "bar order", "allowed commands", "message history", "memory", "saved prompts", "MCP servers", "saved links", "saved videos", "monitor input settings", "skills", "forbidden strings", "persona.md", "operata.md", "vocalia.md", "user avatar", "model avatar"],
+            ["API keys", "server settings", "Home Assistant settings", "toolbar setup", "performance bar setup", "Status bar setup", "bar order", "allowed commands", "message history", "memory", "saved prompts", "MCP servers", "saved links", "saved videos", "monitor input settings", "skills", "custom commands", "forbidden strings", "persona.md", "operata.md", "vocalia.md", "user avatar", "model avatar"],
             ChatScreen.ProfileSectionWords.Select(item => ChatScreen.ProfileSectionSubject(item.Section)));
         Assert.Equal("delete it", ChatScreen.ProfileDeleteNote);
         Assert.Equal("rename it", ChatScreen.ProfileRenameNote);

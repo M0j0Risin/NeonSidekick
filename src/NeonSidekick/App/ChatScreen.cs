@@ -28,6 +28,7 @@ using NeonSidekick.Shell;
 using NeonSidekick.Sql;
 using NeonSidekick.Comfy;
 using NeonSidekick.Companion;
+using NeonSidekick.CustomCommands;
 using NeonSidekick.Skills;
 using NeonSidekick.Speech;
 using NeonSidekick.Timers;
@@ -123,6 +124,12 @@ public enum ProfileSection
 
     /// <summary><c>policestrings [overwrite]</c> (2026-10-09, the user's ask): <c>Shell police forbidden strings</c>, added or replaced.</summary>
     PoliceStrings,
+
+    /// <summary>
+    /// <c>commands [overwrite]</c> (2026-10-30, the custom commands plan): the profile's <c>commands/</c> files, subfolders kept; a same-named
+    /// file skipped, or replaced with overwrite. Not <c>Commands</c>: that is <see cref="Commands"/>, the <c>allowed</c> word's section.
+    /// </summary>
+    CustomCommands,
 
     /// <summary><c>persona [overwrite]</c> (2026-10-10, the user's ask): <c>persona.md</c>, byte for byte; a file already in the target only replaced with overwrite. <c>/sys persona copy &lt;profile&gt; [force]</c> until then.</summary>
     Persona,
@@ -1694,6 +1701,11 @@ internal sealed partial class ChatScreen
         // The mode buttons (2026-10-13, the user's ask): after the settings menu, whose rows save them; the saved words, read without the turn's warning; set through the rows' own save.
         _queueMenu = new QueueMenu(_queue, _flow, _menuPane, () => SavedQueueMode(_settings.Current), mode => _menu.SetQueueMode(mode), () => SavedQueueCancel(_settings.Current), mode => _menu.SetQueueCancelMode(mode));
         // Built once: the roots ride the facts, so a profile switch needs no rebind; the Options rows through the settings menu (2026-09-19).
+        // The custom commands (2026-10-30): the roots read at each scan, so a profile switch needs no rebuild; the pane's lines through the flow
+        // sink, its deletes to the bin while File deletes to Recycle bin is on.
+        _customCommands = new CustomCommandCatalog(() => CustomCommandRoots.For(_settings), _time);
+        _commandsMenu = new CustomCommandsMenu(_customCommands.Scan, () => CustomCommandRoots.For(_settings), settings, _flow, _menuPane, _input, _openFile,
+            () => _effective().FileDeletesToRecycleBin ? _recycleBin : null);
         _skillsMenu = new SkillsMenu(SkillsFacts, settings, _menu, _flow, _menuPane, _input, _openFile, name => SkillsMenu.UsageCaption(_skillRecords, _catalog.Find(name), _time.LocalTimeZone), _skillRecords, SkillVersions, RestoreSkill, ForgetSkillVersions,
             session: _session.History);   // the loaded sub-tab (2026-10-12): the one history the session keeps, watched while the pane is open
         // The /tools pane (2026-09-19): the tool list over the live facts, the Ask / Files / Web rows through the settings menu.
@@ -3060,6 +3072,7 @@ internal sealed partial class ChatScreen
     [
         new(SlashCommands.BasicTabTitle, () => CommandsTab(advanced: false)),
         new(SlashCommands.AdvancedTabTitle, () => CommandsTab(advanced: true)),
+        new(SlashCommands.CustomTabTitle, () => CustomCommandsTab(_customCommands.Scan())),   // 2026-10-30, the user's own commands, live
         new("Keys", KeysTab) { Toggle = KeyCheckToggle() },
     ];
 
@@ -4854,20 +4867,29 @@ internal sealed partial class ChatScreen
     private IReadOnlyList<CompletionItem> CommandChoices()
     {
         var effective = _effective();
-        return CommandItems(effective.HideExitAutocomplete, hideQueue: QueueModeNow() == Queueing.Disabled);
+        return CommandItems(effective.HideExitAutocomplete, hideQueue: QueueModeNow() == Queueing.Disabled, custom: _customCommands.Recent().Commands);
     }
 
     /// <summary>
     /// <see cref="SlashCommands.Completions"/> (or <see cref="SlashCommands.CompletionsWithoutExit"/>
     /// under <paramref name="hideExit"/>; less <see cref="SlashCommands.QueueWord"/> under
-    /// <paramref name="hideQueue"/>). With no flag the base list itself comes back. Pure; pinned.
+    /// <paramref name="hideQueue"/>). With no flag the base list itself comes back. Since 2026-10-30 (the custom commands plan) the
+    /// <paramref name="custom"/> commands join it, one list sorted as <see cref="SlashCommands.Completions"/> is (ordinal by word), so
+    /// <c>/review</c> sits between <c>/rename</c> and <c>/rewind</c>; the note's <c>· profile</c> or <c>· global</c> tells one apart
+    /// (<see cref="CustomCommandText.CompletionNote"/>). Pure; pinned.
     /// </summary>
-    public static IReadOnlyList<CompletionItem> CommandItems(bool hideExit = false, bool hideQueue = false)
+    public static IReadOnlyList<CompletionItem> CommandItems(bool hideExit = false, bool hideQueue = false, IReadOnlyList<CustomCommand>? custom = null)
     {
         var baseList = hideExit ? SlashCommands.CompletionsWithoutExit : SlashCommands.Completions;
         if (hideQueue)
         {
             baseList = baseList.Where(item => item.Text != SlashCommands.QueueWord).ToArray();
+        }
+
+        if (custom is { Count: > 0 })
+        {
+            baseList = baseList.Concat(custom.Select(c => new CompletionItem(c.Word, CustomCommandText.CompletionNote(c))))
+                .OrderBy(item => item.Text, StringComparer.Ordinal).ToArray();
         }
 
         return baseList;
@@ -4973,7 +4995,9 @@ internal sealed partial class ChatScreen
         {
             (item, line) = (bare, bare.Text + " ");
         }
-        else if (TypoSlashes(text, commands) is { } slashed)
+        // A custom command's typo is the //name one alone (2026-10-30, the custom commands plan): a bare one-word message like
+        // "review" is sent as typed, so TypoCommand keeps the built-ins.
+        else if (TypoSlashes(text, CommandItems(custom: _customCommands.Recent().Commands)) is { } slashed)
         {
             (item, line) = slashed;
         }
@@ -5170,6 +5194,7 @@ internal sealed partial class ChatScreen
         ProfileSection.Videos => "saved videos",
         ProfileSection.Monitors => "monitor input settings",
         ProfileSection.Skills => "skills",
+        ProfileSection.CustomCommands => "custom commands",
         ProfileSection.HomeAssistant => "Home Assistant settings",
         ProfileSection.Toolbar => "toolbar setup",
         ProfileSection.PerfBar => "performance bar setup",
@@ -5754,6 +5779,10 @@ internal sealed partial class ChatScreen
             case SlashCommand.Prompts:
                 // The saved prompts' verbs (2026-10-13); save's text is free text; the prompts by number (2026-10-27).
                 return sources.Prompts?.Invoke(argText) ?? PromptsCommand.Complete(argText);
+
+            case SlashCommand.Commands:
+                // new and save (2026-10-30, the custom commands plan), then --global after a name.
+                return CustomCommandsCommand.Complete(argText);
 
             case SlashCommand.Shopping:
                 // The verbs (2026-10-11), then the stores' names and the list's lines.
@@ -9233,6 +9262,10 @@ internal sealed partial class ChatScreen
         {
             await CopySkillsSectionAsync(home, other, pull, cancellationToken).ConfigureAwait(false);
         }
+        else if (action.Section == ProfileSection.CustomCommands)
+        {
+            await CopyCustomCommandsSectionAsync(home, other, action.Overwrite, pull, cancellationToken).ConfigureAwait(false);
+        }
         else if (IsPromptFileSection(action.Section))
         {
             var file = action.Section switch
@@ -11327,6 +11360,7 @@ internal sealed partial class ChatScreen
         ("videos", ProfileSection.Videos, "the saved YouTube videos, added (or replaced with overwrite)"),
         ("monitors", ProfileSection.Monitors, "the monitor input names, hidden inputs and PC inputs, added (or replaced with overwrite)"),
         ("skills", ProfileSection.Skills, "the profile's skills, copied (one the target has is skipped)"),
+        ("commands", ProfileSection.CustomCommands, "the profile's custom commands, copied (same-named files replaced with overwrite)"),   // 2026-10-30
         ("policestrings", ProfileSection.PoliceStrings, "Shell police forbidden strings, added (or replaced with overwrite)"),
         ("persona", ProfileSection.Persona, "persona.md, the persona (overwrite replaces the target's)"),
         ("operata", ProfileSection.Operata, "operata.md, the operating rules (overwrite replaces the target's)"),
@@ -11361,7 +11395,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     public static bool SectionTakesOverwrite(ProfileSection section) =>
         section is ProfileSection.Commands or ProfileSection.History or ProfileSection.Memory or ProfileSection.SavedPrompts or ProfileSection.PoliceStrings
-            or ProfileSection.Mcp or ProfileSection.Links or ProfileSection.Videos or ProfileSection.Monitors
+            or ProfileSection.Mcp or ProfileSection.Links or ProfileSection.Videos or ProfileSection.Monitors or ProfileSection.CustomCommands
         || IsPromptFileSection(section);
 
     /// <summary>Whether a section is one of the prompt files (2026-10-10): persona, operata, vocalia.</summary>
@@ -11696,6 +11730,8 @@ internal sealed partial class ChatScreen
                 ReconcileWebUi();
                 // Its dropdown's lists as they stand now (later on 2026-10-14), built here on the screen's task while a page is connected.
                 RefreshWebCompletions();
+                // A custom command file a built-in hides (2026-10-30): named once a run, here at startup, after a switch, after /commands.
+                AnnounceShadowedCommands();
                 // The toolbar's 🛠️ (2026-10-16): whether any tool is offered, worked out again only when something may have changed it.
                 if (_toolsOfferedDirty)
                 {
@@ -14265,13 +14301,14 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task<bool> HandleOnceAsync(string text, IReadOnlyList<ImageAttachment> images, CancellationToken cancellationToken)
     {
-        var (command, args) = ParseLine(text);
+        var (command, args) = ParseWithCustom(text);
         if (command != SlashCommand.None)
         {
             DiagnosticLog.Debug(AppCategory, CommandLogLine(command, text));
         }
 
-        if (command != SlashCommand.None && images.Count > 0)
+        // A custom command keeps its pictures (2026-10-30): its prompt is a message.
+        if (command is not (SlashCommand.None or SlashCommand.Custom) && images.Count > 0)
         {
             _transcript.Notice(ImagesIgnoredNotice(images));
         }
@@ -14286,6 +14323,18 @@ internal sealed partial class ChatScreen
 
         switch (command)
         {
+            case SlashCommand.Custom:
+                return await RunCustomCommandAsync(text, args, images, cancellationToken).ConfigureAwait(false);
+
+            case SlashCommand.Commands:
+                await HandleCommandsAsync(args, _transcript, cancellationToken).ConfigureAwait(false);
+                return false;
+
+            case SlashCommand.Help when args.Length > 0 && CustomHelpCard(args) is { } card:
+                // /help <your command> (2026-10-30): its card from the scan, no model asked (neon_help can't see the user's commands).
+                ShowCustomHelpCard(card);
+                return false;
+
             case SlashCommand.Help when args.Length > 0:
                 return await HelpLookupAsync(args, cancellationToken).ConfigureAwait(false);
 
@@ -14298,8 +14347,8 @@ internal sealed partial class ChatScreen
                     return false;
                 }
 
-                // No pane to open (a redirected console): the list in the transcript.
-                foreach (var line in SlashCommands.HelpText.Split('\n'))
+                // No pane to open (a redirected console): the list in the transcript, the custom commands after it (2026-10-30).
+                foreach (var line in SlashCommands.HelpText.Split('\n').Concat(CustomCommandText.HelpLines(_customCommands.Scan())))
                 {
                     _transcript.Notice(line);
                 }
@@ -15562,10 +15611,39 @@ internal sealed partial class ChatScreen
             return false;
         }
 
+        // What each pass sends: the message, or a custom command's expansion (2026-10-30), the typed line still each pass's user row.
+        string sent = message;
         if (message.StartsWith('/'))
         {
-            var (command, commandArgs) = ParseLine(message);
+            var (command, commandArgs) = ParseWithCustom(message);
             string token = message.Split(' ', 2)[0];
+            if (command == SlashCommand.Custom)
+            {
+                // Expanded once, before the first pass (a file edited mid-loop is not read again); its errors end the loop here.
+                string word = SlashCommands.CustomWord(message, out _);
+                if (_customCommands.Scan().Find(word) is not { } custom)
+                {
+                    _transcript.Error(UnknownCommandError(word));
+                    return false;
+                }
+
+                var (prompt, error) = CustomCommandsCommand.Prompt(custom, commandArgs);
+                if (prompt is null)
+                {
+                    _transcript.Error(error!);
+                    return false;
+                }
+
+                if (_session.Assistant is not null)
+                {
+                    _transcript.Notice(CustomCommandText.SentNotice(custom));
+                    DiagnosticLog.Debug(AppCategory, CustomCommandText.RunLogLine(custom, prompt.Length));
+                }
+
+                sent = prompt;
+                command = SlashCommand.None;
+            }
+
             if (command == SlashCommand.Unknown)
             {
                 _transcript.Error(UnknownCommandError(token));
@@ -15609,7 +15687,7 @@ internal sealed partial class ChatScreen
 
             _transcript.Notice(LoopTurnNotice(n, count));
             _transcript.User(message);
-            if (await RunMessageAsync(message, n == 1 ? images : [], cancellationToken).ConfigureAwait(false))
+            if (await RunMessageAsync(sent, n == 1 ? images : [], cancellationToken).ConfigureAwait(false))
             {
                 return true;
             }
@@ -18090,18 +18168,31 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// A sent command in the log: <c>Command /sessions: purge older 7</c> — the word as typed, the
     /// argument cut to <see cref="CommandArgumentChars"/>; <c>(unknown)</c> / <c>(overloaded)</c> after
-    /// the word for one the parser refused. Pinned.
+    /// the word for one the parser refused. Pinned. A custom command (2026-10-30) notes <c>(custom)</c>, its word cut at the first white
+    /// space of any kind as the parser cuts it, so a line break after it never logs a two-line word.
     /// </summary>
     public static string CommandLogLine(SlashCommand command, string text)
     {
         string trimmed = text.Trim();
         int space = trimmed.IndexOf(' ');
+        if (command == SlashCommand.Custom)
+        {
+            space = 0;
+            while (space < trimmed.Length && !char.IsWhiteSpace(trimmed[space]))
+            {
+                space++;
+            }
+
+            space = space >= trimmed.Length ? -1 : space;
+        }
+
         string word = space < 0 ? trimmed : trimmed[..space];
         string argument = space < 0 ? "" : LogText.Excerpt(trimmed[(space + 1)..], CommandArgumentChars);
         string note = command switch
         {
             SlashCommand.Unknown => " (unknown)",
             SlashCommand.Overloaded => " (overloaded)",
+            SlashCommand.Custom => " (custom)",
             _ => "",
         };
         return "Command " + word + note + (argument.Length == 0 ? "" : ": " + argument);
@@ -18130,7 +18221,10 @@ internal sealed partial class ChatScreen
         // A Ralph pass (2026-10-18): its own row titled for the loop by the user's hand (so the model never renames it), and its short line
         // as the turn's text — the full-text search would otherwise hold the whole plan once a pass; the history JSON keeps the message.
         var pass = _ralphPass;
-        _sessionId ??= _sessions.Begin(pass?.Title ?? SessionText.FirstLineTitle(text), _session.Endpoint?.ModelId ?? "");
+        // A custom command that opens a session titles it with the typed line (2026-10-30, the user's pick), the title source still the first
+        // line's, so the model may retitle it.
+        string? customTitle = TakeCustomCommandTitle();
+        _sessionId ??= _sessions.Begin(pass?.Title ?? (customTitle is null ? SessionText.FirstLineTitle(text) : SessionText.FirstLineTitle(customTitle)), _session.Endpoint?.ModelId ?? "");
         if (_sessionId is not { } id)
         {
             return;

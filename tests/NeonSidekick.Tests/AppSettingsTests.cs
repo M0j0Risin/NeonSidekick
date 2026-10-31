@@ -1295,6 +1295,18 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(@"Could not create the skills folder C:\x\skills: denied", AppSettings.SkillsFolderWarning(@"C:\x\skills", "denied"));
     }
 
+    /// <summary>Both custom commands folders are made on a load (2026-10-30, the custom commands plan), so a file can be dropped in at once.</summary>
+    [Fact]
+    public void Constructor_CreatesBothCustomCommandsFolders()
+    {
+        using var settings = new AppSettings(_dir);
+
+        Assert.Equal(Path.Combine(Profiles.Directory(_dir, Profiles.DefaultName), "commands"), settings.ProfileCustomCommandsDirectory);
+        Assert.Equal(Path.Combine(_dir, "commands"), settings.GlobalCustomCommandsDirectory);
+        Assert.True(Directory.Exists(settings.ProfileCustomCommandsDirectory));
+        Assert.True(Directory.Exists(settings.GlobalCustomCommandsDirectory));
+    }
+
     [Fact]
     public void Constructor_CreatesTheProfilesSplashFolder()
     {

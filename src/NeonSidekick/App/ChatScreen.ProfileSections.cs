@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using NeonSidekick.CustomCommands;
 using NeonSidekick.Files;
 using NeonSidekick.Mcp;
 using NeonSidekick.Settings;
@@ -349,6 +350,106 @@ internal sealed partial class ChatScreen
         }
     }
 
+    /// <summary>
+    /// <c>/profile push|pull commands [overwrite]</c> (2026-10-30, the custom commands plan): the profile's <c>commands/</c> files the catalog
+    /// walks (<see cref="CustomCommandCatalog.CopyableFiles"/>: <c>*.md</c> up to four folders deep, subfolders kept, dot-files left behind, a
+    /// Skipped file copied as it is) into the target's, byte for byte (<see cref="CustomCommandEditor.CopyInto"/>). A link is never followed
+    /// and is named apart. A same-named file is skipped and named, or replaced with <paramref name="overwrite"/>, the yes naming those apart
+    /// from the new. Two folders that are one (both linked to one place) have nothing to copy, never a file onto itself. No reconcile: the
+    /// next scan reads the new files.
+    /// </summary>
+    private async Task CopyCustomCommandsSectionAsync(string home, string other, bool overwrite, bool pull, CancellationToken cancellationToken)
+    {
+        string ours = _settings.ProfileCustomCommandsDirectory;
+        string theirs = Path.Combine(Profiles.Directory(home, other), CustomCommandRoots.DirectoryName);
+        string sourceRoot = pull ? theirs : ours;
+        string targetRoot = pull ? ours : theirs;
+        if (CustomCommandRoots.SameFolder(sourceRoot, targetRoot))
+        {
+            _flow.Notice(ProfileCustomCommandsSameFolderNotice(other));
+            return;
+        }
+
+        var (files, links) = CustomCommandCatalog.CopyableFiles(sourceRoot);
+        if (files.Count == 0)
+        {
+            _flow.Notice(links.Count == 0 ? ProfileCustomCommandsNothingNotice(other, pull) : ProfileCustomCommandsNothingNewNotice([], other, pull, links));
+            return;
+        }
+
+        var copies = new List<(string Relative, string Full)>();
+        var replacing = new List<string>();
+        var skipped = new List<string>();
+        foreach (var (relative, full) in files)
+        {
+            string name = CommandFileName(relative);
+            if (File.Exists(Path.Combine(targetRoot, relative.Replace('/', Path.DirectorySeparatorChar))))
+            {
+                if (!overwrite)
+                {
+                    skipped.Add(name);
+                    continue;
+                }
+
+                replacing.Add(name);
+            }
+
+            copies.Add((relative, full));
+        }
+
+        if (copies.Count == 0)
+        {
+            _flow.Notice(ProfileCustomCommandsNothingNewNotice(skipped, other, pull, links));
+            return;
+        }
+
+        var fresh = copies.Select(c => CommandFileName(c.Relative)).Where(name => !replacing.Contains(name)).ToList();
+        if (!await ConfirmAsync(ProfileCustomCommandsPrompt(fresh, replacing, other, pull), cancellationToken).ConfigureAwait(false))
+        {
+            _flow.Notice(KeptNotice);
+            return;
+        }
+
+        var copied = new List<string>();
+        var failed = new List<(string Name, string Detail)>();
+        await Task.Run(() =>
+        {
+            foreach (var (relative, full) in copies)
+            {
+                var result = CustomCommandEditor.CopyInto(full, targetRoot, relative, overwrite);
+                switch (result.Outcome)
+                {
+                    case CustomCommandEditOutcome.Copied:
+                        copied.Add(CommandFileName(relative));
+                        break;
+                    case CustomCommandEditOutcome.Exists:
+                        skipped.Add(CommandFileName(relative));   // made there meanwhile: never replaced without overwrite
+                        break;
+                    case CustomCommandEditOutcome.Linked:
+                        failed.Add((CommandFileName(relative), CustomCommandText.LinkedError(CommandFileName(relative).TrimStart('/'))));
+                        break;
+                    default:
+                        failed.Add((CommandFileName(relative), result.Detail));
+                        break;
+                }
+            }
+        }, cancellationToken).ConfigureAwait(false);
+
+        foreach (var (name, detail) in failed)
+        {
+            _flow.Error(ProfileCustomCommandFailedError(name, detail));
+        }
+
+        if (copied.Count > 0)
+        {
+            _flow.Notice(ProfileCustomCommandsCopiedNotice(copied, skipped, other, pull, links));
+        }
+    }
+
+    // A copied file as the lines name it: its /word, or its path under the folder when it is no command name.
+    private static string CommandFileName(string relative) =>
+        CustomCommandName.FromRelativePath(relative) is { } name ? "/" + name : relative;
+
     // ── /profile push|pull servers, homeassistant, toolbar, perfbar, statusbar, barorder (2026-10-26, the user's ask) ──
     // profile.json sections, mirrored (PlanSectionCopy): the target ends up as the source, a default here resetting the
     // target's. The saved values alone, as a bare push carries them; a pull goes through Update, and every bar reads its settings on
@@ -648,6 +749,60 @@ internal sealed partial class ChatScreen
         string tail = skipped.Count == 0 ? "" : $"; {skipped.Count.ToString(CultureInfo.InvariantCulture)} skipped, there already: {ProfileSectionNames(skipped)}";
         return $"({NoticeGlyphs.Skill}{done}{tail}{ProfileSkillsLinksTail(links ?? [])})";
     }
+
+    /// <summary><c>commands</c> with nothing to copy: <c>(🪄 nothing to copy: this profile has no custom commands)</c>, or <c>"work"</c> on a pull.</summary>
+    public static string ProfileCustomCommandsNothingNotice(string profile, bool pull) =>
+        $"({NoticeGlyphs.Commands}nothing to copy: {SourceName(profile, pull)} has no custom commands)";
+
+    /// <summary>The two profiles' <c>commands</c> folders are one (both linked to one place): nothing to copy.</summary>
+    public static string ProfileCustomCommandsSameFolderNotice(string profile) =>
+        $"({NoticeGlyphs.Commands}nothing to copy: \"{profile}\"'s commands folder is this profile's)";
+
+    /// <summary>
+    /// Every file held by the target already, or a link: <c>(🪄 nothing to copy: "work" has these 2 already: /review, /triage)</c>, the links
+    /// after (<see cref="ProfileSkillsLinksTail"/>), or only <c>(🪄 nothing to copy: 1 is a link, never followed: notes)</c>.
+    /// </summary>
+    public static string ProfileCustomCommandsNothingNewNotice(IReadOnlyList<string> skipped, string profile, bool pull, IReadOnlyList<string>? links = null)
+    {
+        ArgumentNullException.ThrowIfNull(skipped);
+        links ??= [];
+        if (skipped.Count == 0)
+        {
+            return $"({NoticeGlyphs.Commands}nothing to copy: {Counted(links.Count, "is a link", "are links")}, never followed: {ProfileSectionNames(links)})";
+        }
+
+        string target = pull ? "this profile" : $"\"{profile}\"";
+        return $"({NoticeGlyphs.Commands}nothing to copy: {target} has {(skipped.Count == 1 ? "this one" : $"these {skipped.Count.ToString(CultureInfo.InvariantCulture)}")} already: {ProfileSectionNames(skipped)} (overwrite replaces them){ProfileSkillsLinksTail(links)})";
+    }
+
+    /// <summary>
+    /// The question before a <c>commands</c> copy: <c>🪄 Copy 2 custom commands (/review, /triage) into "work"?</c>, with
+    /// <c> It replaces 1 there: /fix.</c> when overwrite replaces some.
+    /// </summary>
+    public static string ProfileCustomCommandsPrompt(IReadOnlyList<string> fresh, IReadOnlyList<string> replacing, string profile, bool pull)
+    {
+        ArgumentNullException.ThrowIfNull(fresh);
+        ArgumentNullException.ThrowIfNull(replacing);
+        string where = pull ? $"from \"{profile}\" into this profile" : $"into \"{profile}\"";
+        string head = fresh.Count > 0
+            ? $"{NoticeGlyphs.Commands}Copy {CustomCommandCount(fresh.Count)} ({ProfileSectionNames(fresh)}) {where}?"
+            : $"{NoticeGlyphs.Commands}Copy {CustomCommandCount(replacing.Count)} {where}?";
+        return replacing.Count == 0 ? head : $"{head} It replaces {replacing.Count.ToString(CultureInfo.InvariantCulture)} there: {ProfileSectionNames(replacing)}.";
+    }
+
+    /// <summary>A <c>commands</c> copy done: <c>(🪄 2 custom commands copied into "work"; 1 skipped, there already: /fix)</c>.</summary>
+    public static string ProfileCustomCommandsCopiedNotice(IReadOnlyList<string> copied, IReadOnlyList<string> skipped, string profile, bool pull, IReadOnlyList<string>? links = null)
+    {
+        ArgumentNullException.ThrowIfNull(copied);
+        ArgumentNullException.ThrowIfNull(skipped);
+        string done = $"{CustomCommandCount(copied.Count)} copied {(pull ? $"from \"{profile}\"" : $"into \"{profile}\"")}";
+        string tail = skipped.Count == 0 ? "" : $"; {skipped.Count.ToString(CultureInfo.InvariantCulture)} skipped, there already: {ProfileSectionNames(skipped)}";
+        return $"({NoticeGlyphs.Commands}{done}{tail}{ProfileSkillsLinksTail(links ?? [])})";
+    }
+
+    public static string ProfileCustomCommandFailedError(string name, string detail) => $"Could not copy {NameScrub.Display(name)}: {detail}";
+
+    private static string CustomCommandCount(int count) => Counted(count, "custom command", "custom commands");
 
     /// <summary>A <c>skills</c> copy stopped (Esc, the kill switch): the ones made before it stay.</summary>
     public static string ProfileSkillsStoppedNotice(int copied, string profile, bool pull) =>

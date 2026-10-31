@@ -268,4 +268,34 @@ public sealed class WebCommandsTests
         Assert.True(typo.AsText);
         Assert.Equal("/tools web", typo.Use);
     }
+
+    // Custom commands from the page (2026-10-30, the custom commands plan): run when the settings name them, never sent as text unexpanded.
+
+    private static readonly WebCommandSettings WithReview = On with { CustomNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "review", "frontend:test" } };
+
+    [Fact]
+    public void ACustomCommand_TheSettingsName_Runs()
+    {
+        Assert.Equal(WebCommandVerdict.Run, WebCommands.Check("/review a.cs", WithReview));
+        Assert.Equal(WebCommandVerdict.Run, WebCommands.Check("/Frontend:Test", WithReview));
+        Assert.Equal((SlashCommand.Custom, "a.cs"), WebCommands.Parse("/review a.cs", WithReview));
+        Assert.True(WebCommands.Offers(SlashCommand.Custom));
+        Assert.True(WebCommands.Check("/review a.cs", On).AsText);   // not named: an unknown word, which may go as a message
+    }
+
+    [Fact]
+    public void ACustomCommand_WithCommandsOff_IsRefused_NeverAsText()
+    {
+        var verdict = WebCommands.Check("/review a.cs", WithReview with { Commands = false });
+
+        Assert.Equal((WebCommandKind.Refused, WebUiText.CommandsOff, false), (verdict.Kind, verdict.Reason, verdict.AsText));
+    }
+
+    [Fact]
+    public void ACustomCommandsDoubleSlash_NamesIt_AndCommandsIsThePcs()
+    {
+        Assert.Equal("/review a.cs", WebCommands.Check("//review a.cs", WithReview).Use);
+        Assert.Equal(WebUiText.PcOnly("/commands"), WebCommands.Check("/commands new x", WithReview).Reason);
+        Assert.Contains(SlashCommand.Commands, WebCommands.Never);
+    }
 }

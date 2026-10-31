@@ -162,6 +162,12 @@ public sealed class AppSettings : IDisposable
     /// <summary>The global ComfyUI workflows folder: <c>comfy</c> under the home, every profile's (2026-09-24).</summary>
     public string GlobalComfyDirectory => Path.Combine(StorageDirectory, Comfy.ComfyWorkflowCatalog.DirectoryName);
 
+    /// <summary>The loaded profile's custom commands folder: <c>commands</c> under <see cref="ProfileDirectory"/> (2026-10-30, the custom commands plan), read ahead of <see cref="GlobalCustomCommandsDirectory"/> (<see cref="CustomCommands.CustomCommandCatalog"/>).</summary>
+    public string ProfileCustomCommandsDirectory => Path.Combine(ProfileDirectory, CustomCommands.CustomCommandRoots.DirectoryName);
+
+    /// <summary>The global custom commands folder: <c>commands</c> under the home, every profile's (2026-10-30).</summary>
+    public string GlobalCustomCommandsDirectory => Path.Combine(StorageDirectory, CustomCommands.CustomCommandRoots.DirectoryName);
+
     /// <summary>The loaded profile's name, spelt as its directory is.</summary>
     public string ProfileName
     {
@@ -226,6 +232,10 @@ public sealed class AppSettings : IDisposable
     public static string ComfyFolderWarning(string path, string detail) =>
         $"Could not create the ComfyUI workflows folder {path}: {detail}";
 
+    /// <summary>The warning when a custom commands folder could not be created (2026-10-30); the app runs on, and an absent folder is no command. Pinned.</summary>
+    public static string CommandsFolderWarning(string path, string detail) =>
+        $"Could not create the custom commands folder {path}: {detail}";
+
     /// <summary>
     /// The folders a loaded profile is given exist: the two skills roots (2026-09-18, the user's
     /// call) — <see cref="GlobalSkillsDirectory"/> and <see cref="ProfileSkillsDirectory"/> — and
@@ -237,7 +247,9 @@ public sealed class AppSettings : IDisposable
     /// profile that is not loaded (nothing is created for a look). A failure is a warning, never an
     /// exception. Named <c>EnsureSkillsDirectories</c> until the splash folder joined it. <see cref="ProfileComfyDirectory"/>
     /// joined on 2026-09-24, so the place a ComfyUI workflow goes is there to be found. Since the splash folder moved under
-    /// <see cref="ProfileImagesDirectory"/> (2026-10-10) a load makes the images folder too, made on first use until then.
+    /// <see cref="ProfileImagesDirectory"/> (2026-10-10) a load makes the images folder too, made on first use until then. The two
+    /// <c>commands</c> folders joined on 2026-10-30 (the custom commands plan), the global one as the global skills folder is, so a user
+    /// opening the home finds an empty folder to drop a command file into.
     /// </summary>
     private void EnsureProfileDirectories()
     {
@@ -247,6 +259,8 @@ public sealed class AppSettings : IDisposable
             (ProfileSkillsDirectory, SkillsFolderWarning),
             (ProfileSplashDirectory, SplashFolderWarning),
             (ProfileComfyDirectory, ComfyFolderWarning),
+            (GlobalCustomCommandsDirectory, CommandsFolderWarning),
+            (ProfileCustomCommandsDirectory, CommandsFolderWarning),
         })
         {
             try

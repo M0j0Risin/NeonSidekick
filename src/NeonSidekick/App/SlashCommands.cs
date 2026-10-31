@@ -170,6 +170,13 @@ public enum SlashCommand
     Prompts,
 
     /// <summary>
+    /// <c>/commands</c> (2026-10-30, the user's ask: their own slash commands, Claude Code's way): the custom commands' pane, or
+    /// <c>new &lt;name&gt; [--global]</c> (the template in the editor) and <c>save &lt;name&gt; [--global]</c> (the last message sent) typed
+    /// (<see cref="CustomCommandsCommand"/>). A pane under a reply bare, waits for its end with a verb.
+    /// </summary>
+    Commands,
+
+    /// <summary>
     /// <c>/terminal</c> (2026-10-03, the user's ask: "similar to /explore"): a new Windows Terminal window in the working
     /// directory, or <c>/terminal &lt;folder&gt;</c> in a folder under it (<see cref="Llm.PersonaFile.OpenTerminal"/>). Ctrl+. runs it.
     /// </summary>
@@ -424,6 +431,13 @@ public enum SlashCommand
     Overloaded,
     /// <summary>Started with <c>/</c> but is not a command we know.</summary>
     Unknown,
+
+    /// <summary>
+    /// A custom command (2026-10-30, the custom commands plan): a word no built-in has that a file in a <c>commands</c> folder names, only
+    /// from <see cref="SlashCommands.Parse(string, Func{string, bool}?)"/>; <c>Args</c> is the text after it, cut at the first white space of
+    /// any kind. Its prompt is the file's body filled from the text (<see cref="CustomCommands.CustomCommandTemplate"/>).
+    /// </summary>
+    Custom,
 }
 
 /// <summary>
@@ -470,6 +484,7 @@ public static class SlashCommands
             new(Audits.AuditText.Word, Audits.AuditText.HelpSummary),
             new("/collapse", "fold every item in the transcript"),
             new("/comfy", "manage ComfyUI and its workflows"),
+            new(CustomCommands.CustomCommandText.Word, CustomCommands.CustomCommandText.HelpSummary),   // 2026-10-30, the custom commands plan
             new("/compact", "shrink the conversation's context"),
             new("/copy", "copy replies to the clipboard"),
             new("/cwd", "show or change the working directory"),
@@ -546,14 +561,14 @@ public static class SlashCommands
     /// <summary>
     /// The commands on <c>/help</c>'s <see cref="BasicTabTitle"/> tab (2026-09-27, the user's list): the everyday ones, so the
     /// first tab is a short list (it fit without scrolling until 2026-10-03, when <c>/about</c>, <c>/explore</c>, <c>/perfbar</c>,
-    /// <c>/stt</c>, <c>/toolbar</c>, <c>/tts</c> and <c>/wake</c> came over from the advanced tab, the user's pick; <c>/wake</c> folded into <c>/stt</c> on 2026-10-09; <c>/msgclear</c> came over on 2026-10-10 and <c>/avatar</c> on 2026-10-11, the user's picks; <c>/prompts</c> on 2026-10-13, offered in its review and kept; <c>/mark</c> and <c>/theme</c> on 2026-10-25, the user's pick; <c>/undo</c> beside <c>/rewind</c> on 2026-10-28, the user's pick). Every other command (<c>/log</c> among them) is on
+    /// <c>/stt</c>, <c>/toolbar</c>, <c>/tts</c> and <c>/wake</c> came over from the advanced tab, the user's pick; <c>/wake</c> folded into <c>/stt</c> on 2026-10-09; <c>/msgclear</c> came over on 2026-10-10 and <c>/avatar</c> on 2026-10-11, the user's picks; <c>/prompts</c> on 2026-10-13, offered in its review and kept; <c>/mark</c> and <c>/theme</c> on 2026-10-25, the user's pick; <c>/undo</c> beside <c>/rewind</c> on 2026-10-28, the user's pick; <c>/commands</c> on 2026-10-30, the custom commands plan). Every other command (<c>/log</c> among them) is on
     /// <see cref="AdvancedTabTitle"/>. Only the pane is split: <see cref="HelpText"/>, <see cref="Completions"/> and
     /// <see cref="LabelWidth"/> stay the one A-to-Z list. Pinned.
     /// </summary>
     public static readonly IReadOnlySet<string> BasicCommands = new HashSet<string>(StringComparer.Ordinal)
     {
         "/about", "/avatar", "/clear", "/compact", "/copy", "/cwd", "/draft", "/exit", "/explore", "/help", "/mark", "/memory", "/model", "/msgclear", "/new", "/perfbar", "/profile",
-        "/prompts", "/queue", "/reasoning", "/remember", "/rename", "/rewind", "/server", "/sessions", "/settings", "/skills", "/stt", "/sys", "/terminal", "/theme", "/toolbar",
+        "/prompts", "/commands", "/queue", "/reasoning", "/remember", "/rename", "/rewind", "/server", "/sessions", "/settings", "/skills", "/stt", "/sys", "/terminal", "/theme", "/toolbar",
         "/tools", "/tree", "/tts", "/undo",
     };
 
@@ -565,6 +580,9 @@ public static class SlashCommands
 
     /// <summary>The title of <c>/help</c>'s second tab, every command not in <see cref="BasicCommands"/> (2026-09-27; <c>Commands (advanced)</c> until 2026-10-05). Pinned.</summary>
     public const string AdvancedTabTitle = "Advanced";
+
+    /// <summary>The title of <c>/help</c>'s third tab (2026-10-30, the custom commands plan): the user's own commands, live from the folders. Pinned.</summary>
+    public const string CustomTabTitle = "Custom";
 
     /// <summary>
     /// The input line's command list (<see cref="UI.MentionCompleter.TryFindCommand"/>): every base
@@ -633,7 +651,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/undo", "/theme", "/mark", "/avatar", "/queue", "/sessions", "/rename", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/read", "/remember", "/memory", "/keycheck", "/cmd", "/msgclear", "/sys", "/usage", "/perfbar", "/homebar", "/toolbar", "/header", "/profile", "/prompts", "/timer", "/cwd", "/tree", "/vault", "/explore", "/browse", "/browser", "/open", "/terminal", "/shortcut", "/log", "/process", "/view", "/imagine", "/comfy", "/pasted", "/ha", "/docker", "/eventlog", "/net", "/services", "/tasks", "/ad", "/monitor", "/camera", "/screen", "/youtube", "/shopping", "/print", "/pdf", "/docx", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/code-audit", "/botchat", "/claude", "/advisor", "/test", "/expand", "/collapse", "/find", "/window", "/skills", "/learn", "/about", "/webui", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/undo", "/theme", "/mark", "/avatar", "/queue", "/sessions", "/rename", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/read", "/remember", "/memory", "/keycheck", "/cmd", "/msgclear", "/sys", "/usage", "/perfbar", "/homebar", "/toolbar", "/header", "/profile", "/prompts", "/commands", "/timer", "/cwd", "/tree", "/vault", "/explore", "/browse", "/browser", "/open", "/terminal", "/shortcut", "/log", "/process", "/view", "/imagine", "/comfy", "/pasted", "/ha", "/docker", "/eventlog", "/net", "/services", "/tasks", "/ad", "/monitor", "/camera", "/screen", "/youtube", "/shopping", "/print", "/pdf", "/docx", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/code-audit", "/botchat", "/claude", "/advisor", "/test", "/expand", "/collapse", "/find", "/window", "/skills", "/learn", "/about", "/webui", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -712,6 +730,7 @@ public static class SlashCommands
             "/header" => SlashCommand.Header,
             "/profile" => SlashCommand.Profile,
             "/prompts" => SlashCommand.Prompts,
+            "/commands" => SlashCommand.Commands,
             "/timer" => SlashCommand.Timer,
             "/cwd" => SlashCommand.Cwd,
             "/tree" => SlashCommand.Tree,
@@ -777,6 +796,39 @@ public static class SlashCommands
     }
 
     /// <summary>
+    /// <see cref="Parse(string)"/> with the custom commands (2026-10-30): an <see cref="SlashCommand.Unknown"/> whose word
+    /// <paramref name="isCustom"/> knows (given with its <c>/</c>) is <see cref="SlashCommand.Custom"/>. A built-in always wins. The custom
+    /// word is cut at the first white space of any kind (a built-in's at a space or a tab), so <c>/review</c>, a line break and text is the
+    /// command with that text as its arguments. Null <paramref name="isCustom"/> is <see cref="Parse(string)"/>.
+    /// </summary>
+    public static (SlashCommand Command, string Args) Parse(string line, Func<string, bool>? isCustom)
+    {
+        var parsed = Parse(line);
+        if (parsed.Command != SlashCommand.Unknown || isCustom is null)
+        {
+            return parsed;
+        }
+
+        string word = CustomWord(line, out string args);
+        return isCustom(word) ? (SlashCommand.Custom, args) : parsed;
+    }
+
+    /// <summary>A line's first word cut at the first white space of any kind (a custom command's), and the rest trimmed. Pure.</summary>
+    public static string CustomWord(string line, out string args)
+    {
+        ArgumentNullException.ThrowIfNull(line);
+        string trimmed = line.Trim();
+        int split = 0;
+        while (split < trimmed.Length && !char.IsWhiteSpace(trimmed[split]))
+        {
+            split++;
+        }
+
+        args = trimmed[split..].Trim();
+        return trimmed[..split];
+    }
+
+    /// <summary>
     /// Whether the command reads what follows it. The one list (pinned): a command not here given an
     /// argument parses as <see cref="SlashCommand.Overloaded"/>. <see cref="SlashCommand.None"/>,
     /// <see cref="SlashCommand.Unknown"/> and <see cref="SlashCommand.Overloaded"/> take nothing. <c>/help &lt;words&gt;</c> since 2026-10-14
@@ -787,7 +839,7 @@ public static class SlashCommands
         or SlashCommand.Tts or SlashCommand.Voice or SlashCommand.Read or SlashCommand.View or SlashCommand.Imagine or SlashCommand.Comfy or SlashCommand.Echo
         or SlashCommand.Learn
         or SlashCommand.Sys
-        or SlashCommand.Remember or SlashCommand.Memory or SlashCommand.Profile or SlashCommand.Prompts or SlashCommand.Timer
+        or SlashCommand.Remember or SlashCommand.Memory or SlashCommand.Profile or SlashCommand.Prompts or SlashCommand.Commands or SlashCommand.Custom or SlashCommand.Timer
         or SlashCommand.Cwd or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Explore or SlashCommand.Open or SlashCommand.Browse or SlashCommand.Browser or SlashCommand.Terminal or SlashCommand.Shortcut or SlashCommand.Copy or SlashCommand.Session or SlashCommand.Rename or SlashCommand.GitUser
         or SlashCommand.Loop or SlashCommand.Plan or SlashCommand.CodeAudit or SlashCommand.BotChat or SlashCommand.Claude or SlashCommand.Advisor or SlashCommand.Cmd or SlashCommand.Queue or SlashCommand.Skills or SlashCommand.Test
         or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.EventLog or SlashCommand.Net or SlashCommand.Services or SlashCommand.Tasks or SlashCommand.Ad or SlashCommand.Monitor or SlashCommand.Camera or SlashCommand.Screen or SlashCommand.YouTube or SlashCommand.Shopping or SlashCommand.Print or SlashCommand.Pdf or SlashCommand.Docx or SlashCommand.Perf or SlashCommand.HomeBar or SlashCommand.Toolbar or SlashCommand.Header or SlashCommand.Rewind or SlashCommand.Undo

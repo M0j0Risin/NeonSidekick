@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using Microsoft.Extensions.AI;
 using NeonSidekick.Audio;
+using NeonSidekick.CustomCommands;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Files;
 using NeonSidekick.Llm;
@@ -906,6 +907,8 @@ public sealed partial class SidekickApp
         using var skillStore = new SkillRecordStore(_settings.StorageDirectory);
         _headlessSkillRecords = new SkillRecords(skillStore, () => SkillRoots.For(_settings, _externalSkills), _time);
         var skills = BuildSkills(files, _headlessSkillRecords);
+        // The custom commands (2026-10-30, the custom commands plan): the two commands folders, read at each scan, as the screen's.
+        var customCommands = new CustomCommandCatalog(() => CustomCommandRoots.For(_settings), _time);
         // The web tools need no console either; the setting Web tools decides per turn.
         var webTools = ChatScreen.WebTools(_web, files, () => EffectiveSettings, links: new Llm.Tools.WebLinkHooks(() => new Viewer.BrowserLinks(_settings.ProfileDirectory, _time), _time));
         var git = new Git.GitAccess(files, _time);
@@ -1719,9 +1722,83 @@ public sealed partial class SidekickApp
                     continue;
                 }
 
+                // A custom command (2026-10-30, the custom commands plan), ahead of /help <words> and the server check: expanded, its notice,
+                // then a message from here on — customSent skips the command checks below, so a body starting /plan never runs as /plan.
+                string? customTitle = null;
+                bool customSent = false;
+                if (SlashCommands.Parse(text, customCommands.Knows) is (SlashCommand.Custom, var customArgs))
+                {
+                    string customWord = SlashCommands.CustomWord(text, out _);
+                    if (customCommands.Scan().Find(customWord) is not { } custom)
+                    {
+                        await HeadlessLineAsync("[error] " + ChatScreen.UnknownCommandError(customWord)).ConfigureAwait(false);
+                        continue;
+                    }
+
+                    var (prompt, customError) = CustomCommandsCommand.Prompt(custom, customArgs);
+                    if (prompt is null)
+                    {
+                        await HeadlessLineAsync("[error] " + customError).ConfigureAwait(false);
+                        continue;
+                    }
+
+                    if (assistant is not null)
+                    {
+                        await HeadlessNoticeLineAsync("[notice] " + CustomCommandText.SentNotice(custom)).ConfigureAwait(false);
+                        DiagnosticLog.Debug(CustomCommandCatalog.Category, CustomCommandText.RunLogLine(custom, prompt.Length));
+                    }
+
+                    customTitle = text.Trim();
+                    text = prompt;
+                    customSent = true;
+                }
+
+                // /commands (2026-10-30): the list as notices, new and save write the file and print its path (no editor here); no LLM needed.
+                if (!customSent && SlashCommands.Parse(text) is (SlashCommand.Commands, var commandsArgs))
+                {
+                    var commandsLine = CustomCommandsCommand.Parse(commandsArgs);
+                    switch (commandsLine.Verb)
+                    {
+                        case CustomCommandsVerb.Pane:
+                            foreach (string listed in CustomCommandText.Lines(customCommands.Scan(), customCommands.Roots))
+                            {
+                                await HeadlessNoticeLineAsync("[notice] " + listed).ConfigureAwait(false);
+                            }
+
+                            break;
+                        case CustomCommandsVerb.New:
+                        {
+                            var (answer, path) = CustomCommandsCommand.Create(customCommands.Roots, commandsLine);
+                            await HeadlessLineAsync((path is null ? "[error] " : "[notice] ") + answer).ConfigureAwait(false);
+                            break;
+                        }
+
+                        case CustomCommandsVerb.Save:
+                        {
+                            var (answer, failed) = CustomCommandsCommand.Save(customCommands.Roots, commandsLine, assistant?.History.Messages ?? []);
+                            await HeadlessLineAsync((failed ? "[error] " : "[notice] ") + answer).ConfigureAwait(false);
+                            break;
+                        }
+
+                        default:
+                            await HeadlessLineAsync("[error] " + (commandsLine.Error ?? CustomCommandText.Usage)).ConfigureAwait(false);
+                            break;
+                    }
+
+                    continue;
+                }
+
+                // /help <your command> (2026-10-30): its card from the scan, no model asked, as the screen's.
+                if (!customSent && SlashCommands.Parse(text) is (SlashCommand.Help, { Length: > 0 } cardWords)
+                    && CustomCommandsCommand.HelpCard(customCommands.Scan(), cardWords) is { } card)
+                {
+                    await HeadlessLineAsync(HeadlessReplyPrefix + CustomCommandText.Card(card)).ConfigureAwait(false);
+                    continue;
+                }
+
                 // /help <words> (2026-10-14), as the screen does: the model looks the words up with neon_help, or with no model (or the
                 // tool off) the manual answers itself, ahead of the server check. A bare /help still goes on as the text it is.
-                if (SlashCommands.Parse(text) is (SlashCommand.Help, { Length: > 0 } helpWords))
+                if (!customSent && SlashCommands.Parse(text) is (SlashCommand.Help, { Length: > 0 } helpWords))
                 {
                     if (assistant is not null && ChatScreen.HelpLookupOffered(EffectiveSettings.LlmOfferTools, ChatScreen.HelpOffered(EffectiveSettings), ToolsText.DisabledSet(EffectiveSettings.ToolsDisabled)))
                     {
@@ -1745,7 +1822,7 @@ public sealed partial class SidekickApp
                     continue;
                 }
 
-                var (command, args) = SlashCommands.Parse(text);
+                var (command, args) = customSent ? (SlashCommand.None, "") : SlashCommands.Parse(text);
                 if (command == SlashCommand.Compact)
                 {
                     var (outcome, details) = await CompactHeadlessAsync(session, assistant, args.Length > 0 ? args : null, autoPercent: null, cancellationToken).ConfigureAwait(false);
@@ -1922,7 +1999,8 @@ public sealed partial class SidekickApp
                 if (EffectiveSettings.SessionLogging)
                 {
                     bool firstRow = sessionId is null;
-                    sessionId ??= sessions.Begin(inPass?.Title ?? Sessions.SessionText.FirstLineTitle(text), session.Endpoint?.ModelId ?? "");
+                    // A custom command's session is titled with the typed line (2026-10-30), as the screen's.
+                    sessionId ??= sessions.Begin(inPass?.Title ?? Sessions.SessionText.FirstLineTitle(customTitle ?? text), session.Endpoint?.ModelId ?? "");
                     if (firstRow && inPass is not null && sessionId is { } titled)
                     {
                         sessions.SetTitle(titled, inPass.Title, Sessions.TitleSource.User);

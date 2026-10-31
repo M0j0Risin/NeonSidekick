@@ -352,6 +352,44 @@ public sealed partial class PasteBlocks
     [GeneratedRegex(@"\[Image #(\d+), saved as [^\]\r\n]*\]", RegexOptions.CultureInvariant)]
     private static partial Regex SavedLabelPattern();
 
+    /// <summary>
+    /// The attachment labels a typed line holds, in order: each <see cref="ImageLabel"/> and draft PDF label
+    /// (<see cref="Pdf.PdfText.DocumentLabel"/>). A custom command's expansion that dropped one gets it back on a line of its own
+    /// (2026-10-30, the custom commands plan), so <c>SavePastedPictures</c> still names the picture's file in the sent text. Pure.
+    /// </summary>
+    public static IReadOnlyList<string> AttachmentLabels(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return AttachmentLabelPattern().Matches(text).Select(m => m.Value).ToList();
+    }
+
+    /// <summary>
+    /// <paramref name="text"/> with its attachment labels taken out (<see cref="AttachmentLabels"/>, after <see cref="WithoutSavedPaths"/>),
+    /// each line's trailing spaces with them and the whole trimmed: a sent message saved as a custom command's body (2026-10-30), which is
+    /// text. <paramref name="removed"/> says whether any went. Pure.
+    /// </summary>
+    public static string WithoutAttachmentLabels(string text, out bool removed)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        string typed = WithoutSavedPaths(text);
+        removed = AttachmentLabelPattern().IsMatch(typed);
+        if (!removed)
+        {
+            return typed;
+        }
+
+        string stripped = SpacedAttachmentLabelPattern().Replace(typed, "");
+        return string.Join('\n', stripped.Split('\n').Select(line => line.TrimEnd(' ', '\t'))).Trim();
+    }
+
+    // A draft PDF label runs to its first ".pdf]", as SentDocumentPattern does.
+    [GeneratedRegex(@"\[Image #\d+\]|\[PDF #\d+ [^\r\n]*?\.pdf\]", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    private static partial Regex AttachmentLabelPattern();
+
+    // The same with the one space or tab before it, which goes with the label ("a [Image #1] b" is "a b").
+    [GeneratedRegex(@"[ \t]?(?:\[Image #\d+\]|\[PDF #\d+ [^\r\n]*?\.pdf\])", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    private static partial Regex SpacedAttachmentLabelPattern();
+
     // Up to the first ".pdf]", not the first ']' (2026-10-20, review): an attached PDF's path always ends in .pdf, and a name or folder may
     // hold a ']' of its own (report [v2].pdf, C:\docs\[old]\a.pdf).
     [GeneratedRegex(@"\[PDF #(\d+), from ([^\r\n]*?\.pdf)\]", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]

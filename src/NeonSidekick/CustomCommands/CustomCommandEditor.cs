@@ -1,0 +1,476 @@
+using System.Text;
+using NeonSidekick.Files;
+
+namespace NeonSidekick.CustomCommands;
+
+/// <summary>What a <see cref="CustomCommandEditor"/> call did.</summary>
+public enum CustomCommandEditOutcome
+{
+    Created,
+    Saved,
+    Renamed,
+    Moved,
+    Copied,
+    Deleted,
+
+    /// <summary>The name is no valid command name (<see cref="CustomCommandName.IsValid"/>).</summary>
+    BadName,
+
+    /// <summary>The name is a built-in command's word.</summary>
+    BuiltIn,
+
+    /// <summary>The folder holds that name already (any case); nothing is ever replaced.</summary>
+    Exists,
+
+    /// <summary>The file is gone, or not under its folder.</summary>
+    Missing,
+
+    /// <summary>The file, or a subfolder on the way to the new one, is a link: never written through.</summary>
+    Linked,
+
+    /// <summary>The text to save is blank.</summary>
+    Blank,
+
+    /// <summary>The text to save is over <see cref="CustomCommandFile.MaxBytes"/>.</summary>
+    TooLarge,
+
+    /// <summary>The file is where it would go already.</summary>
+    NothingToChange,
+
+    /// <summary>A file failure: <see cref="CustomCommandEditResult.Detail"/> says what.</summary>
+    Failed,
+}
+
+/// <summary>
+/// The outcome, the command's name and scope, the file's path when one was written or moved, a failure's detail; a delete's way
+/// (<see cref="Way"/>), and whether a saved text held a <c>\$</c> that may read differently (<see cref="MayReadDifferently"/>).
+/// </summary>
+public sealed record CustomCommandEditResult(CustomCommandEditOutcome Outcome, string Name, CustomCommandScope Scope, string Path = "", string Detail = "")
+{
+    public DeleteWay Way { get; init; }
+
+    public bool MayReadDifferently { get; init; }
+
+    /// <summary>Whether it did what was asked.</summary>
+    public bool Done => Outcome is CustomCommandEditOutcome.Created or CustomCommandEditOutcome.Saved or CustomCommandEditOutcome.Renamed
+        or CustomCommandEditOutcome.Moved or CustomCommandEditOutcome.Copied or CustomCommandEditOutcome.Deleted;
+}
+
+/// <summary>
+/// The write side of the custom commands (2026-10-30, the <c>Skills/SkillEditor</c> shape): <see cref="Create"/> writes the template,
+/// <see cref="Save"/> a text as a command, and the pane's acts — <see cref="Rename"/>, <see cref="Move"/>, <see cref="MoveToProfile"/>,
+/// <see cref="CopyToProfile"/>, <see cref="Delete"/>. A built-in word, a name the folder holds already (any case), a missing file and a link
+/// are refused, never overwritten. A <c>:</c> name writes into its subfolder, made as needed, the root too when it's gone; a subfolder on the
+/// way that is a link is refused (the scan skips it), the root itself may be one and is written through. What <see cref="Create"/> and
+/// <see cref="Save"/> write is UTF-8 without a BOM with <c>\n</c> line endings on both systems; a rename, move or copy keeps a file's bytes.
+/// A subfolder a rename, move or delete empties is removed (only when empty). A file failure is an outcome, never an exception.
+/// </summary>
+public static class CustomCommandEditor
+{
+    private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
+
+    /// <summary>The longest description <see cref="Save"/> takes from the text's first line.</summary>
+    public const int SavedDescriptionLength = 60;
+
+    /// <summary>A new command from the template (<see cref="CustomCommandText.Template"/>), in <paramref name="scope"/>'s folder.</summary>
+    public static CustomCommandEditResult Create(CustomCommandRoots roots, CustomCommandScope scope, string name)
+    {
+        ArgumentNullException.ThrowIfNull(roots);
+        ArgumentNullException.ThrowIfNull(name);
+        return Write(roots.Of(scope), scope, name.Trim(), CustomCommandText.Template(name.Trim()), CustomCommandEditOutcome.Created, mayReadDifferently: false);
+    }
+
+    /// <summary>
+    /// <paramref name="text"/> (a sent message, a saved prompt) as a new command: the template's how-to lines, a <c>description</c> from its first
+    /// line, then the text made safe (<see cref="CustomCommandTemplate.Escape"/>), so running it with nothing typed sends the text back.
+    /// </summary>
+    public static CustomCommandEditResult Save(CustomCommandRoots roots, CustomCommandScope scope, string name, string text)
+    {
+        ArgumentNullException.ThrowIfNull(roots);
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(text);
+        name = name.Trim();
+        string body = CustomCommandFile.CleanBody(text.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n'));
+        if (body.Trim().Length == 0)
+        {
+            return new CustomCommandEditResult(CustomCommandEditOutcome.Blank, name, scope);
+        }
+
+        string content = SavedFile(body, out bool mayReadDifferently);
+        if (Utf8NoBom.GetByteCount(content) > CustomCommandFile.MaxBytes)
+        {
+            return new CustomCommandEditResult(CustomCommandEditOutcome.TooLarge, name, scope);
+        }
+
+        return Write(roots.Of(scope), scope, name, content, CustomCommandEditOutcome.Saved, mayReadDifferently);
+    }
+
+    /// <summary>The whole file <see cref="Save"/> writes for <paramref name="body"/> (already folded and cleaned). Pure.</summary>
+    public static string SavedFile(string body, out bool mayReadDifferently)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        string first = CustomCommandFile.FallbackDescription(body) ?? "";
+        first = new string(first.Select(c => char.IsControl(c) ? ' ' : c).ToArray()).Trim();
+        if (first.Length > SavedDescriptionLength)
+        {
+            first = first[..SavedDescriptionLength].TrimEnd() + "…";
+        }
+
+        var sb = new StringBuilder();
+        sb.Append("---\n");
+        foreach (string line in CustomCommandText.TemplateHowTo)
+        {
+            sb.Append(line).Append('\n');
+        }
+
+        sb.Append(CustomCommandFile.DescriptionKey).Append(": \"")
+            .Append(first.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal))
+            .Append("\"\n");
+        sb.Append("---\n");
+        sb.Append(CustomCommandTemplate.Escape(body, out mayReadDifferently)).Append('\n');
+        return sb.ToString();
+    }
+
+    /// <summary>The file at <paramref name="file"/> renamed to <paramref name="newName"/> under its own folder, its bytes kept.</summary>
+    public static CustomCommandEditResult Rename(CustomCommandRoots roots, CustomCommandScope scope, string file, string newName)
+    {
+        ArgumentNullException.ThrowIfNull(roots);
+        ArgumentNullException.ThrowIfNull(file);
+        ArgumentNullException.ThrowIfNull(newName);
+        return Relocate(roots.Of(scope), scope, file, roots.Of(scope), scope, newName.Trim(), copy: false, CustomCommandEditOutcome.Renamed);
+    }
+
+    /// <summary>The file moved to the other scope's folder under the same name (<c>to global</c>, <c>to this profile</c>).</summary>
+    public static CustomCommandEditResult Move(CustomCommandRoots roots, CustomCommandScope scope, string file, CustomCommandScope to)
+    {
+        ArgumentNullException.ThrowIfNull(roots);
+        ArgumentNullException.ThrowIfNull(file);
+        if (to == scope || roots.Same)
+        {
+            return new CustomCommandEditResult(CustomCommandEditOutcome.NothingToChange, NameOf(roots.Of(scope), file), scope);
+        }
+
+        return Relocate(roots.Of(scope), scope, file, roots.Of(to), to, null, copy: false, CustomCommandEditOutcome.Moved);
+    }
+
+    /// <summary>The file moved into another profile's <c>commands</c> folder (<paramref name="profileRoot"/>), made when it's not there.</summary>
+    public static CustomCommandEditResult MoveToProfile(CustomCommandRoots roots, CustomCommandScope scope, string file, string profileRoot)
+    {
+        ArgumentNullException.ThrowIfNull(roots);
+        ArgumentNullException.ThrowIfNull(file);
+        ArgumentException.ThrowIfNullOrWhiteSpace(profileRoot);
+        if (CustomCommandRoots.SameFolder(roots.Of(scope), profileRoot))
+        {
+            return new CustomCommandEditResult(CustomCommandEditOutcome.NothingToChange, NameOf(roots.Of(scope), file), scope);
+        }
+
+        return Relocate(roots.Of(scope), scope, file, profileRoot, CustomCommandScope.Profile, null, copy: false, CustomCommandEditOutcome.Moved);
+    }
+
+    /// <summary>The file copied into another profile's <c>commands</c> folder; the original stays.</summary>
+    public static CustomCommandEditResult CopyToProfile(CustomCommandRoots roots, CustomCommandScope scope, string file, string profileRoot)
+    {
+        ArgumentNullException.ThrowIfNull(roots);
+        ArgumentNullException.ThrowIfNull(file);
+        ArgumentException.ThrowIfNullOrWhiteSpace(profileRoot);
+        if (CustomCommandRoots.SameFolder(roots.Of(scope), profileRoot))
+        {
+            return new CustomCommandEditResult(CustomCommandEditOutcome.NothingToChange, NameOf(roots.Of(scope), file), scope);
+        }
+
+        return Relocate(roots.Of(scope), scope, file, profileRoot, CustomCommandScope.Profile, null, copy: true, CustomCommandEditOutcome.Copied);
+    }
+
+    /// <summary>
+    /// A profile copy's one file (<c>/profile push|pull commands</c>): <paramref name="file"/>'s bytes as they are written to
+    /// <paramref name="relative"/> under <paramref name="targetRoot"/>, its folders made. One there already is <c>Exists</c> unless
+    /// <paramref name="overwrite"/>; a link on the way, or a target that is one, is <c>Linked</c>, never written through.
+    /// </summary>
+    public static CustomCommandEditResult CopyInto(string file, string targetRoot, string relative, bool overwrite)
+    {
+        ArgumentNullException.ThrowIfNull(file);
+        ArgumentException.ThrowIfNullOrWhiteSpace(targetRoot);
+        ArgumentNullException.ThrowIfNull(relative);
+        string name = CustomCommandName.FromRelativePath(relative) ?? relative;
+        string target = Path.GetFullPath(Path.Combine(targetRoot, relative.Replace('/', Path.DirectorySeparatorChar)));
+        if (!IsUnder(Path.TrimEndingDirectorySeparator(Path.GetFullPath(targetRoot)), target))
+        {
+            return new CustomCommandEditResult(CustomCommandEditOutcome.BadName, name, CustomCommandScope.Profile, target);
+        }
+
+        try
+        {
+            if (LinkedOnTheWay(targetRoot, target) || (File.Exists(target) && (File.GetAttributes(target) & FileAttributes.ReparsePoint) != 0))
+            {
+                return new CustomCommandEditResult(CustomCommandEditOutcome.Linked, name, CustomCommandScope.Profile, target);
+            }
+
+            if (File.Exists(target) && !overwrite)
+            {
+                return new CustomCommandEditResult(CustomCommandEditOutcome.Exists, name, CustomCommandScope.Profile, target);
+            }
+
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Copy(file, target, overwrite);
+            return new CustomCommandEditResult(CustomCommandEditOutcome.Copied, name, CustomCommandScope.Profile, target);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new CustomCommandEditResult(CustomCommandEditOutcome.Failed, name, CustomCommandScope.Profile, target, ex.Message);
+        }
+    }
+
+    /// <summary>The file deleted, through the bin when one is given (<see cref="FileDeletes.Remove"/>); a subfolder it empties goes too.</summary>
+    public static CustomCommandEditResult Delete(CustomCommandRoots roots, CustomCommandScope scope, string file, IRecycleBin? bin)
+    {
+        ArgumentNullException.ThrowIfNull(roots);
+        ArgumentNullException.ThrowIfNull(file);
+        string root = roots.Of(scope);
+        string name = NameOf(root, file);
+        if (Refusal(root, scope, file, name) is { } refused)
+        {
+            return refused;
+        }
+
+        try
+        {
+            var way = FileDeletes.Remove(Path.GetFullPath(file), isDirectory: false, isLink: false, bin);
+            RemoveEmptied(root, Path.GetDirectoryName(Path.GetFullPath(file))!);
+            return new CustomCommandEditResult(CustomCommandEditOutcome.Deleted, name, scope, file) { Way = way };
+        }
+        catch (Exception ex) when (IsFileFailure(ex))
+        {
+            return new CustomCommandEditResult(CustomCommandEditOutcome.Failed, name, scope, file, ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// The refusal a new name meets before anything is written, or null: not a valid name, a built-in's word, or a name <paramref name="root"/>
+    /// holds already. The pane's slots ask this before their next question.
+    /// </summary>
+    public static CustomCommandEditOutcome? NameRefusal(string root, string name)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+        ArgumentNullException.ThrowIfNull(name);
+        if (!CustomCommandName.IsValid(name))
+        {
+            return CustomCommandEditOutcome.BadName;
+        }
+
+        if (CustomCommandCatalog.BuiltInWord(name) is not null)
+        {
+            return CustomCommandEditOutcome.BuiltIn;
+        }
+
+        return Taken(root, name) ? CustomCommandEditOutcome.Exists : null;
+    }
+
+    /// <summary>Whether <paramref name="root"/> holds <paramref name="name"/>'s file already, any case.</summary>
+    public static bool Taken(string root, string name)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+        ArgumentNullException.ThrowIfNull(name);
+        string target = Path.Combine(root, CustomCommandName.RelativePath(name));
+        if (File.Exists(target) || Directory.Exists(target))
+        {
+            return true;
+        }
+
+        string? folder = Path.GetDirectoryName(target);
+        try
+        {
+            return folder is not null && Directory.Exists(folder)
+                && Directory.EnumerateFileSystemEntries(folder).Any(e => string.Equals(Path.GetFileName(e), Path.GetFileName(target), StringComparison.OrdinalIgnoreCase));
+        }
+        catch (Exception ex) when (IsFileFailure(ex))
+        {
+            return false;
+        }
+    }
+
+    /// <summary>The command name <paramref name="file"/> has under <paramref name="root"/> (its raw name when it's no valid one).</summary>
+    public static string NameOf(string root, string file)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+        ArgumentNullException.ThrowIfNull(file);
+        try
+        {
+            return CustomCommandName.RawName(Path.GetRelativePath(root, file));
+        }
+        catch (Exception ex) when (IsFileFailure(ex))
+        {
+            return Path.GetFileNameWithoutExtension(file).ToLowerInvariant();
+        }
+    }
+
+    private static CustomCommandEditResult Write(string root, CustomCommandScope scope, string name, string content, CustomCommandEditOutcome done, bool mayReadDifferently)
+    {
+        if (NameRefusal(root, name) is { } refused)
+        {
+            return new CustomCommandEditResult(refused, name, scope);
+        }
+
+        string target = Path.Combine(root, CustomCommandName.RelativePath(name));
+        if (LinkedOnTheWay(root, target))
+        {
+            return new CustomCommandEditResult(CustomCommandEditOutcome.Linked, name, scope, target);
+        }
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            byte[] bytes = Utf8NoBom.GetBytes(content.Replace("\r\n", "\n", StringComparison.Ordinal));
+            // CreateNew: a file that appeared since the check is never replaced.
+            using (var stream = new FileStream(target, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            {
+                stream.Write(bytes);
+            }
+
+            return new CustomCommandEditResult(done, name, scope, target) { MayReadDifferently = mayReadDifferently };
+        }
+        catch (IOException) when (File.Exists(target))
+        {
+            return new CustomCommandEditResult(CustomCommandEditOutcome.Exists, name, scope, target);
+        }
+        catch (Exception ex) when (IsFileFailure(ex))
+        {
+            return new CustomCommandEditResult(CustomCommandEditOutcome.Failed, name, scope, target, ex.Message);
+        }
+    }
+
+    // A rename (newName set), a move or a copy (the same name, another root): the file's bytes kept.
+    private static CustomCommandEditResult Relocate(string root, CustomCommandScope scope, string file, string toRoot, CustomCommandScope toScope, string? newName, bool copy, CustomCommandEditOutcome done)
+    {
+        string name = NameOf(root, file);
+        if (Refusal(root, scope, file, name) is { } refused)
+        {
+            return refused;
+        }
+
+        string target = newName is null
+            ? Path.Combine(toRoot, Path.GetRelativePath(root, Path.GetFullPath(file)))
+            : Path.Combine(toRoot, CustomCommandName.RelativePath(newName));
+        string targetName = newName ?? name;
+        if (string.Equals(Path.GetFullPath(target), Path.GetFullPath(file), StringComparison.OrdinalIgnoreCase))
+        {
+            return new CustomCommandEditResult(CustomCommandEditOutcome.NothingToChange, targetName, toScope, file);
+        }
+
+        if (newName is not null && NameRefusal(toRoot, newName) is { } bad)
+        {
+            return new CustomCommandEditResult(bad, newName, toScope);
+        }
+
+        if (newName is null && Taken(toRoot, name))
+        {
+            return new CustomCommandEditResult(CustomCommandEditOutcome.Exists, targetName, toScope, target);
+        }
+
+        if (LinkedOnTheWay(toRoot, target))
+        {
+            return new CustomCommandEditResult(CustomCommandEditOutcome.Linked, targetName, toScope, target);
+        }
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            if (copy)
+            {
+                File.Copy(file, target, overwrite: false);
+            }
+            else
+            {
+                File.Move(file, target, overwrite: false);
+                RemoveEmptied(root, Path.GetDirectoryName(Path.GetFullPath(file))!);
+            }
+
+            return new CustomCommandEditResult(done, targetName, toScope, target);
+        }
+        catch (IOException) when (File.Exists(target))
+        {
+            return new CustomCommandEditResult(CustomCommandEditOutcome.Exists, targetName, toScope, target);
+        }
+        catch (Exception ex) when (IsFileFailure(ex))
+        {
+            return new CustomCommandEditResult(CustomCommandEditOutcome.Failed, targetName, toScope, target, ex.Message);
+        }
+    }
+
+    // The checks every act on an existing file makes: there, a plain file (no link), under its folder.
+    private static CustomCommandEditResult? Refusal(string root, CustomCommandScope scope, string file, string name)
+    {
+        try
+        {
+            var info = new FileInfo(file);
+            if (!info.Exists || !IsUnder(root, info.FullName))
+            {
+                return new CustomCommandEditResult(CustomCommandEditOutcome.Missing, name, scope, file);
+            }
+
+            if ((info.Attributes & FileAttributes.ReparsePoint) != 0 || LinkedOnTheWay(root, info.FullName))
+            {
+                return new CustomCommandEditResult(CustomCommandEditOutcome.Linked, name, scope, file);
+            }
+
+            return null;
+        }
+        catch (Exception ex) when (IsFileFailure(ex))
+        {
+            return new CustomCommandEditResult(CustomCommandEditOutcome.Failed, name, scope, file, ex.Message);
+        }
+    }
+
+    // Whether a folder between root (not counted: it may be a link) and the file at target is a link.
+    private static bool LinkedOnTheWay(string root, string target)
+    {
+        string top = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
+        string? folder = Path.GetDirectoryName(Path.GetFullPath(target));
+        while (folder is not null && folder.Length > top.Length && IsUnder(top, folder))
+        {
+            if (Directory.Exists(folder) && WorkingDirectory.RealLinkTarget(folder) is not null)
+            {
+                return true;
+            }
+
+            folder = Path.GetDirectoryName(folder);
+        }
+
+        return false;
+    }
+
+    // Each folder from folder up to (not including) root removed while it is empty and no link.
+    private static void RemoveEmptied(string root, string folder)
+    {
+        string top = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
+        string? current = Path.TrimEndingDirectorySeparator(folder);
+        while (current is not null && current.Length > top.Length && IsUnder(top, current))
+        {
+            try
+            {
+                if (!Directory.Exists(current) || WorkingDirectory.RealLinkTarget(current) is not null || Directory.EnumerateFileSystemEntries(current).Any())
+                {
+                    return;
+                }
+
+                Directory.Delete(current);
+            }
+            catch (Exception ex) when (IsFileFailure(ex))
+            {
+                return;
+            }
+
+            current = Path.GetDirectoryName(current);
+        }
+    }
+
+    private static bool IsUnder(string root, string path)
+    {
+        string top = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
+        string full = Path.GetFullPath(path);
+        var comparison = CaseRule.Comparison(top);
+        return full.Length > top.Length && full.StartsWith(top, comparison) && (full[top.Length] == Path.DirectorySeparatorChar || full[top.Length] == Path.AltDirectorySeparatorChar);
+    }
+
+    private static bool IsFileFailure(Exception ex) =>
+        ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException;
+}

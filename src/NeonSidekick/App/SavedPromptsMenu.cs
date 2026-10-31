@@ -27,6 +27,7 @@ internal sealed class SavedPromptsMenu
         new(SavedPromptText.AddButton, SavedPromptText.AddKey),
         new(SavedPromptText.SaveDraftButton, SavedPromptText.SaveDraftKey),
         new(SavedPromptText.EditButton, SavedPromptText.EditKey),
+        new(SavedPromptText.AsCommandButton, SavedPromptText.AsCommandKey),   // 2026-10-30, the custom commands plan
         new(SavedPromptText.RemoveButton, SavedPromptText.RemoveKey),
         new(QueueMenu.ClearAllButton, QueueMenu.ClearAllKey),
     ];
@@ -35,8 +36,9 @@ internal sealed class SavedPromptsMenu
     private const int Add = 1;
     private const int SaveDraft = 2;
     private const int Edit = 3;
-    private const int Remove = 4;
-    private const int ClearAll = 5;
+    private const int AsCommand = 4;
+    private const int Remove = 5;
+    private const int ClearAll = 6;
 
     private const string ErrorPrefix = "Error: ";
 
@@ -48,6 +50,13 @@ internal sealed class SavedPromptsMenu
     private readonly Func<string, CancellationToken, Task<EditorResult>>? _editInEditor;
     private readonly string _editorRefusal;
     private readonly TimeZoneInfo _zone;
+    private readonly CommandSaver? _saveAsCommand;
+
+    /// <summary>
+    /// How the as-command button saves (2026-10-30): the two <c>commands</c> folders, for the scope page, and the write, given the scope, the
+    /// name and the prompt's text, answering the line to show (<c>Error: </c> for a refusal). The screen's; the menu knows no catalog.
+    /// </summary>
+    public sealed record CommandSaver(Func<CustomCommands.CustomCommandRoots> Roots, Func<CustomCommands.CustomCommandScope, string, string, string> Save);
 
     /// <param name="prompts">The loaded profile's saved prompts, read when the pane opens and after every act.</param>
     /// <param name="transcript">Where the lines outside the pane go (clear all's, which closes it).</param>
@@ -57,6 +66,7 @@ internal sealed class SavedPromptsMenu
     /// <param name="editInEditor">A multi-line prompt's round trip through the draft editor; null where it cannot run (under a reply, no editor).</param>
     /// <param name="editorRefusal">What a multi-line edit says when <paramref name="editInEditor"/> is null.</param>
     /// <param name="zone">The zone the footer's date is shown in.</param>
+    /// <param name="saveAsCommand">The as-command button's save; null: the button says it can't.</param>
     public SavedPromptsMenu(
         Func<SavedPrompts> prompts,
         INoticeSink transcript,
@@ -65,7 +75,8 @@ internal sealed class SavedPromptsMenu
         Func<(string Text, bool PicturesDropped)> draft,
         Func<string, CancellationToken, Task<EditorResult>>? editInEditor,
         string editorRefusal,
-        TimeZoneInfo? zone = null)
+        TimeZoneInfo? zone = null,
+        CommandSaver? saveAsCommand = null)
     {
         _prompts = prompts ?? throw new ArgumentNullException(nameof(prompts));
         _transcript = transcript ?? throw new ArgumentNullException(nameof(transcript));
@@ -75,6 +86,7 @@ internal sealed class SavedPromptsMenu
         _editInEditor = editInEditor;
         _editorRefusal = editorRefusal ?? throw new ArgumentNullException(nameof(editorRefusal));
         _zone = zone ?? TimeZoneInfo.Local;
+        _saveAsCommand = saveAsCommand;
     }
 
     /// <summary>What the draft editor's round trip came back with: the text written (null: unchanged or blank), or the line to show instead.</summary>
@@ -205,6 +217,10 @@ internal sealed class SavedPromptsMenu
                 {
                     answer = await EditAsync(page, pick.Row, prompt, cancellationToken).ConfigureAwait(false);
                 }
+                else if (pick.Button == AsCommand)
+                {
+                    answer = await AsCommandAsync(page, pick.Row, prompt, cancellationToken).ConfigureAwait(false);
+                }
                 else if (pick.Button == Remove || pick.Remove)
                 {
                     if (await ConfirmAsync(SavedPromptText.RemovePrompt(prompt), cancellationToken).ConfigureAwait(false))
@@ -279,6 +295,45 @@ internal sealed class SavedPromptsMenu
 
         var outcome = _prompts().Edit(prompt.Id, text);
         return SavedPromptText.Refusal(outcome) ?? SavedPromptText.Edited(prompt with { Text = SavedPrompts.Clean(text) });
+    }
+
+    /// <summary>
+    /// The as-command button (2026-10-30): a name typed on the slot (made a name as the <c>/commands</c> pane's are, a built-in refused), then
+    /// profile or global, then the screen's save with the prompt's text; the prompt stays. The answer for the status line, or null (Esc).
+    /// </summary>
+    private async Task<string?> AsCommandAsync(MenuPage page, int row, SavedPrompt prompt, CancellationToken cancellationToken)
+    {
+        if (_saveAsCommand is null)
+        {
+            return ErrorPrefix + SavedPromptText.AsCommandUnavailable;
+        }
+
+        if (await TypeAsync(page with { Title = SavedPromptText.AsCommandNameTitle }, row, "", cancellationToken).ConfigureAwait(false) is not { Length: > 0 } typed)
+        {
+            return null;
+        }
+
+        string name = CustomCommands.CustomCommandName.Normalize(typed);
+        if (!CustomCommands.CustomCommandName.IsValid(name))
+        {
+            return ErrorPrefix + CustomCommands.CustomCommandText.BadNameError(typed, "");
+        }
+
+        if (CustomCommands.CustomCommandCatalog.BuiltInWord(name) is not null)
+        {
+            return ErrorPrefix + CustomCommands.CustomCommandText.BuiltInError(name);
+        }
+
+        var roots = _saveAsCommand.Roots();
+        CustomCommands.CustomCommandScope[] scopes = [CustomCommands.CustomCommandScope.Profile, CustomCommands.CustomCommandScope.Global];
+        var where = new MenuPage(SavedPromptText.AsCommandScopeTitle(name),
+            scopes.Select(s => Markup.Escape(CustomCommands.CustomCommandText.ScopeName(s).PadRight(9)) + Theme.DimMarkup(roots.Of(s))).ToList(), SettingsMenu.PickKeys);
+        if (await _pane.PickAsync(where, 0, cancellationToken).ConfigureAwait(false) is not { Row: var picked } || picked < 0 || picked >= scopes.Length)
+        {
+            return null;
+        }
+
+        return _saveAsCommand.Save(scopes[picked], name, prompt.Text);
     }
 
     /// <summary>A line typed on the input row under the list (<paramref name="initial"/> to start from); null on ESC, or with no input row (said so).</summary>

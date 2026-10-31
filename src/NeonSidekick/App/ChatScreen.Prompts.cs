@@ -52,7 +52,8 @@ internal sealed partial class ChatScreen
                     DraftForSaving,
                     onWatcher || _editDraft is null ? null : EditPromptInEditorAsync,
                     onWatcher ? SavedPromptText.EditorAtIdle : SavedPromptText.EditorUnavailable,
-                    _time.LocalTimeZone);
+                    _time.LocalTimeZone,
+                    new SavedPromptsMenu.CommandSaver(() => CustomCommands.CustomCommandRoots.For(_settings), SavePromptAsCommand));
                 if (await menu.ShowAsync(cancellationToken).ConfigureAwait(false) is { } picked)
                 {
                     if (onWatcher)

@@ -45,7 +45,12 @@ internal static class HelpFiles
         $"{(file.IsFolder ? "Folder" : "File")} `{Shown(file.Path, windows)}` ({ScopeWords(file.Scope)}): {file.Holds}";
 
     /// <summary>The format answer's heading. Pinned.</summary>
-    public static string FormatHeading(string fileName) => $"Format of `{fileName}` (JSON with comments; this is what the app writes when the file is missing):";
+    public static string FormatHeading(string fileName) => fileName == CustomCommands.CustomCommandRoots.DirectoryName
+        ? $"Format of a file in `{fileName}/` (Markdown, an optional frontmatter first; this is what `/commands new` writes):"
+        : $"Format of `{fileName}` (JSON with comments; this is what the app writes when the file is missing):";
+
+    /// <summary>The format answer's fence language (2026-10-30): <c>markdown</c> for a custom command's file, <c>jsonc</c> for the JSON files.</summary>
+    public static string FenceLanguage(string fileName) => fileName == CustomCommands.CustomCommandRoots.DirectoryName ? "markdown" : "jsonc";
 
     /// <summary>
     /// <c>mcp.json</c>'s example (2026-10-25): its own empty text is the bare <c>{"mcpServers": {}}</c>, so the manual shows one stdio server and
@@ -107,6 +112,7 @@ internal static class HelpFiles
             new(HelpFileScope.Home, Skills.SkillRoots.DirectoryName + "/", "the global skills, a folder each with its `SKILL.md`", "`/skills`"),
             new(HelpFileScope.Home, Join(Skills.SkillRecordStore.FolderName, Skills.SkillRecordStore.FileName), "the skills' records: when each was made, changed and last used", "`/skills`"),
             new(HelpFileScope.Home, Comfy.ComfyWorkflowCatalog.DirectoryName + "/", "the global ComfyUI workflows", "`/comfy`"),
+            new(HelpFileScope.Home, CustomCommands.CustomCommandRoots.DirectoryName + "/", "the global custom commands, a Markdown file each (`review.md` is `/review`)", "`/commands`"),
             new(HelpFileScope.Home, Diagnostics.CrashReport.FileName, "what the app writes when it crashes"),
             new(HelpFileScope.Home, Files.OwnerLock.MachineIdFileName, "this computer's id, made once, which the plan and audit locks name to tell this computer from another"),
             new(HelpFileScope.Home, Viewer.VideoPage.FolderName + "/", "the video window's browser data (YouTube's cookies) and the page it plays from"),
@@ -140,6 +146,7 @@ internal static class HelpFiles
             new(HelpFileScope.Profile, AppSettings.ImagesFolderName + "/" + UI.SplashImages.ProfileFolderName + "/", "the splash pictures, in place of the built-in ones", "`/splash`"),
             new(HelpFileScope.Profile, Skills.SkillRoots.DirectoryName + "/", "this profile's skills", "`/skills`"),
             new(HelpFileScope.Profile, Comfy.ComfyWorkflowCatalog.DirectoryName + "/", "this profile's ComfyUI workflows", "`/comfy`"),
+            new(HelpFileScope.Profile, CustomCommands.CustomCommandRoots.DirectoryName + "/", "this profile's custom commands, run in place of a global one of the same name", "`/commands`"),
             new(HelpFileScope.Profile, Viewer.BrowserPage.FolderName + "/", "the Browser window's browser data (cookies, cache)", "`/browser`"),
             new(HelpFileScope.WorkingFolder, Plans.PlanSlug.Folder + "/", "the plans, a folder each holding `ralph.md`, `ralph.lock` and the reference pictures", "`/plan`"),
             new(HelpFileScope.WorkingFolder, Audits.AuditFiles.Folder + "/", "the code audits' reports, `<name>.md` and `<name>.coverage.txt`, and `<name>.lock` while one is audited", "`/code-audit`"),
@@ -234,11 +241,12 @@ internal static class HelpFiles
         Services.ServiceConfigFile.FileName => Services.ServiceConfigFile.EmptyText,
         Tasks.TaskConfigFile.FileName => Tasks.TaskConfigFile.EmptyText,
         ActiveDirectory.DirectoryConfigFile.FileName => ActiveDirectory.DirectoryConfigFile.EmptyText,
+        CustomCommands.CustomCommandRoots.DirectoryName => CustomCommands.CustomCommandText.Template("<name>"),   // 2026-10-30: what /commands new writes
         _ => null,
     };
 
     /// <summary>A format answer, the text fenced so Markdown leaves its backslashes alone.</summary>
-    public static string Format(string fileName, string text) => FormatHeading(fileName) + "\n```jsonc\n" + text.TrimEnd('\n') + "\n```";
+    public static string Format(string fileName, string text) => FormatHeading(fileName) + "\n```" + FenceLanguage(fileName) + "\n" + text.TrimEnd('\n') + "\n```";
 
     /// <summary>
     /// The files a query's tokens name (2026-10-25, step 12), each once, at most <see cref="HelpText.MaxMatches"/>: a name with its extension

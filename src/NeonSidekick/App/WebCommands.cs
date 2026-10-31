@@ -41,9 +41,10 @@ public sealed record WebCommandVerdict(WebCommandKind Kind, string? Reason = nul
 /// <summary>
 /// The settings a verdict reads: <i>Web UI commands</i>, the switches <c>/tree</c> and <c>/vault</c> need, and whether the page has its Shopping
 /// tab (later on 2026-10-15: bare <c>/shopping</c> points at the tab, or at the setting while the tab is off) and (later on 2026-10-16) its
-/// YouTube tab, for <c>/youtube list</c> (and the bare <c>/youtube</c> since 2026-10-18).
+/// YouTube tab, for <c>/youtube list</c> (and the bare <c>/youtube</c> since 2026-10-18). <see cref="CustomNames"/> (2026-10-30, the custom
+/// commands plan): the names of the custom commands that run, any case, without their <c>/</c>; null is none (no settings wired).
 /// </summary>
-public readonly record struct WebCommandSettings(bool Commands, bool FileTools, bool ObsidianTools, bool ShoppingTab = true, bool YouTubeTab = false);
+public readonly record struct WebCommandSettings(bool Commands, bool FileTools, bool ObsidianTools, bool ShoppingTab = true, bool YouTubeTab = false, IReadOnlySet<string>? CustomNames = null);
 
 /// <summary>
 /// Which slash commands the Web UI's page may run (later on 2026-10-14, the user's calls): a phone has no PC pane to answer and no PC window to
@@ -70,6 +71,7 @@ public static class WebCommands
         SlashCommand.Sampling,
         SlashCommand.Server,
         SlashCommand.Usage,
+        SlashCommand.Commands,   // 2026-10-30: new opens an editor on the PC, and a phone shouldn't write files under the home
     };
 
     /// <summary>The commands some form of which may run from the page: the dropdown offers these alone.</summary>
@@ -82,6 +84,7 @@ public static class WebCommands
         SlashCommand.Docker, SlashCommand.EventLog, SlashCommand.Net, SlashCommand.Services, SlashCommand.Tasks, SlashCommand.Ad, SlashCommand.Monitor, SlashCommand.Camera, SlashCommand.Screen, SlashCommand.Shopping, SlashCommand.Print, SlashCommand.Pdf, SlashCommand.Docx,
         SlashCommand.Rename, SlashCommand.Claude, SlashCommand.Advisor, SlashCommand.Test, SlashCommand.Avatar, SlashCommand.Loop,
         SlashCommand.MsgClear, SlashCommand.Mark,   // /mark (2026-10-18): the PC's rules, set from the page too
+        SlashCommand.Custom,   // 2026-10-30: the user's own commands, a message once expanded
     };
 
     /// <summary>Whether any form of <paramref name="command"/> may run from the page (the dropdown's commands).</summary>
@@ -91,9 +94,16 @@ public static class WebCommands
     public static WebCommandVerdict Check(string line, WebCommandSettings settings)
     {
         ArgumentNullException.ThrowIfNull(line);
-        var (command, args) = SlashCommands.Parse(line);
+        var (command, args) = Parse(line, settings);
         return Check(command, args, line, settings);
     }
+
+    /// <summary>
+    /// <see cref="SlashCommands.Parse(string, Func{string, bool}?)"/> with <paramref name="settings"/>' custom names (2026-10-30): one word rule
+    /// for the page's send, its dropdown and the screen's guard.
+    /// </summary>
+    public static (SlashCommand Command, string Args) Parse(string line, WebCommandSettings settings) =>
+        SlashCommands.Parse(line, settings.CustomNames is { Count: > 0 } names ? word => word.StartsWith('/') && names.Contains(word[1..]) : null);
 
     /// <summary>The verdict on <paramref name="command"/> with <paramref name="args"/>; <paramref name="line"/> names it in a refusal.</summary>
     public static WebCommandVerdict Check(SlashCommand command, string args, string line, WebCommandSettings settings)
@@ -106,10 +116,26 @@ public static class WebCommands
             return WebCommandVerdict.Run;   // a message
         }
 
+        // A custom command the settings name (2026-10-30), ahead of the unknown branch: run, or refused as a built-in is with commands off —
+        // never offered as text, which would send /review x to the model unexpanded.
+        if (command == SlashCommand.Unknown && settings.CustomNames is { Count: > 0 } custom
+            && SlashCommands.CustomWord(line, out _) is var customWord && customWord.StartsWith('/') && custom.Contains(customWord[1..]))
+        {
+            command = SlashCommand.Custom;
+        }
+
+        if (command == SlashCommand.Custom)
+        {
+            return settings.Commands ? WebCommandVerdict.Run : Refused(WebUiText.CommandsOff);
+        }
+
         if (command == SlashCommand.Unknown)
         {
-            // A path or a word the app does not know: the page may send it as a message, and //word may be the command meant.
-            string? use = ChatScreen.TypoSlashes(line, SlashCommands.Completions) is { } typo ? typo.Line.TrimEnd() : null;
+            // A path or a word the app does not know: the page may send it as a message, and //word may be the command meant (a custom one too).
+            var known = settings.CustomNames is { Count: > 0 } names
+                ? SlashCommands.Completions.Concat(names.Select(name => new UI.CompletionItem("/" + name, ""))).ToList()
+                : SlashCommands.Completions;
+            string? use = ChatScreen.TypoSlashes(line, known) is { } typo ? typo.Line.TrimEnd() : null;
             return new WebCommandVerdict(WebCommandKind.Refused, settings.Commands ? WebUiText.UnknownCommand(word) : WebUiText.CommandsOff, AsText: true, Use: settings.Commands ? use : null);
         }
 

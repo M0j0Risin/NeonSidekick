@@ -32,6 +32,22 @@ public static class SavedPromptText
     public const char EditKey = 'e';
 
     /// <summary>
+    /// The highlighted prompt saved as a custom command (2026-10-30, the custom commands plan): a name slot, then profile or global, the
+    /// prompt kept. Its key is in INTERFACE.md's pane keys, not <see cref="PaneKeys"/> (no room under 119 cells).
+    /// </summary>
+    public const string AsCommandButton = "» as command";
+    public const char AsCommandKey = 'm';
+
+    /// <summary>The as-command name slot's title.</summary>
+    public const string AsCommandNameTitle = PaneTitle + " › as command: its name";
+
+    /// <summary>The as-command scope page's title.</summary>
+    public static string AsCommandScopeTitle(string name) => PaneTitle + " › /" + name + " › where";
+
+    /// <summary>The as-command button where the screen gave no way to save one (a test's pane).</summary>
+    public const string AsCommandUnavailable = "custom commands can't be saved here";
+
+    /// <summary>
     /// The remove button: the lists' <c>✖  remove</c> (two spaces: Windows Terminal draws ✖ two cells wide). Its key is <c>r</c> since
     /// 2026-10-16 (<c>d</c> until then, the other lists' letter; <c>d</c> went to <see cref="ToDraftKey"/>); Delete still removes.
     /// </summary>

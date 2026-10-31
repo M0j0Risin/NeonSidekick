@@ -87,10 +87,13 @@ They need no server unless the row says so.
 | `/print …`, `/pdf …` | [Print](TOOLS.md#printing) or [make a PDF](TOOLS.md#making-pdfs) of a file, a web page (`/pdf`) or the last reply, and `/pdf merge\|extract\|delete\|rotate` [edit PDFs](TOOLS.md#editing-pdfs); *Print action policy* doesn't apply. On a Mac, `/pdf` has only the `browser` engine. |
 | `/docx …` | [Makes a Word document](TOOLS.md#writing-office-files) of a Markdown or `.txt` file or the last reply; needs no server unless it is `reply`. |
 | `/test …` | Runs the [benchmark tests](COMMANDS.md#benchmark-tests), a `[notice]` per test. The listing and `history` need no server; a run does. |
+| `/commands`, `/commands new\|save <name> [--global]` | Prints your [custom commands](COMMANDS.md#custom-commands), or writes one and prints its path (no editor opens). `save` takes the last message sent. |
+| `/<name> [<words>]` | Sends a custom command's prompt after a `[notice]` naming its folder. The prompt is a message, so a body starting with `/plan` isn't run as `/plan`. |
 | `/prompts …`, `/browser save\|list\|unsave …` | The saved prompts and saved links: listed, printed, added (`/browser save` needs the address) or removed; `list --clear` empties a list without asking. Other `/browser` forms are errors. |
 | `/youtube …` | Searches (needs a *YouTube API key*) and lists playlists and saved videos (bare `/youtube` lists the saved ones); `list --clear` empties the list without asking. Playing a video is an error. |
 | `/camera list`, `/screen list` | List the cameras, or the monitors and windows; other forms are errors. On a Mac they need macOS 14 or later. |
 | `/avatar …` | Prints or sets the *Model avatar* (`/avatar user …` your *User avatar*); a description picks the closest emoji. |
+| `/help <your command>` | Prints the custom command's card; no server needed. |
 | `/help <words>` | Asks the model to look the words up in the app's manual (`neon_help`). With no server, or *Help tools* or `neon_help` off, it prints the manual's own answer (after a `[notice]` when a server is there). A tool's answer says whether a headless run offers it, and why not. |
 | `/webui …` | An error: the [Web UI](INTERFACE.md#web-ui) runs only with the full-screen app. |
 

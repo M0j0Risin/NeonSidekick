@@ -129,9 +129,79 @@ public sealed record SkillFrontmatter(string Name, string Description, IReadOnly
             return false;
         }
 
+        if (!TryReadBlock(lines, close, out var entries, out problem))
+        {
+            return false;
+        }
+
         string? name = null;
         string? description = null;
         var other = new List<string>();
+        foreach (var entry in entries)
+        {
+            if (entry.Key.Equals(NameKey, StringComparison.OrdinalIgnoreCase))
+            {
+                name = entry.Value.Trim();
+            }
+            else if (entry.Key.Equals(DescriptionKey, StringComparison.OrdinalIgnoreCase))
+            {
+                description = Flatten(entry.Value);
+            }
+            else
+            {
+                for (int i = entry.Start; i < entry.End; i++)
+                {
+                    other.Add(lines[i]);
+                }
+            }
+        }
+
+        if (string.IsNullOrEmpty(name))
+        {
+            problem = NoNameProblem;
+            return false;
+        }
+
+        if (string.IsNullOrEmpty(description))
+        {
+            problem = NoDescriptionProblem;
+            return false;
+        }
+
+        var sb = new StringBuilder();
+        for (int i = close + 1; i < lines.Length; i++)
+        {
+            if (i > close + 1)
+            {
+                sb.Append('\n');
+            }
+
+            sb.Append(lines[i]);
+        }
+
+        frontmatter = new SkillFrontmatter(name, description, other);
+        body = sb.ToString().Trim();
+        return true;
+    }
+
+    /// <summary>
+    /// One key of a frontmatter block (2026-10-30, the custom commands plan: the key/value reader shared by <c>SKILL.md</c> and a command file):
+    /// its key, its scalar (<see cref="ReadScalar"/>), the <c>- item</c> lines under it when it has an empty value (null when none), and the lines
+    /// it took, <paramref name="Start"/> up to <paramref name="End"/> (exclusive).
+    /// </summary>
+    internal sealed record Entry(string Key, string Value, IReadOnlyList<string>? Items, int Start, int End);
+
+    /// <summary>
+    /// The <c>key: value</c> lines between line 1 and <paramref name="close"/> (the closing fence's index), comment and blank lines skipped.
+    /// False with the problem for a line that is no pair (<see cref="NotAPairProblem"/>). Lifted out of <see cref="TryParse"/> on 2026-10-30
+    /// so a custom command's frontmatter reads by the same rules.
+    /// </summary>
+    internal static bool TryReadBlock(string[] lines, int close, out IReadOnlyList<Entry> entries, out string? problem)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        var found = new List<Entry>();
+        entries = found;
+        problem = null;
         int index = 1;
         while (index < close)
         {
@@ -168,53 +238,10 @@ public sealed record SkillFrontmatter(string Name, string Description, IReadOnly
             }
 
             int start = index;
-            string value = ReadScalar(lines, ref index, close, rest);
-            bool known = key.Equals(NameKey, StringComparison.OrdinalIgnoreCase) || key.Equals(DescriptionKey, StringComparison.OrdinalIgnoreCase);
-            if (!known)
-            {
-                for (int i = start; i < index; i++)
-                {
-                    other.Add(lines[i]);
-                }
-
-                continue;
-            }
-
-            if (key.Equals(NameKey, StringComparison.OrdinalIgnoreCase))
-            {
-                name = value.Trim();
-            }
-            else
-            {
-                description = Flatten(value);
-            }
+            string value = ReadScalar(lines, ref index, close, rest, out var items);
+            found.Add(new Entry(key, value, items, start, index));
         }
 
-        if (string.IsNullOrEmpty(name))
-        {
-            problem = NoNameProblem;
-            return false;
-        }
-
-        if (string.IsNullOrEmpty(description))
-        {
-            problem = NoDescriptionProblem;
-            return false;
-        }
-
-        var sb = new StringBuilder();
-        for (int i = close + 1; i < lines.Length; i++)
-        {
-            if (i > close + 1)
-            {
-                sb.Append('\n');
-            }
-
-            sb.Append(lines[i]);
-        }
-
-        frontmatter = new SkillFrontmatter(name, description, other);
-        body = sb.ToString().Trim();
         return true;
     }
 
@@ -222,9 +249,12 @@ public sealed record SkillFrontmatter(string Name, string Description, IReadOnly
     /// The scalar for a key: the rest of its line, or the indented lines that follow a block
     /// indicator (<c>|</c>, <c>&gt;</c>, with <c>-</c> / <c>+</c>) or an empty value (a nested
     /// map — kept as text, the caller ignores it). <paramref name="index"/> lands on the next key.
+    /// Under an empty value the <c>- item</c> lines are read too, at column 0 or indented (both are YAML; Claude Code's command files
+    /// write <c>allowed-tools:</c> lists at column 0, 2026-10-30), each item into <paramref name="items"/>.
     /// </summary>
-    private static string ReadScalar(string[] lines, ref int index, int close, string rest)
+    private static string ReadScalar(string[] lines, ref int index, int close, string rest, out List<string>? items)
     {
+        items = null;
         string inline = rest.Trim();
         bool block = inline is "|" or ">" or "|-" or ">-" or "|+" or ">+";
         if (!block && inline.Length > 0)
@@ -236,9 +266,14 @@ public sealed record SkillFrontmatter(string Name, string Description, IReadOnly
         bool literal = inline.Length > 0 && inline[0] == '|';
         var sb = new StringBuilder();
         index++;
-        while (index < close && (lines[index].Length == 0 || char.IsWhiteSpace(lines[index][0])))
+        while (index < close && (lines[index].Length == 0 || char.IsWhiteSpace(lines[index][0]) || (!block && IsSequenceItem(lines[index]))))
         {
             string continuation = lines[index].Trim();
+            if (!block && IsSequenceItem(continuation))
+            {
+                (items ??= []).Add(Unquote(continuation[1..].Trim()));
+            }
+
             if (sb.Length > 0)
             {
                 sb.Append(literal ? '\n' : ' ');
@@ -250,6 +285,9 @@ public sealed record SkillFrontmatter(string Name, string Description, IReadOnly
 
         return sb.ToString();
     }
+
+    // A YAML block-sequence line: a hyphen, then a space or nothing.
+    private static bool IsSequenceItem(string line) => line.Length > 0 && line[0] == '-' && (line.Length == 1 || char.IsWhiteSpace(line[1]));
 
     /// <summary>A quoted scalar without its quotes (the two YAML escapes that matter, <c>\"</c> and <c>\\</c>, and <c>''</c>); a plain one without a trailing comment.</summary>
     internal static string Unquote(string value)

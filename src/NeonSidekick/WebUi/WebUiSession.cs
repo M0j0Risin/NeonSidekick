@@ -767,9 +767,10 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
         }
 
         // A command (later on 2026-10-14): checked here, and again as the screen takes it (the settings may change in between).
-        if (!request.AsText && SlashCommands.Parse(text) is var (command, args) && command != SlashCommand.None)
+        var commandSettings = CommandSettings?.Invoke() ?? default;
+        if (!request.AsText && WebCommands.Parse(text, commandSettings) is var (command, args) && command != SlashCommand.None)
         {
-            var verdict = WebCommands.Check(command, args, text, CommandSettings?.Invoke() ?? default);
+            var verdict = WebCommands.Check(command, args, text, commandSettings);
             DiagnosticLog.Info(Category, WebUiText.CommandLogLine(WebCommands.Word(text), remote, verdict.Kind == WebCommandKind.Refused ? "refused" : verdict.Kind.ToString().ToLowerInvariant()));
             if (verdict.Kind == WebCommandKind.Page)
             {

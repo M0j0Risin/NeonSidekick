@@ -92,7 +92,7 @@ public partial class ChatScreenTests
 
         string output = await RunAsync(input);
 
-        Assert.Contains(Titled(InfoPane.Title + " │ Basic · Advanced · Keys "), output);
+        Assert.Contains(Titled(InfoPane.Title + " │ Basic · Advanced · Custom · Keys "), output);
         Assert.DoesNotContain(ChatScreen.ConnectCancelledNotice(NoticeGlyphs.Llm), output);
         Assert.NotNull(_session.Assistant);
         Assert.NotNull(embedded.Running);

@@ -224,7 +224,7 @@ public partial class ChatScreenTests
 
         string output = await RunAsync(input);
 
-        int help = output.IndexOf(Titled(InfoPane.Title + " │ Basic · Advanced · Keys "), StringComparison.Ordinal);
+        int help = output.IndexOf(Titled(InfoPane.Title + " │ Basic · Advanced · Custom · Keys "), StringComparison.Ordinal);
         int answer = output.IndexOf(TranscriptRenderer.ToolAnswerIndent + "Index the foreign key.\n", StringComparison.Ordinal);
         Assert.True(help > 0 && answer > help, output);
         Assert.DoesNotContain("  · " + ChatScreen.CancelledNotice, output);

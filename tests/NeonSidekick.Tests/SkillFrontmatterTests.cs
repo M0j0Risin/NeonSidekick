@@ -30,6 +30,17 @@ public class SkillFrontmatterTests
         Assert.Equal("Body.", body);
     }
 
+    /// <summary>A list at column 0 under its key (2026-10-30, the custom commands plan: Claude Code's files write <c>allowed-tools:</c> so) loads.</summary>
+    [Fact]
+    public void AColumnZeroList_UnderItsKey_Loads()
+    {
+        var fm = Parse("---\nname: x\ndescription: Does x.\nallowed-tools:\n- Read\n- Bash(git:*)\n---\nBody.", out string body);
+
+        Assert.Equal("Does x.", fm.Description);
+        Assert.Contains("allowed-tools:", fm.OtherLines);
+        Assert.Equal("Body.", body);
+    }
+
     [Theory]
     [InlineData("description: \"Use when: the user asks, \\\"please\\\".\"", "Use when: the user asks, \"please\".")]
     [InlineData("description: 'It''s for PDFs.'", "It's for PDFs.")]

@@ -57,7 +57,7 @@ public static class Profiles
     /// <c>perfbar</c>, <c>statusbar</c> and <c>toolbar</c> with their sections. A profile elsewhere with one of these names drops out of
     /// <see cref="List"/>, as one did when <c>memory</c> and <c>prompts</c> came; no migration. A to Z.
     /// </summary>
-    public static readonly string[] ReservedNames = { "add", "allowed", "avatar", "barorder", "delete", "edit", "history", "homeassistant", "keys", "links", "mcp", "memory", "monitors", "operata", "overwrite", "perfbar", "persona", "policestrings", "prompts", "pull", "push", "reload", "rename", "reset", "servers", "skills", "statusbar", "toolbar", "videos", "vocalia" };
+    public static readonly string[] ReservedNames = { "add", "allowed", "avatar", "barorder", "commands", "delete", "edit", "history", "homeassistant", "keys", "links", "mcp", "memory", "monitors", "operata", "overwrite", "perfbar", "persona", "policestrings", "prompts", "pull", "push", "reload", "rename", "reset", "servers", "skills", "statusbar", "toolbar", "videos", "vocalia" };
 
     /// <summary>
     /// The wording for a name <see cref="IsValidName"/> refuses, every <see cref="ReservedNames"/> word in it (2026-10-26, the review's R13/R46:

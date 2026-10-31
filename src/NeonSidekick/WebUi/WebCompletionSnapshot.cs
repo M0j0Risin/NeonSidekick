@@ -59,7 +59,7 @@ public sealed class WebCompletionSnapshot(CompletionSources sources, CompletionL
         SlashCommand command = SlashCommand.None;
         if (route.Kind == CompletionKind.Argument)
         {
-            command = SlashCommands.Parse(route.Command!).Command;
+            command = WebCommands.Parse(route.Command!, settings).Command;
             if (!WebCommands.Offers(command))
             {
                 return WebCompletion.Empty(seq);
@@ -99,7 +99,7 @@ public sealed class WebCompletionSnapshot(CompletionSources sources, CompletionL
         switch (route.Kind)
         {
             case CompletionKind.Command:
-                return WebCommands.Offers(SlashCommands.Parse(match).Command);
+                return WebCommands.Offers(WebCommands.Parse(match, settings).Command);
             case CompletionKind.Argument:
                 string word = route.Command!;
                 return WebCommands.Check(command, match, word + " " + match, settings).Allowed

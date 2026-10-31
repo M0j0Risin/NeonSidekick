@@ -199,6 +199,9 @@ internal sealed partial class ChatScreen
         SlashCommand.Rename => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
         SlashCommand.Process => hasArgs ? MidTurnClass.Quick : MidTurnClass.Pane,
         SlashCommand.Skills => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
+        // /commands (2026-10-30): the pane over the reply; new and save wait, so "the last message" is the one the reply answers and the editor opens at the idle line.
+        SlashCommand.Commands => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
+        SlashCommand.Custom => MidTurnClass.Deferred,   // a custom command (2026-10-30) sends a message, as /help <words> does
         SlashCommand.Cwd => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Quick,
         SlashCommand.Tts or SlashCommand.Voice or SlashCommand.Copy
             or SlashCommand.Remember or SlashCommand.Explore or SlashCommand.Open or SlashCommand.Browser or SlashCommand.Prompts or SlashCommand.Terminal or SlashCommand.Shortcut or SlashCommand.Log or SlashCommand.Timer or SlashCommand.Expand or SlashCommand.Collapse or SlashCommand.Window
@@ -315,7 +318,7 @@ internal sealed partial class ChatScreen
             return QueueLine(line);
         }
 
-        var (command, args) = ParseLine(text);
+        var (command, args) = ParseWithCustom(text);
         if (line.Chord && _botChatRunning && command == SlashCommand.BotChat && BotChat.ParseResume(args).Resume)
         {
             // Ctrl+Alt+B under a running /botchat (2026-10-11, the user's pick): the chat ends in one press, not up the ESC
@@ -411,6 +414,8 @@ internal sealed partial class ChatScreen
                 taken = TakeEventLogDraft(typed) && taken;
                 // An admin pane's ask (2026-10-15, the admin-tools plan): the same.
                 taken = TakeAdminDraft(typed) && taken;
+                // A use on /commands' pane (2026-10-30): the word on the draft, the same.
+                taken = TakeCommandsDraft(typed) && taken;
                 if (chord is not null)
                 {
                     // A chord pressed in the pane that names no pane (2026-10-01): offered as the live row's chord is.
@@ -688,6 +693,10 @@ internal sealed partial class ChatScreen
                 // /browser list, list --clear, clear all and a bare save (later on 2026-10-13): the saved links' pane, a question, or the
                 // window's answer waited on, on the watcher with the reply streaming on (BrowserCommand.IsPane).
                 await HandleBrowserAsync(args, _flow, cancellationToken).ConfigureAwait(false);
+                break;
+            case SlashCommand.Commands:
+                // The bare /commands (2026-10-30): the pane over the reply; a use is kept (_commandsDraft) for the hook after this phase.
+                await HandleCommandsAsync(args, _flow, cancellationToken, onWatcher: true).ConfigureAwait(false);
                 break;
             case SlashCommand.Prompts:
                 // /prompts and list --clear (2026-10-13): the pane or the question on the watcher; a pick is only kept (_promptPick), the

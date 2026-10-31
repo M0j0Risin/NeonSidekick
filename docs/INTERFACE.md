@@ -121,7 +121,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | `/ad` card, on a group or a locked user | on a group, `n` nested or direct, `u` users only or all · on a locked user, **Search 4740** opens the PDC emulator's lockout events on `/eventlog` · a name several accounts share opens as a card of them |
 | `/youtube`, `/youtube list` | Enter plays |
 | `/youtube <words>`, `/youtube playlist` | Enter plays · `s` saves the video |
-| `/prompts` | Enter sends the prompt (queued while a reply runs) · `d` puts it on the draft line · `a` add · `s` save the draft · `e` edit (a long one in the draft editor) · `r` or Delete removes (asks) · `c` clears all (asks) · Shift+↑/↓, Shift+Home/End move · type to filter |
+| `/prompts` | Enter sends the prompt (queued while a reply runs) · `d` puts it on the draft line · `a` add · `s` save the draft · `e` edit (a long one in the draft editor) · `m` saves it as a [custom command](COMMANDS.md#custom-commands) · `r` or Delete removes (asks) · `c` clears all (asks) · Shift+↑/↓, Shift+Home/End move · type to filter |
 | `/browser list` | Enter opens in the [Browser window](#the-browser-window) · `a` add · `n` name · `e` address |
 | `/youtube`, `/youtube list`, `/browser list` | `d` or Delete removes (asks) · `c` clears all (asks) · Shift+↑/↓, Shift+Home/End move · type to filter |
 | **Tools and safety** | |
@@ -144,6 +144,8 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | **Skills** | |
 | `/skills` › a skill | Enter on a row: move (asks), copy (asks), rename, edit, revert, lock/unlock, disable/enable, delete (asks) |
 | `/skills` › a skill › `revert` | Enter puts the version back · `d` or Delete removes it (asks) · `c` clear all (asks) |
+| `/commands` | ←/→ all, profile, global · **new command…** asks a name and where, then opens the template · type to filter |
+| `/commands` › a command | Enter on a row: use (puts it on the draft line), move (asks), copy, rename, edit, delete (asks) · a Shadowed file: rename, edit, delete · a Skipped file: edit, delete |
 | **Shopping** | |
 | `/shopping` | Enter or Space ticks · `i` add · `p` place at an aisle or section · `n` rename · `r` or Delete remove · `a` tick all · `c` clear ticked · `s` stores · `+` / `-` quantity |
 | Its add page (`i`) | Enter on the first row types new items · Enter on a past item adds it · `x` or Delete forgets it · type to filter |
@@ -259,7 +261,7 @@ Each runs its command as if typed, and keeps your draft. The last column is what
 
 ## Commands typed during a reply
 
-* **Open their pane over the reply:** `/help`, `/settings`, `/tools`, `/comfy`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/sessions title`, `/rename`, `/skills`, `/reasoning`, `/sampling`, `/msgclear`, `/tree`, `/vault`, `/browse`, `/docker`, `/eventlog`, `/net`, `/services`, `/tasks`, `/ad`, `/youtube`, `/shopping`, `/prompts`, `/browser list`, `/camera list`, `/ha states`, `/keycheck`, `/process`, `/sys persona`, `/sys operata`, `/sys vocalia`, `/toolbar edit`, `/perfbar edit`, `/homebar edit`, a home bar chip's pane, `/webui`
+* **Open their pane over the reply:** `/help`, `/settings`, `/tools`, `/comfy`, `/mcp`, `/sys`, `/usage`, `/about`, `/memory`, `/queue`, `/sessions`, `/sessions title`, `/rename`, `/skills`, `/reasoning`, `/sampling`, `/msgclear`, `/tree`, `/vault`, `/browse`, `/docker`, `/eventlog`, `/net`, `/services`, `/tasks`, `/ad`, `/youtube`, `/shopping`, `/prompts`, `/commands`, `/browser list`, `/camera list`, `/ha states`, `/keycheck`, `/process`, `/sys persona`, `/sys operata`, `/sys vocalia`, `/toolbar edit`, `/perfbar edit`, `/homebar edit`, a home bar chip's pane, `/webui`
 * **Run at once:** `/mark`, `/webui copy`, `/webui browser`, `/ha`, `/camera live`, `/camera watch`, `/camera off`, `/camera use`, `/camera view`, `/camera thumbs`, `/screen view`, `/screen thumbs`, `/tts`, `/stt`, `/stt wake`, `/stt interrupt`, `/perfbar`, `/homebar`, `/homebar on`, `/homebar off`, `/toolbar`, `/header`, `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/queue mode <word>`, `/queue cancel <word>`, `/copy`, `/remember`, `/explore`, `/open`, `/browser <url>`, `/prompts <n>`, `/terminal`, `/shortcut`, `/log`, `/process <id>`, `/docker logs <container>`, `/timer`, `/expand`, `/collapse`, `/window`, `/cwd`, `/comfy view`, `/comfy thumbs`, `/splash view`, `/splash thumbs`, `/pasted view`, `/pasted thumbs`, `/ha stills view`, `/ha stills thumbs`, `/view <path>`, `/view <path> --thumbs`
 * **Stop the reply first:** `/clear`, `/new`, `/splash`, `/rewind`, `/undo` (`/undo purge` waits instead), `/exit`
 * **Everything else:** waits for the reply, queued behind earlier messages (*Queue cancel mode* applies).
@@ -690,10 +692,10 @@ With *Web UI commands* on (off by default), the page sends slash commands too. T
 
 | Kind | Commands | On the page |
 |---|---|---|
-| Run | `/new`, `/clear`, `/splash`, `/compact`, `/plan …` (`/plan ralph` too), `/mark <color>`, `/code-audit …`, `/claude`, `/advisor`, `/help <words>`, `/imagine`, `/loop …`, `/learn [<note>]`, `/test …`, `/pdf …`, `/docx …`, `/print <file\|reply>`, `/avatar <emoji>\|clear`, `/remember`, `/timer …`, `/rename <name>`, `/tts on\|off`, `/stt on\|off`, `/memory <mode>`, `/cwd`, `/model <id>`, `/reasoning <level>`, `/ha …` (not `stills`), `/docker …`, `/shopping …`, `/prompts list\|save\|remove\|<n>`, `/browser save\|unsave`, `/msgclear`, `/undo [<n>]` | Their lines; the status row shows its spinner while it runs |
+| Run | Your [custom commands](COMMANDS.md#custom-commands), `/new`, `/clear`, `/splash`, `/compact`, `/plan …` (`/plan ralph` too), `/mark <color>`, `/code-audit …`, `/claude`, `/advisor`, `/help <words>`, `/imagine`, `/loop …`, `/learn [<note>]`, `/test …`, `/pdf …`, `/docx …`, `/print <file\|reply>`, `/avatar <emoji>\|clear`, `/remember`, `/timer …`, `/rename <name>`, `/tts on\|off`, `/stt on\|off`, `/memory <mode>`, `/cwd`, `/model <id>`, `/reasoning <level>`, `/ha …` (not `stills`), `/docker …`, `/shopping …`, `/prompts list\|save\|remove\|<n>`, `/browser save\|unsave`, `/msgclear`, `/undo [<n>]` | Their lines; the status row shows its spinner while it runs |
 | Pick | `/model`, `/reasoning`, `/rewind [<n>]`, `/plan open [--chat]` | A card with the choices, the one in use marked, a filter for a long list |
 | List | `/ha states`, `/docker logs`, `/eventlog …`, `/net …`, `/services …`, `/tasks …`, `/ad …`, `/code-audit open`, `/print`, `/print printers`, `/camera list`, `/screen list`, `/tree` (needs *File tools*), `/vault` (needs *Obsidian tools*), `/process`, `/comfy status`, `/comfy offered` | A card with the lines; Close |
-| Never | `/exit`, `/webui`, `/cmd`, `/profile`, `/plan edit`, `/cwd <path>`, `/sessions`, `/skills`, `/youtube` (bare and `list` point at the YouTube tab), `/queue`, `/botchat`, `/sampling`, `/server`, `/usage` | Refused: they run at the PC only |
+| Never | `/exit`, `/webui`, `/cmd`, `/profile`, `/plan edit`, `/cwd <path>`, `/sessions`, `/skills`, `/commands`, `/youtube` (bare and `list` point at the YouTube tab), `/queue`, `/botchat`, `/sampling`, `/server`, `/usage` | Refused: they run at the PC only |
 | Page | bare `/prompts` | Opens the 📣 sheet on its Prompts tab (📣 does too, even with *Web UI commands* off) |
 | Other | Every form that opens a pane or a window at the PC (`/settings`, `/theme`, `/view`, `/prompts list --clear`, `/camera`, `/screen`, `/ha stills`, `/undo purge`…) | Refused, naming the form that works here when there is one |
 

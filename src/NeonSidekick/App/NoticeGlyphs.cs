@@ -79,6 +79,9 @@ public static class NoticeGlyphs
     /// <summary>Skills (the toolbar's mortarboard).</summary>
     public const string Skill = ChatScreen.SkillsToolGlyph + " ";
 
+    /// <summary>Custom commands (2026-10-30): their pane's glyph, a wand.</summary>
+    public const string Commands = CustomCommands.CustomCommandText.Glyph + " ";
+
     /// <summary>The <c>--log</c> file: <c>/log</c> (2026-09-22).</summary>
     public const string Log = "📄 ";
 

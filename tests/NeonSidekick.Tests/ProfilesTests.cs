@@ -74,6 +74,7 @@ public class ProfilesTests : IDisposable
         // 2026-10-25 (the user's call): the new sections' words, avatar and overwrite reserved; nothing starting with -, so no name reads as a flag.
         Assert.All(new[] { "mcp", "Links", "videos", "monitors", "skills", "avatar", "overwrite" }, word => Assert.False(Profiles.IsValidName(word)));
         Assert.All(new[] { "homeassistant", "Toolbar", "perfbar", "statusbar", "barorder" }, word => Assert.False(Profiles.IsValidName(word)));   // the home and the bars, 2026-10-26
+        Assert.False(Profiles.IsValidName("Commands"));   // the custom commands' section, 2026-10-30
         Assert.All(new[] { "-x", "--all", "-" }, word => Assert.False(Profiles.IsValidName(word)));
         Assert.True(Profiles.IsValidName("x-y"));
         Assert.True(Profiles.IsValidName("x-"));

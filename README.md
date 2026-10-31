@@ -60,6 +60,7 @@ It's one app for research, IT and admin work such as Active Directory, event log
 * **Auto-complete** for commands, files, folders, skills and tools, and **find** in the transcript (`/find`).
 * **Message queue:** keep typing while the model works; messages go out in order, and `/loop` repeats one.
 * **Saved prompts:** messages you send often, picked from a list (`/prompts`) or from your phone.
+* **Custom commands:** your own slash commands, one Markdown file each (Claude Code's format): `/review src` sends its prompt with your words filled in (`/commands`).
 * **Headless mode:** `--headless` runs over stdin/stdout for scripts and scheduled jobs ([HEADLESS.md](docs/HEADLESS.md)).
 
 ### Models

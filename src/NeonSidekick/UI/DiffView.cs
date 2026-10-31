@@ -251,8 +251,8 @@ public sealed class DiffView : IRenderable, IFoldLayout
         return rows;
     }
 
-    /// <summary>A tab as four cells, any other control character as <c>·</c>: a file's bytes never reach the terminal as codes.</summary>
-    private static string Clean(string line)
+    /// <summary>A tab as four cells, any other control character as <c>·</c>: a file's bytes never reach the terminal as codes. Internal since 2026-10-30: the custom commands pane's footer shows a command's body by the same rule.</summary>
+    internal static string Clean(string line)
     {
         if (!line.Any(char.IsControl))
         {
