@@ -190,7 +190,7 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Equal(3, _chat.Requests.Count);
-        var user = Assert.Single(_chat.Requests[2], m => m.Role == ChatRole.User);
+        var user = Assert.Single(_chat.Requests[2], Llm.ConversationHistory.IsTurnStart);
         Assert.Equal(PlanText.ExecuteFreshMessage(PlanPath, PlanDocument.Body(File.ReadAllText(PlanFile))), user.Text);
         Assert.DoesNotContain(_chat.Requests[2], m => m.Text == "Add a guide");
         Assert.Contains(ChatScreen.NewConversationNotice, output);

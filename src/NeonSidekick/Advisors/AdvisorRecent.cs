@@ -69,7 +69,8 @@ public static class AdvisorRecent
         var lines = new List<string>();
         foreach (var message in messages.Skip(Math.Max(0, messages.Count - AdvisorText.RecentMessages)))
         {
-            if (message.Role == ChatRole.System)
+            // The opener (2026-10-30) is the app's, not the user's: an advisor reading it as the user's words would be misled.
+            if (message.Role == ChatRole.System || Llm.ConversationHistory.IsOpener(message))
             {
                 continue;
             }

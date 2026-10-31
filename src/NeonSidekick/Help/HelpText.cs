@@ -192,8 +192,12 @@ public static class HelpText
         return sb.Append("\nAsk for one menu (").Append(pane.Command).Append(' ').Append(menus[0].Key.ToLowerInvariant()).Append(") for its rows' defaults and what each does.").ToString();
     }
 
-    /// <summary>A tab's rows, each with its default and the first sentence of what it does (a menu's on a group tab too, <paramref name="tab"/> then <c>Database › SQL</c>).</summary>
-    public static string Tab(HelpPane pane, string tab, IReadOnlyList<HelpRow> rows, Func<SettingsField, string> defaultOf, Func<SettingsField, string> describe)
+    /// <summary>
+    /// A tab's rows, each with its default and the first sentence of what it does (a menu's on a group tab too, <paramref name="tab"/> then
+    /// <c>Database › SQL</c>). <paramref name="liveOf"/> (2026-10-30) gives a row's live line, indented on the line under it, or null for none:
+    /// a group switch's "Right now:" line, so a default of off is never read as what the app does now.
+    /// </summary>
+    public static string Tab(HelpPane pane, string tab, IReadOnlyList<HelpRow> rows, Func<SettingsField, string> defaultOf, Func<SettingsField, string> describe, Func<SettingsField, string?>? liveOf = null)
     {
         ArgumentNullException.ThrowIfNull(pane);
         ArgumentNullException.ThrowIfNull(rows);
@@ -208,6 +212,10 @@ public static class HelpText
         foreach (var row in rows)
         {
             sb.Append("\n- ").Append(row.Label).Append(" (default ").Append(defaultOf(row.Field)).Append("): ").Append(FirstSentence(describe(row.Field)));
+            if (liveOf?.Invoke(row.Field) is { } line)
+            {
+                sb.Append("\n  ").Append(line);
+            }
         }
 
         return sb.ToString();

@@ -321,6 +321,93 @@ public class ConversationHistoryTests
         Assert.Equal(0, history.TurnCount);
         Assert.False(history.RemoveLastTurn());
     }
+
+    /// <summary>A first turn as it opens since 2026-10-30: the opener, an opening pair, then the user's message.</summary>
+    private static ConversationHistory OpenedFirstTurn()
+    {
+        var history = new ConversationHistory("s");
+        history.AddOpener(Assistant.OpeningOpenerText);
+        var call = new FunctionCallContent(Assistant.OpeningClockCallId, "get_current_time", new Dictionary<string, object?>());
+        history.AddMessage(new ChatMessage(ChatRole.Assistant, [call]));
+        history.AddToolResults([new FunctionResultContent(call.CallId, "14:05")]);
+        history.AddUser("one");
+        history.AddAssistant("r1");
+        return history;
+    }
+
+    [Fact]
+    public void TheOpener_IsNoTurn_NorTheTurnInFlight()
+    {
+        var history = new ConversationHistory("s");
+        history.AddOpener(Assistant.OpeningOpenerText);
+        Assert.Equal(0, history.TurnCount);
+        Assert.True(ConversationHistory.IsOpener(history.Messages[0]));
+        Assert.False(ConversationHistory.IsTurnStart(history.Messages[0]));
+        Assert.False(ConversationHistory.IsImageCarrier(history.Messages[0]));
+
+        history = OpenedFirstTurn();
+        Assert.Equal(1, history.TurnCount);
+        Assert.Equal([3], history.TurnStarts());
+        Assert.Equal(3, ConversationHistory.InFlightStart(history.Messages));
+        Assert.Equal(["one", "r1"], history.LastTurn().Select(m => m.Text));
+    }
+
+    [Fact]
+    public void WithdrawingTheFirstTurn_TakesTheOpenerAndItsPairs()
+    {
+        var history = OpenedFirstTurn();
+        Assert.True(history.RemoveLastTurn());
+        Assert.Empty(history.Messages);
+        Assert.Equal(0, history.TurnCount);
+    }
+
+    [Fact]
+    public void ACutAtTheFirstTurn_TakesTheOpening_ALaterCutDoesNot()
+    {
+        var history = OpenedFirstTurn();
+        history.AddUser("two");
+        history.AddAssistant("r2");
+
+        var removed = history.TruncateAt(history.TurnStarts()[1]);
+        Assert.Equal(["two", "r2"], removed.Select(m => m.Text));
+        Assert.Equal(5, history.Messages.Count);
+
+        removed = history.TruncateAt(history.TurnStarts()[0]);
+        Assert.Equal(5, removed.Count);
+        Assert.True(ConversationHistory.IsOpener(removed[0]));
+        Assert.Empty(history.Messages);
+    }
+
+    [Fact]
+    public void AnOpeningLeftWithNoTurn_IsDropped_WhenWithdrawn()
+    {
+        // A first turn stopped while its opening calls ran: the opener and a call with no result, no user message yet.
+        var history = new ConversationHistory("s");
+        history.AddOpener(Assistant.OpeningOpenerText);
+        history.AddMessage(new ChatMessage(ChatRole.Assistant, [new FunctionCallContent(Assistant.OpeningClockCallId, "get_current_time", new Dictionary<string, object?>())]));
+
+        Assert.False(history.RemoveLastTurn());
+        Assert.Empty(history.Messages);
+
+        history.AddOpener(Assistant.OpeningOpenerText);
+        history.DropUnfinishedOpening();
+        Assert.Empty(history.Messages);
+
+        // With a turn held, nothing is an unfinished opening.
+        history = OpenedFirstTurn();
+        history.DropUnfinishedOpening();
+        Assert.Equal(5, history.Messages.Count);
+    }
+
+    [Fact]
+    public void TheTurnCap_DropsTheOpenerWithTheFirstTurn()
+    {
+        var history = OpenedFirstTurn();
+        history.MaxTurns = 1;
+        history.AddUser("two");
+        Assert.Equal(["two"], history.Messages.Select(m => m.Text));
+    }
+
     /// <summary><c>/rewind</c> (2026-09-30): the cut at a turn start takes that turn and everything after it, carriers and results with their turns.</summary>
     [Fact]
     public void TruncateAt_ATurnStart_DropsThatTurnAndAfter_AndReturnsThem()

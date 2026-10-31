@@ -128,6 +128,24 @@ public sealed class ThrowingTool : AIFunction
 }
 
 /// <summary>Answers a fixed text: the shape of a no-argument lookup such as the working directory.</summary>
+/// <summary>A tool that answers only by being cancelled (2026-10-30): a turn stopped while it runs.</summary>
+public sealed class HangingTool(string name) : AIFunction
+{
+    private static readonly JsonElement Schema = ToolSchema.Parse("""{"type":"object","properties":{}}""");
+
+    public override string Name => name;
+
+    public override string Description => "Never answers.";
+
+    public override JsonElement JsonSchema => Schema;
+
+    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    {
+        await Task.Delay(Timeout.Infinite, cancellationToken).ConfigureAwait(false);
+        return null;
+    }
+}
+
 public sealed class FixedTool(string name, string text) : AIFunction
 {
     private static readonly JsonElement Schema = ToolSchema.Parse("""{"type":"object","properties":{}}""");

@@ -219,6 +219,23 @@ public partial class ChatScreenTests
         Assert.Contains(HelpText.LiveNotOffered(HelpText.LiveToolsOff), output, StringComparison.Ordinal);
     }
 
+    /// <summary>Plain words (2026-10-30, session 836: "shopping add" read "(off by default)" with no live line, and the model told the user the offered tools were off).</summary>
+    [Fact]
+    public async Task HelpPlainWords_ShoppingToolsOn_SaysOffered()
+    {
+        string output = await ManualHelpAsync("shopping add", d => d.ShoppingTools = true);
+        Assert.Contains(HelpText.LiveOffered, output, StringComparison.Ordinal);
+        Assert.DoesNotContain(ToolsText.SwitchOffReason(SettingsField.ShoppingTools), output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task HelpPlainWords_ShoppingToolsOff_SaysSo()
+    {
+        string output = await ManualHelpAsync("shopping add", d => d.ShoppingTools = false);
+        Assert.Contains(HelpText.LiveNotOffered(ToolsText.SwitchOffReason(SettingsField.ShoppingTools)), output, StringComparison.Ordinal);
+        Assert.DoesNotContain(HelpText.LiveOffered, output, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task HelpTool_ClockToolsOff_GivesItsSwitch()
     {

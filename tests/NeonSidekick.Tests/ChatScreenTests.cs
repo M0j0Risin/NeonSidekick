@@ -238,8 +238,8 @@ public partial class ChatScreenTests : IDisposable
     /// <summary>A fresh store over the loaded profile's file every time: the screen binds its own, so a cached count here would be stale.</summary>
     private MemoryStore _memory => new(_settings.ProfileDirectory);
 
-    /// <summary>The user's line as the model saw it: the request ends with the opening clock call's pair, not the user message.</summary>
-    private static string? UserText(IReadOnlyList<ChatMessage> request) => request.Single(m => m.Role == ChatRole.User).Text;
+    /// <summary>The user's line as the model saw it: the one turn start, not the opener the opening pairs follow (2026-10-30).</summary>
+    private static string? UserText(IReadOnlyList<ChatMessage> request) => request.Single(ConversationHistory.IsTurnStart).Text;
 
     /// <summary>
     /// The hint row as the pane draws it in these scripts: the speech strip first (empty in most
@@ -2114,7 +2114,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(1, _synth.ListCalls);
         Assert.Equal(1, _recognizersBuilt);
         Assert.Equal(2, _chat.Requests.Count);
-        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool }, _chat.Requests[1].Select(m => m.Role));
+        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User }, _chat.Requests[1].Select(m => m.Role));
         Assert.Contains("● two", after);
     }
 
@@ -2150,7 +2150,7 @@ public partial class ChatScreenTests : IDisposable
 
         // The conversation forgotten: the second message opens with the clock and cwd pairs again.
         Assert.Equal(2, _chat.Requests.Count);
-        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool }, _chat.Requests[1].Select(m => m.Role));
+        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User }, _chat.Requests[1].Select(m => m.Role));
         Assert.Contains("● two", output[at..]);
     }
 
@@ -4010,7 +4010,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain("Their name is Chris.", _chat.Requests[0][0].Text);
         Assert.Contains(MemoryPrompt.Directive, _chat.Requests[0][0].Text);
         var request = _chat.Requests[0];
-        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool }, request.Select(m => m.Role));
+        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User }, request.Select(m => m.Role));
         var call = Assert.Single(request[6].Contents.OfType<FunctionCallContent>());
         Assert.Equal((RecallMemoryTool.ToolName, Assistant.OpeningMemoryCallId), (call.Name, call.CallId));
         Assert.Equal(MemoryPrompt.Heading + "\n- Their name is Chris.", MemoryResult(request));
@@ -4382,7 +4382,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain(request, m => m.Contents.OfType<FunctionCallContent>().Any(c => c.CallId == Assistant.OpeningClockCallId));
         Assert.Contains(request, m => m.Contents.OfType<FunctionCallContent>().Any(c => c.CallId == Assistant.OpeningCwdCallId));
         Assert.Contains(request, m => m.Contents.OfType<FunctionCallContent>().Any(c => c.CallId == Assistant.OpeningMemoryCallId));
-        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool }, request.Select(m => m.Role));
+        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User }, request.Select(m => m.Role));
     }
 
     [Fact]
@@ -6246,7 +6246,7 @@ public partial class ChatScreenTests : IDisposable
         // Once per conversation: not on the second turn, again after /clear.
         Assert.Equal(6, output.Split('\n').Count(l => l.Contains("🛠️ ")));
         Assert.Contains("  🛠️ Friday 11 September 2026, 14:05 (Pacific Daylight Time, UTC-07:00)\n  🛠️ " + cwd + "\n  🛠️ nothing remembered yet\n● Fresh.", output);
-        ChatRole[] opened = [ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool];
+        ChatRole[] opened = [ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User];
         Assert.Equal(opened, _chat.Requests[0].Select(m => m.Role));
         Assert.Equal([.. opened, ChatRole.Assistant, ChatRole.User], _chat.Requests[1].Select(m => m.Role));
         Assert.Equal(opened, _chat.Requests[2].Select(m => m.Role));
@@ -6586,8 +6586,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("(LLM offer tools off; conversation cleared)", ChatScreen.ToolsChangedNotice(false));
         Assert.Equal("(LLM offer tools on; conversation cleared)", ChatScreen.ToolsChangedNotice(true));
         Assert.False(_settings.Current.LlmOfferTools);
-        // The first turn opened with the three pairs; the one after the flip starts a fresh history with nothing but the line.
-        Assert.Equal(8, _chat.Requests[0].Count);
+        // The first turn opened with the opener and the three pairs; the one after the flip starts a fresh history with nothing but the line.
+        Assert.Equal(9, _chat.Requests[0].Count);
         Assert.Equal([ChatRole.System, ChatRole.User], _chat.Requests[1].Select(m => m.Role));
         Assert.Null(_chat.Options[1]!.Tools);
         Assert.Equal("hi again", _chat.Requests[1][1].Text);
@@ -6668,7 +6668,7 @@ public partial class ChatScreenTests : IDisposable
 
         // The second request carries the same shape as the first — one seeded pair per tool,
         // nothing added — and the working directory's result now says the new path.
-        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.User }, _chat.Requests[1].Select(m => m.Role));
+        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User, ChatRole.Assistant, ChatRole.User }, _chat.Requests[1].Select(m => m.Role));
         var results = _chat.Requests[1].SelectMany(m => m.Contents.OfType<FunctionResultContent>()).Where(r => r.CallId == Assistant.OpeningCwdCallId).ToList();
         Assert.Equal(FileText.Describe(elsewhere, isDefault: false), Assert.Single(results).Result);
         Assert.Contains("  🛠️ " + TranscriptRenderer.Truncate(FileText.Describe(Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName), isDefault: true), TranscriptRenderer.ToolTextLimit), output);
@@ -7654,8 +7654,8 @@ public partial class ChatScreenTests : IDisposable
         // The work profile has speech off, so its vocalia.md is bound but not in the prompt.
         Assert.DoesNotContain("pirate", after);
         // The conversation was cleared: the second turn carries only the new prompt and the new line.
-        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool }, _chat.Requests[1].Select(m => m.Role));
-        Assert.Equal("hi again", _chat.Requests[1][1].Text);
+        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User }, _chat.Requests[1].Select(m => m.Role));
+        Assert.Equal("hi again", _chat.Requests[1][^1].Text);
         // The new profile has speech off: a quiet connect, no TTS line under the redrawn banner.
         Assert.False(_speech.IsReady);
         Assert.DoesNotContain(SpeechSession.OffLine, output);
@@ -8358,7 +8358,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("by-hand", _settings.Current.LlmModel);
         Assert.Equal(33, _settings.Current.GitLibLogMaxCommits);
         Assert.Equal(2, _chat.Requests.Count);
-        Assert.Equal("hi", _chat.Requests[1][1].Text);   // the conversation kept through the reload
+        Assert.Equal("hi", _chat.Requests[1].First(ConversationHistory.IsTurnStart).Text);   // the conversation kept through the reload
         Assert.Equal("again", _chat.Requests[1][^1].Text);
         Assert.Equal(SettingsChanges.Llm, ChatScreen.ReloadChanges(["LlmModel: before → by-hand", "GitLibLogMaxCommits: 20 → 33"]));
         Assert.Equal(SettingsChanges.Tts | SettingsChanges.Voice | SettingsChanges.Mcp | SettingsChanges.Conversation, ChatScreen.ReloadChanges(["TtsSpeed: 1 → 1.2", "SttInput: false → true", "McpServers: true → false", "LlmOfferTools: true → false", "NoSuchField: 1 → 2"]));
@@ -8402,7 +8402,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("pushed-model", _settings.Current.LlmModel);
         Assert.Equal(33, _settings.Current.GitLibLogMaxCommits);
         Assert.Equal(2, _chat.Requests.Count);
-        Assert.Equal("hi", _chat.Requests[1][1].Text);   // the conversation kept
+        Assert.Equal("hi", _chat.Requests[1].First(ConversationHistory.IsTurnStart).Text);   // the conversation kept
         Assert.Equal("pushed-model", Profiles.ReadProfileFile(_settings.FilePath).LlmModel);
     }
 
@@ -8608,8 +8608,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("haiku", after);   // and the operating rules file
         // Two opening pairs, the clock's and the memories': the reset profile's file tools are off (the default since 2026-09-29), so no
         // get_working_directory pair opens it.
-        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool }, _chat.Requests[2].Select(m => m.Role));
-        Assert.Equal("hi again", _chat.Requests[2][1].Text);
+        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User }, _chat.Requests[2].Select(m => m.Role));
+        Assert.Equal("hi again", _chat.Requests[2][^1].Text);
         // The default profile is untouched.
         Assert.Equal(new[] { "Their name is Chris." }, new MemoryStore(ProfileDir(Profiles.DefaultName)).Snapshot());
     }
@@ -13287,16 +13287,17 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        // The notice: the counts either side (the first turn's eight messages became one), the summariser's read → wrote.
-        Assert.Contains("  · (🗜️ compacted: 10 messages → 9 · 300 → 20 tokens)", output);
+        // The notice: the counts either side (the first turn's nine, the opener among them, became one), the summariser's read → wrote.
+        Assert.Contains("  · (🗜️ compacted: 11 messages → 9 · 300 → 20 tokens)", output);
         Assert.DoesNotContain("The user said a and b.", output);   // the summary itself is not shown unless LLM compact show summary is on (2026-09-21)
         Assert.Equal(4, _chat.Requests.Count);
 
-        // The summariser's request: the instruction, the older turn as it was sent (the pairs included), the request last; no tools, thinking off.
+        // The summariser's request: the instruction, the older turn as it was sent (the opener and the pairs included), the request last; no tools, thinking off.
         var summary = _chat.Requests[2];
         Assert.Equal(ConversationCompactor.SummaryInstruction, summary[0].Text);
-        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.User }, summary.Select(m => m.Role));
-        Assert.Equal("a", summary[1].Text);
+        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User, ChatRole.Assistant, ChatRole.User }, summary.Select(m => m.Role));
+        Assert.Equal(Assistant.OpeningOpenerText, summary[1].Text);
+        Assert.Equal("a", summary[8].Text);
         Assert.Equal(ConversationCompactor.SummaryRequestLine, summary[^1].Text);
         Assert.Null(_chat.Options[2]!.Tools);
         Assert.Equal(ReasoningEffort.None, _chat.Options[2]!.Reasoning!.Effort);
@@ -13323,7 +13324,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("  · (🗜️ compacted: 10 messages → 9)\n", output);
+        Assert.Contains("  · (🗜️ compacted: 11 messages → 9)\n", output);
         Assert.Equal(ConversationCompactor.SummaryRequest("the second question"), _chat.Requests[2][^1].Text);
         Assert.Equal("Summarize the conversation above. Pay particular attention to: the second question", _chat.Requests[2][^1].Text);
     }
@@ -13351,7 +13352,7 @@ public partial class ChatScreenTests : IDisposable
         var stubbed = next.Single(m => m.Role == ChatRole.Tool && m.Contents.OfType<FunctionResultContent>().Any(r => r.CallId == "c1"));
         Assert.StartsWith("(a ", (string)((FunctionResultContent)stubbed.Contents[0]).Result!);
         Assert.EndsWith("-character result, pruned by /compact)", (string)((FunctionResultContent)stubbed.Contents[0]).Result!);
-        Assert.Equal("a", next[1].Text);           // every turn stays
+        Assert.Equal("a", next.First(ConversationHistory.IsTurnStart).Text);           // every turn stays
         Assert.Equal("c", next[^1].Text);
         // The pairs' results were left: the working directory is still found and kept current.
         Assert.Contains(next, m => m.Role == ChatRole.Tool && m.Contents.OfType<FunctionResultContent>().Any(r => r.CallId == Assistant.OpeningCwdCallId));
@@ -13373,7 +13374,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         // … closed (later that day) by how many messages were protected: the three opening pairs, the one kept turn.
-        Assert.Contains("  · (🗜️ compacted: 10 messages → 9 · 300 → 20 tokens)\n  · The user said a.\n  · Then b.\n  · (🗜️ 6 messages protected at the start)\n  · (🗜️ 2 messages protected at the end)\n", output);
+        Assert.Contains("  · (🗜️ compacted: 11 messages → 9 · 300 → 20 tokens)\n  · The user said a.\n  · Then b.\n  · (🗜️ 6 messages protected at the start)\n  · (🗜️ 2 messages protected at the end)\n", output);
     }
 
     [Fact]
@@ -13440,8 +13441,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · (🗜️ compact canceled)\n", output);
         Assert.DoesNotContain("(compacted:", output);
         var next = _chat.Requests[3];
-        Assert.Equal("a", next[1].Text);   // nothing was swapped
-        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.User, ChatRole.Assistant, ChatRole.User }, next.Select(m => m.Role));
+        Assert.Equal("a", next[8].Text);   // nothing was swapped
+        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User, ChatRole.Assistant, ChatRole.User, ChatRole.Assistant, ChatRole.User }, next.Select(m => m.Role));
     }
 
     [Fact]
@@ -13470,8 +13471,8 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Contains("  ✗ 🗜️ Compact failed: HttpRequestException: server went away\n", output);
         Assert.DoesNotContain("(compacted:", output);
-        Assert.Equal("a", _chat.Requests[3][1].Text);
-        Assert.Equal(12, _chat.Requests[3].Count);   // nothing was swapped
+        Assert.Equal("a", _chat.Requests[3][8].Text);
+        Assert.Equal(13, _chat.Requests[3].Count);   // nothing was swapped
     }
 
     [Fact]
@@ -13509,7 +13510,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("  · (🗜️ auto-compacted at 25%: 10 messages → 9 · 30 → 4 tokens)\n", output);
+        Assert.Contains("  · (🗜️ auto-compacted at 25%: 11 messages → 9 · 30 → 4 tokens)\n", output);
         Assert.Equal(1, output.Split("auto-compacted").Length - 1);
         Assert.Equal(5, _chat.Requests.Count);
         Assert.Equal(ConversationCompactor.SummaryInstruction, _chat.Requests[2][0].Text);   // between b and c
@@ -13791,7 +13792,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("  · (🗜️ auto-compacted at 35%: 14 messages → 13 · 30 → 4 tokens · 1 tool result pruned)\n", output);
+        Assert.Contains("  · (🗜️ auto-compacted at 35%: 15 messages → 13 · 30 → 4 tokens · 1 tool result pruned)\n", output);
         Assert.Equal(6, _chat.Requests.Count);
         Assert.Equal(ConversationCompactor.SummaryInstruction, _chat.Requests[4][0].Text);
         var next = _chat.Requests[5];
@@ -13866,7 +13867,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(idle("25 / 100 · 25% · 3 tok/s"), output);
         Assert.Contains(idle("15 / 100 · 15% · 1 tok/s"), output);
         // After the compact: the row reads as before any reply until c's report, then the share again.
-        int compacted = output.IndexOf("(🗜️ compacted: 10 messages → 9 · 30 → 4 tokens)", StringComparison.Ordinal);
+        int compacted = output.IndexOf("(🗜️ compacted: 11 messages → 9 · 30 → 4 tokens)", StringComparison.Ordinal);
         Assert.True(compacted > 0);
         int bare = output.IndexOf(idle(null), compacted, StringComparison.Ordinal);
         int measured = output.IndexOf(idle("24 / 100 · 24% · 1 tok/s"), compacted, StringComparison.Ordinal);
@@ -15444,7 +15445,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · " + ChatScreen.WithdrawnNotice, output);   // no glyph over a notice (2026-10-04)
         Assert.Equal(3, _chat.Requests.Count);
         Assert.Equal("hi", UserText(_chat.Requests[1]));   // the restored draft, sent by the bare Enter; the withdrawn copy left the history
-        Assert.Equal(["hi", "later"], _chat.Requests[2].Where(m => m.Role == ChatRole.User).Select(m => m.Text));
+        Assert.Equal(["hi", "later"], _chat.Requests[2].Where(ConversationHistory.IsTurnStart).Select(m => m.Text));
         Assert.True(output.IndexOf("Hi again.", StringComparison.Ordinal) < output.IndexOf("Later.", StringComparison.Ordinal));
     }
 
@@ -20210,7 +20211,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · " + SettingsMenu.ThemeAlreadyNotice("synthwave"), output);
         Assert.Same(ShippedThemes.Synthwave, Theme.Current);
         Assert.Equal(2, _chat.Requests.Count);
-        Assert.Equal(2, _chat.Requests[1].Count(m => m.Role == ChatRole.User));   // "hi" is still in the history
+        Assert.Equal(2, _chat.Requests[1].Count(ConversationHistory.IsTurnStart));   // "hi" is still in the history
     }
 
     [Fact]
@@ -20834,13 +20835,13 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync(input);
 
         Assert.Equal(2, _chat.Requests.Count);
-        var first = _chat.Requests[0].Single(m => m.Role == ChatRole.User);
+        var first = _chat.Requests[0].Single(ConversationHistory.IsTurnStart);
         Assert.Equal("what is [Image #1]?", first.Text);
         var part = Assert.Single(first.Contents.OfType<DataContent>());
         Assert.Equal(ImageFile.Png, part.MediaType);
         Assert.True(part.Data.Length > 8);
         // The second request still carries the picture: a follow-up can ask about it.
-        Assert.Single(_chat.Requests[1].First(m => m.Role == ChatRole.User).Contents.OfType<DataContent>());
+        Assert.Single(_chat.Requests[1].First(ConversationHistory.IsTurnStart).Contents.OfType<DataContent>());
         Assert.Empty(_chat.Requests[1].Last(m => m.Role == ChatRole.User).Contents.OfType<DataContent>());
         // The thumbnail under the line: the 4 × 4 bitmap is four cells across and two half-block rows down.
         Assert.Contains("› what is [Image #1]?\n  ▀▀▀▀\n  ▀▀▀▀\n", output);
@@ -20871,7 +20872,7 @@ public partial class ChatScreenTests : IDisposable
         // the transcript's line keeps the plain label.
         string saved = Path.Combine(_settings.ProfileImagesDirectory, AppSettingsData.DefaultPastedImagesFolder, "pasted-20260911-140530.bmp");
         Assert.Equal(SmokeChecks.SolidBmp(4, 4), File.ReadAllBytes(saved));
-        var first = Assert.Single(_chat.Requests).Single(m => m.Role == ChatRole.User);
+        var first = Assert.Single(_chat.Requests).Single(ConversationHistory.IsTurnStart);
         Assert.Equal("what is " + PasteBlocks.SavedLabel(1, saved) + "?", first.Text);
         var part = Assert.Single(first.Contents.OfType<DataContent>());
         Assert.Equal(ImageFile.Png, part.MediaType);
@@ -20961,7 +20962,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync(input);
 
-        Assert.Equal("[Image #1] [Image #2]", _chat.Requests[0].Single(m => m.Role == ChatRole.User).Text);
+        Assert.Equal("[Image #1] [Image #2]", _chat.Requests[0].Single(ConversationHistory.IsTurnStart).Text);
         Assert.Contains("› [Image #1] [Image #2]\n  ▀▀▀▀  ▀▀▀▀\n  ▀▀▀▀  ▀▀▀▀\n", output);
     }
 
@@ -20979,7 +20980,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync(input);
 
-        var user = _chat.Requests[0].Single(m => m.Role == ChatRole.User);
+        var user = _chat.Requests[0].Single(ConversationHistory.IsTurnStart);
         Assert.Equal("[Image #1] [Image #2]", user.Text);
         Assert.Equal(2, user.Contents.OfType<DataContent>().Count());
         Assert.Contains("› [Image #1] [Image #2]\n  ▀▀▀▀  ▀▀▀▀\n  ▀▀▀▀  ▀▀▀▀\n", output);
@@ -20997,7 +20998,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync(input);
 
-        var user = _chat.Requests[0].Single(m => m.Role == ChatRole.User);
+        var user = _chat.Requests[0].Single(ConversationHistory.IsTurnStart);
         Assert.Equal("[Image #1]", user.Text);
         Assert.Single(user.Contents.OfType<DataContent>());
         Assert.Contains("› [Image #1]\n", output);
@@ -22307,8 +22308,9 @@ public partial class ChatScreenTests : IDisposable
         var reflection = _chat.Requests[1];
         Assert.Equal(SkillLearner.Request("keep the greeting"), reflection[^1].Text);
         Assert.Equal("hi", reflection[1].Text);
-        Assert.Contains(reflection, m => m.Role == ChatRole.Assistant && m.Text == "Hello.");   // after the opening clock and cwd pairs
-        Assert.Contains(reflection, m => m.Contents.OfType<FunctionResultContent>().Any(r => r.CallId == Assistant.OpeningClockCallId));
+        Assert.Contains(reflection, m => m.Role == ChatRole.Assistant && m.Text == "Hello.");
+        // The opening pairs sit ahead of the turn's message since 2026-10-30, so the turn the reflection reads starts at "hi" without them.
+        Assert.DoesNotContain(reflection, m => m.Contents.OfType<FunctionResultContent>().Any(r => r.CallId == Assistant.OpeningClockCallId));
         Assert.Equal(1, _session.Usage.LearningRequests);
         Assert.True(File.Exists(Path.Combine(ProfileSkills, "greeting", SkillCatalog.FileName)));
     }

@@ -310,6 +310,62 @@ public class NeonHelpCatalogTests
         Assert.EndsWith(HelpText.LiveNotOffered(HelpToolCatalog.NeedReason(SettingsField.FileTools)), answer, StringComparison.Ordinal);
     }
 
+    private static List<string> ShoppingTools() => HelpToolCatalog.All.Where(e => e.Switch == SettingsField.ShoppingTools).Select(e => e.Name).ToList();
+
+    /// <summary>
+    /// Session 836 (2026-10-30): the plain words "shopping add" were scored, and every tool answer there was built without the live line, so the
+    /// model read "(off by default)" and told the user the offered shopping tools were off.
+    /// </summary>
+    [Fact]
+    public void APlainWordsAnswer_CarriesEachToolsLiveLine()
+    {
+        int asked = 0;
+        HelpLive Count()
+        {
+            asked++;
+            return Live(offered: ShoppingTools());
+        }
+
+        string answer = Win("shopping add", live: Count);
+        Assert.StartsWith(HelpText.MatchesHeading("shopping add"), answer, StringComparison.Ordinal);
+        Assert.Equal(1, asked);
+        var blocks = answer.Split("\n\n");
+        Assert.EndsWith(HelpText.LiveOffered, Assert.Single(blocks, b => b.StartsWith("Tool `shopping_add`", StringComparison.Ordinal)), StringComparison.Ordinal);
+        Assert.Contains("\n  " + HelpText.LiveOffered, Assert.Single(blocks, b => b.StartsWith("Setting Shopping tools\n", StringComparison.Ordinal)), StringComparison.Ordinal);
+
+        string off = ToolsText.SwitchOffReason(SettingsField.ShoppingTools);
+        string offAnswer = Win("shopping add", live: () => Live(group: f => f == SettingsField.ShoppingTools ? off : null));
+        Assert.EndsWith(HelpText.LiveNotOffered(off), offAnswer.Split("\n\n").Single(b => b.StartsWith("Tool `shopping_add`", StringComparison.Ordinal)), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void APlainWordsAnswer_WithoutTheApp_HasNoLiveLine() =>
+        Assert.DoesNotContain("Right now:", Win("shopping add"), StringComparison.Ordinal);
+
+    [Fact]
+    public void ASettingNamesPart_ThatSwitchesAGroup_CarriesItsLiveLine()
+    {
+        string answer = Win("shopping", "setting", live: () => Live(offered: ShoppingTools()));
+        var block = Assert.Single(answer.Split("\n\n"), b => b.StartsWith("Setting Shopping tools\n", StringComparison.Ordinal));
+        Assert.Contains(HelpText.ToolsLine(ShoppingTools()), block, StringComparison.Ordinal);
+        Assert.Contains("\n  " + HelpText.LiveOffered, block, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ATabsSwitchRow_CarriesItsGroupsLiveLine()
+    {
+        string answer = Win("/tools shopping", live: () => Live(offered: ShoppingTools()));
+        int row = answer.IndexOf("\n- Shopping tools (default off): ", StringComparison.Ordinal);
+        Assert.True(row >= 0, answer);
+        int next = answer.IndexOf('\n', row + 1);
+        Assert.StartsWith("\n  " + HelpText.LiveOffered, answer[next..], StringComparison.Ordinal);
+        Assert.DoesNotContain("Right now:", Win("/tools shopping"), StringComparison.Ordinal);
+
+        int asked = 0;
+        Win("/settings general", live: () => { asked++; return Live(); });
+        Assert.Equal(0, asked);
+    }
+
     [Fact]
     public void TheTool_CarriesTheLiveLine_AndItsTwinDropsIt()
     {

@@ -263,7 +263,7 @@ public partial class ChatScreenTests
         Assert.Contains("  ✗ " + SplashCommand.Usage, output);
         Assert.Contains("  ✗ " + PastedCommand.Usage, output);
         Assert.Equal(2, _chat.Requests.Count);
-        Assert.Equal(2, _chat.Requests[1].Count(m => m.Role == Microsoft.Extensions.AI.ChatRole.User));   // "hi" kept
+        Assert.Equal(2, _chat.Requests[1].Count(Llm.ConversationHistory.IsTurnStart));   // "hi" kept
     }
 
     [Fact]

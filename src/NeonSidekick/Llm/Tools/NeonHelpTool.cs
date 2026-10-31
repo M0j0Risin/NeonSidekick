@@ -53,7 +53,7 @@ public sealed class NeonHelpTool : AIFunction, IRedactedTwin
     public override string Description =>
         "NeonSidekick's own manual (the terminal chat app you are running in): its slash commands with every form, its settings " +
         "(what each does, its default, and where it lives as pane › tab › row), its panes, keys, tools, bars, flags and files. Call it before " +
-        "answering any question about how to do something in NeonSidekick, instead of guessing; a tool's answer says whether it is offered right now.";
+        "answering any question about how to do something in NeonSidekick, instead of guessing; wherever it names a tool or a tool group's switch, it says whether that is offered right now.";
 
     public override JsonElement JsonSchema => Schema;
 

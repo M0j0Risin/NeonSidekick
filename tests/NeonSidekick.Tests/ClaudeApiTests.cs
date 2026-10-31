@@ -54,6 +54,24 @@ public class ClaudeApiTests
         Assert.Equal("ephemeral", body.GetProperty("cache_control").GetProperty("type").GetString());
     }
 
+    /// <summary>The first turn since 2026-10-30 (the opener, a seeded pair, the user's message): the last result and the message are one user message, roles alternate.</summary>
+    [Fact]
+    public void Write_TheOpenedFirstTurn_Alternates_TheMessageAfterTheLastResult()
+    {
+        var history = new ConversationHistory("sys");
+        history.AddOpener(Assistant.OpeningOpenerText);
+        history.AddMessage(new ChatMessage(ChatRole.Assistant, [new FunctionCallContent(Assistant.OpeningClockCallId, "get_current_time", new Dictionary<string, object?>())]));
+        history.AddToolResults([new FunctionResultContent(Assistant.OpeningClockCallId, "14:05")]);
+        history.AddUser("hi");
+
+        var body = Body(history.BuildRequest());
+
+        Assert.Equal(["user", "assistant", "user"], Roles(body));
+        var last = body.GetProperty("messages")[2];
+        Assert.Equal(["tool_result", "text"], BlockTypes(last));
+        Assert.Equal("hi", last.GetProperty("content")[1].GetProperty("text").GetString());
+    }
+
     [Fact]
     public void Write_ToolResultsAndTheImageCarrier_AreOneUserMessage_ResultsFirst()
     {

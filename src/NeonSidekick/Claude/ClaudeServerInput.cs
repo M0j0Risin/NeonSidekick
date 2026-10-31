@@ -58,6 +58,12 @@ public static class ClaudeServerInput
         var resultImages = new List<DataContent>();
         foreach (var message in tail)
         {
+            // The opener (2026-10-30) is the app's line ahead of the first turn's seeded calls, never the user's words; the CLI gets those calls as context.
+            if (ConversationHistory.IsOpener(message))
+            {
+                continue;
+            }
+
             bool carrier = ConversationHistory.IsImageCarrier(message);
             foreach (var content in message.Contents)
             {
@@ -137,7 +143,7 @@ public static class ClaudeServerInput
         {
             // An attached PDF's text rides its message here too (2026-10-14): a session started over keeps what the PDF said.
             string said = message.Role == ChatRole.User ? string.Join("\n", new[] { message.Text }.Concat(message.Contents.Select(ConversationHistory.DocumentText).OfType<string>()).Where(t => !string.IsNullOrWhiteSpace(t))) : "";
-            if (message.Role == ChatRole.User && !ConversationHistory.IsImageCarrier(message) && said.Length > 0)
+            if (message.Role == ChatRole.User && !ConversationHistory.IsImageCarrier(message) && !ConversationHistory.IsOpener(message) && said.Length > 0)
             {
                 lines.Add(ClaudeCliText.PreambleUser(said));
             }

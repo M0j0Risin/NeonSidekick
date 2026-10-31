@@ -20,6 +20,10 @@ namespace NeonSidekick.Llm;
 /// <see cref="ChatMessage.AdditionalProperties"/> — never on the wire; the adapter reads the role
 /// and the contents — and <see cref="IsTurnStart"/> is the one boundary rule, so a carrier ages out
 /// with the turn it belongs to and never counts in <see cref="TurnCount"/>.</para>
+///
+/// <para>Nor is the <em>opener</em> (<see cref="AddOpener"/>, tagged <see cref="OpeningKey"/>, 2026-10-30): the user-role line the
+/// first turn's opening call pairs follow, ahead of the user's message. It belongs to the first turn: <see cref="Trim"/> drops it
+/// with that turn, <see cref="TruncateAt"/> at that turn takes it too.</para>
 /// </summary>
 public sealed class ConversationHistory
 {
@@ -39,6 +43,13 @@ public sealed class ConversationHistory
 
     /// <summary>The <see cref="ChatMessage.AdditionalProperties"/> key that marks a carrier message (value <c>true</c>).</summary>
     public const string CarrierKey = "neon.imageCarrier";
+
+    /// <summary>
+    /// The <see cref="ChatMessage.AdditionalProperties"/> key that marks the opener (value <c>true</c>, 2026-10-30, plan
+    /// purring-wobbling-flame): the user-role line the first turn's opening calls follow, so they come before the user's message
+    /// instead of after it. Not <see cref="CarrierKey"/>: the picture code would take it for a carrier. No turn start.
+    /// </summary>
+    public const string OpeningKey = "neon.opening";
 
     /// <summary>
     /// The <see cref="AIContent.AdditionalProperties"/> key that marks a camera picture's part (2026-10-02; the value is the
@@ -272,7 +283,7 @@ public sealed class ConversationHistory
     /// <summary>Everything after the system prompt, in order.</summary>
     public IReadOnlyList<ChatMessage> Messages => _messages;
 
-    /// <summary>Number of user turns currently held (a carrier, <see cref="IsImageCarrier"/>, is none). A plain read, safe from any task.</summary>
+    /// <summary>Number of user turns currently held (a carrier, <see cref="IsImageCarrier"/>, or the opener, <see cref="IsOpener"/>, is none). A plain read, safe from any task.</summary>
     public int TurnCount => _turnCount;
 
     /// <summary>
@@ -344,8 +355,17 @@ public sealed class ConversationHistory
             && tag is true;
     }
 
-    /// <summary>The one boundary rule: a user message that is not a carrier starts a turn. <see cref="ConversationCompactor.Split"/> cuts by it too.</summary>
-    public static bool IsTurnStart(ChatMessage message) => message.Role == ChatRole.User && !IsImageCarrier(message);
+    /// <summary>Whether <paramref name="message"/> is the opener (<see cref="AddOpener"/>): tagged <see cref="OpeningKey"/>.</summary>
+    public static bool IsOpener(ChatMessage message)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        return message.AdditionalProperties is { } properties
+            && properties.TryGetValue(OpeningKey, out object? tag)
+            && tag is true;
+    }
+
+    /// <summary>The one boundary rule: a user message that is neither a carrier nor the opener starts a turn. <see cref="ConversationCompactor.Split"/> cuts by it too.</summary>
+    public static bool IsTurnStart(ChatMessage message) => message.Role == ChatRole.User && !IsImageCarrier(message) && !IsOpener(message);
 
     /// <summary>The store ordinal stamped on <paramref name="message"/> (<see cref="TurnOrdinalKey"/>); null when none is.</summary>
     public static int? TurnOrdinal(ChatMessage message)
@@ -449,7 +469,7 @@ public sealed class ConversationHistory
         for (int i = messages.Count - 1; i >= 0; i--)
         {
             var message = messages[i];
-            if (message.Role == ChatRole.User && !IsImageCarrier(message) && !message.Contents.Any(c => c is FunctionResultContent))
+            if (message.Role == ChatRole.User && !IsImageCarrier(message) && !IsOpener(message) && !message.Contents.Any(c => c is FunctionResultContent))
             {
                 return i;
             }
@@ -525,6 +545,13 @@ public sealed class ConversationHistory
         }
 
         return trim;
+    }
+
+    /// <summary>The opener (<see cref="OpeningKey"/>): a user-role line, tagged, that the first turn's opening pairs follow. No trim, since it is no turn.</summary>
+    public void AddOpener(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        _messages.Add(new ChatMessage(ChatRole.User, text) { AdditionalProperties = new AdditionalPropertiesDictionary { [OpeningKey] = true } });
     }
 
     public void AddUser(string text) => AddUser(text, []);
@@ -752,8 +779,8 @@ public sealed class ConversationHistory
 
     /// <summary>
     /// Withdraws the last turn: everything from the last <see cref="IsTurnStart"/> message to the
-    /// end is dropped (the user's message and, on a first turn, the opening call/result pairs
-    /// after it, so the next turn opens as the first one again). What an ESC before the model's
+    /// end is dropped (the user's message and, on a first turn, the opener and opening call/result pairs
+    /// ahead of it, <see cref="TruncateAt"/>, so the next turn opens as the first one again). What an ESC before the model's
     /// first event does, the line going back to the user. False with no turn held. A turn
     /// <see cref="Trim"/> dropped off the front when this one landed is not brought back.
     /// </summary>
@@ -762,6 +789,8 @@ public sealed class ConversationHistory
         int start = _messages.FindLastIndex(IsTurnStart);
         if (start < 0)
         {
+            // A first turn stopped while its opening calls ran: no turn yet, but its opening goes too.
+            DropUnfinishedOpening();
             return false;
         }
 
@@ -794,17 +823,41 @@ public sealed class ConversationHistory
     /// <summary>
     /// Drops every message from <paramref name="index"/> to the end and returns them in order (2026-09-30, <c>/rewind</c>).
     /// Give it a turn start (<see cref="TurnStarts"/>) so the cut falls between turns and never splits a call from its
-    /// result. A cut at the first turn takes the opening pairs with it, and the next turn seeds them again because the
-    /// count is 0. <see cref="RemoveLastTurn"/> is this cut at the last turn.
+    /// result. A cut at the first turn takes the opening pairs with it — since 2026-10-30 they and their opener sit ahead of
+    /// the turn's message, so the cut starts at the opener (<see cref="IsOpener"/>) — and the next turn seeds them again
+    /// because the count is 0. <see cref="RemoveLastTurn"/> is this cut at the last turn.
     /// </summary>
     public List<ChatMessage> TruncateAt(int index)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(index);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(index, _messages.Count);
+        if (OpeningStart() is { } opener && opener < index && !_messages.Take(index).Any(IsTurnStart))
+        {
+            index = opener;
+        }
+
         var removed = _messages.GetRange(index, _messages.Count - index);
         _messages.RemoveRange(index, _messages.Count - index);
         Recount();
         return removed;
+    }
+
+    /// <summary>
+    /// Drops an opening left with no turn after it (2026-10-30): the opener and whatever follows, when no turn has started. A turn
+    /// stopped while its opening calls ran leaves one, a call perhaps without its result; the next first turn seeds a whole one.
+    /// </summary>
+    public void DropUnfinishedOpening()
+    {
+        if (TurnCount == 0 && OpeningStart() is { } opener)
+        {
+            TruncateAt(opener);
+        }
+    }
+
+    private int? OpeningStart()
+    {
+        int at = _messages.FindIndex(IsOpener);
+        return at < 0 ? null : at;
     }
 
     /// <summary>A fresh list for one request: system prompt first, then a copy of the transcript.</summary>

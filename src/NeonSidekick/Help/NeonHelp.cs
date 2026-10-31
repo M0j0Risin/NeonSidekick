@@ -29,8 +29,9 @@ internal static class NeonHelp
     /// <summary>
     /// The answer for <paramref name="query"/> under <paramref name="kind"/> (one of <see cref="HelpText.Kinds"/> or an alias of one,
     /// <see cref="HelpText.KindAliases"/>; empty is <c>any</c>). <paramref name="live"/> (2026-10-25, the user's call) is the running
-    /// app's view of its tools, asked at most once and only by a tool answer, a group list, a group switch's answer or a command whose
-    /// word names a group; null (the advisors' copy, the tests) leaves the "Right now:" line out.
+    /// app's view of its tools, asked at most once and only by a tool answer, a group list, a group switch's answer (a plain-words or
+    /// partial-name match among them, since 2026-10-30), a tab or menu holding a group switch, or a command whose word names a group;
+    /// null (the advisors' copy, the tests) leaves the "Right now:" line out.
     /// </summary>
     public static string Answer(string? query, string? kind = null, Func<HelpLive>? live = null) =>
         Answer(query, kind, live, OperatingSystem.IsWindows(), OperatingSystem.IsMacOS());
@@ -92,7 +93,7 @@ internal static class NeonHelp
             return string.Join("\n\n", glyphs);
         }
 
-        if (Is("pane") && PaneAnswer(q) is { } pane)
+        if (Is("pane") && PaneAnswer(q, live, windows) is { } pane)
         {
             return pane;
         }
@@ -145,7 +146,7 @@ internal static class NeonHelp
 
         if (Is("setting") && !flag && SettingsHolding(q).Where(f => HelpLocation.Of(f, windows) is not null).ToList() is { Count: > 0 } holding)
         {
-            return string.Join("\n\n", holding.Select(f => Setting(f, windows)));
+            return string.Join("\n\n", holding.Select(f => SwitchSetting(f, live, windows)));
         }
 
         // A lone tool name or flag that matched nothing is the miss, never plain words (2026-10-25: on a Mac `service_control` and
@@ -155,7 +156,7 @@ internal static class NeonHelp
             return HelpText.NothingFound(q);
         }
 
-        return Scored(q, kind, windows, mac) is { Count: > 0 } best
+        return Scored(q, kind, live, windows, mac) is { Count: > 0 } best
             ? HelpText.MatchesHeading(q) + "\n\n" + string.Join("\n\n", best)
             : HelpText.NothingFound(q);
     }
@@ -281,10 +282,13 @@ internal static class NeonHelp
     /// <summary>
     /// A pane or one of its tabs: <c>/tools</c> (or <c>tools pane</c>) is the pane; <c>/tools camera</c> its tab; <c>camera tab</c>
     /// every tab of that title. A bare pane command answers with the pane only when asked as one (<c>/tools</c>, <c>tools pane</c>,
-    /// <c>/tools tabs</c>); null when nothing fits.
+    /// <c>/tools tabs</c>); null when nothing fits. A tab's or menu's group switch row carries the group's live line (2026-10-30).
     /// </summary>
-    private static string? PaneAnswer(string q)
+    private static string? PaneAnswer(string q, Func<HelpLive?> live, bool windows)
     {
+        string? LiveOf(SettingsField field) =>
+            HelpToolCatalog.GroupOfSwitch(field, windows) is { } group && live() is { } now ? now.GroupLine(field, group.Tools) : null;
+
         var words = q.ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries);
         string first = words[0].TrimStart('/');
         var pane = HelpLocation.Panes.FirstOrDefault(p => string.Equals(p.Command.TrimStart('/'), first, StringComparison.Ordinal));
@@ -303,14 +307,14 @@ internal static class NeonHelp
                 string? tab = pane.Tabs.FirstOrDefault(t => matches(t, tabWords));
                 if (tab is not null)
                 {
-                    return TabAnswer(pane, tab);
+                    return TabAnswer(pane, tab, LiveOf);
                 }
 
                 // A menu on a group tab (2026-10-09): /tools sql is the SQL menu of the Database tab, as it was the SQL tab.
                 var menu = HelpLocation.Menus(pane.Command).FirstOrDefault(m => matches(m.Menu, tabWords));
                 if (menu.Menu is not null)
                 {
-                    return MenuAnswer(pane, menu.Tab, menu.Menu);
+                    return MenuAnswer(pane, menu.Tab, menu.Menu, LiveOf);
                 }
             }
 
@@ -322,8 +326,8 @@ internal static class NeonHelp
             string tabWords = string.Join(' ', words[..^1]);
             foreach (var matches in new Func<string, string, bool>[] { TabIs, TabMatches })
             {
-                var found = HelpLocation.Panes.SelectMany(p => p.Tabs.Where(t => matches(t, tabWords)).Select(t => TabAnswer(p, t))
-                    .Concat(HelpLocation.Menus(p.Command).Where(m => matches(m.Menu, tabWords)).Select(m => MenuAnswer(p, m.Tab, m.Menu)))).ToList();
+                var found = HelpLocation.Panes.SelectMany(p => p.Tabs.Where(t => matches(t, tabWords)).Select(t => TabAnswer(p, t, LiveOf))
+                    .Concat(HelpLocation.Menus(p.Command).Where(m => matches(m.Menu, tabWords)).Select(m => MenuAnswer(p, m.Tab, m.Menu, LiveOf)))).ToList();
                 if (found.Count > 0)
                 {
                     return string.Join("\n\n", found);
@@ -336,17 +340,17 @@ internal static class NeonHelp
         return null;
     }
 
-    private static string TabAnswer(HelpPane pane, string tab)
+    private static string TabAnswer(HelpPane pane, string tab, Func<SettingsField, string?> liveOf)
     {
         var rows = HelpLocation.OnTab(pane.Command, tab);
         return rows.Any(r => r.Menu is not null)
             ? HelpText.GroupTab(pane, tab, rows)   // a group tab, Devices or Databases (2026-10-09): the menus, each answered on its own
-            : HelpText.Tab(pane, tab, rows, HelpLocation.Default, HelpSettings.Describe);
+            : HelpText.Tab(pane, tab, rows, HelpLocation.Default, HelpSettings.Describe, liveOf);
     }
 
     /// <summary>A menu on a group tab (2026-10-09) answered as a tab is, under its place: <c>Tab /tools › Databases › SQL:</c>.</summary>
-    private static string MenuAnswer(HelpPane pane, string tab, string menu) =>
-        HelpText.Tab(pane, tab + HelpText.PathSeparator + menu, HelpLocation.InMenu(pane.Command, menu), HelpLocation.Default, HelpSettings.Describe);
+    private static string MenuAnswer(HelpPane pane, string tab, string menu, Func<SettingsField, string?> liveOf) =>
+        HelpText.Tab(pane, tab + HelpText.PathSeparator + menu, HelpLocation.InMenu(pane.Command, menu), HelpLocation.Default, HelpSettings.Describe, liveOf);
 
     /// <summary>A tab title against the words asked: the title itself, its start (<c>git</c> is GitLib), or the README's longer name (<c>HA</c> is Home Assistant).</summary>
     private static bool TabIs(string tab, string words) => string.Equals(tab, words, StringComparison.OrdinalIgnoreCase);
@@ -408,9 +412,12 @@ internal static class NeonHelp
     /// Plain words, scored: per query word, three points when it is in an item's name (a command's syntax, a setting's
     /// label, a key), one when only in its text; a word of four letters or more matches by prefix, and a trailing <c>s</c>
     /// is let go. Items that miss every word drop out; of two that tie the shorter name wins (TTS voice over TTS voice preview),
-    /// then the catalog's order.
+    /// then the catalog's order. Each answer is built only once it is kept, so <paramref name="live"/> is asked only when a kept
+    /// match is a tool or a group switch.
     /// </summary>
-    private static IReadOnlyList<string> Scored(string q, string kind, bool windows, bool mac)
+    /// <remarks>Since 2026-10-30 (session 836) a tool's and a group switch's answer here carry the live line as everywhere else: the plain
+    /// words "shopping add" read "(off by default)" with no "Right now:" line, and the model told the user the offered shopping tools were off.</remarks>
+    private static IReadOnlyList<string> Scored(string q, string kind, Func<HelpLive?> live, bool windows, bool mac)
     {
         var words = Words(q).Where(w => !s_stopWords.Contains(w)).Distinct(StringComparer.Ordinal).ToList();
         if (words.Count == 0)
@@ -418,13 +425,13 @@ internal static class NeonHelp
             return [];
         }
 
-        var items = new List<(int Score, int Length, string Text)>();
+        var items = new List<(int Score, int Length, Func<string> Text)>();
         if (kind is "any" or "setting")
         {
             foreach (var row in HelpLocation.RowsFor(windows))
             {
                 string description = HelpSettings.Describe(row.Field);
-                items.Add((Score(words, row.Label + " " + row.Place, description), row.Label.Length, Setting(row.Field, windows)));
+                items.Add((Score(words, row.Label + " " + row.Place, description), row.Label.Length, () => SwitchSetting(row.Field, live, windows)));
             }
         }
 
@@ -434,7 +441,7 @@ internal static class NeonHelp
             {
                 foreach (var form in command.Forms)
                 {
-                    items.Add((Score(words, form.Syntax, form.Meaning), form.Syntax.Length, HelpText.Command(command with { Forms = [form] })));
+                    items.Add((Score(words, form.Syntax, form.Meaning), form.Syntax.Length, () => HelpText.Command(command with { Forms = [form] })));
                 }
             }
         }
@@ -443,7 +450,7 @@ internal static class NeonHelp
         {
             foreach (var (key, meaning) in KeyRows())
             {
-                items.Add((Score(words, key, meaning), key.Length, HelpText.Key(key, meaning)));
+                items.Add((Score(words, key, meaning), key.Length, () => HelpText.Key(key, meaning)));
             }
         }
 
@@ -451,16 +458,16 @@ internal static class NeonHelp
         {
             foreach (var pane in HelpLocation.Panes)
             {
-                items.Add((Score(words, pane.Command + " " + string.Join(' ', pane.Tabs), pane.Summary), pane.Command.Length, HelpText.Pane(pane, tab => HelpLocation.OnTab(pane.Command, tab))));
+                items.Add((Score(words, pane.Command + " " + string.Join(' ', pane.Tabs), pane.Summary), pane.Command.Length, () => HelpText.Pane(pane, tab => HelpLocation.OnTab(pane.Command, tab))));
             }
         }
 
-        // The new sorts (2026-10-25), after the first four so a tie keeps their order; never a live line here.
+        // The new sorts (2026-10-25), after the first four so a tie keeps their order.
         if (kind is "any" or "tool")
         {
             foreach (var entry in HelpToolCatalog.Entries(windows))
             {
-                items.Add((Score(words, entry.Name + " " + entry.Group, entry.Does), entry.Name.Length, HelpToolCatalog.Answer(entry, null, windows, mac)));
+                items.Add((Score(words, entry.Name + " " + entry.Group, entry.Does), entry.Name.Length, () => HelpToolCatalog.Answer(entry, live(), windows, mac)));
             }
         }
 
@@ -468,7 +475,7 @@ internal static class NeonHelp
             .Concat(kind is "any" or "startup" ? HelpStartup.Items(windows, mac) : [])
             .Concat(kind is "any" or "files" ? HelpFiles.Items(windows, mac) : []))
         {
-            items.Add((Score(words, item.Name, item.Text), item.Name.Length, item.Answer()));
+            items.Add((Score(words, item.Name, item.Text), item.Name.Length, item.Answer));
         }
 
         return items
@@ -478,7 +485,7 @@ internal static class NeonHelp
             .ThenBy(i => i.Length)
             .ThenBy(i => i.Index)
             .Take(HelpText.MaxMatches)
-            .Select(i => i.Text)
+            .Select(i => i.Text())
             .ToList();
     }
 

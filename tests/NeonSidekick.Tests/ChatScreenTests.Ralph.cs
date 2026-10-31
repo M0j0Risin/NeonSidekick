@@ -79,7 +79,7 @@ public partial class ChatScreenTests
         Assert.Equal([RalphVerify, RalphVerify, RalphVerify], _ralphVerifier.Commands);
         // Each pass a fresh conversation: the system message and the pass's message, finish_step offered beside every tool.
         Assert.Equal(_chat.Requests[0].Count, _chat.Requests[2].Count);   // the opening's seeded calls and the pass's message: nothing of pass 1
-        Assert.Single(_chat.Requests[2], m => m.Role == ChatRole.User);
+        Assert.Single(_chat.Requests[2], Llm.ConversationHistory.IsTurnStart);
         Assert.Contains("One", LastUserText(_chat.Requests[0]));
         Assert.Contains("Two", LastUserText(_chat.Requests[2]));
         Assert.Contains(FinishStepTool.ToolName, OfferedNames(_chat.Options[0]));
@@ -995,7 +995,7 @@ public partial class ChatScreenTests
         Assert.Contains(RalphText.ApproveRalphRow, output);
         Assert.Contains("Ralph loop: ", output);   // the caption's check line
         Assert.Equal(_chat.Requests[2].Count, _chat.Requests[4].Count);   // both passes fresh: nothing of the planning
-        Assert.Single(_chat.Requests[2], m => m.Role == ChatRole.User);
+        Assert.Single(_chat.Requests[2], Llm.ConversationHistory.IsTurnStart);
         Assert.DoesNotContain("PLAN MODE", _chat.Requests[2][0].Text);
         Assert.Contains(FinishStepTool.ToolName, OfferedNames(_chat.Options[2]));
         Assert.Equal([RalphVerify, RalphVerify, RalphVerify], _ralphVerifier.Commands);

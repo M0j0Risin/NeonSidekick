@@ -136,6 +136,38 @@ public class SessionHistoryTests
         Assert.Equal(1, restored.TurnCount);
     }
 
+    /// <summary>The opener (2026-10-30) keeps its mark, so a resumed session still counts one turn and never seeds a second opening.</summary>
+    [Fact]
+    public void TheOpener_KeepsItsMark_SoItIsNoTurn_AndAnOlderSessionRestoresAsEver()
+    {
+        var history = new ConversationHistory("");
+        history.AddOpener(Assistant.OpeningOpenerText);
+        var call = new FunctionCallContent(Assistant.OpeningClockCallId, "get_current_time", new Dictionary<string, object?>());
+        history.AddMessage(new ChatMessage(ChatRole.Assistant, [call]));
+        history.AddToolResults([new FunctionResultContent(call.CallId, "14:05")]);
+        history.AddUser("hi");
+        history.AddAssistant("Hello.");
+
+        string json = SessionHistory.ToJson(history.Messages);
+        var back = SessionHistory.FromJson(json);
+
+        Assert.Equal(5, back.Count);
+        Assert.True(ConversationHistory.IsOpener(back[0]));
+        Assert.Equal(Assistant.OpeningOpenerText, back[0].Text);
+        Assert.False(ConversationHistory.IsOpener(back[3]));
+        Assert.Equal(1, json.Split("\"Opening\"").Length - 1);   // written only on the opener
+        var restored = new ConversationHistory("");
+        restored.Restore(back);
+        Assert.Equal(1, restored.TurnCount);
+        Assert.Equal([3], restored.TurnStarts());
+
+        // A session saved before the opener: the pairs after the user's message, one turn, as always.
+        var older = SessionHistory.FromJson(SessionHistory.ToJson([new ChatMessage(ChatRole.User, "hi"), history.Messages[1], history.Messages[2], new ChatMessage(ChatRole.Assistant, "Hello.")]));
+        restored.Restore(older);
+        Assert.Equal(1, restored.TurnCount);
+        Assert.DoesNotContain(older, ConversationHistory.IsOpener);
+    }
+
     [Fact]
     public void ACompactionSummary_IsAnOrdinaryUserMessage()
     {

@@ -109,6 +109,43 @@ public class ConversationCompactorTests
         Assert.False(plan.HasOlderTurns);
     }
 
+    /// <summary>The first turn as it opens since 2026-10-30: the opener and the pairs ahead of the user's message.</summary>
+    private static List<ChatMessage> OpenedTwoTurns() =>
+    [
+        new(ChatRole.User, NeonSidekick.Llm.Assistant.OpeningOpenerText) { AdditionalProperties = new AdditionalPropertiesDictionary { [ConversationHistory.OpeningKey] = true } },
+        Call(NeonSidekick.Llm.Assistant.OpeningClockCallId, "get_current_time"), Result(NeonSidekick.Llm.Assistant.OpeningClockCallId, "Friday"),
+        User("one"), Assistant("reply one"),
+        User("two"), Assistant("reply two"),
+    ];
+
+    [Fact]
+    public void Split_TheOpenerAndThePairsAlone_AreNothingToCompact()
+    {
+        // Exactly keepRecent turns: the opener and the pairs ahead of the first are older than the cut, and still nothing to summarise.
+        var plan = ConversationCompactor.Split(OpenedTwoTurns(), keepRecent: 2);
+        Assert.Equal(3, plan.Older.Count);
+        Assert.Equal(2, plan.Opening.Count);
+        Assert.False(plan.HasOlderTurns);
+
+        // The same history mid-turn: the guard plans no summary of a first turn.
+        var first = OpenedTwoTurns()[..5];
+        Assert.False(ConversationCompactor.Split(first, keepRecent: 1).HasOlderTurns);
+    }
+
+    [Fact]
+    public void Summarised_DropsTheOpener_KeepsThePairs()
+    {
+        var plan = ConversationCompactor.Split(OpenedTwoTurns(), keepRecent: 1);
+        Assert.True(plan.HasOlderTurns);
+
+        var compacted = ConversationCompactor.Summarised("the gist", plan);
+
+        Assert.DoesNotContain(compacted, ConversationHistory.IsOpener);
+        Assert.Equal(["user", "assistant", "tool", "user", "assistant"], Roles(compacted));
+        Assert.StartsWith(ConversationCompactor.SummaryPreamble, compacted[0].Text, StringComparison.Ordinal);
+        Assert.Equal("two", compacted[3].Text);
+    }
+
     [Fact]
     public void Split_CopiesNeverViews()
     {

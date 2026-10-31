@@ -14,6 +14,13 @@ public sealed class StoredMessage
     public bool Carrier { get; set; }
 
     /// <summary>
+    /// The <see cref="ConversationHistory.OpeningKey"/> tag (the opener the first turn's opening pairs follow, 2026-10-30), kept off the
+    /// turn count. Written only when set: a session saved before it has no opener and restores as it always did.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Opening { get; set; }
+
+    /// <summary>
     /// The store ordinal of the turn this user message opened (<see cref="ConversationHistory.TurnOrdinalKey"/>, 2026-09-30,
     /// <c>/rewind</c>). Left out while null, so a row written earlier reads the same as ever and needs no schema bump.
     /// </summary>
@@ -307,7 +314,7 @@ public static class SessionHistory
     internal static StoredMessage Store(ChatMessage message, bool withThinking = false, bool keepCamera = false, bool keepScreen = false)
     {
         bool carrier = ConversationHistory.IsImageCarrier(message);
-        var stored = new StoredMessage { Role = message.Role.Value, Carrier = carrier, Ordinal = ConversationHistory.TurnOrdinal(message), Checkpoint = ConversationHistory.TurnCheckpoint(message), UndoNote = ConversationHistory.UndoNoteOf(message), Checkpoints = ConversationHistory.CheckpointList(message) is { Count: > 0 } kept ? kept.ToList() : null, Source = carrier ? ConversationHistory.CarrierSource(message) : null };
+        var stored = new StoredMessage { Role = message.Role.Value, Carrier = carrier, Opening = ConversationHistory.IsOpener(message), Ordinal = ConversationHistory.TurnOrdinal(message), Checkpoint = ConversationHistory.TurnCheckpoint(message), UndoNote = ConversationHistory.UndoNoteOf(message), Checkpoints = ConversationHistory.CheckpointList(message) is { Count: > 0 } kept ? kept.ToList() : null, Source = carrier ? ConversationHistory.CarrierSource(message) : null };
         foreach (var content in message.Contents)
         {
             switch (content)
@@ -413,6 +420,11 @@ public static class SessionHistory
             {
                 message.AdditionalProperties[ConversationHistory.SourceKey] = stored.Source;
             }
+        }
+
+        if (stored.Opening)
+        {
+            (message.AdditionalProperties ??= new AdditionalPropertiesDictionary())[ConversationHistory.OpeningKey] = true;
         }
 
         if (stored.Ordinal is { } ordinal)

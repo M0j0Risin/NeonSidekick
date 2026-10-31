@@ -1362,10 +1362,12 @@ public class AssistantTests
         Assert.False(Assistant.IsOpeningEvent(events[4]));
         Assert.Equal(new[] { "Hello." }, Deltas(events));
 
-        // Not a request: the one request carries both pairs inside the user's turn, one after the other.
+        // Not a request: the one request carries both pairs after the opener, one after the other, and the user's message last
+        // (2026-10-30: after it, the model read the pairs as its own investigation).
         var request = Assert.Single(client.Requests);
-        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool }, request.Select(m => m.Role));
-        Assert.Equal("hi", request[1].Text);
+        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User }, request.Select(m => m.Role));
+        Assert.True(ConversationHistory.IsOpener(request[1]));
+        Assert.Equal(Assistant.OpeningOpenerText, request[1].Text);
         Assert.Equal(Assistant.OpeningClockCallId, Assert.Single(request[2].Contents.OfType<FunctionCallContent>()).CallId);
         var fnResult = Assert.Single(request[3].Contents.OfType<FunctionResultContent>());
         Assert.Equal(Assistant.OpeningClockCallId, fnResult.CallId);
@@ -1374,7 +1376,53 @@ public class AssistantTests
         var cwdFnResult = Assert.Single(request[5].Contents.OfType<FunctionResultContent>());
         Assert.Equal(Assistant.OpeningCwdCallId, cwdFnResult.CallId);
         Assert.Equal(CwdText, cwdFnResult.Result);
+        Assert.Equal("hi", request[6].Text);
+        Assert.False(ConversationHistory.IsOpener(request[6]));
+        Assert.Equal(1, history.TurnCount);
         Assert.Equal("Hello.", history.Messages[^1].Text);
+    }
+
+    [Fact]
+    public async Task APendingPoll_FollowsTheUsersMessage_TheOpeningPairsGoAhead()
+    {
+        var (client, _, assistant) = BuildWithOpening();
+        var poll = new FixedTool("process", "exited 0");
+        assistant.PendingCalls = [new(poll, "neonpoll1")];
+        client.EnqueueText("Hello.");
+
+        await Run(assistant, "hi");
+
+        var request = Assert.Single(client.Requests);
+        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User, ChatRole.Assistant, ChatRole.Tool }, request.Select(m => m.Role));
+        Assert.Equal("hi", request[6].Text);
+        Assert.Equal("neonpoll1", Assert.Single(request[7].Contents.OfType<FunctionCallContent>()).CallId);
+    }
+
+    [Fact]
+    public async Task AFirstTurnStoppedDuringItsOpening_LeavesNoHalfOpening_ForTheNext()
+    {
+        var (client, history, assistant) = BuildWithOpening();
+        var opening = assistant.OpeningCalls;
+        assistant.OpeningCalls = [new(new HangingTool("get_current_time"), Assistant.OpeningClockCallId)];
+        using (var cts = new CancellationTokenSource())
+        {
+            // Stopped after the clock's call is in the history, before its result: the cancel lands in the opening call.
+            await using var turn = assistant.RunTurnAsync("hi", cts.Token).GetAsyncEnumerator(cts.Token);
+            Assert.True(await turn.MoveNextAsync());
+            cts.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => { while (await turn.MoveNextAsync()) { } });
+        }
+
+        Assert.Equal(0, history.TurnCount);
+        Assert.NotEmpty(history.Messages);   // the opener and the call with no result
+        assistant.OpeningCalls = opening;
+        client.EnqueueText("Hello.");
+        await Run(assistant, "hi");
+
+        var request = Assert.Single(client.Requests);
+        Assert.Equal(1, request.Count(ConversationHistory.IsOpener));
+        Assert.Equal(1, request.Count(m => m.Contents.OfType<FunctionCallContent>().Any(c => c.CallId == Assistant.OpeningClockCallId)));
+        Assert.Equal("hi", request[^1].Text);
     }
 
     [Fact]
@@ -1395,7 +1443,7 @@ public class AssistantTests
         Assert.Equal(4, third.Count(Assistant.IsOpeningEvent));
         Assert.Equal(1, client.Requests[1].Count(m => m.Contents.OfType<FunctionCallContent>().Any(c => c.CallId == Assistant.OpeningClockCallId)));
         Assert.Equal(1, client.Requests[1].Count(m => m.Contents.OfType<FunctionCallContent>().Any(c => c.CallId == Assistant.OpeningCwdCallId)));
-        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool }, client.Requests[2].Select(m => m.Role));
+        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User }, client.Requests[2].Select(m => m.Role));
     }
 
     [Fact]
@@ -1512,11 +1560,11 @@ public class AssistantTests
         Assert.Equal(4, first.Count(Assistant.IsOpeningEvent));
         Assert.All(first.OfType<TurnEvent.ToolCall>(), call => Assert.Equal("{}", call.ArgumentsJson));
         var request = Assert.Single(client.Requests);
-        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool }, request.Select(m => m.Role));
+        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User }, request.Select(m => m.Role));
 
         var second = await Run(assistant, "more");
         Assert.DoesNotContain(second, Assistant.IsOpeningEvent);
-        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.User }, client.Requests[1].Select(m => m.Role));
+        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User, ChatRole.Assistant, ChatRole.User }, client.Requests[1].Select(m => m.Role));
     }
 
     [Fact]

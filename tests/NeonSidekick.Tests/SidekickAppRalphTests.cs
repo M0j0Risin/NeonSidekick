@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using NeonSidekick.Files;
+using NeonSidekick.Llm;
 using NeonSidekick.Llm.Tools;
 using NeonSidekick.Plans;
 using NeonSidekick.Tests.Fakes;
@@ -52,7 +53,7 @@ public partial class SidekickAppTests
         Assert.Equal(4, _chat.Requests.Count);
         Assert.Equal(["dotnet build", "dotnet build", "dotnet build"], _ralphVerifier.Commands);
         Assert.Equal(_chat.Requests[0].Count, _chat.Requests[2].Count);   // the opening's seeded calls and the pass's message: nothing of pass 1
-        Assert.Single(_chat.Requests[2], m => m.Role == ChatRole.User);
+        Assert.Single(_chat.Requests[2], ConversationHistory.IsTurnStart);
         Assert.Contains("One", HeadlessLastUser(_chat.Requests[0]));
         Assert.Contains("Two", HeadlessLastUser(_chat.Requests[2]));
         Assert.Contains(FinishStepTool.ToolName, _chat.Options[0]!.Tools!.Select(t => t.Name));

@@ -247,6 +247,29 @@ public class ClaudeCliServerTests
             input.NewContent.OfType<TextContent>().Select(t => t.Text));
     }
 
+    /// <summary>The first turn as it opens since 2026-10-30: the opener, the seeded pairs, the user's message. The opener is never the user's words.</summary>
+    [Fact]
+    public void Split_TheOpener_IsLeftOut_TheSeededCallsStillContext()
+    {
+        var opener = new ChatMessage(ChatRole.User, Assistant.OpeningOpenerText) { AdditionalProperties = new AdditionalPropertiesDictionary { [ConversationHistory.OpeningKey] = true } };
+        var messages = new List<ChatMessage>
+        {
+            new(ChatRole.System, "be brief"),
+            opener,
+            new(ChatRole.Assistant, [new FunctionCallContent(Assistant.OpeningClockCallId, "get_current_time", new Dictionary<string, object?>())]),
+            new(ChatRole.Tool, [new FunctionResultContent(Assistant.OpeningClockCallId, "Wednesday, noon")]),
+            new(ChatRole.User, "hello"),
+        };
+
+        var input = ClaudeServerInput.Split(messages);
+
+        Assert.False(input.HasEarlierTurns);
+        Assert.Equal(
+            [ClaudeCliText.SeededContext([ClaudeCliText.SeededLine("get_current_time", "Wednesday, noon")]), "hello"],
+            input.NewContent.OfType<TextContent>().Select(t => t.Text));
+        Assert.Equal("", ClaudeServerInput.Preamble([opener]));
+    }
+
     [Fact]
     public void Split_AfterTheModelsCalls_TheResultsAreTheNewPart()
     {

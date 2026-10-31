@@ -511,7 +511,7 @@ public partial class SidekickAppTests : IDisposable
 
         // The conversation accumulates: the second request carries the first exchange.
         Assert.Equal(2, _chat.Requests.Count);
-        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.User }, _chat.Requests[1].Select(m => m.Role));
+        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User, ChatRole.Assistant, ChatRole.User }, _chat.Requests[1].Select(m => m.Role));
         Assert.Equal(SkilledPrompt(false, Array.Empty<string>(), web: true), _chat.Requests[1][0].Text);
         Assert.True(_chat.Disposed);
     }
@@ -1045,7 +1045,7 @@ public partial class SidekickAppTests : IDisposable
         Assert.Equal(SkilledPrompt(false, [], web: true), request[0].Text);
         Assert.Contains(Assistant.FileRule, request[0].Text!);
         // The cwd and the memory pairs open the conversation, no clock ahead of them.
-        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool }, request.Select(m => m.Role));
+        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User }, request.Select(m => m.Role));
         Assert.Equal(Assistant.OpeningCwdCallId, Assert.Single(request[3].Contents.OfType<FunctionResultContent>()).CallId);
         Assert.Equal(Assistant.OpeningMemoryCallId, Assert.Single(request[5].Contents.OfType<FunctionResultContent>()).CallId);
         Assert.Contains("Neon: Hi.", output);
@@ -1068,7 +1068,7 @@ public partial class SidekickAppTests : IDisposable
         Assert.DoesNotContain(Assistant.FileRule, request[0].Text!);
         Assert.Contains(Assistant.WebRule, request[0].Text!);
         // The clock and the memory pairs open the conversation, no cwd between them.
-        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool }, request.Select(m => m.Role));
+        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User }, request.Select(m => m.Role));
         Assert.Equal(Assistant.OpeningClockCallId, Assert.Single(request[3].Contents.OfType<FunctionResultContent>()).CallId);
         Assert.Equal(Assistant.OpeningMemoryCallId, Assert.Single(request[5].Contents.OfType<FunctionResultContent>()).CallId);
         Assert.DoesNotContain("[tool] get_working_directory", output);
@@ -1275,7 +1275,7 @@ public partial class SidekickAppTests : IDisposable
         Assert.Contains("Neon: Again.", output);
         Assert.Equal(6, output.Split("[tool]").Length - 1);
         var request = _chat.Requests[0];
-        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool }, request.Select(m => m.Role));
+        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User }, request.Select(m => m.Role));
         Assert.Equal(Assistant.OpeningClockCallId, Assert.Single(request[3].Contents.OfType<FunctionResultContent>()).CallId);
         var cwdResult = Assert.Single(request[5].Contents.OfType<FunctionResultContent>());
         Assert.Equal(Assistant.OpeningCwdCallId, cwdResult.CallId);
@@ -1522,7 +1522,7 @@ public partial class SidekickAppTests : IDisposable
 
         Assert.Contains("Neon: (conversation cleared)", output);
         Assert.Equal(2, _chat.Requests.Count);
-        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool }, _chat.Requests[1].Select(m => m.Role));
+        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User }, _chat.Requests[1].Select(m => m.Role));
     }
 
     [Fact]
@@ -1537,7 +1537,7 @@ public partial class SidekickAppTests : IDisposable
         Assert.Contains("Neon: " + ChatScreen.NewConversationNotice, output);
         Assert.DoesNotContain("(conversation cleared)", output);
         Assert.Equal(2, _chat.Requests.Count);
-        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool }, _chat.Requests[1].Select(m => m.Role));
+        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User }, _chat.Requests[1].Select(m => m.Role));
     }
 
     [Fact]
@@ -1552,7 +1552,7 @@ public partial class SidekickAppTests : IDisposable
         Assert.Contains("Neon: (conversation cleared)", output);
         Assert.DoesNotContain(ChatScreen.NewConversationNotice, output);
         Assert.Equal(2, _chat.Requests.Count);
-        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool }, _chat.Requests[1].Select(m => m.Role));
+        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User }, _chat.Requests[1].Select(m => m.Role));
     }
 
     [Fact]
@@ -1566,7 +1566,7 @@ public partial class SidekickAppTests : IDisposable
 
         string output = await Headless("first\nsecond\n/compact the first question\nthird\n");
 
-        Assert.Contains("Neon: (🗜️ compacted: 10 messages → 9 · 300 → 20 tokens)", output);
+        Assert.Contains("Neon: (🗜️ compacted: 11 messages → 9 · 300 → 20 tokens)", output);
         Assert.Equal(4, _chat.Requests.Count);
         Assert.Equal(ConversationCompactor.SummaryRequest("the first question"), _chat.Requests[2][^1].Text);
         Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User, ChatRole.Assistant, ChatRole.User }, _chat.Requests[3].Select(m => m.Role));
@@ -1586,7 +1586,7 @@ public partial class SidekickAppTests : IDisposable
 
         string output = await Headless("first\nsecond\n/compact\nthird\n");
 
-        Assert.Contains("Neon: (🗜️ compacted: 10 messages → 9 · 300 → 20 tokens)" + Environment.NewLine + "[notice] A summary." + Environment.NewLine + "[notice] Of two lines." + Environment.NewLine + "[notice] (🗜️ 6 messages protected at the start)" + Environment.NewLine + "[notice] (🗜️ 2 messages protected at the end)" + Environment.NewLine, output);
+        Assert.Contains("Neon: (🗜️ compacted: 11 messages → 9 · 300 → 20 tokens)" + Environment.NewLine + "[notice] A summary." + Environment.NewLine + "[notice] Of two lines." + Environment.NewLine + "[notice] (🗜️ 6 messages protected at the start)" + Environment.NewLine + "[notice] (🗜️ 2 messages protected at the end)" + Environment.NewLine, output);
     }
 
     [Fact]
@@ -1619,7 +1619,7 @@ public partial class SidekickAppTests : IDisposable
 
         string output = await Headless("first\nsecond\nthird\n");
 
-        Assert.Contains("[notice] (🗜️ auto-compacted at 25%: 10 messages → 9 · 30 → 4 tokens)", output);
+        Assert.Contains("[notice] (🗜️ auto-compacted at 25%: 11 messages → 9 · 30 → 4 tokens)", output);
         Assert.Equal(4, _chat.Requests.Count);
         Assert.Equal(ConversationCompactor.SummaryInstruction, _chat.Requests[2][0].Text);
     }
@@ -1865,7 +1865,7 @@ public partial class SidekickAppTests : IDisposable
         Assert.Contains("› hello", output);
         Assert.Contains("● Hi there", output);
         Assert.Single(_chat.Requests);
-        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool }, _chat.Requests[0].Select(m => m.Role));
+        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User }, _chat.Requests[0].Select(m => m.Role));
         Assert.True(_chat.Disposed);
     }
 
@@ -1894,8 +1894,8 @@ public partial class SidekickAppTests : IDisposable
         Assert.Contains("● par\n  · " + ChatScreen.CancelledNotice, output);
         Assert.Contains("● next", output);
         Assert.Equal(2, _chat.Requests.Count);
-        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.User }, _chat.Requests[1].Select(m => m.Role));
-        Assert.Equal("par", _chat.Requests[1][8].Text);   // after the three opening pairs
+        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User, ChatRole.Assistant, ChatRole.User }, _chat.Requests[1].Select(m => m.Role));
+        Assert.Equal("par", _chat.Requests[1][9].Text);   // after the opener, the three opening pairs and the first message
     }
 
     /// <summary>The app token (Ctrl+C in Program.cs) mid-stream: the partial reply is committed and the session leaves.</summary>
@@ -1939,7 +1939,7 @@ public partial class SidekickAppTests : IDisposable
         string output = await InteractiveAsync();
 
         Assert.Equal(2, _chat.Requests.Count);
-        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool }, _chat.Requests[1].Select(m => m.Role));
+        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User }, _chat.Requests[1].Select(m => m.Role));
 
         // The banner again (start, then /clear); the wipe is the feedback, no notice. The settings
         // name no URL, so the discovered endpoint's LLM: line follows the banner both times.
@@ -2231,7 +2231,7 @@ public partial class SidekickAppTests : IDisposable
         Assert.True(clients[0].Disposed);
         Assert.Contains("model=beta (configured)", output);
         // The conversation survived the reconnect: the second client saw the first exchange.
-        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.User }, clients[1].Requests[0].Select(m => m.Role));
+        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User, ChatRole.Assistant, ChatRole.User }, clients[1].Requests[0].Select(m => m.Role));
     }
 
     [Fact]
@@ -2271,7 +2271,7 @@ public partial class SidekickAppTests : IDisposable
         Assert.Equal(ReasoningEffort.None, clients[0].Options[0]!.Reasoning!.Effort);
         Assert.Equal(ReasoningEffort.Low, clients[1].Options[0]!.Reasoning!.Effort);
         // The conversation survived the reconnect: the second client saw the first exchange.
-        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.User }, clients[1].Requests[0].Select(m => m.Role));
+        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User, ChatRole.Assistant, ChatRole.User }, clients[1].Requests[0].Select(m => m.Role));
     }
 
     [Fact]
@@ -2315,7 +2315,7 @@ public partial class SidekickAppTests : IDisposable
         Assert.Equal(ReasoningEffort.Low, clients[1].Options[0]!.Reasoning!.Effort);
         Assert.True(clients[0].Disposed);
         // The conversation survived the switch: the second client saw the first exchange.
-        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.User }, clients[1].Requests[0].Select(m => m.Role));
+        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User, ChatRole.Assistant, ChatRole.User }, clients[1].Requests[0].Select(m => m.Role));
     }
 
     [Fact]

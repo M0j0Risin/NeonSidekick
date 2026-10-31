@@ -15,7 +15,8 @@ namespace NeonSidekick.Llm;
 /// is untouched until the new list is complete, so a cancelled or failed summary leaves the
 /// conversation as it was.</para>
 ///
-/// <para>The shape after a summary: <c>user(summary) → the opening call pairs → the recent turns</c>.
+/// <para>The shape after a summary: <c>user(summary) → the opening call pairs → the recent turns</c>; the opener the first turn's
+/// pairs follow (<see cref="ConversationHistory.IsOpener"/>, 2026-10-30) is summarised with the older turns, the summary taking its place.
 /// A user message, because every chat template accepts what follows one and because it keeps
 /// <see cref="ConversationHistory.TurnCount"/> above zero, so the next turn does not seed the
 /// opening calls again; the clock and working-directory pairs are carried over as they were, so
@@ -104,8 +105,12 @@ public static partial class ConversationCompactor
     /// <summary>One <see cref="ChatMessage"/> list split for a compact: the older turns (the opening call pairs among them, in place), those pairs alone, and the recent turns kept verbatim.</summary>
     public sealed record Plan(IReadOnlyList<ChatMessage> Older, IReadOnlyList<ChatMessage> Opening, IReadOnlyList<ChatMessage> Recent)
     {
-        /// <summary>Whether there is anything to compact: an older turn that is not just the opening pairs.</summary>
-        public bool HasOlderTurns => Older.Count > Opening.Count;
+        /// <summary>
+        /// Whether there is anything to compact: an older turn that is not just the opening pairs and the opener ahead of them
+        /// (<see cref="ConversationHistory.IsOpener"/>, 2026-10-30: since the first turn's pairs moved ahead of its message, a history
+        /// of exactly <c>keepRecent</c> turns has them older than the cut).
+        /// </summary>
+        public bool HasOlderTurns => Older.Count > Opening.Count + Older.Count(ConversationHistory.IsOpener);
     }
 
     /// <summary>
@@ -871,7 +876,7 @@ public static partial class ConversationCompactor
 
     /// <summary>
     /// The list after a summary: <see cref="SummaryPreamble"/> + <paramref name="summary"/> as one user message, then the opening pairs, then the
-    /// recent turns. The summary keeps the file checkpoints of the turns it stands for (2026-10-28, review P2-06, the user's pick: keep them), an
+    /// recent turns; the opener is not kept (it is in <see cref="Plan.Older"/>, not <see cref="Plan.Opening"/>). The summary keeps the file checkpoints of the turns it stands for (2026-10-28, review P2-06, the user's pick: keep them), an
     /// earlier summary's too, newest first (<see cref="ConversationHistory.CheckpointListKey"/>), so <c>/undo</c> still reaches them.
     /// </summary>
     public static List<ChatMessage> Summarised(string summary, Plan plan)

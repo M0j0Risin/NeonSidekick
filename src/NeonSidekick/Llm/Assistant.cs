@@ -1506,10 +1506,15 @@ public sealed class Assistant
     /// The tools the assistant calls itself at the start of a conversation — the clock, the
     /// working directory and the memory, in the app — so the first request already carries their answers. Seeded
     /// in list order by the first turn of a conversation (<see cref="ConversationHistory.TurnCount"/>
-    /// was zero) right after the user's message and before the first model request, each as its
-    /// own <c>assistant(call) → tool</c> pair: the shape every tool-capable chat template accepts,
-    /// where a pair with no user message ahead of it is not. Empty (the default) seeds nothing.
-    /// Set per turn by the shell, like <see cref="Tools"/>.
+    /// was zero) before the first model request, each as its own <c>assistant(call) → tool</c> pair.
+    /// Until 2026-10-30 they followed the user's message; now they follow the opener
+    /// (<see cref="OpeningOpenerText"/>, <see cref="ConversationHistory.AddOpener"/>) and the user's message follows them, since a pair
+    /// with no user message ahead of it is not a shape every template accepts. Why (plan purring-wobbling-flame, session 836): three calls
+    /// after the message, the model read them as its own investigation and went on with it, a first-turn "add milk to my shopping list"
+    /// searching files and then saying the shopping tools were off. Measured as first messages, 10 runs per request: Qwen 3.8 27B missed
+    /// 6/30 shopping requests on SGLang and 12/30 on llama.cpp with the calls after the message, 0/30 on each with them ahead, the memory
+    /// question unchanged at 10/10. Untested: a Mistral-family template, which drops tool messages and then demands strict alternation,
+    /// may refuse the <c>user, user</c> it sees. Empty (the default) seeds nothing. Set per turn by the shell, like <see cref="Tools"/>.
     /// </summary>
     public IReadOnlyList<OpeningCall> OpeningCalls { get; set; } = [];
 
@@ -1549,6 +1554,34 @@ public sealed class Assistant
     public ReasoningEffort? Reasoning => _reasoning;
 
     /// <summary>
+    /// The opener's text (<see cref="ConversationHistory.AddOpener"/>, 2026-10-30, the user's wording): the user-role line the first turn's
+    /// opening calls follow, ahead of the user's message. Model-facing only; never shown. Pinned.
+    /// </summary>
+    public const string OpeningOpenerText = "(The conversation starts. The app first gathers the date, the working directory and your memories; the user's message follows them.)";
+
+    /// <summary>
+    /// Seeds <paramref name="calls"/> into the history, in order, each as a genuine call/result pair, not a prompt line: the same
+    /// two events the model's own calls raise, so the transcript shows it the same way, and not a model request, so it costs no
+    /// iteration and no time on the turn budget.
+    /// </summary>
+    private async IAsyncEnumerable<TurnEvent> SeedAsync(IReadOnlyList<OpeningCall> calls, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        foreach (var (tool, callId, seededArguments) in calls)
+        {
+            var call = new FunctionCallContent(callId, tool.Name, seededArguments is null ? new Dictionary<string, object?>() : new Dictionary<string, object?>(seededArguments));
+            _history.AddMessage(new ChatMessage(ChatRole.Assistant, [call]));
+            string openingJson = SerializeArguments(call.Arguments);
+            DiagnosticLog.Debug(Category, ToolCallLogLine(call.Name, openingJson) + OpeningSuffix);
+            yield return new TurnEvent.ToolCall(call.Name, call.CallId, openingJson);
+
+            // An opening tool answers with text; a picture from one would have no carrier.
+            var (result, _, _, _) = await InvokeAsync(tool, call, cancellationToken).ConfigureAwait(false);
+            _history.AddToolResults([ResultContent(call, result)]);
+            yield return new TurnEvent.ToolResult(call.Name, call.CallId, result);
+        }
+    }
+
+    /// <summary>
     /// Runs one turn for <paramref name="userText"/>. Text arrives as <see cref="TurnEvent.TextDelta"/>
     /// events; the reply is committed to <see cref="History"/> once the stream completes, or as far
     /// as it got if it was cut short. Server failures become a <see cref="TurnEvent.Notice"/>, never
@@ -1573,38 +1606,35 @@ public sealed class Assistant
         // Decided before the user message lands: the first turn of a conversation opens with the
         // opening calls, a retry of it (the user message already committed) does not; the pending
         // calls (a process's exit) ride any turn, once.
-        IReadOnlyList<OpeningCall> opening = _history.TurnCount == 0 ? OpeningCalls : [];
-        if (PendingCalls.Count > 0)
-        {
-            opening = [.. opening, .. PendingCalls];
-            PendingCalls = [];
-        }
+        IReadOnlyList<OpeningCall> first = _history.TurnCount == 0 ? OpeningCalls : [];
+        IReadOnlyList<OpeningCall> pending = PendingCalls;
+        PendingCalls = [];
 
         // The turn's two lines in the log (2026-09-19): the opening one now, the closing one with
         // the tally when the scope ends — the reply's end, a notice, a cancel (the consumer's
         // dispose), a throw — through the using declaration's own finally.
-        using var log = new TurnLog(_history.TurnCount + 1, userText, images.Count, opening.Count, _time, cancellationToken);
+        using var log = new TurnLog(_history.TurnCount + 1, userText, images.Count, first.Count + pending.Count, _time, cancellationToken);
+
+        // The first turn's opening calls go ahead of the user's message, after the opener (2026-10-30, plan purring-wobbling-flame):
+        // after it, the model read three calls in as its own investigation and searched files instead of answering.
+        if (first.Count > 0)
+        {
+            _history.DropUnfinishedOpening();
+            _history.AddOpener(OpeningOpenerText);
+            await foreach (var evt in SeedAsync(first, cancellationToken).ConfigureAwait(false))
+            {
+                yield return evt;
+            }
+        }
 
         // Committed up front: a turn that fails still leaves the question in the transcript. An /undo note rides it as its own first part (2026-10-28).
         string? note = TurnNote;
         TurnNote = null;
         _history.AddUser(userText, images, note);
 
-        foreach (var (tool, callId, seededArguments) in opening)
+        await foreach (var evt in SeedAsync(pending, cancellationToken).ConfigureAwait(false))
         {
-            // A genuine call/result pair, not a prompt line: the same two events the model's own
-            // calls raise, so the transcript shows it the same way, and not a model request, so it
-            // costs no iteration and no time on the turn budget.
-            var call = new FunctionCallContent(callId, tool.Name, seededArguments is null ? new Dictionary<string, object?>() : new Dictionary<string, object?>(seededArguments));
-            _history.AddMessage(new ChatMessage(ChatRole.Assistant, [call]));
-            string openingJson = SerializeArguments(call.Arguments);
-            DiagnosticLog.Debug(Category, ToolCallLogLine(call.Name, openingJson) + OpeningSuffix);
-            yield return new TurnEvent.ToolCall(call.Name, call.CallId, openingJson);
-
-            // An opening tool answers with text; a picture from one would have no carrier.
-            var (result, _, _, _) = await InvokeAsync(tool, call, cancellationToken).ConfigureAwait(false);
-            _history.AddToolResults([ResultContent(call, result)]);
-            yield return new TurnEvent.ToolResult(call.Name, call.CallId, result);
+            yield return evt;
         }
 
         var options = new ChatOptions
