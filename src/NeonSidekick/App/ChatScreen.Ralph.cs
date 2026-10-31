@@ -717,7 +717,7 @@ internal sealed partial class ChatScreen
         _lastTurnFailed = true;
         try
         {
-            exit = await RunMessageAsync(message, images, cancellationToken).ConfigureAwait(false);
+            exit = await RunMessageAsync(message, images, cancellationToken, Llm.TurnMark.App).ConfigureAwait(false);
         }
         finally
         {

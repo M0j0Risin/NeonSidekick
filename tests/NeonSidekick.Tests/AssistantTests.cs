@@ -1367,7 +1367,9 @@ public class AssistantTests
         var request = Assert.Single(client.Requests);
         Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User }, request.Select(m => m.Role));
         Assert.True(ConversationHistory.IsOpener(request[1]));
-        Assert.Equal(Assistant.OpeningOpenerText, request[1].Text);
+        // Only what was seeded (2026-10-31, review P6-1): the clock and the cwd, no memories.
+        Assert.Contains("the date and the working directory;", request[1].Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("memories", request[1].Text, StringComparison.Ordinal);
         Assert.Equal(Assistant.OpeningClockCallId, Assert.Single(request[2].Contents.OfType<FunctionCallContent>()).CallId);
         var fnResult = Assert.Single(request[3].Contents.OfType<FunctionResultContent>());
         Assert.Equal(Assistant.OpeningClockCallId, fnResult.CallId);
@@ -1398,12 +1400,17 @@ public class AssistantTests
         Assert.Equal("neonpoll1", Assert.Single(request[7].Contents.OfType<FunctionCallContent>()).CallId);
     }
 
+    /// <summary>
+    /// A first turn stopped during its opening (2026-10-31, review P1-2) keeps its question like any other stopped turn: no opener and no
+    /// call without its result, and the message, with its note and marks, landed; the next turn sends no dangling call.
+    /// </summary>
     [Fact]
-    public async Task AFirstTurnStoppedDuringItsOpening_LeavesNoHalfOpening_ForTheNext()
+    public async Task AFirstTurnStoppedDuringItsOpening_KeepsItsQuestion_AndNoHalfOpening()
     {
         var (client, history, assistant) = BuildWithOpening();
-        var opening = assistant.OpeningCalls;
         assistant.OpeningCalls = [new(new HangingTool("get_current_time"), Assistant.OpeningClockCallId)];
+        assistant.TurnNote = "[The user ran /undo: x]";
+        assistant.TurnMark = new TurnMark("/review x", false);
         using (var cts = new CancellationTokenSource())
         {
             // Stopped after the clock's call is in the history, before its result: the cancel lands in the opening call.
@@ -1413,16 +1420,89 @@ public class AssistantTests
             await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => { while (await turn.MoveNextAsync()) { } });
         }
 
-        Assert.Equal(0, history.TurnCount);
-        Assert.NotEmpty(history.Messages);   // the opener and the call with no result
-        assistant.OpeningCalls = opening;
+        Assert.Equal(1, history.TurnCount);
+        var message = Assert.Single(history.Messages);
+        Assert.EndsWith("hi", message.Text, StringComparison.Ordinal);
+        Assert.Equal("[The user ran /undo: x]", ConversationHistory.UndoNoteOf(message));
+        Assert.Equal("/review x", ConversationHistory.TypedOf(message));
+        Assert.Null(assistant.TurnNote);
+        Assert.Null(assistant.TurnMark);
+
         client.EnqueueText("Hello.");
+        await Run(assistant, "again");
+
+        var request = Assert.Single(client.Requests);
+        Assert.DoesNotContain(request, ConversationHistory.IsOpener);
+        Assert.DoesNotContain(request, m => m.Contents.OfType<FunctionCallContent>().Any());
+        Assert.Equal("again", request[^1].Text);
+    }
+
+    /// <summary>A half opening a first turn with no opening calls finds (2026-10-31, review P4-1) goes before its message, never sent.</summary>
+    [Fact]
+    public async Task AHalfOpening_IsDropped_ByAFirstTurnThatSeedsNothing()
+    {
+        var (client, history, assistant) = BuildWithOpening();
+        history.AddOpener(Assistant.OpeningOpenerText);
+        history.AddMessage(new ChatMessage(ChatRole.Assistant, [new FunctionCallContent(Assistant.OpeningClockCallId, "get_current_time")]));
+        assistant.OpeningCalls = [];
+        client.EnqueueText("Hello.");
+
         await Run(assistant, "hi");
 
         var request = Assert.Single(client.Requests);
-        Assert.Equal(1, request.Count(ConversationHistory.IsOpener));
-        Assert.Equal(1, request.Count(m => m.Contents.OfType<FunctionCallContent>().Any(c => c.CallId == Assistant.OpeningClockCallId)));
+        Assert.Equal(new[] { ChatRole.System, ChatRole.User }, request.Select(m => m.Role));
         Assert.Equal("hi", request[^1].Text);
+    }
+
+    [Fact]
+    public void TheOpener_NamesOnlyWhatWasSeeded()
+    {
+        var clock = new FixedTool("get_current_time", "t");
+        Assert.Equal(Assistant.OpeningOpenerText, Assistant.OpeningOpener([new(clock, Assistant.OpeningClockCallId), new(clock, Assistant.OpeningCwdCallId), new(clock, Assistant.OpeningMemoryCallId)]));
+        Assert.Contains("gathers the date;", Assistant.OpeningOpener([new(clock, Assistant.OpeningClockCallId)]), StringComparison.Ordinal);
+        Assert.Equal(Assistant.OpeningOpenerContextText, Assistant.OpeningOpener([new(clock, "other")]));
+    }
+
+    /// <summary>
+    /// A summary request never carries the opener (2026-10-31, review P2-11): the one place every summary goes through (the compact, a
+    /// mid-turn step's split of turn 1, the lean retry) leaves it out.
+    /// </summary>
+    [Fact]
+    public async Task ASummaryRequest_LeavesTheOpenerOut()
+    {
+        var (client, _, assistant) = Build();
+        client.EnqueueText("");
+        client.EnqueueText("The user said hi.");
+        List<ChatMessage> transcript =
+        [
+            new(ChatRole.User, Assistant.OpeningOpenerText) { AdditionalProperties = new AdditionalPropertiesDictionary { [ConversationHistory.OpeningKey] = true } },
+            new(ChatRole.User, "hi"),
+            new(ChatRole.Assistant, "hello"),
+        ];
+
+        var (text, _) = await assistant.SummarizeAsync(transcript, null, CancellationToken.None);
+
+        Assert.Equal("The user said hi.", text);
+        Assert.Equal(2, client.Requests.Count);   // the first try came back empty: the lean one too
+        Assert.All(client.Requests, r => Assert.DoesNotContain(r, m => m.Text.Contains("The conversation starts", StringComparison.Ordinal)));
+    }
+
+    /// <summary>The turn's marks ride its message as it lands (2026-10-31, review P1-5/P8-1), and are taken once.</summary>
+    [Fact]
+    public async Task TheTurnMark_IsStampedOnTheMessage_AndTakenOnce()
+    {
+        var (client, history, assistant) = Build();
+        client.EnqueueText("one");
+        client.EnqueueText("two");
+        assistant.TurnMark = TurnMark.App;
+
+        await Run(assistant, "a");
+        await Run(assistant, "b");
+
+        var users = history.Messages.Where(ConversationHistory.IsTurnStart).ToList();
+        Assert.True(ConversationHistory.IsAppWritten(users[0]));
+        Assert.False(ConversationHistory.IsAppWritten(users[1]));
+        Assert.Null(ConversationHistory.TypedOf(users[1]));
     }
 
     [Fact]

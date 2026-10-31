@@ -3,15 +3,13 @@ using System.Text;
 
 namespace NeonSidekick.CustomCommands;
 
-/// <summary>A body expanded: the prompt to send, and whether any placeholder took a value (no <c>ARGUMENTS:</c> line then).</summary>
-public sealed record CustomCommandExpansion(string Text, bool Filled);
-
 /// <summary>
 /// A custom command's body filled with what was typed after its name, by Claude Code's rules (code.claude.com/docs/en/slash-commands, read
 /// 2026-10-30), so a Claude command file behaves the same here:
 /// <list type="bullet">
 /// <item><c>$ARGUMENTS</c> is the typed text, trimmed; <c>$ARGUMENTS[N]</c> and <c>$N</c> the Nth word, 0-based (<c>$0</c> the first), a word
-/// grouped by <c>"…"</c> or <c>'…'</c> with its quotes taken off; an indexed placeholder with no such word stays as written.</item>
+/// grouped by <c>"…"</c> or <c>'…'</c> with its quotes taken off (<see cref="SplitWords"/>); an indexed placeholder with no such word stays
+/// as written.</item>
 /// <item>A declared name (<c>arguments: [issue, branch]</c>) makes <c>$issue</c> the first word and <c>$branch</c> the second, empty when there
 /// is none. The whole identifier after the <c>$</c> is read, so <c>$pathname</c> is never <c>$path</c> + <c>name</c>, and a <c>$word</c> that
 /// is no declared name (a <c>$web_search</c> tool mention) is left alone.</item>
@@ -30,8 +28,11 @@ public static class CustomCommandTemplate
     /// <summary>The line added when no placeholder took the typed text.</summary>
     public const string AppendedLabel = "ARGUMENTS: ";
 
-    /// <summary><paramref name="body"/> filled from <paramref name="arguments"/> (the text after the name), <paramref name="names"/> the declared ones.</summary>
-    public static CustomCommandExpansion Expand(string body, string arguments, IReadOnlyList<string> names)
+    /// <summary>
+    /// <paramref name="body"/> filled from <paramref name="arguments"/> (the text after the name), <paramref name="names"/> the declared ones:
+    /// the prompt to send, the <c>ARGUMENTS:</c> line added when no placeholder took a value (decided here, 2026-10-31, review P6-10).
+    /// </summary>
+    public static string Expand(string body, string arguments, IReadOnlyList<string> names)
     {
         ArgumentNullException.ThrowIfNull(body);
         ArgumentNullException.ThrowIfNull(arguments);
@@ -106,12 +107,20 @@ public static class CustomCommandTemplate
             text = text.TrimEnd() + "\n\n" + AppendedLabel + typed;
         }
 
-        return new CustomCommandExpansion(text, filled);
+        return text;
     }
 
     /// <summary>
-    /// The typed text cut into words at white space, shell-style: a <c>"</c> or <c>'</c> at a word's start opens a group only when its match
-    /// follows, the quotes taken off (so <c>don't</c> stays one word, and <c>"hello world" second</c> is two). Pure.
+    /// The typed text cut into words at white space, shell-style, with two rules for English text (2026-10-31, review P6-2, P6-4):
+    /// <list type="bullet">
+    /// <item>A <c>"</c> or <c>'</c>, at a word's start or inside one, opens a group only when the next same quote ends a word (white space
+    /// or the end after it); the quotes come off. Any other quote is kept as written, so <c>'cause it's broken</c> is three words with its
+    /// apostrophes, <c>--title="two words" v2</c> is <c>--title=two words</c> and <c>v2</c>, and Claude's documented <c>"hello world" second</c>
+    /// is two. A real shell would open a quote at <c>it's</c>; this is deliberate.</item>
+    /// <item>An attachment label (<c>[Image #1]</c>, <c>[PDF #2 a b.pdf]</c>, review P3-1) is one word, spaces and all, so the prompt names
+    /// the picture whole and nothing is added back for it.</item>
+    /// </list>
+    /// Pure.
     /// </summary>
     public static IReadOnlyList<string> SplitWords(string text)
     {
@@ -127,22 +136,37 @@ public static class CustomCommandTemplate
             }
 
             var word = new StringBuilder();
-            if (text[i] is '"' or '\'' && text.IndexOf(text[i], i + 1) is var match && match > i)
-            {
-                word.Append(text, i + 1, match - i - 1);
-                i = match + 1;
-            }
-
             while (i < text.Length && !char.IsWhiteSpace(text[i]))
             {
-                word.Append(text[i]);
-                i++;
+                char c = text[i];
+                if (UI.PasteBlocks.LabelLengthAt(text, i) is > 0 and var label)
+                {
+                    word.Append(text, i, label);
+                    i += label;
+                }
+                else if (c is '"' or '\'' && ClosingQuote(text, i) is { } close)
+                {
+                    word.Append(text, i + 1, close - i - 1);
+                    i = close + 1;
+                }
+                else
+                {
+                    word.Append(c);
+                    i++;
+                }
             }
 
             words.Add(word.ToString());
         }
 
         return words;
+    }
+
+    // The next quote like text[open] when it ends a word (white space or the end after it), else null.
+    private static int? ClosingQuote(string text, int open)
+    {
+        int close = text.IndexOf(text[open], open + 1);
+        return close > open && (close + 1 == text.Length || char.IsWhiteSpace(text[close + 1])) ? close : null;
     }
 
     /// <summary>

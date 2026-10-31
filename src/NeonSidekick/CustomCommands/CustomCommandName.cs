@@ -1,5 +1,3 @@
-using System.Text;
-
 namespace NeonSidekick.CustomCommands;
 
 /// <summary>
@@ -65,30 +63,56 @@ public static class CustomCommandName
     /// <summary>Whether <paramref name="segment"/> is a Windows device name (<c>con</c>, <c>nul</c>, <c>com1</c> …), refused on both systems.</summary>
     public static bool IsDeviceName(string segment) => DeviceNames.Contains(segment);
 
+    // This system's path separators (2026-10-31, review P1-4): a \ is a separator on Windows only; on a Mac it is a character in a name.
+    private static readonly char[] SystemSeparators = Path.DirectorySeparatorChar == Path.AltDirectorySeparatorChar
+        ? [Path.DirectorySeparatorChar]
+        : [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar];
+
     /// <summary>
-    /// The name a file at <paramref name="relativePath"/> (under its folder, either separator) would have: its folders and stem lower-cased
-    /// and joined by <c>:</c>, the extension dropped. Null when the result is no valid name (<see cref="IsValid"/>).
+    /// The name a file at <paramref name="relativePath"/> (under its folder, this system's separators) would have: its folders and stem
+    /// lower-cased and joined by <c>:</c>, the extension dropped. Null when the result is no valid name (<see cref="IsValid"/>), or when a
+    /// folder or the stem holds a <c>:</c> itself (2026-10-31, review P1-4: <c>a:b.md</c> on a Mac read as <c>/a:b</c>, whose file
+    /// <see cref="RelativePath"/> maps to <c>a/b.md</c>), so every name maps back to its file.
     /// </summary>
-    public static string? FromRelativePath(string relativePath)
+    public static string? FromRelativePath(string relativePath) => FromRelativePath(relativePath, SystemSeparators);
+
+    /// <summary><see cref="FromRelativePath(string)"/> with the separators given: the tests' seam, so both systems' rules run anywhere.</summary>
+    internal static string? FromRelativePath(string relativePath, char[] separators)
     {
         ArgumentNullException.ThrowIfNull(relativePath);
-        string name = RawName(relativePath);
+        var parts = Parts(relativePath, separators);
+        if (parts.Any(p => p.Contains(Separator, StringComparison.Ordinal)))
+        {
+            return null;
+        }
+
+        string name = string.Join(Separator, parts.Select(p => p.ToLowerInvariant()));
         return IsValid(name) ? name : null;
     }
 
     /// <summary>The name <paramref name="relativePath"/> spells, valid or not: lower-cased, joined by <c>:</c>, the extension dropped.</summary>
-    public static string RawName(string relativePath)
+    public static string RawName(string relativePath) => RawName(relativePath, SystemSeparators);
+
+    internal static string RawName(string relativePath, char[] separators)
     {
         ArgumentNullException.ThrowIfNull(relativePath);
-        string[] parts = relativePath.Split('/', '\\');
+        return string.Join(Separator, Parts(relativePath, separators).Select(p => p.ToLowerInvariant()));
+    }
+
+    /// <summary><paramref name="relativePath"/>'s folders and stem as written (this system's separators), the extension dropped.</summary>
+    public static IReadOnlyList<string> Parts(string relativePath) => Parts(relativePath, SystemSeparators);
+
+    internal static IReadOnlyList<string> Parts(string relativePath, char[] separators)
+    {
+        ArgumentNullException.ThrowIfNull(relativePath);
+        string[] parts = relativePath.Split(separators);
         string stem = parts[^1];
         if (stem.EndsWith(Extension, StringComparison.OrdinalIgnoreCase))
         {
-            stem = stem[..^Extension.Length];
+            parts[^1] = stem[..^Extension.Length];
         }
 
-        parts[^1] = stem;
-        return string.Join(Separator, parts.Select(p => p.ToLowerInvariant()));
+        return parts;
     }
 
     /// <summary>
@@ -102,34 +126,11 @@ public static class CustomCommandName
         var segments = new List<string>();
         foreach (string part in typed.Trim().TrimStart('/').Split(Separator, '/', '\\'))
         {
-            var kebab = new StringBuilder(part.Length);
-            bool gap = false;
-            foreach (char c in part.ToLowerInvariant())
-            {
-                if (c is >= 'a' and <= 'z' or >= '0' and <= '9' or '_')
-                {
-                    if (c == '_' && kebab.Length == 0)
-                    {
-                        continue;
-                    }
-
-                    if (gap && kebab.Length > 0)
-                    {
-                        kebab.Append('-');
-                    }
-
-                    gap = false;
-                    kebab.Append(c);
-                }
-                else
-                {
-                    gap = true;
-                }
-            }
-
+            // The Skills pane's rule, an underscore kept (2026-10-31, review P7-6: one helper).
+            string kebab = Skills.SkillFrontmatter.Kebab(part, keepUnderscore: true);
             if (kebab.Length > 0)
             {
-                segments.Add(kebab.ToString());
+                segments.Add(kebab);
             }
         }
 

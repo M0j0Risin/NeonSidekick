@@ -85,9 +85,17 @@ public static partial class ConversationRewind
     /// left out, both the tagged part and the plain part a restored session has
     /// (<see cref="ConversationCompactor.TurnProgressPreamble"/>), and an <c>/undo</c> note ahead of the text (2026-10-28, <see cref="ConversationHistory.WithoutUndoNote"/>). A <c>/claude</c> exchange's <c>[to Claude] </c> tag becomes
     /// <c>/claude </c> again, and a <c>/cmd</c> run's tag the line that runs it again (2026-10-09). Picture labels (<c>[Image #1]</c>) stay in the text.
+    /// A custom command's message is the line typed for it (<see cref="ConversationHistory.TypedOf"/>, 2026-10-31, review P1-5), so the
+    /// <c>/rewind</c> list, its draft and the <c>/undo</c> labels show <c>/review x</c>, not the prompt it sent.
     /// </summary>
     public static string UserLine(ChatMessage message)
     {
+        ArgumentNullException.ThrowIfNull(message);
+        if (ConversationHistory.TypedOf(message) is { } typed)
+        {
+            return typed;
+        }
+
         string text = TypedText(message);
         return ClaudeText.HistoryUserPrompt(text) is { } prompt ? "/claude " + prompt : Shell.ShellText.CmdHistoryCommand(text) ?? text;
     }

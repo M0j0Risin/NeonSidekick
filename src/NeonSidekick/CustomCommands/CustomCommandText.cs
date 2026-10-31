@@ -49,26 +49,90 @@ public static class CustomCommandText
 
     public const string SameFolderNote = "the global commands folder is this profile's folder: read once, as the profile's";
 
-    public static string UnreadableFolderProblem(string detail) => "the folder can't be read: " + detail;
+    /// <summary>How <see cref="UnreadableFolderProblem"/> starts, which tells a copy's unreadable folders apart.</summary>
+    public const string UnreadableFolderHead = "the folder can't be read: ";
+
+    public static string UnreadableFolderProblem(string detail) => UnreadableFolderHead + detail;
+
+    /// <summary>A <c>*.md</c> that is a pipe, socket or device (2026-10-31, review P5-2): never opened.</summary>
+    public const string NotAFileProblem = "a pipe, socket or device, not a file: not read";
 
     public static string UnreadableFolderLogLine(string folder, string detail) => $"Could not read the commands folder {folder}: {detail}";
 
     public static string ShadowedByBuiltInLogLine(string file, string builtIn) => $"The custom command file {file} is never run: {builtIn} is a built-in.";
 
-    /// <summary>A file whose name is no command name, the name it could be when there is one (<c>my review.md</c> → rename it <c>my-review.md</c>).</summary>
+    /// <summary>
+    /// Why <paramref name="name"/> (as typed after the <c>/</c>, or a file's raw name) is no command name, the one reason that applies
+    /// (2026-10-31, review P7-3, P2-14, P6-3: one wording for "the characters" left a device name, a long part or too many parts unexplained);
+    /// null when it is a valid one.
+    /// </summary>
+    public static string? NameProblem(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        if (CustomCommandName.IsValid(name))
+        {
+            return null;
+        }
+
+        string[] parts = name.Split(CustomCommandName.Separator);
+        if (parts.Length > CustomCommandName.MaxDepth + 1)
+        {
+            return "more than " + (CustomCommandName.MaxDepth + 1).ToString(CultureInfo.InvariantCulture) + " parts joined by :";
+        }
+
+        if (parts.FirstOrDefault(CustomCommandName.IsDeviceName) is { } device)
+        {
+            return device + " is a Windows device name";
+        }
+
+        if (parts.Any(p => p.Length > CustomCommandName.MaxSegmentLength))
+        {
+            return "a part is over " + CustomCommandName.MaxSegmentLength.ToString(CultureInfo.InvariantCulture) + " characters";
+        }
+
+        if (name.Length > CustomCommandName.MaxLength)
+        {
+            return "over " + CustomCommandName.MaxLength.ToString(CultureInfo.InvariantCulture) + " characters";
+        }
+
+        return "lowercase letters, digits, _ and -, each part starting with a letter or digit";
+    }
+
+    /// <summary>
+    /// A file whose name is no command name: the reason (<see cref="NameProblem"/>), then the rename that fixes it when there is one — the
+    /// folder's when the bad part is a folder (<c>My Folder/review.md</c>: rename the folder <c>My Folder</c> to <c>my-folder</c>), else the
+    /// file's (<c>my review.md</c>: rename it <c>my-review.md</c>). A <c>:</c> (or a Mac's <c>\</c>) in a part is named (review P1-4).
+    /// </summary>
     public static string BadNameProblem(string relativePath)
     {
         ArgumentNullException.ThrowIfNull(relativePath);
-        string normalized = CustomCommandName.Normalize(CustomCommandName.RawName(relativePath));
-        string head = "not a command name (lowercase letters, digits, _ and -; " + CustomCommandName.MaxSegmentLength.ToString(CultureInfo.InvariantCulture) + " at most)";
-        if (CustomCommandName.IsValid(normalized))
+        var parts = CustomCommandName.Parts(relativePath);
+        foreach (char bad in new[] { CustomCommandName.Separator, '\\' })
         {
-            return head + ": rename it " + Path.GetFileName(CustomCommandName.RelativePath(normalized));
+            if (parts.Any(p => p.Contains(bad, StringComparison.Ordinal)))
+            {
+                return "a " + bad + " in a file or folder name can't be typed in a command: rename it";
+            }
         }
 
-        return CustomCommandName.RawName(relativePath).Split(CustomCommandName.Separator).Any(CustomCommandName.IsDeviceName)
-            ? "a Windows device name can't be a command: rename it"
-            : head;
+        string raw = CustomCommandName.RawName(relativePath);
+        string head = "not a command name (" + NameProblem(raw) + ")";
+        string normalized = CustomCommandName.Normalize(raw);
+        string[] fixedParts = normalized.Split(CustomCommandName.Separator);
+        if (!CustomCommandName.IsValid(normalized) || fixedParts.Length != parts.Count)
+        {
+            return head;
+        }
+
+        for (int i = 0; i < parts.Count - 1; i++)
+        {
+            if (!CustomCommandName.IsValidSegment(parts[i].ToLowerInvariant()))
+            {
+                return head + ": rename the folder " + parts[i] + " to " + fixedParts[i];
+            }
+        }
+
+        return head + ": rename it " + Path.GetFileName(CustomCommandName.RelativePath(normalized));
     }
 
     public static string CaseDuplicateProblem(string word) => "another file here is " + word + " already (names differ only by case)";
@@ -151,8 +215,10 @@ public static class CustomCommandText
 
     public static readonly string Usage = "Use " + Word + ", " + Word + " new <name> [--global] or " + Word + " save <name> [--global].";
 
+    /// <summary>A typed name refused, with its one reason (<see cref="NameProblem"/>, 2026-10-31, review P7-3) and the name it could be.</summary>
     public static string BadNameError(string typed, string suggestion, string verb = NewWord) =>
-        "\"" + typed + "\" is no command name (lowercase letters, digits, _ and -, folders joined by :)" + (suggestion.Length > 0 ? ": try " + Word + " " + verb + " " + suggestion : "");
+        "\"" + typed + "\" is no command name (" + (NameProblem(typed.Trim().TrimStart('/')) ?? "lowercase letters, digits, _ and -") + ")"
+        + (suggestion.Length > 0 ? ": try " + Word + " " + verb + " " + suggestion : "");
 
     public static string BuiltInError(string name) => "/" + name + " is a built-in command: pick another name";
 
@@ -161,12 +227,25 @@ public static class CustomCommandText
 
     public static string LinkedError(string name) => "/" + name + "'s folder is a link: the app never writes through one below the commands folder";
 
+    /// <summary>A file that is itself a link (2026-10-31, review P4-3: it was named by the folder wording).</summary>
+    public static string LinkedFileError(string path) => path + " is a link: the app never writes or deletes through one";
+
+    /// <summary>
+    /// A move or copy between two folders that are one (2026-10-31, review P7-2), the pane's and <c>/profile push|pull commands</c>' one
+    /// wording: <paramref name="profile"/> names the other profile, null the global folder.
+    /// </summary>
+    public static string SharedFolderNotice(string? profile) =>
+        "nothing to do: " + (profile is null ? "the global commands folder" : "\"" + profile + "\"'s commands folder") + " is this profile's";
+
+    /// <summary>A copy into another profile that holds the name already (2026-10-31, review P2-13): that profile named.</summary>
+    public static string ExistsInProfileError(string name, string profile) => "/" + name + " is in \"" + profile + "\"'s commands already";
+
     public static string FailedError(string detail) => "the command file couldn't be written: " + detail;
 
     public static string CreatedNotice(string name, string path) => Glyph + " /" + name + " started from the template: " + path;
 
-    public static string SavedNotice(string name, string path, string firstLine) =>
-        Glyph + " /" + name + " saved from \"" + firstLine + "\": " + path + ". Type /" + name + " to send it again.";
+    public static string SavedNotice(string name, string path, string firstLine, bool sendAgain = true) =>
+        Glyph + " /" + name + " saved from \"" + firstLine + "\": " + path + "." + (sendAgain ? " Type /" + name + " to send it again." : "");
 
     public const string SavedMayReadDifferently = "A \\$ in the text may read differently when the command runs.";
 
@@ -179,6 +258,17 @@ public static class CustomCommandText
     public const string NothingToSaveError = "no message sent in this conversation yet; " + Word + " new <name> starts from the template";
 
     public static string NotAMessageError(string word) => "the last turn was a " + word + " line, not a message";
+
+    /// <summary>The last message was the app's own (2026-10-31, review P8-1: <c>/help</c>'s question, a plan's or audit's pass, a Ralph pass).</summary>
+    public const string AppWrittenError = "the last message was written by the app, not you";
+
+    /// <summary>The last message was a custom command's prompt (2026-10-31, review P1-5, the user's call: refuse).</summary>
+    public static string FromCustomCommandError(string word) => "the last message came from " + word + ": copy that command on " + Word + " instead";
+
+    /// <summary><c>/commands</c>' completion notes (2026-10-31, review P2-10: they were inline).</summary>
+    public const string NewWordNote = "start a command from the template in your editor: " + Word + " new <name> [--global]";
+    public const string SaveWordNote = "save your last message as a command: " + Word + " save <name> [--global]";
+    public const string GlobalSwitchNote = "in the home's commands folder, every profile's";
 
     public const string BlankError = "the text to save is blank";
 
@@ -241,126 +331,250 @@ public static class CustomCommandText
 
     public static string MissingError(string word) => word + "'s file is gone";
 
+    /// <summary>A Skipped folder row's Enter (2026-10-31, review P2-5): its problem, as a notice.</summary>
+    public static string FolderProblemNotice(string shown, string problem) => Glyph + " " + shown + ": " + problem;
+
+    /// <summary>A Skipped row whose file is gone since the scan (2026-10-31, review P2-5); the list is read again.</summary>
+    public static string GoneNotice(string shown) => Glyph + " " + shown + " is gone: the list is read again";
+
     public static string ProfileWhere(string profile) => "to profile " + profile;
 
-    // ── Lines (no pane, headless) and help ──────────────────────────────────
+    // ── Rows, lines (no pane, headless) and help ────────────────────────────
+
+    /// <summary>
+    /// The rows every list of the commands draws (2026-10-31, review P6-7: the pane, the <c>/help</c> tab and the plain lines each walked the
+    /// scan their own way): the commands, then the Shadowed files, then the Skipped ones, in the scan's order. Each field is cleaned the diff
+    /// view's way (review P2-1, P3-4), and a Skipped file is named by its path under its folder (review P4-8), from <c>scan.Roots</c>. Pure.
+    /// </summary>
+    public static IReadOnlyList<CustomCommandRow> Rows(CustomCommandScan scan)
+    {
+        ArgumentNullException.ThrowIfNull(scan);
+        var rows = new List<CustomCommandRow>(scan.Commands.Count + scan.Shadowed.Count + scan.Problems.Count);
+        rows.AddRange(scan.Commands.Select(c => new CustomCommandRow(CustomCommandRowKind.Command, Clean(c.Word), c.ArgumentHint is { Length: > 0 } hint ? Clean(hint) : null,
+            Clean(c.Description ?? ""), c.Scope, Clean(ShownPath(scan.Roots, c.Scope, c.FilePath))) { Command = c }));
+        rows.AddRange(scan.Shadowed.Select(s => new CustomCommandRow(CustomCommandRowKind.Shadow, Clean(s.Command.Word), null, Clean(ShadowReason(s)), s.Command.Scope,
+            Clean(ShownPath(scan.Roots, s.Command.Scope, s.Command.FilePath))) { Shadow = s }));
+        rows.AddRange(scan.Problems.Select(p => new CustomCommandRow(CustomCommandRowKind.Problem, Clean(ShownPath(scan.Roots, p.Scope, p.FilePath)), null, Clean(p.Problem), p.Scope,
+            Clean(ShownPath(scan.Roots, p.Scope, p.FilePath))) { Problem = p }));
+        return rows;
+    }
+
+    /// <summary>
+    /// A file as the lists name it (2026-10-31, review P4-8): its path under its folder (<c>tools/review.md</c>), or the whole path when it
+    /// isn't under it (or the roots are unknown).
+    /// </summary>
+    public static string ShownPath(CustomCommandRoots roots, CustomCommandScope scope, string path)
+    {
+        ArgumentNullException.ThrowIfNull(roots);
+        ArgumentNullException.ThrowIfNull(path);
+        string root = roots.Of(scope);
+        if (root.Length == 0)
+        {
+            return path;
+        }
+
+        try
+        {
+            string relative = Path.GetRelativePath(root, path);
+            return relative.StartsWith("..", StringComparison.Ordinal) || relative == "." || Path.IsPathRooted(relative) ? path : relative;
+        }
+        catch (ArgumentException)
+        {
+            return path;
+        }
+    }
+
+    private static string Clean(string text) => UI.DiffView.Clean(text);
+
+    /// <summary>A note's start in the plain lists and the pane's band (2026-10-31, review P2-10: written inline).</summary>
+    public const string NotePrefix = "Note: ";
 
     /// <summary>
     /// The pane's text where there is no pane (headless, a redirected console): each command's word, hint, description and scope, then the
-    /// Shadowed and Skipped rows with their reasons, then both folders and the new form, which is all an empty list shows.
+    /// Shadowed and Skipped rows with their reasons, the scan's note, then both folders and the new form, which is all an empty list shows.
     /// </summary>
-    public static IReadOnlyList<string> Lines(CustomCommandScan scan, CustomCommandRoots roots)
+    public static IReadOnlyList<string> Lines(CustomCommandScan scan)
     {
         ArgumentNullException.ThrowIfNull(scan);
-        ArgumentNullException.ThrowIfNull(roots);
+        var rows = Rows(scan);
         var lines = new List<string>();
-        if (scan.Commands.Count == 0)
+        var commands = rows.Where(r => r.Kind == CustomCommandRowKind.Command).ToList();
+        if (commands.Count == 0)
         {
-            lines.Add("No custom commands.");
+            lines.Add(HelpEmptyRow);
         }
         else
         {
-            lines.Add("Custom commands:");
-            foreach (var command in scan.Commands)
-            {
-                lines.Add("  " + CommandLine(command));
-            }
+            lines.Add(ListHeading + ":");
+            lines.AddRange(commands.Select(r => "  " + CommandLine(r)));
         }
 
-        if (scan.Shadowed.Count > 0)
+        if (rows.Any(r => r.Kind == CustomCommandRowKind.Shadow))
         {
             lines.Add(ShadowedHeading + ":");
-            lines.AddRange(scan.Shadowed.Select(s => "  " + s.Command.Word + " (" + ScopeName(s.Command.Scope) + "): " + ShadowReason(s)));
+            lines.AddRange(rows.Where(r => r.Kind == CustomCommandRowKind.Shadow).Select(r => "  " + r.Word + " (" + ScopeName(r.Scope) + "): " + r.Detail));
         }
 
-        if (scan.Problems.Count > 0)
+        if (rows.Any(r => r.Kind == CustomCommandRowKind.Problem))
         {
             lines.Add(SkippedHeading + ":");
-            lines.AddRange(scan.Problems.Select(p => "  " + p.FilePath + ": " + p.Problem));
+            lines.AddRange(rows.Where(r => r.Kind == CustomCommandRowKind.Problem).Select(r => "  " + r.Word + " (" + ScopeName(r.Scope) + "): " + r.Detail));
         }
 
-        lines.Add("Folders: " + roots.Profile + " (profile), " + roots.Global + " (global)");
+        if (scan.Note is { } note)
+        {
+            lines.Add(NotePrefix + note);
+        }
+
+        lines.Add("Folders: " + scan.Roots.Profile + " (profile), " + scan.Roots.Global + " (global)");
         lines.Add("New: " + Word + " new <name> [--global]");
         return lines;
     }
 
-    /// <summary>One command as a plain line: word, hint, description, scope.</summary>
-    public static string CommandLine(CustomCommand command)
+    /// <summary>The plain lists' heading over the commands.</summary>
+    public const string ListHeading = "Custom commands";
+
+    /// <summary>One command row as a plain line: word, hint, description, scope, a warning.</summary>
+    public static string CommandLine(CustomCommandRow row)
     {
-        ArgumentNullException.ThrowIfNull(command);
-        var sb = new StringBuilder(command.Word);
-        if (command.ArgumentHint is { Length: > 0 } hint)
+        ArgumentNullException.ThrowIfNull(row);
+        var sb = new StringBuilder(row.Word);
+        if (row.Hint is { } hint)
         {
             sb.Append(' ').Append(hint);
         }
 
-        if (command.Description is { Length: > 0 } description)
+        if (row.Detail.Length > 0)
         {
-            sb.Append("  ").Append(description);
+            sb.Append("  ").Append(row.Detail);
         }
 
-        sb.Append(" · ").Append(ScopeName(command.Scope));
-        if (command.Warning is { } warning)
+        sb.Append(" · ").Append(ScopeName(row.Scope));
+        if (row.Command?.Warning is { } warning)
         {
-            sb.Append(" (").Append(warning).Append(')');
+            sb.Append(" (").Append(Clean(warning)).Append(')');
         }
 
         return sb.ToString();
     }
 
-    /// <summary>The <c>/help</c> Custom tab as plain lines (the no-pane fallback): the commands, then the Shadowed and Skipped blocks.</summary>
+    /// <summary>The <c>/help</c> Custom tab as plain lines (the no-pane fallback): the commands, then the Shadowed and Skipped blocks, the note.</summary>
     public static IReadOnlyList<string> HelpLines(CustomCommandScan scan)
     {
         ArgumentNullException.ThrowIfNull(scan);
-        if (scan.Commands.Count == 0 && scan.Shadowed.Count == 0 && scan.Problems.Count == 0)
+        var rows = Rows(scan);
+        var lines = new List<string>();
+        if (rows.Count == 0)
         {
-            return ["Custom commands: none (" + Word + " makes one)."];
+            lines.Add(HelpEmptyRow);
+        }
+        else
+        {
+            lines.Add(ListHeading + ":");
+            lines.AddRange(rows.Where(r => r.Kind == CustomCommandRowKind.Command).Select(r => "  " + CommandLine(r)));
+            if (rows.Any(r => r.Kind == CustomCommandRowKind.Shadow))
+            {
+                lines.Add("  " + ShadowedHeading + ": " + string.Join(", ", rows.Where(r => r.Kind == CustomCommandRowKind.Shadow).Select(r => r.Word + " (" + r.Detail + ")")));
+            }
+
+            if (rows.Any(r => r.Kind == CustomCommandRowKind.Problem))
+            {
+                lines.Add("  " + SkippedHeading + ": " + string.Join(", ", rows.Where(r => r.Kind == CustomCommandRowKind.Problem).Select(r => r.Word + " (" + r.Detail + ")")));
+            }
         }
 
-        var lines = new List<string> { "Custom commands:" };
-        lines.AddRange(scan.Commands.Select(c => "  " + CommandLine(c)));
-        if (scan.Shadowed.Count > 0)
+        if (scan.Note is { } note)
         {
-            lines.Add("  " + ShadowedHeading + ": " + string.Join(", ", scan.Shadowed.Select(s => s.Command.Word + " (" + ShadowReason(s) + ")")));
-        }
-
-        if (scan.Problems.Count > 0)
-        {
-            lines.Add("  " + SkippedHeading + ": " + string.Join(", ", scan.Problems.Select(p => Path.GetFileName(p.FilePath) + " (" + p.Problem + ")")));
+            lines.Add("  " + NotePrefix + note);
         }
 
         return lines;
     }
 
-    /// <summary>The <c>/help &lt;command&gt;</c> card: the word and hint, the description, profile or global, the file, a shadow or warning note.</summary>
-    public static string Card(CustomCommand command)
+    /// <summary>
+    /// The <c>/help &lt;word&gt;</c> card (2026-10-31, review P3-6, P4-7, P2-3, P4-6). A command's: the word and hint, profile or global, the
+    /// description, the file, the arguments, a warning, a note when it hides a global file of its name; a Skipped file's: why it doesn't run
+    /// and its file. Both end with the way to the manual's answer (the user's call, 2026-10-31). <paramref name="markdown"/> for the screen and
+    /// the Web UI, which draw it as a reply: the file's own words escaped and the path in a code span, so <c>__init__</c> reads as written;
+    /// headless prints it plain.
+    /// </summary>
+    public static string Card(CustomHelpCard card, bool markdown)
     {
-        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(card);
+        string Said(string text) => markdown ? App.SessionExport.MarkdownText(Clean(text)) : Clean(text);
+        string PathOf(string path) => markdown ? CodeSpan(Clean(path)) : Clean(path);
         var sb = new StringBuilder();
-        sb.Append(command.Word);
-        if (command.ArgumentHint is { Length: > 0 } hint)
+        string word;
+        if (card.Command is { } command)
         {
-            sb.Append(' ').Append(hint);
+            word = command.Word;
+            sb.Append(Said(command.Word));
+            if (command.ArgumentHint is { Length: > 0 } hint)
+            {
+                sb.Append(' ').Append(Said(hint));
+            }
+
+            sb.Append(" — your custom command, from ").Append(ScopeWords(command.Scope)).Append('.');
+            if (command.Description is { Length: > 0 } description)
+            {
+                sb.Append("\n\n").Append(Said(description));
+            }
+
+            sb.Append("\n\nFile: ").Append(PathOf(command.FilePath));
+            if (command.Arguments.Count > 0)
+            {
+                sb.Append("\nArguments: ").Append(Said(string.Join(", ", command.Arguments.Select(a => "$" + a))));
+            }
+
+            if (command.Warning is { } warning)
+            {
+                sb.Append('\n').Append(NotePrefix).Append(Said(warning));
+            }
+
+            if (card.Hides is { } hides)
+            {
+                sb.Append('\n').Append(NotePrefix).Append(HidesNote).Append(PathOf(hides.Command.FilePath));
+            }
+        }
+        else
+        {
+            var problem = card.Problem ?? throw new ArgumentException("A card names a command or a skipped file.", nameof(card));
+            word = "/" + (problem.Name ?? "");
+            sb.Append(Said(word)).Append(" — ").Append(SkippedCardHead).Append(ScopeWords(problem.Scope)).Append(": ").Append(Said(problem.Problem)).Append('.');
+            sb.Append("\n\nFile: ").Append(PathOf(problem.FilePath));
         }
 
-        sb.Append(" — your custom command, from ").Append(ScopeWords(command.Scope)).Append('.');
-        if (command.Description is { Length: > 0 } description)
-        {
-            sb.Append("\n\n").Append(description);
-        }
-
-        sb.Append("\n\nFile: `").Append(command.FilePath).Append('`');
-        if (command.Arguments.Count > 0)
-        {
-            sb.Append("\nArguments: ").Append(string.Join(", ", command.Arguments.Select(a => "$" + a)));
-        }
-
-        if (command.Warning is { } warning)
-        {
-            sb.Append("\nNote: ").Append(warning);
-        }
-
+        sb.Append("\n\n").Append(Said(ManualWayOut(word)));
         return sb.ToString();
+    }
+
+    /// <summary>A Skipped file's card, after its word (review P4-6).</summary>
+    public const string SkippedCardHead = "a file the app skipped, in ";
+
+    /// <summary>A card's note for a profile command that hides a global one (review P2-3), before that file's path.</summary>
+    public const string HidesNote = "it runs instead of the global command of its name, ";
+
+    /// <summary>The card's last line (the user's call, 2026-10-31): several words always ask the manual.</summary>
+    public static string ManualWayOut(string word) => "For the manual's answer, ask in more words: /help about " + word.TrimStart('/');
+
+    /// <summary>
+    /// <paramref name="text"/> as a Markdown code span, fenced one backtick longer than its longest run (and padded when it starts or ends with
+    /// one), so a path holding a backtick reads whole (review P4-7).
+    /// </summary>
+    public static string CodeSpan(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        int longest = 0;
+        int run = 0;
+        foreach (char c in text)
+        {
+            run = c == '`' ? run + 1 : 0;
+            longest = Math.Max(longest, run);
+        }
+
+        string fence = new('`', longest + 1);
+        string pad = text.StartsWith('`') || text.EndsWith('`') ? " " : "";
+        return fence + pad + text + pad + fence;
     }
 
     /// <summary>The Custom tab's line for an empty list.</summary>
@@ -372,12 +586,28 @@ public static class CustomCommandText
     public static readonly IReadOnlyList<string> TemplateHowTo =
     [
         "# $ARGUMENTS is everything typed after the command; $0, $1 … are single words (the first is $0),",
-        "# \"quoted words\" count as one; \\$ writes a dollar sign before a digit. With no placeholder,",
-        "# what you type is added at the end as \"ARGUMENTS: …\".",
+        "# \"quoted words\" count as one; a \\ right before a placeholder keeps it as written. With no",
+        "# placeholder, what you type is added at the end as \"ARGUMENTS: …\".",
     ];
 
     /// <summary>The template's body line (a command still holding it carries <see cref="StillTemplateWarning"/>).</summary>
     public static string TemplateBody(string name) => "Write the prompt for /" + name + " here.";
+
+    private const string TemplateDescriptionHead = "say what /";
+    private const string TemplateDescriptionTail = " does (shown in the / list and /help)";
+
+    /// <summary>The template's description (2026-10-31, review P6-5: lifted, so the template and the still-the-template check can't drift).</summary>
+    public static string TemplateDescription(string name) => TemplateDescriptionHead + name + TemplateDescriptionTail;
+
+    /// <summary>
+    /// Whether <paramref name="description"/> (as the frontmatter reader gives it, unquoted and flattened) is still the template's, for any
+    /// name: a renamed command keeps the old name in it.
+    /// </summary>
+    public static bool IsTemplateDescription(string? description) =>
+        description is not null && description.StartsWith(TemplateDescriptionHead, StringComparison.Ordinal) && description.EndsWith(TemplateDescriptionTail, StringComparison.Ordinal);
+
+    /// <summary>The template's argument hint.</summary>
+    public const string TemplateHint = "<what to type after it>";
 
     /// <summary>The new-command template with <paramref name="name"/> filled in; <c>&lt;name&gt;</c> in <c>neon_help</c>'s format answer.</summary>
     public static string Template(string name)
@@ -390,8 +620,8 @@ public static class CustomCommandText
             sb.Append(line).Append('\n');
         }
 
-        sb.Append("description: say what /").Append(name).Append(" does (shown in the / list and /help)\n");
-        sb.Append("argument-hint: <what to type after it>\n");
+        sb.Append("description: ").Append(TemplateDescription(name)).Append('\n');
+        sb.Append("argument-hint: ").Append(TemplateHint).Append('\n');
         sb.Append("---\n");
         sb.Append(TemplateBody(name)).Append('\n');
         return sb.ToString();

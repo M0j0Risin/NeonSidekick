@@ -40,7 +40,7 @@ internal sealed class SavedPromptsMenu
     private const int Remove = 5;
     private const int ClearAll = 6;
 
-    private const string ErrorPrefix = "Error: ";
+    private const string ErrorPrefix = SavedPromptText.ErrorPrefix;
 
     private readonly Func<SavedPrompts> _prompts;
     private readonly INoticeSink _transcript;
@@ -313,27 +313,20 @@ internal sealed class SavedPromptsMenu
             return null;
         }
 
-        string name = CustomCommands.CustomCommandName.Normalize(typed);
-        if (!CustomCommands.CustomCommandName.IsValid(name))
+        // The /commands pane's judge and scope page (2026-10-31, review P2-9).
+        var (name, refusal) = CustomCommandsMenu.JudgeName(typed);
+        if (name is null)
         {
-            return ErrorPrefix + CustomCommands.CustomCommandText.BadNameError(typed, "");
-        }
-
-        if (CustomCommands.CustomCommandCatalog.BuiltInWord(name) is not null)
-        {
-            return ErrorPrefix + CustomCommands.CustomCommandText.BuiltInError(name);
+            return ErrorPrefix + refusal;
         }
 
         var roots = _saveAsCommand.Roots();
-        CustomCommands.CustomCommandScope[] scopes = [CustomCommands.CustomCommandScope.Profile, CustomCommands.CustomCommandScope.Global];
-        var where = new MenuPage(SavedPromptText.AsCommandScopeTitle(name),
-            scopes.Select(s => Markup.Escape(CustomCommands.CustomCommandText.ScopeName(s).PadRight(9)) + Theme.DimMarkup(roots.Of(s))).ToList(), SettingsMenu.PickKeys);
-        if (await _pane.PickAsync(where, 0, cancellationToken).ConfigureAwait(false) is not { Row: var picked } || picked < 0 || picked >= scopes.Length)
+        if (await CustomCommandsMenu.AskScopeAsync(_pane, roots, SavedPromptText.AsCommandScopeTitle(name), cancellationToken).ConfigureAwait(false) is not { } scope)
         {
             return null;
         }
 
-        return _saveAsCommand.Save(scopes[picked], name, prompt.Text);
+        return _saveAsCommand.Save(scope, name, prompt.Text);
     }
 
     /// <summary>A line typed on the input row under the list (<paramref name="initial"/> to start from); null on ESC, or with no input row (said so).</summary>

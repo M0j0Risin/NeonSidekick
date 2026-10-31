@@ -74,5 +74,43 @@ public partial class SidekickAppTests
         Assert.Empty(_chat.Requests);
         Assert.Contains("Neon: /review — your custom command, from the profile's commands.", output);
         Assert.Contains(path, output);
+        Assert.Contains(CustomCommandText.ManualWayOut("/review"), output);   // 2026-10-31, the user's call
+    }
+
+    /// <summary>
+    /// Headless's card is plain text (2026-10-31, review P3-6): a description's underscores print as written; a Skipped file's name prints its
+    /// reason (review P4-6).
+    /// </summary>
+    [Fact]
+    public async Task Headless_TheCardIsPlain_AndASkippedFileHasOne()
+    {
+        WriteHeadlessCommand("init", "---\ndescription: makes __init__ files\n---\nMake them.");
+        WriteHeadlessCommand("broken", "---\ndescription: x\n---\n");
+
+        string output = await Headless("/help init\n/help broken\n");
+
+        Assert.Empty(_chat.Requests);
+        Assert.Contains("makes __init__ files", output);
+        Assert.DoesNotContain("\\_", output);
+        Assert.Contains(CustomCommandText.SkippedCardHead, output);
+        Assert.Contains(CustomCommandText.EmptyBodyProblem, output);
+    }
+
+    /// <summary>
+    /// A saved command runs at the next line (2026-10-31, review P3-8: the catalog's reuse window read it as unknown), and saving a custom
+    /// command's own message is refused (review P1-5, the user's call).
+    /// </summary>
+    [Fact]
+    public async Task Headless_ASavedCommand_RunsAtOnce_AndItsOwnMessageIsNotSavedAgain()
+    {
+        ServerOn1234("llama");
+        _chat.EnqueueText("Done.").EnqueueText("Again.");
+
+        string output = await Headless("Summarize this.\n/commands save sum\n/sum\n/commands save again\n");
+
+        Assert.Equal(2, _chat.Requests.Count);
+        Assert.Equal("Summarize this.", _chat.Requests[1].Last(m => m.Role == ChatRole.User).Text);
+        Assert.Contains("[error] " + CustomCommandText.FromCustomCommandError("/sum"), output);
+        Assert.False(File.Exists(Path.Combine(_settings.ProfileCustomCommandsDirectory, "again.md")));
     }
 }

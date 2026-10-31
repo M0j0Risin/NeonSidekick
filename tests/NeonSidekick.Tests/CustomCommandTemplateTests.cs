@@ -8,7 +8,7 @@ namespace NeonSidekick.Tests;
 /// </summary>
 public class CustomCommandTemplateTests
 {
-    private static string Expand(string body, string args, params string[] names) => CustomCommandTemplate.Expand(body, args, names).Text;
+    private static string Expand(string body, string args, params string[] names) => CustomCommandTemplate.Expand(body, args, names);
 
     [Fact]
     public void Arguments_IsTheTypedText_Trimmed()
@@ -31,6 +31,27 @@ public class CustomCommandTemplateTests
         Assert.Equal(["don't", "stop"], CustomCommandTemplate.SplitWords("don't stop"));   // a quote mid-word opens nothing
         Assert.Equal(["\"open"], CustomCommandTemplate.SplitWords("\"open"));            // no match: kept as typed
         Assert.Equal("[hello world]", Expand("[$0]", "\"hello world\" second"));
+    }
+
+    /// <summary>
+    /// A quote groups only when the next same quote ends a word (2026-10-31, review P6-2, P6-4): English apostrophes stay, a quote inside a
+    /// word groups with its match.
+    /// </summary>
+    [Fact]
+    public void AQuote_GroupsOnlyWhenItsMatchEndsAWord()
+    {
+        Assert.Equal(["'cause", "it's", "broken"], CustomCommandTemplate.SplitWords("'cause it's broken"));
+        Assert.Equal(["--title=two words", "v2"], CustomCommandTemplate.SplitWords("--title=\"two words\" v2"));
+        Assert.Equal(["don't", "stop", "here"], CustomCommandTemplate.SplitWords("don't stop 'here'"));
+    }
+
+    /// <summary>An attachment label is one word (2026-10-31, review P3-1), so <c>$0</c> names the picture whole.</summary>
+    [Fact]
+    public void AnAttachmentLabel_IsOneWord()
+    {
+        Assert.Equal(["[Image #1]", "playful"], CustomCommandTemplate.SplitWords("[Image #1] playful"));
+        Assert.Equal(["[PDF #2 my report.pdf]", "x"], CustomCommandTemplate.SplitWords("[PDF #2 my report.pdf] x"));
+        Assert.Equal("Describe [Image #1], playful", Expand("Describe $0, $1", "[Image #1] playful"));
     }
 
     [Fact]
@@ -84,8 +105,7 @@ public class CustomCommandTemplateTests
         Assert.Equal("Look at .", Expand("Look at $focus.", "", "focus"));                        // a named one counts even when empty
         Assert.Equal("Look at .", Expand("Look at $focus.", "", "focus"));
         Assert.Equal("Fix $3\n\nARGUMENTS: a", Expand("Fix $3", "a"));                           // an indexed one left as written doesn't
-        Assert.True(CustomCommandTemplate.Expand("$0", "a", []).Filled);
-        Assert.False(CustomCommandTemplate.Expand("plain", "a", []).Filled);
+        Assert.Equal("a", Expand("$0", "a"));                                                    // filled: no line
     }
 
     [Fact]

@@ -298,4 +298,16 @@ public sealed class WebCommandsTests
         Assert.Equal(WebUiText.PcOnly("/commands"), WebCommands.Check("/commands new x", WithReview).Reason);
         Assert.Contains(SlashCommand.Commands, WebCommands.Never);
     }
+
+    /// <summary>
+    /// A command that takes no words, a line break and text is refused, never run (2026-10-31, review P7-4's knock-on): /clear with words
+    /// reads as overloaded.
+    /// </summary>
+    [Fact]
+    public void ACommandWithNoWords_ThenALineBreakAndText_IsRefused()
+    {
+        var verdict = WebCommands.Check("/clear\nand some text", On);
+        Assert.Equal(WebCommandKind.Refused, verdict.Kind);
+        Assert.Equal(ChatScreen.NoArgumentError("/clear"), verdict.Reason);
+    }
 }

@@ -340,13 +340,11 @@ internal sealed partial class ChatScreen
             _flow.Error(ProfileSkillFailedError(name, detail));
         }
 
-        if (copied.Count > 0)
+        // After a yes there is always a summary (2026-10-31, review P4-4): one that copied nothing said nothing at all.
+        _flow.Notice(ProfileSkillsCopiedNotice(copied, skipped, other, pull, links, failed.Count));
+        if (pull && copied.Count > 0)
         {
-            _flow.Notice(ProfileSkillsCopiedNotice(copied, skipped, other, pull, links));
-            if (pull)
-            {
-                ReconcileSkills();
-            }
+            ReconcileSkills();
         }
     }
 
@@ -370,10 +368,21 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        var (files, links) = CustomCommandCatalog.CopyableFiles(sourceRoot);
+        var (files, links, unreadable) = CustomCommandCatalog.CopyableFiles(sourceRoot);
+
+        // A folder that couldn't be listed is named (2026-10-31, review P5-4), never read as "nothing to copy".
+        foreach (var problem in unreadable)
+        {
+            _flow.Error(ProfileCustomCommandsUnreadableError(problem.FilePath, problem.Problem));
+        }
+
         if (files.Count == 0)
         {
-            _flow.Notice(links.Count == 0 ? ProfileCustomCommandsNothingNotice(other, pull) : ProfileCustomCommandsNothingNewNotice([], other, pull, links));
+            if (unreadable.Count == 0)
+            {
+                _flow.Notice(links.Count == 0 ? ProfileCustomCommandsNothingNotice(other, pull) : ProfileCustomCommandsNothingNewNotice([], other, pull, links));
+            }
+
             return;
         }
 
@@ -383,7 +392,9 @@ internal sealed partial class ChatScreen
         foreach (var (relative, full) in files)
         {
             string name = CommandFileName(relative);
-            if (File.Exists(Path.Combine(targetRoot, relative.Replace('/', Path.DirectorySeparatorChar))))
+
+            // Any case (2026-10-31, review P5-5): Review.md there is review.md's command on a case-sensitive volume too.
+            if (CustomCommandEditor.Existing(targetRoot, relative) is not null)
             {
                 if (!overwrite)
                 {
@@ -410,40 +421,52 @@ internal sealed partial class ChatScreen
             return;
         }
 
+        // Under a kill scope like the skills copy (2026-10-31, review P4-5): Esc stops it between files, the ones made staying.
         var copied = new List<string>();
         var failed = new List<(string Name, string Detail)>();
-        await Task.Run(() =>
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using (BeginKillScope(cts))
         {
-            foreach (var (relative, full) in copies)
+            try
             {
-                var result = CustomCommandEditor.CopyInto(full, targetRoot, relative, overwrite);
-                switch (result.Outcome)
+                await Task.Run(() =>
                 {
-                    case CustomCommandEditOutcome.Copied:
-                        copied.Add(CommandFileName(relative));
-                        break;
-                    case CustomCommandEditOutcome.Exists:
-                        skipped.Add(CommandFileName(relative));   // made there meanwhile: never replaced without overwrite
-                        break;
-                    case CustomCommandEditOutcome.Linked:
-                        failed.Add((CommandFileName(relative), CustomCommandText.LinkedError(CommandFileName(relative).TrimStart('/'))));
-                        break;
-                    default:
-                        failed.Add((CommandFileName(relative), result.Detail));
-                        break;
-                }
+                    foreach (var (relative, full) in copies)
+                    {
+                        cts.Token.ThrowIfCancellationRequested();
+                        var result = CustomCommandEditor.CopyInto(sourceRoot, full, targetRoot, relative, overwrite);
+                        switch (result.Outcome)
+                        {
+                            case CustomCommandEditOutcome.Copied:
+                                copied.Add(CommandFileName(relative));
+                                break;
+                            case CustomCommandEditOutcome.Exists:
+                                skipped.Add(CommandFileName(relative));   // made there meanwhile: never replaced without overwrite
+                                break;
+                            case CustomCommandEditOutcome.Linked:
+                                failed.Add((CommandFileName(relative), result.LinkIsFile ? CustomCommandText.LinkedFileError(result.Path) : CustomCommandText.LinkedError(CommandFileName(relative).TrimStart('/'))));
+                                break;
+                            default:
+                                failed.Add((CommandFileName(relative), result.Detail));
+                                break;
+                        }
+                    }
+                }, cts.Token).ConfigureAwait(false);
             }
-        }, cancellationToken).ConfigureAwait(false);
+            catch (OperationCanceledException) when (cts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+            {
+                _flow.Notice(ProfileCustomCommandsStoppedNotice(copied.Count, other, pull));
+                return;
+            }
+        }
 
         foreach (var (name, detail) in failed)
         {
             _flow.Error(ProfileCustomCommandFailedError(name, detail));
         }
 
-        if (copied.Count > 0)
-        {
-            _flow.Notice(ProfileCustomCommandsCopiedNotice(copied, skipped, other, pull, links));
-        }
+        // After a yes there is always a summary (2026-10-31, review P4-4), all skipped or failed included.
+        _flow.Notice(ProfileCustomCommandsCopiedNotice(copied, skipped, other, pull, links, failed.Count));
     }
 
     // A copied file as the lines name it: its /word, or its path under the folder when it is no command name.
@@ -740,23 +763,40 @@ internal sealed partial class ChatScreen
         return $"{NoticeGlyphs.Skill}Copy {SkillCount(names.Count)} ({ProfileSectionNames(names)}) {where}? {(names.Count == 1 ? "It starts" : "Each starts")} there with no history.";
     }
 
-    /// <summary>A <c>skills</c> copy done: <c>(🧩 2 skills copied into "work"; 1 skipped, there already: notes)</c>.</summary>
-    public static string ProfileSkillsCopiedNotice(IReadOnlyList<string> copied, IReadOnlyList<string> skipped, string profile, bool pull, IReadOnlyList<string>? links = null)
+    /// <summary>A <c>skills</c> copy done: <c>(🧩 2 skills copied into "work"; 1 skipped, there already: notes)</c>, <c>; 1 failed</c> after.</summary>
+    public static string ProfileSkillsCopiedNotice(IReadOnlyList<string> copied, IReadOnlyList<string> skipped, string profile, bool pull, IReadOnlyList<string>? links = null, int failed = 0)
     {
         ArgumentNullException.ThrowIfNull(copied);
-        ArgumentNullException.ThrowIfNull(skipped);
-        string done = $"{SkillCount(copied.Count)} copied {(pull ? $"from \"{profile}\"" : $"into \"{profile}\"")}";
-        string tail = skipped.Count == 0 ? "" : $"; {skipped.Count.ToString(CultureInfo.InvariantCulture)} skipped, there already: {ProfileSectionNames(skipped)}";
-        return $"({NoticeGlyphs.Skill}{done}{tail}{ProfileSkillsLinksTail(links ?? [])})";
+        return ProfileCopySummary(NoticeGlyphs.Skill, SkillCount(copied.Count), skipped, failed, profile, pull, links);
     }
+
+    /// <summary>
+    /// The one summary a profile copy ends with (2026-10-31, review P6-9: skills and commands built theirs apart): what was copied, then
+    /// skipped (there already), failed and the links, each only when there are any.
+    /// </summary>
+    private static string ProfileCopySummary(string glyph, string copied, IReadOnlyList<string> skipped, int failed, string profile, bool pull, IReadOnlyList<string>? links)
+    {
+        ArgumentNullException.ThrowIfNull(skipped);
+        string done = $"{copied} copied {(pull ? $"from \"{profile}\"" : $"into \"{profile}\"")}";
+        string tail = skipped.Count == 0 ? "" : $"; {skipped.Count.ToString(CultureInfo.InvariantCulture)} skipped, there already: {ProfileSectionNames(skipped)}";
+        string failures = failed == 0 ? "" : $"; {failed.ToString(CultureInfo.InvariantCulture)} failed";
+        return $"({glyph}{done}{tail}{failures}{ProfileSkillsLinksTail(links ?? [])})";
+    }
+
+    /// <summary>A profile copy stopped (Esc, the kill switch): the ones made before it stay.</summary>
+    private static string ProfileCopyStoppedNotice(string glyph, string copied, string profile, bool pull) =>
+        $"({glyph}stopped: {copied} copied {(pull ? $"from \"{profile}\"" : $"into \"{profile}\"")} before it)";
 
     /// <summary><c>commands</c> with nothing to copy: <c>(🪄 nothing to copy: this profile has no custom commands)</c>, or <c>"work"</c> on a pull.</summary>
     public static string ProfileCustomCommandsNothingNotice(string profile, bool pull) =>
         $"({NoticeGlyphs.Commands}nothing to copy: {SourceName(profile, pull)} has no custom commands)";
 
-    /// <summary>The two profiles' <c>commands</c> folders are one (both linked to one place): nothing to copy.</summary>
+    /// <summary>The two profiles' <c>commands</c> folders are one (both linked to one place): nothing to copy (the pane's words too, <see cref="CustomCommandText.SharedFolderNotice"/>).</summary>
     public static string ProfileCustomCommandsSameFolderNotice(string profile) =>
-        $"({NoticeGlyphs.Commands}nothing to copy: \"{profile}\"'s commands folder is this profile's)";
+        $"({NoticeGlyphs.Commands}{CustomCommandText.SharedFolderNotice(profile)})";
+
+    /// <summary>A folder of the copy's source that couldn't be listed (2026-10-31, review P5-4).</summary>
+    public static string ProfileCustomCommandsUnreadableError(string folder, string problem) => $"Could not copy from {folder}: {problem}";
 
     /// <summary>
     /// Every file held by the target already, or a link: <c>(🪄 nothing to copy: "work" has these 2 already: /review, /triage)</c>, the links
@@ -790,15 +830,16 @@ internal sealed partial class ChatScreen
         return replacing.Count == 0 ? head : $"{head} It replaces {replacing.Count.ToString(CultureInfo.InvariantCulture)} there: {ProfileSectionNames(replacing)}.";
     }
 
-    /// <summary>A <c>commands</c> copy done: <c>(🪄 2 custom commands copied into "work"; 1 skipped, there already: /fix)</c>.</summary>
-    public static string ProfileCustomCommandsCopiedNotice(IReadOnlyList<string> copied, IReadOnlyList<string> skipped, string profile, bool pull, IReadOnlyList<string>? links = null)
+    /// <summary>A <c>commands</c> copy done: <c>(🪄 2 custom commands copied into "work"; 1 skipped, there already: /fix)</c>, <c>; 1 failed</c> after.</summary>
+    public static string ProfileCustomCommandsCopiedNotice(IReadOnlyList<string> copied, IReadOnlyList<string> skipped, string profile, bool pull, IReadOnlyList<string>? links = null, int failed = 0)
     {
         ArgumentNullException.ThrowIfNull(copied);
-        ArgumentNullException.ThrowIfNull(skipped);
-        string done = $"{CustomCommandCount(copied.Count)} copied {(pull ? $"from \"{profile}\"" : $"into \"{profile}\"")}";
-        string tail = skipped.Count == 0 ? "" : $"; {skipped.Count.ToString(CultureInfo.InvariantCulture)} skipped, there already: {ProfileSectionNames(skipped)}";
-        return $"({NoticeGlyphs.Commands}{done}{tail}{ProfileSkillsLinksTail(links ?? [])})";
+        return ProfileCopySummary(NoticeGlyphs.Commands, CustomCommandCount(copied.Count), skipped, failed, profile, pull, links);
     }
+
+    /// <summary>A <c>commands</c> copy stopped (Esc, the kill switch): the ones made before it stay.</summary>
+    public static string ProfileCustomCommandsStoppedNotice(int copied, string profile, bool pull) =>
+        ProfileCopyStoppedNotice(NoticeGlyphs.Commands, CustomCommandCount(copied), profile, pull);
 
     public static string ProfileCustomCommandFailedError(string name, string detail) => $"Could not copy {NameScrub.Display(name)}: {detail}";
 
@@ -806,7 +847,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>A <c>skills</c> copy stopped (Esc, the kill switch): the ones made before it stay.</summary>
     public static string ProfileSkillsStoppedNotice(int copied, string profile, bool pull) =>
-        $"({NoticeGlyphs.Skill}stopped: {SkillCount(copied)} copied {(pull ? $"from \"{profile}\"" : $"into \"{profile}\"")} before it)";
+        ProfileCopyStoppedNotice(NoticeGlyphs.Skill, SkillCount(copied), profile, pull);
 
     /// <summary>One skill's copy that failed (the caps, the volume's room, a file failure, a linked folder).</summary>
     public static string ProfileSkillFailedError(string name, string detail) => $"Could not copy skill '{NameScrub.Display(name)}': {detail}";

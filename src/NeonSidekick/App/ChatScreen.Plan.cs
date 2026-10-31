@@ -828,7 +828,7 @@ internal sealed partial class ChatScreen
             _transcript.Notice(PlanText.ReferencesAttachedNotice(images.Count));
         }
 
-        return await RunMessageAsync(message, images, cancellationToken).ConfigureAwait(false);
+        return await RunMessageAsync(message, images, cancellationToken, Llm.TurnMark.App).ConfigureAwait(false);
     }
 
     /// <summary><c>/plan cancel</c>: the file (when one was presented) marked cancelled, plan mode off.</summary>
@@ -1167,7 +1167,7 @@ internal sealed partial class ChatScreen
 
         string message = PlanText.OpenMessage(path, done, total);
         _transcript.User(message);
-        return await RunMessageAsync(message, [], cancellationToken).ConfigureAwait(false);
+        return await RunMessageAsync(message, [], cancellationToken, Llm.TurnMark.App).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -1223,7 +1223,7 @@ internal sealed partial class ChatScreen
             case PlanChoice.Refine when verdict?.Feedback is { } feedback:
                 string message = feedbackMessage(plan.Path, feedback);
                 _transcript.User(message);
-                return await RunMessageAsync(message, [], cancellationToken).ConfigureAwait(false);
+                return await RunMessageAsync(message, [], cancellationToken, Llm.TurnMark.App).ConfigureAwait(false);
             default:
                 // ESC, no feedback, or no pane: saved and still planning; /plan approve starts it.
                 foreach (var line in PlanText.ShowLines(_plan))
@@ -1522,7 +1522,7 @@ internal sealed partial class ChatScreen
             SyncPlanChrome();
             SavePlanState();
             _transcript.User(PlanText.ReadyMessage);
-            return await RunMessageAsync(PlanText.ReadyMessage, [], cancellationToken).ConfigureAwait(false);
+            return await RunMessageAsync(PlanText.ReadyMessage, [], cancellationToken, Llm.TurnMark.App).ConfigureAwait(false);
         }
 
         if (PlanFiles.ReadWhole(_files, path) is not { } text)

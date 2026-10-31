@@ -3072,7 +3072,7 @@ internal sealed partial class ChatScreen
     [
         new(SlashCommands.BasicTabTitle, () => CommandsTab(advanced: false)),
         new(SlashCommands.AdvancedTabTitle, () => CommandsTab(advanced: true)),
-        new(SlashCommands.CustomTabTitle, () => CustomCommandsTab(_customCommands.Scan())),   // 2026-10-30, the user's own commands, live
+        new(SlashCommands.CustomTabTitle, () => CustomCommandsTab(_customCommands.Recent())),   // 2026-10-30, the user's own commands, live
         new("Keys", KeysTab) { Toggle = KeyCheckToggle() },
     ];
 
@@ -3088,7 +3088,7 @@ internal sealed partial class ChatScreen
         var effective = _effective();
         if (_session.Assistant is not null && HelpLookupOffered(effective.LlmOfferTools, HelpOffered(effective), TurnDisabled(effective)))
         {
-            return await RunMessageAsync(Help.HelpText.AskPrompt(words), [], cancellationToken).ConfigureAwait(false);
+            return await RunMessageAsync(Help.HelpText.AskPrompt(words), [], cancellationToken, Llm.TurnMark.App).ConfigureAwait(false);
         }
 
         if (_session.Assistant is not null)
@@ -4879,6 +4879,24 @@ internal sealed partial class ChatScreen
     /// (<see cref="CustomCommandText.CompletionNote"/>). Pure; pinned.
     /// </summary>
     public static IReadOnlyList<CompletionItem> CommandItems(bool hideExit = false, bool hideQueue = false, IReadOnlyList<CustomCommand>? custom = null)
+    {
+        // One scan's list is one instance (Recent's), so the merged, sorted list is kept against it (2026-10-31, review P1-10: built on every
+        // keystroke); one entry swapped whole, read once, so a Web UI thread never sees it torn.
+        if (Volatile.Read(ref s_commandItems) is { } cached && ReferenceEquals(cached.Custom, custom) && cached.HideExit == hideExit && cached.HideQueue == hideQueue)
+        {
+            return cached.Items;
+        }
+
+        var items = BuildCommandItems(hideExit, hideQueue, custom);
+        Volatile.Write(ref s_commandItems, new CommandItemsEntry(custom, hideExit, hideQueue, items));
+        return items;
+    }
+
+    private sealed record CommandItemsEntry(IReadOnlyList<CustomCommand>? Custom, bool HideExit, bool HideQueue, IReadOnlyList<CompletionItem> Items);
+
+    private static CommandItemsEntry? s_commandItems;
+
+    private static IReadOnlyList<CompletionItem> BuildCommandItems(bool hideExit, bool hideQueue, IReadOnlyList<CustomCommand>? custom)
     {
         var baseList = hideExit ? SlashCommands.CompletionsWithoutExit : SlashCommands.Completions;
         if (hideQueue)
@@ -9265,6 +9283,7 @@ internal sealed partial class ChatScreen
         else if (action.Section == ProfileSection.CustomCommands)
         {
             await CopyCustomCommandsSectionAsync(home, other, action.Overwrite, pull, cancellationToken).ConfigureAwait(false);
+            CommandsChanged();   // a pull wrote this profile's files (2026-10-31, review P3-8)
         }
         else if (IsPromptFileSection(action.Section))
         {
@@ -11775,7 +11794,7 @@ internal sealed partial class ChatScreen
                     _watchTurn = true;   // its own budget, the watch's (DP7)
                     try
                     {
-                        ended = await RunMessageAsync(CameraText.WatchNudgeMessage, [watched.Image], cancellationToken).ConfigureAwait(false);
+                        ended = await RunMessageAsync(CameraText.WatchNudgeMessage, [watched.Image], cancellationToken, Llm.TurnMark.App).ConfigureAwait(false);
                     }
                     finally
                     {
@@ -14324,13 +14343,13 @@ internal sealed partial class ChatScreen
         switch (command)
         {
             case SlashCommand.Custom:
-                return await RunCustomCommandAsync(text, args, images, cancellationToken).ConfigureAwait(false);
+                return await RunCustomCommandAsync(text, images, cancellationToken).ConfigureAwait(false);
 
             case SlashCommand.Commands:
                 await HandleCommandsAsync(args, _transcript, cancellationToken).ConfigureAwait(false);
                 return false;
 
-            case SlashCommand.Help when args.Length > 0 && CustomHelpCard(args) is { } card:
+            case SlashCommand.Help when args.Length > 0 && FindCustomHelpCard(args) is { } card:
                 // /help <your command> (2026-10-30): its card from the scan, no model asked (neon_help can't see the user's commands).
                 ShowCustomHelpCard(card);
                 return false;
@@ -14348,7 +14367,7 @@ internal sealed partial class ChatScreen
                 }
 
                 // No pane to open (a redirected console): the list in the transcript, the custom commands after it (2026-10-30).
-                foreach (var line in SlashCommands.HelpText.Split('\n').Concat(CustomCommandText.HelpLines(_customCommands.Scan())))
+                foreach (var line in SlashCommands.HelpText.Split('\n').Concat(CustomCommandText.HelpLines(_customCommands.Recent())))
                 {
                     _transcript.Notice(line);
                 }
@@ -14856,10 +14875,10 @@ internal sealed partial class ChatScreen
                 return false;
 
             case SlashCommand.Unknown:
-                _transcript.Error(UnknownCommandError(text.Trim().Split(' ', 2)[0]));
+                _transcript.Error(UnknownCommandError(SlashCommands.FirstWord(text)));
                 return false;
             case SlashCommand.Overloaded:
-                _transcript.Error(NoArgumentError(text.Trim().Split(' ', 2)[0]));
+                _transcript.Error(NoArgumentError(SlashCommands.FirstWord(text)));
                 return false;
 
             default:
@@ -15613,34 +15632,30 @@ internal sealed partial class ChatScreen
 
         // What each pass sends: the message, or a custom command's expansion (2026-10-30), the typed line still each pass's user row.
         string sent = message;
+        Llm.TurnMark? mark = null;
         if (message.StartsWith('/'))
         {
             var (command, commandArgs) = ParseWithCustom(message);
-            string token = message.Split(' ', 2)[0];
+            string token = SlashCommands.FirstWord(message);
             if (command == SlashCommand.Custom)
             {
-                // Expanded once, before the first pass (a file edited mid-loop is not read again); its errors end the loop here.
-                string word = SlashCommands.CustomWord(message, out _);
-                if (_customCommands.Scan().Find(word) is not { } custom)
+                // Expanded once, before the first pass (a file edited mid-loop is not read again); its errors end the loop here. Found as the
+                // idle line finds it (2026-10-31, review P1-11: a file gone since the parse is NotFound, never an unknown command).
+                var run = CustomCommandsCommand.Resolve(_customCommands, message);
+                if (run is not { Command: { } custom, Prompt: { } prompt })
                 {
-                    _transcript.Error(UnknownCommandError(word));
-                    return false;
-                }
-
-                var (prompt, error) = CustomCommandsCommand.Prompt(custom, commandArgs);
-                if (prompt is null)
-                {
-                    _transcript.Error(error!);
+                    _transcript.Error(run.Error!);
                     return false;
                 }
 
                 if (_session.Assistant is not null)
                 {
                     _transcript.Notice(CustomCommandText.SentNotice(custom));
-                    DiagnosticLog.Debug(AppCategory, CustomCommandText.RunLogLine(custom, prompt.Length));
+                    DiagnosticLog.Debug(CustomCommandCatalog.Category, CustomCommandText.RunLogLine(custom, prompt.Length));
                 }
 
                 sent = prompt;
+                mark = Llm.TurnMark.TypedAs(message.Trim(), prompt);
                 command = SlashCommand.None;
             }
 
@@ -15668,6 +15683,30 @@ internal sealed partial class ChatScreen
             }
         }
 
+        // A message loop with no model refused once, up front (2026-10-31, review P3-2): each pass said NoAssistantError and set neither stop
+        // flag, so /loop 3 hello said it three times and an endless loop never stopped. A looped built-in (above) needs no model.
+        if (_session.Assistant is null)
+        {
+            _transcript.Error(NoAssistantError);
+            return false;
+        }
+
+        // A custom command's loop titles a new session with its typed line, as the idle line does (2026-10-31, review P1-3): taken by the first
+        // pass that logs, and cleared after the loop, so a first pass that never logs leaves it for no later turn.
+        _customCommandTitle = mark is null ? null : message.Trim();
+        try
+        {
+            return await LoopPassesAsync(message, sent, mark, count, delay, images, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _customCommandTitle = null;
+        }
+    }
+
+    // HandleLoopAsync's passes of one message: each echoed as the user row, sent (with its mark), the delay between.
+    private async Task<bool> LoopPassesAsync(string message, string sent, Llm.TurnMark? mark, int? count, TimeSpan? delay, IReadOnlyList<ImageAttachment> images, CancellationToken cancellationToken)
+    {
         // One network budget for the whole loop (2026-10-23, the admin review's L6, decision DA8).
         using var budgetRun = BudgetRun();
         for (int n = 1; count is null || n <= count; n++)
@@ -15687,7 +15726,7 @@ internal sealed partial class ChatScreen
 
             _transcript.Notice(LoopTurnNotice(n, count));
             _transcript.User(message);
-            if (await RunMessageAsync(sent, n == 1 ? images : [], cancellationToken).ConfigureAwait(false))
+            if (await RunMessageAsync(sent, n == 1 ? images : [], cancellationToken, mark).ConfigureAwait(false))
             {
                 return true;
             }
@@ -17187,10 +17226,14 @@ internal sealed partial class ChatScreen
     /// request: nothing captured while the speaker played is transcribed; after a short settle
     /// the microphone opens for what is said next, with a short no-speech window. Two
     /// interruptions in a row that hear nothing switch interrupting off for the session.</para>
+    ///
+    /// <para><paramref name="mark"/> is what the first turn's user message carries (2026-10-31, review P1-5/P8-1, <see cref="Llm.TurnMark"/>):
+    /// the typed line of a custom command, or the app's own mark (a pass message is one by itself); a heard follow-up carries none.</para>
     /// </summary>
-    private async Task<bool> RunMessageAsync(string text, IReadOnlyList<ImageAttachment> images, CancellationToken cancellationToken)
+    private async Task<bool> RunMessageAsync(string text, IReadOnlyList<ImageAttachment> images, CancellationToken cancellationToken, Llm.TurnMark? mark = null)
     {
         bool passMessage = _passMessage is { } pass && ReferenceEquals(pass, text);
+        mark = passMessage ? Llm.TurnMark.App : mark;
         _passMessage = null;
         if (_session.Assistant is not { } assistant)
         {
@@ -17262,7 +17305,11 @@ internal sealed partial class ChatScreen
         {
             // Talking a plan through (2026-10-17): a present_plan save inside the turn ends it, and the chrome and the row follow below.
             bool talkingBefore = _plan.Talking;
+            assistant.TurnMark = mark;
             var outcome = await RunTurnAsync(assistant, text, images, cancellationToken).ConfigureAwait(false);
+            // Taken by the turn as its message landed; cleared here too for a turn that never got that far, and for the heard turn after.
+            assistant.TurnMark = null;
+            mark = null;
             // A pane opened mid-turn is closed when the keys are needed now (the listen below, the
             // exit) and left to the user otherwise; then the acts and the owed reconnects.
             await EndTurnAsync(closePane: outcome is not (TurnOutcome.Continue or TurnOutcome.Withdrawn), cancellationToken).ConfigureAwait(false);
@@ -18168,26 +18215,14 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// A sent command in the log: <c>Command /sessions: purge older 7</c> — the word as typed, the
     /// argument cut to <see cref="CommandArgumentChars"/>; <c>(unknown)</c> / <c>(overloaded)</c> after
-    /// the word for one the parser refused. Pinned. A custom command (2026-10-30) notes <c>(custom)</c>, its word cut at the first white
-    /// space of any kind as the parser cuts it, so a line break after it never logs a two-line word.
+    /// the word for one the parser refused. Pinned. A custom command (2026-10-30) notes <c>(custom)</c>. The word is cut as the parser cuts
+    /// it (<see cref="SlashCommands.FirstWord(string, out string)"/>, 2026-10-31, review P1-12), so a line break after it never logs a
+    /// two-line word.
     /// </summary>
     public static string CommandLogLine(SlashCommand command, string text)
     {
-        string trimmed = text.Trim();
-        int space = trimmed.IndexOf(' ');
-        if (command == SlashCommand.Custom)
-        {
-            space = 0;
-            while (space < trimmed.Length && !char.IsWhiteSpace(trimmed[space]))
-            {
-                space++;
-            }
-
-            space = space >= trimmed.Length ? -1 : space;
-        }
-
-        string word = space < 0 ? trimmed : trimmed[..space];
-        string argument = space < 0 ? "" : LogText.Excerpt(trimmed[(space + 1)..], CommandArgumentChars);
+        string word = SlashCommands.FirstWord(text, out string rest);
+        string argument = LogText.Excerpt(rest, CommandArgumentChars);
         string note = command switch
         {
             SlashCommand.Unknown => " (unknown)",

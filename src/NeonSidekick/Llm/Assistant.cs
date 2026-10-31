@@ -1492,6 +1492,12 @@ public sealed class Assistant
     public string? TurnNote { get; set; }
 
     /// <summary>
+    /// The marks the next turn's user message carries (2026-10-31, review P1-5/P8-1, <see cref="Llm.TurnMark"/>): taken, and cleared, beside
+    /// <see cref="TurnNote"/> and stamped as the message lands, so the turn in flight carries them during its reply; null for none.
+    /// </summary>
+    public TurnMark? TurnMark { get; set; }
+
+    /// <summary>
     /// The tools the next turn offers. Settable because the shell decides per turn what a turn may
     /// do (memory on or off), the same way it sets <see cref="ConversationHistory.SystemPrompt"/>;
     /// a turn reads it once, at its start.
@@ -1513,8 +1519,9 @@ public sealed class Assistant
     /// after the message, the model read them as its own investigation and went on with it, a first-turn "add milk to my shopping list"
     /// searching files and then saying the shopping tools were off. Measured as first messages, 10 runs per request: Qwen 3.8 27B missed
     /// 6/30 shopping requests on SGLang and 12/30 on llama.cpp with the calls after the message, 0/30 on each with them ahead, the memory
-    /// question unchanged at 10/10. Untested: a Mistral-family template, which drops tool messages and then demands strict alternation,
-    /// may refuse the <c>user, user</c> it sees. Empty (the default) seeds nothing. Set per turn by the shell, like <see cref="Tools"/>.
+    /// question unchanged at 10/10. A strict-alternation (Mistral-family) template refuses tool messages outright, which the app already
+    /// reports (<c>LooksLikeToolRoleRejection</c>, <c>ToolRoleHint</c>), so any tools turn fails there first; the templates that run tool
+    /// calls accept tool → user (2026-10-31, review P1-1). Empty (the default) seeds nothing. Set per turn by the shell, like <see cref="Tools"/>.
     /// </summary>
     public IReadOnlyList<OpeningCall> OpeningCalls { get; set; } = [];
 
@@ -1555,9 +1562,44 @@ public sealed class Assistant
 
     /// <summary>
     /// The opener's text (<see cref="ConversationHistory.AddOpener"/>, 2026-10-30, the user's wording): the user-role line the first turn's
-    /// opening calls follow, ahead of the user's message. Model-facing only; never shown. Pinned.
+    /// opening calls follow, ahead of the user's message, when all three are seeded (<see cref="OpeningOpener"/>). Model-facing only; never shown. Pinned.
     /// </summary>
     public const string OpeningOpenerText = "(The conversation starts. The app first gathers the date, the working directory and your memories; the user's message follows them.)";
+
+    /// <summary>The opener when no seeded call is one of the three the app names (a host's own opening tools).</summary>
+    public const string OpeningOpenerContextText = "(The conversation starts. The app first gathers some context; the user's message follows it.)";
+
+    /// <summary>
+    /// The opener for <paramref name="calls"/> (2026-10-31, review P6-1: the one text named your memories when memory was off and the
+    /// recall was never seeded): only what was seeded, in order, <c>a, b and c</c> or <c>a and b</c>. All three give
+    /// <see cref="OpeningOpenerText"/>. <see cref="ConversationHistory.IsOpener"/> reads the tag, never the text, so saved sessions are unaffected.
+    /// </summary>
+    public static string OpeningOpener(IReadOnlyList<OpeningCall> calls)
+    {
+        ArgumentNullException.ThrowIfNull(calls);
+        var names = new List<string>(3);
+        foreach (var call in calls)
+        {
+            string? name = call.CallId switch
+            {
+                OpeningClockCallId => "the date",
+                OpeningCwdCallId => "the working directory",
+                OpeningMemoryCallId => "your memories",
+                _ => null,
+            };
+            if (name is not null && !names.Contains(name))
+            {
+                names.Add(name);
+            }
+        }
+
+        return names.Count switch
+        {
+            0 => OpeningOpenerContextText,
+            1 => "(The conversation starts. The app first gathers " + names[0] + "; the user's message follows it.)",
+            _ => "(The conversation starts. The app first gathers " + string.Join(", ", names.Take(names.Count - 1)) + " and " + names[^1] + "; the user's message follows them.)",
+        };
+    }
 
     /// <summary>
     /// Seeds <paramref name="calls"/> into the history, in order, each as a genuine call/result pair, not a prompt line: the same
@@ -1615,22 +1657,49 @@ public sealed class Assistant
         // dispose), a throw — through the using declaration's own finally.
         using var log = new TurnLog(_history.TurnCount + 1, userText, images.Count, first.Count + pending.Count, _time, cancellationToken);
 
+        // A stopped opening goes whenever this is a first turn (2026-10-31, review P4-1), not only when this one seeds: a first turn with no
+        // opening calls after a stopped one would otherwise send its dangling call. It does nothing without an opener.
+        if (_history.TurnCount == 0)
+        {
+            _history.DropUnfinishedOpening();
+        }
+
+        // Taken before the opening (2026-10-31, review P1-2), so a turn stopped there still commits its message with them.
+        string? note = TurnNote;
+        TurnNote = null;
+        var mark = TurnMark;
+        TurnMark = null;
+
         // The first turn's opening calls go ahead of the user's message, after the opener (2026-10-30, plan purring-wobbling-flame):
         // after it, the model read three calls in as its own investigation and searched files instead of answering.
         if (first.Count > 0)
         {
-            _history.DropUnfinishedOpening();
-            _history.AddOpener(OpeningOpenerText);
-            await foreach (var evt in SeedAsync(first, cancellationToken).ConfigureAwait(false))
+            _history.AddOpener(OpeningOpener(first));
+            bool opened = false;
+            try
             {
-                yield return evt;
+                await foreach (var evt in SeedAsync(first, cancellationToken).ConfigureAwait(false))
+                {
+                    yield return evt;
+                }
+
+                opened = true;
+            }
+            finally
+            {
+                // A first turn stopped during its opening (Exit, an interrupt, a cancel; 2026-10-31, review P1-2) keeps its question like
+                // any other stopped turn: the half opening goes and the message lands, so the session saves it. A withdraw takes it
+                // back through RemoveLastTurn. Iterators can't catch around a yield, hence the flag.
+                if (!opened)
+                {
+                    _history.DropUnfinishedOpening();
+                    _history.AddUser(userText, images, note, mark);
+                }
             }
         }
 
         // Committed up front: a turn that fails still leaves the question in the transcript. An /undo note rides it as its own first part (2026-10-28).
-        string? note = TurnNote;
-        TurnNote = null;
-        _history.AddUser(userText, images, note);
+        _history.AddUser(userText, images, note, mark);
 
         await foreach (var evt in SeedAsync(pending, cancellationToken).ConfigureAwait(false))
         {
@@ -2253,6 +2322,11 @@ public sealed class Assistant
     /// </summary>
     private async Task<(string Text, TokenUsage? Usage)> SummarizeAsync(string instruction, IReadOnlyList<ChatMessage> transcript, string requestLine, CancellationToken cancellationToken)
     {
+        // The opener is the app's line, not the conversation's (2026-10-31, review P2-11): left out of every summary request here, the
+        // first try and the lean one alike, so the summary never retells it. A lone user message, so no call/result pair is split. The
+        // compactor's plans keep it, since they place the opening by it.
+        transcript = [.. transcript.Where(m => !ConversationHistory.IsOpener(m))];
+
         // Within the picture budget (2026-10-03): a copy, the history untouched; a summary of a picture-heavy past sent every
         // picture once and could fail as the turn had.
         var request = new List<ChatMessage>(transcript.Count + 2) { new(ChatRole.System, instruction) };

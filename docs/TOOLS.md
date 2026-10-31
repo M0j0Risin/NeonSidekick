@@ -110,7 +110,7 @@ Under *Help tools* (on by default).
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `neon_help` | `query?, kind?` | Neon Sidekick's own manual: commands, settings (effect, default, place), panes, keys, tools, bars and toolbar icons, flags, variables and files, narrowed by `kind` (`any`, `command`, `setting`, `pane`, `keys`, `tool`, `interface`, `startup`, `files`). Wherever it names a tool or a group's switch, it says whether that is offered right now, and why not; it reads no other setting's value. `/help <words>` asks the model to use it. |
+| `neon_help` | `query?, kind?` | Neon Sidekick's own manual: commands, settings (effect, default, place), panes, keys, tools, bars and toolbar icons, flags, variables and files, narrowed by `kind` (`any`, `command`, `setting`, `pane`, `keys`, `tool`, `interface`, `startup`, `files`). It says whether a tool or switch it names is offered right now, and reads no other setting. `/help <words>` asks the model to use it; `/help <your command>` shows that command's card. |
 
 ## Files
 
@@ -142,7 +142,7 @@ Under *File tools*. Paths are relative to the working directory; nothing outside
 
 * A deletion with no bin says so. In the `images` folder, `open` opens only pictures and folders; a `runas` UNC share can't be opened.
 * **Keeping a file's form:** a write in the file's own encoding that can't hold a character is refused, never written as `?`. A read-only file is never written over; a hard-linked one is written in place so its other names see it; a replace keeps the file's permissions.
-* **What the file tools never change** (any file tool, the UNC and vault tools too): `.git` and `.neon`, the app's home and profiles, skill folders (`skill_editor` changes a skill), and a SQLite or DuckDB database while that one's tools are on. The file is judged, not its spelling: a short `~1` name, a stream after `:` and a link swapped in are refused.
+* **What the file tools never change** (any file tool, the UNC and vault tools too): `.git` and `.neon`, the app's home and profiles, skill folders (`skill_editor` changes a skill), your commands folders and where a linked one points (`/commands` changes them), and a SQLite or DuckDB database while that one's tools are on. The file is judged, not its spelling: a short `~1` name, a stream after `:` and a link swapped in are refused.
 * **The project file** (`NEON.md`, `AGENTS.md`, `CLAUDE.md` in the working directory) changes only after you allow it on the pane; with nobody to ask (headless, an advisor, a script, a pass that may not ask) it is refused.
 * **Paths:** a `~/` or `file:` path, a device name (`NUL`, `COM1`), a pipe or socket, and a working directory deleted during the session are refused; the last is never made again.
 * **Names with hidden characters** (right-to-left marks, zero-width or control characters) show them as escapes in results and the log, so a name can't disguise itself.

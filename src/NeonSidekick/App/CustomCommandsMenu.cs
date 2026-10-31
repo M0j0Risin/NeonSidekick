@@ -88,73 +88,77 @@ internal sealed class CustomCommandsMenu
         _ => null,
     };
 
-    /// <summary>The rows of one sub-tab under <paramref name="filter"/>. Pure.</summary>
-    public static IReadOnlyList<CommandsRow> Rows(CustomCommandScan scan, CustomCommandRoots roots, string filter, CustomCommandScope? scope)
+    /// <summary>
+    /// The rows of one sub-tab under <paramref name="filter"/>, from the lists' shared rows (<see cref="CustomCommandText.Rows"/>, 2026-10-31,
+    /// review P6-7), the folders from <c>scan.Roots</c>. Pure.
+    /// </summary>
+    public static IReadOnlyList<CommandsRow> Rows(CustomCommandScan scan, string filter, CustomCommandScope? scope)
     {
         ArgumentNullException.ThrowIfNull(scan);
-        ArgumentNullException.ThrowIfNull(roots);
         ArgumentNullException.ThrowIfNull(filter);
         var rows = new List<CommandsRow> { new(Markup.Escape(CustomCommandText.NewRow), CommandsRowKind.New) };
-        var commands = scan.Commands.Where(c => scope is null || c.Scope == scope).Where(c => MenuFilter.Matches(filter, c.Word, c.Description)).ToList();
-        var shadows = scan.Shadowed.Where(s => scope is null || s.Command.Scope == scope).Where(s => MenuFilter.Matches(filter, s.Command.Word, CustomCommandText.ShadowReason(s))).ToList();
-        var problems = scan.Problems.Where(p => scope is null || p.Scope == scope).Where(p => MenuFilter.Matches(filter, Shown(roots, p), p.Problem)).ToList();
-        if (commands.Count == 0 && shadows.Count == 0 && problems.Count == 0)
+        var shown = CustomCommandText.Rows(scan).Where(r => scope is null || r.Scope == scope).Where(r => MenuFilter.Matches(filter, r.Word, r.Detail)).ToList();
+        var commands = shown.Where(r => r.Kind == CustomCommandRowKind.Command).ToList();
+        var shadows = shown.Where(r => r.Kind == CustomCommandRowKind.Shadow).ToList();
+        var problems = shown.Where(r => r.Kind == CustomCommandRowKind.Problem).ToList();
+        if (shown.Count == 0)
         {
             rows.Add(new(filter.Length > 0 ? MenuFilter.NoMatchRow(filter) : Theme.DimMarkup(CustomCommandText.EmptyRow), CommandsRowKind.Other));
             return rows;
         }
 
-        rows.AddRange(commands.Select(c => new CommandsRow(CommandRow(c, scope is null), CommandsRowKind.Command, Command: c)));
+        rows.AddRange(commands.Select(r => new CommandsRow(CommandRow(r, scope is null), CommandsRowKind.Command, Command: r.Command)));
         if (shadows.Count > 0)
         {
             rows.Add(new("", CommandsRowKind.Other));
             rows.Add(new(SectionRule.Markup(CustomCommandText.ShadowedHeading), CommandsRowKind.Other, Heading: true));
-            rows.AddRange(shadows.Select(s => new CommandsRow(Theme.DimMarkup(s.Command.Word + "  " + CustomCommandText.ShadowReason(s) + (scope is null ? " · " + CustomCommandText.ScopeName(s.Command.Scope) : "")), CommandsRowKind.Shadow, Shadow: s)));
+            rows.AddRange(shadows.Select(r => new CommandsRow(Theme.DimMarkup(r.Word + "  " + r.Detail + (scope is null ? " · " + CustomCommandText.ScopeName(r.Scope) : "")), CommandsRowKind.Shadow, Shadow: r.Shadow)));
         }
 
         if (problems.Count > 0)
         {
             rows.Add(new("", CommandsRowKind.Other));
             rows.Add(new(SectionRule.Markup(CustomCommandText.SkippedHeading), CommandsRowKind.Other, Heading: true));
-            rows.AddRange(problems.Select(p => new CommandsRow(Theme.DimMarkup(Shown(roots, p) + "  " + p.Problem), CommandsRowKind.Problem, Problem: p)));
+            rows.AddRange(problems.Select(r => new CommandsRow(Theme.DimMarkup(r.Word + "  " + r.Detail), CommandsRowKind.Problem, Problem: r.Problem)));
         }
 
         return rows;
     }
 
     /// <summary>A command's row: the word, its hint dim, its description, the scope dim on all, a warning's mark.</summary>
-    public static string CommandRow(CustomCommand command, bool withScope)
+    public static string CommandRow(CustomCommandRow row, bool withScope)
     {
-        ArgumentNullException.ThrowIfNull(command);
-        string row = Markup.Escape(command.Word);
-        if (command.ArgumentHint is { Length: > 0 } hint)
+        ArgumentNullException.ThrowIfNull(row);
+        string markup = Markup.Escape(row.Word);
+        if (row.Hint is { } hint)
         {
-            row += "  " + Theme.DimMarkup(hint);
+            markup += "  " + Theme.DimMarkup(hint);
         }
 
-        if (command.Description is { Length: > 0 } description)
+        if (row.Detail.Length > 0)
         {
-            row += "  " + Markup.Escape(DiffView.Clean(description));
+            markup += "  " + Markup.Escape(row.Detail);
         }
 
         if (withScope)
         {
-            row += Theme.DimMarkup(" · " + CustomCommandText.ScopeName(command.Scope));
+            markup += Theme.DimMarkup(" · " + CustomCommandText.ScopeName(row.Scope));
         }
 
-        if (command.Warning is not null)
+        if (row.Command?.Warning is not null)
         {
-            row += Theme.DimMarkup(" (!)");
+            markup += Theme.DimMarkup(" (!)");
         }
 
-        return row;
+        return markup;
     }
 
     /// <summary>
     /// The band for a row: a command's path and its body's first lines (<see cref="FooterBodyLines"/>, each through <see cref="DiffView.Clean"/>),
-    /// its warning on the last line; a Shadowed or Skipped row's path and why. Plain text: the pane escapes it. Null for any other row.
+    /// its warning on the last line; a Shadowed or Skipped row's path and why. Plain text: the pane escapes it. Any other row shows the scan's
+    /// <paramref name="note"/> (2026-10-31, review P5-6: a note, no longer a Skipped row), else nothing.
     /// </summary>
-    public static MenuFooter? Footer(CommandsRow row)
+    public static MenuFooter? Footer(CommandsRow row, string? note = null)
     {
         ArgumentNullException.ThrowIfNull(row);
         switch (row.Kind)
@@ -164,7 +168,7 @@ internal sealed class CustomCommandsMenu
                 var command = row.Command!;
                 var lines = new List<string> { DiffView.Clean(command.FilePath) };
                 lines.AddRange(command.Body.Split('\n').Where(l => l.Trim().Length > 0).Take(FooterBodyLines).Select(DiffView.Clean));
-                return new MenuFooter(string.Join('\n', lines), command.Warning is { } warning ? "Note: " + warning : null) { KeepLines = true };
+                return new MenuFooter(string.Join('\n', lines), command.Warning is { } warning ? CustomCommandText.NotePrefix + DiffView.Clean(warning) : null) { KeepLines = true };
             }
 
             case CommandsRowKind.Shadow:
@@ -172,18 +176,22 @@ internal sealed class CustomCommandsMenu
             case CommandsRowKind.Problem:
                 return new MenuFooter(DiffView.Clean(row.Problem!.FilePath), DiffView.Clean(row.Problem.Problem));
             default:
-                return null;
+                return note is null ? null : new MenuFooter(CustomCommandText.NotePrefix + DiffView.Clean(note));
         }
     }
 
-    /// <summary>The page over the three sub-tabs, <paramref name="sub"/> on show. Pure.</summary>
-    public static MenuPage Page(CustomCommandScan scan, CustomCommandRoots roots, string filter, int sub)
+    /// <summary>
+    /// The page over the three sub-tabs, <paramref name="sub"/> on show, and each sub-tab's rows (2026-10-31, review P5-8: the pick built them
+    /// again), indexed by sub-tab. Pure.
+    /// </summary>
+    public static (MenuPage Page, IReadOnlyList<IReadOnlyList<CommandsRow>> Rows) Page(CustomCommandScan scan, string filter, int sub)
     {
         ArgumentNullException.ThrowIfNull(scan);
+        var built = Enumerable.Range(0, SubTitles.Count).Select(i => Rows(scan, filter, ScopeOf(i))).ToList();
         var subTabs = Enumerable.Range(0, SubTitles.Count).Select(i =>
         {
             var scope = ScopeOf(i);
-            var rows = Rows(scan, roots, filter, scope);
+            var rows = built[i];
             int total = scan.Commands.Count(c => scope is null || c.Scope == scope);
             return new MenuTab(SubTitles[i], rows.Select(r => r.Markup).ToList())
             {
@@ -191,15 +199,16 @@ internal sealed class CustomCommandsMenu
                 Hint = MenuFilter.Hint(Keys, filter),
                 Filter = filter,
                 Caption = MenuFilter.CaptionOrNull(filter, rows.Count(r => r.Kind == CommandsRowKind.Command), total),
-                Footer = r => r >= 0 && r < rows.Count ? Footer(rows[r]) : null,
+                Footer = r => r >= 0 && r < rows.Count ? Footer(rows[r], scan.Note) : null,
             };
         }).ToList();
         var tab = new MenuTab(CustomCommandText.Label, []) { SubTabs = subTabs, Sub = Math.Clamp(sub, 0, subTabs.Count - 1) };
-        return MenuPage.Tabbed(CustomCommandText.Label, [tab], 0, Keys) with
+        var page = MenuPage.Tabbed(CustomCommandText.Label, [tab], 0, Keys) with
         {
             // The sub-tabs' own bands; the page's turns the band on.
             Footer = (_, _) => null,
         };
+        return (page, built);
     }
 
     /// <summary>
@@ -211,7 +220,7 @@ internal sealed class CustomCommandsMenu
         var scan = _scan();
         if (!_pane.Enabled)
         {
-            foreach (string line in CustomCommandText.Lines(scan, _roots()))
+            foreach (string line in CustomCommandText.Lines(scan))
             {
                 _transcript.Notice(line);
             }
@@ -226,8 +235,7 @@ internal sealed class CustomCommandsMenu
         {
             while (true)
             {
-                var roots = _roots();
-                var page = Page(scan, roots, filter, sub);
+                var (page, built) = Page(scan, filter, sub);
                 if (await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { } pick)
                 {
                     return null;
@@ -242,7 +250,7 @@ internal sealed class CustomCommandsMenu
                     continue;
                 }
 
-                var rows = Rows(scan, roots, filter, ScopeOf(sub));
+                var rows = built[Math.Clamp(sub, 0, built.Count - 1)];
                 if (cursor < 0 || cursor >= rows.Count)
                 {
                     continue;
@@ -335,16 +343,24 @@ internal sealed class CustomCommandsMenu
         };
     }
 
-    // A Skipped row's page: edit, delete (a folder's row, nothing).
+    // A Skipped row's page: edit, delete. A folder's row shows its problem, and a file gone since the scan says so and rescans (2026-10-31,
+    // review P2-5: Enter on either did nothing at all).
     private async Task<bool> ProblemPageAsync(CustomCommandProblem problem, CancellationToken cancellationToken)
     {
-        if (!File.Exists(problem.FilePath))
+        if (Directory.Exists(problem.FilePath))
         {
+            Sink.Notice(CustomCommandText.FolderProblemNotice(Shown(problem), problem.Problem));
             return false;
         }
 
+        if (!File.Exists(problem.FilePath))
+        {
+            Sink.Notice(CustomCommandText.GoneNotice(Shown(problem)));
+            return true;
+        }
+
         string[] words = [CustomCommandText.EditWord, CustomCommandText.DeleteWord];
-        string name = Path.GetFileName(problem.FilePath);
+        string name = Shown(problem);
         var page = new MenuPage(CustomCommandText.PageTitle(name), words.Select(Markup.Escape).ToList(), SettingsMenu.PickKeys) { Caption = problem.Problem };
         if (await _pane.PickAsync(page, 0, cancellationToken).ConfigureAwait(false) is not { Row: var row } || row < 0 || row >= words.Length)
         {
@@ -408,7 +424,13 @@ internal sealed class CustomCommandsMenu
             return true;
         }
 
-        Sink.Error(Refusal(result));
+        if (result.Outcome == CustomCommandEditOutcome.SharedFolder)
+        {
+            Sink.Notice(CustomCommandText.SharedFolderNotice(target.Profile));
+            return false;
+        }
+
+        Sink.Error(result.Outcome == CustomCommandEditOutcome.Exists && target.Profile is { } profile ? CustomCommandText.ExistsInProfileError(result.Name, profile) : Refusal(result));
         return result.Outcome == CustomCommandEditOutcome.Missing;
     }
 
@@ -432,9 +454,14 @@ internal sealed class CustomCommandsMenu
         {
             Sink.Notice(CustomCommandText.CopiedNotice(command.Word, others[row]));
         }
+        else if (result.Outcome == CustomCommandEditOutcome.SharedFolder)
+        {
+            Sink.Notice(CustomCommandText.SharedFolderNotice(others[row]));
+        }
         else
         {
-            Sink.Error(Refusal(result));
+            // Another profile's copy named (2026-10-31, review P2-13): "rename or delete the old one on /commands" can't be done from here.
+            Sink.Error(result.Outcome == CustomCommandEditOutcome.Exists ? CustomCommandText.ExistsInProfileError(result.Name, others[row]) : Refusal(result));
         }
 
         return false;
@@ -473,17 +500,10 @@ internal sealed class CustomCommandsMenu
         }
 
         var roots = _roots();
-        var scope = tabScope;
+        var scope = tabScope ?? await AskScopeAsync(_pane, roots, CustomCommandText.NewScopeTitle(name), cancellationToken).ConfigureAwait(false);
         if (scope is null)
         {
-            var scopes = new[] { CustomCommandScope.Profile, CustomCommandScope.Global };
-            var where = new MenuPage(CustomCommandText.NewScopeTitle(name), scopes.Select(s => Markup.Escape(CustomCommandText.ScopeName(s).PadRight(9)) + Theme.DimMarkup(roots.Of(s))).ToList(), SettingsMenu.PickKeys);
-            if (await _pane.PickAsync(where, 0, cancellationToken).ConfigureAwait(false) is not { Row: var picked } || picked < 0 || picked >= scopes.Length)
-            {
-                return false;
-            }
-
-            scope = scopes[picked];
+            return false;
         }
 
         var result = CustomCommandEditor.Create(roots, scope.Value, name);
@@ -494,8 +514,60 @@ internal sealed class CustomCommandsMenu
         }
 
         Sink.Notice(CustomCommandText.CreatedNotice(name, result.Path) + OverrideNote(roots, scope.Value, name));
-        Edit(result.Path);
+        OpenInEditor(Sink, _openFile, result.Path, opened: null);
         return true;
+    }
+
+    /// <summary>
+    /// A typed name made a name and judged (2026-10-31, review P2-9: the pane's slot and <c>/prompts</c>' m slot were two copies): the name,
+    /// or the refusal in words (<see cref="CustomCommandText.BadNameError"/>, <see cref="CustomCommandText.BuiltInError"/>), which each menu
+    /// reports its own way. Pure.
+    /// </summary>
+    public static (string? Name, string? Refusal) JudgeName(string typed)
+    {
+        ArgumentNullException.ThrowIfNull(typed);
+        string name = CustomCommandName.Normalize(typed);
+        if (!CustomCommandName.IsValid(name))
+        {
+            return (null, CustomCommandText.BadNameError(typed.Trim(), ""));
+        }
+
+        return CustomCommandCatalog.BuiltInWord(name) is not null ? (null, CustomCommandText.BuiltInError(name)) : (name, null);
+    }
+
+    /// <summary>
+    /// The scope page (2026-10-31, review P2-9, shared with <c>/prompts</c>' m): profile or global, each with its folder dim; the pick, or
+    /// null on Esc.
+    /// </summary>
+    public static async Task<CustomCommandScope?> AskScopeAsync(MenuPane pane, CustomCommandRoots roots, string title, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(pane);
+        ArgumentNullException.ThrowIfNull(roots);
+        CustomCommandScope[] scopes = [CustomCommandScope.Profile, CustomCommandScope.Global];
+        var where = new MenuPage(title, scopes.Select(s => Markup.Escape(CustomCommandText.ScopeName(s).PadRight(9)) + Theme.DimMarkup(roots.Of(s))).ToList(), SettingsMenu.PickKeys);
+        return await pane.PickAsync(where, 0, cancellationToken).ConfigureAwait(false) is { Row: var picked } && picked >= 0 && picked < scopes.Length ? scopes[picked] : null;
+    }
+
+    /// <summary>
+    /// A command file opened in the user's editor (2026-10-31, review P7-7: <c>/commands new</c> and the pane's edit were two copies):
+    /// <paramref name="opened"/> said once it opens, a failure said as an error.
+    /// </summary>
+    public static void OpenInEditor(INoticeSink sink, Action<string> open, string path, string? opened)
+    {
+        ArgumentNullException.ThrowIfNull(sink);
+        ArgumentNullException.ThrowIfNull(open);
+        try
+        {
+            open(path);
+            if (opened is not null)
+            {
+                sink.Notice(opened);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            sink.Error(CustomCommandText.OpenFailedError(ex.Message));
+        }
     }
 
     // A name typed on the slot, made a name and checked; null on Esc or a refusal (said).
@@ -507,17 +579,10 @@ internal sealed class CustomCommandsMenu
             return null;
         }
 
-        string name = CustomCommandName.Normalize(text);
-        if (!CustomCommandName.IsValid(name))
+        var (name, refusal) = JudgeName(text);
+        if (refusal is not null)
         {
-            Sink.Error(CustomCommandText.BadNameError(text.Trim(), ""));
-            return null;
-        }
-
-        if (CustomCommandCatalog.BuiltInWord(name) is not null)
-        {
-            Sink.Error(CustomCommandText.BuiltInError(name));
-            return null;
+            Sink.Error(refusal);
         }
 
         return name;
@@ -525,16 +590,7 @@ internal sealed class CustomCommandsMenu
 
     private bool Edit(string file)
     {
-        try
-        {
-            _openFile(file);
-            Sink.Notice(CustomCommandText.EditOpenedNotice(file));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception or InvalidOperationException)
-        {
-            Sink.Error(CustomCommandText.OpenFailedError(ex.Message));
-        }
-
+        OpenInEditor(Sink, _openFile, file, CustomCommandText.EditOpenedNotice(file));
         return false;
     }
 
@@ -584,28 +640,18 @@ internal sealed class CustomCommandsMenu
             CustomCommandEditOutcome.BadName => CustomCommandText.BadNameError(result.Name, ""),
             CustomCommandEditOutcome.BuiltIn => CustomCommandText.BuiltInError(result.Name),
             CustomCommandEditOutcome.Exists => CustomCommandText.ExistsError(result.Name, result.Scope),
-            CustomCommandEditOutcome.Linked => CustomCommandText.LinkedError(result.Name),
+            CustomCommandEditOutcome.Linked => result.LinkIsFile ? CustomCommandText.LinkedFileError(result.Path) : CustomCommandText.LinkedError(result.Name),
             CustomCommandEditOutcome.Missing => CustomCommandText.MissingError("/" + result.Name),
             CustomCommandEditOutcome.Blank => CustomCommandText.BlankError,
             CustomCommandEditOutcome.TooLarge => CustomCommandText.TooLargeError,
             CustomCommandEditOutcome.NothingToChange => CustomCommandText.UnchangedNotice,
+            CustomCommandEditOutcome.SharedFolder => CustomCommandText.SharedFolderNotice(null),
             _ => CustomCommandText.FailedError(result.Detail),
         };
     }
 
-    // A Skipped row's file as shown: its path under its folder.
-    private static string Shown(CustomCommandRoots roots, CustomCommandProblem problem)
-    {
-        try
-        {
-            string relative = Path.GetRelativePath(roots.Of(problem.Scope), problem.FilePath);
-            return relative.StartsWith("..", StringComparison.Ordinal) || relative == "." ? problem.FilePath : relative;
-        }
-        catch (ArgumentException)
-        {
-            return problem.FilePath;
-        }
-    }
+    // A Skipped row's file as shown: its path under its folder, cleaned.
+    private string Shown(CustomCommandProblem problem) => DiffView.Clean(CustomCommandText.ShownPath(_roots(), problem.Scope, problem.FilePath));
 
     private async Task<bool> ConfirmAsync(string question, CancellationToken cancellationToken)
     {

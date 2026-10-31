@@ -101,6 +101,9 @@ public enum FileOutcome
     /// <summary>A model write into a skill root other than through <c>skill_editor</c> (2026-10-22, review P3, <see cref="WriteGuard"/>).</summary>
     SkillFilesProtected,
 
+    /// <summary>A model write into a custom commands folder or where a linked one points (2026-10-31, review P2-2, <see cref="WriteGuard"/>).</summary>
+    CommandFilesProtected,
+
     /// <summary>
     /// A model write to the project file the system prompt reads (2026-10-22, review P1, the fix plan's D2): the turn asks the user and runs the
     /// call again on a yes; with nobody to ask, refused.
@@ -4431,8 +4434,8 @@ public sealed class WorkingDirectory
     private static bool IsLink(ref FileSystemEntry entry) =>
         (entry.Attributes & FileAttributes.ReparsePoint) != 0 && RealLinkTarget(entry.ToFullPath()) is not null;
 
-    /// <summary><see cref="IsLink(ref FileSystemEntry)"/> for an entry already in hand.</summary>
-    private static bool IsLink(FileSystemInfo info) => (info.Attributes & FileAttributes.ReparsePoint) != 0 && RealLinkTarget(info.FullName) is not null;
+    /// <summary><see cref="IsLink(ref FileSystemEntry)"/> for an entry already in hand (internal since 2026-10-31, review P8-6: the custom commands' walk asks it).</summary>
+    internal static bool IsLink(FileSystemInfo info) => (info.Attributes & FileAttributes.ReparsePoint) != 0 && RealLinkTarget(info.FullName) is not null;
 
     private const FileAttributes RecallOnOpen = (FileAttributes)0x0004_0000;
     private const FileAttributes RecallOnDataAccess = (FileAttributes)0x0040_0000;

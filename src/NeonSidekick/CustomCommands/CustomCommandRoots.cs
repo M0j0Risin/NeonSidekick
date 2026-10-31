@@ -13,6 +13,9 @@ public sealed record CustomCommandRoots(string Profile, string Global)
     /// <summary>The folder's name under a profile and under the home.</summary>
     public const string DirectoryName = "commands";
 
+    /// <summary>No folders: a scan built by hand (<see cref="CustomCommandScan.Empty"/>).</summary>
+    public static readonly CustomCommandRoots None = new("", "");
+
     /// <summary>The loaded profile's two folders.</summary>
     public static CustomCommandRoots For(AppSettings settings)
     {

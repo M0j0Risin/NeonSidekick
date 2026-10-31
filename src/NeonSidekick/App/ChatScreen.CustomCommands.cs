@@ -30,28 +30,29 @@ internal sealed partial class ChatScreen
     // The typed line a running custom command titles a new session with (LogTurn), set for its RunMessageAsync alone.
     private string? _customCommandTitle;
 
+    // Whether the idle line's top names the files a built-in hides again (2026-10-31, review P1-8/P1-9: it scanned at every pass): set at
+    // start and by CommandsChanged, read by the screen's task; the pane may set it from the watcher.
+    private volatile bool _commandsAnnounceDue = true;
+
+    // The folders the last announcement read, so a profile switch announces its own folders with no site of its own. Screen task only.
+    private CustomCommandRoots? _announcedRoots;
+
     /// <summary><see cref="SlashCommands.Parse(string, Func{string, bool}?)"/> with this run's custom commands (the catalog's recent scan).</summary>
     private (SlashCommand Command, string Args) ParseWithCustom(string text) => SlashCommands.Parse(text, _customCommands.Knows);
 
     /// <summary>
-    /// A custom command at the idle line: found afresh (a file gone since the parse is <see cref="UnknownCommandError"/>), expanded
-    /// (<see cref="CustomCommandsCommand.Prompt"/>; blank is its error), then, with a model connected, the 🪄 notice naming where the prompt came
-    /// from and the prompt sent as a message with the line's pictures (<see cref="RunMessageAsync"/>), the typed line already the user row.
-    /// With no model <see cref="NoAssistantError"/> alone, never a notice for a prompt that went nowhere. One log line, never the prompt.
+    /// A custom command at the idle line: found and expanded (<see cref="CustomCommandsCommand.Resolve"/>: a file gone since the parse is
+    /// <see cref="CustomCommandText.NotFound"/>, 2026-10-31, review P1-11; a blank prompt its error), then, with a model connected, the 🪄
+    /// notice naming where the prompt came from and the prompt sent as a message with the line's pictures (<see cref="RunMessageAsync"/>), the
+    /// typed line already the user row and on the message (<see cref="Llm.TurnMark"/>, review P1-5). With no model
+    /// <see cref="NoAssistantError"/> alone, never a notice for a prompt that went nowhere. One log line, never the prompt.
     /// </summary>
-    private async Task<bool> RunCustomCommandAsync(string text, string args, IReadOnlyList<ImageAttachment> images, CancellationToken cancellationToken)
+    private async Task<bool> RunCustomCommandAsync(string text, IReadOnlyList<ImageAttachment> images, CancellationToken cancellationToken)
     {
-        string word = SlashCommands.CustomWord(text, out _);
-        if (_customCommands.Scan().Find(word) is not { } command)
+        var run = CustomCommandsCommand.Resolve(_customCommands, text);
+        if (run is not { Command: { } command, Prompt: { } prompt })
         {
-            _transcript.Error(UnknownCommandError(word));
-            return false;
-        }
-
-        var (prompt, error) = CustomCommandsCommand.Prompt(command, args);
-        if (prompt is null)
-        {
-            _transcript.Error(error!);
+            _transcript.Error(run.Error!);
             return false;
         }
 
@@ -62,11 +63,11 @@ internal sealed partial class ChatScreen
         }
 
         _transcript.Notice(CustomCommandText.SentNotice(command));
-        DiagnosticLog.Debug(AppCategory, CustomCommandText.RunLogLine(command, prompt.Length));
+        DiagnosticLog.Debug(CustomCommandCatalog.Category, CustomCommandText.RunLogLine(command, prompt.Length));
         _customCommandTitle = text.Trim();
         try
         {
-            return await RunMessageAsync(prompt, images, cancellationToken).ConfigureAwait(false);
+            return await RunMessageAsync(prompt, images, cancellationToken, Llm.TurnMark.TypedAs(_customCommandTitle, prompt)).ConfigureAwait(false);
         }
         finally
         {
@@ -94,7 +95,9 @@ internal sealed partial class ChatScreen
         switch (line.Verb)
         {
             case CustomCommandsVerb.Pane:
-                if (await _commandsMenu.ShowAsync(cancellationToken).ConfigureAwait(false) is { } use)
+                var use = await _commandsMenu.ShowAsync(cancellationToken).ConfigureAwait(false);
+                CommandsChanged();
+                if (use is not null)
                 {
                     if (onWatcher)
                     {
@@ -116,16 +119,9 @@ internal sealed partial class ChatScreen
                     return;
                 }
 
+                CommandsChanged();
                 sink.Notice(answer);
-                try
-                {
-                    _openFile(path);
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception or InvalidOperationException)
-                {
-                    sink.Error(CustomCommandText.OpenFailedError(ex.Message));
-                }
-
+                CustomCommandsMenu.OpenInEditor(sink, _openFile, path, opened: null);
                 return;
             }
 
@@ -138,6 +134,7 @@ internal sealed partial class ChatScreen
                 }
                 else
                 {
+                    CommandsChanged();
                     sink.Notice(answer);
                 }
 
@@ -152,8 +149,8 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// <c>/prompts</c>' as-command button (2026-10-30): the prompt's text saved as <paramref name="name"/>'s body
-    /// (<see cref="CustomCommandEditor.Save"/>), the answer naming the new word and the file, with the override and <c>\$</c> notes; a
-    /// refusal as <c>Error: </c> (the pane's own prefix).
+    /// (<see cref="CustomCommandEditor.Save"/>), the answer <c>/commands save</c>'s (<see cref="CustomCommandsCommand.SavedText"/>, 2026-10-31,
+    /// review P7-5); a refusal behind <see cref="Prompts.SavedPromptText.ErrorPrefix"/> (the pane's own prefix, review P3-10).
     /// </summary>
     private string SavePromptAsCommand(CustomCommandScope scope, string name, string text)
     {
@@ -161,12 +158,22 @@ internal sealed partial class ChatScreen
         var result = CustomCommandEditor.Save(roots, scope, name, text);
         if (result.Outcome != CustomCommandEditOutcome.Saved)
         {
-            return "Error: " + CustomCommandsMenu.Refusal(result);
+            return Prompts.SavedPromptText.ErrorPrefix + CustomCommandsMenu.Refusal(result);
         }
 
-        return CustomCommandText.SavedNotice(name, result.Path, CustomCommandText.FirstLine(text))
-            + CustomCommandsMenu.OverrideNote(roots, scope, name)
-            + (result.MayReadDifferently ? " " + CustomCommandText.SavedMayReadDifferently : "");
+        CommandsChanged();
+        return CustomCommandsCommand.SavedText(roots, result, text, picturesDropped: false);
+    }
+
+    /// <summary>
+    /// The command files changed by the app's hand (2026-10-31, review P1-6/P3-8, P1-8/P1-9): the catalog reads afresh at its next look, so
+    /// <c>/commands save sum</c> then <c>/sum</c> runs (the Web UI's names too), and the idle line's top names any file a built-in now hides.
+    /// Called after the pane, <c>new</c>, <c>save</c>, <c>/prompts</c>' m and <c>/profile push|pull commands</c>.
+    /// </summary>
+    private void CommandsChanged()
+    {
+        _customCommands.Invalidate();
+        _commandsAnnounceDue = true;
     }
 
     /// <summary>
@@ -185,26 +192,41 @@ internal sealed partial class ChatScreen
         return !typed;
     }
 
-    /// <summary>The custom command <c>/help &lt;words&gt;</c> names, from a fresh scan (<see cref="CustomCommandsCommand.HelpCard"/>); null otherwise.</summary>
-    private CustomCommand? CustomHelpCard(string args) => CustomCommandsCommand.HelpCard(_customCommands.Scan(), args);
+    /// <summary>
+    /// The card <c>/help &lt;words&gt;</c> names (<see cref="CustomCommandsCommand.HelpCard"/>): a custom command's, or a Skipped file's (2026-10-31,
+    /// review P4-6); null otherwise. From a recent scan (review P1-8).
+    /// </summary>
+    private CustomHelpCard? FindCustomHelpCard(string args) => CustomCommandsCommand.HelpCard(_customCommands.Recent(), args);
 
     /// <summary>
     /// A custom command's <c>/help</c> card drawn as the manual's own answer (<see cref="HelpLookupAsync"/> with no model): a reply under
-    /// <see cref="TranscriptRenderer.HelpGlyph"/>, never in the history, so the model never reads it and <c>/rewind</c> doesn't offer it.
+    /// <see cref="TranscriptRenderer.HelpGlyph"/>, never in the history, so the model never reads it and <c>/rewind</c> doesn't offer it. The
+    /// card is Markdown where the reply is drawn as Markdown (review P3-6, <see cref="StyledReply"/>), so <c>__init__</c> reads as written; plain
+    /// text where it isn't, as headless's, so no stray backslash shows. The Web UI gets the same text.
     /// </summary>
-    private void ShowCustomHelpCard(CustomCommand command)
+    private void ShowCustomHelpCard(CustomHelpCard card)
     {
-        _transcript.BeginAssistant(StyledReply(_effective().TranscriptMarkdown, _pane.Enabled), TranscriptRenderer.HelpGlyph);
-        _transcript.AppendDelta(CustomCommandText.Card(command));
+        bool styled = StyledReply(_effective().TranscriptMarkdown, _pane.Enabled);
+        _transcript.BeginAssistant(styled, TranscriptRenderer.HelpGlyph);
+        _transcript.AppendDelta(CustomCommandText.Card(card, markdown: styled));
         _transcript.EndAssistant();
     }
 
     /// <summary>
-    /// Files a built-in hides, named once a run (and again after one changes), at the idle line's top: startup, after a profile switch,
-    /// after <c>/commands</c> closes. From a recent scan.
+    /// Files a built-in hides, named once a run (and again after one changes), at the idle line's top. Since 2026-10-31 (review P1-8/P1-9:
+    /// it scanned at every pass) only when due: at start, after <see cref="CommandsChanged"/>, and when the folders differ from the last
+    /// announcement's (a profile switch). A shadowed file made outside the app while it idles is named at the next of those, not at once.
     /// </summary>
     private void AnnounceShadowedCommands()
     {
+        var roots = _customCommands.Roots;
+        if (!_commandsAnnounceDue && roots == _announcedRoots)
+        {
+            return;
+        }
+
+        _commandsAnnounceDue = false;
+        _announcedRoots = roots;
         _customCommands.Recent();
         if (_customCommands.TakeNewlyShadowedByBuiltIn() is { Count: > 0 } shadows)
         {
@@ -214,47 +236,50 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// <c>/help</c>'s Custom tab (2026-10-30): each command's word, description and form (the word and its hint, in the Commands tabs' two
-    /// tones), then the Shadowed and Skipped blocks with their reasons; an empty list a line pointing at <c>/commands</c>. Text cells, never
-    /// Markup: a hint is <c>[issue]</c>. Pure over <paramref name="scan"/>.
+    /// tones), then the Shadowed and Skipped blocks with their reasons (a Skipped file by its path under its folder, 2026-10-31, review P4-8),
+    /// then the scan's note; an empty list a line pointing at <c>/commands</c>. From the lists' shared rows (<see cref="CustomCommandText.Rows"/>,
+    /// review P6-7), cleaned. The word column is as wide as the longest word, wrapping when the window is narrower (review P2-4: a long
+    /// <c>a:b</c> word was cut). Text cells, never Markup: a hint is <c>[issue]</c>. Pure over <paramref name="scan"/>.
     /// </summary>
     internal static IRenderable CustomCommandsTab(CustomCommandScan scan)
     {
         ArgumentNullException.ThrowIfNull(scan);
-        if (scan.Commands.Count == 0 && scan.Shadowed.Count == 0 && scan.Problems.Count == 0)
+        var rows = CustomCommandText.Rows(scan);
+        if (rows.Count == 0)
         {
-            return new Text(CustomCommandText.HelpEmptyRow, Theme.DimText);
+            return scan.Note is { } alone
+                ? new Rows(new Text(CustomCommandText.HelpEmptyRow, Theme.DimText), new Text(CustomCommandText.NotePrefix + alone, Theme.DimText))
+                : new Text(CustomCommandText.HelpEmptyRow, Theme.DimText);
         }
 
+        int longest = rows.Max(r => TextCells.Width(r.Word));
         var grid = new Grid()
-            .AddColumn(new GridColumn().NoWrap().Width(SlashCommands.LabelWidth).PadRight(SlashCommands.HelpColumnGap))
+            .AddColumn(new GridColumn().Width(Math.Max(SlashCommands.LabelWidth, longest)).PadRight(SlashCommands.HelpColumnGap))
             .AddColumn(new GridColumn().Width(SlashCommands.DescriptionWidth).PadRight(SlashCommands.HelpColumnGap))
             .AddColumn(new GridColumn().PadRight(0));
-        foreach (var command in scan.Commands)
+        foreach (var row in rows.Where(r => r.Kind == CustomCommandRowKind.Command))
         {
-            string scope = CustomCommandText.ScopeName(command.Scope);
-            string description = command.Description is { Length: > 0 } said ? said + " · " + scope : scope;
-            string form = command.ArgumentHint is { Length: > 0 } hint ? command.Word + " " + hint : command.Word;
-            grid.AddRow(new Text(command.Word, Theme.AccentSecondary), new Text(description, Theme.Body), FormsCell([form]));
+            string scope = CustomCommandText.ScopeName(row.Scope);
+            string description = row.Detail.Length > 0 ? row.Detail + " · " + scope : scope;
+            string form = row.Hint is { } hint ? row.Word + " " + hint : row.Word;
+            grid.AddRow(new Text(row.Word, Theme.AccentSecondary), new Text(description, Theme.Body), FormsCell([form]));
         }
 
-        if (scan.Shadowed.Count > 0)
+        foreach (var (kind, heading) in new[] { (CustomCommandRowKind.Shadow, CustomCommandText.ShadowedHeading), (CustomCommandRowKind.Problem, CustomCommandText.SkippedHeading) })
         {
-            grid.AddRow(new Text(CustomCommandText.ShadowedHeading, Theme.SectionHeading), Text.Empty, Text.Empty);
-            foreach (var shadow in scan.Shadowed)
+            var block = rows.Where(r => r.Kind == kind).ToList();
+            if (block.Count == 0)
             {
-                grid.AddRow(new Text(shadow.Command.Word, Theme.DimText), new Text(CustomCommandText.ShadowReason(shadow), Theme.DimText), new Text(CustomCommandText.ScopeName(shadow.Command.Scope), Theme.DimText));
+                continue;
+            }
+
+            grid.AddRow(new Text(heading, Theme.SectionHeading), Text.Empty, Text.Empty);
+            foreach (var row in block)
+            {
+                grid.AddRow(new Text(row.Word, Theme.DimText), new Text(row.Detail, Theme.DimText), new Text(CustomCommandText.ScopeName(row.Scope), Theme.DimText));
             }
         }
 
-        if (scan.Problems.Count > 0)
-        {
-            grid.AddRow(new Text(CustomCommandText.SkippedHeading, Theme.SectionHeading), Text.Empty, Text.Empty);
-            foreach (var problem in scan.Problems)
-            {
-                grid.AddRow(new Text(Path.GetFileName(problem.FilePath), Theme.DimText), new Text(problem.Problem, Theme.DimText), new Text(CustomCommandText.ScopeName(problem.Scope), Theme.DimText));
-            }
-        }
-
-        return grid;
+        return scan.Note is { } note ? new Rows(grid, new Text(CustomCommandText.NotePrefix + note, Theme.DimText)) : grid;
     }
 }

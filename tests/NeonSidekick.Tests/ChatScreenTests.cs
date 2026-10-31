@@ -13293,12 +13293,13 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain("The user said a and b.", output);   // the summary itself is not shown unless LLM compact show summary is on (2026-09-21)
         Assert.Equal(4, _chat.Requests.Count);
 
-        // The summariser's request: the instruction, the older turn as it was sent (the opener and the pairs included), the request last; no tools, thinking off.
+        // The summariser's request: the instruction, the older turn as it was sent (the pairs included, the opener left out: 2026-10-31, review
+        // P2-11), the request last; no tools, thinking off.
         var summary = _chat.Requests[2];
         Assert.Equal(ConversationCompactor.SummaryInstruction, summary[0].Text);
-        Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User, ChatRole.Assistant, ChatRole.User }, summary.Select(m => m.Role));
-        Assert.Equal(Assistant.OpeningOpenerText, summary[1].Text);
-        Assert.Equal("a", summary[8].Text);
+        Assert.Equal(new[] { ChatRole.System, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool, ChatRole.User, ChatRole.Assistant, ChatRole.User }, summary.Select(m => m.Role));
+        Assert.DoesNotContain(summary, ConversationHistory.IsOpener);
+        Assert.Equal("a", summary[7].Text);
         Assert.Equal(ConversationCompactor.SummaryRequestLine, summary[^1].Text);
         Assert.Null(_chat.Options[2]!.Tools);
         Assert.Equal(ReasoningEffort.None, _chat.Options[2]!.Reasoning!.Effort);
@@ -14002,6 +14003,33 @@ public partial class ChatScreenTests : IDisposable
     [InlineData(SlashCommand.Collapse, false, MidTurnClass.Quick)]
     public void MidTurnPolicy_IsPinned(SlashCommand command, bool hasArgs, MidTurnClass expected) =>
         Assert.Equal(expected, ChatScreen.MidTurnPolicy(command, hasArgs));
+
+    /// <summary>
+    /// <c>/commands</c> under a reply (2026-10-31, review P3-11, P8-2): the bare word the pane, save at once (the message the reply answers), new
+    /// after the reply; under the embedded model's load a save waits too.
+    /// </summary>
+    [Theory]
+    [InlineData("save x", false, MidTurnClass.Quick)]
+    [InlineData("save x --global", false, MidTurnClass.Quick)]
+    [InlineData("new x", false, MidTurnClass.Deferred)]
+    [InlineData("", false, MidTurnClass.Pane)]
+    [InlineData("bogus", false, MidTurnClass.Deferred)]
+    [InlineData("save x", true, MidTurnClass.Deferred)]
+    [InlineData("", true, MidTurnClass.Pane)]
+    public void MidTurnPolicy_Commands_ByItsVerb(string args, bool load, MidTurnClass expected) =>
+        Assert.Equal(expected, load ? ChatScreen.MidTurnPolicyUnderLoad(SlashCommand.Commands, args) : ChatScreen.MidTurnPolicy(SlashCommand.Commands, args));
+
+    /// <summary>One scan's commands give one merged list, not one per keystroke (2026-10-31, review P1-10).</summary>
+    [Fact]
+    public void CommandItems_OneScansList_IsOneInstance()
+    {
+        IReadOnlyList<NeonSidekick.CustomCommands.CustomCommand> custom = [new NeonSidekick.CustomCommands.CustomCommand("review", NeonSidekick.CustomCommands.CustomCommandScope.Profile, "C:/x/review.md", "does it", null, [], null, "x")];
+        var first = ChatScreen.CommandItems(custom: custom);
+        Assert.Same(first, ChatScreen.CommandItems(custom: custom));
+        Assert.Contains(first, item => item.Text == "/review");
+        Assert.NotSame(first, ChatScreen.CommandItems(hideExit: true, custom: custom));
+        Assert.NotSame(first, ChatScreen.CommandItems(custom: [.. custom]));
+    }
 
     /// <summary>The string form (2026-09-27): <c>/comfy view</c> alone is quick; the other /comfy forms wait, and the rest follow the bool form.</summary>
     [Theory]

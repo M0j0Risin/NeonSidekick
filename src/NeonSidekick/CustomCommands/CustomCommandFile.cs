@@ -184,11 +184,14 @@ public static class CustomCommandFile
         return null;
     }
 
-    /// <summary>A body as it is sent: the blank lines at its top dropped, its end trimmed; the text inside as written.</summary>
+    /// <summary>
+    /// A body as it is sent: the blank lines at its top dropped, its end trimmed; the text inside as written. Its line endings are folded
+    /// already: every caller folds first (2026-10-31, review P7-8: a second fold here did nothing).
+    /// </summary>
     public static string CleanBody(string body)
     {
         ArgumentNullException.ThrowIfNull(body);
-        string text = body.Replace("\r\n", "\n", StringComparison.Ordinal).TrimEnd();
+        string text = body.TrimEnd();
         int start = 0;
         while (start < text.Length)
         {

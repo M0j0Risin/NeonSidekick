@@ -30,7 +30,7 @@ Elsewhere:
 |---|---|
 | `/help` | The commands (everyday ones on Basic, the rest on Advanced) and the keys; on the Keys tab, `k` swaps in `/keycheck`'s list. |
 | `/help <words>` | Asks the model to look the words up in the app's manual (`neon_help`); with no model, or `neon_help` off, the manual answers. Waits during a reply. |
-| `/help <your command>` | Shows one of your [custom commands](#custom-commands): its description, folder and file. No model is asked. |
+| `/help <your command>` | Shows one of your [custom commands](#custom-commands): its description and file, or why a skipped file doesn't run. No model is asked; more words ask the manual (`/help about review`). |
 | `/about` | The version, runtime, folders, components, the embedded models' Hugging Face pages and the license. |
 | `/keycheck` | Lists the app's key chords and whether another program holds each (a held chord never reaches the app). On a Mac, also macOS shortcuts and an Option key that types characters. |
 | `/exit` | Exits the app. |
@@ -57,13 +57,13 @@ Elsewhere:
 | `/queue [clear]` | Lists the messages queued during a reply, to remove, clear or send them; `clear` drops them all. |
 | `/queue mode automatic\|manual\|off` | Sets *Queue mode*: queued messages go when the reply ends, wait for **➤ send**, or aren't kept. |
 | `/queue cancel hold\|drain\|empty` | Sets *Queue cancel mode*: after a canceled reply, keep the queue, send the next, or drop them all. |
-| `/prompts` | Your saved prompts (`prompts.json`, per profile, never shown to the model): a pick sends one as if typed (queued during a reply), puts it on the draft line (the old draft going to the input history) or saves it as a [custom command](#custom-commands). Keys: [Pane keys](INTERFACE.md#pane-keys). |
+| `/prompts` | Your saved prompts (per profile, never shown to the model): a pick sends one as if typed, puts it on the draft line or saves it as a [custom command](#custom-commands). Keys: [Pane keys](INTERFACE.md#pane-keys). |
 | `/prompts <n>`, `/prompts save <text>`, `/prompts remove <n>` | Sends prompt *n* as if typed, saves the rest of the line (a pasted block too), or removes prompt *n*. |
 | `/prompts list [--clear]` | Prints the prompts, numbered; `--clear` removes them all after a yes. |
 | `/<name> [<words>]` | Runs one of your [custom commands](#custom-commands): its prompt, filled from the words, is sent as a message. A built-in command's name always wins. |
 | `/commands` | Lists your custom commands, to use, move, copy, rename, edit or delete one; **new command…** starts one. Keys: [Pane keys](INTERFACE.md#pane-keys). |
 | `/commands new <name> [--global]` | Writes the template into the profile's `commands` folder (or the global one) and opens it in your editor. |
-| `/commands save <name> [--global]` | Saves the last message you sent as a command, so `/<name>` sends it again. Pictures aren't kept. |
+| `/commands save <name> [--global]` | Saves the last message you typed as a command, so `/<name>` sends it again; during a reply, the one it answers. A custom command's or the app's own message is refused. |
 | `/sessions [<id>]` | Lists the stored sessions, or restores one with its pictures (`#12` works too). |
 | `/sessions purge <id>\|all`, `/sessions purge older <age>` | Deletes one stored session, every one, or those older than an age (`30` days, `12h`, `1d 6h`). Its file checkpoints go too, so those turns can't be undone. |
 | `/sessions title [<text>]`, `/rename [<name>]` | Renames the current session; alone, opens a box with its name. |
@@ -110,7 +110,7 @@ The push and pull forms copy to (`push`) or from (`pull`) another profile, after
 | `/profile push\|pull links <name> [overwrite]`, `/profile push\|pull videos <name> [overwrite]` | Copies the Browser window's saved links or the saved YouTube videos (with where each was left). |
 | `/profile push\|pull monitors <name> [overwrite]` | Copies the monitor input names, hidden inputs and PC inputs, keeping the target's own. A bare push or pull replaces them. |
 | `/profile push\|pull skills <name>` | Copies the profile's own skills; one the target has (by folder or name) is skipped. A copy starts with no history. |
-| `/profile push\|pull commands <name> [overwrite]` | Copies the profile's [custom commands](#custom-commands); one the target has is skipped, or replaced with `overwrite`. |
+| `/profile push\|pull commands <name> [overwrite]` | Copies the profile's [custom commands](#custom-commands); one the target has is skipped, or replaced with `overwrite`. Ends with a count; Esc stops it. |
 | `/profile edit\|reload` | Opens `profile.json` in your editor, or reads it back and reconnects what changed. |
 | `/settings`, `//` | Opens the settings; a letter typed on a tab searches them all. |
 | `/settings <words>` | Searches every setting (`/settings`, `/tools`, `/skills`, `/mcp`) by name, tab or description. |
@@ -510,11 +510,11 @@ Its settings are on `/settings` › [Automation](SETTINGS.md#automation).
 
 A custom command is a Markdown file holding a prompt you send often: `/review src/app.cs` sends it with your words filled in. The files follow [Claude Code's format](https://code.claude.com/docs/en/slash-commands), so its command files work as they are.
 
-* **Folders:** the profile's `commands` folder and the home's (global), made when a profile loads. The profile's file wins over a global one of the same name; a built-in's name always wins, and the file shows as Shadowed.
-* **A linked folder:** `commands` may be a link to another folder, such as `~/.claude/commands`, to share Claude Code's. The app then guards only that folder, not where it points.
+* **Folders:** the profile's `commands` folder and the home's (global), made when a profile loads. The profile's file wins over a global one of the same name.
+* **A linked folder:** `commands` may be a link to another folder, such as `~/.claude/commands`, to share Claude Code's. The model can't write in the folder or where it points; you change them with `/commands`.
 * **Names:** the file's name, lowercased: letters, digits, `-` and `_`. A subfolder adds a prefix (`frontend/test.md` is `/frontend:test`), up to 4 folders deep.
 * **Frontmatter** (optional): `description`, `argument-hint` (shown as you type), `arguments` (names for `$name`) and `user-invocable: false` (can't be typed). Other fields, like `model`, are ignored.
-* **Placeholders:** `$ARGUMENTS` is all the words; `$0`, `$1`… (or `$ARGUMENTS[0]`…) one word each, quotes keeping words together. `\$` writes a `$`. With no placeholder, the words go on an `ARGUMENTS:` line.
+* **Placeholders:** `$ARGUMENTS` is all the words; `$0`, `$1`… (or `$ARGUMENTS[0]`…) one word each, a quoted group one word when its closing quote ends a word. A `\` right before a placeholder keeps it as written; with no placeholder, the words go on an `ARGUMENTS:` line.
 * **Nothing runs:** a `!` shell line is sent as written, with a note. A command never runs a program or reads a file.
 * **Pictures** pasted on the line go with the message. Under a reply, a command waits until the reply ends.
 * **Help:** `/help` lists them on its **Custom** tab, and `/help <name>` shows one's card. They run from the Web UI (with *Web UI commands* on) and headless too.

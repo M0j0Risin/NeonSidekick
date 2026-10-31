@@ -370,6 +370,10 @@ public static class FileText
     public static string SkillFilesProtected(string path) =>
         $"Error: '{path}' is in a skill folder; change a skill only with skill_editor";
 
+    /// <summary>A write into a custom commands folder or its link's target (2026-10-31, review P2-2). Prompt text.</summary>
+    public static string CommandFilesProtected(string path) =>
+        $"Error: '{path}' is in the user's custom commands folder, which the file tools never change; the user changes commands with /commands";
+
     /// <summary>The project file with nobody to ask (review P1, D2): headless, a bot, an advisor, a script, a pass that may not ask. Prompt text.</summary>
     public static string ProjectFileRefused(string path) =>
         $"Error: '{path}' is the project file the system prompt reads every turn; it changes only when the user allows it on the screen, and nobody can be asked now: tell the user the change, and they can make it";
@@ -515,6 +519,7 @@ public static class FileText
             FileOutcome.NeonFilesProtected => NeonFilesProtected(path),
             FileOutcome.AppFilesProtected => AppFilesProtected(path),
             FileOutcome.SkillFilesProtected => SkillFilesProtected(path),
+            FileOutcome.CommandFilesProtected => CommandFilesProtected(path),
             FileOutcome.ProjectFileAsk => ProjectFileRefused(path),
             FileOutcome.ShoppingList => Shopping.ShoppingText.NotAFile(path),
             FileOutcome.StreamName => StreamName(path),

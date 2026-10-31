@@ -690,9 +690,7 @@ public static class SlashCommands
             return (SlashCommand.None, "");
         }
 
-        int split = trimmed.IndexOfAny(new[] { ' ', '\t' });
-        string token = split < 0 ? trimmed : trimmed[..split];
-        string args = split < 0 ? "" : trimmed[(split + 1)..].Trim();
+        string token = FirstWord(trimmed, out string args);
 
         var command = token.ToLowerInvariant() switch
         {
@@ -797,9 +795,8 @@ public static class SlashCommands
 
     /// <summary>
     /// <see cref="Parse(string)"/> with the custom commands (2026-10-30): an <see cref="SlashCommand.Unknown"/> whose word
-    /// <paramref name="isCustom"/> knows (given with its <c>/</c>) is <see cref="SlashCommand.Custom"/>. A built-in always wins. The custom
-    /// word is cut at the first white space of any kind (a built-in's at a space or a tab), so <c>/review</c>, a line break and text is the
-    /// command with that text as its arguments. Null <paramref name="isCustom"/> is <see cref="Parse(string)"/>.
+    /// <paramref name="isCustom"/> knows (given with its <c>/</c>) is <see cref="SlashCommand.Custom"/>. A built-in always wins. Both cut the
+    /// word the same way (<see cref="FirstWord(string, out string)"/>). Null <paramref name="isCustom"/> is <see cref="Parse(string)"/>.
     /// </summary>
     public static (SlashCommand Command, string Args) Parse(string line, Func<string, bool>? isCustom)
     {
@@ -809,12 +806,22 @@ public static class SlashCommands
             return parsed;
         }
 
-        string word = CustomWord(line, out string args);
+        string word = FirstWord(line, out string args);
         return isCustom(word) ? (SlashCommand.Custom, args) : parsed;
     }
 
-    /// <summary>A line's first word cut at the first white space of any kind (a custom command's), and the rest trimmed. Pure.</summary>
-    public static string CustomWord(string line, out string args)
+    /// <summary>A line's first word: <see cref="FirstWord(string, out string)"/> without the rest.</summary>
+    public static string FirstWord(string line) => FirstWord(line, out _);
+
+    /// <summary>
+    /// The one word cut (2026-10-31, review P1-12, P5-7, P7-4, the user's Option A): a line's first word ends at its first white space of any
+    /// kind, a built-in's and a custom command's alike, and the rest is trimmed. So <c>/compact</c>, a line break and <c>focus</c> is
+    /// <c>/compact</c> with <c>focus</c>, as a typed space would be; until then a built-in's word ran to the first space or tab and a line
+    /// break made it an unknown command. A command's arguments could hold line breaks already (<c>/cmd dir</c>, a line break, <c>del x</c>);
+    /// only the first separator changed. It reaches the idle line only: a line holding a line break has no <c>CommandText</c>, so under a
+    /// reply it is queued and parsed here when it runs. Pure.
+    /// </summary>
+    public static string FirstWord(string line, out string args)
     {
         ArgumentNullException.ThrowIfNull(line);
         string trimmed = line.Trim();

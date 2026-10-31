@@ -382,6 +382,22 @@ public sealed partial class PasteBlocks
         return string.Join('\n', stripped.Split('\n').Select(line => line.TrimEnd(' ', '\t'))).Trim();
     }
 
+    /// <summary>
+    /// The length of the attachment label (<c>[Image #1]</c>, <c>[PDF #2 a.pdf]</c>) starting at <paramref name="index"/> of
+    /// <paramref name="text"/>, or 0 when none starts there (2026-10-31, review P3-1: a custom command's words keep a label whole).
+    /// </summary>
+    internal static int LabelLengthAt(string text, int index)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        if (index >= text.Length || text[index] != '[')
+        {
+            return 0;
+        }
+
+        var match = AttachmentLabelPattern().Match(text, index);
+        return match.Success && match.Index == index ? match.Length : 0;
+    }
+
     // A draft PDF label runs to its first ".pdf]", as SentDocumentPattern does.
     [GeneratedRegex(@"\[Image #\d+\]|\[PDF #\d+ [^\r\n]*?\.pdf\]", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
     private static partial Regex AttachmentLabelPattern();

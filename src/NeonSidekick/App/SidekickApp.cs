@@ -484,7 +484,8 @@ public sealed partial class SidekickApp
     /// <summary>Runs the mode selected by <paramref name="options"/> and returns the process exit code.</summary>
     /// <summary>
     /// The write guard's facts over the live settings (2026-10-22, <see cref="Files.WriteGuard"/>): the home, the working directory whose root
-    /// holds the project file, every skill root, the SQLite databases and the shopping tripwire while their tools are on, and the bin.
+    /// holds the project file, every skill root, the SQLite databases and the shopping tripwire while their tools are on, the bin, and the
+    /// commands folders with their link targets (2026-10-31).
     /// </summary>
     internal Files.WriteGuardFacts WriteGuardFacts() => new(
         Home: () => _settings.StorageDirectory,
@@ -492,7 +493,19 @@ public sealed partial class SidekickApp
         SkillRoots: () => { var roots = SkillRoots.For(_settings, _externalSkills); return [roots.Profile, roots.Global, roots.External]; },
         Databases: () => ChatScreen.DatabaseGuardFor(EffectiveSettings, _settings.ProfileDirectory, _settings.StorageDirectory),
         ShoppingGuarded: () => ChatScreen.ShoppingListGuarded(EffectiveSettings),
-        RecycleBin: () => EffectiveSettings.FileDeletesToRecycleBin ? _recycleBin : null);
+        RecycleBin: () => EffectiveSettings.FileDeletesToRecycleBin ? _recycleBin : null,
+        CommandRoots: () => CommandRootsGuarded(_settings.ProfileCustomCommandsDirectory, _settings.GlobalCustomCommandsDirectory));
+
+    /// <summary>
+    /// The commands folders the write guard holds (2026-10-31, review P2-2): both, and where each points when it is a link. Read at each
+    /// write, so a profile switch is seen at once.
+    /// </summary>
+    internal static IReadOnlyList<string> CommandRootsGuarded(string profile, string global)
+    {
+        var folders = new List<string> { profile, global };
+        folders.AddRange(new[] { profile, global }.Select(Files.WorkingDirectory.RealLinkTarget).OfType<string>().Where(target => target.Length > 0));
+        return folders;
+    }
 
     public async Task<int> RunAsync(SidekickOptions options, CancellationToken cancellationToken)
     {
@@ -1724,21 +1737,17 @@ public sealed partial class SidekickApp
 
                 // A custom command (2026-10-30, the custom commands plan), ahead of /help <words> and the server check: expanded, its notice,
                 // then a message from here on — customSent skips the command checks below, so a body starting /plan never runs as /plan.
+                // The turn's message carries what was typed or that the app wrote it (2026-10-31, review P1-5/P8-1, Llm.TurnMark).
                 string? customTitle = null;
                 bool customSent = false;
-                if (SlashCommands.Parse(text, customCommands.Knows) is (SlashCommand.Custom, var customArgs))
+                Llm.TurnMark? turnMark = null;
+                if (SlashCommands.Parse(text, customCommands.Knows) is (SlashCommand.Custom, _))
                 {
-                    string customWord = SlashCommands.CustomWord(text, out _);
-                    if (customCommands.Scan().Find(customWord) is not { } custom)
+                    // Found and expanded as the screen does (2026-10-31, review P1-11: a file gone since the parse is NotFound).
+                    var run = CustomCommandsCommand.Resolve(customCommands, text);
+                    if (run is not { Command: { } custom, Prompt: { } prompt })
                     {
-                        await HeadlessLineAsync("[error] " + ChatScreen.UnknownCommandError(customWord)).ConfigureAwait(false);
-                        continue;
-                    }
-
-                    var (prompt, customError) = CustomCommandsCommand.Prompt(custom, customArgs);
-                    if (prompt is null)
-                    {
-                        await HeadlessLineAsync("[error] " + customError).ConfigureAwait(false);
+                        await HeadlessLineAsync("[error] " + run.Error).ConfigureAwait(false);
                         continue;
                     }
 
@@ -1749,6 +1758,7 @@ public sealed partial class SidekickApp
                     }
 
                     customTitle = text.Trim();
+                    turnMark = Llm.TurnMark.TypedAs(customTitle, prompt);
                     text = prompt;
                     customSent = true;
                 }
@@ -1760,7 +1770,7 @@ public sealed partial class SidekickApp
                     switch (commandsLine.Verb)
                     {
                         case CustomCommandsVerb.Pane:
-                            foreach (string listed in CustomCommandText.Lines(customCommands.Scan(), customCommands.Roots))
+                            foreach (string listed in CustomCommandText.Lines(customCommands.Scan()))
                             {
                                 await HeadlessNoticeLineAsync("[notice] " + listed).ConfigureAwait(false);
                             }
@@ -1769,6 +1779,7 @@ public sealed partial class SidekickApp
                         case CustomCommandsVerb.New:
                         {
                             var (answer, path) = CustomCommandsCommand.Create(customCommands.Roots, commandsLine);
+                            customCommands.Invalidate();   // read afresh at the next line (2026-10-31, review P3-8)
                             await HeadlessLineAsync((path is null ? "[error] " : "[notice] ") + answer).ConfigureAwait(false);
                             break;
                         }
@@ -1776,6 +1787,7 @@ public sealed partial class SidekickApp
                         case CustomCommandsVerb.Save:
                         {
                             var (answer, failed) = CustomCommandsCommand.Save(customCommands.Roots, commandsLine, assistant?.History.Messages ?? []);
+                            customCommands.Invalidate();
                             await HeadlessLineAsync((failed ? "[error] " : "[notice] ") + answer).ConfigureAwait(false);
                             break;
                         }
@@ -1788,11 +1800,12 @@ public sealed partial class SidekickApp
                     continue;
                 }
 
-                // /help <your command> (2026-10-30): its card from the scan, no model asked, as the screen's.
+                // /help <your command> (2026-10-30): its card from the scan, no model asked, as the screen's; plain text here (2026-10-31, review
+                // P3-6: the screen's is Markdown), and a Skipped file's card too (review P4-6).
                 if (!customSent && SlashCommands.Parse(text) is (SlashCommand.Help, { Length: > 0 } cardWords)
-                    && CustomCommandsCommand.HelpCard(customCommands.Scan(), cardWords) is { } card)
+                    && CustomCommandsCommand.HelpCard(customCommands.Recent(), cardWords) is { } card)
                 {
-                    await HeadlessLineAsync(HeadlessReplyPrefix + CustomCommandText.Card(card)).ConfigureAwait(false);
+                    await HeadlessLineAsync(HeadlessReplyPrefix + CustomCommandText.Card(card, markdown: false)).ConfigureAwait(false);
                     continue;
                 }
 
@@ -1803,6 +1816,7 @@ public sealed partial class SidekickApp
                     if (assistant is not null && ChatScreen.HelpLookupOffered(EffectiveSettings.LlmOfferTools, ChatScreen.HelpOffered(EffectiveSettings), ToolsText.DisabledSet(EffectiveSettings.ToolsDisabled)))
                     {
                         text = Help.HelpText.AskPrompt(helpWords);
+                        turnMark = Llm.TurnMark.App;
                     }
                     else
                     {
@@ -1935,6 +1949,8 @@ public sealed partial class SidekickApp
                     assistant.Journal = journal;
                 }
 
+                // A pass's message is the app's (review P8-1), as the screen's pass messages are.
+                assistant.TurnMark = passTurn ? Llm.TurnMark.App : turnMark;
                 HeadlessTurn turn;
                 try
                 {
@@ -1950,6 +1966,7 @@ public sealed partial class SidekickApp
 
                     assistant.Journal = null;
                     assistant.TurnNote = null;
+                    assistant.TurnMark = null;
                     throw;
                 }
 
@@ -1960,6 +1977,7 @@ public sealed partial class SidekickApp
 
                 assistant.Journal = null;
                 assistant.TurnNote = null;
+                assistant.TurnMark = null;
                 var sealedJournal = CheckpointTurns.Seal(_checkpoints, assistant.History, journal, withdrawn: false, cancellationToken);
                 if (plan.Active && plan.Path is { } planPath && plan.Revision > planState.RevisionShown)
                 {

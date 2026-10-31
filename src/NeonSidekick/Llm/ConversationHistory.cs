@@ -261,6 +261,55 @@ public sealed class ConversationHistory
     /// <summary>How an <c>/undo</c> note starts, what tells it apart once its properties are gone. Pinned.</summary>
     public const string UndoNotePreamble = "[The user ran /undo: ";
 
+    /// <summary>
+    /// The <see cref="ChatMessage.AdditionalProperties"/> key on a turn's user message that holds the line the user typed when it differs from
+    /// the text sent, a <see cref="string"/> (2026-10-31, review P1-5: a custom command's <c>/review x</c> sent its expansion, and <c>/rewind</c>,
+    /// <c>/undo</c> and <c>/commands save</c> read the expansion back as if typed). Set through <see cref="Assistant.TurnMark"/>, saved as
+    /// <c>StoredMessage.Typed</c>. Never sent.
+    /// </summary>
+    public const string TypedKey = "neon.typed";
+
+    /// <summary>
+    /// The <see cref="ChatMessage.AdditionalProperties"/> key on a turn's user message the app wrote itself (value <c>true</c>, 2026-10-31,
+    /// review P8-1: <c>/help &lt;words&gt;</c>'s question, a plan's or an audit's pass, a Ralph pass), so <c>/commands save</c> never saves it as
+    /// the user's. Set through <see cref="Assistant.TurnMark"/>, saved as <c>StoredMessage.AppWritten</c>. Never sent.
+    /// </summary>
+    public const string AppWrittenKey = "neon.app";
+
+    /// <summary>The line the user typed for <paramref name="message"/> when it differs from the text sent (<see cref="TypedKey"/>); null when none.</summary>
+    public static string? TypedOf(ChatMessage message)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        return message.AdditionalProperties is { } properties && properties.TryGetValue(TypedKey, out object? value) && value is string typed ? typed : null;
+    }
+
+    /// <summary>Whether the app wrote <paramref name="message"/> itself (<see cref="AppWrittenKey"/>).</summary>
+    public static bool IsAppWritten(ChatMessage message)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        return message.AdditionalProperties is { } properties && properties.TryGetValue(AppWrittenKey, out object? value) && value is true;
+    }
+
+    /// <summary>Stamps <paramref name="mark"/>'s two keys on <paramref name="message"/> (<see cref="TypedKey"/>, <see cref="AppWrittenKey"/>), only those set.</summary>
+    public static void SetTurnMark(ChatMessage message, TurnMark? mark)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        if (mark is null)
+        {
+            return;
+        }
+
+        if (mark.Typed is { } typed)
+        {
+            (message.AdditionalProperties ??= new AdditionalPropertiesDictionary())[TypedKey] = typed;
+        }
+
+        if (mark.AppWritten)
+        {
+            (message.AdditionalProperties ??= new AdditionalPropertiesDictionary())[AppWrittenKey] = true;
+        }
+    }
+
     private const string Category = "Llm";
 
     private readonly List<ChatMessage> _messages = new();
@@ -568,13 +617,25 @@ public sealed class ConversationHistory
     /// <see cref="AddUser(string, IReadOnlyList{ImageAttachment})"/> with an <c>/undo</c> note (2026-10-28, the checkpoints plan): when given, it goes
     /// ahead of the user's text in the one text, a blank line between, and is kept on the message (<see cref="UndoNoteKey"/>).
     /// </summary>
-    public void AddUser(string text, IReadOnlyList<ImageAttachment> images, string? note)
+    public void AddUser(string text, IReadOnlyList<ImageAttachment> images, string? note) => AddUser(text, images, note, null);
+
+    /// <summary>
+    /// <see cref="AddUser(string, IReadOnlyList{ImageAttachment}, string?)"/> with the turn's marks (2026-10-31, review P1-5/P8-1,
+    /// <see cref="SetTurnMark"/>), stamped as the message lands so the turn in flight carries them during its reply.
+    /// </summary>
+    public void AddUser(string text, IReadOnlyList<ImageAttachment> images, string? note, TurnMark? mark)
+    {
+        AddUserMessage(text, images, note);
+        SetTurnMark(_messages[^1], mark);
+    }
+
+    private void AddUserMessage(string text, IReadOnlyList<ImageAttachment> images, string? note)
     {
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(images);
         if (note is not null)
         {
-            AddUser(note + NoteBreak + text, images, null);
+            AddUserMessage(note + NoteBreak + text, images, null);
             SetUndoNote(_messages[^1], note);
         }
         else if (images.Count == 0)

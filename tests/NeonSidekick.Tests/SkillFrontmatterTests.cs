@@ -164,4 +164,14 @@ public class SkillFrontmatterTests
         Assert.Equal("a b c", SkillFrontmatter.Flatten("  a\n\n b\t\tc \r\n"));
         Assert.Equal("", SkillFrontmatter.Flatten(" \n "));
     }
+
+    /// <summary>A column-0 list under name or description is no value (2026-10-31, review P4-2: it loaded as a description of "- a").</summary>
+    [Theory]
+    [InlineData("description")]
+    [InlineData("name")]
+    public void AColumnZeroList_UnderNameOrDescription_IsRefused(string key)
+    {
+        Assert.False(SkillFrontmatter.TryParse("---\n" + key + ":\n- a\n---\nBody.", out _, out _, out var problem));
+        Assert.StartsWith("frontmatter line ", problem, StringComparison.Ordinal);
+    }
 }

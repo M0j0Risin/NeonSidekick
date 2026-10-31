@@ -90,6 +90,57 @@ public sealed class CustomCommandCatalogTests : IDisposable
         Assert.False(CustomCommandName.IsValid(CustomCommandName.Normalize("con")));   // the pane's slots refuse it too
     }
 
+    /// <summary>
+    /// A file name is split by the system's separators alone (2026-10-31, review P1-4): a <c>:</c> in a stem, or a <c>\</c> off Windows, is no
+    /// command name, so a name always maps back to its one file.
+    /// </summary>
+    [Fact]
+    public void AColonOrAForeignBackslash_InAStem_IsNoName()
+    {
+        char[] windows = ['\\', '/'];
+        char[] unix = ['/'];
+        Assert.Null(CustomCommandName.FromRelativePath("a:b.md", windows));
+        Assert.Equal("tools:review", CustomCommandName.FromRelativePath("tools\\review.md", windows));
+        Assert.Null(CustomCommandName.FromRelativePath("tools\\review.md", unix));
+        Assert.Equal("tools:review", CustomCommandName.FromRelativePath("tools/review.md", unix));
+        Assert.Contains(":", CustomCommandText.BadNameProblem("a:b.md"), StringComparison.Ordinal);
+    }
+
+    /// <summary>Each bad name says its one reason (2026-10-31, review P7-3, P2-14, P6-3).</summary>
+    [Theory]
+    [InlineData("con", "device name")]
+    [InlineData("a:b:c:d:e:f", "parts")]
+    [InlineData("x", null)]
+    [InlineData("My Review", "lowercase letters")]
+    public void NameProblem_SaysTheOneReason(string name, string? said)
+    {
+        string? problem = CustomCommandText.NameProblem(name);
+        if (said is null)
+        {
+            Assert.Null(problem);
+        }
+        else
+        {
+            Assert.Contains(said, problem, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void NameProblem_TooLong_PartOrWhole()
+    {
+        Assert.Contains("a part is over", CustomCommandText.NameProblem(new string('a', 65)), StringComparison.Ordinal);
+        Assert.Contains("over 128", CustomCommandText.NameProblem(string.Join(':', Enumerable.Repeat(new string('a', 60), 3))), StringComparison.Ordinal);
+        Assert.Contains("device name", CustomCommandText.BadNameError("con", ""), StringComparison.Ordinal);
+    }
+
+    /// <summary>A bad folder's name suggests renaming the folder, not the file (2026-10-31, review P6-3).</summary>
+    [Fact]
+    public void ABadFolder_SuggestsRenamingTheFolder()
+    {
+        Assert.Contains("My Folder", CustomCommandText.BadNameProblem(Path.Combine("My Folder", "review.md")), StringComparison.Ordinal);
+        Assert.Contains("my-folder", CustomCommandText.BadNameProblem(Path.Combine("My Folder", "review.md")), StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Names_AreLowercased_AndTheExtensionMatchedIgnoringCase()
     {
@@ -234,8 +285,9 @@ public sealed class CustomCommandCatalogTests : IDisposable
 
         Write(_profile, "review.md", "Two.");
         var scan = Catalog().Scan();
-        Assert.Single(scan.Commands);
-        Assert.Contains(scan.Problems, p => p.Problem == CustomCommandText.CaseDuplicateProblem("/review"));
+        // The ordinal tie-break (2026-10-31, review P2-12): Review.md sorts first and runs, whatever order the listing gave.
+        Assert.Equal("Review.md", Path.GetFileName(Assert.Single(scan.Commands).FilePath));
+        Assert.Contains(scan.Problems, p => p.Problem == CustomCommandText.CaseDuplicateProblem("/review") && Path.GetFileName(p.FilePath) == "review.md");
     }
 
     [Fact]
@@ -270,7 +322,10 @@ public sealed class CustomCommandCatalogTests : IDisposable
 
         Assert.Equal(CustomCommandScope.Profile, Assert.Single(scan.Commands).Scope);
         Assert.Empty(scan.Shadowed);
-        Assert.Equal(CustomCommandText.SameFolderNote, Assert.Single(scan.Problems).Problem);
+        // A note, not a Skipped row (2026-10-31, review P5-6).
+        Assert.Empty(scan.Problems);
+        Assert.Equal(CustomCommandText.SameFolderNote, scan.Note);
+        Assert.True(scan.SameFolder);
         Assert.True(new CustomCommandRoots(profile, global).Same);
     }
 
@@ -293,9 +348,72 @@ public sealed class CustomCommandCatalogTests : IDisposable
         var catalog = new CustomCommandCatalog(() => new CustomCommandRoots(_profile, _global), new ManualTimeProvider());
         Assert.False(catalog.Knows("/late"));
 
-        Write(_profile, "late.md", "Late.");   // a /commands save just now
+        Write(_profile, "late.md", "Late.");   // a file dropped in just now
+        Assert.False(catalog.Knows("/other"));   // a word not missed yet scans again, and that scan sees late.md
         Assert.True(catalog.Knows("/late"));
         Assert.False(catalog.Knows("late"));   // a word without its slash is no command
+    }
+
+    /// <summary>
+    /// A repeated miss scans once per published scan (2026-10-31, review P1-6, P3-8: a pasted path scanned on every key), and an edit the
+    /// app makes (<see cref="CustomCommandCatalog.Invalidate"/>) is read at once.
+    /// </summary>
+    [Fact]
+    public void ARepeatedMiss_ScansOnce_AndInvalidate_ReadsAfresh()
+    {
+        var catalog = new CustomCommandCatalog(() => new CustomCommandRoots(_profile, _global), new ManualTimeProvider());
+        Assert.False(catalog.Knows("/sum"));
+        Assert.False(catalog.Knows("/sum"));   // scanned again: missed
+
+        Write(_profile, "sum.md", "Sum.");
+        Assert.False(catalog.Knows("/sum"));   // missed already since this scan: no scan
+        Assert.Empty(catalog.Recent().Commands);
+
+        catalog.Invalidate();   // what /commands save does
+        Assert.Equal("sum", Assert.Single(catalog.Recent().Commands).Name);
+        Assert.True(catalog.Knows("/sum"));
+    }
+
+    /// <summary>Another profile's folders inside the reuse window are read, never the last profile's scan (2026-10-31, review P5-3).</summary>
+    [Fact]
+    public void Recent_ReadsTheNewFolders_AfterAProfileSwitch_InsideTheWindow()
+    {
+        string other = Path.Combine(_dir, "other-profile", "commands");
+        Write(other, "theirs.md", "Theirs.");
+        Write(_profile, "mine.md", "Mine.");
+        string current = _profile;
+        var catalog = new CustomCommandCatalog(() => new CustomCommandRoots(current, _global), new ManualTimeProvider());
+        Assert.Equal("mine", Assert.Single(catalog.Recent().Commands).Name);
+
+        current = other;
+
+        Assert.Equal("theirs", Assert.Single(catalog.Recent().Commands).Name);
+        Assert.Equal(other, catalog.Recent().Roots.Profile);
+    }
+
+    /// <summary>A description, hint or warning with a control character reaches no surface as a code (2026-10-31, review P2-1, P3-4).</summary>
+    [Fact]
+    public void ADescriptionsControlCharacters_AreCleaned_AtTheSource()
+    {
+        Write(_profile, "x.md", "---\ndescription: \"red \\e[31m here\"\nargument-hint: \"<a\\tb>\"\n---\nBody.");
+
+        var command = Assert.Single(Catalog(_profile, _global).Scan().Commands);
+
+        Assert.DoesNotContain(command.Description!, char.IsControl);
+        Assert.DoesNotContain(command.ArgumentHint!, char.IsControl);
+    }
+
+    /// <summary>The template's description or hint left as it was warns too (2026-10-31, review P6-5), not only its body.</summary>
+    [Fact]
+    public void TheTemplatesDescription_LeftAsItWas_Warns()
+    {
+        Write(_profile, "x.md", "---\ndescription: " + CustomCommandText.TemplateDescription("old-name") + "\n---\nA real prompt.");
+        Write(_profile, "y.md", "---\nargument-hint: " + CustomCommandText.TemplateHint + "\n---\nA real prompt.");
+
+        var commands = Catalog(_profile, _global).Scan().Commands;
+
+        Assert.All(commands, c => Assert.Contains(CustomCommandText.StillTemplateWarning, c.Warning, StringComparison.Ordinal));
+        Assert.Equal(2, commands.Count);
     }
 
     [Fact]
@@ -309,10 +427,68 @@ public sealed class CustomCommandCatalogTests : IDisposable
         Directory.CreateDirectory(elsewhere);
         MakeLink(Path.Combine(_profile, "linked"), elsewhere);
 
-        var (files, links) = CustomCommandCatalog.CopyableFiles(_profile);
+        var (files, links, _) = CustomCommandCatalog.CopyableFiles(_profile);
 
         Assert.Equal(["bad name.md", "review.md", "sub/one.md"], files.Select(f => f.Relative).Order(StringComparer.Ordinal));
         Assert.Equal(["linked"], links);
+    }
+
+    /// <summary>
+    /// A FIFO named *.md (2026-10-31, review P5-2) is a Skipped row, never opened, so the scan never blocks on it. A Mac's walk asks; the
+    /// scan runs under a deadline so a hang fails instead of stalling the suite.
+    /// </summary>
+    [MacFact]
+    public async Task AFifo_IsASkippedRow_AndTheScanNeverBlocks()
+    {
+        Write(_profile, "review.md", "Review.");
+        using (var mkfifo = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("/usr/bin/mkfifo", Path.Combine(_profile, "x.md")) { UseShellExecute = false })!)
+        {
+            await mkfifo.WaitForExitAsync();
+            Assert.Equal(0, mkfifo.ExitCode);
+        }
+
+        var scan = await Task.Run(() => Catalog().Scan()).WaitAsync(TimeSpan.FromSeconds(20));
+        var (files, _, _) = await Task.Run(() => CustomCommandCatalog.CopyableFiles(_profile)).WaitAsync(TimeSpan.FromSeconds(20));
+
+        Assert.Equal("review", Assert.Single(scan.Commands).Name);
+        Assert.Contains(scan.Problems, p => Path.GetFileName(p.FilePath) == "x.md" && p.Problem == CustomCommandText.NotAFileProblem);
+        Assert.DoesNotContain(files, f => f.Relative == "x.md");
+    }
+
+    /// <summary>A subfolder a copy can't list is named among its unreadable folders (2026-10-31, review P5-4), not "nothing to copy".</summary>
+    [UnixFact]
+    public void CopyableFiles_NameAnUnreadableFolder()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;   // [UnixFact] skips it; the guard is for the platform analyzer (File.SetUnixFileMode)
+        }
+
+        string locked = Path.Combine(_profile, "locked");
+        Write(_profile, "locked/x.md", "x");
+        File.SetUnixFileMode(locked, UnixFileMode.None);
+        try
+        {
+            if (Directory.EnumerateFileSystemEntries(locked).Any())
+            {
+                return;   // run as root: nothing is unreadable
+            }
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+
+        try
+        {
+            var (files, _, unreadable) = CustomCommandCatalog.CopyableFiles(_profile);
+
+            Assert.Empty(files);
+            Assert.Equal(locked, Assert.Single(unreadable).FilePath);
+        }
+        finally
+        {
+            File.SetUnixFileMode(locked, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
     }
 
     // A folder link: a junction on Windows (no privilege needed), a symbolic link elsewhere.

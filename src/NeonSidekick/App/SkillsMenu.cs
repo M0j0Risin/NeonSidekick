@@ -344,27 +344,7 @@ internal sealed class SkillsMenu
     public static string KebabName(string typed)
     {
         ArgumentNullException.ThrowIfNull(typed);
-        var kebab = new System.Text.StringBuilder(typed.Length);
-        bool gap = false;
-        foreach (char c in typed.ToLowerInvariant())
-        {
-            if (c is >= 'a' and <= 'z' or >= '0' and <= '9')
-            {
-                if (gap && kebab.Length > 0)
-                {
-                    kebab.Append('-');
-                }
-
-                kebab.Append(c);
-                gap = false;
-            }
-            else
-            {
-                gap = true;
-            }
-        }
-
-        string name = kebab.ToString();
+        string name = SkillFrontmatter.Kebab(typed, keepUnderscore: false);
         return name.Length > SkillFrontmatter.MaxNameLength ? name[..SkillFrontmatter.MaxNameLength].TrimEnd('-') : name;
     }
 

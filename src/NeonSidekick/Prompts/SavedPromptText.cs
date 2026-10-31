@@ -10,7 +10,8 @@ namespace NeonSidekick.Prompts;
 /// </summary>
 public static class SavedPromptText
 {
-    private const string ErrorPrefix = "Error: ";
+    /// <summary>How an error answer starts for the status line (the pane tells it from a notice by it); <c>/prompts</c>' m uses it too.</summary>
+    public const string ErrorPrefix = "Error: ";
 
     // ── The pane ─────────────────────────────────────────────────────────────
 

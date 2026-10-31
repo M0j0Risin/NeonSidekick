@@ -30,6 +30,12 @@ public sealed record CustomCommand(
 
     /// <summary>Whether the body holds a <c>!</c> shell line, which is sent as written and never run.</summary>
     public bool HasShellLines { get; init; }
+
+    /// <summary>
+    /// The file's write time and length as the scan read it (2026-10-31, review P6-6): the one-time Shadowed notice keys on it, so a changed
+    /// file is named again with no stat of its own outside the scan.
+    /// </summary>
+    internal string Stamp { get; init; } = "";
 }
 
 /// <summary>
@@ -44,11 +50,58 @@ public sealed record CustomCommandShadow(CustomCommand Command, string? BuiltIn,
 /// </summary>
 public sealed record CustomCommandProblem(string FilePath, CustomCommandScope Scope, string Problem, string? Name = null);
 
-/// <summary>One scan's answer: the commands that run, the files a built-in or the profile hides, and the files skipped.</summary>
+/// <summary>
+/// What <c>/help &lt;word&gt;</c> shows for a custom command's word (2026-10-31, review P4-6): the command's card, or a Skipped file's reason
+/// and path when no command runs by that name.
+/// </summary>
+public sealed record CustomHelpCard(CustomCommand? Command, CustomCommandProblem? Problem, CustomCommandShadow? Hides = null);
+
+/// <summary>What a row of the commands' lists is (<see cref="CustomCommandText.Rows"/>).</summary>
+public enum CustomCommandRowKind
+{
+    /// <summary>A command that runs.</summary>
+    Command,
+
+    /// <summary>A file a built-in or the profile's command hides.</summary>
+    Shadow,
+
+    /// <summary>A file the scan skipped.</summary>
+    Problem,
+}
+
+/// <summary>
+/// One row of the commands' lists, cleaned (2026-10-31, review P6-7): <paramref name="Word"/> is a command's word or a Skipped file's path
+/// under its folder, <paramref name="Detail"/> the description, the shadow's reason or the problem, <paramref name="Path"/> the file under its
+/// folder. The thing it shows rides along for the pane's acts.
+/// </summary>
+public sealed record CustomCommandRow(CustomCommandRowKind Kind, string Word, string? Hint, string Detail, CustomCommandScope Scope, string Path)
+{
+    public CustomCommand? Command { get; init; }
+
+    public CustomCommandShadow? Shadow { get; init; }
+
+    public CustomCommandProblem? Problem { get; init; }
+}
+
+/// <summary>
+/// One scan's answer: the commands that run, the files a built-in or the profile hides, and the files skipped; since 2026-10-31 (review
+/// P5-3, P5-6, P4-10) also the <see cref="Roots"/> it read, a <see cref="Note"/> about them and whether they are one folder.
+/// </summary>
 public sealed record CustomCommandScan(IReadOnlyList<CustomCommand> Commands, IReadOnlyList<CustomCommandShadow> Shadowed, IReadOnlyList<CustomCommandProblem> Problems)
 {
-    /// <summary>No command, nothing shadowed or skipped.</summary>
+    private IReadOnlySet<string>? _names;
+
+    /// <summary>No command, nothing shadowed or skipped, no folder.</summary>
     public static readonly CustomCommandScan Empty = new([], [], []);
+
+    /// <summary>The folders this scan read (<see cref="CustomCommandRoots.None"/> for a scan built by hand).</summary>
+    public CustomCommandRoots Roots { get; init; } = CustomCommandRoots.None;
+
+    /// <summary>A note about the folders, not a problem with a file (<see cref="CustomCommandText.SameFolderNote"/>); null for none.</summary>
+    public string? Note { get; init; }
+
+    /// <summary>Whether <see cref="Roots"/> are one folder, judged once per scan (<see cref="CustomCommandRoots.Same"/> follows links).</summary>
+    public bool SameFolder { get; init; }
 
     /// <summary>The command named <paramref name="name"/> (with or without its <c>/</c>, any case), or null.</summary>
     public CustomCommand? Find(string name)
@@ -61,6 +114,9 @@ public sealed record CustomCommandScan(IReadOnlyList<CustomCommand> Commands, IR
     /// <summary>Whether <paramref name="word"/> (<c>/review</c>) is a command that runs.</summary>
     public bool Knows(string word) => word.StartsWith('/') && Find(word) is not null;
 
-    /// <summary>The words of the commands that run, any case.</summary>
-    public IReadOnlySet<string> Names => Commands.Select(c => c.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+    /// <summary>
+    /// The words of the commands that run, any case: one set per scan (2026-10-31, review P2-7: a new set on every read), so the Web UI's
+    /// settings carry one stable set a cache can key on.
+    /// </summary>
+    public IReadOnlySet<string> Names => _names ??= Commands.Select(c => c.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
 }

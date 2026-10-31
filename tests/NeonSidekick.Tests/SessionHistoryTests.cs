@@ -274,4 +274,26 @@ public class SessionHistoryTests
         Assert.Null(ConversationHistory.CarrierSource(carrier));
         Assert.Null(ConversationHistory.PicturePath(Assert.IsType<DataContent>(carrier.Contents[0])));
     }
+
+    /// <summary>A custom command's typed line and the app's own mark survive the store, written only when set (2026-10-31, review P1-5, P8-1).</summary>
+    [Fact]
+    public void TheTurnMarks_RoundTrip_AndAPlainTurnHasNone()
+    {
+        var history = new ConversationHistory("");
+        history.AddUser("Review src.", [], null, new TurnMark("/review src", false));
+        history.AddUser("Look it up.", [], null, TurnMark.App);
+        history.AddUser("mine");
+
+        string json = SessionHistory.ToJson(history.Messages);
+        var back = SessionHistory.FromJson(json);
+
+        Assert.Equal("/review src", ConversationHistory.TypedOf(back[0]));
+        Assert.Equal("/review src", NeonSidekick.App.ConversationRewind.UserLine(back[0]));
+        Assert.Equal("Review src.", NeonSidekick.App.ConversationRewind.TypedText(back[0]));   // what the model read stays the text
+        Assert.True(ConversationHistory.IsAppWritten(back[1]));
+        Assert.False(ConversationHistory.IsAppWritten(back[2]));
+        Assert.Null(ConversationHistory.TypedOf(back[2]));
+        Assert.Equal(1, json.Split("\"Typed\"").Length - 1);
+        Assert.Equal(1, json.Split("\"AppWritten\"").Length - 1);
+    }
 }

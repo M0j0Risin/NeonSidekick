@@ -1,4 +1,5 @@
 using Microsoft.Extensions.AI;
+using NeonSidekick.Llm;
 using NeonSidekick.CustomCommands;
 using NeonSidekick.UI;
 
@@ -23,6 +24,9 @@ public enum CustomCommandsVerb
 /// <summary>A parsed <c>/commands</c> line: the verb, the name and the scope, or the error to show.</summary>
 public sealed record CustomCommandsLine(CustomCommandsVerb Verb, string Name = "", CustomCommandScope Scope = CustomCommandScope.Profile, string? Error = null);
 
+/// <summary>A custom command line resolved (<see cref="CustomCommandsCommand.Resolve"/>): the command, its word, and the prompt or the error.</summary>
+public sealed record CustomCommandRun(CustomCommand? Command, string Word, string? Prompt, string? Error);
+
 /// <summary>
 /// <c>/commands</c>' words (2026-10-30, the custom commands plan; the <see cref="PromptsCommand"/> shape), pure: bare, the pane;
 /// <c>new &lt;name&gt; [--global]</c>; <c>save &lt;name&gt; [--global]</c>. The scope switch is <c>--global</c>, as <c>/skills add</c>'s, so a command
@@ -33,8 +37,8 @@ public static class CustomCommandsCommand
     /// <summary>The words in the order the completion offers them, with their notes.</summary>
     public static readonly IReadOnlyList<(string Word, string Note)> Words =
     [
-        (CustomCommandText.NewWord, "start a command from the template in your editor: /commands new <name> [--global]"),
-        (CustomCommandText.SaveWord, "save your last message as a command: /commands save <name> [--global]"),
+        (CustomCommandText.NewWord, CustomCommandText.NewWordNote),
+        (CustomCommandText.SaveWord, CustomCommandText.SaveWordNote),
     ];
 
     public static CustomCommandsLine Parse(string? args)
@@ -94,7 +98,7 @@ public static class CustomCommandsCommand
         if (words.Length == 3 && words[0].ToLowerInvariant() is CustomCommandText.NewWord or CustomCommandText.SaveWord && words[1].Length > 0)
         {
             string head = words[0] + " " + words[1] + " ";
-            return MentionCompleter.Matches([new CompletionItem(head + CustomCommandText.GlobalSwitch, "in the home's commands folder, every profile's")], argText);
+            return MentionCompleter.Matches([new CompletionItem(head + CustomCommandText.GlobalSwitch, CustomCommandText.GlobalSwitchNote)], argText);
         }
 
         return [];
@@ -105,7 +109,9 @@ public static class CustomCommandsCommand
     /// <c>/rewind</c> could pick (<see cref="ConversationRewind.Turns"/>: no opener, no compact summary), its words as
     /// <see cref="ConversationRewind.TypedText"/> reads them (no progress note, <c>/undo</c> note or restored PDF), the picture and PDF labels
     /// taken out (<see cref="PasteBlocks.WithoutAttachmentLabels"/>; <c>PicturesDropped</c> also when the turn carried one with no label).
-    /// A <c>/claude</c> or <c>/cmd</c> turn is no message: its error. None at all: <see cref="CustomCommandText.NothingToSaveError"/>. Pure.
+    /// A <c>/claude</c> or <c>/cmd</c> turn is no message: its error. None at all: <see cref="CustomCommandText.NothingToSaveError"/>. Since
+    /// 2026-10-31 (review P1-5, P8-1, the user's call: refuse) a message the app wrote (<see cref="ConversationHistory.IsAppWritten"/>) and a
+    /// custom command's expansion (<see cref="ConversationHistory.TypedOf"/>) are refused too: copy the command on <c>/commands</c> instead. Pure.
     /// </summary>
     public static (string? Text, bool PicturesDropped, string? Error) LastSentMessage(IReadOnlyList<ChatMessage> messages)
     {
@@ -117,6 +123,16 @@ public static class CustomCommandsCommand
         }
 
         var message = messages[turns[^1].Start];
+        if (ConversationHistory.IsAppWritten(message))
+        {
+            return (null, false, CustomCommandText.AppWrittenError);
+        }
+
+        if (ConversationHistory.TypedOf(message) is { } typedLine)
+        {
+            return (null, false, CustomCommandText.FromCustomCommandError(SlashCommands.FirstWord(typedLine)));
+        }
+
         string typed = ConversationRewind.TypedText(message);
         if (Claude.ClaudeText.HistoryUserPrompt(typed) is not null)
         {
@@ -142,7 +158,7 @@ public static class CustomCommandsCommand
     {
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(args);
-        string text = CustomCommandTemplate.Expand(command.Body, args, command.Arguments).Text;
+        string text = CustomCommandTemplate.Expand(command.Body, args, command.Arguments);
         if (string.IsNullOrWhiteSpace(text))
         {
             return (null, CustomCommandText.EmptyPromptError(command.Word, command.ArgumentHint));
@@ -158,10 +174,31 @@ public static class CustomCommandsCommand
     }
 
     /// <summary>
-    /// The custom command <c>/help &lt;words&gt;</c> names (2026-10-30): one word, with or without its <c>/</c>, that no built-in has and the
-    /// scan runs; null otherwise (several words, a built-in, none such), which goes to the manual's lookup as before. Pure.
+    /// <paramref name="line"/> (<c>/review src</c>) as its custom command (2026-10-31, review P1-11, P3-7, P3-8: the screen, <c>/loop</c> and
+    /// headless each found it their own way): the word by the one cut (<see cref="SlashCommands.FirstWord(string, out string)"/>), the command
+    /// from the catalog's recent scan (the parse's <see cref="CustomCommandCatalog.Knows"/> just made it fresh), and its prompt
+    /// (<see cref="Prompt"/>). A file gone since the parse is <see cref="CustomCommandText.NotFound"/>, never an unknown command.
     /// </summary>
-    public static CustomCommand? HelpCard(CustomCommandScan scan, string args)
+    public static CustomCommandRun Resolve(CustomCommandCatalog catalog, string line)
+    {
+        ArgumentNullException.ThrowIfNull(catalog);
+        ArgumentNullException.ThrowIfNull(line);
+        string word = SlashCommands.FirstWord(line, out string args);
+        if (catalog.Recent().Find(word) is not { } command)
+        {
+            return new CustomCommandRun(null, word, null, CustomCommandText.NotFound(word));
+        }
+
+        var (prompt, error) = Prompt(command, args);
+        return new CustomCommandRun(command, word, prompt, error);
+    }
+
+    /// <summary>
+    /// The card <c>/help &lt;words&gt;</c> shows for a custom command's word (2026-10-30): one word, with or without its <c>/</c>, that no
+    /// built-in has; the command that runs (with the global file it hides, review P3-6), or, since 2026-10-31 (review P4-6), a Skipped file of
+    /// that name when no command runs by it. Null otherwise (several words, a built-in, none such), which goes to the manual's lookup. Pure.
+    /// </summary>
+    public static CustomHelpCard? HelpCard(CustomCommandScan scan, string args)
     {
         ArgumentNullException.ThrowIfNull(scan);
         string word = (args ?? "").Trim();
@@ -171,7 +208,21 @@ public static class CustomCommandsCommand
         }
 
         string slashed = word.StartsWith('/') ? word : "/" + word;
-        return SlashCommands.Parse(slashed).Command == SlashCommand.Unknown ? scan.Find(slashed) : null;
+        if (SlashCommands.Parse(slashed).Command != SlashCommand.Unknown)
+        {
+            return null;
+        }
+
+        if (scan.Find(slashed) is { } command)
+        {
+            var hides = scan.Shadowed.FirstOrDefault(s => s.Winner is not null && ReferenceEquals(s.Winner, command));
+            return new CustomHelpCard(command, null, hides);
+        }
+
+        string bare = slashed[1..];
+        return scan.Problems.FirstOrDefault(p => p.Name is { } name && string.Equals(name, bare, StringComparison.OrdinalIgnoreCase)) is { } problem
+            ? new CustomHelpCard(null, problem)
+            : null;
     }
 
     /// <summary>
@@ -190,8 +241,7 @@ public static class CustomCommandsCommand
 
     /// <summary>
     /// <c>/commands save &lt;name&gt; [--global]</c>'s write: <see cref="LastSentMessage"/> of <paramref name="messages"/> saved as the
-    /// command's body (<see cref="CustomCommandEditor.Save"/>), the notice quoting its first line and naming the file, with the override,
-    /// <c>\$</c> and pictures notes that apply; or the refusal (<c>Failed</c>).
+    /// command's body (<see cref="CustomCommandEditor.Save"/>), the notice (<see cref="SavedText"/>); or the refusal (<c>Failed</c>).
     /// </summary>
     public static (string Answer, bool Failed) Save(CustomCommandRoots roots, CustomCommandsLine line, IReadOnlyList<ChatMessage> messages)
     {
@@ -204,16 +254,26 @@ public static class CustomCommandsCommand
         }
 
         var result = CustomCommandEditor.Save(roots, line.Scope, line.Name, text);
-        if (result.Outcome != CustomCommandEditOutcome.Saved)
-        {
-            return (CustomCommandsMenu.Refusal(result), true);
-        }
+        return result.Outcome != CustomCommandEditOutcome.Saved
+            ? (CustomCommandsMenu.Refusal(result), true)
+            : (SavedText(roots, result, text, dropped), false);
+    }
 
-        string answer = CustomCommandText.SavedNotice(line.Name, result.Path, CustomCommandText.FirstLine(text))
-            + CustomCommandsMenu.OverrideNote(roots, line.Scope, line.Name)
+    /// <summary>
+    /// A save's notice (2026-10-31, review P7-5: <c>/commands save</c> and <c>/prompts</c>' m built theirs apart): the first line quoted and the
+    /// file named, then the override, <c>\$</c> and pictures notes that apply. "Type /x to send it again" is left out when a profile command
+    /// of the name hides the global one just saved (review P8-3): typing it runs the other one.
+    /// </summary>
+    public static string SavedText(CustomCommandRoots roots, CustomCommandEditResult result, string text, bool picturesDropped)
+    {
+        ArgumentNullException.ThrowIfNull(roots);
+        ArgumentNullException.ThrowIfNull(result);
+        ArgumentNullException.ThrowIfNull(text);
+        bool hidden = result.Scope == CustomCommandScope.Global && !roots.Same && CustomCommandEditor.Taken(roots.Profile, result.Name);
+        return CustomCommandText.SavedNotice(result.Name, result.Path, CustomCommandText.FirstLine(text), sendAgain: !hidden)
+            + CustomCommandsMenu.OverrideNote(roots, result.Scope, result.Name)
             + (result.MayReadDifferently ? " " + CustomCommandText.SavedMayReadDifferently : "")
-            + (dropped ? " " + CustomCommandText.PicturesNotKept : "");
-        return (answer, false);
+            + (picturesDropped ? " " + CustomCommandText.PicturesNotKept : "");
     }
 
     private static CustomCommandsLine Error(string error) => new(CustomCommandsVerb.Unknown, Error: error);

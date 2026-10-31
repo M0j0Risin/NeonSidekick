@@ -107,11 +107,8 @@ public static partial class CrashReports
             ? Platform.MacFiles.KindOf(path) == Platform.MacFiles.Kind.Directory
             : Directory.Exists(path) && new DirectoryInfo(path).LinkTarget is null;
 
-    /// <summary>Whether <paramref name="path"/> is a regular file, never a link, a FIFO, a socket or a device (2026-10-20).</summary>
-    public static bool IsPlainFile(string path) =>
-        OperatingSystem.IsMacOS()
-            ? Platform.MacFiles.KindOf(path) == Platform.MacFiles.Kind.Regular
-            : File.Exists(path) && new FileInfo(path).LinkTarget is null;
+    /// <summary>Whether <paramref name="path"/> is a regular file, never a link, a FIFO, a socket or a device (2026-10-20; <see cref="Files.RegularFiles.IsPlain"/>).</summary>
+    public static bool IsPlainFile(string path) => Files.RegularFiles.IsPlain(path);
 
     /// <summary>
     /// The reports in <paramref name="folders"/> (each with its <see cref="Retired"/> folder) written since <paramref name="since"/>, newest

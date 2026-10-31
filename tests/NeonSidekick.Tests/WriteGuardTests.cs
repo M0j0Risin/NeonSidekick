@@ -30,8 +30,8 @@ public sealed class WriteGuardTests : IDisposable
         try { Directory.Delete(_dir, recursive: true); } catch { /* best effort */ }
     }
 
-    private static WriteGuardFacts Facts(string? home = null, string? cwd = null, IReadOnlyList<string>? skills = null, DatabaseGuard? databases = null) =>
-        new(() => home, () => cwd, () => skills ?? [], () => databases, () => false, () => null);
+    private static WriteGuardFacts Facts(string? home = null, string? cwd = null, IReadOnlyList<string>? skills = null, DatabaseGuard? databases = null, IReadOnlyList<string>? commands = null) =>
+        new(() => home, () => cwd, () => skills ?? [], () => databases, () => false, () => null, commands is null ? null : () => commands);
 
     private FileOutcome Write(string relative) => _files.WriteText(relative, "x", overwrite: true).Outcome;
 
@@ -183,6 +183,52 @@ public sealed class WriteGuardTests : IDisposable
         using var _ = WriteGuard.Configure(Facts(skills: [skills]));
         Assert.Equal(FileOutcome.SkillFilesProtected, Write(Path.Combine(".agents", "skills", "x", "SKILL.md")));   // review P3
         Assert.Equal(FileOutcome.Ok, Write(Path.Combine(".agents", "notes.md")));
+    }
+
+    /// <summary>Both commands folders are in the home, so a model write to either is refused, a working folder inside one too (2026-10-31, review P2-2).</summary>
+    [Fact]
+    public void TheCommandsFolders_AreTheApps()
+    {
+        using var _ = WriteGuard.Configure(Facts(home: _dir));
+        foreach (string folder in new[] { Path.Combine(_dir, "commands"), Path.Combine(_dir, "profiles", "neon", "commands") })
+        {
+            Directory.CreateDirectory(folder);
+            var files = new WorkingDirectory(() => folder, new ManualTimeProvider());
+            Assert.Equal(FileOutcome.AppFilesProtected, files.WriteText("review.md", "x", overwrite: true).Outcome);
+        }
+    }
+
+    /// <summary>
+    /// A commands folder that is a link: where it points is refused too, unless the working folder is inside it, the user's own choice as for a
+    /// skill root (2026-10-31, review P2-2: a target outside the home was guarded by nothing).
+    /// </summary>
+    [Fact]
+    public void ALinkedCommandsFolder_ItsTarget_IsRefused_ButItsOwnRootWrites()
+    {
+        string home = Path.Combine(_dir, "home");
+        string target = Path.Combine(_root, "claude-commands");
+        Directory.CreateDirectory(home);
+        Directory.CreateDirectory(target);
+        string link = Path.Combine(home, "commands");
+        if (OperatingSystem.IsWindows())
+        {
+            Junction.Make(link, target);
+        }
+        else
+        {
+            Directory.CreateSymbolicLink(link, target);
+        }
+
+        var guarded = NeonSidekick.App.SidekickApp.CommandRootsGuarded(Path.Combine(home, "profiles", "neon", "commands"), link);
+        Assert.Contains(guarded, folder => string.Equals(Path.TrimEndingDirectorySeparator(folder), target, StringComparison.OrdinalIgnoreCase));
+
+        using var _ = WriteGuard.Configure(Facts(home: home, commands: guarded));
+        Assert.Equal(FileOutcome.CommandFilesProtected, Write(Path.Combine("claude-commands", "review.md")));
+        Assert.Equal(FileOutcome.Ok, Write("notes.md"));
+        Assert.True(WriteGuard.IsRefusal(FileOutcome.CommandFilesProtected));
+
+        var inside = new WorkingDirectory(() => target, new ManualTimeProvider());
+        Assert.Equal(FileOutcome.Ok, inside.WriteText("review.md", "x", overwrite: true).Outcome);
     }
 
     [Fact]

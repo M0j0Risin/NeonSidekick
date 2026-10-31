@@ -116,14 +116,9 @@ public static class WebCommands
             return WebCommandVerdict.Run;   // a message
         }
 
-        // A custom command the settings name (2026-10-30), ahead of the unknown branch: run, or refused as a built-in is with commands off —
-        // never offered as text, which would send /review x to the model unexpanded.
-        if (command == SlashCommand.Unknown && settings.CustomNames is { Count: > 0 } custom
-            && SlashCommands.CustomWord(line, out _) is var customWord && customWord.StartsWith('/') && custom.Contains(customWord[1..]))
-        {
-            command = SlashCommand.Custom;
-        }
-
+        // A custom command (2026-10-30): run, or refused as a built-in is with commands off — never offered as text, which would send /review x
+        // to the model unexpanded. Since 2026-10-31 (review P1-13) the callers pass Parse's answer with the custom names, so it is Custom here
+        // already; the check no longer works it out again.
         if (command == SlashCommand.Custom)
         {
             return settings.Commands ? WebCommandVerdict.Run : Refused(WebUiText.CommandsOff);
@@ -132,9 +127,7 @@ public static class WebCommands
         if (command == SlashCommand.Unknown)
         {
             // A path or a word the app does not know: the page may send it as a message, and //word may be the command meant (a custom one too).
-            var known = settings.CustomNames is { Count: > 0 } names
-                ? SlashCommands.Completions.Concat(names.Select(name => new UI.CompletionItem("/" + name, ""))).ToList()
-                : SlashCommands.Completions;
+            var known = TypoList(settings.CustomNames);
             string? use = ChatScreen.TypoSlashes(line, known) is { } typo ? typo.Line.TrimEnd() : null;
             return new WebCommandVerdict(WebCommandKind.Refused, settings.Commands ? WebUiText.UnknownCommand(word) : WebUiText.CommandsOff, AsText: true, Use: settings.Commands ? use : null);
         }
@@ -251,21 +244,36 @@ public static class WebCommands
 
     private static WebCommandVerdict Refused(string reason) => new(WebCommandKind.Refused, reason);
 
+    // The typo list for one scan's names (2026-10-31, review P3-9: built on every check), kept against that set's reference; one entry,
+    // swapped whole, so a Kestrel thread never reads it torn.
+    private sealed record TypoEntry(IReadOnlySet<string>? Names, IReadOnlyList<UI.CompletionItem> List);
+
+    private static TypoEntry? s_typos;
+
+    private static IReadOnlyList<UI.CompletionItem> TypoList(IReadOnlySet<string>? names)
+    {
+        if (names is not { Count: > 0 })
+        {
+            return SlashCommands.Completions;
+        }
+
+        if (Volatile.Read(ref s_typos) is { } cached && ReferenceEquals(cached.Names, names))
+        {
+            return cached.List;
+        }
+
+        var list = SlashCommands.Completions.Concat(names.Select(name => new UI.CompletionItem("/" + name, ""))).ToList();
+        Volatile.Write(ref s_typos, new TypoEntry(names, list));
+        return list;
+    }
+
     private static WebCommandVerdict Pane(string word, string? works) => Refused(WebUiText.OpensPane(word, works));
 
     private static bool Is(string word, string expected) => string.Equals(word, expected, StringComparison.OrdinalIgnoreCase);
 
-    private static string FirstWord(string text)
-    {
-        int end = 0;
-        while (end < text.Length && !char.IsWhiteSpace(text[end]))
-        {
-            end++;
-        }
-
-        return text[..end];
-    }
+    // The one word cut (2026-10-31, review P1-12: this was a copy of it).
+    private static string FirstWord(string text) => SlashCommands.FirstWord(text);
 
     /// <summary>The command's word as typed: the line's first word.</summary>
-    public static string Word(string line) => FirstWord((line ?? "").Trim());
+    public static string Word(string line) => SlashCommands.FirstWord(line ?? "");
 }

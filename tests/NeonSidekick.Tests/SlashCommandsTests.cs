@@ -685,4 +685,18 @@ public class SlashCommandsTests
         Assert.Equal(MidTurnClass.Cancel, ChatScreen.MidTurnPolicy(SlashCommand.Rewind, ""));
         Assert.Equal(MidTurnClass.Cancel, ChatScreen.MidTurnPolicy(SlashCommand.Rewind, "3"));
     }
+
+    /// <summary>
+    /// Any white space ends a command's word, a built-in's as a custom one's (2026-10-31, review P7-4, the user's Option A): a line break after
+    /// /compact is its words' start, as a space is.
+    /// </summary>
+    [Fact]
+    public void ALineBreak_EndsABuiltInsWord_AsASpaceDoes()
+    {
+        Assert.Equal((SlashCommand.Compact, "focus"), SlashCommands.Parse("/compact\nfocus"));
+        Assert.Equal((SlashCommand.Compact, "focus"), SlashCommands.Parse("/compact\tfocus"));
+        Assert.Equal((SlashCommand.Custom, "x\ny"), SlashCommands.Parse("/review\nx\ny", word => word == "/review"));
+        Assert.Equal("/foo", SlashCommands.FirstWord("  /foo\nbar"));
+        Assert.Equal("Command /compact: focus", ChatScreen.CommandLogLine(SlashCommand.Compact, "/compact\nfocus"));
+    }
 }

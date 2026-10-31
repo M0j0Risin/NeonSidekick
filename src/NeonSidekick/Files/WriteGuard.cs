@@ -19,13 +19,18 @@ public enum WriteRole
 /// <param name="Databases">The SQLite databases while the SQLite tools are on, else null.</param>
 /// <param name="ShoppingGuarded">Whether the shopping tools are offered (the shopping list's tripwire).</param>
 /// <param name="RecycleBin">The bin a delete moves to while <c>File deletes to Recycle bin</c> is on, else null.</param>
+/// <param name="CommandRoots">
+/// The custom commands folders and, for one that is a link, where it points (2026-10-31, review P2-2): both folders are in the home, which
+/// guards them already, but a link's target outside it was guarded by nothing. Null for none.
+/// </param>
 public sealed record WriteGuardFacts(
     Func<string?> Home,
     Func<string?> WorkingDirectory,
     Func<IReadOnlyList<string>> SkillRoots,
     Func<DatabaseGuard?> Databases,
     Func<bool> ShoppingGuarded,
-    Func<IRecycleBin?> RecycleBin);
+    Func<IRecycleBin?> RecycleBin,
+    Func<IReadOnlyList<string>>? CommandRoots = null);
 
 /// <summary>
 /// The model's writes judged by the file they reach, not by the spelling (2026-10-22, the fix plan's mechanism 1 and decision D2, the
@@ -39,6 +44,7 @@ public sealed record WriteGuardFacts(
 /// <item>The app's home and every profile under it (review P2, W1, U9): a working directory or a share that holds
 /// <c>.neonsidekick</c> made <c>configs\mcp.json</c> (a program at the next start) and <c>profile.json</c> writable.</item>
 /// <item>The skill roots (review P3): <c>skill_editor</c> is the model's one way to change a skill.</item>
+/// <item>The custom commands folders and where a linked one points (2026-10-31, review P2-2): the user changes them with <c>/commands</c>.</item>
 /// <item>A SQLite database while the SQLite tools are on (the old <see cref="DatabaseGuard"/> rule, now also by its header, review I9).</item>
 /// <item>A shopping list's name while the shopping tools are offered (the old tripwire, now in one place, review H16).</item>
 /// <item>The project file (<c>NEON.md</c>, <c>AGENTS.md</c>, <c>CLAUDE.md</c> at the working directory's root, review P1) asks the user:
@@ -161,6 +167,13 @@ public static class WriteGuard
                 return FileOutcome.SkillFilesProtected;
             }
 
+            // A commands folder, or where a linked one points (2026-10-31, review P2-2); a working folder inside one may write in it, as in a
+            // skill root it was pointed at (the user's own choice).
+            if (facts.CommandRoots?.Invoke() is { } commands && commands.Any(folder => Trusted(folder, judgedRoot, judged)))
+            {
+                return FileOutcome.CommandFilesProtected;
+            }
+
             if (IsProjectFile(facts.WorkingDirectory(), judgedRoot, judged) && s_projectAllowed.Value is not { Open: true })
             {
                 if (s_slot.Value is { } slot)
@@ -214,7 +227,7 @@ public static class WriteGuard
 
     /// <summary>Whether <paramref name="outcome"/> is one of the guard's refusals (rather than a path that is outside or missing).</summary>
     public static bool IsRefusal(FileOutcome outcome) => outcome is FileOutcome.GitProtected or FileOutcome.NeonFilesProtected or FileOutcome.AppFilesProtected
-        or FileOutcome.SkillFilesProtected or FileOutcome.ProjectFileAsk or FileOutcome.DatabaseProtected or FileOutcome.ShoppingList;
+        or FileOutcome.SkillFilesProtected or FileOutcome.CommandFilesProtected or FileOutcome.ProjectFileAsk or FileOutcome.DatabaseProtected or FileOutcome.ShoppingList;
 
     /// <summary>Whether <paramref name="full"/> is the project file the system prompt reads: one of its names right in the live working directory.</summary>
     public static bool IsProjectFile(string? workingDirectory, string root, string full)

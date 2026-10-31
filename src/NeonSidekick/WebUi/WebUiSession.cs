@@ -766,8 +766,9 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
             return new WebReply(WebOutcome.Refused, WebUiText.TooLong(MaxMessageBytes));
         }
 
-        // A command (later on 2026-10-14): checked here, and again as the screen takes it (the settings may change in between).
-        var commandSettings = CommandSettings?.Invoke() ?? default;
+        // A command (later on 2026-10-14): checked here, and again as the screen takes it (the settings may change in between). The settings
+        // are read only for a line that may be one (2026-10-31, review P2-7: every message read the catalog).
+        var commandSettings = !request.AsText && text.TrimStart().StartsWith('/') ? CommandSettings?.Invoke() ?? default : default;
         if (!request.AsText && WebCommands.Parse(text, commandSettings) is var (command, args) && command != SlashCommand.None)
         {
             var verdict = WebCommands.Check(command, args, text, commandSettings);

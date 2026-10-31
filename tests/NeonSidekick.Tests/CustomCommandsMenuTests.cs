@@ -30,7 +30,7 @@ public class CustomCommandsMenuTests
         var clear = Command("clear", CustomCommandScope.Global);
         var scan = new CustomCommandScan([review], [new(hidden, null, review), new(clear, "/clear", null)], [new(Path.Combine(Roots.Profile, "bad name.md"), CustomCommandScope.Profile, "not a command name")]);
 
-        var rows = CustomCommandsMenu.Rows(scan, Roots, "", null);
+        var rows = CustomCommandsMenu.Rows(scan with { Roots = Roots }, "", null);
 
         Assert.Equal(CommandsRowKind.New, rows[0].Kind);
         Assert.Equal(CommandsRowKind.Command, rows[1].Kind);
@@ -46,15 +46,15 @@ public class CustomCommandsMenuTests
     {
         var scan = new CustomCommandScan([Command("review", CustomCommandScope.Profile), Command("triage", CustomCommandScope.Global)], [], []);
 
-        var kept = CustomCommandsMenu.Rows(scan, Roots, "tri", null);
+        var kept = CustomCommandsMenu.Rows(scan with { Roots = Roots }, "tri", null);
         Assert.Equal([CommandsRowKind.New, CommandsRowKind.Command], kept.Select(r => r.Kind));
         Assert.Equal("triage", kept[1].Command!.Name);
 
-        var none = CustomCommandsMenu.Rows(scan, Roots, "zzz", null);
+        var none = CustomCommandsMenu.Rows(scan with { Roots = Roots }, "zzz", null);
         Assert.Equal(CommandsRowKind.New, none[0].Kind);
         Assert.Equal(MenuFilter.NoMatchRow("zzz"), none[1].Markup);
 
-        var page = CustomCommandsMenu.Page(scan, Roots, "tri", 0);
+        var (page, _) = CustomCommandsMenu.Page(scan with { Roots = Roots }, "tri", 0);
         Assert.Equal(MenuFilter.CaptionOrNull("tri", 1, 2), page.Tabs![0].SubTabs![0].Caption);   // new command… is never counted
     }
 
@@ -62,7 +62,7 @@ public class CustomCommandsMenuTests
     public void Rows_AScopedSubTab_ShowsItsScopeAlone()
     {
         var scan = new CustomCommandScan([Command("review", CustomCommandScope.Profile), Command("triage", CustomCommandScope.Global)], [], []);
-        Assert.Equal(["triage"], CustomCommandsMenu.Rows(scan, Roots, "", CustomCommandScope.Global).Where(r => r.Command is not null).Select(r => r.Command!.Name));
+        Assert.Equal(["triage"], CustomCommandsMenu.Rows(scan with { Roots = Roots }, "", CustomCommandScope.Global).Where(r => r.Command is not null).Select(r => r.Command!.Name));
         Assert.Equal(CustomCommandScope.Global, CustomCommandsMenu.ScopeOf(2));
         Assert.Null(CustomCommandsMenu.ScopeOf(0));
     }
@@ -82,7 +82,7 @@ public class CustomCommandsMenuTests
     [Fact]
     public void AnEmptyList_SaysHowToMakeOne()
     {
-        var rows = CustomCommandsMenu.Rows(CustomCommandScan.Empty, Roots, "", null);
+        var rows = CustomCommandsMenu.Rows(CustomCommandScan.Empty, "", null);
         Assert.Equal(2, rows.Count);
         Assert.Equal(Theme.DimMarkup(CustomCommandText.EmptyRow), rows[1].Markup);
     }

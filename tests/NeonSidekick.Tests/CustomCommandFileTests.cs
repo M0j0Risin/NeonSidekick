@@ -126,6 +126,6 @@ public class CustomCommandFileTests
         Assert.Equal("say what /triage does (shown in the / list and /help)", file.Description);
         Assert.Equal("<what to type after it>", file.ArgumentHint);
         Assert.DoesNotContain("$", file.Body);
-        Assert.Equal(CustomCommandText.TemplateBody("triage"), CustomCommandTemplate.Expand(file.Body, "", file.Arguments).Text);
+        Assert.Equal(CustomCommandText.TemplateBody("triage"), CustomCommandTemplate.Expand(file.Body, "", file.Arguments));
     }
 }

@@ -10,6 +10,18 @@ namespace NeonSidekick.Files;
 /// </summary>
 public static class RegularFiles
 {
+    /// <summary>
+    /// Whether <paramref name="path"/> is a regular file, never a link, a FIFO, a socket or a device (2026-10-20, lifted from the crash reports'
+    /// reader on 2026-10-31, review P5-2: the custom commands' walk asks it too). One <c>lstat</c> on a Mac.
+    /// </summary>
+    public static bool IsPlain(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        return OperatingSystem.IsMacOS()
+            ? Platform.MacFiles.KindOf(path) == Platform.MacFiles.Kind.Regular
+            : File.Exists(path) && new FileInfo(path).LinkTarget is null;
+    }
+
     /// <summary>The whole of the plain file at <paramref name="full"/>.</summary>
     public static byte[] ReadAllBytes(string full)
     {

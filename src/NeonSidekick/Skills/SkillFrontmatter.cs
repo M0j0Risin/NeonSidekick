@@ -238,7 +238,7 @@ public sealed record SkillFrontmatter(string Name, string Description, IReadOnly
             }
 
             int start = index;
-            string value = ReadScalar(lines, ref index, close, rest, out var items);
+            string value = ReadScalar(lines, ref index, close, key, rest, out var items);
             found.Add(new Entry(key, value, items, start, index));
         }
 
@@ -250,11 +250,14 @@ public sealed record SkillFrontmatter(string Name, string Description, IReadOnly
     /// indicator (<c>|</c>, <c>&gt;</c>, with <c>-</c> / <c>+</c>) or an empty value (a nested
     /// map — kept as text, the caller ignores it). <paramref name="index"/> lands on the next key.
     /// Under an empty value the <c>- item</c> lines are read too, at column 0 or indented (both are YAML; Claude Code's command files
-    /// write <c>allowed-tools:</c> lists at column 0, 2026-10-30), each item into <paramref name="items"/>.
+    /// write <c>allowed-tools:</c> lists at column 0, 2026-10-30), each item into <paramref name="items"/>. A column-0 list is read only under
+    /// a key other than <c>name</c> and <c>description</c> (2026-10-31, review P4-2: <c>description:</c> then <c>- a</c> loaded as a
+    /// description of "- a"), where the old <see cref="NotAPairProblem"/> stands again, for <c>SKILL.md</c> and command files alike.
     /// </summary>
-    private static string ReadScalar(string[] lines, ref int index, int close, string rest, out List<string>? items)
+    private static string ReadScalar(string[] lines, ref int index, int close, string key, string rest, out List<string>? items)
     {
         items = null;
+        bool columnZeroItems = !key.Equals(NameKey, StringComparison.OrdinalIgnoreCase) && !key.Equals(DescriptionKey, StringComparison.OrdinalIgnoreCase);
         string inline = rest.Trim();
         bool block = inline is "|" or ">" or "|-" or ">-" or "|+" or ">+";
         if (!block && inline.Length > 0)
@@ -266,7 +269,7 @@ public sealed record SkillFrontmatter(string Name, string Description, IReadOnly
         bool literal = inline.Length > 0 && inline[0] == '|';
         var sb = new StringBuilder();
         index++;
-        while (index < close && (lines[index].Length == 0 || char.IsWhiteSpace(lines[index][0]) || (!block && IsSequenceItem(lines[index]))))
+        while (index < close && (lines[index].Length == 0 || char.IsWhiteSpace(lines[index][0]) || (!block && columnZeroItems && IsSequenceItem(lines[index]))))
         {
             string continuation = lines[index].Trim();
             if (!block && IsSequenceItem(continuation))
@@ -284,6 +287,42 @@ public sealed record SkillFrontmatter(string Name, string Description, IReadOnly
         }
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// <paramref name="text"/> as a name in kebab case (2026-10-31, review P7-6: the Skills pane's and the custom commands' rules were two
+    /// copies): lower case, a run of anything else one hyphen, none at either end; an underscore kept with <paramref name="keepUnderscore"/>
+    /// (never first). Empty when nothing survives. No length cap: each caller has its own. Pure.
+    /// </summary>
+    internal static string Kebab(string text, bool keepUnderscore)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        var kebab = new StringBuilder(text.Length);
+        bool gap = false;
+        foreach (char c in text.ToLowerInvariant())
+        {
+            if (c is >= 'a' and <= 'z' or >= '0' and <= '9' || (keepUnderscore && c == '_'))
+            {
+                if (c == '_' && kebab.Length == 0)
+                {
+                    continue;
+                }
+
+                if (gap && kebab.Length > 0)
+                {
+                    kebab.Append('-');
+                }
+
+                gap = false;
+                kebab.Append(c);
+            }
+            else
+            {
+                gap = true;
+            }
+        }
+
+        return kebab.ToString();
     }
 
     // A YAML block-sequence line: a hyphen, then a space or nothing.

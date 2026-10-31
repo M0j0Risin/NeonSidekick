@@ -37,6 +37,12 @@ public enum CustomCommandEditOutcome
     /// <summary>The file is where it would go already.</summary>
     NothingToChange,
 
+    /// <summary>
+    /// The two folders a move or copy goes between are one folder (2026-10-31, review P7-2: both linked to one place), so there is nothing to
+    /// do; an info notice, not an error.
+    /// </summary>
+    SharedFolder,
+
     /// <summary>A file failure: <see cref="CustomCommandEditResult.Detail"/> says what.</summary>
     Failed,
 }
@@ -50,6 +56,9 @@ public sealed record CustomCommandEditResult(CustomCommandEditOutcome Outcome, s
     public DeleteWay Way { get; init; }
 
     public bool MayReadDifferently { get; init; }
+
+    /// <summary>For <c>Linked</c>: the file itself is the link, not a folder on the way (2026-10-31, review P4-3).</summary>
+    public bool LinkIsFile { get; init; }
 
     /// <summary>Whether it did what was asked.</summary>
     public bool Done => Outcome is CustomCommandEditOutcome.Created or CustomCommandEditOutcome.Saved or CustomCommandEditOutcome.Renamed
@@ -113,7 +122,8 @@ public static class CustomCommandEditor
         first = new string(first.Select(c => char.IsControl(c) ? ' ' : c).ToArray()).Trim();
         if (first.Length > SavedDescriptionLength)
         {
-            first = first[..SavedDescriptionLength].TrimEnd() + "…";
+            // Never between a surrogate pair (2026-10-31, review P3-5: an emoji on the cut wrote half of one).
+            first = TextCut.Safe(first, SavedDescriptionLength).TrimEnd() + "…";
         }
 
         var sb = new StringBuilder();
@@ -123,9 +133,8 @@ public static class CustomCommandEditor
             sb.Append(line).Append('\n');
         }
 
-        sb.Append(CustomCommandFile.DescriptionKey).Append(": \"")
-            .Append(first.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal))
-            .Append("\"\n");
+        // The frontmatter's own scalar rule (2026-10-31, review P4-9), plain when that reads back the same, so the reader and writer agree.
+        sb.Append(CustomCommandFile.DescriptionKey).Append(": ").Append(Skills.SkillFrontmatter.Scalar(first)).Append('\n');
         sb.Append("---\n");
         sb.Append(CustomCommandTemplate.Escape(body, out mayReadDifferently)).Append('\n');
         return sb.ToString();
@@ -145,9 +154,14 @@ public static class CustomCommandEditor
     {
         ArgumentNullException.ThrowIfNull(roots);
         ArgumentNullException.ThrowIfNull(file);
-        if (to == scope || roots.Same)
+        if (to == scope)
         {
             return new CustomCommandEditResult(CustomCommandEditOutcome.NothingToChange, NameOf(roots.Of(scope), file), scope);
+        }
+
+        if (roots.Same)
+        {
+            return new CustomCommandEditResult(CustomCommandEditOutcome.SharedFolder, NameOf(roots.Of(scope), file), scope);
         }
 
         return Relocate(roots.Of(scope), scope, file, roots.Of(to), to, null, copy: false, CustomCommandEditOutcome.Moved);
@@ -161,7 +175,7 @@ public static class CustomCommandEditor
         ArgumentException.ThrowIfNullOrWhiteSpace(profileRoot);
         if (CustomCommandRoots.SameFolder(roots.Of(scope), profileRoot))
         {
-            return new CustomCommandEditResult(CustomCommandEditOutcome.NothingToChange, NameOf(roots.Of(scope), file), scope);
+            return new CustomCommandEditResult(CustomCommandEditOutcome.SharedFolder, NameOf(roots.Of(scope), file), scope);
         }
 
         return Relocate(roots.Of(scope), scope, file, profileRoot, CustomCommandScope.Profile, null, copy: false, CustomCommandEditOutcome.Moved);
@@ -175,48 +189,84 @@ public static class CustomCommandEditor
         ArgumentException.ThrowIfNullOrWhiteSpace(profileRoot);
         if (CustomCommandRoots.SameFolder(roots.Of(scope), profileRoot))
         {
-            return new CustomCommandEditResult(CustomCommandEditOutcome.NothingToChange, NameOf(roots.Of(scope), file), scope);
+            return new CustomCommandEditResult(CustomCommandEditOutcome.SharedFolder, NameOf(roots.Of(scope), file), scope);
         }
 
         return Relocate(roots.Of(scope), scope, file, profileRoot, CustomCommandScope.Profile, null, copy: true, CustomCommandEditOutcome.Copied);
     }
 
     /// <summary>
-    /// A profile copy's one file (<c>/profile push|pull commands</c>): <paramref name="file"/>'s bytes as they are written to
-    /// <paramref name="relative"/> under <paramref name="targetRoot"/>, its folders made. One there already is <c>Exists</c> unless
-    /// <paramref name="overwrite"/>; a link on the way, or a target that is one, is <c>Linked</c>, never written through.
+    /// A profile copy's one file (<c>/profile push|pull commands</c>): <paramref name="file"/> (under <paramref name="sourceRoot"/>) copied byte
+    /// for byte to <paramref name="relative"/> under <paramref name="targetRoot"/>, its folders made. One there already, any case, is
+    /// <c>Exists</c> unless <paramref name="overwrite"/>, which replaces that one; a link on the way, or a target that is one, is <c>Linked</c>,
+    /// never written through. The same checks as the pane's copy (<see cref="CopyChecked"/>, 2026-10-31, review P6-8).
     /// </summary>
-    public static CustomCommandEditResult CopyInto(string file, string targetRoot, string relative, bool overwrite)
+    public static CustomCommandEditResult CopyInto(string sourceRoot, string file, string targetRoot, string relative, bool overwrite)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceRoot);
         ArgumentNullException.ThrowIfNull(file);
         ArgumentException.ThrowIfNullOrWhiteSpace(targetRoot);
         ArgumentNullException.ThrowIfNull(relative);
         string name = CustomCommandName.FromRelativePath(relative) ?? relative;
         string target = Path.GetFullPath(Path.Combine(targetRoot, relative.Replace('/', Path.DirectorySeparatorChar)));
-        if (!IsUnder(Path.TrimEndingDirectorySeparator(Path.GetFullPath(targetRoot)), target))
+        if (!IsUnder(targetRoot, target))
         {
             return new CustomCommandEditResult(CustomCommandEditOutcome.BadName, name, CustomCommandScope.Profile, target);
         }
 
+        return CopyChecked(sourceRoot, CustomCommandScope.Profile, file, targetRoot, CustomCommandScope.Profile, target, name, overwrite, CustomCommandEditOutcome.Copied);
+    }
+
+    /// <summary>
+    /// The one copy (2026-10-31, review P6-8: the pane's copy and the profile copy checked apart): the source there, a plain file and under its
+    /// root; no link on the way to <paramref name="target"/> nor at it; a file there already in any case (<see cref="Existing"/>) <c>Exists</c>,
+    /// or replaced with <paramref name="overwrite"/>; a file failure an outcome, a file made there since the check <c>Exists</c>.
+    /// </summary>
+    private static CustomCommandEditResult CopyChecked(string root, CustomCommandScope scope, string file, string toRoot, CustomCommandScope toScope, string target, string targetName, bool overwrite, CustomCommandEditOutcome done)
+    {
+        if (Refusal(root, scope, file, targetName) is { } refused)
+        {
+            return refused;
+        }
+
+        if (!RegularFiles.IsPlain(file))
+        {
+            return new CustomCommandEditResult(CustomCommandEditOutcome.Failed, targetName, scope, file, CustomCommandText.NotAFileProblem);
+        }
+
         try
         {
-            if (LinkedOnTheWay(targetRoot, target) || (File.Exists(target) && (File.GetAttributes(target) & FileAttributes.ReparsePoint) != 0))
+            if (LinkedOnTheWay(toRoot, target))
             {
-                return new CustomCommandEditResult(CustomCommandEditOutcome.Linked, name, CustomCommandScope.Profile, target);
+                return new CustomCommandEditResult(CustomCommandEditOutcome.Linked, targetName, toScope, target);
             }
 
-            if (File.Exists(target) && !overwrite)
+            if (Existing(toRoot, Path.GetRelativePath(toRoot, target)) is { } there)
             {
-                return new CustomCommandEditResult(CustomCommandEditOutcome.Exists, name, CustomCommandScope.Profile, target);
+                if (!overwrite)
+                {
+                    return new CustomCommandEditResult(CustomCommandEditOutcome.Exists, targetName, toScope, there);
+                }
+
+                if (WorkingDirectory.IsLink(new FileInfo(there)) || Directory.Exists(there))
+                {
+                    return new CustomCommandEditResult(CustomCommandEditOutcome.Linked, targetName, toScope, there) { LinkIsFile = true };
+                }
+
+                target = there;   // the one there, in its own case, is what overwrite replaces
             }
 
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
             File.Copy(file, target, overwrite);
-            return new CustomCommandEditResult(CustomCommandEditOutcome.Copied, name, CustomCommandScope.Profile, target);
+            return new CustomCommandEditResult(done, targetName, toScope, target);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (IOException) when (!overwrite && File.Exists(target))
         {
-            return new CustomCommandEditResult(CustomCommandEditOutcome.Failed, name, CustomCommandScope.Profile, target, ex.Message);
+            return new CustomCommandEditResult(CustomCommandEditOutcome.Exists, targetName, toScope, target);
+        }
+        catch (Exception ex) when (IsFileFailure(ex))
+        {
+            return new CustomCommandEditResult(CustomCommandEditOutcome.Failed, targetName, toScope, target, ex.Message);
         }
     }
 
@@ -265,26 +315,58 @@ public static class CustomCommandEditor
         return Taken(root, name) ? CustomCommandEditOutcome.Exists : null;
     }
 
-    /// <summary>Whether <paramref name="root"/> holds <paramref name="name"/>'s file already, any case.</summary>
+    /// <summary>Whether <paramref name="root"/> holds <paramref name="name"/>'s file already, any case (<see cref="Existing"/>).</summary>
     public static bool Taken(string root, string name)
     {
         ArgumentNullException.ThrowIfNull(root);
         ArgumentNullException.ThrowIfNull(name);
-        string target = Path.Combine(root, CustomCommandName.RelativePath(name));
-        if (File.Exists(target) || Directory.Exists(target))
+        return Existing(root, CustomCommandName.RelativePath(name)) is not null;
+    }
+
+    /// <summary>
+    /// The entry at <paramref name="relative"/> under <paramref name="root"/> found case-blind segment by segment, its path as it is on disk,
+    /// or null (2026-10-31, review P5-5, P7-1: on a case-sensitive volume <c>Front/card.md</c> and <c>front/card.md</c> are two paths for one
+    /// command name, and only the stem was compared). Names are lower case, so any case of a path is the one command. A folder on the way
+    /// must be a folder; the last segment may be a file or a folder (either blocks a write).
+    /// </summary>
+    public static string? Existing(string root, string relative)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+        ArgumentNullException.ThrowIfNull(relative);
+        string[] segments = relative.Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length == 0)
         {
-            return true;
+            return null;
         }
 
-        string? folder = Path.GetDirectoryName(target);
+        string current = root;
         try
         {
-            return folder is not null && Directory.Exists(folder)
-                && Directory.EnumerateFileSystemEntries(folder).Any(e => string.Equals(Path.GetFileName(e), Path.GetFileName(target), StringComparison.OrdinalIgnoreCase));
+            for (int i = 0; i < segments.Length; i++)
+            {
+                if (!Directory.Exists(current))
+                {
+                    return null;
+                }
+
+                // The entry as the disk spells it: the exact spelling first (a case-sensitive volume may hold both), else any case.
+                bool last = i == segments.Length - 1;
+                var matches = Directory.EnumerateFileSystemEntries(current)
+                    .Where(e => string.Equals(Path.GetFileName(e), segments[i], StringComparison.OrdinalIgnoreCase) && (last || Directory.Exists(e)))
+                    .ToList();
+                if (matches.Count == 0)
+                {
+                    return null;
+                }
+
+                current = matches.FirstOrDefault(e => string.Equals(Path.GetFileName(e), segments[i], StringComparison.Ordinal)) ?? matches[0];
+            }
+
+            return current;
         }
         catch (Exception ex) when (IsFileFailure(ex))
         {
-            return false;
+            return null;
         }
     }
 
@@ -351,9 +433,15 @@ public static class CustomCommandEditor
             ? Path.Combine(toRoot, Path.GetRelativePath(root, Path.GetFullPath(file)))
             : Path.Combine(toRoot, CustomCommandName.RelativePath(newName));
         string targetName = newName ?? name;
-        if (string.Equals(Path.GetFullPath(target), Path.GetFullPath(file), StringComparison.OrdinalIgnoreCase))
+        // By the volume's case rule (2026-10-31, review P2-8): on a case-sensitive one Review.md → review.md is a rename.
+        if (string.Equals(Path.GetFullPath(target), Path.GetFullPath(file), CaseRule.Comparison(root)))
         {
             return new CustomCommandEditResult(CustomCommandEditOutcome.NothingToChange, targetName, toScope, file);
+        }
+
+        if (copy)
+        {
+            return CopyChecked(root, scope, file, toRoot, toScope, target, targetName, overwrite: false, done);
         }
 
         if (newName is not null && NameRefusal(toRoot, newName) is { } bad)
@@ -374,15 +462,8 @@ public static class CustomCommandEditor
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-            if (copy)
-            {
-                File.Copy(file, target, overwrite: false);
-            }
-            else
-            {
-                File.Move(file, target, overwrite: false);
-                RemoveEmptied(root, Path.GetDirectoryName(Path.GetFullPath(file))!);
-            }
+            File.Move(file, target, overwrite: false);
+            RemoveEmptied(root, Path.GetDirectoryName(Path.GetFullPath(file))!);
 
             return new CustomCommandEditResult(done, targetName, toScope, target);
         }
@@ -407,7 +488,12 @@ public static class CustomCommandEditor
                 return new CustomCommandEditResult(CustomCommandEditOutcome.Missing, name, scope, file);
             }
 
-            if ((info.Attributes & FileAttributes.ReparsePoint) != 0 || LinkedOnTheWay(root, info.FullName))
+            if (WorkingDirectory.IsLink(info))
+            {
+                return new CustomCommandEditResult(CustomCommandEditOutcome.Linked, name, scope, file) { LinkIsFile = true };
+            }
+
+            if (LinkedOnTheWay(root, info.FullName))
             {
                 return new CustomCommandEditResult(CustomCommandEditOutcome.Linked, name, scope, file);
             }
@@ -463,12 +549,12 @@ public static class CustomCommandEditor
         }
     }
 
+    // Strictly under root, the root itself not (2026-10-31, review P2-8: the sandbox's own test, so a root at a drive's root, E:\, holds its files).
     private static bool IsUnder(string root, string path)
     {
         string top = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
-        string full = Path.GetFullPath(path);
-        var comparison = CaseRule.Comparison(top);
-        return full.Length > top.Length && full.StartsWith(top, comparison) && (full[top.Length] == Path.DirectorySeparatorChar || full[top.Length] == Path.AltDirectorySeparatorChar);
+        string full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        return !string.Equals(top, full, CaseRule.Comparison(top)) && WorkingDirectory.IsInside(top, full);
     }
 
     private static bool IsFileFailure(Exception ex) =>

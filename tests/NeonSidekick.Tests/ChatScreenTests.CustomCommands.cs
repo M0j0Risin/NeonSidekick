@@ -167,6 +167,70 @@ public sealed partial class ChatScreenTests
 
         Assert.Equal(2, _chat.Requests.Count);
         Assert.All(_chat.Requests, r => Assert.Equal("Review a.cs with care, looking at $1.", r.Last(m => m.Role == ChatRole.User).Text));
+        using var store = new SessionStore(_settings.ProfileDirectory, _time);
+        Assert.Equal("/review a.cs", Assert.Single(store.List(5)).Title);   // 2026-10-31, review P1-3: the typed line, as the idle line titles
+    }
+
+    /// <summary>A message loop with no model says so once and sends nothing (2026-10-31, review P3-2: each pass said it, and an endless loop spun).</summary>
+    [Fact]
+    public async Task ALoop_WithNoModel_SaysSoOnce()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.LlmScanMode = "off"; d.LlmUrl = ""; });
+        WriteCustomCommand("review", ReviewFile);
+        PushLine("/loop 3 /review x");
+        PushLine("/loop 3 hello");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Empty(_chat.Requests);
+        Assert.Equal(2, Count(output, "✗ " + ChatScreen.NoAssistantError));
+        Assert.DoesNotContain(CustomCommandText.Glyph + " /review from", output);
+    }
+
+    /// <summary>
+    /// <c>/rewind</c> lists a custom command's turn by the line typed for it, not the prompt it sent (2026-10-31, review P1-5); a later
+    /// <c>/commands save</c> refuses it (the user's call).
+    /// </summary>
+    [Fact]
+    public async Task CustomCommand_RewindShowsTheTypedLine_AndSaveRefusesIt()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _geometry = new ScreenGeometry(() => null);
+        WriteCustomCommand("review", ReviewFile);
+        _chat.EnqueueText("Reviewed.");
+        StepsWhenIdle(Line("/review a.cs"), Line("/commands save again"), Line("/rewind"), Key(Keys.Enter), Key(Keys.Enter), Key(Keys.Escape), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(Titled(RewindText.ConfirmPrompt(new RewindTurn(1, 0, "/review a.cs", 0), new RewindCut(1, [], false, null, false))), output);
+        Assert.Contains("✗ " + CustomCommandText.FromCustomCommandError("/review"), output);
+        Assert.False(File.Exists(Path.Combine(_settings.ProfileCustomCommandsDirectory, "again.md")));
+    }
+
+    /// <summary>
+    /// <c>/commands save</c> under a reply saves the message that reply answers, at once, never one queued since (2026-10-31, review P8-2).
+    /// </summary>
+    [Fact]
+    public async Task CommandsSave_UnderAReply_SavesTheMessageItAnswers()
+    {
+        MidTurnFixture(i =>
+        {
+            if (i == 1)
+            {
+                PushLine("the next one");
+                PushLine("/commands save hi");
+            }
+        });
+        _chat.EnqueueText("Two.");
+
+        string output = await RunAsync();
+
+        string path = Path.Combine(_settings.ProfileCustomCommandsDirectory, "hi.md");
+        Assert.True(File.Exists(path));
+        Assert.Contains("hi", CustomCommandFile.Read(File.ReadAllText(path)).Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("the next one", File.ReadAllText(path), StringComparison.Ordinal);
+        Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/commands"), output);
     }
 
     [Fact]
@@ -185,6 +249,24 @@ public sealed partial class ChatScreenTests
         Assert.Equal(2, Count(output, "/review <file> [focus] — your custom command, from the profile's commands."));
         Assert.Contains(path, output);
         Assert.DoesNotContain(HelpText.NotAskedNotice, output);
+        Assert.Equal(2, Count(output, CustomCommandText.ManualWayOut("/review")));   // 2026-10-31, the user's call
+    }
+
+    /// <summary>A Skipped file named after /help has a short card with its reason, no model asked (2026-10-31, review P4-6).</summary>
+    [Fact]
+    public async Task CustomCommand_HelpWithASkippedFilesName_ShowsWhy()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _console.Profile.Width = 400;
+        WriteCustomCommand("broken", "---\ndescription: x\n---\n");
+        PushLine("/help broken");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Empty(_chat.Requests);
+        Assert.Contains(CustomCommandText.SkippedCardHead, output);
+        Assert.Contains(CustomCommandText.EmptyBodyProblem, output);
     }
 
     [Fact]

@@ -338,6 +338,32 @@ public sealed partial class ChatScreenTests
         Assert.Empty(Directory.EnumerateDirectories(Path.GetDirectoryName(theirs)!, "skills.~*"));
     }
 
+    /// <summary>
+    /// A push of the commands copies the new file and skips one the target has in any case (2026-10-31, review P5-5), ending with the count
+    /// (review P4-4); all skipped says so too.
+    /// </summary>
+    [Fact]
+    public async Task ProfilePushCommands_CopiesTheNew_SkipsAnyCaseTwin_AndSaysSo()
+    {
+        WorkProfile();
+        string ours = _settings.ProfileCustomCommandsDirectory;
+        string theirs = Path.Combine(_dir, "profiles", "work", NeonSidekick.CustomCommands.CustomCommandRoots.DirectoryName);
+        WriteFile(Path.Combine(ours, "review.md"), "Review it.");
+        WriteFile(Path.Combine(ours, "sum.md"), "Sum it.");
+        WriteFile(Path.Combine(theirs, "Sum.md"), "Theirs.");
+        PushLine("/profile push commands work");
+        PickYes();
+        PushLine("/profile push commands work");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(ChatScreen.ProfileCustomCommandsCopiedNotice(["/review"], ["/sum"], "work", pull: false), output);
+        Assert.Equal("Theirs.", File.ReadAllText(Path.Combine(theirs, "Sum.md")));
+        Assert.True(File.Exists(Path.Combine(theirs, "review.md")));
+        Assert.Contains(ChatScreen.ProfileCustomCommandsNothingNewNotice(["/review", "/sum"], "work", pull: false), output);
+    }
+
     /// <summary>A pull copies into this profile; a folder name with a bidi character is shown escaped.</summary>
     [Fact]
     public async Task ProfilePullSkills_Copies_AndAnOddNameIsEscaped()

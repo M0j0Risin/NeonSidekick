@@ -259,6 +259,15 @@ internal sealed partial class ChatScreen
         SlashCommand.Perf when PerfBarMode.IsEdit(args) => MidTurnClass.Pane,       // /perfbar edit, the same
         SlashCommand.Browser when BrowserCommand.IsPane(args) => MidTurnClass.Pane,   // later on 2026-10-13: the saved links' pane, a question, a bare save
         SlashCommand.Prompts when PromptsCommand.IsPane(args) => MidTurnClass.Pane,   // 2026-10-13: the saved prompts' pane, list --clear's question
+        // /commands (2026-10-31, review P3-11, P8-2): the bare word the pane; save at once on the turn task, so it saves the message the reply
+        // answers, never one queued since (one typed during turn 1's opening calls, before the message lands, sees the one before); new
+        // opens the editor after the reply.
+        SlashCommand.Commands => CustomCommandsCommand.Parse(args).Verb switch
+        {
+            CustomCommandsVerb.Pane => MidTurnClass.Pane,
+            CustomCommandsVerb.Save => MidTurnClass.Quick,
+            _ => MidTurnClass.Deferred,
+        },
         // /webui (later on 2026-10-15, the user's ask): the pane over the reply, its buttons acting at once; copy at once; on, off and reset still wait.
         SlashCommand.WebUi when args.Trim().Length == 0 => MidTurnClass.Pane,
         SlashCommand.WebUi when string.Equals(args.Trim(), "copy", StringComparison.OrdinalIgnoreCase) => MidTurnClass.Quick,
@@ -279,11 +288,13 @@ internal sealed partial class ChatScreen
     public static MidTurnClass MidTurnPolicyUnderLoad(SlashCommand command, string args) => command switch
     {
         SlashCommand.Sampling => MidTurnClass.Deferred,
+        // No message is in flight under the load (2026-10-31, review P8-2): a save waits for it, to save the last one sent.
+        SlashCommand.Commands when CustomCommandsCommand.Parse(args).Verb == CustomCommandsVerb.Save => MidTurnClass.Deferred,
         _ => MidTurnPolicy(command, args),
     };
 
     /// <summary>The first word of a typed line, for the notices that name a command.</summary>
-    private static string CommandWord(string text) => text.Trim().Split(' ', 2)[0];
+    private static string CommandWord(string text) => SlashCommands.FirstWord(text);   // the one word cut (2026-10-31, review P1-12)
 
     /// <summary>
     /// The watcher's line hook (<see cref="KeySource.WatchAsync(CancellationTokenSource, CancellationToken, Func{ConsoleKeyInfo, bool}?, CancellationTokenSource?, Func{KeySource.WatchedLine, Task{bool}}?, Func{bool}?, Func{InputEvent, bool}?, Func{ConsoleKeyInfo, bool}?, Func{InputEvent.Click, string?}?, InputLine.Editor?)"/>),
@@ -753,6 +764,10 @@ internal sealed partial class ChatScreen
                 break;
             case SlashCommand.Queue:
                 HandleQueueArgs(args);
+                break;
+            case SlashCommand.Commands:
+                // /commands save under a reply (2026-10-31, review P8-2): on the turn task, so the history read is the turn's own.
+                await HandleCommandsAsync(args, _flow, cancellationToken).ConfigureAwait(false);
                 break;
             case SlashCommand.Monitor:
                 // /monitor list (2026-10-23): the reads on the board's worker, the lines through the flow sink.

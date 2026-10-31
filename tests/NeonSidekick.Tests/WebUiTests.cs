@@ -547,6 +547,21 @@ public sealed partial class WebUiTests : IDisposable
         Assert.Equal(new WebLine("/clear", null, IPAddress.Loopback), line);
     }
 
+    /// <summary>A plain message never reads the command settings, which scan the custom commands (2026-10-31, review P2-7).</summary>
+    [Fact]
+    public void APlainMessage_NeverReadsTheCommandSettings()
+    {
+        int reads = 0;
+        _session.CommandSettings = () => { reads++; return CommandsOn; };
+
+        Assert.Equal(WebOutcome.Ok, _session.Send(new WebSendRequest { Text = "hello there" }, null).Outcome);
+        Assert.Equal(WebOutcome.Ok, _session.Send(new WebSendRequest { Text = "/clear", AsText = true }, null).Outcome);
+        Assert.Equal(0, reads);
+
+        _session.Send(new WebSendRequest { Text = "/clear" }, null);
+        Assert.Equal(1, reads);
+    }
+
     [Fact]
     public void AnUnknownCommand_OffersTheMessage_AndTheCommandMeant()
     {

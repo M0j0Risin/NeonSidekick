@@ -84,7 +84,7 @@ public sealed class CustomCommandEditorTests : IDisposable
         Assert.DoesNotContain((byte)'\r', File.ReadAllBytes(result.Path));
         var command = Scan().Find("again")!;
         Assert.Equal("Costs $5, every $ARGUMENTS word.", command.Description);
-        Assert.Equal("Costs $5, every $ARGUMENTS word.\n---\nPR #42: done", CustomCommandTemplate.Expand(command.Body, "", command.Arguments).Text);
+        Assert.Equal("Costs $5, every $ARGUMENTS word.\n---\nPR #42: done", CustomCommandTemplate.Expand(command.Body, "", command.Arguments));
     }
 
     [Fact]
@@ -155,12 +155,107 @@ public sealed class CustomCommandEditorTests : IDisposable
         File.WriteAllText(source, "Mine.");
         string target = Path.Combine(_dir, "other", "commands");
 
-        Assert.Equal(CustomCommandEditOutcome.Copied, CustomCommandEditor.CopyInto(source, target, "sub/x.md", overwrite: false).Outcome);
+        Assert.Equal(CustomCommandEditOutcome.Copied, CustomCommandEditor.CopyInto(_roots.Profile, source, target, "sub/x.md", overwrite: false).Outcome);
         File.WriteAllText(Path.Combine(target, "sub", "x.md"), "Theirs.");
-        Assert.Equal(CustomCommandEditOutcome.Exists, CustomCommandEditor.CopyInto(source, target, "sub/x.md", overwrite: false).Outcome);
+        Assert.Equal(CustomCommandEditOutcome.Exists, CustomCommandEditor.CopyInto(_roots.Profile, source, target, "sub/x.md", overwrite: false).Outcome);
         Assert.Equal("Theirs.", File.ReadAllText(Path.Combine(target, "sub", "x.md")));
-        Assert.Equal(CustomCommandEditOutcome.Copied, CustomCommandEditor.CopyInto(source, target, "sub/x.md", overwrite: true).Outcome);
+        Assert.Equal(CustomCommandEditOutcome.Copied, CustomCommandEditor.CopyInto(_roots.Profile, source, target, "sub/x.md", overwrite: true).Outcome);
         Assert.Equal("Mine.", File.ReadAllText(Path.Combine(target, "sub", "x.md")));
+    }
+
+    /// <summary>A file there in another case is the one command (2026-10-31, review P5-5, P7-1): found segment by segment, as it is on disk.</summary>
+    [Fact]
+    public void Existing_FindsAPath_InAnyCase()
+    {
+        string file = Path.Combine(_roots.Profile, "Front", "Card.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        File.WriteAllText(file, "x");
+
+        Assert.Equal(Path.GetFullPath(file), Path.GetFullPath(CustomCommandEditor.Existing(_roots.Profile, "front/card.md")!));
+        Assert.True(CustomCommandEditor.Taken(_roots.Profile, "front:card"));
+        Assert.Null(CustomCommandEditor.Existing(_roots.Profile, "front/other.md"));
+        Assert.Null(CustomCommandEditor.Existing(_roots.Profile, "card.md/front.md"));
+    }
+
+    /// <summary>The copy replaces the one there in its own case, and never takes a source that is no plain file under its root (review P6-8).</summary>
+    [Fact]
+    public void CopyInto_Overwrite_ReplacesTheOneThere_InItsCase_AndRefusesASourceOutsideItsRoot()
+    {
+        string source = Path.Combine(_roots.Profile, "x.md");
+        File.WriteAllText(source, "Mine.");
+        string target = Path.Combine(_dir, "other", "commands");
+        Directory.CreateDirectory(target);
+        File.WriteAllText(Path.Combine(target, "X.md"), "Theirs.");
+
+        var result = CustomCommandEditor.CopyInto(_roots.Profile, source, target, "x.md", overwrite: true);
+
+        Assert.Equal(CustomCommandEditOutcome.Copied, result.Outcome);
+        Assert.Equal("Mine.", File.ReadAllText(Directory.GetFiles(target).Single()));
+        Assert.Equal(CustomCommandEditOutcome.Missing, CustomCommandEditor.CopyInto(_roots.Global, source, target, "x.md", overwrite: true).Outcome);
+    }
+
+    /// <summary>
+    /// Two folders that are one are a SharedFolder (2026-10-31, review P7-2), an info notice, from all three acts; a rename to the same name
+    /// stays NothingToChange.
+    /// </summary>
+    [Fact]
+    public void AMoveOrCopy_IntoTheSameFolder_IsSharedFolder()
+    {
+        string file = Path.Combine(_roots.Profile, "x.md");
+        File.WriteAllText(file, "x");
+        var same = new CustomCommandRoots(_roots.Profile, _roots.Profile);
+
+        Assert.Equal(CustomCommandEditOutcome.SharedFolder, CustomCommandEditor.Move(same, CustomCommandScope.Profile, file, CustomCommandScope.Global).Outcome);
+        Assert.Equal(CustomCommandEditOutcome.SharedFolder, CustomCommandEditor.MoveToProfile(_roots, CustomCommandScope.Profile, file, _roots.Profile).Outcome);
+        Assert.Equal(CustomCommandEditOutcome.SharedFolder, CustomCommandEditor.CopyToProfile(_roots, CustomCommandScope.Profile, file, _roots.Profile).Outcome);
+        Assert.Equal(CustomCommandEditOutcome.NothingToChange, CustomCommandEditor.Rename(_roots, CustomCommandScope.Profile, file, "x").Outcome);
+        Assert.Equal(CustomCommandEditOutcome.NothingToChange, CustomCommandEditor.Move(_roots, CustomCommandScope.Profile, file, CustomCommandScope.Profile).Outcome);
+    }
+
+    /// <summary>A file that is itself a link is named as one (2026-10-31, review P4-3), not by its folder.</summary>
+    [Fact]
+    public void DeletingALinkFile_IsLinked_TheFileNamed()
+    {
+        string real = Path.Combine(_dir, "real.md");
+        File.WriteAllText(real, "x");
+        string link = Path.Combine(_roots.Profile, "x.md");
+        try
+        {
+            File.CreateSymbolicLink(link, real);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return;   // no symlink right on this machine
+        }
+
+        var result = CustomCommandEditor.Delete(_roots, CustomCommandScope.Profile, link, null);
+
+        Assert.Equal(CustomCommandEditOutcome.Linked, result.Outcome);
+        Assert.True(result.LinkIsFile);
+        Assert.Contains("is a link", NeonSidekick.App.CustomCommandsMenu.Refusal(result), StringComparison.Ordinal);
+        Assert.True(File.Exists(real));
+    }
+
+    /// <summary>A description cut never splits an emoji (review P3-5), and one that needs quotes reads back as written (review P4-9).</summary>
+    [Theory]
+    [InlineData("Use when: the user asks \"why\" and \\ more")]
+    [InlineData("- a list line")]
+    public void SavedFile_TheDescription_ReadsBack(string line)
+    {
+        string content = CustomCommandEditor.SavedFile(line + "\nmore", out _);
+        var text = CustomCommandFile.Read(content);
+
+        Assert.Equal(line, text.Description);
+    }
+
+    [Fact]
+    public void SavedFile_ACutDescription_KeepsAWholeEmoji()
+    {
+        string line = new string('a', CustomCommandEditor.SavedDescriptionLength - 1) + "😀 tail";
+        var text = CustomCommandFile.Read(CustomCommandEditor.SavedFile(line, out _));
+
+        Assert.DoesNotContain(System.Text.Rune.ReplacementChar, text.Description!.EnumerateRunes());
+        Assert.EndsWith("…", text.Description, StringComparison.Ordinal);
     }
 
     private static void MakeLink(string link, string target)

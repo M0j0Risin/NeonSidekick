@@ -126,7 +126,7 @@ public static class HelpCommands
         [
             new("/commands", "Open your custom commands: your own `/name` prompts, a Markdown file each in the profile's or the home's `commands` folder. Tabs all, profile and global; **new command…** starts one, and Enter on a command offers use, move, copy, rename, edit and delete. Type to filter. Works while a reply runs."),
             new("/commands new <name> [--global]", "Write a new command from the template into the profile's `commands` folder (`--global`: the home's, every profile's) and open it in your editor. A built-in's name, or one the folder has, is refused."),
-            new("/commands save <name> [--global]", "Save the last message you sent in this conversation as a command, its pictures left out; `/<name>` then sends it again. During a reply, it runs when the reply ends."),
+            new("/commands save <name> [--global]", "Save the last message you typed in this conversation as a command, its pictures left out; `/<name>` then sends it again. A custom command's or the app's own message is refused: copy that command on `/commands` instead. During a reply, it saves the message that reply answers, at once."),
         ]),
         new("/compact",
         [
@@ -209,7 +209,7 @@ public static class HelpCommands
         new("/help",
         [
             new("/help", "Show the commands and keys: everyday commands on Basic, the rest on Advanced, your own on Custom, then Keys. The Keys tab's **⌨ key check** button (`k`) swaps in `/keycheck`'s list, and pressed again shows the keys. Ctrl+H runs it too."),
-            new("/help <words>", "Ask the model to look the words up in the app's manual (`neon_help`) and answer (`/help claude`, `/help change the voice`). With no model connected, or the tool off, the manual's own answer shows instead. One of your custom commands (`/help review`) shows its card, no model asked. During a reply, it runs when the reply ends."),
+            new("/help <words>", "Ask the model to look the words up in the app's manual (`neon_help`) and answer (`/help claude`, `/help change the voice`). With no model connected, or the tool off, the manual's own answer shows instead. One of your custom commands (`/help review`) shows its card, no model asked, or a skipped file's reason; more words go to the manual (`/help about review`). During a reply, it runs when the reply ends."),
         ]),
         new("/homebar",
         [
@@ -371,7 +371,7 @@ public static class HelpCommands
             new("/profile push|pull links <name> [overwrite]", "Copy the Browser window's saved links to another profile or from it, after a yes: added to the target's (an address it has skipped), or replacing them with `overwrite`."),
             new("/profile push|pull videos <name> [overwrite]", "Copy the saved YouTube videos, with where each was left, to another profile or from it, after a yes: added to the target's (one it has skipped), or replacing them with `overwrite`."),
             new("/profile push|pull monitors <name> [overwrite]", "Copy *Monitor input names*, *Monitor inputs hidden* and *Monitor PC inputs* to another profile or from it, after a yes: added to the target's (its own kept), or replacing them with `overwrite`. A bare push or pull carries them too, replacing them."),
-            new("/profile push|pull commands <name> [overwrite]", "Copy the profile's custom commands (its `commands` folder, subfolders kept) to another profile or from it, after a yes. A same-named file is skipped, or replaced with `overwrite`; a link is never followed."),
+            new("/profile push|pull commands <name> [overwrite]", "Copy the profile's custom commands (its `commands` folder, subfolders kept) to another profile or from it, after a yes. A same-named file is skipped, or replaced with `overwrite`; a link is never followed. It ends with what was copied, skipped and failed, and Esc stops it."),
             new("/profile push|pull skills <name>", "Copy the profile's own skills to another profile or from it, after a yes. One whose folder or name the target's skills have is skipped, never replaced. A copy starts with no history, and takes the place of a global skill of that name."),
             new("/profile push|pull policestrings <name> [overwrite]", "Copy *Shell police forbidden strings* to another profile or from it, after a yes: added to the target's list, or replacing it with `overwrite`."),
             new("/profile push|pull persona <name> [overwrite]", "Copy `persona.md` (the persona) to another profile or from it, after a yes. One already in the target is replaced only with `overwrite`."),
