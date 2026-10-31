@@ -35,6 +35,62 @@ internal sealed partial class ChatScreen
     /// <summary>The line sent last came from the page (2026-10-14): withdrawn, it goes back to the page's draft, never the PC's row.</summary>
     private bool _sentFromWeb;
 
+    /// <summary>Tailscale Serve's rules for a port (2026-10-31): the detector in the app on Windows, a fake in tests, null elsewhere.</summary>
+    private readonly Func<int, CancellationToken, Task<TailscaleServeResult?>>? _tailscaleServe;
+
+    /// <summary>How long Serve's answer for a port is reused: the pane's reopen after a button press doesn't ask again.</summary>
+    internal static readonly TimeSpan ServeCacheTime = TimeSpan.FromSeconds(5);
+
+    private readonly object _serveCacheGate = new();
+    private (int Port, DateTimeOffset At, TailscaleServeResult? Result)? _serveCache;
+
+    /// <summary>
+    /// The HTTPS address <c>/webui</c> offers first (2026-10-31, the user's ask), and the other ports Serve forwards to when it offers none:
+    /// <i>Web UI HTTPS address</i> <c>off</c> none; a typed address as typed, never checked (a wrong one fails on the phone); <c>auto</c> while
+    /// serving, Tailscale Serve's rule for the port, asked through <see cref="_tailscaleServe"/> and kept <see cref="ServeCacheTime"/> per port
+    /// behind a lock (the pane also opens over a reply, and <c>/webui copy</c> at the idle line). A cancelled ask stores nothing and throws.
+    /// </summary>
+    private async Task<(WebUiHttps? Https, IReadOnlyList<int> OtherPorts)> WebUiHttpsAsync(AppSettingsData effective, CancellationToken cancellationToken)
+    {
+        if (WebUiHttpsSetting.IsOff(effective.WebUiHttpsAddress))
+        {
+            return (null, []);
+        }
+
+        if (WebUiHttpsSetting.Address(effective.WebUiHttpsAddress) is { } typed)
+        {
+            return (new WebUiHttps(typed, Detected: false, Public: false), []);
+        }
+
+        if (_tailscaleServe is not { } ask || !_webUiController.Serving)
+        {
+            return (null, []);
+        }
+
+        int port = _webUiController.Port;
+        var now = _time.GetUtcNow();
+        lock (_serveCacheGate)
+        {
+            if (_serveCache is { } cached && cached.Port == port && now - cached.At < ServeCacheTime)
+            {
+                return Mapped(cached.Result);
+            }
+        }
+
+        var result = await ask(port, cancellationToken).ConfigureAwait(false);
+        lock (_serveCacheGate)
+        {
+            _serveCache = (port, _time.GetUtcNow(), result);
+        }
+
+        return Mapped(result);
+
+        static (WebUiHttps?, IReadOnlyList<int>) Mapped(TailscaleServeResult? found) =>
+            found is null ? (null, [])
+            : found.Address is { } address ? (new WebUiHttps(address, Detected: true, found.Public), [])
+            : (null, found.OtherPorts);
+    }
+
     /// <summary>Builds the session and the controller, and wires the feed (from the constructor, before the first draw).</summary>
     private (WebUiSession Session, WebUiController Controller) CreateWebUi(Func<IWebUiBackend, IWebUiHost>? webUiHost)
     {
@@ -854,7 +910,7 @@ internal sealed partial class ChatScreen
 
         if (WebUiBrowserArgs(args) is { } external)
         {
-            await OpenWebUiHereAsync(WebUiText.LoopbackHost, external, sink).ConfigureAwait(false);
+            await OpenWebUiHereAsync(WebUiText.LoopbackHost, external, sink, https: false).ConfigureAwait(false);
             return;
         }
 
@@ -871,7 +927,9 @@ internal sealed partial class ChatScreen
                 ReconcileWebUi();
                 return;
             case "copy":
-                if (_webUiController.Links(WebUiTokenNow(mint: false)) is not [var link, ..])
+                // The first link: the HTTPS one when there is one (2026-10-31), else Tailscale's, else the home network's.
+                var (copyHttps, _) = await WebUiHttpsAsync(_effective(), cancellationToken).ConfigureAwait(false);
+                if (_webUiController.Links(WebUiTokenNow(mint: false), copyHttps) is not [var link, ..])
                 {
                     _transcript.Error(WebUiText.NoLinkError);
                     return;
@@ -909,14 +967,16 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        _ = OpenWebUiQuietlyAsync(parsed.Host.Trim('[', ']'), sink);
+        // The tab's base address (2026-10-31): the HTTPS tab opens https here too, at its own host and port.
+        bool https = parsed.Scheme == Uri.UriSchemeHttps;
+        _ = OpenWebUiQuietlyAsync(https ? parsed.GetLeftPart(UriPartial.Authority) : parsed.Host.Trim('[', ']'), sink, https);
     }
 
-    private async Task OpenWebUiQuietlyAsync(string host, INoticeSink sink)
+    private async Task OpenWebUiQuietlyAsync(string host, INoticeSink sink, bool https)
     {
         try
         {
-            await OpenWebUiHereAsync(host, external: false, sink).ConfigureAwait(false);
+            await OpenWebUiHereAsync(host, external: false, sink, https).ConfigureAwait(false);
         }
         catch (Exception e) when (e is not OutOfMemoryException)
         {
@@ -957,7 +1017,7 @@ internal sealed partial class ChatScreen
     /// history would hold the token; a window that can't take it now, and <c>default-browser</c>, go to the default browser, signed in as
     /// <i>Web browser sign in mode</i> says. The notice and the log name where, never the link; the window hands none of its cookies over.
     /// </summary>
-    private async Task OpenWebUiHereAsync(string host, bool external, INoticeSink sink)
+    private async Task OpenWebUiHereAsync(string host, bool external, INoticeSink sink, bool https)
     {
         var effective = _effective();
         if (!effective.WebUi)
@@ -988,7 +1048,9 @@ internal sealed partial class ChatScreen
         bool once = window
             ? Viewer.BrowserPrivacy.Resolve(effective) == Viewer.BrowserPrivacyKind.KeepHistory
             : Web.WebSignInMode.Resolve(effective) == Web.WebSignInModeKind.OneTimeLink;
-        string? link = once ? _webUiController.OneTimeLink(host) : WebUiAuth.SignInLink(host, _webUiController.Port, WebUiTokenNow(mint: false));
+        // An https base (2026-10-31: the HTTPS tab's double-click) is used whole; a bare host gets the server's own port.
+        string baseAddress = https ? host : WebUiAuth.BaseAddress(host, _webUiController.Port);
+        string? link = once ? _webUiController.OneTimeLinkAt(baseAddress) : WebUiAuth.SignInLinkAt(baseAddress, WebUiTokenNow(mint: false));
         if (link is null || !Uri.TryCreate(link, UriKind.Absolute, out var url))
         {
             sink.Error(WebUiText.BrowserNotServing(_webUiController.Port));
@@ -1060,13 +1122,16 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task ShowWebUiAsync(INoticeSink sink, bool onWatcher, CancellationToken cancellationToken)
     {
-        int shownTab = 0;
+        // The shown tab by its title (2026-10-31): the HTTPS tab can come or go between two passes, so an index would land on another address.
+        string? shownTitle = null;
         while (true)
         {
             var effective = _effective();
             var audience = WebUiReach.Resolve(effective);
-            var links = _webUiController.Links(WebUiTokenNow(mint: false));
-            var lines = WebUiText.PaneLines(effective.WebUi, _webUiController.Serving, _webUiController.Serving ? _webUiController.Port : effective.WebUiPort, audience, links);
+            var (https, otherPorts) = await WebUiHttpsAsync(effective, cancellationToken).ConfigureAwait(false);
+            var links = _webUiController.Links(WebUiTokenNow(mint: false), https);
+            var lines = WebUiText.PaneLines(effective.WebUi, _webUiController.Serving, _webUiController.Serving ? _webUiController.Port : effective.WebUiPort, audience, links,
+                https, otherPorts);
             if (!_pane.Enabled)
             {
                 foreach (string line in lines.Where(l => l.Length > 0))
@@ -1095,11 +1160,11 @@ internal sealed partial class ChatScreen
             {
                 // One tab per address (2026-10-14, the user's ask): its QR code for the phone's camera, then the link itself; Tailscale's
                 // headed by its note (later that day, the user's ask).
-                string status = string.Join("\n", WebUiText.StatusLines(effective.WebUi, true, _webUiController.Port, audience));
+                string status = string.Join("\n", WebUiText.StatusLines(effective.WebUi, true, _webUiController.Port, audience, https, otherPorts));
                 // A double-click on the link opens it on this PC (later on 2026-10-15, the user's ask), as /webui browser does, at that tab's host;
                 // on the QR code too since 2026-10-20 (OpenLinkLine).
-                tabs = [.. links.Select(link => new InfoTab(WebUiText.LinkTabTitle(link.Url), () => new Spectre.Console.Rows(
-                    new Spectre.Console.Text(WebUiText.LinkTabText(status, link.Tailscale)),
+                tabs = [.. links.Select(link => new InfoTab(WebUiText.LinkTabTitle(link), () => new Spectre.Console.Rows(
+                    new Spectre.Console.Text(WebUiText.LinkTabText(status, WebUiText.KindOf(link), https)),
                     new QrView(QrCode.Encode(link.Url)),
                     new Spectre.Console.Text("\n" + link.Url + "\n\n" + WebUiText.TokenWarning + "\n" + WebUiText.LinkOpenHint)))
                 {
@@ -1107,8 +1172,10 @@ internal sealed partial class ChatScreen
                 })];
             }
 
+            int shownTab = Math.Max(0, tabs.ToList().FindIndex(t => t.Title == shownTitle));
             await _info.ShowAsync(WebUiText.PaneTitle, tabs, shownTab, cancellationToken, buttons).ConfigureAwait(false);
             shownTab = _info.LastTab;
+            shownTitle = shownTab < tabs.Count ? tabs[shownTab].Title : null;
             switch (_info.Pressed?.Key)
             {
                 case WebUiText.CopyKey:

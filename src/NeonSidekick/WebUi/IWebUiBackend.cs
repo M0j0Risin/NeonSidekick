@@ -65,8 +65,8 @@ public interface IWebUiBackend
     /// <summary>What a page gets as it (re)connects: the transcript, the open asks, the state.</summary>
     WebSnapshot Snapshot();
 
-    /// <summary>A browser signed in from <paramref name="remote"/> (a notice at the PC and an audit line).</summary>
-    void SignedIn(IPAddress? remote);
+    /// <summary>A browser signed in from <paramref name="origin"/> (a notice at the PC and an audit line; 2026-10-31: the proxy it came through named).</summary>
+    void SignedIn(WebUiOrigin origin);
 
     /// <summary>A message from the page.</summary>
     WebReply Send(WebSendRequest request, IPAddress? remote);

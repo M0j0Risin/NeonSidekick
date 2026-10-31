@@ -120,8 +120,9 @@ A browser front end for this profile, for a phone on the home network: the chat 
 | Setting | What it does | Default |
 |---|---|---|
 | Web UI | Serves the pages for this profile; `/webui` shows the sign-in link. A profile switch follows the new profile's settings. Refused while a reply runs. | off |
-| Web UI port | The TCP port it listens on (1024–65535). A port in use or reserved by Windows keeps it off with a notice. A change signs browsers out. | 8765 |
-| Web UI reach | `local` (localhost only) or `lan` (your home network and your Tailscale tailnet). Either way a browser signs in with `/webui`'s link. | `lan` |
+| Web UI port | The TCP port it listens on (1024–65535). A port in use or reserved by Windows keeps it off with a notice. A change signs browsers out. Tailscale Serve doesn't follow it ([HTTPS through Tailscale Serve](INTERFACE.md#https-through-tailscale-serve)). | 8765 |
+| Web UI reach | `local` (this computer, and whatever a proxy on it forwards, such as Tailscale Serve) or `lan` (your home network and your Tailscale tailnet). Either way a browser signs in with `/webui`'s link. | `lan` |
+| Web UI HTTPS address | `auto` shows Tailscale Serve's address first in `/webui` (Windows), `off` none, or type the `https://host[:port]` of your own proxy. Its link holds the token, so type only an address that reaches this computer. | `auto` |
 | Web UI commands | The Chat tab only: lets the page run the slash commands that work from a phone ([Commands from the page](INTERFACE.md#commands-from-the-page)). Off, the page only sends messages. | off |
 | Web UI connection details | The Chat tab only: the page's dropdown shows the `%` and `*` connections' server and database, not just their names. The chat shows whatever the model says either way. | off |
 | Web UI bot check control | The Chat tab only: the page shows a running bot check live, and your taps and typing go into it ([A bot check from the page](INTERFACE.md#a-bot-check-from-the-page)). Off, the page only answers the allow question and *Give up*. | on |

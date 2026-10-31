@@ -17,6 +17,9 @@ internal sealed class FakeWebUiBackend : IWebUiBackend
 
     public ConcurrentQueue<IPAddress?> SignIns { get; } = new();
 
+    /// <summary>Each sign-in's whole origin (2026-10-31: the proxy it came through).</summary>
+    public ConcurrentQueue<WebUiOrigin> Origins { get; } = new();
+
     public int Stops;
 
     public WebReply Reply { get; set; } = WebReply.Ok;
@@ -27,7 +30,11 @@ internal sealed class FakeWebUiBackend : IWebUiBackend
 
     public WebSnapshot Snapshot() => Snap;
 
-    public void SignedIn(IPAddress? remote) => SignIns.Enqueue(remote);
+    public void SignedIn(WebUiOrigin origin)
+    {
+        SignIns.Enqueue(origin.Remote);
+        Origins.Enqueue(origin);
+    }
 
     public WebReply Send(WebSendRequest request, IPAddress? remote)
     {

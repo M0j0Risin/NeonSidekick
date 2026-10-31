@@ -1165,9 +1165,13 @@ public sealed partial class WebUiTests : IDisposable
         Assert.True(App.SettingsMenu.IsToggle(App.SettingsField.WebUi));
         Assert.Equal("must be a port from 1024 to 65535", App.SettingsMenu.WebUiPortRangeError);
         // Server, Guardrails, Tabs (2026-10-16, the user's ask).
-        Assert.Equal([App.SettingsField.WebUi, App.SettingsField.WebUiPort, App.SettingsField.WebUiReach, App.SettingsField.WebUiCommands, App.SettingsField.WebUiConnectionDetails,
+        Assert.Equal([App.SettingsField.WebUi, App.SettingsField.WebUiPort, App.SettingsField.WebUiReach, App.SettingsField.WebUiHttpsAddress, App.SettingsField.WebUiCommands, App.SettingsField.WebUiConnectionDetails,
             App.SettingsField.WebUiBotCheckControl, App.SettingsField.WebUiProfileTheme, App.SettingsField.WebUiChatControls, App.SettingsField.WebUiHomeControls, App.SettingsField.WebUiShoppingControls, App.SettingsField.WebUiYouTubeControls],
             App.SettingsMenu.TabFields[(int)App.SettingsTab.WebUi]);
+        // Web UI HTTPS address (2026-10-31): read when /webui opens, so neither a restart nor refused under a reply; typed, not a toggle.
+        Assert.False(App.SettingsMenu.IsWebUiField(App.SettingsField.WebUiHttpsAddress));
+        Assert.False(App.SettingsMenu.RefusedMidTurn(App.SettingsField.WebUiHttpsAddress));
+        Assert.False(App.SettingsMenu.IsToggle(App.SettingsField.WebUiHttpsAddress));
         // The Guardrails and Tabs rows (later on 2026-10-14; the Home tab's and the theme's 2026-10-15; the Chat and Shopping tabs' later that day) are read at each
         // request: none restarts the server or is refused under a reply.
         foreach (var field in new[]
@@ -1331,8 +1335,8 @@ public sealed partial class WebUiTests : IDisposable
     public void TailscalesTab_IsHeadedByItsNote_AndItsScanHintNamesNoNetwork()
     {
         Assert.Equal("Tailscale: works from any device on your tailnet, at home or away.", WebUiText.TailscaleNote);
-        Assert.Equal(WebUiText.TailscaleNote + "\nWeb UI: on\n\n" + WebUiText.TailscaleScanHint + "\n", WebUiText.LinkTabText("Web UI: on", tailscale: true));
-        Assert.Equal("Web UI: on\n\n" + WebUiText.ScanHint + "\n", WebUiText.LinkTabText("Web UI: on", tailscale: false));
+        Assert.Equal(WebUiText.TailscaleNote + "\nWeb UI: on\n\n" + WebUiText.TailscaleScanHint + "\n", WebUiText.LinkTabText("Web UI: on", WebUiLinkKind.Tailscale));
+        Assert.Equal("Web UI: on\n\n" + WebUiText.ScanHint + "\n", WebUiText.LinkTabText("Web UI: on", WebUiLinkKind.Home));
         Assert.Contains("(on the same network)", WebUiText.ScanHint);
         Assert.DoesNotContain("same network", WebUiText.TailscaleScanHint);
     }
@@ -1408,6 +1412,31 @@ public sealed partial class WebUiTests : IDisposable
         Assert.True(made[1].Stopped);
         Assert.False(controller.Serving);
         Assert.Contains(_session.TakeNotices(), n => n.Text == WebUiText.StoppedNotice);
+    }
+
+    /// <summary>The HTTPS address (2026-10-31): its link first and marked, then the links as before; under <c>local</c>, https then localhost.</summary>
+    [Fact]
+    public async Task TheControllersLinks_PutTheHttpsOneFirst()
+    {
+        await using var controller = new WebUiController(_ => new FakeHost(), _session);
+        Assert.Empty(controller.Links("t1", new WebUiHttps("https://h.ts.net", true, false)));   // not serving: none
+
+        await controller.ReconcileAsync(new WebUiWanted(true, 8765, WebUiAudience.Local, "t1"));
+        Assert.Equal(
+            [new WebUiLink("https://h.ts.net/signin?t=t1", false, true), new WebUiLink("http://localhost:8765/signin?t=t1", false)],
+            controller.Links("t1", new WebUiHttps("https://h.ts.net", true, false)));
+        Assert.Equal([new WebUiLink("http://localhost:8765/signin?t=t1", false)], controller.Links("t1"));
+    }
+
+    /// <summary>An https link (~91 characters on this PC, 96 with :8766) is a bigger QR code; a 120-character one still fits a 120-column pane.</summary>
+    [Fact]
+    public void ALongHttpsLinksQrCode_StillFitsThePane()
+    {
+        string link = WebUiAuth.SignInLinkAt("https://" + new string('h', 120 - "https://:65535/signin?t=".Length - WebUiAuth.TokenLength) + ":65535", WebUiAuth.NewToken());
+        Assert.Equal(120, link.Length);
+        var code = QrCode.Encode(link);
+        Assert.True(code.Version <= 7, code.Version.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Assert.True(code.Size + 8 < 120);   // the modules and the quiet zone, a module a column
     }
 
     [Fact]

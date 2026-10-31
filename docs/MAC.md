@@ -54,7 +54,7 @@ You need an Apple Silicon Mac (M1 or later). Unpack the Mac package as the [READ
 | Docker servers | Not available | Docker on a Mac passes no GPU to containers; the embedded model is the Mac's local server instead. |
 | UNC shares and outside folders | Works | `\\server\share`, `//server/share` or `smb://` paths, mounted under `/Volumes` while the app runs ([UNC shares on a Mac](TOOLS.md#unc-shares-on-a-mac)). |
 | `/keycheck` | Works | Finds macOS's shortcuts, apps' exclusive hotkeys and the terminal's Option key; most shared hotkeys don't show. |
-| Web UI (`/webui`) | Works | The token is in the Keychain; macOS asks once to allow incoming connections. Pictures show scaled originals (no thumbnails); Home's *Now playing* needs macOS 14+, and its PC card shows the Mac's meters. |
+| Web UI (`/webui`) | Works | The token is in the Keychain; macOS asks once to allow incoming connections. Pictures show scaled originals (no thumbnails); Home's *Now playing* needs macOS 14+, and its PC card shows the Mac's meters. Tailscale Serve's address isn't found: type it into *Web UI HTTPS address* for the HTTPS tab. |
 
 ## What differs
 

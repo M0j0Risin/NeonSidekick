@@ -15,8 +15,19 @@ public sealed record WebUiAdapter(NetworkInterfaceType Type, IReadOnlyList<IPAdd
 /// <summary>A sign-in address <see cref="WebUiController.ChooseAddresses"/> chose, and whether it is Tailscale's (later on 2026-10-14: its tab says so).</summary>
 public sealed record WebUiAddress(string Host, bool Tailscale);
 
-/// <summary>A sign-in link (the token in it, never logged) and whether it is Tailscale's address's (later on 2026-10-14).</summary>
-public sealed record WebUiLink(string Url, bool Tailscale);
+/// <summary>
+/// A sign-in link (the token in it, never logged), whether it is Tailscale's address's (later on 2026-10-14), and whether it is the HTTPS
+/// address's (2026-10-31: Tailscale Serve's, or the one <i>Web UI HTTPS address</i> names).
+/// </summary>
+public sealed record WebUiLink(string Url, bool Tailscale, bool Https = false);
+
+/// <summary>What an address tab is (2026-10-31): the home network's, Tailscale's plain-http one, or the HTTPS one.</summary>
+public enum WebUiLinkKind
+{
+    Home,
+    Tailscale,
+    Https,
+}
 
 /// <summary>What the Web UI should be doing: serving or not, on which port, to whom, with which token (plain, never logged).</summary>
 public sealed record WebUiWanted(bool On, int Port, WebUiAudience Audience, string Token)
@@ -126,11 +137,14 @@ public sealed class WebUiController : IAsyncDisposable
     /// <summary>A one-time sign-in link on <paramref name="host"/> from the running server (later on 2026-10-15), or null while it serves none.</summary>
     public string? OneTimeLink(string host) => Volatile.Read(ref _host)?.OneTimeLink(host);
 
+    /// <summary>A one-time sign-in link at <paramref name="baseAddress"/> (2026-10-31: the HTTPS tab's double-click), or null while it serves none.</summary>
+    public string? OneTimeLinkAt(string baseAddress) => Volatile.Read(ref _host)?.OneTimeLinkAt(baseAddress);
+
     /// <summary>
     /// The sign-in links for <paramref name="token"/>: <c>localhost</c> under <c>local</c> (never Tailscale's), each chosen private IPv4 address under
-    /// <c>lan</c>, Tailscale's marked (later on 2026-10-14).
+    /// <c>lan</c>, Tailscale's marked (later on 2026-10-14). With <paramref name="https"/> (2026-10-31), its link first, marked, the others after it unchanged.
     /// </summary>
-    public IReadOnlyList<WebUiLink> Links(string token)
+    public IReadOnlyList<WebUiLink> Links(string token, WebUiHttps? https = null)
     {
         if (!Serving)
         {
@@ -138,14 +152,21 @@ public sealed class WebUiController : IAsyncDisposable
         }
 
         IReadOnlyList<WebUiAddress> hosts = Audience == WebUiAudience.Local ? [new WebUiAddress("localhost", false)] : PrivateAddresses();
-        return [.. hosts.Select(h => new WebUiLink(WebUiAuth.SignInLink(h.Host, Port, token), h.Tailscale))];
+        var plain = hosts.Select(h => new WebUiLink(WebUiAuth.SignInLink(h.Host, Port, token), h.Tailscale));
+        return https is null ? [.. plain] : [new WebUiLink(WebUiAuth.SignInLinkAt(https.Address, token), false, true), .. plain];
     }
 
     /// <summary>
     /// The addresses a phone on the home network reaches this machine at, best first (2026-10-14, the user's ask: <c>/webui</c> listed a VPN's
     /// tunnel and WSL's virtual switch beside the home network's): read from the interfaces that are up and chosen by <see cref="ChooseAddresses"/>.
     /// </summary>
-    public static IReadOnlyList<WebUiAddress> PrivateAddresses()
+    public static IReadOnlyList<WebUiAddress> PrivateAddresses() => ChooseAddresses(UpAdapters());
+
+    /// <summary>
+    /// The adapters that are up, as <see cref="ChooseAddresses"/> and <see cref="TailscaleServe.TailscaleUp"/> weigh them (2026-10-31: the
+    /// Serve detector's gate reads them too); none when the interfaces can't be read.
+    /// </summary>
+    public static IReadOnlyList<WebUiAdapter> UpAdapters()
     {
         var adapters = new List<WebUiAdapter>();
         try
@@ -171,7 +192,7 @@ public sealed class WebUiController : IAsyncDisposable
             DiagnosticLog.Debug(Category, "Web UI: the network interfaces could not be read: " + e.Message);
         }
 
-        return ChooseAddresses(adapters);
+        return adapters;
     }
 
     /// <summary>

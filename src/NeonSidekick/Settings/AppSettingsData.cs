@@ -3542,6 +3542,15 @@ public sealed class AppSettingsData
     public string WebUiReach { get; set; } = NeonSidekick.WebUi.WebUiReach.Default;
 
     /// <summary>
+    /// The HTTPS address <c>/webui</c> offers first (2026-10-31, the user's pick: detect, plus a setting): <c>auto</c> (the default: Tailscale
+    /// Serve's address, detected on Windows through Tailscale's local service; none off Windows), <c>off</c> (no HTTPS tab), or an
+    /// <c>https://host[:port]</c> address typed for a proxy of one's own (<see cref="NeonSidekick.WebUi.WebUiHttpsSetting"/>). Its link and QR code
+    /// hand the token to that host, so only the PC sets it: <c>/settings</c> is PC only from the page, and no tool writes settings. Read when
+    /// <c>/webui</c> opens, so no restart. A value that no longer parses reads as <c>auto</c>. No variable.
+    /// </summary>
+    public string WebUiHttpsAddress { get; set; } = NeonSidekick.WebUi.WebUiHttpsSetting.Default;
+
+    /// <summary>
     /// Whether the Web UI has its Chat tab (2026-10-15, the user's call: on by default): on, the page at <c>/</c> is the chat — the transcript, the
     /// composer, the PC's questions answered from the phone; off, there is no Chat tab: <c>/</c> goes to the first tab that is on (Home, then
     /// Shopping) or, with none on, to a page that says so, and the chat's APIs answer 404 (its event stream ends). The PC is unchanged. Read at

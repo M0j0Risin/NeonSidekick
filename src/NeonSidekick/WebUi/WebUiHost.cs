@@ -40,6 +40,9 @@ public interface IWebUiHost : IAsyncDisposable
     /// for a minute. A host without them (a test's) has none.
     /// </summary>
     string? OneTimeLink(string host) => null;
+
+    /// <summary>A one-time sign-in link at <paramref name="baseAddress"/> (2026-10-31: the HTTPS tab's), or null while not serving; a test's host has none.</summary>
+    string? OneTimeLinkAt(string baseAddress) => null;
 }
 
 /// <summary>
@@ -135,6 +138,12 @@ public sealed class WebUiHost : IWebUiHost
     {
         ArgumentNullException.ThrowIfNull(host);
         return _binding is null || _app is null ? null : WebUiAuth.OnceLink(host, Port, _codes.Mint());
+    }
+
+    public string? OneTimeLinkAt(string baseAddress)
+    {
+        ArgumentNullException.ThrowIfNull(baseAddress);
+        return _binding is null || _app is null ? null : WebUiAuth.OnceLinkAt(baseAddress, _codes.Mint());
     }
 
     public async Task StartAsync(WebUiBinding binding, CancellationToken cancellationToken)
@@ -237,17 +246,23 @@ public sealed class WebUiHost : IWebUiHost
         try
         {
             SecurityHeaders(response);
-            var remote = context.Connection.RemoteIpAddress;
-            if (_binding is { Audience: WebUiAudience.LocalAreaNetwork } && remote is not null && !_allowRemote(remote))
+            var socket = context.Connection.RemoteIpAddress;
+            // The lan check judges the socket's address, never a header (2026-10-31).
+            if (_binding is { Audience: WebUiAudience.LocalAreaNetwork } && socket is not null && !_allowRemote(socket))
             {
-                if (_limits.LogDue(remote, nameof(WebUiText.RefusedRemoteLogLine)))
+                if (_limits.LogDue(socket, nameof(WebUiText.RefusedRemoteLogLine)))
                 {
-                    DiagnosticLog.Info(Category, WebUiText.RefusedRemoteLogLine(remote));
+                    DiagnosticLog.Info(Category, WebUiText.RefusedRemoteLogLine(socket));
                 }
 
                 response.StatusCode = StatusCodes.Status403Forbidden;
                 return;
             }
+
+            // Who it came from, once (2026-10-31): through Tailscale Serve (or a proxy of one's own), the tailnet device's address, so the
+            // notices, the log lines and the rate limits name the phone and not 127.0.0.1; one request never names two addresses.
+            var origin = OriginOf(context);
+            var remote = origin.Remote;
 
             string path = context.Request.Path.Value ?? "/";
             bool get = HttpMethods.IsGet(context.Request.Method) || HttpMethods.IsHead(context.Request.Method);
@@ -267,14 +282,14 @@ public sealed class WebUiHost : IWebUiHost
 
             if (path == WebUiAuth.SignInPath && get)
             {
-                await SignInAsync(context).ConfigureAwait(false);
+                await SignInAsync(context, origin).ConfigureAwait(false);
                 return;
             }
 
             if (path == WebUiAuth.SignInPath && post)
             {
                 // The link pasted on the page (2026-10-15: an app installed from Safari keeps its own cookies), the header no other site can send.
-                await PastedSignInAsync(context).ConfigureAwait(false);
+                await PastedSignInAsync(context, origin).ConfigureAwait(false);
                 return;
             }
 
@@ -361,7 +376,7 @@ public sealed class WebUiHost : IWebUiHost
                         return;
                     case YouTubeEventsPath when _backend.Video is { } video:
                         // The YouTube tab's own stream (2026-10-16): per page, apart from Chat's.
-                        await YouTubeEventsAsync(context, video).ConfigureAwait(false);
+                        await YouTubeEventsAsync(context, video, remote).ConfigureAwait(false);
                         return;
                     case "/api/shopping":
                         // Tagged since 2026-10-16: the page reads it every 5 s with the full body, and most reads change nothing.
@@ -922,28 +937,37 @@ public sealed class WebUiHost : IWebUiHost
         request.Headers[CsrfHeader] == "1"
         && request.ContentType is { } type && type.StartsWith("application/json", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Who <paramref name="context"/> came from (2026-10-31, <see cref="WebUiOrigin.Of"/>): the proxy headers read only from a loopback socket.
+    /// </summary>
+    private static WebUiOrigin OriginOf(HttpContext context)
+    {
+        var headers = context.Request.Headers;
+        return WebUiOrigin.Of(context.Connection.RemoteIpAddress, headers["X-Forwarded-Host"].ToString(), headers["X-Forwarded-For"].ToString(),
+            headers["Tailscale-Funnel-Request"].ToString());
+    }
+
     private bool SignedIn(HttpContext context) =>
         _binding is { } binding && WebUiAuth.Matches(context.Request.Cookies[WebUiAuth.CookieName(Port)], binding.Token);
 
-    private async Task SignInAsync(HttpContext context)
+    private async Task SignInAsync(HttpContext context, WebUiOrigin origin)
     {
-        var remote = context.Connection.RemoteIpAddress;
         if (context.Request.Query.ContainsKey(WebUiAuth.OnceQuery))
         {
-            await OnceSignInAsync(context).ConfigureAwait(false);
+            await OnceSignInAsync(context, origin).ConfigureAwait(false);
             return;
         }
 
         if (_binding is not { } binding || !WebUiAuth.Matches(context.Request.Query["t"].ToString(), binding.Token))
         {
-            DiagnosticLog.Info(Category, WebUiText.SignInFailedLogLine(remote));
+            DiagnosticLog.Info(Category, WebUiText.SignInFailedLogLine(origin));
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
             await AssetAsync(context, WebUiAssets.SignInPage, status: StatusCodes.Status403Forbidden).ConfigureAwait(false);
             return;
         }
 
         SetCookie(context, binding);
-        _backend.SignedIn(remote);
+        _backend.SignedIn(origin);
         // The token leaves the address bar (and the history's next entry) at once.
         context.Response.StatusCode = StatusCodes.Status303SeeOther;
         context.Response.Headers.Location = "/";
@@ -954,9 +978,8 @@ public sealed class WebUiHost : IWebUiHost
     /// goes to <c>/</c>; a HEAD (a link checker, a preview) spends nothing and sets no cookie, so the browser's own GET after it still signs in.
     /// A dead code gets the sign-in page with 403, as a wrong token does. The code is never logged.
     /// </summary>
-    private async Task OnceSignInAsync(HttpContext context)
+    private async Task OnceSignInAsync(HttpContext context, WebUiOrigin origin)
     {
-        var remote = context.Connection.RemoteIpAddress;
         context.Response.Headers.CacheControl = "no-store";
         if (HttpMethods.IsHead(context.Request.Method))
         {
@@ -966,14 +989,14 @@ public sealed class WebUiHost : IWebUiHost
 
         if (_binding is not { } binding || !_codes.Take(context.Request.Query[WebUiAuth.OnceQuery].ToString()))
         {
-            DiagnosticLog.Info(Category, WebUiText.SignInFailedLogLine(remote));
+            DiagnosticLog.Info(Category, WebUiText.SignInFailedLogLine(origin));
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
             await AssetAsync(context, WebUiAssets.SignInPage, status: StatusCodes.Status403Forbidden).ConfigureAwait(false);
             return;
         }
 
         SetCookie(context, binding);
-        _backend.SignedIn(remote);
+        _backend.SignedIn(origin);
         context.Response.StatusCode = StatusCodes.Status303SeeOther;
         context.Response.Headers.Location = "/";
     }
@@ -992,9 +1015,8 @@ public sealed class WebUiHost : IWebUiHost
     /// A sign-in pasted on the page (2026-10-15, E8): the whole link or the bare token, as JSON with the header no other site can send (so no site
     /// can sign a browser in to its own session), checked the way the link is; the same cookie, and the page reloads where it is. Never echoes it.
     /// </summary>
-    private async Task PastedSignInAsync(HttpContext context)
+    private async Task PastedSignInAsync(HttpContext context, WebUiOrigin origin)
     {
-        var remote = context.Connection.RemoteIpAddress;
         context.Response.Headers.CacheControl = "no-store";
         if (!CrossSiteSafe(context.Request))
         {
@@ -1005,13 +1027,13 @@ public sealed class WebUiHost : IWebUiHost
         var request = await ReadAsync(context, WebUiJsonContext.Default.WebSignInRequest).ConfigureAwait(false);
         if (_binding is not { } binding || !WebUiAuth.Matches(WebUiAuth.TokenFrom(request?.Link), binding.Token))
         {
-            DiagnosticLog.Info(Category, WebUiText.SignInFailedLogLine(remote));
+            DiagnosticLog.Info(Category, WebUiText.SignInFailedLogLine(origin));
             await ResultAsync(context, StatusCodes.Status403Forbidden, new WebResult(false, WebUiText.SignInWrong)).ConfigureAwait(false);
             return;
         }
 
         SetCookie(context, binding);
-        _backend.SignedIn(remote);
+        _backend.SignedIn(origin);
         await ResultAsync(context, StatusCodes.Status200OK, new WebResult(true)).ConfigureAwait(false);
     }
 
@@ -1169,7 +1191,7 @@ public sealed class WebUiHost : IWebUiHost
     /// heartbeat — over the page's own queue from the player, which decides which stream ends (an evicted waiting page, a reconnect replacing a
     /// half-open one) through the stream's own cancel. Never counted among <see cref="MaxStreams"/>: the player holds its own list.
     /// </summary>
-    private async Task YouTubeEventsAsync(HttpContext context, IWebVideo video)
+    private async Task YouTubeEventsAsync(HttpContext context, IWebVideo video, IPAddress? remote)
     {
         var response = context.Response;
         string page = context.Request.Query["page"].ToString();
@@ -1198,7 +1220,7 @@ public sealed class WebUiHost : IWebUiHost
             }
         }
 
-        using var attachment = video.Attach(page, load, claim, visible, context.Connection.RemoteIpAddress, End);
+        using var attachment = video.Attach(page, load, claim, visible, remote, End);
         try
         {
             var token = mine.Token;

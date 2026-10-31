@@ -543,7 +543,8 @@ Turn it on with `/webui on` or *Web UI* (`/settings` › Client › Web UI). Not
 ### Signing in
 
 * **The pane:** `/webui` (Ctrl+Alt+W, or the toolbar's 📱) shows a tab per address of the computer running NeonSidekick, each with a QR code and its sign-in link. Scan the code with the phone's camera, or open the link in a browser on the same network.
-* **The addresses:** Tailscale's comes first, since its link works at home and away ([Away from home](#away-from-home)). Then the home network's Ethernet and Wi-Fi adapters, fastest first (`localhost` under `local`).
+* **The addresses:** the HTTPS one comes first when there is one ([HTTPS through Tailscale Serve](#https-through-tailscale-serve)), then Tailscale's, since both work at home and away ([Away from home](#away-from-home)). Then the home network's Ethernet and Wi-Fi adapters, fastest first (`localhost` under `local`).
+* **HTTPS only:** set *Web UI reach* to `local`; the tabs are then the HTTPS one and `localhost`.
 * Other VPN tunnels and WSL's virtual switch aren't listed, though a browser through them still connects with the address typed.
 * **The link** signs the browser in and leaves the address bar at once; the browser keeps a cookie for a year.
 * **The token:** each profile has its own, kept encrypted. `/webui reset`, or a new port, makes a new one and signs every browser out.
@@ -552,7 +553,7 @@ Turn it on with `/webui on` or *Web UI* (`/settings` › Client › Web UI). Not
 
 #### The pane's buttons
 
-* **The strip:** `📱 Web UI │ enabled │ lan │ reset │ 192.168.1.217 · 100.78.20.125`, three buttons ahead of the address tabs.
+* **The strip:** `📱 Web UI │ enabled │ lan │ reset │ HTTPS · 100.78.20.125 · 192.168.1.217`, three buttons ahead of the address tabs.
 * `e` turns *Web UI* on or off, `l` switches *Web UI reach* between `lan` and `local`, and `r` makes a new token after a yes, as `/webui reset` does. The server restarts at once.
 * **copy** (`c`) puts the shown tab's sign-in link on the clipboard; `/webui copy` puts the first tab's.
 * **A double-click on the link or the QR code** opens it on the app's computer, as `/webui browser` does.
@@ -567,17 +568,19 @@ Turn it on with `/webui on` or *Web UI* (`/settings` › Client › Web UI). Not
 
 #### Away from home
 
-* Install Tailscale on the app's computer and the phone, sign both in to the same tailnet (your own private Tailscale network), and scan the Tailscale tab's code once. The phone then reaches the Web UI wherever it is.
-* Nothing to open on the router; *Web UI reach* must be `lan`. If Windows calls Tailscale's network Public, the phone can't connect ([the firewall](#safety-and-the-network)).
+* Install Tailscale on the app's computer and the phone, sign both in to the same tailnet (your own private Tailscale network), and scan the HTTPS tab's code once, or the Tailscale tab's without Serve. The phone then reaches the Web UI wherever it is.
+* Nothing to open on the router; *Web UI reach* must be `lan`, or `local` with [Tailscale Serve](#https-through-tailscale-serve). If Windows calls Tailscale's network Public, the phone can't connect over plain http ([the firewall](#safety-and-the-network)).
 
 #### HTTPS through Tailscale Serve
 
 The page is plain HTTP. Tailscale Serve puts HTTPS in front of it with a real certificate, reachable only on your tailnet.
 
 * **Once, in Tailscale's admin console:** turn on MagicDNS and HTTPS certificates (DNS page).
-* **On the app's computer:** set *Web UI reach* to `local`, then run `tailscale serve --bg <port>`, where `<port>` is *Web UI port*. `tailscale serve status` shows the address, `https://<computer>.<tailnet>.ts.net`.
-* **Signing in:** `/webui`'s links still say `http://localhost`. Open the https address on the phone and paste the `localhost` tab's link (or its token) into the sign-in box; the camera's preview of the QR code can copy the link.
-* **To stop:** `tailscale serve reset`. Set *Web UI reach* back to `lan` for the links and QR codes to work directly again.
+* **On the app's computer:** run `tailscale serve --bg <port>`, where `<port>` is *Web UI port*. `tailscale serve status` shows the address, `https://<computer>.<tailnet>.ts.net`. For HTTPS alone, set *Web UI reach* to `local` ([Signing in](#signing-in)).
+* **Signing in:** `/webui` then opens on an **HTTPS** tab with that address's QR code and link (found on Windows; on a Mac, type it into *Web UI HTTPS address*).
+* **Use `tailscale serve`, not `tailscale funnel`:** Funnel puts the page on the open internet, with only the token in the way. The HTTPS tab warns when it's on.
+* **Another port:** Serve doesn't follow a new *Web UI port*: run the command again with it. A second profile on its own port takes one more rule, e.g. `tailscale serve --bg --https=8766 8766`.
+* **To stop:** `tailscale serve reset`.
 * The cookie is per address: a phone signed in over http signs in again over https.
 
 ### The tabs
@@ -723,9 +726,9 @@ When a web tool meets a bot check (a Cloudflare click, a captcha), the challenge
 
 ### Safety and the network
 
-* **Who may connect:** under `lan`, a browser at a private address (the home network, and Tailscale's 100.64/10) with the cookie.
+* **Who may connect:** under `lan`, a browser at a private address (the home network, and Tailscale's 100.64/10) with the cookie. Under `local`, this computer, and the browsers a proxy on it forwards (Tailscale Serve: your tailnet), with the cookie.
 * Private here doesn't mean safe (a router's NAT loopback, Docker or Tailscale can present one): the token is the gate.
-* **Plain HTTP:** the links are IPv4 addresses, and the page is plain HTTP, so a browser won't send notifications or reach the clipboard ([HTTPS through Tailscale Serve](#https-through-tailscale-serve)).
+* **Plain HTTP:** the page itself is plain HTTP; for HTTPS, see [HTTPS through Tailscale Serve](#https-through-tailscale-serve).
 * **The firewall:** Windows asks to let the app through the first time it serves the network; allow it on private networks. On a network Windows calls Public the phone can't connect. A Mac asks too.
 * **A port that won't open:** another program uses it, or Windows reserves it (`netsh int ipv4 show excludedportrange protocol=tcp` lists the reserved ranges). Pick another in *Web UI port*.
 * **Too fast:** taps, a bot check card's input, Ask the house and pasted sign-ins are limited per address; past that the page says to slow down.

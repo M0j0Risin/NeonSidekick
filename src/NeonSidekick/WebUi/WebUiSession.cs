@@ -746,10 +746,11 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
             StripView?.Invoke(), PointNow?.Invoke());
     }
 
-    public void SignedIn(IPAddress? remote)
+    public void SignedIn(WebUiOrigin origin)
     {
-        DiagnosticLog.Info(Category, WebUiText.SignedInLogLine(remote));
-        Notice(WebUiText.SignedInNotice(remote));
+        ArgumentNullException.ThrowIfNull(origin);
+        DiagnosticLog.Info(Category, WebUiText.SignedInLogLine(origin));
+        Notice(WebUiText.SignedInNotice(origin));
     }
 
     public WebReply Send(WebSendRequest request, IPAddress? remote)

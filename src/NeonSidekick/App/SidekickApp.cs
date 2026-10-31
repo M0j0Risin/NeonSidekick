@@ -111,6 +111,7 @@ public sealed partial class SidekickApp
 
     /// <summary>The Web UI's server over the screen's session (2026-10-14): <see cref="WebUi.WebUiHost"/> in the app; null in tests and headless, no Web UI.</summary>
     private readonly Func<WebUi.IWebUiBackend, WebUi.IWebUiHost>? _webUiHost;
+    private readonly Func<int, CancellationToken, Task<WebUi.TailscaleServeResult?>>? _tailscaleServe;
 
     /// <summary>The <c>/keycheck</c> probe (2026-10-04): <see cref="Hotkeys.WindowsHotkeyProbe"/> on Windows, null elsewhere.</summary>
     private readonly Hotkeys.IHotkeyProbe? _hotkeyProbe;
@@ -272,7 +273,8 @@ public sealed partial class SidekickApp
         bool headlessNarrow = false,
         Plans.IRalphVerifier? ralphVerifier = null,
         Monitors.IMonitorSystem? monitorSystem = null,
-        Files.ICheckpointStore? checkpoints = null)
+        Files.ICheckpointStore? checkpoints = null,
+        Func<int, CancellationToken, Task<WebUi.TailscaleServeResult?>>? tailscaleServe = null)
     {
         // The file checkpoints' store (2026-10-28, the checkpoints plan): CheckpointStore in the app, a fake in tests, none by default.
         _checkpoints = checkpoints;
@@ -298,6 +300,8 @@ public sealed partial class SidekickApp
         _closeDockerLogWindow = closeDockerLogWindow;
         _browserWindow = browserWindow;
         _webUiHost = webUiHost;
+        // Tailscale Serve's rules for the Web UI's port (2026-10-31): the detector in the app on Windows, a fake in tests, none elsewhere.
+        _tailscaleServe = tailscaleServe;
         // The video window (2026-10-05): VideoWindow.Player in the app on Windows, a fake in tests, none elsewhere.
         _videoPlayer = videoPlayer;
         // The thumbnail browser (2026-10-04): ThumbsWindow and PictureWindow.ShowQuietly in the app on Windows, null in tests and
@@ -3431,7 +3435,7 @@ public sealed partial class SidekickApp
         // on the row and hands it back to the terminal otherwise, so the terminal's own selection
         // and right-click copy work whenever there is nothing to click into.
         var mouse = _input as IMouseInput;
-        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, haWire: _haWire, printSpooler: _printSpooler, perfSource: _perfSource, frames: _frames, dockerClient: _dockerClient, camera: _camera, liveView: _liveView, showShot: _showShot, openLogWindow: _openLogWindow, openLogWindowBehind: _openLogWindowBehind, openViewerBehind: _openViewerBehind, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? PersonaFile.OpenTerminal : null, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, openDockerLogWindow: _openDockerLogWindow, closeDockerLogWindow: _closeDockerLogWindow, videoPlayer: _videoPlayer, browserWindow: _browserWindow, webUiHost: _webUiHost, eventLogSystem: _eventLogSystem, unifiedLog: _unifiedLog, recycleBin: _recycleBin, pinger: _pinger, serviceSystem: _serviceSystem, taskSystem: _taskSystem, directorySystem: _directorySystem, joinedDomain: _joinedDomain, tonePlayback: _playbackFactory, ralphVerifier: _ralphVerifier, monitorSystem: _monitorSystem, checkpoints: _checkpoints);
+        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, haWire: _haWire, printSpooler: _printSpooler, perfSource: _perfSource, frames: _frames, dockerClient: _dockerClient, camera: _camera, liveView: _liveView, showShot: _showShot, openLogWindow: _openLogWindow, openLogWindowBehind: _openLogWindowBehind, openViewerBehind: _openViewerBehind, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? PersonaFile.OpenTerminal : null, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, openDockerLogWindow: _openDockerLogWindow, closeDockerLogWindow: _closeDockerLogWindow, videoPlayer: _videoPlayer, browserWindow: _browserWindow, webUiHost: _webUiHost, eventLogSystem: _eventLogSystem, unifiedLog: _unifiedLog, recycleBin: _recycleBin, pinger: _pinger, serviceSystem: _serviceSystem, taskSystem: _taskSystem, directorySystem: _directorySystem, joinedDomain: _joinedDomain, tonePlayback: _playbackFactory, ralphVerifier: _ralphVerifier, monitorSystem: _monitorSystem, checkpoints: _checkpoints, tailscaleServe: _tailscaleServe);
         if (mouse is not null)
         {
             mouse.ModeChanged = screen.FlushConsole;

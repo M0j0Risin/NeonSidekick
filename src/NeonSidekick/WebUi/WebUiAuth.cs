@@ -72,15 +72,24 @@ public static class WebUiAuth
     public const string OnceQuery = "once";
 
     /// <summary>A one-time sign-in link for <paramref name="host"/> (later on 2026-10-15): good once, for a minute.</summary>
-    public static string OnceLink(string host, int port, string code) =>
-        "http://" + (host.Contains(':', StringComparison.Ordinal) ? "[" + host + "]" : host) + ":" + port.ToString(CultureInfo.InvariantCulture) + SignInPath + "?" + OnceQuery + "=" + code;
+    public static string OnceLink(string host, int port, string code) => OnceLinkAt(BaseAddress(host, port), code);
+
+    /// <summary>A one-time sign-in link at <paramref name="baseAddress"/> (2026-10-31: <c>https://host[:port]</c> too, the HTTPS tab's).</summary>
+    public static string OnceLinkAt(string baseAddress, string code) => baseAddress.TrimEnd('/') + SignInPath + "?" + OnceQuery + "=" + code;
+
+    /// <summary>The sign-in link at <paramref name="baseAddress"/> (2026-10-31: <c>https://host[:port]</c> too, the HTTPS tab's).</summary>
+    public static string SignInLinkAt(string baseAddress, string token) => baseAddress.TrimEnd('/') + SignInPath + "?t=" + token;
+
+    /// <summary><c>http://host:port</c>, an IPv6 host in brackets (2026-10-31: the base the tab's links and its double-click share). Pure.</summary>
+    public static string BaseAddress(string host, int port) =>
+        "http://" + (host.Contains(':', StringComparison.Ordinal) ? "[" + host + "]" : host) + ":" + port.ToString(CultureInfo.InvariantCulture);
 
     /// <summary>
-    /// Whether <paramref name="url"/> is a Web UI sign-in link (later on 2026-10-15): http, the path <c>/signin</c>, a token or a code in its query.
-    /// The Browser window keeps none in its list of visits or its saved links, and <c>web_links</c> never hands one to the model. Pure.
+    /// Whether <paramref name="url"/> is a Web UI sign-in link (later on 2026-10-15): http or (2026-10-31) https, the path <c>/signin</c>, a token or
+    /// a code in its query. The Browser window keeps none in its list of visits or its saved links, and <c>web_links</c> never hands one to the model. Pure.
     /// </summary>
     public static bool IsSignInUrl(string? url) =>
-        Uri.TryCreate(url, UriKind.Absolute, out var parsed) && parsed.Scheme == Uri.UriSchemeHttp
+        Uri.TryCreate(url, UriKind.Absolute, out var parsed) && (parsed.Scheme == Uri.UriSchemeHttp || parsed.Scheme == Uri.UriSchemeHttps)
         && string.Equals(parsed.AbsolutePath, SignInPath, StringComparison.Ordinal)
         && (parsed.Query.Contains("t=", StringComparison.Ordinal) || parsed.Query.Contains(OnceQuery + "=", StringComparison.Ordinal));
 
@@ -99,12 +108,10 @@ public static class WebUiAuth
     }
 
     /// <summary>The sign-in link for <paramref name="host"/> (an address or <c>localhost</c>) and <paramref name="port"/>.</summary>
-    public static string SignInLink(string host, int port, string token) =>
-        "http://" + (host.Contains(':', StringComparison.Ordinal) ? "[" + host + "]" : host) + ":" + port.ToString(CultureInfo.InvariantCulture) + SignInPath + "?t=" + token;
+    public static string SignInLink(string host, int port, string token) => SignInLinkAt(BaseAddress(host, port), token);
 
     /// <summary>The page's own address for <paramref name="host"/> and <paramref name="port"/>, the token left out (the notice's).</summary>
-    public static string Address(string host, int port) =>
-        "http://" + (host.Contains(':', StringComparison.Ordinal) ? "[" + host + "]" : host) + ":" + port.ToString(CultureInfo.InvariantCulture) + "/";
+    public static string Address(string host, int port) => BaseAddress(host, port) + "/";
 
     /// <summary>Whether <paramref name="presented"/> is <paramref name="token"/>, in constant time; never for an empty token.</summary>
     public static bool Matches(string? presented, string token)

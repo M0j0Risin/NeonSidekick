@@ -1283,7 +1283,8 @@ internal sealed partial class ChatScreen
         Plans.IRalphVerifier? ralphVerifier = null,
         Monitors.IMonitorSystem? monitorSystem = null,
         bool monitorsQuick = false,
-        Files.ICheckpointStore? checkpoints = null)
+        Files.ICheckpointStore? checkpoints = null,
+        Func<int, CancellationToken, Task<WebUi.TailscaleServeResult?>>? tailscaleServe = null)
     {
         // The manual's live line (2026-10-25, the neon_help plan's Step 2): built first so it can capture the screen.
         _helpTools = HelpTools(HelpLiveNow);
@@ -1292,6 +1293,8 @@ internal sealed partial class ChatScreen
         _recycleBin = recycleBin;
         // The file checkpoints' store (2026-10-28, the checkpoints plan): the app's CheckpointStore, a fake in tests, none by default (no journal, no /undo).
         _checkpoints = checkpoints;
+        // Tailscale Serve's rules for the Web UI's port (2026-10-31): /webui's HTTPS tab under Web UI HTTPS address auto.
+        _tailscaleServe = tailscaleServe;
         // The Browser window (2026-10-13): a web tool's bot check shown to the user, and /browser; none in headless or off Windows.
         _browserWindow = browserWindow;
         _openProcessWindow = openProcessWindow;
@@ -2366,7 +2369,7 @@ internal sealed partial class ChatScreen
                     }
                     else
                     {
-                        _ = OpenWebUiQuietlyAsync(WebUi.WebUiText.LoopbackHost, _flow);
+                        _ = OpenWebUiQuietlyAsync(WebUi.WebUiText.LoopbackHost, _flow, https: false);
                     }
                 });
                 return true;

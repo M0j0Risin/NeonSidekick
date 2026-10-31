@@ -1327,6 +1327,13 @@ public enum SettingsField
 
     /// <summary>Typed: the largest file a checkpoint saves, in MB (<see cref="Settings.AppSettingsData.FileCheckpointLargestFileMegabytes"/>), read per turn (2026-10-28).</summary>
     FileCheckpointLargestFileMegabytes,
+
+    /// <summary>
+    /// Typed: the HTTPS address <c>/webui</c> offers first, <c>auto</c> (Tailscale Serve's, detected), <c>off</c> or an <c>https://host[:port]</c>
+    /// (<see cref="Settings.AppSettingsData.WebUiHttpsAddress"/>). The Web UI tab under <see cref="WebUiReach"/> (2026-10-31, the user's ask); read
+    /// when <c>/webui</c> opens, so neither refused mid-turn nor a restart. Last in the enum, as every newcomer.
+    /// </summary>
+    WebUiHttpsAddress,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1815,7 +1822,7 @@ internal sealed partial class SettingsMenu
          SettingsField.SessionNamingMode, SettingsField.SessionShowName,
          SettingsField.SessionTool, SettingsField.SessionSearchMaxResults],
         [SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatLimitedComfyWorkflows, SettingsField.BotChatImageMode, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageMentionMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatLimitedTools, SettingsField.BotChatLimitedSkills, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.BotChatVision, SettingsField.BotChatCamera, SettingsField.BotChatRecentContext],
-        [SettingsField.WebUi, SettingsField.WebUiPort, SettingsField.WebUiReach, SettingsField.WebUiCommands, SettingsField.WebUiConnectionDetails, SettingsField.WebUiBotCheckControl, SettingsField.WebUiProfileTheme, SettingsField.WebUiChatControls, SettingsField.WebUiHomeControls, SettingsField.WebUiShoppingControls, SettingsField.WebUiYouTubeControls],
+        [SettingsField.WebUi, SettingsField.WebUiPort, SettingsField.WebUiReach, SettingsField.WebUiHttpsAddress, SettingsField.WebUiCommands, SettingsField.WebUiConnectionDetails, SettingsField.WebUiBotCheckControl, SettingsField.WebUiProfileTheme, SettingsField.WebUiChatControls, SettingsField.WebUiHomeControls, SettingsField.WebUiShoppingControls, SettingsField.WebUiYouTubeControls],
         [SettingsField.LlmUrl, SettingsField.LlmModel,
          SettingsField.LlmReasoning, SettingsField.LlmShowThinking,
          SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds,
@@ -2445,6 +2452,7 @@ internal sealed partial class SettingsMenu
         SettingsField.WebUi => "Web UI",
         SettingsField.WebUiPort => "Web UI port",
         SettingsField.WebUiReach => "Web UI reach",
+        SettingsField.WebUiHttpsAddress => "Web UI HTTPS address",
         SettingsField.WebUiCommands => "Web UI commands",
         SettingsField.WebUiConnectionDetails => "Web UI connection details",
         SettingsField.WebUiBotCheckControl => "Web UI bot check control",
@@ -3137,6 +3145,7 @@ internal sealed partial class SettingsMenu
             SettingsField.WebUiProfileTheme => OnOff(data.WebUiProfileTheme),
             SettingsField.WebUiPort => data.WebUiPort.ToString(CultureInfo.InvariantCulture),
             SettingsField.WebUiReach => data.WebUiReach,
+            SettingsField.WebUiHttpsAddress => data.WebUiHttpsAddress,
             SettingsField.ExternalSkills => OnOff(data.ExternalSkills),
             SettingsField.ProjectFile => OnOff(data.ProjectFile),
             SettingsField.TranscriptMarkdown => OnOff(data.TranscriptMarkdown),
@@ -4238,6 +4247,7 @@ internal sealed partial class SettingsMenu
         SettingsField.CodeAuditCleanPasses => data.CodeAuditCleanPasses.ToString(CultureInfo.InvariantCulture),
         SettingsField.CodeAuditPassToolCalls => data.CodeAuditPassToolCalls.ToString(CultureInfo.InvariantCulture),
         SettingsField.WebUiPort => data.WebUiPort.ToString(CultureInfo.InvariantCulture),
+        SettingsField.WebUiHttpsAddress => data.WebUiHttpsAddress,
         SettingsField.FileTreeMaxLength => data.FileTreeMaxLength.ToString(CultureInfo.InvariantCulture),
         SettingsField.WorkingDirectory => data.WorkingDirectory,
         SettingsField.WebBrowserPath => data.WebBrowserPath,
@@ -6866,6 +6876,18 @@ internal sealed partial class SettingsMenu
 
             case SettingsField.HomeAssistantAssistAgent:
                 Apply(field, d => d.HomeAssistantAssistAgent = text);
+                return true;
+
+            case SettingsField.WebUiHttpsAddress:
+                // auto, off, or an https://host[:port] (2026-10-31); the address kept as the links use it, the words lowercased.
+                if (!NeonSidekick.WebUi.WebUiHttpsSetting.IsValid(text))
+                {
+                    Sink.Error(NeonSidekick.WebUi.WebUiText.HttpsAddressInvalid(EditableValue(field, saved)));
+                    return false;
+                }
+
+                string https = NeonSidekick.WebUi.WebUiHttpsSetting.Address(text) ?? text.ToLowerInvariant();
+                Apply(field, d => d.WebUiHttpsAddress = https);
                 return true;
 
             case SettingsField.YouTubeRegion:
