@@ -515,9 +515,25 @@ A custom command is a Markdown file holding a prompt you send often: `/review sr
 * **Names:** the file's name, lowercased: letters, digits, `-` and `_`. A subfolder adds a prefix (`frontend/test.md` is `/frontend:test`), up to 4 folders deep.
 * **Frontmatter** (optional): `description`, `argument-hint` (shown as you type), `arguments` (names for `$name`) and `user-invocable: false` (can't be typed). Other fields, like `model`, are ignored.
 * **Placeholders:** `$ARGUMENTS` is all the words; `$0`, `$1`… (or `$ARGUMENTS[0]`…) one word each, a quoted group one word when its closing quote ends a word. A `\` right before a placeholder keeps it as written; with no placeholder, the words go on an `ARGUMENTS:` line.
+* **Named arguments:** `arguments: [subject, style]` makes `$subject` the first word and `$style` the second, each empty when not typed. Type `""` to skip one and still fill the next.
 * **Nothing runs:** a `!` shell line is sent as written, with a note. A command never runs a program or reads a file.
 * **Pictures** pasted on the line go with the message. Under a reply, a command waits until the reply ends.
 * **Help:** `/help` lists them on its **Custom** tab, and `/help <name>` shows one's card. They run from the Web UI (with *Web UI commands* on) and headless too.
+
+An example, `write-poem.md`:
+
+```markdown
+---
+description: Writes a poem about a subject
+argument-hint: <"subject"> [min words] ["style"]
+arguments: [subject, words, style]
+---
+Write a poem about this subject: $subject
+Minimum length in words: $words
+Style: $style
+```
+
+`/write-poem "autumn leaves" 100 sonnet` fills all three, and `/write-poem rain "" haiku` skips the length.
 
 ### Benchmark tests
 

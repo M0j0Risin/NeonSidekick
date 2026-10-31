@@ -588,6 +588,8 @@ public static class CustomCommandText
         "# $ARGUMENTS is everything typed after the command; $0, $1 … are single words (the first is $0),",
         "# \"quoted words\" count as one; a \\ right before a placeholder keeps it as written. With no",
         "# placeholder, what you type is added at the end as \"ARGUMENTS: …\".",
+        "# Named words: a line \"arguments: [subject, style]\" makes $subject the first word and $style the",
+        "# second, each empty when not typed; type \"\" to skip one and still fill the next.",
     ];
 
     /// <summary>The template's body line (a command still holding it carries <see cref="StillTemplateWarning"/>).</summary>
