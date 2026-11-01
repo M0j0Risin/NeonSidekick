@@ -394,4 +394,15 @@ public class EnvironmentOverridesTests
         Assert.Equal("(set)", EnvironmentOverrides.SecretSet);
         Assert.Equal("Environment", EnvironmentOverrides.Category);
     }
+
+    /// <summary>Windows Terminal (WT_SESSION) and VS Code's terminal own a link's Ctrl+click (2026-11-01, clickable links and paths).</summary>
+    [Fact]
+    public void TerminalOpensLinks_InWindowsTerminal_AndVsCode_NotElsewhere()
+    {
+        Assert.False(EnvironmentOverrides.Empty.TerminalOpensLinks);
+        Assert.True(With((EnvironmentOverrides.WindowsTerminalSessionVariable, "1d4b3c2a-0000-0000-0000-000000000000")).TerminalOpensLinks);
+        Assert.False(With((EnvironmentOverrides.WindowsTerminalSessionVariable, "")).TerminalOpensLinks);
+        Assert.True(With((EnvironmentOverrides.TerminalProgramVariable, "vscode")).TerminalOpensLinks);
+        Assert.False(With((EnvironmentOverrides.TerminalProgramVariable, "iTerm.app")).TerminalOpensLinks);
+    }
 }

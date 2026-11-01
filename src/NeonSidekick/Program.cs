@@ -90,6 +90,8 @@ var environment = new EnvironmentOverrides(Environment.GetEnvironmentVariable);
 NeonSidekick.UI.TextCells.NarrowSelectorSequences = NeonSidekick.UI.TextCells.ForTerminal(environment.TerminalProgram);
 // The app macOS asks about the microphone (2026-10-07, sound on a Mac): the terminal, named in the permission's sentences.
 NeonSidekick.Audio.MicrophoneText.Terminal = NeonSidekick.Audio.MicrophoneText.TerminalName(environment.TerminalProgram);
+// The link chord the hover hint names (2026-11-01, clickable links and paths): Ctrl+click on Windows; on a Mac Shift+click in iTerm2, else Option+click.
+NeonSidekick.UI.LinkText.Chord = NeonSidekick.UI.LinkText.ChordFor(OperatingSystem.IsMacOS(), environment.TerminalProgram);
 // DOCKER_HOST and the CLI's context for the Docker engine socket row's "auto: …" on a Mac (2026-10-11); the clients get the reader through their session.
 NeonSidekick.Docker.DockerSocket.MachineEnvironment = environment.System;
 
@@ -105,6 +107,13 @@ var console = AnsiConsole.Create(new AnsiConsoleSettings
     Ansi = AnsiSupport.Detect,
     ColorSystem = ColorSystemSupport.Detect,
 });
+if (OperatingSystem.IsWindows())
+{
+    // OSC 8 links only where the terminal owns their Ctrl+click (2026-11-01, clickable links and paths): Windows Terminal and VS Code
+    // open them themselves, so the app writes them there and its own opener stands down; anywhere else none are written and the app
+    // opens a link itself, so no terminal can open one a second time. On a Mac Spectre's default stands (Cmd+click is the terminal's).
+    console.Profile.Capabilities.Links = environment.TerminalOpensLinks;
+}
 
 var options = SidekickOptions.Parse(args);
 if (options.Error is not null)

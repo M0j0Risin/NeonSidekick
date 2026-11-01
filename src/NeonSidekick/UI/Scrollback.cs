@@ -74,6 +74,10 @@ public sealed class Scrollback
 
     private readonly List<Line> _lines = new();
     private readonly List<SegmentLine> _rows = new();
+
+    // How many lines of _lines hold a linked segment (2026-11-01, plan review D17): kept at every place _lines changes, so the pane's
+    // tick reads AnyLinks without walking up to MaxRows rows of segments.
+    private int _linkedLines;
     private readonly Dictionary<int, Group> _groups = new();
     private int _width = -1;
     private Group? _open;
@@ -101,6 +105,12 @@ public sealed class Scrollback
         public readonly List<Segment> Segments = new();
         public bool Closed;
         public int Rows;
+
+        /// <summary>A segment of this line carries a link (2026-11-01, clickable links and paths): counted once in <see cref="_linkedLines"/>.</summary>
+        public bool HasLink;
+
+        /// <summary>The source of a code block whose label this line is (2026-11-01, copy a code block): what its ⧉ copies; null for any other line.</summary>
+        public string? CopyText;
 
         /// <summary>The tool run this line is the summary or a member of; null for any other line.</summary>
         public Group? Group;
@@ -396,6 +406,74 @@ public sealed class Scrollback
     public bool ExpandAll { get; private set; }
 
     /// <summary>
+    /// Some line in the store holds a linked segment (2026-11-01, clickable links and paths): the pane asks for the mouse's moves while
+    /// it does, to show the address under the pointer. A count kept as lines come and go, never a walk.
+    /// </summary>
+    public bool AnyLinks => _linkedLines > 0;
+
+    /// <summary>
+    /// The source of the code block whose label shows on store row <paramref name="row"/> (2026-11-01, copy a code block): the line's
+    /// <see cref="Line.CopyText"/>, found by walking the lines as <see cref="GroupAtRow"/> does; null off one. The glyph under the click is
+    /// the pane's to find.
+    /// </summary>
+    public string? CopyTextAt(int row) => LineAtRow(row)?.CopyText;
+
+    /// <summary>
+    /// The last closed line marked as a code block's label holding <paramref name="text"/> (2026-11-01: <c>Code collapse count</c> 0, the
+    /// label written as a plain row). The store may have opened another line since, so the last closed one, never <c>_lines[^1]</c>.
+    /// </summary>
+    public void SetLastLineCopyText(string text)
+    {
+        for (int i = _lines.Count - 1; i >= 0; i--)
+        {
+            if (_lines[i].Closed)
+            {
+                _lines[i].CopyText = text;
+                return;
+            }
+        }
+    }
+
+    /// <summary>The code group's summary line marked with its block's source (2026-11-01): a folded block's label is its summary.</summary>
+    public void SetCodeGroupCopyText(string text)
+    {
+        if (_open is { } group)
+        {
+            group.Summary.CopyText = text;
+        }
+    }
+
+    /// <summary>The line store row <paramref name="row"/> belongs to at the cached width, or null.</summary>
+    private Line? LineAtRow(int row)
+    {
+        if (row < 0)
+        {
+            return null;
+        }
+
+        int at = 0;
+        foreach (var line in _lines)
+        {
+            at += line.Rows;
+            if (row < at)
+            {
+                return line;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>A line leaves <c>_lines</c>: the link count follows.</summary>
+    private void Forget(Line line)
+    {
+        if (line.HasLink)
+        {
+            _linkedLines--;
+        }
+    }
+
+    /// <summary>
     /// Some tool run, code block or thinking block in the store folds (<see cref="Group.Folds"/>): what the upper rule's
     /// ⤡ is drawn for (2026-09-28, the user's ask: the button only while there is something to unfold or fold). A run
     /// under its keep count and a block still streaming do not count. Read on the tick, so a plain loop.
@@ -677,6 +755,11 @@ public sealed class Scrollback
 
             current ??= Open(touched);
             current.Segments.Add(piece);
+            if (piece.Link is not null && !current.HasLink)
+            {
+                current.HasLink = true;
+                _linkedLines++;
+            }
         }
 
         _tagging = null;
@@ -820,9 +903,21 @@ public sealed class Scrollback
             BornWidth = born,
             Parts = lines.Select(line => line.Segments).ToList(),
             Reflow = new Source(renderable, born),
+            HasLink = lines.Any(line => line.HasLink),
+            CopyText = lines.Select(line => line.CopyText).LastOrDefault(text => text is not null),
         };
+        foreach (var line in _lines.GetRange(_lines.Count - count, count))
+        {
+            Forget(line);
+        }
+
         _lines.RemoveRange(_lines.Count - count, count);
         _lines.Add(merged);
+        if (merged.HasLink)
+        {
+            _linkedLines++;
+        }
+
         return merged;
     }
 
@@ -862,7 +957,7 @@ public sealed class Scrollback
 
                     if (piece.Length > 0)
                     {
-                        yield return new Segment(piece, segment.Style);
+                        yield return new Segment(piece, segment.Style, segment.Link);
                     }
                 }
 
@@ -948,6 +1043,7 @@ public sealed class Scrollback
         // One past the lines held: a mark taken at the very end, before the clear, would otherwise read as the first new line.
         _frontDropped += _lines.Count + 1;
         _lines.Clear();
+        _linkedLines = 0;
         _rows.Clear();
         _groups.Clear();
         _liveDiffs.Clear();
@@ -979,6 +1075,7 @@ public sealed class Scrollback
                     _rows.RemoveRange(_rows.Count - open.Rows, open.Rows);
                 }
 
+                Forget(_lines[^1]);
                 _lines.RemoveAt(_lines.Count - 1);
                 _reshaped = true;
             }
@@ -1528,7 +1625,7 @@ public sealed class Scrollback
             if (spaces < text.Length)
             {
                 skip = 0;
-                result.Add(spaces == 0 ? segment : new Segment(text[spaces..], segment.Style));
+                result.Add(spaces == 0 ? segment : new Segment(text[spaces..], segment.Style, segment.Link));
             }
         }
 
@@ -1828,6 +1925,11 @@ public sealed class Scrollback
         }
 
         _rows.RemoveRange(0, rows);
+        foreach (var line in _lines.GetRange(0, lines))
+        {
+            Forget(line);
+        }
+
         _lines.RemoveRange(0, lines);
         _frontDropped += lines;
         return rows;
@@ -1934,9 +2036,10 @@ public sealed class Scrollback
 
     /// <summary>
     /// One cell of a line being cut (2026-10-29): a cluster — a text element with its selectors, modifiers and joined elements (the
-    /// resize review) — where it is in the line's joined text, its style and its cells.
+    /// resize review) — where it is in the line's joined text, its style and its cells; its segment's link (2026-11-01, clickable links and
+    /// paths: a cut and a re-layout keep it as they keep the style).
     /// </summary>
-    private readonly record struct Cell(string Source, int Start, int Length, Style Style, int Width)
+    private readonly record struct Cell(string Source, int Start, int Length, Style Style, int Width, Link? Link = null)
     {
         /// <summary>A space or a tab (a tab is drawn as one space in a narrowed row).</summary>
         public bool Blank => Length == 1 && Source[Start] is ' ' or '\t';
@@ -1994,12 +2097,14 @@ public sealed class Scrollback
         // The cells first (the resize review): a line that fits is the exact cut's one row, with nothing laid out twice.
         var text = new StringBuilder();
         var styles = new List<Style>();
+        var links = new List<Link?>();
         foreach (var segment in shown)
         {
             text.Append(segment.Text);
             for (int i = 0; i < segment.Text.Length; i++)
             {
                 styles.Add(segment.Style);
+                links.Add(segment.Link);
             }
         }
 
@@ -2011,7 +2116,7 @@ public sealed class Scrollback
             int length = 1;
             int cellWidth = all[i] == '\t' ? 1 : TextCells.ClusterWidth(all, i, out length);
             length = Math.Max(1, length);
-            cells.Add(new Cell(all, i, length, styles[i], cellWidth));
+            cells.Add(new Cell(all, i, length, styles[i], cellWidth, links[i]));
             total += cellWidth;
             i += length;
         }
@@ -2272,20 +2377,22 @@ public sealed class Scrollback
         return width;
     }
 
-    /// <summary>Cells <paramref name="from"/> to <paramref name="to"/> onto <paramref name="row"/>, one segment per run of a style; a tab as a space.</summary>
+    /// <summary>Cells <paramref name="from"/> to <paramref name="to"/> onto <paramref name="row"/>, one segment per run of a style and a link; a tab as a space.</summary>
     private static void AddCells(SegmentLine row, List<Cell> cells, int from, int to)
     {
         var run = new StringBuilder();
         var style = Style.Plain;
+        Link? link = null;
         for (int i = from; i < to; i++)
         {
-            if (run.Length > 0 && !cells[i].Style.Equals(style))
+            if (run.Length > 0 && (!cells[i].Style.Equals(style) || !Equals(cells[i].Link, link)))
             {
-                row.Add(new Segment(run.ToString(), style));
+                row.Add(new Segment(run.ToString(), style, link));
                 run.Clear();
             }
 
             style = cells[i].Style;
+            link = cells[i].Link;
             if (cells[i].First == '\t')
             {
                 run.Append(' ');
@@ -2298,7 +2405,7 @@ public sealed class Scrollback
 
         if (run.Length > 0)
         {
-            row.Add(new Segment(run.ToString(), style));
+            row.Add(new Segment(run.ToString(), style, link));
         }
     }
 
@@ -2324,7 +2431,7 @@ public sealed class Scrollback
                 {
                     if (run.Length > 0)
                     {
-                        row.Add(new Segment(run.ToString(), segment.Style));
+                        row.Add(new Segment(run.ToString(), segment.Style, segment.Link));
                         run.Clear();
                     }
 
@@ -2342,7 +2449,7 @@ public sealed class Scrollback
 
             if (run.Length > 0)
             {
-                row.Add(new Segment(run.ToString(), segment.Style));
+                row.Add(new Segment(run.ToString(), segment.Style, segment.Link));
                 run.Clear();
             }
         }

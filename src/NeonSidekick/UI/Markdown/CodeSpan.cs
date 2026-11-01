@@ -5,9 +5,11 @@ namespace NeonSidekick.UI.Markdown;
 /// row <see cref="LabelRow"/> for <see cref="LabelRows"/> rows, then its <see cref="BodyRows"/> body
 /// rows; <see cref="Label"/> is the label's text (the language, or <see cref="MarkdownView.CodeLabel"/>)
 /// and <see cref="SourceLines"/> the block's own lines, which the fold counts (a wrapped line once).
-/// <see cref="Open"/>: its closing fence has not streamed yet (<see cref="CodeBlock.Open"/>, 2026-09-27).
+/// <see cref="Open"/>: its closing fence has not streamed yet (<see cref="CodeBlock.Open"/>, 2026-09-27). <see cref="Text"/> (2026-11-01,
+/// copy a code block): the block's source lines joined with <c>\n</c> exactly as written, what its label's ⧉ copies; empty for the live
+/// open span <see cref="ReplyBlock"/> builds, which never shows one.
 /// </summary>
-public sealed record CodeSpan(int LabelRow, int LabelRows, int BodyRows, string Label, int SourceLines, bool Open = false)
+public sealed record CodeSpan(int LabelRow, int LabelRows, int BodyRows, string Label, int SourceLines, bool Open = false, string Text = "")
 {
     /// <summary>The first row after the block.</summary>
     public int End => LabelRow + LabelRows + BodyRows;

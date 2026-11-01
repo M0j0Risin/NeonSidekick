@@ -355,7 +355,9 @@ public sealed class VtInputParser
 
         return button switch
         {
-            0 => new InputEvent.Click(x, y, MouseButton.Left),
+            // The Meta (Option) or Shift bit held: the link chord (2026-11-01, clickable links and paths). iTerm2 keeps Option+click for
+            // itself and WezTerm and Ghostty keep Shift+click, so either counts; on a left click only.
+            0 => new InputEvent.Click(x, y, MouseButton.Left, Opener: (b & (8 | 4)) != 0),
             2 => new InputEvent.Click(x, y, MouseButton.Right),
             _ => null,
         };

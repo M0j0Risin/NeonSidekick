@@ -37,11 +37,18 @@ public sealed class MarkdownView : IRenderable
     private static readonly IRenderable Spacer = new Text(" ");
 
     private readonly MarkdownDocument _document;
+    private readonly Func<string, string?>? _resolvePath;
     private IRenderable? _content;
 
-    public MarkdownView(MarkdownDocument document)
+    /// <param name="document">The reply's tree.</param>
+    /// <param name="resolvePath">
+    /// Turns an inline code span's text into the full path of a file or folder inside the working folder, or null (2026-11-01, clickable
+    /// paths): the span then carries a <see cref="LinkText.PathScheme"/> link. Null (the default, smoke and most tests) makes no path links.
+    /// </param>
+    public MarkdownView(MarkdownDocument document, Func<string, string?>? resolvePath = null)
     {
         _document = document ?? throw new ArgumentNullException(nameof(document));
+        _resolvePath = resolvePath;
     }
 
     /// <summary>The view of <paramref name="text"/> read by <see cref="DefaultParser"/>.</summary>
@@ -52,7 +59,7 @@ public sealed class MarkdownView : IRenderable
 
     public IEnumerable<Segment> Render(RenderOptions options, int maxWidth) => Content.Render(options, maxWidth);
 
-    private IRenderable Content => _content ??= Compose(_document.Blocks, quote: null, tight: false);
+    private IRenderable Content => _content ??= Compose(_document.Blocks, quote: null, tight: false, _resolvePath);
 
     private IReadOnlyList<CodeSpan>? _spans;
     private int _spansWidth = -1;
@@ -81,12 +88,12 @@ public sealed class MarkdownView : IRenderable
                 row++;   // the spacer
             }
 
-            int rows = Segment.SplitLines(Block(block, quote: null).Render(options, maxWidth)).Count;
+            int rows = Segment.SplitLines(Block(block, quote: null, resolve: null).Render(options, maxWidth)).Count;   // links never change a row
             if (block is CodeBlock code)
             {
                 string label = code.Language ?? CodeLabel;
                 int labelRows = Segment.SplitLines(((IRenderable)new Text(CodeHeading(code.Language), Theme.MarkdownCodeLabel)).Render(options, maxWidth)).Count;
-                spans.Add(new CodeSpan(row, labelRows, rows - labelRows, label, code.Lines.Count, code.Open));
+                spans.Add(new CodeSpan(row, labelRows, rows - labelRows, label, code.Lines.Count, code.Open, string.Join("\n", code.Lines)));
             }
 
             row += rows;
@@ -115,7 +122,7 @@ public sealed class MarkdownView : IRenderable
     }
 
     /// <summary>The blocks stacked, a blank row between them unless <paramref name="tight"/> (a list item's).</summary>
-    private static IRenderable Compose(IReadOnlyList<MarkdownBlock> blocks, Style? quote, bool tight)
+    private static IRenderable Compose(IReadOnlyList<MarkdownBlock> blocks, Style? quote, bool tight, Func<string, string?>? resolve)
     {
         var children = new List<IRenderable>(blocks.Count * 2);
         foreach (var block in blocks)
@@ -125,25 +132,25 @@ public sealed class MarkdownView : IRenderable
                 children.Add(Spacer);
             }
 
-            children.Add(Block(block, quote));
+            children.Add(Block(block, quote, resolve));
         }
 
         return new Rows(children);
     }
 
-    private static IRenderable Block(MarkdownBlock block, Style? quote) => block switch
+    private static IRenderable Block(MarkdownBlock block, Style? quote, Func<string, string?>? resolve) => block switch
     {
-        ParagraphBlock paragraph => Paragraph(paragraph.Inlines, quote),
-        HeadingBlock heading => Paragraph(heading.Inlines, heading.Level switch { 1 => Theme.MarkdownHeading1, 2 => Theme.MarkdownHeading, _ => Theme.MarkdownHeading3 }, flat: true),
+        ParagraphBlock paragraph => Paragraph(paragraph.Inlines, quote, resolve),
+        HeadingBlock heading => Paragraph(heading.Inlines, heading.Level switch { 1 => Theme.MarkdownHeading1, 2 => Theme.MarkdownHeading, _ => Theme.MarkdownHeading3 }, resolve, flat: true),
         CodeBlock code => Code(code),
-        ListBlock list => List(list, quote),
-        QuoteBlock inner => new HangingIndent(QuoteGlyph, QuoteGlyph, Theme.MarkdownQuoteBar, Compose(inner.Blocks, Theme.MarkdownQuote, tight: false)),
+        ListBlock list => List(list, quote, resolve),
+        QuoteBlock inner => new HangingIndent(QuoteGlyph, QuoteGlyph, Theme.MarkdownQuoteBar, Compose(inner.Blocks, Theme.MarkdownQuote, tight: false, resolve)),
         RuleBlock => new Rule().RuleStyle(Theme.MarkdownRule),
-        TableBlock table => Table(table, quote),
+        TableBlock table => Table(table, quote, resolve),
         _ => Spacer,
     };
 
-    private static IRenderable List(ListBlock list, Style? quote)
+    private static IRenderable List(ListBlock list, Style? quote, Func<string, string?>? resolve)
     {
         var items = new List<IRenderable>(list.Items.Count);
         for (int i = 0; i < list.Items.Count; i++)
@@ -151,7 +158,7 @@ public sealed class MarkdownView : IRenderable
             string marker = list.Ordered
                 ? (list.Start + i).ToString(System.Globalization.CultureInfo.InvariantCulture) + ". "
                 : BulletGlyph;
-            var content = Compose(list.Items[i].Blocks, quote, tight: true);
+            var content = Compose(list.Items[i].Blocks, quote, tight: true, resolve);
             items.Add(new HangingIndent(marker, new string(' ', TextCells.Width(marker)), Theme.MarkdownBullet, content));
         }
 
@@ -222,13 +229,13 @@ public sealed class MarkdownView : IRenderable
         return lines;
     }
 
-    private static IRenderable Table(TableBlock table, Style? quote)
+    private static IRenderable Table(TableBlock table, Style? quote, Func<string, string?>? resolve)
     {
         var spectre = Theme.MarkdownTable();
         int columns = table.Header.Cells.Count;
         for (int c = 0; c < columns; c++)
         {
-            var column = new TableColumn(Paragraph(table.Header.Cells[c].Inlines, Theme.TableHeader, flat: true));
+            var column = new TableColumn(Paragraph(table.Header.Cells[c].Inlines, Theme.TableHeader, resolve, flat: true));
             if (c < table.Alignments.Count)
             {
                 column.Alignment = table.Alignments[c] switch
@@ -248,7 +255,7 @@ public sealed class MarkdownView : IRenderable
             var cells = new IRenderable[columns];
             for (int c = 0; c < columns; c++)
             {
-                cells[c] = c < row.Cells.Count ? Paragraph(row.Cells[c].Inlines, quote) : new Text("");
+                cells[c] = c < row.Cells.Count ? Paragraph(row.Cells[c].Inlines, quote, resolve) : new Text("");
             }
 
             spectre.AddRow(cells);
@@ -260,8 +267,11 @@ public sealed class MarkdownView : IRenderable
     /// <summary>
     /// The inlines as one wrapped paragraph. <paramref name="baseStyle"/> is the quote's or the
     /// heading's colour; <paramref name="flat"/> keeps it for every run (a heading is one voice).
+    /// Links (2026-11-01, clickable links and paths): a link's text and its <c>(url)</c>, a bare web address in the text and an inline
+    /// code span that is one carry the address as their segments' <see cref="Segment.Link"/>; an inline code span <paramref name="resolve"/>
+    /// finds as a path carries <see cref="LinkText.PathScheme"/> and a quiet underline. Code blocks never link.
     /// </summary>
-    private static Paragraph Paragraph(IReadOnlyList<MarkdownInline> inlines, Style? baseStyle, bool flat = false)
+    private static Paragraph Paragraph(IReadOnlyList<MarkdownInline> inlines, Style? baseStyle, Func<string, string?>? resolve, bool flat = false)
     {
         var paragraph = new Paragraph();
         foreach (var inline in inlines)
@@ -269,7 +279,7 @@ public sealed class MarkdownView : IRenderable
             switch (inline)
             {
                 case TextRun run:
-                    paragraph.Append(run.Text, flat ? baseStyle : RunStyle(run, baseStyle));
+                    AppendRun(run, flat ? baseStyle ?? Theme.Assistant : RunStyle(run, baseStyle));
                     break;
                 case LinkRun link:
                     AppendLink(link.Text, link.Url);
@@ -286,16 +296,65 @@ public sealed class MarkdownView : IRenderable
 
         return paragraph;
 
-        // One shape for a link and a picture (2026-10-29, review P6-9: one case re-tested and cast the picture twice).
+        // One shape for a link and a picture (2026-10-29, review P6-9: one case re-tested and cast the picture twice). Both parts carry the
+        // link (2026-11-01) when it is a web one; any other scheme gets none.
         void AppendLink(string text, string url)
         {
-            paragraph.Append(text.Length > 0 ? text : url, baseStyle ?? Theme.Assistant);
+            string? target = LinkText.WebTarget(url);
+            paragraph.Append(text.Length > 0 ? text : url, baseStyle ?? Theme.Assistant, LinkOf(target));
             if (url.Length > 0 && !string.Equals(url, text, StringComparison.Ordinal))
             {
-                paragraph.Append(" (" + url + ")", Theme.MarkdownLinkUrl);
+                paragraph.Append(" (" + url + ")", Theme.MarkdownLinkUrl, LinkOf(target));
+            }
+        }
+
+        void AppendRun(TextRun run, Style style)
+        {
+            if (run.Code)
+            {
+                // Inline code that is exactly a web address links like text; one the resolver finds in the working folder links as a path.
+                string trimmed = run.Text.Trim();
+                if (LinkText.IsWeb(trimmed) && LinkText.BareUrls(trimmed) is [var only] && only.Start == 0 && only.Length == trimmed.Length)
+                {
+                    paragraph.Append(run.Text, style, LinkOf(trimmed));
+                }
+                else if (resolve is not null && LinkText.PathCandidate(run.Text) is { Length: > 0 } candidate && resolve(candidate) is { } full
+                    && LinkText.IsLinkable(full, web: false))
+                {
+                    paragraph.Append(run.Text, style.Combine(new Style(decoration: Decoration.Underline)), LinkOf(LinkText.PathLink(full)));
+                }
+                else
+                {
+                    paragraph.Append(run.Text, style);
+                }
+
+                return;
+            }
+
+            int at = 0;
+            foreach (var (start, length) in LinkText.BareUrls(run.Text))
+            {
+                if (start > at)
+                {
+                    paragraph.Append(run.Text[at..start], style);
+                }
+
+                paragraph.Append(run.Text.Substring(start, length), style, LinkOf(run.Text.Substring(start, length)));
+                at = start + length;
+            }
+
+            if (at < run.Text.Length || at == 0)
+            {
+                paragraph.Append(run.Text[at..], style);
             }
         }
     }
+
+    /// <summary>
+    /// <paramref name="target"/> as a segment's link (2026-11-01), null for none. Spectre carries a link on the <see cref="Segment"/>, beside its
+    /// style (<see cref="Segment.Link"/>), so a fold, a resize reflow and a scroll keep it as they keep the style.
+    /// </summary>
+    internal static Link? LinkOf(string? target) => target is null ? null : new Link(target);
 
     /// <summary>A run's style: code wins, then the emphasis over the base colour (the quote's) or the body's.</summary>
     public static Style RunStyle(TextRun run, Style? baseStyle = null)

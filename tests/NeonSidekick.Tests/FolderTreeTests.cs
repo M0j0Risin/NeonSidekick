@@ -388,4 +388,29 @@ public class FolderTreeTests
         Assert.Equal("Cannot read X.", FolderText.DeniedNotice("X"));
         Assert.Equal(Theme.DimMarkup(@"C:\x [y]"), FolderText.PathMarkup(@"C:\x [y]"));
     }
+
+    /// <summary>
+    /// <c>/browse &lt;file&gt;</c> (2026-11-01): <c>selectFile</c> answers a listed file's row, its folder expanded, in a folder loaded
+    /// on the way too; a file the folder doesn't list (hidden) answers the folder's row. Without it, the folder's row as before.
+    /// </summary>
+    [Fact]
+    public void ExpandTo_SelectFile_AnswersTheFilesRow_OrItsFoldersForAHiddenOne()
+    {
+        var folders = new FakeFolders().Root(C).Add(C, "docs", "src").AddFiles(C, "a.txt").AddFiles(P(C, "src"), "Foo.cs");
+
+        var tree = new FolderTree(folders, withFiles: true);
+        int row = tree.ExpandTo(P(C, "src", "Foo.cs"), selectFile: true);
+        Assert.Equal(P(C, "src", "Foo.cs"), tree.Visible[row].Path);
+        Assert.True(tree.Visible[row].IsFile);
+        Assert.True(tree.Visible[tree.ParentOf(row)].Expanded);
+
+        var top = new FolderTree(folders, withFiles: true);
+        Assert.Equal(P(C, "a.txt"), top.Visible[top.ExpandTo(P(C, "a.txt"), selectFile: true)].Path);
+
+        var hidden = new FolderTree(folders, withFiles: true);
+        Assert.Equal(P(C, "src"), hidden.Visible[hidden.ExpandTo(P(C, "src", ".env"), selectFile: true)].Path);
+
+        var folderOnly = new FolderTree(folders, withFiles: true);
+        Assert.Equal(P(C, "src"), folderOnly.Visible[folderOnly.ExpandTo(P(C, "src", "Foo.cs"))].Path);
+    }
 }

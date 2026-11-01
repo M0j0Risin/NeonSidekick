@@ -138,7 +138,7 @@ public static class ThemePreview
         return
         [
             L(0, [.. bannerPieces]),
-            L(0, [.. Runs(Rule(inner), p.GradientStops)]),
+            L(0, [.. RulePieces(inner, p.GradientStops)]),
             Empty(),
             L(1, P(ThemeStyleSlot.User, ThemeText.PreviewUser)),
             Empty(),
@@ -168,7 +168,7 @@ public static class ThemePreview
             L(4, P(ThemeStyleSlot.WarnText, "  " + ThemeText.PreviewWarn)),
             L(2, P(ThemeStyleSlot.ErrorText, "  " + ThemeText.PreviewError)),
             Empty(),
-            L(6, P(ThemeStyleSlot.PaneRule, new string('─', inner))),
+            Theme.RuleGradientOn && Theme.QuietStops(p) is { } quiet ? L(6, [.. RulePieces(inner, quiet)]) : L(6, P(ThemeStyleSlot.PaneRule, new string('─', inner))),
             L(3, P(ThemeStyleSlot.MenuHighlight, menuName), menuValue, P(ThemeStyleSlot.MenuHighlightDim, menuNote)),
             L(5,
                 P(ThemeStyleSlot.User, "› /theme "), P(ThemeStyleSlot.SelectedText, p.Name),
@@ -178,27 +178,9 @@ public static class ThemePreview
         ];
     }
 
-    /// <summary>The rule's five runs of <c>─</c>, as <see cref="Theme.Rule(int, Color[], char)"/> splits them.</summary>
-    private static List<(string Text, double At)> Rule(int width)
-    {
-        const int segments = 5;
-        int per = Math.Max(1, width / segments);
-        var runs = new List<(string, double)>(segments);
-        for (int s = 0; s < segments; s++)
-        {
-            int count = s == segments - 1 ? width - s * per : per;
-            if (count > 0)
-            {
-                runs.Add((new string('─', count), s / (double)(segments - 1)));
-            }
-        }
-
-        return runs;
-    }
-
-    /// <summary><paramref name="runs"/> each in the gradient's colour at its point.</summary>
-    private static List<Piece> Runs(List<(string Text, double At)> runs, Color[] stops) =>
-        runs.Select(run => new Piece(run.Text, new Style(foreground: Theme.SampleGradient(run.At, stops)))).ToList();
+    /// <summary>A rule of <paramref name="width"/> cells in <paramref name="stops"/>' colors, as <see cref="Theme.RuleRuns"/> splits it (2026-11-01: one splitter for the screen and the preview).</summary>
+    private static List<Piece> RulePieces(int width, Color[] stops) =>
+        Theme.RuleRuns(width, stops).Select(run => new Piece(run.Text, new Style(foreground: run.Color))).ToList();
 
     /// <summary><paramref name="text"/> a character at a time across the gradient, as <see cref="Theme.GradientMarkup(string, Color[])"/> colours the banner.</summary>
     private static List<Piece> Gradient(string text, Color[] stops)

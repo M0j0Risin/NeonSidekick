@@ -48,6 +48,8 @@ public class SectionRuleTests
     [Fact]
     public void Render_DrawsTheFillInThePaneRuleColour()
     {
+        using var scope = new Fakes.ThemeScope();
+        Theme.UseRuleGradient(false);   // Gradient rules off: the fill flat as before (2026-11-01)
         using var console = new TestConsole();
         console.Profile.Width = 30;
         console.EmitAnsiSequences();
@@ -56,5 +58,22 @@ public class SectionRuleTests
         plain.EmitAnsiSequences();
         plain.Write(new Text(Rule(30 - 9), Theme.PaneRule));
         Assert.Contains(plain.Output.TrimEnd('\n'), console.Output);
+    }
+
+    /// <summary>Gradient rules on (2026-11-01): the lead and the fill shade along the quiet gradient, the label keeps its style.</summary>
+    [Fact]
+    public void Render_UnderGradientRules_ShadesTheLeadAndTheFill_AndKeepsTheLabel()
+    {
+        using var scope = new Fakes.ThemeScope();
+        var heading = new SectionRule(SectionRule.Markup("Clock"));
+        using var console = new TestConsole();
+        var options = Spectre.Console.Rendering.RenderOptions.Create(console, console.Profile.Capabilities);
+        var segments = ((Spectre.Console.Rendering.IRenderable)heading).Render(options, 60).ToList();
+
+        Assert.Equal("── Clock " + Rule(60 - 9), string.Concat(segments.Select(s => s.Text)));
+        var glyphColors = segments.Where(s => s.Text.Length > 0 && s.Text.All(c => c == ScreenPane.RuleGlyph)).Select(s => s.Style.Foreground).Distinct().ToList();
+        Assert.True(glyphColors.Count > 1, $"{glyphColors.Count} colors");
+        Assert.Equal(Theme.QuietGradient![0], segments[0].Style.Foreground);
+        Assert.Contains(segments, s => s.Text == "Clock" && s.Style.Equals(Theme.SectionHeading));
     }
 }

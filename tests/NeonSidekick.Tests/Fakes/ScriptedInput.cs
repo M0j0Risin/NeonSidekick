@@ -68,9 +68,9 @@ public sealed class ScriptedInput : IAnsiConsoleInput, IInputEvents
     }
 
     /// <summary>A mouse click at buffer cell (<paramref name="x"/>, <paramref name="y"/>), queued in order with the keys.</summary>
-    public ScriptedInput PushClick(int x, int y, MouseButton button = MouseButton.Left)
+    public ScriptedInput PushClick(int x, int y, MouseButton button = MouseButton.Left, bool opener = false)
     {
-        _events.Enqueue(new InputEvent.Click(x, y, button));
+        _events.Enqueue(new InputEvent.Click(x, y, button, opener));
         return this;
     }
 

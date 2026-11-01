@@ -41,7 +41,7 @@ The app itself, this side of the connection.
 | Working directory (cwd) | The folder the file and GitLib tools work in. Enter opens the [folder picker](INTERFACE.md#folder-picker); `/cwd <path>` sets a typed path. | empty (the profile's `files\` folder) |
 | Memory mode | `read-write`: the model saves and recalls memories, and each conversation opens with them. `read-only`: it only recalls (your `/remember` still saves). `off`: no memory, and `/remember` is refused. | `read-write` |
 | Model avatar | The profile's emoji, leading its replies, its `/botchat` lines and the window title. Enter (or `/avatar`) opens the [avatar picker](INTERFACE.md#the-avatar-picker). | 🤖 |
-| User avatar | Your emoji, leading your lines in the transcript in place of `›`. Enter opens the same [picker](INTERFACE.md#the-avatar-picker); 🚫 goes back to `›`. | 🧿 |
+| User avatar | Your emoji, leading your lines in the transcript in place of `›`. Enter opens the same [picker](INTERFACE.md#the-avatar-picker); 🚫 goes back to `›`. | 🙊 |
 | Queue mode | `automatic`: a message sent during a reply waits in `/queue` and goes when the reply ends. `manual`: each waits for `➤ send` (`s`) on `/queue`. `off`: no list. | `automatic` |
 | Queue cancel mode | What a canceled reply does with the queue: `hold` keeps it until your next message, `drain` sends the next at once, `empty` drops them all. Under `hold` a Web UI message counts too, and the page's **Resume** sends what was held. | `empty` |
 | Keep message history | Saves the ↑/↓ history (the newest 100 lines, the Web UI's included) in the profile's `sessions.db`. Off deletes it at the next profile load; `/msgclear` empties it. | on |
@@ -57,6 +57,7 @@ The app itself, this side of the connection.
 | Theme | One of the sixty built-in themes, or your own from the home folder's `themes` folder ([Custom themes](COMMANDS.md#custom-themes)). A wide window previews the highlighted one. | `collider` |
 | Themed background | The terminal takes the theme's background while the app runs. | on |
 | Themed external windows | The [app's own windows](INTERFACE.md#the-apps-windows) wear the theme. Off, they stay black. | on |
+| Gradient rules | The rules around the input line and pane headings shade along the theme's gradient, as quietly as the flat rule. Solid themes and a theme's own `paneRule` stay flat. | on |
 | Welcome splash | What greets you under the banner at startup until your first line: `image`, `robot` or `off`. See [The welcome splash](INTERFACE.md#the-welcome-splash). | `off` |
 | Show header | The banner at startup and after `/clear`, `/splash`, `/theme` and a profile switch. `/header` flips it. | on |
 | Working directory in header | Prints the working directory at the right of the banner's title line. | off |

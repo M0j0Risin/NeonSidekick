@@ -329,6 +329,24 @@ public class InfoPaneTests : IDisposable
         Assert.Equal(1, info.LastTab);
     }
 
+    /// <summary>The link chord held on a pane (2026-11-01, clickable links and paths): a double-click does what it does without it.</summary>
+    [Fact]
+    public async Task ADoubleClickWithTheLinkChord_TellsTheTab_AsAPlainOne()
+    {
+        var (pane, input, keys) = ClickablePane(cursorTop: 100);
+        using var _ = pane;
+        pane.Show();
+        var told = new List<string>();
+        input.PushClick(2, 103, opener: true);
+        input.PushClick(2, 103, opener: true);
+        input.Push(Keys.Escape);
+
+        var info = new InfoPane(pane, keys);
+        await info.ShowAsync(InfoPane.Title, [new InfoTab("One", () => new Text(Numbered(5))) { LineDoubleClicked = told.Add }], 0, CancellationToken.None);
+
+        Assert.Equal(["line2"], told);
+    }
+
     /// <summary>
     /// A chosen line (2026-10-15, the AD gaps plan: a <c>/ad</c> card's row opens its card): a double-click the tab's <see cref="InfoTab.LineChosen"/>
     /// answers true for closes the pane with the line, <see cref="InfoPane.Pressed"/> null; one it answers false for keeps it open and still tells

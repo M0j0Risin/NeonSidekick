@@ -417,6 +417,8 @@ public class NeonHelpCatalogTests
         Assert.StartsWith("Toolbar item 🔓 ", Win("🔓"), StringComparison.Ordinal);
         Assert.Contains(HelpInterface.LockLine, Win("🔓"), StringComparison.Ordinal);
         Assert.Contains(HelpInterface.PoliceLine, Win("🥷"), StringComparison.Ordinal);
+        Assert.Contains(HelpInterface.HintsLadderLine, Win("hints bar"), StringComparison.Ordinal);   // 2026-11-01: it names the address under the pointer
+        Assert.Contains("the address under the pointer", HelpInterface.HintsLadderLine, StringComparison.Ordinal);
         Assert.StartsWith("Toolbar item 📡 Network:", Win("📡"), StringComparison.Ordinal);
         Assert.Contains("Dark background: while Network tools is off", Win("📡"), StringComparison.Ordinal);
     }

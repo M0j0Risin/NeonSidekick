@@ -62,6 +62,12 @@ public sealed class EnvironmentOverrides
     /// <summary>The terminal's own variable, read by <see cref="TerminalProgram"/>: not an override, so not in <see cref="AllVariables"/>.</summary>
     public const string TerminalProgramVariable = "TERM_PROGRAM";
 
+    /// <summary>Windows Terminal's own variable, read by <see cref="TerminalOpensLinks"/>: not an override, so not in <see cref="AllVariables"/>.</summary>
+    public const string WindowsTerminalSessionVariable = "WT_SESSION";
+
+    /// <summary>VS Code's integrated terminal's <c>TERM_PROGRAM</c> value (2026-11-01, <see cref="TerminalOpensLinks"/>).</summary>
+    public const string VsCodeTerminalProgram = "vscode";
+
     /// <summary>iTerm2's own variable, read by <see cref="ItermProfile"/>: not an override, so not in <see cref="AllVariables"/>.</summary>
     public const string ItermProfileVariable = "ITERM_PROFILE";
 
@@ -315,6 +321,16 @@ public sealed class EnvironmentOverrides
     /// in <c>Program</c> so this class stays the one door).
     /// </summary>
     public string? TerminalProgram => Read(TerminalProgramVariable);
+
+    /// <summary>
+    /// Whether the terminal opens a link's Ctrl+click itself (2026-11-01, clickable links and paths): Windows Terminal (<c>WT_SESSION</c>
+    /// set) or VS Code's terminal (<c>TERM_PROGRAM=vscode</c>). There the app writes OSC 8 links and never opens a web link itself (the
+    /// terminal also forwards the click, so it would open twice); anywhere else it writes none and its own opener answers. Windows only:
+    /// a Mac's terminals open links on Cmd+click, which never reaches the app.
+    /// </summary>
+    public bool TerminalOpensLinks =>
+        !string.IsNullOrEmpty(Read(WindowsTerminalSessionVariable))
+        || string.Equals(TerminalProgram, VsCodeTerminalProgram, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// <c>ITERM_PROFILE</c>, the name of the iTerm2 profile this session started with, or null: which profile's Option key a Mac's

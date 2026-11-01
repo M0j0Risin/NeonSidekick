@@ -405,7 +405,7 @@ public static class SessionExport
         }
 
         var styles = Theme.StylesBuilt(palette);
-        bool light = WebTheme.Contrast(palette.Bg, Color.Black) > WebTheme.Contrast(palette.Bg, Color.White);
+        bool light = ColorContrast.Contrast(palette.Bg, Color.Black) > ColorContrast.Contrast(palette.Bg, Color.White);
         var css = new StringBuilder("/* ").Append(WebTheme.CommentSafe(palette.Name)).Append(" */\n:root {\n  color-scheme: ").Append(light ? "light" : "dark").Append(";\n");
         void Token(string name, Color color) => css.Append("  ").Append(name).Append(": ").Append(WebTheme.Hex(color)).Append(";\n");
         Token("--bg", palette.Bg);

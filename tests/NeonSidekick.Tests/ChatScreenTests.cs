@@ -136,7 +136,7 @@ public partial class ChatScreenTests : IDisposable
         // Reflection (auto-learn) is on by default (2026-09-17); a script of five tool calls would then dequeue a reflection it never
         // enqueued, so the fixture opts out and the learning tests opt in.
         _settings.Update(d => d.ReflectionAutoLearn = false);
-        // The user avatar has a default (🙊 from 2026-10-13, 🧿 since 2026-10-18): these scripts pin the sent line's ›, so the fixture opts out; the avatar's own tests set one.
+        // The user avatar has a default (🙊, 🧿 from 2026-10-18 to 2026-11-01): these scripts pin the sent line's ›, so the fixture opts out; the avatar's own tests set one.
         _settings.Update(d => d.UserAvatar = "");
         // Tool collapse count is 2 by default (2026-09-22): with a geometry the opening calls alone fold, and a fold rewrites the
         // flow from the store — every refresh-counting script would count it. The fixture opts out; the fold's own tests opt in.
@@ -16094,9 +16094,12 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(_chat.Requests);
     }
 
-    /// <summary><c>/browse &lt;folder&gt;</c> opens on that folder, its entries in view; a missing path, a file and one outside the root are the usual file errors.</summary>
+    /// <summary>
+    /// <c>/browse &lt;folder&gt;</c> opens on that folder, its entries in view; a file opens its folder with the file at the cursor (2026-11-01,
+    /// clickable links and paths); a missing path and one outside the root are the usual file errors.
+    /// </summary>
     [Fact]
-    public async Task Browse_AFolder_OpensThere_AndRefusesAMissingPath_AFile_AndOneOutside()
+    public async Task Browse_AFolder_OpensThere_AFileAtTheCursor_AndRefusesAMissingPath_AndOneOutside()
     {
         _settings.Update(d => d.TtsOutput = false);
         _console.Profile.Height = 40;
@@ -16111,15 +16114,17 @@ public partial class ChatScreenTests : IDisposable
             input => input.Push(Keys.Down, Keys.Enter, Keys.Escape),
             Line("/browse nope"),
             Line("/browse notes.txt"),
+            input => input.Push(Keys.Enter, Keys.Escape),             // the file at the cursor: Enter opens it
             Line("/browse .."),
             Line("/exit"));
 
         string output = await RunAsync();
 
-        Assert.Equal(new[] { Path.Combine(files, "docs", "a.md") }, _openedFiles);
+        Assert.Equal(new[] { Path.Combine(files, "docs", "a.md"), Path.Combine(files, "notes.txt") }, _openedFiles);
         Assert.Contains("\n" + Path.Combine(files, "docs") + "\n", output);   // the path row: the cursor on the folder named
+        Assert.Contains("\n" + Path.Combine(files, "notes.txt") + "\n", output);   // and on the file named
         Assert.Contains("  ✗ " + FileText.Missing("nope"), output);
-        Assert.Contains("  ✗ " + FileText.IsAFile("notes.txt"), output);
+        Assert.DoesNotContain(FileText.IsAFile("notes.txt"), output);
         Assert.Contains("  ✗ " + FileText.OutsideRoot(".."), output);
     }
 
@@ -21351,6 +21356,22 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(new CopyAction(CopyActionKind.Invalid, 0), ChatScreen.ParseCopyArgs("--thinking --thinking"));
         Assert.Equal(new CopyAction(CopyActionKind.Invalid, 0), ChatScreen.ParseCopyArgs("two --thinking"));
         Assert.Equal(new CopyAction(CopyActionKind.Invalid, 0), ChatScreen.ParseCopyArgs("3 4"));
+
+        // code [<n>] (2026-11-01): the last block, or block n from 1; never with the switch, a sign, 0 or a second number.
+        Assert.Equal("code", ChatScreen.CopyCodeWord);
+        Assert.Equal(new CopyAction(CopyActionKind.Code, 0), ChatScreen.ParseCopyArgs("code"));
+        Assert.Equal(new CopyAction(CopyActionKind.Code, 0), ChatScreen.ParseCopyArgs(" CODE "));
+        Assert.Equal(new CopyAction(CopyActionKind.Code, 2), ChatScreen.ParseCopyArgs("code 2"));
+        Assert.Equal(new CopyAction(CopyActionKind.Invalid, 0), ChatScreen.ParseCopyArgs("code 0"));
+        Assert.Equal(new CopyAction(CopyActionKind.Invalid, 0), ChatScreen.ParseCopyArgs("code -1"));
+        Assert.Equal(new CopyAction(CopyActionKind.Invalid, 0), ChatScreen.ParseCopyArgs("code +1"));
+        Assert.Equal(new CopyAction(CopyActionKind.Invalid, 0), ChatScreen.ParseCopyArgs("code x"));
+        Assert.Equal(new CopyAction(CopyActionKind.Invalid, 0), ChatScreen.ParseCopyArgs("code 1 2"));
+        Assert.Equal(new CopyAction(CopyActionKind.Invalid, 0), ChatScreen.ParseCopyArgs("code --thinking"));
+        Assert.Equal(new CopyAction(CopyActionKind.Invalid, 0), ChatScreen.ParseCopyArgs("2 code"));
+        Assert.Equal("(copied code block 1 of 2 to the clipboard)", ChatScreen.CopiedCodeNotice(1, 2));
+        Assert.Equal("The last reply has 1 code block; there is no code block 3.", ChatScreen.CodeBlockPastCountError(3, 1));
+        Assert.Equal("The last reply has 2 code blocks; there is no code block 3.", ChatScreen.CodeBlockPastCountError(3, 2));
         Assert.Equal("(copied the last reply with its thinking to the clipboard)", ChatScreen.CopiedNotice(1, 5, withUserText: false, withThinking: true));
         Assert.Equal("(copied the last 2 exchanges with their thinking to the clipboard)", ChatScreen.CopiedNotice(2, 5, withUserText: true, withThinking: true));
         Assert.Equal("(copied all 5 replies with their thinking to the clipboard)", ChatScreen.CopiedNotice(5, 5, withUserText: false, withThinking: true));
@@ -21391,6 +21412,43 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · " + ChatScreen.CopiedNotice(2, 3, false), output);   // "the last 2": fewer than there are
         Assert.Contains("  ✗ " + ChatScreen.CopyUsageError, output);
         Assert.Equal(3, _chat.Requests.Count);                                     // /copy never reaches the model
+    }
+
+    [Fact]
+    public void CodeBlocksOf_ReadsEachPieceAlone_TopLevelBlocksInOrder_AnEmptyOneCounted()
+    {
+        Assert.Equal(["a\nb", "", "c"], ChatScreen.CodeBlocksOf(["x\n```py\na\nb\n```\n\n```\n```", "> ```\n> q\n> ```\n\n~~~\nc\n~~~"]));   // a quoted block is not top-level
+        Assert.Empty(ChatScreen.CodeBlocksOf(["no code", "`inline` only"]));
+        // A fence the first piece never closed ends with it: the second piece's fence opens a block of its own.
+        Assert.Equal(["a", "b"], ChatScreen.CodeBlocksOf(["```\na", "```\nb\n```"]));
+    }
+
+    [Fact]
+    public async Task CopyCode_CopiesTheLastBlock_OrTheNthOne_AndSaysWhatWent()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.CopyUserPrompt = false; });
+        _chat.EnqueueText("no code here").EnqueueText("One:\n\n```cs\nint a;\nint b;\n```\n\nTwo:\n\n```\nlast\n```\n\nEmpty:\n\n```\n```");
+        PushLine("a");
+        PushLine("/copy code");
+        PushLine("b");
+        PushLine("/copy code 1");
+        PushLine("/copy code 2");
+        PushLine("/copy code 3");
+        PushLine("/copy code 4");
+        PushLine("/copy code");
+        PushLine("/copy code x");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal(["int a;\r\nint b;", "last"], _copied);
+        Assert.Contains("  · " + ChatScreen.NoCodeBlockNotice, output);
+        Assert.Contains("  · " + ChatScreen.CopiedCodeNotice(1, 3), output);
+        Assert.Contains("  · " + ChatScreen.CopiedCodeNotice(2, 3), output);
+        Assert.Equal(2, Count(output, "  · " + ChatScreen.CodeBlockEmptyNotice(3)));   // code 3, and code: the last block is the empty one
+        Assert.Contains("  ✗ " + ChatScreen.CodeBlockPastCountError(4, 3), output);
+        Assert.Contains("  ✗ " + ChatScreen.CopyUsageError, output);
+        Assert.Equal(2, _chat.Requests.Count);
     }
 
     [Fact]
@@ -25350,7 +25408,10 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(["Projects/", "Projects/Neon/"], Texts(ChatScreen.ArgumentItems("/vault", "P", vaultSources)));   // the vault's folders, as /tree's
         Assert.Equal(["Daily/", "Projects/", "Projects/Neon/"], Texts(ChatScreen.ArgumentItems("/vault", "", vaultSources)));
         Assert.Empty(ChatScreen.ArgumentItems("/read", "", sources));   // a path list, ArgumentPaths (2026-09-17)
-        Assert.Equal([new CompletionItem("all", ChatScreen.CopyAllNote), new CompletionItem("--thinking", ChatScreen.CopyThinkingNote)], ChatScreen.ArgumentItems("/copy", "", sources));
+        Assert.Equal([new CompletionItem("all", ChatScreen.CopyAllNote), new CompletionItem("code", ChatScreen.CopyCodeNote), new CompletionItem("--thinking", ChatScreen.CopyThinkingNote)], ChatScreen.ArgumentItems("/copy", "", sources));
+        Assert.Equal([new CompletionItem("code", ChatScreen.CopyCodeNote)], ChatScreen.ArgumentItems("/copy", "co", sources));   // 2026-11-01
+        Assert.Empty(ChatScreen.ArgumentItems("/copy", "code ", sources));                                                      // the number is the block's place
+        Assert.Empty(ChatScreen.ArgumentItems("/copy", "code 2 ", sources));
         Assert.Equal([new CompletionItem("--thinking", ChatScreen.CopyThinkingNote)], ChatScreen.ArgumentItems("/copy", "--t", sources));   // 2026-09-26
         Assert.Equal([new CompletionItem("all --thinking", ChatScreen.CopyThinkingNote)], ChatScreen.ArgumentItems("/copy", "all ", sources));
         Assert.Equal([new CompletionItem("3 --thinking", ChatScreen.CopyThinkingNote)], ChatScreen.ArgumentItems("/copy", "3 --", sources));

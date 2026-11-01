@@ -34,6 +34,7 @@ The screen, the input line, panes, keys, the bars and the app's own windows. Bac
 From top to bottom:
 
 * **The transcript**, under the banner (*Show header*). PgUp/PgDn scroll it and Ctrl+Home/Ctrl+End jump to its ends; a resize lays it out again at the new width.
+* **Links and paths:** Ctrl+click opens a link in your browser, or a path in `/browse`; hovering shows where it goes. On a Mac the chord differs ([MAC.md](MAC.md#keys--mouse)).
 * **The picture strip**, while there are ComfyUI pictures: its 🎞️ opens the [picture viewer](#the-picture-viewer), × closes the strip.
 * **The upper rule:** the session's name (a double-click renames it), **⤡** (a click folds or unfolds everything, like Ctrl+O), and a 🎞️ that brings a closed picture strip back.
 * **[The input line](#the-input-line).** A dim ☺ at its right end opens the emoji picker (*Emoji picker*).
@@ -54,6 +55,7 @@ From top to bottom:
 * **At the idle line** Esc clears the draft (↑ brings it back); Esc twice on an empty line opens `/rewind`.
 * **Voice:** with *STT input* on, the *STT push-to-talk key* records a message; with *STT wake* on, saying the wake phrase does.
 * **Tool calls** show as `🛠️ read_file notes.md` with the result under them (`→ 4 lines`, ✗ when it failed). Long results fold once the run ends; Ctrl+O or `/expand` opens them.
+* **Code blocks:** ⧉ on a block's label copies it.
 * **During `/read`** (📖): Space on an empty line pauses and resumes; ←/→ step a sentence.
 * **The mouse:** a double-click selects a word, and on the `›` the whole draft.
 
@@ -275,9 +277,10 @@ The keys that apply right now, on a row of their own over the status bar (*Hints
 1. The kill switch's warning (Ctrl+Alt+X, press again to unload).
 2. A waiting second press: Ctrl+C to exit, Esc to rewind, Delete for a splash picture.
 3. An open pane's keys.
-4. What the arrows do right now: the splash's pictures, the picture strip, `/read`'s keys.
+4. The link or path under the pointer.
+5. What the arrows do right now: the splash's pictures, the picture strip, `/read`'s keys.
 
-* **auto** (the default): the row comes with a hint and stays, blank, until you send, a reply ends, a pane opens or closes, the window is resized, or 10 idle seconds pass. Typing never moves the input line.
+* **auto** (the default): the row comes with a hint and stays, blank, until you send, a reply ends, a pane opens or closes, the window is resized, or 10 idle seconds pass. Typing never moves the input line, and a hover never brings the row up.
 * **always** keeps the row; **off** puts the hints at the end of the status bar's left group.
 * During a reply it shows only a pane's keys or the kill switch's warning; **Esc to stop** stays on the status bar.
 * A double-click on it opens `/settings`. It moves with the other bars in *Toolbar order*.

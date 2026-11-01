@@ -27,6 +27,9 @@ internal sealed class SectionRule : IRenderable
     // and must not take a theme picked since.
     private readonly Style _rule = Theme.PaneRule;
 
+    // The gradient rules' stops as the heading was built (2026-11-01, Theme.RuleStops; null = flat), for the same reason.
+    private readonly Color[]? _stops = Theme.RuleStops;
+
     /// <param name="markup">What <see cref="Markup(string, string?, string?)"/> built.</param>
     public SectionRule(string markup)
     {
@@ -63,12 +66,62 @@ internal sealed class SectionRule : IRenderable
     {
         var segments = ((IRenderable)_head).Render(options, maxWidth).ToList();
         int fill = maxWidth - Segment.CellCount(segments) - 1;
+        if (_stops is { } stops)
+        {
+            // Gradient rules (2026-11-01): the lead's two glyphs and the fill shade along the theme's quiet gradient across the width the
+            // heading is drawn at; the label, the count and a note's inner lead keep their styles.
+            ShadeLead(segments, stops, maxWidth);
+        }
+
         if (fill > 0)
         {
+            int column = Segment.CellCount(segments) + 1;
             segments.Add(new Segment(" "));
-            segments.Add(new Segment(new string(ScreenPane.RuleGlyph, fill), _rule));
+            if (_stops is { } fillStops)
+            {
+                foreach (var (text, color) in Theme.RuleRuns(fill, fillStops, column, maxWidth, ScreenPane.RuleGlyph))
+                {
+                    segments.Add(new Segment(text, new Style(foreground: color)));
+                }
+            }
+            else
+            {
+                segments.Add(new Segment(new string(ScreenPane.RuleGlyph, fill), _rule));
+            }
         }
 
         return segments;
+    }
+
+    /// <summary>The first segment's leading rule glyphs, up to <see cref="Lead"/>'s cells, in <paramref name="stops"/>' colors when it is in the rule's style.</summary>
+    private void ShadeLead(List<Segment> segments, Color[] stops, int maxWidth)
+    {
+        if (segments.Count == 0 || !segments[0].Style.Equals(_rule))
+        {
+            return;
+        }
+
+        string text = segments[0].Text;
+        int glyphs = 0;
+        while (glyphs < text.Length && glyphs < Lead.Length && text[glyphs] == ScreenPane.RuleGlyph)
+        {
+            glyphs++;
+        }
+
+        if (glyphs == 0)
+        {
+            return;
+        }
+
+        var pieces = Theme.RuleRuns(glyphs, stops, 0, maxWidth, ScreenPane.RuleGlyph)
+            .Select(p => new Segment(p.Text, new Style(foreground: p.Color)))
+            .ToList();
+        if (glyphs < text.Length)
+        {
+            pieces.Add(new Segment(text[glyphs..], segments[0].Style, segments[0].Link));
+        }
+
+        segments.RemoveAt(0);
+        segments.InsertRange(0, pieces);
     }
 }

@@ -79,6 +79,13 @@ public abstract record InputResult
     public sealed record LowerRuleTitle(string Draft) : InputResult;
 
     /// <summary>
+    /// A path's link chord-clicked in the transcript (2026-11-01, clickable links and paths): the screen runs <c>/browse</c> on
+    /// <see cref="Path"/> (a full path), the file at the cursor; <see cref="Draft"/> as <see cref="HintRow"/>'s. Only from the chat line's
+    /// own read: any other read (a typed yes/no) would take it for a no.
+    /// </summary>
+    public sealed record BrowsePath(string Path, string Draft) : InputResult;
+
+    /// <summary>
     /// A command chord on the chat line (2026-09-30, the user's ask: <see cref="Keys.ShortcutLine"/>): <see cref="Line"/> is
     /// the command it stands for, run as the typed one; <see cref="Draft"/> as <see cref="HintRow"/>'s.
     /// </summary>
@@ -471,6 +478,18 @@ public sealed partial class InputLine
 
     /// <summary>What a double-click on a transcript picture does with its id (later on 2026-09-24): the screen's opener; null = nothing.</summary>
     public Action<int>? OpenPicture { get; set; }
+
+    /// <summary>
+    /// What a chord-click on a web link in the transcript does with its address (2026-11-01, clickable links and paths): the screen's
+    /// opener, which ends no read and leaves the draft as it is; null = nothing (the click goes on to the fold toggle).
+    /// </summary>
+    public Action<string>? OpenLink { get; set; }
+
+    /// <summary>
+    /// What a click on a code block's ⧉ in the transcript does with the block's source (2026-11-01, copy a code block): the screen's
+    /// copy, which ends no read and leaves the draft as it is; null = nothing (the click goes on to the fold toggle).
+    /// </summary>
+    public Action<string>? CopyCode { get; set; }
 
     /// <summary>
     /// Whether a slash command's argument is a path its own file or folder list completes (2026-09-30): there a mention character stays

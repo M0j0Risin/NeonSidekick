@@ -26,8 +26,12 @@ public abstract record InputEvent
     /// </summary>
     public sealed record Paste(string Text) : InputEvent;
 
-    /// <summary>A mouse button pressed at a cell; <see cref="X"/> / <see cref="Y"/> are screen-buffer coordinates, 0-based.</summary>
-    public sealed record Click(int X, int Y, MouseButton Button) : InputEvent;
+    /// <summary>
+    /// A mouse button pressed at a cell; <see cref="X"/> / <see cref="Y"/> are screen-buffer coordinates, 0-based. <see cref="Opener"/>
+    /// (2026-11-01, clickable links and paths): a left click with the OS's link chord held, Ctrl on Windows, Option or Shift on a Mac
+    /// (<see cref="LinkText.Chord"/>); a right click never carries it.
+    /// </summary>
+    public sealed record Click(int X, int Y, MouseButton Button, bool Opener = false) : InputEvent;
 
     /// <summary>
     /// The mouse moved to a cell with the left button held (a selection being dragged); the same

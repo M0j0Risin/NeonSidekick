@@ -197,6 +197,11 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     private volatile object? _ruleMark;
     private object? _drawnRuleMark;
 
+    // The gradient rules' stops this frame (2026-11-01, Theme.RuleStops; null = flat): taken once at the top of Draw so the strip,
+    // upper and lower rules agree when the menu flips the setting from its own thread mid-frame (plan review D57), and compared by
+    // reference on the tick so a flip redraws the rules.
+    private Color[]? _drawnRuleStops;
+
     // The upper rule's ⤡ (2026-09-28 as ↘️↖️, one glyph since 2026-09-29): whether the last draw put it there, and the column
     // it landed at (-1 = none drawn), for TryHitFoldButton and the tick.
     private bool _drawnFolds;
@@ -258,6 +263,15 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     private string? _shownHints;
     private bool _hintsCollapseDue;
     private long _hintsQuietSince;
+
+    // Clickable links and paths (2026-11-01): the hover hint's maker (the screen's; null = no hint), the hint the last tick worked out
+    // (null = none; the screen's status bar reads it through LinkHintNow), the hover the pane last asked the reader for (one owner of
+    // the switch: the companion standing or a link stored), and the inputs of the last lookup, so it reruns only when one changes and
+    // never asks the terminal where its cursor is (plan review H4).
+    private Func<string, string?>? _linkHintMaker;
+    private volatile string? _linkHint;
+    private bool _hoverAsked;
+    private (long Pointer, int Rows, int Top, int Layout, int Width, int Height, int Row, int Col, bool Scrolled)? _linkLookedUp;
 
     // When the top busy label last changed (2026-10-04): the step's own clock beside the turn's.
     private long _stageSince;
@@ -625,7 +639,8 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     /// <param name="time">The clock for the tick; tests pass a manual one.</param>
     public ScreenPane(IAnsiConsole inner, ScreenGeometry? geometry, TimeProvider time)
     {
-        _inner = inner ?? throw new ArgumentNullException(nameof(inner));
+        // Every write through the link filter (2026-11-01): only a web link reaches the terminal as OSC 8, a path never (LinkFilter).
+        _inner = new LinkFilter(inner ?? throw new ArgumentNullException(nameof(inner)));
         ArgumentNullException.ThrowIfNull(time);
         _time = time;
         _geometry = geometry;
@@ -1225,6 +1240,23 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         set => _keysHint = value ?? throw new ArgumentNullException(nameof(value));
     }
 
+    /// <summary>
+    /// The hover hint's maker (2026-11-01, clickable links and paths): handed a link's target (a web address, or <c>neon-path:</c> and a
+    /// full path), it answers the hint the bar shows, or null. Run on the tick under the pane's lock, so path math alone, never the disk.
+    /// Null (the default, the tests) shows no hover hint.
+    /// </summary>
+    public Func<string, string?>? LinkHint
+    {
+        get => _linkHintMaker;
+        set => _linkHintMaker = value;
+    }
+
+    /// <summary>
+    /// The hover hint the last tick worked out (2026-11-01), or null: never under a reply or an overlay. The screen's status bar layout
+    /// puts it at the left group's end while the Hints bar has no row. Any thread.
+    /// </summary>
+    public string? LinkHintNow => _linkHint;
+
     /// <summary>How long a held Hints bar row stays blank with no hint and no key pressed, at rest, before it goes (2026-10-14). Pinned.</summary>
     public static readonly TimeSpan HintsIdle = TimeSpan.FromSeconds(10);
 
@@ -1692,12 +1724,14 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>
     /// The Hints bar's text now (2026-10-14, the ladder, <see cref="HintsBarMode.Pick"/>): the kill switch's alert (a flash stays on the
-    /// Status bar), then at rest the armed prompt, then an open pane's keys, then at rest the keys' lead; null for none.
+    /// Status bar), then at rest the armed prompt, then an open pane's keys, then the address under the pointer (2026-11-01, only while
+    /// the row is already up or always shown: a hover never summons it), then at rest the keys' lead; null for none.
     /// </summary>
     private string? HintsText() => HintsBarMode.Pick(
         _alertHint is { } alert && !_alertFlash ? alert : null,
         _busyLabel is null ? _armedHint() : null,
         _overlay?.Hint,
+        _hintsRows > 0 || HintsBarMode.Resolve(_hintsBar()) == HintsBarStyle.Always ? _linkHint : null,
         _busyLabel is null ? _keysHint() : null);
 
     /// <summary>An open pane's keys stand on the Status bar (the hint row's way): a pane is open and the Hints bar has no row (2026-10-14).</summary>
@@ -3197,6 +3231,61 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>
+    /// The link under buffer cell (<paramref name="x"/>, <paramref name="y"/>) in the transcript (2026-11-01, clickable links and paths):
+    /// true with its <paramref name="target"/> (a web address, or <c>neon-path:</c> and a full path, as the store keeps it, unfiltered),
+    /// false off one, off the region, on the live reply's rows, lifted, or with no geometry. Found as <see cref="TryToggleToolGroupAt"/>
+    /// finds its row, then that row's cells walked to the column.
+    /// </summary>
+    public bool TryHitLink(int x, int y, out string target)
+    {
+        target = "";
+        if (!Enabled)
+        {
+            return false;
+        }
+
+        lock (_gate)
+        {
+            if (StoreRowAt(y) is not int row || LinkAtLocked(row, x) is not { } found)
+            {
+                return false;
+            }
+
+            target = found;
+            return true;
+        }
+    }
+
+    /// <summary>The link of the segment covering column <paramref name="x"/> of store row <paramref name="row"/>, or null. Under the lock.</summary>
+    private string? LinkAtLocked(int row, int x)
+    {
+        var rows = _store.Rows(Width);
+        if (x < 0 || row < 0 || row >= rows.Count)
+        {
+            return null;
+        }
+
+        int at = 0;
+        foreach (var segment in rows[row])
+        {
+            if (segment.IsControlCode || segment.IsLineBreak)
+            {
+                continue;
+            }
+
+            int cells = TextCells.Width(segment.Text);
+            if (x < at + cells)
+            {
+                return segment.Link?.Url is { Length: > 0 } url ? url : null;
+            }
+
+            at += cells;
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// The store row screen row <paramref name="y"/> shows in the transcript region, or null (lifted, mid-batch or
     /// modal, no geometry, off the region, below the flow's end). Under the lock.
     /// </summary>
@@ -3208,6 +3297,27 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             return null;
         }
 
+        return StoreRowFrom(top, y);
+    }
+
+    /// <summary>
+    /// <see cref="StoreRowAt"/> for the hover (2026-11-01, plan review H4/H5): <paramref name="screenRow"/> a row of the window, the
+    /// cursor's row worked out from the layout as the companion's frame does, so the terminal is never asked (on a Mac that is a
+    /// query and a wait, every tick). Under the lock.
+    /// </summary>
+    private int? StoreRowAtScreen(int screenRow)
+    {
+        if (!_drawn || _batch > 0 || _modal > 0 || ResizePending || _geometry is null)
+        {
+            return null;
+        }
+
+        return StoreRowFrom(Height - 1 - LastRowBelowCursor, screenRow);
+    }
+
+    /// <summary>The store row on row <paramref name="y"/> with the cursor on row <paramref name="top"/> (both buffer rows, or both screen rows), or null.</summary>
+    private int? StoreRowFrom(int top, int y)
+    {
         // The picture strip and its rule sit between the region and the upper rule (2026-09-25, the user's report: a click
         // on a tool run's summary did nothing while the strip showed — every row was read the strip's height too high).
         // The scroll's row (2026-10-01) over them while scrolled.
@@ -3294,11 +3404,12 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         {
             foreach (var segment in processed.Render(options, width))
             {
-                // Spectre's merge (internal to it): a text run joins the one before it in the same style.
+                // Spectre's merge (internal to it): a text run joins the one before it in the same style — and link (2026-11-01), so a
+                // linked run of tool lines still folds while each keeps its own target.
                 if (segments.Count > 0 && segments[^1] is { IsLineBreak: false, IsControlCode: false } last
-                    && !segment.IsLineBreak && !segment.IsControlCode && last.Style.Equals(segment.Style))
+                    && !segment.IsLineBreak && !segment.IsControlCode && last.Style.Equals(segment.Style) && Equals(last.Link, segment.Link))
                 {
-                    segments[^1] = new Segment(last.Text + segment.Text, last.Style);
+                    segments[^1] = new Segment(last.Text + segment.Text, last.Style, last.Link);
                 }
                 else
                 {
@@ -3646,7 +3757,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
                 continue;
             }
 
-            rest.Add(skip == 0 ? segment : new Segment(segment.Text[skip..], segment.Style));
+            rest.Add(skip == 0 ? segment : new Segment(segment.Text[skip..], segment.Style, segment.Link));
             skip = 0;
         }
 
@@ -3763,7 +3874,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     /// <summary>The screen is wiped: the flow starts at the top and the pane is off the screen until the next write.</summary>
     public void Clear(bool home)
     {
-        bool hadCompanion;
+        bool? hover;
         _inner.Clear(home);
         if (!Enabled)
         {
@@ -3786,14 +3897,13 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             _builtWidth = Width;
             _builtHeight = Height;
             ForgetLive();
-            hadCompanion = _companion is not null;
             StopCompanionLocked();   // the welcome splash's robot goes with the screen (2026-10-20)
+            _linkHint = null;
+            _linkLookedUp = null;
+            hover = HoverChangeLocked();
         }
 
-        if (hadCompanion)
-        {
-            Hover?.Invoke(false);
-        }
+        AskHover(hover);
     }
 
     // ── The pane ────────────────────────────────────────────────────────────
@@ -4539,12 +4649,12 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
 
     public void Dispose()
     {
-        bool hadCompanion;
+        bool? hover;
         lock (_gate)
         {
             _disposed = true;
-            hadCompanion = _companion is not null;
             StopCompanionLocked();
+            hover = HoverChangeLocked();
             while (_syncDepth > 0)
             {
                 EndSync();   // nothing held past the pane's end
@@ -4554,10 +4664,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         }
 
         _timer?.Dispose();
-        if (hadCompanion)
-        {
-            Hover?.Invoke(false);
-        }
+        AskHover(hover);
     }
 
     // ── The input row ───────────────────────────────────────────────────────
@@ -5703,6 +5810,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     {
         int w = Width;
         int h = Height;
+        _drawnRuleStops = Theme.RuleStops;
 
         // The overlay, and the draft, are laid out again on every draw, at the window's width; the
         // draft to MaxInputRows around the cursor, the overlay cut to what the window leaves over
@@ -6588,32 +6696,46 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
 
         IReadOnlyList<CodeSpan>? spans = null;
         int keep = 0;
-        if (_live is ReplyBlock { CodeKeep: > 0 } reply)
+        if (_live is ReplyBlock reply)
         {
             keep = reply.CodeKeep;
-            // Short of the end, the rows above a streaming code block: its window's spans are theirs, and cheaper.
+            // Short of the end, the rows above a streaming code block: its window's spans are theirs, and cheaper. Every reply's, keep 0
+            // too (2026-11-01, copy a code block): a label with no fold still carries its ⧉ and its text.
             spans = (final ? reply : reply.LiveView()).CodeSpans(RenderOptions.Create(_inner, _inner.Profile.Capabilities), width);
         }
 
         for (int i = from; i < to; i++)
         {
             var span = spans?.FirstOrDefault(c => i >= c.LabelRow && i < c.End);
-            if (span is not null && i == span.LabelRow && ReadsAs(lines[i], MarkdownView.CodeGlyph + span.Label))
+            if (keep > 0 && span is not null && i == span.LabelRow && ReadsAs(lines[i], MarkdownView.CodeGlyph + span.Label))
             {
-                EmitCodeLabel(lines[i], keep, span);
+                EmitCodeLabel(lines[i], keep, span, final);
                 _liveCodeSpan = span.LabelRow;
             }
-            else if (span is not null && _liveCodeSpan == span.LabelRow && _store.CodeGroupOpen)
+            else if (keep > 0 && span is not null && _liveCodeSpan == span.LabelRow && _store.CodeGroupOpen)
             {
                 if (i == from)
                 {
-                    _store.SetCodeGroupSummary(CodeSummary(_store.CodeGroupLabel, span, expanded: false), CodeSummary(_store.CodeGroupLabel, span, expanded: true), span.SourceLines, Width, BornWidth);
+                    bool copy = Copyable(span, final);
+                    _store.SetCodeGroupSummary(CodeSummary(_store.CodeGroupLabel, span, expanded: false, copy), CodeSummary(_store.CodeGroupLabel, span, expanded: true, copy), span.SourceLines, Width, BornWidth);
+                    if (copy)
+                    {
+                        _store.SetCodeGroupCopyText(span.Text);
+                    }
                 }
 
                 var segments = new List<Segment>(lines[i].Count + 1);
                 segments.AddRange(lines[i]);
                 segments.Add(Segment.LineBreak);
                 EmitAs(segments, member: true);
+            }
+            else if (keep == 0 && span is not null && i == span.LabelRow + span.LabelRows - 1 && Copyable(span, final)
+                && ReadsAs(lines[span.LabelRow], MarkdownView.CodeGlyph + span.Label))
+            {
+                // Code collapse count 0 (2026-11-01): no group, the label a plain row, its last row with the ⧉ and the line its text.
+                WriteFlowLine(new SegmentLine(WithCopyGlyph(lines[i])));
+                _store.SetLastLineCopyText(span.Text);
+                _liveCodeSpan = -1;
             }
             else
             {
@@ -6627,6 +6749,84 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             _store.EndGroup();
             _liveCodeSpan = -1;
         }
+    }
+
+    /// <summary>
+    /// Whether a code block's label carries the ⧉ (2026-11-01, copy a code block): a closed block with lines, or once the reply is
+    /// <paramref name="final"/> its unclosed last one too (CommonMark ends a block at the document's end). Never one still streaming.
+    /// </summary>
+    private static bool Copyable(CodeSpan span, bool final) => (!span.Open || final) && span.Text.Length > 0;
+
+    /// <summary><paramref name="row"/> with <see cref="CodeFoldText.CopyTail"/> after it in the label's dim style, when it fits the width the row was laid out at; else as it is (no row is added for it).</summary>
+    private List<Segment> WithCopyGlyph(IReadOnlyList<Segment> row)
+    {
+        var segments = new List<Segment>(row);
+        int cells = segments.Where(s => !s.IsControlCode && !s.IsLineBreak).Sum(s => TextCells.Width(s.Text));
+        if (cells + TextCells.Width(CodeFoldText.CopyTail) <= BornWidth)
+        {
+            segments.Add(new Segment(CodeFoldText.CopyTail, Theme.DimText));
+        }
+
+        return segments;
+    }
+
+    /// <summary>
+    /// The ⧉ under buffer cell (<paramref name="x"/>, <paramref name="y"/>) on a code block's label (2026-11-01, copy a code block): true
+    /// with the block's source in <paramref name="text"/>. The glyph is found by the character drawn at the cell (a row is laid out anew on
+    /// a resize, so never a stored column), the text from the label's line (<see cref="Scrollback.CopyTextAt"/>). False anywhere else.
+    /// </summary>
+    public bool TryHitCodeCopy(int x, int y, out string text)
+    {
+        text = "";
+        if (!Enabled)
+        {
+            return false;
+        }
+
+        lock (_gate)
+        {
+            if (StoreRowAt(y) is not int row || !CopyGlyphAtLocked(row, x) || _store.CopyTextAt(row) is not { } copy)
+            {
+                return false;
+            }
+
+            text = copy;
+            return true;
+        }
+    }
+
+    /// <summary>Whether the character drawn at column <paramref name="x"/> of store row <paramref name="row"/> is <see cref="CodeFoldText.CopyGlyph"/>. Under the lock.</summary>
+    private bool CopyGlyphAtLocked(int row, int x)
+    {
+        var rows = _store.Rows(Width);
+        if (x < 0 || row < 0 || row >= rows.Count)
+        {
+            return false;
+        }
+
+        int at = 0;
+        foreach (var segment in rows[row])
+        {
+            if (segment.IsControlCode || segment.IsLineBreak)
+            {
+                continue;
+            }
+
+            var e = System.Globalization.StringInfo.GetTextElementEnumerator(segment.Text);
+            while (e.MoveNext())
+            {
+                string element = (string)e.Current;
+                int cells = TextCells.Width(element);
+                if (x < at + Math.Max(1, cells))
+                {
+                    return string.Equals(element, CodeFoldText.CopyGlyph, StringComparison.Ordinal);
+                }
+
+                at += cells;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -6683,11 +6883,18 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>The label row of a code block into the flow as its group's summary: stored by <see cref="Scrollback.BeginCodeGroup(int, IReadOnlyList{Segment})"/>, written and counted at the bottom.</summary>
-    private void EmitCodeLabel(SegmentLine row, int keep, CodeSpan span)
+    private void EmitCodeLabel(SegmentLine row, int keep, CodeSpan span, bool final)
     {
-        var segments = new List<Segment>(row);
+        // Its ⧉ and its text (2026-11-01, copy a code block) on a one-row label of a block that is closed, or ends a final reply.
+        bool copy = Copyable(span, final);
+        var segments = copy && span.LabelRows == 1 ? WithCopyGlyph(row) : new List<Segment>(row);
         _store.BeginCodeGroup(keep, segments, Width, BornWidth);
-        _store.SetCodeGroupSummary(CodeSummary(segments, span, expanded: false), CodeSummary(segments, span, expanded: true), span.SourceLines, Width, BornWidth);
+        _store.SetCodeGroupSummary(CodeSummary(segments, span, expanded: false, copy), CodeSummary(segments, span, expanded: true, copy), span.SourceLines, Width, BornWidth);
+        if (copy)
+        {
+            _store.SetCodeGroupCopyText(span.Text);
+        }
+
         WriteSummaryRow(segments);
     }
 
@@ -6713,12 +6920,15 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         }
     }
 
-    /// <summary>The label row with its label's text replaced by <see cref="CodeFoldText.Summary"/>: the indent or the reply's glyph ahead of it kept.</summary>
-    private static List<Segment> CodeSummary(IReadOnlyList<Segment> label, CodeSpan span, bool expanded)
+    /// <summary>
+    /// The label row with its label's text replaced by <see cref="CodeFoldText.Summary"/>: the indent or the reply's glyph ahead of it kept
+    /// (a ⧉ on the label, in its style, drops out with it), and with <paramref name="copy"/> the summary's own ⧉ after (2026-11-01) when it fits.
+    /// </summary>
+    private List<Segment> CodeSummary(IReadOnlyList<Segment> label, CodeSpan span, bool expanded, bool copy = false)
     {
         var result = label.TakeWhile(s => !s.Style.Equals(Theme.MarkdownCodeLabel)).ToList();
         result.Add(new Segment(CodeFoldText.Summary(span.Label, span.SourceLines, expanded), Theme.MarkdownCodeLabel));
-        return result;
+        return copy ? WithCopyGlyph(result) : result;
     }
 
     /// <summary>Whether <paramref name="row"/> is a code label reading <paramref name="label"/>: its label-coloured text starts it.</summary>
@@ -6819,16 +7029,62 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         (_lowerTitleColumn, _lowerTitleCells) = TitleSpan(_drawnLowerRuleTitle, width, 0);
         if (FitRuleTitle(_drawnLowerRuleTitle, width) is var (fitted, left))
         {
-            _inner.Write(new RawText(new string(RuleGlyph, left) + " ", rule));
+            WriteRuleText(new string(RuleGlyph, left) + " ", 0, width, rule);
             _inner.Write(new RawText(fitted, Theme.AccentSecondary));
-            _inner.Write(new RawText(" " + RuleGlyph, rule));
+            WriteRuleText(" " + RuleGlyph, left + 1 + TextCells.Width(fitted), width, rule);
         }
         else
         {
-            _inner.Write(new RawText(new string(RuleGlyph, Math.Max(0, width)), rule));
+            WriteRuleText(new string(RuleGlyph, Math.Max(0, width)), 0, width, rule);
         }
 
         _inner.WriteLine();
+    }
+
+    /// <summary>
+    /// A stretch of a rule drawn from <paramref name="column"/> of a line <paramref name="fullWidth"/> cells wide (2026-11-01, the
+    /// gradient rules): flat in <paramref name="flat"/> under a <c>/mark</c> or while this frame's <see cref="_drawnRuleStops"/> is null,
+    /// else each run of <see cref="RuleGlyph"/> in <see cref="Theme.RuleRuns"/>' colors at its own column, so the input line's rules
+    /// and the strip's sample one gradient across the window. Anything else in the text (the spaces around a title) stays flat.
+    /// </summary>
+    private void WriteRuleText(string text, int column, int fullWidth, Style flat)
+    {
+        if (text.Length == 0)
+        {
+            return;
+        }
+
+        if (_drawnRuleMark is not null || _drawnRuleStops is not { } stops)
+        {
+            _inner.Write(new RawText(text, flat));
+            return;
+        }
+
+        int i = 0;
+        while (i < text.Length)
+        {
+            int start = i;
+            bool glyphs = text[i] == RuleGlyph;
+            while (i < text.Length && (text[i] == RuleGlyph) == glyphs)
+            {
+                i++;
+            }
+
+            string piece = text[start..i];
+            if (glyphs)
+            {
+                foreach (var (runText, color) in Theme.RuleRuns(piece.Length, stops, column, fullWidth, RuleGlyph))
+                {
+                    _inner.Write(new RawText(runText, new Style(foreground: color)));
+                }
+            }
+            else
+            {
+                _inner.Write(new RawText(piece, flat));
+            }
+
+            column += TextCells.Width(piece);
+        }
     }
 
     /// <summary>
@@ -6841,12 +7097,24 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         _stripButtonColumn = parts.ButtonColumn;
         _stripButtonCells = TextCells.Width(parts.Button);
         _stripCloseColumn = parts.CloseColumn;
-        foreach (var (text, style) in new[] { (parts.Lead, Theme.PaneRule), (parts.Button, Theme.AccentSecondary), (parts.Fill, Theme.PaneRule), (parts.Close, Theme.DimText), (parts.Tail, Theme.PaneRule) })
+        // The rule's own pieces shade along the gradient (2026-11-01) unless a /mark is up: the strip ignores a mark's color and stays
+        // flat in the pane rule's then, so a marked window shows no gradient anywhere around the input line.
+        int column = 0;
+        foreach (var (text, style, rule) in new[] { (parts.Lead, Theme.PaneRule, true), (parts.Button, Theme.AccentSecondary, false), (parts.Fill, Theme.PaneRule, true), (parts.Close, Theme.DimText, false), (parts.Tail, Theme.PaneRule, true) })
         {
             if (text.Length > 0)
             {
-                _inner.Write(new RawText(text, style));
+                if (rule)
+                {
+                    WriteRuleText(text, column, width, style);
+                }
+                else
+                {
+                    _inner.Write(new RawText(text, style));
+                }
             }
+
+            column += TextCells.Width(text);
         }
 
         _inner.WriteLine();
@@ -6914,25 +7182,28 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         _reopenColumn = parts.ReopenColumn;
         _ruleTitleColumn = parts.TitleColumn;
         _ruleTitleCells = parts.TitleCells;
-        foreach (var (text, style) in new[] { (parts.Lead, rule), (parts.Button, Theme.AccentSecondary), (parts.Reopen, Theme.AccentSecondary) })
+        WriteRuleText(parts.Lead, 0, width, rule);
+        foreach (var text in new[] { parts.Button, parts.Reopen })
         {
             if (text.Length > 0)
             {
-                _inner.Write(new RawText(text, style));
+                _inner.Write(new RawText(text, Theme.AccentSecondary));
             }
         }
 
-        // The rest: the glyphs in the rule's style (a mark's, 2026-10-18), the session's name between them in the theme's as ever.
-        int restWidth = width - TextCells.Width(parts.Lead + parts.Button + parts.Reopen);
-        if (_drawnRuleMark is not null && FitRuleTitle(_drawnRuleTitle, restWidth) is var (fitted, left))
+        // The rest: the glyphs in the rule's style (a mark's, 2026-10-18; the gradient's, 2026-11-01), the session's name between them
+        // in the theme's as ever.
+        int restColumn = TextCells.Width(parts.Lead + parts.Button + parts.Reopen);
+        int restWidth = width - restColumn;
+        if (FitRuleTitle(_drawnRuleTitle, restWidth) is var (fitted, left))
         {
-            _inner.Write(new RawText(new string(RuleGlyph, left), rule));
+            WriteRuleText(new string(RuleGlyph, left), restColumn, width, rule);
             _inner.Write(new RawText(" " + fitted + " ", Theme.PaneRule));
-            _inner.Write(new RawText(RuleGlyph.ToString(), rule));
+            WriteRuleText(RuleGlyph.ToString(), restColumn + left + 2 + TextCells.Width(fitted), width, rule);
         }
         else if (parts.Rest.Length > 0)
         {
-            _inner.Write(new RawText(parts.Rest, rule));
+            WriteRuleText(parts.Rest, restColumn, width, rule);
         }
 
         _inner.WriteLine();
@@ -7055,7 +7326,8 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     /// <summary>The title <see cref="RuleTitle"/> answers now is not the one on the drawn upper rule, or <see cref="LowerRuleTitle"/>'s not the lower one's (2026-10-12).</summary>
     private bool RuleTitleChanged() =>
         !string.Equals(_ruleTitle(), _drawnRuleTitle, StringComparison.Ordinal) || !string.Equals(_lowerRuleTitle(), _drawnLowerRuleTitle, StringComparison.Ordinal)
-        || !ReferenceEquals(_ruleMark, _drawnRuleMark);   // a /mark (2026-10-18)
+        || !ReferenceEquals(_ruleMark, _drawnRuleMark)   // a /mark (2026-10-18)
+        || !ReferenceEquals(Theme.RuleStops, _drawnRuleStops);   // Gradient rules flipped or the palette changed (2026-11-01)
 
     private void WriteHintRow()
     {
@@ -7357,7 +7629,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>The overlay's hint while one is open, else the screen's — scrolled too since 2026-10-01, the scroll's hint on a row of its own (<see cref="ScrolledRow"/>).</summary>
-    private string StandingHint() => Spaced(OverlayOnStatus ? _overlay!.Hint : _hint());
+    private string StandingHint() => Spaced(OverlayOnStatus ? _overlay!.Hint : (_hintsRows == 0 ? _linkHint : null) ?? _hint());
 
     /// <summary>
     /// A hint's text with a space after each emoji the terminal paints over the cell after it (<see cref="TextCells.SpaceSelectorSequences"/>;
@@ -7384,7 +7656,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             var segment = list[i];
             if (!segment.IsControlCode && !segment.IsLineBreak && segment.Text.Contains('\uFE0F', StringComparison.Ordinal))
             {
-                list[i] = new Segment(Spaced(segment.Text), segment.Style);
+                list[i] = new Segment(Spaced(segment.Text), segment.Style, segment.Link);
             }
         }
 
@@ -8078,6 +8350,73 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
 
     private void OnTick()
     {
+        TickOnce();
+        bool? hover;
+        lock (_gate)
+        {
+            hover = HoverChangeLocked();
+        }
+
+        AskHover(hover);
+    }
+
+    /// <summary>
+    /// Whether the reader should be asked for the mouse's moves (2026-11-01, one owner of the switch): while the companion stands or the
+    /// store holds a link, never after the pane's end. The new value when it differs from the last one asked, else null. Under the lock;
+    /// the caller asks after leaving it (<see cref="AskHover"/>), as the reader on a Mac writes under its own lock.
+    /// </summary>
+    private bool? HoverChangeLocked()
+    {
+        bool wanted = !_disposed && Enabled && (_companion is not null || _store.AnyLinks);
+        if (wanted == _hoverAsked)
+        {
+            return null;
+        }
+
+        _hoverAsked = wanted;
+        return wanted;
+    }
+
+    /// <summary>The reader asked for hover or told to stop, when <paramref name="change"/> says so. Outside the lock.</summary>
+    private void AskHover(bool? change)
+    {
+        if (change is bool on)
+        {
+            Hover?.Invoke(on);
+        }
+    }
+
+    /// <summary>
+    /// The hover hint worked out for the tick (2026-11-01, clickable links and paths): the link under the pointer's last cell handed to
+    /// <see cref="LinkHint"/>, looked up again only when the pointer, the store's rows, the scroll, the layout, the size or the flow's
+    /// end moved. Null under a reply or an overlay (neither shows it), with no link stored, before any move, or off a link. Under the lock.
+    /// </summary>
+    private void LinkHintLocked()
+    {
+        if (!_hoverAsked || _linkHintMaker is not { } maker || _busyLabel is not null || _overlay is not null
+            || Volatile.Read(ref _pointerMoves) == 0 || !_store.AnyLinks)
+        {
+            _linkLookedUp = null;
+            _linkHint = null;
+            return;
+        }
+
+        long at = Volatile.Read(ref _pointerAt);
+        var inputs = (at, _store.Rows(Width).Count, _top, _layoutVersion, Width, Height, _row, _col, _drawnScrolled);
+        if (inputs == _linkLookedUp)
+        {
+            return;   // nothing moved: the hint stands
+        }
+
+        _linkLookedUp = inputs;
+        int windowTop = _geometry?.WindowTop() ?? 0;
+        _linkHint = StoreRowAtScreen((int)(uint)at - windowTop) is int row && LinkAtLocked(row, (int)(at >> 32)) is { } target
+            ? maker(target)
+            : null;
+    }
+
+    private void TickOnce()
+    {
         lock (_gate)
         {
             CloseLeakedFrames();
@@ -8093,6 +8432,9 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
                 _alertUntil = 0;
                 RedrawHint();
             }
+
+            // The address under the pointer (2026-11-01): worked out before the branches, so whichever draws the bars draws it.
+            LinkHintLocked();
 
             int w = Width;
             int h = Height;

@@ -452,9 +452,59 @@ public sealed class TranscriptRenderer : INoticeSink
     public void Tool(string name, string argumentsJson)
     {
         Feed?.Add(WebUi.FeedKind.Tool, ToolText(name, argumentsJson));
-        ToolLine(ToolMarkup(name, argumentsJson), ToolMarkup(name, argumentsJson).TrimStart());
+        ToolLine(ToolMarkup(name, argumentsJson), ToolMarkup(name, argumentsJson).TrimStart(), link: ToolTarget(name, argumentsJson));
         _callOpen = true;   // its result joins this call's unit (2026-10-04)
     }
+
+    /// <summary>
+    /// A tool line's link (2026-11-01, the user's call: the argument alone, never the name or the other values): where the call's
+    /// <c>url</c> or <c>path</c> value sits in <see cref="ToolMarkup"/>'s text and what it opens — the web address, or the path through
+    /// <see cref="ResolvePath"/> (none without one, or outside the working folder). A value cut short links its shown part, never the
+    /// <c>…</c>; one past the brief's three values, none.
+    /// </summary>
+    internal ToolLink? ToolTarget(string name, string argumentsJson)
+    {
+        var found = ToolCallText.BriefWithTarget(argumentsJson);
+        if (found.Value is not { } value || found.Start < 0)
+        {
+            return null;
+        }
+
+        string? target = found.Key == "url"
+            ? LinkText.IsWeb(value) && LinkText.IsLinkable(value, web: true) ? value : null
+            : ReplyResolverForTool(value) is { } full && LinkText.IsLinkable(full, web: false) ? LinkText.PathLink(full) : null;
+        if (target is null)
+        {
+            return null;
+        }
+
+        string shown = Truncate(found.Brief, ToolTextLimit);
+        int visible = shown.Length == found.Brief.Length ? shown.Length : shown.Length - 1;   // the characters before the ellipsis
+        int end = Math.Min(found.Start + found.Length, visible);
+        if (end <= found.Start)
+        {
+            return null;
+        }
+
+        int offset = ToolGlyph.Length + name.Length + 1;
+        return new ToolLink(target, offset + found.Start, end - found.Start);
+    }
+
+    // A tool line's path asks the disk once, as the line is written (no reply cache: the line is drawn once).
+    private string? ReplyResolverForTool(string value)
+    {
+        try
+        {
+            return ResolvePath?.Invoke(value);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>A link inside a one-line markup's text (2026-11-01): what it opens, where it starts in the line's plain text and how many characters it covers.</summary>
+    internal readonly record struct ToolLink(string Target, int Start, int Length);
 
     public void ToolResult(string name, string text)
     {
@@ -678,6 +728,60 @@ public sealed class TranscriptRenderer : INoticeSink
     private int _codeKeep;
 
     /// <summary>
+    /// Turns a path a reply or a tool line names into the full path of an existing file or folder inside the working folder, or null
+    /// (2026-11-01, clickable links and paths): such a path carries a <see cref="LinkText.PathScheme"/> link. Null (the default: smoke, and
+    /// every test that does not set one) makes no path links. <c>ChatScreen</c> sets it over its working folder's read-side resolve.
+    /// </summary>
+    public Func<string, string?>? ResolvePath { get; set; }
+
+    // The open reply's answers (text → full path or none), so the disk is asked once per span per reply, never per frame: the live block
+    // is a new ReplyBlock on every delta and laid out again on every tick (plan review 17). Emptied with the reply's text (ClearReply);
+    // read on the pane's tick thread, so locked.
+    private readonly Dictionary<string, string?> _resolved = new(StringComparer.Ordinal);
+    private readonly Lock _resolvedLock = new();
+
+    /// <summary>The resolver the reply's blocks get: <see cref="ResolvePath"/> through the reply's cache, null without one.</summary>
+    private Func<string, string?>? ReplyResolver => ResolvePath is null ? null : ResolveCached;
+
+    private string? ResolveCached(string text)
+    {
+        lock (_resolvedLock)
+        {
+            if (_resolved.TryGetValue(text, out var known))
+            {
+                return known;
+            }
+        }
+
+        string? full;
+        try
+        {
+            full = ResolvePath?.Invoke(text);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            full = null;
+        }
+
+        lock (_resolvedLock)
+        {
+            _resolved[text] = full;
+        }
+
+        return full;
+    }
+
+    /// <summary>The reply's text emptied, and with it the reply's path answers (2026-11-01): the one place both are cleared.</summary>
+    private void ClearReply()
+    {
+        _reply.Clear();
+        lock (_resolvedLock)
+        {
+            _resolved.Clear();
+        }
+    }
+
+    /// <summary>
     /// A tool call the turn made (<c>ChatScreen.Render</c>, every call, the quiet ones too): counted
     /// by name for the run's summary line (<see cref="ToolGroupText.Summary"/>). The count is the
     /// run's — the calls since anything else was said — whether or not its line is written yet.
@@ -744,10 +848,10 @@ public sealed class TranscriptRenderer : INoticeSink
         _slot = markdown && _pane is { Enabled: true };
         if (_slot)
         {
-            _reply.Clear();
+            ClearReply();
             _glyph = true;
             _codeKeep = CodeCollapseCount();
-            _pane!.SetLive(new ReplyBlock("", glyph: true, codeKeep: _codeKeep, glyphText: _openGlyph));
+            _pane!.SetLive(new ReplyBlock("", glyph: true, codeKeep: _codeKeep, glyphText: _openGlyph, resolvePath: ReplyResolver));
         }
         else
         {
@@ -805,7 +909,7 @@ public sealed class TranscriptRenderer : INoticeSink
             // behind this class's back (a flow write straight to the pane) starts a fresh, glyph-less block.
             if (_state == LineState.MidText && !_pane!.LiveOpen)
             {
-                _reply.Clear();
+                ClearReply();
                 _glyph = false;
             }
 
@@ -816,7 +920,7 @@ public sealed class TranscriptRenderer : INoticeSink
             }
 
             _reply.Append(text);
-            _pane!.SetLive(new ReplyBlock(_reply.ToString(), _glyph, codeKeep: _codeKeep, glyphText: _openGlyph));
+            _pane!.SetLive(new ReplyBlock(_reply.ToString(), _glyph, codeKeep: _codeKeep, glyphText: _openGlyph, resolvePath: ReplyResolver));
             _state = LineState.MidText;
             return;
         }
@@ -972,9 +1076,9 @@ public sealed class TranscriptRenderer : INoticeSink
             _pane.CommitLive();
             if (_glyphAfterThinking)
             {
-                _reply.Clear();
+                ClearReply();
                 _glyph = true;
-                _pane.SetLive(new ReplyBlock("", glyph: true, codeKeep: _codeKeep, glyphText: _openGlyph));
+                _pane.SetLive(new ReplyBlock("", glyph: true, codeKeep: _codeKeep, glyphText: _openGlyph, resolvePath: ReplyResolver));
                 _state = LineState.GlyphOnly;
             }
             else
@@ -1072,8 +1176,8 @@ public sealed class TranscriptRenderer : INoticeSink
     /// (dropped from the slot, or taken back out of the flow on the plain path) — and past the count
     /// the pane folds the run under its summary. Otherwise the plain line it always was.
     /// </summary>
-    private void ToolLine(string fullMarkup, string inlineMarkup, bool sameUnit = false) =>
-        ToolWrite(new EndedLine(Hanging(fullMarkup)), () => WriteLine(fullMarkup, inlineMarkup), sameUnit);
+    private void ToolLine(string fullMarkup, string inlineMarkup, bool sameUnit = false, ToolLink? link = null) =>
+        ToolWrite(new EndedLine(Hanging(fullMarkup, link)), () => WriteLine(fullMarkup, inlineMarkup, link), sameUnit);
 
     /// <summary>
     /// A one-line markup (<c>[style]  · text[/]</c>, every line builder's shape) as a renderable whose wrapped rows start under its
@@ -1081,7 +1185,7 @@ public sealed class TranscriptRenderer : INoticeSink
     /// blanks, the glyph and the blanks after it are the first row's prefix, as many blanks the others'. Any other shape — nested
     /// markup, nothing after the glyph — is the plain line it was.
     /// </summary>
-    internal static IRenderable Hanging(string markup)
+    internal static IRenderable Hanging(string markup, ToolLink? link = null)
     {
         ArgumentNullException.ThrowIfNull(markup);
         int close = markup.IndexOf(']', StringComparison.Ordinal);
@@ -1095,6 +1199,11 @@ public sealed class TranscriptRenderer : INoticeSink
         if (inner.Replace("[[", "", StringComparison.Ordinal).Contains('['))
         {
             return new Markup(markup);   // a span inside: drawn whole
+        }
+
+        if (link is not null)
+        {
+            return HangingLinked(tag, inner, link.Value) ?? new Markup(markup);
         }
 
         int start = 0;
@@ -1132,6 +1241,109 @@ public sealed class TranscriptRenderer : INoticeSink
         }
 
         return new UI.Markdown.HangingIndent(prefix, new string(' ', TextCells.Width(prefix)), style, new Markup("[" + tag + "]" + inner[text..] + "[/]"));
+    }
+
+    /// <summary>
+    /// <see cref="Hanging"/>'s shape with <paramref name="link"/> in its body (2026-11-01): the same prefix and indent (drawn in the line's
+    /// style, which has no link, so blank cells and the glyph never open anything), the body a <see cref="Paragraph"/> of up to three runs
+    /// in the line's style — before, the link, after — which wraps exactly as the markup's own paragraph did. Null for a shape it cannot read.
+    /// </summary>
+    private static IRenderable? HangingLinked(string tag, string inner, ToolLink link)
+    {
+        Style style;
+        try
+        {
+            style = Style.Parse(tag);
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+
+        string plain = Unescape(inner);
+        int start = 0;
+        while (start < plain.Length && plain[start] == ' ')
+        {
+            start++;
+        }
+
+        int end = start;
+        while (end < plain.Length && plain[end] != ' ')
+        {
+            end++;
+        }
+
+        int text = end;
+        while (text < plain.Length && plain[text] == ' ')
+        {
+            text++;
+        }
+
+        if (start == end || text == end || text == plain.Length || link.Start < text)
+        {
+            return LinkedRuns(style, plain, link);   // no prefix to hang under: the whole line, linked
+        }
+
+        string prefix = plain[..text];
+        var body = LinkedRuns(style, plain[text..], link with { Start = link.Start - text });
+        return new UI.Markdown.HangingIndent(prefix, new string(' ', TextCells.Width(prefix)), style, body);
+    }
+
+    /// <summary>
+    /// <paramref name="text"/> (plain, already unescaped) as a <see cref="Paragraph"/> in <paramref name="style"/>, the stretch
+    /// <paramref name="link"/> covers carrying its target (2026-11-01). Each run goes through <see cref="Emoji.Replace(string)"/> as a
+    /// <see cref="Markup"/>'s text does, so a linked line reads exactly as it would unlinked. The one builder for <see cref="Hanging"/>'s
+    /// body and <see cref="WriteLine"/>'s glyph-side lines, so they cannot drift.
+    /// </summary>
+    internal static Paragraph LinkedRuns(Style style, string text, ToolLink link)
+    {
+        int start = Math.Clamp(link.Start, 0, text.Length);
+        int end = Math.Clamp(link.Start + link.Length, start, text.Length);
+        var paragraph = new Paragraph();
+        if (start > 0)
+        {
+            paragraph.Append(Emoji.Replace(text[..start]), style);
+        }
+
+        if (end > start)
+        {
+            paragraph.Append(Emoji.Replace(text[start..end]), style, UI.Markdown.MarkdownView.LinkOf(link.Target));
+        }
+
+        if (end < text.Length)
+        {
+            paragraph.Append(Emoji.Replace(text[end..]), style);
+        }
+
+        return paragraph;
+    }
+
+    /// <summary>A one-line markup's text with its escapes read back (<c>[[</c> to <c>[</c>, <c>]]</c> to <c>]</c>).</summary>
+    private static string Unescape(string inner) => inner.Replace("[[", "[", StringComparison.Ordinal).Replace("]]", "]", StringComparison.Ordinal);
+
+    /// <summary>A one-line markup's style and plain text, or null for any other shape.</summary>
+    private static (Style Style, string Text)? OneLine(string markup)
+    {
+        int close = markup.IndexOf(']', StringComparison.Ordinal);
+        if (!markup.StartsWith('[') || markup.StartsWith("[[", StringComparison.Ordinal) || close < 0 || !markup.EndsWith("[/]", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        string inner = markup[(close + 1)..^3];
+        if (inner.Replace("[[", "", StringComparison.Ordinal).Contains('['))
+        {
+            return null;
+        }
+
+        try
+        {
+            return (Style.Parse(markup[1..close]), Unescape(inner));
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
     }
 
     /// <summary>
@@ -1277,11 +1489,20 @@ public sealed class TranscriptRenderer : INoticeSink
         WriteLine(fullMarkup, inlineMarkup);
     }
 
-    /// <summary>A line-shaped write: its own line, except right after a bare glyph where it continues that line.</summary>
-    private void WriteLine(string fullMarkup, string inlineMarkup)
+    /// <summary>
+    /// A line-shaped write: its own line, except right after a bare glyph where it continues that line. <paramref name="link"/> (2026-11-01,
+    /// a tool line's target, plan review D68: the plain path runs with the pane on the screen too, at <c>Tool collapse count</c> 0) is drawn
+    /// only while the pane is on the screen: no pane, no clicks.
+    /// </summary>
+    private void WriteLine(string fullMarkup, string inlineMarkup, ToolLink? link = null)
     {
         EndThinking();
         _heldWhitespace.Clear();
+        if (_pane is not { Enabled: true })
+        {
+            link = null;
+        }
+
         if (_state == LineState.GlyphOnly)
         {
             if (_slot)
@@ -1291,21 +1512,38 @@ public sealed class TranscriptRenderer : INoticeSink
                 {
                     DropSlot();
                     _glyphPending = true;
-                    _console.MarkupLine(fullMarkup);
+                    MarkupLineLinked(fullMarkup, link);
                 }
             }
             else
             {
-                _console.MarkupLine(inlineMarkup);
+                MarkupLineLinked(inlineMarkup, link);
             }
         }
         else
         {
             BreakIfMidText();
-            _console.Write(new EndedLine(Hanging(fullMarkup)));   // wrapped rows under the text (2026-10-04)
+            _console.Write(new EndedLine(Hanging(fullMarkup, link)));   // wrapped rows under the text (2026-10-04)
         }
 
         _state = LineState.AtLineStart;
+    }
+
+    /// <summary><see cref="AnsiConsoleExtensions.MarkupLine(IAnsiConsole, string)"/>, or with a <paramref name="link"/> the same text as <see cref="LinkedRuns"/> and a line break.</summary>
+    private void MarkupLineLinked(string markup, ToolLink? link)
+    {
+        if (link is { } linked && OneLine(markup) is { } line)
+        {
+            // The link's place is counted in the full line's text, which starts with the tool glyph's blanks; an inline form without
+            // them moves it left by as many.
+            int lead = ToolGlyph.Length - ToolGlyph.TrimStart().Length;
+            bool trimmed = !line.Text.StartsWith(ToolGlyph, StringComparison.Ordinal) && line.Text.StartsWith(ToolGlyph.TrimStart(), StringComparison.Ordinal);
+            _console.Write(LinkedRuns(line.Style, line.Text, trimmed ? linked with { Start = linked.Start - lead } : linked));
+            _console.WriteLine();
+            return;
+        }
+
+        _console.MarkupLine(markup);
     }
 
     private void BreakIfMidText()
@@ -1343,7 +1581,7 @@ public sealed class TranscriptRenderer : INoticeSink
     private void CommitSlot()
     {
         _pane!.CommitLive();
-        _reply.Clear();
+        ClearReply();
         _glyph = false;
     }
 
@@ -1351,7 +1589,7 @@ public sealed class TranscriptRenderer : INoticeSink
     private void DropSlot()
     {
         _pane!.DiscardLive();
-        _reply.Clear();
+        ClearReply();
         _glyph = false;
     }
 

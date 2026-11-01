@@ -108,6 +108,36 @@ public class ChatLogTests
         Assert.Equal("r1" + ChatLog.Separator + "r2", log.Markdown(2, false));
     }
 
+    // ── Where the screen began fresh reply blocks (/copy code, 2026-11-01) ──────
+
+    [Fact]
+    public void LastReplyPieces_CutsWhereTheScreenBrokeTheReply_TrimmedAndShiftedByTheLeadTrimmed()
+    {
+        var trail = new ChatLog.ThoughtTrail();
+        string reply = "\n\nFirst ```a\nx\n```";
+        trail.Break(reply.Length);
+        trail.Break(reply.Length);   // a tool call and its result at one place: one cut
+        reply += "\nSecond.";
+        trail.Break(reply.Length);   // the reply ends at the last tool line: no empty piece
+        var log = new ChatLog();
+
+        Assert.Null(log.LastReplyPieces);
+        log.Add("q", reply + "\n", trail.Thoughts, trail.Breaks);
+
+        Assert.Equal(2, trail.Breaks.Count);
+        Assert.Equal(["First ```a\nx\n```", "Second."], log.LastReplyPieces);
+    }
+
+    [Fact]
+    public void LastReplyPieces_WithNoBreaks_IsTheWholeReply()
+    {
+        var log = new ChatLog();
+        log.Add("q1", "old");
+        log.Add("q2", "  new  ");
+
+        Assert.Equal(["new"], log.LastReplyPieces);
+    }
+
     [Fact]
     public void Quote_PrefixesEveryLine_AnEmptyLineIsABareMarker()
     {

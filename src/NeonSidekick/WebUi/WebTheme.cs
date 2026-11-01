@@ -103,25 +103,7 @@ public static class WebTheme
     public static bool Readable(ThemePalette palette)
     {
         ArgumentNullException.ThrowIfNull(palette);
-        return Contrast(palette.Ink, palette.Bg) >= MinContrast && Contrast(palette.Ink, palette.PanelBg) >= MinContrast;
-    }
-
-    /// <summary>WCAG's contrast ratio of two colors, 1 to 21.</summary>
-    public static double Contrast(Color a, Color b)
-    {
-        double la = Luminance(a), lb = Luminance(b);
-        return (Math.Max(la, lb) + 0.05) / (Math.Min(la, lb) + 0.05);
-    }
-
-    private static double Luminance(Color c)
-    {
-        static double Channel(byte v)
-        {
-            double s = v / 255.0;
-            return s <= 0.03928 ? s / 12.92 : Math.Pow((s + 0.055) / 1.055, 2.4);
-        }
-
-        return 0.2126 * Channel(c.R) + 0.7152 * Channel(c.G) + 0.0722 * Channel(c.B);
+        return ColorContrast.Contrast(palette.Ink, palette.Bg) >= MinContrast && ColorContrast.Contrast(palette.Ink, palette.PanelBg) >= MinContrast;
     }
 
     private static Color Mix(Color a, Color b, double t) =>

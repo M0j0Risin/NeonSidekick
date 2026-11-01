@@ -268,4 +268,95 @@ public class ThemeTests
         Assert.Equal(Theme.GradientMarkup("NEON"), gradient);
         Assert.Equal(Theme.Rule(17), rule);
     }
+
+    // ── Gradient rules (2026-11-01) ─────────────────────────────────────────
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(3)]
+    [InlineData(39)]
+    [InlineData(120)]
+    [InlineData(241)]
+    public void RuleRuns_CoverEveryCellOnce_AndMergeEqualNeighbors(int width)
+    {
+        var runs = Theme.RuleRuns(width, ShippedThemes.Synthwave.GradientStops);
+        Assert.Equal(width, runs.Sum(r => r.Text.Length));
+        Assert.All(runs, r => Assert.True(r.Text.All(c => c == '─')));
+        for (int i = 1; i < runs.Count; i++)
+        {
+            Assert.NotEqual(runs[i - 1].Color, runs[i].Color);
+        }
+    }
+
+    [Fact]
+    public void RuleRuns_APieceAtItsColumn_HasTheWholeLinesColorsThere()
+    {
+        var stops = ShippedThemes.Synthwave.GradientStops;
+        Color[] whole = Cells(Theme.RuleRuns(120, stops));
+        Color[] piece = Cells(Theme.RuleRuns(37, stops, startColumn: 50, fullWidth: 120));
+        Assert.Equal(whole[50..87], piece);
+
+        static Color[] Cells(IReadOnlyList<(string Text, Color Color)> runs) => [.. runs.SelectMany(r => Enumerable.Repeat(r.Color, r.Text.Length))];
+    }
+
+    [Fact]
+    public void RuleRuns_ASmallWidth_IsOneCellARun_AndNothingAtZero()
+    {
+        Assert.Empty(Theme.RuleRuns(0, ShippedThemes.Synthwave.GradientStops));
+        var runs = Theme.RuleRuns(2, [new Color(0, 0, 0), new Color(255, 255, 255)]);
+        Assert.Equal(2, runs.Count);
+    }
+
+    [Fact]
+    public void Rule_IsSmooth_MoreThanFiveColorsAtAFullWidth()
+    {
+        string markup = Theme.Rule(120);
+        int colors = System.Text.RegularExpressions.Regex.Matches(markup, @"\[#[0-9A-F]{6}\]").Select(m => m.Value).Distinct().Count();
+        Assert.True(colors > 5, $"{colors} colors");
+        Assert.Equal(120, markup.Count(c => c == '─'));
+    }
+
+    [Theory]
+    [MemberData(nameof(Palettes))]
+    public void QuietStops_ContrastWithThePageAsTheFlatRuleDoes(string name)
+    {
+        var p = ShippedThemes.All.Single(t => t.Name == name);
+        var quiet = Theme.QuietStops(p);
+        if (p.GradientStops.All(s => s.Equals(p.GradientStops[0])) || p.Styles?.ContainsKey(ThemeStyleSlot.PaneRule) == true)
+        {
+            Assert.Null(quiet);
+            return;
+        }
+
+        Assert.NotNull(quiet);
+        double target = Math.Max(ColorContrast.Contrast(p.Deep, p.Bg), Theme.QuietRuleFloor);
+        Assert.All(quiet, c => Assert.InRange(ColorContrast.Contrast(c, p.Bg), target - 0.05, target + 0.05));
+    }
+
+    [Fact]
+    public void QuietStops_ASolidTheme_OrItsOwnPaneRule_StaysFlat()
+    {
+        var solid = ShippedThemes.Synthwave with { Name = "solid", GradientStops = [Theme.Primary, Theme.Primary] };
+        Assert.Null(Theme.QuietStops(solid));
+        var own = ShippedThemes.Synthwave with
+        {
+            Name = "own",
+            Styles = new Dictionary<ThemeStyleSlot, StyleOverride> { [ThemeStyleSlot.PaneRule] = new(Foreground: new Color(1, 2, 3)) },
+        };
+        Assert.Null(Theme.QuietStops(own));
+        Assert.NotNull(Theme.QuietStops(ShippedThemes.Synthwave));
+    }
+
+    [Fact]
+    public void UseRuleGradient_Off_MakesRuleStopsNull_AndOnGivesTheSameArray()
+    {
+        using var scope = new ThemeScope();
+        Assert.Same(Theme.QuietGradient, Theme.RuleStops);
+        Assert.NotNull(Theme.RuleStops);
+        Theme.UseRuleGradient(false);
+        Assert.Null(Theme.RuleStops);
+        Assert.False(Theme.RuleGradientOn);
+        Theme.UseRuleGradient(true);
+        Assert.Same(Theme.QuietGradient, Theme.RuleStops);
+    }
 }

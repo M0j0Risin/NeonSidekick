@@ -109,6 +109,7 @@ The app reads a few of the system's own variables:
 * `PATH` to find shells and interpreters, with `PATHEXT`, `ProgramFiles`, `ProgramW6432` and `LocalAppData` on Windows.
 * `USERPROFILE` (`HOME` on a Mac) to find Claude Code where its installer puts it.
 * On a Mac, `TERM_PROGRAM` to tell Terminal.app and iTerm2 apart, and `ITERM_PROFILE` for the iTerm2 profile whose Option key `/keycheck` reads.
+* On Windows, `WT_SESSION` and `TERM_PROGRAM` to leave a link's Ctrl+click to Windows Terminal or VS Code.
 
 ## Test suite
 

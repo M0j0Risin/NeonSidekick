@@ -294,9 +294,10 @@ public sealed class FolderTree
     /// answers its row; the deepest folder found when the path runs out (a drive not listed is
     /// row 0). A folder on the way the source does not list (hidden under the default mode, as
     /// the profile's <c>.neonsidekick</c> is) is added to its parent's list when it exists, so
-    /// the working directory is always in view.
+    /// the working directory is always in view. With <paramref name="selectFile"/> (2026-11-01, <c>/browse &lt;file&gt;</c>) a path
+    /// ending at a file the folder lists answers the file's row, its folder expanded; a file the folder doesn't list (hidden) answers the folder's.
     /// </summary>
-    public int ExpandTo(string path)
+    public int ExpandTo(string path, bool selectFile = false)
     {
         ArgumentNullException.ThrowIfNull(path);
         if (_roots.Count == 0)
@@ -334,8 +335,10 @@ public sealed class FolderTree
             return 0;
         }
 
-        foreach (var segment in rest.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries))
+        string[] segments = rest.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries);
+        for (int i = 0; i < segments.Length; i++)
         {
+            string segment = segments[i];
             if (!Load(node))
             {
                 break;
@@ -344,7 +347,13 @@ public sealed class FolderTree
             var child = FindChild(node, segment);
             if (child is { IsFile: true })
             {
-                // A file on the way: the folder above it is as deep as the path goes.
+                // A file on the way: the folder above it is as deep as the path goes, unless the file is the one asked for.
+                if (selectFile && i == segments.Length - 1)
+                {
+                    node.Expanded = true;
+                    node = child;
+                }
+
                 break;
             }
 

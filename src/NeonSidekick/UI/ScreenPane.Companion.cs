@@ -55,7 +55,8 @@ public sealed partial class ScreenPane
 
     /// <summary>
     /// Asks the input reader for the mouse's moves with no button held (2026-10-20, <see cref="IMouseInput.Hover"/>): true while a
-    /// companion stands, false once it is gone. Null — the tests, a reader without hover — asks nothing.
+    /// companion stands or the transcript holds a link (2026-11-01, the address under the pointer), false once neither does; called
+    /// only when that changes. Null — the tests, a reader without hover — asks nothing.
     /// </summary>
     public Action<bool>? Hover { get; set; }
 
@@ -84,6 +85,7 @@ public sealed partial class ScreenPane
             return;
         }
 
+        bool? hover;
         lock (_gate)
         {
             if (_disposed)
@@ -104,9 +106,11 @@ public sealed partial class ScreenPane
             {
                 Redraw();
             }
+
+            hover = HoverChangeLocked();
         }
 
-        Hover?.Invoke(true);
+        AskHover(hover);
     }
 
     /// <summary>
@@ -115,17 +119,14 @@ public sealed partial class ScreenPane
     /// </summary>
     public void HideCompanion()
     {
-        bool had;
+        bool? hover;
         lock (_gate)
         {
-            had = _companion is not null;
             StopCompanionLocked();
+            hover = HoverChangeLocked();   // still on while the store holds a link (2026-11-01)
         }
 
-        if (had)
-        {
-            Hover?.Invoke(false);
-        }
+        AskHover(hover);
     }
 
     /// <summary>The mouse is over screen buffer cell (<paramref name="x"/>, <paramref name="y"/>) with no button held: the next frame hands it to the companion. Any thread; never blocks.</summary>
@@ -207,7 +208,7 @@ public sealed partial class ScreenPane
 
     private void OnCompanionFrame()
     {
-        bool ended = false;
+        bool? hover = null;
         lock (_gate)
         {
             if (_companion is not { } companion || _disposed)
@@ -223,14 +224,11 @@ public sealed partial class ScreenPane
             {
                 DiagnosticLog.Warn(CompanionCategory, "The robot stopped: " + ex.Message);
                 StopCompanionLocked();
-                ended = true;
+                hover = HoverChangeLocked();
             }
         }
 
-        if (ended)
-        {
-            Hover?.Invoke(false);
-        }
+        AskHover(hover);
     }
 
     /// <summary>One frame (see the class's summary). Under the gate.</summary>

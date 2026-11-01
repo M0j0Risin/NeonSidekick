@@ -50,7 +50,7 @@ public sealed class AppSettingsData
     /// <summary>
     /// The user's avatar (2026-10-12, the user's ask): one emoji, picked on <c>/settings</c> › Client › Chat's grid picker right under
     /// <see cref="ModelAvatar"/>. It opens each of the user's lines in the transcript, the main chat's and <c>/botchat</c>'s alike, in
-    /// place of <c>›</c> (<see cref="UI.InputLine.UserGlyph"/>); the input row keeps <c>›</c> while it is typed. 🧿 by default (🙊 until 2026-10-18)
+    /// place of <c>›</c> (<see cref="UI.InputLine.UserGlyph"/>); the input row keeps <c>›</c> while it is typed. 🙊 by default (🧿 from 2026-10-18 until 2026-11-01)
     /// (<see cref="Emojis.AvatarRules.DefaultUserAvatar"/>, 2026-10-13, the user's call; null, the <c>›</c>, until then); empty for none
     /// (the <c>›</c>); anything that is not one two-cell emoji (<see cref="Emojis.AvatarRules"/>) reads as none. A null read or set is the
     /// default: every profile saved before then holds <c>"UserAvatar": null</c>, and one that never chose wears the default as the model's
@@ -135,6 +135,15 @@ public sealed class AppSettingsData
     /// reconnect. No variable.
     /// </summary>
     public bool ThemedExternalWindows { get; set; } = true;
+
+    /// <summary>
+    /// Whether the rules around the input line, the picture strip's rule and the pane headings shade along the theme's gradient
+    /// (2026-11-01, the user's usability and looks pass; plan memoized-dancing-horizon): on (the default), each stop is quieted to the
+    /// flat rule's contrast with the page (<see cref="UI.Theme.QuietStops"/>), so only the hue changes along the line; off, flat in
+    /// <c>deep</c> as before. A solid theme and a theme's own <c>paneRule</c> stay flat either way. The banner's rule and <c>/new</c>'s
+    /// separator are smooth either way. Put in force at once (<see cref="UI.Theme.UseRuleGradient"/>), no reconnect. No variable.
+    /// </summary>
+    public bool GradientRules { get; set; } = true;
 
     /// <summary>
     /// Where the built-in picture viewer last closed (2026-09-28, the user's ask: it opens there the next time; position

@@ -271,4 +271,21 @@ public class VtInputParserTests
         Assert.False(TermiosNative.IsRaw(cooked));
         Assert.True(TermiosNative.IsRaw(TermiosNative.Raw(cooked)));
     }
+
+    /// <summary>The SGR code's Meta (8) or Shift (4) bit on a left press is the link chord on a Mac (2026-11-01); a right press never carries it.</summary>
+    [Fact]
+    public void AMetaOrShiftLeftPress_IsAnOpenerClick_AndABareOrRightOneIsNot()
+    {
+        var events = Parse("\x1b[<8;10;5M\x1b[<4;10;5M\x1b[<0;10;5M\x1b[<10;3;4M");
+
+        Assert.Equal(
+            new InputEvent[]
+            {
+                new InputEvent.Click(9, 4, MouseButton.Left, Opener: true),
+                new InputEvent.Click(9, 4, MouseButton.Left, Opener: true),
+                new InputEvent.Click(9, 4, MouseButton.Left),
+                new InputEvent.Click(2, 3, MouseButton.Right),
+            },
+            events);
+    }
 }

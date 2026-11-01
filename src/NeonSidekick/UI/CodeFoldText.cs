@@ -10,6 +10,15 @@ namespace NeonSidekick.UI;
 /// </summary>
 public static class CodeFoldText
 {
+    /// <summary>
+    /// The copy glyph at a code block's label's end (2026-11-01, copy a code block): <c>📜 csharp ⧉</c>, or folded
+    /// <c>▸ 📜 csharp · 57 lines ⧉</c>. A text glyph one cell wide, so it dims; a click on it copies the block. Pinned.
+    /// </summary>
+    public const string CopyGlyph = "⧉";
+
+    /// <summary>What goes after the label: a space, then <see cref="CopyGlyph"/>.</summary>
+    public const string CopyTail = " " + CopyGlyph;
+
     /// <summary>The label line of a block of <paramref name="lines"/> lines labelled <paramref name="label"/>, folded or not.</summary>
     public static string Summary(string label, int lines, bool expanded)
     {

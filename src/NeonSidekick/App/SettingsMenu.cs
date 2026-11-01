@@ -1331,9 +1331,16 @@ public enum SettingsField
     /// <summary>
     /// Typed: the HTTPS address <c>/webui</c> offers first, <c>auto</c> (Tailscale Serve's, detected), <c>off</c> or an <c>https://host[:port]</c>
     /// (<see cref="Settings.AppSettingsData.WebUiHttpsAddress"/>). The Web UI tab under <see cref="WebUiReach"/> (2026-10-31, the user's ask); read
-    /// when <c>/webui</c> opens, so neither refused mid-turn nor a restart. Last in the enum, as every newcomer.
+    /// when <c>/webui</c> opens, so neither refused mid-turn nor a restart.
     /// </summary>
     WebUiHttpsAddress,
+
+    /// <summary>
+    /// Toggle: the rules around the input line and the pane headings shade along the theme's gradient (<see cref="Settings.AppSettingsData.GradientRules"/>).
+    /// The Chat tab under <see cref="ThemedExternalWindows"/> (2026-11-01, the user's looks pass); put in force at once by <see cref="SettingsMenu.SetToggleAsync"/>.
+    /// Last in the enum, as every newcomer.
+    /// </summary>
+    GradientRules,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1815,7 +1822,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.Profile, SettingsField.WorkingDirectory, SettingsField.MemoryMode, SettingsField.ModelAvatar, SettingsField.UserAvatar,
          SettingsField.QueueMode, SettingsField.QueueCancelMode, SettingsField.KeepMessageHistory, SettingsField.CommandTypoIntercept, SettingsField.HideExitAutocomplete, SettingsField.EmojiPicker,
          SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.CopyUserPrompt, SettingsField.UserLineStyle,
-         SettingsField.Theme, SettingsField.ThemedBackground, SettingsField.ThemedExternalWindows, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.MenuMaxHeight,
+         SettingsField.Theme, SettingsField.ThemedBackground, SettingsField.ThemedExternalWindows, SettingsField.GradientRules, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.MenuMaxHeight,
          SettingsField.HintsBar, SettingsField.StatusBarItems, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.ShowHomeBar, SettingsField.BarOrder,
          SettingsField.DraftEditor, SettingsField.ImageEditor],
         [SettingsField.SessionLogging, SettingsField.SessionSaveThinking, SettingsField.SessionRetentionDays,
@@ -2333,7 +2340,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.WebTools or SettingsField.TtsVoicePreview or SettingsField.FileTools or SettingsField.AskUser
             or SettingsField.AgentSkills or SettingsField.GlobalSkills or SettingsField.ExternalSkills or SettingsField.ProjectFile or SettingsField.TranscriptMarkdown
             or SettingsField.SkillHashMention or SettingsField.ReflectionAutoLearn
-            or SettingsField.HideExitAutocomplete or SettingsField.EmojiPicker or SettingsField.CommandTypoIntercept or SettingsField.KeepMessageHistory or SettingsField.ShowHeader or SettingsField.ShowWorkingDirectory or SettingsField.ThemedExternalWindows or SettingsField.ThemedBackground
+            or SettingsField.HideExitAutocomplete or SettingsField.EmojiPicker or SettingsField.CommandTypoIntercept or SettingsField.KeepMessageHistory or SettingsField.ShowHeader or SettingsField.ShowWorkingDirectory or SettingsField.ThemedExternalWindows or SettingsField.ThemedBackground or SettingsField.GradientRules
             or SettingsField.SessionLogging or SettingsField.SessionTool or SettingsField.SessionSaveThinking
             or SettingsField.ToolsDollarMention or SettingsField.ShowFileDiffs or SettingsField.ReflectionIncludesSessions or SettingsField.ReflectionYieldsToTurns or SettingsField.ReflectionEditsSupportingFiles or SettingsField.McpServers or SettingsField.GitLibTools
             or SettingsField.LlmCompactShowSummary or SettingsField.ShellPolice or SettingsField.ShellPreferNative
@@ -2770,6 +2777,7 @@ internal sealed partial class SettingsMenu
         SettingsField.Theme => "Theme",
         SettingsField.ThemedExternalWindows => "Themed external windows",   // the user's name, under "Themed background" (2026-10-03; "Themed image viewer" beside "Image viewer" from later on 2026-09-27)
         SettingsField.ThemedBackground => "Themed background",   // the user's name, under "Theme" (2026-10-03)
+        SettingsField.GradientRules => "Gradient rules",   // under "Themed external windows" (2026-11-01, the looks pass)
         SettingsField.QueueMode => "Queue mode",   // "Queue messages", a toggle, until 2026-10-09 (the user's call)
         SettingsField.QueueCancelMode => "Queue cancel mode",
         SettingsField.SessionLogging => "Session logging",
@@ -3193,6 +3201,7 @@ internal sealed partial class SettingsMenu
             SettingsField.BarOrder => PaneBars.Value(data.BarOrder),
             SettingsField.ThemedExternalWindows => OnOff(data.ThemedExternalWindows),
             SettingsField.ThemedBackground => OnOff(data.ThemedBackground),
+            SettingsField.GradientRules => OnOff(data.GradientRules),
             SettingsField.Theme => data.Theme,
             SettingsField.QueueMode => data.QueueMode,
             SettingsField.QueueCancelMode => data.QueueCancelMode,
@@ -8236,6 +8245,14 @@ internal sealed partial class SettingsMenu
             Sink.Notice(ChatScreen.InterruptOffWithWakeNotice);
         }
 
+        if (field == SettingsField.GradientRules)
+        {
+            // Put in force at once, as a theme pick is (2026-11-01, plan review D44): a flip raises no SettingsChanges flag, so a pane closed
+            // under a reply would otherwise wait for the next unrelated change. The input rules redraw on the pane's tick, this pane's
+            // headings on its next render.
+            Theme.UseRuleGradient(on);
+        }
+
         return true;
     }
 
@@ -8367,6 +8384,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ShowWorkingDirectory => data.ShowWorkingDirectory,
             SettingsField.ThemedExternalWindows => data.ThemedExternalWindows,
             SettingsField.ThemedBackground => data.ThemedBackground,
+            SettingsField.GradientRules => data.GradientRules,
             SettingsField.SessionLogging => data.SessionLogging,
             SettingsField.SessionTool => data.SessionTool,
             SettingsField.ShellPolice => data.ShellPolice,
@@ -8502,6 +8520,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.ShowWorkingDirectory: data.ShowWorkingDirectory = on; break;
             case SettingsField.ThemedExternalWindows: data.ThemedExternalWindows = on; break;
             case SettingsField.ThemedBackground: data.ThemedBackground = on; break;
+            case SettingsField.GradientRules: data.GradientRules = on; break;
             case SettingsField.SessionLogging: data.SessionLogging = on; break;
             case SettingsField.SessionTool: data.SessionTool = on; break;
             case SettingsField.ShellPolice: data.ShellPolice = on; break;
@@ -8643,6 +8662,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ShowWorkingDirectory => on ? "show the working directory in the header" : "hide the working directory in the header",
         SettingsField.ThemedExternalWindows => on ? "theme the external windows" : "keep the external windows black",
         SettingsField.ThemedBackground => on ? "theme the terminal's background" : "keep the terminal profile's background",
+        SettingsField.GradientRules => on ? "shade the rules along the theme's gradient" : "keep the rules flat",
         SettingsField.SessionLogging => on ? "every completed turn is written to this profile's session store" : "nothing is written; stored sessions can still be restored or purged",
         SettingsField.SessionTool => on ? "the model can search, list and read this profile's earlier sessions" : "the model never sees an earlier session",
         SettingsField.ShellPolice => on ? "shell police enabled" : "shell police disabled",   // the user's wording, 2026-10-03

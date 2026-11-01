@@ -60,13 +60,14 @@ public static class HintsBarMode
     /// <summary>
     /// The one hint the bar shows (2026-10-14, the user's pick: a priority ladder, never joined): the first non-empty of
     /// <paramref name="alert"/> (the kill switch's), <paramref name="armed"/> (exit, rewind, splash delete), <paramref name="overlay"/>
-    /// (an open pane's keys) and <paramref name="keys"/> (the <c>/read</c> keys, the splash's or the picture strip's arrows); null for
-    /// none. Pure.
+    /// (an open pane's keys), <paramref name="link"/> (the address under the pointer, 2026-11-01) and <paramref name="keys"/> (the
+    /// <c>/read</c> keys, the splash's or the picture strip's arrows); null for none. Pure.
     /// </summary>
-    public static string? Pick(string? alert, string? armed, string? overlay, string? keys) =>
+    public static string? Pick(string? alert, string? armed, string? overlay, string? link, string? keys) =>
         !string.IsNullOrEmpty(alert) ? alert
         : !string.IsNullOrEmpty(armed) ? armed
         : !string.IsNullOrEmpty(overlay) ? overlay
+        : !string.IsNullOrEmpty(link) ? link
         : !string.IsNullOrEmpty(keys) ? keys
         : null;
 }

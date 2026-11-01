@@ -10,7 +10,15 @@ namespace NeonSidekick.Tests.Fakes;
 public sealed class ThemeScope : IDisposable
 {
     /// <summary>Starts from synthwave, whatever an earlier test left.</summary>
-    public ThemeScope() => Theme.Use(ShippedThemes.Synthwave);
+    public ThemeScope()
+    {
+        Theme.Use(ShippedThemes.Synthwave);
+        Theme.UseRuleGradient(true);   // the app's default (2026-11-01, Gradient rules)
+    }
 
-    public void Dispose() => Theme.Use(ShippedThemes.Synthwave);
+    public void Dispose()
+    {
+        Theme.Use(ShippedThemes.Synthwave);
+        Theme.UseRuleGradient(true);
+    }
 }

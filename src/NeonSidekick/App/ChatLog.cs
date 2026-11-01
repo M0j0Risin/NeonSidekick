@@ -14,8 +14,11 @@ namespace NeonSidekick.App;
 /// </summary>
 public sealed class ChatLog
 {
-    /// <summary>One turn: the user's text and the reply, both trimmed, and the thinking blocks the reply was interleaved with.</summary>
-    public readonly record struct Exchange(string User, string Reply, IReadOnlyList<Thought> Thoughts);
+    /// <summary>
+    /// One turn: the user's text and the reply, both trimmed, the thinking blocks the reply was interleaved with, and where the screen
+    /// began a fresh reply block (2026-11-01, <see cref="Breaks"/>: after each tool line), so <c>/copy code</c> reads the blocks it drew.
+    /// </summary>
+    public readonly record struct Exchange(string User, string Reply, IReadOnlyList<Thought> Thoughts, IReadOnlyList<int> Breaks);
 
     /// <summary>A thinking block: its text, trimmed, and the offset into the reply where it began.</summary>
     public readonly record struct Thought(int At, string Text);
@@ -46,6 +49,23 @@ public sealed class ChatLog
         /// <summary>The open block, if any, is over.</summary>
         public void End() => _open = false;
 
+        private readonly List<int> _breaks = new();
+
+        /// <summary>
+        /// The screen began a fresh reply block here, the reply <paramref name="at"/> characters long (2026-11-01: a tool call or its
+        /// result commits the live block), so a code block on either side of it is read alone, as drawn.
+        /// </summary>
+        public void Break(int at)
+        {
+            if (_breaks.Count == 0 || _breaks[^1] != at)
+            {
+                _breaks.Add(at);
+            }
+        }
+
+        /// <summary>The places the reply was cut at, in order.</summary>
+        public IReadOnlyList<int> Breaks => _breaks.ToList();
+
         /// <summary>The blocks so far, trimmed; a blank one is left out.</summary>
         public IReadOnlyList<Thought> Thoughts =>
             _blocks.Select(b => new Thought(b.At, b.Text.ToString().Trim())).Where(t => t.Text.Length > 0).ToList();
@@ -65,11 +85,47 @@ public sealed class ChatLog
     public string? LastReply => _exchanges.Count == 0 ? null : _exchanges[^1].Reply;
 
     /// <summary>
+    /// The last reply cut where the screen began fresh reply blocks (<see cref="Exchange.Breaks"/>), each piece trimmed, blank ones left
+    /// out; null when nothing is logged (2026-11-01: <c>/copy code</c> parses each piece alone, so its numbers follow the ⧉ glyphs).
+    /// </summary>
+    public IReadOnlyList<string>? LastReplyPieces
+    {
+        get
+        {
+            if (_exchanges.Count == 0)
+            {
+                return null;
+            }
+
+            var last = _exchanges[^1];
+            var pieces = new List<string>();
+            int from = 0;
+            foreach (int at in last.Breaks.Append(last.Reply.Length))
+            {
+                if (at < from)
+                {
+                    continue;
+                }
+
+                string piece = last.Reply[from..at].Trim();
+                if (piece.Length > 0)
+                {
+                    pieces.Add(piece);
+                }
+
+                from = at;
+            }
+
+            return pieces;
+        }
+    }
+
+    /// <summary>
     /// Records a turn. Both texts are trimmed (the renderer skips a reply's leading whitespace
     /// too); a turn whose reply is blank — an error, tool lines only — records nothing, its
-    /// thinking with it. Each of <paramref name="thoughts"/> keeps its place in the trimmed reply.
+    /// thinking with it. Each of <paramref name="thoughts"/> keeps its place in the trimmed reply, as each of <paramref name="breaks"/> does.
     /// </summary>
-    public void Add(string user, string reply, IReadOnlyList<Thought>? thoughts = null)
+    public void Add(string user, string reply, IReadOnlyList<Thought>? thoughts = null, IReadOnlyList<int>? breaks = null)
     {
         ArgumentNullException.ThrowIfNull(user);
         ArgumentNullException.ThrowIfNull(reply);
@@ -84,7 +140,13 @@ public sealed class ChatLog
             .Select(t => new Thought(Math.Clamp(t.At - lead, 0, trimmedReply.Length), t.Text.Trim()))
             .Where(t => t.Text.Length > 0)
             .ToList();
-        _exchanges.Add(new Exchange(user.Trim(), trimmedReply, kept));
+        var cuts = (breaks ?? [])
+            .Select(at => Math.Clamp(at - lead, 0, trimmedReply.Length))
+            .Where(at => at > 0 && at < trimmedReply.Length)
+            .Distinct()
+            .Order()
+            .ToList();
+        _exchanges.Add(new Exchange(user.Trim(), trimmedReply, kept, cuts));
     }
 
     public void Clear() => _exchanges.Clear();

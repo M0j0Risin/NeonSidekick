@@ -29,7 +29,7 @@ internal static class HelpInterface
     public const string ItemsHeading = "Toolbar items (ask about one by its icon, `/help 📡`, or its name):";
 
     /// <summary>How the Hints bar picks its hint. Pinned.</summary>
-    public const string HintsLadderLine = "It shows one hint, the first there is: an alert (the kill switch's), a waiting second press (exit, a rewind, a splash picture's delete), an open pane's keys, then the arrows' keys (`/read`, the splash, the picture strip).";
+    public const string HintsLadderLine = "It shows one hint, the first there is: an alert (the kill switch's), a waiting second press (exit, a rewind, a splash picture's delete), an open pane's keys, the address under the pointer, then the arrows' keys (`/read`, the splash, the picture strip).";
 
     /// <summary>The Home bar's chips. Pinned.</summary>
     public const string HomeBarLine = "Its chips are picked with `/homebar edit`: a room's lights, a Home Assistant device, the shopping list's 🛒 (the lines still to get) and dividers; a click shows a chip's state, a double-click acts, a right-click opens its pane.";

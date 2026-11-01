@@ -286,12 +286,16 @@ public enum CopyActionKind
     /// <summary><c>all</c>: every exchange of the session.</summary>
     All,
 
+    /// <summary><c>code [&lt;n&gt;]</c> (2026-11-01): code block <see cref="CopyAction.Count"/> of the last reply, its last with 0.</summary>
+    Code,
+
     /// <summary>Anything else; <see cref="ChatScreen.CopyUsageError"/>.</summary>
     Invalid,
 }
 
 /// <summary>
-/// <see cref="Count"/> is set for <see cref="CopyActionKind.Count"/>, and is at least 1; <see cref="Thinking"/>
+/// <see cref="Count"/> is set for <see cref="CopyActionKind.Count"/>, and is at least 1 (for <see cref="CopyActionKind.Code"/> the block's
+/// number, 0 for the last); <see cref="Thinking"/>
 /// is <c>--thinking</c> (2026-09-26): the model's thinking copied too, where it happened.
 /// </summary>
 public readonly record struct CopyAction(CopyActionKind Kind, int Count, bool Thinking = false);
@@ -614,7 +618,24 @@ internal sealed partial class ChatScreen
 
     /// <summary>The <c>/copy</c> switch for the model's thinking too (2026-09-26, the user's ask), after <c>/cmdcopy</c>'s <c>--history</c> (folded into <c>/profile push history</c> on 2026-10-09).</summary>
     public const string CopyThinkingSwitch = "--thinking";
-    public const string CopyUsageError = "/copy copies the last reply; /copy <n> the last n; /copy all every one; add --thinking for the model's thinking too.";
+    public const string CopyUsageError = "/copy copies the last reply; /copy <n> the last n; /copy all every one; /copy code [<n>] a code block of the last one; add --thinking for the model's thinking too.";
+
+    /// <summary>The <c>/copy</c> word for a code block of the last reply (2026-11-01, copy a code block).</summary>
+    public const string CopyCodeWord = "code";
+
+    /// <summary>The last reply holds no code block (<c>/copy code</c>). Pinned.</summary>
+    public const string NoCodeBlockNotice = "(the last reply has no code block)";
+
+    /// <summary><c>/copy code</c>'s number past the last reply's blocks: how many there are.</summary>
+    public static string CodeBlockPastCountError(int asked, int count) =>
+        $"The last reply has {count.ToString(CultureInfo.InvariantCulture)} code block{(count == 1 ? "" : "s")}; there is no code block {asked.ToString(CultureInfo.InvariantCulture)}.";
+
+    /// <summary><c>/copy code</c> on a block with no lines.</summary>
+    public static string CodeBlockEmptyNotice(int block) => $"(code block {block.ToString(CultureInfo.InvariantCulture)} is empty)";
+
+    /// <summary>The line after <c>/copy code</c>: which block went, of how many.</summary>
+    public static string CopiedCodeNotice(int block, int count) =>
+        $"(copied code block {block.ToString(CultureInfo.InvariantCulture)} of {count.ToString(CultureInfo.InvariantCulture)} to the clipboard)";
     public const string NothingToCopyNotice = "(nothing to copy yet)";
     public const string CopyFailedError = "Could not write to the clipboard; try again.";
     public static readonly string ProfileNameError = "Profile name " + Profiles.NameError + ".";
@@ -1626,6 +1647,8 @@ internal sealed partial class ChatScreen
             ToolCollapseCount = () => Math.Clamp(_effective().ToolCollapseCount, AppSettingsData.MinToolCollapseCount, AppSettingsData.MaxToolCollapseCount),
             // Code collapse count (later on 2026-09-22): read when a reply opens, clamped the same way.
             CodeCollapseCount = () => Math.Clamp(_effective().CodeCollapseCount, AppSettingsData.MinCodeCollapseCount, AppSettingsData.MaxCodeCollapseCount),
+            // Clickable paths (2026-11-01): a reply's inline code or a tool line's path that names a file or folder inside the working folder.
+            ResolvePath = ResolveLinkPath,
         };
         // The Web UI's copy of the transcript (2026-10-14): recorded from here on, whether or not the server ever runs.
         WireWebUiFeed();
@@ -1636,6 +1659,9 @@ internal sealed partial class ChatScreen
         _input.PathArgument = TakesPathArgument;   // a mention in any other command's text completes (2026-09-30)
         _input.Remembered = StoreCommand;
         _input.OpenPicture = OpenPicture;
+        _input.OpenLink = OpenLink;   // a web link's chord-click (2026-11-01)
+        _input.CopyCode = CopyCodeBlock;   // a code block's ⧉ (2026-11-01)
+        _pane.LinkHint = LinkHintFor;   // the address under the pointer (2026-11-01)
         _input.SelectPicture = SelectStripPicture;
         _input.OpenViewer = () => OpenViewer();
         _input.CloseStrip = ClosePictureStrip;
@@ -2837,6 +2863,8 @@ internal sealed partial class ChatScreen
         bool hintsBar = _pane.HintsBarShown;
         string? armed = hintsBar ? null : ArmedHint();
         string? keys = hintsBar || armed is not null ? null : KeysLead();
+        // The address under the pointer (2026-11-01, clickable links and paths): after an armed prompt, ahead of the keys.
+        string? link = hintsBar || armed is not null ? null : _pane.LinkHintNow;
         string? timers = armed is null && on.Contains(StatusBarItems.Timers) ? TimerText.StatusLine(_timers.Snapshot()) : null;
         string? reading = armed is null && on.Contains(StatusBarItems.Reading) ? ReadingHintPart() : null;
         foreach (string id in sides.Left)
@@ -2844,7 +2872,7 @@ internal sealed partial class ChatScreen
             Add(id, right: false);
         }
 
-        if ((armed ?? keys) is { Length: > 0 } lead)
+        if ((armed ?? link ?? keys) is { Length: > 0 } lead)
         {
             slots.Add(ScreenPane.HintSlot.Of(lead));   // the left group's end
         }
@@ -3325,6 +3353,28 @@ internal sealed partial class ChatScreen
     {
         if (click.Button == MouseButton.Left)
         {
+            if (click.Opener && _pane.TryHitLink(click.X, click.Y, out string target))
+            {
+                // A link chord-clicked (2026-11-01, clickable links and paths), ahead of the fold toggle: a web address opened at once,
+                // a path answered as /browse on it, the pane over the reply as the typed command's.
+                _queuedClicks.Reset();
+                if (LinkText.PathOf(target) is { } path)
+                {
+                    return BrowsePathLine(path);
+                }
+
+                OpenLink(target);
+                return null;
+            }
+
+            if (_pane.TryHitCodeCopy(click.X, click.Y, out string code))
+            {
+                // A code block's ⧉ (2026-11-01, copy a code block), ahead of the fold toggle: copied under the reply as at idle.
+                _queuedClicks.Reset();
+                CopyCodeBlock(code);
+                return null;
+            }
+
             if (_pane.TryToggleToolGroupAt(click.X, click.Y))
             {
                 // A tool run's summary (2026-09-22): one click unfolds or folds it, nothing answered.
@@ -5276,6 +5326,9 @@ internal sealed partial class ChatScreen
     /// <summary>The <c>/copy</c> list's note on <see cref="CopyThinkingSwitch"/>.</summary>
     public const string CopyThinkingNote = "with the model's thinking";
 
+    /// <summary>The <c>/copy</c> list's note on <see cref="CopyCodeWord"/> (2026-11-01).</summary>
+    public const string CopyCodeNote = "a code block of the last reply";
+
     /// <summary>The note on <c>reset</c> after a prompt-file command. Pinned.</summary>
     public static string PromptFileResetNote(string fileName) => $"remove {fileName} and go back to the default";
 
@@ -5595,9 +5648,9 @@ internal sealed partial class ChatScreen
                     string head = argText[..space];
                     var action = ParseCopyArgs(head);
                     var typed = head.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
-                    if (action.Kind == CopyActionKind.Invalid || typed.Length != 1)
+                    if (action.Kind is CopyActionKind.Invalid or CopyActionKind.Code || typed.Length != 1)
                     {
-                        return [];
+                        return [];   // after code, nothing: the number is the block's place, top to bottom (2026-11-01)
                     }
 
                     return action.Thinking
@@ -5605,7 +5658,7 @@ internal sealed partial class ChatScreen
                         : MentionCompleter.Matches([new(head + " " + CopyThinkingSwitch, CopyThinkingNote)], argText);
                 }
 
-                return MentionCompleter.Matches([new(CopyAllWord, CopyAllNote), new(CopyThinkingSwitch, CopyThinkingNote)], argText);
+                return MentionCompleter.Matches([new(CopyAllWord, CopyAllNote), new(CopyCodeWord, CopyCodeNote), new(CopyThinkingSwitch, CopyThinkingNote)], argText);
             }
 
             case SlashCommand.Queue:
@@ -10117,11 +10170,14 @@ internal sealed partial class ChatScreen
             return;
         }
 
+        // A file as well as a folder (2026-11-01, clickable links and paths): its folder opens with the file at the cursor.
         string folder = args.Trim();
         var outcome = _files.Resolve(folder, forWrite: false, out string full);
+        bool file = false;
         if (outcome == FileOutcome.Ok && folder.Length > 0 && !Directory.Exists(full))
         {
-            outcome = File.Exists(full) ? FileOutcome.IsAFile : FileOutcome.Missing;
+            file = File.Exists(full);
+            outcome = file ? FileOutcome.Ok : FileOutcome.Missing;
         }
 
         if (outcome != FileOutcome.Ok)
@@ -10141,8 +10197,11 @@ internal sealed partial class ChatScreen
         }
 
         var tree = new FolderTree(new SandboxEntries(root, FileBrowserMode.Resolve(_effective())), withFiles: true);
-        int cursor = tree.ExpandTo(folder.Length == 0 ? root : full);
-        tree.Expand(cursor);   // the folder named (or the root) open, its entries in view
+        int cursor = tree.ExpandTo(folder.Length == 0 ? root : full, selectFile: file);
+        if (cursor < 0 || cursor >= tree.Visible.Count || !tree.Visible[cursor].IsFile)
+        {
+            tree.Expand(cursor);   // the folder named (or the root, or a hidden file's folder) open, its entries in view
+        }
 
         await _folderPane.BrowseAsync(tree, cursor, path =>
         {
@@ -11203,6 +11262,19 @@ internal sealed partial class ChatScreen
         var tokens = (args ?? "").Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries).ToList();
         int switches = tokens.RemoveAll(t => t.Equals(CopyThinkingSwitch, StringComparison.OrdinalIgnoreCase));
         bool thinking = switches > 0;
+        if (tokens.Count > 0 && tokens[0].Equals(CopyCodeWord, StringComparison.OrdinalIgnoreCase))
+        {
+            // code [<n>] (2026-11-01): n from 1, stricter than a count (a block past the last is a mistake); never with the switch.
+            if (switches > 0 || tokens.Count > 2)
+            {
+                return new(CopyActionKind.Invalid, 0);
+            }
+
+            return tokens.Count == 1 ? new(CopyActionKind.Code, 0)
+                : int.TryParse(tokens[1], NumberStyles.None, CultureInfo.InvariantCulture, out int block) && block >= 1 ? new(CopyActionKind.Code, block)
+                : new(CopyActionKind.Invalid, 0);
+        }
+
         if (switches > 1 || tokens.Count > 1)
         {
             return new(CopyActionKind.Invalid, 0);
@@ -11259,6 +11331,12 @@ internal sealed partial class ChatScreen
             return;
         }
 
+        if (action.Kind == CopyActionKind.Code)
+        {
+            HandleCopyCode(action.Count);
+            return;
+        }
+
         bool withUserText = _effective().CopyUserPrompt;
         int copied = _log.Take(action.Kind == CopyActionKind.All ? int.MaxValue : action.Count);
         // The log keeps the model's line endings; the clipboard gets the CF_UNICODETEXT convention.
@@ -11271,6 +11349,72 @@ internal sealed partial class ChatScreen
         else
         {
             _transcript.Error(CopyFailedError);
+        }
+    }
+
+    /// <summary>
+    /// <c>/copy code [&lt;n&gt;]</c> (2026-11-01, copy a code block): block <paramref name="block"/> (the last with 0) of the last reply's
+    /// top-level code blocks, read in the pieces the screen drew (<see cref="ChatLog.LastReplyPieces"/>), so the numbers follow the ⧉ glyphs;
+    /// copied with the clipboard's line endings, flashed and noted as <c>/copy</c> is.
+    /// </summary>
+    private void HandleCopyCode(int block)
+    {
+        var blocks = CodeBlocksOf(_log.LastReplyPieces ?? []);
+        if (blocks.Count == 0)
+        {
+            _transcript.Notice(NoCodeBlockNotice);
+            return;
+        }
+
+        int index = block == 0 ? blocks.Count : block;
+        if (index > blocks.Count)
+        {
+            _transcript.Error(CodeBlockPastCountError(index, blocks.Count));
+            return;
+        }
+
+        string text = blocks[index - 1];
+        if (text.Length == 0)
+        {
+            _transcript.Notice(CodeBlockEmptyNotice(index));
+            return;
+        }
+
+        string converted = text.ReplaceLineEndings("\r\n");
+        if (_copy(converted))
+        {
+            _pane.Flash(InputLine.CopiedFlash(converted.Length));
+            _transcript.Notice(CopiedCodeNotice(index, blocks.Count));
+        }
+        else
+        {
+            _transcript.Error(CopyFailedError);
+        }
+    }
+
+    /// <summary>
+    /// The top-level code blocks of <paramref name="pieces"/>, each parsed alone as a reply is (<see cref="UI.Markdown.MarkdigParser.Replies"/>), in
+    /// order: each block's lines joined with <c>\n</c>, as <see cref="UI.Markdown.CodeSpan.Text"/> is. An empty block counts too. Pure.
+    /// </summary>
+    internal static IReadOnlyList<string> CodeBlocksOf(IEnumerable<string> pieces) =>
+        pieces.SelectMany(piece => UI.Markdown.MarkdigParser.Replies.Parse(piece).Blocks.OfType<UI.Markdown.CodeBlock>())
+            .Select(code => string.Join("\n", code.Lines))
+            .ToList();
+
+    /// <summary>
+    /// A click on a code block's ⧉ (2026-11-01, copy a code block; both click paths, any thread): the block's source to the clipboard
+    /// with its line endings, the hint row's flash; a failure through the flow sink (never the transcript: the click may come mid-reply).
+    /// </summary>
+    private void CopyCodeBlock(string text)
+    {
+        string converted = text.ReplaceLineEndings("\r\n");
+        if (_copy(converted))
+        {
+            _pane.Flash(InputLine.CopiedFlash(converted.Length));
+        }
+        else
+        {
+            _flow.Error(CopyFailedError);
         }
     }
 
@@ -12083,6 +12227,17 @@ internal sealed partial class ChatScreen
                         DisarmExit();
                         await _speech.StopAsync().ConfigureAwait(false);
                         if (await HandleAsync(SessionTitleLine, [], cancellationToken).ConfigureAwait(false))
+                        {
+                            return 0;
+                        }
+
+                        break;
+                    case InputResult.BrowsePath browse:
+                        // A path's chord-click in the transcript (2026-11-01, clickable links and paths): /browse on it through the dispatch,
+                        // the file at the cursor — no transcript row, the draft back after, as the session's name.
+                        _timers.Acknowledge();
+                        DisarmExit();
+                        if (await HandleAsync(BrowsePathLine(browse.Path), [], cancellationToken).ConfigureAwait(false))
                         {
                             return 0;
                         }
@@ -14211,6 +14366,10 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task ApplySettingsChangesAsync(SettingsChanges changes, CancellationToken cancellationToken)
     {
+        // Gradient rules (2026-11-01): idempotent, so every pass sets it (a /profile reload, a menu closing at idle); the stops' reference
+        // changes only on a real flip, which the input rules redraw for on the pane's tick.
+        Theme.UseRuleGradient(_effective().GradientRules);
+
         if (changes.HasFlag(SettingsChanges.WebUi))
         {
             // One of the Web UI's rows (2026-10-14): the server started, stopped or restarted as they now say.
@@ -18174,7 +18333,7 @@ internal sealed partial class ChatScreen
             }
 
             // What /copy sees: the reply as shown, partial or whole, with the line that asked for it.
-            _log.Add(PasteBlocks.WithoutSavedPaths(text), reply.ToString(), thoughts.Thoughts);   // a saved paste as it was typed (2026-10-09)
+            _log.Add(PasteBlocks.WithoutSavedPaths(text), reply.ToString(), thoughts.Thoughts, thoughts.Breaks);   // a saved paste as it was typed (2026-10-09)
             _lastReply = reply.ToString();
             // What the session store keeps (2026-09-18): the same pair, the model's call count and
             // the request's tokens, then the whole history as it stands. A withdrawn turn left the
@@ -18821,6 +18980,12 @@ internal sealed partial class ChatScreen
         {
             // Every call, the quiet ones too: the tool run's summary counts calls, not lines (2026-09-22).
             _transcript.CountToolCall(counted.Name);
+        }
+
+        if (evt is TurnEvent.ToolCall or TurnEvent.ToolResult)
+        {
+            // A tool line commits the live block, so the reply's text after it is a fresh block (2026-11-01, /copy code reads it so).
+            thoughts.Break(reply.Length);
         }
 
         if (evt is not (TurnEvent.ThinkingDelta or TurnEvent.ToolWriting))

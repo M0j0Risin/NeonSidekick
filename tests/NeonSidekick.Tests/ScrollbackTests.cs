@@ -1307,4 +1307,46 @@ public class ScrollbackTests
         letter.Append(Segments("𝐀 one two three four\n"), 30);
         Assert.Equal(["𝐀 one two", "three four"], Texts(letter.Rows(12)));
     }
+
+    // ── Links (2026-11-01, clickable links and paths): AnyLinks is a count of lines, kept wherever lines come and go ──
+
+    private static List<Segment> Linked(string text) => [new Segment(text, Style.Plain, new Link("https://a.b/")), Segment.LineBreak];
+
+    [Fact]
+    public void AnyLinks_CountsLines_ThroughAMerge_AResize_AndAClear()
+    {
+        var store = new Scrollback();
+        store.Append(Segments("plain\n"), 20);
+        Assert.False(store.AnyLinks);
+
+        // Two lines merged under one source keep the link.
+        var two = new List<Segment> { new("x"), Segment.LineBreak, new("y", Style.Plain, new Link("https://a.b/")), Segment.LineBreak };
+        store.Append(two, 20, member: false, null, null, new Sized(_ => two));
+        Assert.True(store.AnyLinks);
+        Assert.Equal(2, store.LineCount);   // "plain" and the merged pair
+
+        store.Rows(8);   // a resize lays out rows, never lines
+        Assert.True(store.AnyLinks);
+
+        store.Clear();
+        Assert.False(store.AnyLinks);
+    }
+
+    [Fact]
+    public void AnyLinks_GoesFalse_WhenTheLastLinkedLineIsTrimmedPastMaxRows()
+    {
+        var store = new Scrollback();
+        store.Append(Linked("link"), 40);
+        Assert.True(store.AnyLinks);
+
+        var many = new List<Segment>();
+        for (int i = 0; i < Scrollback.MaxRows; i++)
+        {
+            many.Add(new Segment("r"));
+            many.Add(Segment.LineBreak);
+        }
+
+        store.Append(many, 40);
+        Assert.False(store.AnyLinks);
+    }
 }

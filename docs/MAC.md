@@ -71,6 +71,7 @@ You need an Apple Silicon Mac (M1 or later). Unpack the Mac package as the [READ
 
 * **Stand-in keys.** A Mac terminal can't send some chords, so Ctrl+D opens `/model`, Ctrl+] `/terminal`, Ctrl+Option+A `/memory`, and Option+Delete deletes a word. On a bottom-pane list, Delete is fn+⌫ ([Keyboard shortcuts](INTERFACE.md#keyboard-shortcuts)).
 * **No key for these.** Shift+F3 goes back in a find. Click the ☺ for the emoji picker (Ctrl+J arrives as a line break).
+* **Links and paths.** Option+click (Shift+click in iTerm2) opens a link or path; Cmd+click is the terminal's own. On a fold's summary, iTerm2's Cmd+click also folds or unfolds it.
 * **Copy and paste.** Cmd+V is the terminal's paste, text only. The app's paste (Ctrl+V, Option+V, or a right-click where the terminal passes it on) takes a picture first, such as a ⌃⇧⌘4 screenshot.
 * **Pasting files.** A file copied in Finder pastes as its path, which attaches a picture or a PDF. A right-click in a filter or find box pastes the first copied file's path (on Windows, nothing).
 * **Right-clicks in iTerm2.** Two settings give the right button to the app: *Enable mouse reporting* on (Settings › Profiles › Terminal), and the *Right Button* › *Open Context Menu* row deleted (Settings › Pointer › Bindings).

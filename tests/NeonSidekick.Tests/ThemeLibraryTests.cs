@@ -119,6 +119,12 @@ public sealed class ThemeLibraryTests
                 theme.Name + ": other colors" + Rerun);
             Assert.True(entry.GetProperty("gr").EnumerateArray().Select(s => s.GetString()).SequenceEqual(theme.GradientStops.Select(Theme.ToHex)),
                 theme.Name + ": another gradient" + Rerun);
+
+            // The quiet stops the rules around the input line take under Gradient rules (2026-11-01), null for a flat theme.
+            var q = entry.GetProperty("q");
+            string?[]? shown = q.ValueKind == JsonValueKind.Null ? null : q.EnumerateArray().Select(s => s.GetString()).ToArray();
+            string?[]? quiet = Theme.QuietStops(theme)?.Select(c => (string?)Theme.ToHex(c)).ToArray();
+            Assert.True(shown is null ? quiet is null : quiet is not null && shown.SequenceEqual(quiet), theme.Name + ": other quiet stops" + Rerun);
         }
     }
 

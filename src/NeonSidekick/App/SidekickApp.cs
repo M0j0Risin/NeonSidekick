@@ -3301,7 +3301,7 @@ public sealed partial class SidekickApp
         {
             if (user)
             {
-                d.UserAvatar = chosen;   // empty for none (null is the default since 2026-10-13, 🧿 since 2026-10-18)
+                d.UserAvatar = chosen;   // empty for none (null is the default since 2026-10-13, 🙊 again since 2026-11-01)
             }
             else
             {

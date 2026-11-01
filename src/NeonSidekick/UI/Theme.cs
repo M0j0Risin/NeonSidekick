@@ -378,8 +378,8 @@ public static class Theme
         string.Concat("[", ToHex(color), "]", Markup.Escape(text), "[/]");
 
     /// <summary>
-    /// A horizontal gradient rule of <paramref name="width"/> cells, split into five
-    /// segments. Used as the divider under the header.
+    /// A horizontal gradient rule of <paramref name="width"/> cells: the banner's divider and <c>/new</c>'s separator. Smooth since
+    /// 2026-11-01 (<see cref="RuleRuns"/>; five flat bands before, which read as steps).
     /// </summary>
     public static string Rule(int width, char glyph = '─') => Rule(width, GradientStops, glyph);
 
@@ -392,28 +392,156 @@ public static class Theme
             return string.Empty;
         }
 
+        // Exactly width cells at every width (2026-10-29, the resize review): RuleRuns covers every cell once.
         var sb = new StringBuilder();
-        const int segments = 5;
-        int per = Math.Max(1, width / segments);
-        int used = 0;
-        for (int s = 0; s < segments; s++)
+        foreach (var (text, color) in RuleRuns(width, stops, glyph: glyph))
         {
-            // Exactly width cells at every width (2026-10-29, the resize review: under 5 cells the parts of one cell each ran past it).
-            int count = (s == segments - 1) ? width - used : Math.Min(per, width - used);
-            used += Math.Max(0, count);
-            if (count <= 0)
-            {
-                continue;
-            }
-
-            Color c = SampleGradient(s / (double)(segments - 1), stops);
-            sb.Append('[').Append(ToHex(c)).Append(']');
-            sb.Append(new string(glyph, count));
-            sb.Append("[/]");
+            sb.Append('[').Append(ToHex(color)).Append(']').Append(text).Append("[/]");
         }
 
         return sb.ToString();
     }
+
+    /// <summary>
+    /// The one splitter of a gradient rule into colored runs (2026-11-01, the gradient rules; the banner's rule, the input line's and
+    /// strip's rules, the pane headings and <c>/theme</c>'s preview all use it): <paramref name="width"/> glyphs starting at column
+    /// <paramref name="startColumn"/> of a line <paramref name="fullWidth"/> cells wide (<paramref name="width"/> when 0 or less). The
+    /// color changes every few cells (a run is <c>max(1, fullWidth / 40)</c> cells, counted from the line's column 0), sampled at each
+    /// run's middle over <paramref name="fullWidth"/>, and neighboring runs of the same color are merged. So a piece of a line drawn
+    /// at its own column takes exactly the colors the whole line has there. Covers every cell once; empty when the width is 0. Pure.
+    /// </summary>
+    public static IReadOnlyList<(string Text, Color Color)> RuleRuns(int width, Color[] stops, int startColumn = 0, int fullWidth = 0, char glyph = '─')
+    {
+        ArgumentNullException.ThrowIfNull(stops);
+        if (width <= 0 || stops.Length == 0)
+        {
+            return [];
+        }
+
+        startColumn = Math.Max(0, startColumn);
+        if (fullWidth <= 0)
+        {
+            fullWidth = startColumn + width;
+        }
+
+        int run = Math.Max(1, fullWidth / 40);
+        var pieces = new List<(string, Color)>();
+        Color current = default;
+        int count = 0;
+        for (int col = startColumn; col < startColumn + width; col++)
+        {
+            int middle = (col / run * run) + (run / 2);
+            Color c = SampleGradient(middle / (double)Math.Max(1, fullWidth - 1), stops);
+            if (count > 0 && c.Equals(current))
+            {
+                count++;
+                continue;
+            }
+
+            if (count > 0)
+            {
+                pieces.Add((new string(glyph, count), current));
+            }
+
+            current = c;
+            count = 1;
+        }
+
+        pieces.Add((new string(glyph, count), current));
+        return pieces;
+    }
+
+    /// <summary>
+    /// The least contrast with the page a quiet rule keeps (2026-11-01): the stroke bar <c>ThemeFileTests.BuiltIns_AreReadable_StyleByStyle</c>
+    /// holds every rule to, for a theme whose <c>deep</c> sits closer to its page than that.
+    /// </summary>
+    public const double QuietRuleFloor = 1.3;
+
+    /// <summary>
+    /// <paramref name="p"/>'s gradient stops made as quiet as its flat rule (2026-11-01, the user's ask: the frame of the screen wears the
+    /// theme's gradient without getting louder): each stop is moved toward the page (or, a stop dimmer than the target, toward the ink)
+    /// until its contrast with the page equals <c>deep</c>'s, floored at <see cref="QuietRuleFloor"/>, so only the hue changes along
+    /// the line. Null for a solid theme (every stop the same color) and for one whose own styles change <c>paneRule</c>: those rules
+    /// stay flat. Public for <c>tools/ThemeAtlas.cs</c>. Pure.
+    /// </summary>
+    public static Color[]? QuietStops(ThemePalette p)
+    {
+        ArgumentNullException.ThrowIfNull(p);
+        var stops = p.GradientStops;
+        if (stops.Length == 0 || stops.All(s => s.Equals(stops[0])))
+        {
+            return null;
+        }
+
+        if (p.Styles is { } changes && changes.ContainsKey(ThemeStyleSlot.PaneRule))
+        {
+            return null;
+        }
+
+        double target = Math.Max(ColorContrast.Contrast(p.Deep, p.Bg), QuietRuleFloor);
+        var quiet = new Color[stops.Length];
+        for (int i = 0; i < stops.Length; i++)
+        {
+            quiet[i] = Quieted(stops[i], p.Bg, p.Ink, target);
+        }
+
+        return quiet;
+    }
+
+    /// <summary>
+    /// <paramref name="stop"/> moved toward <paramref name="bg"/> (or, when it contrasts less than <paramref name="target"/>, toward
+    /// <paramref name="ink"/>) until its contrast with <paramref name="bg"/> is <paramref name="target"/>, found by bisection.
+    /// </summary>
+    private static Color Quieted(Color stop, Color bg, Color ink, double target)
+    {
+        bool louder = ColorContrast.Contrast(stop, bg) >= target;
+
+        // From = the end at or under the target, to = the end at or over it; t = 0 is "from".
+        Color from = louder ? bg : stop;
+        Color to = louder ? stop : ink;
+        if (!louder && ColorContrast.Contrast(ink, bg) < target)
+        {
+            return ink;
+        }
+
+        double lo = 0, hi = 1;
+        for (int step = 0; step < 24; step++)
+        {
+            double mid = (lo + hi) / 2;
+            if (ColorContrast.Contrast(Lerp(from, to, mid), bg) < target)
+            {
+                lo = mid;
+            }
+            else
+            {
+                hi = mid;
+            }
+        }
+
+        return Lerp(from, to, hi);
+    }
+
+    /// <summary>Whether the rules around the input line and the pane headings take <see cref="QuietGradient"/> (the setting <c>Gradient rules</c>).</summary>
+    private static volatile bool s_ruleGradient = true;
+
+    /// <summary>
+    /// Puts the setting <c>Gradient rules</c> in force (2026-11-01): on, <see cref="RuleStops"/> is the palette's
+    /// <see cref="QuietGradient"/>; off, null and those rules are flat in <see cref="PaneRule"/>. Beside <see cref="Use"/>.
+    /// </summary>
+    public static void UseRuleGradient(bool on) => s_ruleGradient = on;
+
+    /// <summary>Whether <c>Gradient rules</c> is in force, whatever the palette (<c>/theme</c>'s preview shades its pane rule for any theme).</summary>
+    public static bool RuleGradientOn => s_ruleGradient;
+
+    /// <summary>The palette in force's <see cref="QuietStops"/>, built once when it is put in force; null for a solid theme or its own <c>paneRule</c>.</summary>
+    public static Color[]? QuietGradient => s_current.QuietGradient;
+
+    /// <summary>
+    /// The stops the rules around the input line and the pane headings are drawn in (2026-11-01): <see cref="QuietGradient"/> while
+    /// <c>Gradient rules</c> is on, else null; null means flat in <see cref="PaneRule"/>. The array changes only when the palette or the
+    /// setting does, so a drawer may compare references to know it must redraw.
+    /// </summary>
+    public static Color[]? RuleStops => s_ruleGradient ? s_current.QuietGradient : null;
 
     // ── Widget factories ────────────────────────────────────────────────────
     /// <summary>
@@ -518,9 +646,14 @@ public static class Theme
 
                 _styles[i] = style;
             }
+
+            QuietGradient = QuietStops(p);
         }
 
         public ThemePalette Palette { get; }
+
+        /// <summary>The palette's <see cref="Theme.QuietStops"/>, built once (2026-11-01).</summary>
+        public Color[]? QuietGradient { get; }
 
         public Style this[ThemeStyleSlot slot] => _styles[(int)slot];
 

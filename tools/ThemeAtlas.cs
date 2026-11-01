@@ -6,13 +6,14 @@
 // theme is added, changed or removed by a file edit; the atlas was kept by hand until then and ThemeLibraryTests' drift test now
 // fails when it falls behind).
 //
-//     assets/themes/Theme Atlas.html     the THEMES line (every theme: its colours, gradient, banner letters, rule, every resolved
-//                                        style and its own style changes), the FILTERS list (one per category folder), the header's
+//     assets/themes/Theme Atlas.html     the THEMES line (every theme: its colours, gradient, quiet gradient, banner letters, every
+//                                        resolved style and its own style changes), the FILTERS list (one per category folder), the header's
 //                                        theme, category and style counts and the app's version; the page around them is kept
 //
 // The themes are loaded by the app's own ThemeLibrary.Load over the files on disk (not the embedded copies, so an edit shows without
 // a build of the app first), and every colour comes from the app's Theme code: the banner from Theme.GradientMarkup over
-// SidekickApp.BannerTitle, the rule from Theme.Rule's five segments, the styles from Theme.StylesOf. A file the app would skip stops
+// SidekickApp.BannerTitle, the quiet rules' stops from Theme.QuietStops (2026-11-01, Gradient rules; the page draws both rules from
+// the stops as Theme.RuleRuns does), the styles from Theme.StylesOf. A file the app would skip stops
 // the run with its problem. A category keeps its place in FILTERS; a new folder is added after the rest, A to Z.
 //
 // A .NET 10 file-based app: no csproj, not in the solution, not run by build.ps1. The output is committed; run this after any change
@@ -126,7 +127,23 @@ void WriteTheme(Utf8JsonWriter json, ThemePalette theme, string category)
 
     json.WriteEndArray();
 
-    // The banner letters and the rule's five segments, read back from the markup the app draws them with.
+    // The quiet stops the rules around the input line take under Gradient rules (2026-11-01), null for a theme whose rules stay flat.
+    if (Theme.QuietStops(theme) is { } quiet)
+    {
+        json.WriteStartArray("q");
+        foreach (var stop in quiet)
+        {
+            json.WriteStringValue(Theme.ToHex(stop));
+        }
+
+        json.WriteEndArray();
+    }
+    else
+    {
+        json.WriteNull("q");
+    }
+
+    // The banner letters, read back from the markup the app draws them with.
     json.WriteStartArray("t");
     foreach (var (hex, text) in Segments(Theme.GradientMarkup(SidekickApp.BannerTitle, theme.GradientStops)))
     {
@@ -134,14 +151,6 @@ void WriteTheme(Utf8JsonWriter json, ThemePalette theme, string category)
         json.WriteStringValue(hex);
         json.WriteStringValue(text);
         json.WriteEndArray();
-    }
-
-    json.WriteEndArray();
-
-    json.WriteStartArray("r");
-    foreach (var (hex, _) in Segments(Theme.Rule(5, theme.GradientStops)))
-    {
-        json.WriteStringValue(hex);
     }
 
     json.WriteEndArray();

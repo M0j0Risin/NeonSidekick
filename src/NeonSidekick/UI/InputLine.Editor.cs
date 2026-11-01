@@ -1193,6 +1193,25 @@ public sealed partial class InputLine
                     _line.OpenPicture?.Invoke(picture);
                 }
             }
+            else if (click.Opener && pane.TryHitLink(click.X, click.Y, out string target) && TryOpenLink(target) is { } browse)
+            {
+                // A link chord-clicked (2026-11-01, clickable links and paths), ahead of the fold toggle so one in a run's summary opens
+                // rather than folds: a web address opened at once, the draft untouched; a path ends the read for /browse, the draft back after.
+                _anchor = -1;
+                hintClicks.Reset();
+                if (browse.Length > 0)
+                {
+                    EndRow();
+                    return new EditOutcome.End(new InputResult.BrowsePath(browse, _text.ToString()));
+                }
+            }
+            else if (_line.CopyCode is { } copyCode && pane.TryHitCodeCopy(click.X, click.Y, out string code))
+            {
+                // A code block's ⧉ (2026-11-01, copy a code block), ahead of the fold toggle: the block copied, the draft untouched.
+                _anchor = -1;
+                hintClicks.Reset();
+                copyCode(code);
+            }
             else
             {
                 // A tool run's summary in the transcript (2026-09-22): one click unfolds
@@ -1203,6 +1222,27 @@ public sealed partial class InputLine
             }
 
             return EditOutcome.Handled;
+        }
+
+        /// <summary>
+        /// A link's chord-click (2026-11-01): a web address handed to <see cref="InputLine.OpenLink"/> (<c>""</c>, the click spent), a
+        /// path's full form while this is the chat line's own read with its shortcuts (the screen browses it), <c>""</c> for a path in
+        /// any other read (the click spent, the read open), null with no opener (the click goes on as a plain one would).
+        /// </summary>
+        private string? TryOpenLink(string target)
+        {
+            if (LinkText.IsPath(target))
+            {
+                return _o.Shortcuts && !_o.Live && ReferenceEquals(this, _line._chat) ? LinkText.PathOf(target) : "";
+            }
+
+            if (_line.OpenLink is not { } open)
+            {
+                return null;
+            }
+
+            open(target);
+            return "";
         }
 
         private void Replace(string value)

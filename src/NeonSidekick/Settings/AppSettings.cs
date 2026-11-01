@@ -1006,6 +1006,7 @@ public sealed class AppSettings : IDisposable
         ImageEditor = source.ImageEditor,
         ThemedBackground = source.ThemedBackground,
         ThemedExternalWindows = source.ThemedExternalWindows,
+        GradientRules = source.GradientRules,
         ViewerLeft = source.ViewerLeft,
         ViewerTop = source.ViewerTop,
         CameraWindowLeft = source.CameraWindowLeft,

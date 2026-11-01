@@ -90,6 +90,10 @@ public class ConsistencyPassTests
         InfoPane.ButtonsHint(Buttons(EventLogMenu.CopyAction, EventLogMenu.AskAction), tabs: true, cells: InfoPane.HintCells),
         MenuFilter.Hint(SkillsMenu.LoadedKeys, "x"),
         MenuFilter.HintBeforeEsc(ShoppingText.AddKeys, "x", letteredButtons: true),
+        // The address under the pointer (2026-11-01): a 300-character URL and a deep path, each cut to fit.
+        LinkText.HoverHint("https://example.com/" + new string('a', 300), null, outside: false, LinkText.HintWidth)!,
+        LinkText.HoverHint(LinkText.PathLink(@"C:\w\" + string.Join(@"\", Enumerable.Repeat("folder", 30)) + @"\Foo.cs"), string.Join(@"\", Enumerable.Repeat("folder", 30)) + @"\Foo.cs", outside: false, LinkText.HintWidth)!,
+        LinkText.HoverHint(LinkText.PathLink(@"C:\old\" + string.Join(@"\", Enumerable.Repeat("folder", 30)) + @"\Foo.cs"), null, outside: true, LinkText.HintWidth)!,
     ];
 
     private static readonly (char Key, string Word)[] WebUiButtons =

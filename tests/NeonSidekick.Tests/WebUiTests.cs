@@ -846,7 +846,7 @@ public sealed partial class WebUiTests : IDisposable
             Assert.StartsWith("/* The profile's theme, ", css, StringComparison.Ordinal);
             if (css.Contains("--bg: ", StringComparison.Ordinal))
             {
-                Assert.True(WebTheme.Contrast(palette.Ink, palette.Bg) >= WebTheme.MinContrast, palette.Name);
+                Assert.True(ColorContrast.Contrast(palette.Ink, palette.Bg) >= WebTheme.MinContrast, palette.Name);
             }
             else
             {
@@ -861,7 +861,7 @@ public sealed partial class WebUiTests : IDisposable
         WebTheme.StyleTokens(slab, "--user", new Spectre.Console.Style(Spectre.Console.Color.Black, Spectre.Console.Color.White));
         Assert.Contains("--user-bg: #ffffff;", slab.ToString(), StringComparison.Ordinal);
 
-        Assert.Equal(21, WebTheme.Contrast(Spectre.Console.Color.White, Spectre.Console.Color.Black), 1);
+        Assert.Equal(21, ColorContrast.Contrast(Spectre.Console.Color.White, Spectre.Console.Color.Black), 1);
     }
 
     [Theory]

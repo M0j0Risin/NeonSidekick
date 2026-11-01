@@ -218,19 +218,24 @@ public partial class ScreenPaneTests : IDisposable
 
     /// <summary>
     /// <c>/mark</c> (2026-10-18): the rules' glyphs in the mark's color, the session's name and the lower rule's title in their own styles, null
-    /// the theme's rule again, and a change picked up on the tick.
+    /// the theme's rule again, and a change picked up on the tick. Unmarked, the glyphs shade along the quiet gradient (2026-11-01,
+    /// Gradient rules): the first in its first color, not deep.
     /// </summary>
     [Fact]
     public void RuleMark_ColorsTheRuleGlyphs_KeepsTheTitles_AndRedrawsOnTheTick()
     {
+        using var scope = new ThemeScope();
         _console.EmitAnsiSequences();
         using var pane = Pane();
         pane.RuleTitle = () => "my-session";
         pane.LowerRuleTitle = () => NeonSidekick.Viewer.ProcessWindowText.RuleTitle(3);
         pane.Show();
         Color rule = Theme.PaneRule.Foreground;
+        Color first = Theme.QuietGradient![0];
         Color green = RuleMarks.ColorOf("green");
-        Assert.Contains(Fg(rule) + "─", Output);
+        Assert.Contains(Fg(first) + "─", Output);
+        Assert.DoesNotContain(Fg(rule) + "─", Output);
+        Assert.Contains(Fg(rule) + " my-session ", Output);   // the name keeps the theme's rule style
         Assert.DoesNotContain(Fg(green), Output);
 
         int mark = Output.Length;
@@ -248,12 +253,35 @@ public partial class ScreenPaneTests : IDisposable
         _time.Advance(ScreenPane.Tick);
         Assert.Equal("", Output[mark..]);
 
-        // Taken off: the theme's rule again.
+        // Taken off: the theme's gradient again.
         pane.RuleMark = null;
         _time.Advance(ScreenPane.Tick);
         string plain = Output[mark..];
-        Assert.Contains(Fg(rule) + "─", plain);
+        Assert.Contains(Fg(first) + "─", plain);
         Assert.DoesNotContain(Fg(green), plain);
+
+        // Gradient rules flipped off: redrawn on the tick, flat in deep.
+        mark = Output.Length;
+        Theme.UseRuleGradient(false);
+        _time.Advance(ScreenPane.Tick);
+        string flat = Output[mark..];
+        Assert.Contains(Fg(rule) + "─", flat);
+        Assert.DoesNotContain(Fg(first) + "─", flat);
+    }
+
+    /// <summary>Gradient rules off (2026-11-01): every rule around the input line, the strip's too, is flat in deep, one color.</summary>
+    [Fact]
+    public void RuleGradient_Off_IsFlat()
+    {
+        using var scope = new ThemeScope();
+        Theme.UseRuleGradient(false);
+        _console.EmitAnsiSequences();
+        using var pane = Pane();
+        pane.RuleTitle = () => "my-session";
+        pane.Show();
+        Color rule = Theme.PaneRule.Foreground;
+        Assert.Contains(Fg(rule) + "─", Output);
+        Assert.All(Theme.QuietGradient!.Where(c => !c.Equals(rule)), c => Assert.DoesNotContain(Fg(c) + "─", Output));
     }
 
     /// <summary>A truecolor foreground's parameters and their end, however Spectre opens the sequence.</summary>
@@ -5359,7 +5387,7 @@ public partial class ScreenPaneTests : IDisposable
         pane.SetLive(new ReplyBlock("```text\na\nb\nc\nd\n```\n\nafter", glyph: false));
         pane.CommitLive();
 
-        Assert.Contains("text\n    a\n    b\n    c\n    d\n", Output);
+        Assert.Contains("text" + CodeFoldText.CopyTail + "\n    a\n    b\n    c\n    d\n", Output);   // the label's ⧉ (2026-11-01)
         Assert.DoesNotContain(ToolGroupText.CollapsedGlyph, Output);
     }
 

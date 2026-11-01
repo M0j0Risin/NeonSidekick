@@ -590,13 +590,13 @@ public class TranscriptRendererTests : IDisposable
         s.Console.Profile.Width = 50;
         s.Tick();
         Assert.Equal(new string('─', 50), RowTexts(s.Pane)[0]);
-        // Its five gradient parts span the new width, so it was drawn for it — a wider rule cut at the edge keeps its first parts whole
-        // (the resize review, R66: the narrower rule drops a rule's overflow, so the text alone cannot tell).
-        Assert.Equal(Enumerable.Repeat(10, 5), s.Pane.TranscriptRows()[0].Select(segment => segment.Text.Length));
+        // Its gradient runs are the new width's, so it was drawn for it — a wider rule cut at the edge keeps its first runs' colors
+        // (the resize review, R66: the narrower rule drops a rule's overflow, so the text alone cannot tell; smooth since 2026-11-01).
+        Assert.Equal(Theme.RuleRuns(50, Theme.GradientStops).Select(r => (r.Text.Length, r.Color)), s.Pane.TranscriptRows()[0].Select(segment => (segment.Text.Length, segment.Style.Foreground)));
         s.Console.Profile.Width = 100;
         s.Tick();
         Assert.Equal(new string('─', 100), RowTexts(s.Pane)[0]);
-        Assert.Equal(Enumerable.Repeat(20, 5), s.Pane.TranscriptRows()[0].Select(segment => segment.Text.Length));
+        Assert.Equal(Theme.RuleRuns(100, Theme.GradientStops).Select(r => (r.Text.Length, r.Color)), s.Pane.TranscriptRows()[0].Select(segment => (segment.Text.Length, segment.Style.Foreground)));
     }
 
     // ── Thinking (2026-09-26) ─────────────────────────────────────────────

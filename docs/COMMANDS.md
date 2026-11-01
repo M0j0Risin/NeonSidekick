@@ -50,6 +50,7 @@ Elsewhere:
 | `/undo [<n>]` | Puts back the files the last turn (or *n* turns) changed, after a yes; the conversation stays, and your next message tells the model. There is no redo. |
 | `/undo purge [all]` | Deletes this working folder's file checkpoints (with `all`, every folder's) after a yes; those turns can't be undone after. |
 | `/copy [<n>\|all] [--thinking]` | Copies the last reply, the last *n*, or the whole transcript as Markdown; `--thinking` adds the thinking. |
+| `/copy code [<n>]` | Copies code block *n* of the last reply, or its last, as written. Top-level blocks count, top to bottom, an empty one too. |
 | `/draft` | Writes the next message in your editor; it is sent when you save and close. |
 | `/echo <text>` | Prints a line as a reply, spoken when *TTS output* is on. |
 | `/find [<words>]` | Finds words in the transcript, every match marked. |
@@ -136,7 +137,7 @@ The push and pull forms copy to (`push`) or from (`pull`) another profile, after
 |---|---|
 | `/cwd [<path>\|~\|browse]` | Shows or changes the working directory (a missing folder is created, quotes around the path dropped); `~` is the profile's `files` folder, `browse` the [folder picker](INTERFACE.md#folder-picker). |
 | `/tree [<path>]` | A tree of the working directory in a pane; hidden entries per *File browser/tree mode*, `.git` only when named. |
-| `/browse [<folder>]` | Browses the working directory as a tree, opening a file in its default app. See [File browser](INTERFACE.md#file-browser). |
+| `/browse [<folder>\|<file>]` | Browses the working directory as a tree, opening a file in its default app; a file opens its folder with the file at the cursor. See [File browser](INTERFACE.md#file-browser). |
 | `/explore [<folder>]` | Opens the working directory, or a folder in it, in your file browser. |
 | `/open <file>` | Opens a file from the working directory in its default app. |
 | `/vault [<path>]` | A tree of the *Obsidian vault*, like `/tree`; needs *Obsidian tools* on. |
@@ -649,7 +650,7 @@ Start with `/theme export <name> [<new-name>]`: it writes `themes/<new-name>.jso
 
 * **Colors:** all fifteen are required, as `#RRGGBB` or `#RGB`; a file missing one is skipped. Comments and trailing commas are allowed.
 * **Names:** 1 to 32 lower-case letters, digits, `-` or `_`, starting with a letter or digit, and not `export`.
-* **Gradient** (the banner title and its rule, 2 to 16 stops) is optional; left out, it comes from the theme's colors.
+* **Gradient** (2 to 16 stops) colors the banner and its rule, and, quieted, the input line's and pane headings' rules with *Gradient rules* on. It is optional; left out, it comes from the theme's colors.
 * **Problems** show as warnings when a theme list opens: a broken file is skipped, a misspelled key or a bad style ignored.
 
 **Color roles** (`colors`):
@@ -675,7 +676,7 @@ Start with `/theme export <name> [<new-name>]`: it writes `themes/<new-name>.jso
 **Styles** (`styles`): each can set `fg` and `bg` (a hex color or a role name like `"dim"`) and turn `bold`, `italic`, `underline`, `dim` or `strikethrough` on or off. Some follow another unless set (`user` follows `accentSecondary`, `assistant` follows `body`).
 
 * **Text:** `body`, `dimText`, `accent`, `accentSecondary`, `accentTertiary`, `label`, `errorText`, `goodText`, `warnText`.
-* **Screen:** `user`, `assistant`, `systemText`, `sectionHeading`, `border`, `tableHeader`, `spinner`, `paneRule`, `hint`, `trailerMark`, `pasteLabel`, `placeholder`, `selectedText`.
+* **Screen:** `user`, `assistant`, `systemText`, `sectionHeading`, `border`, `tableHeader`, `spinner`, `paneRule`, `hint`, `trailerMark`, `pasteLabel`, `placeholder`, `selectedText`. Setting `paneRule` keeps the rules around the input line flat.
 * **Menus and help:** `menuHighlight`, `menuHighlightDim`, `menuDisabled`, `menuFooter`, `helpForm` (`/help`'s forms), `helpSlot` (their placeholders).
 * **Replies:** `markdownBold`, `markdownItalic`, `markdownCode`, `markdownCodeBlock`, `markdownCodeLabel`, `thinking`, `markdownHeading1`, `markdownHeading`, `markdownHeading3`, `markdownBullet`, `markdownQuoteBar`, `markdownQuote`, `markdownLinkUrl`, `markdownRule`.
 * **Code highlighting:** `codeKeyword`, `codeType`, `codeString`, `codeNumber`, `codeComment`, `codePunctuation`, `codeFunction`, `codeVariable`, `codeAttribute`, `codeTag`, `codeHeading`, `codeInserted`, `codeDeleted`.

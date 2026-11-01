@@ -20,12 +20,15 @@ public sealed class ReplyBlock : IRenderable
     public const string ContinuationIndent = "  ";
 
     private readonly IMarkdownParser _parser;
+    private readonly Func<string, string?>? _resolvePath;
     private MarkdownDocument? _document;
     private MarkdownView? _view;
     private IRenderable? _content;
 
-    public ReplyBlock(string text, bool glyph, IMarkdownParser? parser = null, int codeKeep = 0, string? glyphText = null)
+    /// <param name="resolvePath">An inline code span's path resolver (2026-11-01, clickable paths; <see cref="MarkdownView"/>'s), null for none.</param>
+    public ReplyBlock(string text, bool glyph, IMarkdownParser? parser = null, int codeKeep = 0, string? glyphText = null, Func<string, string?>? resolvePath = null)
     {
+        _resolvePath = resolvePath;
         Text = text ?? throw new ArgumentNullException(nameof(text));
         Glyph = glyph;
         GlyphText = string.IsNullOrEmpty(glyphText) ? TranscriptRenderer.AssistantGlyph : glyphText;
@@ -43,6 +46,7 @@ public sealed class ReplyBlock : IRenderable
         Indent = whole.Indent;
         CodeKeep = whole.CodeKeep;
         _parser = whole._parser;
+        _resolvePath = whole._resolvePath;
         _document = document;
     }
 
@@ -159,7 +163,7 @@ public sealed class ReplyBlock : IRenderable
 
     private IRenderable Build()
     {
-        _view = new MarkdownView(Document);
+        _view = new MarkdownView(Document, _resolvePath);
         // A stretch after a tool line keeps the reply's left edge (2026-10-04, the UI review: it went flush-left, its bullets and code
         // labels at column 0): the indent the glyph's line has, under no glyph.
         return Glyph || Text.Length > 0 ? new HangingIndent(Glyph ? GlyphText : Indent, Indent, Theme.Accent, _view) : _view;

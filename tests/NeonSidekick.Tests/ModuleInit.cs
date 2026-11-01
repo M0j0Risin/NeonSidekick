@@ -28,6 +28,7 @@ internal static class ModuleInit
         }
 
         UI.Theme.Use(Fakes.ShippedThemes.Synthwave);
+        UI.Theme.UseRuleGradient(true);   // Gradient rules' default (2026-11-01)
 
         // No test reads this machine's adapters for the LAN's prefixes (2026-10-23, the admin review's DA3); a test sets its own.
         Web.OnLinkNetworks.Use([]);

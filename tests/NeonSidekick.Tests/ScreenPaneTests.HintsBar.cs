@@ -36,11 +36,12 @@ public partial class ScreenPaneTests
         Assert.Equal(HintsBarStyle.Off, HintsBarMode.Resolve("off"));
         Assert.All(HintsBarMode.Names, name => Assert.Equal(name, HintsBarMode.Name(HintsBarMode.Resolve(name))));
 
-        Assert.Equal("alert", HintsBarMode.Pick("alert", "armed", "pane", "keys"));
-        Assert.Equal("armed", HintsBarMode.Pick(null, "armed", "pane", "keys"));
-        Assert.Equal("pane", HintsBarMode.Pick("", null, "pane", "keys"));
-        Assert.Equal("keys", HintsBarMode.Pick(null, "", null, "keys"));
-        Assert.Null(HintsBarMode.Pick(null, "", "", null));
+        Assert.Equal("alert", HintsBarMode.Pick("alert", "armed", "pane", "link", "keys"));
+        Assert.Equal("armed", HintsBarMode.Pick(null, "armed", "pane", "link", "keys"));
+        Assert.Equal("pane", HintsBarMode.Pick("", null, "pane", "link", "keys"));
+        Assert.Equal("link", HintsBarMode.Pick(null, null, null, "link", "keys"));   // the address wins over the keys, loses to a pane's
+        Assert.Equal("keys", HintsBarMode.Pick(null, "", null, null, "keys"));
+        Assert.Null(HintsBarMode.Pick(null, "", "", "", null));
     }
 
     [Fact]

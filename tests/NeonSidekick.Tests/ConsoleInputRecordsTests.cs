@@ -243,4 +243,27 @@ public class ConsoleInputRecordsTests
         Assert.Equal(16, System.Runtime.InteropServices.Marshal.SizeOf<KeyEventRecord>());
         Assert.Equal(16, System.Runtime.InteropServices.Marshal.SizeOf<MouseEventRecord>());
     }
+
+    /// <summary>Ctrl held on a left press is the link chord (2026-11-01, clickable links and paths); a right press never carries it.</summary>
+    [Fact]
+    public void ACtrlLeftPress_IsAnOpenerClick_AndAChordedRightPress_IsNot()
+    {
+        const uint LeftCtrl = 0x0008, RightCtrl = 0x0004;
+        uint buttons = 0;
+        var press = Mouse(7, 12, FromLeft1stButtonPressed);
+        press.dwControlKeyState = LeftCtrl;
+        Assert.True(ConsoleInputRecords.TryTranslateMouse(press, ref buttons, out var click, out _));
+        Assert.Equal(new InputEvent.Click(7, 12, MouseButton.Left, Opener: true), click);
+        Assert.True(ConsoleInputRecords.TryTranslateMouse(Mouse(7, 12, 0), ref buttons, out _, out _));
+
+        var plain = Mouse(7, 12, FromLeft1stButtonPressed);
+        Assert.True(ConsoleInputRecords.TryTranslateMouse(plain, ref buttons, out var bare, out _));
+        Assert.False(Assert.IsType<InputEvent.Click>(bare).Opener);
+        Assert.True(ConsoleInputRecords.TryTranslateMouse(Mouse(7, 12, 0), ref buttons, out _, out _));
+
+        var right = Mouse(3, 4, RightmostButtonPressed);
+        right.dwControlKeyState = RightCtrl;
+        Assert.True(ConsoleInputRecords.TryTranslateMouse(right, ref buttons, out var rightClick, out _));
+        Assert.Equal(new InputEvent.Click(3, 4, MouseButton.Right), rightClick);
+    }
 }

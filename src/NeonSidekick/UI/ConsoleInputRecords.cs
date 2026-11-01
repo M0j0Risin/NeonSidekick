@@ -117,7 +117,8 @@ public static class ConsoleInputRecords
 
         if ((pressed & FromLeft1stButtonPressed) != 0)
         {
-            mouse = new InputEvent.Click(record.X, record.Y, MouseButton.Left);
+            // Ctrl held: the link chord (2026-11-01, clickable links and paths), on a left click only.
+            mouse = new InputEvent.Click(record.X, record.Y, MouseButton.Left, Opener: (record.dwControlKeyState & (LeftCtrlPressed | RightCtrlPressed)) != 0);
             return true;
         }
 

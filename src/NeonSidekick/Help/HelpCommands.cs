@@ -61,7 +61,7 @@ public static class HelpCommands
         ]),
         new("/browse",
         [
-            new("/browse [<folder>]", "Browse the working directory, or a folder in it, as a tree in a pane (Tab completes the folder). Space, → and ← open and close folders, `-` collapses all, and Enter (or a double-click on a name) opens or closes a folder, or opens a file in its default app with the pane left open. Hidden, system and dot entries show only when *File browser/tree mode* is `show-hidden`; `.git` folders are left out. Works while a reply runs."),
+            new("/browse [<folder>|<file>]", "Browse the working directory, or a folder in it, as a tree in a pane (Tab completes the folder); a file opens its folder with the file at the cursor, as a path's Ctrl+click in the transcript does. Space, → and ← open and close folders, `-` collapses all, and Enter (or a double-click on a name) opens or closes a folder, or opens a file in its default app with the pane left open. Hidden, system and dot entries show only when *File browser/tree mode* is `show-hidden`; `.git` folders are left out. Works while a reply runs."),
         ]),
         new("/browser",
         [
@@ -135,6 +135,7 @@ public static class HelpCommands
         new("/copy",
         [
             new("/copy [<n>|all] [--thinking]", "Copy the last reply, the last *n*, or the whole transcript (`all`) to the clipboard as Markdown. `--thinking`, before or after, includes the model's thinking, quoted under `💭 **Thinking**` where it happened."),
+            new("/copy code [<n>]", "Copy code block *n* of the last reply, or its last block, as written. Blocks count top to bottom, top-level ones only (not inside a list or a quote), an empty one too. The ⧉ on a block's label copies it with a click."),
         ]),
         new("/cwd",
         [
