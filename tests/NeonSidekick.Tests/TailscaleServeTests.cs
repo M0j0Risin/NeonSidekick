@@ -4,6 +4,7 @@ using System.Net.NetworkInformation;
 using System.Runtime.Versioning;
 using System.Text;
 using NeonSidekick.Diagnostics;
+using NeonSidekick.Tests.Fakes;
 using NeonSidekick.WebUi;
 
 namespace NeonSidekick.Tests;
@@ -108,6 +109,61 @@ public sealed class TailscaleServeTests
     {
         Assert.Equal(new TailscaleServeResult(null, false, []), TailscaleServe.Match("{}", 8765), ResultComparer.Instance);
         Assert.Equal(new TailscaleServeResult(null, false, []), TailscaleServe.Match("null", 8765), ResultComparer.Instance);
+        Assert.False(TailscaleServe.Match("{}", 8765)!.InUse);   // nothing to hint at
+    }
+
+    /// <summary>2026-11-01, the review's P1-1: Funnel on any rule to the port warns, though the address shown is another rule's.</summary>
+    [Fact]
+    public void FunnelOnASecondRule_ToThePort_IsPublic()
+    {
+        const string two = """
+            {"TCP":{"443":{"HTTPS":true},"8443":{"HTTPS":true}},
+             "Web":{"h.ts.net:443":{"Handlers":{"/":{"Proxy":"http://127.0.0.1:8765"}}},
+                    "h.ts.net:8443":{"Handlers":{"/":{"Proxy":"http://127.0.0.1:8765"}}}},
+             "AllowFunnel":{"h.ts.net:8443":true}}
+            """;
+        var found = TailscaleServe.Match(two, 8765)!;
+        Assert.Equal("https://h.ts.net", found.Address);
+        Assert.True(found.Public);
+    }
+
+    /// <summary>2026-11-01, the review's P7-4: a rule to the port below the root gives no address, but its path for the hint.</summary>
+    [Fact]
+    public void ASubPathRule_IsReported()
+    {
+        const string sub = """{"TCP":{"443":{"HTTPS":true}},"Web":{"h.ts.net:443":{"Handlers":{"/neon":{"Proxy":"http://127.0.0.1:8765"}}}}}""";
+        var found = TailscaleServe.Match(sub, 8765)!;
+        Assert.Null(found.Address);
+        Assert.Equal("/neon", found.SubPath);
+        Assert.True(found.InUse);
+        Assert.Equal(8443, found.FreeServePort);   // 443 is taken by the sub-path's rule
+        Assert.Equal("Tailscale Serve forwards /neon to port 8765, but the Web UI lives at /: tailscale serve --bg --https=8443 8765 adds a rule at /.",
+            WebUiText.ServeSubPathHint("/neon", 8765, 8443));
+    }
+
+    /// <summary>2026-11-01, the review's P8-2: only 127.0.0.1, ::1 and localhost are this PC's Web UI (ListenLocalhost binds just those).</summary>
+    [Theory]
+    [InlineData("http://127.0.0.2:8765")]
+    [InlineData("http://127.1.2.3:8765")]
+    public void OtherLoopbackAddresses_DontCount(string proxy)
+    {
+        string json = """{"TCP":{"443":{"HTTPS":true}},"Web":{"h.ts.net:443":{"Handlers":{"/":{"Proxy":"PROXY"}}}}}""".Replace("PROXY", proxy, StringComparison.Ordinal);
+        Assert.Null(TailscaleServe.Match(json, 8765)!.Address);
+    }
+
+    /// <summary>2026-11-01, the review's P3-2: the suggested serve port is free in Serve and never the Web UI's own; none when all three are out.</summary>
+    [Fact]
+    public void TheSuggestedServePort_SkipsTakenPorts_AndTheWebUisOwn()
+    {
+        Assert.Equal(8443, TailscaleServe.Match(Spike, 9000)!.FreeServePort);   // the spike takes 443 and 8766
+        const string taken443 = """{"TCP":{"443":{"HTTPS":true}},"Web":{"h.ts.net:443":{"Handlers":{"/":{"Proxy":"http://127.0.0.1:9000"}}}}}""";
+        Assert.Equal(8443, TailscaleServe.Match(taken443, 8765)!.FreeServePort);
+        Assert.Equal(10000, TailscaleServe.Match(taken443, 8443)!.FreeServePort);   // the Web UI's own port is never suggested
+        const string all = """{"TCP":{"443":{"HTTPS":true},"8443":{"HTTPS":true}},"Foreground":{"s":{"TCP":{"10000":{"HTTPS":true}}}}}""";
+        Assert.Null(TailscaleServe.Match(all, 8765)!.FreeServePort);   // a Foreground rule's port is taken too
+        Assert.Equal("Tailscale Serve has no rule for port 8765.", WebUiText.ServeNoRuleHint(8765, null));
+        Assert.Equal("Tailscale Serve has no rule for port 8765: tailscale serve --bg 8765 adds one.", WebUiText.ServeNoRuleHint(8765, 443));
+        Assert.Equal("Tailscale Serve has no rule for port 8443: tailscale serve --bg --https=10000 8443 adds one.", WebUiText.ServeNoRuleHint(8443, 10000));
     }
 
     // ── The gate and the detector ───────────────────────────────────────────
@@ -124,13 +180,33 @@ public sealed class TailscaleServeTests
         Assert.False(TailscaleServe.TailscaleUp([]));
     }
 
+    /// <summary>2026-11-01, the review's P7-2: Tailscale's IPv6 range opens the gate; the tabs stay IPv4 (no ULA or tailnet IPv6 tab).</summary>
     [Fact]
-    public async Task TheDetector_AsksOnlyWhileTailscaleIsUp_AndLogsEachAnswerOnce()
+    public void TailscalesIpv6Range_OpensTheGate_ButTheTabsStayIpv4()
+    {
+        Assert.True(TailscaleServe.TailscaleUp([Adapter("Tailscale Tailscale Tunnel", "fd7a:115c:a1e0::1")]));
+        Assert.False(TailscaleServe.TailscaleUp([Adapter("Tailscale Tailscale Tunnel", "fd00::1")]));
+        Assert.True(WebUiController.IsTailnet(IPAddress.Parse("fd7a:115c:a1e0:ab12::5")));
+        Assert.True(WebUiController.IsTailnet(IPAddress.Parse("::ffff:100.64.1.2")));
+        Assert.False(WebUiController.IsTailnet(IPAddress.Parse("fd7a:115c:a1e1::1")));
+
+        WebUiAdapter[] both =
+        [
+            new(NetworkInterfaceType.Unknown, [IPAddress.Parse("100.78.20.125"), IPAddress.Parse("fd7a:115c:a1e0::1")], false, 0, "Tailscale Tailscale Tunnel"),
+            new(NetworkInterfaceType.Unknown, [IPAddress.Parse("192.168.1.217"), IPAddress.Parse("fd00::5")], false, 0, "Wi-Fi Intel"),
+        ];
+        Assert.Equal(["100.78.20.125", "192.168.1.217"], WebUiController.ChooseAddresses(both).Select(a => a.Host));
+    }
+
+    /// <summary>The detector: the gate, the 5 s reuse by the clock's timestamps, and one log line per change of answer (2026-11-01, the review's P2-5, P5-2, P9-3).</summary>
+    [Fact]
+    public async Task TheDetector_AsksOnlyWhileTailscaleIsUp_KeepsAnAnswer5s_AndLogsEachChangeOnce()
     {
         var adapters = new List<WebUiAdapter>();
         int asked = 0;
+        var time = new ManualTimeProvider();
         var answer = new TailscaleServeResult("https://h.ts.net", false, []);
-        var detector = new TailscaleServeDetector(() => adapters, (_, _) => { asked++; return Task.FromResult<TailscaleServeResult?>(answer); });
+        var detector = new TailscaleServeDetector(() => adapters, (_, _) => { asked++; return Task.FromResult(answer); }, time);
         var lines = new List<string>();
         void Record(DiagnosticEvent e) => lines.Add(e.Message);
         DiagnosticLog.Emitted += Record;
@@ -144,13 +220,21 @@ public sealed class TailscaleServeTests
             adapters.Add(Adapter("Tailscale", "100.78.20.125"));
             Assert.Equal("https://h.ts.net", (await detector.FindAsync(8765, CancellationToken.None))!.Address);
             Assert.Equal("https://h.ts.net", (await detector.FindAsync(8765, CancellationToken.None))!.Address);
-            Assert.Equal(2, asked);
-            Assert.Equal(2, lines.Count);   // the address once
+            Assert.Equal(1, asked);   // kept 5 s
+            Assert.Equal(2, lines.Count);
             Assert.Equal(WebUiText.HttpsAddressLogLine("https://h.ts.net", false), lines[^1]);
 
-            answer = new TailscaleServeResult(null, false, [8766]);
+            time.Advance(TailscaleServeDetector.KeepFor + TimeSpan.FromSeconds(1));
             await detector.FindAsync(8765, CancellationToken.None);
-            Assert.Equal(WebUiText.ServeNoRuleLogLine(8765, [8766]), lines[^1]);
+            Assert.Equal(2, asked);
+            Assert.Equal(2, lines.Count);   // the same answer: not written again
+
+            await detector.FindAsync(8766, CancellationToken.None);
+            Assert.Equal(3, asked);   // another port replaces the slot
+
+            answer = new TailscaleServeResult(null, false, [8766]);
+            time.Advance(TailscaleServeDetector.KeepFor + TimeSpan.FromSeconds(1));
+            await detector.FindAsync(8765, CancellationToken.None);
             Assert.Equal("Tailscale Serve: no rule for port 8765 (rules for 8766).", lines[^1]);
             Assert.DoesNotContain(lines, l => l.Contains("?t=", StringComparison.Ordinal));
         }
@@ -158,6 +242,63 @@ public sealed class TailscaleServeTests
         {
             DiagnosticLog.Emitted -= Record;
         }
+    }
+
+    /// <summary>2026-11-01, the review's P4-4, P9-3, P2-1: a failure is never kept, its line is written once, and a throwing ask is a failure.</summary>
+    [Fact]
+    public async Task TheDetector_KeepsNoFailure_LogsItOnce_AndTurnsAThrowIntoOne()
+    {
+        int asked = 0;
+        bool fail = true;
+        var detector = new TailscaleServeDetector(() => [Adapter("Tailscale", "100.78.20.125")], (_, _) =>
+        {
+            asked++;
+            return fail ? throw new InvalidOperationException("odd") : Task.FromResult(new TailscaleServeResult("https://h.ts.net", false, []));
+        }, new ManualTimeProvider());
+        var lines = new List<string>();
+        void Record(DiagnosticEvent e) => lines.Add(e.Message);
+        DiagnosticLog.Emitted += Record;
+        try
+        {
+            var first = await detector.FindAsync(8765, CancellationToken.None);
+            var second = await detector.FindAsync(8765, CancellationToken.None);
+            Assert.Equal(2, asked);   // not kept
+            Assert.Equal("an error (InvalidOperationException)", first!.Failure);
+            Assert.Equal(first.Failure, second!.Failure);
+            Assert.Equal([WebUiText.ServeAskFailedLogLine("an error (InvalidOperationException)")], lines);
+
+            fail = false;
+            Assert.Equal("https://h.ts.net", (await detector.FindAsync(8765, CancellationToken.None))!.Address);
+            Assert.Equal(2, lines.Count);
+        }
+        finally
+        {
+            DiagnosticLog.Emitted -= Record;
+        }
+    }
+
+    /// <summary>2026-11-01, the review's P1-16: one ask in flight is shared, and one caller's cancel leaves the other's answer.</summary>
+    [Fact]
+    public async Task TheDetector_SharesOneAskInFlight_AndOneCallersCancel_LeavesTheOthersAnswer()
+    {
+        int asked = 0;
+        var pending = new TaskCompletionSource<TailscaleServeResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var detector = new TailscaleServeDetector(() => [Adapter("Tailscale", "100.78.20.125")], (_, token) =>
+        {
+            asked++;
+            Assert.False(token.CanBeCanceled);   // under no caller's token
+            return pending.Task;
+        }, new ManualTimeProvider());
+
+        using var cancel = new CancellationTokenSource();
+        var first = detector.FindAsync(8765, cancel.Token);
+        var second = detector.FindAsync(8765, CancellationToken.None);
+        await cancel.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => first);
+        pending.SetResult(new TailscaleServeResult("https://h.ts.net", false, []));
+
+        Assert.Equal("https://h.ts.net", (await second)!.Address);
+        Assert.Equal(1, asked);
     }
 
     // ── The pipe client ─────────────────────────────────────────────────────
@@ -170,12 +311,14 @@ public sealed class TailscaleServeTests
     private static async Task ServeOnceAsync(string name, string status, string body, Action<string> seen)
     {
         await using var server = new NamedPipeServerStream(name, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
-        await server.WaitForConnectionAsync();
+        // Bounded (2026-11-01, the review's P7-6): a client that never connects fails the test instead of hanging it.
+        using var wait = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await server.WaitForConnectionAsync(wait.Token);
         var head = new StringBuilder();
         var buffer = new byte[1024];
         while (!head.ToString().Contains("\r\n\r\n", StringComparison.Ordinal))
         {
-            int read = await server.ReadAsync(buffer);
+            int read = await server.ReadAsync(buffer, wait.Token);
             if (read == 0)
             {
                 break;
@@ -187,10 +330,20 @@ public sealed class TailscaleServeTests
         seen(head.ToString());
         byte[] bytes = Encoding.UTF8.GetBytes(body);
         string response = "HTTP/1.1 " + status + "\r\nContent-Type: application/json\r\nContent-Length: " + bytes.Length + "\r\nConnection: close\r\n\r\n";
-        await server.WriteAsync(Encoding.ASCII.GetBytes(response));
-        await server.WriteAsync(bytes);
-        await server.FlushAsync();
-        server.WaitForPipeDrain();
+        await server.WriteAsync(Encoding.ASCII.GetBytes(response), wait.Token);
+        await server.WriteAsync(bytes, wait.Token);
+        await server.FlushAsync(wait.Token);
+        // The client closes once it has read the answer (Connection: close); no WaitForPipeDrain, which blocks unbounded (the review's P7-7).
+        try
+        {
+            while (await server.ReadAsync(buffer, wait.Token) > 0)
+            {
+            }
+        }
+        catch (IOException)
+        {
+            // The client's end went away: done.
+        }
     }
 
     [WindowsFact]
@@ -213,26 +366,29 @@ public sealed class TailscaleServeTests
 
     [WindowsFact]
     [SupportedOSPlatform("windows")]
-    public async Task TheClient_A401_OrNotTheRules_IsNull()
+    public async Task TheClient_A401_OrNotTheRules_IsAFailure()
     {
-        foreach (var (status, body) in new[] { ("401 Unauthorized", "Unable to impersonate"), ("200 OK", "not json") })
+        foreach (var (status, body, failure) in new[] { ("401 Unauthorized", "Unable to impersonate", "HTTP 401"), ("200 OK", "not json", WebUiText.ServeFailureNotRules) })
         {
             string name = "neon-test-" + Guid.NewGuid().ToString("N");
             var serving = ServeOnceAsync(name, status, body, _ => { });
             using var client = new TailscaleServeClient(name);
-            Assert.Null(await client.FindAsync(8765, CancellationToken.None));
+            var result = await client.FindAsync(8765, CancellationToken.None);
+            Assert.Null(result.Address);
+            Assert.Equal(failure, result.Failure);
             await serving;
         }
     }
 
     [WindowsFact]
     [SupportedOSPlatform("windows")]
-    public async Task TheClient_WithNoPipe_IsNull_WithinTheConnectBudget_AndTheCallersCancelThrows()
+    public async Task TheClient_WithNoPipe_IsAFailure_WithinTheRequestBudget_AndTheCallersCancelThrows()
     {
         using var client = new TailscaleServeClient("neon-test-" + Guid.NewGuid().ToString("N"));
         var started = System.Diagnostics.Stopwatch.StartNew();
-        Assert.Null(await client.FindAsync(8765, CancellationToken.None));
-        Assert.True(started.Elapsed < TailscaleServeClient.RequestTimeout + TimeSpan.FromSeconds(1), started.Elapsed.ToString());
+        Assert.NotNull((await client.FindAsync(8765, CancellationToken.None)).Failure);
+        // Widened (2026-11-01, the review's P6-4): a slow runner's scheduling is no failure of the budget.
+        Assert.True(started.Elapsed < TailscaleServeClient.RequestTimeout + TimeSpan.FromSeconds(5), started.Elapsed.ToString());
 
         using var cancel = new CancellationTokenSource();
         cancel.Cancel();
@@ -254,6 +410,7 @@ public sealed class TailscaleServeTests
     [InlineData("https://h.ts.net/#top", false)]
     [InlineData("https://me:pw@h.ts.net", false)]
     [InlineData("h.ts.net", false)]
+    [InlineData("https://h.ts.net:0", false)]
     [InlineData("", false)]
     public void TheSetting_TakesAutoOffOrAnHttpsAddress(string text, bool valid) => Assert.Equal(valid, WebUiHttpsSetting.IsValid(text));
 
@@ -265,12 +422,17 @@ public sealed class TailscaleServeTests
         Assert.Equal("https://h.ts.net", WebUiHttpsSetting.Address("https://H.ts.net/"));
         Assert.Equal("https://proxy.lan:8443", WebUiHttpsSetting.Address("https://proxy.lan:8443"));
         Assert.Equal("https://h.ts.net", WebUiHttpsSetting.Address("https://h.ts.net:443"));
-        Assert.True(WebUiHttpsSetting.Detects("auto"));
-        Assert.True(WebUiHttpsSetting.Detects("nonsense"));   // a hand-broken saved value reads as auto
-        Assert.False(WebUiHttpsSetting.Detects("OFF"));
+        Assert.True(WebUiHttpsSetting.IsAuto("AUTO"));
+        Assert.True(WebUiHttpsSetting.IsAuto(" "));   // blank is auto
+        Assert.False(WebUiHttpsSetting.IsAuto("nonsense"));   // detected as auto is, with the pane's hint (2026-11-01)
         Assert.True(WebUiHttpsSetting.IsOff("OFF"));
-        Assert.False(WebUiHttpsSetting.Detects("https://h.ts.net"));
-        Assert.Equal("Web UI HTTPS address must be auto, off, or an https://host[:port] address; keeping auto.", WebUiText.HttpsAddressInvalid("auto"));
+        Assert.False(WebUiHttpsSetting.IsAuto("https://h.ts.net"));
+        Assert.Equal("must be auto, off, or an https://host[:port] address of at most 99 characters", App.SettingsMenu.WebUiHttpsAddressError);
+
+        // At most 99 characters as used (2026-11-01, the review's P8-1).
+        string longest = "https://" + new string('a', WebUiHttpsSetting.MaxAddressChars - "https://".Length);
+        Assert.Equal(longest, WebUiHttpsSetting.Address(longest));
+        Assert.Null(WebUiHttpsSetting.Address(longest + "a"));
     }
 
     // ── The links ───────────────────────────────────────────────────────────
@@ -282,45 +444,65 @@ public sealed class TailscaleServeTests
         Assert.Equal("https://h.ts.net:8766/signin?t=tok", link);
         Assert.Equal("https://h.ts.net/signin?t=tok", WebUiAuth.SignInLinkAt("https://h.ts.net/", "tok"));
         Assert.Equal("https://h.ts.net/signin?once=c", WebUiAuth.OnceLinkAt("https://h.ts.net", "c"));
-        Assert.True(WebUiAuth.IsSignInUrl(link));
-        Assert.True(WebUiAuth.IsSignInUrl("https://h.ts.net/signin?once=c"));
+        string token = WebUiAuth.NewToken();
+        Assert.True(WebUiAuth.IsSignInUrl(WebUiAuth.SignInLinkAt("https://h.ts.net:8766", token)));
+        Assert.True(WebUiAuth.IsSignInUrl(WebUiAuth.OnceLinkAt("https://h.ts.net", new WebUiOneTimeCodes(TimeProvider.System).Mint())));
         Assert.Equal("https://h.ts.net:8766/signin?t=…", WebUiAuth.Redacted(link));
         Assert.Equal("http://192.168.1.2:8765/signin?t=tok", WebUiAuth.SignInLink("192.168.1.2", 8765, "tok"));   // unchanged
         Assert.Equal("http://[::1]:8765/", WebUiAuth.Address("::1", 8765));
     }
 
+    /// <summary>2026-11-01, the review's P1-6: a stranger's https sign-in page isn't ours unless its value is one of ours in shape, under its whole key.</summary>
+    [Fact]
+    public void AStrangersHttpsSignInPage_IsNotASignInLink()
+    {
+        string token = WebUiAuth.NewToken();
+        Assert.False(WebUiAuth.IsSignInUrl("https://shop.example/signin?t=abc"));
+        Assert.False(WebUiAuth.IsSignInUrl("https://shop.example/signin?xt=" + token));
+        Assert.False(WebUiAuth.IsSignInUrl("https://shop.example/signin?once=c"));
+        Assert.True(WebUiAuth.IsSignInUrl("https://shop.example/signin?a=1&t=" + token));
+        Assert.True(WebUiAuth.IsSignInUrl("http://192.168.1.2:8765/signin?t=abc"));   // http as before
+    }
+
     [Fact]
     public void TheHttpsTab_IsTitledHttps_AndHeadedByWhereItsAddressCameFrom()
     {
-        var link = new WebUiLink("https://h.ts.net/signin?t=x", false, true);
+        var link = new WebUiLink("https://h.ts.net/signin?t=x", WebUiLinkKind.Https);
         Assert.Equal("HTTPS", WebUiText.LinkTabTitle(link));
-        Assert.Equal("100.78.20.125", WebUiText.LinkTabTitle(new WebUiLink("http://100.78.20.125:8765/signin?t=x", true)));
-        Assert.Equal(WebUiLinkKind.Https, WebUiText.KindOf(link));
+        Assert.Equal("100.78.20.125", WebUiText.LinkTabTitle(new WebUiLink("http://100.78.20.125:8765/signin?t=x", WebUiLinkKind.Tailscale)));
 
         var detected = new WebUiHttps("https://h.ts.net", true, false);
         Assert.Equal(WebUiText.HttpsDetectedNote + "\ns\n\n" + WebUiText.TailscaleScanHint + "\n", WebUiText.LinkTabText("s", WebUiLinkKind.Https, detected));
+        // Funnel's note follows the reach (2026-11-01, the review's P1-3): local lets the internet in, lan refuses it.
         Assert.Equal(WebUiText.HttpsDetectedNote + "\n" + WebUiText.FunnelNote + "\ns\n\n" + WebUiText.TailscaleScanHint + "\n",
-            WebUiText.LinkTabText("s", WebUiLinkKind.Https, detected with { Public = true }));
+            WebUiText.LinkTabText("s", WebUiLinkKind.Https, detected with { Public = true }, WebUiAudience.Local));
+        Assert.Equal(WebUiText.HttpsDetectedNote + "\n" + WebUiText.FunnelRefusedNote + "\ns\n\n" + WebUiText.TailscaleScanHint + "\n",
+            WebUiText.LinkTabText("s", WebUiLinkKind.Https, detected with { Public = true }, WebUiAudience.LocalAreaNetwork));
+        Assert.Equal("Funnel is on: anyone on the internet can reach the Web UI. The token is all that keeps them out.", WebUiText.FunnelNote);
+        Assert.Equal("Funnel is on for the Web UI, but Web UI reach lan refuses requests from the internet.", WebUiText.FunnelRefusedNote);
         Assert.StartsWith(WebUiText.HttpsTypedNote + "\n", WebUiText.LinkTabText("s", WebUiLinkKind.Https, new WebUiHttps("https://p.lan", false, true)), StringComparison.Ordinal);   // a typed one is never judged public
         Assert.DoesNotContain(WebUiText.FunnelNote, WebUiText.LinkTabText("s", WebUiLinkKind.Https, new WebUiHttps("https://p.lan", false, true)), StringComparison.Ordinal);
 
-        // Tailscale's tab beside an HTTPS tab is the fallback (pass 12); without one, as before.
+        // Tailscale's tab beside a detected HTTPS tab is the fallback (pass 12); beside a typed one (2026-11-01, the review's P4-2) or none, as before.
         Assert.StartsWith(WebUiText.TailscaleFallbackNote + "\n", WebUiText.LinkTabText("s", WebUiLinkKind.Tailscale, detected), StringComparison.Ordinal);
+        Assert.StartsWith(WebUiText.TailscaleNote + "\n", WebUiText.LinkTabText("s", WebUiLinkKind.Tailscale, new WebUiHttps("https://p.lan", false, false)), StringComparison.Ordinal);
         Assert.StartsWith(WebUiText.TailscaleNote + "\n", WebUiText.LinkTabText("s", WebUiLinkKind.Tailscale), StringComparison.Ordinal);
         Assert.Equal("Tailscale over plain http: works on your tailnet too, if the HTTPS address doesn't.", WebUiText.TailscaleFallbackNote);
         Assert.Equal("HTTPS through Tailscale Serve: works from any device on your tailnet, at home or away.", WebUiText.HttpsDetectedNote);
     }
 
     [Fact]
-    public void TheStatusLines_SayLocalPlusHttps_AndNameServesOtherPorts()
+    public void TheStatusLines_SayLocalPlusHttps_AndEndWithTheHint()
     {
         var https = new WebUiHttps("https://h.ts.net", true, false);
         Assert.Equal("Reach: local — localhost only, plus the HTTPS address", WebUiText.StatusLines(true, true, 8765, WebUiAudience.Local, https)[2]);
         Assert.Equal("Reach: local — localhost only", WebUiText.StatusLines(true, true, 8765, WebUiAudience.Local)[2]);
-        var lines = WebUiText.StatusLines(true, true, 8766, WebUiAudience.LocalAreaNetwork, null, [8765]);
-        Assert.Equal("Tailscale Serve forwards to port 8765, not 8766: tailscale serve --bg --https=8766 8766 adds this one.", lines[^1]);
-        Assert.Equal("Tailscale Serve forwards to ports 1, 2, 3, not 8766: tailscale serve --bg --https=8766 8766 adds this one.", WebUiText.ServeOtherPort([4, 3, 2, 1], 8766));
-        Assert.Equal(3, WebUiText.StatusLines(true, true, 8766, WebUiAudience.LocalAreaNetwork, https, [8765]).Count);   // an address: no hint
+        var lines = WebUiText.StatusLines(true, true, 8766, WebUiAudience.LocalAreaNetwork, null, WebUiText.ServeNoRuleHint(8766, 443));
+        Assert.Equal("Tailscale Serve has no rule for port 8766: tailscale serve --bg 8766 adds one.", lines[^1]);
+        Assert.Equal(3, WebUiText.StatusLines(true, true, 8766, WebUiAudience.LocalAreaNetwork, https).Count);   // no hint: three lines
+        Assert.Equal(5, WebUiText.StatusLines(true, true, 8766, WebUiAudience.LocalAreaNetwork, null, "a\nb").Count);   // a line per \n
+        Assert.Equal("Tailscale Serve couldn't be asked (HTTP 403): no HTTPS tab.", WebUiText.ServeAskFailedHint(WebUiText.ServeFailureStatus(403)));
+        Assert.Equal("Web UI HTTPS address isn't auto, off or an https address: detecting instead.", WebUiText.HttpsSettingBrokenHint);
     }
 
     [Fact]
@@ -328,9 +510,9 @@ public sealed class TailscaleServeTests
     {
         WebUiLink[] links =
         [
-            new("https://h.ts.net/signin?t=x", false, true),
-            new("http://100.78.20.125:8765/signin?t=x", true),
-            new("http://192.168.1.217:8765/signin?t=x", false),
+            new("https://h.ts.net/signin?t=x", WebUiLinkKind.Https),
+            new("http://100.78.20.125:8765/signin?t=x", WebUiLinkKind.Tailscale),
+            new("http://192.168.1.217:8765/signin?t=x"),
         ];
         var lines = WebUiText.PaneLines(true, true, 8765, WebUiAudience.LocalAreaNetwork, links, new WebUiHttps("https://h.ts.net", true, false));
         Assert.Contains(lines, l => l.StartsWith("Open one of these in the browser (a phone on the same network, or anywhere on your tailnet for the ones marked HTTPS and Tailscale).", StringComparison.Ordinal));
@@ -339,7 +521,37 @@ public sealed class TailscaleServeTests
         Assert.Equal(" (HTTPS)", WebUiText.HttpsMark);
 
         var typed = WebUiText.PaneLines(true, true, 8765, WebUiAudience.LocalAreaNetwork, links, new WebUiHttps("https://p.lan", false, false));
-        Assert.Contains(typed, l => l.StartsWith("Open one of these in the browser (a phone on the same network, the one marked HTTPS wherever your proxy reaches, and your tailnet for the one marked Tailscale).", StringComparison.Ordinal));
+        Assert.Contains(typed, l => l.StartsWith("Open one of these in the browser (a phone on the same network, the one marked HTTPS wherever your proxy reaches, and on your tailnet for the one marked Tailscale).", StringComparison.Ordinal));
+    }
+
+    /// <summary>The lead from parts (2026-11-01, the review's P1-13, P1-4): "this computer" under local, Serve's or a typed HTTPS link, Tailscale's.</summary>
+    [Fact]
+    public void TheLead_IsBuiltFromParts()
+    {
+        var detected = new WebUiHttps("https://h.ts.net", true, false);
+        var typed = new WebUiHttps("https://p.lan", false, false);
+        Assert.Equal("Open one of these in the browser (this computer, or anywhere on your tailnet for the one marked HTTPS). The link signs it in and leaves the address bar at once:",
+            WebUiText.Lead(WebUiAudience.Local, detected, tailscale: false));
+        Assert.Equal("Open one of these in the browser (this computer, or the one marked HTTPS wherever your proxy reaches). The link signs it in and leaves the address bar at once:",
+            WebUiText.Lead(WebUiAudience.Local, typed, tailscale: false));
+        Assert.Equal("Open one of these in the browser (a phone on the same network, or anywhere on your tailnet for the one marked HTTPS). The link signs it in and leaves the address bar at once:",
+            WebUiText.Lead(WebUiAudience.LocalAreaNetwork, detected, tailscale: false));
+        Assert.Equal("Open one of these in the browser (this computer). The link signs it in and leaves the address bar at once:",
+            WebUiText.Lead(WebUiAudience.Local, null, tailscale: false));
+    }
+
+    /// <summary>2026-11-01, the review's P3-1: without a pane, a funneled HTTPS link is marked and followed by the note its reach picks.</summary>
+    [Fact]
+    public void WithoutAPane_AFunneledLink_IsMarked_AndNoted()
+    {
+        var funneled = new WebUiHttps("https://h.ts.net", true, true);
+        WebUiLink[] links = [new("https://h.ts.net/signin?t=x", WebUiLinkKind.Https), new("http://localhost:8765/signin?t=x")];
+        var local = WebUiText.PaneLines(true, true, 8765, WebUiAudience.Local, links, funneled);
+        Assert.Contains("  https://h.ts.net/signin?t=x" + WebUiText.FunnelMark, local);
+        Assert.Contains(WebUiText.FunnelNote, local);
+        var lan = WebUiText.PaneLines(true, true, 8765, WebUiAudience.LocalAreaNetwork, links, funneled);
+        Assert.Contains("  https://h.ts.net/signin?t=x" + WebUiText.HttpsMark, lan);
+        Assert.Contains(WebUiText.FunnelRefusedNote, lan);
     }
 
     // ── Requests through a proxy ────────────────────────────────────────────
@@ -367,7 +579,7 @@ public sealed class TailscaleServeTests
     [Fact]
     public void OtherProxies_AreNamed_TheLastForwardedEntryCounts_AndOnlyLoopbackIsTrusted()
     {
-        Assert.Equal("the proxy at evil-ts.net", WebUiOrigin.Of(IPAddress.Loopback, "evil-ts.net", "100.64.1.2", null).Through);
+        Assert.Equal("the proxy at evil-ts.net", WebUiOrigin.Of(IPAddress.Loopback, "evil-ts.net", "192.168.1.50", null).Through);
         Assert.Equal("the proxy at caddy.lan", WebUiOrigin.Of(IPAddress.Loopback, "caddy.lan", "192.168.1.50", null).Through);
         Assert.Equal(IPAddress.Parse("192.168.1.50"), WebUiOrigin.Of(IPAddress.Loopback, "caddy.lan", "6.6.6.6, 192.168.1.50", null).Remote);
         Assert.Equal(IPAddress.Loopback, WebUiOrigin.Of(IPAddress.Loopback, "h.ts.net", "not an address", null).Remote);
@@ -376,12 +588,37 @@ public sealed class TailscaleServeTests
 
         var lan = IPAddress.Parse("192.168.1.40");
         Assert.Equal(new WebUiOrigin(lan), WebUiOrigin.Of(lan, "h.ts.net", "100.64.1.2", "?1"));   // a LAN browser's headers are ignored
-        Assert.Equal(new WebUiOrigin(IPAddress.Loopback), WebUiOrigin.Of(IPAddress.Loopback, null, "100.64.1.2", null));   // no proxy: /webui browser
+        Assert.Equal(new WebUiOrigin(IPAddress.Loopback), WebUiOrigin.Of(IPAddress.Loopback, null, null, null));   // no proxy: /webui browser
 
         string through = WebUiOrigin.Of(IPAddress.Loopback, "bad\u0007[red]host", "10.0.0.2", null).Through!;
         Assert.DoesNotContain('\u0007', through);
         Assert.Contains("[red]", through, StringComparison.Ordinal);   // printed as written: notices are escaped
         Assert.True(WebUiOrigin.Of(IPAddress.Loopback, new string('a', 300), "10.0.0.2", null).Through!.Length <= "the proxy at ".Length + WebUiOrigin.MaxHostChars + 1);
+    }
+
+    /// <summary>2026-11-01, the review's P2-3, P3-4, P1-7, P7-5: the forwarded headers' other shapes.</summary>
+    [Fact]
+    public void TheForwardedHeaders_OtherShapes_AreRead()
+    {
+        // X-Forwarded-For without a host: a proxy on this computer.
+        Assert.Equal(new WebUiOrigin(IPAddress.Parse("100.64.1.2"), WebUiText.ProxyOnThisComputer), WebUiOrigin.Of(IPAddress.Loopback, null, "100.64.1.2", null));
+        Assert.Equal("(" + WebUiText.Glyph + "a browser signed in to the Web UI from 100.64.1.2 through a proxy on this computer)",
+            WebUiText.SignedInNotice(WebUiOrigin.Of(IPAddress.Loopback, "", "100.64.1.2", null)));
+
+        // An entry with a port, IPv4 or bracketed IPv6; a bare IPv6 address is never cut at its last colon.
+        Assert.Equal(IPAddress.Parse("100.64.1.2"), WebUiOrigin.Of(IPAddress.Loopback, "h.ts.net", "100.64.1.2:5555", null).Remote);
+        Assert.Equal(IPAddress.Parse("fd7a:115c:a1e0::1"), WebUiOrigin.Of(IPAddress.Loopback, "h.ts.net", "[fd7a:115c:a1e0::1]:443", null).Remote);
+        Assert.Equal(IPAddress.Parse("fd7a:115c:a1e0::1"), WebUiOrigin.Of(IPAddress.Loopback, "h.ts.net", "fd7a:115c:a1e0::1", null).Remote);
+        Assert.Equal(IPAddress.Loopback, WebUiOrigin.Of(IPAddress.Loopback, "h.ts.net", "12345", null).Remote);   // a bare number is no address
+
+        // The host's first entry alone.
+        Assert.Equal(WebUiOrigin.TailscaleServeName, WebUiOrigin.Of(IPAddress.Loopback, "h.ts.net, caddy.lan", "192.168.1.5", null).Through);
+        Assert.Equal("the proxy at caddy.lan", WebUiOrigin.Of(IPAddress.Loopback, "caddy.lan:8443, h.ts.net", "192.168.1.5", null).Through);
+
+        // A MagicDNS short name is Serve when the address is a tailnet one.
+        Assert.Equal(WebUiOrigin.TailscaleServeName, WebUiOrigin.Of(IPAddress.Loopback, "hoopdiethink", "100.64.1.2", null).Through);
+        Assert.Equal(WebUiOrigin.TailscaleServeName, WebUiOrigin.Of(IPAddress.Loopback, "hoopdiethink:8766", "fd7a:115c:a1e0::9", null).Through);
+        Assert.Equal("the proxy at hoopdiethink", WebUiOrigin.Of(IPAddress.Loopback, "hoopdiethink", "192.168.1.5", null).Through);
     }
 
     /// <summary>Records compared by value, their lists element by element.</summary>

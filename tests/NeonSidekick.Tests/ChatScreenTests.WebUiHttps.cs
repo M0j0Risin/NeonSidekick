@@ -5,8 +5,9 @@ namespace NeonSidekick.Tests;
 
 /// <summary>
 /// <c>/webui</c>'s HTTPS address on the screen (2026-10-31, plan in-the-past-we-ve-iterative-seahorse): Tailscale Serve's address (a fake seam)
-/// first, copied by <c>/webui copy</c> and the pane's copy, <c>off</c> and a typed address, the 5 s reuse, the other-port hint, and the shown tab
-/// kept by its title when the HTTPS tab comes between two passes.
+/// first, copied by <c>/webui copy</c> and the pane's copy, <c>off</c> and a typed address, the hints (another port, a failed ask, a broken saved
+/// value), Funnel's note after a copy, and the shown tab kept by its title when the HTTPS tab comes between two passes. The 5 s reuse is the
+/// detector's (2026-11-01, the review's P2-9: <c>TailscaleServeTests</c>); the fake here answers every pass.
 /// </summary>
 public partial class ChatScreenTests
 {
@@ -43,26 +44,20 @@ public partial class ChatScreenTests
 
         Assert.Equal(2, _copied.Count);
         Assert.All(_copied, c => Assert.StartsWith(ServeAddress + "/signin?t=", c, StringComparison.Ordinal));
-        Assert.Equal(1, calls());   // the second within 5 s reuses the first answer
+        Assert.Equal(2, calls());   // the screen keeps nothing: the detector does (2026-11-01)
     }
 
     [Fact]
-    public async Task ServesAnswer_IsAskedAgain_After5Seconds()
+    public async Task WebUiCopy_OfAFunneledHttpsLink_SaysSoAfterTheCopy()
     {
         HttpsReady();
-        var calls = ServeAnswers(_ => new TailscaleServeResult(ServeAddress, false, []));
-        var input = WhenIdle(
-            i => PushLine(i, "/webui copy"),
-            i =>
-            {
-                _time.Advance(App.ChatScreen.ServeCacheTime + TimeSpan.FromSeconds(1));
-                PushLine(i, "/webui copy");
-            },
-            i => PushLine(i, "/exit"));
+        ServeAnswers(_ => new TailscaleServeResult(ServeAddress, true, []));
+        var input = WhenIdle(i => PushLine(i, "/webui copy"), i => PushLine(i, "/exit"));
 
-        await RunAsync(input);
+        string output = await RunAsync(input);
 
-        Assert.Equal(2, calls());
+        Assert.StartsWith(ServeAddress + "/signin?t=", Assert.Single(_copied), StringComparison.Ordinal);
+        Assert.Contains(WebUiText.FunnelNote, output);   // local: Funnel's requests are let in
     }
 
     [Fact]
@@ -111,7 +106,7 @@ public partial class ChatScreenTests
     public async Task ARuleForAnotherPort_IsNamedInThePanesStatus()
     {
         HttpsReady();
-        ServeAnswers(_ => new TailscaleServeResult(null, false, [8766]));
+        ServeAnswers(_ => new TailscaleServeResult(null, false, [8766], FreeServePort: 443));
         var input = WhenIdle(
             i =>
             {
@@ -122,12 +117,52 @@ public partial class ChatScreenTests
 
         string output = await RunAsync(input);
 
-        Assert.Contains(WebUiText.ServeOtherPort([8766], AppSettingsDataDefaults.WebUiPort), output);
+        Assert.Contains(WebUiText.ServeNoRuleHint(AppSettingsDataDefaults.WebUiPort, 443), output);
+        Assert.Contains("Tailscale Serve has no rule for port 8765: tailscale serve --bg 8765 adds one.", output);
         Assert.DoesNotContain(WebUiText.HttpsTabTitle + " · ", output);
     }
 
+    [Fact]
+    public async Task AFailedAsk_AndABrokenSavedValue_AreHintedAt()
+    {
+        HttpsReady("htps:/oops");
+        var calls = ServeAnswers(_ => new TailscaleServeResult(null, false, [], Failure: WebUiText.ServeFailureStatus(403)));
+        var input = WhenIdle(
+            i =>
+            {
+                PushLine(i, "/webui");
+                i.Push(Keys.Escape);
+            },
+            i => PushLine(i, "/exit"));
+
+        string output = await RunAsync(input);
+
+        Assert.True(calls() >= 1);   // a broken value is detected as auto is
+        Assert.Contains("Tailscale Serve couldn't be asked (HTTP 403): no HTTPS tab.", output);
+        Assert.Contains(WebUiText.HttpsSettingBrokenHint, output);
+    }
+
+    [Fact]
+    public async Task ATypedAddress_CountsOnlyWhileServing()
+    {
+        HttpsReady("https://proxy.example:8443");
+        _settings.Update(d => d.WebUi = false);
+        var input = WhenIdle(
+            i =>
+            {
+                PushLine(i, "/webui");
+                i.Push(Keys.Escape);
+            },
+            i => PushLine(i, "/exit"));
+
+        string output = await RunAsync(input);
+
+        Assert.Contains("Reach: local — localhost only", output);
+        Assert.DoesNotContain(WebUiText.LocalPlusHttps, output);   // not serving: no HTTPS address, typed or found
+    }
+
     /// <summary>
-    /// Pass 51: the HTTPS tab appears between two passes (the 5 s reuse ran out during the copy) while the localhost tab is shown, so the pane
+    /// Pass 51: the HTTPS tab appears between two passes (Serve answered between them) while the localhost tab is shown, so the pane
     /// reopens on the localhost tab by its title, not on the index that now holds the HTTPS one; its copy copies localhost's link again.
     /// </summary>
     [Fact]
@@ -135,7 +170,6 @@ public partial class ChatScreenTests
     {
         HttpsReady();
         var calls = ServeAnswers(n => n == 1 ? null : new TailscaleServeResult(ServeAddress, false, []));
-        _onCopy = () => _time.Advance(App.ChatScreen.ServeCacheTime + TimeSpan.FromSeconds(1));
         var input = WhenIdle(
             i =>
             {

@@ -2369,7 +2369,7 @@ internal sealed partial class ChatScreen
                     }
                     else
                     {
-                        _ = OpenWebUiQuietlyAsync(WebUi.WebUiText.LoopbackHost, _flow, https: false);
+                        _ = OpenWebUiQuietlyAsync(baseAddress: null, _flow);
                     }
                 });
                 return true;

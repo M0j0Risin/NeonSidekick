@@ -35,60 +35,49 @@ internal sealed partial class ChatScreen
     /// <summary>The line sent last came from the page (2026-10-14): withdrawn, it goes back to the page's draft, never the PC's row.</summary>
     private bool _sentFromWeb;
 
-    /// <summary>Tailscale Serve's rules for a port (2026-10-31): the detector in the app on Windows, a fake in tests, null elsewhere.</summary>
+    /// <summary>
+    /// Tailscale Serve's rules for a port (2026-10-31): the detector in the app on Windows, a fake in tests, null elsewhere. The detector keeps
+    /// the answer and writes the log (2026-11-01, the review's P2-9: the screen's own cache is gone).
+    /// </summary>
     private readonly Func<int, CancellationToken, Task<TailscaleServeResult?>>? _tailscaleServe;
 
-    /// <summary>How long Serve's answer for a port is reused: the pane's reopen after a button press doesn't ask again.</summary>
-    internal static readonly TimeSpan ServeCacheTime = TimeSpan.FromSeconds(5);
-
-    private readonly object _serveCacheGate = new();
-    private (int Port, DateTimeOffset At, TailscaleServeResult? Result)? _serveCache;
-
     /// <summary>
-    /// The HTTPS address <c>/webui</c> offers first (2026-10-31, the user's ask), and the other ports Serve forwards to when it offers none:
-    /// <i>Web UI HTTPS address</i> <c>off</c> none; a typed address as typed, never checked (a wrong one fails on the phone); <c>auto</c> while
-    /// serving, Tailscale Serve's rule for the port, asked through <see cref="_tailscaleServe"/> and kept <see cref="ServeCacheTime"/> per port
-    /// behind a lock (the pane also opens over a reply, and <c>/webui copy</c> at the idle line). A cancelled ask stores nothing and throws.
+    /// The HTTPS address <c>/webui</c> offers first (2026-10-31, the user's ask) and the hint line beside it (2026-11-01, the review's P5-7), only
+    /// while serving (P1-5: a typed address too): <i>Web UI HTTPS address</i> <c>off</c> none; a typed address as typed, never checked (the
+    /// setting is the PC's, and its row says to type only one that reaches this computer); <c>auto</c>, Tailscale Serve's rule for the port asked
+    /// through <see cref="_tailscaleServe"/>, with a hint for a rule elsewhere, a failed ask, or a saved value that is no word and no address (P4-3).
+    /// No adapter up (Tailscale not in use): no hint. A cancel of <paramref name="cancellationToken"/> throws.
     /// </summary>
-    private async Task<(WebUiHttps? Https, IReadOnlyList<int> OtherPorts)> WebUiHttpsAsync(AppSettingsData effective, CancellationToken cancellationToken)
+    private async Task<WebUiHttpsState> WebUiHttpsAsync(AppSettingsData effective, CancellationToken cancellationToken)
     {
-        if (WebUiHttpsSetting.IsOff(effective.WebUiHttpsAddress))
+        string? saved = effective.WebUiHttpsAddress;
+        if (WebUiHttpsSetting.IsOff(saved) || !_webUiController.Serving)
         {
-            return (null, []);
+            return WebUiHttpsState.None;
         }
 
-        if (WebUiHttpsSetting.Address(effective.WebUiHttpsAddress) is { } typed)
+        if (WebUiHttpsSetting.Address(saved) is { } typed)
         {
-            return (new WebUiHttps(typed, Detected: false, Public: false), []);
+            return new WebUiHttpsState(new WebUiHttps(typed, Detected: false, Public: false), null);
         }
 
-        if (_tailscaleServe is not { } ask || !_webUiController.Serving)
-        {
-            return (null, []);
-        }
-
+        string? broken = WebUiHttpsSetting.IsAuto(saved) ? null : WebUiText.HttpsSettingBrokenHint;
         int port = _webUiController.Port;
-        var now = _time.GetUtcNow();
-        lock (_serveCacheGate)
+        if (_tailscaleServe is not { } ask || await ask(port, cancellationToken).ConfigureAwait(false) is not { } found)
         {
-            if (_serveCache is { } cached && cached.Port == port && now - cached.At < ServeCacheTime)
-            {
-                return Mapped(cached.Result);
-            }
+            return new WebUiHttpsState(null, broken);
         }
 
-        var result = await ask(port, cancellationToken).ConfigureAwait(false);
-        lock (_serveCacheGate)
+        if (found.Address is { } address)
         {
-            _serveCache = (port, _time.GetUtcNow(), result);
+            return new WebUiHttpsState(new WebUiHttps(address, Detected: true, found.Public), broken);
         }
 
-        return Mapped(result);
-
-        static (WebUiHttps?, IReadOnlyList<int>) Mapped(TailscaleServeResult? found) =>
-            found is null ? (null, [])
-            : found.Address is { } address ? (new WebUiHttps(address, Detected: true, found.Public), [])
-            : (null, found.OtherPorts);
+        string? hint = found.Failure is { } failure ? WebUiText.ServeAskFailedHint(failure)
+            : found.SubPath is { } path ? WebUiText.ServeSubPathHint(path, port, found.FreeServePort)
+            : found.InUse ? WebUiText.ServeNoRuleHint(port, found.FreeServePort)
+            : null;
+        return new WebUiHttpsState(null, broken is null ? hint : hint is null ? broken : broken + "\n" + hint);
     }
 
     /// <summary>Builds the session and the controller, and wires the feed (from the constructor, before the first draw).</summary>
@@ -910,7 +899,7 @@ internal sealed partial class ChatScreen
 
         if (WebUiBrowserArgs(args) is { } external)
         {
-            await OpenWebUiHereAsync(WebUiText.LoopbackHost, external, sink, https: false).ConfigureAwait(false);
+            await OpenWebUiHereAsync(baseAddress: null, external, sink).ConfigureAwait(false);
             return;
         }
 
@@ -928,14 +917,22 @@ internal sealed partial class ChatScreen
                 return;
             case "copy":
                 // The first link: the HTTPS one when there is one (2026-10-31), else Tailscale's, else the home network's.
-                var (copyHttps, _) = await WebUiHttpsAsync(_effective(), cancellationToken).ConfigureAwait(false);
+                var copyEffective = _effective();
+                var copyHttps = (await WebUiHttpsAsync(copyEffective, cancellationToken).ConfigureAwait(false)).Https;
                 if (_webUiController.Links(WebUiTokenNow(mint: false), copyHttps) is not [var link, ..])
                 {
-                    _transcript.Error(WebUiText.NoLinkError);
+                    sink.Error(WebUiText.NoLinkError);
                     return;
                 }
 
-                sink.Notice(_copy(link.Url) ? WebUiText.CopiedNotice : WebUiText.CopyFailedError);
+                bool copied = _copy(link.Url);
+                sink.Notice(copied ? WebUiText.CopiedNotice : WebUiText.CopyFailedError);
+                // Funnel's safety fact after the HTTPS link (2026-11-01, the review's P3-1), as its tab says it.
+                if (copied && link.Kind == WebUiLinkKind.Https && WebUiText.FunnelNoteFor(copyHttps, WebUiReach.Resolve(copyEffective)) is { } funnel)
+                {
+                    sink.Notice(funnel);
+                }
+
                 return;
             case "reset":
                 if (await ResetWebUiTokenAsync(_transcript, cancellationToken).ConfigureAwait(false))
@@ -967,16 +964,16 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        // The tab's base address (2026-10-31): the HTTPS tab opens https here too, at its own host and port.
-        bool https = parsed.Scheme == Uri.UriSchemeHttps;
-        _ = OpenWebUiQuietlyAsync(https ? parsed.GetLeftPart(UriPartial.Authority) : parsed.Host.Trim('[', ']'), sink, https);
+        // The tab's base address (2026-10-31; for every tab since 2026-11-01, the review's P1-11): the HTTPS tab opens https here too, at its own
+        // host and port, and the others at theirs.
+        _ = OpenWebUiQuietlyAsync(parsed.GetLeftPart(UriPartial.Authority), sink);
     }
 
-    private async Task OpenWebUiQuietlyAsync(string host, INoticeSink sink, bool https)
+    private async Task OpenWebUiQuietlyAsync(string? baseAddress, INoticeSink sink)
     {
         try
         {
-            await OpenWebUiHereAsync(host, external: false, sink, https).ConfigureAwait(false);
+            await OpenWebUiHereAsync(baseAddress, external: false, sink).ConfigureAwait(false);
         }
         catch (Exception e) when (e is not OutOfMemoryException)
         {
@@ -1011,13 +1008,14 @@ internal sealed partial class ChatScreen
     internal static TimeSpan BrowserServerWait { get; set; } = TimeSpan.FromSeconds(5);
 
     /// <summary>
-    /// The Web UI opened on this PC at <paramref name="host"/> (later on 2026-10-15, the user's ask): <c>/webui browser</c> (127.0.0.1) and a
-    /// double-click on the pane's link (its tab's host). <i>Web open links in</i> <c>browser-window</c> (and not <paramref name="external"/>) opens
+    /// The Web UI opened on this PC at <paramref name="baseAddress"/> (later on 2026-10-15, the user's ask; a base address since 2026-11-01, the
+    /// review's P1-11): <c>/webui browser</c> (null: 127.0.0.1 at the port served, read once the server is up) and a double-click on the pane's
+    /// link (its tab's <c>http://host:port</c> or <c>https://host[:port]</c>). <i>Web open links in</i> <c>browser-window</c> (and not <paramref name="external"/>) opens
     /// the app's Browser window with the usual sign-in link, or a one-time link under <i>Web browser privacy</i> <c>keep-history</c>, whose kept
     /// history would hold the token; a window that can't take it now, and <c>default-browser</c>, go to the default browser, signed in as
     /// <i>Web browser sign in mode</i> says. The notice and the log name where, never the link; the window hands none of its cookies over.
     /// </summary>
-    private async Task OpenWebUiHereAsync(string host, bool external, INoticeSink sink, bool https)
+    private async Task OpenWebUiHereAsync(string? baseAddress, bool external, INoticeSink sink)
     {
         var effective = _effective();
         if (!effective.WebUi)
@@ -1048,8 +1046,7 @@ internal sealed partial class ChatScreen
         bool once = window
             ? Viewer.BrowserPrivacy.Resolve(effective) == Viewer.BrowserPrivacyKind.KeepHistory
             : Web.WebSignInMode.Resolve(effective) == Web.WebSignInModeKind.OneTimeLink;
-        // An https base (2026-10-31: the HTTPS tab's double-click) is used whole; a bare host gets the server's own port.
-        string baseAddress = https ? host : WebUiAuth.BaseAddress(host, _webUiController.Port);
+        baseAddress ??= WebUiAuth.BaseAddress(WebUiText.LoopbackHost, _webUiController.Port);
         string? link = once ? _webUiController.OneTimeLinkAt(baseAddress) : WebUiAuth.SignInLinkAt(baseAddress, WebUiTokenNow(mint: false));
         if (link is null || !Uri.TryCreate(link, UriKind.Absolute, out var url))
         {
@@ -1097,6 +1094,22 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
+    /// A tab's QR code for <paramref name="url"/>, or, when no code holds it, <see cref="WebUiText.QrTooLongNote"/> (2026-11-01, the review's P8-1:
+    /// a detected ts.net name isn't capped as a typed address is; the link is still shown below it).
+    /// </summary>
+    private static Spectre.Console.Rendering.IRenderable QrOrNote(string url)
+    {
+        try
+        {
+            return new QrView(QrCode.Encode(url));
+        }
+        catch (ArgumentException)
+        {
+            return new Spectre.Console.Text(WebUiText.QrTooLongNote);
+        }
+    }
+
+    /// <summary>
     /// <c>/webui</c>'s pane over a reply (later on 2026-10-15, the user's ask: it waited for the reply's end), on the watcher: as at the idle line,
     /// its buttons acting at once (the server restarted under the reply; the user's pick), its lines through <paramref name="sink"/> (posted to the
     /// turn task) and the server's own notices left to the turn's act drain. Without a server in this build, the idle line's error, through the sink.
@@ -1128,10 +1141,12 @@ internal sealed partial class ChatScreen
         {
             var effective = _effective();
             var audience = WebUiReach.Resolve(effective);
-            var (https, otherPorts) = await WebUiHttpsAsync(effective, cancellationToken).ConfigureAwait(false);
+            var (https, serveHint) = await WebUiHttpsAsync(effective, cancellationToken).ConfigureAwait(false);
             var links = _webUiController.Links(WebUiTokenNow(mint: false), https);
-            var lines = WebUiText.PaneLines(effective.WebUi, _webUiController.Serving, _webUiController.Serving ? _webUiController.Port : effective.WebUiPort, audience, links,
-                https, otherPorts);
+            bool serving = _webUiController.Serving;
+            // One set of status lines a pass (2026-11-01, the review's P8-4), for the plain lines and every tab.
+            var statusLines = WebUiText.StatusLines(effective.WebUi, serving, serving ? _webUiController.Port : effective.WebUiPort, audience, https, serveHint);
+            var lines = WebUiText.PaneLines(statusLines, serving, audience, links, https);
             if (!_pane.Enabled)
             {
                 foreach (string line in lines.Where(l => l.Length > 0))
@@ -1160,19 +1175,28 @@ internal sealed partial class ChatScreen
             {
                 // One tab per address (2026-10-14, the user's ask): its QR code for the phone's camera, then the link itself; Tailscale's
                 // headed by its note (later that day, the user's ask).
-                string status = string.Join("\n", WebUiText.StatusLines(effective.WebUi, true, _webUiController.Port, audience, https, otherPorts));
+                string status = string.Join("\n", statusLines);
                 // A double-click on the link opens it on this PC (later on 2026-10-15, the user's ask), as /webui browser does, at that tab's host;
                 // on the QR code too since 2026-10-20 (OpenLinkLine).
                 tabs = [.. links.Select(link => new InfoTab(WebUiText.LinkTabTitle(link), () => new Spectre.Console.Rows(
-                    new Spectre.Console.Text(WebUiText.LinkTabText(status, WebUiText.KindOf(link), https)),
-                    new QrView(QrCode.Encode(link.Url)),
+                    new Spectre.Console.Text(WebUiText.LinkTabText(status, link.Kind, https, audience)),
+                    QrOrNote(link.Url),
                     new Spectre.Console.Text("\n" + link.Url + "\n\n" + WebUiText.TokenWarning + "\n" + WebUiText.LinkOpenHint)))
                 {
                     LineDoubleClicked = text => OpenLinkLine(link.Url, text, sink),
                 })];
             }
 
-            int shownTab = Math.Max(0, tabs.ToList().FindIndex(t => t.Title == shownTitle));
+            int shownTab = 0;
+            for (int i = 0; i < tabs.Count; i++)
+            {
+                if (tabs[i].Title == shownTitle)
+                {
+                    shownTab = i;
+                    break;
+                }
+            }
+
             await _info.ShowAsync(WebUiText.PaneTitle, tabs, shownTab, cancellationToken, buttons).ConfigureAwait(false);
             shownTab = _info.LastTab;
             shownTitle = shownTab < tabs.Count ? tabs[shownTab].Title : null;

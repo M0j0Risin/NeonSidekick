@@ -17,7 +17,7 @@ public sealed partial class WebUiHostTests
     [Fact]
     public async Task ALiveCode_SignsInOnce_ThenItIsTheSignInPage()
     {
-        string link = _host.OneTimeLink("127.0.0.1")!;
+        string link = _host.OneTimeLinkAt(WebUiAuth.BaseAddress("127.0.0.1", _host.Port))!;
         string path = "/signin?once=" + CodeOf(link);
         Assert.StartsWith("http://127.0.0.1:" + _host.Port + "/signin?once=", link, StringComparison.Ordinal);
 
@@ -36,7 +36,7 @@ public sealed partial class WebUiHostTests
     [Fact]
     public async Task AHead_SpendsNothing_SoTheGetAfterItSignsIn()
     {
-        string path = "/signin?once=" + CodeOf(_host.OneTimeLink("127.0.0.1")!);
+        string path = "/signin?once=" + CodeOf(_host.OneTimeLinkAt(WebUiAuth.BaseAddress("127.0.0.1", _host.Port))!);
 
         using var head = await _client.SendAsync(new HttpRequestMessage(HttpMethod.Head, path));
         using var get = await _client.SendAsync(Get(path, signedIn: false));
@@ -49,9 +49,9 @@ public sealed partial class WebUiHostTests
     [Fact]
     public async Task ARestart_DropsTheCodes()
     {
-        string path = "/signin?once=" + CodeOf(_host.OneTimeLink("127.0.0.1")!);
+        string path = "/signin?once=" + CodeOf(_host.OneTimeLinkAt(WebUiAuth.BaseAddress("127.0.0.1", _host.Port))!);
         await _host.StopAsync();
-        Assert.Null(_host.OneTimeLink("127.0.0.1"));   // not serving: none
+        Assert.Null(_host.OneTimeLinkAt(WebUiAuth.BaseAddress("127.0.0.1", _host.Port)));   // not serving: none
         await _host.StartAsync(new WebUiBinding(WebUiAudience.Local, 0, _token, IPAddress.Loopback), CancellationToken.None);   // the same host, started again
         using var client = new HttpClient(new SocketsHttpHandler { UseCookies = false, AllowAutoRedirect = false }) { BaseAddress = new Uri("http://127.0.0.1:" + _host.Port + "/") };
 

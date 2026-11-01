@@ -36,12 +36,10 @@ public interface IWebUiHost : IAsyncDisposable
     Task StopAsync();
 
     /// <summary>
-    /// A one-time sign-in link on <paramref name="host"/> (later on 2026-10-15, <see cref="WebUiOneTimeCodes"/>), or null while not serving: good once,
-    /// for a minute. A host without them (a test's) has none.
+    /// A one-time sign-in link at <paramref name="baseAddress"/> (later on 2026-10-15, <see cref="WebUiOneTimeCodes"/>; at any base since 2026-10-31,
+    /// the HTTPS tab's; the one API since 2026-11-01, the review's P1-12), or null while not serving: good once, for a minute. A host without
+    /// them (a test's) has none.
     /// </summary>
-    string? OneTimeLink(string host) => null;
-
-    /// <summary>A one-time sign-in link at <paramref name="baseAddress"/> (2026-10-31: the HTTPS tab's), or null while not serving; a test's host has none.</summary>
     string? OneTimeLinkAt(string baseAddress) => null;
 }
 
@@ -133,12 +131,6 @@ public sealed class WebUiHost : IWebUiHost
     public int Port { get; private set; }
 
     private readonly WebUiOneTimeCodes _codes;
-
-    public string? OneTimeLink(string host)
-    {
-        ArgumentNullException.ThrowIfNull(host);
-        return _binding is null || _app is null ? null : WebUiAuth.OnceLink(host, Port, _codes.Mint());
-    }
 
     public string? OneTimeLinkAt(string baseAddress)
     {
@@ -247,22 +239,25 @@ public sealed class WebUiHost : IWebUiHost
         {
             SecurityHeaders(response);
             var socket = context.Connection.RemoteIpAddress;
-            // The lan check judges the socket's address, never a header (2026-10-31).
-            if (_binding is { Audience: WebUiAudience.LocalAreaNetwork } && socket is not null && !_allowRemote(socket))
+            // Who it came from, once (2026-10-31): through Tailscale Serve (or a proxy of one's own), the tailnet device's address, so the
+            // notices, the log lines and the rate limits name the phone and not 127.0.0.1; one request never names two addresses.
+            var origin = OriginOf(context);
+            var remote = origin.Remote;
+
+            // The lan check (2026-10-14) judges the socket's address, and since 2026-11-01 (the review's P1-3, as the docs say) a proxied
+            // request's origin too: Funnel's always refused (Serve alone sets its header; an address test alone would pass the documentation
+            // blocks LanPolicy counts as private), and a forwarded address that isn't private. Ahead of /health, which answers no stranger.
+            if (_binding is { Audience: WebUiAudience.LocalAreaNetwork } && socket is not null
+                && (!_allowRemote(socket) || origin.Funnel || (origin.Through is not null && remote is not null && !_allowRemote(remote))))
             {
-                if (_limits.LogDue(socket, nameof(WebUiText.RefusedRemoteLogLine)))
+                if (_limits.LogDue(remote, nameof(WebUiText.RefusedRemoteLogLine)))
                 {
-                    DiagnosticLog.Info(Category, WebUiText.RefusedRemoteLogLine(socket));
+                    DiagnosticLog.Info(Category, WebUiText.RefusedRemoteLogLine(origin));
                 }
 
                 response.StatusCode = StatusCodes.Status403Forbidden;
                 return;
             }
-
-            // Who it came from, once (2026-10-31): through Tailscale Serve (or a proxy of one's own), the tailnet device's address, so the
-            // notices, the log lines and the rate limits name the phone and not 127.0.0.1; one request never names two addresses.
-            var origin = OriginOf(context);
-            var remote = origin.Remote;
 
             string path = context.Request.Path.Value ?? "/";
             bool get = HttpMethods.IsGet(context.Request.Method) || HttpMethods.IsHead(context.Request.Method);
@@ -276,6 +271,16 @@ public sealed class WebUiHost : IWebUiHost
             // The limits (2026-10-15): a tap, a question to Home Assistant, a sign-in (pasted, or the link's GET since 2026-10-19), each counted per
             // address before anything else. A camera's still is counted in CameraAsync, past its own checks.
             if (WebRateLimit.BucketOf(path, post, HttpMethods.IsGet(context.Request.Method)) is { } bucket && !await TakeAsync(context, remote, bucket).ConfigureAwait(false))
+            {
+                return;
+            }
+
+            // Funnel's sign-ins, and any through a proxy from an address that isn't a tailnet one, also share one bucket (2026-11-01, the
+            // review's P1-2, P7-1): an internet client rotating IPv6 addresses, or a forged X-Forwarded-For through a plain forwarder, gets five
+            // a minute in all. A tailnet device through Serve keeps its own (Serve sets the header, never appends), so a Funnel flood can't
+            // lock the tailnet out. Never 127.0.0.1's bucket, which /webui browser uses. The cost: phones behind a home proxy of one's own share it.
+            if (path == WebUiAuth.SignInPath && SharesSignIn(origin) && WebRateLimit.BucketOf(path, post, HttpMethods.IsGet(context.Request.Method)) is { } shared
+                && !await TakeAsync(context, SharedSignInKey, WebUiText.SharedSignInWhere, shared).ConfigureAwait(false))
             {
                 return;
             }
@@ -741,9 +746,13 @@ public sealed class WebUiHost : IWebUiHost
     /// A token of <paramref name="bucket"/> for <paramref name="remote"/>; past it, the 429 (never cached, <c>Retry-After</c>, <see cref="WebUiText.SlowDown"/>)
     /// is answered and false returned (2026-10-27, the review: one answer for the limits taken up front and the camera's, taken later).
     /// </summary>
-    private async Task<bool> TakeAsync(HttpContext context, IPAddress? remote, WebRateBucket bucket)
+    private Task<bool> TakeAsync(HttpContext context, IPAddress? remote, WebRateBucket bucket) =>
+        TakeAsync(context, WebRateLimit.KeyOf(remote), WebUiText.Where(remote), bucket);
+
+    /// <summary>A token of <paramref name="bucket"/> under <paramref name="key"/> (an address, or <see cref="SharedSignInKey"/>), named <paramref name="where"/> in the log.</summary>
+    private async Task<bool> TakeAsync(HttpContext context, string key, string where, WebRateBucket bucket)
     {
-        if (_limits.TryTake(remote, bucket, out var retry))
+        if (_limits.TryTake(key, where, bucket, out var retry))
         {
             return true;
         }
@@ -947,6 +956,26 @@ public sealed class WebUiHost : IWebUiHost
             headers["Tailscale-Funnel-Request"].ToString());
     }
 
+    /// <summary>The key of the one sign-in bucket Funnel's and other proxied addresses share (never an address's own).</summary>
+    public const string SharedSignInKey = "proxied";
+
+    /// <summary>Whether a sign-in from <paramref name="origin"/> also draws from <see cref="SharedSignInKey"/>: through a proxy, and Funnel's or not from the tailnet.</summary>
+    public static bool SharesSignIn(WebUiOrigin origin)
+    {
+        ArgumentNullException.ThrowIfNull(origin);
+        return origin.Through is not null && (origin.Funnel || origin.Remote is not { } remote || !WebUiController.IsTailnet(remote));
+    }
+
+    /// <summary>A failed sign-in's log line, once a minute per key (2026-11-01, the review's P7-1): the shared bucket's, else the address's.</summary>
+    private void SignInFailed(WebUiOrigin origin)
+    {
+        string key = SharesSignIn(origin) ? SharedSignInKey : WebRateLimit.KeyOf(origin.Remote);
+        if (_limits.LogDue(key, nameof(WebUiText.SignInFailedLogLine)))
+        {
+            DiagnosticLog.Info(Category, WebUiText.SignInFailedLogLine(origin));
+        }
+    }
+
     private bool SignedIn(HttpContext context) =>
         _binding is { } binding && WebUiAuth.Matches(context.Request.Cookies[WebUiAuth.CookieName(Port)], binding.Token);
 
@@ -960,7 +989,7 @@ public sealed class WebUiHost : IWebUiHost
 
         if (_binding is not { } binding || !WebUiAuth.Matches(context.Request.Query["t"].ToString(), binding.Token))
         {
-            DiagnosticLog.Info(Category, WebUiText.SignInFailedLogLine(origin));
+            SignInFailed(origin);
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
             await AssetAsync(context, WebUiAssets.SignInPage, status: StatusCodes.Status403Forbidden).ConfigureAwait(false);
             return;
@@ -989,7 +1018,7 @@ public sealed class WebUiHost : IWebUiHost
 
         if (_binding is not { } binding || !_codes.Take(context.Request.Query[WebUiAuth.OnceQuery].ToString()))
         {
-            DiagnosticLog.Info(Category, WebUiText.SignInFailedLogLine(origin));
+            SignInFailed(origin);
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
             await AssetAsync(context, WebUiAssets.SignInPage, status: StatusCodes.Status403Forbidden).ConfigureAwait(false);
             return;
@@ -1001,6 +1030,11 @@ public sealed class WebUiHost : IWebUiHost
         context.Response.Headers.Location = "/";
     }
 
+    /// <summary>
+    /// The sign-in cookie: <c>Secure</c> when a proxy on this computer says the browser came over https (2026-11-01, the review's P2-2:
+    /// Serve sets <c>X-Forwarded-Proto: https</c> over TLS alone), never on plain http, where a browser drops a Secure cookie. A client faking
+    /// the header through a plain-http rule only spoils its own cookie.
+    /// </summary>
     private void SetCookie(HttpContext context, WebUiBinding binding) =>
         context.Response.Cookies.Append(WebUiAuth.CookieName(Port), binding.Token, new CookieOptions
         {
@@ -1009,7 +1043,13 @@ public sealed class WebUiHost : IWebUiHost
             Path = "/",
             MaxAge = WebUiAuth.CookieLifetime,
             IsEssential = true,
+            Secure = ForwardedHttps(context),
         });
+
+    /// <summary>Whether a loopback socket's <c>X-Forwarded-Proto</c> (its first entry) is <c>https</c>.</summary>
+    private static bool ForwardedHttps(HttpContext context) =>
+        context.Connection.RemoteIpAddress is { } socket && IPAddress.IsLoopback(socket)
+        && string.Equals(context.Request.Headers["X-Forwarded-Proto"].ToString().Split(',')[0].Trim(), "https", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// A sign-in pasted on the page (2026-10-15, E8): the whole link or the bare token, as JSON with the header no other site can send (so no site
@@ -1027,7 +1067,7 @@ public sealed class WebUiHost : IWebUiHost
         var request = await ReadAsync(context, WebUiJsonContext.Default.WebSignInRequest).ConfigureAwait(false);
         if (_binding is not { } binding || !WebUiAuth.Matches(WebUiAuth.TokenFrom(request?.Link), binding.Token))
         {
-            DiagnosticLog.Info(Category, WebUiText.SignInFailedLogLine(origin));
+            SignInFailed(origin);
             await ResultAsync(context, StatusCodes.Status403Forbidden, new WebResult(false, WebUiText.SignInWrong)).ConfigureAwait(false);
             return;
         }

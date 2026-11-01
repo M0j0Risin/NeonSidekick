@@ -303,10 +303,7 @@ public partial class ChatScreenTests
             Starts.Add(binding);
         }
 
-        /// <summary>A one-time link as the real host's reads (later on 2026-10-15), its code numbered.</summary>
-        public string? OneTimeLink(string host) => Started is null ? null : WebUiAuth.OnceLink(host, Port, "code" + Interlocked.Increment(ref _codes));
-
-        /// <summary>The same at a base address (2026-10-31: the HTTPS tab's double-click; every open goes through it now).</summary>
+        /// <summary>A one-time link as the real host's reads (later on 2026-10-15), its code numbered; at a base address since 2026-10-31.</summary>
         public string? OneTimeLinkAt(string baseAddress) => Started is null ? null : WebUiAuth.OnceLinkAt(baseAddress, "code" + Interlocked.Increment(ref _codes));
 
         public Task StopAsync()

@@ -25,9 +25,6 @@ public static class WebUiText
     /// <summary>A new token was made (none was saved, or this machine cannot read the saved one): browsers sign in again. Pinned.</summary>
     public const string TokenMintedNotice = "(" + Glyph + "a new Web UI sign-in token was made: open /webui's link again in each browser)";
 
-    /// <summary>A browser signed in. Pinned.</summary>
-    public static string SignedInNotice(IPAddress? remote) => SignedInNotice(new WebUiOrigin(remote));
-
     /// <summary>
     /// A browser signed in, naming the proxy it came through (2026-10-31: "from 100.x.y.z through Tailscale Serve"; Funnel's "through Tailscale
     /// Funnel, from the internet"). No login is named (the user's pick). Pinned.
@@ -113,9 +110,20 @@ public static class WebUiText
     /// Tailscale's link marked <see cref="TailscaleMark"/> and the lead naming the tailnet (later on 2026-10-14). Pinned.
     /// </summary>
     public static IReadOnlyList<string> PaneLines(bool on, bool serving, int port, WebUiAudience audience, IReadOnlyList<WebUiLink> links,
-        WebUiHttps? https = null, IReadOnlyList<int>? otherPorts = null)
+        WebUiHttps? https = null, string? serveHint = null) =>
+        PaneLines(StatusLines(on, serving, port, audience, https, serveHint), serving, audience, links, https);
+
+    /// <summary>
+    /// <see cref="PaneLines(bool, bool, int, WebUiAudience, IReadOnlyList{WebUiLink}, WebUiHttps?, string?)"/> over <paramref name="status"/>
+    /// already built (2026-11-01, the review's P8-4: one <see cref="StatusLines"/> a pass, shared with the tabs). The HTTPS link is marked
+    /// <see cref="FunnelMark"/> and followed by the Funnel note when Funnel opens it (P3-1).
+    /// </summary>
+    public static IReadOnlyList<string> PaneLines(IReadOnlyList<string> status, bool serving, WebUiAudience audience, IReadOnlyList<WebUiLink> links,
+        WebUiHttps? https = null)
     {
-        var lines = new List<string>(StatusLines(on, serving, port, audience, https, otherPorts)) { "" };
+        ArgumentNullException.ThrowIfNull(status);
+        ArgumentNullException.ThrowIfNull(links);
+        var lines = new List<string>(status) { "" };
         if (!serving)
         {
             return lines;
@@ -127,31 +135,63 @@ public static class WebUiText
             return lines;
         }
 
-        bool tailscale = links.Any(l => l.Tailscale);
-        bool secure = links.Any(l => l.Https);
-        // The HTTPS link's lead (2026-10-31): Serve's reaches the tailnet; a typed one's proxy may not be Tailscale, so it says where only for Tailscale's.
-        lines.Add(secure && https is { Detected: true }
-            ? tailscale
-                ? "Open one of these in the browser (a phone on the same network, or anywhere on your tailnet for the ones marked HTTPS and Tailscale). The link signs it in and leaves the address bar at once:"
-                : "Open one of these in the browser (a phone on the same network, or anywhere on your tailnet for the one marked HTTPS). The link signs it in and leaves the address bar at once:"
-            : secure
-                ? tailscale
-                    ? "Open one of these in the browser (a phone on the same network, the one marked HTTPS wherever your proxy reaches, and your tailnet for the one marked Tailscale). The link signs it in and leaves the address bar at once:"
-                    : "Open one of these in the browser (a phone on the same network, or the one marked HTTPS wherever your proxy reaches). The link signs it in and leaves the address bar at once:"
-                : tailscale
-                    ? "Open one of these in the browser (a phone on the same network, or on your tailnet for the one marked Tailscale). The link signs it in and leaves the address bar at once:"
-                    : "Open one of these in the browser (a phone on the same network). The link signs it in and leaves the address bar at once:");
-        lines.AddRange(links.Select(link => "  " + link.Url + (link.Https ? HttpsMark : link.Tailscale ? TailscaleMark : "")));
+        lines.Add(Lead(audience, https, links.Any(l => l.Kind == WebUiLinkKind.Tailscale)));
+        string? funnel = FunnelNoteFor(https, audience);
+        lines.AddRange(links.Select(link => "  " + link.Url + link.Kind switch
+        {
+            WebUiLinkKind.Https => funnel is not null && audience == WebUiAudience.Local ? FunnelMark : HttpsMark,
+            WebUiLinkKind.Tailscale => TailscaleMark,
+            _ => "",
+        }));
+        if (funnel is not null)
+        {
+            lines.Add(funnel);
+        }
+
         lines.Add("");
         lines.Add("The link holds the token: sending it through a messaging service hands that service the token too. /webui reset makes a new one.");
         return lines;
     }
 
     /// <summary>
-    /// The pane's first lines: on or off, the port, the reach. Under <c>local</c> with an HTTPS address the reach says so (2026-10-31: the tab
-    /// beside it reaches the tailnet); with none, but Serve forwarding to other ports, <see cref="ServeOtherPort"/> ends them.
+    /// The lead above the links where there is no pane (2026-10-31; built from parts since 2026-11-01, the review's P1-13, P3-9): who can open
+    /// them — this computer under <c>local</c> (P1-4), else a phone on the same network — then Serve's HTTPS link anywhere on the tailnet, a typed
+    /// one wherever its proxy reaches, and Tailscale's on the tailnet. Pinned.
     /// </summary>
-    public static IReadOnlyList<string> StatusLines(bool on, bool serving, int port, WebUiAudience audience, WebUiHttps? https = null, IReadOnlyList<int>? otherPorts = null)
+    public static string Lead(WebUiAudience audience, WebUiHttps? https, bool tailscale)
+    {
+        var parts = new List<string> { audience == WebUiAudience.Local ? "this computer" : "a phone on the same network" };
+        if (https is { Detected: true } && tailscale)
+        {
+            parts.Add("anywhere on your tailnet for the ones marked HTTPS and Tailscale");
+        }
+        else
+        {
+            if (https is not null)
+            {
+                parts.Add(https.Detected ? "anywhere on your tailnet for the one marked HTTPS" : "the one marked HTTPS wherever your proxy reaches");
+            }
+
+            if (tailscale)
+            {
+                parts.Add("on your tailnet for the one marked Tailscale");
+            }
+        }
+
+        string who = parts.Count switch
+        {
+            1 => parts[0],
+            2 => parts[0] + ", or " + parts[1],
+            _ => string.Join(", ", parts.Take(parts.Count - 1)) + ", and " + parts[^1],
+        };
+        return "Open one of these in the browser (" + who + "). The link signs it in and leaves the address bar at once:";
+    }
+
+    /// <summary>
+    /// The pane's first lines: on or off, the port, the reach. Under <c>local</c> with an HTTPS address the reach says so (2026-10-31: the tab
+    /// beside it reaches the tailnet); <paramref name="serveHint"/> (<see cref="WebUiHttpsState.ServeHint"/>) ends them, a line per <c>\n</c>.
+    /// </summary>
+    public static IReadOnlyList<string> StatusLines(bool on, bool serving, int port, WebUiAudience audience, WebUiHttps? https = null, string? serveHint = null)
     {
         var lines = new List<string>
         {
@@ -160,9 +200,9 @@ public static class WebUiText
             "Reach: " + WebUiReach.Name(audience) + " — " + WebUiReach.Describe(WebUiReach.Name(audience))
                 + (audience == WebUiAudience.Local && https is not null ? LocalPlusHttps : ""),
         };
-        if (https is null && otherPorts is { Count: > 0 })
+        if (!string.IsNullOrEmpty(serveHint))
         {
-            lines.Add(ServeOtherPort(otherPorts, port));
+            lines.AddRange(serveHint.Split('\n'));
         }
 
         return lines;
@@ -185,25 +225,77 @@ public static class WebUiText
     /// <summary>What heads the HTTPS tab when the setting gave it. Pinned.</summary>
     public const string HttpsTypedNote = "HTTPS at the Web UI HTTPS address (/settings › Client › Web UI).";
 
-    /// <summary>Under <see cref="HttpsDetectedNote"/> when Funnel is on for the address (a safety fact). Pinned.</summary>
-    public const string FunnelNote = "Funnel is on: anyone on the internet can reach this address. The token is all that keeps them out.";
+    /// <summary>
+    /// Under <see cref="HttpsDetectedNote"/> when Funnel is on for a rule to the Web UI, under <c>local</c> (a safety fact; 2026-11-01, the review's
+    /// P1-1: it names the Web UI, as the funneled rule may not be the one shown). Pinned.
+    /// </summary>
+    public const string FunnelNote = "Funnel is on: anyone on the internet can reach the Web UI. The token is all that keeps them out.";
 
-    /// <summary>What heads Tailscale's tab beside an HTTPS tab: both reach the tailnet. Pinned.</summary>
+    /// <summary>Instead of <see cref="FunnelNote"/> under <c>lan</c>, which refuses Funnel's requests (2026-11-01, the review's P1-3). Pinned.</summary>
+    public const string FunnelRefusedNote = "Funnel is on for the Web UI, but Web UI reach lan refuses requests from the internet.";
+
+    /// <summary>After the HTTPS link where there is no pane, when Funnel opens it (under <c>local</c>). Pinned.</summary>
+    public const string FunnelMark = " (HTTPS, open to the internet)";
+
+    /// <summary>The Funnel note for <paramref name="https"/> under <paramref name="audience"/>: null unless Serve's address is funneled. Pure.</summary>
+    public static string? FunnelNoteFor(WebUiHttps? https, WebUiAudience audience) =>
+        https is { Detected: true, Public: true } ? audience == WebUiAudience.Local ? FunnelNote : FunnelRefusedNote : null;
+
+    /// <summary>What heads Tailscale's tab beside a detected HTTPS tab: both reach the tailnet. Pinned.</summary>
     public const string TailscaleFallbackNote = "Tailscale over plain http: works on your tailnet too, if the HTTPS address doesn't.";
 
-    /// <summary>Serve forwards other ports, not this one (a changed <i>Web UI port</i>): ascending, at most three named. Pinned.</summary>
-    public static string ServeOtherPort(IReadOnlyList<int> ports, int port)
+    /// <summary>
+    /// The command that adds a Serve rule for <paramref name="port"/> on <paramref name="servePort"/> (2026-11-01, the review's P3-2: 443's short
+    /// form, else <c>--https=</c>; never the Web UI's own port, which Serve and the Web UI can't both hold). No backticks in the app's text.
+    /// </summary>
+    public static string ServeCommand(int servePort, int port) =>
+        "tailscale serve --bg " + (servePort == 443 ? "" : "--https=" + servePort.ToString(CultureInfo.InvariantCulture) + " ") + port.ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Serve has rules, none for this port (a changed <i>Web UI port</i>; 2026-11-01, the review's P2-4: no other port is named, so an unrelated
+    /// app's rule isn't called a mistake), with the command that adds one when a serve port is free. Pinned.
+    /// </summary>
+    public static string ServeNoRuleHint(int port, int? freeServePort) =>
+        "Tailscale Serve has no rule for port " + port.ToString(CultureInfo.InvariantCulture)
+        + (freeServePort is { } free ? ": " + ServeCommand(free, port) + " adds one." : ".");
+
+    /// <summary>A Serve rule forwards to this port below the root, where the page can't live (2026-11-01, the review's P7-4). Pinned.</summary>
+    public static string ServeSubPathHint(string path, int port, int? freeServePort) =>
+        "Tailscale Serve forwards " + Llm.Tools.UntrustedText.Cut(Llm.Tools.UntrustedText.OneLine(path), 60) + " to port " + port.ToString(CultureInfo.InvariantCulture)
+        + ", but the Web UI lives at /" + (freeServePort is { } free ? ": " + ServeCommand(free, port) + " adds a rule at /." : ".");
+
+    /// <summary>Serve couldn't be asked (2026-11-01, the review's P6-1): the kind, never a body. Pinned.</summary>
+    public static string ServeAskFailedHint(string failure) => "Tailscale Serve couldn't be asked (" + failure + "): no HTTPS tab.";
+
+    /// <summary>A saved <i>Web UI HTTPS address</i> that is neither a word nor an address (2026-11-01, the review's P4-3). Never echoes it. Pinned.</summary>
+    public const string HttpsSettingBrokenHint = "Web UI HTTPS address isn't auto, off or an https address: detecting instead.";
+
+    /// <summary>Under the HTTPS tab's link when no QR code holds it (a very long address). Pinned.</summary>
+    public const string QrTooLongNote = "The link is too long for a QR code: copy it or open it below.";
+
+    /// <summary>Why Serve couldn't be asked: its answer's status (2026-11-01, the review's P1-10: the kinds' words live here).</summary>
+    public static string ServeFailureStatus(int status) => "HTTP " + status.ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>Why Serve couldn't be asked: no answer within the client's budget.</summary>
+    public const string ServeFailureTimeout = "no answer in time";
+
+    /// <summary>Why Serve couldn't be asked: the answer was not Serve's rules.</summary>
+    public const string ServeFailureNotRules = "an answer that is not Serve's rules";
+
+    /// <summary>Why Serve couldn't be asked: an exception, named by its type (the connection's, or another).</summary>
+    public static string ServeFailureError(Exception e)
     {
-        ArgumentNullException.ThrowIfNull(ports);
-        var named = ports.Order().Take(3).Select(p => p.ToString(CultureInfo.InvariantCulture)).ToList();
-        string here = port.ToString(CultureInfo.InvariantCulture);
-        return "Tailscale Serve forwards to " + (named.Count == 1 ? "port " : "ports ") + string.Join(", ", named) + ", not " + here
-            + ": tailscale serve --bg --https=" + here + " " + here + " adds this one.";
+        ArgumentNullException.ThrowIfNull(e);
+        return e is HttpRequestException or IOException or UnauthorizedAccessException or TimeoutException
+            ? "no connection (" + (e.InnerException ?? e).GetType().Name + ")"
+            : "an error (" + e.GetType().Name + ")";
     }
 
-    /// <summary>The menu's edit refused an address. Pinned.</summary>
-    public static string HttpsAddressInvalid(string kept) =>
-        "Web UI HTTPS address must be auto, off, or an https://host[:port] address; keeping " + kept + ".";
+    /// <summary>A request's proxy named by its host (2026-10-31; here since 2026-11-01, the review's P1-10). Pinned.</summary>
+    public static string ProxyAt(string host) => "the proxy at " + host;
+
+    /// <summary>A request with <c>X-Forwarded-For</c> from loopback but no host (2026-11-01, the review's P2-3). Pinned.</summary>
+    public const string ProxyOnThisComputer = "a proxy on this computer";
 
     /// <summary>The log's why-no-HTTPS lines, each written once per change (the address alone, never a link or the token).</summary>
     public const string ServeNoAdapterLogLine = "Tailscale Serve: no Tailscale adapter up.";
@@ -231,29 +323,24 @@ public static class WebUiText
 
     /// <summary>
     /// An address tab's text above its QR code: <paramref name="status"/> (<see cref="StatusLines"/> joined), a blank line and the scan hint;
-    /// Tailscale's headed by <see cref="TailscaleNote"/> and with <see cref="TailscaleScanHint"/> (later on 2026-10-14). Pinned.
+    /// Tailscale's headed by <see cref="TailscaleNote"/> and with <see cref="TailscaleScanHint"/> (later on 2026-10-14). The HTTPS tab's Funnel
+    /// note follows <paramref name="audience"/> (2026-11-01, <see cref="FunnelNoteFor"/>). Pinned.
     /// </summary>
-    public static string LinkTabText(string status, WebUiLinkKind kind, WebUiHttps? https = null) => kind switch
+    public static string LinkTabText(string status, WebUiLinkKind kind, WebUiHttps? https = null, WebUiAudience audience = WebUiAudience.LocalAreaNetwork) => kind switch
     {
         WebUiLinkKind.Https => (https is { Detected: false } ? HttpsTypedNote : HttpsDetectedNote)
-            + (https is { Detected: true, Public: true } ? "\n" + FunnelNote : "") + "\n" + status + "\n\n" + TailscaleScanHint + "\n",
-        // Beside an HTTPS tab, Tailscale's is the fallback (2026-10-31, the user's call: both shown).
-        WebUiLinkKind.Tailscale => (https is null ? TailscaleNote : TailscaleFallbackNote) + "\n" + status + "\n\n" + TailscaleScanHint + "\n",
+            + (FunnelNoteFor(https, audience) is { } funnel ? "\n" + funnel : "") + "\n" + status + "\n\n" + TailscaleScanHint + "\n",
+        // Beside a detected HTTPS tab, Tailscale's is the fallback (2026-10-31, the user's call: both shown); beside a typed one, whose proxy
+        // may not be Tailscale, it keeps its own note (2026-11-01, the review's P4-2).
+        WebUiLinkKind.Tailscale => (https is { Detected: true } ? TailscaleFallbackNote : TailscaleNote) + "\n" + status + "\n\n" + TailscaleScanHint + "\n",
         _ => status + "\n\n" + ScanHint + "\n",
     };
-
-    /// <summary>A link's kind, which picks its tab's lead (2026-10-31).</summary>
-    public static WebUiLinkKind KindOf(WebUiLink link)
-    {
-        ArgumentNullException.ThrowIfNull(link);
-        return link.Https ? WebUiLinkKind.Https : link.Tailscale ? WebUiLinkKind.Tailscale : WebUiLinkKind.Home;
-    }
 
     /// <summary>An address tab's title: <see cref="HttpsTabTitle"/> for the HTTPS link, else the host the link names (2026-10-31).</summary>
     public static string LinkTabTitle(WebUiLink link)
     {
         ArgumentNullException.ThrowIfNull(link);
-        return link.Https ? HttpsTabTitle : LinkTabTitle(link.Url);
+        return link.Kind == WebUiLinkKind.Https ? HttpsTabTitle : LinkTabTitle(link.Url);
     }
 
     /// <summary>Under the link: what holding it means. Pinned.</summary>
@@ -1045,12 +1132,17 @@ public static class WebUiText
     public static string SignedInLogLine(WebUiOrigin origin) => "Web UI: a browser signed in from " + Where(origin) + ".";
 
     /// <summary>A sign-in with a wrong token. Pinned.</summary>
-    public static string SignInFailedLogLine(IPAddress? remote) => SignInFailedLogLine(new WebUiOrigin(remote));
-
     public static string SignInFailedLogLine(WebUiOrigin origin) => "Web UI: a sign-in with a wrong or old token from " + Where(origin) + " was refused.";
 
-    /// <summary>A browser at an address that is not private, under <c>lan</c>. Pinned.</summary>
-    public static string RefusedRemoteLogLine(IPAddress remote) => "Web UI: refused a connection from " + remote + " (not a private address).";
+    /// <summary>
+    /// A browser at an address that is not private, or Funnel's from the internet, under <c>lan</c> (2026-11-01, the review's P1-3: a proxied
+    /// request named by its origin, never 127.0.0.1). Pinned.
+    /// </summary>
+    public static string RefusedRemoteLogLine(WebUiOrigin origin)
+    {
+        ArgumentNullException.ThrowIfNull(origin);
+        return "Web UI: refused a connection from " + Where(origin) + (origin.Funnel ? " (Web UI reach lan refuses the internet)." : " (not a private address).");
+    }
 
     /// <summary>A request that failed.</summary>
     public static string RequestFailedLogLine(string path, Exception e) => "Web UI: " + path + " failed: " + e.Message;
@@ -1091,7 +1183,13 @@ public static class WebUiText
     public static string ClearedLogLine(int count, IPAddress? remote) => "Web UI cleared the ticked lines (" + Lines(count) + ") from " + Where(remote) + ".";
 
     /// <summary>An address past a rate limit, once a minute at most (2026-10-15).</summary>
-    public static string RateLimitedLogLine(IPAddress? remote, WebRateBucket bucket) =>
+    public static string RateLimitedLogLine(IPAddress? remote, WebRateBucket bucket) => RateLimitedLogLine(Where(remote), bucket);
+
+    /// <summary>Who shares the one sign-in bucket of Funnel's and other proxied addresses (2026-11-01, the review's P1-2, P7-1). Pinned.</summary>
+    public const string SharedSignInWhere = "the internet and other proxied addresses";
+
+    /// <summary>A bucket past its limit, named by <paramref name="where"/>: an address, or <see cref="SharedSignInWhere"/>.</summary>
+    public static string RateLimitedLogLine(string where, WebRateBucket bucket) =>
         "Web UI: too many " + bucket switch
         {
             WebRateBucket.Act => "taps",
@@ -1100,7 +1198,7 @@ public static class WebUiText
             WebRateBucket.Report => "player reports",
             WebRateBucket.Camera => "camera pictures",
             _ => "requests",
-        } + " from " + Where(remote) + "; refused for now.";
+        } + " from " + where + "; refused for now.";
 
     /// <summary>The address and, through a proxy, which one (2026-10-31).</summary>
     private static string Where(WebUiOrigin origin) =>
@@ -1108,7 +1206,8 @@ public static class WebUiText
             : origin.Funnel ? " through Tailscale Funnel, from the internet"
             : " through " + through);
 
-    private static string Where(IPAddress? remote) => remote is null ? "an unknown address" : (remote.IsIPv4MappedToIPv6 ? remote.MapToIPv4() : remote).ToString();
+    /// <summary>An address as the log and the notices name it: a mapped IPv4 address as IPv4, "an unknown address" for none.</summary>
+    public static string Where(IPAddress? remote) => remote is null ? "an unknown address" : (remote.IsIPv4MappedToIPv6 ? remote.MapToIPv4() : remote).ToString();
 
     /// <summary>The app's version, as the pages compare it.</summary>
     public static string Version => typeof(WebUiText).Assembly.GetName().Version?.ToString() ?? "";

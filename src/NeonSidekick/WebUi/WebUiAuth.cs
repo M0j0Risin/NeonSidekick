@@ -71,9 +71,6 @@ public static class WebUiAuth
     /// <summary>The query word of a one-time code (later on 2026-10-15): <c>/signin?once=…</c>.</summary>
     public const string OnceQuery = "once";
 
-    /// <summary>A one-time sign-in link for <paramref name="host"/> (later on 2026-10-15): good once, for a minute.</summary>
-    public static string OnceLink(string host, int port, string code) => OnceLinkAt(BaseAddress(host, port), code);
-
     /// <summary>A one-time sign-in link at <paramref name="baseAddress"/> (2026-10-31: <c>https://host[:port]</c> too, the HTTPS tab's).</summary>
     public static string OnceLinkAt(string baseAddress, string code) => baseAddress.TrimEnd('/') + SignInPath + "?" + OnceQuery + "=" + code;
 
@@ -86,18 +83,36 @@ public static class WebUiAuth
 
     /// <summary>
     /// Whether <paramref name="url"/> is a Web UI sign-in link (later on 2026-10-15): http or (2026-10-31) https, the path <c>/signin</c>, a token or
-    /// a code in its query. The Browser window keeps none in its list of visits or its saved links, and <c>web_links</c> never hands one to the model. Pure.
+    /// a code in its query. The Browser window keeps none in its list of visits or its saved links, and <c>web_links</c> never hands one to the model.
+    /// An https link counts only when its <c>t</c> or <c>once</c> value is one of ours in shape (<see cref="IsWellFormed"/>; a one-time code is 43
+    /// base64url characters too), the key matched whole (2026-11-01, the review's P1-6: a stranger's https sign-in page stays in history). Pure.
     /// </summary>
-    public static bool IsSignInUrl(string? url) =>
-        Uri.TryCreate(url, UriKind.Absolute, out var parsed) && (parsed.Scheme == Uri.UriSchemeHttp || parsed.Scheme == Uri.UriSchemeHttps)
-        && string.Equals(parsed.AbsolutePath, SignInPath, StringComparison.Ordinal)
-        && (parsed.Query.Contains("t=", StringComparison.Ordinal) || parsed.Query.Contains(OnceQuery + "=", StringComparison.Ordinal));
+    public static bool IsSignInUrl(string? url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var parsed) || !string.Equals(parsed.AbsolutePath, SignInPath, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        if (parsed.Scheme == Uri.UriSchemeHttp)
+        {
+            return parsed.Query.Contains("t=", StringComparison.Ordinal) || parsed.Query.Contains(OnceQuery + "=", StringComparison.Ordinal);
+        }
+
+        return parsed.Scheme == Uri.UriSchemeHttps
+            && parsed.Query.TrimStart('?').Split('&').Any(pair => pair.Split('=', 2) is [var key, var value]
+                && (key == "t" || key == OnceQuery) && IsWellFormed(Uri.UnescapeDataString(value)));
+    }
 
     /// <summary>A sign-in link with its token or code cut to <c>…</c> (later on 2026-10-15, the Browser window's log line); any other address as it is. Pure.</summary>
     public static string Redacted(string url)
     {
         ArgumentNullException.ThrowIfNull(url);
-        if (!IsSignInUrl(url))
+        // Shaped like one, http or https (2026-11-01, the review's P1-6 tightened IsSignInUrl's https side): cutting a stranger's value too costs
+        // nothing, leaving ours in a log would.
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var parsed) || !string.Equals(parsed.AbsolutePath, SignInPath, StringComparison.Ordinal)
+            || (parsed.Scheme != Uri.UriSchemeHttp && parsed.Scheme != Uri.UriSchemeHttps)
+            || !parsed.Query.TrimStart('?').Split('&').Any(p => p.Split('=', 2) is [var key, _] && key is "t" or OnceQuery))
         {
             return url;
         }

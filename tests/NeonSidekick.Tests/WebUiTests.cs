@@ -1345,13 +1345,13 @@ public sealed partial class WebUiTests : IDisposable
     public void WithoutAPane_TheLinesMarkTailscalesLink_AndItsLeadNamesTheTailnet()
     {
         var lines = WebUiText.PaneLines(true, true, 8765, WebUiAudience.LocalAreaNetwork,
-            [new WebUiLink("http://192.168.1.217:8765/signin?t=x", false), new WebUiLink("http://100.78.20.125:8765/signin?t=x", true)]);
+            [new WebUiLink("http://192.168.1.217:8765/signin?t=x"), new WebUiLink("http://100.78.20.125:8765/signin?t=x", WebUiLinkKind.Tailscale)]);
         Assert.Contains(lines, l => l.StartsWith("Open one of these in the browser (a phone on the same network, or on your tailnet for the one marked Tailscale).", StringComparison.Ordinal));
         Assert.Contains("  http://192.168.1.217:8765/signin?t=x", lines);
         Assert.Contains("  http://100.78.20.125:8765/signin?t=x" + WebUiText.TailscaleMark, lines);
         Assert.Equal(" (Tailscale)", WebUiText.TailscaleMark);
 
-        var plain = WebUiText.PaneLines(true, true, 8765, WebUiAudience.LocalAreaNetwork, [new WebUiLink("http://192.168.1.217:8765/signin?t=x", false)]);
+        var plain = WebUiText.PaneLines(true, true, 8765, WebUiAudience.LocalAreaNetwork, [new WebUiLink("http://192.168.1.217:8765/signin?t=x")]);
         Assert.Contains(plain, l => l.StartsWith("Open one of these in the browser (a phone on the same network). ", StringComparison.Ordinal));
         Assert.DoesNotContain(plain, l => l.Contains("Tailscale", StringComparison.Ordinal));
     }
@@ -1402,7 +1402,7 @@ public sealed partial class WebUiTests : IDisposable
         Assert.Equal(new WebUiBinding(WebUiAudience.Local, 8765, "t1"), made[0].Started);
         Assert.True(controller.Serving);
         Assert.Empty(_session.TakeNotices());   // a start writes nothing in the transcript (2026-10-17, the user's ask)
-        Assert.Equal([new WebUiLink("http://localhost:8765/signin?t=t1", false)], controller.Links("t1"));   // localhost is never Tailscale's
+        Assert.Equal([new WebUiLink("http://localhost:8765/signin?t=t1")], controller.Links("t1"));   // localhost is never Tailscale's
 
         await controller.ReconcileAsync(new WebUiWanted(true, 8766, WebUiAudience.Local, "t1"));
         Assert.True(made[0].Stopped);
@@ -1423,20 +1423,27 @@ public sealed partial class WebUiTests : IDisposable
 
         await controller.ReconcileAsync(new WebUiWanted(true, 8765, WebUiAudience.Local, "t1"));
         Assert.Equal(
-            [new WebUiLink("https://h.ts.net/signin?t=t1", false, true), new WebUiLink("http://localhost:8765/signin?t=t1", false)],
+            [new WebUiLink("https://h.ts.net/signin?t=t1", WebUiLinkKind.Https), new WebUiLink("http://localhost:8765/signin?t=t1")],
             controller.Links("t1", new WebUiHttps("https://h.ts.net", true, false)));
-        Assert.Equal([new WebUiLink("http://localhost:8765/signin?t=t1", false)], controller.Links("t1"));
+        Assert.Equal([new WebUiLink("http://localhost:8765/signin?t=t1")], controller.Links("t1"));
     }
 
-    /// <summary>An https link (~91 characters on this PC, 96 with :8766) is a bigger QR code; a 120-character one still fits a 120-column pane.</summary>
+    /// <summary>
+    /// An https link (~91 characters on this PC, 96 with :8766) is a bigger QR code; the longest a typed address allows (2026-11-01, the review's
+    /// P8-1: <see cref="WebUiHttpsSetting.MaxAddressChars"/>, so 152 characters) is version 8, 49 modules, and still fits a 120-column pane.
+    /// </summary>
     [Fact]
     public void ALongHttpsLinksQrCode_StillFitsThePane()
     {
-        string link = WebUiAuth.SignInLinkAt("https://" + new string('h', 120 - "https://:65535/signin?t=".Length - WebUiAuth.TokenLength) + ":65535", WebUiAuth.NewToken());
-        Assert.Equal(120, link.Length);
+        string address = "https://" + new string('h', WebUiHttpsSetting.MaxAddressChars - "https://:65535".Length) + ":65535";
+        Assert.Equal(address, WebUiHttpsSetting.Address(address));
+        string link = WebUiAuth.SignInLinkAt(address, WebUiAuth.NewToken());
+        Assert.Equal(152, link.Length);
         var code = QrCode.Encode(link);
-        Assert.True(code.Version <= 7, code.Version.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Assert.True(code.Version <= 8, code.Version.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Equal(49, code.Size);
         Assert.True(code.Size + 8 < 120);   // the modules and the quiet zone, a module a column
+        Assert.Null(WebUiHttpsSetting.Address("https://h" + address["https://".Length..]));   // one more is refused
     }
 
     [Fact]

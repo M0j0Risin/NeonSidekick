@@ -97,7 +97,7 @@ public sealed partial class WebUiHostTests
         lock (lines)
         {
             // The address as Kestrel saw it (an IPv4-mapped one on a dual-stack socket): the line's words around it.
-            string lead = WebUiText.RefusedRemoteLogLine(IPAddress.Loopback).Split("127.0.0.1")[0];
+            string lead = WebUiText.RefusedRemoteLogLine(new WebUiOrigin(IPAddress.Loopback)).Split("127.0.0.1")[0];
             Assert.Single(lines, m => m.StartsWith(lead, StringComparison.Ordinal));
         }
     }

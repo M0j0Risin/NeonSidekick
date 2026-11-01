@@ -106,8 +106,6 @@ public partial class ChatScreenTests : IDisposable
     private readonly List<string> _copied = new();
     private bool _copyFails;
 
-    /// <summary>Runs at each copy (2026-10-31: a test moves the clock between two passes of /webui's pane).</summary>
-    private Action? _onCopy;
     /// <summary>Every window title the screen set, in order (the <c>setTitle</c> seam).</summary>
     private readonly List<string> _titles = new();
     private Func<SettingsField, string?> _overriddenBy = _ => null;
@@ -361,7 +359,6 @@ public partial class ChatScreenTests : IDisposable
         }
 
         _copied.Add(text);
-        _onCopy?.Invoke();
         return true;
     }
 

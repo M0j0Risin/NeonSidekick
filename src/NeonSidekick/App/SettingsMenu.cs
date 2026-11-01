@@ -3446,6 +3446,10 @@ internal sealed partial class SettingsMenu
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.HomeAssistantUrl"/>. Pinned.</summary>
     public const string HomeAssistantUrlError = "must be an http or https URL (http://localhost:8123), or empty";
 
+    /// <summary><i>Web UI HTTPS address</i>'s refusal (2026-10-31; the menu's shape since 2026-11-01, the webui-https review's P5-6). Pinned.</summary>
+    public static readonly string WebUiHttpsAddressError =
+        "must be auto, off, or an https://host[:port] address of at most " + NeonSidekick.WebUi.WebUiHttpsSetting.MaxAddressChars.ToString(CultureInfo.InvariantCulture) + " characters";
+
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.HomeAssistantTimeoutSeconds"/>. Pinned.</summary>
     public static string HomeAssistantTimeoutRangeError =>
         "must be " + AppSettingsData.MinHomeAssistantTimeoutSeconds.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxHomeAssistantTimeoutSeconds.ToString(CultureInfo.InvariantCulture) + " seconds";
@@ -6036,7 +6040,8 @@ internal sealed partial class SettingsMenu
         bool allowEmpty = field is SettingsField.LlmUrl or SettingsField.LlmModel or SettingsField.TtsHttpUrl or SettingsField.TtsVoice2 or SettingsField.WorkingDirectory or SettingsField.WebBrowserPath or SettingsField.WebSearxngUrl or SettingsField.WebBrowserHomePage or SettingsField.DraftEditor or SettingsField.ImageEditor or SettingsField.GitLibEmail or SettingsField.GitLibName or SettingsField.ObsidianVault or SettingsField.ComfyUrl or SettingsField.ComfyOutputFolder or SettingsField.ClaudeCodeExecutable or SettingsField.ClaudeCodeModel
             or SettingsField.OpenAIApiOrganization or SettingsField.OpenAIApiProject
             or SettingsField.HomeAssistantUrl or SettingsField.HomeAssistantAssistAgent or SettingsField.DockerEnginePipe or SettingsField.CameraOutputFolder or SettingsField.ScreenOutputFolder or SettingsField.ImageEditOutputFolder or SettingsField.PastedImagesFolder
-            or SettingsField.YouTubeRegion or SettingsField.YouTubeLanguage;
+            or SettingsField.YouTubeRegion or SettingsField.YouTubeLanguage
+            or SettingsField.WebUiHttpsAddress;   // blank is auto (2026-11-01, the webui-https review's P5-3)
         var result = await EditTextAsync(field, page, row, EditableValue(field, saved), allowEmpty, cancellationToken).ConfigureAwait(false);
         if (result is not InputResult.Submitted submitted)
         {
@@ -6879,14 +6884,15 @@ internal sealed partial class SettingsMenu
                 return true;
 
             case SettingsField.WebUiHttpsAddress:
-                // auto, off, or an https://host[:port] (2026-10-31); the address kept as the links use it, the words lowercased.
-                if (!NeonSidekick.WebUi.WebUiHttpsSetting.IsValid(text))
+                // auto, off, or an https://host[:port] (2026-10-31); the address kept as the links use it, the words lowercased; blank is auto
+                // (2026-11-01, the review's P5-3), and a refusal reads as every other field's (P5-6).
+                if (text.Length > 0 && !NeonSidekick.WebUi.WebUiHttpsSetting.IsValid(text))
                 {
-                    Sink.Error(NeonSidekick.WebUi.WebUiText.HttpsAddressInvalid(EditableValue(field, saved)));
+                    Sink.Error($"{FieldName(field)} {WebUiHttpsAddressError}; keeping {EditableValue(field, saved)}.");
                     return false;
                 }
 
-                string https = NeonSidekick.WebUi.WebUiHttpsSetting.Address(text) ?? text.ToLowerInvariant();
+                string https = text.Length == 0 ? NeonSidekick.WebUi.WebUiHttpsSetting.Auto : NeonSidekick.WebUi.WebUiHttpsSetting.Address(text) ?? text.ToLowerInvariant();
                 Apply(field, d => d.WebUiHttpsAddress = https);
                 return true;
 

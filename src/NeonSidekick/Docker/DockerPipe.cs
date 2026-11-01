@@ -1,4 +1,5 @@
 using System.IO.Pipes;
+using System.Security.Principal;
 
 namespace NeonSidekick.Docker;
 
@@ -54,12 +55,21 @@ public static class DockerPipe
     /// <see cref="TimeoutException"/> when nothing serves it, an <see cref="UnauthorizedAccessException"/> when Windows
     /// refuses this account — the client turns either into its sentence.
     /// </summary>
-    public static async ValueTask<Stream> ConnectAsync(string name, CancellationToken cancellationToken)
+    public static ValueTask<Stream> ConnectAsync(string name, CancellationToken cancellationToken) =>
+        ConnectRawAsync(Normalize(name), ConnectTimeout, TokenImpersonationLevel.None, cancellationToken);
+
+    /// <summary>
+    /// One connected instance of pipe <paramref name="bareName"/>, taken as given (2026-11-01, the webui-https review's P2-10: Tailscale Serve's
+    /// client shares this connect; never through <see cref="Normalize"/>, which turns a blank name into Docker's own pipe), within
+    /// <paramref name="timeout"/>, opened at <paramref name="level"/>. The instance is disposed when the connect fails.
+    /// </summary>
+    public static async ValueTask<Stream> ConnectRawAsync(string bareName, TimeSpan timeout, TokenImpersonationLevel level, CancellationToken cancellationToken)
     {
-        var pipe = new NamedPipeClientStream(".", Normalize(name), PipeDirection.InOut, PipeOptions.Asynchronous);
+        ArgumentException.ThrowIfNullOrWhiteSpace(bareName);
+        var pipe = new NamedPipeClientStream(".", bareName, PipeDirection.InOut, PipeOptions.Asynchronous, level);
         try
         {
-            await pipe.ConnectAsync((int)ConnectTimeout.TotalMilliseconds, cancellationToken).ConfigureAwait(false);
+            await pipe.ConnectAsync((int)timeout.TotalMilliseconds, cancellationToken).ConfigureAwait(false);
             return pipe;
         }
         catch

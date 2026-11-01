@@ -741,8 +741,17 @@ internal sealed partial class ChatScreen
                 await HandleMonitorAsync(args, _flow, cancellationToken).ConfigureAwait(false);
                 break;
             case SlashCommand.WebUi:
-                // /webui (later on 2026-10-15): the pane on the watcher, its lines through the flow sink.
-                await ShowWebUiMidTurnAsync(_flow, cancellationToken).ConfigureAwait(false);
+                // /webui (later on 2026-10-15): the pane on the watcher, its lines through the flow sink. The reply's end during Serve's ask
+                // (2026-11-01, the review's P5-1) is /youtube's: a Debug line, no error.
+                try
+                {
+                    await ShowWebUiMidTurnAsync(_flow, cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    DiagnosticLog.Debug(WebUiCategory, "/webui under the reply was canceled as the reply ended.");
+                }
+
                 break;
         }
     }
@@ -834,8 +843,17 @@ internal sealed partial class ChatScreen
                 HandleTimer(args);
                 break;
             case SlashCommand.WebUi:
-                // /webui copy and /webui browser reach here (later on 2026-10-15): their notices through the flow sink, on the turn task.
-                await WebUiCommandAsync(args, cancellationToken, _flow).ConfigureAwait(false);
+                // /webui copy and /webui browser reach here (later on 2026-10-15): their notices through the flow sink, on the turn task; a cancel
+                // during copy's Serve ask is a Debug line (2026-11-01, the review's P5-1).
+                try
+                {
+                    await WebUiCommandAsync(args, cancellationToken, _flow).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    DiagnosticLog.Debug(WebUiCategory, "/webui " + args.Trim() + " under the reply was canceled as the reply ended.");
+                }
+
                 break;
             case SlashCommand.Window:
                 // The window's size in the reply (later on 2026-09-27): read-only.

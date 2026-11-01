@@ -97,21 +97,33 @@ public sealed class WebRateLimit
         };
     }
 
+    /// <summary>An address's key in the tables: its text, a mapped IPv4 address as IPv4; "" for none.</summary>
+    public static string KeyOf(IPAddress? remote) => remote is null ? "" : (remote.IsIPv4MappedToIPv6 ? remote.MapToIPv4() : remote).ToString();
+
     /// <summary>Takes one token for <paramref name="remote"/>: true when there was one; false with how long until the next.</summary>
-    public bool TryTake(IPAddress? remote, WebRateBucket bucket, out TimeSpan retryAfter)
+    public bool TryTake(IPAddress? remote, WebRateBucket bucket, out TimeSpan retryAfter) =>
+        TryTake(KeyOf(remote), WebUiText.Where(remote), bucket, out retryAfter);
+
+    /// <summary>
+    /// Takes one token under <paramref name="key"/> (an address's, or a shared bucket's fixed name: 2026-11-01, the review's P1-2), its refusal
+    /// logged naming <paramref name="where"/>: true when there was one; false with how long until the next.
+    /// </summary>
+    public bool TryTake(string key, string where, WebRateBucket bucket, out TimeSpan retryAfter)
     {
+        ArgumentNullException.ThrowIfNull(key);
+        ArgumentNullException.ThrowIfNull(where);
         var (burst, perSecond) = Rate(bucket);
         long now = _time.GetTimestamp();
-        string address = remote is null ? "" : (remote.IsIPv4MappedToIPv6 ? remote.MapToIPv4() : remote).ToString();
+        string address = key;
         bool log = false;
         lock (_gate)
         {
             Sweep(now);
-            var key = (address, bucket);
-            if (!_entries.TryGetValue(key, out var entry))
+            var slot = (address, bucket);
+            if (!_entries.TryGetValue(slot, out var entry))
             {
                 entry = new Entry { Tokens = burst, Filled = now, LastLogged = long.MinValue };
-                _entries[key] = entry;
+                _entries[slot] = entry;
             }
 
             entry.Tokens = Math.Min(burst, entry.Tokens + _time.GetElapsedTime(entry.Filled, now).TotalSeconds * perSecond);
@@ -134,7 +146,7 @@ public sealed class WebRateLimit
 
         if (log)
         {
-            DiagnosticLog.Info(Category, WebUiText.RateLimitedLogLine(remote, bucket));
+            DiagnosticLog.Info(Category, WebUiText.RateLimitedLogLine(where, bucket));
         }
 
         return false;
@@ -145,11 +157,15 @@ public sealed class WebRateLimit
     /// written once per request, so any address could flood the log): once per address a minute, as a refusal's. The table holds at
     /// <see cref="MaxEntries"/>: the lines older than a minute go first, then all of them.
     /// </summary>
-    public bool LogDue(IPAddress? remote, string what)
+    public bool LogDue(IPAddress? remote, string what) => LogDue(KeyOf(remote), what);
+
+    /// <summary><see cref="LogDue(IPAddress?, string)"/> under a key (an address's, or a shared bucket's: 2026-11-01, the review's P7-1).</summary>
+    public bool LogDue(string key, string what)
     {
+        ArgumentNullException.ThrowIfNull(key);
         ArgumentNullException.ThrowIfNull(what);
         long now = _time.GetTimestamp();
-        string address = remote is null ? "" : (remote.IsIPv4MappedToIPv6 ? remote.MapToIPv4() : remote).ToString();
+        string address = key;
         lock (_gate)
         {
             if (_logged.TryGetValue((address, what), out long last) && _time.GetElapsedTime(last, now) < LogEvery)
@@ -159,9 +175,9 @@ public sealed class WebRateLimit
 
             if (_logged.Count >= MaxEntries)
             {
-                foreach (var key in _logged.Where(e => _time.GetElapsedTime(e.Value, now) >= LogEvery).Select(e => e.Key).ToList())
+                foreach (var stale in _logged.Where(e => _time.GetElapsedTime(e.Value, now) >= LogEvery).Select(e => e.Key).ToList())
                 {
-                    _logged.Remove(key);
+                    _logged.Remove(stale);
                 }
 
                 if (_logged.Count >= MaxEntries)

@@ -16,10 +16,10 @@ public sealed record WebUiAdapter(NetworkInterfaceType Type, IReadOnlyList<IPAdd
 public sealed record WebUiAddress(string Host, bool Tailscale);
 
 /// <summary>
-/// A sign-in link (the token in it, never logged), whether it is Tailscale's address's (later on 2026-10-14), and whether it is the HTTPS
-/// address's (2026-10-31: Tailscale Serve's, or the one <i>Web UI HTTPS address</i> names).
+/// A sign-in link (the token in it, never logged) and its kind: the home network's, Tailscale's (later on 2026-10-14), or the HTTPS address's
+/// (2026-10-31: Tailscale Serve's, or the one <i>Web UI HTTPS address</i> names; one kind, not two flags, since 2026-11-01, the review's P2-12).
 /// </summary>
-public sealed record WebUiLink(string Url, bool Tailscale, bool Https = false);
+public sealed record WebUiLink(string Url, WebUiLinkKind Kind = WebUiLinkKind.Home);
 
 /// <summary>What an address tab is (2026-10-31): the home network's, Tailscale's plain-http one, or the HTTPS one.</summary>
 public enum WebUiLinkKind
@@ -134,10 +134,10 @@ public sealed class WebUiController : IAsyncDisposable
         }
     }
 
-    /// <summary>A one-time sign-in link on <paramref name="host"/> from the running server (later on 2026-10-15), or null while it serves none.</summary>
-    public string? OneTimeLink(string host) => Volatile.Read(ref _host)?.OneTimeLink(host);
-
-    /// <summary>A one-time sign-in link at <paramref name="baseAddress"/> (2026-10-31: the HTTPS tab's double-click), or null while it serves none.</summary>
+    /// <summary>
+    /// A one-time sign-in link at <paramref name="baseAddress"/> from the running server (later on 2026-10-15; at any base since 2026-10-31, the
+    /// HTTPS tab's double-click; the one API since 2026-11-01, the review's P1-12), or null while it serves none.
+    /// </summary>
     public string? OneTimeLinkAt(string baseAddress) => Volatile.Read(ref _host)?.OneTimeLinkAt(baseAddress);
 
     /// <summary>
@@ -152,8 +152,8 @@ public sealed class WebUiController : IAsyncDisposable
         }
 
         IReadOnlyList<WebUiAddress> hosts = Audience == WebUiAudience.Local ? [new WebUiAddress("localhost", false)] : PrivateAddresses();
-        var plain = hosts.Select(h => new WebUiLink(WebUiAuth.SignInLink(h.Host, Port, token), h.Tailscale));
-        return https is null ? [.. plain] : [new WebUiLink(WebUiAuth.SignInLinkAt(https.Address, token), false, true), .. plain];
+        var plain = hosts.Select(h => new WebUiLink(WebUiAuth.SignInLink(h.Host, Port, token), h.Tailscale ? WebUiLinkKind.Tailscale : WebUiLinkKind.Home));
+        return https is null ? [.. plain] : [new WebUiLink(WebUiAuth.SignInLinkAt(https.Address, token), WebUiLinkKind.Https), .. plain];
     }
 
     /// <summary>
@@ -164,7 +164,8 @@ public sealed class WebUiController : IAsyncDisposable
 
     /// <summary>
     /// The adapters that are up, as <see cref="ChooseAddresses"/> and <see cref="TailscaleServe.TailscaleUp"/> weigh them (2026-10-31: the
-    /// Serve detector's gate reads them too); none when the interfaces can't be read.
+    /// Serve detector's gate reads them too); none when the interfaces can't be read. IPv4 and IPv6 addresses both (2026-11-01, the review's
+    /// P7-2: a tailnet holding only Tailscale's IPv6 range still opens the gate); <see cref="ChooseAddresses"/> keeps the IPv4 ones.
     /// </summary>
     public static IReadOnlyList<WebUiAdapter> UpAdapters()
     {
@@ -181,7 +182,7 @@ public sealed class WebUiController : IAsyncDisposable
                 var properties = nic.GetIPProperties();
                 adapters.Add(new WebUiAdapter(
                     nic.NetworkInterfaceType,
-                    [.. properties.UnicastAddresses.Select(u => u.Address).Where(a => a.AddressFamily == AddressFamily.InterNetwork)],
+                    [.. properties.UnicastAddresses.Select(u => u.Address).Where(a => a.AddressFamily is AddressFamily.InterNetwork or AddressFamily.InterNetworkV6)],
                     properties.GatewayAddresses.Any(g => g.Address.AddressFamily == AddressFamily.InterNetwork && !g.Address.Equals(IPAddress.Any)),
                     nic.Speed,
                     nic.Name + " " + nic.Description));
@@ -204,11 +205,13 @@ public sealed class WebUiController : IAsyncDisposable
     /// home network's until then): in the tailnet range (100.64/10) and on Tailscale's own adapter (later on 2026-10-14, the user's
     /// pick: a provider's carrier-grade NAT address or another VPN can hold the range too, <see cref="IsTailscaleAdapter(WebUiAdapter)"/>). An
     /// address is marked Tailscale's by the same test, in the fallback too (first there as well), where a 100.x on another tunnel is listed
-    /// unmarked. Pure.
+    /// unmarked. IPv4 only (2026-11-01, the review's P7-2): each adapter's IPv6 addresses are dropped first, in this one place, since
+    /// <see cref="Web.LanPolicy.IsPrivate"/> would pass a ULA or Tailscale's fd7a::/48 as a tab. Pure.
     /// </summary>
     public static IReadOnlyList<WebUiAddress> ChooseAddresses(IReadOnlyList<WebUiAdapter> adapters)
     {
         ArgumentNullException.ThrowIfNull(adapters);
+        adapters = [.. adapters.Select(a => a with { Addresses = [.. a.Addresses.Where(x => x.AddressFamily == AddressFamily.InterNetwork)] })];
         static bool Usable(IPAddress address)
         {
             byte[] bytes = address.GetAddressBytes();
@@ -229,8 +232,18 @@ public sealed class WebUiController : IAsyncDisposable
         // Tailscale's own address (later on 2026-10-14, the user's ask): its tailnet range, 100.64.0.0/10, on Tailscale's adapter (later that
         // day), so a phone away from home has a code to scan too — while NordLynx's 10.x, WSL's 172.x and any other 100.x stay off the pane.
         // First since 2026-10-17 (the user's ask), the home network's after it.
-        var tailnet = adapters.Where(IsTailscaleAdapter).SelectMany(a => a.Addresses).Where(IsTailnet).Select(a => new WebUiAddress(a.ToString(), true));
+        var tailnet = TailnetAddresses(adapters).Select(a => new WebUiAddress(a.ToString(), true));
         return [.. tailnet.Concat(home).DistinctBy(a => a.Host, StringComparer.Ordinal)];
+    }
+
+    /// <summary>
+    /// The tailnet addresses Tailscale's own adapters hold (2026-11-01, the review's P3-8: one test for the Serve detector's gate and the tabs):
+    /// <see cref="IsTailscaleAdapter(WebUiAdapter)"/> and <see cref="IsTailnet"/>. Pure.
+    /// </summary>
+    public static IEnumerable<IPAddress> TailnetAddresses(IEnumerable<WebUiAdapter> adapters)
+    {
+        ArgumentNullException.ThrowIfNull(adapters);
+        return adapters.Where(IsTailscaleAdapter).SelectMany(a => a.Addresses).Where(IsTailnet);
     }
 
     /// <summary>
@@ -249,12 +262,22 @@ public sealed class WebUiController : IAsyncDisposable
     /// <summary><see cref="IsTailscaleAdapter(WebUiAdapter, bool)"/> on this machine.</summary>
     public static bool IsTailscaleAdapter(WebUiAdapter adapter) => IsTailscaleAdapter(adapter, OperatingSystem.IsWindows());
 
-    /// <summary>Whether <paramref name="address"/> is in Tailscale's tailnet range, the carrier-grade NAT block 100.64.0.0/10.</summary>
+    /// <summary>
+    /// Whether <paramref name="address"/> is in Tailscale's tailnet range: the carrier-grade NAT block 100.64.0.0/10, or (2026-11-01, the review's
+    /// P7-2) Tailscale's IPv6 block fd7a:115c:a1e0::/48. A mapped IPv4 address is read as IPv4.
+    /// </summary>
     public static bool IsTailnet(IPAddress address)
     {
         ArgumentNullException.ThrowIfNull(address);
+        if (address.IsIPv4MappedToIPv6)
+        {
+            address = address.MapToIPv4();
+        }
+
         byte[] bytes = address.GetAddressBytes();
-        return address.AddressFamily == AddressFamily.InterNetwork && bytes[0] == 100 && bytes[1] >= 64 && bytes[1] <= 127;
+        return address.AddressFamily == AddressFamily.InterNetwork
+            ? bytes[0] == 100 && bytes[1] >= 64 && bytes[1] <= 127
+            : bytes is [0xfd, 0x7a, 0x11, 0x5c, 0xa1, 0xe0, ..];
     }
 
     /// <summary>Whether <paramref name="type"/> is a wired or wireless card rather than a tunnel, a dial-up link or the loopback.</summary>

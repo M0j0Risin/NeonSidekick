@@ -543,7 +543,7 @@ Turn it on with `/webui on` or *Web UI* (`/settings` › Client › Web UI). Not
 ### Signing in
 
 * **The pane:** `/webui` (Ctrl+Alt+W, or the toolbar's 📱) shows a tab per address of the computer running NeonSidekick, each with a QR code and its sign-in link. Scan the code with the phone's camera, or open the link in a browser on the same network.
-* **The addresses:** the HTTPS one comes first when there is one ([HTTPS through Tailscale Serve](#https-through-tailscale-serve)), then Tailscale's, since both work at home and away ([Away from home](#away-from-home)). Then the home network's Ethernet and Wi-Fi adapters, fastest first (`localhost` under `local`).
+* **The addresses:** the HTTPS one first when there is one ([Tailscale Serve](#https-through-tailscale-serve)), then Tailscale's ([Away from home](#away-from-home)), then the home network's adapters, fastest first (`localhost` under `local`).
 * **HTTPS only:** set *Web UI reach* to `local`; the tabs are then the HTTPS one and `localhost`.
 * Other VPN tunnels and WSL's virtual switch aren't listed, though a browser through them still connects with the address typed.
 * **The link** signs the browser in and leaves the address bar at once; the browser keeps a cookie for a year.
@@ -568,7 +568,7 @@ Turn it on with `/webui on` or *Web UI* (`/settings` › Client › Web UI). Not
 
 #### Away from home
 
-* Install Tailscale on the app's computer and the phone, sign both in to the same tailnet (your own private Tailscale network), and scan the HTTPS tab's code once, or the Tailscale tab's without Serve. The phone then reaches the Web UI wherever it is.
+* Install Tailscale on both devices and sign them in to one tailnet (your private Tailscale network). Scan the HTTPS tab's code once, or the Tailscale tab's without Serve.
 * Nothing to open on the router; *Web UI reach* must be `lan`, or `local` with [Tailscale Serve](#https-through-tailscale-serve). If Windows calls Tailscale's network Public, the phone can't connect over plain http ([the firewall](#safety-and-the-network)).
 
 #### HTTPS through Tailscale Serve
@@ -577,9 +577,10 @@ The page is plain HTTP. Tailscale Serve puts HTTPS in front of it with a real ce
 
 * **Once, in Tailscale's admin console:** turn on MagicDNS and HTTPS certificates (DNS page).
 * **On the app's computer:** run `tailscale serve --bg <port>`, where `<port>` is *Web UI port*. `tailscale serve status` shows the address, `https://<computer>.<tailnet>.ts.net`. For HTTPS alone, set *Web UI reach* to `local` ([Signing in](#signing-in)).
-* **Signing in:** `/webui` then opens on an **HTTPS** tab with that address's QR code and link (found on Windows; on a Mac, type it into *Web UI HTTPS address*).
-* **Use `tailscale serve`, not `tailscale funnel`:** Funnel puts the page on the open internet, with only the token in the way. The HTTPS tab warns when it's on.
-* **Another port:** Serve doesn't follow a new *Web UI port*: run the command again with it. A second profile on its own port takes one more rule, e.g. `tailscale serve --bg --https=8766 8766`.
+* **Signing in:** `/webui` then opens on an **HTTPS** tab with that address's QR code and link (Windows only; on a Mac see [MAC.md](MAC.md#what-works)).
+* **Use `tailscale serve`, not `tailscale funnel`:** under `local`, Funnel puts the page on the internet with only the token in the way; `lan` refuses Funnel's requests. The HTTPS tab says which.
+* **Another port:** Serve doesn't follow a new *Web UI port*: run `tailscale serve --bg <port>` again. A second profile takes its own HTTPS port, e.g. `tailscale serve --bg --https=8443 8766`.
+* **No rule for the port:** `/webui` names the command that adds one.
 * **To stop:** `tailscale serve reset`.
 * The cookie is per address: a phone signed in over http signs in again over https.
 
@@ -726,7 +727,7 @@ When a web tool meets a bot check (a Cloudflare click, a captcha), the challenge
 
 ### Safety and the network
 
-* **Who may connect:** under `lan`, a browser at a private address (the home network, and Tailscale's 100.64/10) with the cookie. Under `local`, this computer, and the browsers a proxy on it forwards (Tailscale Serve: your tailnet), with the cookie.
+* **Who may connect:** under `lan`, a private address (home network, tailnet) with the cookie; Funnel's internet requests are refused. Under `local`, this computer and what a proxy on it forwards, with the cookie.
 * Private here doesn't mean safe (a router's NAT loopback, Docker or Tailscale can present one): the token is the gate.
 * **Plain HTTP:** the page itself is plain HTTP; for HTTPS, see [HTTPS through Tailscale Serve](#https-through-tailscale-serve).
 * **The firewall:** Windows asks to let the app through the first time it serves the network; allow it on private networks. On a network Windows calls Public the phone can't connect. A Mac asks too.
