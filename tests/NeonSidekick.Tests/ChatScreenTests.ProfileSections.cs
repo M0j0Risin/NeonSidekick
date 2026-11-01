@@ -364,6 +364,39 @@ public sealed partial class ChatScreenTests
         Assert.Contains(ChatScreen.ProfileCustomCommandsNothingNewNotice(["/review", "/sum"], "work", pull: false), output);
     }
 
+    /// <summary>
+    /// A case twin's second file stays behind, with or without overwrite (the Mac pass of 2026-11-01: from a case-sensitive folder the push named
+    /// /review twice and, with overwrite, review.md landed last on a case-blind target's Review.md, so /review there ran the skipped file). Only on
+    /// a case-sensitive temp folder: elsewhere there is no second file to make.
+    /// </summary>
+    [Fact]
+    public async Task ProfilePushCommands_ACaseTwin_StaysBehind_WithOrWithoutOverwrite()
+    {
+        WorkProfile();
+        string ours = _settings.ProfileCustomCommandsDirectory;
+        string theirs = Path.Combine(_dir, "profiles", "work", NeonSidekick.CustomCommands.CustomCommandRoots.DirectoryName);
+        WriteFile(Path.Combine(ours, "Review.md"), "One.");
+        if (File.Exists(Path.Combine(ours, "review.md")))
+        {
+            return;   // this folder ignores case (Windows, a default Mac disk): there is no second file to make
+        }
+
+        WriteFile(Path.Combine(ours, "review.md"), "Two.");
+        WriteFile(Path.Combine(theirs, "Review.md"), "Theirs.");
+        PushLine("/profile push commands work");
+        PushLine("/profile push commands work overwrite");
+        PickYes();
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(ChatScreen.ProfileCustomCommandsNothingNewNotice(["/review"], "work", pull: false), output);   // once, not "/review, /review"
+        Assert.Contains(ChatScreen.ProfileCustomCommandsPrompt([], ["/review"], "work", pull: false), output);
+        Assert.Contains(ChatScreen.ProfileCustomCommandsCopiedNotice(["/review"], [], "work", pull: false), output);
+        Assert.Equal("One.", File.ReadAllText(Path.Combine(theirs, "Review.md")));   // the file that runs here, never its twin
+        Assert.Equal(["Review.md"], Directory.GetFiles(theirs).Select(Path.GetFileName));
+    }
+
     /// <summary>A pull copies into this profile; a folder name with a bidi character is shown escaped.</summary>
     [Fact]
     public async Task ProfilePullSkills_Copies_AndAnOddNameIsEscaped()

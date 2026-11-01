@@ -351,7 +351,8 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// <c>/profile push|pull commands [overwrite]</c> (2026-10-30, the custom commands plan): the profile's <c>commands/</c> files the catalog
     /// walks (<see cref="CustomCommandCatalog.CopyableFiles"/>: <c>*.md</c> up to four folders deep, subfolders kept, dot-files left behind, a
-    /// Skipped file copied as it is) into the target's, byte for byte (<see cref="CustomCommandEditor.CopyInto"/>). A link is never followed
+    /// Skipped file copied as it is, but for a case twin's second file, which runs nowhere) into the target's, byte for byte
+    /// (<see cref="CustomCommandEditor.CopyInto"/>). A link is never followed
     /// and is named apart. A same-named file is skipped and named, or replaced with <paramref name="overwrite"/>, the yes naming those apart
     /// from the new. Two folders that are one (both linked to one place) have nothing to copy, never a file onto itself. No reconcile: the
     /// next scan reads the new files.
@@ -368,7 +369,13 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        var (files, links, unreadable) = CustomCommandCatalog.CopyableFiles(sourceRoot);
+        var (walked, links, unreadable) = CustomCommandCatalog.CopyableFiles(sourceRoot);
+
+        // A case twin's second file stays behind (the Mac pass of 2026-11-01: from a case-sensitive folder holding Review.md and review.md both
+        // went, the yes naming /review twice, and in a case-blind target review.md landed last on Review.md, so /review there ran the file this
+        // one skips). The scan's own rule (CustomCommandName.CaseDuplicates) picks it, so what is copied is what runs here.
+        var twins = CustomCommandName.CaseDuplicates(walked.Select(f => f.Relative));
+        var files = walked.Where(f => !twins.Contains(f.Relative)).ToList();
 
         // A folder that couldn't be listed is named (2026-10-31, review P5-4), never read as "nothing to copy".
         foreach (var problem in unreadable)

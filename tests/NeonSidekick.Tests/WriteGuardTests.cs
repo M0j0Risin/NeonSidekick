@@ -40,7 +40,7 @@ public sealed class WriteGuardTests : IDisposable
     [Theory]
     [InlineData(".neon/plans/x.md", FileOutcome.NeonFilesProtected)]
     [InlineData("app/.neon/x.md", FileOutcome.NeonFilesProtected)]
-    [InlineData("app\\.NEON. \\x.md", FileOutcome.NeonFilesProtected)]
+    [InlineData("app/.NEON. /x.md", FileOutcome.NeonFilesProtected)]
     [InlineData("sub/.git/config", FileOutcome.GitProtected)]
     [InlineData("app/neon/x.md", null)]
     [InlineData("", null)]
@@ -49,6 +49,17 @@ public sealed class WriteGuardTests : IDisposable
         // 2026-10-29, review P5-3.
         Assert.Equal(expected, WriteGuard.GuardedFolder(relative));
         Assert.Equal(expected is not null, OutputNames.UnderNeon(relative));
+    }
+
+    /// <summary>
+    /// The backslash form, a separator on Windows alone (the Mac pass of 2026-11-01: on a Mac a backslash is a name's character, review N3, so
+    /// <c>app\.NEON. \x.md</c> is one file at the root there).
+    /// </summary>
+    [WindowsFact]
+    public void AGuardedFolder_IsFoundBehindBackslashes_OnWindows()
+    {
+        Assert.Equal(FileOutcome.NeonFilesProtected, WriteGuard.GuardedFolder("app\\.NEON. \\x.md"));
+        Assert.True(OutputNames.UnderNeon("app\\.NEON. \\x.md"));
     }
 
     [Fact]

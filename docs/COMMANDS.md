@@ -110,7 +110,7 @@ The push and pull forms copy to (`push`) or from (`pull`) another profile, after
 | `/profile push\|pull links <name> [overwrite]`, `/profile push\|pull videos <name> [overwrite]` | Copies the Browser window's saved links or the saved YouTube videos (with where each was left). |
 | `/profile push\|pull monitors <name> [overwrite]` | Copies the monitor input names, hidden inputs and PC inputs, keeping the target's own. A bare push or pull replaces them. |
 | `/profile push\|pull skills <name>` | Copies the profile's own skills; one the target has (by folder or name) is skipped. A copy starts with no history. |
-| `/profile push\|pull commands <name> [overwrite]` | Copies the profile's [custom commands](#custom-commands); one the target has is skipped, or replaced with `overwrite`. Ends with a count; Esc stops it. |
+| `/profile push\|pull commands <name> [overwrite]` | Copies the profile's [custom commands](#custom-commands); one the target has is skipped, or replaced with `overwrite`. Of two files whose names differ only by case, the one that runs goes. Ends with a count; Esc stops it. |
 | `/profile edit\|reload` | Opens `profile.json` in your editor, or reads it back and reconnects what changed. |
 | `/settings`, `//` | Opens the settings; a letter typed on a tab searches them all. |
 | `/settings <words>` | Searches every setting (`/settings`, `/tools`, `/skills`, `/mcp`) by name, tab or description. |
