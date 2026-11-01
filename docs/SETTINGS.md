@@ -651,7 +651,7 @@ Network shares and folders outside the working directory; see [UNC shares](TOOLS
 
 | Setting | What it does | Default |
 |---|---|---|
-| GitLib tools | Offers the built-in git tools (status, log, diff, blame, branch, stage, commit, stash…) over the working directory's repository. Off, git goes through the shell. | off |
+| GitLib tools | Offers the built-in git tools (status, log, diff, stage, commit…) over the working directory's repository; off, git goes through the shell. The Ralph loop and `/code-audit` still read it, never write. | off |
 | GitLib diff max lines | Where a `gitlib_diff` patch is cut (20–5000). | 500 |
 | GitLib log max commits | Commits `gitlib_log` returns by default (1–200). | 20 |
 | GitLib user email | The `user.email` `/gituser` writes into the repository's config. | empty |

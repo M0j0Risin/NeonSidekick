@@ -1,4 +1,5 @@
 using LibGit2Sharp;
+using NeonSidekick.Audits;
 using NeonSidekick.Files;
 using NeonSidekick.Git;
 using NeonSidekick.Plans;
@@ -104,6 +105,53 @@ public sealed class RalphChangesTests : IDisposable
         Assert.Contains(RalphText.TooLargeToRead("app.cs", (after.Files["app.cs"].Length / 1024).ToString(System.Globalization.CultureInfo.InvariantCulture) + " KB"), delta.Diff);
         Assert.DoesNotContain("/dev/null", delta.Diff);
         Assert.DoesNotContain("+one", delta.Diff);   // HEAD's text, the wrong "after"
+    }
+
+    [Fact]
+    public void TheEvidenceAndTheAuditScopes_LeaveTheRepositoryAsTheyFoundIt()
+    {
+        // 2026-11-01 (the user's call, in place of a "git or files" evidence setting): the Ralph loop and /code-audit read the repository whatever
+        // GitLib tools is set to, so they must never write to it. A tree with every kind of status — a staged change, a dirty file, an untracked
+        // one, and a tracked file touched with its text unchanged (stale stat data, what a status call that refreshed the index would rewrite) —
+        // read every way they read it, and .git is the same file for file and byte for byte after.
+        var (files, git, root) = Repo();
+        string repo = Path.Combine(_dir, "repo");
+        Write(root, "app.cs", "one\ntwo\nstaged\n");
+        using (var staging = new Repository(repo))
+        {
+            Commands.Stage(staging, "app.cs");
+        }
+
+        Write(root, "dirty.cs", "a\ndirty\n");
+        Write(root, "untracked/new.cs", "new\n");
+        File.SetLastWriteTimeUtc(Path.Combine(repo, "outside.cs"), DateTime.UtcNow.AddMinutes(5));
+        var fingerprint = GitFolderFingerprint(repo);
+
+        var before = RalphChanges.Snapshot(files, git);
+        Write(root, "dirty.cs", "a\ndirty\nand the pass\n");
+        Write(root, "untracked/second.cs", "second\n");
+        var after = RalphChanges.Snapshot(files, git, since: before);
+        var delta = RalphChanges.Delta(before, after, files, git, []);
+        Assert.Equal(["dirty.cs", "untracked/second.cs"], delta.Changed);
+        foreach (var kind in new[] { AuditScopeKind.Tree, AuditScopeKind.Diff, AuditScopeKind.Staged })
+        {
+            Assert.NotNull(AuditScopes.Resolve(files, git, new AuditScopeRequest(kind, []), CancellationToken.None).Scope);
+        }
+
+        Assert.Equal(fingerprint, GitFolderFingerprint(repo));
+    }
+
+    /// <summary>Every file under <c>.git</c>, by its path, with a hash of its bytes: a lock left behind or a rewritten index shows as a difference.</summary>
+    private static SortedDictionary<string, string> GitFolderFingerprint(string repo)
+    {
+        string gitDir = Path.Combine(repo, ".git");
+        var prints = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        foreach (string file in Directory.EnumerateFiles(gitDir, "*", SearchOption.AllDirectories))
+        {
+            prints[Path.GetRelativePath(gitDir, file).Replace('\\', '/')] = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(file)));
+        }
+
+        return prints;
     }
 
     [Fact]
