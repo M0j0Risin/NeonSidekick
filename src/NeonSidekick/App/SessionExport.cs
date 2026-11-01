@@ -502,7 +502,7 @@ public static class SessionExport
 
             if (turn.ReplyText.Trim().Length > 0)
             {
-                html.Write("<div class=\"reply\">\n" + PdfHtml.Markdown(turn.ReplyText, _ => null, WebUiMarkdown.SafeLink) + "</div>\n");
+                html.Write("<div class=\"reply\">\n" + PdfHtml.Markdown(turn.ReplyText, _ => null, WebUiMarkdown.SafeLink, softBreaksAsLines: true) + "</div>\n");
             }
 
             if (turn.Cancelled)

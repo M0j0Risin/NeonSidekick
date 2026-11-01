@@ -1151,6 +1151,26 @@ public sealed partial class WebUiTests : IDisposable
         Assert.Equal("mailto:a@b.c", WebUiMarkdown.SafeLink("mailto:a@b.c"));
     }
 
+    /// <summary>
+    /// A reply's line breaks on the page as at the PC (2026-11-01, a haiku between two rules showed as one line): a single line break
+    /// is a <c>&lt;br&gt;</c>, and a setext heading's lines stay apart; a file's PDF keeps Markdown's joining space.
+    /// </summary>
+    [Fact]
+    public void AReplysHtml_KeepsEveryLineBreak_AndAHeadingsLines()
+    {
+        Assert.Contains("a<br />\nb", WebUiMarkdown.ToHtml("a\nb"), StringComparison.Ordinal);
+
+        string haiku = WebUiMarkdown.ToHtml("---\nold pond\nfrog jumps in\nsplash\n\n---");
+        Assert.StartsWith("<hr />", haiku, StringComparison.Ordinal);
+        Assert.Contains("<p>old pond<br />\nfrog jumps in<br />\nsplash</p>", haiku, StringComparison.Ordinal);
+        Assert.DoesNotContain("<h2", haiku, StringComparison.Ordinal);
+
+        Assert.Contains("<h2>old pond<br />\nfrog jumps in</h2>", WebUiMarkdown.ToHtml("---\nold pond\nfrog jumps in\n---"), StringComparison.Ordinal);
+        Assert.Contains("<h2><em>a</em><br />\nb</h2>", WebUiMarkdown.ToHtml("*a*\nb\n---"), StringComparison.Ordinal);
+        Assert.DoesNotContain("<br", Pdf.PdfHtml.Markdown("a\nb", _ => null), StringComparison.Ordinal);
+        Assert.Contains("<h2>Title one<br />\nTitle two</h2>", Pdf.PdfHtml.Markdown("Title one\nTitle two\n---", _ => null), StringComparison.Ordinal);
+    }
+
     // ── The settings ─────────────────────────────────────────────────────────
 
     [Fact]

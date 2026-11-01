@@ -48,7 +48,7 @@ The app itself, this side of the connection.
 | Command typo intercept | A command typed without its slash (`clear`), or with extra ones, asks *Did you mean /clear?* before it goes as text. | on |
 | Show /exit in autocomplete | Lists `/exit` in the `/` list. Typed in full, it works either way. | off |
 | Emoji picker | A dim ☺ at the right end of the input row; a click opens the emoji picker. Ctrl+J opens it too, shown or not (not on a Mac). | on |
-| Transcript markdown | Renders replies as Markdown, code blocks highlighted for common languages. | on |
+| Transcript markdown | Renders replies as Markdown, code blocks highlighted for common languages. A single line break in a reply starts a new line, here, on the Web UI and in `/print`, `/pdf` and `/docx reply`. | on |
 | Paste preview lines | Lines of a long paste shown dim under its `[Pasted text #n]` placeholder (0–200). | 25 |
 | Show image thumbnails | A small thumbnail of each picture you send, a tool fetches or makes, or `/botchat` draws. | on |
 | Image thumbnail size | In columns × rows: `tiny` 32×8, `small` 48×12, `medium` 64×16, `large` 80×20, `xlarge` 96×24, or `fullsize`. | `small` |

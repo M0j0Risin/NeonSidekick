@@ -627,6 +627,22 @@ public sealed class OfficeToolsTests : IDisposable
         Assert.StartsWith("Error:", DocxCommand.Run(converter, "reply paper=huge", () => "x", CancellationToken.None));
     }
 
+    /// <summary><c>/docx reply</c> keeps the reply's line breaks as the screen shows them; a Markdown file keeps Markdown's rule (2026-11-01).</summary>
+    [Fact]
+    public void Docx_AReplyKeepsItsLineBreaks_AFileJoinsThem()
+    {
+        Put("poem.md", "old pond\nfrog jumps in");
+        var converter = new DocxConverter(_files, _time);
+
+        Assert.StartsWith("Made reply-" + Stamp + ".docx", DocxCommand.Run(converter, "reply", () => "old pond\nfrog jumps in", CancellationToken.None));
+        Assert.Matches("old pond</w:t></w:r><w:r><w:br ?/></w:r>", OfficeWriterTests.Part(Bytes("reply-" + Stamp + ".docx"), "word/document.xml"));
+
+        Assert.StartsWith("Made poem.docx", DocxCommand.Run(converter, "poem.md", () => null, CancellationToken.None));
+        string file = OfficeWriterTests.Part(Bytes("poem.docx"), "word/document.xml");
+        Assert.DoesNotContain("<w:br", file, StringComparison.Ordinal);
+        Assert.Contains("old pond frog jumps in", file, StringComparison.Ordinal);
+    }
+
     /// <summary>The last reply is read on the caller's thread, before the conversion goes to the pool (2026-10-30, review F17).</summary>
     [Fact]
     public async Task DocxReply_ReadsTheReply_OnTheCallersThread()

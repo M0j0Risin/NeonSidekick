@@ -4,6 +4,7 @@ using System.Text;
 using Markdig;
 using Markdig.Renderers;
 using Markdig.Renderers.Html;
+using Markdig.Renderers.Html.Inlines;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
 using NeonSidekick.UI.Markdown;
@@ -138,8 +139,11 @@ public static class PdfHtml
     /// <c>data:</c> URI to show, or null — the picture is then its alt text in brackets. <paramref name="link"/> (2026-10-14, the Web UI's
     /// replies, which share this renderer) vets each link's address: the address to keep, or null to leave the link's text alone; a kept
     /// link opens in a new tab with no opener and no referrer. Without it the links are kept as written (the PDF's).
+    /// <paramref name="softBreaksAsLines"/> (2026-11-01, the user's ask after a haiku showed on one line in the Web UI): a single line
+    /// break is a <c>&lt;br&gt;</c>, as the transcript shows a reply (<see cref="MarkdigParser.Replies"/>); the Web UI, the HTML session
+    /// export and <c>/pdf reply</c> pass it, a file's PDF keeps Markdown's joining space. A setext heading's lines are always kept apart.
     /// </summary>
-    public static string Markdown(string markdown, Func<string, string?> resolveImage, Func<string, string?>? link = null)
+    public static string Markdown(string markdown, Func<string, string?> resolveImage, Func<string, string?>? link = null, bool softBreaksAsLines = false)
     {
         ArgumentNullException.ThrowIfNull(markdown);
         ArgumentNullException.ThrowIfNull(resolveImage);
@@ -163,10 +167,17 @@ public static class PdfHtml
             }
         }
 
+        BreakHeadingLines(document);
         using var writer = new StringWriter(CultureInfo.InvariantCulture);
         var renderer = new HtmlRenderer(writer);
         Pipeline.Setup(renderer);
         renderer.ObjectRenderers.Replace<CodeBlockRenderer>(new LexedCodeBlockRenderer());
+        if (softBreaksAsLines && renderer.ObjectRenderers.FindExact<LineBreakInlineRenderer>() is { } lineBreaks)
+        {
+            // A fresh renderer each call, so this never reaches another render (a file's PDF).
+            lineBreaks.RenderAsHardlineBreak = true;
+        }
+
         renderer.Render(document);
         writer.Flush();
         return writer.ToString();
@@ -197,6 +208,42 @@ public static class PdfHtml
             }
 
             OpenApart(auto);
+        }
+    }
+
+    /// <summary>
+    /// A setext heading's lines kept apart (2026-11-01): Markdig leaves their breaks as <c>\n</c> inside a literal, which the terminal
+    /// shows as rows and HTML folds into a space; each becomes a hard break, a <c>&lt;br&gt;</c>. Emphasis nests the literal, so every
+    /// literal under the heading is looked at.
+    /// </summary>
+    private static void BreakHeadingLines(Markdig.Syntax.MarkdownDocument document)
+    {
+        foreach (var heading in document.Descendants<Markdig.Syntax.HeadingBlock>().ToList())
+        {
+            if (heading.Inline is null)
+            {
+                continue;
+            }
+
+            foreach (var literal in heading.Inline.Descendants<LiteralInline>().Where(l => l.Content.IndexOf('\n') >= 0).ToList())
+            {
+                string[] lines = literal.Content.ToString().Split('\n');
+                for (int i = 0; i < lines.Length; i++)
+                {
+                    if (i > 0)
+                    {
+                        literal.InsertBefore(new LineBreakInline { IsHard = true });
+                    }
+
+                    string line = lines[i].TrimEnd('\r');
+                    if (line.Length > 0)
+                    {
+                        literal.InsertBefore(new LiteralInline(line));
+                    }
+                }
+
+                literal.Remove();
+            }
         }
     }
 

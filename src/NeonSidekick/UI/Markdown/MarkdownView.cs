@@ -15,8 +15,8 @@ namespace NeonSidekick.UI.Markdown;
 /// </summary>
 public sealed class MarkdownView : IRenderable
 {
-    /// <summary>The parser the transcript reads replies with.</summary>
-    public static readonly IMarkdownParser DefaultParser = new MarkdigParser();
+    /// <summary>The parser the transcript reads replies with: <see cref="MarkdigParser.Replies"/>, a single line break a new line (2026-11-01).</summary>
+    public static readonly IMarkdownParser DefaultParser = MarkdigParser.Replies;
 
     public const string BulletGlyph = "• ";
     public const string QuoteGlyph = "▎ ";

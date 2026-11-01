@@ -79,6 +79,29 @@ public class MarkdigParserTests
         Assert.Equal(new MarkdownInline[] { new TextRun("one"), new HardBreak(), new TextRun("two three") }, paragraph.Inlines);
     }
 
+    /// <summary>A reply's single line break is a new line (2026-11-01, the haiku the Web UI showed on one line); a link's text stays one line.</summary>
+    [Fact]
+    public void ForReplies_ASoftBreakIsAHardBreak_ALinkStaysOneLine()
+    {
+        var paragraph = Assert.IsType<ParagraphBlock>(Assert.Single(MarkdigParser.Replies.Parse("one\ntwo  \nthree").Blocks));
+        Assert.Equal(new MarkdownInline[] { new TextRun("one"), new HardBreak(), new TextRun("two"), new HardBreak(), new TextRun("three") }, paragraph.Inlines);
+
+        var list = Assert.IsType<ListBlock>(Assert.Single(MarkdigParser.Replies.Parse("- one\n  *two*").Blocks));
+        var item = Assert.IsType<ParagraphBlock>(Assert.Single(Assert.Single(list.Items).Blocks));
+        Assert.Equal(new MarkdownInline[] { new TextRun("one"), new HardBreak(), new TextRun("two", Italic: true) }, item.Inlines);
+
+        var link = Assert.IsType<ParagraphBlock>(Assert.Single(MarkdigParser.Replies.Parse("[a\nb](https://example.com)").Blocks));
+        Assert.Equal(new LinkRun("a b", "https://example.com"), Assert.Single(link.Inlines));
+    }
+
+    /// <summary>A setext heading over two lines keeps its break in its run, which the transcript shows as two rows (2026-11-01).</summary>
+    [Fact]
+    public void SetextHeading_OverTwoLines_KeepsTheBreakInItsRun()
+    {
+        var heading = Assert.IsType<HeadingBlock>(Assert.Single(Parse("Title one\nTitle two\n---").Blocks));
+        Assert.Equal(new TextRun("Title one\nTitle two"), Assert.Single(heading.Inlines));
+    }
+
     [Fact]
     public void Headings_CarryTheirLevel()
     {

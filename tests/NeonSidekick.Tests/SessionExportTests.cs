@@ -110,6 +110,16 @@ public sealed class SessionExportTests : IDisposable
         Assert.Contains("Here is a dog.", doc.Text);   // the text, from the rows, whole
     }
 
+    /// <summary>An exported reply keeps its line breaks as the screen shows them (2026-11-01); the Markdown export keeps the text as written.</summary>
+    [Fact]
+    public void Html_KeepsAReplysLineBreaks_TheMarkdownItsText()
+    {
+        var record = new SessionRecord(Summary(), [Turn(1, "a poem", "old pond\nfrog jumps in")], "");
+
+        Assert.Contains("old pond<br />\nfrog jumps in", SessionExport.Build(record, SessionExportFormat.Html, Zone, Theme.Current, "").Text, StringComparison.Ordinal);
+        Assert.Contains("old pond\nfrog jumps in", SessionExport.Build(record, SessionExportFormat.Markdown, Zone, Theme.Current, "pics").Text, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Html_OpensWithTheCharset_ThenThePolicy_EscapesTheUsersText_AndEmbedsThePictures()
     {

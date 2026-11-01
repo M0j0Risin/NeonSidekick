@@ -10,8 +10,8 @@ namespace NeonSidekick.WebUi;
 /// </summary>
 public static class WebUiMarkdown
 {
-    /// <summary><paramref name="markdown"/> as HTML for the page.</summary>
-    public static string ToHtml(string markdown) => PdfHtml.Markdown(markdown ?? "", _ => null, SafeLink);
+    /// <summary><paramref name="markdown"/> as HTML for the page; a single line break a <c>&lt;br&gt;</c>, as the transcript shows it (2026-11-01).</summary>
+    public static string ToHtml(string markdown) => PdfHtml.Markdown(markdown ?? "", _ => null, SafeLink, softBreaksAsLines: true);
 
     /// <summary>The address a link may keep, or null: an absolute http, https or mailto address alone.</summary>
     public static string? SafeLink(string url)

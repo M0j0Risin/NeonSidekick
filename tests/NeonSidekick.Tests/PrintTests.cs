@@ -317,6 +317,21 @@ public sealed class PrintTests : IDisposable
         Assert.Equal(@"Printed docs\notes.txt: 1 page to Office Laser", result);
     }
 
+    /// <summary><c>/print reply</c> keeps the reply's line breaks as the screen shows them; a Markdown file keeps Markdown's rule (2026-11-01).</summary>
+    [Fact]
+    public async Task AReply_PrintsItsLineBreaks_AFileJoinsThem()
+    {
+        Write("poem.md", "old pond\nfrog jumps in");
+
+        Assert.Equal(["Printed Reply: 1 page to Office Laser"], (await PrintCommand.RunAsync(_print, "reply", () => "old pond\nfrog jumps in", CancellationToken.None)).Lines);
+        var reply = _spooler.Jobs[^1].Pages.SelectMany(Texts).Select(t => t.Text).ToList();
+        Assert.Contains("old pond", reply);
+        Assert.Contains("frog jumps in", reply);
+
+        var (file, _) = _print.Prepare(new PrintRequest("poem.md"));
+        Assert.Contains("old pond frog jumps in", file!.Job!.Pages.SelectMany(Texts).Select(t => t.Text));
+    }
+
     [Fact]
     public void Service_TellsMarkdownPicturesAndTheRestApart()
     {

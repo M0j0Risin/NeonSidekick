@@ -141,7 +141,7 @@ public static class PrintCommand
                 return PrintCommandResult.Error(PrintText.NoReply);
             }
 
-            request = new PrintRequest(null, parsed.Printer, parsed.Copies, parsed.Pages, parsed.Landscape, reply, PrintText.ReplyTitle);
+            request = new PrintRequest(null, parsed.Printer, parsed.Copies, parsed.Pages, parsed.Landscape, reply, PrintText.ReplyTitle, FromReply: true);
         }
         else if (parsed.Target.Length == 0)
         {

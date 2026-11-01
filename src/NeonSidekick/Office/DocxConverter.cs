@@ -13,7 +13,8 @@ namespace NeonSidekick.Office;
 /// <paramref name="Path"/> (Markdown or text) or <paramref name="Markdown"/> text (the reply, the model's own) under <paramref name="Title"/>;
 /// where it goes (<paramref name="To"/>: a file, a folder, or blank for beside the source), whether it may replace a file there, and the page.
 /// <paramref name="ByUser"/>: the user's own <c>/docx</c>, whose write takes the app's pass (<see cref="WriteGuard.AppWrites"/>);
-/// <paramref name="FromReply"/>: its <c>reply</c>, the Markdown being the last reply (named and said as "Reply" when it has no heading).
+/// <paramref name="FromReply"/>: its <c>reply</c>, the Markdown being the last reply (named and said as "Reply" when it has no heading),
+/// read as the transcript shows it (2026-11-01: a single line break a new line, <see cref="MarkdigParser.Replies"/>).
 /// </summary>
 public sealed record DocxRequest(string? Path = null, string? Markdown = null, string? Title = null, string? To = null, bool Overwrite = false, bool Landscape = false, PdfPaperSize? Paper = null, bool ByUser = false, bool FromReply = false);
 
@@ -79,7 +80,7 @@ public sealed class DocxConverter
         }
 
         bool markdown = sourceFull is null || PrintService.IsMarkdown(sourceFull);
-        var document = markdown ? _parser.Parse(text) : Paragraphs(text);
+        var document = markdown ? (request.FromReply ? MarkdigParser.Replies : _parser).Parse(text) : Paragraphs(text);
         if (document.Blocks.Count == 0)
         {
             return OfficeText.EmptyDocument(display);

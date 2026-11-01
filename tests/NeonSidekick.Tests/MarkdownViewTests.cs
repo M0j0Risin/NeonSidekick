@@ -82,9 +82,13 @@ public class MarkdownViewTests : IDisposable
     }
 
     [Fact]
-    public void HardBreak_BreaksTheLine_ASoftBreakDoesNot()
+    public void EveryLineBreak_BreaksTheLine_InAReply()
     {
-        Assert.Equal(new[] { "one", "two three" }, Lines("one  \ntwo\nthree"));
+        // 2026-11-01: a reply's single line break is a new line (MarkdigParser.Replies); a file's parser still joins it.
+        Assert.Equal(new[] { "one", "two", "three" }, Lines("one  \ntwo\nthree"));
+        Assert.Equal(new[] { "• one", "  two" }, Lines("- one\n  two").Select(l => l.TrimEnd()));
+        Assert.Equal(new[] { MarkdownView.QuoteGlyph + "one", MarkdownView.QuoteGlyph + "two" }, Lines("> one\n> two").Select(l => l.TrimEnd()));
+        Assert.Equal(new[] { "one two" }, Render(new MarkdownView(new MarkdigParser().Parse("one\ntwo"))).Select(Text).ToArray());
     }
 
     [Fact]

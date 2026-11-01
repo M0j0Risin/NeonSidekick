@@ -518,6 +518,31 @@ public sealed class PdfTests : IDisposable
         Assert.StartsWith("Replaced notes.pdf", await Convert(new PdfRequest(Path: "notes.md", To: "notes.pdf", Overwrite: true)), StringComparison.Ordinal);
     }
 
+    /// <summary><c>/pdf reply</c> keeps the reply's line breaks as the screen shows them; a Markdown file keeps Markdown's rule (2026-11-01).</summary>
+    [Fact]
+    public async Task AReplysPdf_KeepsItsLineBreaks_AFilesJoinsThem()
+    {
+        Write("poem.md", "old pond\nfrog jumps in");
+
+        Assert.StartsWith("Made", await PdfCommand.RunAsync(_pdf, "reply to=r.pdf", () => "old pond\nfrog jumps in", CancellationToken.None), StringComparison.Ordinal);
+        Assert.Contains("old pond<br />\nfrog jumps in", _browser.PdfPages[^1], StringComparison.Ordinal);
+
+        Assert.StartsWith("Made", await PdfCommand.RunAsync(_pdf, "poem.md", () => null, CancellationToken.None), StringComparison.Ordinal);
+        Assert.Contains("old pond\nfrog jumps in", _browser.PdfPages[^1], StringComparison.Ordinal);
+    }
+
+    /// <summary>With no browser, <c>/pdf reply</c>'s print to PDF still reads it as a reply: two lines, not one (2026-11-01).</summary>
+    [Fact]
+    public async Task NoBrowser_AReplysPdf_PrintsItsLineBreaks()
+    {
+        _browser.Executable = null;
+
+        Assert.StartsWith("Made", await PdfCommand.RunAsync(_pdf, "reply to=r.pdf", () => "old pond\nfrog jumps in", CancellationToken.None), StringComparison.Ordinal);
+        var texts = Assert.Single(_spooler.Jobs).Pages.SelectMany(p => p.Ops.OfType<PrintTextOp>()).Select(t => t.Text).ToList();
+        Assert.Contains("old pond", texts);
+        Assert.Contains("frog jumps in", texts);
+    }
+
     [Fact]
     public async Task NoBrowser_MarkdownGoesToThePrinter_HtmlIsRefused()
     {

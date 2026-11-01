@@ -19,9 +19,10 @@ public enum PrintKind
 /// What to print: a sandbox path, or markdown text (<c>/print reply</c>) with its <paramref name="Title"/>; the printer (blank:
 /// the setting, then the Windows default), the copies, the page range and the orientation. <paramref name="OutputFile"/>
 /// (2026-10-03, the PDF fallback of <c>convert_to_pdf</c>) is the file a print-to-file printer writes instead of asking where;
-/// a file only the shell's program prints cannot take one.
+/// a file only the shell's program prints cannot take one. <paramref name="FromReply"/> (2026-11-01): the Markdown is the last reply,
+/// read as the transcript shows it (<see cref="UI.Markdown.MarkdigParser.Replies"/>: a single line break a new line).
 /// </summary>
-public sealed record PrintRequest(string? Path, string? Printer = null, int Copies = 1, string? Pages = null, bool Landscape = false, string? Markdown = null, string? Title = null, string? OutputFile = null);
+public sealed record PrintRequest(string? Path, string? Printer = null, int Copies = 1, string? Pages = null, bool Landscape = false, string? Markdown = null, string? Title = null, string? OutputFile = null, bool FromReply = false);
 
 /// <summary>
 /// A print ready to go: how, what it shows as (<paramref name="Display"/>, the path relative to the working directory or the
@@ -208,7 +209,7 @@ public sealed class PrintService
         IReadOnlyList<PrintPage> pages = kind switch
         {
             PrintKind.Picture => PrintLayout.Picture(bitmap!, surface.Page),
-            PrintKind.Markdown => PrintLayout.Markdown(_parser.Parse(text!), surface.Page, surface, FontSize),
+            PrintKind.Markdown => PrintLayout.Markdown((request.FromReply ? MarkdigParser.Replies : _parser).Parse(text!), surface.Page, surface, FontSize),
             _ => PrintLayout.Listing(text!, surface.Page, surface, FontSize),
         };
         pages = PrintLayout.WithHeaders(pages, display, PrintText.Stamp(_time.GetLocalNow()), surface.Page, surface);

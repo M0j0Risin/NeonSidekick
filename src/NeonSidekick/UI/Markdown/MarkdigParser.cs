@@ -11,10 +11,18 @@ namespace NeonSidekick.UI.Markdown;
 /// transcript shows is composed from this tree by <see cref="MarkdownView"/>. Setext headings stay
 /// on: with them off Markdig's thematic-break parser still defers to the paragraph, so
 /// <c>Title</c> over <c>---</c> became one paragraph rather than a rule (measured 2026-09-16).
+/// <para><c>softBreaksAsLines</c> (2026-11-01, the user's ask after a haiku showed on one line in the Web UI): a
+/// single line break inside a paragraph is a <see cref="HardBreak"/>, not Markdown's joining space. Replies are read this way
+/// (<see cref="Replies"/>: the transcript, <c>/print</c>, <c>/pdf</c> and <c>/docx reply</c>), because models write poems,
+/// addresses and lyrics a line each; a Markdown file printed or converted keeps the Markdown rule. A table cell is one source
+/// line, and a link's text stays one run on one line.</para>
 /// </summary>
-public sealed class MarkdigParser : IMarkdownParser
+public sealed class MarkdigParser(bool softBreaksAsLines = false) : IMarkdownParser
 {
     private static readonly MarkdownPipeline Pipeline = Build();
+
+    /// <summary>The parser replies are read with: a single line break starts a new line, as the transcript and the Web UI show it.</summary>
+    public static readonly MarkdigParser Replies = new(softBreaksAsLines: true);
 
     public MarkdownDocument Parse(string text)
     {
@@ -25,13 +33,13 @@ public sealed class MarkdigParser : IMarkdownParser
         }
 
         var document = Markdig.Markdown.Parse(text, Pipeline);
-        return new MarkdownDocument(Blocks(document));
+        return new MarkdownDocument(Blocks(document, softBreaksAsLines));
     }
 
     private static MarkdownPipeline Build() =>
         new MarkdownPipelineBuilder().UsePipeTables().DisableHtml().Build();
 
-    private static List<MarkdownBlock> Blocks(ContainerBlock container)
+    private static List<MarkdownBlock> Blocks(ContainerBlock container, bool softBreaks)
     {
         var blocks = new List<MarkdownBlock>();
         foreach (var child in container)
@@ -39,10 +47,10 @@ public sealed class MarkdigParser : IMarkdownParser
             switch (child)
             {
                 case Markdig.Syntax.HeadingBlock heading:
-                    blocks.Add(new HeadingBlock(heading.Level, Inlines(heading.Inline)));
+                    blocks.Add(new HeadingBlock(heading.Level, Inlines(heading.Inline, softBreaks)));
                     break;
                 case Markdig.Syntax.ParagraphBlock paragraph:
-                    blocks.Add(new ParagraphBlock(Inlines(paragraph.Inline)));
+                    blocks.Add(new ParagraphBlock(Inlines(paragraph.Inline, softBreaks)));
                     break;
                 case FencedCodeBlock fenced:
                     blocks.Add(new CodeBlock(Language(fenced.Info), Lines(fenced), fenced.ClosingFencedCharCount == 0));
@@ -51,10 +59,10 @@ public sealed class MarkdigParser : IMarkdownParser
                     blocks.Add(new CodeBlock(null, Lines(indented)));
                     break;
                 case Markdig.Syntax.ListBlock list:
-                    blocks.Add(List(list));
+                    blocks.Add(List(list, softBreaks));
                     break;
                 case Markdig.Syntax.QuoteBlock quote:
-                    blocks.Add(new QuoteBlock(Blocks(quote)));
+                    blocks.Add(new QuoteBlock(Blocks(quote, softBreaks)));
                     break;
                 case ThematicBreakBlock:
                     blocks.Add(new RuleBlock());
@@ -68,10 +76,10 @@ public sealed class MarkdigParser : IMarkdownParser
                     break;
                 case ContainerBlock other:
                     // A container this tree has no shape for (a definition group): its blocks stand on their own.
-                    blocks.AddRange(Blocks(other));
+                    blocks.AddRange(Blocks(other, softBreaks));
                     break;
                 case LeafBlock leaf when leaf.Inline is not null:
-                    blocks.Add(new ParagraphBlock(Inlines(leaf.Inline)));
+                    blocks.Add(new ParagraphBlock(Inlines(leaf.Inline, softBreaks)));
                     break;
             }
         }
@@ -103,7 +111,7 @@ public sealed class MarkdigParser : IMarkdownParser
         return lines;
     }
 
-    private static ListBlock List(Markdig.Syntax.ListBlock list)
+    private static ListBlock List(Markdig.Syntax.ListBlock list, bool softBreaks)
     {
         int start = 1;
         if (list.IsOrdered && int.TryParse(list.OrderedStart, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int parsed))
@@ -116,7 +124,7 @@ public sealed class MarkdigParser : IMarkdownParser
         {
             if (child is ListItemBlock item)
             {
-                items.Add(new ListItem(Blocks(item)));
+                items.Add(new ListItem(Blocks(item, softBreaks)));
             }
         }
 
@@ -186,7 +194,7 @@ public sealed class MarkdigParser : IMarkdownParser
                     Add(inlines, new TextRun(" "));
                 }
 
-                foreach (var inline in Inlines(leaf.Inline))
+                foreach (var inline in Inlines(leaf.Inline, softBreaks: false))
                 {
                     Add(inlines, inline);
                 }
@@ -196,18 +204,18 @@ public sealed class MarkdigParser : IMarkdownParser
         return inlines;
     }
 
-    private static List<MarkdownInline> Inlines(ContainerInline? container)
+    private static List<MarkdownInline> Inlines(ContainerInline? container, bool softBreaks)
     {
         var inlines = new List<MarkdownInline>();
         if (container is not null)
         {
-            Walk(container, inlines, bold: false, italic: false);
+            Walk(container, inlines, bold: false, italic: false, softBreaks);
         }
 
         return inlines;
     }
 
-    private static void Walk(ContainerInline container, List<MarkdownInline> into, bool bold, bool italic)
+    private static void Walk(ContainerInline container, List<MarkdownInline> into, bool bold, bool italic, bool softBreaks)
     {
         foreach (var inline in container)
         {
@@ -220,7 +228,7 @@ public sealed class MarkdigParser : IMarkdownParser
                     Add(into, new TextRun(code.Content, bold, italic, Code: true));
                     break;
                 case EmphasisInline emphasis:
-                    Walk(emphasis, into, bold || emphasis.DelimiterCount >= 2, italic || emphasis.DelimiterCount == 1);
+                    Walk(emphasis, into, bold || emphasis.DelimiterCount >= 2, italic || emphasis.DelimiterCount == 1, softBreaks);
                     break;
                 case LinkInline { IsImage: true } image:
                     Add(into, new ImageRun(PlainText(image), image.Url ?? ""));
@@ -235,7 +243,7 @@ public sealed class MarkdigParser : IMarkdownParser
                     Add(into, new LinkRun(autolink.Url, autolink.Url));
                     break;
                 case LineBreakInline lineBreak:
-                    if (lineBreak.IsHard)
+                    if (lineBreak.IsHard || softBreaks)
                     {
                         into.Add(new HardBreak());
                     }
@@ -251,10 +259,10 @@ public sealed class MarkdigParser : IMarkdownParser
                 case DelimiterInline delimiter:
                     // An opener that never closed: shown as typed.
                     Add(into, new TextRun(delimiter.ToLiteral(), bold, italic));
-                    Walk(delimiter, into, bold, italic);
+                    Walk(delimiter, into, bold, italic, softBreaks);
                     break;
                 case ContainerInline nested:
-                    Walk(nested, into, bold, italic);
+                    Walk(nested, into, bold, italic, softBreaks);
                     break;
                 case LeafInline leaf:
                     Add(into, new TextRun(leaf.ToString() ?? "", bold, italic));

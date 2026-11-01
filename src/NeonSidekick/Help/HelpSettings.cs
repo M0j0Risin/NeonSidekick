@@ -117,7 +117,7 @@ public static class HelpSettings
         SettingsField.AgentSkills => "Lists the skills in the prompt and offers `load_skill` and `skill_editor`. Off also turns off *Project file*.",
         SettingsField.ExternalSkills => "Also reads the skills in `%USERPROFILE%\\.agents\\skills`, read-only.",
         SettingsField.SkillCompactMode => "`protected` keeps a loaded skill's instructions through a prune; `unprotected` prunes them like any tool result.",
-        SettingsField.TranscriptMarkdown => "Renders replies as Markdown instead of plain text. Code fences in C#, JavaScript/TypeScript, Python, Bash, PowerShell, JSON, YAML, TOML/INI, SQL, C/C++, Java, Kotlin, Go, Rust, CSS, XML/HTML and diff are syntax-highlighted.",
+        SettingsField.TranscriptMarkdown => "Renders replies as Markdown instead of plain text. Code fences in C#, JavaScript/TypeScript, Python, Bash, PowerShell, JSON, YAML, TOML/INI, SQL, C/C++, Java, Kotlin, Go, Rust, CSS, XML/HTML and diff are syntax-highlighted. A single line break in a reply starts a new line.",
         SettingsField.PastePreviewLines => "How many lines of a long paste show dimmed under its `[Pasted text #n]` placeholder (0–200; 0 = placeholder only).",
         SettingsField.SkillHashMention => "Typing `#` and part of a name on the input line lists the loaded skills; a pick writes `#name` as text.",
         SettingsField.ReflectionAutoLearn => "Lets the app learn from your work: after enough tool calls, or a tool error the model recovered from, a background reflection writes or improves a skill.",

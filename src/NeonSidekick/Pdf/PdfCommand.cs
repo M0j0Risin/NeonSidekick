@@ -240,7 +240,7 @@ public static class PdfCommand
                 return PdfText.NoReply;
             }
 
-            request = new PdfRequest(Markdown: reply, Title: PrintText.ReplyTitle, ByUser: true);
+            request = new PdfRequest(Markdown: reply, Title: PrintText.ReplyTitle, ByUser: true, FromReply: true);
         }
         else if (IsWebAddress(parsed.Target))
         {

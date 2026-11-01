@@ -13,8 +13,9 @@ namespace NeonSidekick.Pdf;
 /// (<paramref name="To"/>: a file, a folder, or blank for beside the source), whether it may replace a file there, and the page
 /// (<paramref name="Landscape"/>, <paramref name="Paper"/>; a web page keeps its own).
 /// </summary>
-/// <remarks><paramref name="ByUser"/> (2026-10-22, the write guard): the user's own <c>/pdf</c>, whose write takes the app's pass (<see cref="WriteGuard.AppWrites"/>).</remarks>
-public sealed record PdfRequest(string? Path = null, Uri? Url = null, string? Markdown = null, string? Title = null, string? To = null, bool Overwrite = false, bool Landscape = false, PdfPaperSize? Paper = null, bool ByUser = false);
+/// <remarks><paramref name="ByUser"/> (2026-10-22, the write guard): the user's own <c>/pdf</c>, whose write takes the app's pass (<see cref="WriteGuard.AppWrites"/>).
+/// <paramref name="FromReply"/> (2026-11-01): <c>/pdf reply</c>, the Markdown read as the transcript shows it (a single line break a new line).</remarks>
+public sealed record PdfRequest(string? Path = null, Uri? Url = null, string? Markdown = null, string? Title = null, string? To = null, bool Overwrite = false, bool Landscape = false, PdfPaperSize? Paper = null, bool ByUser = false, bool FromReply = false);
 
 /// <summary>
 /// The one door to making PDFs (2026-10-03, the user's ask: PDF conversion with no new package): <c>convert_to_pdf</c>,
@@ -413,7 +414,7 @@ public sealed class PdfConverter
             PdfSourceKind.Picture => PdfHtml.Document(source.Display, PdfHtml.Picture(PdfHtml.DataUri(source.Bytes!, PdfHtml.ImageMediaType(source.Full!) ?? "image/png"), source.Display), paper, request.Landscape),
             PdfSourceKind.Listing => PdfHtml.Document(source.Display, PdfHtml.Listing(source.Text!, source.Display), paper, request.Landscape),
             PdfSourceKind.Html => PdfHtmlSanitizer.Rewrite(source.Text!, paper, request.Landscape, inliner.Bytes),
-            _ => PdfHtml.Document(source.Display, PdfHtml.Markdown(source.Text!, inliner.Picture), paper, request.Landscape),
+            _ => PdfHtml.Document(source.Display, PdfHtml.Markdown(source.Text!, inliner.Picture, softBreaksAsLines: request.FromReply), paper, request.Landscape),
         };
         return inliner.OverBudget ? (null, PdfText.PicturesTooLarge((int)(MaxInlineBytes / 1_000_000))) : (html, null);
     }
@@ -422,7 +423,7 @@ public sealed class PdfConverter
     private async Task<string?> PrinterAsync(Source source, PdfRequest request, string pdfPath, CancellationToken cancellationToken)
     {
         var print = source.Full is null
-            ? new PrintRequest(null, Printer: PrintText.PrintToPdfPrinter, Landscape: request.Landscape, Markdown: source.Text, Title: source.Display, OutputFile: pdfPath)
+            ? new PrintRequest(null, Printer: PrintText.PrintToPdfPrinter, Landscape: request.Landscape, Markdown: source.Text, Title: source.Display, OutputFile: pdfPath, FromReply: request.FromReply)
             : new PrintRequest(source.Full, Printer: PrintText.PrintToPdfPrinter, Landscape: request.Landscape, OutputFile: pdfPath);
         var (plan, error) = await Task.Run(() => _print.Prepare(print), cancellationToken).ConfigureAwait(false);
         if (plan is null)
