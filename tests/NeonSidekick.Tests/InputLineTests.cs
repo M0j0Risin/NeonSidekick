@@ -4353,6 +4353,29 @@ public class InputLineTests : IDisposable
         Assert.Equal("the quick fox", await SubmitAsync());
     }
 
+    /// <summary>
+    /// Terminal.app's Option+←/→ (2026-11-02, the Mac pass): its built-in key map sends ESC b / ESC f, which the parser gives as b and f
+    /// with Alt; on a Mac they move a word as the arrows do. Before, they were dropped and the X landed at the end. Option+Shift+B (ESC B)
+    /// and Ctrl+Option+B are not word keys.
+    /// </summary>
+    [MacFact]
+    public async Task TerminalAppOptionArrows_EscapeBAndF_MoveAWordAtATime_OnAMac()
+    {
+        ConsoleKeyInfo metaB = VtInputParser.Plain('b', alt: true), metaF = VtInputParser.Plain('f', alt: true);
+        Push([.. Chars("the quick brown"), metaB, metaB, metaF, Keys.Char('X'), Keys.Enter]);
+        Assert.Equal("the quick Xbrown", await SubmitAsync());
+
+        Assert.False(InputLine.Editor.IsMetaWordKey(VtInputParser.Plain('B', alt: true), 'b'));
+        Assert.False(InputLine.Editor.IsMetaWordKey(new ConsoleKeyInfo('b', ConsoleKey.B, false, alt: true, control: true), 'b'));
+    }
+
+    /// <summary>Off a Mac, Alt+b/f are no word keys (2026-11-02): Ctrl+←/→ are the word moves there.</summary>
+    [WindowsFact]
+    public void MetaWordKeys_AreAMacsOnly()
+    {
+        Assert.False(InputLine.Editor.IsMetaWordKey(VtInputParser.Plain('b', alt: true), 'b'));
+    }
+
     /// <summary>Ctrl+Shift+← selects back to the word's start; typing replaces it.</summary>
     [Fact]
     public async Task CtrlShiftLeft_SelectsAWord()

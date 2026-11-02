@@ -776,6 +776,21 @@ public sealed partial class InputLine
                     Redraw();
                     break;
 
+                case ConsoleKey.B when IsMetaWordKey(k, 'b'):
+                    // Option+← in Terminal.app (2026-11-02, the Mac pass): its built-in key map sends ESC b for it, never an arrow (iTerm2
+                    // sends the arrow), so the parser gives B with Alt, readline's meta-b, which nothing else reads. The word back, no selecting.
+                    _anchor = -1;
+                    _cursor = DraftWords.PreviousStart(_text.ToString(), _cursor);
+                    Redraw();
+                    break;
+
+                case ConsoleKey.F when IsMetaWordKey(k, 'f'):
+                    // Option+→ in Terminal.app (2026-11-02): ESC f, readline's meta-f. The next word's start.
+                    _anchor = -1;
+                    _cursor = DraftWords.NextStart(_text.ToString(), _cursor);
+                    Redraw();
+                    break;
+
                 case ConsoleKey.LeftArrow:
                     // A plain arrow over an empty draft has nothing to move: the screen may spend
                     // it on the welcome splash (2026-09-19).
@@ -1531,5 +1546,15 @@ public sealed partial class InputLine
             _dismissed = null;
             Redraw();
         }
+
+        /// <summary>
+        /// Option alone with b or f on a Mac (2026-11-02, the Mac pass): what Terminal.app's built-in key map sends for Option+←/→ (ESC b,
+        /// ESC f), readline's meta-b and meta-f. The lower-case letter only, so Option+Shift+B (ESC B) stays out, as do Ctrl and every
+        /// other OS (Option is a Mac's word key, Ctrl elsewhere).
+        /// </summary>
+        internal static bool IsMetaWordKey(ConsoleKeyInfo k, char letter) =>
+            OperatingSystem.IsMacOS()
+            && k.KeyChar == letter
+            && (k.Modifiers & (ConsoleModifiers.Alt | ConsoleModifiers.Control | ConsoleModifiers.Shift)) == ConsoleModifiers.Alt;
     }
 }

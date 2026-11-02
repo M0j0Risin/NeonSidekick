@@ -197,6 +197,18 @@ public class VtInputParserTests
         Assert.False(parser.HasPending);
     }
 
+    // Terminal.app's Option+←/→ (2026-11-02, the Mac pass): its built-in key map sends ESC b and ESC f, one read each, never an arrow;
+    // they are b and f with Alt (readline's meta-b, meta-f), the keys the editor takes as a Mac's word moves (InputLine.Editor.IsMetaWordKey).
+    [Fact]
+    public void TerminalAppOptionArrows_EscapeBAndEscapeF_AreBAndFWithAlt()
+    {
+        var events = Parse("\u001bb", "\u001bf");
+
+        Assert.Equal(2, events.Count);
+        Assert.Equal(('b', ConsoleKey.B, ConsoleModifiers.Alt), (Key(events[0]).KeyChar, Key(events[0]).Key, Key(events[0]).Modifiers));
+        Assert.Equal(('f', ConsoleKey.F, ConsoleModifiers.Alt), (Key(events[1]).KeyChar, Key(events[1]).Key, Key(events[1]).Modifiers));
+    }
+
     [Fact]
     public void EscapeEscapeSs3NotAnArrow_IsAnEscapeThenThatKey()
     {
