@@ -180,13 +180,24 @@ public sealed class VtInputParser
 
         if (next == Esc)
         {
-            // ESC ESC [ A (2026-11-01, message jumps): Terminal.app's Option+Up, the meta prefix ahead of a whole arrow — that arrow with
-            // Alt, never an ESC (under a reply a lone ESC cancels it). Until the arrow is whole the pair waits, as a lone trailing ESC does.
-            if (i + 2 >= s.Length || (s[i + 2] == '[' && i + 3 >= s.Length))
+            // ESC ESC [ A / ESC ESC O A (2026-11-01, message jumps): Terminal.app's Option+Up, the meta prefix ahead of a whole arrow —
+            // that arrow with Alt, never an ESC (under a reply a lone ESC cancels it). Until the arrow is whole the pair waits, as a lone
+            // trailing ESC does. The SS3 form is what Terminal.app sends to this app (the Mac pass, later on 2026-11-01): .NET turns on
+            // application cursor keys at start (terminfo's keypad_xmit), so Up is ESC O A and Option+Up is ESC then ESC O A, two writes
+            // 0.2 ms apart; ESC ESC [ A is only what it sends in normal cursor mode. Only the arrows: ESC ESC O P stays an ESC and F1.
+            if (i + 2 >= s.Length || (s[i + 2] is '[' or 'O' && i + 3 >= s.Length))
             {
                 if (!final)
                 {
                     return 0;
+                }
+            }
+            else if (s[i + 2] == 'O')
+            {
+                if (Ss3Key(s[i + 3]) is { Key: ConsoleKey.UpArrow or ConsoleKey.DownArrow or ConsoleKey.LeftArrow or ConsoleKey.RightArrow } arrow)
+                {
+                    events.Add(new InputEvent.Key(new ConsoleKeyInfo(arrow.KeyChar, arrow.Key, shift: false, alt: true, control: false)));
+                    return 4;
                 }
             }
             else if (s[i + 2] == '[')

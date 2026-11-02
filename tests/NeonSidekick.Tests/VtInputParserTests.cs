@@ -143,6 +143,58 @@ public class VtInputParserTests
         Assert.Equal((ConsoleKey.UpArrow, ConsoleModifiers.Alt), (up.Key, up.Modifiers));
     }
 
+    // What Terminal.app really sends to the app (the Mac pass, later on 2026-11-01): in application cursor mode, which .NET turns on at
+    // start, Option+Up is ESC then ESC O A, written apart; before, the parser read it as an ESC and a plain Up (the rewind, or a reply cancelled).
+    [Fact]
+    public void EscapeEscapeSs3Arrow_IsTheArrowWithAlt()
+    {
+        foreach (var (bytes, key) in new[] { ("\u001b\u001bOA", ConsoleKey.UpArrow), ("\u001b\u001bOB", ConsoleKey.DownArrow), ("\u001b\u001bOC", ConsoleKey.RightArrow), ("\u001b\u001bOD", ConsoleKey.LeftArrow) })
+        {
+            var arrow = Key(Assert.Single(Parse(bytes)));
+            Assert.Equal((key, ConsoleModifiers.Alt), (arrow.Key, arrow.Modifiers));
+        }
+    }
+
+    [Theory]
+    [InlineData("\u001b", "\u001bOA")]     // Terminal.app's two writes
+    [InlineData("\u001b\u001b", "OA")]
+    [InlineData("\u001b\u001bO", "A")]
+    public void EscapeEscapeSs3Arrow_SplitOverTwoReads_WaitsThenIsTheArrowWithAlt(string first, string second)
+    {
+        var parser = new VtInputParser();
+        var events = new List<InputEvent>();
+        parser.Feed(System.Text.Encoding.ASCII.GetBytes(first), events);
+        Assert.Empty(events);
+        Assert.True(parser.HasPending);
+        parser.Feed(System.Text.Encoding.ASCII.GetBytes(second), events);
+
+        var up = Key(Assert.Single(events));
+        Assert.Equal((ConsoleKey.UpArrow, ConsoleModifiers.Alt), (up.Key, up.Modifiers));
+    }
+
+    [Fact]
+    public void EscapeEscapeO_AtTheTimeout_IsAnEscapeThenAltShiftO()
+    {
+        var parser = new VtInputParser();
+        var events = new List<InputEvent>();
+        parser.Feed("\u001b\u001bO"u8, events);
+        Assert.Empty(events);
+
+        parser.Flush(events);
+
+        Assert.Equal(2, events.Count);
+        Assert.Equal(ConsoleKey.Escape, Key(events[0]).Key);
+        Assert.Equal((ConsoleKey.O, ConsoleModifiers.Alt | ConsoleModifiers.Shift), (Key(events[1]).Key, Key(events[1]).Modifiers));
+        Assert.False(parser.HasPending);
+    }
+
+    [Fact]
+    public void EscapeEscapeSs3NotAnArrow_IsAnEscapeThenThatKey()
+    {
+        var events = Parse("\u001b\u001bOP");
+        Assert.Equal([ConsoleKey.Escape, ConsoleKey.F1], events.Select(e => Key(e).Key));
+    }
+
     [Fact]
     public void EscapeEscape_AtTheTimeout_IsTwoEscapes()
     {

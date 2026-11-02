@@ -36,6 +36,12 @@ public partial class ChatScreenTests
     }
 
     /// <summary>A working folder of its own holding <c>src/Foo.cs</c> and <c>My Docs/a b.txt</c>, in force; its full path.</summary>
+    /// <summary>
+    /// 120 columns, or the path's length where it is longer (the Mac pass, later on 2026-11-01): /browse's path row is cut to the width, and a
+    /// Mac's TMPDIR (/var/folders/xx/…/T/, 49 characters) made the test file's path 123, so the whole-line match failed there.
+    /// </summary>
+    private static int WideEnoughFor(string path) => Math.Max(120, path.Length);
+
     private string LinkFolder()
     {
         string folder = Path.Combine(_dir, "linked");
@@ -151,8 +157,8 @@ public partial class ChatScreenTests
     {
         _settings.Update(d => d.TtsOutput = false);
         PaneOf40Rows();
-        _console.Profile.Width = 120;
         string folder = LinkFolder();
+        _console.Profile.Width = WideEnoughFor(Path.Combine(folder, "My Docs", "a b.txt"));
         _chat.EnqueueText("Look at `My Docs/a b.txt` here.");
         _chat.EnqueueText("ok");
         StepsWhenIdle(
@@ -179,8 +185,8 @@ public partial class ChatScreenTests
     {
         _settings.Update(d => d.TtsOutput = false);
         PaneOf40Rows();
-        _console.Profile.Width = 120;
         string folder = LinkFolder();
+        _console.Profile.Width = WideEnoughFor(Path.Combine(folder, "My Docs", "a b.txt"));
         StepsWhenIdle(
             Line("/browse " + Path.Combine(folder, "My Docs", "a b.txt")),
             input => input.Push(Keys.Enter, Keys.Escape),   // Enter opens the file at the cursor
