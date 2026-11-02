@@ -18,6 +18,9 @@ public static class CustomCommandText
     /// <summary>The pane's label and its one tab's title.</summary>
     public const string Label = "Commands";
 
+    /// <summary>The pane's heading (2026-11-01, the user's ask): the glyph before the label, as <c>🎓 Skills</c> and the other panes wear theirs; the breadcrumbs start from it. Pinned.</summary>
+    public const string Title = Glyph + " " + Label;
+
     /// <summary><c>/help</c>'s row for <c>/commands</c>.</summary>
     public const string HelpSummary = "manage your own slash commands";
 
@@ -296,15 +299,15 @@ public static class CustomCommandText
     public const string ToGlobal = "to global";
     public const string ToThisProfile = "to this profile";
 
-    public static string PageTitle(string word) => Label + " › " + word;
+    public static string PageTitle(string word) => Title + " › " + word;
 
-    public static string MoveTitle(string word) => Label + " › " + word + " › move";
+    public static string MoveTitle(string word) => Title + " › " + word + " › move";
 
-    public static string CopyTitle(string word) => Label + " › " + word + " › copy to";
+    public static string CopyTitle(string word) => Title + " › " + word + " › copy to";
 
-    public const string NewNameTitle = Label + " › new command: its name";
+    public const string NewNameTitle = Title + " › new command: its name";
 
-    public static string NewScopeTitle(string name) => Label + " › /" + name + " › where";
+    public static string NewScopeTitle(string name) => Title + " › /" + name + " › where";
 
     public static string MovedNotice(string word, string where) => Glyph + " " + word + " moved " + where;
 

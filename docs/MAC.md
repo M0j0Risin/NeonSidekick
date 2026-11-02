@@ -70,6 +70,7 @@ You need an Apple Silicon Mac (M1 or later). Unpack the Mac package as the [READ
 ### Keys & mouse
 
 * **Stand-in keys.** A Mac terminal can't send some chords, so Ctrl+D opens `/model`, Ctrl+] `/terminal`, Ctrl+Option+A `/memory`, and Option+Delete deletes a word. On a bottom-pane list, Delete is fn+⌫ ([Keyboard shortcuts](INTERFACE.md#keyboard-shortcuts)).
+* **Message jumps.** Option+↑/↓ jumps between messages. Ctrl+↑/↓ does too unless Mission Control holds it (System Settings › Keyboard › Keyboard Shortcuts); `/keycheck` says when it does.
 * **No key for these.** Shift+F3 goes back in a find. Click the ☺ for the emoji picker (Ctrl+J arrives as a line break).
 * **Links and paths.** Option+click (Shift+click in iTerm2) opens a link or path; Cmd+click is the terminal's own. On a fold's summary, iTerm2's Cmd+click also folds or unfolds it.
 * **Copy and paste.** Cmd+V is the terminal's paste, text only. The app's paste (Ctrl+V, Option+V, or a right-click where the terminal passes it on) takes a picture first, such as a ⌃⇧⌘4 screenshot.

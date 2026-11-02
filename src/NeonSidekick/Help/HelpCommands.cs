@@ -553,6 +553,7 @@ public static class HelpCommands
         new("/usage",
         [
             new("/usage", "Show token usage and performance statistics; a `~` marks a reasoning count the app estimated (*LLM reasoning estimate*). Ctrl+U runs it too."),
+            new("/usage context", "Open it on the Context tab: what fills the context window (the system prompt, each tool group, the history, pictures and thinking) and what turning a group off would save."),
         ]),
         new("/vault",
         [

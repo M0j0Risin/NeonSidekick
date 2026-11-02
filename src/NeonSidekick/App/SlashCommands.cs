@@ -549,7 +549,7 @@ public static class SlashCommands
             new("/tools", "switch the model's tools on or off"),
             new("/tree", "show the working directory's tree"),
             new("/tts", "toggle speech output"),
-            new("/usage", "show token usage and statistics"),
+            new("/usage", "token usage and what fills the context"),
             new("/vault", "show the Obsidian vault's tree"),
             new("/view", "view images, a folder of them, or a PDF"),
             new("/webui", "serve the chat to a browser"),
@@ -851,5 +851,6 @@ public static class SlashCommands
         or SlashCommand.Loop or SlashCommand.Plan or SlashCommand.CodeAudit or SlashCommand.BotChat or SlashCommand.Claude or SlashCommand.Advisor or SlashCommand.Cmd or SlashCommand.Queue or SlashCommand.Skills or SlashCommand.Test
         or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.EventLog or SlashCommand.Net or SlashCommand.Services or SlashCommand.Tasks or SlashCommand.Ad or SlashCommand.Monitor or SlashCommand.Camera or SlashCommand.Screen or SlashCommand.YouTube or SlashCommand.Shopping or SlashCommand.Print or SlashCommand.Pdf or SlashCommand.Docx or SlashCommand.Perf or SlashCommand.HomeBar or SlashCommand.Toolbar or SlashCommand.Header or SlashCommand.Rewind or SlashCommand.Undo
         or SlashCommand.Log or SlashCommand.Process or SlashCommand.Tools or SlashCommand.Settings or SlashCommand.Find or SlashCommand.WebUi
-        or SlashCommand.Splash or SlashCommand.Pasted;   // 2026-10-18: view|thumbs|purge
+        or SlashCommand.Splash or SlashCommand.Pasted   // 2026-10-18: view|thumbs|purge
+        or SlashCommand.Usage;   // 2026-11-01: /usage context opens the pane on its Context tab
 }

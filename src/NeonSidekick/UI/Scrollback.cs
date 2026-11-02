@@ -112,6 +112,12 @@ public sealed class Scrollback
         /// <summary>The source of a code block whose label this line is (2026-11-01, copy a code block): what its ⧉ copies; null for any other line.</summary>
         public string? CopyText;
 
+        /// <summary>
+        /// The line starts a message (2026-11-01, message jumps): a sent line, or a reply's first committed row — set from the pending mark
+        /// (<see cref="MarkMessageStart"/>) by the first line that takes visible text, or a run's summary opened while it is pending.
+        /// </summary>
+        public bool MessageStart;
+
         /// <summary>The tool run this line is the summary or a member of; null for any other line.</summary>
         public Group? Group;
 
@@ -190,6 +196,9 @@ public sealed class Scrollback
 
     // Some source shows wrapped at the cached width for want of time (2026-10-29, the resize review): RenderPending has work.
     private bool _pending;
+
+    // The next line to take visible text starts a message (2026-11-01, MarkMessageStart).
+    private bool _startPending;
 
     // The shift each picture takes at the cached width (2026-10-29, the resize review): one for all its rows, by its span id.
     private readonly Dictionary<int, int> _shifts = new();
@@ -537,6 +546,46 @@ public sealed class Scrollback
     /// <summary>The last line has no line break after it yet: the flow cursor sits at its end, not on the row under it.</summary>
     public bool LastLineOpen => _lines.Count > 0 && !_lines[^1].Closed;
 
+    /// <summary>
+    /// The next line to take visible text starts a message (2026-11-01, message jumps): a sent line, a reply's first committed row. A blank
+    /// line ahead of it never takes the mark; a run's summary opened while it is pending does (its rows are where the run shows).
+    /// </summary>
+    public void MarkMessageStart() => _startPending = true;
+
+    /// <summary>A mark still pending is dropped (a reply that committed nothing).</summary>
+    public void DropMessageStart() => _startPending = false;
+
+    /// <summary>
+    /// The store rows the messages start on, in order, at the cached width (2026-11-01): a walk over the lines, as <see cref="LineAtRow"/>
+    /// does, so a resize, a fold, the front trim and a clear need no bookkeeping. A start on a line with no rows (a folded run's member)
+    /// is the row the next shown line begins on.
+    /// </summary>
+    public IReadOnlyList<int> MessageStartRows()
+    {
+        var rows = new List<int>();
+        int at = 0;
+        foreach (var line in _lines)
+        {
+            if (line.MessageStart && (rows.Count == 0 || rows[^1] != at))
+            {
+                rows.Add(at);
+            }
+
+            at += line.Rows;
+        }
+
+        return rows;
+    }
+
+    private void TakeStart(Line line)
+    {
+        if (_startPending)
+        {
+            line.MessageStart = true;
+            _startPending = false;
+        }
+    }
+
     /// <summary>The open last line's rows at the cached width, 0 without one (2026-10-30, review F24: the rows a write joining it finds on the screen).</summary>
     internal int OpenLineRows => LastLineOpen ? _lines[^1].Rows : 0;
 
@@ -755,6 +804,11 @@ public sealed class Scrollback
 
             current ??= Open(touched);
             current.Segments.Add(piece);
+            if (_startPending && !string.IsNullOrWhiteSpace(piece.Text))
+            {
+                TakeStart(current);
+            }
+
             if (piece.Link is not null && !current.HasLink)
             {
                 current.HasLink = true;
@@ -905,6 +959,7 @@ public sealed class Scrollback
             Reflow = new Source(renderable, born),
             HasLink = lines.Any(line => line.HasLink),
             CopyText = lines.Select(line => line.CopyText).LastOrDefault(text => text is not null),
+            MessageStart = lines.Any(line => line.MessageStart),
         };
         foreach (var line in _lines.GetRange(_lines.Count - count, count))
         {
@@ -1051,6 +1106,7 @@ public sealed class Scrollback
         _open = null;
         _waiting = null;
         _pending = false;
+        _startPending = false;
         _reshaped = false;
     }
 
@@ -1075,6 +1131,8 @@ public sealed class Scrollback
                     _rows.RemoveRange(_rows.Count - open.Rows, open.Rows);
                 }
 
+                // The glyph's line started the reply: the run's summary, which carries the glyph now, takes the mark.
+                _startPending |= _lines[^1].MessageStart;
                 Forget(_lines[^1]);
                 _lines.RemoveAt(_lines.Count - 1);
                 _reshaped = true;
@@ -1172,6 +1230,7 @@ public sealed class Scrollback
         }
 
         var summary = new Line { Closed = true, Member = -1, BornWidth = born > 0 ? born : Math.Max(0, _width) };
+        TakeStart(summary);
         var group = new Group(_nextGroup++, Math.Max(0, keep), summary, Array.Empty<Segment>())
         {
             Code = !thinking,
@@ -1457,6 +1516,7 @@ public sealed class Scrollback
     private Group NewGroup(int keep, IReadOnlyList<Segment> lead)
     {
         var summary = new Line { Closed = true, Member = -1 };
+        TakeStart(summary);
         var group = new Group(_nextGroup++, keep, summary, lead);
         summary.Group = group;
         _lines.Add(summary);

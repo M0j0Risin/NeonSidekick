@@ -146,6 +146,31 @@ public class TranscriptFindTests : IDisposable
         Assert.False(pane.OverlayOpen);
     }
 
+    /// <summary>Ctrl+Up/Down under the find (2026-11-01, message jumps): the view goes to a message's start and the find stays open, as PgUp/PgDn.</summary>
+    [Fact]
+    public async Task CtrlUpAndDown_JumpTheView_TheFindStaysOpen()
+    {
+        using var pane = Pane();
+        pane.Show();
+        for (int i = 1; i <= 40; i++)
+        {
+            if (i is 10 or 20)
+            {
+                pane.MarkMessageStart();
+            }
+
+            pane.Write(new Markup("line " + i.ToString(System.Globalization.CultureInfo.InvariantCulture) + "\n"));
+        }
+
+        var tops = new List<int>();
+        var input = Steps(pane, tops, [Keys.Ctrl(ConsoleKey.UpArrow)], [Keys.Ctrl(ConsoleKey.UpArrow)], [Keys.Ctrl(ConsoleKey.DownArrow)], [Keys.Escape]);
+
+        await new TranscriptFind(pane, new KeySource(input, TimeSpan.FromMilliseconds(1))).RunAsync("", CancellationToken.None);
+
+        Assert.Equal([-1, 19, 9, 19], tops);   // the starts at rows 19 and 9, each step read with the find still open
+        Assert.False(pane.Scrolled);
+    }
+
     [Fact]
     public async Task NoMatch_SaysSo_AndTheViewStaysPut()
     {

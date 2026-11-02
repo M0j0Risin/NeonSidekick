@@ -1055,6 +1055,12 @@ internal sealed partial class ChatScreen
     private bool _showThinking;
     private long? _thinkingSince;
 
+    // The reply footer's clocks (2026-11-01, feature idea #4), written and read on the turn's thread: when the tool now running was called and
+    // the menu pane's AskedFor then (null between tools), and the turn's asks inside its tools so far, taken off the footer's time too.
+    private long? _toolCalledAt;
+    private TimeSpan _toolAskedAt;
+    private TimeSpan _turnToolAsks;
+
     /// <summary>How long after a first idle Ctrl+C the second one exits (the hint shows meanwhile).</summary>
     public static readonly TimeSpan ExitConfirmWindow = TimeSpan.FromSeconds(2);
 
@@ -2006,6 +2012,15 @@ internal sealed partial class ChatScreen
     public const string PromptsToolLine = PromptsCommand.Word;
 
     /// <summary>
+    /// The custom commands' item (2026-11-01, the user's ask): the area's own 🪄 (<see cref="CustomCommandText.Glyph"/>, on no other bar), right
+    /// after 🎓 and off by default; no switch, so never on the dark slab. A double-click runs <see cref="CommandsToolLine"/>.
+    /// </summary>
+    public const string CommandsToolGlyph = CustomCommandText.Glyph;
+
+    /// <summary>The line the custom commands' item runs (2026-11-01): the bare <c>/commands</c>, the pane.</summary>
+    public const string CommandsToolLine = CustomCommandText.Word;
+
+    /// <summary>
     /// The shopping list's item (2026-10-11, the user's ask): a cart, <see cref="ShoppingToolLine"/>, the list's checklist pane — a pane like
     /// 📺's, after it; the Shopping tools switch's glyph after the printer earlier that day, whose page <c>/tools shopping</c> still opens. Pinned.
     /// </summary>
@@ -2656,6 +2671,7 @@ internal sealed partial class ChatScreen
         YouTubeToolGlyph => YouTubeToolLine,
         BrowserLinksToolGlyph => BrowserLinksToolLine,
         PromptsToolGlyph => PromptsToolLine,
+        CommandsToolGlyph => CommandsToolLine,
         ShoppingToolGlyph => ShoppingToolLine,
         _ => null,
     };
@@ -3016,7 +3032,14 @@ internal sealed partial class ChatScreen
             new("PgUp / PgDn", "scroll the transcript a page at a time"),
             new("Ctrl+Home", "scroll to the top of the transcript"),
             new("Ctrl+End", "scroll to the bottom of the transcript"),
+            new("Ctrl+Up / Down", "jump to the previous or next message"),   // 2026-11-01, message jumps
         };
+        if (mac)
+        {
+            // Two rows, not one "or" label: /keycheck splits a label on " / ", and Option is no chord it probes (as Option+Delete).
+            rows.Add(new("Option+Up / Down", "jump to the previous or next message (Mission Control may hold Ctrl+Up / Down)"));
+        }
+
         if (voiceOn)
         {
             rows.Add(new(pushToTalk.ToString(), "talk (the push-to-talk key)"));
@@ -3210,26 +3233,33 @@ internal sealed partial class ChatScreen
         new(SystemPromptSummary.ToolsTabTitle, () => SystemPromptSummary.ToolsTab(ToolGroups(), _effective().LlmOfferTools)),
     ];
 
-    /// <summary>The tab <c>/usage</c> opens: the tally as it stands when shown (the Notes tab gone since 2026-09-28).</summary>
+    /// <summary>
+    /// The tabs <c>/usage</c> opens: the tally as it stands when shown (the Notes tab gone since 2026-09-28), and since 2026-11-01 what
+    /// fills the context window (<see cref="ContextFacts"/>), built when shown so reopening after a <c>/tools</c> change shows the new numbers.
+    /// </summary>
     private IReadOnlyList<InfoTab> UsageTabs() =>
     [
         new(UsageText.StatisticsTabTitle, () => UsageText.StatisticsTab(_session.Usage, _session.ContextLength)),
+        new(UsageText.ContextTabTitle, () => UsageText.ContextTab(ContextFacts())),
     ];
 
     /// <summary>
     /// <c>/usage</c>: the pane on <see cref="UsageTabs"/>, or — with no pane to open (a redirected
     /// console) — the tally in the transcript. The typed command's path and, since 2026-09-21, the
-    /// double-click's on the hint row's tally (<see cref="ScreenPane.HintZone.Usage"/>).
+    /// double-click's on the hint row's tally (<see cref="ScreenPane.HintZone.Usage"/>). Since 2026-11-01 <paramref name="tab"/> is the
+    /// tab it opens on (<see cref="UsageText.ContextTabIndex"/> for <c>/usage context</c>); with no pane a bare <c>/usage</c> prints the
+    /// Statistics lines and the Context lines after them, and <c>/usage context</c> the Context lines alone.
     /// </summary>
-    private async Task ShowUsageAsync(CancellationToken cancellationToken)
+    private async Task ShowUsageAsync(int tab, CancellationToken cancellationToken)
     {
         if (_pane.Enabled)
         {
-            await _info.ShowAsync(UsageText.Label, UsageTabs(), 0, cancellationToken).ConfigureAwait(false);
+            await _info.ShowAsync(UsageText.Label, UsageTabs(), tab, cancellationToken).ConfigureAwait(false);
             return;
         }
 
-        foreach (var line in UsageText.Lines(_session.Usage, _session.ContextLength))
+        var lines = tab == UsageText.ContextTabIndex ? [] : UsageText.Lines(_session.Usage, _session.ContextLength);
+        foreach (var line in lines.Concat(UsageText.ContextLines(ContextFacts())))
         {
             _transcript.Notice(line);
         }
@@ -5484,6 +5514,10 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.Toolbar:
                 return MentionCompleter.Matches(ToolbarItems.Words.Select(word => new CompletionItem(word, ToolbarItems.DescribeWord(word))).ToList(), argText);
+
+            case SlashCommand.Usage:
+                // context (2026-11-01): the pane opened on its Context tab.
+                return MentionCompleter.Matches([new CompletionItem(UsageText.ContextWord, UsageText.ContextWordNote)], argText);
 
             case SlashCommand.Header:
                 return MentionCompleter.Matches(HeaderToggle.Words.Select(word => new CompletionItem(word, HeaderToggle.DescribeWord(word))).ToList(), argText);
@@ -14900,8 +14934,12 @@ internal sealed partial class ChatScreen
                 _transcript.Notice(WindowNotice(_pane.Profile.Width, _pane.Profile.Height));
                 return false;
 
+            case SlashCommand.Usage when UsageTab(args) is { } usageTab:
+                await ShowUsageAsync(usageTab, cancellationToken).ConfigureAwait(false);
+                return false;
+
             case SlashCommand.Usage:
-                await ShowUsageAsync(cancellationToken).ConfigureAwait(false);
+                _transcript.Error(UsageText.UsageError);
                 return false;
 
             case SlashCommand.KeyCheck:
@@ -18109,6 +18147,9 @@ internal sealed partial class ChatScreen
         _showThinking = effective.LlmShowThinking;
         _thinkingSince = null;
         using var busy = _transcript.BeginBusy(label);
+        long turnStarted = _time.GetTimestamp();   // the reply footer's time (2026-11-01)
+        _toolCalledAt = null;
+        _turnToolAsks = TimeSpan.Zero;
         // What /imagine made since the last message rides with this one (2026-09-24): the notes ahead of the text, the pictures after the user's own.
         var (sentText, sentImages) = bot is null ? TakeImagineNotes(text, images) : (text, images);
         // A held /botchat turn (later on 2026-09-25) replays the events it already has: the model is not asked again.
@@ -18298,7 +18339,7 @@ internal sealed partial class ChatScreen
                 assistant.History.RemoveLastTurn();
             }
 
-            _transcript.EndAssistant();
+            _transcript.EndAssistant(ReplyFooter(bot is null, outcome, failed || (sawError && reply.Length == 0 && trace.ToolCalls == 0), turnStarted, trace));
             // A reflection that ended during the reply reports here, under it, never inside it.
             DrainLearn();
             // A reply that ran to its end with no usage report is counted as unreported; a cut or
@@ -18981,6 +19022,8 @@ internal sealed partial class ChatScreen
             // Every call, the quiet ones too: the tool run's summary counts calls, not lines (2026-09-22).
             _transcript.CountToolCall(counted.Name);
         }
+
+        TimeTool(evt);
 
         if (evt is TurnEvent.ToolCall or TurnEvent.ToolResult)
         {

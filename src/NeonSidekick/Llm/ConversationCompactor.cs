@@ -191,37 +191,54 @@ public static partial class ConversationCompactor
     /// call names and arguments (as the wire's JSON) and results over <see cref="CharsPerToken"/>, plus
     /// <see cref="PictureTokens"/> per picture. A gate's heuristic, never a count: the mid-turn guard adds it to the
     /// last reported usage for what was appended since (<see cref="Assistant.ContextGuard"/>), and subtracts what a
-    /// prune or a summary took away, so a request is judged before it goes out rather than after.
+    /// prune or a summary took away, so a request is judged before it goes out rather than after. Every message's thinking
+    /// counts; <see cref="Estimate"/> counts only what the wire sends back.
     /// </summary>
     public static long EstimateTokens(IEnumerable<ChatMessage> messages)
     {
         ArgumentNullException.ThrowIfNull(messages);
-        long chars = 0;
-        long pictures = 0;
-        foreach (var message in messages)
+        return Estimate(messages as IReadOnlyList<ChatMessage> ?? messages.ToList(), 0).Total;
+    }
+
+    /// <summary>
+    /// The estimate by kind (2026-11-01, the <c>/usage</c> Context tab): characters of text, call names and arguments, results,
+    /// a PDF's text and thinking, and the pictures counted, in one walk. Thinking counts only for messages at index
+    /// <paramref name="thinkingFrom"/> or later (0 = all, <c>messages.Count</c> = none), since the wire sends back only the turn
+    /// in flight's unless every turn's is preserved (<see cref="ThinkingFrom"/>). <see cref="TokenEstimate.Total"/> is
+    /// <see cref="EstimateTokens"/>' figure when every message's thinking counts.
+    /// </summary>
+    public static TokenEstimate Estimate(IReadOnlyList<ChatMessage> messages, int thinkingFrom)
+    {
+        ArgumentNullException.ThrowIfNull(messages);
+        long text = 0, calls = 0, results = 0, documents = 0, thinking = 0, pictures = 0;
+        for (int i = 0; i < messages.Count; i++)
         {
-            foreach (var content in message.Contents)
+            foreach (var content in messages[i].Contents)
             {
                 switch (content)
                 {
-                    case TextContent text:
-                        chars += text.Text?.Length ?? 0;
+                    case TextContent t:
+                        text += t.Text?.Length ?? 0;
                         break;
                     case TextReasoningContent reasoning:
-                        chars += reasoning.Text?.Length ?? 0;
+                        if (i >= thinkingFrom)
+                        {
+                            thinking += reasoning.Text?.Length ?? 0;
+                        }
+
                         break;
                     case FunctionCallContent call:
-                        chars += call.Name.Length + Assistant.SerializeArguments(call.Arguments).Length;
+                        calls += call.Name.Length + Assistant.SerializeArguments(call.Arguments).Length;
                         break;
                     case FunctionResultContent { Result: string result }:
-                        chars += result.Length;
+                        results += result.Length;
                         break;
                     case FunctionResultContent { Result: { } other }:
-                        chars += other.ToString()?.Length ?? 0;
+                        results += other.ToString()?.Length ?? 0;
                         break;
                     case DataContent document when ConversationHistory.DocumentText(document) is { } pdf:
                         // An attached PDF (2026-10-14, the PDF plan's gap 4) weighs its text, not one picture's tokens.
-                        chars += pdf.Length;
+                        documents += pdf.Length;
                         break;
                     case DataContent:
                         pictures++;
@@ -230,7 +247,42 @@ public static partial class ConversationCompactor
             }
         }
 
-        return chars / CharsPerToken + pictures * PictureTokens;
+        return new TokenEstimate(text, calls, results, documents, thinking, pictures);
+    }
+
+    /// <summary>
+    /// The first message whose thinking the wire sends back (2026-11-01): every one with <paramref name="preserveAll"/>
+    /// (<c>LLM preserve thinking</c>), else the turn in flight's, from <see cref="ConversationHistory.InFlightStart"/> — the
+    /// rule <see cref="OpenAICompatibleChatClient.WithReasoningBack"/> applies.
+    /// </summary>
+    public static int ThinkingFrom(IReadOnlyList<ChatMessage> messages, bool preserveAll)
+    {
+        ArgumentNullException.ThrowIfNull(messages);
+        return preserveAll ? 0 : ConversationHistory.InFlightStart(messages);
+    }
+
+    /// <summary>
+    /// <see cref="Estimate"/>'s result (2026-11-01): characters per kind and the pictures counted. The token figures divide
+    /// the characters by <see cref="CharsPerToken"/>; <see cref="Total"/> divides their sum once (so it is
+    /// <see cref="EstimateTokens"/>' figure), and <see cref="HistoryTokens"/> is what the total holds beyond the pictures and
+    /// the thinking, so the three add up to it.
+    /// </summary>
+    public readonly record struct TokenEstimate(long TextChars, long ToolCallChars, long ToolResultChars, long DocumentChars, long ThinkingChars, long Pictures)
+    {
+        /// <summary>The estimate in tokens: every character over <see cref="CharsPerToken"/>, plus <see cref="PictureTokens"/> a picture.</summary>
+        public long Total => (TextChars + ToolCallChars + ToolResultChars + DocumentChars + ThinkingChars) / CharsPerToken + PictureTokens * Pictures;
+
+        /// <summary>The pictures' tokens.</summary>
+        public long PictureTokenCount => PictureTokens * Pictures;
+
+        /// <summary>The thinking's tokens (the part counted).</summary>
+        public long ThinkingTokens => ThinkingChars / CharsPerToken;
+
+        /// <summary>The tool results' tokens, part of <see cref="HistoryTokens"/>.</summary>
+        public long ToolResultTokens => ToolResultChars / CharsPerToken;
+
+        /// <summary>Everything else: text, calls, results and documents, so <c>HistoryTokens + PictureTokenCount + ThinkingTokens == Total</c>.</summary>
+        public long HistoryTokens => Total - PictureTokenCount - ThinkingTokens;
     }
 
     /// <summary>

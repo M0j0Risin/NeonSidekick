@@ -132,8 +132,30 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     // last Draw put on the screen (Lift steps up from it, like the drawn overlay). _blank: the
     // flow is not on the screen — a scrolled draw or a resize erased it — and the next draw at
     // the bottom writes the store's tail back first (RestoreFlow). _liveCount: the live block's
-    // rows not yet committed, for the rows-below count while scrolled.
-    private int _top = -1;
+    // rows not yet committed, for the rows-below count while scrolled. Since 2026-11-01 (new rows while scrolled up) a setter: leaving the
+    // bottom takes a mark of the rows appended so far and the live rows, so the scroll row can count what came since (FreshRowsLocked).
+    private int _topRow = -1;
+
+    private int _top
+    {
+        get => _topRow;
+        set
+        {
+            if (_topRow < 0 && value >= 0)
+            {
+                _appendedMark = _appendedRows;
+                _liveMark = _liveCount;
+            }
+
+            _topRow = value;
+        }
+    }
+
+    // Rows ever appended to the store (2026-11-01): never lowered by the front trim, nor raised by a fold or a resize's reflow, so a
+    // difference of two readings is what was written in between. The marks are its reading and the live rows' when the view left the bottom.
+    private long _appendedRows;
+    private long _appendedMark;
+    private int _liveMark;
 
     // The transcript's find while one is shown (2026-10-07, ShowFind): its text, and the store row and character of the match it
     // is on; null when none is. The scroll is then held on the store, even at its last window.
@@ -2804,9 +2826,22 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         return starts.Count == 0 ? line : TextFind.Mark(line, starts, find.Length, row == _findRow ? _findStart : -1).ToList();
     }
 
-    /// <summary>The hint row's text while scrolled: <c>⇡ 12 rows below · PgUp/PgDn scroll · Ctrl+End bottom</c>, <c>1 row</c> singular. Pinned.</summary>
-    public static string ScrolledHint(int below) =>
-        "⇡ " + below.ToString(System.Globalization.CultureInfo.InvariantCulture) + (below == 1 ? " row below" : " rows below") + HintSeparator + "PgUp/PgDn scroll" + HintSeparator + "Ctrl+End bottom";
+    /// <summary>
+    /// The hint row's text while scrolled: <c>⇡ 12 rows below · PgUp/PgDn scroll · Ctrl+End bottom</c>, <c>1 row</c> singular. Pinned.
+    /// Since 2026-11-01 (new rows while scrolled up, message jumps): with <paramref name="fresh"/> rows written since the view left the
+    /// bottom, <c>↓ 42 new rows · message 12 of 30 · Ctrl+End bottom</c>; the message holding the top row after the count while
+    /// <paramref name="message"/> and <paramref name="messages"/> are known (0: none). Most useful first: the row is cut from its end.
+    /// </summary>
+    public static string ScrolledHint(int below, int fresh = 0, int message = 0, int messages = 0)
+    {
+        var culture = System.Globalization.CultureInfo.InvariantCulture;
+        string where = message > 0 && messages > 0
+            ? HintSeparator + "message " + message.ToString(culture) + " of " + messages.ToString(culture)
+            : "";
+        return fresh > 0
+            ? "↓ " + fresh.ToString(culture) + (fresh == 1 ? " new row" : " new rows") + where + HintSeparator + "Ctrl+End bottom"
+            : "⇡ " + below.ToString(culture) + (below == 1 ? " row below" : " rows below") + where + HintSeparator + "PgUp/PgDn scroll" + HintSeparator + "Ctrl+End bottom";
+    }
 
     /// <summary>The transcript region's rows over a pane of <paramref name="paneRows"/>: the window less the pane, one at least. Pinned.</summary>
     public static int RegionRows(int height, int paneRows) => Math.Max(1, height - paneRows);
@@ -2829,10 +2864,10 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     /// The scroll's own row (2026-10-01, the user's ask and their pick of centered): <see cref="ScrolledHint"/> cut to
     /// <paramref name="cells"/> and centered in them by the blanks at its left, the odd one at its right. Pure, pinned.
     /// </summary>
-    public static string ScrolledRow(int below, int cells)
+    public static string ScrolledRow(int below, int cells, int fresh = 0, int message = 0, int messages = 0)
     {
         cells = Math.Max(1, cells);
-        string hint = Fit(ScrolledHint(below), cells);
+        string hint = Fit(ScrolledHint(below, fresh, message, messages), cells);
         return new string(' ', (cells - TextCells.Width(hint)) / 2) + hint;
     }
 
@@ -2844,6 +2879,133 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         }
 
         return Math.Max(0, _store.Rows(Width).Count - (_top + RegionRows(_paneRows))) + _liveCount;
+    }
+
+    /// <summary>
+    /// The rows written since the view left the bottom (2026-11-01): the store's appends since the mark, and the live block's rows grown
+    /// (or, once committed, given back) since; 0 at the bottom.
+    /// </summary>
+    private int FreshRowsLocked() =>
+        _top < 0 ? 0 : (int)Math.Clamp(_appendedRows - _appendedMark + _liveCount - _liveMark, 0, int.MaxValue);
+
+    /// <summary>
+    /// The message holding the region's top row and how many the store holds (2026-11-01): (0, 0) at the bottom, with none, or with the
+    /// top row above the first (the banner, the startup notices).
+    /// </summary>
+    private (int Message, int Messages) MessageAtLocked()
+    {
+        if (_top < 0)
+        {
+            return (0, 0);
+        }
+
+        _store.Rows(Width);
+        var starts = _store.MessageStartRows();
+        int message = starts.Count(row => row <= _top);
+        return message == 0 ? (0, 0) : (message, starts.Count);
+    }
+
+    /// <summary>
+    /// Ctrl+↑/↓ (Option+↑/↓ on a Mac; 2026-11-01, message jumps): the region's top row (the bottom window's when not scrolled) to the
+    /// start of the previous message above it (<paramref name="direction"/> &lt; 0) or the next below it; a start inside the last window
+    /// is the bottom. No start that way: nothing moves. Only the view changes. Disabled: nothing.
+    /// </summary>
+    public void JumpMessage(int direction)
+    {
+        if (!Enabled || direction == 0)
+        {
+            return;
+        }
+
+        lock (_gate)
+        {
+            int count = _store.Rows(Width).Count;
+            if (_top < 0 && FitsAtTheBottom(count))
+            {
+                return;
+            }
+
+            int max = Math.Max(0, count - ScrolledRegionRows);
+            int current = _top >= 0 ? _top : max;
+            var starts = _store.MessageStartRows();
+            int target = -1;
+            if (direction < 0)
+            {
+                for (int i = starts.Count - 1; i >= 0; i--)
+                {
+                    if (starts[i] < current)
+                    {
+                        target = starts[i];
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                target = starts.FirstOrDefault(row => row > current, -1);
+                if (target < 0 && _top >= 0 && _liveCount > 0)
+                {
+                    target = max;   // the reply streaming below, its start not committed yet: down to it
+                }
+            }
+
+            if (target < 0)
+            {
+                return;
+            }
+
+            int next = target >= max && _find is null ? -1 : Math.Min(target, max);
+            if (next == _top)
+            {
+                return;
+            }
+
+            _top = next;
+            Redraw();
+        }
+    }
+
+    /// <summary>The next line to take visible text starts a message (2026-11-01, <see cref="Scrollback.MarkMessageStart"/>). Disabled: nothing.</summary>
+    public void MarkMessageStart()
+    {
+        if (!Enabled)
+        {
+            return;
+        }
+
+        lock (_gate)
+        {
+            _store.MarkMessageStart();
+        }
+    }
+
+    /// <summary>The store rows the messages start on at the window's width (2026-11-01, tests); none while disabled.</summary>
+    public IReadOnlyList<int> MessageStartRows()
+    {
+        if (!Enabled)
+        {
+            return [];
+        }
+
+        lock (_gate)
+        {
+            _store.Rows(Width);
+            return _store.MessageStartRows();
+        }
+    }
+
+    /// <summary>A pending message mark dropped (2026-11-01, <see cref="Scrollback.DropMessageStart"/>).</summary>
+    public void DropMessageStart()
+    {
+        if (!Enabled)
+        {
+            return;
+        }
+
+        lock (_gate)
+        {
+            _store.DropMessageStart();
+        }
     }
 
     /// <summary>
@@ -3814,8 +3976,10 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     private int Store(List<Segment> segments, int width)
     {
         _store.ContinueUnit = _member && _sameUnit;
+        int before = _store.Rows(width).Count;   // laid out at the width first: a reflow is not new rows
         int dropped = _store.Append(segments, width, _member, _pictureSpans, _foldSpec, _source, _bornWidth);
         _store.ContinueUnit = false;
+        _appendedRows += Math.Max(0, _store.Count - before + dropped);
         if (_top >= 0 && dropped > 0)
         {
             _top = Math.Max(0, _top - dropped);
@@ -4792,6 +4956,8 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             }
         }
 
+        // A sent line starts a message (2026-11-01, message jumps), a typed slash command's too: the rule is what the screen shows.
+        MarkMessageStart();
         // The preview folds past its first lines once the next thing is said (2026-10-04, SentLineView).
         Write(new SentLineView(InputLine.SubmittedMarkup(submitted, _userLineStyle(), _userGlyph()), preview.Length == 0 ? "" : InputLine.PreviewMarkup(preview)));
         Committed?.Invoke(submitted);
@@ -7698,7 +7864,8 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         int below = RowsBelowLocked();
         if (_find is null || below > 0)
         {
-            return ScrolledRow(below, cells);
+            var (message, messages) = MessageAtLocked();
+            return ScrolledRow(below, cells, FreshRowsLocked(), message, messages);
         }
 
         string end = Fit(FindAtTheEnd, Math.Max(1, cells));

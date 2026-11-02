@@ -1240,7 +1240,7 @@ public sealed class Assistant
         {
             var (summary, usage) = await SummarizeAsync(step.Instruction, step.Transcript, step.RequestLine, cancellationToken).ConfigureAwait(false);
             var messages = step.Rebuild(summary);
-            long saved = ConversationCompactor.EstimateTokens(_history.Messages) - ConversationCompactor.EstimateTokens(messages);
+            long saved = SentEstimate(_history.Messages) - SentEstimate(messages);
             _history.Replace(messages);
             return new MidTurnCompactDone(new ConversationCompactor.Result(before, messages.Count, 0, usage, Summarised: true)
             {
@@ -1254,6 +1254,15 @@ public sealed class Assistant
             return new MidTurnCompactDone(null, 0, ExplainFailure(ex));
         }
     }
+
+    /// <summary>
+    /// The mid-turn guard's estimate of <paramref name="messages"/> as the wire sends them (2026-11-01, riding along with the
+    /// <c>/usage</c> Context tab): an earlier turn's thinking only with <see cref="PreserveThinking"/>
+    /// (<see cref="ConversationCompactor.ThinkingFrom"/>), so a summary of earlier turns isn't credited with thinking that was
+    /// never being sent. Exact for the OpenAI-compatible wire; the Anthropic and Responses clients' signed blocks follow the same rule closely enough.
+    /// </summary>
+    internal long SentEstimate(IReadOnlyList<ChatMessage> messages) =>
+        ConversationCompactor.Estimate(messages, ConversationCompactor.ThinkingFrom(messages, PreserveThinking)).Total;
 
     /// <summary>The stable part of System.ClientModel's network-timeout message, the one the SDK's <c>NetworkTimeout</c> (the request timeout) throws with.</summary>
     public const string NetworkTimeoutMarker = "exceeded the configured timeout";
@@ -2149,7 +2158,7 @@ public sealed class Assistant
                 int arguments = entries.Count(e => e.Argument is not null);
                 if (pruned + arguments > 0)
                 {
-                    projected -= ConversationCompactor.EstimateTokens(_history.Messages) - ConversationCompactor.EstimateTokens(shrunk);
+                    projected -= SentEstimate(_history.Messages) - SentEstimate(shrunk);
                     _history.Replace(shrunk);
                     DiagnosticLog.Info(Category, $"Context at {percent}% of {guard.WindowTokens} tokens after {iteration} tool iteration(s){room}; pruned {pruned} tool result(s) and {arguments} call argument(s) from this turn.");
                     yield return new TurnEvent.Notice(TurnPrunedNotice(percent, pruned, arguments), IsError: false);

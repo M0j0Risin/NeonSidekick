@@ -22,9 +22,12 @@ public sealed class ToolResultView : IRenderable, IFoldLayout
     private readonly IReadOnlyList<string> _detail;
     private readonly int _hidden;
     private readonly bool _failed;
+    private readonly string _time;
 
-    public ToolResultView(string text)
+    /// <param name="time">A slow tool's time suffix (<c> · 2.1s</c>, 2026-11-01, the reply footer), appended after the cut first line so a long one never cuts it.</param>
+    public ToolResultView(string text, string? time = null)
     {
+        _time = time ?? "";
         ArgumentNullException.ThrowIfNull(text);
         var lines = text.ReplaceLineEndings("\n").Split('\n').Select(l => l.TrimEnd()).Where(l => l.Length > 0).ToList();
         _failed = TranscriptRenderer.IsToolFailure(text);
@@ -42,7 +45,7 @@ public sealed class ToolResultView : IRenderable, IFoldLayout
     private Style HeadStyle => new(foreground: _failed ? Theme.Warn : Theme.Dim);
 
     /// <summary>The first line's markup: the glyph's column, the arrow, the line cut to <see cref="TranscriptRenderer.ToolTextLimit"/> cells.</summary>
-    public string HeadMarkup => Theme.ColorMarkup(_failed ? Theme.Warn : Theme.Dim, Lead + Arrow + TranscriptRenderer.Truncate(_head, TranscriptRenderer.ToolTextLimit));
+    public string HeadMarkup => Theme.ColorMarkup(_failed ? Theme.Warn : Theme.Dim, Lead + Arrow + TranscriptRenderer.Truncate(_head, TranscriptRenderer.ToolTextLimit)) + TranscriptRenderer.TimeMarkup(_time);
 
     public FoldLayout? Fold => MoreLines == 0
         ? null

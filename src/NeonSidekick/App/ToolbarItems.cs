@@ -39,6 +39,7 @@ public static class ToolbarItems
     public const string Tools = "tools";
     public const string Mcp = "mcp";
     public const string Skills = "skills";
+    public const string Commands = "commands";   // 2026-11-01, the user's ask: 🪄, /commands' pane, right after Skills, off by default
     public const string Sys = "sys";
     public const string Sessions = "sessions";
     public const string Usage = "usage";
@@ -99,7 +100,7 @@ public static class ToolbarItems
     /// </summary>
     public static readonly string[] Names =
     [
-        Settings, Profile, Themes, WebUi, Tools, Mcp, Skills, Sys, Sessions, Usage, Memory, Prompts, Queue, Ask, CmdList, Police,
+        Settings, Profile, Themes, WebUi, Tools, Mcp, Skills, Commands, Sys, Sessions, Usage, Memory, Prompts, Queue, Ask, CmdList, Police,
         Shell, Files, Image, Web, Advisors, Docker, EventLog, Network, Services, Tasks, Directory, Obsidian, Sql, Oracle, MySql, Sqlite, DuckDb, Postgres, Unc, Ha, Comfy, Camera, Print,
         Log, Process, ComfyView, ComfyThumbs, YouTube, BrowserLinks, ShoppingList, Path, Model,
     ];
@@ -129,6 +130,7 @@ public static class ToolbarItems
         Tools => ChatScreen.ToolsToolGlyph,
         Mcp => ChatScreen.McpToolGlyph,
         Skills => ChatScreen.SkillsToolGlyph,
+        Commands => ChatScreen.CommandsToolGlyph,
         Sys => ChatScreen.SysToolGlyph,
         Sessions => ChatScreen.SessionsToolGlyph,
         Usage => ChatScreen.UsageToolGlyph,
@@ -182,6 +184,7 @@ public static class ToolbarItems
         Tools => "Tools",
         Mcp => "MCP",
         Skills => "Skills",
+        Commands => "Commands",
         Sys => "System prompt",
         Sessions => "Sessions",
         Usage => "Usage",
@@ -239,6 +242,7 @@ public static class ToolbarItems
         Tools => "/tools",
         Mcp => "/mcp",
         Skills => "/skills",
+        Commands => ChatScreen.CommandsToolLine,
         Sys => "/sys",
         Sessions => "/sessions",
         Usage => "/usage",

@@ -203,7 +203,7 @@ internal sealed class CustomCommandsMenu
             };
         }).ToList();
         var tab = new MenuTab(CustomCommandText.Label, []) { SubTabs = subTabs, Sub = Math.Clamp(sub, 0, subTabs.Count - 1) };
-        var page = MenuPage.Tabbed(CustomCommandText.Label, [tab], 0, Keys) with
+        var page = MenuPage.Tabbed(CustomCommandText.Title, [tab], 0, Keys) with
         {
             // The sub-tabs' own bands; the page's turns the band on.
             Footer = (_, _) => null,

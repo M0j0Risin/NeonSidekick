@@ -146,6 +146,14 @@ public sealed class AppSettingsData
     public bool GradientRules { get; set; } = true;
 
     /// <summary>
+    /// A dim line under each reply (2026-11-01, feature idea #4, plan playful-popping-tower): the turn's time, the reply's tokens and decode
+    /// speed, the model's tool calls and the model, a part with no data left out (<see cref="App.UsageText.Footer"/>); with it on, a tool
+    /// that took 2 s or more ends its result line with its time. Time spent on the app's asks inside a tool is left out of both. PC only,
+    /// live only (never on the Web UI, never in a restored session). Off by default. No variable.
+    /// </summary>
+    public bool ReplyFooter { get; set; }
+
+    /// <summary>
     /// Where the built-in picture viewer last closed (2026-09-28, the user's ask: it opens there the next time; position
     /// only, always on — the user's calls): the top-left corner of its restored placement in workspace coordinates, set by
     /// the viewer itself as it closes (<see cref="Viewer.PictureWindow.Placed"/>), never by a menu row. Null, as until the

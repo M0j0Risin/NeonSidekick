@@ -3041,6 +3041,29 @@ public class AssistantTests
         Assert.Equal("hmm", Assert.Single(reply.Contents.OfType<TextReasoningContent>()).Text);
     }
 
+    // The mid-turn guard's estimate (2026-11-01, riding along with /usage's Context tab): an earlier turn's thinking counts only when it is
+    // sent back, with preserve thinking; the turn in flight's always. Until then a prune or summary was credited with thinking never sent.
+    [Fact]
+    public void TheGuardsEstimate_CountsAnEarlierTurnsThinking_OnlyWithPreserveThinking()
+    {
+        var (_, _, assistant) = Build(new AIFunction[] { new EchoTool() });
+        ChatMessage[] messages =
+        [
+            new(ChatRole.User, "one"),
+            new(ChatRole.Assistant, [new TextReasoningContent(LongText(400)), new TextContent("a")]),
+            new(ChatRole.User, "two"),
+            new(ChatRole.Assistant, [new TextReasoningContent(LongText(40)), new TextContent("b")]),
+        ];
+
+        assistant.PreserveThinking = false;
+        long inFlightOnly = assistant.SentEstimate(messages);
+        assistant.PreserveThinking = true;
+        long every = assistant.SentEstimate(messages);
+
+        Assert.Equal(ConversationCompactor.EstimateTokens(messages), every);
+        Assert.Equal(400 / ConversationCompactor.CharsPerToken, every - inFlightOnly);
+    }
+
     [Fact]
     public async Task PreserveThinking_RidesTheRequestsOptions()
     {

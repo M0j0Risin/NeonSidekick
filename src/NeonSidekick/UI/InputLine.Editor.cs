@@ -932,6 +932,14 @@ public sealed partial class InputLine
                     await PasteFromClipboardAsync().ConfigureAwait(false);
                     break;
 
+                case ConsoleKey.UpArrow when (control || alt) && !shift:
+                case ConsoleKey.DownArrow when (control || alt) && !shift:
+                    // Ctrl+Up/Down (Option+Up/Down on a Mac, where Mission Control holds Ctrl's by default; 2026-11-01, message jumps): the
+                    // transcript to the previous or next message's start, at the idle line and under a reply alike. Only the view moves: the
+                    // draft, its cursor, a selection and a history walk stay as they were. With Shift the chord stays the selecting row move.
+                    pane.JumpMessage(k.Key == ConsoleKey.UpArrow ? -1 : +1);
+                    break;
+
                 case ConsoleKey.UpArrow:
                 case ConsoleKey.DownArrow:
                 {

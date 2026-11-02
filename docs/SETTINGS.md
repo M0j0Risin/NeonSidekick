@@ -54,6 +54,7 @@ The app itself, this side of the connection.
 | Image thumbnail size | In columns × rows: `tiny` 32×8, `small` 48×12, `medium` 64×16, `large` 80×20, `xlarge` 96×24, or `fullsize`. | `small` |
 | Copy user prompt | `/copy` puts your prompt above the reply. | on |
 | User line style | Your sent line, in the transcript and on the Web UI's Chat tab: `quiet` (plain), `slab` (on a faint fill) or `bold` (bold in the user color). | `bold` |
+| Reply footer | A dim line under each reply: its time, tokens, speed, tool calls and model. A tool taking 2 s or more shows its time too; time spent answering the app's questions is left out. PC only. | off |
 | Theme | One of the sixty built-in themes, or your own from the home folder's `themes` folder ([Custom themes](COMMANDS.md#custom-themes)). A wide window previews the highlighted one. | `collider` |
 | Themed background | The terminal takes the theme's background while the app runs. | on |
 | Themed external windows | The [app's own windows](INTERFACE.md#the-apps-windows) wear the theme. Off, they stay black. | on |
@@ -64,7 +65,7 @@ The app itself, this side of the connection.
 | Menus max height | How much of the window a pane may take: `half`, `three-quarters` or `full`. Longer lists scroll. | `full` |
 | Hints bar | `auto` (a bar of its own over the status bar while there is a hint, held until the next send), `always`, or `off` (the hints share the status bar). See [The hints bar](INTERFACE.md#the-hints-bar). | `auto` |
 | Status bar | The status bar's sections, order and sides. Enter opens the checklist; see [The status bar](INTERFACE.md#the-status-bar) and [Bar checklists](INTERFACE.md#bar-checklists). | `default`: every section but Working directory; Model and Working directory pinned right |
-| Tool bar | The toolbar's icons, order and sides. Enter (or `/toolbar edit`) opens the checklist; see [The toolbar](INTERFACE.md#the-toolbar). | Settings, Tools, Skills, Memory, Saved prompts, Queue, Shell allowed commands, Shell police, Shell, Files, Image, Web, Web UI, path (14 of 47), with three dividers |
+| Tool bar | The toolbar's icons, order and sides. Enter (or `/toolbar edit`) opens the checklist; see [The toolbar](INTERFACE.md#the-toolbar). | Settings, Tools, Skills, Memory, Saved prompts, Queue, Shell allowed commands, Shell police, Shell, Files, Image, Web, Web UI, path (14 of 49), with three dividers |
 | Performance bar | The performance bar's meters and their places. Enter (or `/perfbar edit`) opens the checklist; **look:** (`l`) or `/perfbar text`, `gauge` or `led` picks the look. See [The performance bar](INTERFACE.md#the-performance-bar). | CPU, RAM, GPU, VRAM, `led` |
 | Home bar | Home Assistant rooms and devices, and the shopping list's 🛒, as chips on a row of their own. Enter (or `/homebar edit`) opens the [picker](INTERFACE.md#the-home-bar). | off |
 | Toolbar order | The order of the five bars under the input line (**Order** on the pane). Enter opens the list; Shift+↑/↓ moves a bar. | `default` (hints bar, status bar, toolbar, performance bar, home bar) |

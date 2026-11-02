@@ -416,5 +416,38 @@ public sealed partial class ChatScreenTests
         Assert.Contains("/review  <file> [focus]  review a file · profile", output);
         Assert.Contains("/triage  Triage it. · global", output);   // no description: the body's first line, Claude Code's way
         Assert.Empty(_chat.Requests);
+        Assert.Contains(CustomCommandText.Title, output);   // the heading wears the glyph (2026-11-01, the user's ask)
+        Assert.Equal("🪄 Commands", CustomCommandText.Title);
+        Assert.Equal("🪄 Commands › /review", CustomCommandText.PageTitle("/review"));
+    }
+
+    /// <summary>
+    /// The 🪄 toolbar item (2026-11-01, the user's ask): off by default; ticked, a double-click opens the pane as <c>/commands</c> does, and the
+    /// typed draft is still on the row after Esc.
+    /// </summary>
+    [Fact]
+    public async Task CustomCommands_TheToolbarsItem_OpensThePane_TheDraftStays()
+    {
+        Assert.DoesNotContain(ToolbarItems.Commands, ToolbarItems.Defaults);
+        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [ToolbarItems.Commands]; });
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 240;
+        _geometry = new ScreenGeometry(() => null, () => 100);   // the line: row 100, the rule 101, the hint row 102, the toolbar 103
+        WriteCustomCommand("triage", "Triage it.", global: true);
+        _chat.EnqueueText("Drafted.");
+        StepsWhenIdle(
+        [
+            .. Typed("my draft"),
+            input => { input.PushClick(0, 103); input.PushClick(0, 103); },   // 🪄
+            Key(Keys.Escape),                                                  // the pane closed
+            Key(Keys.Enter),                                                   // the draft, still on the row, sent
+            Line("/exit"),
+        ]);
+
+        string output = await RunAsync();
+
+        Assert.Contains(CustomCommandText.Title, output);
+        Assert.Contains("/triage  Triage it. · global", output);
+        Assert.Equal("my draft", UserText(Assert.Single(_chat.Requests)));
     }
 }

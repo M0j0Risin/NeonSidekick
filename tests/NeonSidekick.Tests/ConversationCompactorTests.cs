@@ -930,6 +930,39 @@ public class ConversationCompactorTests
         Assert.Equal((4, 1000), (ConversationCompactor.CharsPerToken, ConversationCompactor.PictureTokens));
     }
 
+    // The breakdown (2026-11-01, the /usage Context tab): one walk by kind, the thinking only from thinkingFrom on, the total EstimateTokens' own.
+    [Fact]
+    public void Estimate_SplitsByKind_ThinkingOnlyFromThinkingFrom()
+    {
+        var call = new ChatMessage(ChatRole.Assistant, [new TextReasoningContent(Long(40)), new FunctionCallContent("c1", "echo", new Dictionary<string, object?> { ["text"] = "abcd" })]);
+        ChatMessage[] messages =
+        [
+            User(Long(80)),
+            call,
+            Result("c1", Long(400)),
+            new ChatMessage(ChatRole.User, [new TextContent(Long(4)), new DataContent(new byte[] { 2 }, "image/png")]),
+            new ChatMessage(ChatRole.Assistant, [new TextReasoningContent(Long(20)), new TextContent(Long(16))]),
+        ];
+
+        var all = ConversationCompactor.Estimate(messages, 0);
+        Assert.Equal(new ConversationCompactor.TokenEstimate(100, 19, 400, 0, 60, 1), all);
+        Assert.Equal(ConversationCompactor.EstimateTokens(messages), all.Total);
+        Assert.Equal((100L, 1000L, 15L), (all.ToolResultTokens, all.PictureTokenCount, all.ThinkingTokens));
+        Assert.Equal(all.Total, all.HistoryTokens + all.PictureTokenCount + all.ThinkingTokens);
+
+        Assert.Equal(20, ConversationCompactor.Estimate(messages, 2).ThinkingChars);   // the earlier call's thinking left out
+        Assert.Equal(0, ConversationCompactor.Estimate(messages, messages.Length).ThinkingChars);
+        Assert.Equal(all.Total - 15, ConversationCompactor.Estimate(messages, messages.Length).Total);
+    }
+
+    [Fact]
+    public void ThinkingFrom_EveryTurnWithPreserve_ElseTheTurnInFlight()
+    {
+        ChatMessage[] messages = [User("one"), Assistant("a"), User("two"), Assistant("b")];
+        Assert.Equal(0, ConversationCompactor.ThinkingFrom(messages, preserveAll: true));
+        Assert.Equal(2, ConversationCompactor.ThinkingFrom(messages, preserveAll: false));
+    }
+
     [Fact]
     public void SplitTurn_TheLastTurn_ItsOpeningPairs_EarlierIterations_AndTheLastIteration()
     {

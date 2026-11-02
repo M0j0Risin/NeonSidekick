@@ -338,13 +338,21 @@ public class SlashCommandsTests
     [InlineData("/exit the program please", "the program please")]
     [InlineData("/clear everything", "everything")]
     [InlineData("/new everything", "everything")]
-    [InlineData("/usage reset", "reset")]
     [InlineData("/about x", "x")]
     [InlineData("/window 80", "80")]
     [InlineData("/draft notes.txt", "notes.txt")]   // 2026-09-19: the editor is the argument, never a file
     public void Parse_AKnownCommandWithAnArgumentItDoesNotTake_IsOverloaded(string line, string args)
     {
         Assert.Equal((SlashCommand.Overloaded, args), SlashCommands.Parse(line));
+    }
+
+    // /usage context (2026-11-01, the Context tab): no longer Overloaded; the handler judges the word, any other its usage error.
+    [Theory]
+    [InlineData("/usage context", "context")]
+    [InlineData("/usage reset", "reset")]
+    public void Parse_UsageWithAWord_IsUsage(string line, string args)
+    {
+        Assert.Equal((SlashCommand.Usage, args), SlashCommands.Parse(line));
     }
 
     // /help <words> (2026-10-14, the user's ask): no longer Overloaded; the words are what the model looks up.
@@ -372,6 +380,7 @@ public class SlashCommandsTests
             SlashCommand.Loop, SlashCommand.Plan, SlashCommand.CodeAudit, SlashCommand.BotChat, SlashCommand.Claude, SlashCommand.Advisor, SlashCommand.Cmd, SlashCommand.Queue, SlashCommand.Skills, SlashCommand.Test, SlashCommand.HomeAssistant, SlashCommand.Docker, SlashCommand.EventLog, SlashCommand.Net, SlashCommand.Services, SlashCommand.Tasks, SlashCommand.Ad, SlashCommand.Monitor, SlashCommand.Camera, SlashCommand.Screen, SlashCommand.YouTube, SlashCommand.Shopping, SlashCommand.Print, SlashCommand.Pdf, SlashCommand.Docx, SlashCommand.Perf, SlashCommand.HomeBar, SlashCommand.Toolbar, SlashCommand.Header, SlashCommand.Rewind, SlashCommand.Undo, SlashCommand.Log, SlashCommand.Process, SlashCommand.Tools, SlashCommand.Settings, SlashCommand.Find, SlashCommand.WebUi,
             SlashCommand.Splash, SlashCommand.Pasted,   // 2026-10-18: view|thumbs|purge (/splash took nothing until then)
             SlashCommand.Commands, SlashCommand.Custom,   // 2026-10-30: /commands new|save <name>, and a custom command's text
+            SlashCommand.Usage,   // 2026-11-01: /usage context, the pane on its Context tab
             // /webui [on|off|copy|reset] 2026-10-14; /advisor 2026-10-10; /cmd <command> 2026-10-09; /find [words] 2026-10-07; /process [id] 2026-10-05; /settings <words> | changed 2026-10-04; /pdf later on 2026-10-03; /tools <group> 2026-10-03; /log [--file] later on 2026-10-02; /camera and /docker 2026-10-02; /header [on|off] later still on 2026-10-01; /toolbar [on|off] later on 2026-09-30; /rewind [n] 2026-09-30; /perfbar later on 2026-09-29; /print 2026-09-28; /ha 2026-09-28; /test 2026-09-28; /claude 2026-09-27; /skills add 2026-09-26; /plan 2026-09-26; /botchat 2026-09-24; 2026-09-21 (/queue clear later that day; /skills with edit <name> from then until 2026-09-23); /tools off the list later on 2026-09-22, its expand and collapse root words
         ];
         foreach (var command in Enum.GetValues<SlashCommand>())

@@ -74,7 +74,8 @@ Elsewhere:
 | `/memory forget\|edit` | Forgets every memory after a yes, or opens `memory.json` in your editor. |
 | `/remember <text>` | Adds a memory; refused while *Memory mode* is `off`. |
 | `/msgclear` | Clears this profile's message history (what ↑/↓ recall) after a yes; from the Web UI too, asking on the page and the PC. |
-| `/usage` | Token usage and performance, with rows for `/claude`, `/botchat` and the advisors; `~` marks an estimate. |
+| `/usage` | Token usage and performance, with rows for `/claude`, `/botchat` and the advisors; `~` marks an estimate. A Context tab shows what fills the context window. |
+| `/usage context` | Opens on the Context tab: the system prompt, each tool group, the history, pictures and thinking, and what turning a group off would save. |
 
 ### Models and servers
 

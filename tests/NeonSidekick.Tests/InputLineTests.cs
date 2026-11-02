@@ -725,6 +725,57 @@ public class InputLineTests : IDisposable
         Assert.Equal(text[..at], Assert.IsType<InputResult.Submitted>(await line.ReadAsync()).Text);
     }
 
+    // Message jumps (2026-11-01): Ctrl+Up/Down and Alt (Option) +Up/Down move only the view — never a history walk or a row move; with Shift
+    // the chord is still the selecting row move.
+    [Fact]
+    public async Task OnThePane_CtrlOrAltUp_IsAJump_NeverAHistoryWalk()
+    {
+        var (line, keys) = PaneLine();
+        keys.Push(Chars("first")).Push(Keys.Enter);
+        Assert.Equal("first", Assert.IsType<InputResult.Submitted>(await line.ReadAsync()).Text);
+
+        keys.Push(Chars("abc")).Push(Keys.Ctrl(ConsoleKey.UpArrow), new ConsoleKeyInfo('\0', ConsoleKey.UpArrow, false, true, false), Keys.Ctrl(ConsoleKey.DownArrow)).Push(Chars("d")).Push(Keys.Enter);
+        Assert.Equal("abcd", Assert.IsType<InputResult.Submitted>(await line.ReadAsync()).Text);
+    }
+
+    [Fact]
+    public async Task OnThePane_CtrlShiftUp_StillSelectsAcrossTheRows()
+    {
+        var (line, keys) = PaneLine();
+        string text = TwoRows;
+        var layout = InputLayout.Wrap(text, text.Length, InputLine.AvailableCells(40));
+        int at = layout.IndexAt(0, layout.CursorCol);
+        keys.Push(Chars(text)).Push(new ConsoleKeyInfo('\0', ConsoleKey.UpArrow, true, false, true), Keys.Delete).Push(Keys.Enter);
+        Assert.Equal(text[..at], Assert.IsType<InputResult.Submitted>(await line.ReadAsync()).Text);
+    }
+
+    [Fact]
+    public async Task TheList_KeepsCtrlDown_ItMovesTheHighlight()
+    {
+        var (line, keys, pane, _) = MentionLine();
+        int waits = 0;
+        keys.Push(Chars("@t"));
+        keys.OnWait = () =>
+        {
+            switch (waits++)
+            {
+                case 0:
+                    Assert.True(pane.OverlayOpen);
+                    keys.Push(Keys.Ctrl(ConsoleKey.DownArrow), Keys.Enter);
+                    break;
+                case 1:
+                    Assert.False(pane.OverlayOpen);
+                    Assert.False(pane.Scrolled);
+                    keys.Push(Chars("x")).Push(Keys.Enter);
+                    break;
+            }
+        };
+
+        var submitted = Assert.IsType<InputResult.Submitted>(await line.ReadAsync(multiline: true, mentions: MentionFolderAction.Apply));
+
+        Assert.Equal("@test/thing.txt x", submitted.Text);
+    }
+
     [Fact]
     public async Task OnThePane_TheGoalColumn_SurvivesAShortRow()
     {

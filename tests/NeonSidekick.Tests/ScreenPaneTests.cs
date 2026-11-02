@@ -2963,7 +2963,7 @@ public partial class ScreenPaneTests : IDisposable
     private static string PaneRows(string hint) => Rule(40) + "\n" + InputLine.PromptGlyph + "\n" + Rule(40) + (hint.Length == 0 ? "" : "\n" + hint);
 
     /// <summary>The scroll's row as the 40-column pane draws it: cut to the row with an ellipsis, so no blank to center it (the wording and the centering are pinned apart).</summary>
-    private static string ScrolledRow(int below) => ScreenPane.ScrolledRow(below, 39);
+    private static string ScrolledRow(int below, int fresh = 0) => ScreenPane.ScrolledRow(below, 39, fresh);
 
     /// <summary>The pane while scrolled (2026-10-01): the scroll's row over the upper rule, the hint row the screen's own — empty here.</summary>
     private static string ScrolledPane(int below) => ScrolledRow(below) + "\n" + PaneRows("");
@@ -3191,7 +3191,7 @@ public partial class ScreenPaneTests : IDisposable
         Assert.Equal(5, pane.RowsBelow);
         Assert.Equal(draws, Draws);
         Assert.DoesNotContain("L13", Output[mark..]);
-        Assert.Equal(ScrolledRow(5), Output[mark..].Trim());   // the scroll's row alone, in place (2026-10-01: not the hint row)
+        Assert.Equal(ScrolledRow(5, fresh: 1).Trim(), Output[mark..].Trim());   // the scroll's row alone, in place (2026-10-01: not the hint row); the new row counted since 2026-11-01
 
         // Back at the bottom the new line is on the screen.
         pane.ScrollToEnd();
@@ -3211,7 +3211,7 @@ public partial class ScreenPaneTests : IDisposable
         _time.Advance(ScreenPane.Tick);
         Assert.Equal(6, pane.RowsBelow);   // 4 stored rows below, the block's 2
         Assert.DoesNotContain("live1", Output[mark..]);
-        Assert.Equal(ScrolledRow(6), Output[mark..].Trim());   // the scroll's row alone: no spinner, so no hint row
+        Assert.Equal(ScrolledRow(6, fresh: 2).Trim(), Output[mark..].Trim());   // the scroll's row alone: no spinner, so no hint row; the block's rows new (2026-11-01)
         Assert.Equal(0, pane.LiveRows);
 
         // Committed while scrolled: stored, the count the same; the tick draws nothing more.

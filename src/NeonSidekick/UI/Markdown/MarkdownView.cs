@@ -229,12 +229,19 @@ public sealed class MarkdownView : IRenderable
         return lines;
     }
 
+    /// <summary>
+    /// A table (since 2026-11-01, feature idea #5): a <see cref="FittingTable"/>, the grid while it fits and cards when it is too wide. A card's
+    /// header and value are built as the grid's are, so a quote's color, links and inline code carry over; an empty cell is none on a card.
+    /// </summary>
     private static IRenderable Table(TableBlock table, Style? quote, Func<string, string?>? resolve)
     {
         var spectre = Theme.MarkdownTable();
         int columns = table.Header.Cells.Count;
+        var headers = new List<IRenderable>(columns);
+        var cards = new List<IReadOnlyList<IRenderable?>>(table.Rows.Count);
         for (int c = 0; c < columns; c++)
         {
+            headers.Add(Paragraph(table.Header.Cells[c].Inlines, Theme.TableHeader, resolve, flat: true));
             var column = new TableColumn(Paragraph(table.Header.Cells[c].Inlines, Theme.TableHeader, resolve, flat: true));
             if (c < table.Alignments.Count)
             {
@@ -253,16 +260,23 @@ public sealed class MarkdownView : IRenderable
         foreach (var row in table.Rows)
         {
             var cells = new IRenderable[columns];
+            var card = new IRenderable?[columns];
             for (int c = 0; c < columns; c++)
             {
                 cells[c] = c < row.Cells.Count ? Paragraph(row.Cells[c].Inlines, quote, resolve) : new Text("");
+                card[c] = c < row.Cells.Count && !IsBlank(row.Cells[c].Inlines) ? Paragraph(row.Cells[c].Inlines, quote, resolve) : null;
             }
 
             spectre.AddRow(cells);
+            cards.Add(card);
         }
 
-        return spectre;
+        return new FittingTable(spectre, headers, cards);
     }
+
+    /// <summary>A cell with nothing to show: no inlines, or text runs of whitespace alone.</summary>
+    private static bool IsBlank(IReadOnlyList<MarkdownInline> inlines) =>
+        inlines.All(inline => inline is TextRun run && string.IsNullOrWhiteSpace(run.Text));
 
     /// <summary>
     /// The inlines as one wrapped paragraph. <paramref name="baseStyle"/> is the quote's or the

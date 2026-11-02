@@ -180,7 +180,34 @@ public sealed class VtInputParser
 
         if (next == Esc)
         {
-            // ESC ESC: the first is a lone ESC, the second starts over.
+            // ESC ESC [ A (2026-11-01, message jumps): Terminal.app's Option+Up, the meta prefix ahead of a whole arrow — that arrow with
+            // Alt, never an ESC (under a reply a lone ESC cancels it). Until the arrow is whole the pair waits, as a lone trailing ESC does.
+            if (i + 2 >= s.Length || (s[i + 2] == '[' && i + 3 >= s.Length))
+            {
+                if (!final)
+                {
+                    return 0;
+                }
+            }
+            else if (s[i + 2] == '[')
+            {
+                var arrow = new List<InputEvent>(1);
+                int used = Csi(s, i + 1, arrow, final);
+                if (used == 0)
+                {
+                    return 0;
+                }
+
+                if (arrow is [InputEvent.Key { Info: var a }] && a.Key is ConsoleKey.UpArrow or ConsoleKey.DownArrow or ConsoleKey.LeftArrow or ConsoleKey.RightArrow)
+                {
+                    bool shift = (a.Modifiers & ConsoleModifiers.Shift) != 0;
+                    bool control = (a.Modifiers & ConsoleModifiers.Control) != 0;
+                    events.Add(new InputEvent.Key(new ConsoleKeyInfo(a.KeyChar, a.Key, shift, alt: true, control)));
+                    return 1 + used;
+                }
+            }
+
+            // ESC ESC otherwise: the first is a lone ESC, the second starts over.
             events.Add(new InputEvent.Key(new ConsoleKeyInfo(Esc, ConsoleKey.Escape, false, false, false)));
             return 1;
         }

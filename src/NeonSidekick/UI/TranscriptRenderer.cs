@@ -151,6 +151,9 @@ public sealed class TranscriptRenderer : INoticeSink
     private readonly ScreenPane? _pane;
     private LineState _state = LineState.AtLineStart;
     private bool _assistantOpen;
+
+    // A speaker's line marked this reply's start (2026-11-01, message jumps): BeginAssistant sets no second mark; EndAssistant clears it.
+    private bool _speakerMarked;
     private bool _skipLeadingWhitespace;
 
     // Trailing whitespace of the streamed text so far, written only ahead of more text.
@@ -295,6 +298,7 @@ public sealed class TranscriptRenderer : INoticeSink
         Feed?.Add(WebUi.FeedKind.User, text);
         EndRun();
         BreakIfMidText();
+        _pane?.MarkMessageStart();   // a message starts here (2026-11-01, message jumps)
         _console.MarkupLine(InputLine.SubmittedMarkup(text, _pane?.UserLineStyle(), _pane?.UserGlyph()));
         _state = LineState.AtLineStart;
     }
@@ -309,6 +313,9 @@ public sealed class TranscriptRenderer : INoticeSink
         Feed?.Add(WebUi.FeedKind.Speaker, string.IsNullOrEmpty(avatar) ? name : avatar + " " + name);
         EndRun();
         BreakIfMidText();
+        // The speaker's line starts the bot's reply (2026-11-01, message jumps): the reply's own first row is no second start.
+        _pane?.MarkMessageStart();
+        _speakerMarked = true;
         _console.MarkupLine(SpeakerMarkup(name, color, avatar));
         _state = LineState.AtLineStart;
     }
@@ -511,10 +518,31 @@ public sealed class TranscriptRenderer : INoticeSink
         ArgumentNullException.ThrowIfNull(text);
         // On the pane: the result under its call, its first line and the next ones that fold with the run (2026-10-04); on the page, the same unit (2026-10-15).
         bool sameUnit = TakeCall();
+        string time = TakeToolTime();
         Feed?.Add(WebUi.FeedKind.ToolResult, Truncate(text, ToolTextLimit), failed: IsToolFailure(text), joins: sameUnit);
-        ToolWrite(new ToolResultView(text), () => WriteLine(ToolResultMarkup(name, text), ToolResultMarkup(name, text).TrimStart()), sameUnit);
+        ToolWrite(new ToolResultView(text, time), () => WriteLine(ToolResultMarkup(name, text) + TimeMarkup(time), (ToolResultMarkup(name, text) + TimeMarkup(time)).TrimStart()), sameUnit);
         CountFailure(text);
     }
+
+    // A slow tool's time for the next one-line result (2026-11-01, the reply footer): set by the screen as the result arrives, taken by the
+    // writer that draws it (ToolResult, ToolNote, SkillNote), cleared by the screen at the next call so it never lands on a later tool's line.
+    private string? _toolTime;
+
+    /// <summary>
+    /// The next one-line result's time suffix (<c> · 2.1s</c>, <see cref="App.UsageText.ToolTime"/>), or null for none (2026-11-01, the reply footer):
+    /// the generic result, a tool note and a skill note append it after their cut text; the screen only, never the page.
+    /// </summary>
+    public void ToolTime(string? suffix) => _toolTime = suffix;
+
+    private string TakeToolTime()
+    {
+        string time = _toolTime ?? "";
+        _toolTime = null;
+        return time;
+    }
+
+    /// <summary>A slow tool's suffix in the dim color, or nothing.</summary>
+    internal static string TimeMarkup(string time) => time.Length == 0 ? "" : Theme.DimMarkup(time);
 
     /// <summary>Whether the write that follows completes a call just written (its result or note): it joins the call's unit, so a run's keep count counts calls.</summary>
     private bool TakeCall()
@@ -524,22 +552,22 @@ public sealed class TranscriptRenderer : INoticeSink
         return open;
     }
 
-    public void ToolNote(string text) => Note(text, ToolGlyph);
+    public void ToolNote(string text) => Note(text, ToolGlyph, TakeToolTime());
 
     /// <summary>
     /// An advisor's question line or footer (2026-10-10, the user's ask): <see cref="ToolNote"/> behind <see cref="AdvisorGlyph"/>, still a
     /// tool line, so the run folds as before.
     /// </summary>
-    public void AdvisorNote(string text, string? avatar) => Note(text, AdvisorGlyph(avatar));
+    public void AdvisorNote(string text, string? avatar) => Note(text, AdvisorGlyph(avatar), "");
 
-    private void Note(string text, string glyph)
+    private void Note(string text, string glyph, string time)
     {
         ArgumentNullException.ThrowIfNull(text);
         bool sameUnit = TakeCall();
         Feed?.Add(WebUi.FeedKind.Tool, glyph.TrimStart() + Truncate(text, ToolTextLimit), failed: IsToolFailure(text), joins: sameUnit);
-        ToolLine(ToolNoteMarkup(text, glyph), sameUnit: sameUnit, inlineMarkup: IsToolFailure(text)
+        ToolLine(ToolNoteMarkup(text, glyph) + TimeMarkup(time), sameUnit: sameUnit, inlineMarkup: (IsToolFailure(text)
             ? Theme.ColorMarkup(Theme.Warn, ToolFailedGlyph.TrimStart() + Truncate(text, ToolTextLimit))
-            : Theme.ColorMarkup(Theme.Dim, glyph.TrimStart() + Truncate(text, ToolTextLimit)));
+            : Theme.ColorMarkup(Theme.Dim, glyph.TrimStart() + Truncate(text, ToolTextLimit))) + TimeMarkup(time));
         CountFailure(text);
     }
 
@@ -617,10 +645,11 @@ public sealed class TranscriptRenderer : INoticeSink
     public void SkillNote(string text)
     {
         Feed?.Add(WebUi.FeedKind.Tool, SkillGlyph.TrimStart() + Truncate(text, ToolTextLimit));
-        SkillLine(text);
+        SkillLine(text, TakeToolTime());
     }
 
-    private void SkillLine(string text) => ToolLine(SkillNoteMarkup(text), Theme.ColorMarkup(Theme.Dim, SkillGlyph.TrimStart() + Truncate(text, ToolTextLimit)));
+    private void SkillLine(string text, string time = "") =>
+        ToolLine(SkillNoteMarkup(text) + TimeMarkup(time), Theme.ColorMarkup(Theme.Dim, SkillGlyph.TrimStart() + Truncate(text, ToolTextLimit)) + TimeMarkup(time));
 
     /// <summary><see cref="ToolNote"/> for a result the police refused: the same dim line behind <see cref="PoliceGlyph"/>.</summary>
     public void PoliceNote(string text)
@@ -843,6 +872,12 @@ public sealed class TranscriptRenderer : INoticeSink
         // The opening calls' lines come before the glyph: a run of their own, the reply's calls another.
         EndRun();
         BreakIfMidText();
+        if (!_speakerMarked)
+        {
+            // The reply's first committed row starts a message (2026-11-01, message jumps): the glyph, a tool line or a thinking fold.
+            _pane?.MarkMessageStart();
+        }
+
         _openGlyph = string.IsNullOrEmpty(glyph) ? AssistantGlyph : glyph;
         Feed?.Begin(_openGlyph.Trim());
         _slot = markdown && _pane is { Enabled: true };
@@ -946,13 +981,17 @@ public sealed class TranscriptRenderer : INoticeSink
     /// Closes the reply: a dim <c>(no reply)</c> if nothing was said, then the line is ended and a
     /// blank line separates it from what follows. Safe to call when no reply is open, and the
     /// caller's <c>finally</c> should always call it: a reply left open swallows every later line.
+    /// <paramref name="footer"/> (2026-11-01, the reply footer) is a dim line under the reply's last, ahead of the blank line: the screen
+    /// only, never the page's feed; nothing with no reply open.
     /// </summary>
-    public void EndAssistant()
+    public void EndAssistant(string? footer = null)
     {
+        _toolTime = null;   // a slow tool's time no writer took never outlives its reply
         Feed?.End();
         EndThinking();
         EndRun();
         _glyphPending = false;
+        _speakerMarked = false;
         if (!_assistantOpen)
         {
             return;
@@ -976,6 +1015,7 @@ public sealed class TranscriptRenderer : INoticeSink
                     CommitSlot();
                 }
 
+                WriteFooter(footer);
                 _console.WriteLine();
             }
 
@@ -994,11 +1034,23 @@ public sealed class TranscriptRenderer : INoticeSink
                 _console.WriteLine();
             }
 
+            WriteFooter(footer);
             _console.WriteLine();
         }
 
         _state = LineState.AtLineStart;
         _assistantOpen = false;
+        _pane?.DropMessageStart();   // a reply that committed nothing leaves no mark for the next notice
+    }
+
+    /// <summary>The reply footer's dim line at a line's start (2026-11-01); nothing for null or empty.</summary>
+    private void WriteFooter(string? footer)
+    {
+        if (!string.IsNullOrEmpty(footer))
+        {
+            _console.Write(new Markup(Theme.DimMarkup(footer)));
+            _console.WriteLine();
+        }
     }
 
     /// <summary>

@@ -84,6 +84,8 @@ public class KeyCheckTests
         Assert.Contains("Ctrl+Left", mac);
         Assert.Contains("Ctrl+Right", mac);
         Assert.Contains("Alt+V", mac);
+        Assert.Contains("Ctrl+Up", mac);   // the message jumps (2026-11-01): Mission Control's by default, so the probe can say it is held
+        Assert.Contains("Ctrl+Down", mac);
         var windows = KeyCheck.Chords(ChatScreen.KeyRows(false, ConsoleKey.F4, false, "", mac: false).Select(r => r.Pair), null).Select(c => c.Label).ToList();
         Assert.Contains("Ctrl+Right", windows);
         Assert.Contains("Ctrl+Delete", windows);
@@ -93,6 +95,16 @@ public class KeyCheckTests
     /// The Keys tab is the one list (2026-10-04): every chord the key handling answers to — the command chords, the kill switch,
     /// the learning's cancel, the fold toggle, Ctrl+C — is on it, so <c>/keycheck</c> (and <c>/help</c>) never miss one.
     /// </summary>
+    /// <summary>The message jumps' rows (2026-11-01): <c>Ctrl+Up / Down</c> is two chords to probe; <c>Option+Up / Down</c> none, as Option+Delete.</summary>
+    [Fact]
+    public void TheJumpRows_CtrlIsTwoChords_OptionNone()
+    {
+        var chords = KeyCheck.Chords([("Ctrl+Up / Down", "jump"), ("Option+Up / Down", "jump")], null);
+        Assert.Equal(["Ctrl+Up", "Ctrl+Down"], chords.Select(c => c.Label));
+        Assert.Equal(Ctrl(ConsoleKey.UpArrow), chords[0].Chord);
+        Assert.Equal(Ctrl(ConsoleKey.DownArrow), chords[1].Chord);
+    }
+
     [Fact]
     public void EveryChordTheKeysAnswerTo_IsOnTheKeysTab()
     {

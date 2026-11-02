@@ -536,8 +536,11 @@ internal sealed partial class ChatScreen
             case SlashCommand.Sys:
                 await _info.ShowAsync(SystemPromptSummary.Label, SysPromptTabs(), 0, cancellationToken).ConfigureAwait(false);
                 break;
+            case SlashCommand.Usage when UsageTab(args) is { } usageTab:
+                await _info.ShowAsync(UsageText.Label, UsageTabs(), usageTab, cancellationToken).ConfigureAwait(false);
+                break;
             case SlashCommand.Usage:
-                await _info.ShowAsync(UsageText.Label, UsageTabs(), 0, cancellationToken).ConfigureAwait(false);
+                _flow.Error(UsageText.UsageError);
                 break;
             case SlashCommand.KeyCheck:
                 // /keycheck (2026-10-04): its pane over the reply, as /usage's; an error through the flow sink.

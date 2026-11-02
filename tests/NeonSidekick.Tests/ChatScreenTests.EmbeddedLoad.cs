@@ -53,7 +53,7 @@ public partial class ChatScreenTests
         Assert.Contains("· " + ChatScreen.ConnectCancelledNotice(NoticeGlyphs.Llm), output);
         Assert.Null(_session.Assistant);
         Assert.Null(embedded.Running);
-        Assert.DoesNotContain(Titled(UsageText.Label), output);   // the reply's /usage there is the load's cancel
+        Assert.DoesNotContain(Titled(UsagePaneTitle), output);   // the reply's /usage there is the load's cancel
     }
 
     [Fact]
@@ -203,7 +203,7 @@ public partial class ChatScreenTests
 
         string output = await RunAsync(input);
 
-        Assert.Contains(Titled(UsageText.Label), output);
+        Assert.Contains(Titled(UsagePaneTitle), output);
         Assert.DoesNotContain(ChatScreen.ConnectCancelledNotice(NoticeGlyphs.Llm), output);
         Assert.NotNull(embedded.Running);
     }

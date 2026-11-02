@@ -118,6 +118,54 @@ public class VtInputParserTests
         Assert.False(parser.HasPending);
     }
 
+    // Terminal.app's Option+Up (2026-11-01, message jumps): ESC as a meta prefix ahead of a whole arrow is that arrow with Alt, never an ESC
+    // (under a reply a lone ESC cancels it); split over two reads it waits; the timeout's flush gives the two ESCs; ESC ESC x stays two keys.
+    [Fact]
+    public void EscapeEscapeArrow_IsTheArrowWithAlt()
+    {
+        var up = Key(Assert.Single(Parse("\u001b\u001b[A")));
+        Assert.Equal((ConsoleKey.UpArrow, ConsoleModifiers.Alt), (up.Key, up.Modifiers));
+        var down = Key(Assert.Single(Parse("\u001b\u001b[1;2B")));
+        Assert.Equal((ConsoleKey.DownArrow, ConsoleModifiers.Alt | ConsoleModifiers.Shift), (down.Key, down.Modifiers));
+    }
+
+    [Fact]
+    public void EscapeEscapeArrow_SplitOverTwoReads_WaitsThenIsTheArrowWithAlt()
+    {
+        var parser = new VtInputParser();
+        var events = new List<InputEvent>();
+        parser.Feed("\u001b\u001b"u8, events);
+        Assert.Empty(events);
+        Assert.True(parser.HasPending);
+        parser.Feed("[A"u8, events);
+
+        var up = Key(Assert.Single(events));
+        Assert.Equal((ConsoleKey.UpArrow, ConsoleModifiers.Alt), (up.Key, up.Modifiers));
+    }
+
+    [Fact]
+    public void EscapeEscape_AtTheTimeout_IsTwoEscapes()
+    {
+        var parser = new VtInputParser();
+        var events = new List<InputEvent>();
+        parser.Feed("\u001b\u001b"u8, events);
+        Assert.Empty(events);
+
+        parser.Flush(events);
+
+        Assert.Equal([ConsoleKey.Escape, ConsoleKey.Escape], events.Select(e => Key(e).Key));
+        Assert.False(parser.HasPending);
+    }
+
+    [Fact]
+    public void EscapeEscapeThenAKey_IsAnEscapeThenThatKeyWithAlt()
+    {
+        var events = Parse("\u001b\u001bx");
+        Assert.Equal(2, events.Count);
+        Assert.Equal(ConsoleKey.Escape, Key(events[0]).Key);
+        Assert.Equal((ConsoleKey.X, ConsoleModifiers.Alt), (Key(events[1]).Key, Key(events[1]).Modifiers));
+    }
+
     [Fact]
     public void EscapeThenKey_IsAlt()
     {
