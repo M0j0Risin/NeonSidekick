@@ -166,10 +166,6 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Contains("  · Copy user prompt: off", Output);   // "Copy user text" until 2026-09-18
     }
 
-    /// <summary>
-    /// Gradient rules (2026-11-01): the flip is saved and put in force at once (plan review D44), with no settings change to hand back, so a
-    /// pane closed under a reply needs no later pass for the rules to redraw.
-    /// </summary>
     /// <summary>Reply footer (2026-11-01, feature idea #4): off by default, a toggle under User line style, saved by a flip.</summary>
     [Fact]
     public async Task Toggle_ReplyFooter_IsOffByDefault_AndPersists()
@@ -186,10 +182,14 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.True(_settings.Current.ReplyFooter);
         Assert.True(SettingsMenu.IsToggle(SettingsField.ReplyFooter));
-        Assert.Equal("a dim line under each reply: time, tokens, speed, tools, model", SettingsMenu.ToggleDescribe(SettingsField.ReplyFooter, true));
+        Assert.Equal("a dim line under each reply: time, tokens, speed, tool calls, model", SettingsMenu.ToggleDescribe(SettingsField.ReplyFooter, true));
         Assert.Equal("no line under replies", SettingsMenu.ToggleDescribe(SettingsField.ReplyFooter, false));
     }
 
+    /// <summary>
+    /// Gradient rules (2026-11-01): the flip is saved and put in force at once (plan review D44), with no settings change to hand back, so a
+    /// pane closed under a reply needs no later pass for the rules to redraw.
+    /// </summary>
     [Fact]
     public async Task Toggle_GradientRules_PersistsAndIsInForceAtOnce()
     {

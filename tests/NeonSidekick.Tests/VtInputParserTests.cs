@@ -119,7 +119,7 @@ public class VtInputParserTests
     }
 
     // Terminal.app's Option+Up (2026-11-01, message jumps): ESC as a meta prefix ahead of a whole arrow is that arrow with Alt, never an ESC
-    // (under a reply a lone ESC cancels it); split over two reads it waits; the timeout's flush gives the two ESCs; ESC ESC x stays two keys.
+    // (under a reply a lone ESC cancels it), CSI or SS3 alike; xterm's Meta bit (8, kitty's Super) reads as Alt too (2026-11-02).
     [Fact]
     public void EscapeEscapeArrow_IsTheArrowWithAlt()
     {
@@ -127,34 +127,64 @@ public class VtInputParserTests
         Assert.Equal((ConsoleKey.UpArrow, ConsoleModifiers.Alt), (up.Key, up.Modifiers));
         var down = Key(Assert.Single(Parse("\u001b\u001b[1;2B")));
         Assert.Equal((ConsoleKey.DownArrow, ConsoleModifiers.Alt | ConsoleModifiers.Shift), (down.Key, down.Modifiers));
+        var ss3 = Key(Assert.Single(Parse("\u001b\u001bOA")));
+        Assert.Equal((ConsoleKey.UpArrow, ConsoleModifiers.Alt), (ss3.Key, ss3.Modifiers));
+        var meta = Key(Assert.Single(Parse("\u001b[1;9A")));
+        Assert.Equal((ConsoleKey.UpArrow, ConsoleModifiers.Alt), (meta.Key, meta.Modifiers));
+    }
+
+    // The same-read rule (2026-11-02, the review): an ESC from an earlier read is a lone ESC, so Esc then ↑ under a reply cancels it and
+    // then is ↑; an Option+arrow split over two reads reads that way too, as it did before 2026-11-01.
+    [Fact]
+    public void EscapeEscapeArrow_SplitOverTwoReads_IsAnEscapeThenTheArrow()
+    {
+        var events = Parse("\u001b", "\u001b[A");
+        Assert.Equal([ConsoleKey.Escape, ConsoleKey.UpArrow], events.Select(e => Key(e).Key));
+        Assert.Equal(ConsoleModifiers.None, Key(events[1]).Modifiers);
+
+        var split = Parse("\u001b\u001b", "[A");
+        Assert.Equal([ConsoleKey.Escape, ConsoleKey.UpArrow], split.Select(e => Key(e).Key));
+        Assert.Equal(ConsoleModifiers.None, Key(split[1]).Modifiers);
     }
 
     [Fact]
-    public void EscapeEscapeArrow_SplitOverTwoReads_WaitsThenIsTheArrowWithAlt()
+    public void EscapeEscape_InOneRead_GivesOneEscapeAtOnce_AndTheOtherAtTheTimeout()
     {
         var parser = new VtInputParser();
         var events = new List<InputEvent>();
         parser.Feed("\u001b\u001b"u8, events);
-        Assert.Empty(events);
+        Assert.Equal(ConsoleKey.Escape, Key(Assert.Single(events)).Key);
         Assert.True(parser.HasPending);
-        parser.Feed("[A"u8, events);
-
-        var up = Key(Assert.Single(events));
-        Assert.Equal((ConsoleKey.UpArrow, ConsoleModifiers.Alt), (up.Key, up.Modifiers));
-    }
-
-    [Fact]
-    public void EscapeEscape_AtTheTimeout_IsTwoEscapes()
-    {
-        var parser = new VtInputParser();
-        var events = new List<InputEvent>();
-        parser.Feed("\u001b\u001b"u8, events);
-        Assert.Empty(events);
 
         parser.Flush(events);
 
         Assert.Equal([ConsoleKey.Escape, ConsoleKey.Escape], events.Select(e => Key(e).Key));
         Assert.False(parser.HasPending);
+    }
+
+    // What follows ESC ESC is never run twice (2026-11-02, the review): a paste after Esc arrives whole, a cursor report answers once
+    // (not also F3), a focus report fires once.
+    [Fact]
+    public void EscapeEscape_ThenAPasteACursorReportOrAFocusReport_IsAnEscapeThenThatOnce()
+    {
+        var paste = Parse("\u001b\u001b[200~x\u001b[201~");
+        Assert.Equal(ConsoleKey.Escape, Key(paste[0]).Key);
+        Assert.Equal("x", Assert.IsType<InputEvent.Paste>(Assert.Single(paste.Skip(1))).Text);
+
+        var parser = new VtInputParser { AwaitingCursor = true };
+        int reports = 0;
+        parser.CursorReport = (_, _) => reports++;
+        var events = new List<InputEvent>();
+        parser.Feed("\u001b\u001b[5;10R"u8, events);
+        Assert.Equal(1, reports);
+        Assert.Equal(ConsoleKey.Escape, Key(Assert.Single(events)).Key);
+
+        int focus = 0;
+        var focused = new VtInputParser { FocusChanged = _ => focus++ };
+        var more = new List<InputEvent>();
+        focused.Feed("\u001b\u001b[I"u8, more);
+        Assert.Equal(1, focus);
+        Assert.Equal(ConsoleKey.Escape, Key(Assert.Single(more)).Key);
     }
 
     [Fact]

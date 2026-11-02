@@ -12201,7 +12201,6 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("/mcp", ChatScreen.ToolbarWord(ChatScreen.McpToolGlyph));
         Assert.Equal("/skills", ChatScreen.ToolbarWord(ChatScreen.SkillsToolGlyph));
         Assert.Equal("/commands", ChatScreen.ToolbarWord(ChatScreen.CommandsToolGlyph));   // 2026-11-01, the user's ask: the pane
-        Assert.Equal("🪄", ChatScreen.CommandsToolGlyph);
         Assert.Equal(ChatScreen.CommandsToolGlyph + " Commands", NeonSidekick.CustomCommands.CustomCommandText.Title);   // the pane wears the toolbar's glyph
         Assert.Equal("/sys", ChatScreen.ToolbarWord(ChatScreen.SysToolGlyph));
         Assert.Equal("/sessions", ChatScreen.ToolbarWord(ChatScreen.SessionsToolGlyph));

@@ -127,6 +127,7 @@ internal sealed partial class ChatScreen
     /// </remarks>
     private async Task<AskOutcome<T>> RaceAsync<T>(WebAskSpec spec, Func<CancellationToken, Task<T>> pane, Func<WebAnswerRequest, T> fromWeb, string failure, CancellationToken cancellationToken, bool noticeAnswer = true, bool bothSides = false)
     {
+        using var asking = Llm.ToolSpan.Current?.Asking();   // the wait comes off the running tool's time (2026-11-02, the review)
         if (!FromWebNow && !(bothSides && _effective().WebUi))
         {
             return new AskOutcome<T>(await pane(cancellationToken).ConfigureAwait(false), AskSource.Pc, NeverAsked: false);

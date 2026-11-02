@@ -417,7 +417,6 @@ public sealed partial class ChatScreenTests
         Assert.Contains("/triage  Triage it. · global", output);   // no description: the body's first line, Claude Code's way
         Assert.Empty(_chat.Requests);
         Assert.Contains(CustomCommandText.Title, output);   // the heading wears the glyph (2026-11-01, the user's ask)
-        Assert.Equal("🪄 Commands", CustomCommandText.Title);
         Assert.Equal("🪄 Commands › /review", CustomCommandText.PageTitle("/review"));
     }
 

@@ -47,6 +47,15 @@ public static class Keys
         && (key.Modifiers & ConsoleModifiers.Control) != 0
         && (key.Modifiers & ConsoleModifiers.Alt) == 0;
 
+    /// <summary>
+    /// Ctrl+Up/Down, or Alt (Option) with them, and no Shift: a message jump (2026-11-01; one home since 2026-11-02, the review), read by
+    /// the line's editor and by <c>/find</c>. With Shift the chord stays the selecting row move.
+    /// </summary>
+    public static bool IsMessageJump(ConsoleKeyInfo key) =>
+        key.Key is ConsoleKey.UpArrow or ConsoleKey.DownArrow
+        && (key.Modifiers & (ConsoleModifiers.Control | ConsoleModifiers.Alt)) != 0
+        && (key.Modifiers & ConsoleModifiers.Shift) == 0;
+
     /// <summary>Ctrl+O as the console delivers it: the SI character with the key and Control.</summary>
     public static ConsoleKeyInfo CtrlO => new('\x0f', ConsoleKey.O, false, false, true);
 

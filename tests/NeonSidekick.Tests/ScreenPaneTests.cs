@@ -5292,6 +5292,29 @@ public partial class ScreenPaneTests : IDisposable
         Assert.Contains(CodeFoldText.Summary("text", 13, expanded: false), Output);
     }
 
+    /// <summary>
+    /// A table streaming as the reply's last block is held back from the flow (2026-11-02, the review's P7-1): the grid that fits now turns
+    /// into cards once a wide row arrives, so no grid row may be committed before the table ends; the reply's end commits it whole.
+    /// </summary>
+    [Fact]
+    public void AStreamingTable_IsHeldBack_SoAGridThatTurnsIntoCards_CommitsNoGridRows()
+    {
+        using var pane = Pane();
+        pane.Show();
+        string table = "| a | b | c | d | e | f | g |\n|---|---|---|---|---|---|---|\n" + string.Concat(Enumerable.Range(1, 8).Select(i => "| " + i.ToString(CultureInfo.InvariantCulture) + " | 2 | 3 | 4 | 5 | 6 | 7 |\n"));
+        pane.SetLive(new ReplyBlock("intro\n\n" + table, glyph: false));
+        _time.Advance(ScreenPane.Tick);
+        Assert.True(pane.LiveCommitted <= 2, pane.LiveCommitted.ToString(CultureInfo.InvariantCulture));   // "intro" and its spacer at most
+        Assert.Equal(6, pane.LiveRows);   // the grid's last rows in the region
+
+        pane.SetLive(new ReplyBlock("intro\n\n" + table + "| " + new string('x', 30) + " | 2 | 3 | 4 | 5 | 6 | 7 |\n", glyph: false));
+        _time.Advance(ScreenPane.Tick);
+        pane.CommitLive();
+
+        Assert.DoesNotContain(pane.TranscriptRows(), row => string.Concat(row.Select(s => s.Text)).Contains('╭'));
+        Assert.Contains(pane.TranscriptRows(), row => string.Concat(row.Select(s => s.Text)).Trim() == "a  " + new string('x', 30));
+    }
+
     [Fact]
     public void AStreamingCodeBlock_OnARegionUnderItsWindow_KeepsTheLabel()
     {

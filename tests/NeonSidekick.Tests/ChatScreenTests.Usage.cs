@@ -41,8 +41,8 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.Contains("  · Context: ≈", output, StringComparison.Ordinal);
-        Assert.Contains("  · system prompt: ≈", output, StringComparison.Ordinal);
+        Assert.Contains("  · Context: ~", output, StringComparison.Ordinal);
+        Assert.Contains("  · system prompt: ~", output, StringComparison.Ordinal);
         Assert.DoesNotContain(UsageText.NothingCounted, output, StringComparison.Ordinal);
     }
 
@@ -56,7 +56,7 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         int statistics = output.IndexOf(UsageText.NothingCounted, StringComparison.Ordinal);
-        int context = output.IndexOf("  · system prompt: ≈", StringComparison.Ordinal);
+        int context = output.IndexOf("  · system prompt: ~", StringComparison.Ordinal);
         Assert.True(statistics >= 0 && context > statistics);
     }
 
@@ -71,9 +71,9 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        var totals = Regex.Matches(output, @"  · Context: ≈([\d,]+) tokens").Select(m => long.Parse(m.Groups[1].Value, NumberStyles.AllowThousands, CultureInfo.InvariantCulture)).ToList();
+        var totals = Regex.Matches(output, @"  · Context: ~([\d,]+) tokens").Select(m => long.Parse(m.Groups[1].Value, NumberStyles.AllowThousands, CultureInfo.InvariantCulture)).ToList();
         Assert.Equal(2, totals.Count);
-        var memory = Regex.Match(output, @"  ·   Memory: ≈(\d+)");
+        var memory = Regex.Match(output, @"  ·   Memory: ~(\d+)");
         Assert.True(memory.Success);
         Assert.Single(Regex.Matches(output, @"  ·   Memory: "));   // gone the second time
         Assert.True(totals[1] <= totals[0] - long.Parse(memory.Groups[1].Value, CultureInfo.InvariantCulture));   // its tools, and its prompt section too
@@ -89,7 +89,6 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Contains(UsageText.UsageError, output, StringComparison.Ordinal);
-        Assert.Equal("/usage takes context, or nothing for the pane.", UsageText.UsageError);
     }
 
     [Fact]

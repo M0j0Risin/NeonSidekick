@@ -54,7 +54,7 @@ The app itself, this side of the connection.
 | Image thumbnail size | In columns × rows: `tiny` 32×8, `small` 48×12, `medium` 64×16, `large` 80×20, `xlarge` 96×24, or `fullsize`. | `small` |
 | Copy user prompt | `/copy` puts your prompt above the reply. | on |
 | User line style | Your sent line, in the transcript and on the Web UI's Chat tab: `quiet` (plain), `slab` (on a faint fill) or `bold` (bold in the user color). | `bold` |
-| Reply footer | A dim line under each reply: its time, tokens, speed, tool calls and model. A tool taking 2 s or more shows its time too; time spent answering the app's questions is left out. PC only. | off |
+| Reply footer | A dim line under each reply: time, tokens, speed, tool calls and model, and a tool's time once it takes 2 s or more (time answering the app's questions left out; PC only). | off |
 | Theme | One of the sixty built-in themes, or your own from the home folder's `themes` folder ([Custom themes](COMMANDS.md#custom-themes)). A wide window previews the highlighted one. | `collider` |
 | Themed background | The terminal takes the theme's background while the app runs. | on |
 | Themed external windows | The [app's own windows](INTERFACE.md#the-apps-windows) wear the theme. Off, they stay black. | on |

@@ -7,7 +7,7 @@ namespace NeonSidekick.Tests;
 /// <summary>
 /// The reply footer (2026-11-01, feature idea #4): its words (<see cref="UsageText.Footer"/>, <see cref="UsageText.ToolTime"/>) and where the
 /// renderer writes them — the footer under the reply's last line ahead of its blank one, never on the page; a slow tool's time after its cut
-/// result, on that line alone.
+/// result, on that line alone (an argument of the writer since 2026-11-02, the review: no slot a later line could take).
 /// </summary>
 public class ReplyFooterTests : IDisposable
 {
@@ -20,8 +20,8 @@ public class ReplyFooterTests : IDisposable
     [Fact]
     public void Footer_TheParts_MostUsefulFirst_TheOnesWithNoDataLeftOut()
     {
-        Assert.Equal("12.4s · 812 tok · 48 tok/s · 3 tools · qwen3-32b", UsageText.Footer(new FooterFacts(TimeSpan.FromSeconds(12.4), 812, 48.3, 3, "Qwen/qwen3-32b")));
-        Assert.Equal("1m 05s · 1 tool", UsageText.Footer(new FooterFacts(TimeSpan.FromSeconds(65), 0, null, 1, null)));   // no usage report, no model
+        Assert.Equal("12.4s · 812 tok · 48 tok/s · 3 tool calls · qwen3-32b", UsageText.Footer(new FooterFacts(TimeSpan.FromSeconds(12.4), 812, 48.3, 3, "Qwen/qwen3-32b")));
+        Assert.Equal("1m 05s · 1 tool call", UsageText.Footer(new FooterFacts(TimeSpan.FromSeconds(65), 0, null, 1, null)));   // no usage report, no model
         Assert.Equal("0.4s · 12.5k tok · llama", UsageText.Footer(new FooterFacts(TimeSpan.FromSeconds(0.4), 12_500, null, 0, "llama")));   // untimed: no speed
         Assert.Equal("0.0s", UsageText.Footer(new FooterFacts(TimeSpan.FromSeconds(-1), 0, null, 0, "")));
     }
@@ -73,22 +73,16 @@ public class ReplyFooterTests : IDisposable
     }
 
     [Fact]
-    public void ToolTime_GoesOnTheNextOneLineResult_AfterItsCutText_Once()
+    public void ToolTime_GoesOnTheLineOfTheWriterGivenIt_AfterItsCutText_Once()
     {
         var t = new TranscriptRenderer(_console);
         t.BeginAssistant();
 
-        t.ToolTime(" · 2.5s");
-        t.ToolResult("read_file", new string('a', 300));   // cut at the limit: the time after the ellipsis, never cut itself
+        t.ToolResult("read_file", new string('a', 300), " · 2.5s");   // cut at the limit: the time after the ellipsis, never cut itself
         t.ToolResult("read_file", "next");
-        t.ToolTime(" · 3.0s");
-        t.ToolNote("remembered: a fact");
-        t.ToolTime(" · 4.0s");
-        t.SkillNote("loaded skill 'haiku'");
-        t.ToolTime(" · 5.0s");
-        t.EndAssistant();
-        t.BeginAssistant();
-        t.ToolResult("read_file", "after the reply");
+        t.ToolNote("remembered: a fact", " · 3.0s");
+        t.SkillNote("loaded skill 'haiku'", " · 4.0s");
+        t.ToolNote("a note given none");
         t.EndAssistant();
 
         string output = _console.Output;
@@ -96,22 +90,21 @@ public class ReplyFooterTests : IDisposable
         Assert.Equal(1, Count(output, " · 2.5s"));
         Assert.Contains("remembered: a fact · 3.0s", output, StringComparison.Ordinal);
         Assert.Contains("loaded skill 'haiku' · 4.0s", output, StringComparison.Ordinal);
-        Assert.DoesNotContain(" · 5.0s", output, StringComparison.Ordinal);   // a suffix no writer took ends with its reply
         Assert.DoesNotContain("next ·", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("a note given none ·", output, StringComparison.Ordinal);   // a writer with no time to pass shows none
     }
 
     [Fact]
-    public void ToolTime_Null_ClearsAPendingOne()
+    public void ToolDiff_TheTime_GoesOnItsNoteLine()
     {
         var t = new TranscriptRenderer(_console);
         t.BeginAssistant();
 
-        t.ToolTime(" · 2.5s");
-        t.ToolTime(null);
-        t.ToolResult("read_file", "4 lines");
+        var diff = Files.FileDiff.Of("a.txt", "one\n", "one\ntwo\n")!;
+        t.ToolDiff("edited a.txt", diff, 20, 0, " · 2.5s");
         t.EndAssistant();
 
-        Assert.DoesNotContain(" · 2.5s", _console.Output, StringComparison.Ordinal);
+        Assert.Contains("edited a.txt · 2.5s", _console.Output, StringComparison.Ordinal);
     }
 
     private static int Count(string text, string part)

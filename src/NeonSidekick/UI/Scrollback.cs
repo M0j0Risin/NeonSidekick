@@ -113,8 +113,8 @@ public sealed class Scrollback
         public string? CopyText;
 
         /// <summary>
-        /// The line starts a message (2026-11-01, message jumps): a sent line, or a reply's first committed row — set from the pending mark
-        /// (<see cref="MarkMessageStart"/>) by the first line that takes visible text, or a run's summary opened while it is pending.
+        /// The line starts a message (2026-11-01, message jumps): a sent line, or a reply's first committed row — set by the first line of
+        /// a write made with <see cref="StartsMessage"/> that takes visible text, or by a run's or a block's summary opened with it.
         /// </summary>
         public bool MessageStart;
 
@@ -197,8 +197,11 @@ public sealed class Scrollback
     // Some source shows wrapped at the cached width for want of time (2026-10-29, the resize review): RenderPending has work.
     private bool _pending;
 
-    // The next line to take visible text starts a message (2026-11-01, MarkMessageStart).
-    private bool _startPending;
+    // The rows MessageStartRows gave at the store's shape (2026-11-02, the review: every scroll-row draw walked every line); _shape is
+    // bumped by every wrap, re-layout, merge, trim and clear, so a key that matches is the same rows.
+    private List<int>? _startRows;
+    private (int Shape, int Rows, int Lines, int Dropped) _startKey;
+    private int _shape;
 
     // The shift each picture takes at the cached width (2026-10-29, the resize review): one for all its rows, by its span id.
     private readonly Dictionary<int, int> _shifts = new();
@@ -547,21 +550,37 @@ public sealed class Scrollback
     public bool LastLineOpen => _lines.Count > 0 && !_lines[^1].Closed;
 
     /// <summary>
-    /// The next line to take visible text starts a message (2026-11-01, message jumps): a sent line, a reply's first committed row. A blank
-    /// line ahead of it never takes the mark; a run's summary opened while it is pending does (its rows are where the run shows).
+    /// The write being made starts a message (2026-11-01, message jumps; carried by the write since 2026-11-02, the review: a mark left
+    /// pending was taken by whatever came next, a notice ahead of the reply, or a sent line typed under one). Set by the caller around
+    /// one <see cref="Append(IReadOnlyList{Segment}, int)"/>, <see cref="BeginGroup"/>, <see cref="BeginCodeGroup(int, IReadOnlyList{Segment})"/>
+    /// or <see cref="BeginThinkingGroup(IReadOnlyList{Segment})"/>: its first line with visible text takes it (a blank line never does), a
+    /// summary opened takes it, and it reads false once taken, so a caller sees whether the write had anywhere to put it.
     /// </summary>
-    public void MarkMessageStart() => _startPending = true;
+    public bool StartsMessage { get; set; }
 
-    /// <summary>A mark still pending is dropped (a reply that committed nothing).</summary>
-    public void DropMessageStart() => _startPending = false;
+    /// <summary>
+    /// Rows ever written (2026-11-02, the review: the pane counted the store's growth, so a folding tool run, a code label or a thinking
+    /// header written while scrolled up counted nothing): each append's lines as they wrapped, before any fold, and each block's or run's
+    /// summary. Never lowered by the front trim, a fold or a resize's reflow, so two readings' difference is what was written between.
+    /// </summary>
+    public long RowsWritten { get; private set; }
+
+    /// <summary>The message starts the front trim dropped since the last <see cref="Clear"/> (2026-11-02): message numbers count on past them.</summary>
+    public int StartsTrimmed { get; private set; }
 
     /// <summary>
     /// The store rows the messages start on, in order, at the cached width (2026-11-01): a walk over the lines, as <see cref="LineAtRow"/>
     /// does, so a resize, a fold, the front trim and a clear need no bookkeeping. A start on a line with no rows (a folded run's member)
-    /// is the row the next shown line begins on.
+    /// is the row the next shown line begins on. Kept until the store's shape changes (2026-11-02): the same list while nothing moved.
     /// </summary>
     public IReadOnlyList<int> MessageStartRows()
     {
+        var key = (_shape, _rows.Count, _lines.Count, _frontDropped);
+        if (_startRows is not null && key == _startKey)
+        {
+            return _startRows;
+        }
+
         var rows = new List<int>();
         int at = 0;
         foreach (var line in _lines)
@@ -574,15 +593,39 @@ public sealed class Scrollback
             at += line.Rows;
         }
 
+        _startRows = rows;
+        _startKey = key;
         return rows;
+    }
+
+    /// <summary>How many of <paramref name="sorted"/>'s rows are at or above <paramref name="row"/> (2026-11-02): a binary search.</summary>
+    public static int CountAtOrBefore(IReadOnlyList<int> sorted, int row)
+    {
+        ArgumentNullException.ThrowIfNull(sorted);
+        int lo = 0;
+        int hi = sorted.Count;
+        while (lo < hi)
+        {
+            int mid = (lo + hi) >>> 1;
+            if (sorted[mid] <= row)
+            {
+                lo = mid + 1;
+            }
+            else
+            {
+                hi = mid;
+            }
+        }
+
+        return lo;
     }
 
     private void TakeStart(Line line)
     {
-        if (_startPending)
+        if (StartsMessage)
         {
             line.MessageStart = true;
-            _startPending = false;
+            StartsMessage = false;
         }
     }
 
@@ -772,10 +815,12 @@ public sealed class Scrollback
             EndGroup();
         }
 
-        // The open line is wrapped again with what joins it: its rows leave the cache first.
+        // The open line is wrapped again with what joins it: its rows leave the cache first. What was there counts against the rows
+        // written (RowsWritten, 2026-11-02): the cache's size before, the open line's rows in it.
         var touched = new List<Line>();
         Line? current = null;
         Line? joined = null;
+        int baseline = _rows.Count;
         if (LastLineOpen)
         {
             current = _lines[^1];
@@ -804,7 +849,7 @@ public sealed class Scrollback
 
             current ??= Open(touched);
             current.Segments.Add(piece);
-            if (_startPending && !string.IsNullOrWhiteSpace(piece.Text))
+            if (StartsMessage && !string.IsNullOrWhiteSpace(piece.Text))
             {
                 TakeStart(current);
             }
@@ -876,7 +921,18 @@ public sealed class Scrollback
         if (member && _open!.Folds)
         {
             // The fold moved (a member hid, the summary showed or grew): the run laid out again —
-            // the touched lines' rows are out of the cache already.
+            // the touched lines' rows are out of the cache already. They count as written as they wrap, folded or not (2026-11-02).
+            if (_width > 0)
+            {
+                var scratch = new List<SegmentLine>();
+                foreach (var line in touched)
+                {
+                    Wrap(line, _width, scratch);
+                }
+
+                RowsWritten += Math.Max(0, scratch.Count - (baseline - _rows.Count));
+            }
+
             foreach (var line in touched)
             {
                 line.Rows = 0;
@@ -890,6 +946,8 @@ public sealed class Scrollback
         {
             line.Rows = Wrap(line, _width, _rows);
         }
+
+        RowsWritten += Math.Max(0, _rows.Count - baseline);
 
         if (touched.Any(line => line.Reflow is { } kept && kept.Width != _width))
         {
@@ -942,14 +1000,19 @@ public sealed class Scrollback
     /// <summary>
     /// The last <paramref name="count"/> lines (<paramref name="lines"/>, every one closed, no rows in the cache) made one line holding
     /// them as its parts, kept with <paramref name="renderable"/> (2026-10-29, the resize review). Null, and nothing changed, when the
-    /// write is past <see cref="MaxSourceLines"/> or holds no text (a blank line is the same at every width).
+    /// write is past <see cref="MaxSourceLines"/> or holds no text (a blank line is the same at every width), or when a line after the
+    /// first starts a message (2026-11-02, the review: the one line renders the whole write again at each width, so a start can only sit
+    /// on its first row; a write that opens with blank lines keeps its lines, and its start the right one).
     /// </summary>
     private Line? Merged(List<Line> lines, int count, IRenderable renderable, int born)
     {
-        if (count > MaxSourceLines || !lines.Any(line => line.Segments.Any(s => !string.IsNullOrWhiteSpace(s.Text))))
+        if (count > MaxSourceLines || !lines.Any(line => line.Segments.Any(s => !string.IsNullOrWhiteSpace(s.Text)))
+            || lines.Skip(1).Any(line => line.MessageStart))
         {
             return null;
         }
+
+        _shape++;
 
         var merged = new Line
         {
@@ -959,7 +1022,7 @@ public sealed class Scrollback
             Reflow = new Source(renderable, born),
             HasLink = lines.Any(line => line.HasLink),
             CopyText = lines.Select(line => line.CopyText).LastOrDefault(text => text is not null),
-            MessageStart = lines.Any(line => line.MessageStart),
+            MessageStart = lines[0].MessageStart,
         };
         foreach (var line in _lines.GetRange(_lines.Count - count, count))
         {
@@ -1106,7 +1169,9 @@ public sealed class Scrollback
         _open = null;
         _waiting = null;
         _pending = false;
-        _startPending = false;
+        StartsMessage = false;
+        StartsTrimmed = 0;
+        _shape++;
         _reshaped = false;
     }
 
@@ -1132,7 +1197,7 @@ public sealed class Scrollback
                 }
 
                 // The glyph's line started the reply: the run's summary, which carries the glyph now, takes the mark.
-                _startPending |= _lines[^1].MessageStart;
+                StartsMessage |= _lines[^1].MessageStart;
                 Forget(_lines[^1]);
                 _lines.RemoveAt(_lines.Count - 1);
                 _reshaped = true;
@@ -1244,6 +1309,7 @@ public sealed class Scrollback
         if (_width > 0)
         {
             summary.Rows = Wrap(summary, _width, _rows);
+            RowsWritten += summary.Rows;
         }
     }
 
@@ -1524,6 +1590,7 @@ public sealed class Scrollback
         if (_width > 0)
         {
             summary.Rows = Wrap(summary, _width, _rows);
+            RowsWritten += summary.Rows;
         }
 
         return group;
@@ -1577,6 +1644,7 @@ public sealed class Scrollback
     private void Relayout(Line from)
     {
         _reshaped = true;
+        _shape++;
         if (_width <= 0)
         {
             return;
@@ -1987,11 +2055,17 @@ public sealed class Scrollback
         _rows.RemoveRange(0, rows);
         foreach (var line in _lines.GetRange(0, lines))
         {
+            if (line.MessageStart)
+            {
+                StartsTrimmed++;   // its message is gone, not its number (2026-11-02)
+            }
+
             Forget(line);
         }
 
         _lines.RemoveRange(0, lines);
         _frontDropped += lines;
+        _shape++;
         return rows;
     }
 
@@ -2007,6 +2081,7 @@ public sealed class Scrollback
     /// </summary>
     private int Wrap(Line line, int width, List<SegmentLine> rows)
     {
+        _shape++;
         line.Shift = 0;
         if (line.Parts is { } parts)
         {

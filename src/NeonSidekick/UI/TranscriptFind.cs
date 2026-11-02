@@ -208,7 +208,7 @@ public sealed class TranscriptFind
                     continue;
                 }
 
-                if (IsJump(k))
+                if (Keys.IsMessageJump(k))
                 {
                     // Ctrl/Option+Up/Down (2026-11-01, message jumps): the view to a message's start, the find staying open, as PgUp/PgDn.
                     _pane.JumpMessage(k.Key == ConsoleKey.UpArrow ? -1 : 1);
@@ -274,12 +274,6 @@ public sealed class TranscriptFind
     /// review F66: each went on without a search, the hint left counting the old rows) — a right-click's clipboard is read once, below,
     /// so it is searched first and again if it adds anything.
     /// </summary>
-    /// <summary>Ctrl or Alt (Option) with Up or Down and no Shift: a message jump (2026-11-01).</summary>
-    internal static bool IsJump(ConsoleKeyInfo k) =>
-        k.Key is ConsoleKey.UpArrow or ConsoleKey.DownArrow
-        && (k.Modifiers & (ConsoleModifiers.Control | ConsoleModifiers.Alt)) != 0
-        && (k.Modifiers & ConsoleModifiers.Shift) == 0;
-
     internal static bool SearchesAnyway(InputEvent input, string find) => input switch
     {
         InputEvent.Paste paste => MenuFilter.Pasted(find, paste.Text) is not null,

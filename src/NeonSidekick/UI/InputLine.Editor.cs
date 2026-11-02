@@ -761,15 +761,16 @@ public sealed partial class InputLine
 
                     break;
 
-                case ConsoleKey.LeftArrow when control:
-                    // Ctrl+← (2026-10-04, the UI review): the start of the word, a word back past blanks; with Shift, selecting.
+                case ConsoleKey.LeftArrow when control || (alt && OperatingSystem.IsMacOS()):
+                    // Ctrl+← (2026-10-04, the UI review): the start of the word, a word back past blanks; with Shift, selecting. On a Mac
+                    // Option+← too (2026-11-02, the review), the Mac's own word move, as Option+Delete deletes one.
                     _anchor = shift ? Anchor() : -1;
                     _cursor = DraftWords.PreviousStart(_text.ToString(), _cursor);
                     Redraw();
                     break;
 
-                case ConsoleKey.RightArrow when control:
-                    // Ctrl+→ (2026-10-04): the next word's start; with Shift, selecting.
+                case ConsoleKey.RightArrow when control || (alt && OperatingSystem.IsMacOS()):
+                    // Ctrl+→ (2026-10-04): the next word's start; with Shift, selecting. Option+→ on a Mac (2026-11-02).
                     _anchor = shift ? Anchor() : -1;
                     _cursor = DraftWords.NextStart(_text.ToString(), _cursor);
                     Redraw();
@@ -932,8 +933,8 @@ public sealed partial class InputLine
                     await PasteFromClipboardAsync().ConfigureAwait(false);
                     break;
 
-                case ConsoleKey.UpArrow when (control || alt) && !shift:
-                case ConsoleKey.DownArrow when (control || alt) && !shift:
+                case ConsoleKey.UpArrow when Keys.IsMessageJump(k):
+                case ConsoleKey.DownArrow when Keys.IsMessageJump(k):
                     // Ctrl+Up/Down (Option+Up/Down on a Mac, where Mission Control holds Ctrl's by default; 2026-11-01, message jumps): the
                     // transcript to the previous or next message's start, at the idle line and under a reply alike. Only the view moves: the
                     // draft, its cursor, a selection and a history walk stay as they were. With Shift the chord stays the selecting row move.

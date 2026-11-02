@@ -132,30 +132,20 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     // last Draw put on the screen (Lift steps up from it, like the drawn overlay). _blank: the
     // flow is not on the screen — a scrolled draw or a resize erased it — and the next draw at
     // the bottom writes the store's tail back first (RestoreFlow). _liveCount: the live block's
-    // rows not yet committed, for the rows-below count while scrolled. Since 2026-11-01 (new rows while scrolled up) a setter: leaving the
-    // bottom takes a mark of the rows appended so far and the live rows, so the scroll row can count what came since (FreshRowsLocked).
-    private int _topRow = -1;
+    // rows not yet committed, for the rows-below count while scrolled. Leaving the bottom takes a mark of the rows written so far and the
+    // live rows (2026-11-01, new rows while scrolled up; an explicit MarkLeftBottomLocked since 2026-11-02, the review), so the scroll row
+    // can count what came since (FreshRowsLocked).
+    private int _top = -1;
 
-    private int _top
-    {
-        get => _topRow;
-        set
-        {
-            if (_topRow < 0 && value >= 0)
-            {
-                _appendedMark = _appendedRows;
-                _liveMark = _liveCount;
-            }
-
-            _topRow = value;
-        }
-    }
-
-    // Rows ever appended to the store (2026-11-01): never lowered by the front trim, nor raised by a fold or a resize's reflow, so a
-    // difference of two readings is what was written in between. The marks are its reading and the live rows' when the view left the bottom.
-    private long _appendedRows;
-    private long _appendedMark;
+    // The store's Scrollback.RowsWritten and the live block's unclipped rows when the view left the bottom (2026-11-01); a commit of live
+    // rows moves what it took from the second to the first (2026-11-02), a dropped slot zeroes the second.
+    private long _writtenMark;
     private int _liveMark;
+
+    // A reply's start is owed (2026-11-02, the review: TranscriptRenderer.BeginAssistant's OweMessageStart): the live slot's first commit,
+    // or the reply's first tool line or run, takes it; a notice never does. _startsHere: the write being stored starts a message.
+    private bool _startOwed;
+    private bool _startsHere;
 
     // The transcript's find while one is shown (2026-10-07, ShowFind): its text, and the store row and character of the match it
     // is on; null when none is. The scroll is then held on the store, even at its last window.
@@ -2493,24 +2483,62 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
 
         lock (_gate)
         {
-            int count = _store.Rows(Width).Count;
-            if (_top < 0 && FitsAtTheBottom(count))
+            if (!ScrollTargetLocked(out int max, out int bottomTop, out int liveShown))
             {
                 return;
             }
 
-            int max = Math.Max(0, count - ScrolledRegionRows);
             int current = _top >= 0 ? _top : max;
-            int top = Math.Clamp(current + rows, 0, max);
-            int next = top >= max && _find is null ? -1 : top;   // a find holds the store's last window (2026-10-07)
-            if (next == _top)
-            {
-                return;
-            }
-
-            _top = next;
-            Redraw();
+            MoveTopLocked(Math.Clamp(current + rows, 0, max), Math.Sign(rows), max, bottomTop, liveShown);
         }
+    }
+
+    /// <summary>
+    /// What a scroll moves over (2026-11-02, the review: PgUp, Ctrl+Home and the jumps each measured it, the store alone): the scrolled
+    /// region's last top (<paramref name="max"/>), the store row on the region's top at the bottom (<paramref name="bottomTop"/>, pushed
+    /// down by the live block's rows drawn under the store's) and those rows (<paramref name="liveShown"/>). False at the bottom when the
+    /// store and the live rows fit: nothing to scroll to.
+    /// </summary>
+    private bool ScrollTargetLocked(out int max, out int bottomTop, out int liveShown)
+    {
+        int count = _store.Rows(Width).Count;
+        int bottomRegion = RegionRows(_paneRows - _scrollRows);
+        liveShown = _live is null ? 0 : _top < 0 ? _liveCount : Math.Min(_liveCount, bottomRegion);
+        max = Math.Max(0, count - ScrolledRegionRows);
+        bottomTop = Math.Max(0, count + liveShown - bottomRegion);
+        return _top >= 0 || !FitsAtTheBottom(count + liveShown);
+    }
+
+    /// <summary>
+    /// The region's top moved to store row <paramref name="top"/> (2026-11-02, shared by every scroll): at or past the last window it is the
+    /// bottom — a find holds the window (2026-10-07), and a move up from the bottom to a row the live block pushed above the screen holds
+    /// it too (the bottom would show nothing new). Leaving the bottom takes the new-rows mark. Nothing when nothing moves.
+    /// </summary>
+    private void MoveTopLocked(int top, int direction, int max, int bottomTop, int liveShown)
+    {
+        int next = top < max ? Math.Max(0, top)
+            : _find is not null ? max
+            : direction < 0 && liveShown > 0 && top < bottomTop ? max
+            : -1;
+        if (next == _top)
+        {
+            return;
+        }
+
+        if (_top < 0 && next >= 0)
+        {
+            MarkLeftBottomLocked();
+        }
+
+        _top = next;
+        Redraw();
+    }
+
+    /// <summary>The view leaves the bottom (2026-11-02): the rows written so far and the live block's, what the scroll row's new rows count from.</summary>
+    private void MarkLeftBottomLocked()
+    {
+        _writtenMark = _store.RowsWritten;
+        _liveMark = LiveRowsUnclipped();
     }
 
     /// <summary>The bottom again (Ctrl+End on the line or under a turn): the flow written back where the window was; nothing while not scrolled.</summary>
@@ -2547,15 +2575,12 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
 
         lock (_gate)
         {
-            int count = _store.Rows(Width).Count;
-            int max = Math.Max(0, count - ScrolledRegionRows);
-            if (FitsAtTheBottom(count) || max == 0 || _top == 0)
+            if (!ScrollTargetLocked(out int max, out int bottomTop, out int liveShown) || _top == 0)
             {
                 return;
             }
 
-            _top = 0;
-            Redraw();
+            MoveTopLocked(0, -1, max, bottomTop, liveShown);
         }
     }
 
@@ -2677,7 +2702,13 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     {
         int region = ScrolledRegionRows;
         int max = Math.Max(0, _store.Rows(width > 0 ? width : Width).Count - region);
-        _top = Math.Clamp(_findRow - region / 3, 0, max);
+        int next = Math.Clamp(_findRow - region / 3, 0, max);
+        if (_top < 0)
+        {
+            MarkLeftBottomLocked();   // a find opened at the bottom leaves it too (2026-11-02, the review)
+        }
+
+        _top = next;
     }
 
     /// <summary>The find gone (<see cref="ShowFind"/>): the marks off and the region at the bottom again. Disabled, or no find: nothing.</summary>
@@ -2832,16 +2863,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     /// bottom, <c>↓ 42 new rows · message 12 of 30 · Ctrl+End bottom</c>; the message holding the top row after the count while
     /// <paramref name="message"/> and <paramref name="messages"/> are known (0: none). Most useful first: the row is cut from its end.
     /// </summary>
-    public static string ScrolledHint(int below, int fresh = 0, int message = 0, int messages = 0)
-    {
-        var culture = System.Globalization.CultureInfo.InvariantCulture;
-        string where = message > 0 && messages > 0
-            ? HintSeparator + "message " + message.ToString(culture) + " of " + messages.ToString(culture)
-            : "";
-        return fresh > 0
-            ? "↓ " + fresh.ToString(culture) + (fresh == 1 ? " new row" : " new rows") + where + HintSeparator + "Ctrl+End bottom"
-            : "⇡ " + below.ToString(culture) + (below == 1 ? " row below" : " rows below") + where + HintSeparator + "PgUp/PgDn scroll" + HintSeparator + "Ctrl+End bottom";
-    }
+    public static string ScrolledHint(int below, int fresh = 0, int message = 0, int messages = 0) => ScrollHintText.Hint(below, fresh, message, messages);
 
     /// <summary>The transcript region's rows over a pane of <paramref name="paneRows"/>: the window less the pane, one at least. Pinned.</summary>
     public static int RegionRows(int height, int paneRows) => Math.Max(1, height - paneRows);
@@ -2856,7 +2878,8 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>
     /// A transcript of <paramref name="count"/> rows is whole on the screen at the bottom: there is nothing to scroll to,
-    /// though the scroll's row would leave the scrolled region one row short of it (2026-10-01).
+    /// though the scroll's row would leave the scrolled region one row short of it (2026-10-01). The live block's drawn rows count
+    /// (2026-11-02, <see cref="ScrollTargetLocked"/>).
     /// </summary>
     private bool FitsAtTheBottom(int count) => count <= RegionRows(_paneRows - _scrollRows);
 
@@ -2882,11 +2905,11 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>
-    /// The rows written since the view left the bottom (2026-11-01): the store's appends since the mark, and the live block's rows grown
-    /// (or, once committed, given back) since; 0 at the bottom.
+    /// The rows written since the view left the bottom (2026-11-01): the store's rows written since the mark (<see cref="Scrollback.RowsWritten"/>,
+    /// 2026-11-02: folds, code labels and thinking headers counted), and the live block's rows grown past its mark; 0 at the bottom.
     /// </summary>
     private int FreshRowsLocked() =>
-        _top < 0 ? 0 : (int)Math.Clamp(_appendedRows - _appendedMark + _liveCount - _liveMark, 0, int.MaxValue);
+        _top < 0 ? 0 : (int)Math.Clamp(_store.RowsWritten - _writtenMark + Math.Max(0, _liveCount - _liveMark), 0, int.MaxValue);
 
     /// <summary>
     /// The message holding the region's top row and how many the store holds (2026-11-01): (0, 0) at the bottom, with none, or with the
@@ -2901,14 +2924,16 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
 
         _store.Rows(Width);
         var starts = _store.MessageStartRows();
-        int message = starts.Count(row => row <= _top);
-        return message == 0 ? (0, 0) : (message, starts.Count);
+        int trimmed = _store.StartsTrimmed;   // the messages the cap dropped still count (2026-11-02)
+        int message = Scrollback.CountAtOrBefore(starts, _top) + trimmed;
+        return message == 0 ? (0, 0) : (message, starts.Count + trimmed);
     }
 
     /// <summary>
-    /// Ctrl+↑/↓ (Option+↑/↓ on a Mac; 2026-11-01, message jumps): the region's top row (the bottom window's when not scrolled) to the
-    /// start of the previous message above it (<paramref name="direction"/> &lt; 0) or the next below it; a start inside the last window
-    /// is the bottom. No start that way: nothing moves. Only the view changes. Disabled: nothing.
+    /// Ctrl+↑/↓ (Option+↑/↓ on a Mac; 2026-11-01, message jumps): the region's top row (at the bottom, the row actually there, under the
+    /// live block's push: 2026-11-02, the review) to the start of the previous message above it (<paramref name="direction"/> &lt; 0) or the
+    /// next below it; a start inside the last window is the bottom, and down with no start below is the bottom too. No start up: nothing
+    /// moves. Only the view changes. Disabled: nothing.
     /// </summary>
     public void JumpMessage(int direction)
     {
@@ -2919,54 +2944,88 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
 
         lock (_gate)
         {
-            int count = _store.Rows(Width).Count;
-            if (_top < 0 && FitsAtTheBottom(count))
+            if (!ScrollTargetLocked(out int max, out int bottomTop, out int liveShown))
             {
                 return;
             }
 
-            int max = Math.Max(0, count - ScrolledRegionRows);
-            int current = _top >= 0 ? _top : max;
+            int current = _top >= 0 ? _top : bottomTop;
             var starts = _store.MessageStartRows();
-            int target = -1;
+            int target;
             if (direction < 0)
             {
-                for (int i = starts.Count - 1; i >= 0; i--)
+                int above = Scrollback.CountAtOrBefore(starts, current - 1);
+                if (above == 0)
                 {
-                    if (starts[i] < current)
-                    {
-                        target = starts[i];
-                        break;
-                    }
+                    return;
                 }
+
+                target = starts[above - 1];
             }
             else
             {
-                target = starts.FirstOrDefault(row => row > current, -1);
-                if (target < 0 && _top >= 0 && _liveCount > 0)
+                // No start below while scrolled: the bottom (2026-11-02, the review: only a live block's reply went there).
+                int at = Scrollback.CountAtOrBefore(starts, current);
+                if (at == starts.Count && _top < 0)
                 {
-                    target = max;   // the reply streaming below, its start not committed yet: down to it
+                    return;
                 }
+
+                target = at < starts.Count ? starts[at] : int.MaxValue;
             }
 
-            if (target < 0)
-            {
-                return;
-            }
-
-            int next = target >= max && _find is null ? -1 : Math.Min(target, max);
-            if (next == _top)
-            {
-                return;
-            }
-
-            _top = next;
-            Redraw();
+            MoveTopLocked(target, direction, max, bottomTop, liveShown);
         }
     }
 
-    /// <summary>The next line to take visible text starts a message (2026-11-01, <see cref="Scrollback.MarkMessageStart"/>). Disabled: nothing.</summary>
-    public void MarkMessageStart()
+    /// <summary>
+    /// A write that starts a message (2026-11-02, the review: the mark travels with it): a sent line, a voice line, a bot's speaker line, a
+    /// plain reply's glyph. Its first line with visible text is the start. Disabled: the plain write.
+    /// </summary>
+    public void WriteMessageStart(IRenderable renderable) => WriteFlow(renderable, member: false, startsMessage: true);
+
+    /// <summary>
+    /// A write the open reply's owed start goes to (2026-11-02, <see cref="OweMessageStart"/>): a reply that said nothing's glyph line.
+    /// Disabled: the plain write.
+    /// </summary>
+    public void WriteOwedStart(IRenderable renderable) => WriteFlow(renderable, member: false, owedStart: true);
+
+    /// <summary>
+    /// <paramref name="write"/>'s flow writes may take the open reply's owed start (2026-11-02): a tool line written with no run (Tool
+    /// collapse count 0), through the console as any line. On the calling thread, under the gate.
+    /// </summary>
+    public void OwedStartWrite(Action write)
+    {
+        ArgumentNullException.ThrowIfNull(write);
+        if (!Enabled)
+        {
+            write();
+            return;
+        }
+
+        lock (_gate)
+        {
+            bool was = _owedWrites;
+            _owedWrites = true;
+            try
+            {
+                write();
+            }
+            finally
+            {
+                _owedWrites = was;
+            }
+        }
+    }
+
+    // Set by OwedStartWrite around a tool line's plain writes (2026-11-02).
+    private bool _owedWrites;
+
+    /// <summary>
+    /// A reply opened (2026-11-02, the review): its start is owed to the live slot's first commit, or its first tool line or run, whichever
+    /// comes first; a notice written meanwhile never takes it. Disabled: nothing.
+    /// </summary>
+    public void OweMessageStart()
     {
         if (!Enabled)
         {
@@ -2975,7 +3034,21 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
 
         lock (_gate)
         {
-            _store.MarkMessageStart();
+            _startOwed = true;
+        }
+    }
+
+    /// <summary>The reply is over (2026-11-02): a start it never placed is not owed to whatever comes next. Disabled: nothing.</summary>
+    public void ForgoMessageStart()
+    {
+        if (!Enabled)
+        {
+            return;
+        }
+
+        lock (_gate)
+        {
+            _startOwed = false;
         }
     }
 
@@ -2991,20 +3064,6 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         {
             _store.Rows(Width);
             return _store.MessageStartRows();
-        }
-    }
-
-    /// <summary>A pending message mark dropped (2026-11-01, <see cref="Scrollback.DropMessageStart"/>).</summary>
-    public void DropMessageStart()
-    {
-        if (!Enabled)
-        {
-            return;
-        }
-
-        lock (_gate)
-        {
-            _store.DropMessageStart();
         }
     }
 
@@ -3277,7 +3336,16 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         lock (_gate)
         {
             var segments = lead is null ? null : SpacedSegments(lead.GetSegments(_inner));
+            // The reply's owed start (2026-11-02): a run opened before any of the reply committed is where the reply shows.
+            bool owed = _startOwed;
+            _store.StartsMessage = owed;
             _store.BeginGroup(keep, segments, absorbOpenLine);
+            if (owed)
+            {
+                _startOwed = _store.StartsMessage;
+            }
+
+            _store.StartsMessage = false;
         }
     }
 
@@ -3519,7 +3587,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         }
     }
 
-    private void WriteFlow(IRenderable renderable, bool member, IPictureLayout? pictures = null)
+    private void WriteFlow(IRenderable renderable, bool member, IPictureLayout? pictures = null, bool startsMessage = false, bool owedStart = false)
     {
         ArgumentNullException.ThrowIfNull(renderable);
         if (!Enabled)
@@ -3549,7 +3617,26 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
                 : null;
             // What a resize can render again (2026-10-29): the store keeps it only on a standalone write; a container with the palette in force.
             var source = !member && pictures is null && fold is null && Reflowable(renderable) ? Themed.Bind(renderable) : null;
-            FlowLocked(() => EmitAs(segments, member, spans, fold, source, width));
+            FlowLocked(() =>
+            {
+                // The write's own start, or the reply's owed one for a tool line (2026-11-02): set here, past the live slot's flush, so a
+                // reply committed ahead of a sent line never takes the line's start.
+                bool owed = (member || owedStart || _owedWrites) && _startOwed;
+                _startsHere = startsMessage || owed;
+                try
+                {
+                    EmitAs(segments, member, spans, fold, source, width);
+                }
+                finally
+                {
+                    if (owed)
+                    {
+                        _startOwed = _startsHere;
+                    }
+
+                    _startsHere = false;
+                }
+            });
         }
     }
 
@@ -3976,10 +4063,11 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     private int Store(List<Segment> segments, int width)
     {
         _store.ContinueUnit = _member && _sameUnit;
-        int before = _store.Rows(width).Count;   // laid out at the width first: a reflow is not new rows
+        _store.StartsMessage = _startsHere;
         int dropped = _store.Append(segments, width, _member, _pictureSpans, _foldSpec, _source, _bornWidth);
+        _startsHere = _store.StartsMessage;   // still owed: the write had no text to put it on
+        _store.StartsMessage = false;
         _store.ContinueUnit = false;
-        _appendedRows += Math.Max(0, _store.Count - before + dropped);
         if (_top >= 0 && dropped > 0)
         {
             _top = Math.Max(0, _top - dropped);
@@ -4956,10 +5044,10 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             }
         }
 
-        // A sent line starts a message (2026-11-01, message jumps), a typed slash command's too: the rule is what the screen shows.
-        MarkMessageStart();
+        // A sent line starts a message (2026-11-01, message jumps), a typed slash command's too: the rule is what the screen shows. The
+        // start rides with the write (2026-11-02), so a reply committed ahead of it under the same lock never takes it.
         // The preview folds past its first lines once the next thing is said (2026-10-04, SentLineView).
-        Write(new SentLineView(InputLine.SubmittedMarkup(submitted, _userLineStyle(), _userGlyph()), preview.Length == 0 ? "" : InputLine.PreviewMarkup(preview)));
+        WriteMessageStart(new SentLineView(InputLine.SubmittedMarkup(submitted, _userLineStyle(), _userGlyph()), preview.Length == 0 ? "" : InputLine.PreviewMarkup(preview)));
         Committed?.Invoke(submitted);
     }
 
@@ -6097,9 +6185,10 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         {
             window = _store.Rows(w);
             int max = Math.Max(0, window.Count - region);
-            if (_find is not null)
+            if (_find is not null || (_live is not null && _liveCount > 0))
             {
-                // A find (2026-10-07) paints the store at its last window too, so its marks show there; a short store from its top.
+                // A find (2026-10-07) paints the store at its last window too, so its marks show there; a short store from its top. So
+                // does a live block's (2026-11-02, the review): the bottom would show the block, not the rows a jump or PgUp went to.
                 _top = Math.Min(_top, max);
             }
             else if (_top >= max)
@@ -6174,7 +6263,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
                 _inner.WriteLine();
             }
 
-            _liveCount = LiveRowsLeft(region);
+            _liveCount = LiveRowsUnclipped();
             _pad = 0;
         }
         else
@@ -6218,7 +6307,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
                 // Laid out at the width its first commit was (2026-10-29, the user's pick in the resize review): the committed count is
                 // always read against the layout it was taken on, and each row is drawn fitted to the window (Fitted).
                 int lw = LayoutWidth;
-                var lines = ReplyLayout(lw, out var open, out int through, out int folding);
+                var lines = ReplyLayout(lw, out var open, out int through, out int folding, out int tableRow);
                 _liveFolded = folding;
                 int skip = Math.Min(_liveCommitted, lines.Count);
                 var fitted = new List<SegmentLine>?[lines.Count];
@@ -6231,8 +6320,9 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
 
                 // A code block still streaming keeps its label in the slot with its window (2026-09-27):
                 // the excess commit stops at it, as a thinking block keeps its header. A closed one past
-                // its keep goes in whole at once (through), and folds. Whole layout rows go until what is left fits.
-                int hold = open?.LabelRow ?? lines.Count;
+                // its keep goes in whole at once (through), and folds. Whole layout rows go until what is left fits. A table still
+                // streaming is held the same way (2026-11-02, the review): a grid that turns into cards as it grows never commits grid rows.
+                int hold = Math.Min(open?.LabelRow ?? lines.Count, tableRow);
                 int upTo = skip;
                 while (upTo < hold && left > region)
                 {
@@ -6287,6 +6377,12 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
                 if (open is not null && open.BodyRow >= lines.Count)
                 {
                     body = live.Count;
+                }
+
+                if (open is null && tableRow < lines.Count && live.Count > region)
+                {
+                    // A held table taller than the region: its last rows, as an open code block's window shows.
+                    live = live.GetRange(live.Count - region, region);
                 }
 
                 if (open is not null && live.Count > region)
@@ -6730,8 +6826,14 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     {
         return _live is ThinkingBlock { Streaming: true } thinking
             ? ThinkingBlock.Tail(RenderLines(thinking.LiveView(), _inner, width), region)
-            : ReplyLayout(width, out _, out _, out _);
+            : ReplyLayout(width, out _, out _, out _, out _);
     }
+
+    /// <summary>
+    /// The live block's rows not yet committed, not cut to the region (2026-11-02, the review: one measure for the scrolled draw, the
+    /// scrolled tick and the new-rows mark, so the mark and the reads agree); 0 with none.
+    /// </summary>
+    private int LiveRowsUnclipped() => LiveRowsLeft(RegionRows(_paneRows));
 
     /// <summary>The live block's rows not yet committed as the window draws them, for the rows-below count while scrolled; 0 with none.</summary>
     private int LiveRowsLeft(int region)
@@ -6774,21 +6876,33 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     /// <see cref="ReplyBlock.Tail"/>, <paramref name="open"/> that block's span; the rows above it are
     /// the whole reply's rows. <paramref name="through"/>: the end of the last closed code block past
     /// its keep not yet counted — to be committed whole this draw so it folds — or 0; <paramref name="folding"/>
-    /// how many such blocks the reply has, the count the draw that commits them keeps.
+    /// how many such blocks the reply has, the count the draw that commits them keeps. <paramref name="tableRow"/> (2026-11-02, the review):
+    /// the row a table that is the reply's last block starts at (<see cref="ReplyBlock.OpenTableRow"/>), held back from the flow until a later
+    /// block ends it or the reply does; the layout's row count with none.
     /// </summary>
-    private List<SegmentLine> ReplyLayout(int width, out CodeSpan? open, out int through, out int folding)
+    private List<SegmentLine> ReplyLayout(int width, out CodeSpan? open, out int through, out int folding, out int tableRow)
     {
         open = null;
         through = 0;
         folding = _liveFolded;
-        if (_live is not ReplyBlock { CodeKeep: > 0 } reply)
+        if (_live is not ReplyBlock reply)
         {
-            return RenderLines(_live!, _inner, width);
+            var all = RenderLines(_live!, _inner, width);
+            tableRow = all.Count;
+            return all;
+        }
+
+        if (reply.CodeKeep == 0)
+        {
+            var whole = RenderLines(reply, _inner, width);
+            tableRow = reply.OpenTableRow(RenderOptions.Create(_inner, _inner.Profile.Capabilities), width, whole.Count) ?? whole.Count;
+            return whole;
         }
 
         var view = reply.LiveView();
         var lines = RenderLines(view, _inner, width);
         var options = RenderOptions.Create(_inner, _inner.Profile.Capabilities);
+        tableRow = view.OpenTableRow(options, width, lines.Count) ?? lines.Count;
         folding = reply.FoldingCode;
         if (folding > _liveFolded)
         {
@@ -6812,6 +6926,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         _liveWidth = 0;
         _liveDirty = false;
         _liveCount = 0;
+        _liveMark = 0;   // a slot dropped uncommitted takes its rows out of the new-rows mark too (2026-11-02)
         _liveCodeSpan = -1;
         _liveFolded = 0;
     }
@@ -6842,6 +6957,10 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
 
         int was = _bornWidth;
         _bornWidth = width;
+        // The reply's owed start goes to its first committed row with text, its code label or its thinking header (2026-11-02).
+        bool owed = _startOwed;
+        _startsHere = owed;
+        long written = _store.RowsWritten;
         try
         {
             CommitLiveRowsAt(lines, from, to, width, final);
@@ -6849,6 +6968,17 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         finally
         {
             _bornWidth = was;
+            if (owed)
+            {
+                _startOwed = _startsHere;
+            }
+
+            _startsHere = false;
+
+            // The rows committed were live rows: what the new-rows mark held of them moves to the written side (2026-11-02, the review).
+            int absorbed = (int)Math.Min(_store.RowsWritten - written, _liveMark);
+            _writtenMark += absorbed;
+            _liveMark -= absorbed;
         }
     }
 
@@ -7009,7 +7139,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             if (i == 0)
             {
                 var segments = new List<Segment>(lines[0]);
-                _store.BeginThinkingGroup(segments, Width, BornWidth);
+                StoreStarting(() => _store.BeginThinkingGroup(segments, Width, BornWidth));
                 WriteSummaryRow(segments);
             }
             else if (_store.ThinkingGroupOpen)
@@ -7054,7 +7184,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         // Its ⧉ and its text (2026-11-01, copy a code block) on a one-row label of a block that is closed, or ends a final reply.
         bool copy = Copyable(span, final);
         var segments = copy && span.LabelRows == 1 ? WithCopyGlyph(row) : new List<Segment>(row);
-        _store.BeginCodeGroup(keep, segments, Width, BornWidth);
+        StoreStarting(() => _store.BeginCodeGroup(keep, segments, Width, BornWidth));
         _store.SetCodeGroupSummary(CodeSummary(segments, span, expanded: false, copy), CodeSummary(segments, span, expanded: true, copy), span.SourceLines, Width, BornWidth);
         if (copy)
         {
@@ -7062,6 +7192,21 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         }
 
         WriteSummaryRow(segments);
+    }
+
+    /// <summary>A store call that opens a summary, given the write's start (<see cref="_startsHere"/>, 2026-11-02) to take.</summary>
+    private void StoreStarting(Action open)
+    {
+        _store.StartsMessage = _startsHere;
+        try
+        {
+            open();
+        }
+        finally
+        {
+            _startsHere = _store.StartsMessage;
+            _store.StartsMessage = false;
+        }
     }
 
     /// <summary>The width the segments being written were rendered at (2026-10-29): <see cref="_bornWidth"/>, the window's without one.</summary>
@@ -8660,7 +8805,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
                 if (_drawnScrolled)
                 {
                     // Scrolled: the block is not drawn; its rows count on the scroll's row (the busy row's frame moves on its own).
-                    _liveCount = LiveRowsLeft(RegionRows(_paneRows));
+                    _liveCount = LiveRowsUnclipped();
                     _liveDirty = false;
                     RedrawScrollRow();
                     if (_busyLabel is not null)

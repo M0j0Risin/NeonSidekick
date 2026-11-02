@@ -1068,6 +1068,29 @@ public sealed class Assistant
     public bool PreserveThinking { get; set; }
 
     /// <summary>
+    /// Whether the wire sends back only the turn in flight's thinking whatever <see cref="PreserveThinking"/> says (2026-11-02, the
+    /// review): the Anthropic API's signed blocks and the OpenAI API's encrypted reasoning go back in the turn in flight alone
+    /// (<see cref="Anthropic.AnthropicRequest"/>, <see cref="OpenAIPlatform.OpenAIRequest"/>). Set beside it from <see cref="InFlightOnlyWire"/>.
+    /// </summary>
+    public bool ThinkingInFlightOnly { get; set; }
+
+    /// <summary>Whether an earlier turn's thinking goes back on this wire: <see cref="PreserveThinking"/>, unless <see cref="ThinkingInFlightOnly"/>.</summary>
+    public bool EarlierThinkingSent => PreserveThinking && !ThinkingInFlightOnly;
+
+    /// <summary>Whether <paramref name="url"/> is a wire whose thinking goes back in the turn in flight alone: the Anthropic API or the OpenAI API.</summary>
+    public static bool InFlightOnlyWire(Uri? url) => Anthropic.ClaudeApi.IsClaudeApi(url) || OpenAIPlatform.OpenAIApi.IsOpenAIApi(url);
+
+    /// <summary>
+    /// The history's estimate as the last request carried it (2026-11-02, the review: the <c>/usage</c> Context tab mid-reply), published
+    /// before each request of a turn with <see cref="ConversationCompactor.ThinkingFrom"/> over <see cref="EarlierThinkingSent"/>; null
+    /// before the first. A boxed, immutable <see cref="ConversationCompactor.TokenEstimate"/> swapped in with <see cref="Volatile.Write{T}(ref T, T)"/>
+    /// on the turn's thread, so the screen reads it while the turn appends to the history without a lock.
+    /// </summary>
+    public ConversationCompactor.TokenEstimate? LastSentEstimate => Volatile.Read(ref _lastSent) is ConversationCompactor.TokenEstimate sent ? sent : null;
+
+    private object? _lastSent;
+
+    /// <summary>
     /// The sampling every request of this assistant carries (2026-09-28, the setting <c>LLM sampling</c>): the turn's, the
     /// summariser's and a side request's (<see cref="RequestAsync"/>: the session's title, the skill learner), resolved for
     /// the connected model (<see cref="LlmSampling.Resolve"/>) at the connect and again before each turn, so an edit lands
@@ -1257,12 +1280,13 @@ public sealed class Assistant
 
     /// <summary>
     /// The mid-turn guard's estimate of <paramref name="messages"/> as the wire sends them (2026-11-01, riding along with the
-    /// <c>/usage</c> Context tab): an earlier turn's thinking only with <see cref="PreserveThinking"/>
+    /// <c>/usage</c> Context tab): an earlier turn's thinking only while <see cref="EarlierThinkingSent"/>
     /// (<see cref="ConversationCompactor.ThinkingFrom"/>), so a summary of earlier turns isn't credited with thinking that was
-    /// never being sent. Exact for the OpenAI-compatible wire; the Anthropic and Responses clients' signed blocks follow the same rule closely enough.
+    /// never being sent: <c>LLM preserve thinking</c> on the OpenAI-compatible wire; never on the Anthropic and OpenAI APIs, which send the
+    /// turn in flight's alone (2026-11-02, the review).
     /// </summary>
     internal long SentEstimate(IReadOnlyList<ChatMessage> messages) =>
-        ConversationCompactor.Estimate(messages, ConversationCompactor.ThinkingFrom(messages, PreserveThinking)).Total;
+        ConversationCompactor.Estimate(messages, ConversationCompactor.ThinkingFrom(messages, EarlierThinkingSent)).Total;
 
     /// <summary>The stable part of System.ClientModel's network-timeout message, the one the SDK's <c>NetworkTimeout</c> (the request timeout) throws with.</summary>
     public const string NetworkTimeoutMarker = "exceeded the configured timeout";
@@ -1625,10 +1649,11 @@ public sealed class Assistant
             DiagnosticLog.Debug(Category, ToolCallLogLine(call.Name, openingJson) + OpeningSuffix);
             yield return new TurnEvent.ToolCall(call.Name, call.CallId, openingJson);
 
-            // An opening tool answers with text; a picture from one would have no carrier.
-            var (result, _, _, _) = await InvokeAsync(tool, call, cancellationToken).ConfigureAwait(false);
+            // An opening tool answers with text; a picture from one would have no carrier. Timed as the model's calls are (2026-11-02).
+            var timed = await InvokeTimedAsync(() => InvokeAsync(tool, call, cancellationToken)).ConfigureAwait(false);
+            string result = timed.Result.Text;
             _history.AddToolResults([ResultContent(call, result)]);
-            yield return new TurnEvent.ToolResult(call.Name, call.CallId, result);
+            yield return new TurnEvent.ToolResult(call.Name, call.CallId, result, Took: timed.Took, Asked: timed.Asked);
         }
     }
 
@@ -1653,6 +1678,9 @@ public sealed class Assistant
     {
         ArgumentNullException.ThrowIfNull(userText);
         ArgumentNullException.ThrowIfNull(images);
+
+        // The last turn's estimate is not this one's (2026-11-02, the review): none until this turn's first request.
+        Volatile.Write(ref _lastSent, null);
 
         // Decided before the user message lands: the first turn of a conversation opens with the
         // opening calls, a retry of it (the user message already committed) does not; the pending
@@ -1797,6 +1825,8 @@ public sealed class Assistant
             }
 
             var request = _history.BuildRequest();
+            var history = _history.Messages;
+            Volatile.Write(ref _lastSent, ConversationCompactor.Estimate(history, ConversationCompactor.ThinkingFrom(history, EarlierThinkingSent)));
             var (sentPictures, sentBytes) = PictureBudget.Measure(request);
             log.Requests++;
 
@@ -2104,9 +2134,20 @@ public sealed class Assistant
                 yield return new TurnEvent.ToolCall(call.Name, call.CallId, argumentsJson);
 
                 // A call the length limit cut off (2026-10-18) is answered by why the reply ended, never run; any other parse failure as before.
-                (string Text, IReadOnlyList<ImageAttachment> Images, FileDiff? Diff, string? Shown) invoked = cutOff && call.Exception is not null
-                    ? (CutOffAnswer(call.Name, usage, cutOffTools), [], null, null)
-                    : await InvokeGuardedAsync(call, cancellationToken).ConfigureAwait(false);
+                // A call that runs is timed, its asks apart (2026-11-02, the review: the screen's clock counted panes no tool opened).
+                (string Text, IReadOnlyList<ImageAttachment> Images, FileDiff? Diff, string? Shown) invoked;
+                TimeSpan? took = null;
+                TimeSpan asked = default;
+                if (cutOff && call.Exception is not null)
+                {
+                    invoked = (CutOffAnswer(call.Name, usage, cutOffTools), [], null, null);
+                }
+                else
+                {
+                    var timed = await InvokeTimedAsync(() => InvokeGuardedAsync(call, cancellationToken)).ConfigureAwait(false);
+                    (invoked, took, asked) = (timed.Result, timed.Took, timed.Asked);
+                }
+
                 var (result, pictures, diff, shown) = invoked;
                 // A tool whose pictures are the user's alone (ToolPicturesUnseen) still hands them to the screen below; the model's
                 // copy of the result says so, so it never describes a picture it was not shown.
@@ -2122,7 +2163,7 @@ public sealed class Assistant
                     fetchers.Add(call.Name);
                 }
 
-                yield return new TurnEvent.ToolResult(call.Name, call.CallId, result, pictures.Count > 0 ? pictures : null, diff, shown);
+                yield return new TurnEvent.ToolResult(call.Name, call.CallId, result, pictures.Count > 0 ? pictures : null, diff, shown, took, asked);
             }
 
             _history.AddToolResults(results);
@@ -2735,6 +2776,18 @@ public sealed class Assistant
     /// (<see cref="ProjectFileAsk"/> and <c>ask_user</c> offered), a yes runs the call again with the file allowed for that one call — the
     /// refused attempt wrote nothing — and a no answers <see cref="Files.FileText.ProjectFileDeclined"/>.
     /// </summary>
+    /// <summary>
+    /// A tool call timed (2026-11-02, the review): its wall time on the Assistant's clock and the time its asks waited on the user
+    /// (<see cref="ToolSpan"/>). An ordinary async method, so the span set here flows into the call and is gone when it returns, never
+    /// left in force across the turn's <c>yield return</c> into the screen.
+    /// </summary>
+    private async Task<(T Result, TimeSpan Took, TimeSpan Asked)> InvokeTimedAsync<T>(Func<Task<T>> invoke)
+    {
+        long started = _time.GetTimestamp();
+        var (result, asked) = await ToolSpan.RunAsync(_time, invoke).ConfigureAwait(false);
+        return (result, _time.GetElapsedTime(started), asked);
+    }
+
     private async Task<(string Text, IReadOnlyList<ImageAttachment> Images, FileDiff? Diff, string? Shown)> InvokeGuardedAsync(FunctionCallContent call, CancellationToken cancellationToken)
     {
         var slot = new Files.ProjectFileSlot();

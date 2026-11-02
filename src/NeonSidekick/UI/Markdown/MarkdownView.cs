@@ -121,6 +121,16 @@ public sealed class MarkdownView : IRenderable
         return (labelRows, rows - labelRows);
     }
 
+    /// <summary>
+    /// The last top-level block's rows at <paramref name="maxWidth"/> when it is a table (2026-11-02, the review: a streaming table held back
+    /// as an open code block is, so a grid that turns into cards once the region fills never commits grid rows). Null otherwise.
+    /// </summary>
+    public int? LastTableRows(RenderOptions options, int maxWidth)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return _document.Blocks is [.., TableBlock table] ? Segment.SplitLines(Table(table, quote: null, resolve: null).Render(options, maxWidth)).Count : null;
+    }
+
     /// <summary>The blocks stacked, a blank row between them unless <paramref name="tight"/> (a list item's).</summary>
     private static IRenderable Compose(IReadOnlyList<MarkdownBlock> blocks, Style? quote, bool tight, Func<string, string?>? resolve)
     {
@@ -231,7 +241,8 @@ public sealed class MarkdownView : IRenderable
 
     /// <summary>
     /// A table (since 2026-11-01, feature idea #5): a <see cref="FittingTable"/>, the grid while it fits and cards when it is too wide. A card's
-    /// header and value are built as the grid's are, so a quote's color, links and inline code carry over; an empty cell is none on a card.
+    /// header and value are the grid's own (one renderable shared, 2026-11-02, the review), so a quote's color, links and inline code carry
+    /// over; an empty cell is none on a card.
     /// </summary>
     private static IRenderable Table(TableBlock table, Style? quote, Func<string, string?>? resolve)
     {
@@ -241,8 +252,9 @@ public sealed class MarkdownView : IRenderable
         var cards = new List<IReadOnlyList<IRenderable?>>(table.Rows.Count);
         for (int c = 0; c < columns; c++)
         {
-            headers.Add(Paragraph(table.Header.Cells[c].Inlines, Theme.TableHeader, resolve, flat: true));
-            var column = new TableColumn(Paragraph(table.Header.Cells[c].Inlines, Theme.TableHeader, resolve, flat: true));
+            var header = Paragraph(table.Header.Cells[c].Inlines, Theme.TableHeader, resolve, flat: true);
+            headers.Add(header);
+            var column = new TableColumn(header);
             if (c < table.Alignments.Count)
             {
                 column.Alignment = table.Alignments[c] switch
@@ -264,7 +276,7 @@ public sealed class MarkdownView : IRenderable
             for (int c = 0; c < columns; c++)
             {
                 cells[c] = c < row.Cells.Count ? Paragraph(row.Cells[c].Inlines, quote, resolve) : new Text("");
-                card[c] = c < row.Cells.Count && !IsBlank(row.Cells[c].Inlines) ? Paragraph(row.Cells[c].Inlines, quote, resolve) : null;
+                card[c] = c < row.Cells.Count && !IsBlank(row.Cells[c].Inlines) ? cells[c] : null;
             }
 
             spectre.AddRow(cells);

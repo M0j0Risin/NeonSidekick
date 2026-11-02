@@ -1055,10 +1055,8 @@ internal sealed partial class ChatScreen
     private bool _showThinking;
     private long? _thinkingSince;
 
-    // The reply footer's clocks (2026-11-01, feature idea #4), written and read on the turn's thread: when the tool now running was called and
-    // the menu pane's AskedFor then (null between tools), and the turn's asks inside its tools so far, taken off the footer's time too.
-    private long? _toolCalledAt;
-    private TimeSpan _toolAskedAt;
+    // The reply footer's clock (2026-11-01, feature idea #4), written and read on the turn's thread: the turn's asks inside its tools so far
+    // (each result's TurnEvent.ToolResult.Asked since 2026-11-02, the review), taken off the footer's time.
     private TimeSpan _turnToolAsks;
 
     /// <summary>How long after a first idle Ctrl+C the second one exits (the hint shows meanwhile).</summary>
@@ -3237,11 +3235,16 @@ internal sealed partial class ChatScreen
     /// The tabs <c>/usage</c> opens: the tally as it stands when shown (the Notes tab gone since 2026-09-28), and since 2026-11-01 what
     /// fills the context window (<see cref="ContextFacts"/>), built when shown so reopening after a <c>/tools</c> change shows the new numbers.
     /// </summary>
-    private IReadOnlyList<InfoTab> UsageTabs() =>
-    [
-        new(UsageText.StatisticsTabTitle, () => UsageText.StatisticsTab(_session.Usage, _session.ContextLength)),
-        new(UsageText.ContextTabTitle, () => UsageText.ContextTab(ContextFacts())),
-    ];
+    /// <remarks>The Context tab's facts are built once per call (2026-11-02, the review), shared by the pane's measure pass and the tab shown.</remarks>
+    private IReadOnlyList<InfoTab> UsageTabs()
+    {
+        var context = new Lazy<ContextFacts>(ContextFacts);
+        return
+        [
+            new(UsageText.StatisticsTabTitle, () => UsageText.StatisticsTab(_session.Usage, _session.ContextLength)),
+            new(UsageText.ContextTabTitle, () => UsageText.ContextTab(context.Value)),
+        ];
+    }
 
     /// <summary>
     /// <c>/usage</c>: the pane on <see cref="UsageTabs"/>, or — with no pane to open (a redirected
@@ -4674,10 +4677,12 @@ internal sealed partial class ChatScreen
     /// The state a turn would be prepared from right now, read as <see cref="RunTurnAsync"/> reads it
     /// before <see cref="PrepareTurn"/> — a read only: no speech turn begins, nothing is sent.
     /// </summary>
-    private SystemPromptFacts SystemPromptFacts()
+    private SystemPromptFacts SystemPromptFacts() => SystemPromptFacts(_effective());
+
+    /// <summary><see cref="SystemPromptFacts()"/> over <paramref name="effective"/> and <paramref name="disabled"/> already worked out (2026-11-02, the review: the Context tab builds them once).</summary>
+    private SystemPromptFacts SystemPromptFacts(AppSettingsData effective, IReadOnlySet<string>? disabled = null)
     {
-        var effective = _effective();
-        var disabled = TurnDisabled(effective);
+        disabled ??= TurnDisabled(effective);
         bool filesOffered = effective.FileTools && Without(_fileTools, disabled).Count > 0;
         var unc = Without(UncToolsFor(_uncTools, effective, _unc.Catalog(), filesOffered), disabled);
         var docker = Without(DockerToolsFor(_dockerTools, effective), disabled);
@@ -6385,10 +6390,12 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>The <c>/sys</c> Tools tab's groups: only what the next turn sends (<see cref="SystemPromptSummary.OfferedOnly"/>, 2026-09-26) — <c>/tools</c> builds its own full list (<see cref="ToolsFacts"/>).</summary>
-    private IReadOnlyList<ToolGroup> ToolGroups()
+    private IReadOnlyList<ToolGroup> ToolGroups() => ToolGroups(_effective());
+
+    /// <summary><see cref="ToolGroups()"/> over <paramref name="effective"/> and <paramref name="disabled"/> already worked out (2026-11-02, the review).</summary>
+    private IReadOnlyList<ToolGroup> ToolGroups(AppSettingsData effective, IReadOnlySet<string>? disabled = null)
     {
-        var effective = _effective();
-        var disabled = TurnDisabled(effective);
+        disabled ??= TurnDisabled(effective);
         var fileTools = _fileTools;
         bool files = effective.FileTools && Without(fileTools, disabled).Count > 0;   // the turn's rule (PrepareTurn): an emptied file group is the switch off
         return WithPlanGroup(SystemPromptSummary.OfferedOnly(SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, MemoryMode.Enabled(effective), effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, memorySave: MemoryMode.Saves(effective), mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianOffered(effective) ? ObsidianToolsFor(_vaultTools, effective) : null, sql: SqlOffered(effective, _sql) ? SqlToolsFor(_sqlTools, effective, _pane.Enabled, _sql.Catalog()) : null, comfy: ComfyOffered(effective, _comfy) ? _comfyTools : null, advisors: AdvisorsListed(effective) ? _neonAdvisorTools : null, advisorsEnabled: AdvisorsOffered(effective), homeAssistant: HomeAssistantOffered(effective) ? _haTools : null, oracle: OracleOffered(effective, _oracle) ? OracleToolsFor(_oracleTools, effective, _pane.Enabled, _oracle.Catalog()) : null, mysql: MySqlOffered(effective, _mysql) ? MySqlToolsFor(_mysqlTools, effective, _pane.Enabled, _mysql.Catalog()) : null, unc: UncOffered(effective, _unc) ? UncToolsFor(_uncTools, effective, _unc.Catalog(), files) : null, docker: DockerOffered(effective) ? DockerToolsFor(_dockerTools, effective) : null, camera: CameraOffered(effective) ? _cameraTools : null, help: _helpTools, screen: ScreenOffered(effective) ? _screenTools : null, images: _imageTools, imagesEnabled: effective.ImageTools, sqlite: SqliteOffered(effective, _sqlite) ? SqliteToolsFor(_sqliteTools, effective, _pane.Enabled) : null, duckDb: DuckDbOffered(effective, _duckDb) ? DuckDbToolsFor(_duckDbTools, effective, _pane.Enabled) : null, postgres: PostgresOffered(effective, _postgres) ? PostgresToolsFor(_postgresTools, effective, _pane.Enabled, _postgres.Catalog()) : null, youTube: YouTubeOffered(effective, _youTubeTools) ? YouTubeToolsFor(_youTubeTools, effective) : null, shopping: ShoppingOffered(effective) ? _shoppingTools : null, eventLog: EventLogOffered(effective, _eventLog, _macLog) ? _eventLogTools : null, eventLogTicked: _macLog.Log is not null ? _macLog.LocalTicked : _eventLog.Catalog().Computers.Count > 0, timersEnabled: TimersOffered(effective), admin: AdminGroups(effective), clockEnabled: ClockOffered(effective), helpEnabled: HelpOffered(effective), monitors: MonitorGroup(effective), homeNotes: HomeToolNotes())));   // the vault group only with a vault (2026-09-22): /sys stays as it was for a profile that never names one
@@ -17974,6 +17981,7 @@ internal sealed partial class ChatScreen
         // a reply): a pane it opens reads the keys under the app token and the close signal the
         // turn's end may send (EndTurnAsync). The previous turn's pane was awaited before this one.
         _turnRunning = true;
+        _replyRunning = true;
         BeginReplyRun();
         // The hint row is the turn's again (the usage part); the reading stays remembered for /read.
         _hintReading = null;
@@ -18059,6 +18067,7 @@ internal sealed partial class ChatScreen
             ResetNetworkBudget();
             _turnPictures = images;   // the directive names a picture sent with this message too (2026-10-18)
             PrepareTurn(assistant, TurnInputs(effective), _memory, _persona, _operata, _vocalia, speaker is not null, effective.LlmMaxToolIterations, ContextGuardFor(effective, _session.ContextLength, replyFloor: PlanReplyFloor(_plan, _files)), SkillsFor(effective), markdown, _processes, effective.LlmPreserveThinking, LlmSampling.Resolve(effective, _session.Endpoint?.ModelId));
+            assistant.ThinkingInFlightOnly = Assistant.InFlightOnlyWire(_session.Endpoint?.BaseUrl);
             _turnPictures = [];
 
             // The Claude Code server (2026-09-30) keeps the conversation itself: the turn names its session, and no guard
@@ -18148,7 +18157,6 @@ internal sealed partial class ChatScreen
         _thinkingSince = null;
         using var busy = _transcript.BeginBusy(label);
         long turnStarted = _time.GetTimestamp();   // the reply footer's time (2026-11-01)
-        _toolCalledAt = null;
         _turnToolAsks = TimeSpan.Zero;
         // What /imagine made since the last message rides with this one (2026-09-24): the notes ahead of the text, the pictures after the user's own.
         var (sentText, sentImages) = bot is null ? TakeImagineNotes(text, images) : (text, images);
@@ -18339,7 +18347,7 @@ internal sealed partial class ChatScreen
                 assistant.History.RemoveLastTurn();
             }
 
-            _transcript.EndAssistant(ReplyFooter(bot is null, outcome, failed || (sawError && reply.Length == 0 && trace.ToolCalls == 0), turnStarted, trace));
+            _transcript.EndAssistant(ReplyFooter(bot is null, outcome, (failed || sawError) && reply.Length == 0 && trace.ToolCalls == 0, turnStarted, trace));
             // A reflection that ended during the reply reports here, under it, never inside it.
             DrainLearn();
             // A reply that ran to its end with no usage report is counted as unreported; a cut or
@@ -19023,7 +19031,8 @@ internal sealed partial class ChatScreen
             _transcript.CountToolCall(counted.Name);
         }
 
-        TimeTool(evt);
+        // A slow tool's time for its result line (2026-11-02, the review: from the Assistant's stamps, passed to the writer that draws it).
+        string? time = evt is TurnEvent.ToolResult timed ? ToolTimeFor(timed) : null;
 
         if (evt is TurnEvent.ToolCall or TurnEvent.ToolResult)
         {
@@ -19074,33 +19083,33 @@ internal sealed partial class ChatScreen
                 break;
             case TurnEvent.ToolResult result when string.Equals(result.Name, LoadSkillTool.ToolName, StringComparison.Ordinal):
                 // The instructions are the model's to read; the line says which skill (LoadSkillTool.Note), behind the skills' glyph (later on 2026-09-21).
-                _transcript.SkillNote(LoadSkillTool.Note(result.Text));
+                _transcript.SkillNote(LoadSkillTool.Note(result.Text), time);
                 break;
             case TurnEvent.ToolResult result when string.Equals(result.Name, SkillEditorTool.ToolName, StringComparison.Ordinal):
                 // created / updated / renamed / deleted skill 'x' (SkillText): a quiet tool's one line, behind the skills' glyph too;
                 // an edit_file's numbered region (2026-09-27) is the model's to read, so the line is its header alone.
-                _transcript.SkillNote(SkillNoteLine(result.Text));
+                _transcript.SkillNote(SkillNoteLine(result.Text), time);
                 break;
             case TurnEvent.ToolResult result when string.Equals(result.Name, RecallMemoryTool.ToolName, StringComparison.Ordinal):
                 // The list is the model's to read (/memory shows it); the line says how many (RecallMemoryTool.Note).
-                _transcript.ToolNote(RecallMemoryTool.Note(result.Text));
+                _transcript.ToolNote(RecallMemoryTool.Note(result.Text), time);
                 break;
             case TurnEvent.ToolResult result when string.Equals(result.Name, SessionManagerTool.ToolName, StringComparison.Ordinal):
                 // The sessions are the model's to read; the line is the result's header (SessionManagerTool.Note).
-                _transcript.ToolNote(SessionManagerTool.Note(result.Text));
+                _transcript.ToolNote(SessionManagerTool.Note(result.Text), time);
                 break;
             case TurnEvent.ToolResult result when GitToolNames.Contains(result.Name):
                 // A status, a log, a patch is the model's to read; the line is the result's header (GitText.Note, 2026-09-20).
-                _transcript.ToolNote(GitText.Note(result.Text));
+                _transcript.ToolNote(GitText.Note(result.Text), time);
                 break;
             case TurnEvent.ToolResult result when ObsidianToolNames.Contains(result.Name):
                 // A note, a search, a backlink list is the model's to read; the line is the result's header (ObsidianText.Note, 2026-09-22).
-                _transcript.ToolNote(ObsidianText.Note(result.Text));
+                _transcript.ToolNote(ObsidianText.Note(result.Text), time);
                 break;
             case TurnEvent.ToolResult result when string.Equals(result.Name, HaCameraTool.ToolName, StringComparison.Ordinal):
                 // A camera's still (2026-10-27): the line is the result's header, the picture under it (and on the Web UI's chat); its file stays a
                 // camera photo if it is dragged into a message later (MarkCameraImages).
-                _transcript.ToolNote(HaText.Note(result.Text));
+                _transcript.ToolNote(HaText.Note(result.Text), time);
                 ToolThumbnails(result, thumbnails);
                 foreach (var still in result.Images ?? [])
                 {
@@ -19113,33 +19122,33 @@ internal sealed partial class ChatScreen
                 break;
             case TurnEvent.ToolResult result when HomeAssistantToolNames.Contains(result.Name):
                 // A state list, an overview is the model's to read; the line is the result's header (HaText.Note, 2026-09-28).
-                _transcript.ToolNote(HaText.Note(result.Text));
+                _transcript.ToolNote(HaText.Note(result.Text), time);
                 break;
             case TurnEvent.ToolResult result when DockerToolNames.Contains(result.Name):
                 // A container list, a log, an inspect is the model's to read; the line is the result's header (DockerText.Note, 2026-10-02).
-                _transcript.ToolNote(DockerText.Note(result.Text));
+                _transcript.ToolNote(DockerText.Note(result.Text), time);
                 break;
 
             case TurnEvent.ToolResult result when EventLogToolNames.Contains(result.Name):
                 // A list, a summary or an event is the model's to read; the line is the result's header (EventLogText.Note, 2026-10-15).
-                _transcript.ToolNote(EventLogText.Note(result.Text));
+                _transcript.ToolNote(EventLogText.Note(result.Text), time);
                 break;
 
             case TurnEvent.ToolResult result when AdminNote(result.Name, result.Text) is { } adminNote:
                 // The admin families (2026-10-15): the result's header with the family's glyph; a network budget refusal once a turn ("" after).
                 if (adminNote.Length > 0)
                 {
-                    _transcript.ToolNote(adminNote);
+                    _transcript.ToolNote(adminNote, time);
                 }
 
                 break;
             case TurnEvent.ToolResult result when PrintToolNames.Contains(result.Name):
                 // The printer list is the model's to read; the line is the result's header (PrintText.Note, 2026-09-28).
-                _transcript.ToolNote(PrintText.Note(result.Text));
+                _transcript.ToolNote(PrintText.Note(result.Text), time);
                 break;
             case TurnEvent.ToolResult result when SqlToolNames.Contains(result.Name) || OracleToolNames.Contains(result.Name) || MySqlToolNames.Contains(result.Name) || SqliteToolNames.Contains(result.Name) || DuckDbToolNames.Contains(result.Name) || PostgresToolNames.Contains(result.Name):
                 // A table of rows is the model's to read; the line is the result's header (SqlText.Note, 2026-09-23).
-                _transcript.ToolNote(SqlText.Note(result.Text));
+                _transcript.ToolNote(SqlText.Note(result.Text), time);
                 break;
             case TurnEvent.ToolResult result when ShellToolNames.Contains(result.Name) && ShellText.IsPoliced(result.Text):
                 // The police refused it (2026-09-22): the same one line, behind the officer rather than the tools' glyph. A forbidden string's
@@ -19148,11 +19157,17 @@ internal sealed partial class ChatScreen
                 break;
             case TurnEvent.ToolResult result when ShellToolNames.Contains(result.Name):
                 // A command's output is the model's to read; the line is the result's header: the exit code, the time, the command (ShellText.Note, 2026-09-21).
-                _transcript.ToolNote(ShellText.Note(result.Text));
+                _transcript.ToolNote(ShellText.Note(result.Text), time);
                 break;
             case TurnEvent.ToolResult result when string.Equals(result.Name, GenerateImageTool.ToolName, StringComparison.Ordinal):
                 // The picture's line, then — with ComfyUI show prompts on (later still on 2026-09-24) — what was sent, in full.
-                ComfyLines(result.Text, _transcript.ToolNote);
+                // The time on the picture's line alone (2026-11-02): one of the slowest tools.
+                string? head = time;
+                ComfyLines(result.Text, line =>
+                {
+                    _transcript.ToolNote(line, head);
+                    head = null;
+                });
                 ToolThumbnails(result, thumbnails);
                 if (result.Images is { Count: > 0 } made)
                 {
@@ -19168,7 +19183,7 @@ internal sealed partial class ChatScreen
                 // The plan and the verdict were printed as it ran (PresentPlanAsync); only a refusal has a line of its own.
                 if (result.Text.StartsWith("Error:", StringComparison.Ordinal))
                 {
-                    _transcript.ToolNote(result.Text);
+                    _transcript.ToolNote(result.Text, time);
                 }
 
                 break;
@@ -19176,7 +19191,7 @@ internal sealed partial class ChatScreen
                 // The changes were printed as 🔎 notices as the call ran (OnAuditReported); only a refusal has a line of its own (2026-10-18).
                 if (result.Text.StartsWith("Error:", StringComparison.Ordinal))
                 {
-                    _transcript.ToolNote(result.Text);
+                    _transcript.ToolNote(result.Text, time);
                 }
 
                 break;
@@ -19184,7 +19199,7 @@ internal sealed partial class ChatScreen
                 // The answer was printed as it came (NeonAdvisorView.Answered); only a refusal or a failure has a line of its own.
                 if (result.Text.StartsWith("Error:", StringComparison.Ordinal))
                 {
-                    _transcript.ToolNote(result.Text);
+                    _transcript.ToolNote(result.Text, time);
                 }
 
                 break;
@@ -19195,14 +19210,15 @@ internal sealed partial class ChatScreen
                     FileText.DiffNote(result.Text),
                     diff,
                     Math.Clamp(_effective().DiffMaxLines, AppSettingsData.MinDiffMaxLines, AppSettingsData.MaxDiffMaxLines),
-                    Math.Clamp(_effective().DiffCollapseCount, AppSettingsData.MinDiffCollapseCount, AppSettingsData.MaxDiffCollapseCount));
+                    Math.Clamp(_effective().DiffCollapseCount, AppSettingsData.MinDiffCollapseCount, AppSettingsData.MaxDiffCollapseCount),
+                    time);
                 break;
             case TurnEvent.ToolResult result when QuietTools.Contains(result.Name):
-                _transcript.ToolNote(result.Text);
+                _transcript.ToolNote(result.Text, time);
                 ToolThumbnails(result, thumbnails);
                 break;
             case TurnEvent.ToolResult result:
-                _transcript.ToolResult(result.Name, result.Text);
+                _transcript.ToolResult(result.Name, result.Text, time);
                 break;
             case TurnEvent.Notice notice when notice.IsError:
                 _transcript.Error(TurnText.Shown(notice, InRalphPass || _audit.InPass));

@@ -29,6 +29,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task<AskOutcome<T>> AskBothAsync<T>(WebAskSpec spec, Func<CancellationToken, Task<T>> pane, Func<WebAnswerRequest, T> fromWeb, string failure, CancellationToken turnToken, bool noticeAnswer = true)
     {
+        using var asking = Llm.ToolSpan.Current?.Asking();   // the wait comes off the running tool's time (2026-11-02, the review)
         var handle = _webUi.Asks.Open(spec);
         var paneToken = _paneClose?.Token ?? CancellationToken.None;
         using var paneCts = CancellationTokenSource.CreateLinkedTokenSource(paneToken, turnToken);

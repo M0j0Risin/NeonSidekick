@@ -4341,6 +4341,18 @@ public class InputLineTests : IDisposable
         Assert.Equal("the quick Xbrown", await SubmitAsync());
     }
 
+    /// <summary>On a Mac, Option+←/→ move a word too (2026-11-02, the review), the Mac's own word keys; with Shift, selecting.</summary>
+    [MacFact]
+    public async Task OptionArrows_MoveAWordAtATime_OnAMac()
+    {
+        static ConsoleKeyInfo Option(ConsoleKey key, bool shift = false) => new('\0', key, shift, alt: true, control: false);
+        Push([.. Chars("the quick brown"), Option(ConsoleKey.LeftArrow), Option(ConsoleKey.LeftArrow), Option(ConsoleKey.RightArrow), Keys.Char('X'), Keys.Enter]);
+        Assert.Equal("the quick Xbrown", await SubmitAsync());
+
+        Push([.. Chars("the quick brown"), Option(ConsoleKey.LeftArrow, shift: true), .. Chars("fox"), Keys.Enter]);
+        Assert.Equal("the quick fox", await SubmitAsync());
+    }
+
     /// <summary>Ctrl+Shift+← selects back to the word's start; typing replaces it.</summary>
     [Fact]
     public async Task CtrlShiftLeft_SelectsAWord()

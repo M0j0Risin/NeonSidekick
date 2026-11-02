@@ -1930,6 +1930,7 @@ public sealed partial class SidekickApp
                 // What the turn was made of (2026-10-10): kept, so an advisor is offered this turn's read-only tools.
                 lastInputs = turnInputs;
                 ChatScreen.PrepareTurn(assistant, turnInputs, memory, persona, operata, vocalia, speechOutput: false, EffectiveSettings.LlmMaxToolIterations, ChatScreen.ContextGuardFor(EffectiveSettings, session.ContextLength, replyFloor: ChatScreen.PlanReplyFloor(plan, files)), skills with { Enabled = EffectiveSettings.AgentSkills, External = EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills }, markdown: false, processes, EffectiveSettings.LlmPreserveThinking, LlmSampling.Resolve(EffectiveSettings, session.Endpoint?.ModelId));
+                assistant.ThinkingInFlightOnly = Assistant.InFlightOnlyWire(session.Endpoint?.BaseUrl);
                 assistant.PictureBudget = new PictureBudget(EffectiveSettings.LlmPictureKeep, EffectiveSettings.LlmPictureMegabytes);
 
                 // The Claude Code server (2026-09-30), as the screen does: the turn names its session, no guard over a history the CLI does not read.

@@ -154,12 +154,15 @@ public class TranscriptFindTests : IDisposable
         pane.Show();
         for (int i = 1; i <= 40; i++)
         {
+            var line = new Markup("line " + i.ToString(System.Globalization.CultureInfo.InvariantCulture) + "\n");
             if (i is 10 or 20)
             {
-                pane.MarkMessageStart();
+                pane.WriteMessageStart(line);
             }
-
-            pane.Write(new Markup("line " + i.ToString(System.Globalization.CultureInfo.InvariantCulture) + "\n"));
+            else
+            {
+                pane.Write(line);
+            }
         }
 
         var tops = new List<int>();

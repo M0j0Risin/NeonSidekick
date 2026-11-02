@@ -30,6 +30,18 @@ public class KeysTests
     }
 
     [Fact]
+    public void IsMessageJump_IsCtrlOrAltWithUpOrDown_AndShiftKeepsTheRowMove()
+    {
+        // 2026-11-02, the review: one home for the chord, read by the line's editor and by /find.
+        Assert.True(Keys.IsMessageJump(Keys.Ctrl(ConsoleKey.UpArrow)));
+        Assert.True(Keys.IsMessageJump(Keys.Ctrl(ConsoleKey.DownArrow)));
+        Assert.True(Keys.IsMessageJump(new ConsoleKeyInfo('\0', ConsoleKey.UpArrow, shift: false, alt: true, control: false)));
+        Assert.False(Keys.IsMessageJump(new ConsoleKeyInfo('\0', ConsoleKey.UpArrow, shift: true, alt: false, control: true)));
+        Assert.False(Keys.IsMessageJump(new ConsoleKeyInfo('\0', ConsoleKey.UpArrow, shift: false, alt: false, control: false)));
+        Assert.False(Keys.IsMessageJump(Keys.Ctrl(ConsoleKey.LeftArrow)));
+    }
+
+    [Fact]
     public void IsToolToggle_IsCtrlO_WithoutAlt_AndATypedOStaysAnO()
     {
         // 2026-09-22: the console's SI and the test factory's '\0' count; Alt, a typed "O" (upper case marked with Control by Spectre's test input) and "o" do not.

@@ -1,3 +1,6 @@
+using System.Buffers;
+using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.AI;
 using NeonSidekick.Claude;
 using NeonSidekick.Llm;
@@ -20,8 +23,31 @@ internal sealed partial class ChatScreen
     internal static long ToolTokens(AIFunction tool)
     {
         ArgumentNullException.ThrowIfNull(tool);
-        long chars = tool.Name.Length + (tool.Description?.Length ?? 0) + tool.JsonSchema.GetRawText().Length + ToolWrapperChars;
+        long chars = tool.Name.Length + (tool.Description?.Length ?? 0) + SchemaChars(tool.JsonSchema) + ToolWrapperChars;
         return chars / ConversationCompactor.CharsPerToken;
+    }
+
+    /// <summary>What a tool with no schema object sends in its place, as the request writers do.</summary>
+    internal const string EmptySchema = """{"type":"object"}""";
+
+    /// <summary>
+    /// A schema's characters as the wire sends it (2026-11-02, the review: the raw text kept a literal's indentation and read 15–25% high):
+    /// written minified, as the request writers write it; <see cref="EmptySchema"/> for anything but an object.
+    /// </summary>
+    internal static int SchemaChars(JsonElement schema)
+    {
+        if (schema.ValueKind != JsonValueKind.Object)
+        {
+            return EmptySchema.Length;
+        }
+
+        var buffer = new ArrayBufferWriter<byte>();
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            schema.WriteTo(writer);
+        }
+
+        return Encoding.UTF8.GetCharCount(buffer.WrittenSpan);
     }
 
     /// <summary>
@@ -29,35 +55,61 @@ internal sealed partial class ChatScreen
     /// the system prompt's sections (<see cref="SystemPromptSummary.PromptSections"/>, what <c>/sys</c> shows), the offered tool groups
     /// (<see cref="ToolGroups"/>, <c>/sys</c>' Tools tab), and the history's breakdown with the thinking the next request sends back
     /// (none of an earlier turn's unless <c>LLM preserve thinking</c> is on, since the next request starts a turn). While a reply runs the
-    /// history is the turn's own list, appended to without a lock, so it is not read: the tab works the history out from the server's count.
+    /// history is the turn's own list, appended to without a lock, so it is not read (2026-11-02, the review): the tab shows the main
+    /// assistant's <see cref="Assistant.LastSentEstimate"/> (marked as last sent), else works the history out from the server's count. The
+    /// settings and the <c>/tools</c> list are read once, for the prompt and the groups alike; a switchable group's prompt sentences are
+    /// what the prompt loses <see cref="SystemPromptFacts.Without"/> its switch.
     /// </summary>
     private ContextFacts ContextFacts()
     {
         var effective = _effective();
-        if (ClaudeCliEndpoint.IsClaudeCli(_session.Endpoint?.BaseUrl))
+        var url = _session.Endpoint?.BaseUrl;
+        bool inFlightOnly = Assistant.InFlightOnlyWire(url);
+        if (ClaudeCliEndpoint.IsClaudeCli(url))
         {
             return new ContextFacts(_session.ContextLength, 0, [], [], null, null, 0, effective.LlmPreserveThinking, ClaudeCode: true);
         }
 
-        var prompt = SystemPromptSummary.PromptSections(SystemPromptFacts())
-            .Where(s => s.InPrompt)
-            .Select(s => (s.Label, (long)(s.Body.Length / ConversationCompactor.CharsPerToken)))
-            .ToList();
-        var groups = ToolGroups()
-            .Select(g => new ContextToolGroup(g.Label, g.Tools.Count, g.Tools.Sum(ToolTokens), g.Switch is not null))
+        var disabled = TurnDisabled(effective);
+        var promptFacts = SystemPromptFacts(effective, disabled);
+        var prompt = PromptParts(promptFacts);
+        long promptTokens = prompt.Sum(p => p.Tokens);
+        var groups = ToolGroups(effective, disabled)
+            .Select(g => new ContextToolGroup(g.Label, g.Tools.Count, g.Tools.Sum(ToolTokens), g.Switch is not null,
+                g.Switch is { } field ? Math.Max(0, promptTokens - PromptParts(promptFacts.Without(field)).Sum(p => p.Tokens)) : 0))
             .ToList();
         string? noTools = groups.Count == 0 ? SystemPromptSummary.NoToolsLine(effective.LlmOfferTools) : null;
         ConversationCompactor.TokenEstimate? history = null;
-        int messages = 0;
+        bool asSent = false;
         if (!_turnRunning)
         {
             var list = _session.History.Messages;
-            messages = list.Count;
-            history = ConversationCompactor.Estimate(list, effective.LlmPreserveThinking ? 0 : list.Count);
+            history = ConversationCompactor.Estimate(list, effective.LlmPreserveThinking && !inFlightOnly ? 0 : list.Count);
+        }
+        else if (_session.Assistant?.LastSentEstimate is { } sent)
+        {
+            history = sent;
+            asSent = true;
         }
 
-        return new ContextFacts(_session.ContextLength, _session.Usage.LastRequest.Total, prompt, groups, noTools, history, messages, effective.LlmPreserveThinking);
+        var usage = _session.Usage;
+        long counted = usage.LastRequest.Total;
+        return new ContextFacts(_session.ContextLength, counted, prompt, groups, noTools, history, _session.History.TurnCount, effective.LlmPreserveThinking)
+        {
+            InFlightOnly = inFlightOnly,
+            AsLastSent = asSent,
+            ReplyRunning = _replyRunning,
+            Sent = !usage.Conversation.IsEmpty,
+            PreviousModel = counted > 0 && usage.HintHidden,
+        };
     }
+
+    /// <summary>The system prompt's sections in it, as estimated tokens.</summary>
+    private static List<(string Label, long Tokens)> PromptParts(SystemPromptFacts facts) =>
+        SystemPromptSummary.PromptSections(facts)
+            .Where(s => s.InPrompt)
+            .Select(s => (s.Label, (long)(s.Body.Length / ConversationCompactor.CharsPerToken)))
+            .ToList();
 
     /// <summary>The tab <c>/usage</c>'s argument names: 0 for none (Statistics), <see cref="UsageText.ContextTabIndex"/> for <c>context</c>, null for anything else.</summary>
     internal static int? UsageTab(string args)
@@ -74,35 +126,25 @@ internal sealed partial class ChatScreen
 internal sealed partial class ChatScreen
 {
     /// <summary>
-    /// A tool's own time, for its result line (2026-11-01, the reply footer): stamped at the call and read at the result, less the menu pane's
-    /// asks between them (an approval, <c>ask_user</c>), which also go to the turn's <see cref="_turnToolAsks"/>. With the footer on, a tool
-    /// that took <see cref="UsageText.SlowTool"/> or more hands the renderer its suffix; never the shell family (its note has its time),
-    /// <c>ask_user</c> (the time is the user's) or the advisor (its own view). Each call clears a suffix no writer took.
+    /// A tool's own time, for its result line (2026-11-01, the reply footer; from the Assistant's stamps since 2026-11-02, the review): its
+    /// <see cref="TurnEvent.ToolResult.Took"/> less its <see cref="TurnEvent.ToolResult.Asked"/> (an approval, <c>ask_user</c>, answered
+    /// here or on the page), which also goes to the turn's <see cref="_turnToolAsks"/>. With the footer on, outside a <c>/botchat</c> turn, a
+    /// tool that took <see cref="UsageText.SlowTool"/> or more gets its suffix; never the shell family (its note has its time),
+    /// <c>ask_user</c> (the time is the user's), the advisor (its own view) or a call never run. Null for none.
     /// </summary>
-    private void TimeTool(TurnEvent evt)
+    private string? ToolTimeFor(TurnEvent.ToolResult result)
     {
-        if (evt is TurnEvent.ToolCall)
+        _turnToolAsks += result.Asked;
+        if (result.Took is not { } took || !_effective().ReplyFooter || _botTurnRunning
+            || ShellToolNames.Contains(result.Name)
+            || string.Equals(result.Name, AskUserTool.ToolName, StringComparison.Ordinal)
+            || string.Equals(result.Name, NeonAdvisorTool.ToolName, StringComparison.Ordinal))
         {
-            _transcript.ToolTime(null);
-            _toolCalledAt = _time.GetTimestamp();
-            _toolAskedAt = _menuPane.AskedFor;
-            return;
+            return null;
         }
 
-        if (evt is not TurnEvent.ToolResult result || _toolCalledAt is not long called)
-        {
-            return;
-        }
-
-        _toolCalledAt = null;
-        var asked = _menuPane.AskedFor - _toolAskedAt;
-        _turnToolAsks += asked;
-        var took = _time.GetElapsedTime(called) - asked;
-        bool timed = _effective().ReplyFooter
-            && !ShellToolNames.Contains(result.Name)
-            && !string.Equals(result.Name, AskUserTool.ToolName, StringComparison.Ordinal)
-            && !string.Equals(result.Name, NeonAdvisorTool.ToolName, StringComparison.Ordinal);
-        _transcript.ToolTime(timed ? UsageText.ToolTime(took) : null);
+        var shown = took - result.Asked;
+        return UsageText.ToolTime(shown < TimeSpan.Zero ? TimeSpan.Zero : shown);
     }
 
     /// <summary>
@@ -112,7 +154,6 @@ internal sealed partial class ChatScreen
     /// </summary>
     private string? ReplyFooter(bool mainChat, TurnOutcome outcome, bool errorOnly, long started, TurnTrace trace)
     {
-        _transcript.ToolTime(null);
         if (!mainChat || errorOnly || outcome is not (TurnOutcome.Continue or TurnOutcome.Interrupted) || !_effective().ReplyFooter)
         {
             return null;

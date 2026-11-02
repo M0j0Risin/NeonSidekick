@@ -1097,4 +1097,34 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.False(Facts() with { TimersEnabled = false } is { Timers: true });
         Assert.True(Facts().Timers);
     }
+
+    /// <summary>
+    /// Every group switch that drives a prompt sentence takes it out <see cref="SystemPromptFacts.Without"/> it (2026-11-02, the review's P2-8:
+    /// the <c>/usage</c> Context tab's "off saves"), and a switch with no sentence of its own leaves the prompt as it was.
+    /// </summary>
+    [Fact]
+    public void Without_EachGroupsSwitch_TakesItsSentencesOut()
+    {
+        var all = new SystemPromptFacts(null, null, null, Memory: true, Memories: ["Their name is Chris."], TtsOutput: false, SpeechReady: false,
+            McpTools: 1, GitTools: 1, ShellTools: 1, ObsidianEnabled: true, ObsidianTools: 1, SqlEnabled: true, SqlTools: 1, HomeAssistantEnabled: true, HomeAssistantTools: 1,
+            OracleEnabled: true, OracleTools: 1, MySqlEnabled: true, MySqlTools: 1, UncEnabled: true, UncTools: 1, DockerEnabled: true, DockerTools: 1, HelpTools: 1,
+            SqliteEnabled: true, SqliteTools: 1, PostgresEnabled: true, PostgresTools: 1, WebEnabled: true, WebTools: 1, Download: true, Ask: new AskLimits(2, 5),
+            SessionsEnabled: true, SessionTools: 1, ImagesEnabled: true, ImageTools: 1, AdvisorsEnabled: true, AdvisorTools: 1, ShoppingEnabled: true, ShoppingTools: 1,
+            EventLogEnabled: true, EventLogTools: 1, Admin: AdminRules.Network | AdminRules.Services | AdminRules.Tasks | AdminRules.Directory | AdminRules.Monitors,
+            DuckDbEnabled: true, DuckDbTools: 1);
+        string prompt = SystemPromptSummary.SystemPrompt(all);
+        SettingsField[] sentences =
+        [
+            SettingsField.FileTools, SettingsField.WebTools, SettingsField.AskUser, SettingsField.SessionTool, SettingsField.MemoryMode, SettingsField.McpServers,
+            SettingsField.GitLibTools, SettingsField.ShellCommandPolicy, SettingsField.ObsidianTools, SettingsField.SqlTools, SettingsField.OracleTools,
+            SettingsField.MySqlTools, SettingsField.SqliteTools, SettingsField.DuckDbTools, SettingsField.PostgresTools, SettingsField.UncTools,
+            SettingsField.DockerTools, SettingsField.EventLogTools, SettingsField.HomeAssistantTools, SettingsField.ShoppingTools, SettingsField.Advisors,
+            SettingsField.ImageTools, SettingsField.TimerTools, SettingsField.ClockTools, SettingsField.HelpTools, SettingsField.NetworkTools,
+            SettingsField.ServiceTools, SettingsField.TaskTools, SettingsField.DirectoryTools, SettingsField.MonitorTools,
+        ];
+
+        Assert.All(sentences, field => Assert.True(SystemPromptSummary.SystemPrompt(all.Without(field)).Length < prompt.Length, field.ToString()));
+        Assert.All([SettingsField.ComfyTools, SettingsField.PrintTools, SettingsField.CameraTools, SettingsField.ScreenTools, SettingsField.YouTubeTools],
+            field => Assert.Same(all, all.Without(field)));
+    }
 }

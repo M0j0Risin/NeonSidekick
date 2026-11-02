@@ -48,9 +48,11 @@ public abstract record TurnEvent
     /// here so a host can draw them; null (read as none) for every other tool. <paramref name="Diff"/> is what a file-writing
     /// tool changed (2026-10-03, <see cref="Tools.ToolDiffResult"/>): the host's to draw, never in the history; null otherwise.
     /// <paramref name="Shown"/> is a line for the user in the text's place (later on 2026-10-03, <see cref="Tools.ToolShownResult"/>:
-    /// the forbidden string the model is not told); the history keeps the text; null otherwise.
+    /// the forbidden string the model is not told); the history keeps the text; null otherwise. <paramref name="Took"/> (2026-11-02, the
+    /// review: the reply footer's tool times) is the call's wall time, null for a call never run (cut off by the length limit), and
+    /// <paramref name="Asked"/> the part of it spent waiting on the user (<see cref="ToolSpan"/>), which the time shown leaves out.
     /// </summary>
-    public sealed record ToolResult(string Name, string CallId, string Text, IReadOnlyList<ImageAttachment>? Images = null, FileDiff? Diff = null, string? Shown = null) : TurnEvent;
+    public sealed record ToolResult(string Name, string CallId, string Text, IReadOnlyList<ImageAttachment>? Images = null, FileDiff? Diff = null, string? Shown = null, TimeSpan? Took = null, TimeSpan Asked = default) : TurnEvent;
 
     /// <summary>
     /// Something the user should see that is not reply text: a timeout, a server error, an iteration cap. <paramref name="AskAgain"/>: the

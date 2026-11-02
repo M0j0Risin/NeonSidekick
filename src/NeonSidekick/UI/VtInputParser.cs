@@ -18,8 +18,13 @@ namespace NeonSidekick.UI;
 /// never ran, and Ctrl+] is a Mac's <c>/terminal</c> (Ctrl+. sends a bare ".").</item>
 /// <item>ESC then a key is that key with Alt (Option as Meta). A lone ESC is ESC, but only once the bytes stop:
 /// ESC also opens every sequence below, so the reader calls <see cref="Flush"/> when nothing more came within its timeout.</item>
+/// <item>ESC ESC then a whole arrow (<c>ESC ESC [ A</c>, <c>ESC ESC O A</c>, Terminal.app's Option+Up) is that arrow with Alt, the
+/// meta prefix ahead of it (2026-11-01, message jumps), but only when both ESCs and the arrow came in one read (2026-11-02, the
+/// review): an ESC left from an earlier read is a lone ESC, and a read that ends inside the pair gives its first ESC at once, so Esc
+/// then ↑ under a reply still cancels it. A terminal writes a key's bytes at once, so an Option+arrow split over two reads, which
+/// then reads as Esc then the arrow (as before 2026-11-01), is rare. Anything else after ESC ESC is a lone ESC, then the rest.</item>
 /// <item>CSI and SS3 keys (arrows, Home/End, Insert/Delete, PageUp/Down, F1–F12, Shift+Tab) with xterm's modifier
-/// parameter (1 + Shift 1, Alt 2, Ctrl 4).</item>
+/// parameter (1 + Shift 1, Alt 2, Ctrl 4, Meta 8; Meta reads as Alt, as the mouse's bit 8 does).</item>
 /// <item>Bracketed paste (<c>ESC[200~</c> … <c>ESC[201~</c>) as one <see cref="InputEvent.Paste"/>, CR LF and lone CR as
 /// <c>'\n'</c>: Cmd+V's text never submits a line, whatever reads it splits.</item>
 /// <item>SGR mouse reports (<c>ESC[&lt;b;x;yM</c>/<c>m</c>): left and right presses are clicks, a motion with the left button
@@ -44,6 +49,10 @@ public sealed class VtInputParser
     private StringBuilder? _paste;
     private char[] _chars = new char[256];
     private volatile bool _awaitingCursor;
+
+    // Of the characters Drain reads, how many were already waiting before this read (2026-11-02): an ESC below it came from an
+    // earlier read, so it never opens the ESC ESC meta form.
+    private int _carried;
 
     /// <summary>Set (from the asking thread) while a cursor position query waits; a <c>CSI r;c R</c> is then the answer, not F3.</summary>
     public bool AwaitingCursor
@@ -77,12 +86,17 @@ public sealed class VtInputParser
         }
 
         int count = _utf8.GetChars(bytes, _chars, flush: false);
+        _carried = _pending.Length;
         _pending.Append(_chars, 0, count);
         Drain(events, final: false);
     }
 
     /// <summary>The reader's timeout passed with bytes still waiting: what can stand alone (a lone ESC) is delivered.</summary>
-    public void Flush(List<InputEvent> events) => Drain(events, final: true);
+    public void Flush(List<InputEvent> events)
+    {
+        _carried = 0;
+        Drain(events, final: true);
+    }
 
     private void Drain(List<InputEvent> events, bool final)
     {
@@ -180,34 +194,15 @@ public sealed class VtInputParser
 
         if (next == Esc)
         {
-            // ESC ESC [ A (2026-11-01, message jumps): Terminal.app's Option+Up, the meta prefix ahead of a whole arrow — that arrow with
-            // Alt, never an ESC (under a reply a lone ESC cancels it). Until the arrow is whole the pair waits, as a lone trailing ESC does.
-            if (i + 2 >= s.Length || (s[i + 2] == '[' && i + 3 >= s.Length))
+            // ESC ESC [ A (2026-11-01, message jumps): Terminal.app's Option+Up, the meta prefix ahead of a whole arrow, is that arrow
+            // with Alt, never an ESC (under a reply a lone ESC cancels it). Only when the pair and the arrow came in this read
+            // (2026-11-02): a carried ESC, an unfinished arrow or anything else makes the first a lone ESC and the rest start over.
+            if (i >= _carried && ArrowAfterMeta(s, i + 2, out var arrow) is > 0 and var used)
             {
-                if (!final)
-                {
-                    return 0;
-                }
-            }
-            else if (s[i + 2] == '[')
-            {
-                var arrow = new List<InputEvent>(1);
-                int used = Csi(s, i + 1, arrow, final);
-                if (used == 0)
-                {
-                    return 0;
-                }
-
-                if (arrow is [InputEvent.Key { Info: var a }] && a.Key is ConsoleKey.UpArrow or ConsoleKey.DownArrow or ConsoleKey.LeftArrow or ConsoleKey.RightArrow)
-                {
-                    bool shift = (a.Modifiers & ConsoleModifiers.Shift) != 0;
-                    bool control = (a.Modifiers & ConsoleModifiers.Control) != 0;
-                    events.Add(new InputEvent.Key(new ConsoleKeyInfo(a.KeyChar, a.Key, shift, alt: true, control)));
-                    return 1 + used;
-                }
+                events.Add(new InputEvent.Key(arrow));
+                return 2 + used;
             }
 
-            // ESC ESC otherwise: the first is a lone ESC, the second starts over.
             events.Add(new InputEvent.Key(new ConsoleKeyInfo(Esc, ConsoleKey.Escape, false, false, false)));
             return 1;
         }
@@ -215,6 +210,82 @@ public sealed class VtInputParser
         // ESC then a key: that key with Alt.
         events.Add(new InputEvent.Key(Plain(next, alt: true)));
         return 2;
+    }
+
+    /// <summary>
+    /// The arrow at <paramref name="at"/>, just past an ESC ESC (2026-11-02, the review): <c>[</c>, digits and <c>;</c>, then A–D, or
+    /// SS3's <c>O</c> then A–D, as that arrow with Alt. Pure: it reads only the string (no callback, paste or cursor answer). Returns
+    /// the characters used, 0 when the read ends inside it, -1 when it is no arrow.
+    /// </summary>
+    internal static int ArrowAfterMeta(string s, int at, out ConsoleKeyInfo key)
+    {
+        key = default;
+        if (at >= s.Length)
+        {
+            return 0;
+        }
+
+        if (s[at] == 'O')
+        {
+            if (at + 1 >= s.Length)
+            {
+                return 0;
+            }
+
+            if (ArrowKey(s[at + 1]) is not { } plain)
+            {
+                return -1;
+            }
+
+            key = new ConsoleKeyInfo('\0', plain, false, alt: true, false);
+            return 2;
+        }
+
+        if (s[at] != '[')
+        {
+            return -1;
+        }
+
+        int j = at + 1;
+        while (j < s.Length && (char.IsAsciiDigit(s[j]) || s[j] == ';'))
+        {
+            if (j - at > MaxSequence)
+            {
+                return -1;
+            }
+
+            j++;
+        }
+
+        if (j >= s.Length)
+        {
+            return 0;
+        }
+
+        if (ArrowKey(s[j]) is not { } arrow)
+        {
+            return -1;
+        }
+
+        var (shift, _, control) = Modifiers(Number(s.Substring(at + 1, j - at - 1).Split(';'), 1, 1));
+        key = new ConsoleKeyInfo('\0', arrow, shift, alt: true, control);
+        return j - at + 1;
+    }
+
+    private static ConsoleKey? ArrowKey(char c) => c switch
+    {
+        'A' => ConsoleKey.UpArrow,
+        'B' => ConsoleKey.DownArrow,
+        'C' => ConsoleKey.RightArrow,
+        'D' => ConsoleKey.LeftArrow,
+        _ => null,
+    };
+
+    /// <summary>xterm's modifier parameter (1 + a mask): Shift 1, Alt 2, Ctrl 4, and Meta 8 read as Alt (2026-11-02, as the mouse reads it).</summary>
+    internal static (bool Shift, bool Alt, bool Control) Modifiers(int mods)
+    {
+        int m = Math.Max(0, mods - 1);
+        return ((m & 1) != 0, (m & (2 | 8)) != 0, (m & 4) != 0);
     }
 
     private int Csi(string s, int i, List<InputEvent> events, bool final)
@@ -301,9 +372,8 @@ public sealed class VtInputParser
 
         if (key is { } k)
         {
-            bool shift = fin == 'Z' || ((mods - 1) & 1) != 0;
-            bool alt = ((mods - 1) & 2) != 0;
-            bool control = ((mods - 1) & 4) != 0;
+            var (modShift, alt, control) = Modifiers(mods);
+            bool shift = fin == 'Z' || modShift;
             char ch = k == ConsoleKey.Tab ? '\t' : '\0';
             events.Add(new InputEvent.Key(new ConsoleKeyInfo(ch, k, shift, alt, control)));
         }

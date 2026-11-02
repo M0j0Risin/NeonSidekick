@@ -298,8 +298,8 @@ public sealed class TranscriptRenderer : INoticeSink
         Feed?.Add(WebUi.FeedKind.User, text);
         EndRun();
         BreakIfMidText();
-        _pane?.MarkMessageStart();   // a message starts here (2026-11-01, message jumps)
-        _console.MarkupLine(InputLine.SubmittedMarkup(text, _pane?.UserLineStyle(), _pane?.UserGlyph()));
+        // A message starts here (2026-11-01, message jumps), the start carried by the line's own write (2026-11-02, the review).
+        MessageLine(InputLine.SubmittedMarkup(text, _pane?.UserLineStyle(), _pane?.UserGlyph()));
         _state = LineState.AtLineStart;
     }
 
@@ -314,10 +314,22 @@ public sealed class TranscriptRenderer : INoticeSink
         EndRun();
         BreakIfMidText();
         // The speaker's line starts the bot's reply (2026-11-01, message jumps): the reply's own first row is no second start.
-        _pane?.MarkMessageStart();
         _speakerMarked = true;
-        _console.MarkupLine(SpeakerMarkup(name, color, avatar));
+        MessageLine(SpeakerMarkup(name, color, avatar));
         _state = LineState.AtLineStart;
+    }
+
+    /// <summary>A markup line that starts a message (2026-11-02): through the pane's start-carrying write, else the console's as ever.</summary>
+    private void MessageLine(string markup)
+    {
+        if (_pane is not null)
+        {
+            _pane.WriteMessageStart(new Markup(markup + Environment.NewLine));
+        }
+        else
+        {
+            _console.MarkupLine(markup);
+        }
     }
 
     /// <summary>
@@ -513,36 +525,24 @@ public sealed class TranscriptRenderer : INoticeSink
     /// <summary>A link inside a one-line markup's text (2026-11-01): what it opens, where it starts in the line's plain text and how many characters it covers.</summary>
     internal readonly record struct ToolLink(string Target, int Start, int Length);
 
-    public void ToolResult(string name, string text)
+    /// <summary>
+    /// A tool's result under its call. <paramref name="time"/> (2026-11-01, the reply footer; an argument since 2026-11-02, the review: a
+    /// slot armed by the screen could land on another writer's line) is a slow tool's suffix, <c> · 2.1s</c> (<see cref="App.UsageText.ToolTime"/>),
+    /// drawn dim after the cut text on the screen only, never the page; null or empty for none. The other one-line writers take it alike.
+    /// </summary>
+    public void ToolResult(string name, string text, string? time = null)
     {
         ArgumentNullException.ThrowIfNull(text);
         // On the pane: the result under its call, its first line and the next ones that fold with the run (2026-10-04); on the page, the same unit (2026-10-15).
         bool sameUnit = TakeCall();
-        string time = TakeToolTime();
+        time ??= "";
         Feed?.Add(WebUi.FeedKind.ToolResult, Truncate(text, ToolTextLimit), failed: IsToolFailure(text), joins: sameUnit);
         ToolWrite(new ToolResultView(text, time), () => WriteLine(ToolResultMarkup(name, text) + TimeMarkup(time), (ToolResultMarkup(name, text) + TimeMarkup(time)).TrimStart()), sameUnit);
         CountFailure(text);
     }
 
-    // A slow tool's time for the next one-line result (2026-11-01, the reply footer): set by the screen as the result arrives, taken by the
-    // writer that draws it (ToolResult, ToolNote, SkillNote), cleared by the screen at the next call so it never lands on a later tool's line.
-    private string? _toolTime;
-
-    /// <summary>
-    /// The next one-line result's time suffix (<c> · 2.1s</c>, <see cref="App.UsageText.ToolTime"/>), or null for none (2026-11-01, the reply footer):
-    /// the generic result, a tool note and a skill note append it after their cut text; the screen only, never the page.
-    /// </summary>
-    public void ToolTime(string? suffix) => _toolTime = suffix;
-
-    private string TakeToolTime()
-    {
-        string time = _toolTime ?? "";
-        _toolTime = null;
-        return time;
-    }
-
     /// <summary>A slow tool's suffix in the dim color, or nothing.</summary>
-    internal static string TimeMarkup(string time) => time.Length == 0 ? "" : Theme.DimMarkup(time);
+    internal static string TimeMarkup(string? time) => string.IsNullOrEmpty(time) ? "" : Theme.DimMarkup(time);
 
     /// <summary>Whether the write that follows completes a call just written (its result or note): it joins the call's unit, so a run's keep count counts calls.</summary>
     private bool TakeCall()
@@ -552,7 +552,8 @@ public sealed class TranscriptRenderer : INoticeSink
         return open;
     }
 
-    public void ToolNote(string text) => Note(text, ToolGlyph, TakeToolTime());
+    /// <summary>A tool's one dim line behind the tools' glyph; <paramref name="time"/> as <see cref="ToolResult"/> takes it.</summary>
+    public void ToolNote(string text, string? time = null) => Note(text, ToolGlyph, time ?? "");
 
     /// <summary>
     /// An advisor's question line or footer (2026-10-10, the user's ask): <see cref="ToolNote"/> behind <see cref="AdvisorGlyph"/>, still a
@@ -627,14 +628,14 @@ public sealed class TranscriptRenderer : INoticeSink
     /// of more rows than <paramref name="collapseCount"/> (2026-10-04, <c>Diff collapse count</c>; 0 never) folds on its own under its
     /// summary row once the run is over — with no run, at the next write — on the screen's pane only.
     /// </summary>
-    public void ToolDiff(string note, FileDiff diff, int maxLines, int collapseCount = 0)
+    public void ToolDiff(string note, FileDiff diff, int maxLines, int collapseCount = 0, string? time = null)
     {
         ArgumentNullException.ThrowIfNull(note);
         ArgumentNullException.ThrowIfNull(diff);
-        // The page gets the rows too (2026-10-15), cut and folded as here.
+        // The page gets the rows too (2026-10-15), cut and folded as here. A slow edit's time on its note line (2026-11-02), the screen's only.
         Feed?.Add(WebUi.FeedKind.Tool, ToolGlyph.TrimStart() + Truncate(note, ToolTextLimit), diff: WebUi.WebDiffs.From(diff, maxLines, collapseCount));
-        var full = new DiffView(new Markup(ToolNoteMarkup(note)), diff, maxLines, collapseCount);
-        var inline = new DiffView(new Markup(Theme.ColorMarkup(Theme.Dim, ToolGlyph.TrimStart() + Truncate(note, ToolTextLimit))), diff, maxLines, collapseCount);
+        var full = new DiffView(new Markup(ToolNoteMarkup(note) + TimeMarkup(time)), diff, maxLines, collapseCount);
+        var inline = new DiffView(new Markup(Theme.ColorMarkup(Theme.Dim, ToolGlyph.TrimStart() + Truncate(note, ToolTextLimit)) + TimeMarkup(time)), diff, maxLines, collapseCount);
         ToolWrite(full, () => WriteBlock(full, inline));
     }
 
@@ -642,10 +643,10 @@ public sealed class TranscriptRenderer : INoticeSink
     public const string ToolAnswerIndent = "     ";
 
     /// <summary><see cref="ToolNote"/> for a skill tool's result: the same dim line behind <see cref="SkillGlyph"/>.</summary>
-    public void SkillNote(string text)
+    public void SkillNote(string text, string? time = null)
     {
         Feed?.Add(WebUi.FeedKind.Tool, SkillGlyph.TrimStart() + Truncate(text, ToolTextLimit));
-        SkillLine(text, TakeToolTime());
+        SkillLine(text, time ?? "");
     }
 
     private void SkillLine(string text, string time = "") =>
@@ -872,21 +873,26 @@ public sealed class TranscriptRenderer : INoticeSink
         // The opening calls' lines come before the glyph: a run of their own, the reply's calls another.
         EndRun();
         BreakIfMidText();
-        if (!_speakerMarked)
-        {
-            // The reply's first committed row starts a message (2026-11-01, message jumps): the glyph, a tool line or a thinking fold.
-            _pane?.MarkMessageStart();
-        }
-
         _openGlyph = string.IsNullOrEmpty(glyph) ? AssistantGlyph : glyph;
         Feed?.Begin(_openGlyph.Trim());
         _slot = markdown && _pane is { Enabled: true };
         if (_slot)
         {
+            // The reply's first committed row starts a message (2026-11-01, message jumps): owed to the slot's first commit, or the
+            // reply's first tool line or run (2026-11-02, the review: a notice written first took it).
+            if (!_speakerMarked)
+            {
+                _pane!.OweMessageStart();
+            }
+
             ClearReply();
             _glyph = true;
             _codeKeep = CodeCollapseCount();
             _pane!.SetLive(new ReplyBlock("", glyph: true, codeKeep: _codeKeep, glyphText: _openGlyph, resolvePath: ReplyResolver));
+        }
+        else if (_pane is not null && !_speakerMarked)
+        {
+            _pane.WriteMessageStart(new RawText(_openGlyph, Theme.Accent));   // the plain path's glyph is the reply's start
         }
         else
         {
@@ -986,7 +992,6 @@ public sealed class TranscriptRenderer : INoticeSink
     /// </summary>
     public void EndAssistant(string? footer = null)
     {
-        _toolTime = null;   // a slow tool's time no writer took never outlives its reply
         Feed?.End();
         EndThinking();
         EndRun();
@@ -1006,7 +1011,7 @@ public sealed class TranscriptRenderer : INoticeSink
                 if (_state == LineState.GlyphOnly)
                 {
                     DropSlot();
-                    _console.Write(new RawText(_openGlyph, Theme.Accent));
+                    _pane!.WriteOwedStart(new RawText(_openGlyph, Theme.Accent));   // the start still owed, when no tool line took it
                     _console.Markup(Theme.DimMarkup(NoReplyText));
                     _console.WriteLine();
                 }
@@ -1040,7 +1045,7 @@ public sealed class TranscriptRenderer : INoticeSink
 
         _state = LineState.AtLineStart;
         _assistantOpen = false;
-        _pane?.DropMessageStart();   // a reply that committed nothing leaves no mark for the next notice
+        _pane?.ForgoMessageStart();   // a reply that committed nothing leaves no mark for the next notice
     }
 
     /// <summary>The reply footer's dim line at a line's start (2026-11-01); nothing for null or empty.</summary>
@@ -1429,7 +1434,15 @@ public sealed class TranscriptRenderer : INoticeSink
         if (!open && (_pane is not { Enabled: true } || keep <= 0))
         {
             _run = false;
-            alone();
+            if (_pane is not null)
+            {
+                _pane.OwedStartWrite(alone);   // no run: the reply's first tool line still takes its owed start (2026-11-02)
+            }
+            else
+            {
+                alone();
+            }
+
             return;
         }
 

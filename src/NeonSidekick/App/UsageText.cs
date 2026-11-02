@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using NeonSidekick.Llm;
 using NeonSidekick.UI;
 using Spectre.Console;
@@ -322,11 +323,16 @@ public static class UsageText
     public const string FreeLabel = "Free";
     public const string OverLabel = "Over";
 
-    /// <summary>What marks a figure of the Context tab as estimated: the app's own count, characters over four.</summary>
-    public const string ApproxMark = "≈";
+    /// <summary>
+    /// The History row's note mid-reply with nothing of the turn's sent yet: the row is the last count less the prompt and tools. Pinned.
+    /// </summary>
+    public const string HistoryFromCount = "from the server's count";
 
-    /// <summary>The History row's note mid-reply: the history is the turn's own list then, so the row is the last count less the prompt and tools. Pinned.</summary>
-    public const string HistoryFromCount = "from the server's count; a reply is running";
+    /// <summary>The History row's note mid-reply (2026-11-02, the review): the history as the turn's last request carried it. Pinned.</summary>
+    public const string HistoryAsSent = "as last sent";
+
+    /// <summary>What a mid-reply note adds while the wait is a reply's (not a model load's or a <c>/print</c>'s). Pinned.</summary>
+    public const string ReplyRunningNote = "a reply is running";
 
     /// <summary>The Thinking row's note with <c>LLM preserve thinking</c> off: the next request sends none of it back. Pinned.</summary>
     public const string ThinkingNotSent = "not sent back (LLM preserve thinking is off)";
@@ -334,42 +340,63 @@ public static class UsageText
     /// <summary>The Thinking row's note with it on. Pinned.</summary>
     public const string ThinkingSent = "every turn's sent back (LLM preserve thinking is on)";
 
+    /// <summary>
+    /// The Thinking row's note with it on where the server takes back only the turn in flight's (2026-11-02, the review: the Anthropic
+    /// and OpenAI APIs). Pinned.
+    /// </summary>
+    public const string ThinkingInFlightOnly = "only the turn in flight's sent back on this server";
+
     /// <summary>The note under the headline before anything was sent: the first request also carries the opening calls' results, not estimated here. Pinned.</summary>
     public const string NothingSentYet = "nothing sent yet; the first request also carries the opening calls (the clock, the folder, the memory list)";
+
+    /// <summary>The note under the headline once a compaction or a <c>/rewind</c> forgot the count (2026-11-02, the review). Pinned.</summary>
+    public const string CountedAgain = "the server counts the history again at the next request";
 
     /// <summary>The headline's reference line: the server's own count of the last request, which a <c>/tools</c> change since has made stale. Pinned.</summary>
     public static string ServerCounted(long tokens) => "the server counted " + N0(tokens) + " at the last request";
 
+    /// <summary>The reference line after a connect, before the new model's first count (2026-11-02, the review): the count is the previous model's. Pinned.</summary>
+    public static string PreviousModelCounted(long tokens) => "the previous model counted " + N0(tokens) + " at the last request";
+
     /// <summary>The Tools row's note: <c>41 tools in 9 groups</c>.</summary>
     public static string ToolsNote(int tools, int groups) => Plural(tools, "tool", "tools") + " in " + Plural(groups, "group", "groups");
 
-    /// <summary>A switchable group's note: <c>off saves 12%</c> of the window, <c>off saves &lt;1%</c> for a sliver.</summary>
+    /// <summary>A switchable group's note: <c>off saves 12%</c> of the window (its tools and its prompt sentences), <c>off saves &lt;1%</c> for a sliver.</summary>
     public static string OffSaves(int percent) => "off saves " + (percent < 1 ? "<1%" : PercentText(percent));
 
-    /// <summary>The headline: <c>≈21,400 of 32,768 (65%)</c>, or <c>≈21,400 tokens; window unknown</c>. Pinned.</summary>
+    /// <summary>The headline: <c>~21,400 of 32,768 (65%)</c>, or <c>~21,400 tokens; window unknown</c>. Pinned.</summary>
     public static string ContextHeadline(ContextFacts facts)
     {
         ArgumentNullException.ThrowIfNull(facts);
         long estimate = facts.Estimate;
         return facts.Window is { } w
-            ? ApproxMark + N0(estimate) + " of " + N0(w.Tokens) + " (" + PercentText(Percent(estimate, w) ?? 0) + ")"
-            : ApproxMark + N0(estimate) + " tokens; window " + WindowUnknown;
+            ? EstimateMark + N0(estimate) + " of " + N0(w.Tokens) + " (" + PercentText(Percent(estimate, w) ?? 0) + ")"
+            : EstimateMark + N0(estimate) + " tokens; window " + WindowUnknown;
     }
 
-    /// <summary>The dim line under the headline: the server's last count, or <see cref="NothingSentYet"/>.</summary>
+    /// <summary>
+    /// The dim line under the headline: the server's last count (the previous model's after a connect, 2026-11-02), else
+    /// <see cref="CountedAgain"/> once something was sent (a compaction or a <c>/rewind</c> forgot the count), else <see cref="NothingSentYet"/>.
+    /// </summary>
     public static string ContextReference(ContextFacts facts)
     {
         ArgumentNullException.ThrowIfNull(facts);
-        return facts.LastCounted > 0 ? ServerCounted(facts.LastCounted) : NothingSentYet;
+        return facts.LastCounted > 0 ? facts.PreviousModel ? PreviousModelCounted(facts.LastCounted) : ServerCounted(facts.LastCounted)
+            : facts.Sent ? CountedAgain
+            : NothingSentYet;
     }
 
-    private static string Approx(long tokens) => tokens > 0 ? ApproxMark + CompactNumber(tokens) : "0";
+    private static string Approx(long tokens) => tokens > 0 ? EstimateMark + CompactNumber(tokens) : "0";
+
+    /// <summary>A mid-reply note: <paramref name="note"/>, then <see cref="ReplyRunningNote"/> while the wait is a reply's.</summary>
+    private static string MidReply(string note, bool replyRunning) => replyRunning ? note + "; " + ReplyRunningNote : note;
 
     /// <summary>
     /// The Context tab's rows (2026-11-01), pure: the system prompt (its parts largest first), the tools with a row per offered group
-    /// (largest first, ties by name; <c>off saves</c> for a group with a switch while the window is known), the history, the pictures and
-    /// the thinking as the next request carries them, then what is free (or over). Mid-reply the history is one row from the server's
-    /// count, with no picture or thinking rows. The rows add up to <see cref="ContextHeadline"/>'s estimate.
+    /// (largest first, ties by name; <c>off saves</c> for a group with a switch while the window is known, its prompt sentences counted), the
+    /// history (its turns), the pictures and the thinking as the next request carries them, then what is free (or over). Mid-reply they are
+    /// the turn's last request's, marked <see cref="HistoryAsSent"/>; before it, the history is one row from the server's count, with no
+    /// picture or thinking rows. The rows add up to <see cref="ContextHeadline"/>'s estimate.
     /// </summary>
     public static IReadOnlyList<ContextRow> ContextRows(ContextFacts facts)
     {
@@ -380,24 +407,26 @@ public static class UsageText
         rows.Add(new(ToolsLabel, Approx(facts.ToolTokens), facts.Groups.Count > 0 ? ToolsNote(facts.Groups.Sum(g => g.Tools), facts.Groups.Count) : facts.NoToolsNote ?? "", ContextPiece.Tools));
         foreach (var group in facts.Groups.OrderByDescending(g => g.Tokens).ThenBy(g => g.Label, StringComparer.Ordinal))
         {
-            string note = group.Switchable && Percent(group.Tokens, facts.Window) is { } share ? OffSaves(share) : "";
+            string note = group.Switchable && Percent(group.Tokens + group.PromptTokens, facts.Window) is { } share ? OffSaves(share) : "";
             rows.Add(new(group.Label, Approx(group.Tokens), note, ContextPiece.Tools, Sub: true));
         }
 
         if (facts.History is { } history)
         {
-            string note = Plural(facts.Messages, "message", "messages") + (history.ToolResultTokens > 0 ? Sep + "tool results " + CompactNumber(history.ToolResultTokens) : "");
+            string note = Plural(facts.Turns, "turn", "turns") + (history.ToolResultTokens > 0 ? Sep + "tool results " + CompactNumber(history.ToolResultTokens) : "")
+                + (facts.AsLastSent ? Sep + MidReply(HistoryAsSent, facts.ReplyRunning) : "");
             rows.Add(new(HistoryLabel, Approx(history.HistoryTokens), note, ContextPiece.History));
             if (history.Pictures > 0)
             {
                 rows.Add(new(PicturesLabel, Approx(history.PictureTokenCount), Plural(history.Pictures, "picture", "pictures"), ContextPiece.Pictures));
             }
 
-            rows.Add(new(ThinkingLabel, Approx(history.ThinkingTokens), facts.PreserveThinking ? ThinkingSent : ThinkingNotSent, ContextPiece.Thinking));
+            string thinking = !facts.PreserveThinking ? ThinkingNotSent : facts.InFlightOnly ? ThinkingInFlightOnly : ThinkingSent;
+            rows.Add(new(ThinkingLabel, Approx(history.ThinkingTokens), thinking, ContextPiece.Thinking));
         }
         else if (facts.HistoryTokens is { } counted)
         {
-            rows.Add(new(HistoryLabel, Approx(counted), HistoryFromCount, ContextPiece.History));
+            rows.Add(new(HistoryLabel, Approx(counted), MidReply(HistoryFromCount, facts.ReplyRunning), ContextPiece.History));
         }
 
         if (facts.Window is { } window)
@@ -405,7 +434,7 @@ public static class UsageText
             long free = window.Tokens - facts.Estimate;
             rows.Add(free >= 0
                 ? new(FreeLabel, CompactNumber(free), "", ContextPiece.Free)
-                : new(OverLabel, ApproxMark + CompactNumber(-free), "", ContextPiece.Over));
+                : new(OverLabel, EstimateMark + CompactNumber(-free), "", ContextPiece.Over));
         }
 
         return rows;
@@ -414,7 +443,8 @@ public static class UsageText
     /// <summary>
     /// The Context tab (2026-11-01): a <see cref="SectionRule"/> with the window's source, the headline and its reference line, the bar
     /// (<see cref="ContextBar"/>, only with a window) and the rows as three columns — label in its piece's color, figure, dim note. The
-    /// Claude Code server's one line instead. <c>Text</c> cells, never <c>Markup</c>.
+    /// Claude Code server's one line instead. <c>Text</c> cells, never <c>Markup</c>; a label past <see cref="LabelCap"/> cells ends in an
+    /// ellipsis (<see cref="CutToCells"/>, 2026-11-02, the review: a long MCP server's name left the notes a few cells at 80 columns).
     /// </summary>
     public static IRenderable ContextTab(ContextFacts facts)
     {
@@ -436,7 +466,7 @@ public static class UsageText
         }
 
         var rows = ContextRows(facts);
-        int labels = rows.Select(r => TextCells.Width(r.Label) + (r.Sub ? SubIndent : 0)).DefaultIfEmpty(0).Max();
+        int labels = Math.Min(LabelCap, rows.Select(r => TextCells.Width(r.Label) + (r.Sub ? SubIndent : 0)).DefaultIfEmpty(0).Max());
         int values = rows.Select(r => TextCells.Width(r.Value)).DefaultIfEmpty(0).Max();
         var grid = new Grid()
             .AddColumn(new GridColumn().NoWrap().Width(labels).PadRight(SlashCommands.HelpColumnGap))
@@ -445,7 +475,7 @@ public static class UsageText
         foreach (var row in rows)
         {
             grid.AddRow(
-                new Text((row.Sub ? new string(' ', SubIndent) : "") + row.Label, row.Sub ? Theme.Body : PieceStyle(row.Piece)),
+                new Text(CutToCells((row.Sub ? new string(' ', SubIndent) : "") + row.Label, labels), row.Sub ? Theme.Body : PieceStyle(row.Piece)),
                 new Text(row.Value, row.Piece == ContextPiece.Over ? new Style(Theme.Warn) : Theme.Body),
                 new Text(row.Note, Theme.DimText));
         }
@@ -457,6 +487,39 @@ public static class UsageText
 
     /// <summary>The cells a group's row sits in under the Tools row.</summary>
     public const int SubIndent = 2;
+
+    /// <summary>The label column's widest (2026-11-02, the review), its indent included; a longer label ends in an ellipsis. The plain lines keep it whole.</summary>
+    public const int LabelCap = 24;
+
+    /// <summary>
+    /// <paramref name="text"/> in at most <paramref name="cells"/> cells, a cut one ending in <c>…</c> (2026-11-02, the review): by cells, so a
+    /// wide glyph in an MCP server's name counts two. Spectre's own ellipsis drops a word too long for its column rather than cutting it.
+    /// </summary>
+    public static string CutToCells(string text, int cells)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        if (TextCells.Width(text) <= cells)
+        {
+            return text;
+        }
+
+        var cut = new StringBuilder(text.Length);
+        int used = 0;
+        for (int i = 0; i < text.Length;)
+        {
+            int width = TextCells.ElementWidth(text, i, out int length);
+            if (used + width > cells - 1)
+            {
+                break;
+            }
+
+            cut.Append(text, i, length);
+            used += width;
+            i += length;
+        }
+
+        return cut.Append('…').ToString();
+    }
 
     /// <summary>The bar's pieces in order with their tokens: prompt, tools, history, pictures, thinking (the free part is what the window has left).</summary>
     public static IReadOnlyList<(ContextPiece Piece, long Tokens)> BarPieces(ContextFacts facts)
@@ -480,35 +543,59 @@ public static class UsageText
     /// <summary>
     /// The bar's cells per piece over <paramref name="width"/> cells (2026-11-01), pure: each piece its share of the window (of the
     /// estimate once that is past the window, so the bar is full), at least one cell for a piece over zero, the boundaries rounded
-    /// cumulatively so the last piece takes the rounding; the free cells are what is left.
+    /// cumulatively so the last piece takes the rounding; the free cells are what is left. Since 2026-11-02 (the review) a piece never takes
+    /// the cells the later pieces over zero need, nor the last free cell while some of the window is free; past the window the pieces share
+    /// <c>width − 1</c> cells, the last one the warning's. A bar too narrow for every piece drops the latest.
     /// </summary>
     public static IReadOnlyList<int> BarCells(IReadOnlyList<(ContextPiece Piece, long Tokens)> pieces, long window, int width)
     {
         ArgumentNullException.ThrowIfNull(pieces);
         var cells = new int[pieces.Count];
-        long whole = Math.Max(window, pieces.Sum(p => p.Tokens));
+        long total = pieces.Sum(p => p.Tokens);
+        long whole = Math.Max(window, total);
         if (whole <= 0 || width <= 0)
         {
             return cells;
         }
 
+        // Past the window, the warning cell; short of it, one free cell.
+        int room = total != window && width > 1 ? width - 1 : width;
         long sum = 0;
         int used = 0;
         for (int i = 0; i < pieces.Count; i++)
         {
-            if (pieces[i].Tokens <= 0 || used >= width)
+            if (pieces[i].Tokens <= 0 || used >= room)
             {
                 continue;
             }
 
+            int later = 0;
+            for (int j = i + 1; j < pieces.Count; j++)
+            {
+                later += pieces[j].Tokens > 0 ? 1 : 0;
+            }
+
             sum += pieces[i].Tokens;
-            int end = Math.Min(width, Math.Max(used + 1, (int)Math.Round(sum * (double)width / whole)));
+            int cap = Math.Max(used + 1, room - later);
+            int end = Math.Min(cap, Math.Max(used + 1, (int)Math.Round(sum * (double)room / whole)));
             cells[i] = end - used;
             used = end;
         }
 
         return cells;
     }
+
+    /// <summary>
+    /// The bar's glyph for a piece (2026-11-02, the review): <c>█</c> in its color; with no color (<c>NO_COLOR</c>, a legacy console) each piece
+    /// its own shade so the pieces still tell apart: prompt <c>█</c>, tools <c>▓</c>, history <c>▒</c>, pictures and thinking <c>▚</c>.
+    /// </summary>
+    public static char PieceGlyph(ContextPiece piece, bool noColor) => !noColor ? '█' : piece switch
+    {
+        ContextPiece.Prompt => '█',
+        ContextPiece.Tools => '▓',
+        ContextPiece.History => '▒',
+        _ => '▚',
+    };
 
     /// <summary>A piece's color: the prompt Primary, tools Secondary, history Tertiary, pictures Warm, thinking Highlight, free Dimmer, over Warn.</summary>
     public static Color PieceColor(ContextPiece piece) => piece switch
@@ -525,8 +612,8 @@ public static class UsageText
     private static Style PieceStyle(ContextPiece piece) => new(PieceColor(piece));
 
     /// <summary>
-    /// The Context tab as plain lines (2026-11-01), for a console with no pane: <c>Context: ≈21,400 of 32,768 tokens (65%, n_ctx on /props)</c>,
-    /// the reference line, then a line per row (<c>system prompt: ≈3.1k (Rules 1.4k · Project 0.9k)</c>, a group's two spaces in).
+    /// The Context tab as plain lines (2026-11-01), for a console with no pane: <c>Context: ~21,400 of 32,768 tokens (65%, n_ctx on /props)</c>,
+    /// the reference line, then a line per row (<c>system prompt: ~3.1k (Rules 1.4k · Project 0.9k)</c>, a group's two spaces in).
     /// </summary>
     public static IReadOnlyList<string> ContextLines(ContextFacts facts)
     {
@@ -540,8 +627,8 @@ public static class UsageText
         var lines = new List<string>(12)
         {
             facts.Window is { } w
-                ? $"Context: {ApproxMark}{N0(estimate)} of {N0(w.Tokens)} tokens ({PercentText(Percent(estimate, w) ?? 0)}, {w.Source})"
-                : $"Context: {ApproxMark}{N0(estimate)} tokens; window {WindowUnknown}",
+                ? $"Context: {EstimateMark}{N0(estimate)} of {N0(w.Tokens)} tokens ({PercentText(Percent(estimate, w) ?? 0)}, {w.Source})"
+                : $"Context: {EstimateMark}{N0(estimate)} tokens; window {WindowUnknown}",
             "(" + ContextReference(facts) + ")",
         };
         foreach (var row in ContextRows(facts))
@@ -579,8 +666,9 @@ public static class UsageText
     public static readonly TimeSpan SlowTool = TimeSpan.FromSeconds(2);
 
     /// <summary>
-    /// The dim line under a reply (<see cref="Settings.AppSettingsData.ReplyFooter"/>): <c>12.4s · 812 tok · 48 tok/s · 3 tools · qwen3-32b</c>, a part
-    /// with no data left out (no usage report: the time, the tools and the model). The time as the thinking fold writes it
+    /// The dim line under a reply (<see cref="Settings.AppSettingsData.ReplyFooter"/>): <c>12.4s · 812 tok · 48 tok/s · 3 tool calls · qwen3-32b</c>, a
+    /// part with no data left out (no usage report: the time, the tool calls and the model; "tool calls" since 2026-11-02, the review, as the
+    /// run's summary counts them). The time as the thinking fold writes it
     /// (<see cref="UI.ThinkingFoldText.Duration"/>), the speed whole, the model its id's last path segment. Pinned.
     /// </summary>
     public static string Footer(FooterFacts facts)
@@ -599,7 +687,7 @@ public static class UsageText
 
         if (facts.ToolCalls > 0)
         {
-            parts.Add(facts.ToolCalls == 1 ? "1 tool" : facts.ToolCalls.ToString(CultureInfo.InvariantCulture) + " tools");
+            parts.Add(Plural(facts.ToolCalls, "tool call", "tool calls"));
         }
 
         if (ChatScreen.ModelLabel(facts.Model) is { Length: > 0 } model)
@@ -805,14 +893,17 @@ public sealed record UsageSection(string Heading, string Note, IReadOnlyList<(st
 /// </summary>
 public sealed record UsageSections(IReadOnlyList<UsageSection> Sections, IReadOnlyList<(string Label, string Value)> Apart, bool NothingYet, bool Nothing);
 
-/// <summary>One offered tool group on the <c>/usage</c> Context tab (2026-11-01): its label, its tools, their estimated weight, whether a setting switches it.</summary>
 /// <summary>
 /// What the reply footer says (2026-11-01, feature idea #4, <see cref="UsageText.Footer"/>): the turn's time less the app's asks inside its tools,
 /// the reply's output tokens (0: none reported), its decode speed (null: untimed), the model's own tool calls and the model's id.
 /// </summary>
 public sealed record FooterFacts(TimeSpan Elapsed, long OutputTokens, double? TokensPerSecond, int ToolCalls, string? Model);
 
-public sealed record ContextToolGroup(string Label, int Tools, long Tokens, bool Switchable);
+/// <summary>
+/// One offered tool group on the <c>/usage</c> Context tab (2026-11-01): its label, its tools, their estimated weight, whether a setting switches
+/// it, and (2026-11-02, the review) the prompt's tokens that switch also takes out.
+/// </summary>
+public sealed record ContextToolGroup(string Label, int Tools, long Tokens, bool Switchable, long PromptTokens = 0);
 
 /// <summary>The pieces of the Context tab, each with its color on the bar and its row.</summary>
 public enum ContextPiece
@@ -831,8 +922,8 @@ public sealed record ContextRow(string Label, string Value, string Note, Context
 
 /// <summary>
 /// What the <c>/usage</c> Context tab is built from (2026-11-01), gathered by the screen without side effects: the window, the server's last
-/// count (0 for none), the system prompt's sections and the offered tool groups as estimated tokens, the history's breakdown (null while a
-/// reply runs: the history is the turn's own list then), its message count, the preserve-thinking switch and whether the server is Claude Code.
+/// count (0 for none), the system prompt's sections and the offered tool groups as estimated tokens, the history's breakdown (mid-reply the
+/// turn's last request's, <see cref="AsLastSent"/>; null before it), its turns, the preserve-thinking switch and whether the server is Claude Code.
 /// </summary>
 public sealed record ContextFacts(
     ContextLength? Window,
@@ -841,10 +932,25 @@ public sealed record ContextFacts(
     IReadOnlyList<ContextToolGroup> Groups,
     string? NoToolsNote,
     ConversationCompactor.TokenEstimate? History,
-    int Messages,
+    int Turns,
     bool PreserveThinking,
     bool ClaudeCode = false)
 {
+    /// <summary>Whether the server takes back only the turn in flight's thinking whatever <see cref="PreserveThinking"/> says (2026-11-02, the review).</summary>
+    public bool InFlightOnly { get; init; }
+
+    /// <summary>Whether <see cref="History"/> is the turn's last request's, read mid-reply (2026-11-02, the review).</summary>
+    public bool AsLastSent { get; init; }
+
+    /// <summary>Whether the wait is a reply's, not a model load's or a <c>/print</c>'s (2026-11-02, the review).</summary>
+    public bool ReplyRunning { get; init; }
+
+    /// <summary>Whether this conversation sent anything, so a zero <see cref="LastCounted"/> is a forgotten count (2026-11-02, the review).</summary>
+    public bool Sent { get; init; }
+
+    /// <summary>Whether <see cref="LastCounted"/> is the previous model's: a connect since, and no count of the new one (2026-11-02, the review).</summary>
+    public bool PreviousModel { get; init; }
+
     /// <summary>The system prompt's estimate: its parts summed.</summary>
     public long PromptTokens => PromptParts.Sum(p => p.Tokens);
 
@@ -872,25 +978,26 @@ internal sealed class ContextBar(IReadOnlyList<(ContextPiece Piece, long Tokens)
         int width = Math.Max(1, maxWidth - margin);
         var cells = UsageText.BarCells(pieces, window, width);
         bool over = pieces.Sum(p => p.Tokens) > window;
+        bool noColor = options.ColorSystem is ColorSystem.NoColors or ColorSystem.Legacy;
         var segments = new List<Segment>(pieces.Count + 3);
         int used = 0;
         for (int i = 0; i < pieces.Count; i++)
         {
             if (cells[i] > 0)
             {
-                segments.Add(new Segment(new string('█', cells[i]), new Style(UsageText.PieceColor(pieces[i].Piece))));
+                segments.Add(new Segment(new string(UsageText.PieceGlyph(pieces[i].Piece, noColor), cells[i]), new Style(UsageText.PieceColor(pieces[i].Piece))));
                 used += cells[i];
             }
         }
 
-        if (over && used > 0)
+        if (over && used < width)
         {
-            // The last cell in the warning color: past the window.
-            var last = segments[^1];
-            segments[^1] = new Segment(last.Text[..^1], last.Style);
-            segments.Add(new Segment("█", new Style(Theme.Warn)));
+            // The warning cell, past the window: BarCells left it.
+            segments.Add(new Segment(noColor ? "!" : "█", new Style(Theme.Warn)));
+            used++;
         }
-        else if (used < width)
+
+        if (used < width)
         {
             segments.Add(new Segment(new string('░', width - used), new Style(Theme.Dimmer)));
         }

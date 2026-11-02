@@ -9,6 +9,81 @@ public class ScrollbackTests
 {
     private static List<Segment> Segments(params string[] texts) => texts.Select(t => new Segment(t)).ToList();
 
+    /// <summary>One append made with <see cref="Scrollback.StartsMessage"/> (2026-11-02): the flag read false after, whether the write took it or not.</summary>
+    private static void AppendStart(Scrollback store, IReadOnlyList<Segment> segments, int width, IRenderable? source = null)
+    {
+        store.StartsMessage = true;
+        store.Append(segments, width, false, null, null, source, 0);
+        store.StartsMessage = false;
+    }
+
+    [Fact]
+    public void RowsWritten_CountsEveryWrite_FoldedOrNot_AndNoFoldTrimOrReflowLowersIt()
+    {
+        var store = new Scrollback();
+        store.Append(Segments("one\n", "two\n"), 40);
+        Assert.Equal(2, store.RowsWritten);
+
+        store.BeginGroup(1);
+        store.Append(Segments("tool a\n"), 40, member: true);
+        store.Append(Segments("tool b\n"), 40, member: true);   // past the keep: the run folds, its rows were still written
+        store.EndGroup();
+        long written = store.RowsWritten;
+        Assert.True(written >= 4);
+
+        store.Rows(10);        // a reflow
+        store.Rows(40);
+        Assert.Equal(written, store.RowsWritten);
+
+        store.BeginCodeGroup(0, Segments("📜 csharp"), 40, 40);   // a block's label counts
+        Assert.Equal(written + 1, store.RowsWritten);
+    }
+
+    [Fact]
+    public void AMergedWrite_OpeningWithBlankLines_KeepsItsStartOnTheText()
+    {
+        var store = new Scrollback();
+        store.Append(Segments("banner\n"), 40);
+        AppendStart(store, Segments("\n", "hello\n"), 40, new Markup("\nhello\n"));
+
+        Assert.Equal([2], store.MessageStartRows());
+        store.Rows(80);
+        Assert.Equal([2], store.MessageStartRows());
+    }
+
+    [Fact]
+    public void MessageStartRows_IsTheSameList_UntilTheStoreChanges()
+    {
+        var store = new Scrollback();
+        AppendStart(store, Segments("hi\n"), 40);
+        store.Rows(40);
+        var first = store.MessageStartRows();
+        Assert.Same(first, store.MessageStartRows());
+
+        AppendStart(store, Segments("again\n"), 40);
+        Assert.NotSame(first, store.MessageStartRows());
+        Assert.Equal([0, 1], store.MessageStartRows());
+        Assert.Equal(1, Scrollback.CountAtOrBefore([0, 1], 0));
+        Assert.Equal(2, Scrollback.CountAtOrBefore([0, 1], 5));
+        Assert.Equal(0, Scrollback.CountAtOrBefore([3], 2));
+    }
+
+    [Fact]
+    public void TheFrontTrim_CountsTheStartsItDrops_AndAClearForgetsThem()
+    {
+        var store = new Scrollback();
+        AppendStart(store, Segments("first\n"), 40);
+        for (int i = 0; i < Scrollback.MaxRows; i++)
+        {
+            store.Append(Segments("x\n"), 40);
+        }
+
+        Assert.Equal(1, store.StartsTrimmed);
+        Assert.Empty(store.MessageStartRows());
+        store.Clear();
+        Assert.Equal(0, store.StartsTrimmed);
+    }
+
     private static string Text(SegmentLine row) => string.Concat(row.Select(s => s.Text));
 
     private static string[] Texts(IReadOnlyList<SegmentLine> rows) => rows.Select(Text).ToArray();

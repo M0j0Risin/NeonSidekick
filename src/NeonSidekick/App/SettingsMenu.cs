@@ -1343,7 +1343,7 @@ public enum SettingsField
     GradientRules,
 
     /// <summary>
-    /// Toggle: a dim line under each reply with its time, tokens, speed, tools and model (<see cref="Settings.AppSettingsData.ReplyFooter"/>).
+    /// Toggle: a dim line under each reply with its time, tokens, speed, tool calls and model (<see cref="Settings.AppSettingsData.ReplyFooter"/>).
     /// The Chat tab's Transcript run under <see cref="UserLineStyle"/> (2026-11-01, feature idea #4); read at each turn's end. Last in the enum.
     /// </summary>
     ReplyFooter,
@@ -8673,7 +8673,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ThemedExternalWindows => on ? "theme the external windows" : "keep the external windows black",
         SettingsField.ThemedBackground => on ? "theme the terminal's background" : "keep the terminal profile's background",
         SettingsField.GradientRules => on ? "shade the rules along the theme's gradient" : "keep the rules flat",
-        SettingsField.ReplyFooter => on ? "a dim line under each reply: time, tokens, speed, tools, model" : "no line under replies",
+        SettingsField.ReplyFooter => on ? "a dim line under each reply: time, tokens, speed, tool calls, model" : "no line under replies",
         SettingsField.SessionLogging => on ? "every completed turn is written to this profile's session store" : "nothing is written; stored sessions can still be restored or purged",
         SettingsField.SessionTool => on ? "the model can search, list and read this profile's earlier sessions" : "the model never sees an earlier session",
         SettingsField.ShellPolice => on ? "shell police enabled" : "shell police disabled",   // the user's wording, 2026-10-03

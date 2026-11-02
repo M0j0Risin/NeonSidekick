@@ -104,6 +104,28 @@ public sealed class ReplyBlock : IRenderable
     }
 
     /// <summary>
+    /// The table the reply may still be streaming (2026-11-02, the review): the last top-level block when it is a table, whatever
+    /// <see cref="CodeKeep"/> says. A table ends only when a later block arrives, so until then a row may still widen it past the grid,
+    /// and the pane holds it back from the flow as it holds an open code block. Null otherwise.
+    /// </summary>
+    public TableBlock? OpenTable => Document.Blocks is [.., TableBlock table] ? table : null;
+
+    /// <summary>
+    /// The row <see cref="OpenTable"/> starts at in this block laid out at <paramref name="maxWidth"/> as <paramref name="rows"/> rows: the last
+    /// block, so its rows are the last rows, as <see cref="OpenCodeSpan"/> works it out. Null without one.
+    /// </summary>
+    public int? OpenTableRow(RenderOptions options, int maxWidth, int rows)
+    {
+        if (OpenTable is null)
+        {
+            return null;
+        }
+
+        _ = Content;
+        return _view!.LastTableRows(options, ViewWidth(maxWidth)) is { } table ? Math.Max(0, rows - table) : null;
+    }
+
+    /// <summary>
     /// The top-level code blocks whose fence has closed and that are over <see cref="CodeKeep"/> lines —
     /// the ones the transcript folds (2026-09-27): the pane commits each whole the draw it closes, so it
     /// folds at once, not after streaming at full height. 0 without a <see cref="CodeKeep"/>.

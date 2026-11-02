@@ -125,6 +125,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task<T> RunCameraPaneAsync<T>(Func<CancellationToken, Task<T>> body, T fallback, CancellationToken turnToken)
     {
+        using var asking = Llm.ToolSpan.Current?.Asking();   // the wait comes off the running tool's time (2026-11-02, the review)
         var paneToken = _paneClose?.Token ?? CancellationToken.None;
         T result = fallback;
         var request = _keys.RequestPaneAsync(async () =>

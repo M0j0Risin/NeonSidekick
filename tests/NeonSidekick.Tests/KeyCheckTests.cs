@@ -91,10 +91,6 @@ public class KeyCheckTests
         Assert.Contains("Ctrl+Delete", windows);
     }
 
-    /// <summary>
-    /// The Keys tab is the one list (2026-10-04): every chord the key handling answers to — the command chords, the kill switch,
-    /// the learning's cancel, the fold toggle, Ctrl+C — is on it, so <c>/keycheck</c> (and <c>/help</c>) never miss one.
-    /// </summary>
     /// <summary>The message jumps' rows (2026-11-01): <c>Ctrl+Up / Down</c> is two chords to probe; <c>Option+Up / Down</c> none, as Option+Delete.</summary>
     [Fact]
     public void TheJumpRows_CtrlIsTwoChords_OptionNone()
@@ -105,6 +101,10 @@ public class KeyCheckTests
         Assert.Equal(Ctrl(ConsoleKey.DownArrow), chords[1].Chord);
     }
 
+    /// <summary>
+    /// The Keys tab is the one list (2026-10-04): every chord the key handling answers to — the command chords, the kill switch,
+    /// the learning's cancel, the fold toggle, Ctrl+C — is on it, so <c>/keycheck</c> (and <c>/help</c>) never miss one.
+    /// </summary>
     [Fact]
     public void EveryChordTheKeysAnswerTo_IsOnTheKeysTab()
     {

@@ -593,33 +593,6 @@ public sealed class MenuPane : INoticeSink
         _clicks = new DoubleClick(pane.Time);
     }
 
-    // The time the pane's asks have waited on the user, on the pane's clock (2026-11-01, the reply footer): every PickAsync and EditAsync,
-    // a nested one counted once through the depth.
-    private long _askedTicks;
-    private int _askDepth;
-
-    /// <summary>
-    /// How long the pane has waited on its asks since it was made (2026-11-01, feature idea #4): every <see cref="PickAsync"/> and
-    /// <see cref="EditAsync"/>, an approval or a <c>/settings</c> page alike. The reply footer and a tool's time take its growth over a
-    /// tool's span off the time shown, so the model is not charged for an approval the user took 30 s over. Safe from any thread.
-    /// </summary>
-    public TimeSpan AskedFor => TimeSpan.FromTicks(Interlocked.Read(ref _askedTicks));
-
-    private long BeginAsk()
-    {
-        Interlocked.Increment(ref _askDepth);
-        return _pane.Time.GetTimestamp();
-    }
-
-    private void EndAsk(long started)
-    {
-        var waited = _pane.Time.GetElapsedTime(started);
-        if (Interlocked.Decrement(ref _askDepth) == 0)
-        {
-            Interlocked.Add(ref _askedTicks, waited.Ticks);
-        }
-    }
-
     /// <summary>The kinds of line the status shows, in the transcript's colours.</summary>
     public enum NoticeKind
     {
@@ -842,19 +815,6 @@ public sealed class MenuPane : INoticeSink
     /// with the tab, sub-tab and cursor on show, for the host to build the page again and show it; the same tab keeps its viewport.
     /// </summary>
     public async Task<MenuPick?> PickAsync(MenuPage page, int cursor, CancellationToken cancellationToken, Action<int>? highlighted = null, CancellationToken stale = default)
-    {
-        long started = BeginAsk();
-        try
-        {
-            return await PickOnceAsync(page, cursor, cancellationToken, highlighted, stale).ConfigureAwait(false);
-        }
-        finally
-        {
-            EndAsk(started);
-        }
-    }
-
-    private async Task<MenuPick?> PickOnceAsync(MenuPage page, int cursor, CancellationToken cancellationToken, Action<int>? highlighted, CancellationToken stale)
     {
         ArgumentNullException.ThrowIfNull(page);
         Require();
@@ -1240,19 +1200,6 @@ public sealed class MenuPane : INoticeSink
     /// submits reaches the transcript. The pane stays open with the slot emptied.
     /// </summary>
     public async Task<InputResult> EditAsync(MenuPage page, int highlighted, InputLine input, string initial, bool allowEmpty, CancellationToken cancellationToken, bool mask = false)
-    {
-        long started = BeginAsk();
-        try
-        {
-            return await EditOnceAsync(page, highlighted, input, initial, allowEmpty, cancellationToken, mask).ConfigureAwait(false);
-        }
-        finally
-        {
-            EndAsk(started);
-        }
-    }
-
-    private async Task<InputResult> EditOnceAsync(MenuPage page, int highlighted, InputLine input, string initial, bool allowEmpty, CancellationToken cancellationToken, bool mask)
     {
         ArgumentNullException.ThrowIfNull(page);
         ArgumentNullException.ThrowIfNull(input);

@@ -8,7 +8,9 @@ namespace NeonSidekick.Tests;
 
 /// <summary>
 /// Wide tables that fit (2026-11-01, feature idea #5): a reply's table too wide for its window shows each row as a card of aligned
-/// <c>Header  value</c> lines, every other card on the code block's slab; one that fits, or can wrap readably, stays a grid.
+/// <c>Header  value</c> lines, every other card on the code block's slab; one that fits, or can wrap readably, stays a grid. Since 2026-11-02
+/// (the review): each header laid out once, the stripes by cards shown, a segment's own background kept, a rule between cards with no color,
+/// no cards under four cells, and the grid measured once a width.
 /// </summary>
 public class FittingTableTests : IDisposable
 {
@@ -105,7 +107,106 @@ public class FittingTableTests : IDisposable
         Assert.True(FittingTable.Stacks(new Measurement(30, 90), 4, 1, 52));    // (52 - 13) / 4 = 9: cards
         Assert.False(FittingTable.Stacks(new Measurement(90, 90), 1, 1, 52));   // one column
         Assert.False(FittingTable.Stacks(new Measurement(90, 90), 4, 0, 52));   // no body
+        Assert.False(FittingTable.Stacks(new Measurement(90, 90), 4, 1, FittingTable.HeaderGap + 1));   // no room for a header cell and a value cell
+        Assert.True(FittingTable.Stacks(new Measurement(90, 90), 4, 1, FittingTable.HeaderGap + 2));
         Assert.Equal(10, FittingTable.MinColumnCells);
+    }
+
+    /// <summary>A renderable that counts its measures and renders.</summary>
+    private sealed class Counting(string text) : IRenderable
+    {
+        public int Measures { get; private set; }
+
+        public int Renders { get; private set; }
+
+        public Measurement Measure(RenderOptions options, int maxWidth)
+        {
+            Measures++;
+            return ((IRenderable)new Text(text)).Measure(options, maxWidth);
+        }
+
+        public IEnumerable<Segment> Render(RenderOptions options, int maxWidth)
+        {
+            Renders++;
+            return ((IRenderable)new Text(text)).Render(options, maxWidth);
+        }
+    }
+
+    private static FittingTable Cards(IRenderable[] headers, params IRenderable?[][] rows)
+    {
+        var grid = new Table();
+        foreach (var header in headers)
+        {
+            grid.AddColumn(new TableColumn(header));
+        }
+
+        foreach (var row in rows)
+        {
+            grid.AddRow(row.Select(c => c ?? new Text("")).ToArray());
+        }
+
+        return new FittingTable(grid, headers, rows);
+    }
+
+    [Fact]
+    public void EachHeader_IsLaidOutOnce_ARender_AndTheGridMeasuredOnceAWidth()
+    {
+        var name = new Counting("Name");
+        var notes = new Counting("Notes");
+        var table = Cards([name, notes], [new Text(new string('a', 30)), new Text(new string('n', 60))], [new Text("b"), new Text(new string('m', 60))]);
+        var options = RenderOptions.Create(_console, _console.Profile.Capabilities);
+
+        int measured = name.Measures;
+        table.Measure(options, 40);
+        int once = name.Measures;
+        table.Measure(options, 40);
+        Assert.True(once > measured);
+        Assert.Equal(once, name.Measures);   // the same width: the answer kept
+
+        _ = table.Render(options, 40).ToList();
+        Assert.Equal(1, name.Renders);   // two cards, one layout of the header
+        Assert.Equal(1, notes.Renders);
+    }
+
+    [Fact]
+    public void ARowOfEmptyCells_IsNoCard_AndTheStripesStillAlternate()
+    {
+        string blank = "|  |  |  |\n";
+        var lines = Render("| Server | Model | Notes |\n|---|---|---|\n| one | " + new string('a', 30) + " | x |\n" + blank + "| two | " + new string('b', 30) + " | y |\n| three | c | z |", 40);
+        var slab = Theme.MarkdownCodeBlock.Background;
+        int two = lines.FindIndex(l => Text(l).StartsWith("Server  two", StringComparison.Ordinal));
+        int three = lines.FindIndex(l => Text(l).StartsWith("Server  three", StringComparison.Ordinal));
+
+        Assert.True(two > 0 && three > two);
+        Assert.All(lines[two..three], l => Assert.All(l, s => Assert.Equal(slab, s.Style.Background)));   // the second card shown
+        Assert.All(lines[three..], l => Assert.All(l, s => Assert.NotEqual(slab, s.Style.Background)));
+    }
+
+    [Fact]
+    public void AStripedCard_KeepsASegmentsOwnBackground()
+    {
+        var own = new Style(Color.White, Color.Red);
+        var table = Cards([new Text("Name"), new Text("Notes")],
+            [new Text(new string('a', 30)), new Text(new string('n', 60))],
+            [new Text("b"), new Markup("[white on red]own[/] " + new string('m', 60))]);
+        var lines = Segment.SplitLines(table.Render(RenderOptions.Create(_console, _console.Profile.Capabilities), 40));
+
+        var segment = lines.SelectMany(l => l).Single(s => s.Text == "own");
+        Assert.Equal(own.Background, segment.Style.Background);
+        Assert.Contains(lines.SelectMany(l => l), s => s.Style.Background == Theme.MarkdownCodeBlock.Background);   // the rest on the slab
+    }
+
+    [Fact]
+    public void WithNoColor_ADimRule_StandsBetweenTheCards_AndNoSlab()
+    {
+        _console.Profile.Capabilities.ColorSystem = ColorSystem.NoColors;
+        var lines = Render(Wide, 60);
+        var texts = lines.Select(Text).ToList();
+        int second = texts.FindIndex(l => l.StartsWith("Server   vLLM", StringComparison.Ordinal));
+
+        Assert.Equal(new string('─', 60), texts[second - 1]);
+        Assert.Single(texts, l => l.StartsWith('─'));   // between the two, none before the first
+        Assert.All(lines, l => Assert.All(l, s => Assert.NotEqual(Theme.MarkdownCodeBlock.Background, s.Style.Background)));
     }
 
     [Fact]

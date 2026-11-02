@@ -33,7 +33,8 @@ The screen, the input line, panes, keys, the bars and the app's own windows. Bac
 
 From top to bottom:
 
-* **The transcript**, under the banner (*Show header*). PgUp/PgDn scroll it, Ctrl+Home/Ctrl+End jump to its ends, and Ctrl+↑/↓ to the previous or next message; a resize lays it out again at the new width.
+* **The transcript**, under the banner (*Show header*). PgUp/PgDn scroll it and Ctrl+Home/Ctrl+End jump to its ends; a resize lays it out again at the new width.
+* **Message jumps:** Ctrl+↑/↓ goes to the previous or next message (Option+↑/↓ on a Mac, [MAC.md](MAC.md#keys--mouse)). VS Code's terminal keeps Ctrl+↑/↓ for its own command jumps; remove that binding in VS Code to use them here.
 * **Scrolled up**, the row under the transcript counts the new rows written since you left the bottom and names the message on top; a double-click on it goes back down.
 * **Links and paths:** Ctrl+click opens a link in your browser, or a path in `/browse`; hovering shows where it goes. On a Mac the chord differs ([MAC.md](MAC.md#keys--mouse)).
 * **The picture strip**, while there are ComfyUI pictures: its 🎞️ opens the [picture viewer](#the-picture-viewer), × closes the strip.
@@ -57,7 +58,7 @@ From top to bottom:
 * **Voice:** with *STT input* on, the *STT push-to-talk key* records a message; with *STT wake* on, saying the wake phrase does.
 * **Tool calls** show as `🛠️ read_file notes.md` with the result under them (`→ 4 lines`, ✗ when it failed). Long results fold once the run ends; Ctrl+O or `/expand` opens them.
 * **Code blocks:** ⧉ on a block's label copies it.
-* **Tables:** a table too wide for the window shows each row as a card of header and value lines, every other card shaded.
+* **Tables:** a table too wide for the window shows each row as a card of header and value lines, every other card shaded (with no color, a line between cards).
 * **During `/read`** (📖): Space on an empty line pauses and resumes; ←/→ step a sentence.
 * **The mouse:** a double-click selects a word, and on the `›` the whole draft.
 
@@ -114,7 +115,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | A Ralph loop's checkpoint | `k` keep · `r` redo with a note (typed below) · `v` view the changes · `s` stop the loop · Esc keeps |
 | A Ralph loop's by-hand check | `w` it works · `r` redo with a note (typed below) · `v` view the changes (where it opens, so Enter alone ticks nothing) · `s` stop the loop · Esc stops |
 | A code audit's done pane | `p` fix via plan (with a finding open) · `g` more passes… · `k` keep the report · `d` discard it · Esc keeps |
-| `/find` | type to find · a paste or right-click adds its first line · Enter or F3 older · Shift+Enter or Shift+F3 newer · PgUp/PgDn scroll · Esc, Ctrl+F or a double-click outside done |
+| `/find` | type to find · a paste or right-click adds its first line · Enter or F3 older · Shift+Enter or Shift+F3 newer · PgUp/PgDn scroll · Ctrl+↑/↓ previous or next message · Esc, Ctrl+F or a double-click outside done |
 | Info panes (`/help`, `/sys`, `/about`, `/tree`…) | ↑/↓, PgUp/PgDn scroll · ←/→ or Tab switch tabs · type to find · Esc closes |
 | `/help` › Keys | `k` **⌨ key check**: swaps in `/keycheck`'s list; pressed again, shows the keys |
 | **Saved lists** | |
@@ -234,7 +235,6 @@ Each runs its command as if typed, and keeps your draft. The last column is what
 | Ctrl+W | `/webui browser` (the [Web UI](#web-ui) on the app's computer) | at once |
 | Ctrl+Y | `/sys` | over the reply |
 | Ctrl+Z | `/theme` | waits |
-| Ctrl+↑ / Ctrl+↓ | jumps to the previous or next message (Option+↑/↓ on a Mac) | at once |
 | Ctrl+Alt+B | `/botchat --resume` | ends a running botchat at once; otherwise waits |
 | Ctrl+Alt+C | `/clear` | stops the reply first |
 | Ctrl+Alt+D | `/mcp` | over the reply |

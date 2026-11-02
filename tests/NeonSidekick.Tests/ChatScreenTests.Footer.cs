@@ -48,7 +48,7 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Matches(@"Hello from the page\. · 3\.0s\n", output);   // web_fetch's one-line note ends with the tool's time
-        Assert.Matches(@"Read it\.\n3\.0s · 832 tok · (\d+ tok/s · )?1 tool( · [^\n]+)?\n\n", output);   // both requests' output; one model call
+        Assert.Matches(@"Read it\.\n3\.0s · 832 tok · (\d+ tok/s · )?1 tool call( · [^\n]+)?\n\n", output);   // both requests' output; one model call
     }
 
     [Fact]

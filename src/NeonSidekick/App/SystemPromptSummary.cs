@@ -150,6 +150,47 @@ public sealed record SystemPromptFacts(
     int DuckDbTools = 0,
     bool DuckDbWrite = false)
 {
+    /// <summary>
+    /// These facts with the group <paramref name="group"/> switches turned off (2026-11-02, the review: the <c>/usage</c> Context tab's
+    /// <c>off saves</c> counts the prompt's sentences too): the flag or the list that switch drives cleared, the rest as it was. A group
+    /// with no sentence of its own (ComfyUI, printing, the camera, the screen, YouTube) is these facts unchanged.
+    /// </summary>
+    public SystemPromptFacts Without(SettingsField group) => group switch
+    {
+        SettingsField.FileTools => this with { FilesEnabled = false, Download = false },
+        SettingsField.WebTools => this with { WebEnabled = false, Download = false },
+        SettingsField.AskUser => this with { Ask = null },
+        SettingsField.SessionTool => this with { SessionsEnabled = false },
+        SettingsField.MemoryMode => this with { Memory = false, Memories = [] },
+        SettingsField.AgentSkills => this with { SkillsEnabled = false },
+        SettingsField.McpServers => this with { McpEnabled = false },
+        SettingsField.GitLibTools => this with { GitEnabled = false },
+        SettingsField.ShellCommandPolicy => this with { ShellEnabled = false },
+        SettingsField.ObsidianTools => this with { ObsidianEnabled = false },
+        SettingsField.SqlTools => this with { SqlEnabled = false },
+        SettingsField.OracleTools => this with { OracleEnabled = false },
+        SettingsField.MySqlTools => this with { MySqlEnabled = false },
+        SettingsField.SqliteTools => this with { SqliteEnabled = false },
+        SettingsField.DuckDbTools => this with { DuckDbEnabled = false },
+        SettingsField.PostgresTools => this with { PostgresEnabled = false },
+        SettingsField.UncTools => this with { UncEnabled = false },
+        SettingsField.DockerTools => this with { DockerEnabled = false },
+        SettingsField.EventLogTools => this with { EventLogEnabled = false, Admin = Admin & ~AdminRules.DirectoryLockout },
+        SettingsField.HomeAssistantTools => this with { HomeAssistantEnabled = false },
+        SettingsField.ShoppingTools => this with { ShoppingEnabled = false },
+        SettingsField.Advisors => this with { AdvisorsEnabled = false },
+        SettingsField.ImageTools => this with { ImagesEnabled = false },
+        SettingsField.TimerTools => this with { TimersEnabled = false },
+        SettingsField.ClockTools => this with { ClockEnabled = false },
+        SettingsField.HelpTools => this with { HelpTools = 0 },
+        SettingsField.NetworkTools => this with { Admin = Admin & ~(AdminRules.Network | AdminRules.NetworkCerts | AdminRules.NetworkEcho) },
+        SettingsField.ServiceTools => this with { Admin = Admin & ~(AdminRules.Services | AdminRules.ServiceWrites | AdminRules.ServiceStartTypes) },
+        SettingsField.TaskTools => this with { Admin = Admin & ~(AdminRules.Tasks | AdminRules.TaskWrites) },
+        SettingsField.DirectoryTools => this with { Admin = Admin & ~(AdminRules.Directory | AdminRules.DirectoryLockout) },
+        SettingsField.MonitorTools => this with { Admin = Admin & ~AdminRules.Monitors },
+        _ => this,
+    };
+
     /// <summary>Whether the rules carry <see cref="Assistant.EventLogRuleHere"/> (Windows' sentence, or the Mac's since 2026-10-18): tools on, the switch on with a reader (wevtapi, or the unified log on a Mac) and an event-log tool offered (2026-10-15).</summary>
     public bool EventLog => ToolsEnabled && EventLogEnabled && EventLogTools > 0;
 

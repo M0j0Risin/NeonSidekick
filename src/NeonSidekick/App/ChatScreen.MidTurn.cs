@@ -63,6 +63,13 @@ internal sealed partial class ChatScreen
     // True from a turn's start until its pane phase (if any) closed and its acts were drained.
     private volatile bool _turnRunning;
 
+    /// <summary>
+    /// Whether a reply runs (2026-11-02, the review: the <c>/usage</c> Context tab said "a reply is running" under any watched wait): set
+    /// by <see cref="RunTurnAsync"/> beside <see cref="_turnRunning"/>, never by a wait of <see cref="StartReplyWatch"/> alone (a model load,
+    /// <c>/print</c>, a bot's speech); cleared where <see cref="_turnRunning"/> is.
+    /// </summary>
+    private volatile bool _replyRunning;
+
     // Fired when the reply ends with a pane still open on it (2026-10-12, the user's ask): the pane's ReplyRun, so the rows the reply
     // held back open where the pane stands. A fresh one per reply (BeginReplyRun); never fired under /botchat or a load, whose end is
     // no idle line (the next bot, the connect).
@@ -1179,6 +1186,7 @@ internal sealed partial class ChatScreen
         await RunActsUntilAsync(pending).ConfigureAwait(false);
         await pending.ConfigureAwait(false);
         _turnRunning = false;
+        _replyRunning = false;
         await DrainActsAsync().ConfigureAwait(false);
     }
 
