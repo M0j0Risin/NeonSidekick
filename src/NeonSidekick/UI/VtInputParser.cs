@@ -19,10 +19,9 @@ namespace NeonSidekick.UI;
 /// <item>ESC then a key is that key with Alt (Option as Meta). A lone ESC is ESC, but only once the bytes stop:
 /// ESC also opens every sequence below, so the reader calls <see cref="Flush"/> when nothing more came within its timeout.</item>
 /// <item>ESC ESC then a whole arrow (<c>ESC ESC [ A</c>, <c>ESC ESC O A</c>, Terminal.app's Option+Up) is that arrow with Alt, the
-/// meta prefix ahead of it (2026-11-01, message jumps), but only when both ESCs and the arrow came in one read (2026-11-02, the
-/// review): an ESC left from an earlier read is a lone ESC, and a read that ends inside the pair gives its first ESC at once, so Esc
-/// then ↑ under a reply still cancels it. A terminal writes a key's bytes at once, so an Option+arrow split over two reads, which
-/// then reads as Esc then the arrow (as before 2026-11-01), is rare. Anything else after ESC ESC is a lone ESC, then the rest.</item>
+/// meta prefix ahead of it (2026-11-01, message jumps), waiting across reads while unfinished (Terminal.app writes the ESC and the
+/// arrow apart). A real Esc then ↑ stays two keys: the ESC fires at the reader's timeout first. Anything else after ESC ESC is a lone
+/// ESC, then the rest.</item>
 /// <item>CSI and SS3 keys (arrows, Home/End, Insert/Delete, PageUp/Down, F1–F12, Shift+Tab) with xterm's modifier
 /// parameter (1 + Shift 1, Alt 2, Ctrl 4, Meta 8; Meta reads as Alt, as the mouse's bit 8 does).</item>
 /// <item>Bracketed paste (<c>ESC[200~</c> … <c>ESC[201~</c>) as one <see cref="InputEvent.Paste"/>, CR LF and lone CR as
@@ -49,10 +48,6 @@ public sealed class VtInputParser
     private StringBuilder? _paste;
     private char[] _chars = new char[256];
     private volatile bool _awaitingCursor;
-
-    // Of the characters Drain reads, how many were already waiting before this read (2026-11-02): an ESC below it came from an
-    // earlier read, so it never opens the ESC ESC meta form.
-    private int _carried;
 
     /// <summary>Set (from the asking thread) while a cursor position query waits; a <c>CSI r;c R</c> is then the answer, not F3.</summary>
     public bool AwaitingCursor
@@ -86,7 +81,6 @@ public sealed class VtInputParser
         }
 
         int count = _utf8.GetChars(bytes, _chars, flush: false);
-        _carried = _pending.Length;
         _pending.Append(_chars, 0, count);
         Drain(events, final: false);
     }
@@ -94,7 +88,6 @@ public sealed class VtInputParser
     /// <summary>The reader's timeout passed with bytes still waiting: what can stand alone (a lone ESC) is delivered.</summary>
     public void Flush(List<InputEvent> events)
     {
-        _carried = 0;
         Drain(events, final: true);
     }
 
@@ -194,13 +187,23 @@ public sealed class VtInputParser
 
         if (next == Esc)
         {
-            // ESC ESC [ A (2026-11-01, message jumps): Terminal.app's Option+Up, the meta prefix ahead of a whole arrow, is that arrow
-            // with Alt, never an ESC (under a reply a lone ESC cancels it). Only when the pair and the arrow came in this read
-            // (2026-11-02): a carried ESC, an unfinished arrow or anything else makes the first a lone ESC and the rest start over.
-            if (i >= _carried && ArrowAfterMeta(s, i + 2, out var arrow) is > 0 and var used)
+            // ESC ESC [ A / ESC ESC O A (2026-11-01, message jumps): Terminal.app's Option+Up, the meta prefix ahead of a whole arrow —
+            // that arrow with Alt, never an ESC (under a reply a lone ESC cancels it). Until the arrow is whole the pair waits, as a lone
+            // trailing ESC does, across reads too: Terminal.app sends it as ESC then ESC O A, two writes 0.2 ms apart (the Mac pass,
+            // later on 2026-11-01: .NET turns on application cursor keys at start, terminfo's keypad_xmit, so its arrows are SS3).
+            // A real Esc then ↑ stays two keys: the lone ESC fires at the reader's timeout (UnixConsoleInput.EscapeTimeout) before
+            // the arrow comes. The scan is pure (2026-11-02, the review): no paste, cursor or focus report starts inside it. Only the
+            // arrows: ESC ESC O P stays an ESC and F1.
+            int used = ArrowAfterMeta(s, i + 2, out var arrow);
+            if (used > 0)
             {
                 events.Add(new InputEvent.Key(arrow));
                 return 2 + used;
+            }
+
+            if (used == 0 && !final)
+            {
+                return 0;
             }
 
             events.Add(new InputEvent.Key(new ConsoleKeyInfo(Esc, ConsoleKey.Escape, false, false, false)));
