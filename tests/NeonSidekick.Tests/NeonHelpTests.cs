@@ -47,6 +47,40 @@ public class NeonHelpTests
             text => Assert.Contains("deleted for good", text, StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// A Mac's purge forms name its row, <i>File deletes to Trash</i>, and say a volume with no Trash asks again before a for-good delete
+    /// (2026-11-03, the docs pass: they named the Recycle bin's row and said such a volume deleted for good, but a purge stops there and asks).
+    /// </summary>
+    [Fact]
+    public void MacPurgeForms_NameTheTrashRow_AndAskAgainWithNoTrash()
+    {
+        var purges = NeonSidekick.Help.HelpMac.Forms.Where(f => f.Key.EndsWith(" purge", StringComparison.Ordinal)).ToList();
+        Assert.Equal(6, purges.Count);
+        Assert.All(purges, f =>
+        {
+            Assert.Contains("*File deletes to Trash*", f.Value, StringComparison.Ordinal);
+            Assert.Contains("asks again", f.Value, StringComparison.Ordinal);
+            Assert.DoesNotContain("Recycle bin", f.Value, StringComparison.Ordinal);
+        });
+    }
+
+    /// <summary>
+    /// The two event-log rows a Mac's Event log tab shows with no Mac text until 2026-11-03 (the docs pass) say what they do there, never
+    /// "Windows only"; and the switch's text no longer says a Mac does not use the offered list.
+    /// </summary>
+    [Fact]
+    public void MacEventLogRows_SayWhatTheyDoThere()
+    {
+        foreach (var field in new[] { SettingsField.EventLogComputersOffered, SettingsField.EventLogAddComputer })
+        {
+            string text = NeonSidekick.Help.HelpMac.Settings[field];
+            Assert.Contains("`local`", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("Windows only", text, StringComparison.Ordinal);
+        }
+
+        Assert.DoesNotContain("does not use", NeonSidekick.Help.HelpMac.Settings[SettingsField.EventLogTools], StringComparison.Ordinal);
+    }
+
     [Fact]
     public void EverySetting_HasHelp_OnePlace_AndADefault()
     {

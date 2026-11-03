@@ -49,7 +49,8 @@ public sealed class HaSession : IDisposable
 
     /// <summary>
     /// The token, readable: a <c>dpapi:</c> value decrypted (this Windows user on this machine), a plain one (a variable, a
-    /// hand edit) as it is. Null when none is set or the stored one cannot be read — another user's or machine's profile.
+    /// hand edit) as it is. Null when none is set or the stored one cannot be read — another user's or machine's profile. On a Mac a
+    /// <c>keychain:</c> value, under the app's key in the macOS Keychain (2026-11-03, the docs pass: this said only DPAPI).
     /// </summary>
     public static string? TokenOf(AppSettingsData effective)
     {
@@ -58,7 +59,8 @@ public sealed class HaSession : IDisposable
     }
 
     /// <summary>
-    /// The token as the settings file keeps it: encrypted with DPAPI for this Windows user; empty for empty. Where DPAPI is
+    /// The token as the settings file keeps it: encrypted with DPAPI for this Windows user (on a Mac under the app's Keychain key,
+    /// 2026-11-03); empty for empty. Where DPAPI is
     /// unavailable the plain token is kept and <paramref name="error"/> says why, so the caller can warn.
     /// </summary>
     public static string Protect(string plain, out string? error) => SettingsSecrets.Protect(plain, out error);

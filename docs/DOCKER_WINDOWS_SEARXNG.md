@@ -87,7 +87,7 @@ docker compose up
 
 ## Using it in NeonSidekick
 
-On `/tools` › Core › Web, set *Web search method* to `searxng` and *Web SearXNG URL* to `http://localhost:8888`. The URL can come from `NEONSIDEKICK_SEARXNG_URL` instead, but the method must still be `searxng`. The app reads the `json` format, so keep it enabled as above.
+On `/tools` › Core › Web, set *Web search method* to `searxng` and *Web SearXNG URL* to `http://localhost:8888` (or set `NEONSIDEKICK_SEARXNG_URL`; the method must still be `searxng`). The app reads the `json` format, so keep it enabled.
 
 ## Test output types
 
@@ -100,7 +100,7 @@ curl -s "http://localhost:8888/search?q=cheese&format=rss" | head -c 300
 
 ## (optional) Boot guard `docker-compose.yml`
 
-On Windows, without this, SearXNG can fall back to its default settings after a boot, until you restart the container by hand.
+On Windows, without this, SearXNG can fall back to its default settings after a boot until you restart the container.
 
 ```yaml
 # Read the documentation before using the `docker-compose.yml` file:

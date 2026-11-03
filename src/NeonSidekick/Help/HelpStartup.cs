@@ -13,7 +13,8 @@ internal sealed record HelpFlag(string Flag, IReadOnlyList<string> Aliases, Sett
 /// flag's words are read from the usage text's line that starts with it (<see cref="SidekickOptions.Usage"/>, this system's own), so the rows
 /// hold only the flag, its aliases and the setting it overrides (held to <c>SidekickApp.OverriddenBy</c> by a test). A variable that overrides a
 /// setting is answered from <see cref="EnvironmentOverrides.Fields"/> with that setting's sentence and place; the rest from the hand-written
-/// lines here. Off Windows the services, tasks and monitor checks have no rows (the usage text itself is unchanged).
+/// lines here. Off Windows the services, tasks and monitor checks have no rows; the usage text is the Mac's own there (2026-11-03,
+/// <see cref="SidekickOptions.UsageFor"/>: its Docker, event-log and directory check lines).
 /// </summary>
 internal static partial class HelpStartup
 {

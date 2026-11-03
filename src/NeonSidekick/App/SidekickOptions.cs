@@ -146,14 +146,37 @@ public sealed record SidekickOptions(
 
     /// <summary>
     /// The help text. Pinned wording; tests assert on it. On a Mac (2026-10-11) <c>--docker-check</c>'s line names the engine's socket
-    /// instead of Docker Desktop's pipe; Windows' text stays as it was, byte for byte.
+    /// instead of Docker Desktop's pipe; Windows' text stays as it was, byte for byte. <c>--help</c> and <c>neon_help</c>'s flag answers both read
+    /// it (<see cref="Help.HelpStartup"/>).
     /// </summary>
-    public static string Usage => OperatingSystem.IsMacOS() ? UsageText.Replace(DockerCheckPipeLine, DockerCheckSocketLine, StringComparison.Ordinal) : UsageText;
+    public static string Usage => UsageFor(OperatingSystem.IsMacOS());
+
+    /// <summary>
+    /// The help text for a Mac or not, whatever this machine is (2026-11-03, the docs pass), so the tests read both. On a Mac
+    /// <c>--eventlog-check</c> reads only <c>local</c> (<see cref="App.EventLogCheck.RunMac"/>) and <c>--ad-check</c> has no <c>current</c> domain
+    /// (<see cref="App.AdminChecks.DirectoryAsync"/> finds none), so those two lines are the Mac's own; the services and tasks checks carry
+    /// "Windows" in both texts, as the monitor check does. Pure.
+    /// </summary>
+    public static string UsageFor(bool mac) => mac
+        ? UsageText.Replace(DockerCheckPipeLine, DockerCheckSocketLine, StringComparison.Ordinal)
+            .Replace(EventLogCheckWindowsLine, EventLogCheckMacLine, StringComparison.Ordinal)
+            .Replace(AdCheckWindowsLine, AdCheckMacLine, StringComparison.Ordinal)
+        : UsageText;
 
     private const string DockerCheckPipeLine = "prove the Docker tools against Docker Desktop's engine pipe (reads only)";
 
     /// <summary><c>--docker-check</c>'s words on a Mac (2026-10-11). Pinned.</summary>
     public const string DockerCheckSocketLine = "prove the Docker tools against the Docker engine's socket (reads only)";
+
+    private const string EventLogCheckWindowsLine = "prove the event-log tools against that computer of eventlog.json, or local (reads only)";
+
+    /// <summary><c>--eventlog-check</c>'s words on a Mac (2026-11-03): a Mac reads only its own logs. Pinned.</summary>
+    public const string EventLogCheckMacLine = "prove the event-log tools against this Mac's own logs: local (reads only)";
+
+    private const string AdCheckWindowsLine = "prove the directory tools against that domain of ad.json, or current (reads only)";
+
+    /// <summary><c>--ad-check</c>'s words on a Mac (2026-11-03): a Mac has no built-in <c>current</c> domain. Pinned.</summary>
+    public const string AdCheckMacLine = "prove the directory tools against that domain of ad.json (reads only)";
 
     private const string UsageText =
         "Usage: NeonSidekick [--headless] [--smoke] [--audio-check] [--voice-check] [--sql-check <connection>] [--oracle-check <connection>] [--mysql-check <connection>] [--sqlite-check <database>] [--duckdb-check <database>] [--postgres-check <connection>] [--unc-check <share>] [--eventlog-check <computer>] [--network-check <host>] [--services-check <computer>] [--tasks-check <computer>] [--ad-check <domain>] [--docker-check] [--camera-check] [--monitor-check] [--url <url>] [--model <id>] [--cwd <path>] [--profile <name>] [--yolo] [--no-police] [--log <path>] [--version] [--help]\n" +
@@ -172,8 +195,8 @@ public sealed record SidekickOptions(
         "  --unc-check <share>          prove the UNC tools against that share of unc.json (reads only), exit 0/1\n" +
         "  --eventlog-check <computer>  prove the event-log tools against that computer of eventlog.json, or local (reads only), exit 0/1\n" +
         "  --network-check <host>       prove the network tools against that host: DNS, ping, port 443, TLS (reads only), exit 0/1\n" +
-        "  --services-check <computer>  prove the services tools against that computer of services.json, or local (reads only), exit 0/1\n" +
-        "  --tasks-check <computer>     prove the task tools against that computer of tasks.json, or local (reads only), exit 0/1\n" +
+        "  --services-check <computer>  prove the services tools against that computer of services.json, or local (reads only; Windows), exit 0/1\n" +
+        "  --tasks-check <computer>     prove the task tools against that computer of tasks.json, or local (reads only; Windows), exit 0/1\n" +
         "  --ad-check <domain>          prove the directory tools against that domain of ad.json, or current (reads only), exit 0/1\n" +
         "  --docker-check               prove the Docker tools against Docker Desktop's engine pipe (reads only), exit 0/1\n" +
         "  --camera-check               open the camera, read frames and encode one (nothing saved), exit 0/1\n" +

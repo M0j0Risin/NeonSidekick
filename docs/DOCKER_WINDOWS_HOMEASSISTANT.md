@@ -1,6 +1,6 @@
 # Home Assistant and MQTT with Docker
 
-Home Assistant, an MQTT broker (Mosquitto) and, if you have Ring cameras, ring-mqtt, all on Windows, for the Home Assistant tools. Back to the [README](../README.md).
+Home Assistant, an MQTT broker (Mosquitto) and, if you have Ring cameras, ring-mqtt, in Docker on Windows or a Mac, for the Home Assistant tools. Back to the [README](../README.md).
 
 ## Prerequisites
 
@@ -9,7 +9,7 @@ Home Assistant, an MQTT broker (Mosquitto) and, if you have Ring cameras, ring-m
 
 ## Prepare directory
 
-Use a WSL (Ubuntu) shell, starting in your home directory (`~`).
+On Windows, use a WSL (Ubuntu) shell; on a Mac, use Terminal. Start in your home directory (`~`).
 
 ```bash
 mkdir -p ~/home-assistant/config ~/home-assistant/mosquitto/config ~/home-assistant/mosquitto/data ~/home-assistant/ring-mqtt
@@ -57,7 +57,7 @@ services:
       options: { max-size: 10m, max-file: "3" }
 ```
 
-The three containers share the compose network, so they reach each other by name (`mosquitto`, `ring-mqtt`). The broker isn't published, so nothing else on your network can reach it.
+The three containers reach each other by name (`mosquitto`, `ring-mqtt`) on the compose network. The broker isn't published, so nothing else on your network can reach it.
 
 ## Create mosquitto.conf
 
@@ -87,7 +87,7 @@ docker compose run --rm mosquitto sh -c 'chown mosquitto:mosquitto /mosquitto/co
 docker compose up -d homeassistant mosquitto
 ```
 
-Open `http://localhost:8123` in Windows and create your Home Assistant account.
+Open `http://localhost:8123` in your browser and create your Home Assistant account.
 
 ## Connect Home Assistant to the broker
 
@@ -95,9 +95,9 @@ In Home Assistant, **Settings › Devices & services › Add integration › MQT
 
 ## Ring cameras with ring-mqtt (optional)
 
-ring-mqtt signs in to your Ring account and publishes your devices to the broker, where Home Assistant finds them by itself. Its snapshots are taken every 30 seconds by default, with or without a Ring Protect plan.
+ring-mqtt signs in to your Ring account and publishes your devices to the broker, where Home Assistant finds them. It takes snapshots every 30 seconds by default, with or without a Ring Protect plan.
 
-Create `~/home-assistant/ring-mqtt/config.json`. The login goes inside the URL: ring-mqtt doesn't read separate user and password keys.
+Create `~/home-assistant/ring-mqtt/config.json`. The login goes inside the URL; ring-mqtt reads no separate user and password keys.
 
 ```json
 {
@@ -112,9 +112,9 @@ docker compose up -d ring-mqtt
 docker compose logs -f ring-mqtt
 ```
 
-Open `http://localhost:55123` in Windows, sign in with your Ring account and enter the two-factor code. The log then shows "MQTT connection established" and a "New device" line for each Ring device.
+Open `http://localhost:55123` in your browser, sign in with your Ring account and enter the two-factor code. The log then shows "MQTT connection established" and a "New device" line for each Ring device.
 
-The token is saved in `ring-mqtt/ring-state.json` and gives full access to your Ring account: keep that file out of backups and shares. Once it's saved, comment out ring-mqtt's `ports:` line and the `55123` line under it, then run `docker compose up -d ring-mqtt`.
+The token, saved in `ring-mqtt/ring-state.json`, gives full access to your Ring account: keep that file out of backups and shares. Once it's saved, comment out ring-mqtt's `ports:` line and the `55123` line under it, then run `docker compose up -d ring-mqtt`.
 
 Each camera arrives in Home Assistant with a snapshot camera, `camera.<name>_snapshot`, beside its motion, ding and light entities. For live video, see ring-mqtt's [Video Streaming](https://github.com/tsightler/ring-mqtt/wiki/Video-Streaming) guide.
 
@@ -123,7 +123,7 @@ Each camera arrives in Home Assistant with a snapshot camera, `camera.<name>_sna
 1. In Home Assistant, open your profile › **Security** and create a long-lived access token.
 2. On `/tools` › Home › HomeAssistant, set *Home Assistant URL* to `http://localhost:8123`, paste the token into *Home Assistant API key*, and turn on *Home Assistant tools*.
 
-For a Ring camera, use its `_snapshot` camera with `ha_camera` or the home bar's 📹: it gives a recent still, where Ring's own integration gives the latest recording's. See [Home Assistant](TOOLS.md#home-assistant) for the tools and [the home bar](INTERFACE.md#the-home-bar) for 📹.
+For a Ring camera, use its `_snapshot` camera with `ha_camera` or the home bar's 📹: it gives a recent still, where Ring's own integration gives the latest recording's ([Home Assistant tools](TOOLS.md#home-assistant), [the home bar](INTERFACE.md#the-home-bar)).
 
 ## Check the snapshots
 

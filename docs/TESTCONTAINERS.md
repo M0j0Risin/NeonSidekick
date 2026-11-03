@@ -1,6 +1,6 @@
 # Test containers
 
-The Docker containers the live tests run against. Each live test is skipped unless its variable is set; see [ENVIRONMENT.md](ENVIRONMENT.md#test-suite) for the variables.
+The Docker containers the live tests run against. Each live test skips unless its variable is set ([ENVIRONMENT.md](ENVIRONMENT.md#test-suite)).
 
 | Container | What it is | Image |
 |---|---|---|
@@ -17,7 +17,7 @@ The Docker containers the live tests run against. Each live test is skipped unle
 
 ## `samba_ad_dev` on a Mac
 
-The image is amd64 only; Docker Desktop on Apple Silicon runs it under emulation, healthy in about a minute. macOS's own Kerberos already holds port 88, so the KDC goes to 1088:
+The image is amd64 only; Docker Desktop on Apple Silicon emulates it (healthy in about a minute). macOS's own Kerberos holds port 88, so the KDC goes to 1088:
 
 ```sh
 docker run -d --name samba_ad_dev --hostname DC1 --privileged \
@@ -49,10 +49,10 @@ samba-tool domain passwordsettings pso create ShortPasswords 10 --min-pwd-length
 printf "dn: CN=Frank Ode,OU=Sales,OU=Neon,$B\nchangetype: modify\nreplace: manager\nmanager: CN=Erin Ng,OU=Engineering,OU=Neon,$B\n" | ldbmodify -H /usr/local/samba/private/sam.ldb'
 ```
 
-`frank`'s account ends 10 days after seeding, so `account_expiring` finds him only within that time; run `samba-tool user setexpiry frank --days=10` again after.
+`frank`'s account ends 10 days after seeding, so `account_expiring` finds him only within that time; rerun `samba-tool user setexpiry frank --days=10` after.
 
 Then, in the shell that runs the tests or the app:
 * `KRB5_CONFIG` names a `krb5.conf` holding `[realms] LAB.NEON.TEST = { kdc = tcp/127.0.0.1:1088 }`.
-* `/etc/hosts` holds `127.0.0.1 dc1.lab.neon.test`. A Mac signs in as `ldap/<server>`, and the DC answers to its own name only: `localhost` fails.
+* `/etc/hosts` holds `127.0.0.1 dc1.lab.neon.test`: a Mac signs in as `ldap/<server>`, and the DC answers to its own name only (`localhost` fails).
 * `NEONSIDEKICK_TEST_AD_DOMAIN=Domain=lab.neon.test;Server=dc1.lab.neon.test;User=reader@LAB.NEON.TEST;Password=…` ([ENVIRONMENT.md](ENVIRONMENT.md#test-suite)).
-* The refused-password test can't prove the hold here. The app asks port 88 of the DC's address, and on 127.0.0.1 that is macOS's own KDC, which knows no domain account. The test then checks that nothing is held.
+* The refused-password test can't prove the hold here: the app asks port 88 of the DC's address, which on 127.0.0.1 is macOS's own KDC, knowing no domain account. The test checks that nothing is held instead.

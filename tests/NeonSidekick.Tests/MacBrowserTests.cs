@@ -982,6 +982,9 @@ public class MacBrowserTests
         Assert.Contains("macOS 14", browse, StringComparison.Ordinal);
         Assert.DoesNotContain("Ctrl+", browse, StringComparison.Ordinal);
         Assert.DoesNotContain("hidden", NeonSidekick.Help.HelpMac.Forms["/browser clear history|all"], StringComparison.Ordinal);
+        string tree = NeonSidekick.Help.HelpMac.Forms["/browse [<folder>|<file>]"];   // 2026-11-03: a path's chord is a Mac's
+        Assert.Contains("Option+click", tree, StringComparison.Ordinal);
+        Assert.DoesNotContain("Ctrl+", tree, StringComparison.Ordinal);
         Assert.Contains("Browser window", NeonSidekick.Help.HelpMac.Settings[NeonSidekick.App.SettingsField.ThemedExternalWindows], StringComparison.Ordinal);
     }
 

@@ -88,7 +88,7 @@ public class SidekickOptionsTests
         Assert.True(eventLog.IsCheck);
         Assert.Equal("eventlog-check", eventLog.Mode);
         Assert.NotNull(SidekickOptions.Parse(new[] { "--eventlog-check" }).Error);
-        Assert.Contains("--eventlog-check <computer>  prove the event-log tools against that computer of eventlog.json, or local (reads only), exit 0/1", SidekickOptions.Usage);
+        Assert.Contains("--eventlog-check <computer>  prove the event-log tools against that computer of eventlog.json, or local (reads only), exit 0/1", SidekickOptions.UsageFor(mac: false));
         var o = SidekickOptions.Parse(new[] { "--voice-check" });
         Assert.True(o.VoiceCheck);
         Assert.False(o.AudioCheck);
@@ -332,6 +332,30 @@ public class SidekickOptionsTests
         var result = o.ApplyTo(new AppSettingsData { WorkingDirectory = "/saved" });
         Assert.Equal(Path.Combine(Environment.CurrentDirectory, "sub", "dir"), result.WorkingDirectory);
         Assert.Equal("/saved", SidekickOptions.None.ApplyTo(new AppSettingsData { WorkingDirectory = "/saved" }).WorkingDirectory);
+    }
+
+    /// <summary>
+    /// A Mac's help text has its own event-log and directory check lines (2026-11-03, the docs pass: it offered a named event-log computer
+    /// and the <c>current</c> domain, neither of which a Mac has), and both texts tag the services and tasks checks "Windows".
+    /// </summary>
+    [Fact]
+    public void UsageOnAMac_HasItsOwnCheckLines_AndBothTagTheWindowsChecks()
+    {
+        string mac = SidekickOptions.UsageFor(mac: true);
+        string windows = SidekickOptions.UsageFor(mac: false);
+        Assert.Contains("--eventlog-check <computer>  " + SidekickOptions.EventLogCheckMacLine + ", exit 0/1", mac);
+        Assert.Contains("--ad-check <domain>          " + SidekickOptions.AdCheckMacLine + ", exit 0/1", mac);
+        Assert.Contains("--docker-check               " + SidekickOptions.DockerCheckSocketLine + ", exit 0/1", mac);
+        Assert.DoesNotContain("or current", mac, StringComparison.Ordinal);
+        Assert.DoesNotContain("computer of eventlog.json", mac, StringComparison.Ordinal);
+        Assert.Contains("--ad-check <domain>          prove the directory tools against that domain of ad.json, or current (reads only), exit 0/1", windows);
+        foreach (string text in new[] { mac, windows })
+        {
+            Assert.Contains("--services-check <computer>  prove the services tools against that computer of services.json, or local (reads only; Windows), exit 0/1", text);
+            Assert.Contains("--tasks-check <computer>     prove the task tools against that computer of tasks.json, or local (reads only; Windows), exit 0/1", text);
+        }
+
+        Assert.Equal(OperatingSystem.IsMacOS() ? mac : windows, SidekickOptions.Usage);
     }
 
     [Fact]

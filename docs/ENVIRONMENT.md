@@ -2,12 +2,14 @@
 
 Every variable Neon Sidekick reads. Back to the [README](../README.md).
 
-Each starts with `NEONSIDEKICK_`, overrides a setting for one launch, and is never saved. Settings are in [SETTINGS.md](SETTINGS.md), command-line options in [COMMANDLINE.md](COMMANDLINE.md), and [HEADLESS.md](HEADLESS.md) shows the variables in scripted runs.
+Each starts with `NEONSIDEKICK_`, overrides a setting for one launch and is never saved. Settings are in [SETTINGS.md](SETTINGS.md), options in [COMMANDLINE.md](COMMANDLINE.md); [HEADLESS.md](HEADLESS.md) shows the variables in scripted runs.
 
 * **Precedence:** command-line flag > variable > saved setting > default. A settings row a variable overrides says so.
-* **Values:** blank means unset, and word values ignore case. **on/off** also takes `true`/`false`, `1`/`0` and `yes`/`no`. A value that doesn't parse is logged and ignored.
-* **Logging:** with `--log`, the log lists the variables in force, the keys only as `(set)`.
-* **Children:** every program the app starts (a command or script, an MCP stdio server, `llama-server`, the headless browser) inherits the environment except the secrets: every `NEONSIDEKICK_*` variable whose name holds `KEY`, `TOKEN`, `SECRET`, `PASSWORD`, `CONNECTION` or `CREDENTIAL`, and every `NEONSIDEKICK_TEST_*` one. An MCP server's own `env` entries still reach it.
+* **Values:** blank means unset; word values ignore case. **on/off** also takes `true`/`false`, `1`/`0` and `yes`/`no`. A value that doesn't parse is logged and ignored.
+* **Logging:** with `--log`, the log lists the variables in force, keys only as `(set)`.
+* **Children:** every program the app starts (a command or script, an MCP stdio server, `llama-server`, the headless browser) inherits the environment:
+  * except the secrets: every `NEONSIDEKICK_*` variable whose name holds `KEY`, `TOKEN`, `SECRET`, `PASSWORD`, `CONNECTION` or `CREDENTIAL`, and every `NEONSIDEKICK_TEST_*` one
+  * an MCP server's own `env` entries still reach it.
 
 ## Contents
 
@@ -27,7 +29,7 @@ Each starts with `NEONSIDEKICK_`, overrides a setting for one launch, and is nev
 | Variable | What it does | Accepts |
 |---|---|---|
 | `NEONSIDEKICK_HOME` | The home folder: settings, profiles, models, llama.cpp, skills and the connection files. | A folder path. Default `%USERPROFILE%\.neonsidekick` (`~/.neonsidekick` on a Mac). |
-| `NEONSIDEKICK_PROFILE` | The profile for this launch. `--profile` wins, and any launch with neither loads `neon`. An unknown name exits with code 2. | A profile name. |
+| `NEONSIDEKICK_PROFILE` | The profile for this launch (`--profile` wins; with neither, `neon`). An unknown name exits with code 2. | A profile name. |
 
 ## LLM
 
@@ -40,7 +42,7 @@ Each starts with `NEONSIDEKICK_`, overrides a setting for one launch, and is nev
 | `NEONSIDEKICK_LLM_REQUEST_TIMEOUT` | *LLM request timeout (s)* | Seconds, above 0 and up to 3600. |
 | `NEONSIDEKICK_LLM_TURN_TIMEOUT` | *LLM turn timeout (s)* | Seconds, above 0 and up to 21600. |
 | `NEONSIDEKICK_LLM_CONTEXT` | *LLM context length* | Tokens, a whole number above 0; used in place of the server's own figure. |
-| `NEONSIDEKICK_LLM_SAMPLING` | *LLM sampling*, for every model | A JSON object (`{"temperature":0.6,"top_k":20,"typical_p":0.9}`). Known fields must be in range, and other keys are passed through; saved values fill in the rest. |
+| `NEONSIDEKICK_LLM_SAMPLING` | *LLM sampling*, for every model | A JSON object (`{"temperature":0.6,"top_k":20,"typical_p":0.9}`). Known fields must be in range; other keys pass through; saved values fill in the rest. |
 
 ## Embedded LLM
 
@@ -98,13 +100,11 @@ Each starts with `NEONSIDEKICK_`, overrides a setting for one launch, and is nev
 | `NEONSIDEKICK_HA_URL` | *Home Assistant URL* | The server's URL (`http://localhost:8123`). |
 | `NEONSIDEKICK_HA_TOKEN` | *Home Assistant API key* | A long-lived token as issued. Never logged. |
 | `NEONSIDEKICK_YOUTUBE_API_KEY` | *YouTube API key* | A YouTube Data API v3 key as issued. Never logged. Each search costs 100 of its daily quota units. |
-| `NEONSIDEKICK_DOCKER_PIPE` | *Docker engine pipe* (*Docker engine socket* on a Mac) | A pipe name, `\\.\pipe\name` or `npipe:////./pipe/name`; on a Mac a socket's path or `unix:///path`. See the notes below. |
+| `NEONSIDEKICK_DOCKER_PIPE` | *Docker engine pipe* (*Docker engine socket* on a Mac) | A pipe name, `\\.\pipe\name` or `npipe:////./pipe/name`; on a Mac a socket's path or `unix:///path` (see below). |
 
-On a Mac, with neither `NEONSIDEKICK_DOCKER_PIPE` nor the setting, the app finds the socket as the `docker` command does, from `DOCKER_HOST` (never a `tcp://` or `ssh://` one) or the CLI's current context (`DOCKER_CONTEXT`, `DOCKER_CONFIG`); see [the order](TOOLS.md#docker-on-a-mac).
+On a Mac, with neither `NEONSIDEKICK_DOCKER_PIPE` nor the setting, the app finds the socket as the `docker` command does: from `DOCKER_HOST` (never a `tcp://` or `ssh://` one) or the CLI's current context (`DOCKER_CONTEXT`, `DOCKER_CONFIG`); see [the order](TOOLS.md#docker-on-a-mac).
 
 ## System variables it reads
-
-The app reads a few of the system's own variables:
 
 * `PATH` to find shells and interpreters, with `PATHEXT`, `ProgramFiles`, `ProgramW6432` and `LocalAppData` on Windows.
 * `USERPROFILE` (`HOME` on a Mac) to find Claude Code where its installer puts it.
@@ -113,20 +113,24 @@ The app reads a few of the system's own variables:
 
 ## Test suite
 
-Only for running the tests from source. Each live test is skipped unless its resource is there.
+Only for running the tests from source; each live test skips unless its resource is there.
 
 * `NEONSIDEKICK_TEST_LLM_URL`, `NEONSIDEKICK_TEST_TTS_URL`, `NEONSIDEKICK_TEST_SQL_CONNECTION`: a server to test against.
 * `NEONSIDEKICK_TEST_ORACLE_CONNECTION`: an ODP.NET connection string (`User Id=…;Password=…;Data Source=localhost:1521/FREEPDB1`) for a user that may create tables (`gvenzl/oracle-free` works).
 * `NEONSIDEKICK_TEST_MYSQL_CONNECTION`: a MySqlConnector connection string (`Server=127.0.0.1;Port=3306;User ID=…;Password=…;Database=…`) to a database the user owns (`mysql:8.4` and `mariadb:11` work).
 * `NEONSIDEKICK_TEST_POSTGRES_CONNECTION`: an Npgsql connection string (`Host=127.0.0.1;Port=5432;Username=…;Password=…;Database=…`).
-* `NEONSIDEKICK_TEST_UNC_SHARE`: a readable `\\server\share` path (`\\localhost\C$\Windows`); on a Mac, `smb://server/share` (your Public share with File Sharing on works), mounted and unmounted by each test. `NEONSIDEKICK_TEST_UNC_USER` and `NEONSIDEKICK_TEST_UNC_PASSWORD` add an account for the runas path. Reads only.
+* `NEONSIDEKICK_TEST_UNC_SHARE`: a readable `\\server\share` path (`\\localhost\C$\Windows`); on a Mac `smb://server/share` (your Public share with File Sharing on works), mounted and unmounted by each test. Reads only.
+  * `NEONSIDEKICK_TEST_UNC_USER` and `NEONSIDEKICK_TEST_UNC_PASSWORD` add an account for the runas path.
 * `NEONSIDEKICK_TEST_DOCKER_CONTAINER`: a running container to read (`mysql_dev`); `NEONSIDEKICK_TEST_DOCKER_PIPE` names another pipe (a socket's path on a Mac). Reads only.
 * `NEONSIDEKICK_TEST_EVENTLOG_COMPUTER`: a computer's host whose event logs are read over RPC as you (`localhost` is a loopback session). Windows only; reads only.
 * `NEONSIDEKICK_TEST_NETWORK_HOST`: a host to look up, ping and (when 443 answers) shake hands with (`example.com`). Reads only.
-* `NEONSIDEKICK_TEST_SERVICES_COMPUTER`: a computer whose services are read as you (`localhost` works). With `NEONSIDEKICK_TEST_SERVICE_CONTROL` naming a harmless service on the test machine, the test restarts it, only when run elevated. Windows only.
-* `NEONSIDEKICK_TEST_TASKS_COMPUTER`: a computer whose scheduled tasks are read as you (`localhost` needs an elevated run). With `NEONSIDEKICK_TEST_TASK_CONTROL` naming a task you made on the test machine, the test runs, disables and re-enables it. Windows only.
-* `NEONSIDEKICK_TEST_AD_DOMAIN`: `Domain=…;Server=…;User=DOMAIN\name;Password=…`, read through a scratch home's `ad.json`. For the `samba_ad_dev` container: `Domain=lab.neon.test;Server=localhost;User=LAB\reader` and its password. On a Mac, `Server=dc1.lab.neon.test;User=reader@LAB.NEON.TEST` with a hosts entry for that name ([TESTCONTAINERS.md](TESTCONTAINERS.md#samba_ad_dev-on-a-mac)). Reads only.
-  * On a Mac the user is `name@REALM` (`User=reader@LAB.NEON.TEST`), and the test realm needs a `krb5.conf` ([TESTCONTAINERS.md](TESTCONTAINERS.md)).
+* `NEONSIDEKICK_TEST_SERVICES_COMPUTER`: a computer whose services are read as you (`localhost` works). Windows only.
+  * With `NEONSIDEKICK_TEST_SERVICE_CONTROL` naming a harmless service on the test machine, the test restarts it, only when run elevated.
+* `NEONSIDEKICK_TEST_TASKS_COMPUTER`: a computer whose scheduled tasks are read as you (`localhost` needs an elevated run). Windows only.
+  * With `NEONSIDEKICK_TEST_TASK_CONTROL` naming a task you made on the test machine, the test runs, disables and re-enables it.
+* `NEONSIDEKICK_TEST_AD_DOMAIN`: `Domain=…;Server=…;User=DOMAIN\name;Password=…`, read through a scratch home's `ad.json`. Reads only.
+  * For the `samba_ad_dev` container: `Domain=lab.neon.test;Server=localhost;User=LAB\reader` and its password.
+  * On a Mac the user is `name@REALM`: `Server=dc1.lab.neon.test;User=reader@LAB.NEON.TEST`, with a hosts entry for that name and a `krb5.conf` for the realm ([TESTCONTAINERS.md](TESTCONTAINERS.md#samba_ad_dev-on-a-mac)).
 * `NEONSIDEKICK_TEST_CAMERA`: `1` or a camera's name (the light comes on); `NEONSIDEKICK_TEST_CAMERA_OUT`: a folder to keep the test photo in.
 * `NEONSIDEKICK_TEST_NVIDIA_MONITOR`: `1` reads a monitor off the desktop through an NVIDIA card (Windows; leave one connected but off the desktop). Reads only.
 * `NEONSIDEKICK_TEST_BROWSER_WINDOW`: `1` runs the Browser window's bot-check test against a local page (Windows, macOS 14+; the window shows briefly).

@@ -18,7 +18,7 @@ Every example serves on port `30000`, so only one can run at a time. Each contai
 
 Once per machine; skip what you've done. Steps 1–4 are in Windows, the rest in the Ubuntu shell.
 
-1. **NVIDIA driver.** Install the current Windows driver for your GPU (from nvidia.com or the NVIDIA app). It serves WSL too. Don't install an NVIDIA driver or the CUDA toolkit inside Ubuntu: either would replace the one WSL uses.
+1. **NVIDIA driver.** Install the current Windows driver for your GPU (nvidia.com or the NVIDIA app); it serves WSL too. Don't install an NVIDIA driver or the CUDA toolkit inside Ubuntu: either would replace the one WSL uses.
 2. **WSL 2 and Ubuntu.** In PowerShell as administrator:
 
    ```powershell
@@ -28,7 +28,7 @@ Once per machine; skip what you've done. Steps 1–4 are in Windows, the rest in
 
    Restart if asked, open Ubuntu from the Start menu and create your Linux user. `wsl -l -v` should show Ubuntu at version 2.
 3. **Docker Desktop.** Install it from [docker.com](https://www.docker.com/products/docker-desktop/). In Settings › General, tick *Use WSL 2 based engine*; in Settings › Resources › WSL Integration, turn on Ubuntu; then *Apply & restart*.
-4. **WSL memory.** WSL 2 gives Linux half the system RAM by default, and the containers run inside it. The examples use a lot of shared memory, and a model's weights pass through system RAM as it loads. On a 64 GB machine, raise it in `%UserProfile%\.wslconfig`:
+4. **WSL memory.** WSL 2 gives Linux, and so the containers, half the system RAM by default. The examples use a lot of shared memory, and a model's weights pass through system RAM as it loads. On a 64 GB machine, raise it in `%UserProfile%\.wslconfig`:
 
    ```ini
    [wsl2]
@@ -61,10 +61,10 @@ Once per machine; skip what you've done. Steps 1–4 are in Windows, the rest in
 ## Using them in NeonSidekick
 
 1. Run an example's command once to create its container (the first run downloads the model). From then on the app starts and stops it.
-2. On `/settings` › Servers › Docker, turn on *Docker servers enabled* and tick the container in *Docker server containers*. The list shows containers whose image or command has one of the *Docker server match words* (`sglang` is one by default).
+2. On `/settings` › Servers › Docker, turn on *Docker servers enabled* and tick the container in *Docker server containers* (`sglang` is one of the *Docker server match words* by default).
 3. Pick the container in `/server`, or start the app with `--url docker:<container>`.
 
-The app starts the container you pick and stops the other ticked ones first, so the shared port is never a problem. See [Docker servers](TOOLS.md#docker-servers).
+Picking one stops the other ticked containers first, so the shared port is never a problem ([Docker servers](TOOLS.md#docker-servers)).
 
 ## Models
 
