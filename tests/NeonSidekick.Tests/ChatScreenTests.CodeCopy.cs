@@ -54,8 +54,8 @@ public partial class ChatScreenTests
 
         Assert.NotNull(at);
         Assert.Equal("x = 1\ny = 2", at!.Value.Text);
-        Assert.Equal(["x = 1\r\ny = 2"], _copied);
-        Assert.Contains(InputLine.CopiedFlash("x = 1\r\ny = 2".Length), output);
+        Assert.Equal([ClipboardLines("x = 1\r\ny = 2")], _copied);
+        Assert.Contains(InputLine.CopiedFlash(ClipboardLines("x = 1\r\ny = 2").Length), output);
         Assert.Equal("ab", _chat.Requests[1].Last(m => m.Role == ChatRole.User).Text);
     }
 

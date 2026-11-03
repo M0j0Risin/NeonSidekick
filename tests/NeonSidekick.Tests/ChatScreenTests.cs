@@ -5030,7 +5030,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Equal(2, _copied.Count);
-        Assert.Equal((ChatLog.ThinkingQuote("Pondering the sky.") + "\n\nIt is blue.").ReplaceLineEndings("\r\n"), _copied[0]);
+        Assert.Equal(ClipboardLines(ChatLog.ThinkingQuote("Pondering the sky.") + "\n\nIt is blue."), _copied[0]);
         Assert.Equal("It is blue.", _copied[1]);
         Assert.Contains("  · " + CopyText.CopiedNotice(1, 1, withUserText: false, withThinking: true), output);
     }
@@ -6299,7 +6299,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("● Bold and:\n   \n  • one\n  • two\n\n", output);
         Assert.DoesNotContain("**Bold**", output);
         // /copy keeps the raw Markdown (Copy user text on: the question quoted above it).
-        Assert.Equal("> hi\r\n\r\n**Bold** and:\r\n- one\r\n- two", Assert.Single(_copied));
+        Assert.Equal(ClipboardLines("> hi\r\n\r\n**Bold** and:\r\n- one\r\n- two"), Assert.Single(_copied));
     }
 
     [Fact]
@@ -11166,9 +11166,9 @@ public partial class ChatScreenTests : IDisposable
         // → showed the Keys tab, with the keys that apply (voice off: no push-to-talk row).
         Assert.Contains(rule + "\n" + Titled(InfoPane.Title + " │ Basic · Advanced · Custom · Keys ") + "\n \nEnter", output);
         // The label column follows the widest key ("Ctrl+Backspace / Delete", 23 cells, since 2026-10-04; on a Mac, 2026-10-07,
-        // "Ctrl+Left / Right", Option+Delete standing for it) + the gap of 2.
+        // "Ctrl+Left / Right", Option+Delete standing for it; "Option+Left / Right", 19, since 2026-11-02) + the gap of 2.
         int width = ChatScreen.KeyRows(false, ConsoleKey.F4, false, "").Max(r => r.Key.Length) + 2;
-        Assert.Equal(OperatingSystem.IsMacOS() ? 19 : 25, width);
+        Assert.Equal(OperatingSystem.IsMacOS() ? 21 : 25, width);
         Assert.Contains("Ctrl+Home".PadRight(width) + "scroll to the top of the transcript", output);
         Assert.Contains("Ctrl+End".PadRight(width) + "scroll to the bottom of the transcript", output);
         Assert.Contains("Ctrl+C".PadRight(width) + "copy the selection · stop the speech · cancel the reply · press twice to exit", output);
@@ -20781,7 +20781,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("see: alpha\nbeta", UserText(_chat.Requests[0]));
         Assert.Contains("› see: alpha\n  beta\n", output);
         Assert.Contains("● Two lines, noted.", output);
-        Assert.Equal(new[] { "> see: alpha\r\n> beta\r\n\r\nTwo lines, noted." }, _copied);
+        Assert.Equal(new[] { ClipboardLines("> see: alpha\r\n> beta\r\n\r\nTwo lines, noted.") }, _copied);
     }
 
     /// <summary>A long paste is a token on the line and the block in the request; a paste during a reply waits for the next line.</summary>
@@ -20890,7 +20890,7 @@ public partial class ChatScreenTests : IDisposable
         // The thumbnail under the line: the 4 × 4 bitmap is four cells across and two half-block rows down.
         Assert.Contains("› what is [Image #1]?\n  ▀▀▀▀\n  ▀▀▀▀\n", output);
         Assert.DoesNotContain(path, output);
-        Assert.StartsWith("> what is [Image #1]?\r\n\r\nA pink square.", Assert.Single(_copied));
+        Assert.StartsWith(ClipboardLines("> what is [Image #1]?\r\n\r\nA pink square."), Assert.Single(_copied));
     }
 
     /// <summary>A picture pasted off the clipboard is the same image part, thumbnail and label as a dropped file, under its clipboard name.</summary>
@@ -20923,7 +20923,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("› what is [Image #1]?\n  ▀▀▀▀\n  ▀▀▀▀\n", output);
         Assert.DoesNotContain("clipboard-1.png", output);
         Assert.False(Directory.Exists(Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName, AppSettingsData.DefaultPastedImagesFolder)));
-        Assert.StartsWith("> what is [Image #1]?\r\n\r\nA pink square.", Assert.Single(_copied));
+        Assert.StartsWith(ClipboardLines("> what is [Image #1]?\r\n\r\nA pink square."), Assert.Single(_copied));
     }
 
     private string PastedFolder => Path.Combine(_settings.ProfileImagesDirectory, AppSettingsData.DefaultPastedImagesFolder);
@@ -21414,8 +21414,8 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        string both = "one\r\n\r\n---\r\n\r\n**two**";
-        Assert.Equal(new[] { "**two**", "**two**", both, "**two**", "**two**", both, both, "**two**\r\n\r\n---\r\n\r\nthree" }, _copied);
+        string both = ClipboardLines("one\r\n\r\n---\r\n\r\n**two**");
+        Assert.Equal(new[] { "**two**", "**two**", both, "**two**", "**two**", both, both, ClipboardLines("**two**\r\n\r\n---\r\n\r\nthree") }, _copied);
         Assert.Equal(4, Count(output, "  · " + CopyText.CopiedNotice(1, 2, false)));   // /copy, /copy 1, /copy 0, /copy -4
         Assert.Equal(3, Count(output, "  · " + CopyText.CopiedNotice(2, 2, false)));
         Assert.Contains("  · " + CopyText.CopiedNotice(2, 3, false), output);   // "the last 2": fewer than there are
@@ -21452,7 +21452,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         // The empty block carries no ⧉, so it has no number (2026-11-02, the copy-code findings: the pin moved from three blocks).
-        Assert.Equal(["int a;\r\nint b;", "last", "last"], _copied);
+        Assert.Equal([ClipboardLines("int a;\r\nint b;"), "last", "last"], _copied);
         Assert.Contains("  · " + CopyText.NoCodeBlockNotice, output);
         Assert.Contains("  · " + CopyText.CopiedCodeNotice(1, 2), output);
         Assert.Equal(2, Count(output, "  · " + CopyText.CopiedCodeNotice(2, 2)));   // code 2, and code: the last block with a ⧉
@@ -21478,8 +21478,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(
             new[]
             {
-                "> list two things\r\n\r\n- a\r\n- b",
-                "> what time is it?\r\n\r\nIt is noon.\r\n\r\n---\r\n\r\n> list two things\r\n\r\n- a\r\n- b",
+                ClipboardLines("> list two things\r\n\r\n- a\r\n- b"),
+                ClipboardLines("> what time is it?\r\n\r\nIt is noon.\r\n\r\n---\r\n\r\n> list two things\r\n\r\n- a\r\n- b"),
             },
             _copied);
         Assert.Contains("  · " + CopyText.CopiedNotice(1, 2, true), output);
