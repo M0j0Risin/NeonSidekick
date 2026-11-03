@@ -97,6 +97,18 @@ public static class WebUiText
     /// <summary><c>/webui copy</c> done. Pinned.</summary>
     public const string CopiedNotice = "(" + Glyph + "the sign-in link is on the clipboard: it holds the token, so paste it only where you trust)";
 
+    /// <summary>
+    /// Whether the HTTPS link is a one-time one (2026-11-02, review P12-5, the user's call): a public (Funnel) address under <c>local</c>, which
+    /// lets the internet's requests in. The tailnet's address keeps the token's link. Pure.
+    /// </summary>
+    public static bool OnceOnly(WebUiHttps? https, WebUiAudience audience) => https is { Public: true } && audience == WebUiAudience.Local;
+
+    /// <summary>Under a one-time HTTPS link, in place of <see cref="TokenWarning"/> (2026-11-02, review P12-5). Pinned.</summary>
+    public const string OnceLinkNote = "Open to the internet, so this link signs in once, within a minute; /webui shows a fresh one.";
+
+    /// <summary><c>/webui copy</c> of a one-time HTTPS link (2026-11-02, review P12-5): its own, not the pane's. Pinned.</summary>
+    public const string OnceCopiedNotice = "(" + Glyph + "a one-time sign-in link is on the clipboard: it signs in once, within a minute)";
+
     /// <summary><c>/webui copy</c> failed. Pinned.</summary>
     public const string CopyFailedError = "/webui copy: the clipboard could not be written.";
 
@@ -146,6 +158,11 @@ public static class WebUiText
         if (funnel is not null)
         {
             lines.Add(funnel);
+        }
+
+        if (OnceOnly(https, audience))
+        {
+            lines.Add(OnceLinkNote);   // 2026-11-02, review P12-5
         }
 
         lines.Add("");
@@ -296,6 +313,12 @@ public static class WebUiText
 
     /// <summary>A request with <c>X-Forwarded-For</c> from loopback but no host (2026-11-01, the review's P2-3). Pinned.</summary>
     public const string ProxyOnThisComputer = "a proxy on this computer";
+
+    /// <summary>
+    /// What <see cref="WebUiOrigin.Through"/> holds for a request through Tailscale Serve, shown in the sign-in notice and its log lines
+    /// (moved here 2026-11-02, review P5-4: a user-visible word outside the area's text class).
+    /// </summary>
+    public const string TailscaleServeName = "Tailscale Serve";
 
     /// <summary>The log's why-no-HTTPS lines, each written once per change (the address alone, never a link or the token).</summary>
     public const string ServeNoAdapterLogLine = "Tailscale Serve: no Tailscale adapter up.";

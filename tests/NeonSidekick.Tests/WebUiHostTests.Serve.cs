@@ -35,7 +35,7 @@ public sealed partial class WebUiHostTests
         Assert.Equal(HttpStatusCode.SeeOther, response.StatusCode);
         var origin = Assert.Single(_backend.Origins);
         Assert.Equal(IPAddress.Parse("100.64.1.2"), origin.Remote);
-        Assert.Equal(WebUiOrigin.TailscaleServeName, origin.Through);
+        Assert.Equal(WebUiText.TailscaleServeName, origin.Through);
         Assert.Equal("(" + WebUiText.Glyph + "a browser signed in to the Web UI from 100.64.1.2 through Tailscale Serve)", WebUiText.SignedInNotice(origin));
     }
 
@@ -79,7 +79,7 @@ public sealed partial class WebUiHostTests
         }
 
         Assert.Equal([IPAddress.Parse("100.64.1.3"), IPAddress.Parse("100.64.1.4")], _backend.Origins.Select(o => o.Remote).ToList());
-        Assert.All(_backend.Origins, o => Assert.Equal(WebUiOrigin.TailscaleServeName, o.Through));
+        Assert.All(_backend.Origins, o => Assert.Equal(WebUiText.TailscaleServeName, o.Through));
     }
 
     [Fact]

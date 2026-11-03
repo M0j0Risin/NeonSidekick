@@ -73,8 +73,8 @@ public sealed class TranscriptFind
         // The rows, their layout and the pane's place are read together (2026-10-29, the resize review); the place comes back for Nearest.
         TextFind.Hit Search()
         {
-            var rows = _pane.TranscriptRows(out laidOut, out var place);
-            int own = OwnLine(rows, _pane.UserGlyph());
+            var rows = _pane.TranscriptRows(out laidOut, out var place, out int lastStart);
+            int own = OwnLine(rows, lastStart, _pane.UserGlyph());
             hits = TextFind.Matches(rows, find);
             hits.RemoveAll(found => found.Line >= own);
             hit = hits.Count - 1;
@@ -282,24 +282,20 @@ public sealed class TranscriptFind
     };
 
     /// <summary>
-    /// Where the typed <c>/find</c> line that opened the find starts — the last row with text, when it is one — else the row
-    /// count: the rows from there on are not searched. Ctrl+F writes no line, so nothing is left out then. <paramref name="glyph"/>
-    /// is what a sent line opens with (<see cref="ScreenPane.UserGlyph"/>, the user avatar since 2026-10-12).
+    /// Where the typed <c>/find</c> line that opened the find starts — the last message's start row (<paramref name="lastStart"/>; a sent
+    /// line starts a message), when it is one — else the row count: the rows from there on are not searched. Ctrl+F writes no line, so
+    /// nothing is left out then. From the start row (2026-11-02, review P6-4: the last row with text was a wrapped /find line's continuation,
+    /// and the find counted the query itself). <paramref name="glyph"/> is what a sent line opens with (<see cref="ScreenPane.UserGlyph"/>,
+    /// the user avatar since 2026-10-12).
     /// </summary>
-    internal static int OwnLine(IReadOnlyList<IReadOnlyList<Spectre.Console.Rendering.Segment>> rows, string glyph = InputLine.PromptGlyph)
+    internal static int OwnLine(IReadOnlyList<IReadOnlyList<Spectre.Console.Rendering.Segment>> rows, int lastStart, string glyph = InputLine.PromptGlyph)
     {
-        for (int i = rows.Count - 1; i >= 0; i--)
+        if (lastStart < 0 || lastStart >= rows.Count)
         {
-            string text = TextFind.LineText(rows[i]);
-            if (text.Trim().Length == 0)
-            {
-                continue;
-            }
-
-            return text.StartsWith(glyph + "/find", StringComparison.Ordinal) ? i : rows.Count;
+            return rows.Count;
         }
 
-        return rows.Count;
+        return TextFind.LineText(rows[lastStart]).StartsWith(glyph + "/find", StringComparison.Ordinal) ? lastStart : rows.Count;
     }
 
     /// <summary>

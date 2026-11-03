@@ -31,7 +31,7 @@ public sealed class SqlExportJob
     private readonly Func<Exception, string>? _failed;
 
     /// <param name="begin">The sheet begun (the pending file opened): the rows' sink, or null with the refusal. Called once, inside the session.</param>
-    /// <param name="header">A column's header when the family adds to its name (PostgreSQL's <c> (UTC)</c>); null for the name.</param>
+    /// <param name="header">A column's header when the family adds to its name (PostgreSQL's and MySQL's <see cref="SqlExport.UtcColumn"/>); null for the name.</param>
     /// <param name="failed">
     /// The refusal for a file failure (<see cref="XlsxTarget.Failure"/>) while the sheet takes the columns or a row, worded with the workbook's
     /// name; null lets it throw.
@@ -185,6 +185,12 @@ public static class SqlExport
     /// </summary>
     public static string FileStem(string? name) => FileNames.Safe(name ?? "") is { Length: > 0 } safe ? "query-" + safe : "query";
 
+    /// <summary>
+    /// What a header adds over a column whose cells hold UTC (2026-10-29, the Office writing plan, PostgreSQL's timestamptz; MySQL's
+    /// TIMESTAMP too since 2026-11-02, review P10-4, whose export pins the session to UTC): one text for both, so the families agree.
+    /// </summary>
+    public const string UtcColumn = " (UTC)";
+
     /// <summary>Whether a column's type name says a date alone (<c>date</c> in any case): its midnight values are dates, not date-times.</summary>
     public static bool IsDateType(string? typeName) => string.Equals(typeName?.Trim(), "date", StringComparison.OrdinalIgnoreCase);
 
@@ -193,9 +199,10 @@ public static class SqlExport
     /// typed by <see cref="XlsxValue.From"/>, a date column's midnight a date (<paramref name="typeName"/>; null when no column of the family
     /// holds a date alone); anything else (an array, a provider's own type) the family's export text through <paramref name="text"/>, never
     /// the chat's clipped cell (2026-10-29, review P5-1: an array was cut at the chat's 500 characters and scrubbed). A value the provider
-    /// can't hand over (past <see cref="decimal"/>) is its provider value's text, by the 15-digit rule when it is a number.
+    /// can't hand over (past <see cref="decimal"/>) is its provider value's text, by the 15-digit rule when it is a number, read through
+    /// <paramref name="provider"/> when the family gives one (<see cref="FromProvider"/>).
     /// </summary>
-    public static XlsxValue Typed(DbDataReader reader, int ordinal, string? typeName, Func<object, string> text)
+    public static XlsxValue Typed(DbDataReader reader, int ordinal, string? typeName, Func<object, string> text, Func<DbDataReader, int, string>? provider = null)
     {
         ArgumentNullException.ThrowIfNull(reader);
         ArgumentNullException.ThrowIfNull(text);
@@ -205,7 +212,7 @@ public static class SqlExport
         }
         catch (Exception ex) when (ex is InvalidCastException or OverflowException)
         {
-            return FromProvider(reader, ordinal, typeName);
+            return FromProvider(reader, ordinal, typeName, provider);
         }
     }
 
@@ -218,13 +225,18 @@ public static class SqlExport
             : XlsxValue.OfText(text(value));
     }
 
-    /// <summary>A value GetValue won't hand over: its provider value's invariant text, by the 15-digit rule; the type's name when that fails too.</summary>
-    public static XlsxValue FromProvider(DbDataReader reader, int ordinal, string? typeName)
+    /// <summary>
+    /// A value GetValue won't hand over: its provider value's invariant text, by the number rule; the type's name when that fails too.
+    /// <paramref name="provider"/> is the family's own read of it, the one its chat cell uses (2026-11-02, review P10-1/P10-8: MySqlConnector
+    /// doesn't override <see cref="DbDataReader.GetProviderSpecificValue"/>, so a DECIMAL past <see cref="decimal"/> threw again and exported
+    /// as the placeholder while the chat showed every digit through <c>GetMySqlDecimal</c>); null for the generic provider value.
+    /// </summary>
+    public static XlsxValue FromProvider(DbDataReader reader, int ordinal, string? typeName, Func<DbDataReader, int, string>? provider = null)
     {
         ArgumentNullException.ThrowIfNull(reader);
         try
         {
-            return XlsxValue.OfNumberText(InvariantText(reader.GetProviderSpecificValue(ordinal)));
+            return XlsxValue.OfNumberText(provider is null ? InvariantText(reader.GetProviderSpecificValue(ordinal)) : provider(reader, ordinal));
         }
         catch (Exception inner) when (inner is not (DbException or OperationCanceledException or OutOfMemoryException))
         {

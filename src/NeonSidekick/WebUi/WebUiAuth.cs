@@ -74,6 +74,14 @@ public static class WebUiAuth
     /// <summary>A one-time sign-in link at <paramref name="baseAddress"/> (2026-10-31: <c>https://host[:port]</c> too, the HTTPS tab's).</summary>
     public static string OnceLinkAt(string baseAddress, string code) => baseAddress.TrimEnd('/') + SignInPath + "?" + OnceQuery + "=" + code;
 
+    /// <summary>The code of a <see cref="OnceLinkAt"/> link, or null when <paramref name="link"/> isn't one (2026-11-02, review P12-5). Pure.</summary>
+    public static string? OnceCodeOf(string? link)
+    {
+        const string Marker = SignInPath + "?" + OnceQuery + "=";
+        int at = link?.IndexOf(Marker, StringComparison.Ordinal) ?? -1;
+        return at < 0 ? null : link![(at + Marker.Length)..];
+    }
+
     /// <summary>The sign-in link at <paramref name="baseAddress"/> (2026-10-31: <c>https://host[:port]</c> too, the HTTPS tab's).</summary>
     public static string SignInLinkAt(string baseAddress, string token) => baseAddress.TrimEnd('/') + SignInPath + "?t=" + token;
 

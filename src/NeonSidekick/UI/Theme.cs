@@ -22,6 +22,17 @@ public static class Theme
 {
     private static volatile ThemeStyles s_current = new(ThemeLibrary.Default);
 
+    /// <summary>
+    /// Whether <paramref name="options"/>' console shows the palette's backgrounds (2026-11-02, review P1-6): 256 colors or true color. A
+    /// 16-color console maps a slab to one of its few colors, or to none, so a card's stripes and the context bar's shades can't be told apart;
+    /// those draw their no-color forms (a ─ rule between cards, a glyph a piece) there too.
+    /// </summary>
+    public static bool HasBackgrounds(Spectre.Console.Rendering.RenderOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return options.ColorSystem is ColorSystem.EightBit or ColorSystem.TrueColor;
+    }
+
     /// <summary>The last set <see cref="StylesOf"/> built for a palette not in force.</summary>
     private static volatile ThemeStyles? s_other;
 

@@ -480,6 +480,16 @@ public sealed class TranscriptFeed
     public IReadOnlyList<WebEntry> Snapshot(Func<string, string> html, bool defer = false)
     {
         ArgumentNullException.ThrowIfNull(html);
+        return Snapshot((markdown, _) => html(markdown), defer);
+    }
+
+    /// <summary>
+    /// <see cref="Snapshot(Func{string, string}, bool)"/> with <paramref name="html"/> given each reply's own footnote prefix too
+    /// (<see cref="IdPrefix"/>, 2026-11-02, review P5-2).
+    /// </summary>
+    public IReadOnlyList<WebEntry> Snapshot(Func<string, string, string> html, bool defer = false)
+    {
+        ArgumentNullException.ThrowIfNull(html);
         List<Entry> entries;
         lock (_gate)
         {
@@ -502,6 +512,13 @@ public sealed class TranscriptFeed
     public WebEntry? EntryOf(long seq, Func<string, string> html)
     {
         ArgumentNullException.ThrowIfNull(html);
+        return EntryOf(seq, (markdown, _) => html(markdown));
+    }
+
+    /// <summary><see cref="EntryOf(long, Func{string, string})"/> with each reply's footnote prefix (2026-11-02, review P5-2).</summary>
+    public WebEntry? EntryOf(long seq, Func<string, string, string> html)
+    {
+        ArgumentNullException.ThrowIfNull(html);
         Entry? found;
         lock (_gate)
         {
@@ -517,6 +534,19 @@ public sealed class TranscriptFeed
     /// Looked for from the newest, where a reply that just ended is.
     /// </summary>
     public string? HtmlOf(long seq, Func<string, string> html)
+    {
+        ArgumentNullException.ThrowIfNull(html);
+        return HtmlOf(seq, (markdown, _) => html(markdown));
+    }
+
+    /// <summary>
+    /// The footnote prefix of entry <paramref name="seq"/> (2026-11-02, review P5-2): <c>e{seq}-</c>, so two replies on one page never share
+    /// a <c>fn:1</c>. Every render path takes it from here, so the cached HTML is the same whoever renders it first.
+    /// </summary>
+    public static string IdPrefix(long seq) => "e" + seq.ToString(System.Globalization.CultureInfo.InvariantCulture) + "-";
+
+    /// <summary><see cref="HtmlOf(long, Func{string, string})"/> with the entry's footnote prefix (2026-11-02, review P5-2).</summary>
+    public string? HtmlOf(long seq, Func<string, string, string> html)
     {
         ArgumentNullException.ThrowIfNull(html);
         Entry? found = null;
@@ -771,7 +801,7 @@ public sealed class TranscriptFeed
         public UI.NoticeTone Tone { get; set; }
 
         /// <summary>A finished reply's Markdown as HTML, rendered once and cached (re-rendered only if its text changed); null for anything else.</summary>
-        public string? Html(Func<string, string> html)
+        public string? Html(Func<string, string, string> html)
         {
             if (Kind != FeedKind.Assistant || NoReply)
             {
@@ -788,7 +818,7 @@ public sealed class TranscriptFeed
                 string text = Text.ToString();
                 if (_htmlLength != text.Length)
                 {
-                    _html = html(text);
+                    _html = html(text, IdPrefix(Seq));
                     _htmlLength = text.Length;
                 }
 
@@ -796,7 +826,7 @@ public sealed class TranscriptFeed
             }
         }
 
-        public WebEntry ToWeb(Func<string, string>? html, bool defer = false)
+        public WebEntry ToWeb(Func<string, string, string>? html, bool defer = false)
         {
             string text;
             bool ended;

@@ -1088,7 +1088,24 @@ public sealed class Assistant
     /// </summary>
     public ConversationCompactor.TokenEstimate? LastSentEstimate => Volatile.Read(ref _lastSent) is ConversationCompactor.TokenEstimate sent ? sent : null;
 
+    /// <summary>
+    /// Whether <see cref="LastSentEstimate"/> is published (2026-11-02, review P1-11): the chat session's assistant alone, whose Context tab
+    /// reads it. A bot's or an advisor's would walk its whole history before every request for nobody.
+    /// </summary>
+    public bool PublishSentEstimate { get; init; }
+
     private object? _lastSent;
+
+    /// <summary>
+    /// The user message the turn in flight added, published right after <see cref="ConversationHistory.AddUser(string)"/> (2026-11-02, review
+    /// P13-1): <c>/commands save</c> under a reply takes it, never walking the history the turn is appending to (a torn read, or a throw).
+    /// Null before the first turn.
+    /// </summary>
+    public ChatMessage? LastUserMessage => Volatile.Read(ref _lastUser);
+
+    private ChatMessage? _lastUser;
+
+    private void PublishUser() => Volatile.Write(ref _lastUser, _history.Messages[^1]);
 
     /// <summary>
     /// The sampling every request of this assistant carries (2026-09-28, the setting <c>LLM sampling</c>): the turn's, the
@@ -1731,12 +1748,14 @@ public sealed class Assistant
                 {
                     _history.DropUnfinishedOpening();
                     _history.AddUser(userText, images, note, mark);
+                    PublishUser();
                 }
             }
         }
 
         // Committed up front: a turn that fails still leaves the question in the transcript. An /undo note rides it as its own first part (2026-10-28).
         _history.AddUser(userText, images, note, mark);
+        PublishUser();
 
         await foreach (var evt in SeedAsync(pending, cancellationToken).ConfigureAwait(false))
         {
@@ -1808,7 +1827,9 @@ public sealed class Assistant
             var clock = new StreamClock(_time, Meter);
 
             // The tool calls as they stream (2026-10-29, session 832): the busy row's "writing <tool>", and a call past its tool's ceiling stopped.
-            var watch = new ToolArgumentWatch(ArgumentCeiling, _time);
+            // A streamed name counts only when the request offered that tool (2026-11-02, review P12-7): an injected model's made-up
+            // name, or one with ESC or bidi characters, never becomes the app's own status line.
+            var watch = new ToolArgumentWatch(ArgumentCeiling, _time, name => FindTool(_tools, name) is not null);
             ToolArgumentWatch.Runaway? runaway = null;
 
             // A turn cancelled before its request (2026-09-25: the /botchat ESC that ends the chat can land as the next bot's
@@ -1826,7 +1847,10 @@ public sealed class Assistant
 
             var request = _history.BuildRequest();
             var history = _history.Messages;
-            Volatile.Write(ref _lastSent, ConversationCompactor.Estimate(history, ConversationCompactor.ThinkingFrom(history, EarlierThinkingSent)));
+            if (PublishSentEstimate)
+            {
+                Volatile.Write(ref _lastSent, ConversationCompactor.Estimate(history, ConversationCompactor.ThinkingFrom(history, EarlierThinkingSent)));
+            }
             var (sentPictures, sentBytes) = PictureBudget.Measure(request);
             log.Requests++;
 
@@ -2765,18 +2789,6 @@ public sealed class Assistant
     }
 
     /// <summary>
-    /// Runs one call against <paramref name="tools"/> and returns the text that goes back to the
-    /// model, with the pictures a <see cref="ToolImageResult"/> carried (empty otherwise). Every
-    /// branch returns — unknown tool, unparseable arguments, a throwing tool — so the caller can
-    /// always attach the <c>CallId</c>. Only cancellation escapes. Static, so a side loop
-    /// (<see cref="Skills.SkillLearner"/>) runs its own tools through the same rules.
-    /// </summary>
-    /// <summary>
-    /// One of the turn's own calls, watched for a project-file refusal (2026-10-22, <see cref="Files.WriteGuard"/>): with someone to ask
-    /// (<see cref="ProjectFileAsk"/> and <c>ask_user</c> offered), a yes runs the call again with the file allowed for that one call — the
-    /// refused attempt wrote nothing — and a no answers <see cref="Files.FileText.ProjectFileDeclined"/>.
-    /// </summary>
-    /// <summary>
     /// A tool call timed (2026-11-02, the review): its wall time on the Assistant's clock and the time its asks waited on the user
     /// (<see cref="ToolSpan"/>). An ordinary async method, so the span set here flows into the call and is gone when it returns, never
     /// left in force across the turn's <c>yield return</c> into the screen.
@@ -2788,6 +2800,11 @@ public sealed class Assistant
         return (result, _time.GetElapsedTime(started), asked);
     }
 
+    /// <summary>
+    /// One of the turn's own calls, watched for a project-file refusal (2026-10-22, <see cref="Files.WriteGuard"/>): with someone to ask
+    /// (<see cref="ProjectFileAsk"/> and <c>ask_user</c> offered), a yes runs the call again with the file allowed for that one call — the
+    /// refused attempt wrote nothing — and a no answers <see cref="Files.FileText.ProjectFileDeclined"/>.
+    /// </summary>
     private async Task<(string Text, IReadOnlyList<ImageAttachment> Images, FileDiff? Diff, string? Shown)> InvokeGuardedAsync(FunctionCallContent call, CancellationToken cancellationToken)
     {
         var slot = new Files.ProjectFileSlot();
@@ -2831,6 +2848,13 @@ public sealed class Assistant
     /// <summary>The result for a tool that threw (2026-09-18: <c>Error: boom failed: kaboom</c>, the <c>Error:</c> prefix every other tool sentence carries; <c>Error executing tool '…'</c> before). Pinned.</summary>
     public static string ToolFailed(string name, string message) => $"Error: {name} failed: {message}";
 
+    /// <summary>
+    /// Runs one call against <paramref name="tools"/> and returns the text that goes back to the
+    /// model, with the pictures a <see cref="ToolImageResult"/> carried (empty otherwise). Every
+    /// branch returns — unknown tool, unparseable arguments, a throwing tool — so the caller can
+    /// always attach the <c>CallId</c>. Only cancellation escapes. Static, so a side loop
+    /// (<see cref="Skills.SkillLearner"/>) runs its own tools through the same rules.
+    /// </summary>
     public static async Task<(string Text, IReadOnlyList<ImageAttachment> Images)> InvokeToolAsync(IReadOnlyList<AIFunction> tools, FunctionCallContent call, CancellationToken cancellationToken)
     {
         var (text, images, _, _) = await InvokeToolWithDiffAsync(tools, call, cancellationToken).ConfigureAwait(false);

@@ -685,6 +685,55 @@ public sealed class OfficeToolsTests : IDisposable
     }
 
     [Fact]
+    public void ADocxCanceledAtItsLastBlock_NeverFinishesTheZip()
+    {
+        // 2026-11-02, review P13-3: the token was checked per block only, so an Esc during the last block's picture still wrote the
+        // picture parts, styles and the zip's end, and the converter committed the file (replacing one under overwrite).
+        using var late = new CancellationTokenSource();
+        var document = new UI.Markdown.MarkdigParser().Parse("One\n\n![a](a.png)");
+        using var sink = new MemoryStream();
+        Assert.Throws<OperationCanceledException>(() => WordWriter.Write(sink, document, new WordPage(Pdf.PdfPaper.Default, false), null, null, _ =>
+        {
+            late.Cancel();
+            return null;
+        }, _time, late.Token));
+    }
+
+    private static byte[] SolidPng() => ImageFile.Load(App.SmokeChecks.SolidBmp(8, 4), "x.bmp", out _)!.Bytes;
+
+    private static string[] Entries(byte[] file)
+    {
+        using var zip = new System.IO.Compression.ZipArchive(new MemoryStream(file));
+        return [.. zip.Entries.Select(e => e.FullName)];
+    }
+
+    [Fact]
+    public void BrokenDataPictures_DontSpendTheBudget_ARealOneAfterThemIsEmbedded()
+    {
+        // 2026-11-02, review P9-8: a data: picture's bytes were counted before WordPicture judged them, so junk early on spent the
+        // budget and the conversion was refused as too large.
+        byte[] png = SolidPng();
+        string junk = "data:image/png;base64," + Convert.ToBase64String(new byte[3000]);
+        string real = "data:image/png;base64," + Convert.ToBase64String(png);
+        var converter = new DocxConverter(_files, _time) { PictureBudget = 4000 };
+        string result = converter.Convert(new DocxRequest(Markdown: $"![j1]({junk})\n\n![j2]({junk})\n\n![ok]({real})", To: "pics.docx"), CancellationToken.None);
+        Assert.StartsWith("Made pics.docx", result);
+        Assert.Contains(Entries(Bytes("pics.docx")), name => name.StartsWith("word/media/", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void APictureNamedWithAHash_IsFoundUncut()
+    {
+        // 2026-11-02, review P9-9: chart#1.png was looked up as "chart" and became the placeholder.
+        Directory.CreateDirectory(Path.Combine(_root, "charts"));
+        File.WriteAllBytes(Path.Combine(_root, "charts", "chart#1.png"), SolidPng());
+        Put("report.md", "# Report\n\n![chart](charts/chart#1.png)");
+        string result = new DocxConverter(_files, _time).Convert(new DocxRequest(Path: "report.md"), CancellationToken.None);
+        Assert.StartsWith("Made report.docx", result);
+        Assert.Contains(Entries(Bytes("report.docx")), name => name.StartsWith("word/media/", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Docx_WritesIntoNeon_ByTheUsersHand()
     {
         Directory.CreateDirectory(Path.Combine(_root, ".neon", "plans"));

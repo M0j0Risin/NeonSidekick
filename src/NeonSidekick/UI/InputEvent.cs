@@ -61,6 +61,14 @@ public abstract record InputEvent
     /// so the hook that made it never opens a pane itself. Every reader that has no use for one lets it pass as nothing.
     /// </summary>
     public sealed record Command(string Line) : InputEvent;
+
+    /// <summary>
+    /// The window changed size while an overlay is open (2026-11-02, review P7-3: an open info, menu, folder or approval pane laid itself out
+    /// only on a key, so after a resize it kept the old width's lines and hit tests until one came). Posted by the pane's tick once it has
+    /// rebuilt the screen (<see cref="KeySource.Post"/>); the panes show themselves again on it, every other reader lets it pass as nothing,
+    /// and one read with no overlay open is dropped.
+    /// </summary>
+    public sealed record Resize : InputEvent;
 }
 
 /// <summary>

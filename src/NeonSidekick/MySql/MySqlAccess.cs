@@ -158,7 +158,10 @@ public sealed class MySqlAccess
         var grids = new List<SqlGrid>();
         try
         {
-            await ExecuteAsync(connection, null, SessionStatement(connection.ServerVersion, timeoutSeconds), timeoutSeconds, cancellationToken).ConfigureAwait(false);
+            // An export's session in UTC (2026-11-02, review P10-4, the user's call): a TIMESTAMP is handed in the session's zone, never
+            // named, so the workbook's header says UTC (ExportHeader). The pool resets the session on its way back, so a chat read after it
+            // sees the server's zone again.
+            await ExecuteAsync(connection, null, SessionStatement(connection.ServerVersion, timeoutSeconds, utc: export is not null), timeoutSeconds, cancellationToken).ConfigureAwait(false);
             if (await ModeRefusalAsync(connection, timeoutSeconds, cancellationToken).ConfigureAwait(false) is { } kept)
             {
                 return SqlRun.Refused(SqlOutcome.Failed, kept, target.Name);
@@ -322,16 +325,20 @@ public sealed class MySqlAccess
     /// <summary>
     /// The session's own statement, before the transaction: <c>sql_mode</c> without <c>NO_BACKSLASH_ESCAPES</c> and
     /// <c>ANSI_QUOTES</c> (an empty slot the two leave is one the server accepts), and the statement time cap in the server's
-    /// own variable and unit. Pure.
+    /// own variable and unit. With <paramref name="utc"/> (an export, 2026-11-02, review P10-4) the session's zone is UTC too, as a numeric
+    /// offset, which needs no time zone tables on the server. Pure.
     /// </summary>
-    public static string SessionStatement(string? serverVersion, int timeoutSeconds)
+    public static string SessionStatement(string? serverVersion, int timeoutSeconds, bool utc = false)
     {
         string cap = IsMariaDb(serverVersion)
             ? "SESSION max_statement_time = " + timeoutSeconds.ToString(CultureInfo.InvariantCulture)
             : "SESSION max_execution_time = " + (timeoutSeconds * 1000L).ToString(CultureInfo.InvariantCulture);
         // group_concat_max_len raised (2026-10-24, the database review's E12): MySQL's 1,024 bytes cut an index's key list silently.
-        return "SET SESSION sql_mode = " + ModeStripped + ", " + cap + ", SESSION group_concat_max_len = 1048576";
+        return "SET SESSION sql_mode = " + ModeStripped + ", " + cap + ", SESSION group_concat_max_len = 1048576" + (utc ? UtcZone : "");
     }
+
+    /// <summary>What an export's session statement adds: the session's zone UTC (P10-4).</summary>
+    public const string UtcZone = ", SESSION time_zone = '+00:00'";
 
     /// <summary>
     /// The modes the gate's lexing needs off: the two that change how a string or a name is read, and every combination mode that turns
@@ -486,8 +493,8 @@ public sealed class MySqlAccess
     /// <summary>
     /// A MySQL or MariaDB cell for a workbook (2026-10-29): a <c>DATE</c> or <c>DATETIME</c> a date or date-time (the connection reads them as
     /// <see cref="MySqlDateTime"/>, so a zero date can't pass for a real one), a zero date as the chat writes it; the rest by the common
-    /// rules — <c>BIT</c> and unsigned <c>BIGINT</c> numbers within 15 digits, <c>TIME</c> a time or duration, a decimal past 15 digits
-    /// text. <c>TINYINT(1)</c> stays the number the chat shows (<c>TreatTinyAsBoolean</c> is off).
+    /// rules — <c>BIT</c> and unsigned <c>BIGINT</c> numbers within 15 digits, <c>TIME</c> a time or duration, a whole decimal past 15
+    /// digits text and a fraction the nearest double (<see cref="XlsxValue.TryExcelNumber"/>). <c>TINYINT(1)</c> stays the number the chat shows (<c>TreatTinyAsBoolean</c> is off).
     /// </summary>
     public static XlsxValue ExportCell(DbDataReader reader, int ordinal, string? typeName)
     {
@@ -512,9 +519,30 @@ public sealed class MySqlAccess
         }
         catch (Exception ex) when (ex is FormatException or OverflowException or InvalidCastException or MySqlConversionException)
         {
-            // A value GetValue won't hand over (a decimal past decimal's range): its provider value.
-            return SqlExport.FromProvider(reader, ordinal, typeName);
+            // A value GetValue won't hand over (a decimal past decimal's range): its MySqlDecimal's digits, the chat's read (2026-11-02,
+            // review P10-1: the generic provider value isn't overridden by MySqlConnector, so it threw again and wrote the placeholder).
+            return SqlExport.FromProvider(reader, ordinal, typeName, ProviderNumber);
         }
+    }
+
+    /// <summary>A <c>DECIMAL</c> past <see cref="decimal"/> as <see cref="ReadCell"/> reads it: its <see cref="MySqlDecimal"/> text, every digit.</summary>
+    private static string ProviderNumber(DbDataReader reader, int ordinal) =>
+        reader is MySqlDataReader mysql ? mysql.GetMySqlDecimal(ordinal).ToString() : SqlExport.InvariantText(reader.GetProviderSpecificValue(ordinal));
+
+    /// <summary>
+    /// A column's header in a workbook (2026-11-02, review P10-4): its name, and <see cref="SqlExport.UtcColumn"/> on a <c>TIMESTAMP</c>,
+    /// whose cells the export's UTC session hands in UTC (<see cref="SessionStatement"/>). A <c>DATETIME</c> stores no zone and is left as it is.
+    /// </summary>
+    public static string ExportHeader(DbDataReader reader, int ordinal)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+        string name = reader.GetName(ordinal);
+        if (string.IsNullOrEmpty(name))
+        {
+            name = SqlText.UnnamedColumn(ordinal);
+        }
+
+        return string.Equals(reader.GetDataTypeName(ordinal), "TIMESTAMP", StringComparison.OrdinalIgnoreCase) ? name + SqlExport.UtcColumn : name;
     }
 
     /// <summary>The server's message with its number — <c>Error 1146: Table 'shop.x' doesn't exist</c> is what the model needs to fix the text.</summary>

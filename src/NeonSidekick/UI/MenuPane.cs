@@ -855,6 +855,12 @@ public sealed class MenuPane : INoticeSink
                     return new MenuPick(page.Tab, _cursor, Sub: page.Sub, Refresh: true);
                 }
 
+                if (input is InputEvent.Resize)
+                {
+                    Show();   // laid out at the window's new size with no key (2026-11-02, review P7-3)
+                    continue;
+                }
+
                 if (input is InputEvent.Click click)
                 {
                     // A left click on a shown row is the arrow keys' move, a second on the same row

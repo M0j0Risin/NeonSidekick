@@ -146,6 +146,42 @@ public static class TextCells
     }
 
     /// <summary>
+    /// <paramref name="text"/> in at most <paramref name="cells"/> cells, a cut one ending in <c>…</c> (2026-11-02, review P2-9: the one cut;
+    /// three spelled it apart, one by text elements, one by elements, one by clusters, and a ZWJ emoji or a selector at the edge came out
+    /// differently in each). Cut between clusters (<see cref="ClusterWidth"/>), so a glyph is never parted from its selector or joiner.
+    /// Nothing for 0 cells or fewer.
+    /// </summary>
+    public static string Cut(string text, int cells)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        if (cells <= 0)
+        {
+            return "";
+        }
+
+        if (Width(text) <= cells)
+        {
+            return text;
+        }
+
+        int used = 0;
+        int end = 0;
+        while (end < text.Length)
+        {
+            int w = ClusterWidth(text, end, out int length);
+            if (used + w > cells - 1)
+            {
+                break;
+            }
+
+            used += w;
+            end += length;
+        }
+
+        return text[..end] + "…";
+    }
+
+    /// <summary>
     /// Width and UTF-16 length of the cluster at <paramref name="index"/> (2026-10-04): the element there (<see cref="ElementWidth"/>)
     /// with every variation selector after it and every ZWJ-joined element — what the terminal draws as one glyph, and what a
     /// cut or a wrap must never split (a base parted from its U+FE0F put the cursor a cell off).

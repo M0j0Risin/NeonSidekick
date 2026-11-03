@@ -76,6 +76,90 @@ public sealed class LiveQueryExportTests : IDisposable
         Assert.DoesNotContain("2026-10-29", sheet);
     }
 
+    [LiveMySqlFact]
+    public async Task MySql_ADecimalPastDecimal_KeepsEveryDigit()
+    {
+        // 2026-11-02, review P10-1/P10-7: the generic provider fallback threw again on MySqlConnector and wrote the placeholder.
+        var catalog = new MySqlCatalog([new MySqlNamedConnection("live", LiveMySql.Config!, "test")], []);
+        var tools = ChatScreen.MySqlTools(new MySqlAccess(() => catalog), () => new AppSettingsData { MySqlTools = true }, saveRoot: Root);
+        string nines = new('9', 40);
+        string result = await Invoke<MySqlQueryTool>(tools, ("sql", $"SELECT CAST('{nines}' AS DECIMAL(65,0)) AS big"), ("to", "mybig.xlsx"));
+        Assert.StartsWith("Made mybig.xlsx (", result);
+        string sheet = Sheet("mybig.xlsx");
+        Assert.Contains(">" + nines + "<", sheet);
+        Assert.DoesNotContain("can't be read", sheet);
+    }
+
+    [LiveMySqlFact]
+    public async Task MySql_ATimestampExportsInUtc_SaysSo_AndTheChatsZoneIsTheServers()
+    {
+        // 2026-11-02, review P10-4 (the user's call): stored at 14:00 +02:00, so 12:00 UTC whatever the server's zone.
+        using (var connection = new MySqlConnector.MySqlConnection(Environment.GetEnvironmentVariable(LiveMySql.Variable)))
+        {
+            connection.Open();
+            foreach (string sql in new[]
+            {
+                "CREATE TABLE IF NOT EXISTS ns_stamps (id INT PRIMARY KEY, at TIMESTAMP NULL)",
+                "SET SESSION time_zone = '+02:00'",
+                "REPLACE INTO ns_stamps VALUES (1, '2026-10-29 14:00:00')",
+            })
+            {
+                using var command = new MySqlConnector.MySqlCommand(sql, connection);
+                command.ExecuteNonQuery();
+            }
+        }
+
+        var catalog = new MySqlCatalog([new MySqlNamedConnection("live", LiveMySql.Config!, "test")], []);
+        var tools = ChatScreen.MySqlTools(new MySqlAccess(() => catalog), () => new AppSettingsData { MySqlTools = true }, saveRoot: Root);
+        string result = await Invoke<MySqlQueryTool>(tools, ("sql", "SELECT at FROM ns_stamps WHERE id = 1"), ("to", "mystamp.xlsx"));
+        Assert.StartsWith("Made mystamp.xlsx (", result);
+        Assert.Contains("at" + SqlExport.UtcColumn, Sheet("mystamp.xlsx"));
+        // mysql_dev's own zone is UTC, so this holds the SET's form (the server takes it) and the header more than the shift itself,
+        // which QueryExportTests.MySql_AnExportsSession_IsUtc_… pins.
+        string read = OfficeWriterTests.Read(File.ReadAllBytes(Path.Combine(_root, "mystamp.xlsx")), new OfficeRequest(Sheet: "Query"));
+        Assert.Contains("12:00", read);
+        Assert.DoesNotContain("14:00", read);
+
+        // The pool resets the session on its way back: the chat's next read sees the server's own zone, not the export's.
+        string zone = await Invoke<MySqlQueryTool>(tools, ("sql", "SELECT @@session.time_zone = @@global.time_zone AS same"));
+        Assert.Contains("| 1 |", zone);
+    }
+
+    [LiveOracleFact]
+    public async Task Oracle_AnEmptyClob_IsAnEmptyTextCell_NotABlank()
+    {
+        // 2026-11-02, review P10-3: EMPTY_CLOB() is no NULL, but the LOB branch wrote it blank.
+        var catalog = new OracleCatalog([new OracleNamedConnection("free", LiveOracle.Config!, "test")], []);
+        var tools = ChatScreen.OracleTools(new OracleAccess(() => catalog), () => new AppSettingsData { OracleTools = true }, saveRoot: Root);
+        string result = await Invoke<OracleQueryTool>(tools, ("sql", "SELECT EMPTY_CLOB() AS c, 1 AS n FROM dual"), ("to", "emptyclob.xlsx"));
+        Assert.StartsWith("Made emptyclob.xlsx (", result);
+        Assert.Contains("t=\"inlineStr\"", Cell(Sheet("emptyclob.xlsx"), "A"));
+    }
+
+    [LivePostgresFact]
+    public async Task Postgres_ColumnsWithAPrecision_ReadAsTheirType()
+    {
+        // 2026-11-02, review P9-1–P9-4 and P9-7: Npgsql names these columns with their precision.
+        var catalog = new PostgresCatalog([new PostgresNamedConnection("live", LivePostgres.Config!, "test")], []);
+        var tools = ChatScreen.PostgresTools(new PostgresAccess(() => catalog), () => new AppSettingsData { PostgresTools = true }, saveRoot: Root);
+        string result = await Invoke<PostgresQueryTool>(tools,
+            ("sql", "SELECT 'NaN'::numeric(10,2) AS nan, interval '1 month'::interval(0) AS i, '10:00+02'::timetz(0) AS tz, " +
+                "TIMESTAMPTZ '2026-10-29 12:00:00+00'::timestamptz(3) AS at"),
+            ("to", "pgmod.xlsx"));
+        Assert.StartsWith("Made pgmod.xlsx (", result);
+        string sheet = Sheet("pgmod.xlsx");
+        Assert.Contains(">NaN<", Cell(sheet, "A"));
+        Assert.Contains(">1 mon<", Cell(sheet, "B"));
+        Assert.Contains(">10:00:00+02:00<", Cell(sheet, "C"));
+        Assert.Contains("at" + SqlExport.UtcColumn, sheet);
+        Assert.DoesNotContain("can't be read", sheet);
+
+        string chat = await Invoke<PostgresQueryTool>(tools, ("sql", "SELECT interval '1 month'::interval(0) AS i, '10:00+02'::timetz(0) AS tz"));
+        Assert.Contains("1 mon", chat);
+        Assert.Contains("10:00:00+02:00", chat);
+        Assert.DoesNotContain("0001-01-02", chat);
+    }
+
     [LiveOracleFact]
     public async Task Oracle_TypesTheCells_AndKeepsATimeZonesTimestampAsText()
     {
@@ -105,7 +189,7 @@ public sealed class LiveQueryExportTests : IDisposable
             ("to", "pg.xlsx"));
         Assert.StartsWith("Made pg.xlsx (", result);
         string sheet = Sheet("pg.xlsx");
-        Assert.Contains("at" + PostgresText.UtcColumn, sheet);
+        Assert.Contains("at" + SqlExport.UtcColumn, sheet);
         Assert.Contains("12345678901234567.89", sheet);
         Assert.Contains(">infinity<", sheet);
         Assert.DoesNotContain("2026-10-29", sheet);

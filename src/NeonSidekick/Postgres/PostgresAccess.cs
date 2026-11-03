@@ -433,7 +433,7 @@ public sealed class PostgresAccess
 
     /// <summary>
     /// A PostgreSQL cell for a workbook (2026-10-29): an interval as PostgreSQL writes it (<see cref="IntervalText"/>: a month has no fixed
-    /// length), an array as <c>{a, b}</c>, a numeric past <see cref="decimal"/> its exact digits (<see cref="NumericText"/>; text past 15) and
+    /// length), an array as <c>{a, b}</c>, a numeric past <see cref="decimal"/> its exact digits (<see cref="NumericText"/>; a whole one text past 15) and
     /// NaN or an infinity as the word; money a number, as Npgsql hands it (2026-10-30, review F16/F117, the live run: money came as a bare
     /// decimal with no currency, so the text it was written as carried nothing more, while a month's interval, NaN and a numeric past
     /// <see cref="decimal"/> all wrote the can't-be-read placeholder); dates, timestamps and
@@ -453,6 +453,10 @@ public sealed class PostgresAccess
             return XlsxValue.Blank;
         }
 
+        // The bare type name, its modifiers dropped (2026-11-02, review P9-1/P9-2: Npgsql names a numeric(10,2) column
+        // "numeric(10, 2)" and a time(0) with time zone "time(0) with time zone", so the exact compares missed every column with a
+        // precision and its NaN, its month's interval and its timetz went back to the placeholder or the dummy date).
+        typeName = BaseTypeName(typeName);
         if (typeName == IntervalType)
         {
             return XlsxValue.OfText(ExportInterval(reader, ordinal));
@@ -491,6 +495,57 @@ public sealed class PostgresAccess
 
         return cell;
     }
+
+    /// <summary>
+    /// A type name with its modifiers dropped and its spaces collapsed (2026-11-02, review P9-1–P9-4): <c>numeric(10, 2)</c> is
+    /// <c>numeric</c>, <c>time(0) with time zone</c> is <c>time with time zone</c>, <c>timestamp(3) with time zone</c> is
+    /// <c>timestamp with time zone</c>. Npgsql's <see cref="DbDataReader.GetDataTypeName"/> keeps a column's precision, which the
+    /// exact compares here never expected. Remembered by the name, as <c>SqliteAccess.DeclaredDateOf</c> is (a database has few type
+    /// names, and two exports may run at once); past <see cref="BaseTypeNames"/> names nothing more is kept.
+    /// </summary>
+    public static string? BaseTypeName(string? typeName)
+    {
+        if (typeName is null || typeName.IndexOf('(', StringComparison.Ordinal) < 0)
+        {
+            return typeName;
+        }
+
+        if (s_baseTypeNames.TryGetValue(typeName, out string? known))
+        {
+            return known;
+        }
+
+        var sb = new StringBuilder(typeName.Length);
+        int depth = 0;
+        foreach (char c in typeName)
+        {
+            if (c == '(')
+            {
+                depth++;
+            }
+            else if (c == ')')
+            {
+                depth = Math.Max(0, depth - 1);
+            }
+            else if (depth == 0 && !(c == ' ' && (sb.Length == 0 || sb[^1] == ' ')))
+            {
+                sb.Append(c);
+            }
+        }
+
+        string judged = sb.ToString().Trim();
+        if (s_baseTypeNames.Count < BaseTypeNames)
+        {
+            s_baseTypeNames.TryAdd(typeName, judged);
+        }
+
+        return judged;
+    }
+
+    /// <summary>The most type names <see cref="BaseTypeName"/> keeps.</summary>
+    private const int BaseTypeNames = 256;
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> s_baseTypeNames = new(StringComparer.Ordinal);
 
     /// <summary>The type name Npgsql gives an <c>interval</c> column.</summary>
     private const string IntervalType = "interval";
@@ -689,8 +744,11 @@ public sealed class PostgresAccess
     /// <summary>The type name Npgsql gives a <c>date</c> column.</summary>
     private const string DateType = "date";
 
-    /// <summary>The type name Npgsql gives a <c>timetz</c> column.</summary>
+    /// <summary>The type name Npgsql gives a <c>timetz</c> column, its precision dropped (<see cref="BaseTypeName"/>).</summary>
     private const string TimeTzType = "time with time zone";
+
+    /// <summary>The type name Npgsql gives a <c>timestamptz</c> column, its precision dropped (<see cref="BaseTypeName"/>).</summary>
+    private const string TimestampTzType = "timestamp with time zone";
 
     /// <summary>A timetz as PostgreSQL writes one: the time and its offset (Npgsql hands it on a dummy date, which is no part of it).</summary>
     public static string TimeTz(DateTimeOffset value) => value.ToString("HH:mm:ss.FFFFFFFzzz", CultureInfo.InvariantCulture);
@@ -745,7 +803,10 @@ public sealed class PostgresAccess
         return string.Join(", ", pairs.Select(p => Quoted(p.Key) + "=>" + (p.Value is null ? SqlText.Null : Quoted(p.Value))));
     }
 
-    /// <summary>A column's header in a workbook: its name, and <see cref="PostgresText.UtcColumn"/> on a timestamptz, whose cells hold UTC.</summary>
+    /// <summary>
+    /// A column's header in a workbook: its name, and <see cref="SqlExport.UtcColumn"/> on a timestamptz, whose cells hold UTC; a
+    /// <c>timestamptz(3)</c> too (2026-11-02, review P9-3: Npgsql names it <c>timestamp(3) with time zone</c>, so its header was unmarked).
+    /// </summary>
     public static string ExportHeader(DbDataReader reader, int ordinal)
     {
         ArgumentNullException.ThrowIfNull(reader);
@@ -755,7 +816,7 @@ public sealed class PostgresAccess
             name = SqlText.UnnamedColumn(ordinal);
         }
 
-        return reader.GetDataTypeName(ordinal) == "timestamp with time zone" ? name + PostgresText.UtcColumn : name;
+        return BaseTypeName(reader.GetDataTypeName(ordinal)) == TimestampTzType ? name + SqlExport.UtcColumn : name;
     }
 
     /// <summary>One cell as text: <see cref="SqlText.Cell"/>, an array as <c>{a, b}</c>; a value the client cannot hold (a numeric past <see cref="decimal"/>) as <see cref="PostgresText.Unreadable"/>.</summary>
@@ -769,7 +830,9 @@ public sealed class PostgresAccess
             }
 
             // An interval as PostgreSQL writes it, a month's too (2026-10-30, the user's call after review F16), as the workbook has it.
-            if (reader.GetDataTypeName(ordinal) == IntervalType)
+            // Judged on the bare type name (2026-11-02, review P9-4: an interval(0) or a timetz(0) carries its precision in the name).
+            string? typeName = BaseTypeName(reader.GetDataTypeName(ordinal));
+            if (typeName == IntervalType)
             {
                 return ReadInterval(reader, ordinal) is { } interval ? SqlText.Cell(interval) : PostgresText.Unreadable(IntervalType);
             }
@@ -781,7 +844,7 @@ public sealed class PostgresAccess
             {
                 Array array and not byte[] => ArrayText(array),
                 DateTime { Kind: DateTimeKind.Utc } utc => SqlText.Cell(utc) + " UTC",
-                DateTimeOffset timetz when reader.GetDataTypeName(ordinal) == TimeTzType => TimeTz(timetz),
+                DateTimeOffset timetz when typeName == TimeTzType => TimeTz(timetz),
                 _ => SqlText.Cell(value),
             };
         }

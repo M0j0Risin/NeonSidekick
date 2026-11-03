@@ -137,7 +137,7 @@ public static partial class ShellPoliceChecks
             if (TrustedFilesPolice.Find(command, trusted) is { } named)
             {
                 DiagnosticLog.Info(ShellKinds.Category, ShellText.TrustedLogLine(request, named, null));
-                return new ShellPoliceRefusal(ShellText.TrustedPoliced, ShellText.TrustedShown(named, null));
+                return new ShellPoliceRefusal(ShellText.TrustedPolicedFor(named), ShellText.TrustedShown(named, null));
             }
 
             foreach (var (name, text) in scripts.Value)
@@ -145,7 +145,7 @@ public static partial class ShellPoliceChecks
                 if (TrustedFilesPolice.Find(text, trusted) is { } inScript)
                 {
                     DiagnosticLog.Info(ShellKinds.Category, ShellText.TrustedLogLine(request, inScript, name));
-                    return new ShellPoliceRefusal(ShellText.TrustedPoliced, ShellText.TrustedShown(inScript, name));
+                    return new ShellPoliceRefusal(ShellText.TrustedPolicedFor(inScript), ShellText.TrustedShown(inScript, name));
                 }
             }
         }

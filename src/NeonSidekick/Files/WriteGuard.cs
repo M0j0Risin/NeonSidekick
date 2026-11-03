@@ -174,6 +174,12 @@ public static class WriteGuard
                 return FileOutcome.CommandFilesProtected;
             }
 
+            // Claude Code's project servers (2026-11-02, review P12-2): a root .mcp.json, which /claude's claude -p loads from the working folder.
+            if (IsRootFile(facts.WorkingDirectory(), judgedRoot, judged, ClaudeMcpFileName))
+            {
+                return FileOutcome.ClaudeFilesProtected;
+            }
+
             if (IsProjectFile(facts.WorkingDirectory(), judgedRoot, judged) && s_projectAllowed.Value is not { Open: true })
             {
                 if (s_slot.Value is { } slot)
@@ -201,9 +207,11 @@ public static class WriteGuard
     }
 
     /// <summary>
-    /// The refusal a path under the root earns by its names alone: a <c>.git</c> or <c>.neon</c> at any depth (trailing dots and spaces
-    /// dropped, as Windows drops them), else null. Pure; <see cref="Judge"/>'s first test, and what a converter's made name asks
+    /// The refusal a path under the root earns by its names alone: a <c>.git</c>, <c>.neon</c> or <c>.claude</c> at any depth (trailing dots
+    /// and spaces dropped, as Windows drops them), else null. Pure; <see cref="Judge"/>'s first test, and what a converter's made name asks
     /// (2026-10-29, review P5-3: <c>OutputNames</c> asked only the first folder, so <c>app/.neon/plans/x.md</c> wrote beside itself).
+    /// <c>.claude</c> since 2026-11-02 (review P12-2): <c>/claude</c> runs <c>claude -p</c> in the working folder, which loads that folder's
+    /// <c>.claude/settings.json</c> hooks and commands, so a model that wrote one there ran a command of its own choosing on the next <c>/claude</c>.
     /// </summary>
     public static FileOutcome? GuardedFolder(string relative)
     {
@@ -220,6 +228,11 @@ public static class WriteGuard
             {
                 return FileOutcome.NeonFilesProtected;
             }
+
+            if (string.Equals(bare, ClaudeFolderName, StringComparison.OrdinalIgnoreCase))
+            {
+                return FileOutcome.ClaudeFilesProtected;
+            }
         }
 
         return null;
@@ -227,7 +240,26 @@ public static class WriteGuard
 
     /// <summary>Whether <paramref name="outcome"/> is one of the guard's refusals (rather than a path that is outside or missing).</summary>
     public static bool IsRefusal(FileOutcome outcome) => outcome is FileOutcome.GitProtected or FileOutcome.NeonFilesProtected or FileOutcome.AppFilesProtected
-        or FileOutcome.SkillFilesProtected or FileOutcome.CommandFilesProtected or FileOutcome.ProjectFileAsk or FileOutcome.DatabaseProtected or FileOutcome.ShoppingList;
+        or FileOutcome.SkillFilesProtected or FileOutcome.CommandFilesProtected or FileOutcome.ProjectFileAsk or FileOutcome.DatabaseProtected or FileOutcome.ShoppingList
+        or FileOutcome.ClaudeFilesProtected;
+
+    /// <summary>Claude Code's folder of settings, hooks and commands (2026-11-02, review P12-2), refused at any depth.</summary>
+    public const string ClaudeFolderName = ".claude";
+
+    /// <summary>Claude Code's project servers file (2026-11-02, review P12-2), refused right in the working folder.</summary>
+    public const string ClaudeMcpFileName = ".mcp.json";
+
+    /// <summary>Whether <paramref name="full"/> is the file <paramref name="name"/> right in the live working directory (trailing dots and spaces dropped).</summary>
+    private static bool IsRootFile(string? workingDirectory, string root, string full, string name)
+    {
+        if (string.IsNullOrEmpty(workingDirectory) || !SamePath(Trim(workingDirectory), root))
+        {
+            return false;
+        }
+
+        string? parent = Path.GetDirectoryName(full);
+        return parent is not null && SamePath(parent, root) && string.Equals(Path.GetFileName(full).TrimEnd('.', ' '), name, StringComparison.OrdinalIgnoreCase);
+    }
 
     /// <summary>Whether <paramref name="full"/> is the project file the system prompt reads: one of its names right in the live working directory.</summary>
     public static bool IsProjectFile(string? workingDirectory, string root, string full)

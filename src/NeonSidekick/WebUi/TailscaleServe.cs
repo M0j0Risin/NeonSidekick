@@ -352,33 +352,51 @@ public sealed class TailscaleServeDetector
         return await answer.WaitAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>The shared ask: under no caller's token (the client's own budget bounds it), never throwing; its answer logged when it changed.</summary>
+    /// <summary>
+    /// The shared ask: under no caller's token (the client's own budget bounds it), never throwing; its answer logged when it changed. Every
+    /// waiter's task ends however it goes (2026-11-02, review P13-5: the result was set only on the happy path, so an out-of-memory throw left
+    /// the slot's task pending and every later ask for that port waited on it for good): the result in a <c>finally</c>, the one throw the
+    /// catch lets through handed to the waiters and rethrown.
+    /// </summary>
     private async Task AskAsync(int port, TaskCompletionSource<TailscaleServeResult> answer)
     {
-        TailscaleServeResult result;
         try
         {
-            result = await _ask(port, CancellationToken.None).ConfigureAwait(false);
-        }
-        catch (Exception e) when (e is not OutOfMemoryException)
-        {
-            result = new TailscaleServeResult(null, false, [], Failure: WebUiText.ServeFailureError(e));
-        }
+            TailscaleServeResult result;
+            try
+            {
+                result = await _ask(port, CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (Exception e) when (e is not OutOfMemoryException)
+            {
+                result = new TailscaleServeResult(null, false, [], Failure: WebUiText.ServeFailureError(e));
+            }
 
-        if (result.Failure is { } failure)
-        {
-            Log(WebUiText.ServeAskFailedLogLine(failure), info: false);
+            try
+            {
+                if (result.Failure is { } failure)
+                {
+                    Log(WebUiText.ServeAskFailedLogLine(failure), info: false);
+                }
+                else if (result.Address is { } address)
+                {
+                    Log(WebUiText.HttpsAddressLogLine(address, result.Public), info: true);
+                }
+                else
+                {
+                    Log(WebUiText.ServeNoRuleLogLine(port, result.OtherPorts), info: false);
+                }
+            }
+            finally
+            {
+                answer.TrySetResult(result);
+            }
         }
-        else if (result.Address is { } address)
+        catch (OutOfMemoryException e)
         {
-            Log(WebUiText.HttpsAddressLogLine(address, result.Public), info: true);
+            answer.TrySetException(e);
+            throw;
         }
-        else
-        {
-            Log(WebUiText.ServeNoRuleLogLine(port, result.OtherPorts), info: false);
-        }
-
-        answer.SetResult(result);
     }
 
     private void Log(string line, bool info)

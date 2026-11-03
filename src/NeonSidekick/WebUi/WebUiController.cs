@@ -140,11 +140,16 @@ public sealed class WebUiController : IAsyncDisposable
     /// </summary>
     public string? OneTimeLinkAt(string baseAddress) => Volatile.Read(ref _host)?.OneTimeLinkAt(baseAddress);
 
+    /// <summary>Whether <paramref name="link"/>, from <see cref="OneTimeLinkAt"/>, is still unused and good (2026-11-02, review P12-5); false while serving none.</summary>
+    public bool OneTimeLinkGood(string link) => Volatile.Read(ref _host)?.OneTimeLinkGood(link) ?? false;
+
     /// <summary>
     /// The sign-in links for <paramref name="token"/>: <c>localhost</c> under <c>local</c> (never Tailscale's), each chosen private IPv4 address under
     /// <c>lan</c>, Tailscale's marked (later on 2026-10-14). With <paramref name="https"/> (2026-10-31), its link first, marked, the others after it unchanged.
+    /// <paramref name="httpsLink"/> (2026-11-02, review P12-5) is the HTTPS entry's link in place of the token's: a one-time link for a public
+    /// (Funnel) address under <c>local</c>, where the long-lived token would sign in anyone it reached. The one builder of every caller's HTTPS entry.
     /// </summary>
-    public IReadOnlyList<WebUiLink> Links(string token, WebUiHttps? https = null)
+    public IReadOnlyList<WebUiLink> Links(string token, WebUiHttps? https = null, string? httpsLink = null)
     {
         if (!Serving)
         {
@@ -153,7 +158,7 @@ public sealed class WebUiController : IAsyncDisposable
 
         IReadOnlyList<WebUiAddress> hosts = Audience == WebUiAudience.Local ? [new WebUiAddress("localhost", false)] : PrivateAddresses();
         var plain = hosts.Select(h => new WebUiLink(WebUiAuth.SignInLink(h.Host, Port, token), h.Tailscale ? WebUiLinkKind.Tailscale : WebUiLinkKind.Home));
-        return https is null ? [.. plain] : [new WebUiLink(WebUiAuth.SignInLinkAt(https.Address, token), WebUiLinkKind.Https), .. plain];
+        return https is null ? [.. plain] : [new WebUiLink(httpsLink ?? WebUiAuth.SignInLinkAt(https.Address, token), WebUiLinkKind.Https), .. plain];
     }
 
     /// <summary>

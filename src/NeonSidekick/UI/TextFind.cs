@@ -84,7 +84,7 @@ public static class TextFind
                 var (inside, end, isCurrent) = Place(starts, length, current, position + i);
                 int stop = Math.Min(text.Length, end - position);
                 var style = !inside ? segment.Style : isCurrent ? Theme.FindCurrent : segment.Style.Combine(Theme.FindMatch);
-                marked.Add(new Segment(text[i..stop], style));
+                marked.Add(new Segment(text[i..stop], style, segment.Link));   // a link kept under the mark (2026-11-02, review P2-5)
                 i = stop;
             }
 

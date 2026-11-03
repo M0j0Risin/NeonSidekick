@@ -18,10 +18,11 @@ namespace NeonSidekick.UI;
 /// never ran, and Ctrl+] is a Mac's <c>/terminal</c> (Ctrl+. sends a bare ".").</item>
 /// <item>ESC then a key is that key with Alt (Option as Meta). A lone ESC is ESC, but only once the bytes stop:
 /// ESC also opens every sequence below, so the reader calls <see cref="Flush"/> when nothing more came within its timeout.</item>
-/// <item>ESC ESC then a whole arrow (<c>ESC ESC [ A</c>, <c>ESC ESC O A</c>, Terminal.app's Option+Up) is that arrow with Alt, the
-/// meta prefix ahead of it (2026-11-01, message jumps), waiting across reads while unfinished (Terminal.app writes the ESC and the
-/// arrow apart). A real Esc then ↑ stays two keys: the ESC fires at the reader's timeout first. Anything else after ESC ESC is a lone
-/// ESC, then the rest.</item>
+/// <item>ESC ESC then a whole key (<c>ESC ESC [ A</c>, <c>ESC ESC O A</c>, Terminal.app's Option+Up; any CSI or SS3 key since
+/// 2026-11-02, review P2-2: Option+fn+Delete, Option+F1) is that key with Alt, the meta prefix ahead of it (2026-11-01, message jumps),
+/// waiting across reads while unfinished (Terminal.app writes the ESC and the key apart). A real Esc then ↑ stays two keys: the ESC fires
+/// at the reader's timeout first. Anything else after ESC ESC (a paste, a mouse, focus or cursor report, an unknown key) is a lone ESC,
+/// then the rest.</item>
 /// <item>CSI and SS3 keys (arrows, Home/End, Insert/Delete, PageUp/Down, F1–F12, Shift+Tab) with xterm's modifier
 /// parameter (1 + Shift 1, Alt 2, Ctrl 4, Meta 8; Meta reads as Alt, as the mouse's bit 8 does).</item>
 /// <item>Bracketed paste (<c>ESC[200~</c> … <c>ESC[201~</c>) as one <see cref="InputEvent.Paste"/>, CR LF and lone CR as
@@ -192,12 +193,13 @@ public sealed class VtInputParser
             // trailing ESC does, across reads too: Terminal.app sends it as ESC then ESC O A, two writes 0.2 ms apart (the Mac pass,
             // later on 2026-11-01: .NET turns on application cursor keys at start, terminfo's keypad_xmit, so its arrows are SS3).
             // A real Esc then ↑ stays two keys: the lone ESC fires at the reader's timeout (UnixConsoleInput.EscapeTimeout) before
-            // the arrow comes. The scan is pure (2026-11-02, the review): no paste, cursor or focus report starts inside it. Only the
-            // arrows: ESC ESC O P stays an ESC and F1.
-            int used = ArrowAfterMeta(s, i + 2, out var arrow);
+            // the arrow comes. The scan is pure (2026-11-02, the review): no paste, cursor or focus report starts inside it. Every whole
+            // key, not only the arrows (2026-11-02, review P2-2): Option+fn+Delete, Option+PgUp and Option+F1 are ESC ESC [3~, ESC ESC [5~ and
+            // ESC ESC O P, each that key with Alt; an unknown one (ESC ESC [99z) is still an ESC and then what follows.
+            int used = KeyAfterMeta(s, i + 2, out var meta);
             if (used > 0)
             {
-                events.Add(new InputEvent.Key(arrow));
+                events.Add(new InputEvent.Key(meta));
                 return 2 + used;
             }
 
@@ -216,11 +218,14 @@ public sealed class VtInputParser
     }
 
     /// <summary>
-    /// The arrow at <paramref name="at"/>, just past an ESC ESC (2026-11-02, the review): <c>[</c>, digits and <c>;</c>, then A–D, or
-    /// SS3's <c>O</c> then A–D, as that arrow with Alt. Pure: it reads only the string (no callback, paste or cursor answer). Returns
-    /// the characters used, 0 when the read ends inside it, -1 when it is no arrow.
+    /// The key at <paramref name="at"/>, just past an ESC ESC (2026-11-02, the review; every key, not only the arrows, since review P2-2): a
+    /// CSI key (<c>[</c>, digits and <c>;</c>, then a final <see cref="CsiKey"/> knows) or an SS3 one (<c>O</c> then <see cref="Ss3Key"/>'s),
+    /// as that key with Alt. Pure: it reads only the string, and refuses what <see cref="Csi"/> handles as a side effect — a mouse report
+    /// (its <c>&lt;</c> is no parameter), a focus report (<c>[I</c>/<c>[O</c> are no keys), a paste's <c>200~</c>/<c>201~</c>, and any <c>R</c>
+    /// with two parameters (a cursor report; a bare <c>[R</c> is F3) — so those are an ESC and then read as ever. Returns the characters used,
+    /// 0 when the read ends inside it, -1 when it is no key.
     /// </summary>
-    internal static int ArrowAfterMeta(string s, int at, out ConsoleKeyInfo key)
+    internal static int KeyAfterMeta(string s, int at, out ConsoleKeyInfo key)
     {
         key = default;
         if (at >= s.Length)
@@ -235,12 +240,12 @@ public sealed class VtInputParser
                 return 0;
             }
 
-            if (ArrowKey(s[at + 1]) is not { } plain)
+            if (Ss3Key(s[at + 1]) is not { } plain)
             {
                 return -1;
             }
 
-            key = new ConsoleKeyInfo('\0', plain, false, alt: true, false);
+            key = new ConsoleKeyInfo(plain.KeyChar, plain.Key, false, alt: true, false);
             return 2;
         }
 
@@ -265,22 +270,37 @@ public sealed class VtInputParser
             return 0;
         }
 
-        if (ArrowKey(s[j]) is not { } arrow)
+        char fin = s[j];
+        string body = s.Substring(at + 1, j - at - 1);
+        var parts = body.Split(';');
+        if ((fin == '~' && body is "200" or "201") || (fin == 'R' && parts.Length == 2) || CsiKey(fin, Number(parts, 0, 1)) is not { } found)
         {
             return -1;
         }
 
-        var (shift, _, control) = Modifiers(Number(s.Substring(at + 1, j - at - 1).Split(';'), 1, 1));
-        key = new ConsoleKeyInfo('\0', arrow, shift, alt: true, control);
+        var (modShift, _, control) = Modifiers(Number(parts, 1, 1));
+        key = new ConsoleKeyInfo(found == ConsoleKey.Tab ? '\t' : '\0', found, fin == 'Z' || modShift, alt: true, control);
         return j - at + 1;
     }
 
-    private static ConsoleKey? ArrowKey(char c) => c switch
+    /// <summary>
+    /// A CSI sequence's key by its final byte and first parameter (2026-11-02, review P2-2: lifted out of <see cref="Csi"/>, so it and
+    /// <see cref="KeyAfterMeta"/> read one table); null for a final that is no key.
+    /// </summary>
+    private static ConsoleKey? CsiKey(char fin, int p0) => fin switch
     {
         'A' => ConsoleKey.UpArrow,
         'B' => ConsoleKey.DownArrow,
         'C' => ConsoleKey.RightArrow,
         'D' => ConsoleKey.LeftArrow,
+        'H' => ConsoleKey.Home,
+        'F' => ConsoleKey.End,
+        'P' => ConsoleKey.F1,
+        'Q' => ConsoleKey.F2,
+        'R' => ConsoleKey.F3,
+        'S' => ConsoleKey.F4,
+        'Z' => ConsoleKey.Tab,
+        '~' => Tilde(p0),
         _ => null,
     };
 
@@ -356,24 +376,7 @@ public sealed class VtInputParser
             return used;
         }
 
-        ConsoleKey? key = fin switch
-        {
-            'A' => ConsoleKey.UpArrow,
-            'B' => ConsoleKey.DownArrow,
-            'C' => ConsoleKey.RightArrow,
-            'D' => ConsoleKey.LeftArrow,
-            'H' => ConsoleKey.Home,
-            'F' => ConsoleKey.End,
-            'P' => ConsoleKey.F1,
-            'Q' => ConsoleKey.F2,
-            'R' => ConsoleKey.F3,
-            'S' => ConsoleKey.F4,
-            'Z' => ConsoleKey.Tab,
-            '~' => Tilde(p0),
-            _ => null,
-        };
-
-        if (key is { } k)
+        if (CsiKey(fin, p0) is { } k)
         {
             var (modShift, alt, control) = Modifiers(mods);
             bool shift = fin == 'Z' || modShift;

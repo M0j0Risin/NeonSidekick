@@ -87,6 +87,55 @@ public sealed class CustomCommandEditorTests : IDisposable
         Assert.Equal("Costs $5, every $ARGUMENTS word.\n---\nPR #42: done", CustomCommandTemplate.Expand(command.Body, "", command.Arguments));
     }
 
+    /// <summary>
+    /// A write that fails after the file was made leaves no file and says it failed (2026-11-02, review P13-4: a cut command stayed, read as
+    /// "exists", and every retry said so); a retry then saves.
+    /// </summary>
+    [Fact]
+    public void ASaveWhoseWriteFails_LeavesNoFile_AndIsAFailure_NotExists()
+    {
+        var open = CustomCommandEditor.OpenNew;
+        try
+        {
+            CustomCommandEditor.OpenNew = path => new FailingStream(new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None));
+            var failed = CustomCommandEditor.Save(_roots, CustomCommandScope.Profile, "cut", "some text");
+            Assert.Equal(CustomCommandEditOutcome.Failed, failed.Outcome);
+            Assert.False(File.Exists(Path.Combine(_roots.Profile, "cut.md")));
+        }
+        finally
+        {
+            CustomCommandEditor.OpenNew = open;
+        }
+
+        Assert.Equal(CustomCommandEditOutcome.Saved, CustomCommandEditor.Save(_roots, CustomCommandScope.Profile, "cut", "some text").Outcome);
+    }
+
+    /// <summary>A stream whose writes fail as a full disk's do, its file left made.</summary>
+    private sealed class FailingStream(Stream inner) : Stream
+    {
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        public override bool CanWrite => true;
+        public override long Length => inner.Length;
+        public override long Position { get => inner.Position; set => inner.Position = value; }
+        public override void Flush() => inner.Flush();
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new IOException("There is not enough space on the disk.");
+        public override void Write(ReadOnlySpan<byte> buffer) => throw new IOException("There is not enough space on the disk.");
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                inner.Dispose();
+            }
+
+            base.Dispose(disposing);
+        }
+    }
+
     [Fact]
     public void Save_SaysWhenABackslashedPlaceholderMayReadDifferently()
     {

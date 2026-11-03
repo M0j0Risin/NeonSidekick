@@ -209,11 +209,35 @@ public class VtInputParserTests
         Assert.Equal(('f', ConsoleKey.F, ConsoleModifiers.Alt), (Key(events[1]).KeyChar, Key(events[1]).Key, Key(events[1]).Modifiers));
     }
 
+    /// <summary>
+    /// With Option as Meta, Terminal.app puts its ESC ahead of every key's sequence, F1's SS3 too (2026-11-02, review P2-2: the pin moved from
+    /// "an Escape then F1", the arrows' reasoning carried to every whole key).
+    /// </summary>
     [Fact]
-    public void EscapeEscapeSs3NotAnArrow_IsAnEscapeThenThatKey()
+    public void EscapeEscapeSs3NotAnArrow_IsF1WithAlt()
     {
-        var events = Parse("\u001b\u001bOP");
-        Assert.Equal([ConsoleKey.Escape, ConsoleKey.F1], events.Select(e => Key(e).Key));
+        var key = Key(Assert.Single(Parse("\u001b\u001bOP")));
+        Assert.Equal((ConsoleKey.F1, ConsoleModifiers.Alt), (key.Key, key.Modifiers));
+    }
+
+    /// <summary>
+    /// Option+fn+Delete, Option+PgUp, Option+F5 and Option+Home (2026-11-02, review P2-2) are that key with Alt and no Esc; an unknown final is
+    /// still an Esc and then what follows; a paste after ESC ESC is never a key.
+    /// </summary>
+    [Fact]
+    public void EscapeEscapeThenAnyWholeKey_IsThatKeyWithAlt_NoEscape()
+    {
+        var keys = Parse("\u001b\u001b[3~\u001b\u001b[5~\u001b\u001b[15~\u001b\u001b[1;2H").Select(Key).ToList();
+        Assert.Equal([ConsoleKey.Delete, ConsoleKey.PageUp, ConsoleKey.F5, ConsoleKey.Home], keys.Select(k => k.Key));
+        Assert.All(keys, k => Assert.True(k.Modifiers.HasFlag(ConsoleModifiers.Alt)));
+        Assert.Equal(ConsoleModifiers.Alt | ConsoleModifiers.Shift, keys[3].Modifiers);
+
+        var unknown = Parse("\u001b\u001b[99z");
+        Assert.Equal(ConsoleKey.Escape, Key(unknown[0]).Key);
+
+        var paste = Parse("\u001b\u001b[200~ab\u001b[201~");
+        Assert.Equal(ConsoleKey.Escape, Key(paste[0]).Key);
+        Assert.Equal("ab", Assert.IsType<InputEvent.Paste>(Assert.Single(paste.Skip(1))).Text);
     }
 
     [Fact]

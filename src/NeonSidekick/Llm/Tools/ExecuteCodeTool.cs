@@ -187,12 +187,13 @@ public sealed class ExecuteCodeTool : AIFunction
             return new ToolShownResult(ShellText.Forbidden, ShellText.ForbiddenShown(forbidden));
         }
 
-        // The trusted files' tripwire (2026-10-22, the fix plan's D8): a script naming .git, .neon, the project file or the app's home.
+        // The trusted files' tripwire (2026-10-22, the fix plan's D8): a script naming .git, .neon, .claude or .mcp.json (2026-11-02, review
+        // P12-2), the project file or the app's home.
         if (effective.ShellPolice && TrustedFilesPolice.For(_files.Root) is { } trusted && TrustedFilesPolice.Find(code, trusted) is { } named)
         {
             DiagnosticLog.Info(ShellKinds.Category, ShellText.TrustedLogLine(request, named, null));
             _gate.NoteRefused(request);
-            return new ToolShownResult(ShellText.TrustedPoliced, ShellText.TrustedShown(named, null));
+            return new ToolShownResult(ShellText.TrustedPolicedFor(named), ShellText.TrustedShown(named, null));
         }
 
         // The SQLite police (2026-10-05), under Shell police while the SQLite tools are on: a script that reaches SQLite is refused whatever the policy.

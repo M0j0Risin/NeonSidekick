@@ -417,6 +417,31 @@ internal static unsafe partial class ViewerNative
     [LibraryImport("kernel32.dll")]
     public static partial IntPtr GetConsoleWindow();
 
+    [LibraryImport("user32.dll", EntryPoint = "GetClassNameW")]
+    public static partial int GetClassName(IntPtr hWnd, char* lpClassName, int nMaxCount);
+
+    /// <summary>The class of the window a ConPTY gives its client as its console window (Windows Terminal, VS Code). Pinned.</summary>
+    public const string PseudoConsoleClass = "PseudoConsoleWindow";
+
+    /// <summary>
+    /// Whether this process's console is a pseudo console's (2026-11-02, review P1-10): its console window is ConPTY's
+    /// <see cref="PseudoConsoleClass"/>, where under conhost it is a <c>ConsoleWindowClass</c>. Checked live that day under Windows Terminal and
+    /// under conhost: both report the window visible, so its class is the tell, not <see cref="IsWindowVisible"/>. Windows only; false with no
+    /// console window.
+    /// </summary>
+    public static bool UnderPseudoConsole()
+    {
+        IntPtr console = GetConsoleWindow();
+        if (console == IntPtr.Zero)
+        {
+            return false;
+        }
+
+        char* name = stackalloc char[64];
+        int length = GetClassName(console, name, 64);
+        return length > 0 && new ReadOnlySpan<char>(name, length).SequenceEqual(PseudoConsoleClass);
+    }
+
     [LibraryImport("user32.dll")]
     public static partial IntPtr GetAncestor(IntPtr hwnd, uint gaFlags);
 

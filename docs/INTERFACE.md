@@ -33,8 +33,8 @@ The screen, the input line, panes, keys, the bars and the app's own windows. Bac
 
 From top to bottom:
 
-* **The transcript**, under the banner (*Show header*). PgUp/PgDn scroll it and Ctrl+Home/Ctrl+End jump to its ends; a resize lays it out again at the new width.
-* **Message jumps:** Ctrl+↑/↓ goes to the previous or next message (Option+↑/↓ on a Mac, [MAC.md](MAC.md#keys--mouse)). VS Code's terminal keeps Ctrl+↑/↓ for its own command jumps; remove that binding in VS Code to use them here.
+* **The transcript**, under the banner (*Show header*). PgUp/PgDn scroll it and Ctrl+Home/Ctrl+End jump to its ends. A resize lays notices and the banner out again; replies re-wrap only when narrower.
+* **Message jumps:** Ctrl+↑/↓ goes to the previous or next message (Option+↑/↓ on a Mac, [MAC.md](MAC.md#keys--mouse)).
 * **Scrolled up**, the row under the transcript counts the new rows written since you left the bottom and names the message on top; a double-click on it goes back down.
 * **Links and paths:** Ctrl+click opens a link in your browser, or a path in `/browse`; hovering shows where it goes. On a Mac the chord differs ([MAC.md](MAC.md#keys--mouse)).
 * **The picture strip**, while there are ComfyUI pictures: its 🎞️ opens the [picture viewer](#the-picture-viewer), × closes the strip.
@@ -47,7 +47,7 @@ From top to bottom:
 
 ## The input line
 
-* **Editing**, even during a reply: ←/→, Home/End (again for the whole message), Ctrl+←/→ by word, Shift to select. Ctrl+Backspace and Ctrl+Delete delete a word.
+* **Editing**, even during a reply: ←/→, Home/End (again for the whole message), Ctrl+←/→ by word (Option+←/→ on a Mac, [MAC.md](MAC.md#keys--mouse)), Shift to select. Ctrl+Backspace and Ctrl+Delete delete a word.
 * **Enter** sends; Ctrl+Enter starts a new line. ↑/↓ step through earlier messages and move through a wrapped draft.
 * **Copy and paste:** Ctrl+A or a drag selects, Ctrl+C copies, Ctrl+X cuts. A right-click on the input line, or Alt+V, pastes, pictures too.
 * **Ctrl+C** with nothing selected stops the speech, else cancels the reply; twice at an idle line, it exits.
@@ -584,7 +584,7 @@ The page is plain HTTP. Tailscale Serve puts HTTPS in front of it with a real ce
 * **Once, in Tailscale's admin console:** turn on MagicDNS and HTTPS certificates (DNS page).
 * **On the app's computer:** run `tailscale serve --bg <port>`, where `<port>` is *Web UI port*. `tailscale serve status` shows the address, `https://<computer>.<tailnet>.ts.net`. For HTTPS alone, set *Web UI reach* to `local` ([Signing in](#signing-in)).
 * **Signing in:** `/webui` then opens on an **HTTPS** tab with that address's QR code and link (Windows only; on a Mac see [MAC.md](MAC.md#what-works)).
-* **Use `tailscale serve`, not `tailscale funnel`:** under `local`, Funnel puts the page on the internet with only the token in the way; `lan` refuses Funnel's requests. The HTTPS tab says which.
+* **Use `tailscale serve`, not `tailscale funnel`:** under `local`, Funnel puts the page on the internet with only the token in the way; `lan` refuses Funnel's requests. The HTTPS tab says which, and a Funnel address gets one-time links only, each good once for a minute.
 * **Another port:** Serve doesn't follow a new *Web UI port*: run `tailscale serve --bg <port>` again. A second profile takes its own HTTPS port, e.g. `tailscale serve --bg --https=8443 8766`.
 * **No rule for the port:** `/webui` names the command that adds one.
 * **To stop:** `tailscale serve reset`.

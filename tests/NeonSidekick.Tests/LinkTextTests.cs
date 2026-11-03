@@ -96,6 +96,35 @@ public class LinkTextTests : IDisposable
         Assert.EndsWith("…", cut, StringComparison.Ordinal);
     }
 
+    /// <summary>A bidi override or a zero-width character makes no link: what's read isn't what opens (2026-11-02, review P1-9).</summary>
+    [Fact]
+    public void IsLinkable_RefusesBidiAndZeroWidth_AndTheHintNamesTheAsciiHost()
+    {
+        Assert.False(LinkText.IsLinkable("https://a.b/\u202Etxt.exe", web: true));
+        Assert.False(LinkText.IsLinkable("https://pay\u200Bpal.com/", web: true));
+        Assert.Null(LinkText.WebTarget("https://a.b/\u202Ec"));
+        Assert.Equal(LinkText.Chord + " opens https://xn--pple-43d.com/", LinkText.HoverHint("https://аpple.com/", null, outside: false, LinkText.HintWidth));
+        Assert.DoesNotContain("\u202E", LinkText.HoverHint(LinkText.PathLink("C:\\old\\a\u202Etxt.exe"), null, outside: true, LinkText.HintWidth), StringComparison.Ordinal);
+    }
+
+    /// <summary>A /find mark over a linked stretch keeps the link on every piece it cuts (2026-11-02, review P2-5).</summary>
+    [Fact]
+    public void FindsMark_KeepsTheLink_OnEveryPiece()
+    {
+        var link = new Link("https://a.b/c");
+        var marked = TextFind.Mark([new Segment("see https://a.b/c now", Style.Plain, link)], [4], 5, current: 4);
+        Assert.True(marked.Count >= 3);
+        Assert.All(marked, segment => Assert.Equal("https://a.b/c", segment.Link?.Url));
+    }
+
+    /// <summary>What a reply's resolver would be asked, gathered with no layout (2026-11-02, review P2-4): code spans, once each, never an address.</summary>
+    [Fact]
+    public void PathCandidates_AreTheInlineCode_InListsQuotesAndTables_OnceEach()
+    {
+        var document = MarkdigParser.Replies.Parse("See `a.cs`.\n\n- `b.cs:12`\n\n> `c.cs`\n\n| x |\n|---|\n| `d.cs` |\n\n`a.cs` and `https://a.b/` and `e.cs`\n\n```\nnot.cs\n```");
+        Assert.Equal(["a.cs", "b.cs", "c.cs", "d.cs", "e.cs"], MarkdownView.PathCandidates(document));
+    }
+
     // ── LinkFilter ──────────────────────────────────────────────────────────
 
     [Fact]

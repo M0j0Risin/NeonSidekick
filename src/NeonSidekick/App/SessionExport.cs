@@ -43,7 +43,7 @@ public sealed record SessionExportDocument(string Text, IReadOnlyList<ExportPict
 /// </list>
 /// Into the working folder, named after the title and the session's start, never over a file (<see cref="Write"/>).
 /// </summary>
-public static class SessionExport
+public static partial class SessionExport
 {
     /// <summary>The pictures folder's ending after the export's stem.</summary>
     public const string PicturesSuffix = "-pictures";
@@ -336,7 +336,7 @@ public static class SessionExport
 
             if (turn.ReplyText.Trim().Length > 0)
             {
-                md.Write("\n" + turn.ReplyText.ReplaceLineEndings("\n").TrimEnd() + "\n");
+                md.Write("\n" + SafeReply(turn.ReplyText) + "\n");
             }
 
             if (turn.Cancelled)
@@ -502,7 +502,7 @@ public static class SessionExport
 
             if (turn.ReplyText.Trim().Length > 0)
             {
-                html.Write("<div class=\"reply\">\n" + PdfHtml.Markdown(turn.ReplyText, _ => null, WebUiMarkdown.SafeLink, softBreaksAsLines: true) + "</div>\n");
+                html.Write("<div class=\"reply\">\n" + PdfHtml.Markdown(turn.ReplyText, _ => null, WebUiMarkdown.SafeLink, softBreaksAsLines: true, idPrefix: "t" + (i + 1).ToString(CultureInfo.InvariantCulture) + "-") + "</div>\n");
             }
 
             if (turn.Cancelled)

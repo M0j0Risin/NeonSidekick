@@ -73,7 +73,7 @@ Under *Shell command policy*. Commands run in the working directory, guarded by 
 | `execute_code` | `language, code, timeout?` | Runs a one-off `python` (`python3` on a Mac), `node` or `powershell` script. It asks like `run_command`; allowing it for the session covers that language. |
 | `process` | `action, session_id?, data?, timeout?, until?, offset?, limit?` | Up to 16 background commands (and the last 64 finished), by id prefix: `list`, `poll`, `log` (last 5,000 lines), `wait` (`until` a line holds a text), `kill`, `write` / `submit`, `close`. |
 
-* **The shell police also** refuses a line, a script it runs, an `execute_code` script or a `process` write that names `.git`, `.neon`, the project file or the app's own folder (a bare `git` command excepted); a script the line runs before it exists; and a script holding a forbidden string. Like every police rule it reads the text, not what runs.
+* **The shell police also** refuses a line, a script it runs, an `execute_code` script or a `process` write that names `.git`, `.neon`, `.claude`, a `.mcp.json`, the project file or the app's own folder (a bare `git` command excepted); a script the line runs before it exists; and a script holding a forbidden string. Like every police rule it reads the text, not what runs.
 * **A `cmd` line with an unclosed quote** always asks, whatever the allow list holds.
 
 ### Clock
@@ -142,7 +142,7 @@ Under *File tools*. Paths are relative to the working directory; nothing outside
 
 * A deletion with no bin says so. In the `images` folder, `open` opens only pictures and folders; a `runas` UNC share can't be opened.
 * **Keeping a file's form:** a write in the file's own encoding that can't hold a character is refused, never written as `?`. A read-only file is never written over; a hard-linked one is written in place so its other names see it; a replace keeps the file's permissions.
-* **What the file tools never change** (any file tool, the UNC and vault tools too): `.git` and `.neon`, the app's home and profiles, skill folders (`skill_editor` changes a skill), your commands folders and where a linked one points (`/commands` changes them), and a SQLite or DuckDB database while that one's tools are on. The file is judged, not its spelling: a short `~1` name, a stream after `:` and a link swapped in are refused.
+* **What the file tools never change** (any file tool, the UNC and vault tools too): `.git`, `.neon`, `.claude` and the working folder's `.mcp.json` (Claude Code's settings), the app's home and profiles, skill folders (`skill_editor` changes a skill), your commands folders and where a linked one points (`/commands` changes them), and a SQLite or DuckDB database while that one's tools are on. The file is judged, not its spelling: a short `~1` name, a stream after `:` and a link swapped in are refused.
 * **The project file** (`NEON.md`, `AGENTS.md`, `CLAUDE.md` in the working directory) changes only after you allow it on the pane; with nobody to ask (headless, an advisor, a script, a pass that may not ask) it is refused.
 * **Paths:** a `~/` or `file:` path, a device name (`NUL`, `COM1`), a pipe or socket, and a working directory deleted during the session are refused; the last is never made again.
 * **Names with hidden characters** (right-to-left marks, zero-width or control characters) show them as escapes in results and the log, so a name can't disguise itself.
@@ -184,14 +184,14 @@ With *File checkpoints* on, each turn keeps what the file tools changed, so `/un
 `convert_to_xlsx` and `convert_to_docx` write Excel and Word files in the working directory; `/docx` makes a Word copy of a Markdown file or the last reply ([Commands](COMMANDS.md)).
 
 * **Workbooks:** a CSV, TSV or JSON file, or a table (`columns`, `rows`), becomes a new workbook, or a new sheet in one (`to` and `sheet`). `overwrite` replaces that sheet, or with no `sheet` the whole file.
-* **Values:** numbers, dates and true/false are typed; codes with leading zeros stay text, and a long ID shows every digit. Past 15 digits a number is text; no formula is written.
+* **Values:** numbers, dates and true/false are typed; codes with leading zeros stay text, and a long ID shows every digit. Past 15 digits a whole number is text; a fraction keeps Excel's 15. No formula is written.
 * **Query results:** while *File tools* and `convert_to_xlsx` are on, each database's `*_query` takes `to` (with `sheet` and `overwrite`) and writes every row, up to Excel's 1,048,575. The answer shows the first 5.
-* **Exports:** the read-only rules hold, and Esc stops an export; a stopped or failed one writes nothing. A PostgreSQL `timestamptz` column is UTC, and its header says so.
+* **Exports:** the read-only rules hold, and Esc stops an export; a stopped or failed one writes nothing. A PostgreSQL `timestamptz` or MySQL `TIMESTAMP` column is UTC, and its header says so.
 * **Saved meanwhile:** a workbook saved in another program while a sheet is being added is left as it is, and the answer says to run it again.
 * **Word:** headings, lists, quotes, code, tables, links and pictures from the working directory, without their location and camera data. A web picture shows as its alt text; the title, or the first `#` heading, heads each page.
 * **Where:** beside the source (a plan or audit under `.neon/` at the top), or where `to` names a file or folder. Only a file `to` names is replaced, and only with `overwrite`.
 * **Made names:** Markdown text's title or first heading, `table-…` or `query-<connection>-…`, with the minute.
-* **Not written:** `write_file` refuses an Office file and names the tool to use; nothing writes PowerPoint or OpenDocument. A macro, protected, encrypted or damaged workbook isn't changed, nor a protected sheet or one holding a chart or table.
+* **Not written:** `write_file` refuses an Office file and names the tool to use; nothing writes PowerPoint or OpenDocument. A macro, protected, encrypted, damaged, Strict or over-100 MB workbook isn't changed, nor a protected sheet or one holding a chart or table.
 * **Undo:** `/undo` takes back what these tools and the exports wrote; `/docx` is your own act and keeps no checkpoint.
 
 #### Editing PDFs

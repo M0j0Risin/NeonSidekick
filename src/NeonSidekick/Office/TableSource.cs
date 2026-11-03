@@ -25,7 +25,8 @@ public readonly record struct RawCell(string Text, RawKind Kind = RawKind.Text)
 /// <summary>
 /// A column's type, judged over every cell and never per cell (2026-10-29, the Office writing plan: a column of ZIP codes, <c>02134</c> and
 /// <c>90210</c>, stays text throughout). Numbers only when every non-empty cell is an invariant number with no leading zero, no <c>+</c> and
-/// at most 15 digits (so <c>1.234,56</c> stays text rather than being guessed); dates when every cell is ISO 8601 with no offset; booleans
+/// one Excel holds (at most 15 digits, or a fraction below 10^15, <see cref="XlsxValue.TryExcelNumber"/>; so <c>1.234,56</c> stays text
+/// rather than being guessed); dates when every cell is ISO 8601 with no offset; booleans
 /// when every cell is <c>true</c> or <c>false</c>. JSON's own numbers and booleans count as such. Pure.
 /// </summary>
 public sealed partial class ColumnJudge
@@ -112,7 +113,8 @@ public sealed partial class ColumnJudge
 
     /// <summary>
     /// Whether <paramref name="text"/> is a number the judge takes: invariant, no <c>+</c>, no leading zero, and one Excel holds without losing
-    /// a digit (<see cref="XlsxValue.TryExcelNumber"/>: at most 15 digits, no exponent past a double's range). An exponent counts only after a
+    /// a digit worth keeping (<see cref="XlsxValue.TryExcelNumber"/>: at most 15 digits or a fraction below 10^15, 2026-11-02, review P9-5; no
+    /// exponent past a double's range). An exponent counts only after a
     /// decimal point or with a sign (2026-10-30, review F44: codes like <c>1E10</c> and <c>2E05</c> turned a column into numbers); Python's
     /// <c>1e-05</c>, R's <c>1e+10</c> and Excel's <c>1.00E+10</c> all sign theirs.
     /// </summary>

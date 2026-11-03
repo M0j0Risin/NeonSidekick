@@ -359,6 +359,120 @@ public sealed class OwnerLockTests : IDisposable
         Assert.Equal(first, File.ReadAllText(Path.Combine(home, OwnerLock.MachineIdFileName)).Trim());
     }
 
+    // ── Take-over guards (2026-11-02, review P1-13, P4-3, P4-4) ─────────────
+
+    private string Guard => LockFile + ".takeover";
+
+    /// <summary>A stale lock and a take-over guard a gone taker left, beside it.</summary>
+    private (LockOwner Stale, LockOwner Gone) LeftGuard()
+    {
+        var stale = new LockOwner(501, T0);
+        var gone = new LockOwner(502, T0);
+        Assert.Equal(LockTake.Taken, OwnerLock.TryLock(_files, Lock, stale, _ => true));
+        File.WriteAllText(Guard, OwnerLock.TextOf(gone));
+        return (stale, gone);
+    }
+
+    /// <summary>
+    /// A left guard is removed by claim, not by a look then a delete (P1-13): while the first taker judges it, a second claims it and a third
+    /// (another process) publishes a fresh one; the first's claim finds the fresh guard, puts it back, and leaves no claimed copy.
+    /// </summary>
+    [Fact]
+    public void ALeftGuard_JudgedWhileAnotherReplacesIt_IsPutBack_NeverDeleted()
+    {
+        var (stale, gone) = LeftGuard();
+        var fresh = new LockOwner(503, T0);
+        var second = new LockOwner(504, T0);
+        bool nested = false;
+        bool Alive(LockOwner owner)
+        {
+            if (owner == gone && !nested)
+            {
+                nested = true;
+                // Inside the first taker's judgement: a second taker claims the left guard, then another process's taker publishes its own.
+                Assert.Equal(LockTake.Held, OwnerLock.TryLock(_files, Lock, second, held => held == fresh));
+                Assert.False(File.Exists(Guard));
+                File.WriteAllText(Guard, OwnerLock.TextOf(fresh));
+            }
+
+            return owner == fresh;
+        }
+
+        Assert.Equal(LockTake.Held, OwnerLock.TryLock(_files, Lock, new LockOwner(505, T0), Alive));
+
+        Assert.Equal(OwnerLock.TextOf(fresh), File.ReadAllText(Guard));   // the fresh guard stands
+        Assert.Empty(Directory.EnumerateFiles(Folder, "*" + OwnerLock.ClaimMark + "*"));
+        Assert.Equal(stale, OwnerLock.ReadOwner(_files, Lock));            // and the lock it guards is untouched
+    }
+
+    /// <summary>A guard naming this process that it isn't holding (its own delete failed) is a leftover, removed, not "held" until a restart (P4-3).</summary>
+    [Fact]
+    public void ALeftoverGuardOfThisProcess_DoesntBlockATakeOver()
+    {
+        var (stale, _) = LeftGuard();
+        File.WriteAllText(Guard, OwnerLock.TextOf(OwnerLock.Me));
+        var taker = new LockOwner(506, T0);
+
+        Assert.Equal(LockTake.Held, OwnerLock.TryLock(_files, Lock, taker, owner => owner != stale));   // this take clears the leftover
+        Assert.False(File.Exists(Guard));
+        Assert.Equal(LockTake.Taken, OwnerLock.TryLock(_files, Lock, taker, owner => owner != stale));
+    }
+
+    /// <summary>This process's take-overs go one at a time (P4-3): a second taker waits while the first judges a guard.</summary>
+    [Fact]
+    public async Task ASecondTaker_WaitsWhileTheFirstJudgesAGuard()
+    {
+        var (_, gone) = LeftGuard();
+        using var judging = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        bool secondJudged = false;
+        var first = Task.Run(() => OwnerLock.TryLock(_files, Lock, new LockOwner(507, T0), owner =>
+        {
+            if (owner == gone)
+            {
+                judging.Set();
+                release.Wait(TimeSpan.FromSeconds(30));
+            }
+
+            return false;
+        }));
+        Assert.True(await Task.Run(() => judging.Wait(TimeSpan.FromSeconds(10))));
+
+        var second = Task.Run(() => OwnerLock.TryLock(_files, Lock, new LockOwner(508, T0), owner =>
+        {
+            secondJudged |= owner == gone;
+            return false;
+        }));
+        await Task.Delay(300);
+        Assert.False(second.IsCompleted);   // waiting on the first's judgement
+        Assert.False(secondJudged);
+
+        release.Set();
+        await Task.WhenAll(first, second).WaitAsync(TimeSpan.FromSeconds(10));
+    }
+
+    /// <summary>First launches racing for the machine id all read the one that was published (P4-4: each kept its own on a Mac).</summary>
+    [Fact]
+    public async Task FirstLaunchesRacing_AllGetOneMachineId()
+    {
+        for (int round = 0; round < 10; round++)
+        {
+            string home = Path.Combine(_dir, "home" + round);
+            using var start = new ManualResetEventSlim();
+            var launches = Enumerable.Range(0, 8).Select(_ => Task.Run(() =>
+            {
+                start.Wait();
+                return OwnerLock.ReadOrCreateMachineId(home);
+            })).ToList();
+            start.Set();
+            string?[] ids = await Task.WhenAll(launches);
+
+            Assert.NotNull(ids[0]);
+            Assert.All(ids, id => Assert.Equal(ids[0], id));
+            Assert.Equal([OwnerLock.MachineIdFileName], Directory.EnumerateFiles(home).Select(Path.GetFileName));
+        }
+    }
+
     [Fact]
     public void OwnerAlive_ThisProcess_IsAlive_AndAGoneOne_IsNot()
     {

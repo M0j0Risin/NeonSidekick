@@ -22,6 +22,27 @@ public sealed class TextCellsNarrowTests
         return cells;
     }
 
+    /// <summary>
+    /// The one cut (2026-11-02, review P2-9): the hover hint's, the /usage labels' and the tool lines' cuts are <see cref="TextCells.Cut"/>,
+    /// so a ZWJ emoji or a selector at the edge goes whole or not at all, the same in each, and the result fits.
+    /// </summary>
+    [Theory]
+    [InlineData("ab👩\u200D💻cd", 4)]
+    [InlineData("ab👩\u200D💻cd", 5)]
+    [InlineData("ab⚙️cd", 4)]
+    [InlineData("abcdef", 3)]
+    public void TheThreeCuts_AreOne_AndNeverPartAGlyph(string text, int cells)
+    {
+        string cut = TextCells.Cut(text, cells);
+        Assert.Equal(cut, App.UsageText.CutToCells(text, cells));
+        Assert.Equal(cut, TranscriptRenderer.Truncate(text, cells));
+        Assert.True(TextCells.Width(cut) <= cells);
+        Assert.EndsWith("…", cut, StringComparison.Ordinal);
+        Assert.DoesNotContain("\u200D…", cut, StringComparison.Ordinal);   // never a joiner left at the edge
+        Assert.False(cut.Length >= 2 && char.IsHighSurrogate(cut[^2]));
+        Assert.Equal("", TextCells.Cut(text, 0));
+    }
+
     [Theory]
     [InlineData("⚙️", 1, 2)]   // U+2699 U+FE0F: the base one cell, the selector none in Terminal.app, one elsewhere
     [InlineData("🛠️", 1, 2)]   // U+1F6E0 U+FE0F: a pair with its selector, one cell there

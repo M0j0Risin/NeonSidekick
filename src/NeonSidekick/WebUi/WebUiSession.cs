@@ -410,7 +410,7 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     /// </summary>
     public Action<string>? Accepted { get; set; }
 
-    public WebEntry? Entry(long seq) => Feed.EntryOf(seq, WebUiMarkdown.ToHtml);
+    public WebEntry? Entry(long seq) => Feed.EntryOf(seq, (Func<string, string, string>)WebUiMarkdown.ToHtml);
 
     /// <summary>Whether the pages wear the profile's theme (2026-10-15, <i>Web UI profile theme</i>, read per request); null: they do.</summary>
     public Func<bool>? ProfileTheme { get; set; }
@@ -742,7 +742,7 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     public WebSnapshot Snapshot()
     {
         // The connecting page's own copy: the other pages' last state stays what the sampler compares with.
-        return new WebSnapshot(Feed.Snapshot(WebUiMarkdown.ToHtml, defer: true), Asks.OpenAsks().Select(View).ToList(), _state(), WebUiText.Words, TakeDrafts(), StatusNow?.Invoke().Status,
+        return new WebSnapshot(Feed.Snapshot((Func<string, string, string>)WebUiMarkdown.ToHtml, defer: true), Asks.OpenAsks().Select(View).ToList(), _state(), WebUiText.Words, TakeDrafts(), StatusNow?.Invoke().Status,
             StripView?.Invoke(), PointNow?.Invoke());
     }
 
@@ -1091,7 +1091,7 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
                 // entry's own cache (2026-10-19, the review: rendered here a second time beside the snapshot's), rendered here only once the feed has
                 // let it go.
                 Events.Publish(new WebEvent("end", () => JsonSerializer.Serialize(
-                    new WebEnd(ended.Seq, ended.Kind == FeedKind.Assistant ? Feed.HtmlOf(ended.Seq, WebUiMarkdown.ToHtml) ?? WebUiMarkdown.ToHtml(ended.Markdown) : null, ended.Summary),
+                    new WebEnd(ended.Seq, ended.Kind == FeedKind.Assistant ? Feed.HtmlOf(ended.Seq, (Func<string, string, string>)WebUiMarkdown.ToHtml) ?? WebUiMarkdown.ToHtml(ended.Markdown, TranscriptFeed.IdPrefix(ended.Seq)) : null, ended.Summary),
                     WebUiJsonContext.Default.WebEnd)));
                 break;
             case FeedChange.Replaced replaced:
@@ -1118,7 +1118,7 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     private static WebAskView View(WebAskHandle handle)
     {
         var spec = handle.Spec;
-        return new WebAskView(handle.Id, spec.Kind, spec.Title, spec.Body, spec.Lines, spec.Markdown is { } markdown ? WebUiMarkdown.ToHtml(markdown) : null,
+        return new WebAskView(handle.Id, spec.Kind, spec.Title, spec.Body, spec.Lines, spec.Markdown is { } markdown ? WebUiMarkdown.ToHtml(markdown, "a" + handle.Id + "-") : null,
             spec.Choices, spec.TextChoice, spec.Questions, spec.SubmitLabel, spec.Items, spec.Current, spec.Live, spec.Detail, spec.DetailLabel);
     }
 

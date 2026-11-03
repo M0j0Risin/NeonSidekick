@@ -395,14 +395,21 @@ public class EnvironmentOverridesTests
         Assert.Equal("Environment", EnvironmentOverrides.Category);
     }
 
-    /// <summary>Windows Terminal (WT_SESSION) and VS Code's terminal own a link's Ctrl+click (2026-11-01, clickable links and paths).</summary>
+    /// <summary>
+    /// Windows Terminal (WT_SESSION) and VS Code's terminal own a link's Ctrl+click (2026-11-01, clickable links and paths), under a pseudo
+    /// console only (2026-11-02, review P1-10: a moved pin, the new argument; a conhost window opened from a WT tab inherits WT_SESSION).
+    /// </summary>
     [Fact]
     public void TerminalOpensLinks_InWindowsTerminal_AndVsCode_NotElsewhere()
     {
-        Assert.False(EnvironmentOverrides.Empty.TerminalOpensLinks);
-        Assert.True(With((EnvironmentOverrides.WindowsTerminalSessionVariable, "1d4b3c2a-0000-0000-0000-000000000000")).TerminalOpensLinks);
-        Assert.False(With((EnvironmentOverrides.WindowsTerminalSessionVariable, "")).TerminalOpensLinks);
-        Assert.True(With((EnvironmentOverrides.TerminalProgramVariable, "vscode")).TerminalOpensLinks);
-        Assert.False(With((EnvironmentOverrides.TerminalProgramVariable, "iTerm.app")).TerminalOpensLinks);
+        var wt = With((EnvironmentOverrides.WindowsTerminalSessionVariable, "1d4b3c2a-0000-0000-0000-000000000000"));
+        var code = With((EnvironmentOverrides.TerminalProgramVariable, "vscode"));
+        Assert.False(EnvironmentOverrides.Empty.TerminalOpensLinks(underPseudoConsole: true));
+        Assert.True(wt.TerminalOpensLinks(underPseudoConsole: true));
+        Assert.False(With((EnvironmentOverrides.WindowsTerminalSessionVariable, "")).TerminalOpensLinks(underPseudoConsole: true));
+        Assert.True(code.TerminalOpensLinks(underPseudoConsole: true));
+        Assert.False(With((EnvironmentOverrides.TerminalProgramVariable, "iTerm.app")).TerminalOpensLinks(underPseudoConsole: true));
+        Assert.False(wt.TerminalOpensLinks(underPseudoConsole: false));   // WT_SESSION inherited into a conhost window
+        Assert.False(code.TerminalOpensLinks(underPseudoConsole: false));
     }
 }

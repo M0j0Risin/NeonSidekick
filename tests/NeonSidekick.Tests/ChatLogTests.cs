@@ -128,6 +128,21 @@ public class ChatLogTests
         Assert.Equal(["First ```a\nx\n```", "Second."], log.LastReplyPieces);
     }
 
+    /// <summary>A piece keeps its first line's indent (2026-11-02, review P3-2): four spaces after a tool line are a code block, not a paragraph.</summary>
+    [Fact]
+    public void LastReplyPieces_KeepAPiecesIndent_ItsLeadingLineBreaksOff()
+    {
+        var trail = new ChatLog.ThoughtTrail();
+        string reply = "Start.";
+        trail.Break(reply.Length);
+        reply += "\n\n    indented\n    code";
+        var log = new ChatLog();
+        log.Add("q", reply, trail.Thoughts, trail.Breaks);
+
+        Assert.Equal(["Start.", "    indented\n    code"], log.LastReplyPieces);
+        Assert.Equal(["indented\ncode"], ChatScreen.CodeBlocksOf(log.LastReplyPieces!));
+    }
+
     [Fact]
     public void LastReplyPieces_WithNoBreaks_IsTheWholeReply()
     {

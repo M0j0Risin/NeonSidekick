@@ -77,8 +77,8 @@ public static class OutputNames
     }
 
     /// <summary>
-    /// Whether the file at <paramref name="relative"/> lies in a folder nothing may be written beside: a <c>.neon</c> or <c>.git</c> at any
-    /// depth (<see cref="WriteGuard.GuardedFolder"/>, any case, either separator).
+    /// Whether the file at <paramref name="relative"/> lies in a folder nothing may be written beside: a <c>.neon</c>, <c>.git</c> or
+    /// <c>.claude</c> at any depth (<see cref="WriteGuard.GuardedFolder"/>, any case, either separator).
     /// </summary>
     public static bool UnderNeon(string relative)
     {

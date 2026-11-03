@@ -36,6 +36,12 @@ public sealed class DocxConverter
     private readonly TimeProvider _time;
     private readonly IMarkdownParser _parser = new MarkdigParser();
 
+    /// <summary>
+    /// The bytes every picture of one document may take, together (<see cref="PdfConverter.MaxInlineBytes"/>); a test's seam (2026-11-02,
+    /// review P9-8), so a small budget shows which pictures count against it.
+    /// </summary>
+    internal long PictureBudget { get; set; } = PdfConverter.MaxInlineBytes;
+
     public DocxConverter(WorkingDirectory files, TimeProvider? time = null)
     {
         _files = files ?? throw new ArgumentNullException(nameof(files));
@@ -122,14 +128,17 @@ public sealed class DocxConverter
             try
             {
                 string folder = sourceFull is null ? _files.Root : System.IO.Path.GetDirectoryName(sourceFull)!;
-                var pictures = new SandboxPictures(_files, folder, PdfConverter.MaxInlineBytes);
+                var pictures = new SandboxPictures(_files, folder, PictureBudget);
                 var page = new WordPage(request.Paper ?? PdfPaper.Default, request.Landscape);
                 var stats = WordWriter.Write(pending.Stream, document, page, header, title, address => Picture(pictures, address, cancellationToken), _time, cancellationToken);
                 if (pictures.OverBudget)
                 {
-                    return OfficeText.PicturesTooLarge((int)(PdfConverter.MaxInlineBytes / 1_000_000));
+                    return OfficeText.PicturesTooLarge((int)(PictureBudget / 1_000_000));
                 }
 
+                // Never put in place after an Esc (2026-11-02, review P13-3: the abandoned task committed the .docx, replacing a file under
+                // overwrite, after the user had stopped it). The throw leaves `using (pending)` with the file uncommitted, so it's dropped.
+                cancellationToken.ThrowIfCancellationRequested();
                 var result = pending.Commit();
                 if (result.Outcome != FileOutcome.Ok)
                 {
@@ -258,21 +267,19 @@ public sealed class DocxConverter
             return null;
         }
 
-        byte[]? bytes;
         if (address.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
         {
-            bytes = DataPicture(address);
-            if (bytes is null || !pictures.Count(bytes.LongLength))
+            // Judged usable before it's counted (2026-11-02, review P9-8: a broken data: picture early on spent the budget that later
+            // real ones needed, and the conversion was refused as too large).
+            if (DataPicture(address) is not { } data || WordPicture.From(data) is not { } picture || !pictures.Count(data.LongLength))
             {
                 return null;
             }
-        }
-        else
-        {
-            bytes = pictures.Bytes(address, IsEmbeddable);
+
+            return picture;
         }
 
-        return bytes is null ? null : WordPicture.From(bytes);
+        return pictures.Bytes(address, IsEmbeddable) is { } bytes ? WordPicture.From(bytes) : null;
     }
 
     /// <summary>A <c>data:</c> picture's bytes: PNG, JPEG or GIF in base64, no bigger than a picture's cap; null otherwise.</summary>

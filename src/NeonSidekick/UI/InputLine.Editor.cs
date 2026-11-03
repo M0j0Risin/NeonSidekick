@@ -335,6 +335,13 @@ public sealed partial class InputLine
         public async ValueTask<EditOutcome> FeedAsync(InputEvent input, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(input);
+            if (input is InputEvent.Resize)
+            {
+                // A value typed under a menu (2026-11-02, review P7-3): the draft and its pairs as they were; the menu behind it is laid out at
+                // the new width when the value is done and it shows again.
+                return EditOutcome.Handled;
+            }
+
             var pane = _line._pane;
             var hintClicks = _line._hintClicks;
             if (input is not InputEvent.Drag)

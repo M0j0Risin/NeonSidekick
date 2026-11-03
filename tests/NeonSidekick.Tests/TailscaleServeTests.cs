@@ -277,6 +277,22 @@ public sealed class TailscaleServeTests
         }
     }
 
+    /// <summary>
+    /// The one throw the ask's catch lets through faults the waiters' task instead of leaving it pending, and the next ask for that port runs
+    /// (2026-11-02, review P13-5: every later ask waited on the stuck task, and the HTTPS tab never answered).
+    /// </summary>
+    [Fact]
+    public async Task AnAskThatThrowsPastItsCatch_EndsTheWaiters_AndTheNextAskRuns()
+    {
+        bool fail = true;
+        var detector = new TailscaleServeDetector(() => [Adapter("Tailscale", "100.78.20.125")], (_, _) =>
+            fail ? throw new OutOfMemoryException("test") : Task.FromResult(new TailscaleServeResult("https://h.ts.net", false, [])), new ManualTimeProvider());
+
+        await Assert.ThrowsAsync<OutOfMemoryException>(() => detector.FindAsync(8765, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10)));
+        fail = false;
+        Assert.Equal("https://h.ts.net", (await detector.FindAsync(8765, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10)))!.Address);
+    }
+
     /// <summary>2026-11-01, the review's P1-16: one ask in flight is shared, and one caller's cancel leaves the other's answer.</summary>
     [Fact]
     public async Task TheDetector_SharesOneAskInFlight_AndOneCallersCancel_LeavesTheOthersAnswer()
@@ -561,7 +577,7 @@ public sealed class TailscaleServeTests
     {
         var origin = WebUiOrigin.Of(IPAddress.Loopback, "hoopdiethink.tail9511ae.ts.net", "100.64.1.2", null);
         Assert.Equal(IPAddress.Parse("100.64.1.2"), origin.Remote);
-        Assert.Equal(WebUiOrigin.TailscaleServeName, origin.Through);
+        Assert.Equal(WebUiText.TailscaleServeName, origin.Through);
         Assert.False(origin.Funnel);
         Assert.Equal("(" + WebUiText.Glyph + "a browser signed in to the Web UI from 100.64.1.2 through Tailscale Serve)", WebUiText.SignedInNotice(origin));
 
@@ -574,7 +590,7 @@ public sealed class TailscaleServeTests
     [InlineData("hoopdiethink.tail9511ae.ts.net:8766")]
     [InlineData("HOOPDIETHINK.TAIL9511AE.TS.NET.")]
     public void AServeHost_WithAPortOrATrailingDot_IsStillServe(string host) =>
-        Assert.Equal(WebUiOrigin.TailscaleServeName, WebUiOrigin.Of(IPAddress.Loopback, host, "100.64.1.2", null).Through);
+        Assert.Equal(WebUiText.TailscaleServeName, WebUiOrigin.Of(IPAddress.Loopback, host, "100.64.1.2", null).Through);
 
     [Fact]
     public void OtherProxies_AreNamed_TheLastForwardedEntryCounts_AndOnlyLoopbackIsTrusted()
@@ -612,12 +628,12 @@ public sealed class TailscaleServeTests
         Assert.Equal(IPAddress.Loopback, WebUiOrigin.Of(IPAddress.Loopback, "h.ts.net", "12345", null).Remote);   // a bare number is no address
 
         // The host's first entry alone.
-        Assert.Equal(WebUiOrigin.TailscaleServeName, WebUiOrigin.Of(IPAddress.Loopback, "h.ts.net, caddy.lan", "192.168.1.5", null).Through);
+        Assert.Equal(WebUiText.TailscaleServeName, WebUiOrigin.Of(IPAddress.Loopback, "h.ts.net, caddy.lan", "192.168.1.5", null).Through);
         Assert.Equal("the proxy at caddy.lan", WebUiOrigin.Of(IPAddress.Loopback, "caddy.lan:8443, h.ts.net", "192.168.1.5", null).Through);
 
         // A MagicDNS short name is Serve when the address is a tailnet one.
-        Assert.Equal(WebUiOrigin.TailscaleServeName, WebUiOrigin.Of(IPAddress.Loopback, "hoopdiethink", "100.64.1.2", null).Through);
-        Assert.Equal(WebUiOrigin.TailscaleServeName, WebUiOrigin.Of(IPAddress.Loopback, "hoopdiethink:8766", "fd7a:115c:a1e0::9", null).Through);
+        Assert.Equal(WebUiText.TailscaleServeName, WebUiOrigin.Of(IPAddress.Loopback, "hoopdiethink", "100.64.1.2", null).Through);
+        Assert.Equal(WebUiText.TailscaleServeName, WebUiOrigin.Of(IPAddress.Loopback, "hoopdiethink:8766", "fd7a:115c:a1e0::9", null).Through);
         Assert.Equal("the proxy at hoopdiethink", WebUiOrigin.Of(IPAddress.Loopback, "hoopdiethink", "192.168.1.5", null).Through);
     }
 

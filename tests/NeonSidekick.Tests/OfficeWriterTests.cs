@@ -222,7 +222,9 @@ public sealed class OfficeWriterTests
     [InlineData("-1e400")]
     [InlineData("1e-400")]
     [InlineData("1234567890123456")]
-    [InlineData("0.1000000000000000000000000000001")]
+    // 0.1000000000000000000000000000001 was here: since 2026-11-02 (review P9-6/P10-2) a fraction below 10^15 is the nearest double
+    // (QueryExportTests.TheNumberRule_…); a fraction whose whole part is past 15 digits still stays text.
+    [InlineData("12345678901234567.5")]
     [InlineData("abc")]
     public void ANumberThatWouldLoseDigits_StaysText(string text)
     {
@@ -234,6 +236,20 @@ public sealed class OfficeWriterTests
         var json = new ColumnJudge();
         json.Observe(0, new RawCell(text, RawKind.Number));
         Assert.Equal(XlsxKind.Text, json.Convert(0, new RawCell(text, RawKind.Number)).Kind);
+    }
+
+    [Fact]
+    public void AColumnOfRoundTripDoubles_StaysNumeric()
+    {
+        // 2026-11-02, review P9-5: pandas' and JSON.stringify's 17-digit doubles made the whole column text (SUM 0).
+        var judge = new ColumnJudge();
+        string[] cells = ["0.30000000000000004", "0.1", "2.5"];
+        foreach (string cell in cells)
+        {
+            judge.Observe(0, new RawCell(cell));
+        }
+
+        Assert.All(cells, cell => Assert.Equal(XlsxKind.Number, judge.Convert(0, new RawCell(cell)).Kind));
     }
 
     [Fact]

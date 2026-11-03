@@ -531,6 +531,45 @@ public sealed class QueryExportTests : IDisposable
     }
 
     [Fact]
+    public void AJobWhoseCloseThrows_StillLetsThePendingFileGo_AndThrowsNothing()
+    {
+        // 2026-11-02, review P13-2: Dispose let go of the job first, and its throw (a writer's flush on a full disk) skipped the pending
+        // file and the workbook read, so the .neon-tmp stayed held and the throw escaped the export as a crash.
+        var target = XlsxTarget.Plan(_files, new XlsxRequest("held.xlsx", null, false, null, "query", "Query"), _time, out string? refusal);
+        Assert.Null(refusal);
+        Assert.NotNull(target!.Begin(out refusal));
+        target.WrapJob(job => new ThrowingCloseJob(job));
+        target.Dispose();
+        Assert.Empty(Directory.EnumerateFiles(_root, "*held*", SearchOption.AllDirectories));
+    }
+
+    private sealed class ThrowingCloseJob(IWorkbookJob inner) : IWorkbookJob
+    {
+        public SheetWriter Sheet => inner.Sheet;
+
+        public SheetResult Finish() => inner.Finish();
+
+        public void Dispose()
+        {
+            inner.Dispose();
+            throw new IOException("There is not enough space on the disk.");
+        }
+    }
+
+    [Fact]
+    public async Task ADuckDbExport_WritesABlobAsHex_AndAnInfinityAsTheWord()
+    {
+        // 2026-11-02, review P9-11 and P10-6, through the driver's own column types.
+        string sql = "SELECT '\\x00\\xFFA'::BLOB AS b, 'infinity'::DOUBLE AS inf";
+        string result = await Invoke(DuckDb(), ("sql", sql), ("to", "blob.xlsx"));
+        Assert.StartsWith("Made blob.xlsx (", result);
+        string cells = Cells(Bytes("blob.xlsx"), "Query");
+        Assert.Contains("0x00FF41", cells);
+        Assert.Contains("Infinity", cells);
+        Assert.DoesNotContain("inf\t", cells + "\t");
+    }
+
+    [Fact]
     public async Task ADuckDbExplain_ExportsAsText()
     {
         string result = await Invoke(DuckDb(), ("sql", "EXPLAIN SELECT 1"), ("to", "plan.xlsx"));
@@ -689,7 +728,7 @@ public sealed class QueryExportTests : IDisposable
         Assert.Equal(XlsxKind.Date, Cell(PostgresAccess.ExportCell, new FakeDataReader(["d"], ["date"], [new DateTime(2026, 10, 29)])).Kind);
         var utc = new FakeDataReader(["at", "plain"], ["timestamp with time zone", "text"], [new DateTime(2026, 10, 29, 12, 0, 0, DateTimeKind.Utc), "x"]);
         Assert.Equal(XlsxKind.DateTime, Cell(PostgresAccess.ExportCell, utc).Kind);
-        Assert.Equal("at" + PostgresText.UtcColumn, PostgresAccess.ExportHeader(utc, 0));
+        Assert.Equal("at" + SqlExport.UtcColumn, PostgresAccess.ExportHeader(utc, 0));
         Assert.Equal("plain", PostgresAccess.ExportHeader(utc, 1));
     }
 
@@ -736,6 +775,110 @@ public sealed class QueryExportTests : IDisposable
         var tiny = new FakeDataReader(["b"], ["TINYINT"], [(sbyte)1]);
         var number = Cell(MySqlAccess.ExportCell, tiny);   // TreatTinyAsBoolean is off: the 0/1 the chat shows
         Assert.Equal((XlsxKind.Number, 1d), (number.Kind, number.Number));
+    }
+
+    [Fact]
+    public void Postgres_TypeNamesWithModifiers_ReadAsTheBareType()
+    {
+        // 2026-11-02, review P9-1–P9-4 and P9-7: Npgsql names a column with its precision (the live names), and the exact compares
+        // sent an interval(0) to the placeholder, a timetz(0) to its dummy date and left a timestamptz(3)'s header unmarked.
+        Assert.Equal("numeric", PostgresAccess.BaseTypeName("numeric(10, 2)"));
+        Assert.Equal("interval", PostgresAccess.BaseTypeName("interval(0)"));
+        Assert.Equal("time with time zone", PostgresAccess.BaseTypeName("time(0) with time zone"));
+        Assert.Equal("timestamp with time zone", PostgresAccess.BaseTypeName("timestamp(3) with time zone"));
+        Assert.Equal("numeric[]", PostgresAccess.BaseTypeName("numeric(10,2)[]"));
+        Assert.Equal("text", PostgresAccess.BaseTypeName("text"));
+        Assert.Null(PostgresAccess.BaseTypeName(null));
+
+        Assert.Equal("1 day 06:00:00", Cell(PostgresAccess.ExportCell, new FakeDataReader(["i"], ["interval(0)"], [TimeSpan.FromHours(30)])).Text);
+        var timetz = new DateTimeOffset(1, 1, 2, 9, 0, 0, TimeSpan.FromHours(2));
+        Assert.Equal((XlsxKind.Text, "09:00:00+02:00"), Pair(Cell(PostgresAccess.ExportCell, new FakeDataReader(["t"], ["time(0) with time zone"], [timetz]))));
+        Assert.Equal(SqlExportText.Unreadable("numeric"), Cell(PostgresAccess.ExportCell, new FakeDataReader(["n"], ["numeric(10, 2)"], [new InvalidCastException()])).Text);
+        var utc = new FakeDataReader(["at"], ["timestamp(3) with time zone"], [new DateTime(2026, 10, 29, 12, 0, 0, DateTimeKind.Utc)]);
+        Assert.Equal("at" + SqlExport.UtcColumn, PostgresAccess.ExportHeader(utc, 0));
+    }
+
+    /// <summary>
+    /// The one number rule (2026-11-02, review P9-5/P9-6/P10-2): a fraction below 10^15 is the nearest double whatever its digits (an AVG,
+    /// a ratio, a round-trip double), a whole number past 15 digits stays text (an ID), as does a fraction whose whole part is past them.
+    /// </summary>
+    [Theory]
+    [InlineData("0.30000000000000004", XlsxKind.Number)]
+    [InlineData("1.6666666666666666666666666666666666667", XlsxKind.Number)]
+    [InlineData("1.0000000000000000001", XlsxKind.Number)]
+    [InlineData("-0.000000000000000000000000000000012345678901234567", XlsxKind.Number)]
+    [InlineData("12345678901234567890", XlsxKind.Text)]
+    [InlineData("1234567890123456.75", XlsxKind.Text)]
+    [InlineData("123456789012345", XlsxKind.Number)]
+    [InlineData("NaN", XlsxKind.Text)]
+    public void TheNumberRule_AFractionIsANumber_ALongWholeNumberText(string text, XlsxKind kind) =>
+        Assert.Equal(kind, XlsxValue.OfNumberText(text).Kind);
+
+    [Fact]
+    public void TheNumberRule_HoldsForDecimals_AndKeepsTheDoublesRoundTripText()
+    {
+        var round = XlsxValue.OfNumberText("0.30000000000000004");
+        Assert.Equal((0.30000000000000004, "0.30000000000000004"), (round.Number, round.Text));
+        var average = XlsxValue.OfDecimal(1.6666666666666666666666666667m);
+        Assert.Equal(XlsxKind.Number, average.Kind);
+        Assert.Equal(5d / 3, average.Number, 15);
+        Assert.Equal(XlsxKind.Text, XlsxValue.OfDecimal(12345678901234567890m).Kind);
+        Assert.Equal(XlsxKind.Text, XlsxValue.OfDecimal(1234567890123456.7m).Kind);
+    }
+
+    [Fact]
+    public void AFamilysProviderRead_IsUsed_WhenGetValueWontHandTheValueOver()
+    {
+        // 2026-11-02, review P10-1/P10-7/P10-8: MySqlConnector doesn't override GetProviderSpecificValue, so the generic fallback threw
+        // again; the family's own read (its chat cell's) is asked instead. Here the generic one throws too, as MySqlConnector's does.
+        var past = new FakeDataReader(["n"], ["DECIMAL"], [new OverflowException("past decimal")]);
+        Assert.True(past.Read());
+        Assert.Equal(SqlExportText.Unreadable("DECIMAL"), SqlExport.FromProvider(past, 0, "DECIMAL").Text);
+        string nines = new('9', 40);
+        Assert.Equal((XlsxKind.Text, nines), Pair(SqlExport.FromProvider(past, 0, "DECIMAL", (_, _) => nines)));
+        Assert.Equal((XlsxKind.Text, nines), Pair(SqlExport.Typed(past, 0, "DECIMAL", SqlExport.InvariantText, (_, _) => nines)));
+    }
+
+    [Fact]
+    public void MySql_AnExportsSession_IsUtc_AndATimestampsHeaderSaysSo()
+    {
+        // 2026-11-02, review P10-4 (the user's call): the export pins the zone; the chat's session adds nothing.
+        Assert.EndsWith(MySqlAccess.UtcZone, MySqlAccess.SessionStatement("8.4.0", 30, utc: true));
+        Assert.DoesNotContain("time_zone", MySqlAccess.SessionStatement("8.4.0", 30));
+        var reader = new FakeDataReader(["at", "on"], ["TIMESTAMP", "DATETIME"], [DateTime.UtcNow, DateTime.Now]);
+        Assert.Equal("at" + SqlExport.UtcColumn, MySqlAccess.ExportHeader(reader, 0));
+        Assert.Equal("on", MySqlAccess.ExportHeader(reader, 1));
+    }
+
+    [Fact]
+    public void DuckDb_InfinitiesAreTheFamiliesWord_AndABlobIsItsBytes()
+    {
+        // 2026-11-02, review P10-6 and P9-11.
+        Assert.Equal((XlsxKind.Text, "Infinity"), Pair(DuckDbAccess.FromText("inf", typeof(double))));
+        Assert.Equal((XlsxKind.Text, "-Infinity"), Pair(DuckDbAccess.FromText("-inf", typeof(double))));
+        Assert.Equal((XlsxKind.Text, "0x00FF41"), Pair(DuckDbAccess.FromText(@"\x00\xFFA", typeof(byte[]))));
+        Assert.Equal((XlsxKind.Text, "0x5C"), Pair(DuckDbAccess.FromText(@"\x5C", typeof(Stream))));
+        Assert.Equal(@"\q", DuckDbAccess.FromText(@"\q", typeof(byte[])).Text);   // not DuckDB's form: as it is
+    }
+
+    [Fact]
+    public void Sqlite_AComputedDate_IsADate_AndTextStaysText()
+    {
+        // 2026-11-02, review P10-5: an expression column has no declared type, so date('…') and MAX(order_date) were text.
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT date('2026-11-02'), datetime('2026-11-02 10:30:00'), 'Ada', '2026-11-02 not a date', '', 7";
+        using var reader = command.ExecuteReader();
+        var types = Enumerable.Range(0, reader.FieldCount).Select(reader.GetDataTypeName).ToArray();   // before the first row, as the job asks
+        Assert.True(reader.Read());
+        var cells = Enumerable.Range(0, reader.FieldCount).Select(i => SqliteAccess.ExportCell(reader, i, types[i])).ToArray();
+        Assert.Equal(XlsxKind.Date, cells[0].Kind);
+        Assert.Equal(XlsxKind.DateTime, cells[1].Kind);
+        Assert.Equal((XlsxKind.Text, "Ada"), Pair(cells[2]));
+        Assert.Equal(XlsxKind.Text, cells[3].Kind);
+        Assert.Equal(XlsxValue.EmptyText, cells[4]);
+        Assert.Equal(XlsxKind.Number, cells[5].Kind);
     }
 
     [Fact]

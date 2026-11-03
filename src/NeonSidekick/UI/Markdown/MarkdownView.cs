@@ -59,7 +59,17 @@ public sealed class MarkdownView : IRenderable
 
     public IEnumerable<Segment> Render(RenderOptions options, int maxWidth) => Content.Render(options, maxWidth);
 
-    private IRenderable Content => _content ??= Compose(_document.Blocks, quote: null, tight: false, _resolvePath);
+    private IRenderable Content => _content ??= ComposeTop();
+
+    // The last top-level block's table as Content built it (2026-11-02, review P1-4), so LastTableRows reads its render's rows.
+    private FittingTable? _lastTable;
+
+    private IRenderable ComposeTop()
+    {
+        var composed = Compose(_document.Blocks, quote: null, tight: false, _resolvePath, out var last);
+        _lastTable = _document.Blocks is [.., TableBlock] ? last as FittingTable : null;
+        return composed;
+    }
 
     private IReadOnlyList<CodeSpan>? _spans;
     private int _spansWidth = -1;
@@ -128,13 +138,97 @@ public sealed class MarkdownView : IRenderable
     public int? LastTableRows(RenderOptions options, int maxWidth)
     {
         ArgumentNullException.ThrowIfNull(options);
-        return _document.Blocks is [.., TableBlock table] ? Segment.SplitLines(Table(table, quote: null, resolve: null).Render(options, maxWidth)).Count : null;
+        if (_document.Blocks is not [.., TableBlock table])
+        {
+            return null;
+        }
+
+        // The rows this view's own render drew at that width (2026-11-02, review P1-4), else the table laid out alone; a resolved path
+        // link changes no cell's width, so the two agree.
+        _ = Content;
+        return _lastTable?.RowsAt(maxWidth) ?? Segment.SplitLines(Table(table, quote: null, resolve: null).Render(options, maxWidth)).Count;
     }
 
+    /// <summary>
+    /// What a resolver given to this view would be asked (2026-11-02, review P2-4): every inline code span's <see cref="LinkText.PathCandidate"/>
+    /// that isn't a web address, in paragraphs, headings, lists, quotes and tables, in order and once each. No layout: the transcript asks
+    /// them all ahead of a commit.
+    /// </summary>
+    public static IReadOnlyList<string> PathCandidates(MarkdownDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        var found = new List<string>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        Blocks(document.Blocks);
+        return found;
+
+        void Blocks(IReadOnlyList<MarkdownBlock> blocks)
+        {
+            foreach (var block in blocks)
+            {
+                switch (block)
+                {
+                    case ParagraphBlock paragraph:
+                        Inlines(paragraph.Inlines);
+                        break;
+                    case HeadingBlock heading:
+                        Inlines(heading.Inlines);
+                        break;
+                    case ListBlock list:
+                        foreach (var item in list.Items)
+                        {
+                            Blocks(item.Blocks);
+                        }
+
+                        break;
+                    case QuoteBlock quote:
+                        Blocks(quote.Blocks);
+                        break;
+                    case TableBlock table:
+                        foreach (var cell in table.Header.Cells)
+                        {
+                            Inlines(cell.Inlines);
+                        }
+
+                        foreach (var row in table.Rows)
+                        {
+                            foreach (var cell in row.Cells)
+                            {
+                                Inlines(cell.Inlines);
+                            }
+                        }
+
+                        break;
+                }
+            }
+        }
+
+        void Inlines(IReadOnlyList<MarkdownInline> inlines)
+        {
+            foreach (var inline in inlines)
+            {
+                if (inline is TextRun { Code: true } run && !IsOneWebAddress(run.Text.Trim()) && LinkText.PathCandidate(run.Text) is { Length: > 0 } candidate
+                    && seen.Add(candidate))
+                {
+                    found.Add(candidate);
+                }
+            }
+        }
+    }
+
+    /// <summary>An inline code span that is exactly one web address (it links as the address, never as a path).</summary>
+    private static bool IsOneWebAddress(string trimmed) =>
+        LinkText.IsWeb(trimmed) && LinkText.BareUrls(trimmed) is [var only] && only.Start == 0 && only.Length == trimmed.Length;
+
     /// <summary>The blocks stacked, a blank row between them unless <paramref name="tight"/> (a list item's).</summary>
-    private static IRenderable Compose(IReadOnlyList<MarkdownBlock> blocks, Style? quote, bool tight, Func<string, string?>? resolve)
+    private static IRenderable Compose(IReadOnlyList<MarkdownBlock> blocks, Style? quote, bool tight, Func<string, string?>? resolve) =>
+        Compose(blocks, quote, tight, resolve, out _);
+
+    /// <summary><see cref="Compose(IReadOnlyList{MarkdownBlock}, Style?, bool, Func{string, string?}?)"/>, the last block's renderable in <paramref name="last"/>.</summary>
+    private static IRenderable Compose(IReadOnlyList<MarkdownBlock> blocks, Style? quote, bool tight, Func<string, string?>? resolve, out IRenderable? last)
     {
         var children = new List<IRenderable>(blocks.Count * 2);
+        last = null;
         foreach (var block in blocks)
         {
             if (children.Count > 0 && !tight)
@@ -142,7 +236,8 @@ public sealed class MarkdownView : IRenderable
                 children.Add(Spacer);
             }
 
-            children.Add(Block(block, quote, resolve));
+            last = Block(block, quote, resolve);
+            children.Add(last);
         }
 
         return new Rows(children);
@@ -340,7 +435,7 @@ public sealed class MarkdownView : IRenderable
             {
                 // Inline code that is exactly a web address links like text; one the resolver finds in the working folder links as a path.
                 string trimmed = run.Text.Trim();
-                if (LinkText.IsWeb(trimmed) && LinkText.BareUrls(trimmed) is [var only] && only.Start == 0 && only.Length == trimmed.Length)
+                if (IsOneWebAddress(trimmed))
                 {
                     paragraph.Append(run.Text, style, LinkOf(trimmed));
                 }

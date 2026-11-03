@@ -1240,4 +1240,38 @@ public class InfoPaneTests : IDisposable
 
         return count;
     }
+
+    /// <summary>
+    /// A resize with the pane open (2026-11-02, review P7-3: laid out again only on a key, so it kept the old width's lines and hit tests
+    /// until one came): the tick's <see cref="InputEvent.Resize"/> wakes the pane's read and the pane is laid out at the new width.
+    /// </summary>
+    [Fact]
+    public async Task AResize_LaysTheOpenPaneOut_WithNoKey()
+    {
+        using var pane = Pane();
+        pane.Show();
+        var input = new ScriptedInput();
+        var keys = new KeySource(input, TimeSpan.FromMilliseconds(1)) { Mirror = pane };
+        pane.OverlayResized = () => keys.Post(new InputEvent.Resize());
+        int waits = 0;
+        int mark = 0;
+        input.OnWait = () =>
+        {
+            if (++waits == 1)
+            {
+                mark = Output.Length;
+                _console.Profile.Width = 30;
+                _time.Advance(ScreenPane.Tick);   // the rebuild, then the post: this read wakes
+            }
+            else
+            {
+                input.Push(Keys.Escape);
+            }
+        };
+
+        await new InfoPane(pane, keys).ShowAsync("/screen list", [Tab("/screen list", "Monitors:")], 0, CancellationToken.None);
+
+        Assert.Equal(2, waits);
+        Assert.Contains(Titled("/screen list", 30) + "\n \nMonitors:\n" + Rule(30), Output[mark..]);
+    }
 }

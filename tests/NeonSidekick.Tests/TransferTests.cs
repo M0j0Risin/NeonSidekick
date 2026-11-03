@@ -301,7 +301,7 @@ public sealed class TransferTests : IDisposable
 
         Assert.False(File.Exists(top));
         Assert.True(File.Exists(below));
-        await new WorkingDirectory(() => Path.Combine(_root, "missing"), new ManualTimeProvider()).SweepRoot(inline: true);   // no folder, no throw
+        await new WorkingDirectory(() => Path.Combine(_root, "missing"), new ManualTimeProvider()).SweepRoot();   // no folder, no throw
     }
 
     /// <summary>A restore's new file from a stream sweeps a crash's temps and never writes over one that appeared (2026-10-28, review P6-08).</summary>

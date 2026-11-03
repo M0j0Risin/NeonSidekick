@@ -81,7 +81,9 @@ internal sealed partial class ChatScreen
         string? noTools = groups.Count == 0 ? SystemPromptSummary.NoToolsLine(effective.LlmOfferTools) : null;
         ConversationCompactor.TokenEstimate? history = null;
         bool asSent = false;
-        if (!_turnRunning)
+        // By the reply, not the turn (2026-11-02, review P11-1): a turn waiting on a watch alone has no request in flight, so the whole history
+        // is what the next one sends, not "as last sent".
+        if (!_replyRunning)
         {
             var list = _session.History.Messages;
             history = ConversationCompactor.Estimate(list, effective.LlmPreserveThinking && !inFlightOnly ? 0 : list.Count);

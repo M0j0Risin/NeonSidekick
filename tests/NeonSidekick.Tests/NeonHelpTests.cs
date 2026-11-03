@@ -93,6 +93,15 @@ public class NeonHelpTests
         }
     }
 
+    /// <summary>/find's help names the message jump (2026-11-02, review P11-4), Option's on a Mac.</summary>
+    [Fact]
+    public void Find_NamesTheMessageJump()
+    {
+        string find = HelpCommands.Commands.Single(c => c.Command == "/find").Forms.Single().Meaning;
+        Assert.Contains(OperatingSystem.IsMacOS() ? "Option+Up/Down" : "Ctrl+Up/Down", find, StringComparison.Ordinal);
+        Assert.Contains("Option+Up/Down", HelpMac.Forms["/find [<words>]"], StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Location_IsWorkedOutFromTheMenus()
     {

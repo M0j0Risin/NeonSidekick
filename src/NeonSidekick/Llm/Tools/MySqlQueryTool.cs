@@ -88,7 +88,8 @@ public sealed class MySqlQueryTool : MySqlTool
             // name the workbook after one connection and read another).
             var pinned = Server.Pinned(target);
             return await ExportAsync(export, target.Name, rows, maxRows, TimeoutSeconds(Effective), MySqlAccess.ExportCell,
-                (job, timeout, token) => pinned.ExportAsync(target.Name, body, parameters, job, rows, timeout, token), MySqlText.Error, cancellationToken).ConfigureAwait(false);
+                (job, timeout, token) => pinned.ExportAsync(target.Name, body, parameters, job, rows, timeout, token), MySqlText.Error, cancellationToken,
+                MySqlAccess.ExportHeader).ConfigureAwait(false);
         }
 
         var run = await Server.RunAsync(connection, [body], parameters, rows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);

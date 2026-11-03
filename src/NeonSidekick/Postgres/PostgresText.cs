@@ -261,8 +261,6 @@ public static class PostgresText
 
     // ─── results ────────────────────────────────────────────────────────────────
 
-    /// <summary>What a timestamptz column's header adds in a workbook (2026-10-29, the Office writing plan): its cells hold UTC, as the chat's say.</summary>
-    public const string UtcColumn = " (UTC)";
 
     /// <summary>A value the client cannot read: its type, and how to read it anyway.</summary>
     public static string Unreadable(string type) => $"({type}: select it as text — CAST(… AS text) or …::text)";

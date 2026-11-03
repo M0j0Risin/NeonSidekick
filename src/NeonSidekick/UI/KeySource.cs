@@ -54,6 +54,12 @@ public sealed class KeySource : IAnsiConsoleInput
     private readonly Queue<InputEvent> _buffer = new();
     private Task _pendingLine = Task.CompletedTask;
 
+    // Events posted from another thread (2026-11-02, review P7-3: the pane's resize), and the waiting read's wake: a post cancels it, and
+    // the read takes the posted event next.
+    private readonly System.Collections.Concurrent.ConcurrentQueue<InputEvent> _posted = new();
+    private readonly object _wakeGate = new();
+    private CancellationTokenSource? _wake;
+
     // The pane requests (RequestPaneAsync), posted from the turn task and served by the watcher:
     // the queue, the signal the no-keyboard wait wakes on, and whether a watcher runs at all.
     private readonly object _requestGate = new();
@@ -388,6 +394,10 @@ public sealed class KeySource : IAnsiConsoleInput
             {
                 e = _buffer.Dequeue();
             }
+            else if (_posted.TryDequeue(out var posted))
+            {
+                e = posted;
+            }
             else
             {
                 if (cancellationToken.IsCancellationRequested)
@@ -395,14 +405,57 @@ public sealed class KeySource : IAnsiConsoleInput
                     return null;
                 }
 
+                using var wake = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                lock (_wakeGate)
+                {
+                    _wake = wake;
+                }
+
+                // Woken by a post, not cancelled: the posted event is read next. A null the source itself gives (its input gone, a cancel it
+                // reads as null) goes to the caller as before, never read again in a loop.
+                bool woken = false;
                 try
                 {
-                    e = await _events.ReadAsync(cancellationToken).ConfigureAwait(false);
+                    if (_posted.IsEmpty)
+                    {
+                        e = await _events.ReadAsync(wake.Token).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        e = null;   // a post that came between the look above and the wake set: taken at once
+                        woken = true;
+                    }
+                }
+                catch (OperationCanceledException) when (wake.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+                {
+                    e = null;
+                    woken = true;
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
                     return null;
                 }
+                finally
+                {
+                    lock (_wakeGate)
+                    {
+                        if (ReferenceEquals(_wake, wake))
+                        {
+                            _wake = null;
+                        }
+                    }
+                }
+
+                // A source gives null when its token fires (IInputEvents.ReadAsync's contract), so a wake reaches it as a null too.
+                if (woken || (e is null && wake.IsCancellationRequested && !cancellationToken.IsCancellationRequested))
+                {
+                    continue;
+                }
+            }
+
+            if (e is InputEvent.Resize && Mirror?.OverlayOpen != true)
+            {
+                continue;   // a resize for an overlay that closed meanwhile (2026-11-02, review P7-3): the chat line never sees one
             }
 
             if (SpentOnHook(e))
@@ -416,6 +469,20 @@ public sealed class KeySource : IAnsiConsoleInput
             {
                 return e;
             }
+        }
+    }
+
+    /// <summary>
+    /// <paramref name="e"/> queued from any thread (2026-11-02, review P7-3: the pane's <see cref="InputEvent.Resize"/>, from its tick): a
+    /// waiting <see cref="ReadInputAsync"/> wakes and returns it; one not waiting reads it next. Never blocks.
+    /// </summary>
+    public void Post(InputEvent e)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        _posted.Enqueue(e);
+        lock (_wakeGate)
+        {
+            _wake?.Cancel();
         }
     }
 

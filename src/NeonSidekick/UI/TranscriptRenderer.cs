@@ -222,8 +222,11 @@ public sealed class TranscriptRenderer : INoticeSink
     public static string ProcessAlertMarkup(string text) => Theme.ColorMarkup(Theme.Warn, ProcessGlyph + text);
 
     /// <summary>A tool call's line: the glyph, the name and the call's values (2026-10-04, <see cref="ToolCallText.Brief"/>; the raw JSON until then).</summary>
-    public static string ToolMarkup(string name, string argumentsJson) =>
-        Theme.ColorMarkup(Theme.Dim, (ToolGlyph + name + " " + Truncate(ToolCallText.Brief(argumentsJson), ToolTextLimit)).TrimEnd());
+    public static string ToolMarkup(string name, string argumentsJson) => ToolMarkup(name, ToolCallText.BriefWithTarget(argumentsJson));
+
+    /// <summary><see cref="ToolMarkup(string, string)"/> over a brief already parsed (2026-11-02, review P2-8: a call's JSON was parsed four times).</summary>
+    internal static string ToolMarkup(string name, ToolCallText.BriefTarget found) =>
+        Theme.ColorMarkup(Theme.Dim, (ToolGlyph + name + " " + Truncate(found.Brief, ToolTextLimit)).TrimEnd());
 
     /// <summary>
     /// A tool result's one line where no run holds it (the plain path): under its call's line, the arrow and the result flattened
@@ -255,39 +258,13 @@ public sealed class TranscriptRenderer : INoticeSink
         Theme.ColorMarkup(DiagnosticColor(evt.Level), $"  [{evt.Category}] {evt.Message}");
 
     /// <summary>
-    /// One line of at most <paramref name="max"/> cells; newlines become spaces, an overflow ends in an ellipsis. Cut between
-    /// clusters (<see cref="TextCells.ClusterWidth"/>, 2026-10-04: it counted UTF-16 units, so an emoji could be split in half
-    /// and a wide text ran past its budget).
+    /// One line of at most <paramref name="max"/> cells; newlines become spaces, an overflow ends in an ellipsis (<see cref="TextCells.Cut"/>,
+    /// between clusters: 2026-10-04, it counted UTF-16 units, so an emoji could be split in half and a wide text ran past its budget).
     /// </summary>
     public static string Truncate(string text, int max)
     {
         ArgumentNullException.ThrowIfNull(text);
-        string flat = text.ReplaceLineEndings(" ");
-        if (max <= 0)
-        {
-            return "";
-        }
-
-        if (TextCells.Width(flat) <= max)
-        {
-            return flat;
-        }
-
-        int cells = 0;
-        int end = 0;
-        while (end < flat.Length)
-        {
-            int w = TextCells.ClusterWidth(flat, end, out int length);
-            if (cells + w > max - 1)
-            {
-                break;
-            }
-
-            cells += w;
-            end += length;
-        }
-
-        return flat[..end] + "…";
+        return TextCells.Cut(text.ReplaceLineEndings(" "), max);
     }
 
     // ── Lines ───────────────────────────────────────────────────────────────
@@ -465,15 +442,27 @@ public sealed class TranscriptRenderer : INoticeSink
     }
 
     /// <summary>A tool call's one line as plain text (the Web UI's feed): <see cref="ToolMarkup"/> without its markup.</summary>
-    public static string ToolText(string name, string argumentsJson) =>
-        (ToolGlyph.TrimStart() + name + " " + Truncate(ToolCallText.Brief(argumentsJson), ToolTextLimit)).TrimEnd();
+    public static string ToolText(string name, string argumentsJson) => ToolText(name, ToolCallText.BriefWithTarget(argumentsJson));
+
+    private static string ToolText(string name, ToolCallText.BriefTarget found) =>
+        (ToolGlyph.TrimStart() + name + " " + Truncate(found.Brief, ToolTextLimit)).TrimEnd();
 
     public void Tool(string name, string argumentsJson)
     {
-        Feed?.Add(WebUi.FeedKind.Tool, ToolText(name, argumentsJson));
-        ToolLine(ToolMarkup(name, argumentsJson), ToolMarkup(name, argumentsJson).TrimStart(), link: ToolTarget(name, argumentsJson));
+        // The arguments parsed once, for the feed's text, the line's markup and its link (2026-11-02, review P2-8).
+        var found = ToolCallText.BriefWithTarget(argumentsJson);
+        Feed?.Add(WebUi.FeedKind.Tool, ToolText(name, found));
+        string markup = ToolMarkup(name, found);
+        ToolLine(markup, markup.TrimStart(), link: ToolTarget(name, found));
         _callOpen = true;   // its result joins this call's unit (2026-10-04)
     }
+
+    /// <summary>
+    /// The names of the tools whose <c>path</c> is the working folder's (2026-11-02, review P2-6; <c>TurnToolSet.WorkingFolderNamesOf</c>,
+    /// set each turn): only their tool lines link a path, so a <c>unc_read</c> or an Obsidian path never links a same-named local file. Null
+    /// (smoke, the tests that set none) links any tool's path, as before.
+    /// </summary>
+    public IReadOnlySet<string>? WorkingFolderTools { get; set; }
 
     /// <summary>
     /// A tool line's link (2026-11-01, the user's call: the argument alone, never the name or the other values): where the call's
@@ -481,9 +470,10 @@ public sealed class TranscriptRenderer : INoticeSink
     /// <see cref="ResolvePath"/> (none without one, or outside the working folder). A value cut short links its shown part, never the
     /// <c>…</c>; one past the brief's three values, none.
     /// </summary>
-    internal ToolLink? ToolTarget(string name, string argumentsJson)
+    internal ToolLink? ToolTarget(string name, string argumentsJson) => ToolTarget(name, ToolCallText.BriefWithTarget(argumentsJson));
+
+    private ToolLink? ToolTarget(string name, ToolCallText.BriefTarget found)
     {
-        var found = ToolCallText.BriefWithTarget(argumentsJson);
         if (found.Value is not { } value || found.Start < 0)
         {
             return null;
@@ -491,6 +481,7 @@ public sealed class TranscriptRenderer : INoticeSink
 
         string? target = found.Key == "url"
             ? LinkText.IsWeb(value) && LinkText.IsLinkable(value, web: true) ? value : null
+            : WorkingFolderTools is { } local && !local.Contains(name) ? null
             : ReplyResolverForTool(value) is { } full && LinkText.IsLinkable(full, web: false) ? LinkText.PathLink(full) : null;
         if (target is null)
         {
@@ -537,7 +528,7 @@ public sealed class TranscriptRenderer : INoticeSink
         bool sameUnit = TakeCall();
         time ??= "";
         Feed?.Add(WebUi.FeedKind.ToolResult, Truncate(text, ToolTextLimit), failed: IsToolFailure(text), joins: sameUnit);
-        ToolWrite(new ToolResultView(text, time), () => WriteLine(ToolResultMarkup(name, text) + TimeMarkup(time), (ToolResultMarkup(name, text) + TimeMarkup(time)).TrimStart()), sameUnit);
+        ToolWrite(new ToolResultView(text, time), () => WriteLine(ToolResultMarkup(name, text), (ToolResultMarkup(name, text) + TimeMarkup(time)).TrimStart(), tail: time), sameUnit);
         CountFailure(text);
     }
 
@@ -566,9 +557,9 @@ public sealed class TranscriptRenderer : INoticeSink
         ArgumentNullException.ThrowIfNull(text);
         bool sameUnit = TakeCall();
         Feed?.Add(WebUi.FeedKind.Tool, glyph.TrimStart() + Truncate(text, ToolTextLimit), failed: IsToolFailure(text), joins: sameUnit);
-        ToolLine(ToolNoteMarkup(text, glyph) + TimeMarkup(time), sameUnit: sameUnit, inlineMarkup: (IsToolFailure(text)
+        ToolLine(ToolNoteMarkup(text, glyph), sameUnit: sameUnit, inlineMarkup: (IsToolFailure(text)
             ? Theme.ColorMarkup(Theme.Warn, ToolFailedGlyph.TrimStart() + Truncate(text, ToolTextLimit))
-            : Theme.ColorMarkup(Theme.Dim, glyph.TrimStart() + Truncate(text, ToolTextLimit))) + TimeMarkup(time));
+            : Theme.ColorMarkup(Theme.Dim, glyph.TrimStart() + Truncate(text, ToolTextLimit))) + TimeMarkup(time), tail: time);
         CountFailure(text);
     }
 
@@ -650,7 +641,7 @@ public sealed class TranscriptRenderer : INoticeSink
     }
 
     private void SkillLine(string text, string time = "") =>
-        ToolLine(SkillNoteMarkup(text) + TimeMarkup(time), Theme.ColorMarkup(Theme.Dim, SkillGlyph.TrimStart() + Truncate(text, ToolTextLimit)) + TimeMarkup(time));
+        ToolLine(SkillNoteMarkup(text), Theme.ColorMarkup(Theme.Dim, SkillGlyph.TrimStart() + Truncate(text, ToolTextLimit)) + TimeMarkup(time), tail: time);
 
     /// <summary><see cref="ToolNote"/> for a result the police refused: the same dim line behind <see cref="PoliceGlyph"/>.</summary>
     public void PoliceNote(string text)
@@ -764,50 +755,217 @@ public sealed class TranscriptRenderer : INoticeSink
     /// </summary>
     public Func<string, string?>? ResolvePath { get; set; }
 
-    // The open reply's answers (text → full path or none), so the disk is asked once per span per reply, never per frame: the live block
-    // is a new ReplyBlock on every delta and laid out again on every tick (plan review 17). Emptied with the reply's text (ClearReply);
-    // read on the pane's tick thread, so locked.
-    private readonly Dictionary<string, string?> _resolved = new(StringComparer.Ordinal);
+    // The path answers (2026-11-02, review P2-4: the disk was asked on the pane's tick, under its lock, so a slow share froze the screen).
+    // The layout reads them and never waits: a span not known yet is queued to one background worker and draws unlinked until it answers,
+    // when the reply is laid out again (ReplaceLive). _found holds the paths found for the session (the model often writes a file, then
+    // names it again); _missed the spans with no file, for this reply only (ClearReply: a file named before it exists links once written);
+    // _queued what's asked and not answered. ForgetPaths empties them all when the working folder moves (the answers are full paths under
+    // the old one), and _generation keeps an answer for the old folder out. Read on the tick thread, the worker and the renderer's: locked.
+    private readonly Dictionary<string, string> _found = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _missed = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _queued = new(StringComparer.Ordinal);
+    private readonly Queue<string> _toResolve = new();
     private readonly Lock _resolvedLock = new();
+    private int _generation;
+    private bool _resolving;
 
-    /// <summary>The resolver the reply's blocks get: <see cref="ResolvePath"/> through the reply's cache, null without one.</summary>
+    // The ReplyBlock last put in the live slot (the worker lays it out again), and the one SettleReply last settled.
+    private volatile ReplyBlock? _liveReply;
+    private ReplyBlock? _settledReply;
+
+    /// <summary>
+    /// Where the path worker runs (2026-11-02, review P2-4): a pool thread. Tests run it inline, or hold it to show the layout doesn't wait.
+    /// </summary>
+    internal Action<Action> RunResolver { get; set; } = static work => _ = Task.Run(work);
+
+    /// <summary>The resolver the reply's blocks get: <see cref="ResolvePath"/> through the cache, null without one.</summary>
     private Func<string, string?>? ReplyResolver => ResolvePath is null ? null : ResolveCached;
 
+    /// <summary>The cache's answer for <paramref name="text"/>, never the disk: null while it's unknown (then asked in the background) or missing.</summary>
     private string? ResolveCached(string text)
     {
+        bool start;
         lock (_resolvedLock)
         {
-            if (_resolved.TryGetValue(text, out var known))
+            if (_found.TryGetValue(text, out var full))
             {
-                return known;
+                return full;
+            }
+
+            if (_missed.Contains(text) || !_queued.Add(text))
+            {
+                return null;
+            }
+
+            _toResolve.Enqueue(text);
+            start = !_resolving;
+            _resolving = true;
+        }
+
+        if (start)
+        {
+            RunResolver(ResolveQueued);
+        }
+
+        return null;
+    }
+
+    /// <summary>The worker: each queued span through <see cref="ResolvePath"/>, then the live reply laid out again when one was found.</summary>
+    private void ResolveQueued()
+    {
+        bool anyFound = false;
+        while (true)
+        {
+            string text;
+            int generation;
+            lock (_resolvedLock)
+            {
+                if (!_toResolve.TryDequeue(out text!))
+                {
+                    _resolving = false;
+                    break;
+                }
+
+                generation = _generation;
+            }
+
+            string? full = AskDisk(text);
+            lock (_resolvedLock)
+            {
+                if (generation != _generation)
+                {
+                    continue;   // the working folder moved while it was asked
+                }
+
+                _queued.Remove(text);
+                if (full is not null)
+                {
+                    _found[text] = full;
+                    anyFound = true;
+                }
+                else
+                {
+                    _missed.Add(text);
+                }
             }
         }
 
-        string? full;
+        // Recorded before the block is read: a block put in the slot after this lays itself out with the answer.
+        if (anyFound && _liveReply is { } live)
+        {
+            _pane?.ReplaceLive(live, live.Again());
+        }
+    }
+
+    /// <summary><see cref="ResolvePath"/> on <paramref name="text"/>, a failure none.</summary>
+    private string? AskDisk(string text)
+    {
         try
         {
-            full = ResolvePath?.Invoke(text);
+            return ResolvePath?.Invoke(text);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
-            full = null;
+            return null;
         }
-
-        lock (_resolvedLock)
-        {
-            _resolved[text] = full;
-        }
-
-        return full;
     }
 
-    /// <summary>The reply's text emptied, and with it the reply's path answers (2026-11-01): the one place both are cleared.</summary>
+    /// <summary>
+    /// Before the live reply commits (2026-11-02, review P2-4): its spans the worker hasn't answered are asked here, on the renderer's
+    /// thread, and the reply is laid out again when any links, so a reply committed in the tick its last words came in still links its
+    /// paths. Rows the pane committed earlier, while the reply streamed, stay as they were drawn: a span answered after its row committed
+    /// stays unlinked (rare: a local look takes well under a tick). Once per block.
+    /// </summary>
+    private void SettleReply()
+    {
+        if (ResolvePath is null || _liveReply is not { } live || ReferenceEquals(live, _settledReply))
+        {
+            return;
+        }
+
+        bool linked = false;
+        foreach (string text in live.PathCandidates)
+        {
+            int generation;
+            lock (_resolvedLock)
+            {
+                if (_found.ContainsKey(text))
+                {
+                    linked = true;
+                    continue;
+                }
+
+                if (_missed.Contains(text))
+                {
+                    continue;
+                }
+
+                generation = _generation;
+            }
+
+            string? full = AskDisk(text);
+            lock (_resolvedLock)
+            {
+                if (generation != _generation)
+                {
+                    continue;
+                }
+
+                if (full is not null)
+                {
+                    _found[text] = full;
+                    linked = true;
+                }
+                else
+                {
+                    _missed.Add(text);
+                }
+            }
+        }
+
+        if (linked)
+        {
+            var again = live.Again();
+            _pane!.SetLive(again);
+            _liveReply = again;
+            live = again;
+        }
+
+        _settledReply = live;
+    }
+
+    /// <summary>
+    /// The path answers forgotten (2026-11-02, review P2-4): <c>ChatScreen</c> calls it when the working folder moves (<c>/cwd</c>, a
+    /// profile switch), since every answer is a full path under the old one. An answer on its way is dropped.
+    /// </summary>
+    public void ForgetPaths()
+    {
+        lock (_resolvedLock)
+        {
+            _found.Clear();
+            _missed.Clear();
+            _queued.Clear();
+            _toResolve.Clear();
+            _generation++;
+        }
+    }
+
+    /// <summary>A reply block into the live slot, kept for the path worker's second layout.</summary>
+    private void SetReplyLive(ReplyBlock block)
+    {
+        _liveReply = block;
+        _pane!.SetLive(block);
+    }
+
+    /// <summary>The reply's text emptied, and with it this reply's "no such file" answers (2026-11-01; the found ones kept, 2026-11-02).</summary>
     private void ClearReply()
     {
         _reply.Clear();
+        _liveReply = null;
+        _settledReply = null;
         lock (_resolvedLock)
         {
-            _resolved.Clear();
+            _missed.Clear();
         }
     }
 
@@ -873,6 +1031,8 @@ public sealed class TranscriptRenderer : INoticeSink
         // The opening calls' lines come before the glyph: a run of their own, the reply's calls another.
         EndRun();
         BreakIfMidText();
+        // The reply's ⧉ glyphs are numbered from here (2026-11-02, the copy-code findings): once a turn, so every piece a tool line cut counts.
+        _pane?.MarkCopyFloor();
         _openGlyph = string.IsNullOrEmpty(glyph) ? AssistantGlyph : glyph;
         Feed?.Begin(_openGlyph.Trim());
         _slot = markdown && _pane is { Enabled: true };
@@ -888,7 +1048,7 @@ public sealed class TranscriptRenderer : INoticeSink
             ClearReply();
             _glyph = true;
             _codeKeep = CodeCollapseCount();
-            _pane!.SetLive(new ReplyBlock("", glyph: true, codeKeep: _codeKeep, glyphText: _openGlyph, resolvePath: ReplyResolver));
+            SetReplyLive(new ReplyBlock("", glyph: true, codeKeep: _codeKeep, glyphText: _openGlyph, resolvePath: ReplyResolver));
         }
         else if (_pane is not null && !_speakerMarked)
         {
@@ -961,7 +1121,7 @@ public sealed class TranscriptRenderer : INoticeSink
             }
 
             _reply.Append(text);
-            _pane!.SetLive(new ReplyBlock(_reply.ToString(), _glyph, codeKeep: _codeKeep, glyphText: _openGlyph, resolvePath: ReplyResolver));
+            SetReplyLive(new ReplyBlock(_reply.ToString(), _glyph, codeKeep: _codeKeep, glyphText: _openGlyph, resolvePath: ReplyResolver));
             _state = LineState.MidText;
             return;
         }
@@ -1005,6 +1165,11 @@ public sealed class TranscriptRenderer : INoticeSink
         _heldWhitespace.Clear();
         if (_slot)
         {
+            if (_state == LineState.MidText)
+            {
+                SettleReply();   // its paths asked outside the pane's lock (2026-11-02, review P2-4)
+            }
+
             // One lift and one draw for the block, its blank line, or the glyph line nothing followed.
             using (_pane!.Batch())
             {
@@ -1087,6 +1252,11 @@ public sealed class TranscriptRenderer : INoticeSink
             }
 
             EndRun();
+            if (_state == LineState.MidText)
+            {
+                SettleReply();
+            }
+
             using (_pane!.Batch())
             {
                 _glyphAfterThinking = _state == LineState.GlyphOnly;
@@ -1135,7 +1305,7 @@ public sealed class TranscriptRenderer : INoticeSink
             {
                 ClearReply();
                 _glyph = true;
-                _pane.SetLive(new ReplyBlock("", glyph: true, codeKeep: _codeKeep, glyphText: _openGlyph, resolvePath: ReplyResolver));
+                SetReplyLive(new ReplyBlock("", glyph: true, codeKeep: _codeKeep, glyphText: _openGlyph, resolvePath: ReplyResolver));
                 _state = LineState.GlyphOnly;
             }
             else
@@ -1233,34 +1403,38 @@ public sealed class TranscriptRenderer : INoticeSink
     /// (dropped from the slot, or taken back out of the flow on the plain path) — and past the count
     /// the pane folds the run under its summary. Otherwise the plain line it always was.
     /// </summary>
-    private void ToolLine(string fullMarkup, string inlineMarkup, bool sameUnit = false, ToolLink? link = null) =>
-        ToolWrite(new EndedLine(Hanging(fullMarkup, link)), () => WriteLine(fullMarkup, inlineMarkup, link), sameUnit);
+    /// <remarks><paramref name="tail"/>: a slow tool's time (2026-11-02, review P2-1), kept apart from <paramref name="fullMarkup"/> so the
+    /// line keeps its hanging shape; the inline markup carries it glued, as a line with no indent to keep.</remarks>
+    private void ToolLine(string fullMarkup, string inlineMarkup, bool sameUnit = false, ToolLink? link = null, string? tail = null) =>
+        ToolWrite(new EndedLine(Hanging(fullMarkup, link, tail)), () => WriteLine(fullMarkup, inlineMarkup, link, tail), sameUnit);
 
     /// <summary>
     /// A one-line markup (<c>[style]  · text[/]</c>, every line builder's shape) as a renderable whose wrapped rows start under its
     /// text, not at column 0 (2026-10-04, the UI review: a long path in a 🛠️ line wrapped to the window's edge): the leading
     /// blanks, the glyph and the blanks after it are the first row's prefix, as many blanks the others'. Any other shape — nested
-    /// markup, nothing after the glyph — is the plain line it was.
+    /// markup, nothing after the glyph — is the plain line it was. <paramref name="tail"/> (2026-11-02, review P2-1: a slow tool's time glued
+    /// onto the markup made it a second span, so a long line wrapped to column 0 again) is dim text at the body's end, inside the indent.
     /// </summary>
-    internal static IRenderable Hanging(string markup, ToolLink? link = null)
+    internal static IRenderable Hanging(string markup, ToolLink? link = null, string? tail = null)
     {
         ArgumentNullException.ThrowIfNull(markup);
+        string glued = markup + TimeMarkup(tail);
         int close = markup.IndexOf(']', StringComparison.Ordinal);
         if (!markup.StartsWith('[') || markup.StartsWith("[[", StringComparison.Ordinal) || close < 0 || !markup.EndsWith("[/]", StringComparison.Ordinal))
         {
-            return new Markup(markup);
+            return new Markup(glued);
         }
 
         string tag = markup[1..close];
         string inner = markup[(close + 1)..^3];
         if (inner.Replace("[[", "", StringComparison.Ordinal).Contains('['))
         {
-            return new Markup(markup);   // a span inside: drawn whole
+            return new Markup(glued);   // a span inside: drawn whole
         }
 
         if (link is not null)
         {
-            return HangingLinked(tag, inner, link.Value) ?? new Markup(markup);
+            return HangingLinked(tag, inner, link.Value, tail) ?? new Markup(glued);
         }
 
         int start = 0;
@@ -1283,7 +1457,7 @@ public sealed class TranscriptRenderer : INoticeSink
 
         if (start == end || text == end || text == inner.Length)
         {
-            return new Markup(markup);
+            return new Markup(glued);
         }
 
         string prefix = inner[..text].Replace("[[", "[", StringComparison.Ordinal).Replace("]]", "]", StringComparison.Ordinal);
@@ -1294,10 +1468,10 @@ public sealed class TranscriptRenderer : INoticeSink
         }
         catch (InvalidOperationException)
         {
-            return new Markup(markup);
+            return new Markup(glued);
         }
 
-        return new UI.Markdown.HangingIndent(prefix, new string(' ', TextCells.Width(prefix)), style, new Markup("[" + tag + "]" + inner[text..] + "[/]"));
+        return new UI.Markdown.HangingIndent(prefix, new string(' ', TextCells.Width(prefix)), style, new Markup("[" + tag + "]" + inner[text..] + "[/]" + TimeMarkup(tail)));
     }
 
     /// <summary>
@@ -1305,7 +1479,7 @@ public sealed class TranscriptRenderer : INoticeSink
     /// style, which has no link, so blank cells and the glyph never open anything), the body a <see cref="Paragraph"/> of up to three runs
     /// in the line's style — before, the link, after — which wraps exactly as the markup's own paragraph did. Null for a shape it cannot read.
     /// </summary>
-    private static IRenderable? HangingLinked(string tag, string inner, ToolLink link)
+    private static IRenderable? HangingLinked(string tag, string inner, ToolLink link, string? tail = null)
     {
         Style style;
         try
@@ -1338,12 +1512,23 @@ public sealed class TranscriptRenderer : INoticeSink
 
         if (start == end || text == end || text == plain.Length || link.Start < text)
         {
-            return LinkedRuns(style, plain, link);   // no prefix to hang under: the whole line, linked
+            return WithTail(LinkedRuns(style, plain, link), tail);   // no prefix to hang under: the whole line, linked
         }
 
         string prefix = plain[..text];
-        var body = LinkedRuns(style, plain[text..], link with { Start = link.Start - text });
+        var body = WithTail(LinkedRuns(style, plain[text..], link with { Start = link.Start - text }), tail);
         return new UI.Markdown.HangingIndent(prefix, new string(' ', TextCells.Width(prefix)), style, body);
+    }
+
+    /// <summary><paramref name="paragraph"/> with <paramref name="tail"/> after it in the dim color, as <see cref="TimeMarkup"/> draws it.</summary>
+    private static Paragraph WithTail(Paragraph paragraph, string? tail)
+    {
+        if (!string.IsNullOrEmpty(tail))
+        {
+            paragraph.Append(tail, new Style(foreground: Theme.Dim));
+        }
+
+        return paragraph;
     }
 
     /// <summary>
@@ -1559,8 +1744,9 @@ public sealed class TranscriptRenderer : INoticeSink
     /// a tool line's target, plan review D68: the plain path runs with the pane on the screen too, at <c>Tool collapse count</c> 0) is drawn
     /// only while the pane is on the screen: no pane, no clicks.
     /// </summary>
-    private void WriteLine(string fullMarkup, string inlineMarkup, ToolLink? link = null)
+    private void WriteLine(string fullMarkup, string inlineMarkup, ToolLink? link = null, string? tail = null)
     {
+        string glued = fullMarkup + TimeMarkup(tail);
         EndThinking();
         _heldWhitespace.Clear();
         if (_pane is not { Enabled: true })
@@ -1577,7 +1763,7 @@ public sealed class TranscriptRenderer : INoticeSink
                 {
                     DropSlot();
                     _glyphPending = true;
-                    MarkupLineLinked(fullMarkup, link);
+                    MarkupLineLinked(glued, link);
                 }
             }
             else
@@ -1588,7 +1774,7 @@ public sealed class TranscriptRenderer : INoticeSink
         else
         {
             BreakIfMidText();
-            _console.Write(new EndedLine(Hanging(fullMarkup, link)));   // wrapped rows under the text (2026-10-04)
+            _console.Write(new EndedLine(Hanging(fullMarkup, link, tail)));   // wrapped rows under the text (2026-10-04), the time inside (P2-1)
         }
 
         _state = LineState.AtLineStart;
@@ -1645,6 +1831,7 @@ public sealed class TranscriptRenderer : INoticeSink
     /// <summary>The slot's text becomes transcript; the next stretch of this reply is flush-left.</summary>
     private void CommitSlot()
     {
+        SettleReply();   // a no-op when the caller settled it already, outside the lock
         _pane!.CommitLive();
         ClearReply();
         _glyph = false;

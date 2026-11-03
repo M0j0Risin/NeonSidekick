@@ -37,7 +37,9 @@ public sealed class CustomCommandCatalog
     // The words a scan was asked about and missed since it was published (2026-10-31, review P1-6/P3-8): a repeated miss scans no more.
     private readonly HashSet<string> _missed = new(StringComparer.OrdinalIgnoreCase);
     private CustomCommandScan _last = CustomCommandScan.Empty;
-    private DateTimeOffset _lastAt = DateTimeOffset.MinValue;
+    // When the last scan was published, on the monotonic clock (2026-11-02, review P4-6: the wall clock stepped back kept a stale scan
+    // fresh, so /commands save sum then /sum read as unknown); null is "scan again".
+    private long? _lastAt;
 
     private sealed record Loaded(CustomCommandFileText? Text, string? Problem, string Stamp = "");
 
@@ -64,7 +66,7 @@ public sealed class CustomCommandCatalog
         var roots = _roots();
         lock (_gate)
         {
-            if (_time.GetUtcNow() - _lastAt < ReuseWindow && _last.Roots == roots)
+            if (_lastAt is { } at && _time.GetElapsedTime(at) < ReuseWindow && _last.Roots == roots)
             {
                 return _last;
             }
@@ -150,7 +152,7 @@ public sealed class CustomCommandCatalog
     {
         lock (_gate)
         {
-            _lastAt = DateTimeOffset.MinValue;
+            _lastAt = null;
             _missed.Clear();
         }
     }
@@ -229,7 +231,7 @@ public sealed class CustomCommandCatalog
         lock (_gate)
         {
             _last = scan;
-            _lastAt = _time.GetUtcNow();
+            _lastAt = _time.GetTimestamp();
             _missed.Clear();
         }
 
@@ -325,6 +327,16 @@ public sealed class CustomCommandCatalog
                 warnings.Add(CustomCommandText.ShellLinesWarning);
             }
 
+            if (text.IgnoredKeys is { Count: > 0 } ignored)
+            {
+                warnings.Add(CustomCommandText.IgnoredKeysWarning(ignored));   // 2026-11-02, review P12-6
+            }
+
+            if (text.ArgumentDropped)
+            {
+                warnings.Add(CustomCommandText.ArgumentDroppedWarning);   // 2026-11-02, review P4-1
+            }
+
             // The template's description or hint left as they were warns too (2026-10-31, review P6-5), not only its body.
             if (text.Body.Trim() == CustomCommandText.TemplateBody(name) || CustomCommandText.IsTemplateDescription(text.Description) || text.ArgumentHint == CustomCommandText.TemplateHint)
             {
@@ -344,6 +356,7 @@ public sealed class CustomCommandCatalog
                 text.Body)
             {
                 HasShellLines = text.HasShellLines,
+                IgnoredKeys = text.IgnoredKeys ?? [],
                 Stamp = loaded.Stamp,
             });
         }

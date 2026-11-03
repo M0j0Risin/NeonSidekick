@@ -304,7 +304,41 @@ public partial class ChatScreenTests
         }
 
         /// <summary>A one-time link as the real host's reads (later on 2026-10-15), its code numbered; at a base address since 2026-10-31.</summary>
-        public string? OneTimeLinkAt(string baseAddress) => Started is null ? null : WebUiAuth.OnceLinkAt(baseAddress, "code" + Interlocked.Increment(ref _codes));
+        public string? OneTimeLinkAt(string baseAddress)
+        {
+            if (Started is null)
+            {
+                return null;
+            }
+
+            string link = WebUiAuth.OnceLinkAt(baseAddress, "code" + Interlocked.Increment(ref _codes));
+            lock (_good)
+            {
+                _good.Add(link);
+            }
+
+            return link;
+        }
+
+        private readonly HashSet<string> _good = [];
+
+        /// <summary>Unused links are good (2026-11-02, review P12-5) until <see cref="SpendAll"/>.</summary>
+        public bool OneTimeLinkGood(string link)
+        {
+            lock (_good)
+            {
+                return _good.Contains(link);
+            }
+        }
+
+        /// <summary>Every link minted so far used, as a phone's sign-in would.</summary>
+        public void SpendAll()
+        {
+            lock (_good)
+            {
+                _good.Clear();
+            }
+        }
 
         public Task StopAsync()
         {

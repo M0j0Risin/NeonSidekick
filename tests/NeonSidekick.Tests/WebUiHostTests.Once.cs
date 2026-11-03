@@ -60,6 +60,34 @@ public sealed partial class WebUiHostTests
         Assert.Equal(HttpStatusCode.Forbidden, stale.StatusCode);
     }
 
+    /// <summary>
+    /// <see cref="WebUiOneTimeCodes.IsGood"/> takes nothing (2026-11-02, review P12-5): good until the code is taken or its minute is up; an
+    /// unknown or empty one never is. The host answers it for its own links.
+    /// </summary>
+    [Fact]
+    public void IsGood_TakesNothing_AndTurnsFalse_AfterATake_OrTheLifetime()
+    {
+        var time = new ManualTimeProvider();
+        var codes = new WebUiOneTimeCodes(time);
+        string taken = codes.Mint();
+        string lapsing = codes.Mint();
+
+        Assert.True(codes.IsGood(taken));
+        Assert.True(codes.IsGood(taken));   // asked twice, still held
+        Assert.True(codes.Take(taken));
+        Assert.False(codes.IsGood(taken));
+
+        time.Advance(WebUiOneTimeCodes.Lifetime + TimeSpan.FromSeconds(1));
+        Assert.False(codes.IsGood(lapsing));
+        Assert.False(codes.IsGood("nope"));
+        Assert.False(codes.IsGood(null));
+
+        string link = _host.OneTimeLinkAt(WebUiAuth.BaseAddress("127.0.0.1", _host.Port))!;
+        Assert.Equal(CodeOf(link), WebUiAuth.OnceCodeOf(link));
+        Assert.True(_host.OneTimeLinkGood(link));
+        Assert.False(_host.OneTimeLinkGood(WebUiAuth.SignInLinkAt(WebUiAuth.BaseAddress("127.0.0.1", _host.Port), _token)));
+    }
+
     [Fact]
     public void TheCodes_AreGoodOnce_ForAMinute_AtMostEight()
     {

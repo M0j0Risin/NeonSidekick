@@ -40,7 +40,11 @@ public sealed class ToolArgumentWatch
 
     private sealed class Call
     {
+        /// <summary>The name the stream gave, once the request offered that tool (<c>offered</c>); null until then, or for one it didn't.</summary>
         public string? Name { get; set; }
+
+        /// <summary>The name the stream gave, offered or not: for the log lines alone (<see cref="Latest"/>), scrubbed there.</summary>
+        public string? StreamedName { get; set; }
 
         public long Chars { get; set; }
 
@@ -51,6 +55,7 @@ public sealed class ToolArgumentWatch
     }
 
     private readonly Func<string, int?> _ceiling;
+    private readonly Func<string, bool>? _offered;
     private readonly TimeProvider _time;
     private readonly Dictionary<int, Call> _calls = [];
     private (string Name, long Chars)? _shown;
@@ -61,19 +66,30 @@ public sealed class ToolArgumentWatch
 
     /// <param name="ceiling">A tool's ceiling by its name (<see cref="Tools.IArgumentCeiling"/>), null for none; read as a call is named.</param>
     /// <param name="time">The clock <see cref="ProgressInterval"/> is kept on.</param>
-    public ToolArgumentWatch(Func<string, int?> ceiling, TimeProvider time)
+    /// <param name="offered">
+    /// Whether the request offered a tool of that name (2026-11-02, review P12-7); null takes every name. A name it didn't offer is never
+    /// the call's name, so the busy row shows it as <see cref="TurnText.UnnamedCall"/> past <see cref="CountShownFrom"/> and it has no
+    /// ceiling: an injected model's long name, or one carrying ESC or bidi characters, never reads as the app's own status.
+    /// </param>
+    public ToolArgumentWatch(Func<string, int?> ceiling, TimeProvider time, Func<string, bool>? offered = null)
     {
         ArgumentNullException.ThrowIfNull(ceiling);
         ArgumentNullException.ThrowIfNull(time);
         _ceiling = ceiling;
         _time = time;
+        _offered = offered;
     }
 
     /// <summary>The first call past its ceiling, or null.</summary>
     public Runaway? Over { get; private set; }
 
-    /// <summary>The call written last and its own characters, shown or not, or null before any; for the request's log lines.</summary>
-    public TurnEvent.ToolWriting? Latest => _latest is { } call ? new TurnEvent.ToolWriting(call.Name ?? TurnText.UnnamedCall, call.Chars) : null;
+    /// <summary>
+    /// The call written last and its own characters, shown or not, or null before any; for the request's log lines, so its streamed name
+    /// even when the request didn't offer it (troubleshooting), put through <see cref="Files.NameScrub.Display"/>.
+    /// </summary>
+    public TurnEvent.ToolWriting? Latest => _latest is { } call
+        ? new TurnEvent.ToolWriting(call.Name ?? (call.StreamedName is { } streamed ? Files.NameScrub.Display(streamed) : TurnText.UnnamedCall), call.Chars)
+        : null;
 
     /// <summary>Every call's arguments' characters so far, for the turn's closing log line.</summary>
     public long Chars { get; private set; }
@@ -100,10 +116,14 @@ public sealed class ToolArgumentWatch
                 _calls.Add(delta.Index, call);
             }
 
-            if (call.Name is null && !string.IsNullOrEmpty(delta.FunctionName))
+            if (call.StreamedName is null && !string.IsNullOrEmpty(delta.FunctionName))
             {
-                call.Name = delta.FunctionName;
-                call.Ceiling = _ceiling(call.Name);
+                call.StreamedName = delta.FunctionName;
+                if (_offered?.Invoke(delta.FunctionName) ?? true)
+                {
+                    call.Name = delta.FunctionName;
+                    call.Ceiling = _ceiling(call.Name);
+                }
             }
 
             int piece = delta.FunctionArgumentsUpdate is { } arguments ? Encoding.UTF8.GetCharCount(arguments.ToMemory().Span) : 0;

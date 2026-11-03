@@ -42,6 +42,9 @@ public sealed class WriteGuardTests : IDisposable
     [InlineData("app/.neon/x.md", FileOutcome.NeonFilesProtected)]
     [InlineData("app/.NEON. /x.md", FileOutcome.NeonFilesProtected)]
     [InlineData("sub/.git/config", FileOutcome.GitProtected)]
+    [InlineData(".claude/settings.json", FileOutcome.ClaudeFilesProtected)]   // 2026-11-02, review P12-2
+    [InlineData("sub/.Claude. /x", FileOutcome.ClaudeFilesProtected)]
+    [InlineData("app/.claudeignore", null)]
     [InlineData("app/neon/x.md", null)]
     [InlineData("", null)]
     public void AGuardedFolder_IsFoundAtAnyDepth(string relative, FileOutcome? expected)
@@ -83,6 +86,26 @@ public sealed class WriteGuardTests : IDisposable
         Assert.Equal(FileOutcome.NeonFilesProtected, _files.Delete(".neon").Outcome);
         Assert.Equal(FileOutcome.Ok, WriteGuard.AsApp(() => _files.WriteText(plan, "x", overwrite: true)).Outcome);
         Assert.Equal(FileText.NeonFilesProtected(plan), FileText.Error(FileOutcome.NeonFilesProtected, plan, "write"));
+    }
+
+    /// <summary>
+    /// Claude Code's files (2026-11-02, review P12-2): <c>.claude</c> at any depth and a <c>.mcp.json</c> right in the working folder, which
+    /// <c>/claude</c> loads, are refused; one deeper is an ordinary file; the app's own writes pass (a commands root linked into
+    /// <c>~/.claude/commands</c>, with the home as the working folder).
+    /// </summary>
+    [Fact]
+    public void ClaudeCodesFiles_AreRefused_ARootMcpJsonToo_ButTheAppWrites()
+    {
+        using var _ = WriteGuard.Configure(Facts(cwd: _root));
+        Assert.Equal(FileOutcome.ClaudeFilesProtected, Write(Path.Combine(".claude", "settings.json")));
+        Assert.Equal(FileOutcome.ClaudeFilesProtected, Write(Path.Combine("sub", ".claude", "commands", "x.md")));
+        Assert.Equal(FileOutcome.ClaudeFilesProtected, Write(".mcp.json"));
+        Assert.Equal(FileOutcome.ClaudeFilesProtected, Write(".MCP.json. "));
+        Assert.Equal(FileOutcome.Ok, Write(Path.Combine("sub", ".mcp.json")));
+        Assert.Equal(FileOutcome.ClaudeFilesProtected, _files.Delete(".claude").Outcome);
+        Assert.Equal(FileOutcome.Ok, WriteGuard.AsApp(() => _files.WriteText(Path.Combine(".claude", "commands", "c.md"), "x", overwrite: true)).Outcome);
+        Assert.True(WriteGuard.IsRefusal(FileOutcome.ClaudeFilesProtected));
+        Assert.Equal(FileText.ClaudeFilesProtected(".mcp.json"), FileText.Error(FileOutcome.ClaudeFilesProtected, ".mcp.json", "write"));
     }
 
     /// <summary>A task started inside the app's scope is guarded again once the scope closes: the pass never outlives the call.</summary>

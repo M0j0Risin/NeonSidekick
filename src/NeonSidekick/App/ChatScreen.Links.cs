@@ -17,9 +17,13 @@ internal sealed partial class ChatScreen
     /// links itself (Windows Terminal or VS Code on Windows: the pane's console writes links only there) the click is spent and nothing
     /// is opened, so a link never opens twice.
     /// </summary>
+    /// <remarks>
+    /// The address opened is <see cref="SafeText.WebLink"/>'s target, its host in the ASCII form the hover hint shows (2026-11-02, review
+    /// P12-3/P12-8), so what the hint names is what opens.
+    /// </remarks>
     private void OpenLink(string target)
     {
-        if (!LinkText.IsWeb(target) || !LinkText.IsLinkable(target, web: true) || !Uri.TryCreate(target, UriKind.Absolute, out var url))
+        if (!LinkText.IsWeb(target) || SafeText.WebLink(target) is not { } link || !Uri.TryCreate(link.Target, UriKind.Absolute, out var url))
         {
             return;
         }

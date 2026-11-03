@@ -196,10 +196,14 @@ public class FittingTableTests : IDisposable
         Assert.Contains(lines.SelectMany(l => l), s => s.Style.Background == Theme.MarkdownCodeBlock.Background);   // the rest on the slab
     }
 
-    [Fact]
-    public void WithNoColor_ADimRule_StandsBetweenTheCards_AndNoSlab()
+    /// <summary>16 colors count as none for the slab (2026-11-02, review P1-6): its stripes can't be told apart there, so the rule stands between cards.</summary>
+    [Theory]
+    [InlineData(ColorSystem.NoColors)]
+    [InlineData(ColorSystem.Legacy)]
+    [InlineData(ColorSystem.Standard)]
+    public void WithNoColor_ADimRule_StandsBetweenTheCards_AndNoSlab(ColorSystem colors)
     {
-        _console.Profile.Capabilities.ColorSystem = ColorSystem.NoColors;
+        _console.Profile.Capabilities.ColorSystem = colors;
         var lines = Render(Wide, 60);
         var texts = lines.Select(Text).ToList();
         int second = texts.FindIndex(l => l.StartsWith("Server   vLLM", StringComparison.Ordinal));

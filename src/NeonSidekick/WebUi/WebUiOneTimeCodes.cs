@@ -69,6 +69,34 @@ public sealed class WebUiOneTimeCodes
         }
     }
 
+    /// <summary>
+    /// Whether <paramref name="presented"/> is held and still within its lifetime, taking nothing (2026-11-02, review P12-5: the pane keeps a
+    /// public address's one-time link while this holds, and mints the next once it's used or lapsed). Compared in constant time, as <see cref="Take"/>.
+    /// </summary>
+    public bool IsGood(string? presented)
+    {
+        if (string.IsNullOrEmpty(presented))
+        {
+            return false;
+        }
+
+        byte[] given = Encoding.UTF8.GetBytes(presented);
+        lock (_gate)
+        {
+            bool good = false;
+            foreach (var (code, minted) in _codes)
+            {
+                byte[] held = Encoding.UTF8.GetBytes(code);
+                if (held.Length == given.Length && CryptographicOperations.FixedTimeEquals(held, given))
+                {
+                    good = _time.GetElapsedTime(minted) <= Lifetime;
+                }
+            }
+
+            return good;
+        }
+    }
+
     /// <summary>Every code dropped (the server starting or stopping).</summary>
     public void Clear()
     {

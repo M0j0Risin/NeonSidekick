@@ -361,7 +361,8 @@ public sealed class SqlAccess
 
     /// <summary>
     /// A SQL Server cell for a workbook (2026-10-29): read once and in order, as SequentialAccess asks — text to Excel's cap through
-    /// <c>GetChars</c> and binary through <c>GetBytes</c>, never whole; a decimal or money by its provider value, past 15 digits text; a
+    /// <c>GetChars</c> and binary through <c>GetBytes</c>, never whole; a decimal or money by its provider value, a whole one past 15 digits
+    /// text (a fraction the nearest double, <see cref="XlsxValue.TryExcelNumber"/>); a
     /// <c>date</c> column's values dates and a <c>time</c> a time of day; anything else by the common rules. A value that won't read (a CLR
     /// type the app carries no assembly for) is <see cref="SqlText.Unreadable"/>, never a second read. The buffers are the shared pool's
     /// (2026-10-29, review P1-10: 64 KB a text cell, allocated per cell of every row).
@@ -425,7 +426,7 @@ public sealed class SqlAccess
 
     /// <summary>
     /// A SQL Server value read for a workbook, as a cell (2026-10-29, review P3-13: the per-type rules apart from the sealed reader, so they
-    /// are tested): a decimal's provider value by its exact digits (past 15 text), money as its decimal, a <c>time</c> a time of day, a
+    /// are tested): a decimal's provider value by its exact digits (a whole one past 15 text), money as its decimal, a <c>time</c> a time of day, a
     /// <c>date</c> column's values dates, anything the sheet can't type as its invariant text. Pure.
     /// </summary>
     public static XlsxValue ExportValue(object? value, string? typeName) => value switch

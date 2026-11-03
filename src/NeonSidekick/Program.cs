@@ -112,7 +112,8 @@ if (OperatingSystem.IsWindows())
     // OSC 8 links only where the terminal owns their Ctrl+click (2026-11-01, clickable links and paths): Windows Terminal and VS Code
     // open them themselves, so the app writes them there and its own opener stands down; anywhere else none are written and the app
     // opens a link itself, so no terminal can open one a second time. On a Mac Spectre's default stands (Cmd+click is the terminal's).
-    console.Profile.Capabilities.Links = environment.TerminalOpensLinks;
+    // Under a pseudo console only (2026-11-02, review P1-10): a conhost window opened from a Windows Terminal tab inherits WT_SESSION.
+    console.Profile.Capabilities.Links = environment.TerminalOpensLinks(NeonSidekick.Viewer.ViewerNative.UnderPseudoConsole());
 }
 
 var options = SidekickOptions.Parse(args);

@@ -106,9 +106,20 @@ public static class ShellText
     public const string TrustedPoliced =
         "Error: refused by the shell police: the command names .git, .neon, the project file or the app's own folder, which only the app's tools change (the git tools, write_file with the user's yes for the project file); use those";
 
+    /// <summary>
+    /// The tripwire's sentence for Claude Code's files (2026-11-02, review P12-2): <c>.claude</c> and <c>.mcp.json</c>, which no tool of the
+    /// model's changes. Prompt text.
+    /// </summary>
+    public const string ClaudePoliced =
+        "Error: refused by the shell police: the command names Claude Code's settings (.claude or .mcp.json), which /claude loads and only the user changes; tell the user the change, and they can make it";
+
+    /// <summary>The model's sentence for the word that tripped the tripwire: <see cref="ClaudePoliced"/> for Claude Code's files, else <see cref="TrustedPoliced"/>.</summary>
+    public static string TrustedPolicedFor(string token) => TrustedFilesPolice.IsClaudeFile(token) ? ClaudePoliced : TrustedPoliced;
+
     /// <summary>The transcript's line for it: the word that tripped it, and the script it was in.</summary>
     public static string TrustedShown(string token, string? file) =>
-        "refused: names " + token + (file is null ? "" : " (in " + file + ")") + ", a file only the app's tools change";
+        "refused: names " + token + (file is null ? "" : " (in " + file + ")")
+        + (TrustedFilesPolice.IsClaudeFile(token) ? ", Claude Code's settings only the user changes" : ", a file only the app's tools change");
 
     public static string TrustedLogLine(CommandRequest request, string token, string? file) =>
         $"police: trusted files ('{token}'{(file is null ? "" : " in " + file)}) — {request.Kind} {Quote(request.Command)}";

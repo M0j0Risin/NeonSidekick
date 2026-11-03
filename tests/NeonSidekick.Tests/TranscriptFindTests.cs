@@ -286,17 +286,24 @@ public class TranscriptFindTests : IDisposable
         Assert.True(input.IsAvailable);   // nothing read
     }
 
-    /// <summary>The typed /find line that opened the find is not searched (it holds the words); with no such line, every row is.</summary>
+    /// <summary>
+    /// The typed /find line that opened the find is not searched (it holds the words); with no such line, every row is. Found from the last
+    /// message's start (2026-11-02, review P6-4: a moved pin, the start row now passed), so a /find line wrapped onto a second row is still
+    /// left out whole.
+    /// </summary>
     [Fact]
     public void TheOwnFindLine_IsLeftOut()
     {
         static IReadOnlyList<Segment> Row(string text) => [new Segment(text)];
         IReadOnlyList<IReadOnlyList<Segment>> typed = [Row("apple"), Row(InputLine.PromptGlyph + "/find apple"), Row(" ")];
+        IReadOnlyList<IReadOnlyList<Segment>> wrapped = [Row("apple"), Row(InputLine.PromptGlyph + "/find a very long"), Row("apple"), Row(" ")];
         IReadOnlyList<IReadOnlyList<Segment>> chord = [Row("apple"), Row("pear")];
 
-        Assert.Equal(1, TranscriptFind.OwnLine(typed));
-        Assert.Equal(2, TranscriptFind.OwnLine(chord));
-        Assert.Equal(0, TranscriptFind.OwnLine([]));
+        Assert.Equal(1, TranscriptFind.OwnLine(typed, 1));
+        Assert.Equal(1, TranscriptFind.OwnLine(wrapped, 1));
+        Assert.Equal(2, TranscriptFind.OwnLine(chord, 0));
+        Assert.Equal(2, TranscriptFind.OwnLine(chord, -1));
+        Assert.Equal(0, TranscriptFind.OwnLine([], -1));
         Assert.Equal("the end of the transcript", ScreenPane.FindAtTheEnd);
     }
 

@@ -127,6 +127,17 @@ internal sealed record TurnToolInputs
 internal sealed record TurnToolSet(IReadOnlyList<AIFunction> Tools, IReadOnlyList<AIFunction> Offered, TurnRules Rules, RecallMemoryTool? Recall, RunCommandTool? Shell, NeonAdvisorTool? Advisors = null)
 {
     public static readonly TurnToolSet Empty = new([], [], new TurnRules(), null, null);
+
+    /// <summary>The names of the set's tools whose <c>path</c> is the working folder's (<see cref="WorkingFolderNamesOf"/>).</summary>
+    public IReadOnlySet<string> WorkingFolderNames => WorkingFolderNamesOf(Tools);
+
+    /// <summary>
+    /// The names of <paramref name="tools"/>' file and git tools, the ones whose <c>path</c> argument names a file in the working folder
+    /// (2026-11-02, review P2-6): a tool line links a path only for them, never for a UNC share's, an Obsidian vault's, a task's or a
+    /// skill's path that happens to match a local file's name.
+    /// </summary>
+    public static IReadOnlySet<string> WorkingFolderNamesOf(IEnumerable<AIFunction> tools) =>
+        tools.Where(t => t is FileTool or GitTool).Select(t => t.Name).ToHashSet(StringComparer.Ordinal);
 }
 
 internal sealed partial class ChatScreen

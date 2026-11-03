@@ -406,4 +406,84 @@ public sealed class SessionExportTests : IDisposable
         var doc = SessionExport.Build(new SessionRecord(Summary(), [Turn(1, "go", "done", 1, ["mcp__x`y"])], ""), SessionExportFormat.Markdown, Zone, Theme.Current, "p");
         Assert.Contains(": ``mcp__x`y``\n", doc.Text);
     }
+
+    // ── The note's replies made safe (2026-11-02, review P5-1/P12-1, P5-2) ──
+
+    private static string Note(params string[] replies) =>
+        SessionExport.Build(new SessionRecord(Summary(turns: replies.Length), [.. replies.Select((reply, i) => Turn(i + 1, "q" + (i + 1), reply))], ""),
+            SessionExportFormat.Markdown, Zone, Theme.Current, "p").Text;
+
+    /// <summary>A fence a reply left open is closed, so it can't swallow the next turn's heading.</summary>
+    [Fact]
+    public void Markdown_AFenceLeftOpen_IsClosed_AndTheNextTurnsHeadingStaysAHeading()
+    {
+        Assert.Equal("Here:\n\n```csharp\nvar x = 1;\n```", SessionExport.SafeReply("Here:\n\n```csharp\nvar x = 1;"));
+        Assert.Equal("```\na %% b\n```", SessionExport.SafeReply("```\na %% b"));   // its lines are still code: no %% escape
+        string note = Note("Here:\n\n```csharp\nvar x = 1;", "second");
+
+        string before = note[..note.IndexOf("## Turn 2", StringComparison.Ordinal)];
+        Assert.Equal(0, before.Split('\n').Count(line => line.StartsWith("```", StringComparison.Ordinal)) % 2);   // every fence above it closed
+        Assert.Contains("var x = 1;\n```\n", note, StringComparison.Ordinal);
+        Assert.Equal("Done.\n\n```\nclosed\n```", SessionExport.SafeReply("Done.\n\n```\nclosed\n```"));   // a closed one is left alone
+    }
+
+    /// <summary>A remote picture, raw HTML, a link that isn't the web's and Obsidian's comment never go live in the note.</summary>
+    [Fact]
+    public void Markdown_ARemotePicture_RawHtml_AndANonWebLink_AreText()
+    {
+        string safe = SessionExport.SafeReply(
+            "![pixel](https://tracker.example/p.gif) <img src=x onerror=alert(1)> [vault](obsidian://open?vault=x) <obsidian://x> %%hidden%% [ok](https://example.com/) ![local](pics/a.png)");
+
+        Assert.DoesNotContain("](https://tracker.example", safe, StringComparison.Ordinal);
+        Assert.Contains("pixel", safe, StringComparison.Ordinal);
+        Assert.Contains("\\<img", safe, StringComparison.Ordinal);
+        Assert.DoesNotContain("](obsidian:", safe, StringComparison.Ordinal);
+        Assert.Contains("vault", safe, StringComparison.Ordinal);
+        Assert.DoesNotContain("<obsidian:", safe, StringComparison.Ordinal);
+        Assert.Contains("\\%\\%hidden\\%\\%", safe, StringComparison.Ordinal);
+        Assert.Contains("[ok](https://example.com/)", safe, StringComparison.Ordinal);   // a web link stays
+        Assert.Contains("![local](pics/a.png)", safe, StringComparison.Ordinal);         // a relative picture stays
+    }
+
+    /// <summary>Code keeps what it says: a fenced block and an inline span holding HTML, %% and an obsidian: address come through as written.</summary>
+    [Fact]
+    public void Markdown_Code_IsKeptAsWritten()
+    {
+        string reply = "Use `<img src=x>` and `%%` here.\n\n```html\n<img src=x> %% [a](obsidian://x)\n```";
+        Assert.Equal(reply, SessionExport.SafeReply(reply));
+    }
+
+    /// <summary>Two replies' <c>[^1]</c> in one HTML export get ids of their own, so the second's footnote never jumps to the first's.</summary>
+    [Fact]
+    public void Html_TwoRepliesFootnotes_HaveDistinctIds()
+    {
+        var record = new SessionRecord(Summary(), [Turn(1, "a", "One[^1].\n\n[^1]: first"), Turn(2, "b", "Two[^1].\n\n[^1]: second")], "");
+        string html = SessionExport.Build(record, SessionExportFormat.Html, Zone, Theme.Current, "").Text;
+
+        Assert.Contains("id=\"t1-fn:1\"", html, StringComparison.Ordinal);
+        Assert.Contains("id=\"t2-fn:1\"", html, StringComparison.Ordinal);
+        Assert.Contains("href=\"#t2-fn:1\"", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("id=\"fn:1\"", html, StringComparison.Ordinal);
+    }
+
+    /// <summary>The Web UI's feed renders each reply with its own prefix, the same HTML whichever path renders it first.</summary>
+    [Fact]
+    public void TheFeed_GivesEachReplyItsOwnFootnoteIds_TheSameOnEveryPath()
+    {
+        var feed = new TranscriptFeed();
+        foreach (string reply in new[] { "One[^1].\n\n[^1]: first", "Two[^1].\n\n[^1]: second" })
+        {
+            feed.Begin(null);
+            feed.Append(reply);
+            feed.End();
+        }
+
+        Func<string, string, string> html = WebUiMarkdown.ToHtml;
+        var replies = feed.Snapshot(html).Where(e => e.Kind == "assistant").ToList();
+        Assert.Equal(2, replies.Count);
+        Assert.Contains("id=\"" + TranscriptFeed.IdPrefix(replies[0].Seq) + "fn:1\"", replies[0].Html!, StringComparison.Ordinal);
+        Assert.Contains("id=\"" + TranscriptFeed.IdPrefix(replies[1].Seq) + "fn:1\"", replies[1].Html!, StringComparison.Ordinal);
+        Assert.Equal(replies[1].Html, feed.EntryOf(replies[1].Seq, html)!.Html);
+        Assert.Equal(replies[1].Html, feed.HtmlOf(replies[1].Seq, html));
+    }
 }

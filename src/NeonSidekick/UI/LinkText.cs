@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using NeonSidekick.Files;
 using NeonSidekick.Hotkeys;
 
 namespace NeonSidekick.UI;
@@ -14,8 +15,8 @@ public static partial class LinkText
     /// <summary>A path's carrier in a segment's link (2026-11-01): only the app's resolver makes one, and the pane's filter keeps it from the terminal.</summary>
     public const string PathScheme = "neon-path:";
 
-    /// <summary>The longest web link given an OSC 8 sequence (plan review 13): past it, plain text.</summary>
-    public const int MaxWebLinkLength = 2000;
+    /// <summary>The longest web link given an OSC 8 sequence (plan review 13): past it, plain text. <see cref="SafeText"/>'s, the one rule.</summary>
+    public const int MaxWebLinkLength = SafeText.MaxWebLinkLength;
 
     /// <summary>
     /// The chord the hover hint names (2026-11-01): Ctrl+click on Windows, Option+click or Shift+click on a Mac by terminal
@@ -33,11 +34,7 @@ public static partial class LinkText
         : "Option+click";
 
     /// <summary>Whether <paramref name="target"/> is a web link: <c>http</c>, <c>https</c> or <c>mailto</c>, the only schemes a terminal may open.</summary>
-    public static bool IsWeb(string? target) =>
-        target is not null
-        && (target.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
-            || target.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
-            || target.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase));
+    public static bool IsWeb(string? target) => target is not null && SafeText.HasWebScheme(target);
 
     /// <summary>Whether <paramref name="target"/> is a path the app's resolver made (<see cref="PathScheme"/>).</summary>
     public static bool IsPath(string? target) => target is not null && target.StartsWith(PathScheme, StringComparison.Ordinal) && target.Length > PathScheme.Length;
@@ -50,7 +47,10 @@ public static partial class LinkText
 
     /// <summary>
     /// The one rule for a link's target (plan review 13): no C0 or C1 control character or DEL anywhere (it would go inside an OSC 8
-    /// sequence), and for a web link no space and at most <see cref="MaxWebLinkLength"/> characters. Anything else gets no link at all.
+    /// sequence), and for a web link no space and at most <see cref="MaxWebLinkLength"/> characters, and no bidi or zero-width character
+    /// (2026-11-02, review P1-9: a U+202E or a U+200B made the address shown differ from the one opened). Anything else gets no link at
+    /// all. A character scan, cheap enough for every link of every layout; the parse is <see cref="SafeText.WebLink"/>'s, where a link
+    /// is opened, hovered or written out.
     /// </summary>
     public static bool IsLinkable(string? target, bool web)
     {
@@ -59,20 +59,20 @@ public static partial class LinkText
             return false;
         }
 
+        if (web)
+        {
+            return SafeText.IsSafeWebChars(target);
+        }
+
         foreach (char c in target)
         {
             if (c < 0x20 || (c >= 0x7F && c <= 0x9F))
             {
                 return false;
             }
-
-            if (web && char.IsWhiteSpace(c))
-            {
-                return false;
-            }
         }
 
-        return !web || target.Length <= MaxWebLinkLength;
+        return true;
     }
 
     /// <summary>
@@ -140,13 +140,16 @@ public static partial class LinkText
     /// <summary>
     /// The hover hint for a link's <paramref name="target"/> (2026-11-01): <c>Ctrl+click opens https://…</c> for a web link, cut to
     /// <paramref name="width"/> cells; for a path, <paramref name="shownPath"/> (the path relative to the working folder) shown in
-    /// <c>/browse</c>, or the full path "outside the working folder" when <paramref name="outside"/>. Null for anything else.
+    /// <c>/browse</c>, or the full path "outside the working folder" when <paramref name="outside"/>. Null for anything else. A web link
+    /// shows <see cref="SafeWebLink.Hint"/>, the host first in its ASCII form and a userinfo as <c>…@</c>, and a path is scrubbed
+    /// (<see cref="SafeText.ShownPath"/>) (2026-11-02, review P12-3/P2-3: a long userinfo cut the real host off the end, an IDN host showed
+    /// unconverted, and a bidi character in a path drew it reversed).
     /// </summary>
     public static string? HoverHint(string target, string? shownPath, bool outside, int width)
     {
         ArgumentNullException.ThrowIfNull(target);
-        string? hint = IsWeb(target) ? $"{Chord} opens {target}"
-            : PathOf(target) is { } full ? outside ? $"{full} is outside the working folder" : $"{Chord} shows {shownPath ?? full} in /browse"
+        string? hint = IsWeb(target) ? SafeText.WebLink(target) is { } link ? $"{Chord} opens {link.Hint}" : null
+            : PathOf(target) is { } full ? outside ? $"{SafeText.ShownPath(full)} is outside the working folder" : $"{Chord} shows {SafeText.ShownPath(shownPath ?? full)} in /browse"
             : null;
         return hint is null ? null : Cut(hint, Math.Max(1, width));
     }
@@ -154,32 +157,8 @@ public static partial class LinkText
     /// <summary>The widest a hover hint is drawn (one less than a 120-column window, the hints' budget).</summary>
     public const int HintWidth = 119;
 
-    /// <summary><paramref name="text"/> cut to <paramref name="width"/> cells with an ellipsis, never inside a surrogate pair.</summary>
-    private static string Cut(string text, int width)
-    {
-        if (TextCells.Width(text) <= width)
-        {
-            return text;
-        }
-
-        var cut = new System.Text.StringBuilder();
-        int cells = 0;
-        var e = System.Globalization.StringInfo.GetTextElementEnumerator(text);
-        while (e.MoveNext())
-        {
-            string element = (string)e.Current;
-            int w = TextCells.Width(element);
-            if (cells + w > width - 1)
-            {
-                break;
-            }
-
-            cut.Append(element);
-            cells += w;
-        }
-
-        return cut.Append('…').ToString();
-    }
+    /// <summary><paramref name="text"/> cut to <paramref name="width"/> cells with an ellipsis (<see cref="TextCells.Cut"/>, 2026-11-02, review P2-9).</summary>
+    private static string Cut(string text, int width) => TextCells.Cut(text, width);
 
     [GeneratedRegex(@"https?://[^\s<>""`\[\]{}|\\^]+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex BareUrl();

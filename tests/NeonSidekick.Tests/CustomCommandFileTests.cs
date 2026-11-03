@@ -33,6 +33,18 @@ public class CustomCommandFileTests
         Assert.True(file.UserInvocable);
         Assert.Null(file.FrontmatterWarning);
         Assert.Equal("Review PR $pr for $focus.", file.Body);
+        Assert.Equal(["allowed-tools", "model"], file.IgnoredKeys);   // named, not honored (2026-11-02, review P12-6)
+    }
+
+    /// <summary>A name that isn't one, or repeats, keeps its place as an empty slot (2026-11-02, review P4-1), so the names after it keep their words.</summary>
+    [Fact]
+    public void ADroppedArgumentName_KeepsItsPlace()
+    {
+        var file = CustomCommandFile.Read("---\narguments: [file-name, style, style, tone]\n---\nbody");
+        Assert.Equal(["", "style", "", "tone"], file.Arguments);
+        Assert.True(file.ArgumentDropped);
+        Assert.False(CustomCommandFile.Read("---\narguments: [a, b]\n---\nbody").ArgumentDropped);
+        Assert.Empty(CustomCommandFile.Read("---\ndescription: x\n---\nbody").IgnoredKeys!);
     }
 
     [Theory]

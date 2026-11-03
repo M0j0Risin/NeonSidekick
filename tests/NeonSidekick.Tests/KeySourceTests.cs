@@ -1247,4 +1247,105 @@ public class KeySourceTests
             await Task.Delay(5);
         }
     }
+
+    /// <summary>
+    /// A posted <see cref="InputEvent.Resize"/> with no overlay open (2026-11-02, review P7-3): dropped, so the chat line never sees one;
+    /// a read waiting when it came wakes, drops it and waits on for the next key.
+    /// </summary>
+    [Fact]
+    public async Task APostedResize_WithNoOverlayOpen_IsDropped_AndAWaitingReadWaitsOn()
+    {
+        var input = new ScriptedInput();
+        var keys = new KeySource(input, FastPoll);
+        keys.Post(new InputEvent.Resize());
+        input.Push(Keys.Char('a'));
+        Assert.Equal('a', Assert.IsType<InputEvent.Key>(await keys.ReadInputAsync(CancellationToken.None)).Info.KeyChar);
+
+        var waiting = keys.ReadInputAsync(CancellationToken.None);
+        await Task.Delay(20);
+        keys.Post(new InputEvent.Resize());
+        await Task.Delay(20);
+        Assert.False(waiting.IsCompleted);
+        input.Push(Keys.Char('b'));
+        Assert.Equal('b', Assert.IsType<InputEvent.Key>(await waiting).Info.KeyChar);
+    }
+
+    /// <summary>A posted event with an overlay open wakes a waiting read, which returns it (2026-11-02, review P7-3).</summary>
+    [Fact]
+    public async Task APostedResize_UnderAnOverlay_WakesTheWaitingRead()
+    {
+        using var console = new TestConsole().Interactive();
+        console.Profile.Width = 40;
+        console.Profile.Height = 12;
+        using var pane = new ScreenPane(console, new ScreenGeometry(() => null), new ManualTimeProvider());
+        pane.Show();
+        pane.ShowOverlay(new Markup("an overlay"), "hint");
+        var keys = new KeySource(new ScriptedInput(), FastPoll) { Mirror = pane };
+
+        var waiting = keys.ReadInputAsync(CancellationToken.None);
+        await Task.Delay(20);
+        Assert.False(waiting.IsCompleted);
+        keys.Post(new InputEvent.Resize());
+        Assert.IsType<InputEvent.Resize>(await waiting.WaitAsync(TimeSpan.FromSeconds(10)));
+    }
+
+    /// <summary>
+    /// A source's own null (its input gone, IInputEvents' "null when the token fires") goes to the caller once, never read again in a loop;
+    /// a post's wake, which such a source also answers with null, is read on (2026-11-02, review P7-3).
+    /// </summary>
+    [Fact]
+    public async Task ASourcesNull_IsReturned_APostsWakeOfANullingSource_IsReadOn()
+    {
+        var gone = new NullingEvents(endAtOnce: true);
+        Assert.Null(await new KeySource(gone).ReadInputAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10)));
+        Assert.Equal(1, gone.Reads);
+
+        using var console = new TestConsole().Interactive();
+        console.Profile.Width = 40;
+        console.Profile.Height = 12;
+        using var pane = new ScreenPane(console, new ScreenGeometry(() => null), new ManualTimeProvider());
+        pane.Show();
+        pane.ShowOverlay(new Markup("an overlay"), "hint");
+        var waits = new NullingEvents(endAtOnce: false);
+        var keys = new KeySource(waits) { Mirror = pane };
+        var waiting = keys.ReadInputAsync(CancellationToken.None);
+        await WaitUntilAsync(() => waits.Reads == 1);
+        keys.Post(new InputEvent.Resize());
+        Assert.IsType<InputEvent.Resize>(await waiting.WaitAsync(TimeSpan.FromSeconds(10)));
+    }
+
+    /// <summary>An event source that answers with null: at once, or when its token fires (as KeyEvents does over a Spectre input).</summary>
+    private sealed class NullingEvents(bool endAtOnce) : IAnsiConsoleInput, IInputEvents
+    {
+        public bool IsKeyAvailable() => false;
+
+        public ConsoleKeyInfo? ReadKey(bool intercept) => null;
+
+        public Task<ConsoleKeyInfo?> ReadKeyAsync(bool intercept, CancellationToken cancellationToken) => Task.FromResult<ConsoleKeyInfo?>(null);
+
+        public int Reads { get; private set; }
+
+        public bool IsAvailable => false;
+
+        public bool NextIsMouse => false;
+
+        public InputEvent? Read() => null;
+
+        public async Task<InputEvent?> ReadAsync(CancellationToken cancellationToken)
+        {
+            Reads++;
+            if (!endAtOnce)
+            {
+                try
+                {
+                    await Task.Delay(Timeout.Infinite, cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                }
+            }
+
+            return null;
+        }
+    }
 }

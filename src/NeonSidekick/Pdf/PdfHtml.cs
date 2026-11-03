@@ -142,8 +142,11 @@ public static class PdfHtml
     /// <paramref name="softBreaksAsLines"/> (2026-11-01, the user's ask after a haiku showed on one line in the Web UI): a single line
     /// break is a <c>&lt;br&gt;</c>, as the transcript shows a reply (<see cref="MarkdigParser.Replies"/>); the Web UI, the HTML session
     /// export and <c>/pdf reply</c> pass it, a file's PDF keeps Markdown's joining space. A setext heading's lines are always kept apart.
+    /// <paramref name="idPrefix"/> (2026-11-02, review P5-2) goes ahead of every footnote's ids and their links (<c>fn:1</c>, <c>fnref:1</c>):
+    /// a page or an export holding several replies passes one per reply, so the second reply's <c>[^1]</c> never jumps to the first's.
     /// </summary>
-    public static string Markdown(string markdown, Func<string, string?> resolveImage, Func<string, string?>? link = null, bool softBreaksAsLines = false)
+    public static string Markdown(string markdown, Func<string, string?> resolveImage, Func<string, string?>? link = null, bool softBreaksAsLines = false,
+        string idPrefix = "")
     {
         ArgumentNullException.ThrowIfNull(markdown);
         ArgumentNullException.ThrowIfNull(resolveImage);
@@ -180,7 +183,25 @@ public static class PdfHtml
 
         renderer.Render(document);
         writer.Flush();
-        return writer.ToString();
+        return Prefixed(writer.ToString(), idPrefix);
+    }
+
+    /// <summary>
+    /// The footnotes' ids and links with <paramref name="prefix"/> ahead (2026-11-02, review P5-2). Only the renderer writes these
+    /// attributes: raw HTML is escaped (a <c>"</c> is <c>&amp;quot;</c>), so a reply can't spell one.
+    /// </summary>
+    private static string Prefixed(string html, string prefix)
+    {
+        if (prefix.Length == 0 || !html.Contains("fn", StringComparison.Ordinal))
+        {
+            return html;
+        }
+
+        return html
+            .Replace("id=\"fn:", "id=\"" + prefix + "fn:", StringComparison.Ordinal)
+            .Replace("href=\"#fn:", "href=\"#" + prefix + "fn:", StringComparison.Ordinal)
+            .Replace("id=\"fnref:", "id=\"" + prefix + "fnref:", StringComparison.Ordinal)
+            .Replace("href=\"#fnref:", "href=\"#" + prefix + "fnref:", StringComparison.Ordinal);
     }
 
     /// <summary>Each link's address through <paramref name="link"/>: kept with <c>target=_blank rel="noopener noreferrer"</c>, or the link replaced by its text.</summary>

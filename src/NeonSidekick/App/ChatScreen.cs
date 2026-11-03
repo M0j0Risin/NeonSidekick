@@ -289,7 +289,7 @@ public enum CopyActionKind
     /// <summary><c>code [&lt;n&gt;]</c> (2026-11-01): code block <see cref="CopyAction.Count"/> of the last reply, its last with 0.</summary>
     Code,
 
-    /// <summary>Anything else; <see cref="ChatScreen.CopyUsageError"/>.</summary>
+    /// <summary>Anything else; <see cref="CopyText.CopyUsageError"/>.</summary>
     Invalid,
 }
 
@@ -613,30 +613,6 @@ internal sealed partial class ChatScreen
     public const string MemoryDisabledNote = "no memory (what is remembered stays)";
     public const string MemoryUsageError = "/memory lists the memories; read-write, read-only or off sets Memory mode; forget forgets them all; edit opens memory.json in your editor.";
 
-    /// <summary>The <c>/copy</c> word for every exchange.</summary>
-    public const string CopyAllWord = "all";
-
-    /// <summary>The <c>/copy</c> switch for the model's thinking too (2026-09-26, the user's ask), after <c>/cmdcopy</c>'s <c>--history</c> (folded into <c>/profile push history</c> on 2026-10-09).</summary>
-    public const string CopyThinkingSwitch = "--thinking";
-    public const string CopyUsageError = "/copy copies the last reply; /copy <n> the last n; /copy all every one; /copy code [<n>] a code block of the last one; add --thinking for the model's thinking too.";
-
-    /// <summary>The <c>/copy</c> word for a code block of the last reply (2026-11-01, copy a code block).</summary>
-    public const string CopyCodeWord = "code";
-
-    /// <summary>The last reply holds no code block (<c>/copy code</c>). Pinned.</summary>
-    public const string NoCodeBlockNotice = "(the last reply has no code block)";
-
-    /// <summary><c>/copy code</c>'s number past the last reply's blocks: how many there are.</summary>
-    public static string CodeBlockPastCountError(int asked, int count) =>
-        $"The last reply has {count.ToString(CultureInfo.InvariantCulture)} code block{(count == 1 ? "" : "s")}; there is no code block {asked.ToString(CultureInfo.InvariantCulture)}.";
-
-    /// <summary><c>/copy code</c> on a block with no lines.</summary>
-    public static string CodeBlockEmptyNotice(int block) => $"(code block {block.ToString(CultureInfo.InvariantCulture)} is empty)";
-
-    /// <summary>The line after <c>/copy code</c>: which block went, of how many.</summary>
-    public static string CopiedCodeNotice(int block, int count) =>
-        $"(copied code block {block.ToString(CultureInfo.InvariantCulture)} of {count.ToString(CultureInfo.InvariantCulture)} to the clipboard)";
-    public const string NothingToCopyNotice = "(nothing to copy yet)";
     public const string CopyFailedError = "Could not write to the clipboard; try again.";
     public static readonly string ProfileNameError = "Profile name " + Profiles.NameError + ".";
     private const string MaxMemoriesText = "200";
@@ -740,7 +716,8 @@ internal sealed partial class ChatScreen
     /// shows one splash, not every one walked past (<see cref="ReplaceSplashEntry"/>).
     /// </summary>
     private long? _splashFeedSeq;
-    private int _splashReserve;
+    // The lines RefitSplash puts back under the picture it draws again, while it draws it (SplashArea measures them at its width).
+    private Scrollback.Copied? _splashReserve;
     private readonly IReadOnlyList<AIFunction> _clockTools;
     private readonly IReadOnlyList<AIFunction> _helpTools;
     private readonly WorkingDirectory _files;
@@ -1637,6 +1614,8 @@ internal sealed partial class ChatScreen
             Placeholder = InputPlaceholder,
         };
         _keys.Mirror = _pane;
+        // A resize with an overlay open (2026-11-02, review P7-3): the pane's reader lays it out again with no key.
+        _pane.OverlayResized = () => _keys.Post(new InputEvent.Resize());
         _pane.ChordInPlace = ChordInPlace;
         // Ctrl+Alt+X (2026-10-01): the embedded model's kill switch, wherever the key is read.
         _keys.KillSwitch = KillSwitch;
@@ -3036,6 +3015,8 @@ internal sealed partial class ChatScreen
         {
             // Two rows, not one "or" label: /keycheck splits a label on " / ", and Option is no chord it probes (as Option+Delete).
             rows.Add(new("Option+Up / Down", "jump to the previous or next message (Mission Control may hold Ctrl+Up / Down)"));
+            // Terminal.app's Option+←/→ (2026-11-02, review P11-2: ESC b / ESC f, the word moves since 69b196c4), worded as the row above.
+            rows.Add(new("Option+Left / Right", "move a word back or forward (Mission Control may hold Ctrl+Left / Right)"));
         }
 
         if (voiceOn)
@@ -5355,15 +5336,6 @@ internal sealed partial class ChatScreen
     /// <summary>The <c>/cwd</c> list's note on <c>~</c>. Pinned.</summary>
     public const string CwdDefaultNote = "the profile's files folder";
 
-    /// <summary>The <c>/copy</c> list's note on <c>all</c>. Pinned.</summary>
-    public const string CopyAllNote = "every reply";
-
-    /// <summary>The <c>/copy</c> list's note on <see cref="CopyThinkingSwitch"/>.</summary>
-    public const string CopyThinkingNote = "with the model's thinking";
-
-    /// <summary>The <c>/copy</c> list's note on <see cref="CopyCodeWord"/> (2026-11-01).</summary>
-    public const string CopyCodeNote = "a code block of the last reply";
-
     /// <summary>The note on <c>reset</c> after a prompt-file command. Pinned.</summary>
     public static string PromptFileResetNote(string fileName) => $"remove {fileName} and go back to the default";
 
@@ -5693,11 +5665,11 @@ internal sealed partial class ChatScreen
                     }
 
                     return action.Thinking
-                        ? MentionCompleter.Matches([new(head + " " + CopyAllWord, CopyAllNote)], argText)
-                        : MentionCompleter.Matches([new(head + " " + CopyThinkingSwitch, CopyThinkingNote)], argText);
+                        ? MentionCompleter.Matches([new(head + " " + CopyText.CopyAllWord, CopyText.CopyAllNote)], argText)
+                        : MentionCompleter.Matches([new(head + " " + CopyText.CopyThinkingSwitch, CopyText.CopyThinkingNote)], argText);
                 }
 
-                return MentionCompleter.Matches([new(CopyAllWord, CopyAllNote), new(CopyCodeWord, CopyCodeNote), new(CopyThinkingSwitch, CopyThinkingNote)], argText);
+                return MentionCompleter.Matches([new(CopyText.CopyAllWord, CopyText.CopyAllNote), new(CopyText.CopyCodeWord, CopyText.CopyCodeNote), new(CopyText.CopyThinkingSwitch, CopyText.CopyThinkingNote)], argText);
             }
 
             case SlashCommand.Queue:
@@ -9786,7 +9758,8 @@ internal sealed partial class ChatScreen
         void Moved()
         {
             ForgetReading();
-            _ = _files.SweepRoot(inline: true);
+            _transcript.ForgetPaths();   // its answers are full paths under the old folder (2026-11-02, review P2-4)
+            CwdSweep = _files.SweepRoot();   // off the screen's thread (2026-11-02, review P13-7)
         }
 
         switch (action.Kind)
@@ -11295,15 +11268,15 @@ internal sealed partial class ChatScreen
     /// The <c>/copy</c> grammar, pure: nothing ⇒ the last exchange; <c>all</c> (ignoring case) ⇒
     /// every one; an integer ⇒ that many, where less than one is one and more than <see cref="int.MaxValue"/>
     /// is all (the clamp to what exists is <see cref="ChatLog.Take"/>'s); anything else ⇒ invalid.
-    /// <see cref="CopyThinkingSwitch"/> (ignoring case) before or after it (2026-09-26) sets
+    /// <see cref="CopyText.CopyThinkingSwitch"/> (ignoring case) before or after it (2026-09-26) sets
     /// <see cref="CopyAction.Thinking"/>; the switch twice, or two other words, is invalid.
     /// </summary>
     public static CopyAction ParseCopyArgs(string args)
     {
         var tokens = (args ?? "").Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries).ToList();
-        int switches = tokens.RemoveAll(t => t.Equals(CopyThinkingSwitch, StringComparison.OrdinalIgnoreCase));
+        int switches = tokens.RemoveAll(t => t.Equals(CopyText.CopyThinkingSwitch, StringComparison.OrdinalIgnoreCase));
         bool thinking = switches > 0;
-        if (tokens.Count > 0 && tokens[0].Equals(CopyCodeWord, StringComparison.OrdinalIgnoreCase))
+        if (tokens.Count > 0 && tokens[0].Equals(CopyText.CopyCodeWord, StringComparison.OrdinalIgnoreCase))
         {
             // code [<n>] (2026-11-01): n from 1, stricter than a count (a block past the last is a mistake); never with the switch.
             if (switches > 0 || tokens.Count > 2)
@@ -11327,7 +11300,7 @@ internal sealed partial class ChatScreen
         }
 
         string text = tokens[0];
-        if (text.Equals(CopyAllWord, StringComparison.OrdinalIgnoreCase))
+        if (text.Equals(CopyText.CopyAllWord, StringComparison.OrdinalIgnoreCase))
         {
             return new(CopyActionKind.All, 0, thinking);
         }
@@ -11342,50 +11315,36 @@ internal sealed partial class ChatScreen
             : new(CopyActionKind.Count, (int)Math.Max(count, 1), thinking);
     }
 
-    /// <summary>
-    /// The line after a copy: how many went, of how many there are, as replies or exchanges — and,
-    /// with <paramref name="withThinking"/> (2026-09-26), that the thinking went with them. Pinned.
-    /// </summary>
-    public static string CopiedNotice(int copied, int total, bool withUserText, bool withThinking = false)
-    {
-        string noun = withUserText ? "exchange" : "reply";
-        string nouns = withUserText ? "exchanges" : "replies";
-        string one = withThinking ? " with its thinking" : "";
-        string many = withThinking ? " with their thinking" : "";
-        return copied == 1 ? $"(copied the last {noun}{one} to the clipboard)"
-            : copied < total ? $"(copied the last {copied} {nouns}{many} to the clipboard)"
-            : $"(copied all {copied} {nouns}{many} to the clipboard)";
-    }
-
     private void HandleCopy(string args)
     {
         var action = ParseCopyArgs(args);
         if (action.Kind == CopyActionKind.Invalid)
         {
-            _transcript.Error(CopyUsageError);
+            _transcript.Error(CopyText.CopyUsageError);
             return;
         }
 
-        if (_log.Count == 0)
-        {
-            _transcript.Notice(NothingToCopyNotice);
-            return;
-        }
-
+        // Code first (2026-11-02, review P11-3): under the first reply the log is still empty, but the screen's blocks count.
         if (action.Kind == CopyActionKind.Code)
         {
             HandleCopyCode(action.Count);
             return;
         }
 
+        if (_log.Count == 0)
+        {
+            _transcript.Notice(CopyText.NothingToCopyNotice);
+            return;
+        }
+
         bool withUserText = _effective().CopyUserPrompt;
         int copied = _log.Take(action.Kind == CopyActionKind.All ? int.MaxValue : action.Count);
-        // The log keeps the model's line endings; the clipboard gets the CF_UNICODETEXT convention.
-        string markdown = _log.Markdown(copied, withUserText, action.Thinking).ReplaceLineEndings("\r\n");
+        // The log keeps the model's line endings; the clipboard gets this platform's (2026-11-02, review P3-1), its hidden characters out.
+        string markdown = CopyText.ForClipboard(_log.Markdown(copied, withUserText, action.Thinking), out int dropped);
         if (_copy(markdown))
         {
-            _pane.Flash(InputLine.CopiedFlash(markdown.Length));   // the hint row says it too (2026-10-04)
-            _transcript.Notice(CopiedNotice(copied, _log.Count, withUserText, action.Thinking));
+            _pane.Flash(CopyText.WithHidden(InputLine.CopiedFlash(markdown.Length), dropped));   // the hint row says it too (2026-10-04)
+            _transcript.Notice(CopyText.WithHidden(CopyText.CopiedNotice(copied, _log.Count, withUserText, action.Thinking), dropped));
         }
         else
         {
@@ -11394,38 +11353,33 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// <c>/copy code [&lt;n&gt;]</c> (2026-11-01, copy a code block): block <paramref name="block"/> (the last with 0) of the last reply's
-    /// top-level code blocks, read in the pieces the screen drew (<see cref="ChatLog.LastReplyPieces"/>), so the numbers follow the ⧉ glyphs;
-    /// copied with the clipboard's line endings, flashed and noted as <c>/copy</c> is.
+    /// <c>/copy code [&lt;n&gt;]</c> (2026-11-01, copy a code block): block <paramref name="block"/> (the last with 0) of the last reply's code
+    /// blocks, numbered as its ⧉ glyphs are (2026-11-02, the copy-code findings: <see cref="ScreenPane.CopyTextsOfLastReply"/>, the streaming
+    /// reply's closed blocks too); with no pane, or no ⧉ drawn, the last reply's top-level blocks read in the pieces the screen drew
+    /// (<see cref="ChatLog.LastReplyPieces"/>). Copied through <see cref="CopyText.ForClipboard"/>, flashed and noted as <c>/copy</c> is.
     /// </summary>
     private void HandleCopyCode(int block)
     {
-        var blocks = CodeBlocksOf(_log.LastReplyPieces ?? []);
+        var blocks = _pane.CopyTextsOfLastReply() is { Count: > 0 } drawn ? drawn : CodeBlocksOf(_log.LastReplyPieces ?? []);
         if (blocks.Count == 0)
         {
-            _transcript.Notice(NoCodeBlockNotice);
+            _transcript.Notice(_log.Count == 0 ? CopyText.NothingToCopyNotice : CopyText.NoCodeBlockNotice);
             return;
         }
 
         int index = block == 0 ? blocks.Count : block;
         if (index > blocks.Count)
         {
-            _transcript.Error(CodeBlockPastCountError(index, blocks.Count));
+            _transcript.Error(CopyText.CodeBlockPastCountError(index, blocks.Count));
             return;
         }
 
-        string text = blocks[index - 1];
-        if (text.Length == 0)
-        {
-            _transcript.Notice(CodeBlockEmptyNotice(index));
-            return;
-        }
-
-        string converted = text.ReplaceLineEndings("\r\n");
+        // Never an empty one (2026-11-02): an empty block has no ⧉, and the fallback skips it too.
+        string converted = CopyText.ForClipboard(blocks[index - 1], out int dropped);
         if (_copy(converted))
         {
-            _pane.Flash(InputLine.CopiedFlash(converted.Length));
-            _transcript.Notice(CopiedCodeNotice(index, blocks.Count));
+            _pane.Flash(CopyText.WithHidden(InputLine.CopiedFlash(converted.Length), dropped));
+            _transcript.Notice(CopyText.WithHidden(CopyText.CopiedCodeNotice(index, blocks.Count), dropped));
         }
         else
         {
@@ -11435,11 +11389,13 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The top-level code blocks of <paramref name="pieces"/>, each parsed alone as a reply is (<see cref="UI.Markdown.MarkdigParser.Replies"/>), in
-    /// order: each block's lines joined with <c>\n</c>, as <see cref="UI.Markdown.CodeSpan.Text"/> is. An empty block counts too. Pure.
+    /// order: each block's lines joined with <c>\n</c>, as <see cref="UI.Markdown.CodeSpan.Text"/> is. An empty block is skipped (2026-11-02, the
+    /// copy-code findings), as it carries no ⧉, so the fallback numbers as the glyphs do. Pure.
     /// </summary>
     internal static IReadOnlyList<string> CodeBlocksOf(IEnumerable<string> pieces) =>
         pieces.SelectMany(piece => UI.Markdown.MarkdigParser.Replies.Parse(piece).Blocks.OfType<UI.Markdown.CodeBlock>())
             .Select(code => string.Join("\n", code.Lines))
+            .Where(text => text.Length > 0)
             .ToList();
 
     /// <summary>
@@ -11448,10 +11404,10 @@ internal sealed partial class ChatScreen
     /// </summary>
     private void CopyCodeBlock(string text)
     {
-        string converted = text.ReplaceLineEndings("\r\n");
+        string converted = CopyText.ForClipboard(text, out int dropped);   // 2026-11-02, reviews P3-1 and P12-4
         if (_copy(converted))
         {
-            _pane.Flash(InputLine.CopiedFlash(converted.Length));
+            _pane.Flash(CopyText.WithHidden(InputLine.CopiedFlash(converted.Length), dropped));
         }
         else
         {
@@ -11869,10 +11825,13 @@ internal sealed partial class ChatScreen
         }
     }
 
-    /// <summary>Runs until <c>/exit</c>, the keyboard going away, or <paramref name="cancellationToken"/>. Always 0.</summary>
     /// <summary>The launch's sweep of the working folder's stale temps (F88); kept so a test can wait for it.</summary>
     internal Task? LaunchSweep { get; private set; }
 
+    /// <summary>The last <c>/cwd</c>'s sweep of the new folder's stale temps (2026-11-02, review P13-7), off the thread; kept so a test can wait for it.</summary>
+    internal Task? CwdSweep { get; private set; }
+
+    /// <summary>Runs until <c>/exit</c>, the keyboard going away, or <paramref name="cancellationToken"/>. Always 0.</summary>
     public async Task<int> RunAsync(CancellationToken cancellationToken)
     {
         bool previousEcho = DiagnosticLog.EchoToConsole;
@@ -12942,7 +12901,7 @@ internal sealed partial class ChatScreen
         {
             head();
             ForgetSplash();
-            _splashReserve = lines.Rows;
+            _splashReserve = lines;
             try
             {
                 if (name is not null)
@@ -12952,7 +12911,7 @@ internal sealed partial class ChatScreen
             }
             finally
             {
-                _splashReserve = 0;
+                _splashReserve = null;
             }
 
             _splashForced = forced && _splashShown;
@@ -13041,8 +13000,14 @@ internal sealed partial class ChatScreen
     /// picture's, and the robot's block — and, while <see cref="RefitSplash"/> draws it again, the rows of the lines it
     /// puts back under it.
     /// </summary>
-    private ThumbnailBox SplashArea() =>
-        ThumbnailSize.Fit(_pane.Profile.Width, _pane.Profile.Height, _pane.FlowRow + _splashReserve + ScreenPane.PaneRows + _pane.InputRows + _pane.ReservedBarRows);   // the Hints bar counted: the arrows' hint brings it (2026-10-14)
+    private ThumbnailBox SplashArea()
+    {
+        // The lines put back measured at the width the box is fitted at (2026-11-02, review P8-3: their rows at the width they were read at,
+        // before the folder scan and the decode, reserved a resize's old rows: the picture too tall, the banner off the top).
+        int width = _pane.Profile.Width;
+        int reserve = _splashReserve?.RowsAt(width) ?? 0;
+        return ThumbnailSize.Fit(width, _pane.Profile.Height, _pane.FlowRow + reserve + ScreenPane.PaneRows + _pane.InputRows + _pane.ReservedBarRows);   // the Hints bar counted: the arrows' hint brings it (2026-10-14)
+    }
 
     /// <summary>
     /// The robot splash (2026-10-20, the user's ask: <c>Welcome splash</c> <c>robot</c>, the AnimationTrials proof of concept moved in):
@@ -15646,6 +15611,7 @@ internal sealed partial class ChatScreen
         _pictureStrip.Clear();
         _log.Clear();
         ForgetReading();
+        _transcript.ForgetPaths();   // another profile, another working folder (2026-11-02, review P2-4)
         ForgetSplash();
         void Head()
         {
@@ -18068,6 +18034,8 @@ internal sealed partial class ChatScreen
             _turnPictures = images;   // the directive names a picture sent with this message too (2026-10-18)
             PrepareTurn(assistant, TurnInputs(effective), _memory, _persona, _operata, _vocalia, speaker is not null, effective.LlmMaxToolIterations, ContextGuardFor(effective, _session.ContextLength, replyFloor: PlanReplyFloor(_plan, _files)), SkillsFor(effective), markdown, _processes, effective.LlmPreserveThinking, LlmSampling.Resolve(effective, _session.Endpoint?.ModelId));
             assistant.ThinkingInFlightOnly = Assistant.InFlightOnlyWire(_session.Endpoint?.BaseUrl);
+            // The tools whose path is the working folder's (2026-11-02, review P2-6): a tool line links only theirs.
+            _transcript.WorkingFolderTools = TurnToolSet.WorkingFolderNamesOf(assistant.Tools);
             _turnPictures = [];
 
             // The Claude Code server (2026-09-30) keeps the conversation itself: the turn names its session, and no guard

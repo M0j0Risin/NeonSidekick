@@ -260,13 +260,50 @@ public sealed class SqliteAccess
     /// A SQLite cell for a workbook (2026-10-29): integers, reals, text and blobs by the common rules; text in a column declared
     /// <c>DATE</c>, <c>DATETIME</c> or <c>TIMESTAMP</c> a date or date-time when it reads as ISO (SQLite keeps dates as text), else the
     /// text as it is. An empty string is an empty text cell, not a blank (2026-10-29, review P3-4; in a date column too since 2026-10-30,
-    /// review F42). Only a date column's value is read here; any other goes straight to <see cref="SqlExport.Typed"/>, which reads it once
-    /// (review F105: every cell was read twice).
+    /// review F42). Each cell is read once (review F105: every cell was read twice).
+    /// A column with no date type (an expression's — <c>date(…)</c>, <c>MAX(order_date)</c> — which the provider names by its first row's
+    /// storage class, or a declared <c>TEXT</c>, which can't be told from it) has each text cell judged on its own (2026-11-02, review P10-5:
+    /// computed dates were text): one shaped like an ISO date (<see cref="LooksIso"/>) that reads as one is a date or a date-time, anything
+    /// else goes to <see cref="SqlExport.FromValue"/> as read. In SQLite a date is text by convention, so a text column may mix the two.
     /// </summary>
     public static XlsxValue ExportCell(DbDataReader reader, int ordinal, string? typeName)
     {
         ArgumentNullException.ThrowIfNull(reader);
-        if (DeclaredDateOf(typeName) is { } dateOnly && !reader.IsDBNull(ordinal) && reader.GetValue(ordinal) is string text)
+        if (DeclaredDateOf(typeName) is not { } dateOnly)
+        {
+            object value;
+            try
+            {
+                if (reader.IsDBNull(ordinal))
+                {
+                    return XlsxValue.Blank;
+                }
+
+                value = reader.GetValue(ordinal);
+            }
+            catch (Exception ex) when (ex is InvalidCastException or OverflowException)
+            {
+                return SqlExport.FromProvider(reader, ordinal, typeName);
+            }
+
+            if (value is string iso && LooksIso(iso))
+            {
+                string trimmed = iso.Trim();
+                if (trimmed.Length == 10 && DateOnly.TryParseExact(trimmed, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var day))
+                {
+                    return XlsxValue.OfDate(day);
+                }
+
+                if (DateTime.TryParseExact(trimmed, IsoDateTimes, CultureInfo.InvariantCulture, DateTimeStyles.None, out var moment))
+                {
+                    return XlsxValue.OfDateTime(moment);
+                }
+            }
+
+            return SqlExport.FromValue(value, typeName, SqlExport.InvariantText);
+        }
+
+        if (!reader.IsDBNull(ordinal) && reader.GetValue(ordinal) is string text)
         {
             if (dateOnly && DateOnly.TryParseExact(text.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
             {
@@ -282,6 +319,21 @@ public sealed class SqliteAccess
         }
 
         return SqlExport.Typed(reader, ordinal, typeName, SqlExport.InvariantText);
+    }
+
+    /// <summary>
+    /// The cheap shape test before a parse (P10-5): a digit first, a <c>-</c> at 4, at least ten characters, so a column of names or codes
+    /// never pays for <see cref="DateTime.TryParseExact(string, string[], IFormatProvider, DateTimeStyles, out DateTime)"/>.
+    /// </summary>
+    private static bool LooksIso(string text)
+    {
+        int at = 0;
+        while (at < text.Length && char.IsWhiteSpace(text[at]))
+        {
+            at++;
+        }
+
+        return text.Length - at >= 10 && char.IsAsciiDigit(text[at]) && text[at + 4] == '-';
     }
 
     /// <summary>

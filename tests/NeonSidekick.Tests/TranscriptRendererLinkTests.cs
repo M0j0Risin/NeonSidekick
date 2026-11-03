@@ -148,6 +148,113 @@ public sealed class TranscriptRendererLinkTests : IDisposable
         Assert.Equal(deep + "/Bar.cs", Linked(rows.SelectMany(r => r), LinkText.PathLink(file)));
     }
 
+    /// <summary>Only the working folder's tools link a path (2026-11-02, review P2-6): a share's <c>src/Foo.cs</c> isn't the local one.</summary>
+    [Fact]
+    public void AToolOutsideTheWorkingFolder_LinksNoPath_BesideASameNamedLocalFile()
+    {
+        _t.WorkingFolderTools = new HashSet<string>(StringComparer.Ordinal) { "read_file" };
+        _t.Tool("unc_read", "{\"path\":\"src/Foo.cs\"}");
+        Assert.DoesNotContain(Stored, s => s.Link is not null);
+
+        _t.Tool("read_file", "{\"path\":\"src/Foo.cs\"}");
+        Assert.Equal("src/Foo.cs", Linked(Stored, LinkText.PathLink(Path.Combine(_folder, "src", "Foo.cs"))));
+    }
+
+    // ── A reply's paths, asked off the layout (2026-11-02, review P2-4) ─────
+
+    /// <summary>A look that blocks never stalls the tick that asked it; once it answers the reply is laid out again with the link.</summary>
+    [Fact]
+    public async Task AReplysPath_IsAskedOffTheLayout_ABlockedLookStallsNoTick_AndLinksOnceItAnswers()
+    {
+        using var gate = new ManualResetEventSlim();
+        Task? worker = null;
+        _t.ResolvePath = text => gate.Wait(TimeSpan.FromSeconds(30)) ? Resolve(text) : null;
+        _t.RunResolver = work => worker = Task.Run(work);
+        _t.BeginAssistant(markdown: true);
+        _t.AppendDelta("See `src/Foo.cs` for it.");
+
+        await Task.Run(() => _time.Advance(ScreenPane.Tick)).WaitAsync(TimeSpan.FromSeconds(10));   // laid out without waiting on the look
+        Assert.NotNull(worker);
+        string target = LinkText.PathLink(Path.Combine(_folder, "src", "Foo.cs"));
+        var before = _pane.LiveForTests!;
+        Assert.Empty(Linked(LiveSegments(before), target));
+
+        gate.Set();
+        await worker!.WaitAsync(TimeSpan.FromSeconds(10));
+        var after = _pane.LiveForTests!;
+        Assert.NotSame(before, after);   // laid out again, so the next tick draws the link
+        Assert.Equal("src/Foo.cs", Linked(LiveSegments(after), target));
+        _time.Advance(ScreenPane.Tick);
+        _t.EndAssistant();
+        Assert.Equal("src/Foo.cs", Linked(Stored, target));
+    }
+
+    private List<Segment> LiveSegments(IRenderable live) =>
+        live.Render(RenderOptions.Create(_console, _console.Profile.Capabilities), 80).ToList();
+
+    /// <summary>A reply that commits in the tick its words came in, the worker never run, still links: its spans are asked before the commit.</summary>
+    [Fact]
+    public void AReplyCommittedAtOnce_StillLinksItsPath()
+    {
+        _t.RunResolver = static _ => { };
+        _t.BeginAssistant(markdown: true);
+        _t.AppendDelta("Open `src/Foo.cs` and `src/Gone.cs`.");
+        _t.EndAssistant();
+
+        Assert.Equal("src/Foo.cs", Linked(Stored, LinkText.PathLink(Path.Combine(_folder, "src", "Foo.cs"))));
+        Assert.Single(Stored.Where(s => s.Link is not null).Select(s => s.Link!.Url).Distinct());
+    }
+
+    /// <summary>A file named before it exists links in a later reply once it's written: a miss is forgotten with its reply.</summary>
+    [Fact]
+    public void AFileNamedBeforeItExists_LinksInALaterReply()
+    {
+        _t.RunResolver = static work => work();
+        string file = Path.Combine(_folder, "src", "New.cs");
+        string target = LinkText.PathLink(file);
+        _t.BeginAssistant(markdown: true);
+        _t.AppendDelta("I'll write `src/New.cs`.");
+        _time.Advance(ScreenPane.Tick);
+        _t.EndAssistant();
+        Assert.Empty(Linked(Stored, target));
+
+        File.WriteAllText(file, "x");
+        _t.BeginAssistant(markdown: true);
+        _t.AppendDelta("Wrote `src/New.cs`.");
+        _time.Advance(ScreenPane.Tick);
+        _t.EndAssistant();
+        Assert.Equal("src/New.cs", Linked(Stored, target));
+    }
+
+    /// <summary>A found path is kept for the session, never asked again, until <see cref="TranscriptRenderer.ForgetPaths"/> (a <c>/cwd</c>).</summary>
+    [Fact]
+    public void AFoundPath_IsAskedOnce_UntilThePathsAreForgotten()
+    {
+        int asks = 0;
+        _t.ResolvePath = text =>
+        {
+            Interlocked.Increment(ref asks);
+            return Resolve(text);
+        };
+        _t.RunResolver = static work => work();
+        void Reply()
+        {
+            _t.BeginAssistant(markdown: true);
+            _t.AppendDelta("See `src/Foo.cs`.");
+            _time.Advance(ScreenPane.Tick);
+            _t.EndAssistant();
+        }
+
+        Reply();
+        Assert.Equal(1, asks);
+        Reply();
+        Assert.Equal(1, asks);   // the session's answer
+
+        _t.ForgetPaths();
+        Reply();
+        Assert.Equal(2, asks);
+    }
+
     [Fact]
     public void ThePlainPath_LinksTheUrl_OnALineOfItsOwn_AndAfterTheRepliesGlyph()
     {

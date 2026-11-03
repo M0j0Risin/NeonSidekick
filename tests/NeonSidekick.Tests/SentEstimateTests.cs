@@ -11,8 +11,25 @@ namespace NeonSidekick.Tests;
 /// </summary>
 public class SentEstimateTests
 {
-    private static Assistant NewAssistant(FakeChatClient client) =>
-        new(client, new ConversationHistory("sys"), new LlmTimeouts(TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(5)), [], new ManualTimeProvider());
+    private static Assistant NewAssistant(FakeChatClient client, bool publish = true) =>
+        new(client, new ConversationHistory("sys"), new LlmTimeouts(TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(5)), [], new ManualTimeProvider())
+        {
+            PublishSentEstimate = publish,
+        };
+
+    /// <summary>An assistant that isn't the chat session's (a bot's, an advisor's) publishes nothing (2026-11-02, review P1-11).</summary>
+    [Fact]
+    public async Task ABotsAssistant_LeavesLastSentEstimateNull()
+    {
+        var client = new FakeChatClient();
+        var assistant = NewAssistant(client, publish: false);
+        client.EnqueueText("Hi.");
+        await foreach (var _ in assistant.RunTurnAsync("first", []))
+        {
+        }
+
+        Assert.Null(assistant.LastSentEstimate);
+    }
 
     [Fact]
     public async Task LastSentEstimate_IsPublishedBeforeEachRequest_WithTheNewMessage_AndNoneOfTheLastTurnsBeforeIt()

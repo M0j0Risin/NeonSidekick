@@ -352,8 +352,9 @@ public sealed class DuckDbAccess
     /// <summary>
     /// The cell reader of a wrapped read whose columns are <paramref name="types"/> (2026-10-29): each value is DuckDB's text, read back
     /// as the column's type — numbers by the 15-digit rule, booleans, a <c>DATE</c> a date, a <c>TIMESTAMP</c> a date-time, a <c>TIME</c> a
-    /// time — and anything that won't read so (an infinity, a time zone's timestamp, an interval, a list) the text as it is; <c>''</c> an empty
-    /// text cell, never a blank (2026-10-30, review F15).
+    /// time — and anything that won't read so (a time zone's timestamp, an interval, a list) the text as it is; <c>''</c> an empty text cell,
+    /// never a blank (2026-10-30, review F15). A double's <c>inf</c>/<c>-inf</c> is the other families' <c>Infinity</c> text, and a
+    /// <c>BLOB</c>'s <c>\xHH</c> escapes are decoded to its bytes, so it reads <c>0x…</c> as theirs do (2026-11-02, review P10-6/P9-11).
     /// </summary>
     public static SqlCellReader ExportCell(IReadOnlyList<Type> types)
     {
@@ -371,6 +372,40 @@ public sealed class DuckDbAccess
         };
     }
 
+    /// <summary>
+    /// A <c>BLOB</c>'s bytes from its <c>::VARCHAR</c> text (P9-11): DuckDB writes a printable byte as itself and every other (a backslash
+    /// and the quotes too) as <c>\xHH</c>. Null when the text isn't that form, so it stays as it is.
+    /// </summary>
+    public static byte[]? BlobBytes(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        var bytes = new List<byte>(text.Length);
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (c == '\\')
+            {
+                if (i + 3 < text.Length && text[i + 1] == 'x' && char.IsAsciiHexDigit(text[i + 2]) && char.IsAsciiHexDigit(text[i + 3]))
+                {
+                    bytes.Add(Convert.ToByte(text.Substring(i + 2, 2), 16));
+                    i += 3;
+                    continue;
+                }
+
+                return null;
+            }
+
+            if (c is < ' ' or > '~')
+            {
+                return null;
+            }
+
+            bytes.Add((byte)c);
+        }
+
+        return [.. bytes];
+    }
+
     /// <summary>DuckDB's text of a value of <paramref name="type"/> (the driver's type of the column) as the sheet's cell.</summary>
     public static XlsxValue FromText(string text, Type type)
     {
@@ -384,7 +419,18 @@ public sealed class DuckDbAccess
         if (type == typeof(float) || type == typeof(double))
         {
             // A double is what Excel stores, so its 17 digits are no loss (2026-10-29, review P5-2: by the decimal rule it went to text).
-            return double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out double real) ? XlsxValue.OfDouble(real) : XlsxValue.OfDbText(text);
+            // DuckDB writes an infinity inf, which .NET won't parse (P10-6): mapped first, so OfDouble writes the families' one word.
+            return text switch
+            {
+                "inf" => XlsxValue.OfDouble(double.PositiveInfinity),
+                "-inf" => XlsxValue.OfDouble(double.NegativeInfinity),
+                _ => double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out double real) ? XlsxValue.OfDouble(real) : XlsxValue.OfDbText(text),
+            };
+        }
+
+        if (type == typeof(byte[]) || typeof(Stream).IsAssignableFrom(type))
+        {
+            return BlobBytes(text) is { } bytes ? XlsxValue.OfBytes(bytes) : XlsxValue.OfDbText(text);
         }
 
         if (type == typeof(sbyte) || type == typeof(byte) || type == typeof(short) || type == typeof(ushort) || type == typeof(int) || type == typeof(uint)

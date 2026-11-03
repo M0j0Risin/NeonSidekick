@@ -47,6 +47,10 @@ public partial class ChatScreenTests
         Assert.Equal(2, calls());   // the screen keeps nothing: the detector does (2026-11-01)
     }
 
+    /// <summary>
+    /// A funneled address under <c>local</c> copies a one-time link, never the token's (2026-11-02, review P12-5, the user's call: the pin moved
+    /// from <c>?t=</c>), and Funnel's note still follows.
+    /// </summary>
     [Fact]
     public async Task WebUiCopy_OfAFunneledHttpsLink_SaysSoAfterTheCopy()
     {
@@ -56,8 +60,54 @@ public partial class ChatScreenTests
 
         string output = await RunAsync(input);
 
-        Assert.StartsWith(ServeAddress + "/signin?t=", Assert.Single(_copied), StringComparison.Ordinal);
+        Assert.StartsWith(ServeAddress + "/signin?" + WebUiAuth.OnceQuery + "=", Assert.Single(_copied), StringComparison.Ordinal);
+        Assert.Contains(WebUiText.OnceCopiedNotice, output);
         Assert.Contains(WebUiText.FunnelNote, output);   // local: Funnel's requests are let in
+    }
+
+    /// <summary>
+    /// The pane's funneled HTTPS tab (2026-11-02, review P12-5): a one-time link, kept from one opening to the next while it's unused, a fresh one
+    /// once it's used; a copy mints its own; no token link at that address anywhere. The tailnet's address keeps the token's link (the test above).
+    /// </summary>
+    [Fact]
+    public async Task AFunneledHttpsLink_IsOneTime_ThePanesKeptWhileUnused_ACopyItsOwn()
+    {
+        HttpsReady();
+        ServeAnswers(_ => new TailscaleServeResult(ServeAddress, true, []));
+        _console.Profile.Width = 160;   // the note on one row, below the QR code
+        _console.Profile.Height = 90;
+        RecordingHost? host = null;
+        _webUiHost = _ => host = new RecordingHost();
+        string Once(int n) => WebUiAuth.OnceLinkAt(ServeAddress, "code" + n.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        var input = WhenIdle(
+            i =>
+            {
+                PushLine(i, "/webui");
+                i.Push(Keys.Escape);
+            },
+            i =>
+            {
+                PushLine(i, "/webui");
+                i.Push(Keys.Escape);
+            },
+            i =>
+            {
+                host!.SpendAll();
+                PushLine(i, "/webui");
+                i.Push(Keys.Escape);
+            },
+            i => PushLine(i, "/webui copy"),
+            i => PushLine(i, "/exit"));
+
+        string output = await RunAsync(input);
+
+        Assert.DoesNotContain(ServeAddress + "/signin?t=", output);
+        Assert.Contains(Once(1), output);
+        Assert.Contains(Once(2), output);   // the third opening, after the first was used
+        Assert.DoesNotContain(Once(4), output);
+        Assert.Contains(WebUiText.OnceLinkNote, output);
+        Assert.Equal(Once(3), Assert.Single(_copied));
+        Assert.Contains(WebUiText.OnceCopiedNotice, output);
     }
 
     [Fact]

@@ -2035,7 +2035,9 @@ public partial class ScreenPaneTests : IDisposable
         _time.Advance(ScreenPane.Tick);
 
         Assert.Equal(9, pane.Padding);
-        Assert.StartsWith("\e[?2026h\e[?25l\e[6A\e[40D\e[J", Output[mark..]);
+        // The lift, then the climb to the top row and one erase (2026-11-02, review P8-7: a moved pin, the lift erased first too).
+        Assert.StartsWith("\e[?2026h\e[?25l\e[6A\e[40D\e[14A\e[40D\e[J", Output[mark..]);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(Output[mark..], @"\e\[J"));
         Assert.Contains(new string('\n', 9) + Rule(40) + "\n", Strip(Output[mark..]));
     }
 
@@ -2099,7 +2101,7 @@ public partial class ScreenPaneTests : IDisposable
         }
 
         Assert.Equal([ScreenPane.ResizedLogLine(40, 10, 30, 10)], lines);
-        Assert.Contains("\e[J", Output[mark..]);                                                   // erased from the top
+        Assert.Contains("\e[10A\e[30D\e[J", Output[mark..]);   // climbed to the top row, then erased (2026-11-02, review P8-4: a bare \e[J was the lift's own)
         Assert.Contains("hello\nworld\n" + (key ? "" : "again\n"), Strip(Output[mark..]));        // the store's tail written back
 
         // Rebuilt once: the next tick at the same size leaves the screen alone.
@@ -2354,7 +2356,7 @@ public partial class ScreenPaneTests : IDisposable
         _console.Profile.Width = 40;
         int mark = Output.Length;
         _time.Advance(ScreenPane.Tick);
-        Assert.Contains("\e[J", Output[mark..]);
+        Assert.Contains("\e[10A\e[40D\e[J", Output[mark..]);   // climbed to the top row, then erased (2026-11-02, review P8-4)
         Assert.Contains("hello\nworld\n", Strip(Output[mark..]));
     }
 
@@ -2750,9 +2752,13 @@ public partial class ScreenPaneTests : IDisposable
         Assert.InRange(pane.HeldFloor, 0, 10);
     }
 
-    /// <summary>A find whose line the cap trimmed in a re-layout (F113): no match is current, never row 0.</summary>
+    /// <summary>
+    /// A find in a store a narrowing doubles past the cap (F113's case; a moved pin since 2026-11-02, review P7-2): the cap counts rows where
+    /// a line is not narrowed, so the narrowing drops no line, and the match stays on its text. A match whose line a trim did take is no
+    /// current match (F113: never row 0) — <see cref="AnAppendThatTrimsTheFront_MovesTheFindsMatch"/> holds the trim's side.
+    /// </summary>
     [Fact]
-    public void AFind_WhoseLineTheCapTrimmed_HasNoCurrentMatch()
+    public void AFind_InAStoreANarrowingDoubles_KeepsItsLine()
     {
         using var pane = Pane();
         pane.Open();
@@ -2764,7 +2770,14 @@ public partial class ScreenPaneTests : IDisposable
 
         _console.Profile.Width = 20;
         _time.Advance(ScreenPane.Tick);
-        Assert.Equal(new TextFind.Hit(-1, -1), pane.FindPlace);
+        rows = pane.TranscriptRows(out _, out var place);
+        Assert.True(rows.Count > Scrollback.MaxRows);   // the rows past the cap while narrow, every line kept
+        Assert.Equal(new TextFind.Hit(0, 0), place);
+        Assert.StartsWith("row 0000", TextFind.LineText(rows[0]), StringComparison.Ordinal);
+
+        _console.Profile.Width = 40;
+        _time.Advance(ScreenPane.Tick);
+        Assert.Equal(6000, pane.TranscriptRows().Count);   // wider again: nothing went
     }
 
     /// <summary>A write rendered again above the screen's rows (F32): laid out at the new width with no draw.</summary>
@@ -5341,6 +5354,10 @@ public partial class ScreenPaneTests : IDisposable
         Assert.Contains("  " + MarkdownView.CodeHeading("text") + "\n    c1\n    c2\n    c3\n", Output[mark..]);   // a block with no glyph keeps the reply's two cells (2026-10-04)
     }
 
+    /// <summary>
+    /// With no keep the open block still draws at the region's full height, its label held in the slot over the block's last rows until it
+    /// closes (2026-11-02, review P1-2: the pin moved from 7 rows committed, which sent the label to the store without its ⧉); closed, it commits whole.
+    /// </summary>
     [Fact]
     public void AStreamingCodeBlock_WithoutACodeKeep_StreamsAtFullHeight()
     {
@@ -5348,8 +5365,39 @@ public partial class ScreenPaneTests : IDisposable
         pane.Show();
         pane.SetLive(new ReplyBlock("```text\n" + CodeLines(1, 12), glyph: false));
         _time.Advance(ScreenPane.Tick);
-        Assert.Equal(7, pane.LiveCommitted);
+        Assert.Equal(0, pane.LiveCommitted);
         Assert.Equal(6, pane.LiveRows);
+
+        pane.SetLive(new ReplyBlock("```text\n" + CodeLines(1, 12) + "\n```\n\nafter", glyph: false));
+        _time.Advance(ScreenPane.Tick);
+        Assert.True(pane.LiveCommitted > 0);   // closed, the rows past the region go, the label first
+        Assert.Equal(6, pane.LiveRows);
+    }
+
+    /// <summary>
+    /// A block whose group stays open over several commits is one number (2026-11-02, the copy-code findings: its text is set again each
+    /// commit, and the store's one walk counts the line once); the floor leaves the earlier reply's block out.
+    /// </summary>
+    [Fact]
+    public void ABlockCommittedOverSeveralTicks_IsOneCopyText_FromTheFloorOn()
+    {
+        using var pane = Pane();
+        pane.Show();
+        pane.SetLive(new ReplyBlock("```text\nearlier\n```\n\ndone", glyph: false, codeKeep: 3));
+        _time.Advance(ScreenPane.Tick);
+        pane.CommitLive();
+
+        pane.MarkCopyFloor();
+        string reply = "```text\n" + CodeLines(1, 12) + "\n```\n\nafter";
+        foreach (string more in new[] { "", " one", " one two" })
+        {
+            pane.SetLive(new ReplyBlock(reply + more, glyph: false, codeKeep: 3));
+            _time.Advance(ScreenPane.Tick);
+        }
+
+        pane.CommitLive();
+
+        Assert.Equal([CodeLines(1, 12)], pane.CopyTextsOfLastReply());
     }
 
     [Fact]

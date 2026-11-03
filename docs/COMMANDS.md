@@ -50,7 +50,7 @@ Elsewhere:
 | `/undo [<n>]` | Puts back the files the last turn (or *n* turns) changed, after a yes; the conversation stays, and your next message tells the model. There is no redo. |
 | `/undo purge [all]` | Deletes this working folder's file checkpoints (with `all`, every folder's) after a yes; those turns can't be undone after. |
 | `/copy [<n>\|all] [--thinking]` | Copies the last reply, the last *n*, or the whole transcript as Markdown; `--thinking` adds the thinking. |
-| `/copy code [<n>]` | Copies code block *n* of the last reply, or its last, as written. Top-level blocks count, top to bottom, an empty one too. |
+| `/copy code [<n>]` | Copies code block *n* of the last reply, or its last, as written. The numbers follow the ⧉ glyphs, top to bottom (an empty block has none); hidden characters are left out. |
 | `/draft` | Writes the next message in your editor; it is sent when you save and close. |
 | `/echo <text>` | Prints a line as a reply, spoken when *TTS output* is on. |
 | `/find [<words>]` | Finds words in the transcript, every match marked. |
@@ -515,9 +515,9 @@ A custom command is a Markdown file holding a prompt you send often: `/review sr
 * **Folders:** the profile's `commands` folder and the home's (global), made when a profile loads. The profile's file wins over a global one of the same name.
 * **A linked folder:** `commands` may be a link to another folder, such as `~/.claude/commands`, to share Claude Code's. The model can't write in the folder or where it points; you change them with `/commands`.
 * **Names:** the file's name, lowercased: letters, digits, `-` and `_`. A subfolder adds a prefix (`frontend/test.md` is `/frontend:test`), up to 4 folders deep.
-* **Frontmatter** (optional): `description`, `argument-hint` (shown as you type), `arguments` (names for `$name`) and `user-invocable: false` (can't be typed). Other fields, like `model`, are ignored.
+* **Frontmatter** (optional): `description`, `argument-hint` (shown as you type), `arguments` (names for `$name`) and `user-invocable: false` (can't be typed). `allowed-tools`, `model` and `disable-model-invocation` aren't honored, and a note says so; other fields are ignored.
 * **Placeholders:** `$ARGUMENTS` is all the words; `$0`, `$1`… (or `$ARGUMENTS[0]`…) one word each, a quoted group one word when its closing quote ends a word. A `\` right before a placeholder keeps it as written; with no placeholder, the words go on an `ARGUMENTS:` line.
-* **Named arguments:** `arguments: [subject, style]` makes `$subject` the first word and `$style` the second, each empty when not typed. Type `""` to skip one and still fill the next.
+* **Named arguments:** `arguments: [subject, style]` makes `$subject` the first word and `$style` the second, each empty when not typed. Type `""` to skip one and still fill the next. A name that isn't valid, or repeats, keeps its place and draws a warning.
 * **Nothing runs:** a `!` shell line is sent as written, with a note. A command never runs a program or reads a file.
 * **Pictures** pasted on the line go with the message. Under a reply, a command waits until the reply ends.
 * **Help:** `/help` lists them on its **Custom** tab, and `/help <name>` shows one's card. They run from the Web UI (with *Web UI commands* on) and headless too.

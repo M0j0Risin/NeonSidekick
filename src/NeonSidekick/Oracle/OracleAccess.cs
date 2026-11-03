@@ -456,7 +456,8 @@ public sealed class OracleAccess
     /// An Oracle cell for a workbook (2026-10-29): a CLOB read to Excel's cap and a BLOB's, BFILE's or LONG RAW's bytes to the hex that fits,
     /// a LONG to the cap (2026-10-29, review P5-5: they went through the chat's clipped text; a LONG and a LONG RAW are fetched whole with
     /// the row, as in the chat, and only the cell is capped); a time zone's timestamp and an interval as the chat writes them (text: the
-    /// offset is the value); a NUMBER past 15 digits text by its provider value; BINARY_DOUBLE and the rest by the common rules. A DATE is
+    /// offset is the value); a NUMBER past 15 digits by its provider value, a whole one text and a fraction (an AVG, a ratio) the nearest
+    /// double (2026-11-02, review P10-2); an EMPTY_CLOB() an empty text cell, not a blank (review P10-3); BINARY_DOUBLE and the rest by the common rules. A DATE is
     /// always a date-time, midnight too: Oracle's DATE holds a time (review P1-7: its type name "Date" read as a date alone). A LOB is read
     /// until the buffer is full or the LOB ends (review P1-8: one read may return fewer).
     /// </summary>
@@ -480,7 +481,8 @@ public sealed class OracleAccess
                                 read += got;
                             }
 
-                            return XlsxValue.OfText(new string(buffer, 0, read));
+                            // An EMPTY_CLOB() is no NULL (2026-11-02, review P10-3: OfText wrote it blank, F15/F42's rule missed the LOBs).
+                            return XlsxValue.OfDbText(new string(buffer, 0, read));
                         }
 
                     case "Blob":
@@ -515,7 +517,7 @@ public sealed class OracleAccess
                         {
                             var buffer = new char[XlsxValue.MaxChars + 1];
                             int read = (int)oracle.GetChars(ordinal, 0, buffer, 0, buffer.Length);
-                            return XlsxValue.OfText(new string(buffer, 0, read));
+                            return XlsxValue.OfDbText(new string(buffer, 0, read));
                         }
 
                     // INTERVAL DAY TO SECOND too (2026-10-30, review F49: the doc promised it, but it fell through to a duration).

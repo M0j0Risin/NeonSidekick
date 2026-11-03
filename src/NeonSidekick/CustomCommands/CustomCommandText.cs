@@ -38,6 +38,21 @@ public static class CustomCommandText
 
     public const string ShellLinesWarning = "its !`…` lines are sent as written, never run";
 
+    /// <summary>
+    /// Claude Code's restricting keys a file sets, not honored here (2026-11-02, review P12-6): said on the card and over each run, so a
+    /// read-only command isn't taken for one.
+    /// </summary>
+    public static string IgnoredKeysWarning(IReadOnlyList<string> keys)
+    {
+        ArgumentNullException.ThrowIfNull(keys);
+        string named = string.Join(" and ", keys);
+        return "its " + named + (keys.Count == 1 ? " isn't" : " aren't") + " honored"
+            + (keys.Contains("allowed-tools") ? ": every tool that's on stays offered" : "");
+    }
+
+    /// <summary>A declared argument that isn't a name, or repeats (2026-11-02, review P4-1): its place kept, so the names after it keep their words.</summary>
+    public const string ArgumentDroppedWarning = "an argument name that isn't valid or repeats was left out; the names after it keep their places";
+
     public const string StillTemplateWarning = "still the template: edit it";
 
     public const string NotUserInvocableProblem = "user-invocable: false keeps it from being typed";
@@ -157,7 +172,8 @@ public static class CustomCommandText
     public static string SentNotice(CustomCommand command)
     {
         ArgumentNullException.ThrowIfNull(command);
-        return "(" + Glyph + " " + command.Word + " from " + ScopeWords(command.Scope) + (command.HasShellLines ? "; " + ShellLinesWarning : "") + ")";
+        return "(" + Glyph + " " + command.Word + " from " + ScopeWords(command.Scope) + (command.HasShellLines ? "; " + ShellLinesWarning : "")
+            + (command.IgnoredKeys.Count > 0 ? "; " + IgnoredKeysWarning(command.IgnoredKeys) : "") + ")";
     }
 
     public static string EmptyPromptError(string word, string? hint) =>
@@ -524,9 +540,9 @@ public static class CustomCommandText
             }
 
             sb.Append("\n\nFile: ").Append(PathOf(command.FilePath));
-            if (command.Arguments.Count > 0)
+            if (command.Arguments.Any(a => a.Length > 0))
             {
-                sb.Append("\nArguments: ").Append(Said(string.Join(", ", command.Arguments.Select(a => "$" + a))));
+                sb.Append("\nArguments: ").Append(Said(string.Join(", ", command.Arguments.Where(a => a.Length > 0).Select(a => "$" + a))));
             }
 
             if (command.Warning is { } warning)

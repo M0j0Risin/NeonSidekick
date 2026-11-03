@@ -574,6 +574,12 @@ public sealed class InfoPane
                     return;
                 }
 
+                if (input is InputEvent.Resize)
+                {
+                    Show(label, tabs, active);   // laid out at the window's new size with no key (2026-11-02, review P7-3)
+                    continue;
+                }
+
                 int next = active;
                 int first = _first;
                 bool redraw = false;

@@ -78,14 +78,11 @@ public static class WebUiHttpsSetting
 
 /// <summary>
 /// Who a Web UI request came from (2026-10-31): <paramref name="Remote"/> the browser's address, <paramref name="Through"/> the proxy it came
-/// through (<see cref="TailscaleServeName"/>, <c>the proxy at host</c>, or <see cref="WebUiText.ProxyOnThisComputer"/>), null for a direct request;
+/// through (<see cref="WebUiText.TailscaleServeName"/>, <c>the proxy at host</c>, or <see cref="WebUiText.ProxyOnThisComputer"/>), null for a direct request;
 /// <paramref name="Funnel"/> whether Tailscale Funnel brought it from the internet. Worked out once per request by <see cref="Of"/>.
 /// </summary>
 public sealed record WebUiOrigin(IPAddress? Remote, string? Through = null, bool Funnel = false)
 {
-    /// <summary>What <see cref="Through"/> holds for a request through Tailscale Serve.</summary>
-    public const string TailscaleServeName = "Tailscale Serve";
-
     /// <summary>The most characters of a proxy's host kept in the notice.</summary>
     public const int MaxHostChars = 100;
 
@@ -119,7 +116,7 @@ public sealed record WebUiOrigin(IPAddress? Remote, string? Through = null, bool
         string name = HostName(forwardedHost.Split(',')[0]);
         if (name.EndsWith(".ts.net", StringComparison.OrdinalIgnoreCase) || (forwarded is not null && WebUiController.IsTailnet(forwarded)))
         {
-            return new WebUiOrigin(remote, TailscaleServeName, funnelHeader?.Trim() == "?1");
+            return new WebUiOrigin(remote, WebUiText.TailscaleServeName, funnelHeader?.Trim() == "?1");
         }
 
         return new WebUiOrigin(remote, WebUiText.ProxyAt(UntrustedText.Cut(UntrustedText.OneLine(name), MaxHostChars)));

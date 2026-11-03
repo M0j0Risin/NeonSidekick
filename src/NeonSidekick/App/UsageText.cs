@@ -432,8 +432,9 @@ public static class UsageText
         if (facts.Window is { } window)
         {
             long free = window.Tokens - facts.Estimate;
+            // Free is the window less an estimate, so an estimate too (2026-11-02, review P1-3), marked as Over is.
             rows.Add(free >= 0
-                ? new(FreeLabel, CompactNumber(free), "", ContextPiece.Free)
+                ? new(FreeLabel, EstimateMark + CompactNumber(free), "", ContextPiece.Free)
                 : new(OverLabel, EstimateMark + CompactNumber(-free), "", ContextPiece.Over));
         }
 
@@ -495,31 +496,7 @@ public static class UsageText
     /// <paramref name="text"/> in at most <paramref name="cells"/> cells, a cut one ending in <c>…</c> (2026-11-02, the review): by cells, so a
     /// wide glyph in an MCP server's name counts two. Spectre's own ellipsis drops a word too long for its column rather than cutting it.
     /// </summary>
-    public static string CutToCells(string text, int cells)
-    {
-        ArgumentNullException.ThrowIfNull(text);
-        if (TextCells.Width(text) <= cells)
-        {
-            return text;
-        }
-
-        var cut = new StringBuilder(text.Length);
-        int used = 0;
-        for (int i = 0; i < text.Length;)
-        {
-            int width = TextCells.ElementWidth(text, i, out int length);
-            if (used + width > cells - 1)
-            {
-                break;
-            }
-
-            cut.Append(text, i, length);
-            used += width;
-            i += length;
-        }
-
-        return cut.Append('…').ToString();
-    }
+    public static string CutToCells(string text, int cells) => TextCells.Cut(text, cells);   // the one cut (2026-11-02, review P2-9)
 
     /// <summary>The bar's pieces in order with their tokens: prompt, tools, history, pictures, thinking (the free part is what the window has left).</summary>
     public static IReadOnlyList<(ContextPiece Piece, long Tokens)> BarPieces(ContextFacts facts)
@@ -978,7 +955,7 @@ internal sealed class ContextBar(IReadOnlyList<(ContextPiece Piece, long Tokens)
         int width = Math.Max(1, maxWidth - margin);
         var cells = UsageText.BarCells(pieces, window, width);
         bool over = pieces.Sum(p => p.Tokens) > window;
-        bool noColor = options.ColorSystem is ColorSystem.NoColors or ColorSystem.Legacy;
+        bool noColor = !Theme.HasBackgrounds(options);   // 16 colors too (2026-11-02, review P1-6): its shades can't be told apart
         var segments = new List<Segment>(pieces.Count + 3);
         int used = 0;
         for (int i = 0; i < pieces.Count; i++)

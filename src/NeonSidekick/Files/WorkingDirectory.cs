@@ -105,6 +105,12 @@ public enum FileOutcome
     CommandFilesProtected,
 
     /// <summary>
+    /// A model write into Claude Code's <c>.claude</c> folder at any depth, or a root <c>.mcp.json</c> (2026-11-02, review P12-2,
+    /// <see cref="WriteGuard"/>): <c>/claude</c> loads their hooks and servers.
+    /// </summary>
+    ClaudeFilesProtected,
+
+    /// <summary>
     /// A model write to the project file the system prompt reads (2026-10-22, review P1, the fix plan's D2): the turn asks the user and runs the
     /// call again on a yes; with nobody to ask, refused.
     /// </summary>
@@ -1127,7 +1133,7 @@ public sealed class WorkingDirectory
             return FileOutcome.OutsideRoot;
         }
 
-        // The model's writes judged by the file they reach (2026-10-22, WriteGuard): .git, .neon, the app's home, the skill roots, the project
+        // The model's writes judged by the file they reach (2026-10-22, WriteGuard): .git, .neon, .claude and a root .mcp.json (2026-11-02), the app's home, the skill roots, the project
         // file (asked), a SQLite database (2026-10-05), a shopping list's name. A delete or a move's source takes the target away (Remove).
         if (forWrite && WriteGuard.Judge(root, candidate, linkItself ? WriteRole.Remove : WriteRole.Write, ShoppingListGuard, Databases) is { } guarded)
         {
@@ -5322,11 +5328,11 @@ public sealed class WorkingDirectory
     }
 
     /// <summary>
-    /// The root's top level swept of stale temps (2026-10-30, review F88: a crash's beside a file nobody wrote again stayed): at launch, off
-    /// the caller's thread (<paramref name="inline"/> false), and after a <c>/cwd</c>. The root is read on the caller's thread; one that can't be
-    /// read sweeps nothing.
+    /// The root's top level swept of stale temps (2026-10-30, review F88: a crash's beside a file nobody wrote again stayed), at launch and after a
+    /// <c>/cwd</c>, always off the caller's thread (2026-11-02, review P13-7: a <c>/cwd</c> into a big or slow folder held the screen while it
+    /// listed). The root is read on the caller's thread; one that can't be read sweeps nothing.
     /// </summary>
-    internal Task SweepRoot(bool inline = false)
+    internal Task SweepRoot()
     {
         string root;
         try
@@ -5335,12 +5341,6 @@ public sealed class WorkingDirectory
         }
         catch (Exception ex) when (IsFileFailure(ex) || ex is ArgumentException or NotSupportedException)
         {
-            return Task.CompletedTask;
-        }
-
-        if (inline)
-        {
-            SweepStaleTemps(root);
             return Task.CompletedTask;
         }
 

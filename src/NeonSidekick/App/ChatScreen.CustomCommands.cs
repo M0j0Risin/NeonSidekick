@@ -1,3 +1,4 @@
+using Microsoft.Extensions.AI;
 using NeonSidekick.CustomCommands;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Files;
@@ -127,7 +128,11 @@ internal sealed partial class ChatScreen
 
             case CustomCommandsVerb.Save:
             {
-                var (answer, failed) = CustomCommandsCommand.Save(CustomCommandRoots.For(_settings), line, _session.History.Messages);
+                // Under a reply the turn is appending to the history: the message it published, never a walk (2026-11-02, review P13-1).
+                IReadOnlyList<ChatMessage> messages = _replyRunning
+                    ? _session.Assistant?.LastUserMessage is { } sent ? [sent] : []
+                    : _session.History.Messages;
+                var (answer, failed) = CustomCommandsCommand.Save(CustomCommandRoots.For(_settings), line, messages);
                 if (failed)
                 {
                     sink.Error(answer);

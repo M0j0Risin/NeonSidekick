@@ -135,7 +135,7 @@ public static class HelpCommands
         new("/copy",
         [
             new("/copy [<n>|all] [--thinking]", "Copy the last reply, the last *n*, or the whole transcript (`all`) to the clipboard as Markdown. `--thinking`, before or after, includes the model's thinking, quoted under `💭 **Thinking**` where it happened."),
-            new("/copy code [<n>]", "Copy code block *n* of the last reply, or its last block, as written. Blocks count top to bottom, top-level ones only (not inside a list or a quote), an empty one too. The ⧉ on a block's label copies it with a click."),
+            new("/copy code [<n>]", "Copy code block *n* of the last reply, or its last block, as written. The numbers follow the ⧉ glyphs on the blocks' labels, top to bottom (an empty block has none), and hidden characters are left out. The ⧉ copies its block with a click."),
         ]),
         new("/cwd",
         [
@@ -183,7 +183,7 @@ public static class HelpCommands
         ]),
         new("/find",
         [
-            new("/find [<words>]", "Find words in the transcript: a find row opens over the input row, every match is marked, and the transcript scrolls to the newest. Typing changes the words, and a paste (Ctrl+V or a right-click) adds its first line; Enter or F3 goes to the next match up (older), Shift+Enter or Shift+F3 back down, PgUp/PgDn scroll. Folded blocks that hold a match open, and fold again when the find ends. Esc, Ctrl+F or a double-click outside it ends it at the bottom of the transcript. Ctrl+F runs it too."),
+            new("/find [<words>]", "Find words in the transcript: a find row opens over the input row, every match is marked, and the transcript scrolls to the newest. Typing changes the words, and a paste (Ctrl+V or a right-click) adds its first line; Enter or F3 goes to the next match up (older), Shift+Enter or Shift+F3 back down, PgUp/PgDn scroll, Ctrl+Up/Down jump to the previous or next message. Folded blocks that hold a match open, and fold again when the find ends. Esc, Ctrl+F or a double-click outside it ends it at the bottom of the transcript. Ctrl+F runs it too."),
         ]),
         new("/gituser",
         [

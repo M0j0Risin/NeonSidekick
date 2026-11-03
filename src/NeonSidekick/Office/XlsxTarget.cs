@@ -299,11 +299,32 @@ public sealed class XlsxTarget : IDisposable
     private static (long Length, DateTime Written)? Stamp(WorkingDirectory files, string relative) =>
         files.TryStamp(relative) is { } stamp ? (stamp.Length, stamp.Written) : null;
 
+    /// <summary>
+    /// Each part let go in its own try, in order — the job, the appender, the pending file, the workbook read — so a throw from one (the
+    /// job's flush of a writer on a full disk) never skips the rest and leaves the pending <c>.neon-tmp</c> held open (2026-11-02, review
+    /// P13-2). A failure here is logged and swallowed, never rethrown: the export has already answered (its refusal or its result), and
+    /// <c>ServerTool.ExportAsync</c>'s <c>using</c> sits outside its catches.
+    /// </summary>
     public void Dispose()
     {
-        _job?.Dispose();
-        _appender?.Dispose();
-        _pending?.Dispose();
-        _existing?.Dispose();
+        Release(_job, "job");
+        Release(_appender, "appender");
+        Release(_pending, "pending file");
+        Release(_existing, "workbook read");
+    }
+
+    /// <summary>A test's seam (P13-2): the begun job wrapped, so a test can make its close throw. Null until <see cref="Begin"/>.</summary>
+    internal void WrapJob(Func<IWorkbookJob, IWorkbookJob> wrap) => _job = _job is null ? null : wrap(_job);
+
+    private void Release(IDisposable? part, string what)
+    {
+        try
+        {
+            part?.Dispose();
+        }
+        catch (Exception ex) when (Failure(ex) || ex is InvalidOperationException or ObjectDisposedException)
+        {
+            DiagnosticLog.Warn(OfficeText.Category, OfficeText.ReleaseFailedLogLine(what, Relative, ex.GetType().Name, LogText.Excerpt(ex.Message)));
+        }
     }
 }

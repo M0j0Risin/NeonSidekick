@@ -20,8 +20,9 @@ public enum XlsxKind
 
 /// <summary>
 /// One cell's typed value and the rules that make it (2026-10-29, the Office writing plan): never a formula (text is always a string cell,
-/// so <c>=cmd|…</c> stays text); a number past 15 significant digits, NaN or infinity as text (an ID like <c>1234567890123456789</c> isn't
-/// mangled into <c>1.23457E+18</c>); a date kept as its <see cref="DateTime"/> until the writer knows the workbook's date system, then text
+/// so <c>=cmd|…</c> stays text); a whole number past 15 significant digits, NaN or infinity as text (an ID like <c>1234567890123456789</c>
+/// isn't mangled into <c>1.23457E+18</c>), while a fraction below 10^15 is the nearest double whatever its digits (2026-11-02, review
+/// P9-5/P9-6/P10-2: every AVG, ratio and round-trip double was text); a date kept as its <see cref="DateTime"/> until the writer knows the workbook's date system, then text
 /// when the system can't hold it (before 1900-03-01, Lotus's leap-day bug); a <see cref="DateTimeOffset"/> as ISO 8601 text with its offset;
 /// a <see cref="TimeSpan"/> a time of day in [0, 24 h), a <c>[h]:mm:ss</c> duration past it, text when negative; text cut at Excel's
 /// <see cref="MaxChars"/> with <c>…</c> (<see cref="Cut"/> counted by the answer); bytes as <c>0x…</c> hex under the same cap. Pure.
@@ -73,12 +74,27 @@ public readonly record struct XlsxValue(XlsxKind Kind, double Number = 0, string
             ? new XlsxValue(XlsxKind.Number, value, value.ToString("R", CultureInfo.InvariantCulture))
             : OfText(value.ToString(CultureInfo.InvariantCulture));
 
-    /// <summary>A decimal written as its own exact text within <see cref="MaxDigits"/> significant digits, else as text.</summary>
+    /// <summary>
+    /// A decimal written as its own exact text within <see cref="MaxDigits"/> significant digits; past them a fraction below
+    /// <see cref="MaxFraction"/> is the nearest double (<see cref="IsFraction(decimal)"/>, 2026-11-02, review P10-2: PostgreSQL's AVG of
+    /// a numeric came as 17 digits and went to text); a whole number past them stays text.
+    /// </summary>
     public static XlsxValue OfDecimal(decimal value)
     {
         string text = value.ToString(CultureInfo.InvariantCulture);
-        return SignificantDigits(text) <= MaxDigits ? new XlsxValue(XlsxKind.Number, (double)value, text) : OfText(text);
+        return SignificantDigits(text) <= MaxDigits ? new XlsxValue(XlsxKind.Number, (double)value, text)
+            : IsFraction(value) && Math.Abs(value) < (decimal)MaxFraction ? OfDouble((double)value)
+            : OfText(text);
     }
+
+    /// <summary>
+    /// The magnitude below which a fraction past <see cref="MaxDigits"/> digits is still a number (2026-11-02, review P9-6/P10-2): under
+    /// 10^15 the whole part keeps every digit in a double and only the fraction's tail rounds, which is what a ratio or an average needs;
+    /// at or past it, the digits that would go are the whole part's, so it stays text as an ID does.
+    /// </summary>
+    public const double MaxFraction = 1e15;
+
+    private static bool IsFraction(decimal value) => value != decimal.Truncate(value);
 
     /// <summary>An integer as a number within <see cref="MaxDigits"/> significant digits, else as text.</summary>
     public static XlsxValue OfInteger(BigInteger value)
@@ -97,7 +113,10 @@ public readonly record struct XlsxValue(XlsxKind Kind, double Number = 0, string
     /// <summary>
     /// <paramref name="text"/> as a number Excel holds without losing a digit (2026-10-29, review P1-2/P2-5: <c>1e-30</c> parsed as a decimal
     /// 0, <c>1e400</c> as infinity, both written as numbers): the decimal when its digits are the text's own, within 15; else the double
-    /// when it is finite, not a zero the text's digits aren't, and the text has at most 15 digits; else false (the text stays text). Pure.
+    /// when it is finite, not a zero the text's digits aren't, and the text has at most 15 digits; else, past 15 digits, the nearest double
+    /// when the text is a fraction below <see cref="MaxFraction"/> (2026-11-02, review P9-5/P9-6/P10-2: a round-trip double like
+    /// <c>0.30000000000000004</c> or an Oracle AVG made a whole column text); else false (a whole number past 15 digits, an ID, stays
+    /// text). Pure.
     /// </summary>
     public static bool TryExcelNumber(string text, out XlsxValue value)
     {
@@ -113,8 +132,18 @@ public readonly record struct XlsxValue(XlsxKind Kind, double Number = 0, string
             }
         }
 
-        if (digits <= MaxDigits && double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out double real) && double.IsFinite(real)
-            && (real != 0 || digits == 0))
+        bool parsed = double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out double real) && double.IsFinite(real);
+        if (parsed && digits <= MaxDigits && (real != 0 || digits == 0))
+        {
+            value = OfDouble(real);
+            return true;
+        }
+
+        // A fraction past 15 digits: judged on the decimal where it reads (its digits are the text's to 28), else on the double (a tiny
+        // value past decimal's scale), so 1.0000000000000000001 is a fraction though its double is 1.
+        bool fraction = parsed && ((decimal.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out decimal asDecimal) && IsFraction(asDecimal))
+            || real != Math.Truncate(real));
+        if (fraction && Math.Abs(real) < MaxFraction)
         {
             value = OfDouble(real);
             return true;

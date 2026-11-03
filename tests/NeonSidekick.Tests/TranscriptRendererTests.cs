@@ -902,6 +902,27 @@ public class TranscriptRendererTests : IDisposable
         Assert.IsType<Markup>(TranscriptRenderer.Hanging("[red]  ·[/]"));
     }
 
+    /// <summary>
+    /// A slow tool's note that wraps keeps its indent, the time inside it at the end (2026-11-02, review P2-1: glued onto the markup it made
+    /// two spans, and the line wrapped to column 0); a result's first line too.
+    /// </summary>
+    [Fact]
+    public void ASlowToolsWrappedNote_KeepsItsIndent_TheTimeAtItsEnd()
+    {
+        var console = new TestConsole();
+        console.Profile.Width = 20;
+        console.Write(TranscriptRenderer.Hanging(TranscriptRenderer.NoticeMarkup("one two three four five six"), tail: " 2.4s"));
+        Assert.Equal(["  · one two three", "    four five six", "    2.4s"], console.Output.TrimEnd().Split('\n').Select(l => l.TrimEnd()));
+
+        var result = new TestConsole();
+        result.Profile.Width = 24;
+        result.Write(new ToolResultView("alpha beta gamma delta epsilon", " 3.1s"));
+        var rows = result.Output.TrimEnd().Split('\n').Select(l => l.TrimEnd()).ToList();
+        Assert.True(rows.Count > 1);
+        Assert.All(rows.Skip(1), row => Assert.StartsWith("  ", row, StringComparison.Ordinal));
+        Assert.EndsWith("3.1s", rows[^1], StringComparison.Ordinal);
+    }
+
     /// <summary>A call's values (2026-10-04, the UI review): plain values in order, at most three; arrays, objects and nulls left out; no JSON, no brief.</summary>
     [Fact]
     public void ToolCallBrief_IsTheCallsValues()

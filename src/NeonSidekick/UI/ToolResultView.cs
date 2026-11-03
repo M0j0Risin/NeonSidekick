@@ -45,7 +45,10 @@ public sealed class ToolResultView : IRenderable, IFoldLayout
     private Style HeadStyle => new(foreground: _failed ? Theme.Warn : Theme.Dim);
 
     /// <summary>The first line's markup: the glyph's column, the arrow, the line cut to <see cref="TranscriptRenderer.ToolTextLimit"/> cells.</summary>
-    public string HeadMarkup => Theme.ColorMarkup(_failed ? Theme.Warn : Theme.Dim, Lead + Arrow + TranscriptRenderer.Truncate(_head, TranscriptRenderer.ToolTextLimit)) + TranscriptRenderer.TimeMarkup(_time);
+    public string HeadMarkup => HeadLine + TranscriptRenderer.TimeMarkup(_time);
+
+    /// <summary>The first line's markup without the time (2026-11-02, review P2-1): one span, so <see cref="TranscriptRenderer.Hanging"/> keeps its indent.</summary>
+    private string HeadLine => Theme.ColorMarkup(_failed ? Theme.Warn : Theme.Dim, Lead + Arrow + TranscriptRenderer.Truncate(_head, TranscriptRenderer.ToolTextLimit));
 
     public FoldLayout? Fold => MoreLines == 0
         ? null
@@ -58,7 +61,7 @@ public sealed class ToolResultView : IRenderable, IFoldLayout
     public IEnumerable<Segment> Render(RenderOptions options, int maxWidth)
     {
         var segments = new List<Segment>();
-        segments.AddRange(TranscriptRenderer.Hanging(HeadMarkup).Render(options, maxWidth));
+        segments.AddRange(TranscriptRenderer.Hanging(HeadLine, tail: _time).Render(options, maxWidth));
         segments.Add(Segment.LineBreak);
         var dim = new Style(foreground: Theme.Dim);
         string indent = TranscriptRenderer.ToolAnswerIndent + "  ";

@@ -5,8 +5,9 @@ namespace NeonSidekick.Shell;
 
 /// <summary>
 /// The trusted files' tripwire (2026-10-22, the fix plan's D8, after the reviews found the shell could do what the file tools refuse): a
-/// <c>run_command</c> line, a script file it runs, an <c>execute_code</c> script or a <c>process</c> write that names <c>.git</c> or
-/// <c>.neon</c> (a path segment, not <c>.gitignore</c>), the project file (<see cref="Llm.ProjectFile.FileNames"/>) or the app's home is
+/// <c>run_command</c> line, a script file it runs, an <c>execute_code</c> script or a <c>process</c> write that names <c>.git</c>,
+/// <c>.neon</c> or <c>.claude</c> (a path segment, not <c>.gitignore</c> or <c>.claudeignore</c>), a <c>.mcp.json</c> (since 2026-11-02,
+/// review P12-2: <c>/claude</c> loads both), the project file (<see cref="Llm.ProjectFile.FileNames"/>) or the app's home is
 /// refused — the same inputs and callers as <see cref="SqlitePolice"/>, under <c>Shell police</c>. A bare <c>git</c> command is never read:
 /// git reaching its own folder is git's business. Fed by <see cref="WriteGuard"/>'s facts, so the two never disagree. A tripwire like the
 /// others: lexical, it sees the text, not what runs (a name built at run time passes), and says so in TOOLS.md. Pure but for the facts.
@@ -66,14 +67,35 @@ public static partial class TrustedFilesPolice
         return false;
     }
 
-    /// <summary>Whether <paramref name="word"/> names <c>.git</c>, <c>.neon</c>, the project file, the app's folder name, or a path under the home.</summary>
+    /// <summary>
+    /// Whether <paramref name="word"/> (a word <see cref="Find"/> returned) names Claude Code's files: a <c>.claude</c> segment or a
+    /// <c>.mcp.json</c> (2026-11-02, review P12-2). Those get their own refusal: no tool of the model's changes them, only the user.
+    /// </summary>
+    public static bool IsClaudeFile(string word)
+    {
+        ArgumentNullException.ThrowIfNull(word);
+        var parts = ValueOf(word.Replace('\\', '/')).Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Any(part => part.Equals(WriteGuard.ClaudeFolderName, StringComparison.OrdinalIgnoreCase))
+            || (parts.Length > 0 && parts[^1].Equals(WriteGuard.ClaudeMcpFileName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>Past a key=value or a switch's colon, the value: --git-dir=.git, -o:.neon/x (a drive's colon kept).</summary>
+    private static string ValueOf(string spelled)
+    {
+        int cut = spelled.LastIndexOfAny(['=', ':']);
+        return cut >= 0 && !(cut == 1 && char.IsAsciiLetter(spelled[0])) ? spelled[(cut + 1)..] : spelled;
+    }
+
+    /// <summary>Whether <paramref name="word"/> names <c>.git</c>, <c>.neon</c>, Claude Code's files, the project file, the app's folder name, or a path under the home.</summary>
     private static bool Names(string word, Guard guard)
     {
-        string spelled = word.Replace('\\', '/');
-        // Past a key=value or a switch's colon, the value: --git-dir=.git, -o:.neon/x.
-        int cut = spelled.LastIndexOfAny(['=', ':']);
-        string value = cut >= 0 && !(cut == 1 && char.IsAsciiLetter(spelled[0])) ? spelled[(cut + 1)..] : spelled;
+        string value = ValueOf(word.Replace('\\', '/'));
         var parts = value.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (IsClaudeFile(word))
+        {
+            return true;
+        }
+
         foreach (string part in parts)
         {
             if (part.Equals(WorkingDirectory.GitFolderName, StringComparison.OrdinalIgnoreCase)

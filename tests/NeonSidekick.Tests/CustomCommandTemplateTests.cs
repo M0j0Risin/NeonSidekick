@@ -10,6 +10,14 @@ public class CustomCommandTemplateTests
 {
     private static string Expand(string body, string args, params string[] names) => CustomCommandTemplate.Expand(body, args, names);
 
+    /// <summary>A dropped name's slot keeps the next name on its own word (2026-11-02, review P4-1): <c>$style</c> is the second word.</summary>
+    [Fact]
+    public void ANameAfterADroppedOne_BindsItsOwnWord()
+    {
+        var names = CustomCommandFile.Read("---\narguments: [file-name, style]\n---\nx").Arguments;
+        Assert.Equal("style=formal", CustomCommandTemplate.Expand("style=$style", "report.txt formal", names));
+    }
+
     [Fact]
     public void Arguments_IsTheTypedText_Trimmed()
     {

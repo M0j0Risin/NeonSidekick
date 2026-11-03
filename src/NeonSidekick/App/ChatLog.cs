@@ -107,7 +107,8 @@ public sealed class ChatLog
                     continue;
                 }
 
-                string piece = last.Reply[from..at].Trim();
+                // Line breaks off the front, all whitespace off the end (2026-11-02, review P3-2): an indented first line is a code block.
+                string piece = last.Reply[from..at].TrimStart('\r', '\n').TrimEnd();
                 if (piece.Length > 0)
                 {
                     pieces.Add(piece);

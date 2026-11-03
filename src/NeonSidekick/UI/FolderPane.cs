@@ -124,6 +124,12 @@ public sealed class FolderPane
                     return null;
                 }
 
+                if (input is InputEvent.Resize)
+                {
+                    Show();   // laid out at the window's new size with no key (2026-11-02, review P7-3)
+                    continue;
+                }
+
                 if (input is InputEvent.Click click)
                 {
                     if (click.Button != MouseButton.Left)

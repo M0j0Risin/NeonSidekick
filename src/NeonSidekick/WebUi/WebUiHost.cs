@@ -41,6 +41,12 @@ public interface IWebUiHost : IAsyncDisposable
     /// them (a test's) has none.
     /// </summary>
     string? OneTimeLinkAt(string baseAddress) => null;
+
+    /// <summary>
+    /// Whether a link <see cref="OneTimeLinkAt"/> gave is still unused and within its minute (2026-11-02, review P12-5), taking nothing. A host
+    /// without codes has none good.
+    /// </summary>
+    bool OneTimeLinkGood(string link) => false;
 }
 
 /// <summary>
@@ -137,6 +143,8 @@ public sealed class WebUiHost : IWebUiHost
         ArgumentNullException.ThrowIfNull(baseAddress);
         return _binding is null || _app is null ? null : WebUiAuth.OnceLinkAt(baseAddress, _codes.Mint());
     }
+
+    public bool OneTimeLinkGood(string link) => _binding is not null && _app is not null && _codes.IsGood(WebUiAuth.OnceCodeOf(link));
 
     public async Task StartAsync(WebUiBinding binding, CancellationToken cancellationToken)
     {

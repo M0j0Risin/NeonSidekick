@@ -53,6 +53,15 @@ public sealed class ReplyBlock : IRenderable
     private MarkdownDocument Document => _document ??= _parser.Parse(Text);
 
     /// <summary>
+    /// The same reply as a block not laid out yet (2026-11-02, review P2-4): its parse kept, its layout made again, so a path the resolver
+    /// answered since this one was laid out links.
+    /// </summary>
+    public ReplyBlock Again() => new(this, Document);
+
+    /// <summary>The inline code spans the resolver would be asked about (<see cref="MarkdownView.PathCandidates"/>), in order.</summary>
+    public IReadOnlyList<string> PathCandidates => _resolvePath is null ? [] : MarkdownView.PathCandidates(Document);
+
+    /// <summary>
     /// The code block the reply is still streaming (2026-09-27, the user's ask: a long code block
     /// scrolled the screen row by row as it came, and flickered — show it as the thinking is shown):
     /// the last top-level block when it is a fence not closed yet, with a <see cref="CodeKeep"/> to
@@ -82,13 +91,19 @@ public sealed class ReplyBlock : IRenderable
     }
 
     /// <summary>
-    /// Where <see cref="OpenCode"/> sits in this block laid out at <paramref name="maxWidth"/> as
+    /// The last top-level block when it is a fence not closed yet, whatever <see cref="CodeKeep"/> says (2026-11-02, review P1-2: with Code
+    /// collapse count 0 the pane still holds its label back until it closes, so the label commits with its ⧉). <see cref="OpenCode"/> with a keep.
+    /// </summary>
+    public CodeBlock? StreamingCode => Document.Blocks is [.., CodeBlock { Open: true } code] ? code : null;
+
+    /// <summary>
+    /// Where <see cref="StreamingCode"/> sits in this block laid out at <paramref name="maxWidth"/> as
     /// <paramref name="rows"/> rows: the last block, so its rows are the last rows — only it is laid
     /// out again, not the reply above it. Null without one.
     /// </summary>
     public CodeSpan? OpenCodeSpan(RenderOptions options, int maxWidth, int rows)
     {
-        if (OpenCode is not { } code)
+        if (StreamingCode is not { } code)
         {
             return null;
         }

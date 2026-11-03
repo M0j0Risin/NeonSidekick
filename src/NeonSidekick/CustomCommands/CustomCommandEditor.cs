@@ -260,15 +260,41 @@ public static class CustomCommandEditor
             File.Copy(file, target, overwrite);
             return new CustomCommandEditResult(done, targetName, toScope, target);
         }
-        catch (IOException) when (!overwrite && File.Exists(target))
+        catch (IOException ex) when (!overwrite && FileErrors.IsExists(ex))
         {
+            // Only a name taken since the check is a clash (2026-11-02, review P13-8: any failure with the file there was, a partial copy on a
+            // full disk too).
             return new CustomCommandEditResult(CustomCommandEditOutcome.Exists, targetName, toScope, target);
         }
         catch (Exception ex) when (IsFileFailure(ex))
         {
+            if (!overwrite)
+            {
+                DeleteQuietly(target);   // a partial copy of this call's (none stood there: Existing said so)
+            }
+
             return new CustomCommandEditResult(CustomCommandEditOutcome.Failed, targetName, toScope, target, ex.Message);
         }
     }
+
+    /// <summary>A file this call made and couldn't finish, removed; a failure to remove it is left (the next scan reads it as it is).</summary>
+    private static void DeleteQuietly(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception ex) when (IsFileFailure(ex))
+        {
+            // Left behind.
+        }
+    }
+
+    /// <summary>
+    /// The new file's stream, never over one there (<see cref="FileMode.CreateNew"/>): a seam for the tests (2026-11-02, review P13-4), which
+    /// hand back a stream whose write fails.
+    /// </summary>
+    internal static Func<string, Stream> OpenNew { get; set; } = static path => new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
 
     /// <summary>The file deleted, through the bin when one is given (<see cref="FileDeletes.Remove"/>); a subfolder it empties goes too.</summary>
     public static CustomCommandEditResult Delete(CustomCommandRoots roots, CustomCommandScope scope, string file, IRecycleBin? bin)
@@ -398,24 +424,33 @@ public static class CustomCommandEditor
             return new CustomCommandEditResult(CustomCommandEditOutcome.Linked, name, scope, target);
         }
 
+        // Whether this call made the file (2026-11-02, review P13-4: a write that failed after the create read as "exists", left a cut
+        // command for the next scan, and every retry said "exists").
+        bool created = false;
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
             byte[] bytes = Utf8NoBom.GetBytes(content.Replace("\r\n", "\n", StringComparison.Ordinal));
             // CreateNew: a file that appeared since the check is never replaced.
-            using (var stream = new FileStream(target, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            using (var stream = OpenNew(target))
             {
+                created = true;
                 stream.Write(bytes);
             }
 
             return new CustomCommandEditResult(done, name, scope, target) { MayReadDifferently = mayReadDifferently };
         }
-        catch (IOException) when (File.Exists(target))
+        catch (IOException ex) when (!created && (FileErrors.IsExists(ex) || File.Exists(target)))
         {
             return new CustomCommandEditResult(CustomCommandEditOutcome.Exists, name, scope, target);
         }
         catch (Exception ex) when (IsFileFailure(ex))
         {
+            if (created)
+            {
+                DeleteQuietly(target);
+            }
+
             return new CustomCommandEditResult(CustomCommandEditOutcome.Failed, name, scope, target, ex.Message);
         }
     }
@@ -467,12 +502,19 @@ public static class CustomCommandEditor
 
             return new CustomCommandEditResult(done, targetName, toScope, target);
         }
-        catch (IOException) when (File.Exists(target))
+        catch (IOException ex) when (FileErrors.IsExists(ex))
         {
             return new CustomCommandEditResult(CustomCommandEditOutcome.Exists, targetName, toScope, target);
         }
         catch (Exception ex) when (IsFileFailure(ex))
         {
+            // A move across volumes copies, then deletes the source (2026-11-02, review P13-8): when that delete failed the command stood in
+            // both places and read as "exists already". The copy goes, so it stays where it was, and the failure is said as one.
+            if (File.Exists(file) && File.Exists(target))
+            {
+                DeleteQuietly(target);
+            }
+
             return new CustomCommandEditResult(CustomCommandEditOutcome.Failed, targetName, toScope, target, ex.Message);
         }
     }

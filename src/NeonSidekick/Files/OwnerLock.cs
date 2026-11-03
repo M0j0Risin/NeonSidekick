@@ -93,7 +93,10 @@ public static partial class OwnerLock
 
     /// <summary>
     /// The id kept in <c>&lt;home&gt;/machine-id</c>, made the first time (a GUID, published whole without replacing one, so two first launches
-    /// agree); null when the home can't be read or written (the host name then decides, as before).
+    /// agree); null when the home can't be read or written (the host name then decides, as before). Published as a lock is (<see cref="PublishCall"/>,
+    /// 2026-11-02, review P4-4: <c>File.Move</c> without overwrite is a look then a rename on macOS, so two first launches each kept an id of
+    /// their own, and a lock the first wrote read as another machine's for good); where the volume takes neither link nor exclusive rename, the
+    /// move, then whatever stands there read back.
     /// </summary>
     public static string? ReadOrCreateMachineId(string home)
     {
@@ -111,7 +114,10 @@ public static partial class OwnerLock
             try
             {
                 File.WriteAllText(temp, Guid.NewGuid().ToString("D") + "\n");
-                File.Move(temp, path, overwrite: false);
+                if (PublishCall(temp, path) == PublishOutcome.Unsupported)
+                {
+                    File.Move(temp, path, overwrite: false);
+                }
             }
             catch (IOException)
             {
@@ -346,10 +352,8 @@ public static partial class OwnerLock
         Exists,
     }
 
-    // Windows' "a file is there" answers to a move without replace: ERROR_FILE_EXISTS and ERROR_ALREADY_EXISTS as HRESULTs.
-    private const int FileExistsHResult = unchecked((int)0x80070050);
-    private const int AlreadyExistsHResult = unchecked((int)0x800700B7);
-    private const int Eexist = 17;
+    // EEXIST, the errno a publishing call gives when the name is taken (FileErrors holds the HRESULTs).
+    private const int Eexist = FileErrors.Eexist;
 
     /// <summary><see cref="Publish"/>, a seam for the tests (a refusal by a lock that is gone by the read, which no real race repeats on cue).</summary>
     internal static Func<string, string, PublishOutcome> PublishCall { get; set; } = Publish;
@@ -373,7 +377,7 @@ public static partial class OwnerLock
             File.WriteAllText(temp, text);
             return PublishCall(temp, full);
         }
-        catch (IOException ex) when (ex.HResult is FileExistsHResult or AlreadyExistsHResult)
+        catch (IOException ex) when (FileErrors.IsExists(ex))
         {
             return PublishOutcome.Exists;
         }
@@ -473,28 +477,40 @@ public static partial class OwnerLock
     /// F38), and goes when that owner is gone (<paramref name="alive"/>); one whose owner can't be judged here goes once older than
     /// <see cref="GuardStale"/>.
     /// </summary>
+    /// <remarks>
+    /// Under <see cref="s_takeover"/> (2026-11-02, review P4-3), so of this process's own takers one at a time judges a guard: a guard naming
+    /// this process that it isn't holding now (<see cref="s_holding"/>) is a leftover its own delete couldn't remove (an indexer, a virus
+    /// scanner), removed as another's would be. Until then one naming this process was never left, and every later take-over in that folder
+    /// read as held until a restart. The lock is reentrant: a take nested in another's judgement (the tests' stand-in for another process)
+    /// sees the outer one's guard as held.
+    /// </remarks>
     private static bool RemoveIfStill(string full, LockOwner? held, Func<LockOwner, bool> alive, out bool unsupported)
+    {
+        lock (s_takeover)
+        {
+            return RemoveIfStillLocked(full, held, alive, out unsupported);
+        }
+    }
+
+    /// <summary>This process's take-overs one at a time (2026-11-02, review P4-3).</summary>
+    private static readonly Lock s_takeover = new();
+
+    /// <summary>The take-over guards this process holds right now (under <see cref="s_takeover"/>; more than one only when takes nest).</summary>
+    private static readonly HashSet<string> s_holding = new(StringComparer.OrdinalIgnoreCase);
+
+    private static bool RemoveIfStillLocked(string full, LockOwner? held, Func<LockOwner, bool> alive, out bool unsupported)
     {
         string guard = full + ".takeover";
         var guarded = TryCreate(guard, TextOf(Me));
         unsupported = guarded == PublishOutcome.Unsupported;
         if (guarded != PublishOutcome.Published)
         {
-            try
-            {
-                if (GuardLeft(guard, alive))
-                {
-                    File.Delete(guard);
-                }
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                // Its holder lets it go.
-            }
-
+            ClaimLeftGuard(guard, alive);
+            SweepClaims(guard);
             return false;
         }
 
+        s_holding.Add(guard);
         try
         {
             var (state, now) = ReadLockAt(full);
@@ -517,21 +533,119 @@ public static partial class OwnerLock
         }
         finally
         {
+            s_holding.Remove(guard);
             DeleteQuietly(guard);
         }
     }
 
     /// <summary>
-    /// Whether the take-over guard at <paramref name="guard"/> was left by a taker that is gone: one naming this process never (another of its own
-    /// takes removes it), one of this machine when <paramref name="alive"/> says its owner is gone, and one that can't be judged here (unreadable,
-    /// the old pid-only kind, another machine's, whose processes this one can't see) once older than <see cref="GuardStale"/>.
+    /// A take-over guard a gone taker left (<see cref="GuardLeft"/>) removed by claim (2026-11-02, review P1-13: a look then a delete let a late
+    /// taker delete a fresh guard another had just published, so two takers each removed and published, and two instances held one lock).
+    /// Renamed first to a name of its own (<c>&lt;guard&gt;.stale.&lt;nonce&gt;</c>, one atomic move, which only one claimer wins), then read
+    /// back: deleted when it is still the guard that was judged (its text and its time), else put back where it was (published as a lock is,
+    /// never over a fresh one: one there holds the name, and the claimed copy goes). On Windows the move fails while another taker reads the
+    /// guard: not claimed this time, as a delete that failed was.
+    /// </summary>
+    private static void ClaimLeftGuard(string guard, Func<LockOwner, bool> alive)
+    {
+        var judged = Fingerprint(guard);
+        if (judged is null || !GuardLeft(guard, alive))
+        {
+            return;
+        }
+
+        string claimed = guard + ClaimMark + Guid.NewGuid().ToString("N")[..8];
+        try
+        {
+            File.Move(guard, claimed, overwrite: false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return;   // another claimed it, or holds it open
+        }
+
+        if (Fingerprint(claimed) != judged)
+        {
+            // A fresh guard was published between the judgement and the move: back where it was, unless another is there now.
+            try
+            {
+                _ = PublishCall(claimed, guard);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // One holds the name already: the claimed copy goes below.
+            }
+        }
+
+        DeleteQuietly(claimed);
+    }
+
+    /// <summary>The mark ahead of a claimed guard's nonce.</summary>
+    internal const string ClaimMark = ".stale.";
+
+    /// <summary>What a guard is, for the claim's "still the one judged": its text and its last write (a rename keeps both); null when it's gone.</summary>
+    private static (string Text, DateTime Written)? Fingerprint(string path)
+    {
+        try
+        {
+            if (!File.Exists(path))
+            {
+                return null;
+            }
+
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            byte[] buffer = new byte[MaxLockBytes + 1];
+            int length = stream.Read(buffer, 0, buffer.Length);
+            return (Convert.ToHexString(buffer, 0, Math.Max(0, length)), File.GetLastWriteTimeUtc(path));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Claimed guards a crash left between the claim and the delete, removed once older than <see cref="GuardStale"/>, so none piles up.</summary>
+    private static void SweepClaims(string guard)
+    {
+        try
+        {
+            string? folder = Path.GetDirectoryName(guard);
+            if (folder is null || !Directory.Exists(folder))
+            {
+                return;
+            }
+
+            foreach (string left in Directory.EnumerateFiles(folder, Path.GetFileName(guard) + ClaimMark + "*"))
+            {
+                if (DateTime.UtcNow - File.GetLastWriteTimeUtc(left) > GuardStale)
+                {
+                    DeleteQuietly(left);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A folder that can't be listed keeps them: never read as a guard.
+        }
+    }
+
+    /// <summary>
+    /// Whether the take-over guard at <paramref name="guard"/> was left by a taker that is gone: one naming this process when it holds no such
+    /// guard now (<see cref="s_holding"/>, 2026-11-02, review P4-3: a delete of its own that failed), one of this machine when <paramref name="alive"/>
+    /// says its owner is gone, and one that can't be judged here (unreadable, the old pid-only kind, another machine's, whose processes this one
+    /// can't see) once older than <see cref="GuardStale"/>.
     /// </summary>
     private static bool GuardLeft(string guard, Func<LockOwner, bool> alive)
     {
         var (state, owner) = ReadLockAt(guard);
-        if (state == LockRead.Missing || owner == Me)
+        if (state == LockRead.Missing)
         {
             return false;
+        }
+
+        if (owner == Me)
+        {
+            return !s_holding.Contains(guard);
         }
 
         if (state == LockRead.Read && owner is { Foreign: false })

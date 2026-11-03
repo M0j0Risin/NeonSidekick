@@ -72,7 +72,8 @@ public class UsageContextTests
         Assert.Equal($"~{facts.Estimate:N0} of 32,768 ({UsageText.PercentText(UsageText.Percent(facts.Estimate, Window)!.Value)})", UsageText.ContextHeadline(facts));
         Assert.Equal("the server counted 2,950 at the last request", UsageText.ContextReference(facts));
         Assert.Equal(UsageText.NothingSentYet, UsageText.ContextReference(Facts(Window, counted: 0)));
-        Assert.Equal((UsageText.FreeLabel, UsageText.CompactNumber(32_768 - facts.Estimate)), (UsageText.ContextRows(facts)[^1].Label, UsageText.ContextRows(facts)[^1].Value));
+        // Free is marked an estimate (2026-11-02, review P1-3: the pin moved from the bare number).
+        Assert.Equal((UsageText.FreeLabel, UsageText.EstimateMark + UsageText.CompactNumber(32_768 - facts.Estimate)), (UsageText.ContextRows(facts)[^1].Label, UsageText.ContextRows(facts)[^1].Value));
     }
 
     [Fact]

@@ -35,6 +35,38 @@ public sealed class CustomCommandCatalogTests : IDisposable
         return path;
     }
 
+    /// <summary>A file's restricting keys warn on its card and over each run (2026-11-02, review P12-6); a file without them doesn't.</summary>
+    [Fact]
+    public void ACommandsAllowedTools_Warns_OnTheCardAndOverEachRun()
+    {
+        Write(_profile, "review.md", "---\nallowed-tools: Read, Grep\n---\nReview it.");
+        Write(_profile, "plain.md", "Plain.");
+        Write(_profile, "args.md", "---\narguments: [file-name, style]\n---\nStyle $style.");
+
+        var scan = Catalog().Scan();
+        var review = scan.Find("review")!;
+        string warning = CustomCommandText.IgnoredKeysWarning(["allowed-tools"]);
+        Assert.Equal(warning, review.Warning);
+        Assert.Contains(warning, CustomCommandText.SentNotice(review), StringComparison.Ordinal);
+        Assert.Null(scan.Find("plain")!.Warning);
+        Assert.DoesNotContain(warning, CustomCommandText.SentNotice(scan.Find("plain")!), StringComparison.Ordinal);
+        Assert.Equal(CustomCommandText.ArgumentDroppedWarning, scan.Find("args")!.Warning);
+    }
+
+    /// <summary>The scan's reuse window is on the monotonic clock (2026-11-02, review P4-6): the wall clock stepped back keeps no stale scan fresh.</summary>
+    [Fact]
+    public void Recent_AcrossABackwardClockStep_ScansAgain()
+    {
+        var time = new ManualTimeProvider();
+        var catalog = new CustomCommandCatalog(() => new CustomCommandRoots(_profile, _global), time);
+        Assert.Null(catalog.Recent().Find("sum"));
+
+        Write(_profile, "sum.md", "Sum it up.");
+        time.UtcNow = time.UtcNow.AddHours(-1);
+        time.Advance(CustomCommandCatalog.ReuseWindow);
+        Assert.NotNull(catalog.Recent().Find("sum"));
+    }
+
     [Fact]
     public void TheProfilesFile_WinsOverTheGlobalOne()
     {

@@ -116,15 +116,24 @@ public sealed class SandboxPictures(WorkingDirectory files, string folder, long 
         return Count(bytes.LongLength) ? Pdf.PdfHtml.DataUri(bytes, type.ToLowerInvariant()) : null;
     }
 
+    /// <summary>
+    /// A picture's address → its file in the sandbox, or null: cut at its query or fragment first, as a web address is; a relative one that
+    /// names no file so is tried whole (2026-11-02, review P9-9: <c>charts/chart#1.png</c> looked up <c>charts/chart</c>).
+    /// </summary>
     private string? Locate(string address)
     {
         string text = address.Trim();
         int cut = text.IndexOfAny(['?', '#']);
-        if (cut >= 0)
+        if (cut < 0)
         {
-            text = text[..cut];
+            return Find(text);
         }
 
+        return Find(text[..cut]) ?? (Uri.TryCreate(text, UriKind.Absolute, out _) && !(text.Length > 1 && text[1] == ':') ? null : Find(text));
+    }
+
+    private string? Find(string text)
+    {
         if (text.Length == 0)
         {
             return null;

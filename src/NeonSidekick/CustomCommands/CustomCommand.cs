@@ -31,6 +31,9 @@ public sealed record CustomCommand(
     /// <summary>Whether the body holds a <c>!</c> shell line, which is sent as written and never run.</summary>
     public bool HasShellLines { get; init; }
 
+    /// <summary>Claude Code's restricting keys the file sets and the app doesn't honor (2026-11-02, review P12-6), in file order; said on each run.</summary>
+    public IReadOnlyList<string> IgnoredKeys { get; init; } = [];
+
     /// <summary>
     /// The file's write time and length as the scan read it (2026-10-31, review P6-6): the one-time Shadowed notice keys on it, so a changed
     /// file is named again with no stat of its own outside the scan.

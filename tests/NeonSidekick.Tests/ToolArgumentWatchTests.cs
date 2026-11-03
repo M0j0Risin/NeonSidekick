@@ -80,6 +80,26 @@ public class ToolArgumentWatchTests
     }
 
     /// <summary>
+    /// A name the request didn't offer is never the busy row's (2026-11-02, review P12-7): an injected name with an ESC streams as
+    /// <see cref="TurnText.UnnamedCall"/> and has no ceiling; the log's <see cref="ToolArgumentWatch.Latest"/> keeps it, scrubbed.
+    /// </summary>
+    [Fact]
+    public void ANameTheRequestDidntOffer_StreamsAsUnnamed_ItsLogLineScrubbed()
+    {
+        var watch = new ToolArgumentWatch(_ => 10, _time, name => name == "read_file");
+        string injected = "evil\u001b]0;pwned\u0007";
+        Assert.Null(watch.Observe(FakeChatClient.ArgumentDelta(0, "c1", injected, "{")));
+        var shown = watch.Observe(FakeChatClient.ArgumentDelta(0, null, null, Chars(ToolArgumentWatch.CountShownFrom)));
+        Assert.Equal(TurnText.UnnamedCall, shown?.Name);
+        Assert.Null(watch.Over);   // no ceiling for a name nobody offered
+        Assert.DoesNotContain("\u001b", watch.Latest!.Name, StringComparison.Ordinal);
+        Assert.StartsWith("evil", watch.Latest.Name, StringComparison.Ordinal);
+
+        var offered = new ToolArgumentWatch(_ => null, _time, name => name == "read_file");
+        Assert.Equal(Writing("read_file", 1), offered.Observe(FakeChatClient.ArgumentDelta(0, "c1", "read_file", "{")));
+    }
+
+    /// <summary>
     /// A chunk with two pieces of one call shows its size after both (2026-10-30, review F70: the shown event is built once, after the
     /// update); the same size again shows nothing, however long after.
     /// </summary>

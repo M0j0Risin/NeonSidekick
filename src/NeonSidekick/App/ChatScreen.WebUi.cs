@@ -32,6 +32,47 @@ internal sealed partial class ChatScreen
     /// <summary>The state last handed to the controller: the idle line's backstop asks again only when the settings say otherwise.</summary>
     private WebUiWanted? _webUiAsked;
 
+    /// <summary>
+    /// The pane's one-time link for a public HTTPS address (2026-11-02, review P12-5), kept while it's unused and within its minute, so a pass
+    /// after a button shows the same code the phone may be scanning; minting on every pass would push it out past the eight held.
+    /// </summary>
+    private string? _webUiPaneOnce;
+
+    /// <summary>
+    /// The HTTPS entry's link for <see cref="WebUiController.Links"/>: null (the token's) unless <see cref="WebUiText.OnceOnly"/>, else a one-time
+    /// link, the pane's kept one unless <paramref name="fresh"/> (a copy mints its own). 2026-11-02, review P12-5.
+    /// </summary>
+    private string? WebUiHttpsLink(WebUiHttps? https, WebUiAudience audience, bool fresh)
+    {
+        if (https is null || !WebUiText.OnceOnly(https, audience))
+        {
+            return null;
+        }
+
+        if (fresh)
+        {
+            return _webUiController.OneTimeLinkAt(https.Address);
+        }
+
+        if (_webUiPaneOnce is not { } held || !held.StartsWith(https.Address.TrimEnd('/') + "/", StringComparison.Ordinal) || !_webUiController.OneTimeLinkGood(held))
+        {
+            _webUiPaneOnce = _webUiController.OneTimeLinkAt(https.Address);
+        }
+
+        return _webUiPaneOnce;
+    }
+
+    /// <summary>
+    /// <see cref="WebUiController.Links"/> with <see cref="WebUiHttpsLink"/>'s entry; when a one-time link is due and none could be minted, the
+    /// HTTPS entry is left out, never the token's link in its place (2026-11-02, review P12-5).
+    /// </summary>
+    private IReadOnlyList<WebUiLink> WebUiLinksNow(WebUiHttps? https, WebUiAudience audience, bool fresh)
+    {
+        string? once = WebUiHttpsLink(https, audience, fresh);
+        var links = _webUiController.Links(WebUiTokenNow(mint: false), https, once);
+        return once is null && WebUiText.OnceOnly(https, audience) ? [.. links.Where(l => l.Kind != WebUiLinkKind.Https)] : links;
+    }
+
     /// <summary>The line sent last came from the page (2026-10-14): withdrawn, it goes back to the page's draft, never the PC's row.</summary>
     private bool _sentFromWeb;
 
@@ -919,16 +960,18 @@ internal sealed partial class ChatScreen
                 // The first link: the HTTPS one when there is one (2026-10-31), else Tailscale's, else the home network's.
                 var copyEffective = _effective();
                 var copyHttps = (await WebUiHttpsAsync(copyEffective, cancellationToken).ConfigureAwait(false)).Https;
-                if (_webUiController.Links(WebUiTokenNow(mint: false), copyHttps) is not [var link, ..])
+                var copyAudience = WebUiReach.Resolve(copyEffective);
+                bool copyOnce = WebUiText.OnceOnly(copyHttps, copyAudience);
+                if (WebUiLinksNow(copyHttps, copyAudience, fresh: true) is not [var link, ..])
                 {
                     sink.Error(WebUiText.NoLinkError);
                     return;
                 }
 
                 bool copied = _copy(link.Url);
-                sink.Notice(copied ? WebUiText.CopiedNotice : WebUiText.CopyFailedError);
+                sink.Notice(!copied ? WebUiText.CopyFailedError : copyOnce && link.Kind == WebUiLinkKind.Https ? WebUiText.OnceCopiedNotice : WebUiText.CopiedNotice);
                 // Funnel's safety fact after the HTTPS link (2026-11-01, the review's P3-1), as its tab says it.
-                if (copied && link.Kind == WebUiLinkKind.Https && WebUiText.FunnelNoteFor(copyHttps, WebUiReach.Resolve(copyEffective)) is { } funnel)
+                if (copied && link.Kind == WebUiLinkKind.Https && WebUiText.FunnelNoteFor(copyHttps, copyAudience) is { } funnel)
                 {
                     sink.Notice(funnel);
                 }
@@ -1142,7 +1185,8 @@ internal sealed partial class ChatScreen
             var effective = _effective();
             var audience = WebUiReach.Resolve(effective);
             var (https, serveHint) = await WebUiHttpsAsync(effective, cancellationToken).ConfigureAwait(false);
-            var links = _webUiController.Links(WebUiTokenNow(mint: false), https);
+            bool once = WebUiText.OnceOnly(https, audience);
+            var links = WebUiLinksNow(https, audience, fresh: false);
             bool serving = _webUiController.Serving;
             // One set of status lines a pass (2026-11-01, the review's P8-4), for the plain lines and every tab.
             var statusLines = WebUiText.StatusLines(effective.WebUi, serving, serving ? _webUiController.Port : effective.WebUiPort, audience, https, serveHint);
@@ -1181,7 +1225,8 @@ internal sealed partial class ChatScreen
                 tabs = [.. links.Select(link => new InfoTab(WebUiText.LinkTabTitle(link), () => new Spectre.Console.Rows(
                     new Spectre.Console.Text(WebUiText.LinkTabText(status, link.Kind, https, audience)),
                     QrOrNote(link.Url),
-                    new Spectre.Console.Text("\n" + link.Url + "\n\n" + WebUiText.TokenWarning + "\n" + WebUiText.LinkOpenHint)))
+                    new Spectre.Console.Text("\n" + link.Url + "\n\n" + (once && link.Kind == WebUiLinkKind.Https ? WebUiText.OnceLinkNote : WebUiText.TokenWarning)
+                        + "\n" + WebUiText.LinkOpenHint)))
                 {
                     LineDoubleClicked = text => OpenLinkLine(link.Url, text, sink),
                 })];
@@ -1204,9 +1249,12 @@ internal sealed partial class ChatScreen
             {
                 case WebUiText.CopyKey:
                     // The shown tab's link (later on 2026-10-15, the user's ask), as /webui copy's; the pane opens again on the same tab.
+                    // A one-time HTTPS link copied is a fresh one (2026-11-02, review P12-5), so the QR's code stays for the phone.
                     if (shownTab < links.Count)
                     {
-                        sink.Notice(_copy(links[shownTab].Url) ? WebUiText.CopiedNotice : WebUiText.CopyFailedError);
+                        bool copyOnce = once && links[shownTab].Kind == WebUiLinkKind.Https;
+                        string? url = copyOnce ? WebUiHttpsLink(https, audience, fresh: true) : links[shownTab].Url;
+                        sink.Notice(url is not null && _copy(url) ? copyOnce ? WebUiText.OnceCopiedNotice : WebUiText.CopiedNotice : WebUiText.CopyFailedError);
                     }
 
                     continue;

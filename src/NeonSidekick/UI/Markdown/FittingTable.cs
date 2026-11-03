@@ -74,8 +74,24 @@ internal sealed class FittingTable : IRenderable
     public Measurement Measure(RenderOptions options, int maxWidth) =>
         StacksAt(options, maxWidth) ? new Measurement(Math.Min(maxWidth, 1), maxWidth) : ((IRenderable)_grid).Measure(options, maxWidth);
 
-    public IEnumerable<Segment> Render(RenderOptions options, int maxWidth) =>
-        StacksAt(options, maxWidth) ? Cards(options, maxWidth) : ((IRenderable)_grid).Render(options, maxWidth);
+    public IEnumerable<Segment> Render(RenderOptions options, int maxWidth)
+    {
+        var segments = StacksAt(options, maxWidth) ? Cards(options, maxWidth) : ((IRenderable)_grid).Render(options, maxWidth).ToList();
+        Volatile.Write(ref _rowsAt, ((maxWidth + 1L) << 32) | (uint)Segment.SplitLines(segments).Count);
+        return segments;
+    }
+
+    /// <summary>
+    /// The last render's rows at <paramref name="maxWidth"/> (2026-11-02, review P1-4: the pane asked for a streaming table's rows by laying
+    /// it out a second time each tick), or null when the last render was at another width or there was none. One <c>long</c>, as <see cref="_stacksAt"/>.
+    /// </summary>
+    public int? RowsAt(int maxWidth)
+    {
+        long cached = Volatile.Read(ref _rowsAt);
+        return cached != 0 && cached >> 32 == maxWidth + 1L ? (int)(uint)cached : null;
+    }
+
+    private long _rowsAt;
 
     private List<Segment> Cards(RenderOptions options, int maxWidth)
     {
@@ -83,7 +99,7 @@ internal sealed class FittingTable : IRenderable
         int headerCells = Math.Max(1, Math.Min(widest, maxWidth / 3));
         int valueCells = Math.Max(1, maxWidth - headerCells - HeaderGap);
         var slab = Theme.MarkdownCodeBlock.Background;
-        bool noColor = options.ColorSystem is ColorSystem.NoColors or ColorSystem.Legacy;
+        bool noColor = !Theme.HasBackgrounds(options);   // 16 colors too (2026-11-02, review P1-6)
 
         // Each header laid out once, not once a row (2026-11-02, the review).
         var headers = new List<SegmentLine>[_headers.Count];

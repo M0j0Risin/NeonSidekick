@@ -263,6 +263,10 @@ public static class OfficeText
     /// <summary>The log category of a write's one line.</summary>
     public const string Category = "office";
 
+    /// <summary>The log line of a workbook part that threw as it was let go (2026-11-02, review P13-2): logged, never rethrown.</summary>
+    public static string ReleaseFailedLogLine(string part, string? workbook, string kind, string message) =>
+        $"xlsx {part} of {workbook ?? "a workbook"} failed to close ({kind}): {message}";
+
     /// <summary>A table with no columns. Pinned.</summary>
     public const string NoColumns = "Error: the result has no columns, so there is nothing to write";
 

@@ -4369,11 +4369,17 @@ public class InputLineTests : IDisposable
         Assert.False(InputLine.Editor.IsMetaWordKey(new ConsoleKeyInfo('b', ConsoleKey.B, false, alt: true, control: true), 'b'));
     }
 
-    /// <summary>Off a Mac, Alt+b/f are no word keys (2026-11-02): Ctrl+←/→ are the word moves there.</summary>
-    [WindowsFact]
+    /// <summary>
+    /// Alt+b/f are word keys on a Mac alone (2026-11-02; a plain fact since review P10-9, so the Linux runners and the Mac both check it),
+    /// and never with Shift (Alt+B) or Ctrl, anywhere.
+    /// </summary>
+    [Fact]
     public void MetaWordKeys_AreAMacsOnly()
     {
-        Assert.False(InputLine.Editor.IsMetaWordKey(VtInputParser.Plain('b', alt: true), 'b'));
+        Assert.Equal(OperatingSystem.IsMacOS(), InputLine.Editor.IsMetaWordKey(VtInputParser.Plain('b', alt: true), 'b'));
+        Assert.Equal(OperatingSystem.IsMacOS(), InputLine.Editor.IsMetaWordKey(VtInputParser.Plain('f', alt: true), 'f'));
+        Assert.False(InputLine.Editor.IsMetaWordKey(VtInputParser.Plain('B', alt: true), 'b'));
+        Assert.False(InputLine.Editor.IsMetaWordKey(new ConsoleKeyInfo('b', ConsoleKey.B, false, alt: true, control: true), 'b'));
     }
 
     /// <summary>Ctrl+Shift+← selects back to the word's start; typing replaces it.</summary>
@@ -4532,5 +4538,20 @@ public class InputLineTests : IDisposable
 
         Assert.Equal("mine", _line.LastSubmittedDraft);
         Assert.Equal("from the phone", _line.History[^1]);
+    }
+
+    /// <summary>A resize under a value being typed (2026-11-02, review P7-3): handled as nothing, the draft and its cursor as they were.</summary>
+    [Fact]
+    public async Task AResize_ChangesNoDraft()
+    {
+        var (line, keys) = PaneLine(() => "Z");
+        keys.Push(Chars("ab")).Push(Keys.Enter);
+        Assert.Equal("ab", Assert.IsType<InputResult.Submitted>(await line.ReadAsync(editor: line.Chat)).Text);
+        var editor = line.Chat;
+        editor.BeginLive();
+        await editor.FeedAsync(new InputEvent.Key(Keys.Char('q')), CancellationToken.None);
+
+        Assert.Equal(EditOutcome.Handled, await editor.FeedAsync(new InputEvent.Resize(), CancellationToken.None));
+        Assert.Equal("q", editor.Text);
     }
 }

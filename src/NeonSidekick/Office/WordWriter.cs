@@ -178,6 +178,9 @@ public sealed class WordWriter
         _package.Relate(DocumentPart, _package.NextId(DocumentPart), "numbering", "numbering.xml");
         _package.Relate(DocumentPart, _package.NextId(DocumentPart), "settings", "settings.xml");
         _package.Properties(title);
+        // The last check before the zip is finished (2026-11-02, review P13-3): the blocks' checks end at the last block, and the picture
+        // parts, styles and the rest ran on after an Esc. The token is the one Task.Run was given, so a cancel here ends that task Canceled.
+        _cancellation.ThrowIfCancellationRequested();
         _package.Finish();
     }
 
@@ -373,25 +376,14 @@ public sealed class WordWriter
     /// <summary>
     /// A link's target when it may be a hyperlink (<c>http</c>, <c>https</c> or <c>mailto</c>, nothing else), escaped as a relationship
     /// holds it: spaces and accents percent-encoded, a non-ASCII host in its IDN form (2026-10-29, review P1-6: the raw text made Word
-    /// report unreadable content). False for any other target.
+    /// report unreadable content). False for any other target. <see cref="Files.SafeText.WebLink"/>'s one rule since 2026-11-02 (review
+    /// P12-8), so a bidi or zero-width character, a space or an address past the length cap now gets no hyperlink, as on the screen.
     /// </summary>
     public static bool TryLinkable(string url, out string target)
     {
         ArgumentNullException.ThrowIfNull(url);
-        target = "";
-        if (!Uri.TryCreate(url.Trim(), UriKind.Absolute, out var uri)
-            || !(uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeMailto))
-        {
-            return false;
-        }
-
-        target = uri.AbsoluteUri;
-        if (uri.Scheme != Uri.UriSchemeMailto && !uri.IdnHost.Equals(uri.Host, StringComparison.OrdinalIgnoreCase))
-        {
-            target = new UriBuilder(uri) { Host = uri.IdnHost }.Uri.AbsoluteUri;
-        }
-
-        return true;
+        target = Files.SafeText.WebLink(url)?.Target ?? "";
+        return target.Length > 0;
     }
 
     private void Link(LinkRun link, Look outer)

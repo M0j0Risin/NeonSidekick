@@ -131,4 +131,23 @@ public sealed class ShellFixesTests : IDisposable
         Assert.Null(TrustedFilesPolice.Find("cat .gitignore .github/workflows/x.yml", guard));
         Assert.Equal("--git-dir=.git", TrustedFilesPolice.Find("hub --git-dir=.git x", guard));
     }
+
+    /// <summary>
+    /// Claude Code's files are on the tripwire (2026-11-02, review P12-2) with a refusal of their own; <c>claude --help</c> and a
+    /// <c>.claudeignore</c> pass.
+    /// </summary>
+    [Fact]
+    public void ClaudeCodesFiles_AreATripwire_WithTheirOwnRefusal()
+    {
+        var guard = new TrustedFilesPolice.Guard(Path.Combine(_dir, "home"), _root);
+        string? named = TrustedFilesPolice.Find("echo {} > .claude/settings.json", guard);
+        Assert.Equal(".claude/settings.json", named);
+        Assert.True(TrustedFilesPolice.IsClaudeFile(named!));
+        Assert.Equal(ShellText.ClaudePoliced, ShellText.TrustedPolicedFor(named!));
+        Assert.Equal(".mcp.json", TrustedFilesPolice.Find("Set-Content .mcp.json '{}'", guard));
+        Assert.Equal("sub\\.CLAUDE\\x", TrustedFilesPolice.Find("copy a sub\\.CLAUDE\\x", guard));
+        Assert.Null(TrustedFilesPolice.Find("claude --help", guard));
+        Assert.Null(TrustedFilesPolice.Find("cat .claudeignore claude.json", guard));
+        Assert.Equal(ShellText.TrustedPoliced, ShellText.TrustedPolicedFor(".git/config"));
+    }
 }

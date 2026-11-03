@@ -963,6 +963,30 @@ public class ScrollbackTests
         Assert.Equal(["xy"], Texts(store.Rows(6)));
     }
 
+    /// <summary>
+    /// A full store narrowed to half its width (2026-11-02, review P7-2: the rows doubled past the cap and the oldest lines went for good):
+    /// every line kept, the rows past the cap while narrow, and a find, a jump's start and the first row still the oldest line's.
+    /// </summary>
+    [Fact]
+    public void AFullStore_NarrowedToHalf_DropsNoLine()
+    {
+        var store = new Scrollback();
+        AppendStart(store, Segments("first aaaa bbbb\n"), 16);
+        for (int i = 1; i < Scrollback.MaxRows; i++)
+        {
+            store.Append(Segments("line aaaa bbbb c\n"), 16);
+        }
+
+        Assert.Equal(Scrollback.MaxRows, store.Rows(16).Count);
+        var narrow = store.Rows(8);
+        Assert.Equal(Scrollback.MaxRows, store.LineCount);
+        Assert.True(narrow.Count >= 2 * Scrollback.MaxRows - 1);
+        Assert.StartsWith("first", TextFind.LineText(narrow[0]), StringComparison.Ordinal);
+        Assert.Equal(0, store.MessageStartRows()[0]);
+        Assert.Contains(TextFind.Matches(narrow.Take(2).ToList(), "first"), hit => hit.Line == 0);
+        Assert.Equal(Scrollback.MaxRows, store.Rows(16).Count);   // wider again: the same lines
+    }
+
     [Fact]
     public void TheCap_DropsASourceWhole_AndCountsItsRows()
     {
@@ -971,16 +995,17 @@ public class ScrollbackTests
         Assert.Equal(["A", "B", "C", "D"], Texts(store.Rows(5)));
         Assert.Equal(1, store.LineCount);   // one write, one line (the resize review)
 
-        // One row past the cap: the write goes whole, the rows dropped are the four it took.
+        // One row past the cap: the write goes whole, the rows dropped are the four it took. The cap counts its three rows at its own
+        // width, not the four narrower (2026-11-02, review P7-2: a moved pin, one more line to pass it).
         int dropped = 0;
-        for (int i = 0; i < Scrollback.MaxRows - 3; i++)
+        for (int i = 0; i < Scrollback.MaxRows - 2; i++)
         {
             dropped += store.Append(Segments("x\n"), 5);
         }
 
         Assert.Equal(4, dropped);
         Assert.Equal(["x", "x"], Texts(store.Rows(5)).Take(2));
-        Assert.Equal(Scrollback.MaxRows - 3, store.Rows(20).Count);
+        Assert.Equal(Scrollback.MaxRows - 2, store.Rows(20).Count);
     }
 
     [Fact]
@@ -1298,12 +1323,16 @@ public class ScrollbackTests
     }
 
     /// <summary>
-    /// A source rendered again above the screen's tail changes nothing shown (F32): no redraw unless scrolled; one in the tail redraws.
+    /// A source rendered again above the screen's tail changes nothing shown (F32): the relay names the line it laid out, and
+    /// <see cref="Scrollback.Touches"/> finds it in no window it isn't in; one in the tail is found. A moved pin (2026-11-02, review P7-7):
+    /// <c>RenderPending(tailRows, scrolled)</c> judged it; the pane now judges every relay over its window once its anchors resolved.
     /// </summary>
     [Fact]
-    public void RenderPending_AboveTheTail_AsksForNoRedraw()
+    public void RenderPending_AboveTheTail_TouchesNoTail()
     {
+        Scrollback.WidthChange? change = null;
         var store = Reflowing();
+        store.Relaid = c => change = c;
         store.Append(Segments("xy\n"), 20, member: false, null, null, TwoWhenNarrow());
         for (int i = 0; i < 10; i++)
         {
@@ -1313,15 +1342,46 @@ public class ScrollbackTests
         store.RenderBudget = TimeSpan.Zero;
         store.Rows(5);
         Assert.True(store.Pending);
-        Assert.False(store.RenderPending(tailRows: 6, scrolled: false));
+        Assert.True(store.RenderPending());   // it laid the line out
+        int rows = store.Rows(5).Count;
+        Assert.False(store.Touches(change!, rows - 6, 6));
+        Assert.True(store.Touches(change!, 0, 2));
         Assert.False(store.Reshaped);
         Assert.Equal(["x", "y"], Texts(store.Rows(5)).Take(2));
 
         store = Reflowing();
+        store.Relaid = c => change = c;
         store.Append(Segments("xy\n"), 20, member: false, null, null, TwoWhenNarrow());
         store.RenderBudget = TimeSpan.Zero;
         store.Rows(5);
-        Assert.True(store.RenderPending(tailRows: 6, scrolled: false));
+        Assert.True(store.RenderPending());
+        Assert.True(store.Touches(change!, Math.Max(0, store.Rows(5).Count - 6), 6));
+    }
+
+    /// <summary>
+    /// Every re-layout goes through the relay (2026-11-02, review P7-5): Ctrl+O's <see cref="Scrollback.SetAllExpanded"/> and the find's
+    /// unfold tell the pane before and after, with every line laid out (<see cref="Scrollback.Touches"/> finds any row); they told nothing.
+    /// </summary>
+    [Fact]
+    public void AFoldsReLayout_AtTheSameWidth_IsRelayed()
+    {
+        int relaying = 0;
+        Scrollback.WidthChange? change = null;
+        var store = new Scrollback();
+        store.Relaying = () => relaying++;
+        store.Relaid = c => change = c;
+        store.Append(Segments("before\n"), 40);
+        store.BeginGroup(1);
+        store.Append(Segments("tool a\n"), 40, member: true);
+        store.Append(Segments("tool b\n"), 40, member: true);
+        store.EndGroup();
+        store.Append(Segments("after\n"), 40);
+        store.Rows(40);
+        store.SetAllExpanded(!store.ExpandAll);
+        Assert.Equal(1, relaying);
+        Assert.NotNull(change);
+        Assert.Equal(40, change!.Width);
+        Assert.True(store.Touches(change, 0, 1));
     }
 
     /// <summary>A narrowed <c>| … |</c> line repeats its bar on every row; an anchor in it still follows the narrowing and widening (F64).</summary>
@@ -1423,5 +1483,81 @@ public class ScrollbackTests
 
         store.Append(many, 40);
         Assert.False(store.AnyLinks);
+    }
+
+    // ── The review of 2026-11-02 (part 4) ───────────────────────────────────
+
+    /// <summary>
+    /// The first write after a narrowing, before any layout at the new width, is judged at its own width (2026-11-02, review P6-3): a
+    /// picture's open row cut there needs its break, though the cached layout is still the wider one.
+    /// </summary>
+    [Fact]
+    public void JoinNeedsBreak_IsJudgedAtTheWritesWidth_NotTheCachedLayouts()
+    {
+        var pixel = new Style(background: Color.Red);
+        var segments = new List<Segment> { new("    "), new("    ", pixel), Segment.LineBreak, new("  "), new("    ", pixel) };
+        IReadOnlyList<IReadOnlyList<PictureSpan>> spans = [[new PictureSpan(4, 4, 9)], [new PictureSpan(2, 4, 9)]];
+        var store = new Scrollback();
+        store.Append(segments, 10, member: false, spans);
+        store.Rows(10);   // laid out at the width written
+
+        Assert.False(store.JoinNeedsBreak(Segments("text"), 10));
+        Assert.True(store.JoinNeedsBreak(Segments("text"), 4));   // the open row is cut at 4
+        Assert.False(store.JoinNeedsBreak(Segments("\n"), 4));    // a break only closes it
+    }
+
+    /// <summary>
+    /// A write the store renders again is copied at another width with its renderable and the width it was written at (2026-11-02,
+    /// review P6-1: refused, so a resize at startup left the splash unrefit).
+    /// </summary>
+    [Fact]
+    public void Since_ASourceLaidOutAtAnotherWidth_IsCopiedWithItsRenderable()
+    {
+        var store = Reflowing();
+        var mark = store.Mark;
+        var source = TwoWhenNarrow();
+        store.Append(Segments("xy\n"), 20, member: false, null, null, source);
+
+        var copied = Assert.IsType<Scrollback.Copied>(store.Since(mark, 6));
+        var chunk = Assert.Single(copied.Chunks);
+        Assert.Same(source, chunk.Source);
+        Assert.Equal(20, chunk.Born);
+    }
+
+    /// <summary>
+    /// An emoji whose selector ends on the last column is one row (2026-11-02, review P7-6: the zero-width selector after a full row
+    /// started a row of its own, a blank row the terminal never draws).
+    /// </summary>
+    [Fact]
+    public void AnEmojiWithItsSelector_EndingOnTheLastColumn_IsOneRow()
+    {
+        var store = new Scrollback();
+        store.Append([new Segment("ab👍"), new Segment("️"), Segment.LineBreak], 4);
+        var row = Assert.Single(store.Rows(4));
+        Assert.Equal("ab👍️", Texts([row])[0]);
+    }
+
+    /// <summary>
+    /// The rows a copy adds, put back at another width (2026-11-02, review P8-3: the reserve was the rows at the width read, so a resize
+    /// between the read and the splash's fit reserved the old width's): a closed mark's lines, and what joined an open line after its head.
+    /// </summary>
+    [Fact]
+    public void Copied_RowsAt_CountsTheRowsAtTheWidthAsked()
+    {
+        var store = new Scrollback();
+        var mark = store.Mark;
+        store.Append(Segments("aaa bbb ccc\n"), 20);
+        var copied = store.Since(mark, 20)!;
+        Assert.Equal(1, copied.Rows);
+        Assert.Equal(1, copied.RowsAt(20));
+        Assert.Equal(3, copied.RowsAt(5));   // "aaa", "bbb", "ccc"
+
+        var joined = new Scrollback();
+        joined.Append(Segments("start "), 20);
+        var inside = joined.Mark;
+        joined.Append(Segments("aaa bbb\n"), 20);
+        var tail = joined.Since(inside, 20)!;
+        Assert.Equal(0, tail.RowsAt(20));   // "start aaa bbb": the head's one row
+        Assert.Equal(1, tail.RowsAt(8));    // "start" then "aaa bbb"
     }
 }
