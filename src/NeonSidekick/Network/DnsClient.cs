@@ -6,8 +6,11 @@ using System.Security.Cryptography;
 
 namespace NeonSidekick.Network;
 
-/// <summary>What one lookup came to: the reply and the server that gave it, or the sentence saying why not.</summary>
-public sealed record DnsOutcome(DnsMessage? Reply, IPEndPoint? Server, string? Error, bool OverTcp = false);
+/// <summary>
+/// What one lookup came to: the reply and the server that gave it, or the sentence saying why not. <paramref name="Resolver"/> names what
+/// answered when no one server did (2026-11-03: a Mac's system resolver, <see cref="NetworkText.SystemResolver"/>).
+/// </summary>
+public sealed record DnsOutcome(DnsMessage? Reply, IPEndPoint? Server, string? Error, bool OverTcp = false, string? Resolver = null);
 
 /// <summary>
 /// <c>net_dns</c>'s own client (2026-10-15, the admin-tools plan) for every type but a plain A/AAAA asked of the system: UDP first from a fresh
@@ -68,6 +71,23 @@ public static class DnsClient
         }
 
         return found.OrderBy(a => a.AddressFamily == AddressFamily.InterNetwork ? 0 : 1).Select(a => new IPEndPoint(a, Port)).ToList();
+    }
+
+    /// <summary>
+    /// A lookup asked of the system (2026-11-03, a VPN domain's report): on a Mac through its own resolver (<see cref="MacDnsService"/>), which
+    /// follows a VPN's per-domain resolvers that <see cref="SystemServers"/> cannot see there, and only when that daemon cannot be asked through
+    /// <see cref="SystemServers"/>; elsewhere through <see cref="SystemServers"/>, as before. The DC lookup, <c>net_dns</c>'s system
+    /// lookups and the trace's reverse names come here.
+    /// </summary>
+    public static async Task<DnsOutcome> SystemQueryAsync(string name, ushort type, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        if (OperatingSystem.IsMacOS() && await MacDnsService.QueryAsync(name, type, cancellationToken).ConfigureAwait(false) is { } answered)
+        {
+            return answered;
+        }
+
+        return await QueryAsync(SystemServers(), name, type, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

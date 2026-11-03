@@ -609,7 +609,7 @@ public sealed class NetworkTests
 
     /// <summary>The door with no system DNS server: a lookup through the system's resolvers is judged and counted, then answers "no server".</summary>
     private NetworkAccess NoServers() =>
-        new(() => _settings, _pinger, _time, (host, _) => _names.TryGetValue(host, out var a) ? Task.FromResult(a) : throw new System.Net.Sockets.SocketException(11001), systemDns: () => []);
+        new(() => _settings, _pinger, _time, (host, _) => _names.TryGetValue(host, out var a) ? Task.FromResult(a) : throw new System.Net.Sockets.SocketException(11001), systemQuery: (name, type, ct) => DnsClient.QueryAsync([], name, type, ct));
 
     [Fact]
     public async Task Preamble_ARefusalQuotesTheServerFenced()

@@ -483,7 +483,7 @@ Under *Network tools*. Small checks on one host at a time: is it up, what does i
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `net_dns` | `name, type?, server?` | A name's records: A (default) and AAAA through the system's resolver; CNAME, MX, TXT, NS, SOA, PTR, SRV and CAA from its DNS servers, or `server` (a host too). |
+| `net_dns` | `name, type?, server?` | A name's records: A (default) and AAAA through the system's resolver; CNAME, MX, TXT, NS, SOA, PTR, SRV and CAA from its DNS servers (on a Mac, the system's resolver too), or `server` (a host too). |
 | `net_ping` | `host, count?` | Echoes (4 by default, 10 at most): answered or not, the loss and the round trips. |
 | `net_trace` | `host, max_hops?, names?` | The route, hop by hop (30 at most, about 45 seconds); `names` looks each hop's name up. |
 | `net_port` | `host, ports` | Whether TCP ports (16 at most) are open, refused or silent, on every address the host has. |
@@ -688,7 +688,7 @@ Under *Directory tools*. **Read-only:** the app's directory client holds no call
 The same tools, `/ad` and `--ad-check`, read-only as on Windows.
 
 * **Kerberos only.** `windows` uses your default ticket: run `kinit you@CORP.EXAMPLE` first (`klist` shows it). `runas` takes `name@REALM`, the realm in capitals; a `DOMAIN\name` is refused only when used, so an `ad.json` shared with a PC still loads. Its password is a Keychain item (`NeonSidekick/ad/<name>`).
-* **No `current`:** name each domain in `ad.json`. A DC is the `server` when given, else found in DNS (`_ldap._tcp.dc._msdcs.<domain>`), else the domain's own name.
+* **No `current`:** name each domain in `ad.json`. A DC is the `server` when given, else found in DNS (`_ldap._tcp.dc._msdcs.<domain>`, asked of the Mac's own resolver, so a VPN's DNS for its domain counts), else the domain's own name. Up to 8 DCs are tried in DNS's order, each but the last for 3 seconds.
 * **Name the DC itself:** the sign-in asks for `ldap/<the name connected to>`, which an alias, `localhost`, an IP, or the domain's name when DNS lists no DCs doesn't have. Give `server` the DC's full name (a hosts entry can point it at another address).
 * **Sealed:** on 389 always signed and sealed (a DC offering neither is refused); on LDAPS the DC's certificate must be trusted in the Keychain. A DC auditing unsigned binds (event 2889) logs these sealed ones too.
 * **A `runas` ticket** goes in its own cache, which macOS may make the default when you have none (`klist -l`); `kdestroy -p <name@REALM>` removes it.

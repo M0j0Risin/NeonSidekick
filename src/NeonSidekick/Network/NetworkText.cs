@@ -168,6 +168,12 @@ public static class NetworkText
 
     public static string DnsNoAnswer(string server) => $"Error: {server} gave no usable answer in time.";
 
+    /// <summary>What answered a lookup asked of the system as a whole (a Mac's DNS-SD, 2026-11-03; the A/AAAA lookup's words too). Pinned.</summary>
+    public const string SystemResolver = "the system resolver";
+
+    /// <summary>A Mac's system resolver refusing or failing a lookup, by its DNS-SD error code (2026-11-03). Pinned.</summary>
+    public static string DnsServiceFailed(int code) => $"Error: {SystemResolver} failed the lookup (DNS-SD error {code.ToString(CultureInfo.InvariantCulture)}).";
+
     /// <summary>An RCODE as a sentence: NXDOMAIN, SERVFAIL, REFUSED and the rest.</summary>
     public static string Rcode(int code) => code switch
     {

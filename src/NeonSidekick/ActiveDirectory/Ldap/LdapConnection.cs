@@ -79,13 +79,19 @@ public sealed class LdapConnection : IDisposable
     }
 
     /// <summary>Connects to <paramref name="host"/>:<paramref name="port"/>, LDAPS under <paramref name="tls"/>, in <see cref="ConnectTimeout"/>.</summary>
-    public static LdapConnection Open(string host, int port, bool tls)
+    public static LdapConnection Open(string host, int port, bool tls) => Open(host, port, tls, ConnectTimeout);
+
+    /// <summary>
+    /// As <see cref="Open(string, int, bool)"/>, the TCP connect given <paramref name="connectTimeout"/> (2026-11-03: a DC that is not the last
+    /// to try gets less, <see cref="ManagedDirectorySystem.CandidateConnectTimeout"/>); a TLS handshake keeps <see cref="ConnectTimeout"/>.
+    /// </summary>
+    public static LdapConnection Open(string host, int port, bool tls, TimeSpan connectTimeout)
     {
         ArgumentNullException.ThrowIfNull(host);
         var client = new TcpClient { NoDelay = true };
         try
         {
-            using var timeout = new CancellationTokenSource(ConnectTimeout);
+            using var timeout = new CancellationTokenSource(connectTimeout);
             client.ConnectAsync(host, port, timeout.Token).AsTask().GetAwaiter().GetResult();
         }
         catch (Exception ex) when (ex is SocketException or OperationCanceledException or IOException)

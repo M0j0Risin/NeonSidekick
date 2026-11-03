@@ -28,7 +28,8 @@ public static class NetworkChecks
 
     /// <summary>
     /// <c>net_dns</c>: A/AAAA with no server through the system resolver (the injected one); every other type, or any type with a
-    /// <paramref name="server"/>, through the app's own client against the system's servers or that one. An explicit server is judged and
+    /// <paramref name="server"/>, through the app's own client against the system's servers (on a Mac its own resolver since 2026-11-03,
+    /// <see cref="DnsClient.SystemQueryAsync"/>) or that one. An explicit server is judged and
     /// counted as a host; the system's resolvers are exempt, but the question is not (2026-10-19, the network review): a PTR is judged by
     /// its address, an A/AAAA by what it resolved to, any other by its name, and through the system's resolvers each counts as a host. A PTR
     /// of an address asks for its reverse name.
@@ -61,7 +62,6 @@ public static class NetworkChecks
             return new NetworkAnswer(NetworkText.BadName(name));
         }
 
-        IReadOnlyList<IPEndPoint> servers;
         bool system = string.IsNullOrWhiteSpace(server);
         if (system && (type is DnsWire.A or DnsWire.Aaaa) && reverse is null)
         {
@@ -99,9 +99,11 @@ public static class NetworkChecks
         }
 
         string? note = question.Note;
+        DnsOutcome outcome;
         if (system)
         {
-            servers = access.SystemDns();
+            // The system's own resolver (2026-11-03: on a Mac a VPN's per-domain servers too, DnsClient.SystemQueryAsync).
+            outcome = await access.SystemQueryAsync(asked, type, cancellationToken).ConfigureAwait(false);
         }
         else
         {
@@ -112,10 +114,10 @@ public static class NetworkChecks
             }
 
             note ??= target.Value!.ModelNote;
-            servers = target.Value!.Addresses.Select(a => new IPEndPoint(a, DnsClient.Port)).ToList();
+            var servers = target.Value!.Addresses.Select(a => new IPEndPoint(a, DnsClient.Port)).ToList();
+            outcome = await DnsClient.QueryAsync(servers, asked, type, cancellationToken).ConfigureAwait(false);
         }
 
-        var outcome = await DnsClient.QueryAsync(servers, asked, type, cancellationToken).ConfigureAwait(false);
         var (shown, withheld) = await AnswersAsync(access, budget, outcome, cancellationToken).ConfigureAwait(false);
         string text = NetworkRender.Lookup(asked, type, shown, system);
         return new NetworkAnswer(withheld > 0 ? text + "\n" + NetworkText.AnswersWithheld(withheld) : text, note);

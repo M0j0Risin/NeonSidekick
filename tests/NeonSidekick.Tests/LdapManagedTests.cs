@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Formats.Asn1;
 using System.Net;
 using System.Net.Security;
@@ -342,10 +343,12 @@ public sealed class LdapManagedTests
     [Fact]
     public void Candidates_AreTheServerNamed_OrTheDomainsDcs_ThenItsName()
     {
-        IReadOnlyList<string> Locate(string d) => ["dc2.lab.neon.test", "dc1.lab.neon.test", "dc3.lab.neon.test", "dc4.lab.neon.test"];
+        // Ten DCs: the first eight tried, then the domain's name (2026-11-03: three until then).
+        IReadOnlyList<string> Locate(string d) => [.. Enumerable.Range(1, 10).Select(i => "dc" + i.ToString(CultureInfo.InvariantCulture) + ".lab.neon.test")];
 
         Assert.Equal(["dc9.lab.neon.test"], ManagedDirectorySystem.Candidates(new DirectoryTarget("dc9.lab.neon.test", 389, false, null, "lab.neon.test"), Locate));
-        Assert.Equal(["dc2.lab.neon.test", "dc1.lab.neon.test", "dc3.lab.neon.test", "lab.neon.test"], ManagedDirectorySystem.Candidates(new DirectoryTarget("lab.neon.test", 389, false, null, "lab.neon.test"), Locate));
+        Assert.Equal([.. Locate("").Take(ManagedDirectorySystem.MaxCandidates), "lab.neon.test"], ManagedDirectorySystem.Candidates(new DirectoryTarget("lab.neon.test", 389, false, null, "lab.neon.test"), Locate));
+        Assert.Equal(8, ManagedDirectorySystem.MaxCandidates);
         Assert.Equal(["localhost"], ManagedDirectorySystem.Candidates(new DirectoryTarget("localhost", 389, false, null), Locate));
     }
 
@@ -510,7 +513,7 @@ public sealed class LdapManagedTests
 
         string? host = null;
         var layer = new FakeLayer { Signed = true, Encrypted = true };
-        var system = new ManagedDirectorySystem((_, h, _, _) => { host = h; return layer; }, (_, _) => Kdc(KdcVerdict.KnowsTheAccount), _ => [], (_, _, _) => new LdapConnection(server.Connect()));
+        var system = new ManagedDirectorySystem((_, h, _, _) => { host = h; return layer; }, (_, _) => Kdc(KdcVerdict.KnowsTheAccount), _ => [], (_, _, _, _) => new LdapConnection(server.Connect()));
 
         string? name = system.Run(new DirectoryTarget("DC1.lab.neon.test", 389, false, null, "lab.neon.test"), s => s.RootDse().Text("dnsHostName"));
 
@@ -518,6 +521,44 @@ public sealed class LdapManagedTests
         Assert.Equal("DC1.lab.neon.test", host);
         Assert.True(layer.Disposed);
         await server.Finished;
+    }
+
+    /// <summary>
+    /// 2026-11-03, a VPN domain's report: five DCs at one priority, the first three out of reach. The fourth is the one signed in to, and every
+    /// DC but the last to try was given the short connect.
+    /// </summary>
+    [Fact]
+    public async Task Run_PastThreeDeadDcs_SignsInToTheFourth_EachTryButTheLastShort()
+    {
+        await using var server = FakeLdapServer.Start(async s =>
+        {
+            await s.ServeBindAsync(offer: [7, 0, 0x10, 0]);
+        });
+
+        string? host = null;
+        var tried = new List<(string Host, TimeSpan Timeout)>();
+        var system = new ManagedDirectorySystem((_, h, _, _) => { host = h; return new FakeLayer(); }, (_, _) => Kdc(KdcVerdict.KnowsTheAccount),
+            _ => ["dc1.lab.neon.test", "dc2.lab.neon.test", "dc3.lab.neon.test", "dc4.lab.neon.test", "dc5.lab.neon.test"],
+            (h, _, _, timeout) =>
+            {
+                tried.Add((h, timeout));
+                return h is "dc1.lab.neon.test" or "dc2.lab.neon.test" or "dc3.lab.neon.test"
+                    ? throw new DirectoryException(LdapResultCodes.ConnectError, "closed")
+                    : new LdapConnection(server.Connect());
+            });
+
+        system.Run(new DirectoryTarget("lab.neon.test", 389, false, null, "lab.neon.test"), _ => 0);
+
+        Assert.Equal("dc4.lab.neon.test", host);
+        Assert.Equal(["dc1.lab.neon.test", "dc2.lab.neon.test", "dc3.lab.neon.test", "dc4.lab.neon.test"], tried.Select(t => t.Host));
+        Assert.All(tried, t => Assert.Equal(ManagedDirectorySystem.CandidateConnectTimeout, t.Timeout));
+
+        // Alone, a DC gets the whole wait.
+        TimeSpan? only = null;
+        var single = new ManagedDirectorySystem((_, _, _, _) => new FakeLayer(), (_, _) => Kdc(KdcVerdict.KnowsTheAccount), _ => [],
+            (_, _, _, timeout) => { only = timeout; throw new DirectoryException(LdapResultCodes.ConnectError, "closed"); });
+        Assert.Throws<DirectoryException>(() => single.Run(new DirectoryTarget("dc9.lab.neon.test", 389, false, null, "lab.neon.test"), _ => 0));
+        Assert.Equal(LdapConnection.ConnectTimeout, only);
     }
 
     /// <summary>For the domain's own name, the DC DNS gave is both the one connected to and the Kerberos name.</summary>
@@ -533,7 +574,7 @@ public sealed class LdapManagedTests
         string? opened = null;
         var system = new ManagedDirectorySystem((_, h, _, _) => { host = h; return new FakeLayer(); }, (_, _) => Kdc(KdcVerdict.KnowsTheAccount),
             _ => ["dc2.lab.neon.test", "dc1.lab.neon.test"],
-            (h, _, _) =>
+            (h, _, _, _) =>
             {
                 if (h == "dc2.lab.neon.test")
                 {
@@ -566,7 +607,7 @@ public sealed class LdapManagedTests
         await using var server = FakeLdapServer.Start(_ => Task.CompletedTask);
         var layer = new FakeLayer { FailAtStep = 1, FailCode = LdapResultCodes.TicketRefused };
         (string Address, string Principal)? probed = null;
-        var system = new ManagedDirectorySystem((_, _, _, _) => layer, (a, p) => { probed = (a, p); return Kdc(verdict); }, _ => [], (_, _, _) => new LdapConnection(server.Connect()));
+        var system = new ManagedDirectorySystem((_, _, _, _) => layer, (a, p) => { probed = (a, p); return Kdc(verdict); }, _ => [], (_, _, _, _) => new LdapConnection(server.Connect()));
 
         var refused = Assert.Throws<DirectoryException>(() => system.Run(new DirectoryTarget("localhost", 389, false, new DirectoryLogin("reader@LAB.NEON.TEST", "x"), "lab.neon.test"), _ => 0));
 
@@ -587,7 +628,7 @@ public sealed class LdapManagedTests
 
         bool probed = false;
         var system = new ManagedDirectorySystem((_, _, _, _) => new FakeLayer { FailAtStep = 2 }, (_, _) => { probed = true; return Kdc(KdcVerdict.KnowsTheAccount); }, _ => [],
-            (_, _, _) => new LdapConnection(server.Connect()));
+            (_, _, _, _) => new LdapConnection(server.Connect()));
 
         var refused = Assert.Throws<DirectoryException>(() => system.Run(new DirectoryTarget("localhost", 389, false, new DirectoryLogin("reader@LAB.NEON.TEST", "x"), "lab.neon.test"), _ => 0));
 
@@ -605,7 +646,7 @@ public sealed class LdapManagedTests
             await s.SendAsync(Replies.Bind(bind.Id, LdapResultCodes.InvalidCredentials, diagnostic: "80090308: LdapErr"), wrapped: false);
         });
 
-        var system = new ManagedDirectorySystem((_, _, _, _) => new FakeLayer(), (_, _) => Kdc(KdcVerdict.KnowsTheAccount), _ => [], (_, _, _) => new LdapConnection(server.Connect()));
+        var system = new ManagedDirectorySystem((_, _, _, _) => new FakeLayer(), (_, _) => Kdc(KdcVerdict.KnowsTheAccount), _ => [], (_, _, _, _) => new LdapConnection(server.Connect()));
 
         var refused = Assert.Throws<DirectoryException>(() => system.Run(new DirectoryTarget("dc1.lab.neon.test", 389, false, new DirectoryLogin("reader@LAB.NEON.TEST", "x"), "lab.neon.test"), _ => 0));
 
@@ -619,7 +660,7 @@ public sealed class LdapManagedTests
         await using var server = FakeLdapServer.Start(_ => Task.CompletedTask);
         bool probed = false;
         var system = new ManagedDirectorySystem((_, _, _, _) => new FakeLayer { FailAtStep = 1, FailCode = LdapResultCodes.TicketRefused }, (_, _) => { probed = true; return Kdc(KdcVerdict.KnowsTheAccount); }, _ => [],
-            (_, _, _) => new LdapConnection(server.Connect()));
+            (_, _, _, _) => new LdapConnection(server.Connect()));
 
         var refused = Assert.Throws<DirectoryException>(() => system.Run(new DirectoryTarget("localhost", 389, false, null, "lab.neon.test"), _ => 0));
 

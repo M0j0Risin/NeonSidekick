@@ -379,6 +379,13 @@ public static class DnsWire
     /// <summary><paramref name="name"/> when the read ended inside its RDATA (C11); else the reply is malformed.</summary>
     private static string Within(string name, int cursor, int end) => cursor <= end ? name : throw new DnsFormatException(NetworkText.DnsTruncatedReply);
 
+    /// <summary>
+    /// One record's data in words, read from its RDATA alone (2026-11-03, the Mac's system resolver: <c>DNSServiceQueryRecord</c> hands each
+    /// record's RDATA over by itself, its names written out whole). A compression pointer has nothing to point into, so it throws
+    /// <see cref="DnsFormatException"/> as a malformed reply's record does.
+    /// </summary>
+    public static string RecordData(ReadOnlySpan<byte> rdata, ushort type) => ReadData(rdata, 0, rdata.Length, type);
+
     private static string ReadData(ReadOnlySpan<byte> packet, int at, int length, ushort type)
     {
         var data = packet.Slice(at, length);

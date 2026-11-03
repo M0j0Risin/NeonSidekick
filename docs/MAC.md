@@ -49,7 +49,7 @@ You need an Apple Silicon Mac (M1 or later). Unpack the Mac package as the [READ
 | Services and scheduled tasks: their tools, `/services`, `/tasks` | Not available | A Mac has neither; `/tools`, the toolbar and help leave them out, the commands say there's nothing to read. |
 | Monitors: their tools, `/monitor`, the home bar's 🖥️, `--monitor-check` | Not available | Windows only; `/tools` and help leave them out, and a profile's saved 🖥️ isn't drawn. |
 | Active Directory: its tools, `/ad`, `--ad-check` | Works | Read-only, Kerberos only; `runas` takes `name@REALM`; no built-in `current` domain ([Active Directory on a Mac](TOOLS.md#active-directory-on-a-mac)). |
-| Network tools and `/net` | Works | Ping and trace: IPv4 only; `net_certs` reads only `my` (your login keychain) and `root` (the system's trust). |
+| Network tools and `/net` | Works | Ping and trace: IPv4 only; `net_certs` reads only `my` (your login keychain) and `root` (the system's trust); `net_dns` without `server` asks the Mac's own resolver for every type, a VPN's DNS for its domains included. |
 | Docker servers | Not available | Mac containers get no GPU; the embedded model is the local server instead. |
 | UNC shares and outside folders | Works | `\\server\share`, `//server/share` or `smb://`, mounted under `/Volumes` while the app runs ([UNC shares on a Mac](TOOLS.md#unc-shares-on-a-mac)). |
 | `/keycheck` | Works | Finds macOS's shortcuts, apps' exclusive hotkeys and the Option key; most shared hotkeys don't show. |

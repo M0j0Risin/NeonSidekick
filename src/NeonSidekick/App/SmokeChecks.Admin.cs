@@ -51,6 +51,32 @@ public static partial class SmokeChecks
         }
     }
 
+    /// <summary>
+    /// <c>net:dnssd</c> (2026-11-03): a Mac's own resolver through <c>DNSServiceQueryRecord</c>, the import, the callback and the poll loop under
+    /// NativeAOT, asked for 127.0.0.1's reverse name, which mDNSResponder answers itself (<c>localhost</c>, no network).
+    /// </summary>
+    [SupportedOSPlatform("macos")]
+    public static SmokeCheck ProbeDnsService()
+    {
+        const string name = "net:dnssd";
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        try
+        {
+            var outcome = MacDnsService.QueryAsync(DnsWire.ReverseName(IPAddress.Loopback), DnsWire.Ptr, timeout.Token).GetAwaiter().GetResult();
+            if (outcome is null)
+            {
+                return new SmokeCheck(name, false, "the system resolver could not be asked");
+            }
+
+            string? answer = outcome.Reply?.Answers.FirstOrDefault(a => a.Type == DnsWire.Ptr)?.Data.TrimEnd('.');
+            return new SmokeCheck(name, answer == "localhost", answer is null ? outcome.Error ?? "no PTR record" : "PTR " + answer + " from " + NetworkText.SystemResolver);
+        }
+        catch (OperationCanceledException)
+        {
+            return new SmokeCheck(name, false, "no answer in 10 s");
+        }
+    }
+
     /// <summary>A reply to <paramref name="query"/>: its header with QR and RA set, its question, one A record pointing at the question's name.</summary>
     internal static byte[] AnswerA(byte[] query, byte[] address)
     {

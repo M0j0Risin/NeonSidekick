@@ -161,14 +161,14 @@ public static class NetworkProbes
     }
 
     /// <summary>
-    /// The reverse name of <paramref name="address"/>: a PTR asked of the system's resolvers by the app's own client, which the hop's time limit
+    /// The reverse name of <paramref name="address"/>: a PTR asked of the system's resolvers (on a Mac its own resolver since 2026-11-03, DnsClient.SystemQueryAsync), which the hop's time limit
     /// and Esc end (2026-10-23, the admin review's B3: Dns.GetHostEntryAsync took no cancel and looked the name up forward too); null when it has
     /// none.
     /// </summary>
     public static async Task<string?> ReverseAsync(IPAddress address, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(address);
-        var outcome = await DnsClient.QueryAsync(DnsClient.SystemServers(), DnsWire.ReverseName(address), DnsWire.Ptr, cancellationToken).ConfigureAwait(false);
+        var outcome = await DnsClient.SystemQueryAsync(DnsWire.ReverseName(address), DnsWire.Ptr, cancellationToken).ConfigureAwait(false);
         return outcome.Reply?.Answers.FirstOrDefault(a => a.Type == DnsWire.Ptr)?.Data.TrimEnd('.') is { Length: > 0 } name ? name : null;
     }
 }

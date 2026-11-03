@@ -209,6 +209,7 @@ public static partial class SmokeChecks
         // The admin families (2026-10-15, the admin-tools plan): the network checks everywhere, the Windows layers on Windows.
         results.Add(ProbeIcmp());
         results.Add(ProbeDns());
+        results.Add(OperatingSystem.IsMacOS() ? ProbeDnsService() : new SmokeCheck("net:dnssd", true, "skipped: not macOS"));
         results.Add(ProbeTls());
         results.Add(ProbeCertStore());
         results.Add(OperatingSystem.IsWindows() ? ProbeServices() : new SmokeCheck("services:scm", true, "skipped: not Windows"));

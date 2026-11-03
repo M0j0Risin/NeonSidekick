@@ -41,13 +41,22 @@ public sealed class ManagedDirectorySystem : IDirectorySystem
     /// <summary>How long a DC lookup in DNS may take.</summary>
     public static readonly TimeSpan LocateTimeout = TimeSpan.FromSeconds(5);
 
-    /// <summary>The most DCs tried in turn.</summary>
-    public const int MaxCandidates = 3;
+    /// <summary>
+    /// The most DCs from DNS tried in turn (3 until 2026-11-03: a VPN domain listed five at one priority, the first three out of a
+    /// VPN's reach, so the lookup gave only dead ones and the domain's own name, whose Kerberos name no DC holds).
+    /// </summary>
+    public const int MaxCandidates = 8;
+
+    /// <summary>
+    /// How long a connect waits for a DC that is not the last to try (2026-11-03): a closed port fails at once, but one whose packets are dropped
+    /// would hold each try for <see cref="LdapConnection.ConnectTimeout"/>; the last keeps that whole wait.
+    /// </summary>
+    public static readonly TimeSpan CandidateConnectTimeout = TimeSpan.FromSeconds(3);
 
     private readonly Func<DirectoryLogin?, string, bool, ChannelBinding?, ISaslLayer> _layers;
     private readonly Func<string, string, KdcAnswer> _askKdc;
     private readonly Func<string, IReadOnlyList<string>> _locate;
-    private readonly Func<string, int, bool, LdapConnection> _open;
+    private readonly Func<string, int, bool, TimeSpan, LdapConnection> _open;
 
     /// <summary>The app's: Kerberos through .NET, the DC's KDC asked on port 88, DNS for DCs, real sockets.</summary>
     public ManagedDirectorySystem()
@@ -60,7 +69,7 @@ public sealed class ManagedDirectorySystem : IDirectorySystem
         Func<DirectoryLogin?, string, bool, ChannelBinding?, ISaslLayer> layers,
         Func<string, string, KdcAnswer> askKdc,
         Func<string, IReadOnlyList<string>> locate,
-        Func<string, int, bool, LdapConnection> open)
+        Func<string, int, bool, TimeSpan, LdapConnection> open)
     {
         _layers = layers;
         _askKdc = askKdc;
@@ -160,11 +169,13 @@ public sealed class ManagedDirectorySystem : IDirectorySystem
     private (LdapConnection Connection, string Host) Connect(DirectoryTarget target)
     {
         DirectoryException? last = null;
-        foreach (string host in Candidates(target, _locate).Distinct(StringComparer.OrdinalIgnoreCase))
+        var hosts = Candidates(target, _locate).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        for (int i = 0; i < hosts.Count; i++)
         {
+            string host = hosts[i];
             try
             {
-                return (_open(host, target.Port, target.Tls), host);
+                return (_open(host, target.Port, target.Tls, i < hosts.Count - 1 ? CandidateConnectTimeout : LdapConnection.ConnectTimeout), host);
             }
             catch (DirectoryException ex)
             {
@@ -175,14 +186,18 @@ public sealed class ManagedDirectorySystem : IDirectorySystem
         throw last ?? new DirectoryException(LdapResultCodes.ConnectError, "no domain controller to connect to");
     }
 
-    /// <summary>A domain's DCs from DNS, best priority (then weight) first; none when DNS has none or does not answer.</summary>
+    /// <summary>
+    /// A domain's DCs from DNS, best priority (then weight) first; none when DNS has none or does not answer. Asked of the system's resolver
+    /// (2026-11-03, a VPN domain's report: on a Mac the servers .NET lists come from <c>/etc/resolv.conf</c>, which a VPN's per-domain
+    /// resolvers are not in, so its domain's DCs were never found; <see cref="DnsClient.SystemQueryAsync"/>).
+    /// </summary>
     public static IReadOnlyList<string> Locate(string domain)
     {
         ArgumentNullException.ThrowIfNull(domain);
         try
         {
             using var timeout = new CancellationTokenSource(LocateTimeout);
-            var outcome = DnsClient.QueryAsync(DnsClient.SystemServers(), "_ldap._tcp.dc._msdcs." + domain.Trim().TrimEnd('.'), DnsWire.Srv, timeout.Token).GetAwaiter().GetResult();
+            var outcome = DnsClient.SystemQueryAsync("_ldap._tcp.dc._msdcs." + domain.Trim().TrimEnd('.'), DnsWire.Srv, timeout.Token).GetAwaiter().GetResult();
             return SrvTargets(outcome.Reply?.Answers ?? []);
         }
         catch (Exception ex) when (ex is OperationCanceledException or SocketException or IOException)

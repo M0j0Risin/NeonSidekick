@@ -101,7 +101,7 @@ public static class NetworkRender
     /// <summary>A system lookup of A/AAAA: the addresses the resolver gave.</summary>
     public static string SystemLookup(string name, ushort type, IReadOnlyList<IPAddress> addresses)
     {
-        var answer = new Answer($"DNS {name} {DnsWire.TypeName(type)} via the system resolver: {Count(addresses.Count, "address", "addresses")}");
+        var answer = new Answer($"DNS {name} {DnsWire.TypeName(type)} via {NetworkText.SystemResolver}: {Count(addresses.Count, "address", "addresses")}");
         foreach (var address in addresses)
         {
             answer.Line("  " + address);
@@ -115,7 +115,7 @@ public static class NetworkRender
     public static string Lookup(string name, ushort type, DnsOutcome outcome, bool systemServer)
     {
         ArgumentNullException.ThrowIfNull(outcome);
-        string via = outcome.Server is { } server ? server.Address + (systemServer ? " (system resolver)" : "") + (outcome.OverTcp ? " over TCP" : "") : "?";
+        string via = outcome.Server is { } server ? server.Address + (systemServer ? " (system resolver)" : "") + (outcome.OverTcp ? " over TCP" : "") : outcome.Resolver ?? "?";
         if (outcome.Reply is not { } reply)
         {
             return outcome.Error ?? NetworkText.DnsNoAnswer(via);

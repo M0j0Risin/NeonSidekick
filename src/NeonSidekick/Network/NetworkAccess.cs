@@ -44,23 +44,23 @@ public sealed class NetworkAccess
     private readonly ConcurrentDictionary<string, (DateTimeOffset At, IPAddress[] Found)> _listNames = new(StringComparer.OrdinalIgnoreCase);
     private readonly Func<AppSettingsData> _effective;
     private readonly Func<string, CancellationToken, Task<IPAddress[]>> _resolve;
-    private readonly Func<IReadOnlyList<IPEndPoint>> _systemDns;
+    private readonly Func<string, ushort, CancellationToken, Task<DnsOutcome>> _systemQuery;
 
     /// <param name="effective">The settings in force, read at each call.</param>
     /// <param name="pinger">The echo; null where there is none (the ping and trace tools are then not offered).</param>
     /// <param name="resolve">The resolver (<see cref="Dns.GetHostAddressesAsync(string, CancellationToken)"/> when null).</param>
     /// <param name="connect">The TCP connect <c>net_port</c> uses (<see cref="NetworkProbes.ConnectAsync"/> when null).</param>
-    /// <param name="systemDns">The system's resolvers (<see cref="DnsClient.SystemServers"/> when null).</param>
+    /// <param name="systemQuery">A lookup asked of the system (<see cref="DnsClient.SystemQueryAsync"/> when null; a server list until 2026-11-03).</param>
     /// <param name="time">The clock: certificates' days left, the zone an answer shows.</param>
     public NetworkAccess(Func<AppSettingsData> effective, IPinger? pinger, TimeProvider time, Func<string, CancellationToken, Task<IPAddress[]>>? resolve = null,
-        Func<IPAddress, int, CancellationToken, Task<PortState>>? connect = null, Func<IReadOnlyList<IPEndPoint>>? systemDns = null)
+        Func<IPAddress, int, CancellationToken, Task<PortState>>? connect = null, Func<string, ushort, CancellationToken, Task<DnsOutcome>>? systemQuery = null)
     {
         _effective = effective ?? throw new ArgumentNullException(nameof(effective));
         Pinger = pinger;
         Time = time ?? throw new ArgumentNullException(nameof(time));
         _resolve = resolve ?? ((host, ct) => Dns.GetHostAddressesAsync(host, ct));
         Connect = connect ?? NetworkProbes.ConnectAsync;
-        _systemDns = systemDns ?? DnsClient.SystemServers;
+        _systemQuery = systemQuery ?? DnsClient.SystemQueryAsync;
     }
 
     public IPinger? Pinger { get; }
@@ -72,8 +72,8 @@ public sealed class NetworkAccess
     /// <summary>The settings in force now.</summary>
     public AppSettingsData Effective => _effective();
 
-    /// <summary>The system's resolvers, read now.</summary>
-    public IReadOnlyList<IPEndPoint> SystemDns() => _systemDns();
+    /// <summary><paramref name="name"/>'s <paramref name="type"/> records asked of the system's resolver.</summary>
+    public Task<DnsOutcome> SystemQueryAsync(string name, ushort type, CancellationToken cancellationToken) => _systemQuery(name, type, cancellationToken);
 
     /// <summary>The most distinct hosts a turn may check, clamped.</summary>
     public int MaxHosts => Math.Clamp(_effective().NetworkMaxHostsPerTurn, AppSettingsData.MinNetworkMaxHosts, AppSettingsData.MaxNetworkMaxHosts);
