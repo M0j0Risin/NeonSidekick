@@ -19,7 +19,7 @@ Elsewhere:
 - [Command details](#command-details)
   - [Plan mode](#plan-mode) · [Ralph loop](#ralph-loop) · [Code audit](#code-audit) · [Bot conversations](#bot-conversations) · [Claude Code from the chat](#claude-code-from-the-chat)
   - [Advisor](#advisor) · [Your own shell line](#your-own-shell-line) · [Loops](#loops) · [Custom commands](#custom-commands) · [Benchmark tests](#benchmark-tests) · [Imagine options](#imagine-options) · [Camera](#camera)
-  - [Screen capture](#screen-capture) · [Profiles](#profiles) · [Desktop shortcuts](#desktop-shortcuts) · [Custom themes](#custom-themes) · [Voice presets](#voice-presets)
+  - [Screen capture](#screen-capture) · [Profiles](#profiles) · [Desktop shortcuts](#desktop-shortcuts) · [Custom themes](#custom-themes) · [Voice presets](#voice-presets) · [Updating](#updating)
 - The app's windows, pasting a picture, the folder picker and the file browser: [Using the app](INTERFACE.md).
 
 ## All commands
@@ -33,6 +33,10 @@ Elsewhere:
 | `/help <your command>` | Shows one of your [custom commands](#custom-commands): its description and file, or why a skipped file doesn't run. No model is asked; more words ask the manual (`/help about review`). |
 | `/about` | The version, runtime, folders, components, the embedded models' Hugging Face pages and the license. |
 | `/keycheck` | Lists the app's key chords and whether another program holds each (a held chord never reaches the app). On a Mac, also macOS shortcuts and an Option key that types characters. |
+| `/update` | Shows the newest release's notes, with Install and Later; Install downloads and checks it, and it installs when you quit. With one under way, offers to cancel it ([Updating](#updating)). |
+| `/update notes` | Prints the release notes of the version running. Works offline. |
+| `/update rollback` | Goes back to the earlier version when you quit. Warns what that can turn off and asks nothing; `/update cancel` takes it back. |
+| `/update cancel` | Stops a download and deletes its partial file, or drops a ready update or a pending rollback. |
 | `/exit` | Exits the app. |
 
 ### Conversation
@@ -683,3 +687,26 @@ Forty-one more come with the repo in [`assets/voices`](../assets/voices): copy a
 | `characters` | aria, atlas, jinx, maven, nick, wren |
 | `duets` | ash, morgan, quinn, river, rowan, sage (a female and a male voice blended) |
 | `accents` | amelie, arjun, beatriz, giulia, kenji, lucia, marco, mateo, mei, priya, yuki (an English voice with another language's accent) |
+
+### Updating
+
+`/update` installs a newer release from GitHub. Only a copy unpacked from a release package can update itself; one you built can't. You keep chatting during the download, and the 🆙 marker on the lower rule shows how far it has got ([The screen](INTERFACE.md#the-screen)).
+
+* **What's checked first:** the project's signature, the package and every file against their hashes, and a test start of the new version. Anything wrong refuses it, names the reason and links the Releases page.
+* **Antivirus** can fail the test start; the message says so. Updating by hand always works.
+* **What happens at quit:** the changed files are replaced and the old ones kept in `.update/previous` in the install folder. Nothing in `.neonsidekick` changes. `/exit` shows the result, and the new version runs at next launch.
+* **Closing the window** installs too if the time fits, otherwise at the next `/exit`. A failure there is reported at next start.
+* **An interrupted install** (a crash, a power cut) is undone at the next start, and the update installs at the next exit.
+* **Another copy open from that folder** makes the update wait for a later exit. A copy started during an install waits for it, and may then ask you to start it again.
+* **A renamed exe** can't update itself. A headless run or a check never installs one.
+* **Only the app's own use:** the model has no tool for this, and the Web UI runs only `/update notes`. Installing happens at the PC.
+
+**Going back with `/update rollback`:**
+* **One step:** it restores the version the last update replaced. Afterward there's nothing further back, and the check offers the newer version again.
+* **Sessions:** a newer `sessions.db` turns sessions off in the older version, with the file untouched. Updating again brings them back.
+* **Settings** the older version doesn't know go back to their defaults, if it saves `profile.json`.
+* **The shopping list, skill records and file checkpoints** can turn off the same way, with their files untouched. The older version's message says "until it is moved away"; don't move them, since updating again brings them back.
+* **Refused, with the reason:** a kept file altered by hand, a version signed only by a key this copy no longer trusts, or a kept version missing a file it needs (after a package unpacked by hand over the folder).
+* **Files altered by hand** that both versions share stay as they are: going back doesn't repair the install.
+
+**The way back by hand**, if the new version won't start: move everything in `.update/previous` over the install folder, then delete `.update`. Or unpack any version from the [Releases page](https://github.com/M0j0Risin/NeonSidekick/releases) into a fresh folder.

@@ -550,6 +550,13 @@ public static class HelpCommands
             new("/undo [<n>]", "Put back the files the last turn (or the last n turns) changed through the file tools, the conversation kept; it lists the files and asks first. Files changed since are asked about: restore over them (yours to the Recycle bin first) or skip them. Files a turn made go to the Recycle bin. Only turns the model still sees can be undone, and Ralph passes and botchat turns aren't checkpointed; shell commands, git, shares, the vault, databases and MCP tools aren't undone. The next message tells the model what came back. There is no redo."),
             new("/undo purge [all]", "Delete the file checkpoints of this working folder (every conversation's), or with `all` of every folder in the profile, after a yes naming what it frees; deleted for good, never to the Recycle bin, so those turns can no longer be undone."),
         ]),
+        new("/update",
+        [
+            new("/update", "Check GitHub for a new version and show its notes, with Install (`i`) and Later (`l`). Install downloads and verifies it while you keep chatting, and it installs when you quit. While one is under way, it offers to cancel. A double-click on the 🆙 marker on the lower rule opens it too."),
+            new("/update notes", "Print the release notes of the version running. They're saved with the update, so this works offline."),
+            new("/update rollback", "Go back to the earlier version when you quit, after checking the kept files. Nothing happens until then, and `/update cancel` takes it back."),
+            new("/update cancel", "Stop a download, or drop a stage or a pending rollback."),
+        ]),
         new("/usage",
         [
             new("/usage", "Show token usage and performance statistics; a `~` marks a reasoning count the app estimated (*LLM reasoning estimate*). Ctrl+U runs it too."),

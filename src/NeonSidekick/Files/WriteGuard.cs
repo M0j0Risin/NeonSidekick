@@ -23,6 +23,10 @@ public enum WriteRole
 /// The custom commands folders and, for one that is a link, where it points (2026-10-31, review P2-2): both folders are in the home, which
 /// guards them already, but a link's target outside it was guarded by nothing. Null for none.
 /// </param>
+/// <param name="InstallFolder">
+/// A package's install folder (2026-11-04, self-update), decided once at start and kept, so deleting the manifest mid-run can't lift the guard: a changed staged file or a planted <c>swap.json</c> would otherwise run at the next launch.
+/// Null for none: a dev copy, or an exe simply sitting in a shared folder such as Downloads.
+/// </param>
 public sealed record WriteGuardFacts(
     Func<string?> Home,
     Func<string?> WorkingDirectory,
@@ -30,7 +34,8 @@ public sealed record WriteGuardFacts(
     Func<DatabaseGuard?> Databases,
     Func<bool> ShoppingGuarded,
     Func<IRecycleBin?> RecycleBin,
-    Func<IReadOnlyList<string>>? CommandRoots = null);
+    Func<IReadOnlyList<string>>? CommandRoots = null,
+    Func<string?>? InstallFolder = null);
 
 /// <summary>
 /// The model's writes judged by the file they reach, not by the spelling (2026-10-22, the fix plan's mechanism 1 and decision D2, the
@@ -43,6 +48,8 @@ public sealed record WriteGuardFacts(
 /// <c>/plan edit</c>.</item>
 /// <item>The app's home and every profile under it (review P2, W1, U9): a working directory or a share that holds
 /// <c>.neonsidekick</c> made <c>configs\mcp.json</c> (a program at the next start) and <c>profile.json</c> writable.</item>
+/// <item>A package's install folder (2026-11-04, self-update): the exe, its libraries, the manifest and <c>.update</c>. A working folder in it gets no write pass, and it's found by identity as well as spelling, as the home is; a home inside it keeps
+/// the home's own rules, so its <c>files</c> sandbox still writes. Checked before the skill roots, so the external <c>.agents\skills</c> beside the binary doesn't keep a skill root's rules.</item>
 /// <item>The skill roots (review P3): <c>skill_editor</c> is the model's one way to change a skill.</item>
 /// <item>The custom commands folders and where a linked one points (2026-10-31, review P2-2): the user changes them with <c>/commands</c>.</item>
 /// <item>A SQLite database while the SQLite tools are on (the old <see cref="DatabaseGuard"/> rule, now also by its header, review I9).</item>
@@ -162,6 +169,11 @@ public static class WriteGuard
                 return FileOutcome.AppFilesProtected;
             }
 
+            if (InInstall(facts.InstallFolder?.Invoke(), facts.Home(), judged))
+            {
+                return FileOutcome.InstallFilesProtected;
+            }
+
             if (facts.SkillRoots() is { } skills && skills.Any(skill => Trusted(skill, judgedRoot, judged)))
             {
                 return FileOutcome.SkillFilesProtected;
@@ -241,7 +253,7 @@ public static class WriteGuard
     /// <summary>Whether <paramref name="outcome"/> is one of the guard's refusals (rather than a path that is outside or missing).</summary>
     public static bool IsRefusal(FileOutcome outcome) => outcome is FileOutcome.GitProtected or FileOutcome.NeonFilesProtected or FileOutcome.AppFilesProtected
         or FileOutcome.SkillFilesProtected or FileOutcome.CommandFilesProtected or FileOutcome.ProjectFileAsk or FileOutcome.DatabaseProtected or FileOutcome.ShoppingList
-        or FileOutcome.ClaudeFilesProtected;
+        or FileOutcome.ClaudeFilesProtected or FileOutcome.InstallFilesProtected;
 
     /// <summary>Claude Code's folder of settings, hooks and commands (2026-11-02, review P12-2), refused at any depth.</summary>
     public const string ClaudeFolderName = ".claude";
@@ -321,6 +333,49 @@ public static class WriteGuard
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="full"/> is in the install folder and not in a home kept inside it (<c>NEONSIDEKICK_HOME</c> for a portable setup, or the fallback for a process with no profile folder), which <see cref="InHome"/> has judged by its own
+    /// rules. By its spelling and by its identity (<c>subst</c>, <c>\\localhost\D$</c>), and with no pass for a working folder inside it, so <c>--cwd</c> at the folder can't undo the guard.
+    /// </summary>
+    private static bool InInstall(string? install, string? home, string full)
+    {
+        if (string.IsNullOrEmpty(install))
+        {
+            return false;
+        }
+
+        string folder = Trim(install);
+        bool inside = WorkingDirectory.IsInside(folder, full) || (InstallIdentity(folder) is { } id && FileIdentity.AncestorWith(full, id) is not null);
+        return inside && !BelongsToHome(home, full);
+    }
+
+    private static bool BelongsToHome(string? home, string full)
+    {
+        if (string.IsNullOrEmpty(home))
+        {
+            return false;
+        }
+
+        string folder = Trim(home);
+        return WorkingDirectory.IsInside(folder, full) || SpelledHome(full) is not null || (HomeIdentity(folder) is { } id && FileIdentity.AncestorWith(full, id) is not null);
+    }
+
+    private static (string Path, FileId? Id) s_installIdentity;
+
+    /// <summary>The install folder's identity, read once and kept, as the home's is.</summary>
+    private static FileId? InstallIdentity(string install)
+    {
+        var cached = s_installIdentity;
+        if (cached.Path == install && cached.Id is not null)
+        {
+            return cached.Id;
+        }
+
+        var id = FileIdentity.Of(install);
+        s_installIdentity = (install, id);
+        return id;
     }
 
     /// <summary>The part of <paramref name="full"/> up to and including a <c>.neonsidekick</c> folder, or null.</summary>

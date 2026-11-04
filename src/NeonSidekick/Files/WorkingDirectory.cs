@@ -98,6 +98,9 @@ public enum FileOutcome
     /// <summary>A model write into the app's home or a profile (2026-10-22, review P2/W1, <see cref="WriteGuard"/>): settings, configs and databases.</summary>
     AppFilesProtected,
 
+    /// <summary>A model write into a package's install folder (2026-11-04, self-update, <see cref="WriteGuard"/>): the exe, its libraries, the manifest and <c>.update</c>.</summary>
+    InstallFilesProtected,
+
     /// <summary>A model write into a skill root other than through <c>skill_editor</c> (2026-10-22, review P3, <see cref="WriteGuard"/>).</summary>
     SkillFilesProtected,
 

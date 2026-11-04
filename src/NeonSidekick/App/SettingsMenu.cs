@@ -1347,6 +1347,11 @@ public enum SettingsField
     /// The Chat tab's Transcript run under <see cref="UserLineStyle"/> (2026-11-01, feature idea #4); read at each turn's end. Last in the enum.
     /// </summary>
     ReplyFooter,
+
+    /// <summary>
+    /// Toggle: ask GitHub for a new version at every launch (<see cref="Settings.AppSettingsData.CheckForUpdatesAtStart"/>, 2026-11-04, self-update). The Chat tab's first run, under <see cref="MemoryMode"/>'s line of app-wide behavior. Last in the enum.
+    /// </summary>
+    CheckForUpdatesAtStart,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1826,7 +1831,7 @@ internal sealed partial class SettingsMenu
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> TabFields =
     [
         [SettingsField.Profile, SettingsField.WorkingDirectory, SettingsField.MemoryMode, SettingsField.ModelAvatar, SettingsField.UserAvatar,
-         SettingsField.QueueMode, SettingsField.QueueCancelMode, SettingsField.KeepMessageHistory, SettingsField.CommandTypoIntercept, SettingsField.HideExitAutocomplete, SettingsField.EmojiPicker,
+         SettingsField.CheckForUpdatesAtStart, SettingsField.QueueMode, SettingsField.QueueCancelMode, SettingsField.KeepMessageHistory, SettingsField.CommandTypoIntercept, SettingsField.HideExitAutocomplete, SettingsField.EmojiPicker,
          SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.CopyUserPrompt, SettingsField.UserLineStyle, SettingsField.ReplyFooter,
          SettingsField.Theme, SettingsField.ThemedBackground, SettingsField.ThemedExternalWindows, SettingsField.GradientRules, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.MenuMaxHeight,
          SettingsField.HintsBar, SettingsField.StatusBarItems, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.ShowHomeBar, SettingsField.BarOrder,
@@ -2346,7 +2351,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.WebTools or SettingsField.TtsVoicePreview or SettingsField.FileTools or SettingsField.AskUser
             or SettingsField.AgentSkills or SettingsField.GlobalSkills or SettingsField.ExternalSkills or SettingsField.ProjectFile or SettingsField.TranscriptMarkdown
             or SettingsField.SkillHashMention or SettingsField.ReflectionAutoLearn
-            or SettingsField.HideExitAutocomplete or SettingsField.EmojiPicker or SettingsField.CommandTypoIntercept or SettingsField.KeepMessageHistory or SettingsField.ShowHeader or SettingsField.ShowWorkingDirectory or SettingsField.ThemedExternalWindows or SettingsField.ThemedBackground or SettingsField.GradientRules or SettingsField.ReplyFooter
+            or SettingsField.HideExitAutocomplete or SettingsField.EmojiPicker or SettingsField.CommandTypoIntercept or SettingsField.KeepMessageHistory or SettingsField.ShowHeader or SettingsField.ShowWorkingDirectory or SettingsField.ThemedExternalWindows or SettingsField.ThemedBackground or SettingsField.GradientRules or SettingsField.ReplyFooter or SettingsField.CheckForUpdatesAtStart
             or SettingsField.SessionLogging or SettingsField.SessionTool or SettingsField.SessionSaveThinking
             or SettingsField.ToolsDollarMention or SettingsField.ShowFileDiffs or SettingsField.ReflectionIncludesSessions or SettingsField.ReflectionYieldsToTurns or SettingsField.ReflectionEditsSupportingFiles or SettingsField.McpServers or SettingsField.GitLibTools
             or SettingsField.LlmCompactShowSummary or SettingsField.ShellPolice or SettingsField.ShellPreferNative
@@ -2784,6 +2789,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ThemedExternalWindows => "Themed external windows",   // the user's name, under "Themed background" (2026-10-03; "Themed image viewer" beside "Image viewer" from later on 2026-09-27)
         SettingsField.ThemedBackground => "Themed background",   // the user's name, under "Theme" (2026-10-03)
         SettingsField.GradientRules => "Gradient rules",   // under "Themed external windows" (2026-11-01, the looks pass)
+        SettingsField.CheckForUpdatesAtStart => "Check for updates at start",
         SettingsField.ReplyFooter => "Reply footer",   // under "User line style" (2026-11-01, feature idea #4)
         SettingsField.QueueMode => "Queue mode",   // "Queue messages", a toggle, until 2026-10-09 (the user's call)
         SettingsField.QueueCancelMode => "Queue cancel mode",
@@ -3210,6 +3216,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ThemedBackground => OnOff(data.ThemedBackground),
             SettingsField.GradientRules => OnOff(data.GradientRules),
             SettingsField.ReplyFooter => OnOff(data.ReplyFooter),
+            SettingsField.CheckForUpdatesAtStart => OnOff(data.CheckForUpdatesAtStart),
             SettingsField.Theme => data.Theme,
             SettingsField.QueueMode => data.QueueMode,
             SettingsField.QueueCancelMode => data.QueueCancelMode,
@@ -8394,6 +8401,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ThemedBackground => data.ThemedBackground,
             SettingsField.GradientRules => data.GradientRules,
             SettingsField.ReplyFooter => data.ReplyFooter,
+            SettingsField.CheckForUpdatesAtStart => data.CheckForUpdatesAtStart,
             SettingsField.SessionLogging => data.SessionLogging,
             SettingsField.SessionTool => data.SessionTool,
             SettingsField.ShellPolice => data.ShellPolice,
@@ -8531,6 +8539,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.ThemedBackground: data.ThemedBackground = on; break;
             case SettingsField.GradientRules: data.GradientRules = on; break;
             case SettingsField.ReplyFooter: data.ReplyFooter = on; break;
+            case SettingsField.CheckForUpdatesAtStart: data.CheckForUpdatesAtStart = on; break;
             case SettingsField.SessionLogging: data.SessionLogging = on; break;
             case SettingsField.SessionTool: data.SessionTool = on; break;
             case SettingsField.ShellPolice: data.ShellPolice = on; break;
@@ -8674,6 +8683,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ThemedBackground => on ? "theme the terminal's background" : "keep the terminal profile's background",
         SettingsField.GradientRules => on ? "shade the rules along the theme's gradient" : "keep the rules flat",
         SettingsField.ReplyFooter => on ? "a dim line under each reply: time, tokens, speed, tool calls, model" : "no line under replies",
+        SettingsField.CheckForUpdatesAtStart => on ? "asks GitHub for a new version at every launch" : "no request at start; /update still works by hand",
         SettingsField.SessionLogging => on ? "every completed turn is written to this profile's session store" : "nothing is written; stored sessions can still be restored or purged",
         SettingsField.SessionTool => on ? "the model can search, list and read this profile's earlier sessions" : "the model never sees an earlier session",
         SettingsField.ShellPolice => on ? "shell police enabled" : "shell police disabled",   // the user's wording, 2026-10-03

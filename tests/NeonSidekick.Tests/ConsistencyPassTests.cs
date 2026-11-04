@@ -81,6 +81,8 @@ public class ConsistencyPassTests
     /// </summary>
     public static TheoryData<string> WidestHints() =>
     [
+        InfoPane.ButtonsHint([('i', "install"), ('l', "later")], tabs: false, cells: InfoPane.HintCells, find: false),   // /update's offer (2026-11-04)
+        InfoPane.ButtonsHint([('c', "cancel update"), ('k', "keep")], tabs: false, cells: InfoPane.HintCells, find: false),   // and its offer to cancel
         InfoPane.ButtonsHint(WebUiButtons, tabs: true, cells: InfoPane.HintCells),   // /webui with two or more addresses
         InfoPane.ButtonsHint(WebUiButtons, tabs: false, cells: InfoPane.HintCells),   // and with one
         InfoPane.ButtonsHint([('c', "copy"), ('a', "ask"), ('n', DirectoryText.NestingWord), ('u', DirectoryText.MembersWord)], tabs: false, cells: InfoPane.HintCells),   // /ad's group card

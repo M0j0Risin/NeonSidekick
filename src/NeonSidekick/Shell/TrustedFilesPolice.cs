@@ -7,21 +7,21 @@ namespace NeonSidekick.Shell;
 /// The trusted files' tripwire (2026-10-22, the fix plan's D8, after the reviews found the shell could do what the file tools refuse): a
 /// <c>run_command</c> line, a script file it runs, an <c>execute_code</c> script or a <c>process</c> write that names <c>.git</c>,
 /// <c>.neon</c> or <c>.claude</c> (a path segment, not <c>.gitignore</c> or <c>.claudeignore</c>), a <c>.mcp.json</c> (since 2026-11-02,
-/// review P12-2: <c>/claude</c> loads both), the project file (<see cref="Llm.ProjectFile.FileNames"/>) or the app's home is
+/// review P12-2: <c>/claude</c> loads both), the project file (<see cref="Llm.ProjectFile.FileNames"/>), the app's home or a package's install folder (2026-11-04, self-update) is
 /// refused — the same inputs and callers as <see cref="SqlitePolice"/>, under <c>Shell police</c>. A bare <c>git</c> command is never read:
 /// git reaching its own folder is git's business. Fed by <see cref="WriteGuard"/>'s facts, so the two never disagree. A tripwire like the
 /// others: lexical, it sees the text, not what runs (a name built at run time passes), and says so in TOOLS.md. Pure but for the facts.
 /// </summary>
 public static partial class TrustedFilesPolice
 {
-    /// <summary>What a judgement is held to: the app's home (null when none is known) and the working directory.</summary>
-    public sealed record Guard(string? Home, string Root);
+    /// <summary>What a judgement is held to: the app's home (null when none is known), the working directory, and a package's install folder (null for none).</summary>
+    public sealed record Guard(string? Home, string Root, string? InstallFolder = null);
 
     /// <summary>The guard over <paramref name="root"/> with the process's facts, or null while none are set (tests without an app).</summary>
     public static Guard? For(string root)
     {
         ArgumentNullException.ThrowIfNull(root);
-        return WriteGuard.Facts is { } facts ? new Guard(facts.Home(), root) : null;
+        return WriteGuard.Facts is { } facts ? new Guard(facts.Home(), root, facts.InstallFolder?.Invoke()) : null;
     }
 
     /// <summary>The first word of <paramref name="text"/> that names a trusted file or folder, else null.</summary>
@@ -86,7 +86,7 @@ public static partial class TrustedFilesPolice
         return cut >= 0 && !(cut == 1 && char.IsAsciiLetter(spelled[0])) ? spelled[(cut + 1)..] : spelled;
     }
 
-    /// <summary>Whether <paramref name="word"/> names <c>.git</c>, <c>.neon</c>, Claude Code's files, the project file, the app's folder name, or a path under the home.</summary>
+    /// <summary>Whether <paramref name="word"/> names <c>.git</c>, <c>.neon</c>, Claude Code's files, the project file, the app's folder name, or a path under the home or the install folder. It can't tell a read from a write, so a full path there is refused either way; a relative one from a working folder inside passes, as for the home.</summary>
     private static bool Names(string word, Guard guard)
     {
         string value = ValueOf(word.Replace('\\', '/'));
@@ -111,12 +111,12 @@ public static partial class TrustedFilesPolice
             return true;
         }
 
-        if (guard.Home is { Length: > 0 } home && (Path.IsPathRooted(value) || value.StartsWith('~')))
+        if (Path.IsPathRooted(value) || value.StartsWith('~'))
         {
             try
             {
                 string full = Path.GetFullPath(value.StartsWith('~') ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), value.TrimStart('~', '/')) : value);
-                return WorkingDirectory.IsInside(Path.GetFullPath(home), full) || string.Equals(Path.TrimEndingDirectorySeparator(full), Path.TrimEndingDirectorySeparator(Path.GetFullPath(home)), StringComparison.OrdinalIgnoreCase);
+                return Covers(guard.Home, full) || Covers(guard.InstallFolder, full);
             }
             catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
             {
@@ -126,6 +126,9 @@ public static partial class TrustedFilesPolice
 
         return false;
     }
+
+    private static bool Covers(string? folder, string full) =>
+        folder is { Length: > 0 } && (WorkingDirectory.IsInside(Path.GetFullPath(folder), full) || string.Equals(Path.TrimEndingDirectorySeparator(full), Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder)), StringComparison.OrdinalIgnoreCase));
 
     /// <summary>The app's own folder name under a user's profile (the default home).</summary>
     public const string HomeFolderName = ".neonsidekick";

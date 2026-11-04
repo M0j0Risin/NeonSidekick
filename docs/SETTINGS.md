@@ -36,6 +36,7 @@ Every setting on the `/settings`, `/skills`, `/tools` and `/mcp` panes, its defa
 | Memory mode | `read-write`: the model saves and recalls memories, and each conversation opens with them. `read-only`: recall only (`/remember` still saves). `off`: none, `/remember` refused. | `read-write` |
 | Model avatar | The profile's emoji, leading its replies, `/botchat` lines and the window title. Enter (or `/avatar`) opens the [avatar picker](INTERFACE.md#the-avatar-picker). | 🤖 |
 | User avatar | Your emoji, leading your lines in place of `›`. Enter opens the [picker](INTERFACE.md#the-avatar-picker); 🚫 goes back to `›`. | 🙊 |
+| Check for updates at start | Asks GitHub for a newer release at each start, sending nothing about you, and shows a line and the 🆙 marker. Off, nothing is asked; [`/update`](COMMANDS.md#updating) still works. | on |
 | Queue mode | `automatic`: a message sent during a reply waits in `/queue` and goes when it ends. `manual`: each waits for `➤ send` (`s`). `off`: no list. | `automatic` |
 | Queue cancel mode | A canceled reply's queue: `hold` keeps it until your next message (a Web UI message too; the page's **Resume** sends it), `drain` sends the next at once, `empty` drops it. | `empty` |
 | Keep message history | Saves the ↑/↓ history (newest 100 lines, the Web UI's too) in `sessions.db`. Off deletes it at the next profile load; `/msgclear` empties it. | on |
@@ -510,7 +511,7 @@ The tools most profiles use, and the pane's own options.
 |---|---|---|
 | Shell command policy | How the model may run shell commands: `off` (no shell tools), `ask` (anything not on the allowed list asks first) or `yolo` (everything runs). See [Shell guards](#shell-guards). | `off` |
 | Shell allowed commands | Command prefixes allowed for good (`git status`, `dotnet build`); the approval's *Allow … always* adds one. The list can remove one or step the policy ([Pane keys](INTERFACE.md#pane-keys)). | empty |
-| Shell police | Refuses a command, script or process input naming a path outside the working directory, or `.git`, `.neon`, `.claude`, a `.mcp.json`, the project file or the app's folder. Turning it off asks first, and stops the forbidden strings and database rules too. | on |
+| Shell police | Refuses a command, script or process input naming a path outside the working directory, or `.git`, `.neon`, `.claude`, a `.mcp.json`, the project file, the app's home or a release package's install folder. Turning it off asks first, and stops the forbidden strings and database rules too. | on |
 | Shell police forbidden strings | Strings the police refuses outright, ignoring case and spacing. A new profile starts with a list of harmful actions; `r` restores it, `/profile push policestrings` copies it. | the starter list |
 | Shell prefer native tools | Sends back a lone shell command one of the app's own tools covers, once a turn. | on |
 | Shell default shell | The shell when a call names none: `powershell` (pwsh if installed, else 5.1), `cmd` or `bash` (Git Bash). On a Mac: `zsh`, `bash` or `powershell`. | `powershell` (`zsh` on a Mac) |

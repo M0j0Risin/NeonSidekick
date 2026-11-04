@@ -56,7 +56,7 @@ It's one app for research, IT and admin work (Active Directory, event logs, data
 * **Voice in and out:** Whisper speech-to-text (push-to-talk or "hey neon") and Kokoro speech with mixable voices, in-process or through a Kokoro server.
 * **Web UI:** the chat, the model's questions, the shopping list, a Home tab (lights, scenes, cameras, PC meters) and YouTube on your phone, over your network or Tailscale (`/webui`, [the Web UI](docs/INTERFACE.md#web-ui)).
 * **Pictures as input:** paste or drop one, or take one with the webcam (`/camera`) or of the screen (`/screen`) (macOS 14+ on a Mac).
-* **No installer:** unzip and run. Native code, so it starts fast and needs no .NET runtime.
+* **No installer:** unzip and run. Native code, so it starts fast and needs no .NET runtime. It updates itself when you say so (`/update`).
 * **Auto-complete** for commands, files, folders, skills and tools, and **find** in the transcript (`/find`).
 * **Message queue:** keep typing while the model works; messages go out in order, and `/loop` repeats one.
 * **Saved prompts:** messages you send often, picked from a list (`/prompts`) or your phone.
@@ -127,7 +127,7 @@ It's one app for research, IT and admin work (Active Directory, event logs, data
 ## Getting started
 
 ### What you need
-* **A 64-bit Windows 10 or 11 PC** with an Intel or AMD processor with AVX2 (from about 2015 on), or an Apple Silicon Mac (M1 and later). No runtime to install.
+* **A 64-bit Windows 10 or 11 PC** with an Intel or AMD processor with AVX2 (from about 2015 on), or an Apple Silicon Mac (M1 and later). No .NET runtime to install.
 * **Windows Terminal:** the app is built for it. It comes with Windows 11; on Windows 10, install it from the Microsoft Store. On a Mac, [iTerm2](https://iterm2.com) works best ([why](docs/MAC.md#install-and-first-run)); Terminal.app works, with less.
 * **A language model:** one the app downloads and runs, one you run, the OpenAI or Anthropic API, or Claude Code on your Claude subscription.
 * **For local models, a graphics card with 16 GB of VRAM or more** (NVIDIA with driver 580 or newer, or any Vulkan card) **or an Apple Silicon Mac.** Without one they run slowly.
@@ -138,6 +138,7 @@ Only for some features:
 * **Scripts in Python or Node:** Python or Node installed.
 * **`bash` on Windows:** Git Bash. **PowerShell on a Mac:** PowerShell 7 (`pwsh`).
 * **The video and Browser windows on Windows 10:** the free Microsoft Edge WebView2 Runtime (Windows 11 has it).
+* **Voice and the embedded model on Windows:** [Microsoft's Visual C++ runtime](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist). Most PCs have it, and the app says so if yours doesn't.
 * **Better web search:** a SearXNG server ([setup with Docker](docs/DOCKER_WINDOWS_SEARXNG.md)), or an MCP web-search server.
 * **The integrations:** the thing itself, such as Home Assistant, ComfyUI, Docker Desktop, an Obsidian vault or a YouTube API key.
 
@@ -154,7 +155,11 @@ On a Mac:
 3. In iTerm2 (recommended) or Terminal, run `./NeonSidekick` in that folder. Keep everything in the folder together.
 4. When macOS asks whether the app may use its Keychain key, choose **Always Allow**. For the Ctrl+Option shortcuts, let Option act as Meta ([how](docs/MAC.md#install-and-first-run)).
 
-**Updating:** unpack the new version into a fresh folder (on a Mac, clear its quarantine again). Your settings, memories and conversations live in `.neonsidekick`, so they carry over.
+**Updating:**
+* **In the app:** at each start it asks GitHub for a newer release, sending nothing about you. `/update` shows what's new, and the new version installs when you quit. *Check for updates at start* in `/settings` turns the asking off.
+* **Checked first:** an update must carry the project's own signature, whatever the steps above say about Windows' and Apple's. Details and the way back: [Updating](docs/COMMANDS.md#updating).
+* **By hand** (and for a copy older than 0.5.7): unpack the new version into a fresh folder; on a Mac, clear its quarantine again. Your settings, memories and conversations live in `.neonsidekick`, so they carry over.
+* **The folder's name** stays as you unpacked it, so one named for an older version may hold a newer one.
 
 Each download's `.sha256` file checks it arrived intact (`Get-FileHash` on Windows, `shasum -a 256` on a Mac).
 

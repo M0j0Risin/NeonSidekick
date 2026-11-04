@@ -129,6 +129,7 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
     private readonly Func<string?, BackendChoice> _choose;
     private readonly Func<long?> _totalVram;
     private readonly Func<ILlamaServerHost> _extraHost;
+    private readonly Func<string, bool>? _vcLoads;
     private readonly List<ExtraServer> _extras = [];
     private readonly Lock _extrasLock = new();
     private readonly SemaphoreSlim _extrasGate = new(1, 1);
@@ -151,13 +152,15 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
     /// <param name="choose">The backend for a <c>Embedded backend</c> setting; <see cref="LlamaBackendDetect.Choose(string?)"/> when null.</param>
     /// <param name="totalVram">The biggest GPU's dedicated memory in bytes, for the VRAM budget (later on 2026-09-29); <see cref="Perf.GpuMemory.DedicatedBytes"/> when null.</param>
     /// <param name="extraHost">A host for an extra server (later on 2026-09-29, multi-server botchats); a new <see cref="LlamaServerHost"/> when null.</param>
-    public EmbeddedLlmService(EmbeddedModels files, ILlamaServerHost host, Func<string?, BackendChoice>? choose = null, Func<long?>? totalVram = null, Func<ILlamaServerHost>? extraHost = null)
+    /// <param name="vcLoads">Stands in for the Visual C++ runtime's loader in a test (<see cref="App.VcRuntime"/>, 2026-11-04).</param>
+    public EmbeddedLlmService(EmbeddedModels files, ILlamaServerHost host, Func<string?, BackendChoice>? choose = null, Func<long?>? totalVram = null, Func<ILlamaServerHost>? extraHost = null, Func<string, bool>? vcLoads = null)
     {
         _files = files ?? throw new ArgumentNullException(nameof(files));
         _host = host ?? throw new ArgumentNullException(nameof(host));
         _choose = choose ?? LlamaBackendDetect.Choose;
         _totalVram = totalVram ?? Perf.GpuMemory.DedicatedBytes;
         _extraHost = extraHost ?? (() => new LlamaServerHost());
+        _vcLoads = vcLoads;
     }
 
     /// <summary>The app's service: the real catalog and runtimes under the two folders, a download client with no timeout (gigabytes), the real host.</summary>
@@ -200,6 +203,13 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
     public async Task<ModelResult> InstallAsync(EmbeddedModel model, AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(model);
+
+        // No download of a llama.cpp runtime or a model that can't run here (2026-11-04, the self-update plan's Visual C++ message).
+        if (App.VcRuntime.MainMissing(_vcLoads))
+        {
+            return ModelResult.Failed(_files.WeightsPath(model), EmbeddedLlmText.InstallFailed(model, App.VcRuntimeText.Missing(App.VcRuntime.MainLibrary)));
+        }
+
         var runtime = await _files.EnsureRuntimeAsync(Backend(effective).Backend, phase, cancellationToken).ConfigureAwait(false);
         if (!runtime.Ok)
         {
@@ -477,6 +487,13 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
         if (vramOnly && backend == LlamaBackend.Vulkan && (_totalVram() is not { } dedicated || dedicated < (long)MinDedicatedVramMiB << 20))
         {
             throw new EmbeddedLlmException(EmbeddedLlmText.VramOnlyNoVram, vramOnlyRefused: true);
+        }
+
+        // The one DLL the server's exe imports (2026-11-04): no box, no wait, no download. runtimeMissing bars the CUDA to Vulkan
+        // fallback, which would fail the same way, but RuntimeFailed's wording would blame the llama.cpp runtime.
+        if (App.VcRuntime.MainMissing(_vcLoads))
+        {
+            throw new EmbeddedLlmException(EmbeddedLlmText.StartFailed(App.VcRuntimeText.Missing(App.VcRuntime.MainLibrary)), runtimeMissing: true);
         }
 
         var runtime = await _files.EnsureRuntimeAsync(backend, phase, cancellationToken).ConfigureAwait(false);

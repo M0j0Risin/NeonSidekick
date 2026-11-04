@@ -114,7 +114,7 @@ public sealed class InfoPane
     /// <see cref="ScrollLead"/> (2026-10-16, the user's ask: every hint fits a 120-column window; ↑/↓ and PgUp/PgDn scroll every info
     /// pane, so they are the words a short row can spare). The pane passes its window's width less one, the Hints bar's room.
     /// </summary>
-    public static string ButtonsHint(IReadOnlyList<(char Key, string Word)> buttons, bool tabs = true, int cells = int.MaxValue)
+    public static string ButtonsHint(IReadOnlyList<(char Key, string Word)> buttons, bool tabs = true, int cells = int.MaxValue, bool find = true)
     {
         ArgumentNullException.ThrowIfNull(buttons);
         var rest = new System.Text.StringBuilder(tabs ? "←/→ = tabs · " : "");
@@ -124,7 +124,13 @@ public sealed class InfoPane
         }
 
         // A button answers its bare letter, so a find that starts with one starts with Shift (2026-10-15, the menus' TypeOrShiftKeys).
-        string tail = rest.Append(buttons.Count > 0 ? ShiftFindKeys : "type = find").Append(" · Esc = close").ToString();
+        // A pane with its find off (2026-11-04, self-update) names none.
+        if (find)
+        {
+            rest.Append(buttons.Count > 0 ? ShiftFindKeys : "type = find").Append(" · ");
+        }
+
+        string tail = rest.Append("Esc = close").ToString();
         string full = ScrollLead + tail;
         return TextCells.Width(full) > cells ? tail : full;
     }
@@ -515,6 +521,9 @@ public sealed class InfoPane
     // The pane's buttons this visit (2026-10-14): ahead of the tabs on the strip.
     private IReadOnlyList<InfoAction> _actions = [];
 
+    // The find off for this visit (2026-11-04, self-update, the user's call on the update panes): typed characters, Shift+letter, Ctrl+V and a right-click's paste do nothing, so nothing invites typing beside an Install button.
+    private bool _noFind;
+
     /// <summary>
     /// Shows the pane under <paramref name="label"/> on <paramref name="tabs"/>[<paramref name="initial"/>]
     /// and reads keys until ESC, the token, or the end of input; on every path the pane is closed, or the one it opened over
@@ -524,7 +533,7 @@ public sealed class InfoPane
     /// <summary>Told the pane's label as it opens (later on 2026-10-14, as <see cref="MenuPane.Opening"/>).</summary>
     public Action<string>? Opening { get; set; }
 
-    public async Task ShowAsync(string label, IReadOnlyList<InfoTab> tabs, int initial, CancellationToken cancellationToken, IReadOnlyList<InfoAction>? actions = null)
+    public async Task ShowAsync(string label, IReadOnlyList<InfoTab> tabs, int initial, CancellationToken cancellationToken, IReadOnlyList<InfoAction>? actions = null, bool noFind = false)
     {
         Opening?.Invoke(label);
         ArgumentNullException.ThrowIfNull(label);
@@ -532,6 +541,7 @@ public sealed class InfoPane
         Pressed = null;
         ChosenLine = null;
         _actions = actions ?? [];
+        _noFind = noFind;
         if (tabs.Count == 0)
         {
             throw new ArgumentException("At least one tab.", nameof(tabs));
@@ -632,7 +642,7 @@ public sealed class InfoPane
                     _clicks.Reset();
                     var shown = Shown(tabs);
                     var toggle = tabs[active].Toggle;
-                    if (click.Button == MouseButton.Right && _clipboard?.Invoke() is { } clip && MenuFilter.Pasted(_find, clip) is { } clipped)
+                    if (click.Button == MouseButton.Right && !_noFind && _clipboard?.Invoke() is { } clip && MenuFilter.Pasted(_find, clip) is { } clipped)
                     {
                         _find = clipped;
                         _findMoved = true;
@@ -679,7 +689,7 @@ public sealed class InfoPane
                 {
                     // Into the find (2026-10-14, the user's call: dropped until then): its first line, the typed find's cap.
                     _clicks.Reset();
-                    if (MenuFilter.Pasted(_find, paste.Text) is not { } pasted)
+                    if (_noFind || MenuFilter.Pasted(_find, paste.Text) is not { } pasted)
                     {
                         continue;
                     }
@@ -746,7 +756,7 @@ public sealed class InfoPane
                         redraw = true;
                     }
                 }
-                else if (FindChar(k) is char typed)
+                else if (!_noFind && FindChar(k) is char typed)
                 {
                     // Typed: the find grows (2026-10-07; every other key was swallowed before), the keys already waiting with it.
                     _clicks.Reset();
@@ -991,7 +1001,7 @@ public sealed class InfoPane
         }
 
         string hint = _find.Length > 0 ? FindHint(_find, _hit, _hits.Count)
-            : _actions.Count > 0 ? ButtonsHint([.. _actions.Select(a => (a.Key, a.Word)), .. toggle is null ? Array.Empty<(char, string)>() : [(toggle.Key, toggle.Word)]], tabs: tabs.Count > 1, cells: width - 1)
+            : _actions.Count > 0 ? ButtonsHint([.. _actions.Select(a => (a.Key, a.Word)), .. toggle is null ? Array.Empty<(char, string)>() : [(toggle.Key, toggle.Word)]], tabs: tabs.Count > 1, cells: width - 1, find: !_noFind)
             : toggle is not null ? ToggleHint(toggle.Key, toggle.Word, tabs: tabs.Count > 1, cells: width - 1)
             : tabs.Count == 1 ? SingleTabHintText : HintText;
         _pane.ShowOverlay(new Rows(lines), hint, close: true);

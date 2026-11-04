@@ -366,6 +366,10 @@ public static class FileText
     public static string AppFilesProtected(string path) =>
         $"Error: '{path}' is one of the app's own settings, configs or databases, which the file tools never change; the user changes them in /settings, /tools and the other panes";
 
+    /// <summary>A write into a package's install folder (2026-11-04, self-update). Prompt text.</summary>
+    public static string InstallFilesProtected(string path) =>
+        $"Error: '{path}' is in the folder the app is installed in, which the file tools never change; the user updates the app with /update";
+
     /// <summary>A write into a skill root (review P3). Prompt text.</summary>
     public static string SkillFilesProtected(string path) =>
         $"Error: '{path}' is in a skill folder; change a skill only with skill_editor";
@@ -522,6 +526,7 @@ public static class FileText
             FileOutcome.InSkillFolder => InSkillFolder(path),
             FileOutcome.NeonFilesProtected => NeonFilesProtected(path),
             FileOutcome.AppFilesProtected => AppFilesProtected(path),
+            FileOutcome.InstallFilesProtected => InstallFilesProtected(path),
             FileOutcome.SkillFilesProtected => SkillFilesProtected(path),
             FileOutcome.CommandFilesProtected => CommandFilesProtected(path),
             FileOutcome.ClaudeFilesProtected => ClaudeFilesProtected(path),

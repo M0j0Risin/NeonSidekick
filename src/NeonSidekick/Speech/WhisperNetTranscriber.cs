@@ -26,16 +26,19 @@ public sealed class WhisperNetTranscriber : ISpeechRecognizer
 
     private readonly string _modelPath;
     private readonly string _language;
+    private readonly Func<string, bool>? _vcLoads;
     private WhisperFactory? _factory;
     private WhisperProcessor? _processor;
     private bool _disposed;
 
-    public WhisperNetTranscriber(string modelPath, string language = "en")
+    /// <param name="vcLoads">Stands in for the Visual C++ runtime's loader in a test (<see cref="App.VcRuntime"/>, 2026-11-04).</param>
+    public WhisperNetTranscriber(string modelPath, string language = "en", Func<string, bool>? vcLoads = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelPath);
         ArgumentException.ThrowIfNullOrWhiteSpace(language);
         _modelPath = modelPath;
         _language = language;
+        _vcLoads = vcLoads;
     }
 
     public PcmFormat Format => PcmFormat.Whisper;
@@ -75,13 +78,13 @@ public sealed class WhisperNetTranscriber : ISpeechRecognizer
         catch (DllNotFoundException ex)
         {
             Unload();
-            detail = "native runtime missing: " + ex.Message;
+            detail = App.VcRuntime.Explain("native runtime missing: " + ex.Message, _vcLoads);
             return false;
         }
         catch (Exception ex)
         {
             Unload();
-            detail = Assistant.Explain(ex);
+            detail = App.VcRuntime.Explain(Assistant.Explain(ex), _vcLoads);
             return false;
         }
     }

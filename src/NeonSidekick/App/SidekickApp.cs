@@ -101,6 +101,8 @@ public sealed partial class SidekickApp
     private readonly Monitors.IMonitorSystem? _monitorSystem;
     private readonly Func<string?> _joinedDomain;
     private readonly bool _headlessNarrow;
+    private readonly string? _installFolder;
+    private readonly Func<Updates.IUpdater>? _updater;
     private readonly Plans.IRalphVerifier? _ralphVerifier;
     private readonly Files.IRecycleBin? _recycleBin;
     private readonly Files.ICheckpointStore? _checkpoints;
@@ -274,8 +276,14 @@ public sealed partial class SidekickApp
         Plans.IRalphVerifier? ralphVerifier = null,
         Monitors.IMonitorSystem? monitorSystem = null,
         Files.ICheckpointStore? checkpoints = null,
-        Func<int, CancellationToken, Task<WebUi.TailscaleServeResult?>>? tailscaleServe = null)
+        Func<int, CancellationToken, Task<WebUi.TailscaleServeResult?>>? tailscaleServe = null,
+        string? installFolder = null,
+        Func<Updates.IUpdater>? updater = null)
     {
+        // The screen's updater (2026-11-04, self-update): the real one in the app, a fake in tests, null by default, so no test can reach GitHub. Only the interactive screen ever makes one: headless and check modes never check, stage or swap.
+        _updater = updater;
+        // A package's install folder, decided once by Program at start and kept (2026-11-04, self-update): the write guard's and the shell police's. Null for a dev copy and in tests.
+        _installFolder = installFolder;
         // The file checkpoints' store (2026-10-28, the checkpoints plan): CheckpointStore in the app, a fake in tests, none by default.
         _checkpoints = checkpoints;
         // The monitors (2026-10-23, the monitors plan): WindowsMonitorSystem in the app on Windows, a fake in tests, none elsewhere.
@@ -498,7 +506,8 @@ public sealed partial class SidekickApp
         Databases: () => ChatScreen.DatabaseGuardFor(EffectiveSettings, _settings.ProfileDirectory, _settings.StorageDirectory),
         ShoppingGuarded: () => ChatScreen.ShoppingListGuarded(EffectiveSettings),
         RecycleBin: () => EffectiveSettings.FileDeletesToRecycleBin ? _recycleBin : null,
-        CommandRoots: () => CommandRootsGuarded(_settings.ProfileCustomCommandsDirectory, _settings.GlobalCustomCommandsDirectory));
+        CommandRoots: () => CommandRootsGuarded(_settings.ProfileCustomCommandsDirectory, _settings.GlobalCustomCommandsDirectory),
+        InstallFolder: () => _installFolder);
 
     /// <summary>
     /// The commands folders the write guard holds (2026-10-31, review P2-2): both, and where each points when it is a link. Read at each
@@ -3436,7 +3445,7 @@ public sealed partial class SidekickApp
         // on the row and hands it back to the terminal otherwise, so the terminal's own selection
         // and right-click copy work whenever there is nothing to click into.
         var mouse = _input as IMouseInput;
-        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, haWire: _haWire, printSpooler: _printSpooler, perfSource: _perfSource, frames: _frames, dockerClient: _dockerClient, camera: _camera, liveView: _liveView, showShot: _showShot, openLogWindow: _openLogWindow, openLogWindowBehind: _openLogWindowBehind, openViewerBehind: _openViewerBehind, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? PersonaFile.OpenTerminal : null, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, openDockerLogWindow: _openDockerLogWindow, closeDockerLogWindow: _closeDockerLogWindow, videoPlayer: _videoPlayer, browserWindow: _browserWindow, webUiHost: _webUiHost, eventLogSystem: _eventLogSystem, unifiedLog: _unifiedLog, recycleBin: _recycleBin, pinger: _pinger, serviceSystem: _serviceSystem, taskSystem: _taskSystem, directorySystem: _directorySystem, joinedDomain: _joinedDomain, tonePlayback: _playbackFactory, ralphVerifier: _ralphVerifier, monitorSystem: _monitorSystem, checkpoints: _checkpoints, tailscaleServe: _tailscaleServe);
+        var screen = new ChatScreen(_console, _settings, () => EffectiveSettings, OverriddenBy, session, speech, new KeySource(_input ?? _console.Input), voice, PersonaFile.OpenInEditor, RenderScreen, _time, _geometry, _clipboard, mouse is null ? null : mouse.Capture, _copyToClipboard, clipboardImage: _clipboardImage, web: _web, setTitle: _setTitle, externalSkills: _externalSkills, holdWheel: mouse is null ? null : mouse.HoldWheel, splash: SplashImages.Source, editDraft: PersonaFile.EditAndWaitAsync, mcp: mcp, environment: _environment.System, logFile: _options.LogPath is { } logPath ? Path.GetFullPath(logPath) : null, comfyClient: _comfyClient, openImage: PersonaFile.OpenImage, claude: _claude, openViewer: _openViewer, viewPicture: _viewPicture, followViewer: _followViewer, haClient: _haClient, haWire: _haWire, printSpooler: _printSpooler, perfSource: _perfSource, frames: _frames, dockerClient: _dockerClient, camera: _camera, liveView: _liveView, showShot: _showShot, openLogWindow: _openLogWindow, openLogWindowBehind: _openLogWindowBehind, openViewerBehind: _openViewerBehind, closeLogWindow: _closeLogWindow, closeViewer: _closeViewer, openTerminal: OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? PersonaFile.OpenTerminal : null, screenSystem: _screenSystem, hotkeyProbe: _hotkeyProbe, shortcutWriter: _shortcutWriter, openThumbs: _openThumbs, followThumbs: _followThumbs, showInViewer: _showInViewer, closeThumbs: _closeThumbs, openProcessWindow: _openProcessWindow, openDockerLogWindow: _openDockerLogWindow, closeDockerLogWindow: _closeDockerLogWindow, videoPlayer: _videoPlayer, browserWindow: _browserWindow, webUiHost: _webUiHost, eventLogSystem: _eventLogSystem, unifiedLog: _unifiedLog, recycleBin: _recycleBin, pinger: _pinger, serviceSystem: _serviceSystem, taskSystem: _taskSystem, directorySystem: _directorySystem, joinedDomain: _joinedDomain, tonePlayback: _playbackFactory, ralphVerifier: _ralphVerifier, monitorSystem: _monitorSystem, checkpoints: _checkpoints, tailscaleServe: _tailscaleServe, updater: _updater?.Invoke());
         if (mouse is not null)
         {
             mouse.ModeChanged = screen.FlushConsole;

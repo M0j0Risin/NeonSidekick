@@ -167,6 +167,12 @@ public static partial class SmokeChecks
         results.Add(ProbeHotkey());
         results.Add(ProbeCarbonHotkeys());
         results.Add(ProbeShortcut());
+        results.Add(ProbeUpdateSignature());   // 2026-11-04, self-update
+        results.Add(ProbeUpdateKeys());
+        results.Add(ProbeNoSimulationFlags());
+        results.Add(ProbeUpdateRenameLoaded(nativeDirectory));
+        results.Add(ProbeUpdateLock());
+        results.Add(OperatingSystem.IsWindows() ? ProbeVcRuntime() : new SmokeCheck("vcruntime:load", true, "skipped: not Windows"));
         results.Add(ProbeRecycleBin());   // later on 2026-10-15: File deletes to Recycle bin
         results.Add(ProbeQuarantine());   // 2026-10-22: unzip carries a Mac archive's quarantine
         results.Add(ProbeSqlite());

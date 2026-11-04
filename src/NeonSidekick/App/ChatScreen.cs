@@ -1286,8 +1286,11 @@ internal sealed partial class ChatScreen
         Monitors.IMonitorSystem? monitorSystem = null,
         bool monitorsQuick = false,
         Files.ICheckpointStore? checkpoints = null,
-        Func<int, CancellationToken, Task<WebUi.TailscaleServeResult?>>? tailscaleServe = null)
+        Func<int, CancellationToken, Task<WebUi.TailscaleServeResult?>>? tailscaleServe = null,
+        Updates.IUpdater? updater = null)
     {
+        // The updater (2026-11-04, self-update): the app's over the install folder, a fake in tests, none by default, so no test can reach GitHub.
+        _updater = updater;
         // The manual's live line (2026-10-25, the neon_help plan's Step 2): built first so it can capture the screen.
         _helpTools = HelpTools(HelpLiveNow);
         _logFile = logFile;
@@ -1550,6 +1553,8 @@ internal sealed partial class ChatScreen
             RuleTitle = () => UpperRuleTitle(_botChatCast, _sessionTitle, ShowNameDisplay(_effective())),
             // The running processes' count on the lower rule (2026-10-12, the user's ask): ▶ 3, nothing while none run.
             LowerRuleTitle = () => ProcessWindowText.RuleTitle(_processes.Running),
+            // The update's marker left of it (2026-11-04, self-update): 🆙 0.5.7 at quit, nothing while no update is known or under way.
+            LowerRuleMarker = UpdateMarkerNow,
             // The model and its mark while the Hint bar's Model is checked (2026-10-12).
             Trailer = () => HintOn(StatusBarItems.Model) ? ModelLabel(_session.Endpoint?.ModelId) : "",
             TrailerMark = () => HintOn(StatusBarItems.Model) ? ModelMark(_session.Endpoint?.ModelId, _effective().LlmReasoning) : "",
@@ -3448,6 +3453,12 @@ internal sealed partial class ChatScreen
                 }
 
                 return _queuedClicks.Second(InputLine.RuleTitlePairKey) ? SessionTitleLine : null;
+            }
+
+            if (_pane.TryHitLowerRuleMarker(click.X, click.Y))
+            {
+                // The update's marker (2026-11-04, self-update): two clicks answer /update, under the reply as at idle.
+                return _queuedClicks.Second(InputLine.LowerRuleMarkerPairKey) ? Updates.UpdateText.Word : null;
             }
 
             if (_pane.TryHitLowerRuleTitle(click.X, click.Y))
@@ -5897,6 +5908,10 @@ internal sealed partial class ChatScreen
                 return sources.LogFile
                     ? MentionCompleter.Matches([new(LogViewText.FileWord, LogViewText.FileWordNote), new(LogViewText.PathWord, LogViewText.PathWordNote)], argText)
                     : [];
+
+            case SlashCommand.Update:
+                // Its forms (2026-11-04, self-update); one word, so a space closes the list.
+                return argText.Contains(' ', StringComparison.Ordinal) ? [] : MentionCompleter.Matches([new(Updates.UpdateText.NotesWord, Updates.UpdateText.NotesNote), new(Updates.UpdateText.RollbackWord, Updates.UpdateText.RollbackNote), new(Updates.UpdateText.CancelWord, Updates.UpdateText.CancelNote)], argText);
 
             case SlashCommand.Process:
                 // The background processes' ids, newest first, with their state and command (2026-10-05); one id, so a space closes the list.
@@ -11859,6 +11874,8 @@ internal sealed partial class ChatScreen
             ApplyWindowTitle();
             // The Web UI's server, as the profile says (2026-10-14): started behind the line, its notice printed at the loop's top.
             ReconcileWebUi();
+            // The update's start (2026-11-04, self-update): what the start's step left to say, what's on disk, and the check behind the line.
+            BeginUpdateAtStart();
             // The watch pictures a double-click left behind (2026-10-02): cleared as the profile loads, in case watch mode never stopped cleanly.
             ClearWatchFolder();
             // A crash's temps in the working folder's top level (2026-10-30, review F88), off the screen's thread.
@@ -11892,6 +11909,7 @@ internal sealed partial class ChatScreen
                 DrainDiagnostics();
                 // The Web UI's notices (a sign-in, the server's start) and, as a backstop, its server as the settings now say (2026-10-14).
                 PrintWebNotices();
+                PrintUpdateLines();   // the update's lines (2026-11-04, self-update), at the idle line alone
                 ShowHomeCameras(idle: true);   // the camera chips' stills (2026-10-27)
                 ReconcileWebUi();
                 // Its dropdown's lists as they stand now (later on 2026-10-14), built here on the screen's task while a page is connected.
@@ -12243,6 +12261,17 @@ internal sealed partial class ChatScreen
                         }
 
                         break;
+                    case InputResult.LowerRuleMarker:
+                        // A double-click on the update's marker (2026-11-04, self-update): /update through the dispatch, no transcript row, the draft back after.
+                        _timers.Acknowledge();
+                        DisarmExit();
+                        await _speech.StopAsync().ConfigureAwait(false);
+                        if (await HandleAsync(Updates.UpdateText.Word, [], cancellationToken).ConfigureAwait(false))
+                        {
+                            return 0;
+                        }
+
+                        break;
                     case InputResult.LowerRuleTitle:
                         // A double-click on the running processes' count on the lower rule (2026-10-12, the user's ask): /process
                         // through the dispatch, its list — no transcript row, the draft back after, as the session's name.
@@ -12346,6 +12375,7 @@ internal sealed partial class ChatScreen
             // The Docker log window before its session goes (2026-10-23): its feed's loop never outlives the door it reads through.
             _closeDockerLogWindow?.Invoke();
             _docker.Dispose();
+            await EndUpdateWorkAsync().ConfigureAwait(false);   // a running probe killed and waited for, the download's partial kept (2026-11-04, self-update)
             _advisorHost.Dispose();
             StopLive();
             _cameraWatch.Dispose();
@@ -12428,7 +12458,7 @@ internal sealed partial class ChatScreen
 
         Volatile.Write(ref _alertSignal, alert);
         if (_timers.HasAlerts || _processes.HasAlerts || LearnPending || _jobs.HasCompletions || ImagineReady || WindowWorkReady || ReadSeekReady
-            || _webUi.LinesReady || _webUi.NoticesReady || _settings.OutsideChangesReady || !_homeCameraShows.IsEmpty)
+            || _webUi.LinesReady || _webUi.NoticesReady || _settings.OutsideChangesReady || !_homeCameraShows.IsEmpty || !_updateLines.IsEmpty)
         {
             // Queued between the loop's drain and this arm: the read returns at once.
             alert.Cancel();
@@ -14892,6 +14922,10 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.Log:
                 HandleLog(args);
+                return false;
+
+            case SlashCommand.Update:
+                await UpdateCommandAsync(args, _transcript, cancellationToken).ConfigureAwait(false);
                 return false;
 
             case SlashCommand.Process when args.Trim().Length == 0:

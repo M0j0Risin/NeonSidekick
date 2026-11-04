@@ -26,6 +26,7 @@ Get-Content job.txt | NeonSidekick.exe --headless > run_output.txt        # one 
 
 ## Before you start
 
+- **A headless run never checks for updates or installs one.** A run started during an [update](COMMANDS.md#updating) waits for it, with nothing added to stdout.
 - **A fresh profile does little headless.** The model gets only the clock (*Clock tools*), help (*Help tools*), memory, past-session and skill tools, and no server is looked for (*LLM server scan mode* `off`).
   - Set up a server (or `--url`) and the tool groups the job needs first, in the TUI (`/settings`, `/tools`) or `profile.json`.
 - **Tick the "… offered" lists first.** The SQL, Oracle, MySQL, PostgreSQL, SQLite, DuckDB, UNC and ComfyUI tools offer nothing until entries are ticked on `/tools`.
@@ -143,7 +144,7 @@ Any other `/…` line is sent to the model as a message, so `/model gemma` switc
 | `/remember`, `/memory`, `/sessions`, `/imagine`, `/process`, `/tree`, `/vault` | Ask the model: it has the memory, session, ComfyUI, `process`, file and Obsidian tools when they're on. `/sessions export` is an `[error]`: it works on the screen only. |
 | `/loop` | Repeat the line, or loop in the script. |
 | `/usage` | `--log` records the run. |
-| `/learn`, `/timer`, `/tts`, `/stt`, `/read`, `/echo`, `/sys`, `/keycheck`, `/copy`, `/draft`, `/view`, `/explore`, `/open`, `/browse`, `/terminal`, `/shortcut`, `/theme`, `/mark`, `/perfbar`, `/homebar`, `/toolbar`, `/header`, `/window`, `/expand`, `/collapse`, `/find`, `/splash view\|thumbs\|purge`, `/pasted`, `/ha stills`, `/queue`, `/rename`, `/help` alone, `/about`, `/log`, `/comfy`, `/gituser`, `/botchat` | Not available: they need the screen, sound, an editor, the clipboard or a confirmation. |
+| `/learn`, `/timer`, `/tts`, `/stt`, `/read`, `/echo`, `/sys`, `/keycheck`, `/copy`, `/draft`, `/view`, `/explore`, `/open`, `/browse`, `/terminal`, `/shortcut`, `/theme`, `/mark`, `/perfbar`, `/homebar`, `/toolbar`, `/header`, `/window`, `/expand`, `/collapse`, `/find`, `/splash view\|thumbs\|purge`, `/pasted`, `/ha stills`, `/queue`, `/rename`, `/help` alone, `/about`, `/log`, `/comfy`, `/gituser`, `/botchat`, `/update` | Not available: they need the screen, sound, an editor, the clipboard or a confirmation. |
 
 ## Flags in headless runs
 
@@ -226,7 +227,7 @@ The run carries on. At the end, if anything was refused, it prints a summary and
 [notice] 2 commands were not run: "npm install", "python script"
 ```
 
-Shell police refusals count too, under `--yolo` as well. **Exit codes:** **0** nothing was refused, **2** a bad argument or an unknown profile (nothing ran), **3** at least one command was refused.
+Shell police refusals count too, under `--yolo` as well. **Exit codes:** **0** nothing was refused, **2** a bad argument, an unknown profile, or a copy started during an [update](COMMANDS.md#updating) that finished (nothing ran), **3** at least one command was refused.
 
 ```powershell
 Get-Content job.txt | NeonSidekick.exe --headless --cwd D:\Repo\MyApp | Tee-Object run.txt
@@ -285,4 +286,4 @@ Flags beat variables, and variables beat the profile's saved values. [ENVIRONMEN
 
 `--smoke`, `--audio-check`, `--voice-check`, `--sql-check`, `--oracle-check`, `--mysql-check`, `--sqlite-check`, `--duckdb-check`, `--postgres-check`, `--unc-check`, `--eventlog-check`, `--network-check`, `--services-check`, `--tasks-check`, `--ad-check`, `--docker-check`, `--camera-check` and `--monitor-check` are separate modes; with `--headless`, headless wins and they're ignored. `--help` and `--version` print and exit first.
 
-`--mcp-relay`, `--llama-guard` and `--shell-guard` are the app's internal modes, not for you to run.
+`--mcp-relay`, `--llama-guard`, `--shell-guard` and `--update-probe` are the app's internal modes, not for you to run.

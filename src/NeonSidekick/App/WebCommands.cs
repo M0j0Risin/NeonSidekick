@@ -85,6 +85,7 @@ public static class WebCommands
         SlashCommand.Rename, SlashCommand.Claude, SlashCommand.Advisor, SlashCommand.Test, SlashCommand.Avatar, SlashCommand.Loop,
         SlashCommand.MsgClear, SlashCommand.Mark,   // /mark (2026-10-18): the PC's rules, set from the page too
         SlashCommand.Custom,   // 2026-10-30: the user's own commands, a message once expanded
+        SlashCommand.Update,   // 2026-11-04, self-update: /update notes alone
     };
 
     /// <summary>Whether any form of <paramref name="command"/> may run from the page (the dropdown's commands).</summary>
@@ -205,6 +206,8 @@ public static class WebCommands
             SlashCommand.Tree => settings.FileTools ? WebCommandVerdict.List : Refused(WebUiText.Needs(word, "File tools")),
             SlashCommand.Vault => settings.ObsidianTools ? WebCommandVerdict.List : Refused(WebUiText.Needs(word, "Obsidian tools")),
             SlashCommand.Process => text.Length == 0 ? WebCommandVerdict.List : Pane(word, "/process"),
+            // 2026-11-04, self-update: installing happens at the PC. Notes only read, and the "Updated" line names them.
+            SlashCommand.Update => Is(text, Updates.UpdateText.NotesWord) ? WebCommandVerdict.Run : Refused(WebUiText.PcOnly(text.Length == 0 ? word : word + " " + first)),
             // 2026-10-18: the bare word is /tools comfy (a page on the PC); the status it showed is /comfy status, a list as before.
             SlashCommand.Comfy => Is(text, ChatScreen.ComfyStatusWord) || Is(text, ChatScreen.ComfyOfferedWord) ? WebCommandVerdict.List : Pane(word, "/comfy status or /comfy offered"),
             SlashCommand.Loop => LoopVerdict(args, settings),

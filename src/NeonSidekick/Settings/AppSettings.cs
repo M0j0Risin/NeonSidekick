@@ -1008,6 +1008,7 @@ public sealed class AppSettings : IDisposable
         ThemedExternalWindows = source.ThemedExternalWindows,
         GradientRules = source.GradientRules,
         ReplyFooter = source.ReplyFooter,
+        CheckForUpdatesAtStart = source.CheckForUpdatesAtStart,
         ViewerLeft = source.ViewerLeft,
         ViewerTop = source.ViewerTop,
         CameraWindowLeft = source.CameraWindowLeft,

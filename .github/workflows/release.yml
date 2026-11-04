@@ -135,5 +135,6 @@ jobs:
             echo "Release $tag already exists; skipping."
             exit 0
           fi
-          gh release create "$tag" --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes --title "NeonSidekick $tag" \
+          # A draft (2026-11-04, self-update): releases/latest ignores it, so no copy is offered it until tools/ReleaseSign.cs has signed and published it.
+          gh release create "$tag" --repo "$GITHUB_REPOSITORY" --draft --verify-tag --generate-notes --title "NeonSidekick $tag" \
             "${zips[0]}" "${tars[0]}" "${shas[@]}"

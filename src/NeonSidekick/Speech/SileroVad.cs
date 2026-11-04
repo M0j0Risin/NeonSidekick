@@ -60,15 +60,18 @@ public sealed class SileroVad : IVoiceActivityDetector
     private int _bytesSinceAnalysis;
     private bool _feedFailureLogged;
 
+    private readonly Func<string, bool>? _vcLoads;
     private WhisperVadFactory? _factory;
     private WhisperVadProcessor? _processor;
     private bool _disposed;
 
-    public SileroVad(string modelPath, VadOptions? options = null)
+    /// <param name="vcLoads">Stands in for the Visual C++ runtime's loader in a test (<see cref="App.VcRuntime"/>, 2026-11-04).</param>
+    public SileroVad(string modelPath, VadOptions? options = null, Func<string, bool>? vcLoads = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelPath);
         _modelPath = modelPath;
         _options = options ?? VadOptions.Default;
+        _vcLoads = vcLoads;
     }
 
     public string ModelPath => _modelPath;
@@ -114,13 +117,13 @@ public sealed class SileroVad : IVoiceActivityDetector
         catch (DllNotFoundException ex)
         {
             Unload();
-            detail = "native runtime missing: " + ex.Message;
+            detail = App.VcRuntime.Explain("native runtime missing: " + ex.Message, _vcLoads);
             return false;
         }
         catch (Exception ex)
         {
             Unload();
-            detail = Assistant.Explain(ex);
+            detail = App.VcRuntime.Explain(Assistant.Explain(ex), _vcLoads);
             return false;
         }
     }

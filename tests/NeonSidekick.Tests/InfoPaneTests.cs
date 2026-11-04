@@ -406,6 +406,52 @@ public class InfoPaneTests : IDisposable
         Assert.Equal("type / Shift+letter = filter", MenuFilter.TypeOrShiftKeys);   // the menus' wording, "find" here
     }
 
+    /// <summary>
+    /// A pane with its find off for one visit (2026-11-04, self-update: the update panes, where a stray letter must invite nothing): a letter, Shift+letter,
+    /// Ctrl+V, a paste and a right-click all do nothing, and the hint names no find. Its buttons and the scroll still answer.
+    /// </summary>
+    [Fact]
+    public async Task WithItsFindOff_TypingPastingAndARightClickDoNothing_TheButtonsAndScrollStillAnswer()
+    {
+        _console.Profile.Width = 120;
+        var (pane, input, keys) = ClickablePane(cursorTop: 100);
+        using var _ = pane;
+        pane.Show();
+        var buttons = new InfoAction[] { new("install", 'i', "install"), new("later", 'l', "later") };
+        input.Push(Keys.Char('x'), new ConsoleKeyInfo('X', ConsoleKey.X, shift: true, alt: false, control: false), Keys.Ctrl(ConsoleKey.V));
+        input.PushPaste("pasted");
+        input.PushClick(5, 103, MouseButton.Right);
+        input.Push(Keys.PageDown, Keys.Char('l'));
+        var info = new InfoPane(pane, keys, clipboard: () => "clipped");
+
+        await info.ShowAsync("/update", [Tab("Long", Numbered(20))], 0, CancellationToken.None, buttons, noFind: true);
+
+        Assert.Same(buttons[1], info.Pressed);
+        Assert.DoesNotContain("find: ", Output);
+        Assert.DoesNotContain(InfoPane.ShiftFindKeys, Output);
+        Assert.Contains(InfoPane.ButtonsHint([('i', "install"), ('l', "later")], tabs: false, cells: 119, find: false), Output);
+        Assert.Contains("\nline6\n", Output);   // the page down
+    }
+
+    /// <summary>The option is one visit's: the same pane shown again without it finds as usual.</summary>
+    [Fact]
+    public async Task TheFindOff_LastsOneVisit()
+    {
+        _console.Profile.Width = 120;
+        var (pane, input, keys) = ClickablePane(cursorTop: 100);
+        using var _ = pane;
+        pane.Show();
+        var buttons = new InfoAction[] { new("later", 'l', "later") };
+        var info = new InfoPane(pane, keys);
+        input.Push(Keys.Char('x'), Keys.Char('l'));
+        await info.ShowAsync("/update", [Tab("One", "alpha")], 0, CancellationToken.None, buttons, noFind: true);
+        Assert.DoesNotContain("find: ", Output);
+
+        input.Push(Keys.Char('a'), Keys.Escape, Keys.Escape);
+        await info.ShowAsync("/update", [Tab("One", "alpha")], 0, CancellationToken.None, buttons);
+        Assert.Contains("find: a", Output);
+    }
+
     /// <summary>A paste and a right-click go onto the find (2026-10-14, the user's call): the first line of each, the matches marked.</summary>
     [Fact]
     public async Task APaste_AndARightClick_GoOntoTheFind()

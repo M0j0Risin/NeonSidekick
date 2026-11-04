@@ -13,6 +13,7 @@
         .\build.ps1 -CoverageFloor 0           # report line coverage without gating (the default floor is 80%)
         .\build.ps1 -Package                   # ...and stage publish/package/NeonSidekick-v<ver>-win-x64.zip + .sha256
         .\build.ps1 -Package -Tag v0.2.0       # the same, refusing a tag that is not the csproj <Version> (release.yml)
+        .\build.ps1 -Publish -Package -UpdateSim   # a simulation build's package, for tools/UpdateSim.cs: never a release, and -Tag refuses it
         .\build.ps1 -TestOnly -CiLike          # the test step as a CI runner meets it: an empty home, fresh temp, no live tests, 2 cores
         .\build.ps1 -TestOnly -CiLike -Cores 1 -Filter "FullyQualifiedName~WebUiPageTests" -Repeat 20 -HangTimeout 60s
 
@@ -33,6 +34,7 @@ param(
     [double]$CoverageFloor = 80,
     [switch]$Package,
     [string]$Tag,
+    [switch]$UpdateSim,
     [string]$Runtime,
     [switch]$CiLike,
     [int]$Cores = 2,
@@ -83,6 +85,7 @@ if ($Cores -lt 1) { Fail "-Cores is a count of cores, 1 or more." }
 # An affinity mask is one processor group's, 64 bits (2026-10-20, the code review); past 64 there is nothing it could pin.
 if ($Cores -gt 64) { Fail "-Cores is at most 64 (one processor group's affinity)." }
 if ($Publish -and $CiLike) { Fail "-CiLike shapes the test step; -Publish has none." }
+if ($UpdateSim -and $Tag) { Fail "-UpdateSim is a simulation build's flags compiled in: it can't be a release." }
 
 # -CiLike (2026-10-19, the pre-CI check in .notes/ci_test_debug_guidance.md): the test step as a GitHub runner meets it, since
 # nearly every CI-only failure so far was a race a fast, warm machine never showed. The test host gets an empty NEONSIDEKICK_HOME,
@@ -328,8 +331,10 @@ if ($OnWindows -and -not (Get-Command vswhere.exe -ErrorAction SilentlyContinue)
     }
 }
 
+# Passed as a property the csproj appends to DefineConstants (2026-11-04, self-update); a build from this switch isn't for daily use, and the next plain publish replaces it.
+$simProperty = if ($UpdateSim) { @("/p:UpdateSim=true") } else { @() }
 $publishLog = @(dotnet publish $AppProject -c Release -r $Runtime --self-contained `
-    /p:PublishAot=true /p:StripSymbols=true -o $PublishDir 2>&1)
+    /p:PublishAot=true /p:StripSymbols=true @simProperty -o $PublishDir 2>&1)
 $publishLog | ForEach-Object { Write-Host $_ }
 if ($LASTEXITCODE -ne 0) { Fail "Publish FAILED" }
 
@@ -456,6 +461,13 @@ if ($Package) {
     if (Test-Path $PackageRoot) { Remove-Item -Recurse -Force $PackageRoot }
     New-Item -ItemType Directory -Path $stage | Out-Null
     Copy-Item -Path (Join-Path $PublishDir "*") -Destination $stage -Recurse
+    # The user's session logs (/shortcut --log writes them beside the exe, and publishes keep them) stay out on either OS: the manifest would list them, and a growing log
+    # would read as an altered file. CI's folder has none. (2026-11-04, self-update)
+    $stageLogs = Join-Path $stage "logs"
+    if (Test-Path $stageLogs) { Remove-Item -Recurse -Force $stageLogs }
+    # The Windows symbols stay out too, matching the Mac's dSYM (2026-11-04: 79 of v0.5.6's 289 MB packed, 410 of its 801 MB unpacked). They stay in publish/output for reading a crash.
+    $stagePdb = Join-Path $stage "NeonSidekick.pdb"
+    if (Test-Path $stagePdb) { Remove-Item -Force $stagePdb }
     if (-not $OnWindows) {
         # What a Mac never runs stays out of the tarball (2026-10-06, the first Mac package: 566 MB unpacked): NativeAOT's
         # debug symbols (NeonSidekick.dSYM, 247 MB; kept in publish/output for reading a crash), the Windows ONNX Runtime
@@ -477,6 +489,59 @@ if ($Package) {
     New-Item -ItemType Directory -Path $stageDocs | Out-Null
     Copy-Item -Path (Join-Path $ProjectRoot "docs/*.md") -Destination $stageDocs
 
+    # update-manifest.json (2026-11-04, self-update), the package's list of itself and a lasting contract: the old exe reads the new one's. Last before archiving, so it lists what ships.
+    # This script runs under both Windows PowerShell and pwsh, so each step is spelled out to parse the same: -Force since dotfiles are hidden otherwise, ordinal sorting, [ordered] and
+    # @() since a lone file through a pipeline becomes an object, and no BOM. The bytes can differ between the two (Windows PowerShell escapes & ' < in JSON), and nothing needs them to
+    # match: the .sha256 hashes the file this run wrote, and the app reads it as JSON.
+    $stageRoot = (Get-Item -LiteralPath $stage).FullName.TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
+    $exeName = Split-Path -Leaf $Exe
+    $manifestPath = Join-Path $stage "update-manifest.json"
+    [string[]]$manifestPaths = @(Get-ChildItem -LiteralPath $stage -Recurse -File -Force | ForEach-Object { $_.FullName.Substring($stageRoot.Length).Replace('\', '/') })
+    [Array]::Sort($manifestPaths, [StringComparer]::Ordinal)
+    $manifestFiles = @($manifestPaths | ForEach-Object {
+        [ordered]@{ path = $_; sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $stage $_)).Hash.ToLowerInvariant() }
+    })
+    $manifest = [ordered]@{ format = 1; version = "$version"; rid = "$Runtime"; exe = $exeName; files = $manifestFiles }
+    [System.IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json -Depth 4), (New-Object System.Text.UTF8Encoding($false)))
+    $manifestHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $manifestPath).Hash.ToLowerInvariant()
+    Write-Host "  update-manifest.json: $($manifestFiles.Count) files"
+
+    # The update probe from the stage (2026-11-04, self-update): a release whose probe fails could never be installed by the updater, and the smoke ran on publish/output, not on
+    # what's packaged, so it misses anything this step left out. The result file sits beside the stage, so it isn't packed, and a stray startup line on stdout can't reach it.
+    $probeResult = Join-Path $PackageRoot "probe-result"
+    $probeInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $probeInfo.FileName = Join-Path $stage $exeName
+    $probeInfo.Arguments = '--update-probe "' + $probeResult + '"'
+    $probeInfo.UseShellExecute = $false
+    $probeInfo.RedirectStandardOutput = $true
+    $probeInfo.RedirectStandardError = $true
+    $probe = [System.Diagnostics.Process]::Start($probeInfo)
+    $probeOut = $probe.StandardOutput.ReadToEndAsync()
+    $probeErr = $probe.StandardError.ReadToEndAsync()
+    if (-not $probe.WaitForExit(60000)) {
+        $probe.Kill()
+        Fail "The update probe timed out in the stage."
+    }
+    $probeLines = if (Test-Path -LiteralPath $probeResult) { @(Get-Content -LiteralPath $probeResult) } else { @() }
+    if ($probe.ExitCode -ne 0 -or $probeLines.Count -eq 0 -or $probeLines[0] -cne "version $version" -or $probeLines[-1] -cne "done") {
+        foreach ($line in $probeLines) { Write-Host "    $line" }
+        if ($probeOut.Result) { Write-Host $probeOut.Result }
+        if ($probeErr.Result) { Write-Host $probeErr.Result -ForegroundColor Red }
+        Fail "The update probe failed in the stage (exit $($probe.ExitCode)); this release could never install itself."
+    }
+    Write-Host "  update probe passed: $(@($probeLines | Where-Object { $_ -clike 'loaded *' }).Count) libraries loaded"
+    Remove-Item -LiteralPath $probeResult
+
+    # The suite never runs this step, so what it wrote is checked here: the manifest against the stage, after the probe ran in it (2026-11-04).
+    [string[]]$stageNow = @(Get-ChildItem -LiteralPath $stage -Recurse -File -Force | ForEach-Object { $_.FullName.Substring($stageRoot.Length).Replace('\', '/') } | Where-Object { $_ -cne "update-manifest.json" })
+    [Array]::Sort($stageNow, [StringComparer]::Ordinal)
+    $manifestRead = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    [string[]]$manifestListed = @($manifestRead.files | ForEach-Object { $_.path })
+    if (($stageNow -join "`n") -cne ($manifestListed -join "`n")) { Fail "update-manifest.json doesn't match the stage." }
+    foreach ($entry in $manifestRead.files) {
+        if ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $stage $entry.path)).Hash.ToLowerInvariant() -cne $entry.sha256) { Fail "update-manifest.json's hash of $($entry.path) doesn't match." }
+    }
+
     if (-not $OnWindows) {
         # A tar.gz off Windows (2026-10-06, the macOS build): a zip written here keeps no Unix modes, and the exe and
         # espeak-ng must stay executable. The system tar (bsdtar on macOS) keeps them.
@@ -484,7 +549,7 @@ if ($Package) {
         tar -czf $tarball -C $PackageRoot $stageName
         if ($LASTEXITCODE -ne 0) { Fail "tar FAILED" }
         $hash = (Get-FileHash -Algorithm SHA256 -Path $tarball).Hash.ToLowerInvariant()
-        [System.IO.File]::WriteAllText("$tarball.sha256", "$hash *$stageName.tar.gz`n", [System.Text.Encoding]::ASCII)
+        [System.IO.File]::WriteAllText("$tarball.sha256", "$hash *$stageName.tar.gz`n# $manifestHash *update-manifest.json`n", [System.Text.Encoding]::ASCII)
         $tarSize = [Math]::Round((Get-Item $tarball).Length / 1MB, 1)
         Write-Host "  $tarball  ($tarSize MB)" -ForegroundColor Green
         Write-Host "  sha256 $hash"
@@ -501,7 +566,7 @@ if ($Package) {
         try {
             $archive = New-Object System.IO.Compression.ZipArchive($zipStream, [System.IO.Compression.ZipArchiveMode]::Create)
             try {
-                Get-ChildItem -Path $stage -Recurse -File | Sort-Object FullName | ForEach-Object {
+                Get-ChildItem -Path $stage -Recurse -File -Force | Sort-Object FullName | ForEach-Object {
                     $entryName = $_.FullName.Substring($base.Length).Replace('\', '/')
                     [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive, $_.FullName, $entryName, [System.IO.Compression.CompressionLevel]::Optimal) | Out-Null
                 }
@@ -512,7 +577,7 @@ if ($Package) {
             $zipStream.Dispose()
         }
         $hash = (Get-FileHash -Algorithm SHA256 -Path $zip).Hash.ToLowerInvariant()
-        [System.IO.File]::WriteAllText("$zip.sha256", "$hash *$stageName.zip`n", [System.Text.Encoding]::ASCII)
+        [System.IO.File]::WriteAllText("$zip.sha256", "$hash *$stageName.zip`n# $manifestHash *update-manifest.json`n", [System.Text.Encoding]::ASCII)
 
         $zipSize = [Math]::Round((Get-Item $zip).Length / 1MB, 1)
         Write-Host "  $zip  ($zipSize MB)" -ForegroundColor Green

@@ -243,6 +243,12 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     private int _lowerTitleColumn = -1;
     private int _lowerTitleCells;
 
+    // The update's marker (2026-11-04, self-update), beside the lower rule's title and not merged into it: its provider, the one last drawn for the tick, and where it landed, for TryHitLowerRuleMarker.
+    private Func<string> _lowerRuleMarker = static () => "";
+    private string _drawnLowerRuleMarker = "";
+    private int _lowerMarkerColumn = -1;
+    private int _lowerMarkerCells;
+
     // The hint row.
     private Func<string> _hint = static () => "";
     private Func<string> _strip = static () => "";
@@ -1037,6 +1043,16 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>
+    /// The update's marker, left of <see cref="LowerRuleTitle"/> on the lower rule (2026-11-04, self-update: <c>🆙 0.5.7 at quit ── ▶ 2</c>), read on every draw and on the tick, so the download's percentage redraws too; empty = none.
+    /// In a narrow window it's dropped first, whole, so <c>▶ n</c> stays readable and clickable.
+    /// </summary>
+    public Func<string> LowerRuleMarker
+    {
+        get => _lowerRuleMarker;
+        set => _lowerRuleMarker = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
+    /// <summary>
     /// The label at the right edge of the hint row in every state, read like <see cref="Strip"/>;
     /// empty = the row as it is. The screen puts the model's name there.
     /// </summary>
@@ -1554,6 +1570,25 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             }
 
             return y == top + FirstBarRowBelowCursor - 1 && x >= _lowerTitleColumn - 1 && x <= _lowerTitleColumn + _lowerTitleCells;
+        }
+    }
+
+    /// <summary>Whether a click landed on the update's marker on the lower rule (2026-11-04: a double-click there opens <c>/update</c>), the space either side of it included; <see cref="TryHitLowerRuleTitle"/>'s rules.</summary>
+    public bool TryHitLowerRuleMarker(int x, int y)
+    {
+        if (!Enabled)
+        {
+            return false;
+        }
+
+        lock (_gate)
+        {
+            if (!_drawn || _drawnOverlay || _lowerMarkerColumn < 0 || _batch > 0 || _modal > 0 || _geometry?.CursorTop() is not int top)
+            {
+                return false;
+            }
+
+            return y == top + FirstBarRowBelowCursor - 1 && x >= _lowerMarkerColumn - 1 && x <= _lowerMarkerColumn + _lowerMarkerCells;
         }
     }
 
@@ -7626,6 +7661,33 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         _drawnLowerRuleTitle = _lowerRuleTitle();
         // The mark the upper rule took this frame (WriteUpperRule): a change since redraws both at the tick.
         var rule = _drawnRuleMark is Style marked ? marked : Theme.PaneRule;
+        _drawnLowerRuleMarker = _lowerRuleMarker();
+        (_lowerMarkerColumn, _lowerMarkerCells) = (-1, 0);
+        if (MarkerFit(_drawnLowerRuleMarker, _drawnLowerRuleTitle, width) is int markerLeft)
+        {
+            // The marker, then the title behind two rule glyphs: each has its own click area and neither is ever cut.
+            int markerCells = TextCells.Width(_drawnLowerRuleMarker);
+            (_lowerMarkerColumn, _lowerMarkerCells) = (markerLeft + 1, markerCells);
+            WriteRuleText(new string(RuleGlyph, markerLeft) + " ", 0, width, rule);
+            _inner.Write(new RawText(_drawnLowerRuleMarker, Theme.AccentSecondary));
+            int at = markerLeft + 1 + markerCells;
+            (_lowerTitleColumn, _lowerTitleCells) = (-1, 0);
+            if (_drawnLowerRuleTitle.Length > 0)
+            {
+                string between = " " + new string(RuleGlyph, LowerRuleGap) + " ";
+                WriteRuleText(between, at, width, rule);
+                at += between.Length;
+                int titleCells = TextCells.Width(_drawnLowerRuleTitle);
+                (_lowerTitleColumn, _lowerTitleCells) = (at, titleCells);
+                _inner.Write(new RawText(_drawnLowerRuleTitle, Theme.AccentSecondary));
+                at += titleCells;
+            }
+
+            WriteRuleText(" " + RuleGlyph, at, width, rule);
+            _inner.WriteLine();
+            return;
+        }
+
         (_lowerTitleColumn, _lowerTitleCells) = TitleSpan(_drawnLowerRuleTitle, width, 0);
         if (FitRuleTitle(_drawnLowerRuleTitle, width) is var (fitted, left))
         {
@@ -7639,6 +7701,31 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         }
 
         _inner.WriteLine();
+    }
+
+    /// <summary>The rule glyphs between the update's marker and the lower rule's title.</summary>
+    public const int LowerRuleGap = 2;
+
+    /// <summary>
+    /// Where the lower rule's marker goes: the rule glyphs at its left, or null with none or too little room, since the marker is dropped first, whole. <see cref="RuleTitleMinRule"/> glyphs stay at the left, as for a title.
+    /// </summary>
+    public static int? MarkerFit(string marker, string title, int width)
+    {
+        ArgumentNullException.ThrowIfNull(marker);
+        ArgumentNullException.ThrowIfNull(title);
+        if (marker.Length == 0)
+        {
+            return null;
+        }
+
+        int used = 1 + TextCells.Width(marker) + 2;   // a space either side and the last glyph
+        if (title.Length > 0)
+        {
+            used += LowerRuleGap + 2 + TextCells.Width(title);
+        }
+
+        int left = width - used;
+        return left >= RuleTitleMinRule ? left : null;
     }
 
     /// <summary>
@@ -7926,6 +8013,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     /// <summary>The title <see cref="RuleTitle"/> answers now is not the one on the drawn upper rule, or <see cref="LowerRuleTitle"/>'s not the lower one's (2026-10-12).</summary>
     private bool RuleTitleChanged() =>
         !string.Equals(_ruleTitle(), _drawnRuleTitle, StringComparison.Ordinal) || !string.Equals(_lowerRuleTitle(), _drawnLowerRuleTitle, StringComparison.Ordinal)
+        || !string.Equals(_lowerRuleMarker(), _drawnLowerRuleMarker, StringComparison.Ordinal)   // the update's marker (2026-11-04)
         || !ReferenceEquals(_ruleMark, _drawnRuleMark)   // a /mark (2026-10-18)
         || !ReferenceEquals(Theme.RuleStops, _drawnRuleStops);   // Gradient rules flipped or the palette changed (2026-11-01)
 

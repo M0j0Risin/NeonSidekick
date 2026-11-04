@@ -201,6 +201,97 @@ public partial class ScreenPaneTests : IDisposable
         Assert.False(pane.TryHitLowerRuleTitle(36, 101));
     }
 
+    /// <summary>The update's marker left of the process count (2026-11-04, self-update), each with its own click area, following on the tick.</summary>
+    [Fact]
+    public void LowerRuleMarker_StandsBesideTheTitle_FollowsOnTheTick_AndHasItsOwnClickArea()
+    {
+        _cursorTop = 100;
+        string marker = "";
+        string title = NeonSidekick.Viewer.ProcessWindowText.RuleTitle(3);
+        using var pane = Pane();
+        pane.LowerRuleMarker = () => marker;
+        pane.LowerRuleTitle = () => title;
+        pane.Show();
+        Assert.False(pane.TryHitLowerRuleMarker(20, 101));
+        Assert.True(pane.TryHitLowerRuleTitle(36, 101));
+
+        marker = "🆙 0.5.7 at quit";
+        int mark = Output.Length;
+        _time.Advance(ScreenPane.Tick);
+        Assert.Contains(Rule(14) + " 🆙 0.5.7 at quit ── ▶ 3 ─\n", Output[mark..]);
+
+        // 🆙 0.5.7 at quit at columns 15–30, ▶ 3 at 35–37, the space either side of each included.
+        Assert.False(pane.TryHitLowerRuleMarker(13, 101));
+        foreach (int x in new[] { 14, 15, 30, 31 })
+        {
+            Assert.True(pane.TryHitLowerRuleMarker(x, 101));
+            Assert.False(pane.TryHitLowerRuleTitle(x, 101));
+        }
+
+        Assert.False(pane.TryHitLowerRuleMarker(32, 101));
+        Assert.False(pane.TryHitLowerRuleTitle(33, 101));
+        foreach (int x in new[] { 34, 35, 37, 38 })
+        {
+            Assert.True(pane.TryHitLowerRuleTitle(x, 101));
+            Assert.False(pane.TryHitLowerRuleMarker(x, 101));
+        }
+
+        // A percentage's change redraws; the same text again doesn't.
+        mark = Output.Length;
+        _time.Advance(ScreenPane.Tick);
+        Assert.Equal("", Output[mark..]);
+        marker = "🆙 0.5.7 42%";
+        _time.Advance(ScreenPane.Tick);
+        Assert.Contains("🆙 0.5.7 42% ── ▶ 3 ─\n", Output[mark..]);
+
+        pane.ShowOverlay(new Markup("a"), "Esc closes");
+        Assert.False(pane.TryHitLowerRuleMarker(20, 101));
+        pane.CloseOverlay();
+
+        marker = "";
+        _time.Advance(ScreenPane.Tick);
+        Assert.False(pane.TryHitLowerRuleMarker(20, 101));
+        Assert.True(pane.TryHitLowerRuleTitle(36, 101));
+    }
+
+    [Fact]
+    public void LowerRuleMarker_Alone_SitsAtTheRightEdge()
+    {
+        _cursorTop = 100;
+        using var pane = Pane();
+        pane.LowerRuleMarker = () => "🆙 0.5.7";
+        pane.Show();
+        Assert.Contains(Rule(29) + " 🆙 0.5.7 ─\n", Output);
+        Assert.True(pane.TryHitLowerRuleMarker(30, 101));
+        Assert.True(pane.TryHitLowerRuleMarker(38, 101));
+        Assert.False(pane.TryHitLowerRuleTitle(30, 101));
+    }
+
+    /// <summary>A narrow window drops the marker first, whole, so <c>▶ n</c> stays readable and clickable.</summary>
+    [Fact]
+    public void LowerRuleMarker_NarrowWindow_DropsTheMarkerFirst_Whole()
+    {
+        const string marker = "🆙 0.5.7 at quit";
+        const string title = "▶ 3";
+        Assert.Equal(14, ScreenPane.MarkerFit(marker, title, 40));
+        Assert.Equal(8, ScreenPane.MarkerFit(marker, title, 34));
+        Assert.Null(ScreenPane.MarkerFit(marker, title, 33));
+        Assert.Equal(8, ScreenPane.MarkerFit(marker, "", 27));
+        Assert.Null(ScreenPane.MarkerFit(marker, "", 26));
+        Assert.Null(ScreenPane.MarkerFit("", title, 200));
+
+        _cursorTop = 100;
+        _console.Profile.Width = 30;
+        using var pane = Pane();
+        pane.LowerRuleMarker = () => marker;
+        pane.LowerRuleTitle = () => title;
+        pane.Show();
+        Assert.DoesNotContain(NeonSidekick.Updates.UpdateText.MarkerGlyph, Output);
+        Assert.Contains(Rule(24) + " ▶ 3 ─\n", Output);
+        Assert.True(pane.TryHitLowerRuleTitle(26, 101));
+        Assert.False(pane.TryHitLowerRuleMarker(10, 101));
+    }
+
     /// <summary>The lower rule's title in ⤡'s colour, the rule around it in the rule's own (later on 2026-10-12, the user's ask).</summary>
     [Fact]
     public void LowerRuleTitle_IsDrawnInTheFoldButtonsColour()

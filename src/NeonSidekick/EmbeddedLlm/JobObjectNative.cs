@@ -202,4 +202,16 @@ internal static partial class JobObjectNative
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static partial bool TerminateProcess(nint process, uint exitCode);
+
+    /// <summary><c>SEM_NOGPFAULTERRORBOX</c>: no error box for a crash (2026-11-04, the update probe, which an open one would run into its 30 s limit).</summary>
+    internal const uint NoGpFaultErrorBox = 0x0002;
+
+    /// <summary>
+    /// <c>SEM_FAILCRITICALERRORS</c>: no "Bad Image" box for a damaged library (2026-11-04, the user saw one over the chat in the simulation's hand test: a garbage
+    /// <c>libwinpthread-1.dll</c>, raised while loading <c>libvosk.dll</c>, which imports it, with the probe stuck behind it until its 30 s limit).
+    /// </summary>
+    internal const uint FailCriticalErrors = 0x0001;
+
+    [LibraryImport("kernel32.dll")]
+    internal static partial uint SetErrorMode(uint mode);
 }

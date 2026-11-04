@@ -40,6 +40,6 @@ Everything `NeonSidekick.exe` (`./NeonSidekick` on a Mac) takes on its command l
 
 The check modes change nothing: they read only (`--sql-check` makes one temporary table inside a transaction that is rolled back). Each tool's section in [TOOLS.md](TOOLS.md) says what its check covers. `--headless` ignores them.
 
-**Exit codes:** 0 done (a check passed), 1 a check failed, 2 a bad argument or an unknown profile, 3 a headless run in which a shell command was refused ([When a command is refused](HEADLESS.md#when-a-command-is-refused)).
+**Exit codes:** 0 done (a check passed), 1 a check failed, 2 a bad argument, an unknown profile, or a copy started during an [update](COMMANDS.md#updating) that finished, 3 a headless run in which a shell command was refused ([When a command is refused](HEADLESS.md#when-a-command-is-refused)).
 
-`--mcp-relay`, `--llama-guard` and `--shell-guard` are for when the app starts its own executable: the Claude Code server, and on a Mac, stopping the embedded model's server or background commands if the app crashes. Don't pass them yourself.
+`--mcp-relay`, `--llama-guard`, `--shell-guard` and `--update-probe` are for when the app starts its own executable: the Claude Code server, on a Mac stopping the embedded model's server or background commands if the app crashes, and test-starting an update. Don't pass them yourself.

@@ -51,6 +51,11 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
+  <!-- A simulation build (2026-11-04, self-update; build.ps1 -UpdateSim, which a tag refuses and CI never sets): appended, since -p:DefineConstants on a command line would replace the SDK's own. -->
+  <PropertyGroup Condition="'$(UpdateSim)' == 'true'">
+    <DefineConstants>$(DefineConstants);UPDATE_SIM</DefineConstants>
+  </PropertyGroup>
+
   <ItemGroup>
     <!-- The Web UI's HTTP server (2026-10-14, the user's pick: Kestrel). The shared framework, not a package: the SDK carries it, and
          an AOT publish restores its runtime pack (Microsoft.AspNetCore.App.Runtime.<rid>) from NuGet. Used through

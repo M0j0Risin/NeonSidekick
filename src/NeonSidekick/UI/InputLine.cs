@@ -78,6 +78,9 @@ public abstract record InputResult
     /// </summary>
     public sealed record LowerRuleTitle(string Draft) : InputResult;
 
+    /// <summary>A double-click on the update's marker on the lower rule (2026-11-04, self-update): the screen opens <c>/update</c>; <see cref="Draft"/> as <see cref="HintRow"/>'s.</summary>
+    public sealed record LowerRuleMarker(string Draft) : InputResult;
+
     /// <summary>
     /// A path's link chord-clicked in the transcript (2026-11-01, clickable links and paths): the screen runs <c>/browse</c> on
     /// <see cref="Path"/> (a full path), the file at the cursor; <see cref="Draft"/> as <see cref="HintRow"/>'s. Only from the chat line's
@@ -456,6 +459,9 @@ public sealed partial class InputLine
 
     /// <summary>What two clicks on the lower rule's process count must share to pair (2026-10-12): beside <see cref="RuleTitlePairKey"/>, no other part's. Pinned.</summary>
     public const int LowerRuleTitlePairKey = -500_001;
+
+    /// <summary>What two clicks on the update's marker must share to pair (2026-11-04): beside <see cref="LowerRuleTitlePairKey"/>, no other part's. Pinned.</summary>
+    public const int LowerRuleMarkerPairKey = -500_002;
 
     /// <summary>
     /// What two clicks on the draft must share to pair into a word's selection (2026-09-30, <see cref="DraftWords"/>): the

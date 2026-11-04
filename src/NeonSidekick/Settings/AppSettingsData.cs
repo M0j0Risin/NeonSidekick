@@ -154,6 +154,12 @@ public sealed class AppSettingsData
     public bool ReplyFooter { get; set; }
 
     /// <summary>
+    /// Asks GitHub for a new version at every launch (2026-11-04, self-update), on a background task that never delays startup: a line and a marker on the lower rule when one is out. Sends a generic User-Agent and no user data. Off, the app makes no
+    /// request at start and no "new version" line or marker appears; <c>/update</c> still works by hand. The profile loaded at start decides the check; an "is out" marker follows the current profile's value. On by default. No variable.
+    /// </summary>
+    public bool CheckForUpdatesAtStart { get; set; } = true;
+
+    /// <summary>
     /// Where the built-in picture viewer last closed (2026-09-28, the user's ask: it opens there the next time; position
     /// only, always on — the user's calls): the top-left corner of its restored placement in workspace coordinates, set by
     /// the viewer itself as it closes (<see cref="Viewer.PictureWindow.Placed"/>), never by a menu row. Null, as until the

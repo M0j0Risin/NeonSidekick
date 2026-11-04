@@ -66,6 +66,7 @@ public sealed class KokoroInProcessSynthesizer : ISpeechSynthesizer
 
     private readonly string _modelPath;
     private readonly string _contentDirectory;
+    private readonly Func<string, bool>? _vcLoads;
     private readonly Dictionary<string, KokoroVoice> _voices = new(StringComparer.Ordinal);
     private IReadOnlyDictionary<string, string> _voiceFiles = new Dictionary<string, string>();
     private SessionOptions? _options;
@@ -74,11 +75,13 @@ public sealed class KokoroInProcessSynthesizer : ISpeechSynthesizer
 
     /// <param name="modelPath">The absolute path of <c>kokoro.onnx</c> (the session has ensured it).</param>
     /// <param name="contentDirectory">Where <c>voices\</c> and <c>espeak\</c> live; the exe's directory by default, a temp dir in tests.</param>
-    public KokoroInProcessSynthesizer(string modelPath, string? contentDirectory = null)
+    /// <param name="vcLoads">Stands in for the Visual C++ runtime's loader in a test (<see cref="App.VcRuntime"/>, 2026-11-04).</param>
+    public KokoroInProcessSynthesizer(string modelPath, string? contentDirectory = null, Func<string, bool>? vcLoads = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelPath);
         _modelPath = modelPath;
         _contentDirectory = string.IsNullOrWhiteSpace(contentDirectory) ? AppContext.BaseDirectory : contentDirectory;
+        _vcLoads = vcLoads;
     }
 
     public PcmFormat Format => PcmFormat.Kokoro;
@@ -190,12 +193,12 @@ public sealed class KokoroInProcessSynthesizer : ISpeechSynthesizer
         catch (DllNotFoundException ex)
         {
             DiagnosticLog.Error(Category, "Kokoro in-process: " + ex.Message, ex);
-            return VoiceListResult.Missing(MissingRuntimeDetail);
+            return VoiceListResult.Missing(App.VcRuntime.Explain(MissingRuntimeDetail, _vcLoads));
         }
         catch (Exception ex)
         {
             DiagnosticLog.Error(Category, "Kokoro in-process: the model did not load: " + ex.Message, ex);
-            return VoiceListResult.Missing("model load failed: " + ex.Message);
+            return VoiceListResult.Missing(App.VcRuntime.Explain("model load failed: " + ex.Message, _vcLoads));
         }
     }
 

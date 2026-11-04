@@ -16,7 +16,7 @@ How Neon Sidekick runs on an Apple Silicon Mac: setting it up, what works, and w
 You need an Apple Silicon Mac (M1 or later). Unpack the Mac package as the [README's install steps](../README.md#install) say and run `./NeonSidekick` in iTerm2 or Terminal, or [build it yourself](BUILD.md#building-on-a-mac).
 
 * **Use [iTerm2](https://iterm2.com):** pictures, the splash and the robot in full color (256 banded colors in Terminal.app), and a right Option that still types å with Meta set up. Terminal.app runs the app, with less.
-* **The Keychain question.** On the first run and after each new build, macOS asks whether the app may use its Keychain key. Choose **Always Allow**, or it asks every time.
+* **The Keychain question.** On the first run and after each new build or update, macOS asks whether the app may use its Keychain key. Choose **Always Allow**, or it asks every time.
 * **Option as Meta.** The Ctrl+Alt shortcuts are Ctrl+Option on a Mac, and reach the app only if Option acts as Meta.
 * **Setting it up:** set iTerm2's *Left Option key* to *Esc+* (Settings › Profiles › Keys), or turn on Terminal.app's *Use Option as Meta key* (Settings › Profiles › Keyboard).
 * **What it costs:** Option no longer types characters such as å (iTerm2's right Option still can). `/keycheck` says whether your terminal is set up.
@@ -167,6 +167,7 @@ kgetcred MSSQLSvc/sqlhost.test.example.edu:1451@TEST.EXAMPLE.EDU             # a
 ## Known issues
 
 Not yet tried on a Mac:
+* **`/update` from a real release:** the install, a second copy waiting, and whether the Web UI's firewall question comes back.
 * **A bot check with the screen locked** (covered or minimized works, [above](#the-browser-window-on-a-mac)).
 * **Event logs under a standard account, or from a terminal without Full Disk Access.**
 * **Whether the unified log would follow links inside a `.logarchive`** (the app refuses one), and skipping install.log's lines from a reset clock on a real log.

@@ -656,7 +656,7 @@ public sealed class ModelStore
 
     /// <summary>The refusal when the drive cannot hold what a resumable download still needs plus <see cref="DiskHeadroomBytes"/>. Pinned.</summary>
     public static string DiskSpaceError(string display, long needed, long free, string directory) =>
-        $"not enough disk space for {display}: it needs {SizeLabel(needed)} more and {SizeLabel(DiskHeadroomBytes)} to spare, {System.IO.Path.GetPathRoot(directory)} has {SizeLabel(free)} free";
+        $"not enough disk space for {display}: it needs {SizeLabel(needed)} more and {SizeLabel(DiskHeadroomBytes)} to spare, {directory} has {SizeLabel(free)} free";
 
     private static async Task<string> Sha256Async(string path, CancellationToken cancellationToken)
     {
@@ -665,12 +665,21 @@ public sealed class ModelStore
         return Convert.ToHexStringLower(hash);
     }
 
-    private static long? FreeBytesOn(string directory)
+    /// <summary>
+    /// The free bytes on the volume holding <paramref name="directory"/>, or null when they can't be read (a UNC path throws in <see cref="DriveInfo"/>). Asks about the folder itself, or the nearest one that exists, not its root
+    /// (2026-11-04, self-update): on a Mac <c>/</c> is the wrong volume for an external disk, and .NET's Unix code calls <c>statfs</c> on the path it's given.
+    /// </summary>
+    public static long? FreeBytesOn(string directory)
     {
         try
         {
-            string? root = System.IO.Path.GetPathRoot(System.IO.Path.GetFullPath(directory));
-            return string.IsNullOrEmpty(root) ? null : new DriveInfo(root).AvailableFreeSpace;
+            string? folder = System.IO.Path.GetFullPath(directory);
+            while (folder is not null && !System.IO.Directory.Exists(folder))
+            {
+                folder = System.IO.Path.GetDirectoryName(folder);
+            }
+
+            return string.IsNullOrEmpty(folder) ? null : new DriveInfo(folder).AvailableFreeSpace;
         }
         catch
         {

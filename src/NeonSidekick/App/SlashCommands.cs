@@ -253,6 +253,11 @@ public enum SlashCommand
     /// </summary>
     Process,
 
+    /// <summary>
+    /// <c>/update</c> (2026-11-04, self-update): the new version's notes with Install and Later, or the offer to cancel what's under way; <c>notes</c>, <c>rollback</c> and <c>cancel</c> answer in lines. A pane under a reply bare, quick with a word. Never a tool; on the page only <c>notes</c> runs.
+    /// </summary>
+    Update,
+
     /// <summary><c>/about</c>: the app's version, runtime, folders, servers, third-party components, the embedded models' Hugging Face repositories (the Models tab, 2026-10-09) and licence, in the info pane.</summary>
     About,
 
@@ -549,6 +554,7 @@ public static class SlashCommands
             new("/tools", "switch the model's tools on or off"),
             new("/tree", "show the working directory's tree"),
             new("/tts", "toggle speech output"),
+            new(Updates.UpdateText.Word, "update the app from its GitHub releases"),
             new("/usage", "token usage and what fills the context"),
             new("/vault", "show the Obsidian vault's tree"),
             new("/view", "view images, a folder of them, or a PDF"),
@@ -651,7 +657,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/undo", "/theme", "/mark", "/avatar", "/queue", "/sessions", "/rename", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/read", "/remember", "/memory", "/keycheck", "/cmd", "/msgclear", "/sys", "/usage", "/perfbar", "/homebar", "/toolbar", "/header", "/profile", "/prompts", "/commands", "/timer", "/cwd", "/tree", "/vault", "/explore", "/browse", "/browser", "/open", "/terminal", "/shortcut", "/log", "/process", "/view", "/imagine", "/comfy", "/pasted", "/ha", "/docker", "/eventlog", "/net", "/services", "/tasks", "/ad", "/monitor", "/camera", "/screen", "/youtube", "/shopping", "/print", "/pdf", "/docx", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/code-audit", "/botchat", "/claude", "/advisor", "/test", "/expand", "/collapse", "/find", "/window", "/skills", "/learn", "/about", "/webui", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/undo", "/theme", "/mark", "/avatar", "/queue", "/sessions", "/rename", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/read", "/remember", "/memory", "/keycheck", "/cmd", "/msgclear", "/sys", "/usage", "/perfbar", "/homebar", "/toolbar", "/header", "/profile", "/prompts", "/commands", "/timer", "/cwd", "/tree", "/vault", "/explore", "/browse", "/browser", "/open", "/terminal", "/shortcut", "/log", "/process", "/view", "/imagine", "/comfy", "/pasted", "/ha", "/docker", "/eventlog", "/net", "/services", "/tasks", "/ad", "/monitor", "/camera", "/screen", "/youtube", "/shopping", "/print", "/pdf", "/docx", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/code-audit", "/botchat", "/claude", "/advisor", "/test", "/expand", "/collapse", "/find", "/window", "/skills", "/learn", "/about", "/webui", "/update", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -778,6 +784,7 @@ public static class SlashCommands
             "/window" => SlashCommand.Window,
             "/log" => SlashCommand.Log,
             "/process" => SlashCommand.Process,
+            "/update" => SlashCommand.Update,
             "/about" => SlashCommand.About,
             "/skills" => SlashCommand.Skills,
             "/learn" => SlashCommand.Learn,
@@ -852,5 +859,6 @@ public static class SlashCommands
         or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.EventLog or SlashCommand.Net or SlashCommand.Services or SlashCommand.Tasks or SlashCommand.Ad or SlashCommand.Monitor or SlashCommand.Camera or SlashCommand.Screen or SlashCommand.YouTube or SlashCommand.Shopping or SlashCommand.Print or SlashCommand.Pdf or SlashCommand.Docx or SlashCommand.Perf or SlashCommand.HomeBar or SlashCommand.Toolbar or SlashCommand.Header or SlashCommand.Rewind or SlashCommand.Undo
         or SlashCommand.Log or SlashCommand.Process or SlashCommand.Tools or SlashCommand.Settings or SlashCommand.Find or SlashCommand.WebUi
         or SlashCommand.Splash or SlashCommand.Pasted   // 2026-10-18: view|thumbs|purge
-        or SlashCommand.Usage;   // 2026-11-01: /usage context opens the pane on its Context tab
+        or SlashCommand.Usage   // 2026-11-01: /usage context opens the pane on its Context tab
+        or SlashCommand.Update;   // 2026-11-04, self-update: notes, rollback, cancel
 }

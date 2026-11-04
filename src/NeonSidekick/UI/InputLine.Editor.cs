@@ -1197,6 +1197,16 @@ public sealed partial class InputLine
                     return new EditOutcome.End(new InputResult.RuleTitle(_text.ToString()));
                 }
             }
+            else if (pane.TryHitLowerRuleMarker(click.X, click.Y))
+            {
+                // The update's marker on the lower rule (2026-11-04, self-update): a double-click opens /update, the draft back after.
+                _anchor = -1;
+                if (hintClicks.Second(LowerRuleMarkerPairKey))
+                {
+                    EndRow();
+                    return new EditOutcome.End(new InputResult.LowerRuleMarker(_text.ToString()));
+                }
+            }
             else if (pane.TryHitLowerRuleTitle(click.X, click.Y))
             {
                 // The running processes' count on the lower rule (2026-10-12, the user's ask): a double-click opens /process,

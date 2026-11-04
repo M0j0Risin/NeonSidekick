@@ -205,6 +205,7 @@ internal sealed partial class ChatScreen
         SlashCommand.Session => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
         SlashCommand.Rename => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
         SlashCommand.Process => hasArgs ? MidTurnClass.Quick : MidTurnClass.Pane,
+        SlashCommand.Update => hasArgs ? MidTurnClass.Quick : MidTurnClass.Pane,   // 2026-11-04, self-update: the offer over the reply; its forms answer in lines
         SlashCommand.Skills => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
         // /commands (2026-10-30): the pane over the reply; new and save wait, so "the last message" is the one the reply answers and the editor opens at the idle line.
         SlashCommand.Commands => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
@@ -553,6 +554,10 @@ internal sealed partial class ChatScreen
                 // /keycheck (2026-10-04): its pane over the reply, as /usage's; an error through the flow sink.
                 await ShowKeyCheckAsync(_flow, cancellationToken).ConfigureAwait(false);
                 break;
+            case SlashCommand.Update:
+                // The bare /update (2026-11-04, self-update): the offer over the reply; its answers through the flow sink.
+                await UpdateCommandAsync(args, _flow, cancellationToken, onWatcher: true).ConfigureAwait(false);
+                break;
             case SlashCommand.Process:
                 // The bare /process (2026-10-05): its list over the reply; none yet is a line through the flow sink.
                 await ListProcessesAsync(_flow, cancellationToken).ConfigureAwait(false);
@@ -844,6 +849,10 @@ internal sealed partial class ChatScreen
                 break;
             case SlashCommand.Log:
                 HandleLog(args);
+                break;
+            case SlashCommand.Update:
+                // /update notes, rollback and cancel (2026-11-04, self-update): lines through the flow sink, no pane; a wrong word gets the usage.
+                await UpdateCommandAsync(args, _flow, cancellationToken, onWatcher: true).ConfigureAwait(false);
                 break;
             case SlashCommand.Process:
                 // /process <id> (2026-10-05): the window is its own thread, as the log window's.

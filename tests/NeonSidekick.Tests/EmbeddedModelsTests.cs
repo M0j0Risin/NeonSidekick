@@ -716,6 +716,48 @@ public class EmbeddedModelsTests : IDisposable
         Assert.Equal(EmbeddedLlmText.NotInstalled(_model), ex.Message);
     }
 
+    // The Visual C++ runtime (2026-11-04): only vcruntime140.dll, the one DLL the server's exe imports, refuses.
+
+    [Fact]
+    public async Task Install_WithVcRuntime140Missing_Refuses_AndDownloadsNothing()
+    {
+        await using var service = new EmbeddedLlmService(_files, new FakeLlamaServerHost(), Cuda, vcLoads: _ => false);
+
+        var result = await service.InstallAsync(_model, new AppSettingsData(), null, CancellationToken.None);
+
+        Assert.False(result.Ok);
+        Assert.Equal(EmbeddedLlmText.InstallFailed(_model, App.VcRuntimeText.Missing(App.VcRuntime.MainLibrary)), result.Detail);
+        Assert.Empty(_http.Requests);
+    }
+
+    [Fact]
+    public async Task Start_WithVcRuntime140Missing_Refuses_DownloadsNothing_AndTriesNoOtherBuild()
+    {
+        InstallByHand();
+        var host = new FakeLlamaServerHost();
+        await using var service = new EmbeddedLlmService(_files, host, Cuda, vcLoads: _ => false);
+
+        var refused = await Assert.ThrowsAsync<EmbeddedLlmException>(() => service.StartAsync(_model, new AppSettingsData(), null, CancellationToken.None));
+
+        Assert.Equal(EmbeddedLlmText.StartFailed(App.VcRuntimeText.Missing(App.VcRuntime.MainLibrary)), refused.Message);
+        Assert.True(refused.RuntimeMissing);
+        Assert.Empty(host.Launches);
+        Assert.Empty(_http.Requests);
+    }
+
+    [Fact]
+    public async Task Start_WithOnlyAnotherVcDllMissing_GoesOn()
+    {
+        InstallByHand();
+        var host = new FakeLlamaServerHost();
+        await using var service = new EmbeddedLlmService(_files, host, Cuda, vcLoads: library => library == App.VcRuntime.MainLibrary);
+
+        var info = await service.StartAsync(_model, new AppSettingsData(), null, CancellationToken.None);
+
+        Assert.Equal("tiny-model", info.ModelId);
+        Assert.Single(host.Launches);
+    }
+
     [Fact]
     public async Task AutoCuda_ThatFailsToStart_FallsBackToVulkan_AndRemembers()
     {

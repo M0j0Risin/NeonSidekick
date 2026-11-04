@@ -45,6 +45,7 @@ From top to bottom:
 * **The upper rule:** the session's name (a double-click renames it), **⤡** (a click folds or unfolds everything, like Ctrl+O), and 🎞️ to bring a closed picture strip back.
 * **[The input line](#the-input-line).** A dim ☺ at its right end opens the emoji picker (*Emoji picker*).
 * **The lower rule:** **▶ n** counts the background processes running; a double-click opens `/process`.
+* **The update marker:** left of **▶ n**, **🆙** shows a new version and how its [update](COMMANDS.md#updating) stands (`🆙 0.5.7`, `42%`, `checking`, `at quit`, `back to 0.5.6 at quit`); a double-click opens `/update`. *Check for updates at start* off hides the plain `🆙 0.5.7`, and a narrow window drops the marker first.
 * **A mark:** `/mark <color>` colors both rules for the conversation, kept with its session; `/mark default` takes it off.
 * **Five bars**, in *Toolbar order*: [hints](#the-hints-bar) (while there is a hint), [status](#the-status-bar), [toolbar](#the-toolbar), [performance](#the-performance-bar), [home](#the-home-bar).
 * **A short window** drops the home bar, then the performance bar, then the toolbar; the hints bar goes last.
@@ -121,6 +122,8 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | A code audit's done pane | `p` fix via plan (with a finding open) · `g` more passes… · `k` keep the report · `d` discard it · Esc keeps |
 | `/find` | type to find (a paste or right-click adds a first line) · Enter or F3 older · Shift+Enter or Shift+F3 newer · PgUp/PgDn scroll · Ctrl+↑/↓ previous or next message · Esc, Ctrl+F or a double-click outside done |
 | Info panes (`/help`, `/sys`, `/about`, `/tree`…) | ↑/↓, PgUp/PgDn scroll · ←/→ or Tab switch tabs · type to find · Esc closes |
+| `/update` | `i` install · `l` later · ↑/↓, PgUp/PgDn scroll · a double-click on the release link opens it · Esc is later. Typing finds nothing here. |
+| `/update`, with one under way | `c` cancel update · `k` keep · Esc keeps. Typing finds nothing here. |
 | `/help` › Keys | `k` **⌨ key check**: swaps in `/keycheck`'s list; pressed again, shows the keys |
 | **Saved lists** | |
 | `/eventlog` | ←/→ logs · Enter opens the event (`c` copy, `a` ask, Esc back to the list) · `r` refresh · `m` more · `c` computer · type to filter |
@@ -272,13 +275,13 @@ Each runs its command as if typed and keeps your draft. The last column says wha
   * Info: `/help`, `/sys` (and `/sys persona`, `/sys operata`, `/sys vocalia`), `/about`, `/usage`, `/keycheck`, `/tree`, `/vault`, `/browse`
   * Settings: `/settings`, `/tools`, `/mcp`, `/skills`, `/commands`, `/comfy`, `/reasoning`, `/sampling`, `/webui`, `/toolbar edit`, `/perfbar edit`, `/homebar edit`, a home bar chip's pane
   * Conversation: `/memory`, `/queue`, `/sessions`, `/sessions title`, `/rename`, `/msgclear`, `/prompts`
-  * Lists: `/docker`, `/eventlog`, `/net`, `/services`, `/tasks`, `/monitor`, `/ad`, `/youtube`, `/shopping`, `/browser list`, `/camera list`, `/ha states`, `/process`
+  * Lists: `/docker`, `/eventlog`, `/net`, `/services`, `/tasks`, `/monitor`, `/ad`, `/youtube`, `/shopping`, `/browser list`, `/camera list`, `/ha states`, `/process`, `/update`
 * **Run at once:**
   * Display: `/mark`, `/header`, `/toolbar`, `/perfbar`, `/homebar` (and `on`, `off`), `/expand`, `/collapse`, `/window`, `/log`, `/terminal`, `/shortcut`, `/explore`, `/open`, `/cwd`
   * Voice and camera: `/tts`, `/stt` (and `wake`, `interrupt`), `/camera live`, `watch`, `off`, `use`, `view` and `thumbs`, `/screen view` and `thumbs`
   * Pictures: `/view <path>` (and `--thumbs`), and `view` or `thumbs` after `/comfy`, `/splash`, `/pasted` or `/ha stills`
   * The reply's settings: `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/queue mode <word>`, `/queue cancel <word>`
-  * Others: `/copy`, `/remember`, `/timer`, `/ha`, `/webui copy`, `/webui browser`, `/browser <url>`, `/prompts <n>`, `/process <id>`, `/docker logs <container>`, `/monitor list`, `/commands save <name>` (saves the message the reply answers)
+  * Others: `/update notes`, `rollback` and `cancel`, `/copy`, `/remember`, `/timer`, `/ha`, `/webui copy`, `/webui browser`, `/browser <url>`, `/prompts <n>`, `/process <id>`, `/docker logs <container>`, `/monitor list`, `/commands save <name>` (saves the message the reply answers)
 * **Stop the reply first:** `/clear`, `/new`, `/splash`, `/rewind`, `/undo` (`/undo purge` waits instead), `/exit`
 * **Everything else** waits for the reply, queued behind earlier messages (*Queue cancel mode* applies).
 
@@ -704,12 +707,12 @@ With *Web UI commands* on (off by default), the page sends slash commands too. T
 
 | Kind | Commands | On the page |
 |---|---|---|
-| Run | Your [custom commands](COMMANDS.md#custom-commands), `/new`, `/clear`, `/splash`, `/compact`, `/plan …` (`/plan ralph` too), `/mark <color>`, `/code-audit …`, `/claude`, `/advisor`, `/help <words>`, `/imagine`, `/loop …`, `/learn [<note>]`, `/test …`, `/pdf …`, `/docx …`, `/print <file\|reply>`, `/avatar <emoji>\|clear`, `/remember`, `/timer …`, `/rename <name>`, `/tts on\|off`, `/stt on\|off`, `/memory <mode>`, `/cwd`, `/model <id>`, `/reasoning <level>`, `/ha …` (not `stills`), `/docker …`, `/shopping …`, `/prompts list\|save\|remove\|<n>`, `/browser save\|unsave`, `/msgclear`, `/undo [<n>]` | Their lines; the status row shows its spinner while it runs |
+| Run | Your [custom commands](COMMANDS.md#custom-commands), `/update notes`, `/new`, `/clear`, `/splash`, `/compact`, `/plan …` (`/plan ralph` too), `/mark <color>`, `/code-audit …`, `/claude`, `/advisor`, `/help <words>`, `/imagine`, `/loop …`, `/learn [<note>]`, `/test …`, `/pdf …`, `/docx …`, `/print <file\|reply>`, `/avatar <emoji>\|clear`, `/remember`, `/timer …`, `/rename <name>`, `/tts on\|off`, `/stt on\|off`, `/memory <mode>`, `/cwd`, `/model <id>`, `/reasoning <level>`, `/ha …` (not `stills`), `/docker …`, `/shopping …`, `/prompts list\|save\|remove\|<n>`, `/browser save\|unsave`, `/msgclear`, `/undo [<n>]` | Their lines; the status row shows its spinner while it runs |
 | Pick | `/model`, `/reasoning`, `/rewind [<n>]`, `/plan open [--chat]` | A card with the choices, the one in use marked, a filter for a long list |
 | List | `/ha states`, `/docker logs`, `/eventlog …`, `/net …`, `/services …`, `/tasks …`, `/ad …`, `/code-audit open`, `/print`, `/print printers`, `/camera list`, `/screen list`, `/tree` (needs *File tools*), `/vault` (needs *Obsidian tools*), `/process`, `/comfy status`, `/comfy offered` | A card with the lines; Close |
 | Never | `/exit`, `/webui`, `/cmd`, `/profile`, `/plan edit`, `/cwd <path>`, `/sessions`, `/skills`, `/commands`, `/youtube` (bare and `list` point at the tab), `/queue`, `/botchat`, `/sampling`, `/server`, `/usage` | Refused: they run at the PC only |
 | Page | bare `/prompts` | Opens the 📣 sheet on its Prompts tab (📣 does too, even with *Web UI commands* off) |
-| Other | Every form that opens a pane or a window at the PC (`/settings`, `/theme`, `/view`, `/prompts list --clear`, `/camera`, `/screen`, `/ha stills`, `/undo purge`…) | Refused, naming the form that works here when there is one |
+| Other | Every form that opens a pane or a window at the PC, and `/update`'s others, since installing happens at the PC (`/settings`, `/theme`, `/view`, `/prompts list --clear`, `/camera`, `/screen`, `/ha stills`, `/undo purge`…) | Refused, naming the form that works here when there is one |
 
 * **A Ralph loop:** its confirm, checkpoint and by-hand check ask on both sides; the status row shows 🔁, and Stop ends the loop.
 * **`/loop`** runs as at the PC (a looped `/read` is refused).

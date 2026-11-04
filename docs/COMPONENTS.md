@@ -35,6 +35,6 @@ What Neon Sidekick is built on. Back to the [README](../README.md).
 ## System libraries
 
 * **Windows:** WinMM (sound), WIC (pictures), Media Foundation (camera), GDI and DWM (screen capture, the app's windows), the print spooler, NVML, PDH and DXGI (performance bar), NVAPI (a monitor off the desktop), DPAPI and Credential Manager (secrets), the WebView2 Runtime (YouTube and the Browser window).
-* **Windows, too:** the Event Log API (event logs), the Service Control Manager and Task Scheduler (services, tasks), LDAP (Active Directory), monitor configuration over DDC/CI (monitors), the Recycle Bin (deletes), Windows sign-in (UNC shares and `runas`).
+* **Windows, too:** Microsoft's Visual C++ runtime (voice, the embedded model), the Event Log API (event logs), the Service Control Manager and Task Scheduler (services, tasks), LDAP (Active Directory), monitor configuration over DDC/CI (monitors), the Recycle Bin (deletes), Windows sign-in (UNC shares and `runas`).
 * **macOS:** AudioToolbox and Core Audio (sound), ImageIO (pictures), AVFoundation (camera), ScreenCaptureKit (screen capture), AppKit (the app's windows), WebKit (YouTube and the Browser window), IOKit and Metal (performance bar), Security (the Keychain).
 * **macOS, too:** CUPS and PDFKit (printing), NetFS (network shares), Carbon (`/keycheck`), the unified log (event logs), Kerberos and GSS (Active Directory, SQL Server sign-in).

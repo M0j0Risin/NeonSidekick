@@ -34,6 +34,20 @@ using Spectre.Console;
 // is off since SqlClient refuses it, and this keeps what the flag gave (App/CulturePin.cs).
 CulturePin.Apply();
 
+// The update probe (2026-11-04, self-update): this executable, staged, started by the copy that's installing it, or by build.ps1 from the package. Before anything touches the console, the options,
+// the home or the Mac sweeps, so no startup line can reach its result. It has native libraries loaded when it ends, so on Windows it ends through ProcessEnd: ExitProcess's DLL detaches can hang, and a hung
+// probe would time out and reject a good release.
+if (NeonSidekick.Updates.UpdateProbe.Asked(args))
+{
+    int probed = NeonSidekick.Updates.UpdateProbe.Run(args[1]);
+    if (OperatingSystem.IsWindows())
+    {
+        ProcessEnd.Now(unchecked((uint)probed));
+    }
+
+    return probed;
+}
+
 // Pictures on a Mac (2026-10-07): ImageIO registered as MagicScaler's codecs before anything touches MagicScaler, which fixes
 // its codec list on first use (Images/ImageIOCodecs). Windows keeps WIC and never calls this. Without the console echo (the v0.5.0
 // release run, 2026-10-07): no sink is open this early, so its line went to stdout, ahead of --version's (the package step refused
@@ -116,6 +130,9 @@ if (OperatingSystem.IsWindows())
     console.Profile.Capabilities.Links = environment.TerminalOpensLinks(NeonSidekick.Viewer.ViewerNative.UnderPseudoConsole());
 }
 
+#if UPDATE_SIM
+var updateSim = NeonSidekick.Updates.UpdateSimFlags.Take(ref args);   // a simulation build's flags (2026-11-04), off the arguments before the app's own parser sees them
+#endif
 var options = SidekickOptions.Parse(args);
 if (options.Error is not null)
 {
@@ -159,6 +176,45 @@ if (options.LogPath is { } logPath)
 }
 
 using var logSinkScope = logSink;
+
+// The update's start step and its exit (2026-11-04, self-update): after the --log sink opens, so it's logged, and before the home is resolved and any bundled native library loads, in every mode that gets
+// this far. --version and the helper modes end above, so they take no lock. An interactive run says it's waiting; a headless or check run adds nothing to its stdout.
+bool updateInteractive = !options.Headless && !options.IsCheck;
+NeonSidekick.Updates.UpdateExit? updateExit = null;
+string? updateStartLine = null;
+string? updateGuarded = null;
+NeonSidekick.Updates.UpdateContext? updateKept = null;
+NeonSidekick.Updates.UpdateSource? updateSource = null;
+if (NeonSidekick.Updates.UpdateInstall.Locate(Environment.ProcessPath) is { } updateInstall)
+{
+    var updateContext = new NeonSidekick.Updates.UpdateContext(
+        new NeonSidekick.Updates.UpdateFolder(updateInstall),
+        NeonSidekick.Updates.UpdateVersion.TryParse(SidekickApp.Version, out var updateRunning) ? updateRunning : default,
+        NeonSidekick.Updates.UpdateKeys.Embedded,
+        NeonSidekick.Updates.UpdateInstall.ExeName(Environment.ProcessPath));
+#if UPDATE_SIM
+    updateContext = updateSim.Apply(updateContext);
+    updateSource = updateSim.SourceOrNull();
+#endif
+    var updateStart = NeonSidekick.Updates.UpdateStartup.Run(updateContext, updateInteractive, updateInteractive ? console.WriteLine : null);
+    if (updateStart.StartAgain)
+    {
+        updateStart.Held?.Dispose();
+        return 2;
+    }
+
+    updateStartLine = updateStart.Line;
+    updateKept = updateContext;
+    updateGuarded = NeonSidekick.Updates.UpdateInstall.Guarded(updateContext.Folder);
+    updateExit = new NeonSidekick.Updates.UpdateExit(updateContext, updateStart.Held);
+#if UPDATE_SIM
+    if (updateSim.Check is not null)
+    {
+        // Plain stdout: this mode has no screen, and Spectre would wrap a long line at a piped console's width, where UpdateSim reads it.
+        return await NeonSidekick.Updates.UpdateSimMode.RunAsync(updateSim, updateContext, updateStartLine, updateExit, Console.Out.WriteLine);
+    }
+#endif
+}
 
 string home = AppSettings.ResolveStorageDirectory(environment.Home);
 
@@ -289,7 +345,7 @@ if (OperatingSystem.IsWindows())
     tailscaleServe = new NeonSidekick.WebUi.TailscaleServeDetector(NeonSidekick.WebUi.WebUiController.UpAdapters, serveClient.FindAsync, TimeProvider.System).FindAsync;
 }
 
-var app = new SidekickApp(console, settings, environment, geometry: geometry, input: consoleInput, clipboard: readClipboard, copyToClipboard: copyToClipboard, clipboardImage: readClipboardImage, setTitle: title => ConsoleTitle.TrySet(title), openViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.Open : null, viewPicture: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.OpenAt : null, followViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.Follow : null, printSpooler: OperatingSystem.IsWindows() ? new NeonSidekick.Printing.WindowsPrintSpooler() : OperatingSystem.IsMacOS() ? new NeonSidekick.Printing.MacPrintSpooler() : null, embeddedLlm: NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.Offered ? () => NeonSidekick.EmbeddedLlm.EmbeddedLlmService.Create(settings.EmbeddedModelsDirectory, settings.LlamaDirectory) : null, perfSource: NeonSidekick.Perf.PerfSources.CreateDefault, frames: frames, camera: OperatingSystem.IsWindows() ? new NeonSidekick.Camera.MediaFoundationCameraSystem() : OperatingSystem.IsMacOSVersionAtLeast(14) ? new NeonSidekick.Camera.MacCameraSystem() : null, liveView: OperatingSystem.IsWindows() || NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.ShowLive : null, showShot: NeonSidekick.Viewer.PictureWindow.IsAvailable ? picture => NeonSidekick.Viewer.PictureWindow.OpenAt(picture, activate: false) : null, openLogWindow: NeonSidekick.Viewer.LogWindow.IsAvailable && logBuffer is not null ? () => NeonSidekick.Viewer.LogWindow.Show(logBuffer) : null, openLogWindowBehind: NeonSidekick.Viewer.LogWindow.IsAvailable && logBuffer is not null ? () => NeonSidekick.Viewer.LogWindow.Show(logBuffer, activate: false) : null, openViewerBehind: NeonSidekick.Viewer.PictureWindow.IsAvailable ? folder => NeonSidekick.Viewer.PictureWindow.Open(folder, activate: false) : null, openProcessWindow: NeonSidekick.Viewer.ProcessWindow.IsAvailable ? NeonSidekick.Viewer.ProcessWindow.Show : null, openDockerLogWindow: NeonSidekick.Viewer.DockerLogWindow.IsAvailable ? NeonSidekick.Viewer.DockerLogWindow.Show : null, closeDockerLogWindow: NeonSidekick.Viewer.DockerLogWindow.IsAvailable ? NeonSidekick.Viewer.DockerLogWindow.Close : null,closeLogWindow: NeonSidekick.Viewer.LogWindow.IsAvailable && logBuffer is not null ? NeonSidekick.Viewer.LogWindow.Close : null, closeViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.CloseViewer : null, screenSystem: OperatingSystem.IsWindows() ? new NeonSidekick.Screen.WindowsScreenSystem() : OperatingSystem.IsMacOSVersionAtLeast(14) ? new NeonSidekick.Screen.MacScreenSystem() : null, hotkeyProbe: OperatingSystem.IsWindows() ? new NeonSidekick.Hotkeys.WindowsHotkeyProbe() : OperatingSystem.IsMacOS() ? new NeonSidekick.Hotkeys.MacHotkeyProbe(environment.TerminalProgram, environment.ItermProfile) : null, shortcutWriter: OperatingSystem.IsWindows() ? new NeonSidekick.Shortcuts.WindowsShortcutWriter() : OperatingSystem.IsMacOS() ? new NeonSidekick.Shortcuts.MacShortcutWriter() : null, openThumbs: NeonSidekick.Viewer.ThumbsWindow.IsAvailable ? NeonSidekick.Viewer.ThumbsWindow.Open : null, followThumbs: NeonSidekick.Viewer.ThumbsWindow.IsAvailable ? NeonSidekick.Viewer.ThumbsWindow.Follow : null, closeThumbs: NeonSidekick.Viewer.ThumbsWindow.IsAvailable ? NeonSidekick.Viewer.ThumbsWindow.Close : null, showInViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.ShowQuietly : null, videoPlayer: OperatingSystem.IsWindows() ? NeonSidekick.Viewer.VideoWindow.Player : OperatingSystem.IsMacOSVersionAtLeast(14) && NeonSidekick.Viewer.MacVideoWindows.IsAvailable ? NeonSidekick.Viewer.MacVideoWindows.Player : null, browserWindow: OperatingSystem.IsWindows() ? NeonSidekick.Viewer.BrowserWindow.Window : OperatingSystem.IsMacOSVersionAtLeast(14) && NeonSidekick.Viewer.MacBrowserWindows.IsAvailable ? NeonSidekick.Viewer.MacBrowserWindows.Window : null, webUiHost: backend => new NeonSidekick.WebUi.WebUiHost(backend, settings.StorageDirectory), tailscaleServe: tailscaleServe, eventLogSystem: OperatingSystem.IsWindows() ? new NeonSidekick.EventLog.WindowsEventLogSystem() : null, unifiedLog: OperatingSystem.IsMacOS() ? new NeonSidekick.EventLog.MacUnifiedLog() : null, recycleBin: recycleBin, checkpoints: checkpoints, pinger: OperatingSystem.IsWindows() ? new NeonSidekick.Network.WindowsPinger() : new NeonSidekick.Network.IcmpSocketPinger(), serviceSystem: OperatingSystem.IsWindows() ? new NeonSidekick.Services.WindowsServiceSystem() : null, taskSystem: OperatingSystem.IsWindows() ? new NeonSidekick.Tasks.WindowsTaskSystem() : null, directorySystem: OperatingSystem.IsWindows() ? new NeonSidekick.ActiveDirectory.WindowsDirectorySystem() : OperatingSystem.IsMacOS() ? new NeonSidekick.ActiveDirectory.Ldap.ManagedDirectorySystem() : null, monitorSystem: OperatingSystem.IsWindows() ? new NeonSidekick.Monitors.WindowsMonitorSystem() : null, headlessNarrow: NeonSidekick.UI.TextCells.NarrowOnMainScreen(environment.TerminalProgram) && !Console.IsOutputRedirected);
+var app = new SidekickApp(console, settings, environment, geometry: geometry, input: consoleInput, clipboard: readClipboard, copyToClipboard: copyToClipboard, clipboardImage: readClipboardImage, setTitle: title => ConsoleTitle.TrySet(title), openViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.Open : null, viewPicture: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.OpenAt : null, followViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.Follow : null, printSpooler: OperatingSystem.IsWindows() ? new NeonSidekick.Printing.WindowsPrintSpooler() : OperatingSystem.IsMacOS() ? new NeonSidekick.Printing.MacPrintSpooler() : null, embeddedLlm: NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.Offered ? () => NeonSidekick.EmbeddedLlm.EmbeddedLlmService.Create(settings.EmbeddedModelsDirectory, settings.LlamaDirectory) : null, perfSource: NeonSidekick.Perf.PerfSources.CreateDefault, frames: frames, camera: OperatingSystem.IsWindows() ? new NeonSidekick.Camera.MediaFoundationCameraSystem() : OperatingSystem.IsMacOSVersionAtLeast(14) ? new NeonSidekick.Camera.MacCameraSystem() : null, liveView: OperatingSystem.IsWindows() || NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.ShowLive : null, showShot: NeonSidekick.Viewer.PictureWindow.IsAvailable ? picture => NeonSidekick.Viewer.PictureWindow.OpenAt(picture, activate: false) : null, openLogWindow: NeonSidekick.Viewer.LogWindow.IsAvailable && logBuffer is not null ? () => NeonSidekick.Viewer.LogWindow.Show(logBuffer) : null, openLogWindowBehind: NeonSidekick.Viewer.LogWindow.IsAvailable && logBuffer is not null ? () => NeonSidekick.Viewer.LogWindow.Show(logBuffer, activate: false) : null, openViewerBehind: NeonSidekick.Viewer.PictureWindow.IsAvailable ? folder => NeonSidekick.Viewer.PictureWindow.Open(folder, activate: false) : null, openProcessWindow: NeonSidekick.Viewer.ProcessWindow.IsAvailable ? NeonSidekick.Viewer.ProcessWindow.Show : null, openDockerLogWindow: NeonSidekick.Viewer.DockerLogWindow.IsAvailable ? NeonSidekick.Viewer.DockerLogWindow.Show : null, closeDockerLogWindow: NeonSidekick.Viewer.DockerLogWindow.IsAvailable ? NeonSidekick.Viewer.DockerLogWindow.Close : null,closeLogWindow: NeonSidekick.Viewer.LogWindow.IsAvailable && logBuffer is not null ? NeonSidekick.Viewer.LogWindow.Close : null, closeViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.CloseViewer : null, screenSystem: OperatingSystem.IsWindows() ? new NeonSidekick.Screen.WindowsScreenSystem() : OperatingSystem.IsMacOSVersionAtLeast(14) ? new NeonSidekick.Screen.MacScreenSystem() : null, hotkeyProbe: OperatingSystem.IsWindows() ? new NeonSidekick.Hotkeys.WindowsHotkeyProbe() : OperatingSystem.IsMacOS() ? new NeonSidekick.Hotkeys.MacHotkeyProbe(environment.TerminalProgram, environment.ItermProfile) : null, shortcutWriter: OperatingSystem.IsWindows() ? new NeonSidekick.Shortcuts.WindowsShortcutWriter() : OperatingSystem.IsMacOS() ? new NeonSidekick.Shortcuts.MacShortcutWriter() : null, openThumbs: NeonSidekick.Viewer.ThumbsWindow.IsAvailable ? NeonSidekick.Viewer.ThumbsWindow.Open : null, followThumbs: NeonSidekick.Viewer.ThumbsWindow.IsAvailable ? NeonSidekick.Viewer.ThumbsWindow.Follow : null, closeThumbs: NeonSidekick.Viewer.ThumbsWindow.IsAvailable ? NeonSidekick.Viewer.ThumbsWindow.Close : null, showInViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.ShowQuietly : null, videoPlayer: OperatingSystem.IsWindows() ? NeonSidekick.Viewer.VideoWindow.Player : OperatingSystem.IsMacOSVersionAtLeast(14) && NeonSidekick.Viewer.MacVideoWindows.IsAvailable ? NeonSidekick.Viewer.MacVideoWindows.Player : null, browserWindow: OperatingSystem.IsWindows() ? NeonSidekick.Viewer.BrowserWindow.Window : OperatingSystem.IsMacOSVersionAtLeast(14) && NeonSidekick.Viewer.MacBrowserWindows.IsAvailable ? NeonSidekick.Viewer.MacBrowserWindows.Window : null, webUiHost: backend => new NeonSidekick.WebUi.WebUiHost(backend, settings.StorageDirectory), tailscaleServe: tailscaleServe, eventLogSystem: OperatingSystem.IsWindows() ? new NeonSidekick.EventLog.WindowsEventLogSystem() : null, unifiedLog: OperatingSystem.IsMacOS() ? new NeonSidekick.EventLog.MacUnifiedLog() : null, recycleBin: recycleBin, checkpoints: checkpoints, pinger: OperatingSystem.IsWindows() ? new NeonSidekick.Network.WindowsPinger() : new NeonSidekick.Network.IcmpSocketPinger(), serviceSystem: OperatingSystem.IsWindows() ? new NeonSidekick.Services.WindowsServiceSystem() : null, taskSystem: OperatingSystem.IsWindows() ? new NeonSidekick.Tasks.WindowsTaskSystem() : null, directorySystem: OperatingSystem.IsWindows() ? new NeonSidekick.ActiveDirectory.WindowsDirectorySystem() : OperatingSystem.IsMacOS() ? new NeonSidekick.ActiveDirectory.Ldap.ManagedDirectorySystem() : null, monitorSystem: OperatingSystem.IsWindows() ? new NeonSidekick.Monitors.WindowsMonitorSystem() : null, headlessNarrow: NeonSidekick.UI.TextCells.NarrowOnMainScreen(environment.TerminalProgram) && !Console.IsOutputRedirected, installFolder: updateGuarded, updater: updateKept is { } keptContext ? () => new NeonSidekick.Updates.AppUpdater(keptContext, updateStartLine, source: updateSource) : null);
 
 // The console window closed by its X button (2026-10-02, the user's report: Docker server stop on exit never ran then).
 // SIGHUP is CTRL_CLOSE_EVENT on Windows (a hangup elsewhere): no finally of the run's runs after it, so the handler does the
@@ -338,6 +394,12 @@ void CloseWork()
     catch (Exception ex)
     {
         DiagnosticLog.Warn(AppSettings.Category, "Settings flush on window close: " + ex.Message);
+    }
+
+    // Last, in what's left of the deadline: a window close can't show anything, so a failure is reported at next start. On a Mac this path also runs on kill, a logout and Activity Monitor's Quit, with no limit, so the swap gives itself the same budget.
+    if (updateInteractive)
+    {
+        updateExit?.Run(null, NeonSidekick.Updates.UpdateExit.CloseBudget);
     }
 }
 
@@ -624,6 +686,12 @@ await settings.FlushAsync().ConfigureAwait(false);
 if (!OperatingSystem.IsWindows() && Microsoft.ML.OnnxRuntime.OrtEnv.IsCreated)
 {
     Microsoft.ML.OnnxRuntime.OrtEnv.Instance().Dispose();
+}
+
+// The update installs here (2026-11-04, self-update): the interactive app's way out, after a caught crash too, with the log still open, and before the Windows-only end below, so a Mac runs it as well. It never changes the exit code.
+if (updateInteractive)
+{
+    updateExit?.Run(console.WriteLine);
 }
 
 // Windows ends here by ProcessEnd (2026-10-24, the leftover process; see OnClosing and ProcessEnd): what the using declarations

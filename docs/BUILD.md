@@ -10,6 +10,7 @@ How to build, test and publish Neon Sidekick yourself. Back to the [README](../R
 - [Tests](#tests)
 - [Checking the native exe](#checking-the-native-exe)
 - [Building on a Mac](#building-on-a-mac)
+- [Making a release](#making-a-release)
 - [Troubleshooting](#troubleshooting)
 
 ## What you need
@@ -41,6 +42,7 @@ dotnet run --project src/NeonSidekick -c Release
 | `.\build.ps1 -Publish` | Restore, build, publish the native exe and smoke-test it, with no tests. |
 | `.\build.ps1 -Package` | The full run, then the release package in `publish\package\` (a `.zip` on Windows, a `.tar.gz` on a Mac) with the README, docs, license and a `.sha256`. Not with `-TestOnly`. |
 | `.\build.ps1 -Package -Tag v1.2.3` | The same, refusing a tag that isn't `v` plus the project's `<Version>`. |
+| `.\build.ps1 -Publish -Package -UpdateSim` | A simulation build's package, for `tools/UpdateSim.cs` ([below](#making-a-release)). Never a release: `-Tag` refuses it. |
 | `.\build.ps1 -CoverageFloor 0` | Reports coverage without failing under the floor (80% by default). |
 | `.\build.ps1 -TestOnly -CiLike` | Runs the tests the way a CI runner meets them (below the table). |
 | `.\build.ps1 -TestOnly -Filter "<filter>" -Repeat 20` | Runs only the tests a `dotnet test` filter picks, as many times as asked, and counts the passing runs; no coverage. Both need `-TestOnly`. |
@@ -59,6 +61,7 @@ The build is strict on purpose:
 * **Smoke test.** After publishing, the script runs the exe with `--smoke`: every native library must load and work, and the Web UI's server must serve. `dotnet build` and `dotnet test` can't catch a missing native DLL; this can.
 * **ASP.NET Core.** The Web UI uses its shared framework, which the SDK carries; a native publish restores its runtime pack (`Microsoft.AspNetCore.App.Runtime.<rid>`) from NuGet.
 * **Version check.** `-Package` checks that the published exe's `--version` matches the project's `<Version>`.
+* **Package check.** `-Package` writes `update-manifest.json`, the hash of every file, and test-starts the package with `--update-probe`. A failure stops the build.
 
 ## Tests
 
@@ -140,6 +143,28 @@ pwsh ./build.ps1 -Package      # publish/package/NeonSidekick-v<version>-osx-arm
 * **The Keychain.** The tests use their own Keychain item (`NeonSidekick.Tests` / `master-key`), never the app's; delete it in Keychain Access at any time.
 * **Seeing the terminal.** `screencapture -l <window id>` captures what Terminal.app or iTerm2 drew (the script's terminal needs Screen Recording).
 * **Which app has the keyboard:** ask `NSWorkspace.shared.frontmostApplication`; System Events' `frontmost` never names an accessory app like this one.
+
+## Making a release
+
+CI builds on a tag and leaves a draft, which `releases/latest` ignores. Nothing reaches a copy of the app until you sign and publish it from your own PC.
+
+**Once:** run `dotnet run tools/ReleaseSign.cs --new-key <file>` twice, for a daily key and a backup, in your own terminal. Keep both files outside the repo and the app's home, each with a backup of its own, and put the public halves it prints in `Updates/UpdateKeys.cs`.
+
+**Each release:**
+1. Push the tag `vX.Y.Z`, which must equal the project's `<Version>`.
+2. Write the notes with `gh release edit vX.Y.Z --notes-file <file>`. The Install pane shows them. Their **Updating** line says to use `/update`, and that a copy older than 0.5.7 unpacks a fresh folder.
+3. Run `dotnet run tools/ReleaseSign.cs publish vX.Y.Z --key <file>`, and `--key` again for a second key. It shows the commit and hashes for you to confirm, signs, uploads the `.sig` files, checks them against `UpdateKeys`, publishes, and says so loudly if `releases/latest` isn't this tag.
+
+A wrong key stops at the draft, so nothing is offered. Running it again after a failure is fine.
+
+* **Moving a tag before publishing:** delete the draft as well, since CI skips a tag that already has a release.
+* **Pulling a bad release:** mark it a pre-release so `releases/latest` stops offering it, then ship a fix with a higher version. Copies that already downloaded it still install it, and only a higher version reaches them.
+* **A lost or stolen key:** sign the next release with the backup, and put a new key in the source in the bad one's place. Later releases carry the backup's line beside the new key's until copies on older versions have moved on.
+* **Losing both keys** means the next version is installed by hand.
+
+**What a release must keep agreeing with:** the old exe stages and swaps the new one, so `--update-probe`, `update-manifest.json`, the `.sig` and `.sha256` formats, `swap.json` and the `.update` layout are lasting contracts, each pinned by a test. A fix to the swap itself takes effect one release later.
+
+**Trying an update locally:** `.\build.ps1 -Publish -Package -UpdateSim` makes a package with the simulation's flags compiled in. Then `dotnet run tools/UpdateSim.cs` runs the whole flow against a fake GitHub on loopback, in a scratch install and home. `publish\output` then holds the test build, so publish again before daily use.
 
 ## Troubleshooting
 

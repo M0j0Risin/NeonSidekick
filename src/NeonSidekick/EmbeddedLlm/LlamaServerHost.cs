@@ -452,9 +452,7 @@ public sealed class LlamaServerHost : ILlamaServerHost
                     throw new EmbeddedLlmException(EmbeddedLlmText.StartFailed(EmbeddedLlmText.VramDidNotFit), vramOnlyRefused: true);
                 }
 
-                string tail = ErrorTail();
-                bool portInUse = tail.Contains("bind", StringComparison.OrdinalIgnoreCase);
-                throw new EmbeddedLlmException(EmbeddedLlmText.StartFailed(EmbeddedLlmText.ExitedEarly(process.ExitCode, tail)), portInUse);
+                throw EarlyExit(process.ExitCode, ErrorTail());
             }
 
             try
@@ -614,6 +612,21 @@ public sealed class LlamaServerHost : ILlamaServerHost
     }
 
     /// <summary>A loopback port the OS has free right now; the server binds it a moment later (a race <see cref="PortRetries"/> covers).</summary>
+    /// <summary>
+    /// What a server that ended before it was ready throws. A DLL it couldn't find, when that's the Visual C++ runtime (2026-11-04), gets the
+    /// runtime's text and bars the CUDA to Vulkan fallback, since the next build needs it too. <paramref name="vcLoads"/> stands in for the loader in a test.
+    /// </summary>
+    public static EmbeddedLlmException EarlyExit(int code, string tail, Func<string, bool>? vcLoads = null)
+    {
+        if (code == App.VcRuntime.DllNotFoundExitCode && App.VcRuntime.Missing(vcLoads) is { } library)
+        {
+            return new EmbeddedLlmException(EmbeddedLlmText.StartFailed(App.VcRuntimeText.Missing(library)), runtimeMissing: true);
+        }
+
+        bool portInUse = tail.Contains("bind", StringComparison.OrdinalIgnoreCase);
+        return new EmbeddedLlmException(EmbeddedLlmText.StartFailed(EmbeddedLlmText.ExitedEarly(code, tail)), portInUse);
+    }
+
     private static int FreeLoopbackPort()
     {
         var listener = new TcpListener(IPAddress.Loopback, 0);
