@@ -164,7 +164,7 @@ A wrong key stops at the draft, so nothing is offered. Running it again after a 
 
 **What a release must keep agreeing with:** the old exe stages and swaps the new one, so `--update-probe`, `update-manifest.json`, the `.sig` and `.sha256` formats, `swap.json` and the `.update` layout are lasting contracts, each pinned by a test. A fix to the swap itself takes effect one release later.
 
-**Trying an update locally:** `.\build.ps1 -Publish -Package -UpdateSim` makes a package with the simulation's flags compiled in. Then `dotnet run tools/UpdateSim.cs` runs the whole flow against a fake GitHub on loopback, in a scratch install and home. `publish\output` then holds the test build, so publish again before daily use.
+**Trying an update locally:** `.\build.ps1 -Publish -Package -UpdateSim` makes a package with the simulation's flags compiled in. Then `dotnet run tools/UpdateSim.cs` runs the whole flow against a fake GitHub on loopback, in a scratch install and home. With `--serve` it stays up and opens the real interface over that fake GitHub, to try the marker and panes by hand. `publish\output` then holds the test build, so publish again before daily use.
 
 ## Troubleshooting
 

@@ -690,7 +690,7 @@ Forty-one more come with the repo in [`assets/voices`](../assets/voices): copy a
 
 ### Updating
 
-`/update` installs a newer release from GitHub. Only a copy unpacked from a release package can update itself; one you built can't. You keep chatting during the download, and the 🆙 marker on the lower rule shows how far it has got ([The screen](INTERFACE.md#the-screen)).
+`/update` installs a newer release from GitHub. Only a copy unpacked from a release package can update itself; one you built can't. You keep chatting during the download, and the 📦 marker on the lower rule shows how far it has got ([The screen](INTERFACE.md#the-screen)).
 
 * **What's checked first:** the project's signature, the package and every file against their hashes, and a test start of the new version. Anything wrong refuses it, names the reason and links the Releases page.
 * **Antivirus** can fail the test start; the message says so. Updating by hand always works.

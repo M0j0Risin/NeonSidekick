@@ -36,7 +36,7 @@ Every setting on the `/settings`, `/skills`, `/tools` and `/mcp` panes, its defa
 | Memory mode | `read-write`: the model saves and recalls memories, and each conversation opens with them. `read-only`: recall only (`/remember` still saves). `off`: none, `/remember` refused. | `read-write` |
 | Model avatar | The profile's emoji, leading its replies, `/botchat` lines and the window title. Enter (or `/avatar`) opens the [avatar picker](INTERFACE.md#the-avatar-picker). | 🤖 |
 | User avatar | Your emoji, leading your lines in place of `›`. Enter opens the [picker](INTERFACE.md#the-avatar-picker); 🚫 goes back to `›`. | 🙊 |
-| Check for updates at start | Asks GitHub for a newer release at each start, sending nothing about you, and shows a line and the 🆙 marker. Off, nothing is asked; [`/update`](COMMANDS.md#updating) still works. | on |
+| Check for updates at start | Asks GitHub for a newer release at each start, sending nothing about you, and shows a line and the 📦 marker. Off, nothing is asked; [`/update`](COMMANDS.md#updating) still works. | on |
 | Queue mode | `automatic`: a message sent during a reply waits in `/queue` and goes when it ends. `manual`: each waits for `➤ send` (`s`). `off`: no list. | `automatic` |
 | Queue cancel mode | A canceled reply's queue: `hold` keeps it until your next message (a Web UI message too; the page's **Resume** sends it), `drain` sends the next at once, `empty` drops it. | `empty` |
 | Keep message history | Saves the ↑/↓ history (newest 100 lines, the Web UI's too) in `sessions.db`. Off deletes it at the next profile load; `/msgclear` empties it. | on |

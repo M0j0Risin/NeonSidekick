@@ -215,12 +215,12 @@ public partial class ScreenPaneTests : IDisposable
         Assert.False(pane.TryHitLowerRuleMarker(20, 101));
         Assert.True(pane.TryHitLowerRuleTitle(36, 101));
 
-        marker = "🆙 0.5.7 at quit";
+        marker = "📦 0.5.7 at quit";
         int mark = Output.Length;
         _time.Advance(ScreenPane.Tick);
-        Assert.Contains(Rule(14) + " 🆙 0.5.7 at quit ── ▶ 3 ─\n", Output[mark..]);
+        Assert.Contains(Rule(14) + " 📦 0.5.7 at quit ── ▶ 3 ─\n", Output[mark..]);
 
-        // 🆙 0.5.7 at quit at columns 15–30, ▶ 3 at 35–37, the space either side of each included.
+        // 📦 0.5.7 at quit at columns 15–30, ▶ 3 at 35–37, the space either side of each included.
         Assert.False(pane.TryHitLowerRuleMarker(13, 101));
         foreach (int x in new[] { 14, 15, 30, 31 })
         {
@@ -240,9 +240,9 @@ public partial class ScreenPaneTests : IDisposable
         mark = Output.Length;
         _time.Advance(ScreenPane.Tick);
         Assert.Equal("", Output[mark..]);
-        marker = "🆙 0.5.7 42%";
+        marker = "📦 0.5.7 42%";
         _time.Advance(ScreenPane.Tick);
-        Assert.Contains("🆙 0.5.7 42% ── ▶ 3 ─\n", Output[mark..]);
+        Assert.Contains("📦 0.5.7 42% ── ▶ 3 ─\n", Output[mark..]);
 
         pane.ShowOverlay(new Markup("a"), "Esc closes");
         Assert.False(pane.TryHitLowerRuleMarker(20, 101));
@@ -259,9 +259,9 @@ public partial class ScreenPaneTests : IDisposable
     {
         _cursorTop = 100;
         using var pane = Pane();
-        pane.LowerRuleMarker = () => "🆙 0.5.7";
+        pane.LowerRuleMarker = () => "📦 0.5.7";
         pane.Show();
-        Assert.Contains(Rule(29) + " 🆙 0.5.7 ─\n", Output);
+        Assert.Contains(Rule(29) + " 📦 0.5.7 ─\n", Output);
         Assert.True(pane.TryHitLowerRuleMarker(30, 101));
         Assert.True(pane.TryHitLowerRuleMarker(38, 101));
         Assert.False(pane.TryHitLowerRuleTitle(30, 101));
@@ -271,7 +271,7 @@ public partial class ScreenPaneTests : IDisposable
     [Fact]
     public void LowerRuleMarker_NarrowWindow_DropsTheMarkerFirst_Whole()
     {
-        const string marker = "🆙 0.5.7 at quit";
+        const string marker = "📦 0.5.7 at quit";
         const string title = "▶ 3";
         Assert.Equal(14, ScreenPane.MarkerFit(marker, title, 40));
         Assert.Equal(8, ScreenPane.MarkerFit(marker, title, 34));

@@ -1043,7 +1043,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>
-    /// The update's marker, left of <see cref="LowerRuleTitle"/> on the lower rule (2026-11-04, self-update: <c>🆙 0.5.7 at quit ── ▶ 2</c>), read on every draw and on the tick, so the download's percentage redraws too; empty = none.
+    /// The update's marker, left of <see cref="LowerRuleTitle"/> on the lower rule (2026-11-04, self-update: <c>📦 0.5.7 at quit ── ▶ 2</c>), read on every draw and on the tick, so the download's percentage redraws too; empty = none.
     /// In a narrow window it's dropped first, whole, so <c>▶ n</c> stays readable and clickable.
     /// </summary>
     public Func<string> LowerRuleMarker

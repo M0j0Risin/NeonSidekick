@@ -6,6 +6,8 @@
 //     .\build.ps1 -Publish -Package -UpdateSim          the simulation build's package, whose exe knows the --update-* flags
 //     dotnet run tools/UpdateSim.cs                     every unattended scenario, on that package
 //     dotnet run tools/UpdateSim.cs -- --only rollback,kill-swap --package <folder> --scratch <folder> --keep
+//     dotnet run tools/UpdateSim.cs -- --serve          the by-hand run: keeps the fake GitHub up and opens the real interface over it, for the marker, its clicks and a window close
+//     dotnet run tools/UpdateSim.cs -- --serve --move-all   the same with every file moving, the exe too: a window close's worst case
 //
 // Each scenario gets a fresh copy of the package as its install folder and a scratch NEONSIDEKICK_HOME. The key pair is new each run, so no private key is ever committed to this
 // public repo. The server is a hand-served TcpListener, as the repo's other loopback servers are: it answers range requests with a 206 and redirects assets once, as GitHub does.
@@ -28,6 +30,8 @@ string? packageArgument = null;
 string? scratchArgument = null;
 HashSet<string>? only = null;
 bool keep = false;
+bool serve = false;
+bool moveAll = false;
 for (int i = 0; i < args.Length; i++)
 {
     switch (args[i])
@@ -44,8 +48,14 @@ for (int i = 0; i < args.Length; i++)
         case "--keep":
             keep = true;
             break;
+        case "--serve":
+            serve = true;
+            break;
+        case "--move-all":
+            moveAll = true;
+            break;
         default:
-            Console.Error.WriteLine($"Usage: dotnet run tools/UpdateSim.cs -- [--package <folder>] [--scratch <folder>] [--only a,b] [--keep] (not {args[i]})");
+            Console.Error.WriteLine($"Usage: dotnet run tools/UpdateSim.cs -- [--package <folder>] [--scratch <folder>] [--only a,b] [--keep] [--serve [--move-all]] (not {args[i]})");
             return 2;
     }
 }
@@ -57,6 +67,18 @@ using var key = UpdateSignature.NewKey();
 using var github = new FakeGitHub();
 var sim = new Sim(package, scratch, key, github);
 Console.WriteLine($"package {package}, version {sim.Base}; scratch {scratch}; fake GitHub at {github.Origin}");
+
+if (serve)
+{
+    sim.ServeMovesAll = moveAll;
+    ByHand.Run(sim);
+    if (!keep)
+    {
+        Sim.Delete(scratch);
+    }
+
+    return 0;
+}
 
 var scenarios = Scenarios.All(sim);
 int failed = 0;
@@ -105,6 +127,107 @@ if (!keep)
 }
 
 return failed == 0 ? 0 : 1;
+
+/// <summary>
+/// The by-hand run (--serve, 2026-11-04, the user's call): what the scenarios can't see, on the real interface. One install folder and one scratch home; each start runs as the version the
+/// folder holds, since one binary has one version, so the second start says "Updated to X". Only the files that differ move, the marker and the release's own, unless --move-all asks for every file, the exe too: what a window close's 4 s has to fit at worst
+/// (2026-11-04: the first window close moved only the few, which fit easily and proved little about a real update's time).
+/// </summary>
+static class ByHand
+{
+    /// <summary>Long enough to see the marker's percentage and to try /update cancel in the middle.</summary>
+    private const double DownloadSeconds = 45;
+
+    private static readonly string Notes = """
+        ## What's new in this simulated release
+
+        These notes are long on purpose, so the pane has to scroll, as a real release's do.
+
+        ### New
+        * First new thing, with a line long enough to wrap in a narrow window, so you can see how a pane's text wraps when the notes run past the edge of the window it's in.
+        * Second new thing.
+        * Third new thing.
+
+        ### Fixed
+        * First fix.
+        * Second fix.
+        * Third fix.
+        * Fourth fix.
+        * Fifth fix.
+        * Sixth fix.
+
+        ### Safety
+        * The next line holds a terminal color code, which should show as a plain mark and color nothing: {ESC}[31mstill plain text{ESC}[0m
+        * [markup in brackets] should show as typed.
+
+        ### More
+        * Line 1 of more, to make it scroll.
+        * Line 2 of more.
+        * Line 3 of more.
+        * Line 4 of more.
+        * Line 5 of more.
+        * Line 6 of more.
+        * Line 7 of more.
+        * Line 8 of more.
+        * Line 9 of more.
+        * Line 10 of more.
+        * Line 11 of more.
+        * Line 12 of more.
+        * Line 13 of more.
+        * Line 14 of more.
+        * Line 15 of more.
+        * Line 16 of more.
+        * Line 17 of more.
+        * Line 18 of more.
+        * Line 19 of more.
+        * Line 20 of more.
+        * Line 21 of more.
+        * Line 22 of more.
+
+        ### Updating
+        Use /update. These are the last lines, so seeing them means the pane scrolled all the way.
+        """.Replace("{ESC}", "\u001b", StringComparison.Ordinal);
+
+    public static void Run(Sim sim)
+    {
+        sim.Begin("serve");
+        sim.GitHub.Notes = Notes;
+        sim.GitHub.SendSeconds = DownloadSeconds;
+        sim.GitHub.Log = line => Console.WriteLine("  fake GitHub: " + line);
+        string latest = sim.Next;
+        sim.Publish(latest);
+        Console.WriteLine($"Published {latest}, signed by this run's key. The install is {sim.Folder.Install}");
+        Console.WriteLine("The scratch home is new, so the app asks to connect a model first: Esc says not now, and then the \"is out\" line shows.");
+        sim.OpenWindow();
+        while (true)
+        {
+            Console.WriteLine();
+            Console.WriteLine(sim.ServeStatus(latest));
+            Console.WriteLine("  Enter  start the app again, as the version the folder holds");
+            Console.WriteLine("  n      publish a newer release");
+            Console.WriteLine("  q      stop any copy still running from here, and delete it all (its window stays until you close it)");
+            string? answer = Console.ReadLine()?.Trim();
+            if (answer is null or "q")
+            {
+                break;
+            }
+
+            if (answer == "n")
+            {
+                latest = Sim.After(latest);
+                sim.Publish(latest);
+                Console.WriteLine($"Published {latest}. A start finds it, and so does /update.");
+            }
+            else if (answer.Length == 0)
+            {
+                sim.OpenWindow();
+            }
+        }
+
+        sim.StopServedCopies();
+        sim.End();
+    }
+}
 
 /// <summary>The non-interactive scenarios of the plan's table. The rest (the marker, double-clicks, a window close) are by hand.</summary>
 static class Scenarios
@@ -647,6 +770,7 @@ sealed class Sim
     private readonly Dictionary<string, byte[]> _baseFiles = new(StringComparer.Ordinal);
     private readonly UpdateManifest _baseManifest;
     private readonly List<string> _output = [];
+    private int _windows;
 
     public Sim(string package, string scratch, ECDsa key, FakeGitHub github)
     {
@@ -700,6 +824,95 @@ sealed class Sim
     public string ManifestVersion => UpdateManifest.ReadFile(Folder.Manifest, out _)?.Version ?? "none";
 
     private string Home => Path.Combine(Scratch, "home-" + Name);
+
+    /// <summary>The version after this one.</summary>
+    public static string After(string version) =>
+        UpdateVersion.TryParse(version, out var parsed) ? new UpdateVersion(parsed.Major, parsed.Minor, parsed.Patch + 1).ToString() : throw new InvalidOperationException("not a version: " + version);
+
+    /// <summary>The by-hand run moves every file, the exe too.</summary>
+    public bool ServeMovesAll { get; set; }
+
+    /// <summary>What the by-hand run's install holds now, for the tool's console.</summary>
+    public string ServeStatus(string latest)
+    {
+        string state = File.Exists(Folder.Ready) ? ", a stage ready" : Directory.Exists(Folder.Staging) ? ", a stage on the way" : "";
+        string previous = Directory.Exists(Folder.Previous) && Directory.EnumerateFileSystemEntries(Folder.Previous).Any() ? $", an earlier version kept ({Directory.EnumerateFiles(Folder.Previous, "*", SearchOption.AllDirectories).Count()} files)" : "";
+        return $"The folder holds {ManifestVersion}{state}{previous}. The fake GitHub's latest is {latest}.";
+    }
+
+    /// <summary>
+    /// Starts the real interface over the fake GitHub, as the version the folder holds. Through a script, so the home and the flags reach the app through Windows Terminal, and on Windows the
+    /// window stays up afterward with the quit lines on it. Its last act leaves the install folder, or a window left open would keep the folder from being deleted.
+    /// </summary>
+    public void OpenWindow()
+    {
+        string arguments = $"--update-source {GitHub.Origin} --update-as-version {ManifestVersion} --update-test-key {_publicKey}" + (ServeMovesAll ? " " + MoveAll[0] : "");
+        string title = "NeonSidekick update sim " + ++_windows;
+        if (OperatingSystem.IsWindows())
+        {
+            string script = Path.Combine(Scratch, $"start-{_windows}.cmd");
+            File.WriteAllText(script, string.Join("\r\n",
+                "@echo off",
+                "set \"NO_COLOR=\"",
+                $"set \"NEONSIDEKICK_HOME={Home}\"",
+                $"cd /d \"{Folder.Install}\"",
+                $"\"{Folder.Full(ExeName)}\" {arguments}",
+                "cd /d \"%TEMP%\"",
+                "echo.",
+                "pause",
+                ""));
+            try
+            {
+                var start = new ProcessStartInfo("wt.exe") { UseShellExecute = false };
+                foreach (string argument in (string[])["-w", "new", "--size", "120,40", "--title", title, "--suppressApplicationTitle", "--", "cmd", "/c", script])
+                {
+                    start.ArgumentList.Add(argument);
+                }
+
+                Process.Start(start);
+                Console.WriteLine($"Opened \"{title}\" in Windows Terminal.");
+            }
+            catch (System.ComponentModel.Win32Exception)
+            {
+                Console.WriteLine($"Windows Terminal didn't start. In another terminal, run: \"{script}\"");
+            }
+        }
+        else
+        {
+            string script = Path.Combine(Scratch, $"start-{_windows}.sh");
+            File.WriteAllText(script, string.Join("\n",
+                "unset NO_COLOR",
+                $"export NEONSIDEKICK_HOME='{Home}'",
+                $"cd '{Folder.Install}'",
+                $"'{Folder.Full(ExeName)}' {arguments}",
+                ""));
+            Console.WriteLine($"In another iTerm2 or Terminal window, run: zsh '{script}'");
+        }
+    }
+
+    /// <summary>Ends what the by-hand run started and nothing else: only a copy whose exe is under this run's scratch folder, never the user's own.</summary>
+    public void StopServedCopies()
+    {
+        foreach (var process in Process.GetProcessesByName(Path.GetFileNameWithoutExtension(ExeName)))
+        {
+            try
+            {
+                if (process.MainModule?.FileName is { } file && file.StartsWith(Scratch, StringComparison.OrdinalIgnoreCase))
+                {
+                    process.Kill(entireProcessTree: true);
+                    process.WaitForExit(5000);
+                }
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
+            {
+                // Gone already, or not ours to read.
+            }
+            finally
+            {
+                process.Dispose();
+            }
+        }
+    }
 
     public static string NewestPackage()
     {
@@ -1107,14 +1320,23 @@ sealed class FakeGitHub : IDisposable
 
     public int RangeRequests { get; private set; }
 
-    public static string Json(string tag, IEnumerable<(string Name, long Size, string Url)> assets)
+    /// <summary>The release's notes, the by-hand run's long ones.</summary>
+    public string Notes { get; set; } = "the simulated notes";
+
+    /// <summary>Paces an archive to take about this long, so the by-hand run can watch its percentage.</summary>
+    public double? SendSeconds { get; set; }
+
+    /// <summary>Told each request, for the by-hand run's console.</summary>
+    public Action<string>? Log { get; set; }
+
+    public static string Json(string tag, IEnumerable<(string Name, long Size, string Url)> assets, string notes = "the simulated notes")
     {
         var stream = new MemoryStream();
         using (var json = new Utf8JsonWriter(stream))
         {
             json.WriteStartObject();
             json.WriteString("tag_name", tag);
-            json.WriteString("body", "the simulated notes");
+            json.WriteString("body", notes);
             json.WriteString("html_url", "http://127.0.0.1/sim/releases/tag/" + tag);
             json.WriteStartArray("assets");
             foreach (var (name, size, url) in assets)
@@ -1148,6 +1370,7 @@ sealed class FakeGitHub : IDisposable
         DropAt = null;
         StallAt = null;
         SlowAfter = null;
+        SendSeconds = null;
         RangeRequests = 0;
     }
 
@@ -1202,7 +1425,7 @@ sealed class FakeGitHub : IDisposable
             }
 
             var (tag, names) = _releases[^1];
-            return Json(tag, names.Where(n => !_hidden.Any(h => n.EndsWith(h, StringComparison.Ordinal))).Select(n => (n, (long)_assets[tag + "/" + n].Length, Origin + "sim/releases/download/" + tag + "/" + n)));
+            return Json(tag, names.Where(n => !_hidden.Any(h => n.EndsWith(h, StringComparison.Ordinal))).Select(n => (n, (long)_assets[tag + "/" + n].Length, Origin + "sim/releases/download/" + tag + "/" + n)), Notes);
         }
     }
 
@@ -1230,6 +1453,7 @@ sealed class FakeGitHub : IDisposable
             {
                 var stream = client.GetStream();
                 var (path, rangeFrom) = await ReadRequestAsync(stream).ConfigureAwait(false);
+                Log?.Invoke(rangeFrom > 0 ? $"{path} from byte {rangeFrom}" : path);
                 if (path == "/repos/sim/releases/latest")
                 {
                     await WriteAsync(stream, LatestStatus ?? 200, Encoding.UTF8.GetBytes(LatestJson()), "application/json").ConfigureAwait(false);
@@ -1283,8 +1507,18 @@ sealed class FakeGitHub : IDisposable
         long stallAt = isArchive && StallAt is { } stall ? (long)(bytes.Length * stall) : long.MaxValue;
         long slowAt = isArchive && SlowAfter is { } slow ? (long)(bytes.Length * slow) : long.MaxValue;
         const int chunk = 1 << 16;
+        var sending = Stopwatch.StartNew();
         for (long at = rangeFrom; at < bytes.Length; at += chunk)
         {
+            if (isArchive && SendSeconds is { } seconds)
+            {
+                double ahead = seconds * (at - rangeFrom) / bytes.Length - sending.Elapsed.TotalSeconds;
+                if (ahead > 0.02)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(ahead), _stop.Token).ConfigureAwait(false);
+                }
+            }
+
             if (at >= stopAt)
             {
                 return;   // the connection dropped

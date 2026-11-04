@@ -13,19 +13,19 @@ public abstract record UpdateScreenState
     /// <summary>See <see cref="Nothing"/>.</summary>
     public sealed record None : UpdateScreenState;
 
-    /// <summary>A new version is out: <c>🆙 0.5.7</c>.</summary>
+    /// <summary>A new version is out: <c>📦 0.5.7</c>.</summary>
     public sealed record Offered(string Version) : UpdateScreenState;
 
-    /// <summary><c>🆙 0.5.7 42%</c>.</summary>
+    /// <summary><c>📦 0.5.7 42%</c>.</summary>
     public sealed record Downloading(string Version, int Percent) : UpdateScreenState;
 
-    /// <summary>Verifying and test-running: <c>🆙 0.5.7 checking</c>.</summary>
+    /// <summary>Verifying and test-running: <c>📦 0.5.7 checking</c>.</summary>
     public sealed record Checking(string Version) : UpdateScreenState;
 
-    /// <summary>Verified and ready: <c>🆙 0.5.7 at quit</c>.</summary>
+    /// <summary>Verified and ready: <c>📦 0.5.7 at quit</c>.</summary>
     public sealed record Ready(string Version) : UpdateScreenState;
 
-    /// <summary>A pending rollback: <c>🆙 back to 0.5.6 at quit</c>.</summary>
+    /// <summary>A pending rollback: <c>📦 back to 0.5.6 at quit</c>.</summary>
     public sealed record GoingBack(string Target) : UpdateScreenState;
 }
 
@@ -91,7 +91,7 @@ public static class UpdateText
     public const string Usage = "Usage: /update, /update notes, /update rollback or /update cancel";
 
     /// <summary>The marker's glyph on the lower rule.</summary>
-    public const string MarkerGlyph = "🆙";
+    public const string MarkerGlyph = "📦";
 
     public const string CheckingSpinner = "Checking for updates...";
 

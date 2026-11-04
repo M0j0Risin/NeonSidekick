@@ -1553,7 +1553,7 @@ internal sealed partial class ChatScreen
             RuleTitle = () => UpperRuleTitle(_botChatCast, _sessionTitle, ShowNameDisplay(_effective())),
             // The running processes' count on the lower rule (2026-10-12, the user's ask): ▶ 3, nothing while none run.
             LowerRuleTitle = () => ProcessWindowText.RuleTitle(_processes.Running),
-            // The update's marker left of it (2026-11-04, self-update): 🆙 0.5.7 at quit, nothing while no update is known or under way.
+            // The update's marker left of it (2026-11-04, self-update): 📦 0.5.7 at quit, nothing while no update is known or under way.
             LowerRuleMarker = UpdateMarkerNow,
             // The model and its mark while the Hint bar's Model is checked (2026-10-12).
             Trailer = () => HintOn(StatusBarItems.Model) ? ModelLabel(_session.Endpoint?.ModelId) : "",

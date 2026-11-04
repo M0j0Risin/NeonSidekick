@@ -63,12 +63,12 @@ public partial class ChatScreenTests
 
     [Theory]
     [InlineData("", 0, true, "")]
-    [InlineData("offered", 0, true, "🆙 0.5.7")]
+    [InlineData("offered", 0, true, "📦 0.5.7")]
     [InlineData("offered", 0, false, "")]
-    [InlineData("downloading", 42, false, "🆙 0.5.7 42%")]
-    [InlineData("checking", 0, false, "🆙 0.5.7 checking")]
-    [InlineData("ready", 0, false, "🆙 0.5.7 at quit")]
-    [InlineData("back", 0, false, "🆙 back to 0.5.7 at quit")]
+    [InlineData("downloading", 42, false, "📦 0.5.7 42%")]
+    [InlineData("checking", 0, false, "📦 0.5.7 checking")]
+    [InlineData("ready", 0, false, "📦 0.5.7 at quit")]
+    [InlineData("back", 0, false, "📦 back to 0.5.7 at quit")]
     public void TheMarker_ReadsItsState_AndOnlyIsOutFollowsTheSetting(string state, int percent, bool checkOn, string expected)
     {
         UpdateScreenState shown = state switch
@@ -91,7 +91,7 @@ public partial class ChatScreenTests
         UpdatePaneOn();
         _updater = new FakeUpdater { Answer = FakeUpdater.Newer() };
         UpdateScript(
-            (() => Shows(UpdateText.IsOutLine("0.5.7")) && MarkerShows("🆙 0.5.7"), Line("/exit")));
+            (() => Shows(UpdateText.IsOutLine("0.5.7")) && MarkerShows("📦 0.5.7"), Line("/exit")));
 
         string output = await RunAsync();
 
@@ -191,11 +191,11 @@ public partial class ChatScreenTests
         UpdatePaneOn();
         _settings.Update(d => d.CheckForUpdatesAtStart = false);
         _updater = new FakeUpdater { ReadyOnDisk = "0.5.7" };
-        UpdateScript((() => MarkerShows("🆙 0.5.7 at quit"), Line("/exit")));
+        UpdateScript((() => MarkerShows("📦 0.5.7 at quit"), Line("/exit")));
 
         string output = await RunAsync();
 
-        Assert.Contains("🆙 0.5.7 at quit", output);
+        Assert.Contains("📦 0.5.7 at quit", output);
         Assert.DoesNotContain(UpdateText.IsOutLine("0.5.7"), output);
     }
 
@@ -204,7 +204,7 @@ public partial class ChatScreenTests
     {
         UpdatePaneOn();
         _updater = new FakeUpdater { ReadyOnDisk = "0.5.7", Answer = FakeUpdater.Newer() };
-        UpdateScript((() => Asked() && MarkerShows("🆙 0.5.7 at quit"), Line("/exit")));
+        UpdateScript((() => Asked() && MarkerShows("📦 0.5.7 at quit"), Line("/exit")));
         Assert.DoesNotContain(UpdateText.IsOutLine("0.5.7"), await RunAsync());
     }
 
@@ -213,7 +213,7 @@ public partial class ChatScreenTests
     {
         UpdatePaneOn();
         _updater = new FakeUpdater { ReadyOnDisk = "0.5.7", Answer = FakeUpdater.Newer("0.5.8") };
-        UpdateScript((() => Shows(UpdateText.IsOutLine("0.5.8")) && MarkerShows("🆙 0.5.7 at quit"), Line("/exit")));
+        UpdateScript((() => Shows(UpdateText.IsOutLine("0.5.8")) && MarkerShows("📦 0.5.7 at quit"), Line("/exit")));
         Assert.Contains(UpdateText.IsOutLine("0.5.8"), await RunAsync());
     }
 
@@ -238,8 +238,8 @@ public partial class ChatScreenTests
         UpdatePaneOn();
         _settings.Update(d => d.CheckForUpdatesAtStart = false);
         _updater = new FakeUpdater { RollbackOnDisk = "0.5.5" };
-        UpdateScript((() => MarkerShows("🆙 back to 0.5.5 at quit"), Line("/exit")));
-        Assert.Contains("🆙 back to 0.5.5 at quit", await RunAsync());
+        UpdateScript((() => MarkerShows("📦 back to 0.5.5 at quit"), Line("/exit")));
+        Assert.Contains("📦 back to 0.5.5 at quit", await RunAsync());
     }
 
     [Fact]
@@ -250,7 +250,7 @@ public partial class ChatScreenTests
         UpdateScript(
             (() => Asked(), i => { _updater.ReadyOnDisk = "0.5.7"; PushLine(i, "/update"); }),
             (() => Shows(UpdateText.UnderWay(new UpdateScreenState.Ready("0.5.7"))), Key(Keys.Char('k'))),
-            (() => MarkerShows("🆙 0.5.7 at quit"), Line("/exit")));
+            (() => MarkerShows("📦 0.5.7 at quit"), Line("/exit")));
 
         await RunAsync();
 
@@ -277,8 +277,8 @@ public partial class ChatScreenTests
         UpdateScript(
             (() => Shows(UpdateText.IsOutLine("0.5.7")), Line("/update")),
             (() => Shows("the notes"), Key(Keys.Char('i'))),
-            (() => Shows(downloading) && MarkerShows("🆙 0.5.7 42%"), _ => release.SetResult()),
-            (() => Shows(UpdateText.ReadyLine("0.5.7")) && MarkerShows("🆙 0.5.7 at quit"), Line("/exit")));
+            (() => Shows(downloading) && MarkerShows("📦 0.5.7 42%"), _ => release.SetResult()),
+            (() => Shows(UpdateText.ReadyLine("0.5.7")) && MarkerShows("📦 0.5.7 at quit"), Line("/exit")));
 
         string output = await RunAsync();
 
@@ -410,7 +410,7 @@ public partial class ChatScreenTests
         await RunAsync();
 
         Assert.Contains(UpdateText.ReleasesUrl, line);
-        Assert.DoesNotContain("🆙 0.5.7 at quit", Output[..mark]);
+        Assert.DoesNotContain("📦 0.5.7 at quit", Output[..mark]);
     }
 
     // ---- what /update answers with nothing to offer
@@ -542,7 +542,7 @@ public partial class ChatScreenTests
         UpdateScript(
             (() => Shows(UpdateText.IsOutLine("0.5.7")), Line("/update")),
             (() => Shows("the notes"), Key(Keys.Char('i'))),
-            (() => MarkerShows("🆙 0.5.7 42%"), Line("/update cancel")),
+            (() => MarkerShows("📦 0.5.7 42%"), Line("/update cancel")),
             (() => Shows(UpdateText.CanceledLine), Line("/exit")));
 
         await RunAsync();
@@ -639,7 +639,7 @@ public partial class ChatScreenTests
         _updater = new FakeUpdater();
         UpdateScript(
             (() => true, Line("/update rollback")),
-            (() => Shows(UpdateText.GoingBackLine("0.5.5")) && MarkerShows("🆙 back to 0.5.5 at quit"), Line("/exit")));
+            (() => Shows(UpdateText.GoingBackLine("0.5.5")) && MarkerShows("📦 back to 0.5.5 at quit"), Line("/exit")));
 
         Assert.Contains(UpdateText.RollbackWarning, await RunAsync());
     }
@@ -688,7 +688,7 @@ public partial class ChatScreenTests
         UpdateScript(
             (() => Shows(UpdateText.IsOutLine("0.5.7")), Line("/update")),
             (() => Shows("the notes"), Key(Keys.Char('i'))),
-            (() => MarkerShows("🆙 0.5.7 10%"), Line("/update rollback")),
+            (() => MarkerShows("📦 0.5.7 10%"), Line("/update rollback")),
             (() => Shows(UpdateText.CancelDownloadFirst), Line("/exit")));
 
         await RunAsync();
@@ -757,7 +757,7 @@ public partial class ChatScreenTests
         UpdatePaneOn();
         _updater = new FakeUpdater { Answer = FakeUpdater.Newer() };
         UpdateScript(
-            (() => Shows(UpdateText.IsOutLine("0.5.7")) && MarkerShows("🆙 0.5.7"), i => { i.PushClick(193, 101); i.PushClick(193, 101); }),   // 🆙 0.5.7 at columns 189–196
+            (() => Shows(UpdateText.IsOutLine("0.5.7")) && MarkerShows("📦 0.5.7"), i => { i.PushClick(193, 101); i.PushClick(193, 101); }),   // 📦 0.5.7 at columns 189–196
             (() => Shows("the notes"), Key(Keys.Escape)),
             (() => true, Line("/exit")));
 
@@ -778,7 +778,7 @@ public partial class ChatScreenTests
         int mark = 0;
         bool hidden = false;
         UpdateScript(
-            (() => Shows(UpdateText.IsOutLine("0.5.7")) && MarkerShows("🆙 0.5.7"), _ =>
+            (() => Shows(UpdateText.IsOutLine("0.5.7")) && MarkerShows("📦 0.5.7"), _ =>
             {
                 _settings.Update(d => d.CheckForUpdatesAtStart = false);
                 mark = Output.Length;
@@ -787,7 +787,7 @@ public partial class ChatScreenTests
             }),
             (() => true, Line("/update")),
             (() => Shows("the notes"), Key(Keys.Char('i'))),
-            (() => MarkerShows("🆙 0.5.7 42%"), Line("/exit")));
+            (() => MarkerShows("📦 0.5.7 42%"), Line("/exit")));
 
         await RunAsync();
 
@@ -803,7 +803,7 @@ public partial class ChatScreenTests
         int mark = 0;
         bool hidden = false;
         UpdateScript(
-            (() => Shows(UpdateText.IsOutLine("0.5.7")) && MarkerShows("🆙 0.5.7"), Line("/profile work")),
+            (() => Shows(UpdateText.IsOutLine("0.5.7")) && MarkerShows("📦 0.5.7"), Line("/profile work")),
             (() => Shows("work"), _ =>
             {
                 mark = Output.Length;
@@ -905,7 +905,7 @@ public partial class ChatScreenTests
             i.PushClick(193, 101);
             opened = Soon(() => Shows("the notes"));
             i.Push(Keys.Char('l'));
-        }, () => Shows(UpdateText.IsOutLine("0.5.7")) && MarkerShows("🆙 0.5.7"));
+        }, () => Shows(UpdateText.IsOutLine("0.5.7")) && MarkerShows("📦 0.5.7"));
 
         await RunAsync();
 
@@ -913,7 +913,7 @@ public partial class ChatScreenTests
         Assert.Equal(1, _updater.Checks);   // the start's answer was used
     }
 
-    /// <summary>Side by side (the plan's mockup: <c>🆙 0.5.7 ── ▶ 1</c>), each answers its own double-click and neither takes the other's.</summary>
+    /// <summary>Side by side (the plan's mockup: <c>📦 0.5.7 ── ▶ 1</c>), each answers its own double-click and neither takes the other's.</summary>
     [WindowsFact]
     public async Task TheMarkerAndTheProcessCount_SideBySide_EachOpensItsOwn()
     {
@@ -928,7 +928,7 @@ public partial class ChatScreenTests
         bool listFirst = false;
         UpdateScript(
             (() => Shows(UpdateText.IsOutLine("0.5.7")), Line("start it")),
-            (() => MarkerShows("🆙 0.5.7 ── ▶ 1 ─"), i => { i.PushClick(76, 101); i.PushClick(76, 101); }),   // ▶ 1 at columns 75–77, the marker at 63–70
+            (() => MarkerShows("📦 0.5.7 ── ▶ 1 ─"), i => { i.PushClick(76, 101); i.PushClick(76, 101); }),   // ▶ 1 at columns 75–77, the marker at 63–70
             (() => Shows(ProcessMenu.Title), i => { listFirst = !Shows("the notes"); i.Push(Keys.Escape); }),
             (() => true, i => { i.PushClick(66, 101); i.PushClick(66, 101); }),
             (() => Shows("the notes"), Key(Keys.Char('l'))),
