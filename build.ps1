@@ -332,7 +332,7 @@ if ($OnWindows -and -not (Get-Command vswhere.exe -ErrorAction SilentlyContinue)
 }
 
 # Passed as a property the csproj appends to DefineConstants (2026-11-04, self-update); a build from this switch isn't for daily use, and the next plain publish replaces it.
-$simProperty = if ($UpdateSim) { @("/p:UpdateSim=true") } else { @() }
+$simProperty = @(if ($UpdateSim) { "/p:UpdateSim=true" })   # the @() outside: an if unwraps a one-item array, and a splatted string goes in a character at a time
 $publishLog = @(dotnet publish $AppProject -c Release -r $Runtime --self-contained `
     /p:PublishAot=true /p:StripSymbols=true @simProperty -o $PublishDir 2>&1)
 $publishLog | ForEach-Object { Write-Host $_ }
