@@ -157,6 +157,56 @@ public sealed class WriteGuardInstallTests : IDisposable
         Assert.Equal(FileText.InstallFilesProtected("a.dll"), FileText.Error(FileOutcome.InstallFilesProtected, "a.dll", "write"));
     }
 
+    [Fact]
+    public void APackageUnpackedInTheSandbox_StaysGuarded()
+    {
+        // The home's pass is for a home kept inside the install, and only that: as "is it in a home" a package in the default sandbox had no guard (2026-11-04, review P4-9).
+        string home = Path.Combine(_dir, "home");
+        string sandbox = Path.Combine(home, "profiles", "neon", "files");
+        string package = Path.Combine(sandbox, "pkg");
+        Directory.CreateDirectory(package);
+        using var _ = WriteGuard.Configure(Facts(home, install: package));
+        var files = At(sandbox);
+
+        Assert.Equal(FileOutcome.InstallFilesProtected, files.WriteText(Path.Combine("pkg", "NeonSidekick.exe"), "x", overwrite: true).Outcome);
+        Assert.Equal(FileOutcome.Ok, files.WriteText("notes.md", "x", overwrite: true).Outcome);
+    }
+
+    [Fact]
+    public void DeletingOrMovingAFolderThatHoldsTheInstall_IsRefused()
+    {
+        // An ancestor lost every unloaded DLL before failing on the running exe, and on a Mac the Trash took the whole of it (2026-11-04, review P6-1).
+        using var _ = WriteGuard.Configure(Facts());
+        var files = At(Path.GetDirectoryName(_dir)!);
+        string name = Path.GetFileName(_dir);
+
+        Assert.Equal(FileOutcome.InstallFilesProtected, files.Delete(name).Outcome);
+        Assert.Equal(FileOutcome.InstallFilesProtected, files.Move(name, name + "-moved", overwrite: false).Outcome);
+        Assert.True(File.Exists(Path.Combine(_install, "update-manifest.json")));
+    }
+
+    [Fact]
+    public void DeletingAFolderThatHoldsTheHome_IsRefused_ButABesideFolderIsnt()
+    {
+        string home = Path.Combine(_dir, "keep", "home");
+        string beside = Path.Combine(_dir, "beside");
+        Directory.CreateDirectory(home);
+        Directory.CreateDirectory(beside);
+        using var _ = WriteGuard.Configure(Facts(home, install: null));
+        var files = At(_dir);
+
+        Assert.Equal(FileOutcome.AppFilesProtected, files.Delete("keep").Outcome);
+        Assert.Equal(FileOutcome.AppFilesProtected, WriteGuard.HoldsAppFolders(Path.Combine(_dir, "keep")));
+        Assert.Null(WriteGuard.HoldsAppFolders(beside));
+    }
+
+    [Fact]
+    public void TheRefusals_SayInOrHolds()
+    {
+        Assert.Contains("is in or holds", FileText.InstallFilesProtected("x"), StringComparison.Ordinal);
+        Assert.Contains("is in or holds", FileText.AppFilesProtected("x"), StringComparison.Ordinal);
+    }
+
     // ---- the shell police
 
     [Fact]
@@ -169,6 +219,51 @@ public sealed class WriteGuardInstallTests : IDisposable
         Assert.Equal(_install, TrustedFilesPolice.Find("dir " + _install, guard));
         Assert.Null(TrustedFilesPolice.Find("type a.dll", guard));
         Assert.Null(TrustedFilesPolice.Find("copy evil " + Path.Combine(_dir, "other", "a.dll"), guard));
+    }
+
+    [Theory]
+    [InlineData("type .update/ready")]
+    [InlineData("del update-manifest.json")]
+    [InlineData("copy evil.dll sub/.update/staging/a.dll")]
+    public void TheShellPolice_RefusesTheUpdatesOwnNames(string command)
+    {
+        // By name, as .git and .neon are (2026-11-04, review P2-6).
+        Assert.NotNull(TrustedFilesPolice.Find(command, new TrustedFilesPolice.Guard(Path.Combine(_dir, "home"), _dir, _install)));
+        Assert.Null(TrustedFilesPolice.Find(command, new TrustedFilesPolice.Guard(Path.Combine(_dir, "home"), _dir)));
+    }
+
+    [Fact]
+    public void TheShellPolice_FromInsideTheInstall_RefusesARelativeWordThatExists()
+    {
+        // `copy evil.dll onnxruntime.dll` from the install's own folder named no full path (review P2-6).
+        File.WriteAllText(Path.Combine(_install, "onnxruntime.dll"), "x");
+        var guard = new TrustedFilesPolice.Guard(Path.Combine(_dir, "home"), _install, _install);
+
+        Assert.NotNull(TrustedFilesPolice.Find("copy evil.dll onnxruntime.dll", guard));
+        Assert.Null(TrustedFilesPolice.Find("copy a.txt new-name.txt", guard));
+    }
+
+    [Fact]
+    public void TheShellPolice_InAHomeKeptInTheInstall_LeavesTheSandboxAlone()
+    {
+        // A portable install's sandbox would otherwise refuse every command.
+        string home = Path.Combine(_install, "portable");
+        string sandbox = Path.Combine(home, "profiles", "neon", "files");
+        Directory.CreateDirectory(sandbox);
+        File.WriteAllText(Path.Combine(sandbox, "notes.md"), "x");
+
+        Assert.Null(TrustedFilesPolice.Find("type notes.md", new TrustedFilesPolice.Guard(home, sandbox, _install)));
+    }
+
+    [Fact]
+    public void TheShellPolice_ReadsAPathBehindAnEqualsOrASwitchsColon()
+    {
+        // A drive's colon is kept (review P7-3): --out=D:\install\x read as \install\x, which named nothing the guard knows.
+        var guard = new TrustedFilesPolice.Guard(Path.Combine(_dir, "home"), _dir, _install);
+        string exe = Path.Combine(_install, "NeonSidekick.exe");
+
+        Assert.NotNull(TrustedFilesPolice.Find("tool --out=" + exe, guard));
+        Assert.NotNull(TrustedFilesPolice.Find("tool -o:" + exe, guard));
     }
 
     [Fact]

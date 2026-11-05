@@ -697,10 +697,11 @@ public partial class ChatScreenTests
     }
 
     [Fact]
-    public async Task Notes_PrintScrubbed()
+    public async Task Notes_PrintLineByLine()
     {
+        // The scrub is the updater's, once, where the file is read (review P2-18): UpdateStageTests.NotesWithControlCharacters_AreScrubbedOnce_AsTheyAreRead holds it.
         _settings.Update(d => { d.TtsOutput = false; d.CheckForUpdatesAtStart = false; });
-        _updater = new FakeUpdater { Notes = "first line\nsecond\u001b[31m line" };
+        _updater = new FakeUpdater { Notes = "first line\nsecond line" };
         PushLine("/update notes");
         PushLine("/exit");
 
@@ -708,8 +709,7 @@ public partial class ChatScreenTests
 
         Assert.Contains(UpdateText.NotesHeading("0.5.6"), output);
         Assert.Contains("first line", output);
-        Assert.Contains("[31m line", output);
-        Assert.DoesNotContain("\u001b", output, StringComparison.Ordinal);   // Ordinal: a culture comparison ignores control characters and finds it anywhere
+        Assert.Contains("second line", output);
     }
 
     [Fact]
@@ -852,25 +852,416 @@ public partial class ChatScreenTests
     [Theory]
     [InlineData("/update notes")]
     [InlineData("/update cancel")]
-    [InlineData("/update rollback")]
     public async Task UnderAReply_AWord_AnswersInLines_OpensNoPane_AndNeverReachesTheModel(string typed)
     {
         UpdatePaneOn();
         _settings.Update(d => d.CheckForUpdatesAtStart = false);
         _updater = new FakeUpdater { Notes = "these notes" };
         UnderTheReply(i => PushLine(i, typed));
-        string answer = typed switch
-        {
-            "/update notes" => "these notes",
-            "/update cancel" => UpdateText.NothingToCancel,
-            _ => UpdateText.GoingBackLine("0.5.5"),
-        };
+        string answer = typed == "/update notes" ? "these notes" : UpdateText.NothingToCancel;
 
         string output = await RunAsync();
 
         Assert.Contains(answer, output);
         Assert.Equal(0, _updater.Checks);
         Assert.Equal("hi", Assert.Single(_chat.Requests)[^1].Text);
+    }
+
+    // ---- the screen, as the review left it (2026-11-04)
+
+    [Fact]
+    public void Rollback_IsAPaneUnderAReply_AndTheOtherWordsQuick()
+    {
+        // A Quick command runs through Post and isn't built to read a pane's keys (review P3-8).
+        Assert.Equal(MidTurnClass.Pane, ChatScreen.MidTurnPolicy(SlashCommand.Update, "rollback"));
+        Assert.Equal(MidTurnClass.Pane, ChatScreen.MidTurnPolicy(SlashCommand.Update, " ROLLBACK "));
+        Assert.Equal(MidTurnClass.Quick, ChatScreen.MidTurnPolicy(SlashCommand.Update, "notes"));
+        Assert.Equal(MidTurnClass.Quick, ChatScreen.MidTurnPolicy(SlashCommand.Update, "cancel"));
+    }
+
+    [Fact]
+    public async Task UnderAReply_Rollback_AnswersInLines_AndNeverReachesTheModel()
+    {
+        UpdatePaneOn();
+        _settings.Update(d => d.CheckForUpdatesAtStart = false);
+        _updater = new FakeUpdater();
+        UnderTheReply(i => PushLine(i, "/update rollback"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(UpdateText.GoingBackLine("0.5.5"), output);
+        Assert.Equal("0.5.5", _updater.RollbackOnDisk);
+        Assert.Equal("hi", Assert.Single(_chat.Requests)[^1].Text);
+    }
+
+    [Fact]
+    public async Task UnderAReply_TheWait_IsAPane_AndEscStopsIt()
+    {
+        // A wait with no reader left every key stuck, Esc too (reviews P2-11, P3-8, P7-1).
+        UpdatePaneOn();
+        _settings.Update(d => d.CheckForUpdatesAtStart = false);
+        _updater = new FakeUpdater { Answer = FakeUpdater.Newer(), CheckGate = new TaskCompletionSource() };
+        bool showed = false;
+        UnderTheReply(i =>
+        {
+            PushLine(i, "/update");
+            showed = Soon(() => Shows(UpdateText.CheckingSpinner));
+            i.Push(Keys.Escape);
+        });
+
+        string output = await RunAsync();
+
+        Assert.True(showed);
+        Assert.DoesNotContain("the notes", output);
+        Assert.Equal(1, _updater.Checks);
+        Assert.Empty(_updater.Staged);
+    }
+
+    [Fact]
+    public async Task UnderAReply_ACancelUnderTheWait_EndsTheCommandQuietly()
+    {
+        // Left to the watcher, the cancel reached LinePhase and /update came back on the row as type-ahead (review P7-2). Only a close of the pane's token gets here: a reply that just ends leaves the pane open, as it does /help.
+        UpdatePaneOn();
+        _settings.Update(d => d.CheckForUpdatesAtStart = false);
+        _updater = new FakeUpdater { Answer = FakeUpdater.Newer(), CheckGate = new TaskCompletionSource() };
+        using var stop = new CancellationTokenSource();
+        UnderTheReply(i =>
+        {
+            PushLine(i, "/update");
+            Assert.True(Soon(() => Shows(UpdateText.CheckingSpinner)));
+            stop.Cancel();
+        });
+
+        string output = await RunAsync(Scripted(), stop.Token);
+
+        Assert.Equal(1, _updater.Checks);
+        Assert.DoesNotContain("the notes", output);
+        Assert.DoesNotContain("A mid-turn command failed", output);
+    }
+
+    [Fact]
+    public async Task AtTheIdleLine_KeysTypedUnderASlowCheck_DontAnswerThePane()
+    {
+        // An 'i' typed while it asked would otherwise press Install (review P3-8).
+        UpdatePaneOn();
+        _settings.Update(d => d.CheckForUpdatesAtStart = false);
+        var gate = new TaskCompletionSource();
+        _updater = new FakeUpdater { Answer = FakeUpdater.Newer(), CheckGate = gate };
+        UpdateScript(
+            (() => true, i =>
+            {
+                _ = Task.Run(() =>
+                {
+                    if (Asked())
+                    {
+                        _time.Advance(TimeSpan.FromSeconds(1));
+                        gate.SetResult();
+                    }
+                });
+                PushLine(i, "/update");
+                i.Push(Keys.Char('i'));
+            }),
+            (() => Shows("the notes"), Key(Keys.Escape)),
+            (() => true, Line("/exit")));
+
+        await RunAsync();
+
+        Assert.Empty(_updater.Staged);
+    }
+
+    [Fact]
+    public async Task AtTheIdleLine_EscStopsTheRollbacksCheck()
+    {
+        UpdatePaneOn();
+        _settings.Update(d => d.CheckForUpdatesAtStart = false);
+        _updater = new FakeUpdater
+        {
+            RollbackCheck = token =>
+            {
+                token.WaitHandle.WaitOne(TimeSpan.FromSeconds(20));
+                token.ThrowIfCancellationRequested();
+                return null;
+            },
+        };
+        UpdateScript(
+            (() => true, i => { PushLine(i, "/update rollback"); i.Push(Keys.Escape); }),
+            (() => true, Line("/exit")));
+
+        string output = await RunAsync();
+
+        Assert.Null(_updater.RollbackOnDisk);
+        Assert.DoesNotContain(UpdateText.GoingBackLine("0.5.5"), output);
+    }
+
+    [Theory]
+    [InlineData("a line")]
+    [InlineData(null)]
+    public async Task TheStartsLine_IsAcknowledged_Once_WithOrWithoutOne(string? line)
+    {
+        // With none too, or a stale journal would never go (review P5-3).
+        _settings.Update(d => { d.TtsOutput = false; d.CheckForUpdatesAtStart = false; });
+        _updater = new FakeUpdater { StartLine = line };
+        PushLine("/update notes");
+        PushLine("/exit");
+
+        await RunAsync();
+
+        Assert.Equal(1, _updater.StartsAcknowledged);
+    }
+
+    [Fact]
+    public async Task ADropThatFails_SaysWhy_NotCanceled()
+    {
+        // Reviews P1-12, P3-4.
+        _settings.Update(d => { d.TtsOutput = false; d.CheckForUpdatesAtStart = false; });
+        _updater = new FakeUpdater { ReadyOnDisk = "0.5.7", DropRefusal = UpdateText.AnotherCopyStaging };
+        PushLine("/update cancel");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(UpdateText.StageFailedLine(UpdateText.AnotherCopyStaging), output);
+        Assert.DoesNotContain(UpdateText.CanceledLine, output);
+    }
+
+    [Fact]
+    public async Task ACancelOfARollbackThatFails_SaysWhy_NotCanceled()
+    {
+        // The file still there means the rollback still happens at quit (review P3-4).
+        _settings.Update(d => { d.TtsOutput = false; d.CheckForUpdatesAtStart = false; });
+        _updater = new FakeUpdater { RollbackOnDisk = "0.5.5", CancelRollbackRefusal = UpdateText.CouldntDelete("rollback") };
+        PushLine("/update cancel");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(UpdateText.StageFailedLine(UpdateText.CouldntDelete("rollback")), output);
+        Assert.DoesNotContain(UpdateText.CanceledLine, output);
+    }
+
+    [Fact]
+    public async Task CancelWithAPartialOrAnUnprovenStageLeft_DeletesThem()
+    {
+        // Nothing else could (reviews P4-11, P5-9).
+        _settings.Update(d => { d.TtsOutput = false; d.CheckForUpdatesAtStart = false; });
+        _updater = new FakeUpdater { LeftoversOnDisk = true };
+        PushLine("/update cancel");
+        PushLine("/exit");
+
+        Assert.Contains(UpdateText.CanceledLine, await RunAsync());
+        Assert.Equal([true], _updater.Drops);
+    }
+
+    [Fact]
+    public async Task ACancelDuringADownload_EmptiesTheStagesLastLine()
+    {
+        // A failure arriving as the cancel lands printed under "Update canceled." (review P4-12).
+        UpdatePaneOn();
+        _updater = new FakeUpdater { Answer = FakeUpdater.Newer() };
+        _updater.Stage = async (_, progress, ct) =>
+        {
+            progress?.Report(new UpdateStagePhase.Downloading(42));
+            try
+            {
+                await Task.Delay(Timeout.Infinite, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                // Ends with its own answer, as a stage past its last check of the token does.
+            }
+
+            return new UpdateStageResult("a late failure");
+        };
+        UpdateScript(
+            (() => Shows(UpdateText.IsOutLine("0.5.7")), Line("/update")),
+            (() => Shows("the notes"), Key(Keys.Char('i'))),
+            (() => MarkerShows("📦 0.5.7 42%"), Line("/update cancel")),
+            (() => Shows(UpdateText.CanceledLine), Line("/update notes")),
+            (() => Shows(UpdateText.NoNotesSaved("0.5.6")), Line("/exit")));
+
+        Assert.DoesNotContain("a late failure", await RunAsync());
+    }
+
+    [Fact]
+    public async Task AStagesLastLine_WakesTheIdleRead_WithNoKey()
+    {
+        // A stage ending between the idle loop's print and the read's arm: the slot wasn't in the arm's look, so its line sat until the next key.
+        UpdatePaneOn();
+        _updater = new FakeUpdater { Answer = FakeUpdater.Newer() };
+        var release = new TaskCompletionSource();
+        _updater.Stage = async (_, _, ct) =>
+        {
+            await release.Task.WaitAsync(ct);
+            return new UpdateStageResult("a reason");
+        };
+        UpdateScript(
+            (() => Shows(UpdateText.IsOutLine("0.5.7")), Line("/update")),
+            (() => Shows("the notes"), Key(Keys.Char('i'))),
+            (() => true, _ => release.SetResult()),
+            (() => Shows(UpdateText.StageFailedLine("a reason")), Line("/exit")));
+
+        await RunAsync();
+
+        Assert.Single(_updater.Staged);
+    }
+
+    [Fact]
+    public async Task ACancellationNobodyAskedFor_IsAFailure_NotACancel()
+    {
+        // A request's own timeout, read as a cancel, left the marker at 42% for good (review P7-7).
+        UpdatePaneOn();
+        _updater = new FakeUpdater { Answer = FakeUpdater.Newer() };
+        _updater.Stage = (_, _, _) => throw new TaskCanceledException("timed out");
+        UpdateScript(
+            (() => Shows(UpdateText.IsOutLine("0.5.7")), Line("/update")),
+            (() => Shows("the notes"), Key(Keys.Char('i'))),
+            (() => Shows(UpdateText.StageFailedLine("timed out")), Line("/exit")));
+
+        await RunAsync();
+
+        Assert.Single(_updater.Staged);
+    }
+
+    [Fact]
+    public async Task UpdateNotes_BeforeTheStartsAnswer_LeavesThatAnswer()
+    {
+        // Only the bare word claims the check: /update notes at once dropped the start's late answer, and the marker never came (review P1-13).
+        UpdatePaneOn();
+        var gate = new TaskCompletionSource();
+        _updater = new FakeUpdater { Answer = FakeUpdater.Newer(), CheckGate = gate };
+        UpdateScript(
+            (() => Asked(), Line("/update notes")),
+            (() => Shows(UpdateText.NoNotesSaved("0.5.6")), _ => gate.TrySetResult()),
+            (() => Shows(UpdateText.IsOutLine("0.5.7")), Line("/exit")));
+
+        await RunAsync();
+
+        Assert.Equal(1, _updater.Checks);
+    }
+
+    [Fact]
+    public async Task APulledRelease_LeavesNoKeptAnswer()
+    {
+        // The marker and the kept answer went on offering it for the hour (review P1-14).
+        UpdatePaneOn();
+        _updater = new FakeUpdater { Answer = FakeUpdater.Newer() };
+        UpdateScript(
+            (() => Shows(UpdateText.IsOutLine("0.5.7")), i =>
+            {
+                _time.Advance(ChatScreen.UpdateAnswerKept + TimeSpan.FromMinutes(1));
+                _updater.Answer = new UpdateCheckResult(UpdateCheckKind.Latest);
+                PushLine(i, "/update");
+            }),
+            (() => Shows(UpdateText.LatestLine("0.5.6")), i => { _updater.Answer = FakeUpdater.Newer("0.5.8"); PushLine(i, "/update"); }),
+            (() => Shows("the notes"), Key(Keys.Escape)),
+            (() => true, Line("/exit")));
+
+        await RunAsync();
+
+        Assert.Equal(3, _updater.Checks);
+    }
+
+    [Fact]
+    public async Task ThePane_MovesTheMarkerFromAnOlderOffer()
+    {
+        // The pane said 0.5.8 over a marker saying 0.5.7 (review P6-5).
+        UpdatePaneOn();
+        _updater = new FakeUpdater { Answer = FakeUpdater.Newer() };
+        UpdateScript(
+            (() => Shows(UpdateText.IsOutLine("0.5.7")), i =>
+            {
+                _time.Advance(ChatScreen.UpdateAnswerKept + TimeSpan.FromMinutes(1));
+                _updater.Answer = FakeUpdater.Newer("0.5.8");
+                PushLine(i, "/update");
+            }),
+            (() => Shows("the notes"), Key(Keys.Escape)),
+            (() => MarkerShows("📦 0.5.8"), Line("/exit")));
+
+        await RunAsync();
+
+        Assert.Empty(_updater.Staged);
+    }
+
+    [Fact]
+    public async Task AStageAnotherCopyLeft_ShowsAtTheNextIdleLine()
+    {
+        // With no /update to read the disk, a second copy's stage never reached this marker (review P5-7).
+        UpdatePaneOn();
+        _settings.Update(d => d.CheckForUpdatesAtStart = false);
+        _updater = new FakeUpdater();
+        UpdateScript(
+            (() => true, i => { _updater.ReadyOnDisk = "0.5.7"; PushLine(i, "/update notes"); }),
+            (() => MarkerShows("📦 0.5.7 at quit"), Line("/exit")));
+
+        await RunAsync();
+
+        Assert.Equal(0, _updater.Checks);
+    }
+
+    [Fact]
+    public async Task AQuitMidStage_SaysItWasntFinished()
+    {
+        // "Downloading" had said it installs at quit (review P6-2).
+        UpdatePaneOn();
+        _updater = new FakeUpdater { Answer = FakeUpdater.Newer() };
+        _updater.Stage = async (_, progress, ct) =>
+        {
+            progress?.Report(new UpdateStagePhase.Downloading(10));
+            await Task.Delay(Timeout.Infinite, ct);
+            return new UpdateStageResult(null);
+        };
+        UpdateScript(
+            (() => Shows(UpdateText.IsOutLine("0.5.7")), Line("/update")),
+            (() => Shows("the notes"), Key(Keys.Char('i'))),
+            (() => MarkerShows("📦 0.5.7 10%"), Line("/exit")));
+
+        Assert.Contains(UpdateText.QuitMidStage("0.5.7"), await RunAsync());
+    }
+
+    [Fact]
+    public async Task Rollback_LeavesTheStage_AndCancelBringsItBack()
+    {
+        // Review P3-13: the swap's finish deletes it if the rollback goes ahead.
+        UpdatePaneOn();
+        _settings.Update(d => d.CheckForUpdatesAtStart = false);
+        _updater = new FakeUpdater { ReadyOnDisk = "0.5.7" };
+        UpdateScript(
+            (() => true, Line("/update rollback")),
+            (() => Shows(UpdateText.GoingBackLine("0.5.5")), Line("/update cancel")),
+            (() => Shows(UpdateText.CanceledLine) && MarkerShows("📦 0.5.7 at quit"), Line("/exit")));
+
+        await RunAsync();
+
+        Assert.Equal("0.5.7", _updater.ReadyOnDisk);
+        Assert.Equal(1, _updater.RollbacksCanceled);
+    }
+
+    [Fact]
+    public async Task Rollback_NamesTheDocsThatStay()
+    {
+        // Review P2-2, the user's call.
+        UpdatePaneOn();
+        _settings.Update(d => d.CheckForUpdatesAtStart = false);
+        _updater = new FakeUpdater { DocsStaying = ["docs/a.md"] };
+        UpdateScript(
+            (() => true, Line("/update rollback")),
+            (() => Shows(UpdateText.GoingBackLine("0.5.5", ["docs/a.md"])), Line("/exit")));
+
+        await RunAsync();
+
+        Assert.Equal("0.5.5", _updater.RollbackOnDisk);
+    }
+
+    [Fact]
+    public async Task ANewVersionWhileGoingBack_SaysCancelComesFirst()
+    {
+        // Install was refused with a pending rollback, and the line didn't say why (review P3-14).
+        UpdatePaneOn();
+        _updater = new FakeUpdater { RollbackOnDisk = "0.5.5", Answer = FakeUpdater.Newer() };
+        UpdateScript(
+            (() => Shows(UpdateText.IsOutWhileGoingBack("0.5.7")), Line("/exit")));
+
+        Assert.DoesNotContain(UpdateText.IsOutLine("0.5.7"), await RunAsync());
     }
 
     [Fact]

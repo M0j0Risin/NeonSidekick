@@ -6,4 +6,7 @@ public static class VcRuntimeText
     public const string InstallerUrl = "https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist";
 
     public static string Missing(string library) => $"Microsoft's Visual C++ runtime isn't installed, {library} is missing: {InstallerUrl}";
+
+    /// <summary>What the load itself said, behind <see cref="Missing"/>: the engine may not need that DLL at all.</summary>
+    public static string Detail(string otherwise) => $"The load said: {otherwise}";
 }

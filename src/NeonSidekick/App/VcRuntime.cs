@@ -41,10 +41,10 @@ public static class VcRuntime
 
     /// <summary>
     /// What a failed load says: the runtime's text when one of its DLLs is missing, <paramref name="otherwise"/> when none is. Asked in both
-    /// of a load's catch branches, since the exception's type can vary under NativeAOT.
+    /// of a load's catch branches, since the exception's type can vary under NativeAOT. The original detail stays behind the runtime's text (2026-11-04, review P1-16): an engine may not need the DLL that's missing, and a corrupt model's reason was lost to it.
     /// </summary>
     public static string Explain(string otherwise, Func<string, bool>? loads = null) =>
-        Missing(loads) is { } library ? VcRuntimeText.Missing(library) : otherwise;
+        Missing(loads) is { } library ? VcRuntimeText.Missing(library) + " " + VcRuntimeText.Detail(otherwise) : otherwise;
 
     /// <summary>The real loader: a failed <see cref="NativeLibrary.TryLoad(string, out IntPtr)"/> raises no box under NativeAOT.</summary>
     private static bool Loads(string library)

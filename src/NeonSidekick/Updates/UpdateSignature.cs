@@ -54,6 +54,13 @@ public static class UpdateSignature
         return false;
     }
 
+    /// <summary>Whether <paramref name="signatureText"/> holds anything shaped like a signature: a page or an error sent with a 200 doesn't, which is the network's doing, and not a trust failure (2026-11-04, review P4-13).</summary>
+    public static bool HoldsSignatureLine(string signatureText)
+    {
+        ArgumentNullException.ThrowIfNull(signatureText);
+        return Lines(signatureText).Count > 0;
+    }
+
     /// <summary>One line of a <c>.sig</c> file: the base64 signature of <paramref name="signed"/>, with no line ending.</summary>
     public static string SignatureLine(ReadOnlySpan<byte> signed, ECDsa privateKey)
     {

@@ -1,3 +1,6 @@
+using NeonSidekick.Diagnostics;
+using NeonSidekick.Speech;
+
 namespace NeonSidekick.Updates;
 
 /// <summary>
@@ -9,6 +12,7 @@ namespace NeonSidekick.Updates;
 /// <item><c>staged/</c>: the stage's <c>.sha256</c>, <c>.sig</c>, notes and install hashes, and the probe's files, outside <c>staging/</c> so they never land among the checked files; <c>ready</c> beside it.</item>
 /// <item><c>release/</c>: the installed version's <c>.sha256</c>, <c>.sig</c> and notes, empty for a copy installed by hand.</item>
 /// <item><c>previous/</c>: the old version's changed files, its manifest and its <c>release/</c>. <c>previous.old/</c> holds the older set during a swap, and <c>outgoing/</c> the newer files during a rollback, for an undo.</item>
+/// <item><c>kept/&lt;version&gt;/</c>: the user's own files a swap had to move out of the way (a stray, an edited copy), a folder per swap. Nothing of the app's is here, and the app never deletes it.</item>
 /// <item><c>swap.json</c>, <c>rollback</c> (a pending rollback), <c>swap-failed.txt</c> (why a window close's swap failed).</item>
 /// </list>
 /// </summary>
@@ -16,6 +20,9 @@ public sealed class UpdateFolder
 {
     /// <summary>The folder's own name, under the install.</summary>
     public const string Name = ".update";
+
+    /// <summary>The proof folder's name, in <c>.update/</c> and <c>previous/</c>; a package can't list a top-level folder of this name (2026-11-04, review P6-13: the name was a literal in four places, and a rename missed in one would move proofs into the install).</summary>
+    public const string ReleaseName = "release";
 
     /// <summary>The <c>.sha256</c>'s fixed name in <c>staged/</c>, <c>release/</c> and <c>previous/release/</c>; the text inside names the asset.</summary>
     public const string ShaName = "release.sha256";
@@ -43,19 +50,22 @@ public sealed class UpdateFolder
 
     public string Staging => Path.Combine(Root, "staging");
 
-    public string StagingParts => Staging + ".parts";
+    public string StagingParts => ModelStore.PartsPath(Staging);
 
     public string Staged => Path.Combine(Root, "staged");
 
     public string Ready => Path.Combine(Root, "ready");
 
-    public string Release => Path.Combine(Root, "release");
+    public string Release => Path.Combine(Root, ReleaseName);
 
     public string Previous => Path.Combine(Root, "previous");
 
     public string PreviousOld => Path.Combine(Root, "previous.old");
 
     public string Outgoing => Path.Combine(Root, "outgoing");
+
+    /// <summary>Where a swap puts the user's files it had to move: <c>kept/&lt;version&gt;</c>, a new folder per swap.</summary>
+    public string Kept => Path.Combine(Root, "kept");
 
     public string Journal => Path.Combine(Root, "swap.json");
 
@@ -85,7 +95,7 @@ public sealed class UpdateFolder
 
     public string PreviousManifest => Path.Combine(Previous, UpdateManifest.FileName);
 
-    public string PreviousRelease => Path.Combine(Previous, "release");
+    public string PreviousRelease => Path.Combine(Previous, ReleaseName);
 
     /// <summary>A path under the install, from a relative one with forward slashes.</summary>
     public string Full(string relative) => Path.Combine(Install, relative.Replace('/', Path.DirectorySeparatorChar));
@@ -101,4 +111,41 @@ public sealed class UpdateFolder
 
     /// <summary>A relative path, with forward slashes, for a path under the install (the journal holds these, so moving the folder changes nothing).</summary>
     public string Relative(string full) => Path.GetRelativePath(Install, full).Replace(Path.DirectorySeparatorChar, '/');
+
+    /// <summary>
+    /// Deletes a folder of this layout, the one delete for the update's code (2026-11-04, reviews P5-5, P1-20). A read-only file would otherwise fail the delete for good: <c>previous.old</c> stuck that way stopped every later swap with "still in use".
+    /// So a failure clears the attributes and tries once more. True when it's gone; what's left is logged, and something retries it next time.
+    /// </summary>
+    public static bool DeleteQuietly(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        try
+        {
+            if (!Directory.Exists(path))
+            {
+                return true;
+            }
+
+            try
+            {
+                Directory.Delete(path, recursive: true);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                foreach (string entry in Directory.EnumerateFileSystemEntries(path, "*", new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = 0, IgnoreInaccessible = true }))
+                {
+                    File.SetAttributes(entry, File.GetAttributes(entry) & ~FileAttributes.ReadOnly);
+                }
+
+                Directory.Delete(path, recursive: true);
+            }
+
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            DiagnosticLog.Info(UpdateJournal.Category, UpdateText.CleanupLeft(path, ex.Message));
+            return false;
+        }
+    }
 }

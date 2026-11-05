@@ -1317,6 +1317,7 @@ internal sealed partial class ChatScreen
         _splash = splash;
         _setTitle = setTitle;
         ArgumentNullException.ThrowIfNull(console);
+        _updateConsole = console;
         _renderScreen = renderScreen ?? throw new ArgumentNullException(nameof(renderScreen));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         // The Hint bar resolved once a change (2026-10-13, the code review): the row's funcs read it every frame.
@@ -12375,6 +12376,7 @@ internal sealed partial class ChatScreen
             // The Docker log window before its session goes (2026-10-23): its feed's loop never outlives the door it reads through.
             _closeDockerLogWindow?.Invoke();
             _docker.Dispose();
+            string? updateQuitLine = UpdateQuitLine();   // read first: ending the work moves the state on
             await EndUpdateWorkAsync().ConfigureAwait(false);   // a running probe killed and waited for, the download's partial kept (2026-11-04, self-update)
             _advisorHost.Dispose();
             StopLive();
@@ -12401,6 +12403,11 @@ internal sealed partial class ChatScreen
             DrainDiagnostics();
             _pane.Close();
             _pane.Dispose();
+            if (updateQuitLine is not null)
+            {
+                _updateConsole.WriteLine(updateQuitLine);   // after the alternate buffer: anything printed earlier goes with it (2026-11-04, review P6-2)
+            }
+
             DiagnosticLog.Emitted -= enqueue;
             DiagnosticLog.EchoToConsole = previousEcho;
         }
@@ -12458,7 +12465,7 @@ internal sealed partial class ChatScreen
 
         Volatile.Write(ref _alertSignal, alert);
         if (_timers.HasAlerts || _processes.HasAlerts || LearnPending || _jobs.HasCompletions || ImagineReady || WindowWorkReady || ReadSeekReady
-            || _webUi.LinesReady || _webUi.NoticesReady || _settings.OutsideChangesReady || !_homeCameraShows.IsEmpty || !_updateLines.IsEmpty)
+            || _webUi.LinesReady || _webUi.NoticesReady || _settings.OutsideChangesReady || !_homeCameraShows.IsEmpty || !_updateLines.IsEmpty || Volatile.Read(ref _updateFinalLine) is not null)
         {
             // Queued between the loop's drain and this arm: the read returns at once.
             alert.Cancel();

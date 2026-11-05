@@ -364,11 +364,11 @@ public static class FileText
 
     /// <summary>A write into the app's home or a profile (review P2/W1). Prompt text.</summary>
     public static string AppFilesProtected(string path) =>
-        $"Error: '{path}' is one of the app's own settings, configs or databases, which the file tools never change; the user changes them in /settings, /tools and the other panes";
+        $"Error: '{path}' is in or holds the app's own settings, configs or databases, which the file tools never change; the user changes them in /settings, /tools and the other panes";
 
     /// <summary>A write into a package's install folder (2026-11-04, self-update). Prompt text.</summary>
     public static string InstallFilesProtected(string path) =>
-        $"Error: '{path}' is in the folder the app is installed in, which the file tools never change; the user updates the app with /update";
+        $"Error: '{path}' is in or holds the folder the app is installed in, which the file tools never change; the user updates the app with /update";
 
     /// <summary>A write into a skill root (review P3). Prompt text.</summary>
     public static string SkillFilesProtected(string path) =>

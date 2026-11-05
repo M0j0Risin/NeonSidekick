@@ -106,6 +106,36 @@ public sealed class KeySource : IAnsiConsoleInput
     public int Buffered => _buffer.Count;
 
     /// <summary>
+    /// Drops the keys typed so far, from the type-ahead and the console's own queue, and only keys (2026-11-04, review P3-8): what a pane with buttons must not read as a press after a wait the user typed through. Only when no reader is running.
+    /// </summary>
+    public void DropTypedKeys()
+    {
+        for (int left = _buffer.Count; left > 0; left--)
+        {
+            var e = _buffer.Dequeue();
+            if (e is not InputEvent.Key)
+            {
+                _buffer.Enqueue(e);
+            }
+        }
+
+        try
+        {
+            while (_events.IsAvailable && _events.Read() is { } queued)
+            {
+                if (queued is not InputEvent.Key)
+                {
+                    _buffer.Enqueue(queued);
+                }
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            // Redirected stdin: no keyboard, so nothing was typed.
+        }
+    }
+
+    /// <summary>
     /// The line hook still running after <see cref="WatchAsync(CancellationTokenSource, CancellationToken, Func{ConsoleKeyInfo, bool}?, CancellationTokenSource?, Func{string, Task{bool}}?)"/>
     /// returned (its <c>stop</c> fired while a pane the hook opened was reading the keys); a
     /// completed task when none. The hook owns the keys until it completes: await this before

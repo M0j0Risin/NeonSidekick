@@ -1,3 +1,5 @@
+using NeonSidekick.Files;
+
 namespace NeonSidekick.Updates;
 
 /// <summary>
@@ -7,6 +9,12 @@ namespace NeonSidekick.Updates;
 /// </summary>
 public sealed class UpdateLock : IDisposable
 {
+    /// <summary>EWOULDBLOCK on a Mac: the one error .NET's <c>flock</c> call turns into an <see cref="IOException"/>, with the errno in its <c>HResult</c> (read from .NET 10's <c>SafeFileHandle.Unix.cs</c>).</summary>
+    private const int MacWouldBlock = 35;
+
+    /// <summary>The same on Linux, which this app doesn't ship for but the suite can run on.</summary>
+    private const int LinuxWouldBlock = 11;
+
     private readonly FileStream _file;
 
     private UpdateLock(FileStream file)
@@ -15,21 +23,42 @@ public sealed class UpdateLock : IDisposable
     }
 
     /// <summary>A shared hold, or null when someone holds it exclusively or it can't be created: a read-only folder never stops the app, it just can't update, which preflight reports.</summary>
-    public static UpdateLock? TryShared(string path) => TryOpen(path, FileAccess.Read, FileShare.Read);
+    public static UpdateLock? TryShared(string path) => TryOpen(path, FileAccess.Read, FileShare.Read, out _);
+
+    /// <summary><see cref="TryShared(string)"/>, with <paramref name="held"/> true only when another holder is why it failed, so only that case waits (2026-11-04, review P5-2: an in-use lock that can't be opened read as an update in progress, 10 s at every start).</summary>
+    public static UpdateLock? TryShared(string path, out bool held) => TryOpen(path, FileAccess.Read, FileShare.Read, out held);
 
     /// <summary>An exclusive hold, or null when anyone holds it.</summary>
-    public static UpdateLock? TryExclusive(string path) => TryOpen(path, FileAccess.ReadWrite, FileShare.None);
+    public static UpdateLock? TryExclusive(string path) => TryOpen(path, FileAccess.ReadWrite, FileShare.None, out _);
+
+    /// <summary><see cref="TryExclusive(string)"/>, with <paramref name="held"/> as in <see cref="TryShared(string, out bool)"/>.</summary>
+    public static UpdateLock? TryExclusive(string path, out bool held) => TryOpen(path, FileAccess.ReadWrite, FileShare.None, out held);
 
     public void Dispose() => _file.Dispose();
 
-    private static UpdateLock? TryOpen(string path, FileAccess access, FileShare share)
+    /// <summary>
+    /// Whether <paramref name="ex"/> says another holder has the lock: a sharing or lock violation on Windows, EWOULDBLOCK elsewhere. A bare <see cref="IOException"/> won't do, since write-protected media and disk errors throw it too.
+    /// </summary>
+    internal static bool IsHeld(IOException ex)
     {
+        ArgumentNullException.ThrowIfNull(ex);
+        return OperatingSystem.IsWindows() ? WriteResult.IsInUse(ex) : ex.HResult is MacWouldBlock or LinuxWouldBlock;
+    }
+
+    private static UpdateLock? TryOpen(string path, FileAccess access, FileShare share, out bool held)
+    {
+        held = false;
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             return new UpdateLock(new FileStream(path, FileMode.OpenOrCreate, access, share));
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (IOException ex)
+        {
+            held = IsHeld(ex);
+            return null;
+        }
+        catch (UnauthorizedAccessException)
         {
             return null;
         }

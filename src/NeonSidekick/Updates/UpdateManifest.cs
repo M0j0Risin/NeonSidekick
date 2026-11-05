@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -34,17 +35,7 @@ public readonly record struct UpdateVersion(int Major, int Minor, int Patch) : I
         return tag is ['v', ..] && TryParse(tag[1..], out version);
     }
 
-    public int CompareTo(UpdateVersion other)
-    {
-        int major = Major.CompareTo(other.Major);
-        if (major != 0)
-        {
-            return major;
-        }
-
-        int minor = Minor.CompareTo(other.Minor);
-        return minor != 0 ? minor : Patch.CompareTo(other.Patch);
-    }
+    public int CompareTo(UpdateVersion other) => (Major, Minor, Patch).CompareTo((other.Major, other.Minor, other.Patch));
 
     public static bool operator <(UpdateVersion left, UpdateVersion right) => left.CompareTo(right) < 0;
 
@@ -166,10 +157,10 @@ public sealed class UpdateManifest
 
     /// <summary>
     /// Whether <paramref name="path"/> is a package's own relative path: forward slashes, no empty, <c>.</c> or <c>..</c> part, no root, no colon
-    /// (a drive or an NTFS stream), no part ending in a dot or space (Windows would quietly name another file), no control characters. Shared with
-    /// the journal's reading, which also accepts <c>.update</c>'s own paths.
+    /// (a drive or an NTFS stream), no part ending in a dot or space (Windows would quietly name another file), no control characters, and on Windows no device name (2026-11-04, review P5-16: a step at <c>NUL</c> targets a
+    /// device, with or without an extension). None is in today's package. Shared with the journal's reading, which also accepts <c>.update</c>'s own paths.
     /// </summary>
-    internal static bool IsRelativeInside(string path)
+    internal static bool IsRelativeInside(string? path)
     {
         if (string.IsNullOrEmpty(path) || path.Contains('\\', StringComparison.Ordinal) || path.Contains(':', StringComparison.Ordinal) || path.Any(char.IsControl))
         {
@@ -178,7 +169,7 @@ public sealed class UpdateManifest
 
         foreach (string part in path.Split('/'))
         {
-            if (part.Length == 0 || part is "." or ".." || part[^1] is '.' or ' ')
+            if (part.Length == 0 || part is "." or ".." || part[^1] is '.' or ' ' || (OperatingSystem.IsWindows() && IsDeviceName(part)))
             {
                 return false;
             }
@@ -187,9 +178,20 @@ public sealed class UpdateManifest
         return !System.IO.Path.IsPathRooted(path);
     }
 
+    // CON, PRN, AUX, NUL, COM1-9 and LPT1-9, in any case and with any extension: Windows reads aux.txt as AUX.
+    private static bool IsDeviceName(string part)
+    {
+        int dot = part.IndexOf('.', StringComparison.Ordinal);
+        string name = (dot < 0 ? part : part[..dot]).TrimEnd(' ').ToUpperInvariant();
+        return name is "CON" or "PRN" or "AUX" or "NUL"
+            || (name.Length == 4 && name[3] is >= '1' and <= '9' && name.StartsWith("COM", StringComparison.Ordinal))
+            || (name.Length == 4 && name[3] is >= '1' and <= '9' && name.StartsWith("LPT", StringComparison.Ordinal));
+    }
+
     private string? Problem()
     {
-        if (!UpdateVersion.TryParse(Version, out _) || string.IsNullOrEmpty(Rid))
+        // A JSON null reaches these past their initializers (2026-11-04, review P1-1): this reader's whole job is untrusted input, and a throw here went past every catch on the start's path.
+        if (!UpdateVersion.TryParse(Version, out _) || string.IsNullOrEmpty(Rid) || Files is null || Exe is null)
         {
             return UpdateText.ManifestUnreadable;
         }
@@ -197,9 +199,14 @@ public sealed class UpdateManifest
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var file in Files)
         {
+            if (file is null)
+            {
+                return UpdateText.ManifestUnreadable;
+            }
+
             if (!IsRelativeInside(file.Path) || IsReserved(file.Path) || !IsHash(file.Sha256) || !seen.Add(file.Path))
             {
-                return UpdateText.ManifestBadEntry(file.Path);
+                return UpdateText.ManifestBadEntry(file.Path ?? "");
             }
         }
 
@@ -209,12 +216,12 @@ public sealed class UpdateManifest
 
     private static bool IsReserved(string path)
     {
-        // "release" too: previous/ holds a package's files beside its own release/ folder, so a top-level one would land in it.
+        // The release folder too: previous/ holds a package's files beside its own release/ folder, so a top-level one would land in it.
         string top = path.Split('/')[0];
-        return string.Equals(top, UpdateFolder.Name, StringComparison.OrdinalIgnoreCase) || string.Equals(top, "release", StringComparison.OrdinalIgnoreCase) || string.Equals(path, FileName, StringComparison.OrdinalIgnoreCase);
+        return string.Equals(top, UpdateFolder.Name, StringComparison.OrdinalIgnoreCase) || string.Equals(top, UpdateFolder.ReleaseName, StringComparison.OrdinalIgnoreCase) || string.Equals(path, FileName, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool IsHash(string text) => text.Length == 64 && text.All(char.IsAsciiHexDigit);
+    private static bool IsHash(string? text) => text is { Length: 64 } && text.All(char.IsAsciiHexDigit);
 }
 
 /// <summary>The hashes of a file or some bytes, in the lower-case hex the manifest and the <c>.sha256</c> use.</summary>
@@ -222,10 +229,28 @@ public static class UpdateHash
 {
     public static string Of(ReadOnlySpan<byte> bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
 
-    public static string OfFile(string path)
+    /// <summary>The file's hash, read in chunks with <paramref name="cancellationToken"/> checked between them (2026-11-04, review P7-6): one big exe could otherwise run past a window close's whole budget.</summary>
+    public static string OfFile(string path, CancellationToken cancellationToken = default)
     {
-        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, 1 << 20, FileOptions.SequentialScan);
-        return Convert.ToHexStringLower(SHA256.HashData(stream));
+        cancellationToken.ThrowIfCancellationRequested();
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, 1 << 16, FileOptions.SequentialScan);
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        byte[] buffer = ArrayPool<byte>.Shared.Rent(1 << 20);
+        try
+        {
+            int read;
+            while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                hash.AppendData(buffer, 0, read);
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+
+        return Convert.ToHexStringLower(hash.GetHashAndReset());
     }
 
     public static bool Same(string left, string right) => string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
@@ -271,10 +296,26 @@ public sealed record UpdateShaFile(string ArchiveHash, string ArchiveName, strin
     }
 }
 
+/// <summary>One installed file as staging found it: its hash, and the length and time it had just before that hash was taken.</summary>
+public sealed class UpdateInstallFile
+{
+    [JsonPropertyName("sha256")]
+    public string Sha256 { get; set; } = "";
+
+    [JsonPropertyName("length")]
+    public long Length { get; set; }
+
+    [JsonPropertyName("time")]
+    public long TimeTicks { get; set; }
+}
+
 /// <summary>
 /// The hashes of the install's listed files, kept in <c>staged/</c> (2026-11-04, self-update): hashing the whole install happens at staging, in the
 /// background, so a swap in a window close's 4 s only hashes what moves, and a file altered by hand counts as changed. <see cref="ManifestHash"/> is
 /// the installed manifest they were taken against: a package unpacked by hand over the folder changes it, and then the list no longer holds.
+///
+/// <para>Each entry keeps the file's length and time (2026-11-04, review P4-8: a shared library antivirus quarantined while a stage waited read as "same", and the swap reported done with it gone), read before its hash, so a write between the two shows
+/// as a change. <see cref="Current"/> hashes again only what's different now, so a window close's cost stays near the old one.</para>
 /// </summary>
 public sealed class UpdateInstallHashes
 {
@@ -282,10 +323,10 @@ public sealed class UpdateInstallHashes
     public string ManifestHash { get; set; } = "";
 
     [JsonPropertyName("files")]
-    public Dictionary<string, string> Files { get; set; } = [];
+    public Dictionary<string, UpdateInstallFile> Files { get; set; } = [];
 
-    /// <summary>Takes the hashes of every file <paramref name="installed"/> lists that's there; a missing one has no entry, so it counts as changed.</summary>
-    public static UpdateInstallHashes Take(string install, UpdateManifest installed, string manifestHash)
+    /// <summary>Takes the hashes of every file <paramref name="installed"/> lists that's there; a missing one has no entry, so it counts as changed. <paramref name="cancellationToken"/> ends it (review P2-12: it was a whole install's hashing that nothing could stop).</summary>
+    public static UpdateInstallHashes Take(string install, UpdateManifest installed, string manifestHash, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(installed);
         var hashes = new UpdateInstallHashes { ManifestHash = manifestHash };
@@ -296,7 +337,10 @@ public sealed class UpdateInstallHashes
             {
                 try
                 {
-                    hashes.Files[file.Path] = UpdateHash.OfFile(full);
+                    var info = new FileInfo(full);
+                    long length = info.Length;
+                    long time = info.LastWriteTimeUtc.Ticks;
+                    hashes.Files[file.Path] = new UpdateInstallFile { Sha256 = UpdateHash.OfFile(full, cancellationToken), Length = length, TimeTicks = time };
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
@@ -307,12 +351,65 @@ public sealed class UpdateInstallHashes
 
         return hashes;
     }
+
+    /// <summary>
+    /// The stage's list, one reader for the recheck and the start (2026-11-04, reviews P2-9, P3-19). Null when it's missing or not a valid list: <c>"files": null</c> or a null entry went past every catch on the exit's path. A failure to read it throws, since that isn't the list's fault.
+    /// </summary>
+    public static UpdateInstallHashes? TryRead(UpdateFolder folder)
+    {
+        ArgumentNullException.ThrowIfNull(folder);
+        try
+        {
+            var hashes = JsonSerializer.Deserialize(File.ReadAllBytes(folder.StagedInstallHashes), UpdateJsonContext.Default.UpdateInstallHashes);
+            return hashes is { ManifestHash: not null, Files: not null } && !hashes.Files.Values.Any(file => file is null or { Sha256: null }) ? hashes : null;
+        }
+        catch (Exception ex) when (ex is JsonException or FileNotFoundException or DirectoryNotFoundException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// What each listed file hashes to now, by path: the kept answer when its length and time are as staging found them, else hashed again under <paramref name="cancellationToken"/>, so a file edited or quarantined since gets repaired, and one only touched stays verified.
+    /// A file that's gone or can't be read has no entry.
+    /// </summary>
+    public Dictionary<string, string> Current(string install, UpdateManifest installed, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(installed);
+        var current = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var file in installed.Files)
+        {
+            var info = new FileInfo(System.IO.Path.Combine(install, file.Path));
+            if (!info.Exists)
+            {
+                continue;
+            }
+
+            if (Files.TryGetValue(file.Path, out var kept) && kept.Length == info.Length && kept.TimeTicks == info.LastWriteTimeUtc.Ticks)
+            {
+                current[file.Path] = kept.Sha256;
+                continue;
+            }
+
+            try
+            {
+                current[file.Path] = UpdateHash.OfFile(info.FullName, cancellationToken);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Unreadable counts as changed, as a missing file does.
+            }
+        }
+
+        return current;
+    }
 }
 
 /// <summary>The update's JSON types (2026-11-04, self-update), source-generated like every other area's.</summary>
 [JsonSourceGenerationOptions(WriteIndented = true, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(UpdateManifest))]
 [JsonSerializable(typeof(UpdateInstallHashes))]
+[JsonSerializable(typeof(UpdateInstallFile))]
 [JsonSerializable(typeof(UpdateJournal))]
 [JsonSerializable(typeof(GitHubRelease))]
 internal sealed partial class UpdateJsonContext : JsonSerializerContext;

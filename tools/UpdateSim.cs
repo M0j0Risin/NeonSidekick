@@ -258,7 +258,8 @@ static class Scenarios
             s.AlterInstalled(s.SmallFile, "altered by hand");
             s.Says(await s.Run("all"), "exit: done");
             s.InstalledIs(s.SmallFile, s.BaseText(s.SmallFile));
-            s.PreviousIs(s.SmallFile, "altered by hand");
+            s.KeptIs(s.Base, s.SmallFile, "altered by hand");
+            s.NotInPrevious(s.SmallFile);
         }),
         ("cancel-keeps-rollback", async () =>
         {
@@ -383,6 +384,7 @@ static class Scenarios
             s.Publish(s.Next, tamper: entries => entries.Remove(s.NativeLibrary), manifestFromEntries: true);
             s.Refused(await s.Run("all"));
             s.NoStage();
+            s.False(Directory.Exists(s.Folder.Staging), "a package missing a file is the package's fault, so it's dropped");
         }),
         ("garbage-library", async () =>
         {
@@ -392,6 +394,7 @@ static class Scenarios
             s.Refused(await s.Run("all"));
             s.True(clock.Elapsed < TimeSpan.FromSeconds(20), "a damaged library should fail at once, with no box to wait on");
             s.NoStage();
+            s.StageKept();
             s.ManifestIs(s.Base);
         }),
         ("probe-crashes", async () =>
@@ -401,12 +404,26 @@ static class Scenarios
             s.Refused(await s.Run("all"));
             s.True(clock.Elapsed < TimeSpan.FromSeconds(20), "a crash should fail at once, with no box to wait on");
             s.NoStage();
+            s.StageKept();
+        }),
+        ("failed-probe-retries-with-no-download", async () =>
+        {
+            s.Publish(s.Next, tamper: entries => entries[Sim.CrashMarker] = [], manifestFromEntries: true);
+            s.Refused(await s.Run("stage"));
+            s.StageKept();
+            long sent = s.GitHub.Sent(s.Archive(s.Next));
+            s.Refused(await s.Run("stage"));
+            s.True(s.GitHub.Sent(s.Archive(s.Next)) == sent, "a retry after a failed test run should download nothing");
+            s.StageKept();
+            s.Says(await s.Run("cancel"), "cancel: done");
+            s.False(Directory.Exists(s.Folder.Staging), "/update cancel should delete a kept stage");
         }),
         ("probe-hangs", async () =>
         {
             s.Publish(s.Next, tamper: entries => entries[Sim.HangMarker] = [], manifestFromEntries: true);
             s.Refused(await s.Run("all", limitSeconds: 90));
             s.NoStage();
+            s.StageKept();
         }),
         ("library-fails-in-both", async () =>
         {
@@ -572,6 +589,44 @@ static class Scenarios
             s.Says(await s.Run("start", asVersion: s.Next), "Updated to " + s.Next);
             s.False(File.Exists(s.Folder.Journal), "an interactive start clears it");
         }),
+        ("old-copy-just-after-a-swap", async () =>
+        {
+            s.Publish(s.Next);
+            s.Says(await s.Run("all"), "exit: done");
+            var old = await s.Run("start");
+            s.True(old.Code == 2, $"the old exe over new files should exit with code 2, not {old.Code}");
+            s.Says(old, UpdateText.StartAgainLine(s.Next));
+            s.True(!old.Text.Contains(UpdateText.WaitingLine, StringComparison.Ordinal), "nothing held the lock, so it had nothing to wait for");
+            s.True(File.Exists(s.Folder.Journal), "the journal stays for the new exe's line");
+            s.Says(await s.Run("start", asVersion: s.Next), "Updated to " + s.Next);
+        }),
+        ("stale-journal-after-a-hand-unpack", async () =>
+        {
+            s.Publish(s.Next);
+            s.Says(await s.Run("all"), "exit: done");
+            s.UnpackBaseOver();
+            var start = await s.Run("start");
+            s.True(start.Code == 0, $"a stale journal must not lock the app out, and this exited {start.Code}");
+            s.False(File.Exists(s.Folder.Journal), "nothing is left for a stale journal to say");
+            s.ManifestIs(s.Base);
+        }),
+        ("kept-files-on-an-update-and-a-rollback", async () =>
+        {
+            s.Publish(s.Next);
+            s.AlterInstalled("sim-marker.txt", "a stray at a path the new version adds");
+            s.AlterInstalled(s.SmallFile, "edited by hand");
+            s.Says(await s.Run("all"), "exit: done");
+            s.KeptIs(s.Base, "sim-marker.txt", "a stray at a path the new version adds");
+            s.KeptIs(s.Base, s.SmallFile, "edited by hand");
+            s.Says(await s.Run("start", asVersion: s.Next), "Updated to " + s.Next, UpdateText.KeptFilesLine(s.KeptFolder(s.Base)));
+            s.Says(await s.Run("start", asVersion: s.Next), "start: nothing to say");
+
+            s.AlterInstalled("sim-marker.txt", "edited again");
+            s.Says(await s.Run("rollback", asVersion: s.Next), "rollback: to " + s.Base, "exit: done");
+            s.KeptIs(s.Next, "sim-marker.txt", "edited again");
+            s.Says(await s.Run("start"), UpdateText.BackOnLine(s.Base), UpdateText.KeptFilesLine(s.KeptFolder(s.Next)));
+            s.KeptIs(s.Base, s.SmallFile, "edited by hand");
+        }),
         ("headless-exit-keeps-the-stage", async () =>
         {
             s.Publish(s.Next);
@@ -716,10 +771,19 @@ static class Scenarios
         {
             s.Publish(s.Next);
             s.Says(await s.Run("all", Sim.MoveAll), "exit: done");
-            File.WriteAllText(Path.Combine(s.Folder.Previous, s.SmallFile.Replace('/', Path.DirectorySeparatorChar)), "altered");
+            File.WriteAllText(Path.Combine(s.Folder.Previous, s.SmallNonDoc.Replace('/', Path.DirectorySeparatorChar)), "altered");
             s.Says(await s.Run("rollback", asVersion: s.Next), "rollback: refused");
             s.ManifestIs(s.Next);
             s.True(Directory.Exists(s.Folder.Previous), "previous stays");
+        }),
+        ("rollback-past-an-edited-doc", async () =>
+        {
+            s.Publish(s.Next);
+            s.Says(await s.Run("all", Sim.MoveAll), "exit: done");
+            File.WriteAllText(Path.Combine(s.Folder.Previous, s.SmallFile.Replace('/', Path.DirectorySeparatorChar)), "altered");
+            s.Says(await s.Run("rollback", asVersion: s.Next), "rollback: to " + s.Base, "docs staying: " + s.SmallFile, "exit: done");
+            s.ManifestIs(s.Base);
+            s.IntactAsBase();
         }),
     ];
 }
@@ -792,6 +856,8 @@ sealed class Sim
         AfterNext = new UpdateVersion(parsed.Major, parsed.Minor, parsed.Patch + 2).ToString();
         string? small = _baseManifest.Files.Select(f => f.Path).FirstOrDefault(p => p.EndsWith(".md", StringComparison.Ordinal));
         SmallFile = small ?? throw new InvalidOperationException("the package holds no .md file to alter");
+        SmallNonDoc = _baseManifest.Files.Select(f => f.Path).Where(p => !p.EndsWith(".md", StringComparison.OrdinalIgnoreCase) && !Path.GetFileName(p).StartsWith("LICENSE", StringComparison.OrdinalIgnoreCase) && !Path.GetFileName(p).StartsWith("README", StringComparison.OrdinalIgnoreCase) && p != ExeName)
+            .OrderBy(p => new FileInfo(Path.Combine(package, p.Replace('/', Path.DirectorySeparatorChar))).Length).ThenBy(p => p, StringComparer.Ordinal).First();
         NativeLibrary = NativeSample();
     }
 
@@ -810,6 +876,9 @@ sealed class Sim
     public string ExeName { get; }
 
     public string SmallFile { get; }
+
+    /// <summary>A listed file that isn't a doc: an altered copy of one of these still blocks a rollback.</summary>
+    public string SmallNonDoc { get; }
 
     public string NativeLibrary { get; }
 
@@ -836,7 +905,7 @@ sealed class Sim
     public string ServeStatus(string latest)
     {
         string state = File.Exists(Folder.Ready) ? ", a stage ready" : Directory.Exists(Folder.Staging) ? ", a stage on the way" : "";
-        string previous = Directory.Exists(Folder.Previous) && Directory.EnumerateFileSystemEntries(Folder.Previous).Any() ? $", an earlier version kept ({Directory.EnumerateFiles(Folder.Previous, "*", SearchOption.AllDirectories).Count()} files)" : "";
+        string previous = Directory.Exists(Folder.Previous) && Directory.EnumerateFileSystemEntries(Folder.Previous).Any() ? $", an earlier version to go back to ({Directory.EnumerateFiles(Folder.Previous, "*", SearchOption.AllDirectories).Count()} files)" : "";
         return $"The folder holds {ManifestVersion}{state}{previous}. The fake GitHub's latest is {latest}.";
     }
 
@@ -1144,6 +1213,13 @@ sealed class Sim
 
     public void NoStage() => False(File.Exists(Folder.Ready), "there should be no ready stage");
 
+    /// <summary>A verified stage kept after a failed test run: a retry tests it again with no download. No ready, so it never installs.</summary>
+    public void StageKept() => True(Directory.Exists(Folder.Staging), "a failed test run should keep the stage");
+
+    public string KeptFolder(string version) => Path.Combine(Folder.Kept, version);
+
+    public void KeptIs(string version, string path, string text) => True(File.ReadAllText(Path.Combine(KeptFolder(version), path.Replace('/', Path.DirectorySeparatorChar))) == text, path + " in kept isn't what it should be");
+
     public void InPrevious(string path) => True(File.Exists(Path.Combine(Folder.Previous, path.Replace('/', Path.DirectorySeparatorChar))), path + " should be in previous");
 
     public void NotInPrevious(string path) => False(File.Exists(Path.Combine(Folder.Previous, path.Replace('/', Path.DirectorySeparatorChar))), path + " shouldn't have moved");
@@ -1329,7 +1405,7 @@ sealed class FakeGitHub : IDisposable
     /// <summary>Told each request, for the by-hand run's console.</summary>
     public Action<string>? Log { get; set; }
 
-    public static string Json(string tag, IEnumerable<(string Name, long Size, string Url)> assets, string notes = "the simulated notes")
+    public static string Json(string tag, IEnumerable<(string Name, long Size, string Url)> assets, string notes = "the simulated notes", string origin = "http://127.0.0.1/")
     {
         var stream = new MemoryStream();
         using (var json = new Utf8JsonWriter(stream))
@@ -1337,7 +1413,7 @@ sealed class FakeGitHub : IDisposable
             json.WriteStartObject();
             json.WriteString("tag_name", tag);
             json.WriteString("body", notes);
-            json.WriteString("html_url", "http://127.0.0.1/sim/releases/tag/" + tag);
+            json.WriteString("html_url", origin + "sim/releases/tag/" + tag);
             json.WriteStartArray("assets");
             foreach (var (name, size, url) in assets)
             {
@@ -1425,7 +1501,7 @@ sealed class FakeGitHub : IDisposable
             }
 
             var (tag, names) = _releases[^1];
-            return Json(tag, names.Where(n => !_hidden.Any(h => n.EndsWith(h, StringComparison.Ordinal))).Select(n => (n, (long)_assets[tag + "/" + n].Length, Origin + "sim/releases/download/" + tag + "/" + n)), Notes);
+            return Json(tag, names.Where(n => !_hidden.Any(h => n.EndsWith(h, StringComparison.Ordinal))).Select(n => (n, (long)_assets[tag + "/" + n].Length, Origin + "sim/releases/download/" + tag + "/" + n)), Notes, origin: Origin);
         }
     }
 

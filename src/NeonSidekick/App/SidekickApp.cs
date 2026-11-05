@@ -1640,6 +1640,13 @@ public sealed partial class SidekickApp
                     continue;
                 }
 
+                // /update (2026-11-04, review P5-12): the screen's alone too, or it went to the server check and then the model as text.
+                if (SlashCommands.Parse(text) is (SlashCommand.Update, _))
+                {
+                    await HeadlessLineAsync("[error] " + Updates.UpdateText.NotHeadless).ConfigureAwait(false);
+                    continue;
+                }
+
                 // /eventlog (2026-10-15): ahead of the server check too — the logs need no LLM; the rows as lines.
                 if (SlashCommands.Parse(text) is (SlashCommand.EventLog, var eventLogArgs))
                 {

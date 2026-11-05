@@ -1,14 +1,18 @@
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Files;
 using NeonSidekick.Llm.Tools;
+using NeonSidekick.Speech;
 
 namespace NeonSidekick.Updates;
 
 /// <summary>What the start's step found.</summary>
 /// <param name="Held">The in-use lock this run holds for its life, or null: not a package, a folder that can't take a lock, or a wait that ran out.</param>
-/// <param name="StartAgain">True when a copy that waited out a swap is now the old exe over new files: <c>Program.cs</c> ends with exit code 2, nothing run.</param>
-/// <param name="Line">What the screen says: "Updated to X", "Back on X" or why a window close's swap failed.</param>
-public sealed record UpdateStartResult(UpdateLock? Held, bool StartAgain = false, string? Line = null);
+/// <param name="StartAgain">True when this copy is the old exe over new files: <c>Program.cs</c> ends with exit code 2, nothing run.</param>
+/// <param name="Line">What the screen says: "Updated to X", "Back on X", why a window close's swap failed, or that the install may be mixed.</param>
+/// <param name="JournalMayGo">True when a finished journal may go once the screen has printed: this copy is what it installed, or its target isn't what the folder holds.</param>
+/// <param name="FailureShown">True when <paramref name="Line"/> holds <c>swap-failed.txt</c>'s text, so printing it uses the file up.</param>
+/// <param name="StartAgainLine">The words behind <paramref name="StartAgain"/>, for a run with no screen to write to stderr.</param>
+public sealed record UpdateStartResult(UpdateLock? Held, bool StartAgain = false, string? Line = null, bool JournalMayGo = false, bool FailureShown = false, string? StartAgainLine = null);
 
 /// <summary>
 /// The next start's step (2026-11-04, self-update), in <c>Program.cs</c> after the <c>--log</c> sink opens, so it's logged, and before the home is resolved and any bundled native library loads, in every mode that gets that far. A failure in this step is logged and never stops the
@@ -18,6 +22,12 @@ public static class UpdateStartup
 {
     /// <summary>How long a copy started during a swap waits for the lock: longer than a normal swap. If it runs out (a slow disk, a stuck antivirus scan), the copy logs it and starts anyway, so a stuck swap can't keep the app from starting.</summary>
     public static readonly TimeSpan WaitLimit = TimeSpan.FromSeconds(10);
+
+    /// <summary>How long a copy tries for the exclusive lock to settle an interrupted swap: two copies started together each drop their shared hold in turn, so a short retry lets one through.</summary>
+    public static readonly TimeSpan SettleLimit = TimeSpan.FromSeconds(3);
+
+    /// <summary>How long an interactive run's "start it again" stays on the screen before the window can close: a double-clicked window would otherwise flash and vanish.</summary>
+    public static readonly TimeSpan StartAgainPause = TimeSpan.FromSeconds(3);
 
     private static readonly TimeSpan WaitStep = TimeSpan.FromMilliseconds(100);
 
@@ -34,14 +44,16 @@ public static class UpdateStartup
         // Its log lines stay off the console: they'd print as [Update] ... on the screen, or leak onto --headless's stdout.
         bool echo = DiagnosticLog.EchoToConsole;
         DiagnosticLog.EchoToConsole = false;
+        var state = new StepState();
         try
         {
-            return Step(context, interactive, say, pause ?? Thread.Sleep);
+            return Step(context, interactive, say, pause ?? Thread.Sleep, state);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
+            // Broad on purpose, the app-starts promise (2026-11-04, reviews P1-7, P3-6). The step's own hold is kept: a second one here would leave the first open for the process's life, and this run's own exit would then read it as another copy.
             DiagnosticLog.Warn(UpdateJournal.Category, UpdateText.StartStepFailed(ex.Message));
-            return new UpdateStartResult(UpdateLock.TryShared(folder.InUseLock));
+            return new UpdateStartResult(state.Held ?? UpdateLock.TryShared(folder.InUseLock), Line: interactive ? state.Line : null);
         }
         finally
         {
@@ -49,108 +61,208 @@ public static class UpdateStartup
         }
     }
 
-    private static UpdateStartResult Step(UpdateContext context, bool interactive, Action<string>? say, Action<TimeSpan> pause)
+    /// <summary>
+    /// What the screen calls once the start's line is printed, with or without one (2026-11-04, review P5-3): the step used to delete both files as it built the line, so <c>--profile typo</c> or a crash before the idle line lost "Updated to X" for good. A journal goes only if it reads
+    /// as finished and the step said it may, so a renamed old copy's start leaves it for the listed exe's line. A failure goes only if this line showed it.
+    /// </summary>
+    public static void Acknowledge(UpdateFolder folder, bool journalMayGo, bool failureShown)
     {
-        var folder = context.Folder;
-        var held = UpdateLock.TryShared(folder.InUseLock);
-        bool waited = false;
-        if (held is null && !IsReadOnly(folder))
+        ArgumentNullException.ThrowIfNull(folder);
+        try
         {
-            waited = true;
-            say?.Invoke(UpdateText.WaitingLine);
-            for (var waiting = TimeSpan.Zero; held is null && waiting < WaitLimit; waiting += WaitStep)
+            if (journalMayGo && UpdateJournal.TryRead(folder) is { Finished: true })
             {
-                pause(WaitStep);
-                held = UpdateLock.TryShared(folder.InUseLock);
+                UpdateJournal.Delete(folder);
             }
 
-            if (held is null)
+            if (failureShown)
             {
-                DiagnosticLog.Warn(UpdateJournal.Category, UpdateText.WaitRanOut);
-                return new UpdateStartResult(null);
+                File.Delete(folder.SwapFailed);
             }
         }
-
-        var journal = UpdateJournal.TryRead(folder);
-        if (journal is { Finished: false })
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            held = FinishUnfinished(context, journal, held, out journal);
+            DiagnosticLog.Warn(UpdateJournal.Category, UpdateText.StartStepFailed(ex.Message));
         }
-
-        // The exe moves last, so a copy started mid-swap is the old exe, and once the swap finishes its files are new: the mismatch that swapping at exit exists to avoid. A swap that was undone leaves old files, so it starts normally.
-        if (waited && journal is { Finished: true } && journal.Target != context.Running.ToString())
-        {
-            say?.Invoke(UpdateText.StartAgainLine(journal.Target));
-            return new UpdateStartResult(held, StartAgain: true);
-        }
-
-        string? line = null;
-        if (journal is { Finished: true } && interactive)
-        {
-            if (journal.Target == context.Running.ToString())
-            {
-                line = journal.Rollback ? UpdateText.BackOnLine(journal.Target) : UpdateText.UpdatedLine(journal.Target);
-            }
-
-            UpdateJournal.Delete(folder);
-        }
-
-        TidyStage(context);
-        if (interactive)
-        {
-            line = JoinLines(line, ReadSwapFailed(folder));
-        }
-
-        return new UpdateStartResult(held, Line: line);
     }
 
-    private static UpdateLock? FinishUnfinished(UpdateContext context, UpdateJournal unfinished, UpdateLock? shared, out UpdateJournal? after)
+    private sealed class StepState
     {
-        // Exclusively before anything moves, then back to the usual shared hold, so two copies started together after a crash can't both undo it. If it can't get the lock, another copy is doing or holding it, and this copy leaves the journal for that one.
+        public UpdateLock? Held { get; set; }
+
+        public string? Line { get; set; }
+    }
+
+    private static UpdateStartResult Step(UpdateContext context, bool interactive, Action<string>? say, Action<TimeSpan> pause, StepState state)
+    {
         var folder = context.Folder;
-        shared?.Dispose();
-        using (var exclusive = UpdateLock.TryExclusive(folder.InUseLock))
+        state.Held = UpdateLock.TryShared(folder.InUseLock, out bool inUse);
+
+        // Only a held lock is an update in progress: one that can't be opened (read-only media, an ACL) never waits, and goes on to settle what it can.
+        if (state.Held is null && inUse)
         {
-            if (exclusive is null)
+            say?.Invoke(UpdateText.WaitingLine);
+            state.Held = WaitForShared(folder, pause);
+            if (state.Held is null)
             {
-                after = unfinished;
-                return UpdateLock.TryShared(folder.InUseLock);
+                DiagnosticLog.Warn(UpdateJournal.Category, UpdateText.WaitRanOut);
+                return new UpdateStartResult(null, Line: interactive && UpdateJournal.IsUnsettled(folder) ? UpdateText.MixedLine : null);
+            }
+        }
+
+        var journal = UpdateJournal.TryRead(folder, out bool unreadable);
+        bool mixed = unreadable;
+        if (journal is { Finished: false })
+        {
+            journal = FinishUnfinished(context, journal, state, pause, out mixed);
+        }
+
+        string running = context.Running.ToString();
+        bool mayGo = false;
+        string? line = null;
+        if (journal is { Finished: true })
+        {
+            if (journal.Target == running)
+            {
+                mayGo = true;
+                if (interactive)
+                {
+                    line = journal.Rollback ? UpdateText.BackOnLine(journal.Target) : UpdateText.UpdatedLine(journal.Target);
+                    line = JoinLines(line, KeptLine(folder, journal));
+                }
+            }
+            else if (InstalledVersion(folder) == journal.Target)
+            {
+                // The exe moves last, so a copy started just before it did is the old exe, and its files are now new: the mismatch that swapping at exit exists to avoid. A renamed copy isn't told to start again: that would repeat for as long as the journal
+                // stays, and it leaves the journal for the listed exe's "Updated to" line. It no longer rests on having waited (2026-11-04, review P3-1): a copy reaching the lock just after the swap let go ran the old exe over new libraries.
+                if (UpdateManifest.ReadFile(folder.Manifest, out _) is { } installed && context.IsListedExe(installed))
+                {
+                    string startAgain = UpdateText.StartAgainLine(journal.Target);
+                    DiagnosticLog.Warn(UpdateJournal.Category, startAgain);
+                    say?.Invoke(startAgain);
+                    if (interactive)
+                    {
+                        pause(StartAgainPause);
+                    }
+
+                    return new UpdateStartResult(state.Held, StartAgain: true, StartAgainLine: startAgain);
+                }
+            }
+            else
+            {
+                // Stale: a package unpacked by hand since. It must not lock the app out with exit 2, and nothing is left for it to say.
+                mayGo = true;
+            }
+        }
+
+        state.Line = line;
+        bool unsettled = mixed || UpdateJournal.IsUnsettled(folder);
+        if (interactive && mixed)
+        {
+            line = JoinLines(line, UpdateText.MixedLine);
+            state.Line = line;
+        }
+
+        TidyStage(context, unsettled);
+        string? failed = interactive ? ReadSwapFailed(folder) : null;
+        return new UpdateStartResult(state.Held, Line: JoinLines(line, failed), JournalMayGo: mayGo, FailureShown: interactive && File.Exists(folder.SwapFailed));
+    }
+
+    // A journal this far is a package's own: the installed manifest's version, normalized like the journal's own target.
+    private static string? InstalledVersion(UpdateFolder folder) => UpdateManifest.ReadFile(folder.Manifest, out _)?.ParsedVersion.ToString();
+
+    private static string? KeptLine(UpdateFolder folder, UpdateJournal journal)
+    {
+        // Any step that moved a file under .update/kept. The journal is a file on disk, so what it names is scrubbed like swap-failed.txt's text.
+        string prefix = folder.Relative(folder.Kept) + "/";
+        foreach (var step in journal.Steps)
+        {
+            if (step is { Kind: UpdateStepKind.Move, To: { } to } && to.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                int slash = to.IndexOf('/', prefix.Length);
+                if (slash > 0)
+                {
+                    return UpdateText.KeptFilesLine(UntrustedText.Scrub(folder.Full(to[..slash])));
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static UpdateLock? WaitForShared(UpdateFolder folder, Action<TimeSpan> pause)
+    {
+        UpdateLock? held = null;
+        for (var waiting = TimeSpan.Zero; held is null && waiting < WaitLimit; waiting += WaitStep)
+        {
+            pause(WaitStep);
+            held = UpdateLock.TryShared(folder.InUseLock);
+        }
+
+        return held;
+    }
+
+    private static UpdateJournal? FinishUnfinished(UpdateContext context, UpdateJournal unfinished, StepState state, Action<TimeSpan> pause, out bool mixed)
+    {
+        // Exclusively before anything moves, then back to the usual shared hold, so two copies started together after a crash can't both undo it. Each lets go of its own hold first, so a single try could leave each to the other (2026-11-04, review P3-2): it retries, and stops once another copy has settled it.
+        // The way back to shared retries too (review P5-1): a single try while the other copy holds it exclusively left this copy running its whole life with no lock.
+        var folder = context.Folder;
+        state.Held?.Dispose();
+        state.Held = null;
+        UpdateJournal? after = unfinished;
+        mixed = false;
+        UpdateLock? exclusive = UpdateLock.TryExclusive(folder.InUseLock, out bool held);
+        for (var waiting = TimeSpan.Zero; exclusive is null && held && waiting < SettleLimit; waiting += WaitStep)
+        {
+            pause(WaitStep);
+            after = UpdateJournal.TryRead(folder);
+            if (after is not { Finished: false })
+            {
+                state.Held = WaitForSharedAtOnce(folder, pause);
+                return after;
             }
 
-            after = UpdateJournal.TryRead(folder);
+            exclusive = UpdateLock.TryExclusive(folder.InUseLock, out held);
+        }
+
+        if (exclusive is null)
+        {
+            // Another copy holds it, or it can't be opened: this copy can't settle the swap, so it says the folder may be mixed.
+            DiagnosticLog.Warn(UpdateJournal.Category, UpdateText.CouldntSettle);
+            mixed = true;
+            state.Held = WaitForSharedAtOnce(folder, pause);
+            return after;
+        }
+
+        using (exclusive)
+        {
+            after = UpdateJournal.TryRead(folder, out bool unreadable);
+            mixed = unreadable;
             if (after is { Finished: false })
             {
                 var swap = new UpdateSwap(folder) { BetweenSteps = context.BetweenSteps };
-                string running = context.Running.ToString();
-                if (after.Target == running)
-                {
-                    // Only cleanup was left.
-                    swap.Finish(after);
-                }
-                else if (after.Source == running)
-                {
-                    // Undo it and keep the stage for the next exit. It never finishes forward, because the old exe would then run on with new DLLs.
-                    swap.Undo(after);
-                    after = UpdateJournal.TryRead(folder);
-                }
-                else
-                {
-                    // Neither version: a package unpacked by hand over an interrupted swap. Moving anything now would leave a mix.
-                    DiagnosticLog.Warn(UpdateJournal.Category, UpdateText.JournalRejected(UpdateText.JournalNotThisVersion(after.Source, after.Target, running)));
-                    UpdateJournal.Delete(folder);
-                    after = null;
-                }
+                var settled = swap.Settle(after, context.Running.ToString());
+                mixed = settled == UpdateSettled.UndoStopped;
+                after = settled == UpdateSettled.Finished ? after : UpdateJournal.TryRead(folder);
             }
         }
 
-        return UpdateLock.TryShared(folder.InUseLock);
+        state.Held = WaitForSharedAtOnce(folder, pause);
+        return after;
     }
 
-    // A stage no newer than the running version is dropped, and so is one staged over a different installed manifest, since its list of changed files no longer holds and swapping it would leave a mix of versions. Only
-    // under the staging lock, so it never takes files another copy is staging.
-    private static void TidyStage(UpdateContext context)
+    private static UpdateLock? WaitForSharedAtOnce(UpdateFolder folder, Action<TimeSpan> pause) =>
+        UpdateLock.TryShared(folder.InUseLock, out bool held) is { } shared ? shared : held ? WaitForShared(folder, pause) : null;
+
+    // Everything here is only under the staging lock, so it never takes files another copy is staging. While a swap isn't settled nothing but a killed run's unpacking folders is touched (2026-11-04, review P3-3): the journal's undo moves files back into staging/ and staged/.
+    private static void TidyStage(UpdateContext context, bool unsettled)
     {
         var folder = context.Folder;
+        if (NothingToTidy(folder))
+        {
+            return;   // no lock (review P7-8): every start in every mode took it, and a run starting just as the user pressed Install read as another copy downloading
+        }
+
         using var staging = UpdateLock.TryExclusive(folder.StagingLock);
         if (staging is null)
         {
@@ -158,18 +270,35 @@ public static class UpdateStartup
         }
 
         UpdateStage.RemoveExtracting(folder);
-        if (!File.Exists(folder.Journal))
-        {
-            WorkingDirectory.DeleteDirectoryQuietly(folder.PreviousOld);
-            WorkingDirectory.DeleteDirectoryQuietly(folder.Outgoing);
-        }
-
-        if (!Directory.Exists(folder.Staging))
+        if (unsettled)
         {
             return;
         }
 
-        if (UpdateManifest.ReadFile(folder.StagingManifest, out _) is { } staged && staged.ParsedVersion <= context.Running)
+        if (!File.Exists(folder.Journal))
+        {
+            UpdateFolder.DeleteQuietly(folder.PreviousOld);
+            UpdateFolder.DeleteQuietly(folder.Outgoing);
+        }
+
+        TidyParts(context);
+        if (!Directory.Exists(folder.Staging))
+        {
+            // An orphan: ready with no stage would fail the next exit with "the update changed", though none was pending (review P5-8); staged/ what the last cleanup couldn't delete.
+            UpdateStage.Drop(folder);
+            return;
+        }
+
+        // A stage no newer than the running version is dropped, and so is one staged over a different installed manifest, since its list of changed files no longer holds and swapping it would leave a mix of versions. One with no manifest it can read is what a cleanup
+        // couldn't delete (review P2-10): the swap took its manifest, so nothing else would ever retry it. A complete stage with no ready stays: the next /update checks and test-runs it again with no download.
+        var staged = UpdateManifest.ReadFile(folder.StagingManifest, out _);
+        if (staged is null)
+        {
+            UpdateStage.Drop(folder);
+            return;
+        }
+
+        if (staged.ParsedVersion <= context.Running)
         {
             DiagnosticLog.Info(UpdateJournal.Category, UpdateText.StageDroppedOld(staged.Version));
             UpdateStage.Drop(folder);
@@ -183,17 +312,38 @@ public static class UpdateStartup
         }
     }
 
+    private static bool NothingToTidy(UpdateFolder folder) =>
+        !Directory.Exists(folder.Root)
+        || (!Directory.Exists(folder.Staging) && !Directory.Exists(folder.StagingParts) && !Directory.Exists(folder.Staged) && !Directory.Exists(folder.PreviousOld) && !Directory.Exists(folder.Outgoing)
+            && !File.Exists(folder.Ready) && !Directory.EnumerateDirectories(folder.Root, ModelStore.ExtractingPattern).Any());
+
+    // A partial for a version no newer than this one is never going to be finished (review P6-8: 0.5.8 half down, then 0.5.9 unpacked by hand, left hundreds of MB for good).
+    private static void TidyParts(UpdateContext context)
+    {
+        var folder = context.Folder;
+        if (!Directory.Exists(folder.StagingParts))
+        {
+            return;
+        }
+
+        foreach (string part in Directory.EnumerateFileSystemEntries(folder.StagingParts))
+        {
+            if (!UpdateCheck.TryParseArchiveVersion(Path.GetFileName(part), out var version) || version <= context.Running)
+            {
+                UpdateStage.DeleteEntryQuietly(part);
+            }
+        }
+
+        if (!Directory.EnumerateFileSystemEntries(folder.StagingParts).Any())
+        {
+            UpdateFolder.DeleteQuietly(folder.StagingParts);
+        }
+    }
+
     private static bool OverThisInstall(UpdateFolder folder)
     {
-        try
-        {
-            var hashes = System.Text.Json.JsonSerializer.Deserialize(File.ReadAllBytes(folder.StagedInstallHashes), UpdateJsonContext.Default.UpdateInstallHashes);
-            return hashes is not null && UpdateHash.Same(UpdateHash.OfFile(folder.Manifest), hashes.ManifestHash);
-        }
-        catch (System.Text.Json.JsonException)
-        {
-            return false;
-        }
+        var hashes = UpdateInstallHashes.TryRead(folder);
+        return hashes is not null && File.Exists(folder.Manifest) && UpdateHash.Same(UpdateHash.OfFile(folder.Manifest), hashes.ManifestHash);
     }
 
     private static string? ReadSwapFailed(UpdateFolder folder)
@@ -204,26 +354,8 @@ public static class UpdateStartup
         }
 
         string text = UntrustedText.Scrub(File.ReadAllText(folder.SwapFailed)).Trim();
-        File.Delete(folder.SwapFailed);
         return text.Length == 0 ? null : UpdateText.WindowCloseFailed(text);
     }
 
     private static string? JoinLines(string? first, string? second) => first is null ? second : second is null ? first : first + "\n" + second;
-
-    // No lock and no folder that takes one: the app just can't update here, which preflight reports. An exclusive holder is the only reason worth waiting for.
-    private static bool IsReadOnly(UpdateFolder folder)
-    {
-        try
-        {
-            Directory.CreateDirectory(folder.Root);
-            string probe = Path.Combine(folder.Root, "startup.tmp");
-            File.WriteAllText(probe, "");
-            File.Delete(probe);
-            return false;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return true;
-        }
-    }
 }

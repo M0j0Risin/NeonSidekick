@@ -90,28 +90,31 @@ public sealed class UpdateSimFlags
 /// </summary>
 public static class UpdateSimMode
 {
-    public static async Task<int> RunAsync(UpdateSimFlags flags, UpdateContext context, string? startLine, UpdateExit exit, Action<string> say)
+    public static async Task<int> RunAsync(UpdateSimFlags flags, UpdateContext context, UpdateStartResult start, UpdateExit exit, Action<string> say)
     {
         ArgumentNullException.ThrowIfNull(flags);
+        ArgumentNullException.ThrowIfNull(start);
         ArgumentNullException.ThrowIfNull(exit);
         ArgumentNullException.ThrowIfNull(say);
         string mode = flags.Check ?? "all";
-        say("start: " + (startLine ?? "nothing to say"));
-        var updater = new AppUpdater(context, startLine, source: flags.SourceOrNull());
+        say("start: " + (start.Line ?? "nothing to say"));
+
+        // Right after the line, in every mode, as the screen would.
+        var updater = new AppUpdater(context, start.Line, source: flags.SourceOrNull(), journalMayGo: start.JournalMayGo, failureShown: start.FailureShown);
+        updater.AcknowledgeStart();
         switch (mode)
         {
             case "start":
                 return 0;
             case "disk":
                 var disk = updater.ReadDisk();
-                say($"disk: ready {disk.ReadyVersion ?? "none"}, rollback {disk.RollbackTarget ?? "none"}");
+                say($"disk: ready {disk.ReadyVersion ?? "none"}, rollback {disk.RollbackTarget ?? "none"}, leftovers {(disk.Leftovers ? "yes" : "no")}");
                 return 0;
             case "notes":
                 say("notes: " + (updater.RunningNotes() ?? "none"));
                 return 0;
             case "cancel":
-                updater.CancelRollback();
-                string? busy = updater.DropStage(alsoParts: true);
+                string? busy = updater.CancelRollback() ?? updater.DropStage(alsoParts: true);
                 say("cancel: " + (busy ?? "done"));
                 return busy is null ? 0 : 1;
             case "exit":
@@ -119,14 +122,14 @@ public static class UpdateSimMode
                 say("exit: done");
                 return 0;
             case "rollback":
-                string? refused = updater.AskRollback(CancellationToken.None, out string? target);
+                string? refused = updater.AskRollback(CancellationToken.None, out string? target, out var docs);
                 if (refused is not null)
                 {
                     say("rollback: refused: " + refused);
                     return 1;
                 }
 
-                say("rollback: to " + target);
+                say("rollback: to " + target + (docs.Count > 0 ? ", docs staying: " + string.Join(", ", docs) : ""));
                 exit.Run(say);
                 say("exit: done");
                 return 0;
@@ -146,7 +149,7 @@ public static class UpdateSimMode
         }
 
         var progress = new SayingProgress(say);
-        var result = await updater.StageAsync(release, progress, release.Notes, CancellationToken.None).ConfigureAwait(false);
+        var result = await updater.StageAsync(release, progress, CancellationToken.None).ConfigureAwait(false);
         if (!result.Ok)
         {
             say("stage: failed: " + result.Reason);

@@ -27,6 +27,8 @@ Get-Content job.txt | NeonSidekick.exe --headless > run_output.txt        # one 
 ## Before you start
 
 - **A headless run never checks for updates or installs one.** A run started during an [update](COMMANDS.md#updating) waits for it, with nothing added to stdout.
+  - Its start still settles the install folder: it undoes an interrupted install and tidies a leftover download. A finished install's line and a failure's report wait for the next interactive start.
+  - An old copy started during or just after an update exits with code 2, nothing run, and says on stderr to start it again.
 - **A fresh profile does little headless.** The model gets only the clock (*Clock tools*), help (*Help tools*), memory, past-session and skill tools, and no server is looked for (*LLM server scan mode* `off`).
   - Set up a server (or `--url`) and the tool groups the job needs first, in the TUI (`/settings`, `/tools`) or `profile.json`.
 - **Tick the "… offered" lists first.** The SQL, Oracle, MySQL, PostgreSQL, SQLite, DuckDB, UNC and ComfyUI tools offer nothing until entries are ticked on `/tools`.
@@ -110,6 +112,7 @@ They need no server unless the row says so.
 | `/help <your command>` | Prints the custom command's card, or why a skipped file doesn't run; no server needed. |
 | `/help <words>` | Asks the model to look it up in the manual (`neon_help`); with no server, or *Help tools* or `neon_help` off, prints the manual's answer (after a `[notice]` if a server is there). A tool's answer says if headless offers it, and why not. |
 | `/webui …` | An error: the [Web UI](INTERFACE.md#web-ui) runs only with the full-screen app. |
+| `/update …` | An error: [updates](COMMANDS.md#updating) run only in the full-screen app. |
 
 - Case doesn't matter. `/exit`, `/new`, `/clear` and `/splash` must be alone on the line: `/new please` goes to the model as text.
 - With no server, messages and the commands that need one get `Neon: [error] No LLM server. Set NEONSIDEKICK_LLM_URL and restart.`
@@ -144,7 +147,7 @@ Any other `/…` line is sent to the model as a message, so `/model gemma` switc
 | `/remember`, `/memory`, `/sessions`, `/imagine`, `/process`, `/tree`, `/vault` | Ask the model: it has the memory, session, ComfyUI, `process`, file and Obsidian tools when they're on. `/sessions export` is an `[error]`: it works on the screen only. |
 | `/loop` | Repeat the line, or loop in the script. |
 | `/usage` | `--log` records the run. |
-| `/learn`, `/timer`, `/tts`, `/stt`, `/read`, `/echo`, `/sys`, `/keycheck`, `/copy`, `/draft`, `/view`, `/explore`, `/open`, `/browse`, `/terminal`, `/shortcut`, `/theme`, `/mark`, `/perfbar`, `/homebar`, `/toolbar`, `/header`, `/window`, `/expand`, `/collapse`, `/find`, `/splash view\|thumbs\|purge`, `/pasted`, `/ha stills`, `/queue`, `/rename`, `/help` alone, `/about`, `/log`, `/comfy`, `/gituser`, `/botchat`, `/update` | Not available: they need the screen, sound, an editor, the clipboard or a confirmation. |
+| `/learn`, `/timer`, `/tts`, `/stt`, `/read`, `/echo`, `/sys`, `/keycheck`, `/copy`, `/draft`, `/view`, `/explore`, `/open`, `/browse`, `/terminal`, `/shortcut`, `/theme`, `/mark`, `/perfbar`, `/homebar`, `/toolbar`, `/header`, `/window`, `/expand`, `/collapse`, `/find`, `/splash view\|thumbs\|purge`, `/pasted`, `/ha stills`, `/queue`, `/rename`, `/help` alone, `/about`, `/log`, `/comfy`, `/gituser`, `/botchat` | Not available: they need the screen, sound, an editor, the clipboard or a confirmation. |
 
 ## Flags in headless runs
 
@@ -227,7 +230,7 @@ The run carries on. At the end, if anything was refused, it prints a summary and
 [notice] 2 commands were not run: "npm install", "python script"
 ```
 
-Shell police refusals count too, under `--yolo` as well. **Exit codes:** **0** nothing was refused, **2** a bad argument, an unknown profile, or a copy started during an [update](COMMANDS.md#updating) that finished (nothing ran), **3** at least one command was refused.
+Shell police refusals count too, under `--yolo` as well. **Exit codes:** **0** nothing was refused, **2** a bad argument, an unknown profile, or an old copy started during or just after an [update](COMMANDS.md#updating) (nothing ran), **3** at least one command was refused.
 
 ```powershell
 Get-Content job.txt | NeonSidekick.exe --headless --cwd D:\Repo\MyApp | Tee-Object run.txt

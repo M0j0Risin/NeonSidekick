@@ -6,6 +6,7 @@ using NeonSidekick.EmbeddedLlm;
 using NeonSidekick.Files;
 using NeonSidekick.Llm;
 using NeonSidekick.Llm.Tools;
+using NeonSidekick.Shell;
 using NeonSidekick.Speech;
 
 namespace NeonSidekick.Updates;
@@ -13,7 +14,7 @@ namespace NeonSidekick.Updates;
 /// <summary>Runs a probe: the seam a test fakes, so no test starts a process.</summary>
 public interface IUpdateProbeRunner
 {
-    /// <summary>Starts <paramref name="exe"/>'s probe and waits. Its exit code, or null when it hadn't ended by <paramref name="limit"/> and was killed and waited for, since its files are locked until then. Throws <see cref="OperationCanceledException"/> the same way, once it's gone.</summary>
+    /// <summary>Starts <paramref name="exe"/>'s probe and waits. Its exit code, or null when it hadn't ended by <paramref name="limit"/> and was killed and briefly waited for, since its files are locked until then. Throws <see cref="OperationCanceledException"/> the same way.</summary>
     Task<int?> RunAsync(string exe, string resultFile, string stderrFile, TimeSpan limit, CancellationToken cancellationToken);
 }
 
@@ -23,6 +24,22 @@ public interface IUpdateProbeRunner
 /// </summary>
 public sealed class UpdateProbeProcess : IUpdateProbeRunner
 {
+    /// <summary>How long a killed probe is waited for. The wait had no limit, and a process stuck in the kernel (a driver, a dead share) held the staging lock for good, with no cancel left to end it (2026-11-04, review P6-4).</summary>
+    public static readonly TimeSpan KilledLimit = TimeSpan.FromSeconds(5);
+
+    /// <summary>Waits for <paramref name="exited"/> up to <paramref name="limit"/>; a probe still there is logged and left, and the stage's next look at its files reports what it finds.</summary>
+    internal static async Task WaitAfterKillAsync(Task exited, TimeSpan limit)
+    {
+        try
+        {
+            await exited.WaitAsync(limit).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            DiagnosticLog.Warn(UpdateJournal.Category, UpdateText.ProbeWontEnd);
+        }
+    }
+
     public async Task<int?> RunAsync(string exe, string resultFile, string stderrFile, TimeSpan limit, CancellationToken cancellationToken)
     {
         using var process = Start(exe, resultFile, stderrFile);
@@ -49,7 +66,7 @@ public sealed class UpdateProbeProcess : IUpdateProbeRunner
                 DiagnosticLog.Info(UpdateJournal.Category, ex.Message);
             }
 
-            await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+            await WaitAfterKillAsync(process.WaitForExitAsync(CancellationToken.None), KilledLimit).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
             return null;
         }
@@ -77,6 +94,7 @@ public sealed class UpdateProbeProcess : IUpdateProbeRunner
         };
         start.ArgumentList.Add(UpdateProbe.Flag);
         start.ArgumentList.Add(resultFile);
+        ChildEnvironment.Withhold(start.Environment);   // as Windows' ChildJob.Start does (2026-11-04, review P3-17): the Mac probe inherited the app's secrets
         try
         {
             var process = Process.Start(start);
@@ -87,9 +105,17 @@ public sealed class UpdateProbeProcess : IUpdateProbeRunner
                 process.BeginOutputReadLine();
                 process.ErrorDataReceived += (_, line) =>
                 {
+                    // On a pool thread: an exception here would end the app (2026-11-04, review P1-11), and a full disk or a held file is no reason to.
                     if (line.Data is { } text)
                     {
-                        File.AppendAllText(stderrFile, text + "\n");
+                        try
+                        {
+                            File.AppendAllText(stderrFile, text + "\n");
+                        }
+                        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                        {
+                            DiagnosticLog.Info(UpdateJournal.Category, ex.Message);
+                        }
                     }
                 };
                 process.BeginErrorReadLine();
@@ -134,6 +160,11 @@ public sealed class UpdateStage
     /// <summary>The probe's limit; a fresh exe's first start took 0.12 s here, so this is roomy.</summary>
     public static readonly TimeSpan ProbeLimit = TimeSpan.FromSeconds(30);
 
+    /// <summary>How many times the staging lock is tried, a tenth of a second apart: a start's tidy holds it for a moment (2026-11-04, review P7-8).</summary>
+    private const int LockTries = 10;
+
+    private static readonly TimeSpan LockPause = TimeSpan.FromMilliseconds(100);
+
     /// <summary>Free space wanted, as multiples of the archive: the archive and the unpacked copy while <c>previous</c> still exists.</summary>
     public const int SpaceFactor = 4;
 
@@ -161,11 +192,25 @@ public sealed class UpdateStage
     {
         ArgumentNullException.ThrowIfNull(folder);
         TryDo(() => File.Delete(folder.Ready));
-        WorkingDirectory.DeleteDirectoryQuietly(folder.Staging);
-        WorkingDirectory.DeleteDirectoryQuietly(folder.Staged);
+        UpdateFolder.DeleteQuietly(folder.Staging);
+        UpdateFolder.DeleteQuietly(folder.Staged);
         if (alsoParts)
         {
-            WorkingDirectory.DeleteDirectoryQuietly(folder.StagingParts);
+            UpdateFolder.DeleteQuietly(folder.StagingParts);
+        }
+    }
+
+    /// <summary>Deletes one entry of <c>staging.parts</c>: a partial's file, or a parallel download's folder.</summary>
+    public static void DeleteEntryQuietly(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        if (Directory.Exists(path))
+        {
+            UpdateFolder.DeleteQuietly(path);
+        }
+        else
+        {
+            TryDo(() => File.Delete(path));
         }
     }
 
@@ -178,14 +223,14 @@ public sealed class UpdateStage
             return;
         }
 
-        foreach (string leftover in Directory.EnumerateDirectories(folder.Root, "*.extracting"))
+        foreach (string leftover in Directory.EnumerateDirectories(folder.Root, ModelStore.ExtractingPattern))
         {
-            WorkingDirectory.DeleteDirectoryQuietly(leftover);
+            UpdateFolder.DeleteQuietly(leftover);
         }
     }
 
     /// <summary>
-    /// The refusals before anything starts: no package manifest, a folder that can't take files, not enough room, a renamed copy. Null when it may start. The lock is taken by <see cref="StageAsync"/>, since a refusal here is a reason and that one's a state.
+    /// The refusals before anything starts: no package manifest, a folder that can't take files, not enough room, a renamed copy, a swap not yet settled, a pending rollback. Null when it may start. The lock is taken by <see cref="StageAsync"/>, since a refusal here is a reason and that one's a state.
     /// </summary>
     public string? Preflight(long archiveBytes)
     {
@@ -205,12 +250,24 @@ public sealed class UpdateStage
             return UpdateText.RenamedCopy(installed.Exe);
         }
 
-        // Really creating and renaming a file, which also catches synced or network folders that refuse it.
+        // An interrupted swap's journal: settling it at exit would delete a stage it never knew of, and its undo moves files back into staging/ (2026-11-04, reviews P2-3, P2-5). A rollback another copy asked for goes first (review P5-4): the exit would run it and ignore a stage, and the marker would promise both.
+        if (UpdateJournal.IsUnsettled(Folder))
+        {
+            return UpdateText.UnsettledSwap;
+        }
+
+        if (File.Exists(Folder.Rollback))
+        {
+            return UpdateText.RollbackPendingFirst;
+        }
+
+        // Really creating and renaming a file, which also catches synced or network folders that refuse it. Names of its own (review P1-9): two copies at once would otherwise fail each other's rename and read as a read-only folder.
         try
         {
             Directory.CreateDirectory(Folder.Root);
-            string first = Path.Combine(Folder.Root, "preflight.tmp");
-            string second = Path.Combine(Folder.Root, "preflight2.tmp");
+            string unique = Guid.NewGuid().ToString("N");
+            string first = Path.Combine(Folder.Root, $"preflight-{unique}.tmp");
+            string second = Path.Combine(Folder.Root, $"preflight-{unique}-2.tmp");
             File.WriteAllText(first, "");
             File.Move(first, second, overwrite: true);
             File.Delete(second);
@@ -221,12 +278,46 @@ public sealed class UpdateStage
         }
 
         // Plus the download's own margin, so there's one refusal, before anything starts. Space it can't read means going on: the rename test ran, and a full disk fails the download with its reason.
-        long needed = (archiveBytes * SpaceFactor) + ModelStore.DiskHeadroomBytes;
-        return _freeBytes(Folder.Install) is { } free && free < needed ? ModelStore.DiskSpaceError(UpdateText.StageDisplay, needed - ModelStore.DiskHeadroomBytes, free, Folder.Install) : null;
+        long more = RoomStillNeeded(archiveBytes, HeldBytes());
+        long needed = more > long.MaxValue - ModelStore.DiskHeadroomBytes ? long.MaxValue : more + ModelStore.DiskHeadroomBytes;
+        return _freeBytes(Folder.Install) is { } free && free < needed ? ModelStore.DiskSpaceError(UpdateText.StageDisplay, more, free, Folder.Install) : null;
+    }
+
+    /// <summary>
+    /// What the stage still needs: <see cref="SpaceFactor"/> times the archive, less <paramref name="held"/>, what a partial or a kept stage already holds (2026-11-04, review P5-15: a resumed download on a nearly full disk was refused for room it already had). A size from GitHub's JSON can't overflow it (review P7-10): a negative figure passed the check.
+    /// </summary>
+    internal static long RoomStillNeeded(long archiveBytes, long held)
+    {
+        long whole = archiveBytes > long.MaxValue / SpaceFactor ? long.MaxValue : archiveBytes * SpaceFactor;
+        return Math.Max(0, whole - Math.Max(0, held));
+    }
+
+    private long HeldBytes()
+    {
+        long held = 0;
+        foreach (string folder in new[] { Folder.Staging, Folder.StagingParts })
+        {
+            try
+            {
+                if (Directory.Exists(folder))
+                {
+                    foreach (var file in new DirectoryInfo(folder).EnumerateFiles("*", new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = 0, IgnoreInaccessible = true }))
+                    {
+                        held += file.Length;
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                DiagnosticLog.Info(UpdateJournal.Category, ex.Message);
+            }
+        }
+
+        return held;
     }
 
     /// <summary>The whole flow, for one release. Holds the staging lock throughout. Throws <see cref="OperationCanceledException"/> on the caller's cancel, with the partial download kept and a running probe gone.</summary>
-    public async Task<UpdateStageResult> StageAsync(UpdateRelease release, IProgress<UpdateStagePhase>? progress, string? rawNotes, CancellationToken cancellationToken)
+    public async Task<UpdateStageResult> StageAsync(UpdateRelease release, IProgress<UpdateStagePhase>? progress, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(release);
         string? refused = Preflight(release.ArchiveBytes);
@@ -235,13 +326,13 @@ public sealed class UpdateStage
             return new UpdateStageResult(refused);
         }
 
-        using var held = UpdateLock.TryExclusive(Folder.StagingLock);
+        using var held = await TakeStagingLockAsync(cancellationToken).ConfigureAwait(false);
         if (held is null)
         {
             return new UpdateStageResult(UpdateText.AnotherCopyStaging);
         }
 
-        Prepare(release);
+        // Proofs first, and only then does anything change (2026-11-04, review P1-6): a network failure or a bad signature cost a stage that was ready to install.
         byte[] shaBytes;
         byte[] sigBytes;
         try
@@ -254,18 +345,27 @@ public sealed class UpdateStage
             return new UpdateStageResult(ex.Message);
         }
 
-        if (!UpdateSignature.Verify(shaBytes, Encoding.ASCII.GetString(sigBytes), _context.Keys))
+        // A captive portal's page or a proxy's error is a 200 too, and that's the network, not a trust failure (2026-11-04, reviews P4-13, P6-7).
+        string sigText = Encoding.ASCII.GetString(sigBytes);
+        var sha = UpdateShaFile.TryParse(Encoding.UTF8.GetString(shaBytes));
+        if (!UpdateSignature.HoldsSignatureLine(sigText))
         {
-            return new UpdateStageResult(UpdateText.NotSigned);
+            return new UpdateStageResult(UpdateText.NotASignature);
         }
 
-        var sha = UpdateShaFile.TryParse(Encoding.UTF8.GetString(shaBytes));
+        if (!UpdateSignature.Verify(shaBytes, sigText, _context.Keys))
+        {
+            return new UpdateStageResult(sha is null ? UpdateText.NotASignature : UpdateText.NotSigned);
+        }
+
         if (sha is null || sha.ArchiveName != release.ArchiveName)
         {
             // The signed text must name the exact expected asset, so an older signed release can't be replayed as new.
             return new UpdateStageResult(UpdateText.NotThisRelease(release.ArchiveName));
         }
 
+        Prepare(release);
+        await Task.Run(() => DropBadArchive(release, sha, cancellationToken), cancellationToken).ConfigureAwait(false);
         string? failed = await DownloadAsync(release, sha, progress, cancellationToken).ConfigureAwait(false);
         if (failed is not null)
         {
@@ -278,27 +378,73 @@ public sealed class UpdateStage
             Directory.CreateDirectory(Folder.Staged);
             await File.WriteAllBytesAsync(Folder.StagedSha, shaBytes, cancellationToken).ConfigureAwait(false);
             await File.WriteAllBytesAsync(Folder.StagedSig, sigBytes, cancellationToken).ConfigureAwait(false);
-            await File.WriteAllTextAsync(Folder.StagedNotes, UntrustedText.Scrub(rawNotes ?? ""), cancellationToken).ConfigureAwait(false);
+            await File.WriteAllTextAsync(Folder.StagedNotes, release.Notes ?? "", cancellationToken).ConfigureAwait(false);   // as GitHub holds them: UpdateProofs.Notes scrubs them where they're read
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return new UpdateStageResult(ex.Message);
         }
 
-        string? bad = await Task.Run(() => Verify(release, sha, cancellationToken), cancellationToken).ConfigureAwait(false);
+        var (bad, drop) = await Task.Run(() => Verify(release, sha, cancellationToken), cancellationToken).ConfigureAwait(false);
         if (bad is null)
         {
-            bad = await ProbeAsync(release, cancellationToken).ConfigureAwait(false);
+            (bad, drop) = await ProbeAsync(release, cancellationToken).ConfigureAwait(false);
         }
 
         if (bad is not null)
         {
-            Drop(Folder);
+            if (drop)
+            {
+                Drop(Folder);
+            }
+
             return new UpdateStageResult(bad);
         }
 
-        File.WriteAllText(Folder.Ready, "");
+        // Last before ready (2026-11-04, review P3-9): a cancel landing just after the probe would otherwise answer "canceled" over a stage that installs at quit.
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            File.WriteAllText(Folder.Ready, "");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new UpdateStageResult(ex.Message);
+        }
+
         return new UpdateStageResult(null);
+    }
+
+    private async Task<UpdateLock?> TakeStagingLockAsync(CancellationToken cancellationToken)
+    {
+        for (int attempt = 1; ; attempt++)
+        {
+            var taken = UpdateLock.TryExclusive(Folder.StagingLock, out bool held);
+            if (taken is not null || !held || attempt >= LockTries)
+            {
+                return taken;
+            }
+
+            await Task.Delay(LockPause, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    // ModelStore takes a complete file of the right length on trust, since it only ever moves one there after its hash matched. Here a damaged or planted one never downloaded again, and every try failed on the unpack or the hash that follows (2026-11-04, review P4-6). The signed hash says which it is.
+    private void DropBadArchive(UpdateRelease release, UpdateShaFile sha, CancellationToken cancellationToken)
+    {
+        string archive = Path.Combine(Folder.StagingParts, release.ArchiveName);
+        try
+        {
+            if (File.Exists(archive) && new FileInfo(archive).Length == release.ArchiveBytes && !UpdateHash.Same(UpdateHash.OfFile(archive, cancellationToken), sha.ArchiveHash))
+            {
+                DiagnosticLog.Warn(UpdateJournal.Category, ModelStore.ChecksumError(UpdateText.StageDisplay));
+                File.Delete(archive);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            DiagnosticLog.Info(UpdateJournal.Category, ex.Message);
+        }
     }
 
     // A stage is started: ready goes first. A complete folder of this version stays, to be verified and probed again rather than downloaded again, since EnsureArchiveSetAsync answers "present" for any complete folder
@@ -307,11 +453,11 @@ public sealed class UpdateStage
     {
         TryDo(() => File.Delete(Folder.Ready));
         RemoveExtracting(Folder);
-        WorkingDirectory.DeleteDirectoryQuietly(Folder.Staged);
+        UpdateFolder.DeleteQuietly(Folder.Staged);
         if (Directory.Exists(Folder.Staging)
             && (UpdateManifest.ReadFile(Folder.StagingManifest, out _) is not { } staged || staged.ParsedVersion != release.Version))
         {
-            WorkingDirectory.DeleteDirectoryQuietly(Folder.Staging);
+            UpdateFolder.DeleteQuietly(Folder.Staging);
         }
 
         if (Directory.Exists(Folder.StagingParts))
@@ -320,17 +466,7 @@ public sealed class UpdateStage
             {
                 if (!Path.GetFileName(part).StartsWith(release.ArchiveName, StringComparison.Ordinal))
                 {
-                    TryDo(() =>
-                    {
-                        if (Directory.Exists(part))
-                        {
-                            Directory.Delete(part, recursive: true);
-                        }
-                        else
-                        {
-                            File.Delete(part);
-                        }
-                    });
+                    DeleteEntryQuietly(part);
                 }
             }
         }
@@ -339,7 +475,7 @@ public sealed class UpdateStage
     private async Task<string?> DownloadAsync(UpdateRelease release, UpdateShaFile sha, IProgress<UpdateStagePhase>? progress, CancellationToken cancellationToken)
     {
         using var stalled = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var watch = new StallWatch(_time);
+        using var watch = new StallWatch(_time);
         var spec = new ArchiveSetSpec(
             UpdateText.StageDisplay,
             Folder.Staging,
@@ -378,108 +514,117 @@ public sealed class UpdateStage
         }
     }
 
-    private string? Verify(UpdateRelease release, UpdateShaFile sha, CancellationToken cancellationToken)
+    // A failed hash or a missing file is the package's fault and drops it. A file it can't read for now isn't (2026-11-04, review P2-4): a scanner's brief hold cost a whole download.
+    private (string? Reason, bool Drop) Verify(UpdateRelease release, UpdateShaFile sha, CancellationToken cancellationToken)
     {
         try
         {
-            if (!UpdateHash.Same(UpdateHash.OfFile(Folder.StagingManifest), sha.ManifestHash))
+            if (!UpdateHash.Same(UpdateHash.OfFile(Folder.StagingManifest, cancellationToken), sha.ManifestHash))
             {
-                return UpdateText.PackageBad(UpdateManifest.FileName);
+                return (UpdateText.PackageBad(UpdateManifest.FileName), true);
             }
 
             var staged = UpdateManifest.ReadFile(Folder.StagingManifest, out string? problem);
             if (staged is null)
             {
-                return UpdateText.PackageRefused(problem!);
+                return (UpdateText.PackageRefused(problem!), true);
             }
 
             var installed = UpdateManifest.ReadFile(Folder.Manifest, out problem);
             if (installed is null)
             {
-                return UpdateText.DamagedInstall(problem!);
+                return (UpdateText.DamagedInstall(problem!), false);
             }
 
             if (staged.ParsedVersion != release.Version || !string.Equals(staged.Rid, installed.Rid, StringComparison.Ordinal))
             {
-                return UpdateText.PackageRefused(UpdateText.ManifestNotThisRelease(staged.Version, staged.Rid));
+                return (UpdateText.PackageRefused(UpdateText.ManifestNotThisRelease(staged.Version, staged.Rid)), true);
             }
 
             foreach (var file in staged.Files)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 string full = Path.Combine(Folder.Staging, file.Path.Replace('/', Path.DirectorySeparatorChar));
-                if (!File.Exists(full) || !UpdateHash.Same(UpdateHash.OfFile(full), file.Sha256))
+                if (!File.Exists(full) || !UpdateHash.Same(UpdateHash.OfFile(full, cancellationToken), file.Sha256))
                 {
-                    return UpdateText.PackageBad(file.Path);
+                    return (UpdateText.PackageBad(file.Path), true);
                 }
             }
 
             // Hashing the whole install happens here, in the background, and the result is kept, so a window close only hashes what moves.
-            var hashes = UpdateInstallHashes.Take(Folder.Install, installed, UpdateHash.OfFile(Folder.Manifest));
+            var hashes = UpdateInstallHashes.Take(Folder.Install, installed, UpdateHash.OfFile(Folder.Manifest, cancellationToken), cancellationToken);
             File.WriteAllBytes(Folder.StagedInstallHashes, JsonSerializer.SerializeToUtf8Bytes(hashes, UpdateJsonContext.Default.UpdateInstallHashes));
-            return null;
+            return (null, false);
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return (UpdateText.PackageBad(UpdateManifest.FileName), true);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return ex.Message;
+            return (UpdateText.StageCheckUnreadable(ex.Message), false);
         }
     }
 
     // The machine's fault isn't the release's: the app chats without the Visual C++ runtime, so refusing on a library that won't load here either would refuse every update and blame antivirus. So a failed load or a crash asks
     // the installed exe's own probe, and a library failing there too is logged and ignored. A crash ends that run, so the libraries after it go unloaded; their files have still passed the hash check. A missing file, a library new in this release,
     // or any failure at the package step still refuses.
-    private async Task<string?> ProbeAsync(UpdateRelease release, CancellationToken cancellationToken)
+    //
+    // A refusal that may be the machine's keeps the stage (2026-11-04, review P4-14, the user's call): antivirus holding a new exe for a scan, the usual cause, cost a whole download. It never installs without a pass: the retry verifies and tests again, with no download. A missing file or a run naming another version is the package's fault, and drops it. So does nothing else.
+    // A timeout asks the installed exe too (review P5-10): a library that hangs in both is the machine's, as one that crashes in both is, and the installed run's own timeout still leaves its result file naming what it hung on.
+    private async Task<(string? Reason, bool Drop)> ProbeAsync(UpdateRelease release, CancellationToken cancellationToken)
     {
-        var staged = UpdateManifest.ReadFile(Folder.StagingManifest, out _)!;
-        string stagedExe = Path.Combine(Folder.Staging, staged.Exe);
-        int? code = await RunProbeAsync(stagedExe, Folder.ProbeResult, cancellationToken).ConfigureAwait(false);
-        if (code is null)
+        var staged = UpdateManifest.ReadFile(Folder.StagingManifest, out _);
+        if (staged is null)
         {
-            return UpdateText.ProbeTimedOut;
+            return (UpdateText.PackageBad(UpdateManifest.FileName), true);
         }
 
+        string stagedExe = Path.Combine(Folder.Staging, staged.Exe);
+        int? code = await RunProbeAsync(stagedExe, Folder.ProbeResult, cancellationToken).ConfigureAwait(false);
         var result = UpdateProbeResult.ParseFile(Folder.ProbeResult);
-        if (result.Version != release.Version.ToString())
+        if (result.Version is { } named && named != release.Version.ToString())
         {
-            return UpdateText.ProbeFailed;
+            return (UpdateText.PackageRefused(UpdateText.ManifestNotThisRelease(named, staged.Rid)), true);
         }
 
         if (result.Missing.Count > 0)
         {
-            return UpdateText.PackageBad(result.Missing[0]);
+            return (UpdateText.PackageBad(result.Missing[0]), true);
         }
 
         var suspects = result.Suspects.ToList();
         if (suspects.Count == 0)
         {
-            return code == UpdateProbe.Passed && result.Finished ? null : UpdateText.ProbeFailed;
+            return code == UpdateProbe.Passed && result.Finished ? (null, false) : (code is null ? UpdateText.ProbeTimedOut : UpdateText.ProbeFailed, false);
         }
 
         var installed = UpdateManifest.ReadFile(Folder.Manifest, out _);
         if (installed is null)
         {
-            return UpdateText.ProbeFailedOn(suspects[0]);
+            return (code is null ? UpdateText.ProbeTimedOut : UpdateText.ProbeFailedOn(suspects[0]), false);
         }
 
-        int? installedCode = await RunProbeAsync(Path.Combine(Folder.Install, installed.Exe), Folder.ProbeResultInstalled, cancellationToken).ConfigureAwait(false);
-        var alsoFails = installedCode is null ? [] : new HashSet<string>(UpdateProbeResult.ParseFile(Folder.ProbeResultInstalled).Suspects, _context.Comparer);
+        await RunProbeAsync(Path.Combine(Folder.Install, installed.Exe), Folder.ProbeResultInstalled, cancellationToken).ConfigureAwait(false);
+        var alsoFails = new HashSet<string>(UpdateProbeResult.ParseFile(Folder.ProbeResultInstalled).Suspects, _context.Comparer);
         foreach (string library in suspects)
         {
             if (!alsoFails.Contains(library))
             {
-                return UpdateText.ProbeFailedOn(library);
+                return (code is null ? UpdateText.ProbeTimedOut : UpdateText.ProbeFailedOn(library), false);
             }
 
             DiagnosticLog.Info(UpdateJournal.Category, UpdateText.LibraryFailsInBoth(library));
         }
 
-        return null;
+        return (null, false);
     }
 
     private async Task<int?> RunProbeAsync(string exe, string resultFile, CancellationToken cancellationToken)
     {
-        // Each run deletes its own result first, so a crash can't be read as an older run's answer.
+        // Each run deletes its own result first, so a crash can't be read as an older run's answer, and its stderr (2026-11-04, review P5-14: the Mac's handler appends, so the log showed an earlier run's words under this one).
         TryDo(() => File.Delete(resultFile));
+        TryDo(() => File.Delete(Folder.ProbeStderr));
         int? code = await _probe.RunAsync(exe, resultFile, Folder.ProbeStderr, ProbeLimit, cancellationToken).ConfigureAwait(false);
         if (code != UpdateProbe.Passed)
         {
@@ -513,7 +658,7 @@ public sealed class UpdateStage
         public void Report((long Received, long? Total) value) => report(value);
     }
 
-    private sealed class StallWatch(TimeProvider time)
+    private sealed class StallWatch(TimeProvider time) : IDisposable
     {
         private readonly CancellationTokenSource _stop = new();
         private long _received = -1;
@@ -528,6 +673,8 @@ public sealed class UpdateStage
         }
 
         public void Stop() => _stop.Cancel();
+
+        public void Dispose() => _stop.Dispose();
 
         public async Task RunAsync(CancellationTokenSource stall, TimeSpan limit)
         {

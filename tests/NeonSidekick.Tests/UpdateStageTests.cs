@@ -12,7 +12,7 @@ public sealed class UpdateStageTests : IDisposable
     public void Dispose() => _f.Dispose();
 
     private Task<UpdateStageResult> Stage(UpdateRelease release, IProgress<UpdateStagePhase>? progress = null, CancellationToken cancellationToken = default) =>
-        _f.Stage().StageAsync(release, progress, release.Notes, cancellationToken);
+        _f.Stage().StageAsync(release, progress, cancellationToken);
 
     [Fact]
     public async Task AGoodRelease_EndsReady_WithItsProofsKept()
@@ -54,12 +54,19 @@ public sealed class UpdateStageTests : IDisposable
     }
 
     [Fact]
-    public async Task NotesWithControlCharacters_AreSavedScrubbed()
+    public async Task NotesWithControlCharacters_AreScrubbedOnce_AsTheyAreRead()
     {
+        // The file on disk isn't what's trusted, so the one scrub is at the reader (2026-11-04, review P2-18): three of them did the same work.
         _f.Install("0.5.6", new Dictionary<string, string> { [UpdateFixture.Exe] = "old" });
         var release = _f.Publish("0.5.7", new Dictionary<string, string> { [UpdateFixture.Exe] = "new" }, notes: "safe\u001b[31m text");
         Assert.True((await Stage(release)).Ok);
-        Assert.DoesNotContain('\u001b', File.ReadAllText(_f.Folder.StagedNotes));
+        new UpdateExit(_f.Context(), null, null).Run(_ => { });
+
+        string? notes = UpdateProofs.Notes(_f.Folder, UpdateManifest.ReadFile(_f.Folder.Manifest, out _)!);
+
+        Assert.NotNull(notes);
+        Assert.Contains("safe", notes, StringComparison.Ordinal);
+        Assert.DoesNotContain('\u001b', notes);
     }
 
     [Fact]
@@ -255,7 +262,7 @@ public sealed class UpdateStageTests : IDisposable
         var context = _f.Context();
         var stage = new UpdateStage(context, new ModelStore(_f.Folder.Root, http, UpdateJournal.Category) { AvailableBytes = _ => null }, new UpdateCheck(http, UpdateSource.GitHub(App.AboutText.RepositoryUrl), context.Running, UpdateFixture.Rid), _f.Probe, time, _ => null);
 
-        var run = stage.StageAsync(release, null, null, CancellationToken.None);
+        var run = stage.StageAsync(release, null, CancellationToken.None);
         await blocking.Reached.WaitAsync(TimeSpan.FromSeconds(10));
         while (!run.IsCompleted)
         {
@@ -388,19 +395,216 @@ public sealed class UpdateStageTests : IDisposable
     }
 
     [Fact]
-    public async Task AProbeThatTimesOut_DropsTheStage()
+    public async Task AProbeThatTimesOut_KeepsTheStage_ButNeverReady()
     {
+        // A slow machine isn't the package's fault (2026-11-04, review P4-14, the user's call): a retry tests again with no download, and nothing installs without a pass.
         _f.Probe.Answer = _ => ("", null);
         Assert.Equal(UpdateText.ProbeTimedOut, (await Stage(_f.Usual())).Reason);
-        Assert.False(Directory.Exists(_f.Folder.Staging));
+        Assert.True(Directory.Exists(_f.Folder.Staging));
+        Assert.False(File.Exists(_f.Folder.Ready));
     }
 
     [Fact]
     public async Task AProbeReportingAnotherVersion_DropsTheStage()
     {
         _f.Probe.Version = "0.5.5";
-        Assert.Equal(UpdateText.ProbeFailed, (await Stage(_f.Usual())).Reason);
+        Assert.Equal(UpdateText.PackageRefused(UpdateText.ManifestNotThisRelease("0.5.5", UpdateFixture.Rid)), (await Stage(_f.Usual())).Reason);
         Assert.False(Directory.Exists(_f.Folder.Staging));
+    }
+
+    // ---- a failed test run, as the review left it (2026-11-04, review P4-14, the user's call)
+
+    private int ArchiveRequests(UpdateRelease release) => _f.Http.Requests.Count(request => request.Uri == release.ArchiveUrl);
+
+    [Fact]
+    public async Task AFailedTestRun_KeepsTheStage_AndARetryDownloadsNothing()
+    {
+        var release = _f.Usual();
+        _f.Probe.Answer = exe => Answers(exe, "version 0.5.7\nloading a.dll\n", -1, "version 0.5.6\nloading a.dll\nloaded a.dll\ndone\n", UpdateProbe.Passed);
+        Assert.Equal(UpdateText.ProbeFailedOn("a.dll"), (await Stage(release)).Reason);
+        Assert.True(Directory.Exists(_f.Folder.Staging));
+        Assert.False(File.Exists(_f.Folder.Ready));
+        int sent = ArchiveRequests(release);
+
+        _f.Probe.Answer = null;
+        Assert.True((await Stage(release)).Ok);
+
+        Assert.Equal(sent, ArchiveRequests(release));
+        Assert.True(File.Exists(_f.Folder.Ready));
+    }
+
+    [Fact]
+    public async Task ARunWithNoVersionLine_IsACrash_AndKeepsTheStage()
+    {
+        _f.Probe.Answer = _ => ("", UpdateProbe.Failed);
+        Assert.Equal(UpdateText.ProbeFailed, (await Stage(_f.Usual())).Reason);
+        Assert.True(Directory.Exists(_f.Folder.Staging));
+    }
+
+    [Fact]
+    public async Task AFailedTestRunsWords_SayItTriesAgain_NotThatItWasDropped()
+    {
+        Assert.DoesNotContain("dropped", UpdateText.ProbeTimedOut, StringComparison.Ordinal);
+        Assert.Contains("/update cancel drops it", UpdateText.ProbeFailed, StringComparison.Ordinal);
+        Assert.Contains("/update cancel drops it", UpdateText.ProbeFailedOn("a.dll"), StringComparison.Ordinal);
+        await Task.CompletedTask;
+    }
+
+    [Fact]
+    public async Task AHungTestRun_AsksTheInstalledExeToo()
+    {
+        // A library that hangs in both versions isn't this release's fault (review P5-10).
+        _f.Probe.Answer = exe => Answers(exe, "version 0.5.7\nloading a.dll\n", null, "version 0.5.6\nloading a.dll\n", null);
+        Assert.True((await Stage(_f.Usual())).Ok);
+        Assert.Equal(2, _f.Probe.Exes.Count);
+    }
+
+    [Fact]
+    public async Task EachTestRun_StartsWithNoEarlierStderr()
+    {
+        // The Mac's handler appends, so the log showed an earlier run's text (review P5-14).
+        var release = _f.Usual();
+        UpdateFixture.Write(_f.Folder.ProbeStderr, "an earlier run's text");
+        Assert.True((await Stage(release)).Ok);
+        Assert.False(_f.Probe.StderrWasThere[0]);
+    }
+
+    [Fact]
+    public async Task ACancelJustAfterTheTestRun_WritesNoReady()
+    {
+        // It answered "canceled" over a stage that then installed at quit (review P3-9).
+        var release = _f.Usual();
+        using var stop = new CancellationTokenSource();
+        _f.Probe.Answer = _ =>
+        {
+            stop.Cancel();
+            return ("version 0.5.7\ndone\n", UpdateProbe.Passed);
+        };
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Stage(release, null, stop.Token));
+
+        Assert.False(File.Exists(_f.Folder.Ready));
+    }
+
+    [Fact]
+    public async Task ABadSignature_LeavesAStageThatWasReady()
+    {
+        // Proofs first (review P1-6): a network failure or a bad signature cost a stage that was ready to install.
+        Assert.True((await Stage(_f.Usual())).Ok);
+        using var other = UpdateSignature.NewKey();
+        var worse = _f.Publish("0.5.8", new Dictionary<string, string> { [UpdateFixture.Exe] = "newer exe" }, signer: other);
+
+        Assert.Equal(UpdateText.NotSigned, (await Stage(worse)).Reason);
+
+        Assert.True(File.Exists(_f.Folder.Ready));
+        Assert.Equal("new exe", File.ReadAllText(Path.Combine(_f.Folder.Staging, UpdateFixture.Exe)));
+    }
+
+    [Theory]
+    [InlineData("<html>a captive portal's page</html>")]
+    [InlineData("")]
+    public async Task APageWhereTheSignatureShouldBe_IsTheNetwork_NotATrustFailure(string page)
+    {
+        // Reviews P4-13, P6-7.
+        var usual = _f.Usual();
+        var release = usual with { SigUrl = new Uri(usual.SigUrl.AbsoluteUri.Replace(usual.ArchiveName, "page/" + usual.ArchiveName, StringComparison.Ordinal)) };
+        _f.Http.Map(release.SigUrl.AbsoluteUri, (_, _) => Task.FromResult(StubHttpMessageHandler.Bytes(HttpStatusCode.OK, System.Text.Encoding.ASCII.GetBytes(page))));
+        Assert.Equal(UpdateText.NotASignature, (await Stage(release)).Reason);
+        Assert.False(Directory.Exists(_f.Folder.Staging));
+    }
+
+    [Fact]
+    public async Task AWrongCompleteArchive_IsDeleted_AndDownloadedAgain()
+    {
+        // ModelStore takes a complete file of the right length on trust, so a damaged or planted one never downloaded again (review P4-6).
+        var release = _f.Usual();
+        string archive = Path.Combine(_f.Folder.StagingParts, release.ArchiveName);
+        Directory.CreateDirectory(_f.Folder.StagingParts);
+        File.WriteAllBytes(archive, new byte[release.ArchiveBytes]);
+
+        Assert.True((await Stage(release)).Ok);
+
+        Assert.Equal(1, ArchiveRequests(release));
+    }
+
+    [Fact]
+    public async Task AStagingLockFreedInAMoment_IsWaitedFor()
+    {
+        // A start's tidy holds it for a moment, and a stage begun just then read as another copy downloading (review P7-8).
+        var release = _f.Usual();
+        var other = UpdateLock.TryExclusive(_f.Folder.StagingLock);
+        var freed = Task.Delay(150).ContinueWith(_ => other!.Dispose(), TaskScheduler.Default);
+
+        Assert.True((await Stage(release)).Ok);
+
+        await freed;
+    }
+
+    [Fact]
+    public void Preflight_RefusesAnUnsettledSwap_AndAPendingRollback()
+    {
+        // Reviews P2-3, P2-5, P5-4: settling at exit would delete a stage it never knew of, and a rollback's exit deletes the stage.
+        _f.Usual();
+        Directory.CreateDirectory(_f.Folder.Root);
+        new UpdateSwap(_f.Folder).PlanUpdate("0.5.5", "0.5.6", UpdateFixture.Exe, UpdateFixture.Exe, [], [], []).Save(_f.Folder);
+        Assert.Equal(UpdateText.UnsettledSwap, _f.Stage().Preflight(1));
+        UpdateJournal.Delete(_f.Folder);
+        UpdateFixture.Write(_f.Folder.Rollback, "");
+        Assert.Equal(UpdateText.RollbackPendingFirst, _f.Stage().Preflight(1));
+    }
+
+    [Fact]
+    public async Task Preflights_AtOnce_DontFailEachOther()
+    {
+        // Fixed temp names: two copies failed each other's rename and read as a read-only folder (review P1-9).
+        _f.Usual();
+        var answers = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => Task.Run(() => _f.Stage().Preflight(1))));
+        Assert.All(answers, Assert.Null);
+        Assert.Empty(Directory.EnumerateFiles(_f.Folder.Root, "preflight-*"));
+    }
+
+    [Theory]
+    [InlineData(100, 0, 400)]
+    [InlineData(100, 150, 250)]
+    [InlineData(100, 1000, 0)]
+    [InlineData(100, -5, 400)]
+    [InlineData(long.MaxValue, 0, long.MaxValue)]
+    public void TheRoomStillNeeded_CountsWhatsAlreadyHere(long archive, long held, long needed)
+    {
+        // A resumed download on a nearly full disk refused itself over its own partial, and the multiple could overflow (reviews P5-15, P7-10).
+        Assert.Equal(needed, UpdateStage.RoomStillNeeded(archive, held));
+    }
+
+    [Fact]
+    public void Preflight_CountsAPartial_TowardTheRoom()
+    {
+        _f.Usual();
+        UpdateFixture.Write(Path.Combine(_f.Folder.StagingParts, "a.part"), new string('x', 4000));
+        long enough = 1000 * UpdateStage.SpaceFactor - 4000 + ModelStore.DiskHeadroomBytes;
+        Assert.Null(_f.Stage(freeBytes: _ => enough).Preflight(1000));
+        Assert.NotNull(_f.Stage(freeBytes: _ => ModelStore.DiskHeadroomBytes - 1).Preflight(1000));
+    }
+
+    [Fact]
+    public void ThePartsFolder_IsModelStoresOwnName() => Assert.Equal(ModelStore.PartsPath(_f.Folder.Staging), _f.Folder.StagingParts);
+
+    [Fact]
+    public void TheWordsWithANumber_ReadItFromTheConstant()
+    {
+        // Review P5-18.
+        Assert.Contains(UpdateStage.ProbeLimit.TotalSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture), UpdateText.ProbeTimedOut, StringComparison.Ordinal);
+        Assert.Contains(UpdateStage.StallLimit.TotalSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture), UpdateText.Stalled, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AnUnpackingCancel_EndsTheTarToo()
+    {
+        // The synchronous unpack had no way to stop, and /update cancel's wait had none either (review P3-7).
+        string archive = Path.Combine(_f.Root, "a.tar.gz");
+        await File.WriteAllBytesAsync(archive, new byte[64]);
+        using var stop = new CancellationTokenSource();
+        stop.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => ModelStore.ExtractTarGzAsync(archive, Path.Combine(_f.Root, "out"), stop.Token));
     }
 
     [Fact]
@@ -435,7 +639,8 @@ public sealed class UpdateStageTests : IDisposable
     {
         _f.Probe.Answer = exe => Answers(exe, "version 0.5.7\nloading a.dll\nfailed a.dll\ndone\n", UpdateProbe.Failed, "version 0.5.6\nloading a.dll\nloaded a.dll\ndone\n", UpdateProbe.Passed);
         Assert.Equal(UpdateText.ProbeFailedOn("a.dll"), (await Stage(_f.Usual())).Reason);
-        Assert.False(Directory.Exists(_f.Folder.Staging));
+        Assert.True(Directory.Exists(_f.Folder.Staging));
+        Assert.False(File.Exists(_f.Folder.Ready));
     }
 
     [Fact]

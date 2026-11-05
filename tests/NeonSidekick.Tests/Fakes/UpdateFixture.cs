@@ -19,9 +19,13 @@ public sealed class FakeUpdateProbe : IUpdateProbeRunner
 
     public List<string> Exes { get; } = [];
 
+    /// <summary>The stderr file as each run found it: whether an earlier run's text was still there.</summary>
+    public List<bool> StderrWasThere { get; } = [];
+
     public Task<int?> RunAsync(string exe, string resultFile, string stderrFile, TimeSpan limit, CancellationToken cancellationToken)
     {
         Exes.Add(exe);
+        StderrWasThere.Add(File.Exists(stderrFile));
         var (text, code) = Answer?.Invoke(exe) ?? ($"version {Version}\ndone\n", UpdateProbe.Passed);
         File.WriteAllText(resultFile, text);
         return Task.FromResult(code);

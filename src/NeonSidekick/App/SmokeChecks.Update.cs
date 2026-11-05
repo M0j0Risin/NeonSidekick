@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
 using NeonSidekick.Updates;
@@ -41,7 +42,7 @@ public static partial class SmokeChecks
 #else
         var keys = UpdateKeys.Embedded;
         bool good = keys.Count == UpdateKeys.Required && keys.All(UpdateSignature.IsPublicKey) && keys.Distinct(StringComparer.Ordinal).Count() == keys.Count;
-        return new SmokeCheck(name, good, good ? "the daily and backup keys are embedded" : $"needs {UpdateKeys.Required} different keys that parse, has {keys.Count}");
+        return new SmokeCheck(name, good, good ? "the daily and backup keys are embedded" : string.Create(CultureInfo.InvariantCulture, $"needs {UpdateKeys.Required} different keys that parse, has {keys.Count}"));
 #endif
     }
 
@@ -52,7 +53,7 @@ public static partial class SmokeChecks
     public static SmokeCheck ProbeVcRuntime()
     {
         string? missing = VcRuntime.Missing();
-        return new SmokeCheck("vcruntime:load", missing is null, missing is null ? $"{VcRuntime.Libraries.Count} DLLs load" : missing + " won't load");
+        return new SmokeCheck("vcruntime:load", missing is null, missing is null ? string.Create(CultureInfo.InvariantCulture, $"{VcRuntime.Libraries.Count} DLLs load") : missing + " won't load");
     }
 
     /// <summary>

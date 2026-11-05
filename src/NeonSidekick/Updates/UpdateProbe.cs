@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using NeonSidekick.App;
 using NeonSidekick.EmbeddedLlm;
@@ -36,12 +37,20 @@ public static class UpdateProbe
     internal const string FailedLine = "failed ";
     internal const string DoneLine = "done";
 
+    /// <summary>
+    /// How long the probe gives itself. It ends itself after this, on both OSes (2026-11-04, review P5-13): the app's own 30 s kill dies with the app, and a Mac has no job object, so a hung probe outlived a killed app, holding its stage's files. Longer than the app's limit, so the app's answer comes first.
+    /// </summary>
+    public static readonly TimeSpan SelfLimit = TimeSpan.FromSeconds(60);
+
 #if UPDATE_SIM
     /// <summary>A file beside a simulation build's exe that makes its probe hang, for the 30 s limit's scenario.</summary>
     public const string HangMarker = "probe-hang";
 
     /// <summary>A file beside a simulation build's exe that makes its probe crash after setting its error mode, for the no-box scenario.</summary>
     public const string CrashMarker = "probe-crash";
+
+    /// <summary>What a simulation build's probe writes between its version line and its last, which <c>build.ps1 -Tag</c> refuses (2026-11-04, review P4-3): such a package must never become a release. Any other reader ignores a line it doesn't know.</summary>
+    public const string SimBuildLine = "update-sim-build";
 #endif
 
     /// <summary>Whether this run is the probe.</summary>
@@ -56,6 +65,7 @@ public static class UpdateProbe
             _ = JobObjectNative.SetErrorMode(JobObjectNative.FailCriticalErrors | JobObjectNative.NoGpFaultErrorBox);
         }
 
+        Watchdog(SelfLimit, EndNow);
         string directory = AppContext.BaseDirectory;
         string version = SidekickApp.Version;
 #if UPDATE_SIM
@@ -75,18 +85,53 @@ public static class UpdateProbe
             Thread.Sleep(Timeout.Infinite);
         }
 #endif
-        return Run(resultFile, directory, version, Libraries(out var existOnly), [.. existOnly, .. SmokeChecks.RequiredContentFiles], library => NativeLibrary.TryLoad(library, out _));
+
+        // With the app's own reader (2026-11-04, review P2-14): a manifest this build can't read is a package no copy could later update from, and build.ps1's own checks would pass it.
+        bool manifestGood = UpdateManifest.ReadFile(Path.Combine(directory, UpdateManifest.FileName), out _) is not null;
+        return Run(resultFile, directory, version, Libraries(out var existOnly), [.. existOnly, .. SmokeChecks.RequiredContentFiles], library => NativeLibrary.TryLoad(library, out _), manifestGood);
+    }
+
+    /// <summary>Starts a background thread that calls <paramref name="end"/> after <paramref name="limit"/>; it takes both as arguments so a test drives it with a harmless ending.</summary>
+    internal static Thread Watchdog(TimeSpan limit, Action end)
+    {
+        var watchdog = new Thread(() =>
+        {
+            Thread.Sleep(limit);
+            end();
+        })
+        { IsBackground = true, Name = "Update probe's limit" };
+        watchdog.Start();
+        return watchdog;
+    }
+
+    private static void EndNow()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            ProcessEnd.Now(unchecked((uint)Failed));
+        }
+
+        using var self = Process.GetCurrentProcess();
+        self.Kill();
     }
 
     /// <summary>The probe over its seams: writes the version, then what's missing, then each load.</summary>
-    public static int Run(string resultFile, string directory, string version, IReadOnlyList<string> libraries, IReadOnlyList<string> files, Func<string, bool> load)
+    public static int Run(string resultFile, string directory, string version, IReadOnlyList<string> libraries, IReadOnlyList<string> files, Func<string, bool> load, bool manifestGood = true)
     {
         ArgumentNullException.ThrowIfNull(libraries);
         ArgumentNullException.ThrowIfNull(files);
         ArgumentNullException.ThrowIfNull(load);
         using var writer = new StreamWriter(new FileStream(resultFile, FileMode.Create, FileAccess.Write, FileShare.Read)) { AutoFlush = true, NewLine = "\n" };
         writer.WriteLine(VersionLine + version);
-        bool passed = true;
+#if UPDATE_SIM
+        writer.WriteLine(SimBuildLine);
+#endif
+        bool passed = manifestGood;
+        if (!manifestGood)
+        {
+            writer.WriteLine(MissingLine + UpdateManifest.FileName);
+        }
+
         foreach (string file in files.Concat(libraries))
         {
             if (!File.Exists(Path.Combine(directory, file)))

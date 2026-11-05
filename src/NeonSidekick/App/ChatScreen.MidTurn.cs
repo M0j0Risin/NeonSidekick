@@ -245,6 +245,8 @@ internal sealed partial class ChatScreen
     /// </summary>
     public static MidTurnClass MidTurnPolicy(SlashCommand command, string args) => command switch
     {
+        // 2026-11-04, review P7-1: it hashes for seconds under a pane Esc can close, and a Quick command runs through Post, which isn't built to read a pane's keys.
+        SlashCommand.Update when string.Equals(args.Trim(), Updates.UpdateText.RollbackWord, StringComparison.OrdinalIgnoreCase) => MidTurnClass.Pane,
         SlashCommand.Camera when Camera.CameraCommand.Parse(args).Verb == Camera.CameraVerb.Purge => MidTurnClass.Deferred,
         SlashCommand.Undo when UndoText.Parse(args) is { Purge: true } => MidTurnClass.Deferred,   // 2026-10-28: a purge waits for the reply, never stops it
         // A typo (2026-10-28, review P5-12): words /undo or /rewind can't read are their usage error after the reply, never a stopped reply.

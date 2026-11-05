@@ -153,18 +153,19 @@ CI builds on a tag and leaves a draft, which `releases/latest` ignores. Nothing 
 **Each release:**
 1. Push the tag `vX.Y.Z`, which must equal the project's `<Version>`.
 2. Write the notes with `gh release edit vX.Y.Z --notes-file <file>`. The Install pane shows them. Their **Updating** line says to use `/update`, and that a copy older than 0.5.7 unpacks a fresh folder.
-3. Run `dotnet run tools/ReleaseSign.cs publish vX.Y.Z --key <file>`, and `--key` again for a second key. It shows the commit and hashes for you to confirm, signs, uploads the `.sig` files, checks them against `UpdateKeys`, publishes, and says so loudly if `releases/latest` isn't this tag.
+3. Run `dotnet run tools/ReleaseSign.cs publish vX.Y.Z --key <file>`, and `--key` again for a second key. It shows the commit and hashes for you to confirm, signs, uploads the `.sig` files and publishes.
 
-A wrong key stops at the draft, so nothing is offered. Running it again after a failure is fine.
+Before publishing, it checks that CI built the tag's commit and that the signatures pass `UpdateKeys` and the last published release's keys. A failure stops at the draft, so nothing is offered, and running it again is fine. It says so loudly if `releases/latest` isn't this tag.
 
-* **Moving a tag before publishing:** delete the draft as well, since CI skips a tag that already has a release.
+* **Moving a tag before publishing:** delete the draft as well, since CI skips a tag that already has a release. A forgotten draft stops at the commit check.
+* **Moving `Updates/UpdateKeys.cs`:** the tool can't find the last release's keys, so it asks you to type a confirmation that they weren't checked.
 * **Pulling a bad release:** mark it a pre-release so `releases/latest` stops offering it, then ship a fix with a higher version. Copies that already downloaded it still install it, and only a higher version reaches them.
 * **A lost or stolen key:** sign the next release with the backup, and put a new key in the source in the bad one's place. Later releases carry the backup's line beside the new key's until copies on older versions have moved on.
-* **Losing both keys** means the next version is installed by hand.
+* **Losing both keys** means the next version is installed by hand. The tool asks you to type a confirmation that installed copies will refuse this release.
 
-**What a release must keep agreeing with:** the old exe stages and swaps the new one, so `--update-probe`, `update-manifest.json`, the `.sig` and `.sha256` formats, `swap.json` and the `.update` layout are lasting contracts, each pinned by a test. A fix to the swap itself takes effect one release later.
+**What a release must keep agreeing with:** the old exe stages and swaps the new one, so `--update-probe`, `update-manifest.json`, the `.sig` and `.sha256` formats, `swap.json` and the `.update` layout, `.update/kept` included, are lasting contracts, each pinned by a test. A fix to the swap itself takes effect one release later.
 
-**Trying an update locally:** `.\build.ps1 -Publish -Package -UpdateSim` makes a package with the simulation's flags compiled in. Then `dotnet run tools/UpdateSim.cs` runs the whole flow against a fake GitHub on loopback, in a scratch install and home. With `--serve` it stays up and opens the real interface over that fake GitHub, to try the marker and panes by hand. `publish\output` then holds the test build, so publish again before daily use.
+**Trying an update locally:** build a package with `.\build.ps1 -Publish -Package -UpdateSim`, then run `dotnet run tools/UpdateSim.cs`. It runs the whole flow against a fake GitHub on loopback, in a scratch install and home; `--serve` stays up and opens the real interface, to try the marker and panes by hand. `publish\output` then holds the test build, so publish again before daily use.
 
 ## Troubleshooting
 

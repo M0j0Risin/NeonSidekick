@@ -348,10 +348,11 @@ public static class WriteGuard
 
         string folder = Trim(install);
         bool inside = WorkingDirectory.IsInside(folder, full) || (InstallIdentity(folder) is { } id && FileIdentity.AncestorWith(full, id) is not null);
-        return inside && !BelongsToHome(home, full);
+        return inside && !InHomeKeptInside(home, folder, full);
     }
 
-    private static bool BelongsToHome(string? home, string full)
+    // The pass is for a home kept inside the install, and only that (2026-11-04, review P4-9): as "is it in a home" it also passed an install kept inside a home, so a package unpacked in the default sandbox had no guard, and the model could overwrite its exe.
+    private static bool InHomeKeptInside(string? home, string install, string full)
     {
         if (string.IsNullOrEmpty(home))
         {
@@ -359,7 +360,40 @@ public static class WriteGuard
         }
 
         string folder = Trim(home);
-        return WorkingDirectory.IsInside(folder, full) || SpelledHome(full) is not null || (HomeIdentity(folder) is { } id && FileIdentity.AncestorWith(full, id) is not null);
+        bool keptInside = WorkingDirectory.IsInside(install, folder) || (InstallIdentity(install) is { } id && FileIdentity.AncestorWith(folder, id) is not null);
+        return keptInside && (WorkingDirectory.IsInside(folder, full) || (HomeIdentity(folder) is { } homeId && FileIdentity.AncestorWith(full, homeId) is not null));
+    }
+
+    /// <summary>
+    /// What a delete or move of <paramref name="directory"/> would take of the app's own folders, by spelling and by identity (2026-11-04, review P6-1): an ancestor of the install lost every unloaded DLL before failing on the running exe, and on a Mac the Trash took the whole of it. Null when it holds neither.
+    /// </summary>
+    internal static FileOutcome? HoldsAppFolders(string directory)
+    {
+        ArgumentNullException.ThrowIfNull(directory);
+        if (s_facts is not { } facts)
+        {
+            return null;
+        }
+
+        string folder = Trim(directory);
+        var id = FileIdentity.Of(folder);
+        if (Holds(folder, id, facts.InstallFolder?.Invoke()))
+        {
+            return FileOutcome.InstallFilesProtected;
+        }
+
+        return Holds(folder, id, facts.Home()) ? FileOutcome.AppFilesProtected : null;
+    }
+
+    private static bool Holds(string folder, FileId? id, string? target)
+    {
+        if (string.IsNullOrEmpty(target))
+        {
+            return false;
+        }
+
+        string inside = Trim(target);
+        return WorkingDirectory.IsInside(folder, inside) || string.Equals(folder, inside, StringComparison.OrdinalIgnoreCase) || (id is { } known && FileIdentity.AncestorWith(inside, known) is not null);
     }
 
     private static (string Path, FileId? Id) s_installIdentity;

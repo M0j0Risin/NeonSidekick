@@ -10,9 +10,10 @@
 //         committed, or inside the app's home, where the model's tools work, and never overwrites a file.
 //
 //     dotnet run tools/ReleaseSign.cs publish vX.Y.Z --key <file> [--key <file>]
-//         Signs the draft CI made for that tag and publishes it. It shows the tag's commit and the hashes for you to confirm, signs each
-//         .sha256 (one line per key), uploads the .sig files, checks them against the keys the source embeds, publishes, and then asks
-//         GitHub whether this tag is what copies will now be offered. Safe to run again after a failure: nothing is live until the last step.
+//         Signs the draft CI made for that tag and publishes it. It shows the tag's commit and the hashes for you to confirm, checks that CI built
+//         that commit, signs each .sha256 (one line per key), checks each key against the keys the source embeds and the .sig against the keys the
+//         last published release embeds, uploads the .sig files, publishes, and then asks GitHub whether this tag is what copies will now be offered.
+//         Safe to run again after a failure: nothing is live until the last step.
 //
 // The password is only ever typed at the terminal, never taken as an argument, so it can't land in a shell's history or a chat. With its
 // input redirected this stops rather than read a password from a pipe.
@@ -25,12 +26,16 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using NeonSidekick.App;
 using NeonSidekick.Files;
 using NeonSidekick.Settings;
 using NeonSidekick.Updates;
 
 const int MinimumPassword = 12;
+const string BuildCommitName = "build-commit.txt";
+const string KeysPath = "src/NeonSidekick/Updates/UpdateKeys.cs";
+const string FirstWithKeys = "0.5.7";
 
 if (args is ["--new-key", var path])
 {
@@ -43,10 +48,11 @@ if (args is ["publish", var tag, .. var rest] && KeyFiles(rest) is { Count: > 0 
     {
         return Publish(tag, keyFiles);
     }
-    catch (StopException stop)
+    catch (Exception failure) when (failure is StopException or JsonException or KeyNotFoundException or InvalidOperationException or IOException or UnauthorizedAccessException)
     {
-        Console.Error.WriteLine(stop.Message);
-        Console.Error.WriteLine("Nothing was published.");
+        // A failure past the publish is a release that's live and couldn't be confirmed (2026-11-04, review P4-7): "Nothing was published." sent a rerun into "already published".
+        Console.Error.WriteLine(failure.Message);
+        Console.Error.WriteLine(PublishState.Done ? $"{tag} IS published and live. This couldn't confirm the rest: check what releases/latest answers." : "Nothing was published.");
         return 1;
     }
 }
@@ -73,7 +79,7 @@ static List<string>? KeyFiles(string[] rest)
 
 static int Publish(string tag, List<string> keyFiles)
 {
-    if (!UpdateVersion.TryParseTag(tag, out _))
+    if (!UpdateVersion.TryParseTag(tag, out var tagVersion))
     {
         throw new StopException($"{tag} isn't a plain vX.Y.Z tag, which is all a copy of the app would accept.");
     }
@@ -114,16 +120,30 @@ static int Publish(string tag, List<string> keyFiles)
         throw new StopException($"The draft for {tag} holds no .sha256 file.");
     }
 
+    if (!assets.Any(a => a.GetProperty("name").GetString() == BuildCommitName))
+    {
+        throw new StopException($"The draft for {tag} holds no {BuildCommitName}, so nothing says which commit CI built. Delete the draft and run CI on the tag again.");
+    }
+
     // The tag's commit comes from the commits API: a release's targetCommitish only says main.
     using var commit = JsonDocument.Parse(Gh("api", $"repos/{repository}/commits/{tag}"));
     string commitHash = commit.RootElement.GetProperty("sha").GetString()!;
     string commitLine = commit.RootElement.GetProperty("commit").GetProperty("message").GetString()!.Split('\n')[0];
+    var publishedKeys = LastPublishedKeys(repository);
 
     string folder = Path.Combine(Path.GetTempPath(), "neonsidekick-release-" + Guid.NewGuid().ToString("N"));
     Directory.CreateDirectory(folder);
     try
     {
-        Gh("release", "download", tag, "--repo", repository, "--pattern", "*.sha256", "--dir", folder);
+        Gh("release", "download", tag, "--repo", repository, "--pattern", "*.sha256", "--pattern", BuildCommitName, "--dir", folder);
+
+        // The confirmation below shows the tag's commit, and nothing else ties the draft to it (2026-11-04, review P3-15): CI skips a release that already exists, so a moved tag kept the old draft, and this would sign the old build under the new commit's subject.
+        string built = File.ReadAllText(Path.Combine(folder, BuildCommitName)).Trim();
+        if (!string.Equals(built, commitHash, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new StopException($"This draft was built from {built}, and {tag} is at {commitHash}. Delete the draft and run CI on the tag again.");
+        }
+
         var signing = new List<(string ShaPath, byte[] Bytes, string SigPath)>();
         Console.WriteLine($"{tag}, commit {commitHash}");
         Console.WriteLine($"  {commitLine}");
@@ -134,6 +154,13 @@ static int Publish(string tag, List<string> keyFiles)
             string shaPath = Path.Combine(folder, name);
             byte[] bytes = File.ReadAllBytes(shaPath);
             string archive = name[..^".sha256".Length];
+
+            // The name a copy asks for under this tag (2026-11-04, review P3-16): a v0.5.8 draft holding a v0.5.7 archive would publish, and every copy would report no package.
+            if (!UpdateCheck.TryParseArchiveVersion(archive, out var named) || named != tagVersion)
+            {
+                throw new StopException($"{archive} isn't named for {tag}, so no copy would ask for it.");
+            }
+
             if (UpdateShaFile.TryParse(Encoding.ASCII.GetString(bytes)) is not { } sha)
             {
                 throw new StopException($"{name} doesn't read as a release's two lines (the archive's hash, then the manifest's).");
@@ -200,16 +227,34 @@ static int Publish(string tag, List<string> keyFiles)
                 {
                     throw new StopException($"{file} didn't open with that password.");
                 }
+                catch (ArgumentException)
+                {
+                    throw new StopException($"{file} holds no key.");   // review P2-15: this was a stack trace
+                }
             }
 
+            bool refusedByInstalled = false;
             foreach (var (_, bytes, sigPath) in signing)
             {
-                string lines = string.Concat(keys.Select(key => UpdateSignature.SignatureLine(bytes, key) + "\n"));
-                File.WriteAllText(sigPath, lines, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-                if (!UpdateSignature.Verify(bytes, lines, UpdateKeys.Embedded))
+                // Each key's own line (2026-11-04, review P1-15): any one line passing let a wrong second key through, against BUILD.md's "A wrong key stops at the draft".
+                var lines = keys.Select(key => UpdateSignature.SignatureLine(bytes, key)).ToList();
+                for (int i = 0; i < lines.Count; i++)
                 {
-                    throw new StopException($"That key isn't one the source embeds (UpdateKeys), so every copy would refuse {Path.GetFileName(sigPath)}.");
+                    if (!UpdateSignature.Verify(bytes, lines[i], UpdateKeys.Embedded))
+                    {
+                        throw new StopException($"{keyFiles[i]} isn't a key the source embeds (UpdateKeys), so it can't sign {Path.GetFileName(sigPath)}.");
+                    }
                 }
+
+                string text = string.Concat(lines.Select(line => line + "\n"));
+                File.WriteAllText(sigPath, text, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+                refusedByInstalled |= publishedKeys is { Count: > 0 } && !UpdateSignature.Verify(bytes, text, publishedKeys);
+            }
+
+            // What installed copies embed, not this source (review P2-13): after a key change, signing with the new key alone passed here, and every copy refused the release. BUILD.md allows one case that can't pass, losing both keys, so this asks rather than stopping for good.
+            if (refusedByInstalled)
+            {
+                Confirm("*** No signature here verifies under the keys the last published release embeds. EVERY INSTALLED COPY WILL REFUSE THIS RELEASE, and they'd have to update by hand. ***", "refuse");
             }
         }
         finally
@@ -221,11 +266,19 @@ static int Publish(string tag, List<string> keyFiles)
         Gh(["release", "upload", tag, "--repo", repository, "--clobber", .. signing.Select(s => s.SigPath)]);
         Console.WriteLine("Signatures uploaded.");
         Gh("release", "edit", tag, "--repo", repository, "--draft=false", "--latest");
+        PublishState.Done = true;
         Console.WriteLine($"{tag} is published.");
     }
     finally
     {
-        Directory.Delete(folder, recursive: true);
+        try
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Console.Error.WriteLine($"Couldn't delete {folder}: {ex.Message}");
+        }
     }
 
     // GitHub's docs don't say a published draft becomes latest, and they sort it by the commit's date. If this isn't the tag, no copy is offered it.
@@ -242,6 +295,41 @@ static int Publish(string tag, List<string> keyFiles)
     return 0;
 }
 
+// The keys the last published release embeds. Null when there's nothing to check: only a version from before the updater skips quietly (it has no such file), and a later tag whose file has moved asks, since the check couldn't run. A network failure stops, since running this again is fine.
+static IReadOnlyList<string>? LastPublishedKeys(string repository)
+{
+    using var latest = JsonDocument.Parse(Gh("api", $"repos/{repository}/releases/latest"));
+    string lastTag = latest.RootElement.GetProperty("tag_name").GetString() ?? "";
+    if (!UpdateVersion.TryParseTag(lastTag, out var last) || !UpdateVersion.TryParse(FirstWithKeys, out var first) || last < first)
+    {
+        return null;
+    }
+
+    if (GhOrNotFound("api", "-H", "Accept: application/vnd.github.raw", $"repos/{repository}/contents/{KeysPath}?ref={lastTag}") is { } source)
+    {
+        var keys = Regex.Matches(source, "\"([A-Za-z0-9+/=]{40,})\"").Select(match => match.Groups[1].Value).Where(UpdateSignature.IsPublicKey).ToList();
+        if (keys.Count > 0)
+        {
+            return keys;
+        }
+    }
+
+    Confirm($"*** {KeysPath} at {lastTag} isn't there or holds no key, so the keys installed copies trust WEREN'T CHECKED. ***", "unchecked");
+    return null;
+}
+
+// A word of its own to type, so a yes meant for the question above can't answer this one.
+static void Confirm(string warning, string word)
+{
+    Console.WriteLine();
+    Console.WriteLine(warning);
+    Console.Write($"Go on anyway? Type {word}: ");
+    if (!string.Equals(Console.ReadLine()?.Trim(), word, StringComparison.Ordinal))
+    {
+        throw new StopException("Not confirmed.");
+    }
+}
+
 static bool LooksGenerated(string? notes)
 {
     if (string.IsNullOrWhiteSpace(notes))
@@ -254,7 +342,21 @@ static bool LooksGenerated(string? notes)
         line.StartsWith("## What's Changed", StringComparison.Ordinal) || line.StartsWith("* ", StringComparison.Ordinal) || line.StartsWith("**Full Changelog**", StringComparison.Ordinal));
 }
 
-static string Gh(params string[] arguments)
+static string Gh(params string[] arguments) =>
+    GhRun(arguments, out string failure) ?? throw new StopException($"gh {string.Join(' ', arguments)} failed: {failure}");
+
+// Null only for a 404: anything else that failed stops.
+static string? GhOrNotFound(params string[] arguments)
+{
+    if (GhRun(arguments, out string failure) is { } output)
+    {
+        return output;
+    }
+
+    return failure.Contains("HTTP 404", StringComparison.Ordinal) ? null : throw new StopException($"gh {string.Join(' ', arguments)} failed: {failure}");
+}
+
+static string? GhRun(string[] arguments, out string failure)
 {
     var start = new ProcessStartInfo("gh") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
     foreach (string argument in arguments)
@@ -262,16 +364,22 @@ static string Gh(params string[] arguments)
         start.ArgumentList.Add(argument);
     }
 
-    using var process = Process.Start(start) ?? throw new StopException("gh didn't start.");
+    Process? started;
+    try
+    {
+        started = Process.Start(start);
+    }
+    catch (System.ComponentModel.Win32Exception ex)
+    {
+        throw new StopException($"gh didn't start, so GitHub's command line may not be installed: {ex.Message}");   // review P2-15: this was a stack trace
+    }
+
+    using var process = started ?? throw new StopException("gh didn't start.");
     var error = process.StandardError.ReadToEndAsync();
     string output = process.StandardOutput.ReadToEnd();
     process.WaitForExit();
-    if (process.ExitCode != 0)
-    {
-        throw new StopException($"gh {string.Join(' ', arguments)} failed: {error.GetAwaiter().GetResult().Trim()}");
-    }
-
-    return output;
+    failure = error.GetAwaiter().GetResult().Trim();
+    return process.ExitCode == 0 ? output : null;
 }
 
 static int NewKey(string path)
@@ -394,5 +502,11 @@ static string ReadPassword(string prompt)
     }
 }
 
-/// <summary>A reason to stop before anything is live.</summary>
+/// <summary>A reason to stop.</summary>
 sealed class StopException(string message) : Exception(message);
+
+/// <summary>Whether the release went live, for what a failure says.</summary>
+static class PublishState
+{
+    public static bool Done { get; set; }
+}

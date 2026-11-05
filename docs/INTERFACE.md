@@ -124,6 +124,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | Info panes (`/help`, `/sys`, `/about`, `/tree`…) | ↑/↓, PgUp/PgDn scroll · ←/→ or Tab switch tabs · type to find · Esc closes |
 | `/update` | `i` install · `l` later · ↑/↓, PgUp/PgDn scroll · a double-click on the release link opens it · Esc is later. Typing finds nothing here. |
 | `/update`, with one under way | `c` cancel update · `k` keep · Esc keeps. Typing finds nothing here. |
+| `/update` or `/update rollback` checking, under a reply | Esc stops it. |
 | `/help` › Keys | `k` **⌨ key check**: swaps in `/keycheck`'s list; pressed again, shows the keys |
 | **Saved lists** | |
 | `/eventlog` | ←/→ logs · Enter opens the event (`c` copy, `a` ask, Esc back to the list) · `r` refresh · `m` more · `c` computer · type to filter |
@@ -275,13 +276,13 @@ Each runs its command as if typed and keeps your draft. The last column says wha
   * Info: `/help`, `/sys` (and `/sys persona`, `/sys operata`, `/sys vocalia`), `/about`, `/usage`, `/keycheck`, `/tree`, `/vault`, `/browse`
   * Settings: `/settings`, `/tools`, `/mcp`, `/skills`, `/commands`, `/comfy`, `/reasoning`, `/sampling`, `/webui`, `/toolbar edit`, `/perfbar edit`, `/homebar edit`, a home bar chip's pane
   * Conversation: `/memory`, `/queue`, `/sessions`, `/sessions title`, `/rename`, `/msgclear`, `/prompts`
-  * Lists: `/docker`, `/eventlog`, `/net`, `/services`, `/tasks`, `/monitor`, `/ad`, `/youtube`, `/shopping`, `/browser list`, `/camera list`, `/ha states`, `/process`, `/update`
+  * Lists: `/docker`, `/eventlog`, `/net`, `/services`, `/tasks`, `/monitor`, `/ad`, `/youtube`, `/shopping`, `/browser list`, `/camera list`, `/ha states`, `/process`, `/update`, `/update rollback`
 * **Run at once:**
   * Display: `/mark`, `/header`, `/toolbar`, `/perfbar`, `/homebar` (and `on`, `off`), `/expand`, `/collapse`, `/window`, `/log`, `/terminal`, `/shortcut`, `/explore`, `/open`, `/cwd`
   * Voice and camera: `/tts`, `/stt` (and `wake`, `interrupt`), `/camera live`, `watch`, `off`, `use`, `view` and `thumbs`, `/screen view` and `thumbs`
   * Pictures: `/view <path>` (and `--thumbs`), and `view` or `thumbs` after `/comfy`, `/splash`, `/pasted` or `/ha stills`
   * The reply's settings: `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/queue mode <word>`, `/queue cancel <word>`
-  * Others: `/update notes`, `rollback` and `cancel`, `/copy`, `/remember`, `/timer`, `/ha`, `/webui copy`, `/webui browser`, `/browser <url>`, `/prompts <n>`, `/process <id>`, `/docker logs <container>`, `/monitor list`, `/commands save <name>` (saves the message the reply answers)
+  * Others: `/update notes` and `cancel`, `/copy`, `/remember`, `/timer`, `/ha`, `/webui copy`, `/webui browser`, `/browser <url>`, `/prompts <n>`, `/process <id>`, `/docker logs <container>`, `/monitor list`, `/commands save <name>` (saves the message the reply answers)
 * **Stop the reply first:** `/clear`, `/new`, `/splash`, `/rewind`, `/undo` (`/undo purge` waits instead), `/exit`
 * **Everything else** waits for the reply, queued behind earlier messages (*Queue cancel mode* applies).
 

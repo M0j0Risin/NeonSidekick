@@ -17,7 +17,7 @@ public sealed class AppUpdaterTests : IDisposable
 
     private async Task Ready()
     {
-        var result = await _f.Stage().StageAsync(_f.Usual(), null, "the notes", CancellationToken.None);
+        var result = await _f.Stage().StageAsync(_f.Usual(), null, CancellationToken.None);
         Assert.True(result.Ok, result.Reason);
     }
 
@@ -88,7 +88,7 @@ public sealed class AppUpdaterTests : IDisposable
     public void Rollback_WithNoPrevious_IsNothingToGoBackTo()
     {
         _f.Usual();
-        Assert.Equal(UpdateText.NothingToGoBackTo, Updater().AskRollback(CancellationToken.None, out string? target));
+        Assert.Equal(UpdateText.NothingToGoBackTo, Updater().AskRollback(CancellationToken.None, out string? target, out _));
         Assert.Null(target);
     }
 
@@ -99,7 +99,7 @@ public sealed class AppUpdaterTests : IDisposable
         Swapped();
         var updater = Updater(running: "0.5.7");
 
-        Assert.Null(updater.AskRollback(CancellationToken.None, out string? target));
+        Assert.Null(updater.AskRollback(CancellationToken.None, out string? target, out _));
 
         Assert.Equal("0.5.6", target);
         Assert.Equal("0.5.6", updater.ReadDisk().RollbackTarget);
@@ -111,8 +111,127 @@ public sealed class AppUpdaterTests : IDisposable
     public async Task ARefusedRollback_LeavesAStageInPlace()
     {
         await Ready();
-        Assert.NotNull(Updater().AskRollback(CancellationToken.None, out _));
+        Assert.NotNull(Updater().AskRollback(CancellationToken.None, out _, out _));
         Assert.Equal("0.5.7", Updater().ReadDisk().ReadyVersion);
+    }
+
+    [Fact]
+    public async Task Rollback_KeepsAStageOnDisk_AndCancelBringsItBack()
+    {
+        // Review P3-13: it was deleted at the command, and /update cancel couldn't bring it back.
+        await Ready();
+        Swapped();
+        _f.Probe.Version = "0.5.8";
+        var newer = _f.Publish("0.5.8", new Dictionary<string, string> { [UpdateFixture.Exe] = "newer exe" });
+        Assert.True((await _f.Stage("0.5.7").StageAsync(newer, null, CancellationToken.None)).Ok);
+        var updater = Updater(running: "0.5.7");
+
+        Assert.Null(updater.AskRollback(CancellationToken.None, out string? target, out _));
+
+        Assert.Equal("0.5.6", target);
+        Assert.Equal(new UpdateDiskState("0.5.8", "0.5.6"), updater.ReadDisk());
+        Assert.Null(updater.CancelRollback());
+        Assert.Equal(new UpdateDiskState("0.5.8", null), updater.ReadDisk());
+    }
+
+    [Fact]
+    public async Task Rollback_RefusesAnUnsettledSwap_AndARenamedCopy()
+    {
+        // Reviews P2-3, P4-5: settling at exit would delete what this asks for, and a renamed copy's exit doesn't swap.
+        await Ready();
+        Swapped();
+        Assert.Equal(UpdateText.RenamedCopy(UpdateFixture.Exe), new AppUpdater(_f.Context("0.5.7", "Copy.exe"), null, _f.Client).AskRollback(CancellationToken.None, out _, out _));
+        var journal = UpdateJournal.TryRead(_f.Folder)!;
+        journal.Finished = false;
+        journal.Save(_f.Folder);
+        Assert.Equal(UpdateText.UnsettledSwap, Updater(running: "0.5.7").AskRollback(CancellationToken.None, out _, out _));
+    }
+
+    [Fact]
+    public async Task ARollbackThatCantWrite_IsARefusal_NotACrash()
+    {
+        // Called on the screen's path: a read-only folder reached the crash catch (review P1-8).
+        await Ready();
+        Swapped();
+        Directory.CreateDirectory(_f.Folder.Rollback);
+
+        Assert.NotNull(Updater(running: "0.5.7").AskRollback(CancellationToken.None, out string? target, out _));
+
+        Assert.Null(target);
+    }
+
+    [Fact]
+    public async Task ARollbacksCheck_StopsAtItsToken()
+    {
+        await Ready();
+        Swapped();
+        using var stop = new CancellationTokenSource();
+        stop.Cancel();
+        Assert.ThrowsAny<OperationCanceledException>(() => Updater(running: "0.5.7").AskRollback(stop.Token, out _, out _));
+    }
+
+    [Fact]
+    public async Task ADeleteThatFails_IsReported_WhileReadyOrRollbackStand()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;   // A Unix delete doesn't care about an open file.
+        }
+
+        // "Update canceled." over a stage that still installs at quit was false (review P3-4).
+        await Ready();
+        using (new FileStream(_f.Folder.Ready, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            Assert.Equal(UpdateText.CouldntDelete(_f.Folder.Ready), Updater().DropStage(false));
+        }
+
+        File.WriteAllText(_f.Folder.Rollback, "");
+        using var held = new FileStream(_f.Folder.Rollback, FileMode.Open, FileAccess.Read, FileShare.None);
+        Assert.Equal(UpdateText.CouldntDelete(_f.Folder.Rollback), Updater().CancelRollback());
+    }
+
+    [Fact]
+    public async Task Leftovers_AreAPartial_OrAStageWithNoReady()
+    {
+        // Reviews P4-11, P5-9.
+        _f.Usual();
+        Assert.False(Updater().ReadDisk().Leftovers);
+        UpdateFixture.Write(Path.Combine(_f.Folder.StagingParts, "a.part"), "x");
+        Assert.True(Updater().ReadDisk().Leftovers);
+        Directory.Delete(_f.Folder.StagingParts, recursive: true);
+        await _f.Stage().StageAsync(_f.Usual(), null, CancellationToken.None);
+        Assert.False(Updater().ReadDisk().Leftovers);
+        File.Delete(_f.Folder.Ready);
+        Assert.True(Updater().ReadDisk().Leftovers);
+    }
+
+    [Fact]
+    public async Task TheAcknowledgment_DeletesOnlyWhatTheStartSaidItCould()
+    {
+        // Review P5-3.
+        await Ready();
+        Swapped();
+        UpdateFixture.Write(_f.Folder.SwapFailed, "a reason");
+
+        new AppUpdater(_f.Context("0.5.7"), null, _f.Client).AcknowledgeStart();
+        Assert.True(File.Exists(_f.Folder.Journal));
+        Assert.True(File.Exists(_f.Folder.SwapFailed));
+
+        new AppUpdater(_f.Context("0.5.7"), null, _f.Client, journalMayGo: true, failureShown: true).AcknowledgeStart();
+        Assert.False(File.Exists(_f.Folder.Journal));
+        Assert.False(File.Exists(_f.Folder.SwapFailed));
+    }
+
+    [Theory]
+    [InlineData("a reason")]
+    [InlineData("a reason.")]
+    public void TheFailureLines_EndASentenceOnce(string reason)
+    {
+        // Review P1-19.
+        Assert.Equal($"The update didn't install: a reason. {UpdateText.ReleasesUrl}", UpdateText.FailedLine(reason));
+        Assert.Equal($"The update stopped: a reason. {UpdateText.ReleasesUrl}", UpdateText.StageFailedLine(reason));
+        Assert.Equal($"Didn't go back: a reason. {UpdateText.ReleasesUrl}", UpdateText.WentBackFailedLine(reason));
+        Assert.StartsWith("a reason, and the undo", UpdateText.UndoAlsoStopped(reason), StringComparison.Ordinal);
     }
 
     [Fact]

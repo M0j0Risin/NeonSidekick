@@ -332,7 +332,8 @@ if ($OnWindows -and -not (Get-Command vswhere.exe -ErrorAction SilentlyContinue)
 }
 
 # Passed as a property the csproj appends to DefineConstants (2026-11-04, self-update); a build from this switch isn't for daily use, and the next plain publish replaces it.
-$simProperty = @(if ($UpdateSim) { "/p:UpdateSim=true" })   # the @() outside: an if unwraps a one-item array, and a splatted string goes in a character at a time
+# False unless asked (review P4-3): a global property beats an UpdateSim environment variable, which MSBuild would otherwise read past -Tag's refusal. It leaves the session's variable alone.
+$simProperty = @(if ($UpdateSim) { "/p:UpdateSim=true" } else { "/p:UpdateSim=false" })   # the @() outside: an if unwraps a one-item array, and a splatted string goes in a character at a time
 $publishLog = @(dotnet publish $AppProject -c Release -r $Runtime --self-contained `
     /p:PublishAot=true /p:StripSymbols=true @simProperty -o $PublishDir 2>&1)
 $publishLog | ForEach-Object { Write-Host $_ }
@@ -518,7 +519,8 @@ if ($Package) {
     $probe = [System.Diagnostics.Process]::Start($probeInfo)
     $probeOut = $probe.StandardOutput.ReadToEndAsync()
     $probeErr = $probe.StandardError.ReadToEndAsync()
-    if (-not $probe.WaitForExit(60000)) {
+    # The app's own limit (UpdateStage.ProbeLimit), review P5-11: a package taking longer here would pass the build and be refused by every copy.
+    if (-not $probe.WaitForExit(30000)) {
         $probe.Kill()
         Fail "The update probe timed out in the stage."
     }
@@ -529,6 +531,8 @@ if ($Package) {
         if ($probeErr.Result) { Write-Host $probeErr.Result -ForegroundColor Red }
         Fail "The update probe failed in the stage (exit $($probe.ExitCode)); this release could never install itself."
     }
+    # A simulation build honors a test key and another server, so it can never be a release, however its flags got set (review P4-3).
+    if ($Tag -and ($probeLines -ccontains "update-sim-build")) { Fail "This package is a simulation build: it can't be a release." }
     Write-Host "  update probe passed: $(@($probeLines | Where-Object { $_ -clike 'loaded *' }).Count) libraries loaded"
     Remove-Item -LiteralPath $probeResult
 

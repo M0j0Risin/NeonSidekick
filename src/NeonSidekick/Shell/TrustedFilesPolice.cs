@@ -79,11 +79,17 @@ public static partial class TrustedFilesPolice
             || (parts.Length > 0 && parts[^1].Equals(WriteGuard.ClaudeMcpFileName, StringComparison.OrdinalIgnoreCase));
     }
 
-    /// <summary>Past a key=value or a switch's colon, the value: --git-dir=.git, -o:.neon/x (a drive's colon kept).</summary>
+    /// <summary>Past a key=value or a switch's colon, the value: --git-dir=.git, -o:.neon/x. A drive's colon is kept, after an <c>=</c> or a switch's colon too (2026-11-04, review P7-3: --out=D:\install\x read as \install\x, which named nothing the guard knows).</summary>
     private static string ValueOf(string spelled)
     {
         int cut = spelled.LastIndexOfAny(['=', ':']);
-        return cut >= 0 && !(cut == 1 && char.IsAsciiLetter(spelled[0])) ? spelled[(cut + 1)..] : spelled;
+        if (cut < 0)
+        {
+            return spelled;
+        }
+
+        bool drive = spelled[cut] == ':' && cut >= 1 && char.IsAsciiLetter(spelled[cut - 1]) && (cut == 1 || spelled[cut - 2] is '=' or ':');
+        return drive ? spelled[(cut - 1)..] : spelled[(cut + 1)..];
     }
 
     /// <summary>Whether <paramref name="word"/> names <c>.git</c>, <c>.neon</c>, Claude Code's files, the project file, the app's folder name, or a path under the home or the install folder. It can't tell a read from a write, so a full path there is refused either way; a relative one from a working folder inside passes, as for the home.</summary>
@@ -111,6 +117,11 @@ public static partial class TrustedFilesPolice
             return true;
         }
 
+        if (NamesInstall(value, parts, guard))
+        {
+            return true;
+        }
+
         if (Path.IsPathRooted(value) || value.StartsWith('~'))
         {
             try
@@ -125,6 +136,35 @@ public static partial class TrustedFilesPolice
         }
 
         return false;
+    }
+
+    // With an install known (2026-11-04, review P2-6): its update folder and manifest by name, as .git and .neon are, and from a working folder inside it, a relative word that resolves to something there, so `copy evil.dll onnxruntime.dll` is refused. Only what exists, or every switch and new name would be, and not inside a home kept there, or a portable install's sandbox would refuse every command.
+    private static bool NamesInstall(string value, string[] parts, Guard guard)
+    {
+        if (guard.InstallFolder is not { Length: > 0 } install || parts.Length == 0)
+        {
+            return false;
+        }
+
+        if (parts.Any(part => part.Equals(Updates.UpdateFolder.Name, StringComparison.OrdinalIgnoreCase)) || parts[^1].Equals(Updates.UpdateManifest.FileName, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (Path.IsPathRooted(value) || value.StartsWith('~') || !Covers(install, Path.GetFullPath(guard.Root)))
+        {
+            return false;
+        }
+
+        try
+        {
+            string full = Path.GetFullPath(Path.Combine(guard.Root, value));
+            return Covers(install, full) && !Covers(guard.Home, full) && (File.Exists(full) || Directory.Exists(full));
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
     }
 
     private static bool Covers(string? folder, string full) =>

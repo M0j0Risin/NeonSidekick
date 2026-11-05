@@ -79,10 +79,66 @@ public class UpdateCheckTests
     }
 
     [Fact]
-    public async Task NoSha_OrNoArchiveForThisPlatform_IsNoPackage()
+    public async Task NoArchiveForThisPlatform_IsNoPackage_AndAnArchiveWithNoSha_IsUnsigned()
     {
-        Assert.Equal(UpdateCheckKind.NoPackage, (await Run(Release(sha: false))).Kind);
+        // The archive is there, so "not for this platform" would be wrong (2026-11-04, review P7-9).
+        Assert.Equal(UpdateCheckKind.Unsigned, (await Run(Release(sha: false))).Kind);
         Assert.Equal(UpdateCheckKind.NoPackage, (await Run(Release(), rid: "osx-arm64")).Kind);
+    }
+
+    [Fact]
+    public async Task ANullAsset_IsARelease_WithoutThatAsset()
+    {
+        // 2026-11-04, review P1-1.
+        Assert.Equal(UpdateCheckKind.NoPackage, (await Run("""{"tag_name":"v0.5.10","assets":[null]}""")).Kind);
+    }
+
+    [Fact]
+    public async Task TheRepositorysCapitals_DontMatter_OnAnAssetsUrl()
+    {
+        // GitHub ignores them, so a change of capitals mustn't read as a release with no assets (2026-11-04, review P1-18, the user's call).
+        string lower = Release().Replace("M0j0Risin/NeonSidekick", "m0j0risin/neonsidekick", StringComparison.Ordinal);
+        Assert.Equal(UpdateCheckKind.Newer, (await Run(lower)).Kind);
+    }
+
+    [Fact]
+    public async Task AnAssetOfAnotherRepository_IsStillNotOurs()
+    {
+        string other = Release().Replace("M0j0Risin/NeonSidekick", "M0j0Risin/Other", StringComparison.Ordinal);
+        Assert.Equal(UpdateCheckKind.NoPackage, (await Run(other)).Kind);
+    }
+
+    [Theory]
+    [InlineData("https://github.com/M0j0Risin/NeonSidekick/releases/tag/v0.5.10", true)]
+    [InlineData("https://github.com/m0j0risin/neonsidekick/releases/tag/v0.5.10", true)]
+    [InlineData("http://github.com/M0j0Risin/NeonSidekick/releases/tag/v0.5.10", false)]
+    [InlineData("https://evil.example/M0j0Risin/NeonSidekick/releases/tag/v0.5.10", false)]
+    [InlineData("https://github.com/Someone/Else/releases/tag/v0.5.10", false)]
+    [InlineData("https://github.com/M0j0Risin/NeonSidekick/issues/1", false)]
+    [InlineData("not a url", false)]
+    [InlineData(null, false)]
+    public void ThePageShown_IsThisRepositorysReleases_OrTheReleasesLink(string? raw, bool kept)
+    {
+        // It comes from the release's JSON and lands on the screen as a link (2026-11-04, review P1-17).
+        Assert.Equal(kept ? raw : UpdateText.ReleasesUrl, UpdateSource.GitHub(AboutText.RepositoryUrl).PageOrReleases(raw));
+    }
+
+    [Fact]
+    public void APageWithAControlCharacter_IsNotShown() =>
+        Assert.Equal(UpdateText.ReleasesUrl, UpdateSource.GitHub(AboutText.RepositoryUrl).PageOrReleases("https://github.com/M0j0Risin/NeonSidekick/releases/tag/v1\u001b[31m"));
+
+    [Theory]
+    [InlineData("NeonSidekick-v0.5.8-win-x64.zip", true)]
+    [InlineData("NeonSidekick-v0.5.8-osx-arm64.tar.gz.part", true)]
+    [InlineData("NeonSidekick-v0.5-win-x64.zip", false)]
+    [InlineData("other.bin", false)]
+    public void AnArchivesName_GivesItsVersion(string name, bool parsed)
+    {
+        Assert.Equal(parsed, UpdateCheck.TryParseArchiveVersion(name, out var version));
+        if (parsed)
+        {
+            Assert.Equal(new UpdateVersion(0, 5, 8), version);
+        }
     }
 
     [Fact]

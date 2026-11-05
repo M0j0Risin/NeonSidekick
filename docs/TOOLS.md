@@ -74,6 +74,7 @@ Under *Shell command policy*. Commands run in the working directory, guarded by 
 | `process` | `action, session_id?, data?, timeout?, until?, offset?, limit?` | Up to 16 background commands (and the last 64 finished), by id prefix: `list`, `poll`, `log` (last 5,000 lines), `wait` (`until` a line holds a text), `kill`, `write` / `submit`, `close`. |
 
 * **The shell police also refuses** any line, script, `execute_code` script or `process` write naming `.git`, `.neon`, `.claude`, a `.mcp.json`, the project file, the app's home or a release package's install folder (a bare `git` command excepted), a script run before it exists, or one holding a forbidden string. It reads the text, not what runs.
+* **Inside an install folder** it also refuses `.update` and `update-manifest.json` by name, and a relative word naming something that exists there. A home kept inside the folder keeps the home's rules.
 * **A `cmd` line with an unclosed quote** always asks, whatever the allow list holds.
 
 ### Clock
@@ -145,7 +146,8 @@ Under *File tools*. Paths are relative to the working directory; nothing outside
 * **Never changed by a file tool** (the UNC and vault tools too):
   * `.git`, `.neon`, `.claude` and the working folder's `.mcp.json` (Claude Code's settings)
   * the app's home and profiles
-  * the folder a release package was unpacked into: the exe, its libraries and `.update`, so nothing can tamper with an update. Reading is allowed, a copy you built isn't covered, and a home inside the folder keeps the home's rules.
+  * the folder a release package was unpacked into: the exe, its libraries and `.update`, so nothing can tamper with an update. Reading is allowed, and a copy you built isn't covered.
+  * deleting or moving a folder that holds the install or the home
   * skill folders (`skill_editor` changes skills)
   * your commands folders, and where a linked one points (`/commands` changes them)
   * a SQLite or DuckDB database while its tools are on

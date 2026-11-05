@@ -15,6 +15,14 @@ public sealed class FakeUpdater : IUpdater
 
     public string? RollbackOnDisk { get; set; }
 
+    public bool LeftoversOnDisk { get; set; }
+
+    /// <summary>How many times the screen said it had printed the start's line.</summary>
+    public int StartsAcknowledged { get; private set; }
+
+    /// <summary>The docs a rollback leaves as they are.</summary>
+    public IReadOnlyList<string> DocsStaying { get; set; } = [];
+
     /// <summary>The next checks' answer; a Latest by default.</summary>
     public UpdateCheckResult Answer { get; set; } = new(UpdateCheckKind.Latest);
 
@@ -36,6 +44,11 @@ public sealed class FakeUpdater : IUpdater
 
     public string? RollbackRefusal { get; set; }
 
+    public string? CancelRollbackRefusal { get; set; }
+
+    /// <summary>Runs in place of the rollback's check, for one that takes its time. A refusal it returns stands.</summary>
+    public Func<CancellationToken, string?>? RollbackCheck { get; set; }
+
     public string RollbackTarget { get; set; } = "0.5.5";
 
     public int RollbacksCanceled { get; private set; }
@@ -50,7 +63,9 @@ public sealed class FakeUpdater : IUpdater
 
     private int _checks;
 
-    public UpdateDiskState ReadDisk() => new(ReadyOnDisk, RollbackOnDisk);
+    public UpdateDiskState ReadDisk() => new(ReadyOnDisk, RollbackOnDisk, LeftoversOnDisk);
+
+    public void AcknowledgeStart() => StartsAcknowledged++;
 
     public async Task<UpdateCheckResult> CheckAsync(CancellationToken cancellationToken)
     {
@@ -66,7 +81,7 @@ public sealed class FakeUpdater : IUpdater
 
     public string? Preflight(long archiveBytes) => PreflightRefusal;
 
-    public async Task<UpdateStageResult> StageAsync(UpdateRelease release, IProgress<UpdateStagePhase>? progress, string? rawNotes, CancellationToken cancellationToken)
+    public async Task<UpdateStageResult> StageAsync(UpdateRelease release, IProgress<UpdateStagePhase>? progress, CancellationToken cancellationToken)
     {
         Staged.Add(release);
         if (Stage is { } stage)
@@ -86,29 +101,43 @@ public sealed class FakeUpdater : IUpdater
         if (DropRefusal is null)
         {
             ReadyOnDisk = null;
+            LeftoversOnDisk = false;
         }
 
         return DropRefusal;
     }
 
-    public string? AskRollback(CancellationToken cancellationToken, out string? target)
+    public string? AskRollback(CancellationToken cancellationToken, out string? target, out IReadOnlyList<string> docsStaying)
     {
         target = null;
+        docsStaying = [];
+        if (RollbackCheck?.Invoke(cancellationToken) is { } checkedOut)
+        {
+            return checkedOut;
+        }
+
         if (RollbackRefusal is { } refused)
         {
             return refused;
         }
 
-        ReadyOnDisk = null;
+        // The stage stays on disk (2026-11-04, review P3-13): /update cancel brings it back.
         RollbackOnDisk = RollbackTarget;
         target = RollbackTarget;
+        docsStaying = DocsStaying;
         return null;
     }
 
-    public void CancelRollback()
+    public string? CancelRollback()
     {
         RollbacksCanceled++;
+        if (CancelRollbackRefusal is { } refused)
+        {
+            return refused;
+        }
+
         RollbackOnDisk = null;
+        return null;
     }
 
     public string? RunningNotes() => Notes;

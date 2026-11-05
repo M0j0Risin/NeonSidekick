@@ -49,6 +49,16 @@ public partial class SidekickAppTests
 
     // The live line headless (2026-10-25, the neon_help plan's Step 2), no server: the manual answers with headless's own reasons.
 
+    [Theory]
+    [InlineData("/update\n")]
+    [InlineData("/update rollback\n")]
+    public async Task Headless_Update_IsTheScreensAlone(string typed)
+    {
+        // It went on to the server check and then the model as text (2026-11-04, review P5-12).
+        string output = await Headless(typed);
+        Assert.Contains("[error] " + Updates.UpdateText.NotHeadless, output);
+    }
+
     [Fact]
     public async Task Headless_HelpTool_AToolThatNeedsTheScreen_SaysAHeadlessRunNeverOffersIt()
     {

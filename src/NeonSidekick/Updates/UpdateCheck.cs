@@ -76,17 +76,19 @@ public sealed record UpdateCheckResult(UpdateCheckKind Kind, UpdateRelease? Rele
 public sealed class UpdateSource
 {
     private readonly string _assetPrefix;
+    private readonly string _pagePrefix;
     private readonly string _assetScheme;
     private readonly string _assetHost;
     private readonly int _assetPort;
 
-    private UpdateSource(Uri latest, string assetScheme, string assetHost, int assetPort, string assetPrefix)
+    private UpdateSource(Uri latest, string assetScheme, string assetHost, int assetPort, string repositoryPath)
     {
         Latest = latest;
         _assetScheme = assetScheme;
         _assetHost = assetHost;
         _assetPort = assetPort;
-        _assetPrefix = assetPrefix;
+        _pagePrefix = repositoryPath + "/releases/";
+        _assetPrefix = _pagePrefix + "download/";
     }
 
     /// <summary>The URL that answers with the latest release.</summary>
@@ -97,24 +99,34 @@ public sealed class UpdateSource
     {
         var repository = new Uri(repositoryUrl);
         string path = repository.AbsolutePath.TrimEnd('/');
-        return new UpdateSource(new Uri("https://api.github.com/repos" + path + "/releases/latest"), Uri.UriSchemeHttps, repository.Host, repository.Port, path + "/releases/download/");
+        return new UpdateSource(new Uri("https://api.github.com/repos" + path + "/releases/latest"), Uri.UriSchemeHttps, repository.Host, repository.Port, path);
     }
 
 #if UPDATE_SIM
     /// <summary>A simulation build's fake GitHub: the one loopback origin stands in for <c>github.com</c> and HTTPS, for the assets too.</summary>
-    public static UpdateSource Simulated(Uri origin) => new(new Uri(origin, "repos/sim/releases/latest"), origin.Scheme, origin.Host, origin.Port, "/sim/releases/download/");
+    public static UpdateSource Simulated(Uri origin) => new(new Uri(origin, "repos/sim/releases/latest"), origin.Scheme, origin.Host, origin.Port, "/sim");
 #endif
 
     /// <summary>Whether <paramref name="url"/> is an asset this repository published.</summary>
     public bool IsAsset(Uri url)
     {
         ArgumentNullException.ThrowIfNull(url);
-        return url.IsAbsoluteUri
-            && string.Equals(url.Scheme, _assetScheme, StringComparison.OrdinalIgnoreCase)
-            && string.Equals(url.Host, _assetHost, StringComparison.OrdinalIgnoreCase)
-            && url.Port == _assetPort
-            && url.AbsolutePath.StartsWith(_assetPrefix, StringComparison.Ordinal);
+        return IsOurs(url, _assetPrefix);
     }
+
+    /// <summary>
+    /// What's shown for a release's page: <paramref name="raw"/> if it's on this repository, else the Releases link (2026-11-04, review P1-17). It comes from the release's JSON and lands in the transcript as a link, so it must not be able to name another site or carry control characters.
+    /// </summary>
+    public string PageOrReleases(string? raw) =>
+        raw is not null && !raw.Any(char.IsControl) && Uri.TryCreate(raw, UriKind.Absolute, out var url) && IsOurs(url, _pagePrefix) ? raw : UpdateText.ReleasesUrl;
+
+    // The repository's path ignores case (2026-11-04, review P1-18, the user's call): GitHub does, so a change of its capitals mustn't read as a release with no assets. That assets come from this repository stays, so a true rename still means one update by hand.
+    private bool IsOurs(Uri url, string prefix) =>
+        url.IsAbsoluteUri
+        && string.Equals(url.Scheme, _assetScheme, StringComparison.OrdinalIgnoreCase)
+        && string.Equals(url.Host, _assetHost, StringComparison.OrdinalIgnoreCase)
+        && url.Port == _assetPort
+        && url.AbsolutePath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
 }
 
 /// <summary>
@@ -133,6 +145,8 @@ public sealed class UpdateCheck
     /// <summary>The <c>.sha256</c>'s and <c>.sig</c>'s size cap: two lines, and a line per key.</summary>
     public const int SignedFileCap = 64 * 1024;
 
+    private const string ArchivePrefix = "NeonSidekick-v";
+
     private readonly HttpClient _http;
     private readonly UpdateSource _source;
     private readonly UpdateVersion _running;
@@ -150,7 +164,21 @@ public sealed class UpdateCheck
 
     /// <summary>The archive's name for a version and platform, as <c>build.ps1 -Package</c> names it: a zip on Windows, a tarball elsewhere.</summary>
     public static string ArchiveName(UpdateVersion version, string rid) =>
-        $"NeonSidekick-v{version}-{rid}{(rid.StartsWith("win", StringComparison.OrdinalIgnoreCase) ? ".zip" : ".tar.gz")}";
+        $"{ArchivePrefix}{version}-{rid}{(rid.StartsWith("win", StringComparison.OrdinalIgnoreCase) ? ".zip" : ".tar.gz")}";
+
+    /// <summary>The version an archive's name (or its partial's) says, for the start's tidy of <c>staging.parts</c>.</summary>
+    public static bool TryParseArchiveVersion(string name, out UpdateVersion version)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        version = default;
+        if (!name.StartsWith(ArchivePrefix, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        int dash = name.IndexOf('-', ArchivePrefix.Length);
+        return dash > 0 && UpdateVersion.TryParse(name[ArchivePrefix.Length..dash], out version);
+    }
 
     /// <summary>The check. Never throws but for the caller's own cancellation: any failure is an answer.</summary>
     public async Task<UpdateCheckResult> CheckAsync(CancellationToken cancellationToken)
@@ -195,10 +223,13 @@ public sealed class UpdateCheck
             using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, limit.Token).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
+                // What's said of the release list isn't true of one of its files (2026-11-04, review P6-7).
+                bool latest = url == _source.Latest;
                 throw new UpdateFetchException(response.StatusCode switch
                 {
-                    HttpStatusCode.Forbidden or HttpStatusCode.TooManyRequests => UpdateText.RateLimited,
-                    HttpStatusCode.NotFound => UpdateText.NoReleaseFound,
+                    HttpStatusCode.Forbidden or HttpStatusCode.TooManyRequests when latest => UpdateText.RateLimited,
+                    HttpStatusCode.NotFound when latest => UpdateText.NoReleaseFound,
+                    HttpStatusCode.NotFound => UpdateText.AssetGone,
                     var other => UpdateText.ServerAnswered((int)other),
                 });
             }
@@ -246,16 +277,17 @@ public sealed class UpdateCheck
         var archive = Asset(release, archiveName);
         var sha = Asset(release, archiveName + ".sha256");
         var sig = Asset(release, archiveName + ".sha256.sig");
-        if (archive is null || sha is null)
+        if (archive is null)
         {
             return new UpdateCheckResult(UpdateCheckKind.NoPackage, Found: version);
         }
 
-        return sig is null
+        // An archive with neither proof is unsigned too (2026-11-04, review P7-9): "no package for this system" sent the user looking for one that was there.
+        return sha is null || sig is null
             ? new UpdateCheckResult(UpdateCheckKind.Unsigned, Found: version)
             : new UpdateCheckResult(
                 UpdateCheckKind.Newer,
-                new UpdateRelease(version, release.Body, release.PageUrl ?? "", archiveName, archive.Value.Url, archive.Value.Bytes, sha.Value.Url, sig.Value.Url),
+                new UpdateRelease(version, release.Body, _source.PageOrReleases(release.PageUrl), archiveName, archive.Value.Url, archive.Value.Bytes, sha.Value.Url, sig.Value.Url),
                 Found: version);
     }
 
@@ -264,7 +296,7 @@ public sealed class UpdateCheck
     {
         foreach (var asset in release.Assets ?? [])
         {
-            if (asset.Name == name && asset.Size > 0 && Uri.TryCreate(asset.Url, UriKind.Absolute, out var url) && _source.IsAsset(url))
+            if (asset?.Name == name && asset.Size > 0 && Uri.TryCreate(asset.Url, UriKind.Absolute, out var url) && _source.IsAsset(url))
             {
                 return (url, asset.Size);
             }

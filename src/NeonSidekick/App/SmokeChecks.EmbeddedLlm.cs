@@ -129,7 +129,7 @@ public static partial class SmokeChecks
     }
 
     /// <summary>
-    /// <c>llm:tar-unpack</c> (2026-10-07, the embedded LLM on a Mac): <see cref="Speech.ModelStore.ExtractTarGz"/> in the
+    /// <c>llm:tar-unpack</c> (2026-10-07, the embedded LLM on a Mac): <see cref="Speech.ModelStore.ExtractTarGzAsync"/> in the
     /// published binary — a tiny gzipped tar made here, as llama.cpp's is laid out (one top folder, an executable file, a
     /// <c>.0</c> link to a versioned one), unpacked and read back: the exec bits kept, the link a link to its file. Then a
     /// tar whose link points out of the folder must be refused. Off Windows only: Windows' runtimes are zips.
@@ -155,7 +155,7 @@ public static partial class SmokeChecks
                 writer.WriteEntry(new PaxTarEntry(TarEntryType.SymbolicLink, "top/libx.0.dylib") { LinkName = "libx.0.1.dylib" });
             });
             string into = Path.Combine(root, "into");
-            Speech.ModelStore.ExtractTarGz(archive, into);
+            Speech.ModelStore.ExtractTarGzAsync(archive, into, CancellationToken.None).GetAwaiter().GetResult();
             string server = Path.Combine(into, "top", "server");
             var link = new FileInfo(Path.Combine(into, "top", "libx.0.dylib"));
             bool executable = (File.GetUnixFileMode(server) & UnixFileMode.UserExecute) != 0;
@@ -169,7 +169,7 @@ public static partial class SmokeChecks
             WriteTarGz(hostile, writer => writer.WriteEntry(new PaxTarEntry(TarEntryType.SymbolicLink, "top/escape") { LinkName = "../../../etc/passwd" }));
             try
             {
-                Speech.ModelStore.ExtractTarGz(hostile, Path.Combine(root, "hostile"));
+                Speech.ModelStore.ExtractTarGzAsync(hostile, Path.Combine(root, "hostile"), CancellationToken.None).GetAwaiter().GetResult();
                 return new SmokeCheck(name, false, "a link out of the folder was unpacked");
             }
             catch (IOException)

@@ -57,11 +57,37 @@ public static class UpdateText
 
     public const string AnotherCopyStaging = "another copy is already downloading this update";
 
-    public const string Stalled = "the download stalled with no data for 60 seconds; /update tries again and picks up where it stopped";
+    /// <summary>The download's limit, in words from the constant (2026-11-04, review P5-18), so the two can't part.</summary>
+    public static string Stalled => string.Create(CultureInfo.InvariantCulture, $"the download stalled with no data for {UpdateStage.StallLimit.TotalSeconds} seconds; /update tries again and picks up where it stopped");
 
-    public const string ProbeTimedOut = "the new version didn't finish its test run in 30 seconds, so it was dropped. Antivirus can cause this";
+    /// <summary>The stage stays for these three (review P4-14): the retry tests again with no download.</summary>
+    public static string ProbeTimedOut => string.Create(CultureInfo.InvariantCulture, $"the new version didn't finish its test run in {UpdateStage.ProbeLimit.TotalSeconds} seconds. {ProbeKept}");
 
-    public const string ProbeFailed = "the new version failed its test run, so it was dropped. Antivirus can cause this";
+    public const string ProbeFailed = "the new version failed its test run. " + ProbeKept;
+
+    private const string ProbeKept = "Antivirus can cause this. /update tries again with no download, and /update cancel drops it";
+
+    public const string ProbeWontEnd = "The update's test run didn't end after it was killed; going on without it.";
+
+    public const string UnsettledSwap = "an interrupted update hasn't been settled yet; restart NeonSidekick with no other copy open, then try again";
+
+    public const string RollbackPendingFirst = "going back to the earlier version is pending; /update cancel takes it back first";
+
+    public const string NotASignature = "the signature that came back isn't one, so a proxy or a sign-in page may be in the way; try again on another network";
+
+    public const string AssetGone = "GitHub no longer has this release's files";
+
+    public const string CouldntSettle = "Another copy holds the install lock, so an interrupted update wasn't settled at this start.";
+
+    public const string MixedLine = "The last update was interrupted and couldn't be undone, so this install may be a mix of versions. Restart with no other copy open, or unpack a fresh copy: " + ReleasesUrl;
+
+    public const string UnfinishedSwap = "an interrupted update's record can't be read; the next start tries again";
+
+    public const string MixedReason = "an interrupted update couldn't be undone, so this install may be a mix of versions; the next start tries again";
+
+    public const string SettledInstead = "an interrupted update had to be settled first, so this quit installs nothing; the next one does";
+
+    public const string CancelWaitRanOut = "The download didn't stop in time. Try /update cancel again.";
 
     public const string NothingToGoBackTo = "There's no earlier version to go back to.";
 
@@ -95,6 +121,8 @@ public static class UpdateText
 
     public const string CheckingSpinner = "Checking for updates...";
 
+    public const string CheckingEarlierSpinner = "Checking the earlier version...";
+
     public const string PaneLabel = "Update";
 
     public const string PaneTab = "NeonSidekick";
@@ -124,11 +152,24 @@ public static class UpdateText
 
     public static string IsOutLine(string version) => $"NeonSidekick {version} is out. /update to see what's new and install it.";
 
-    public static string DownloadingLine(string version, string size) => $"Downloading NeonSidekick {version} ({size}). It installs when you quit; /update cancel stops it.";
+    public static string DownloadingLine(string version, string size) => $"Downloading NeonSidekick {version} ({size}). It installs when you quit, once it's ready; /update cancel stops it.";
+
+    /// <summary>What a quit says of a stage still under way, this quit only: the marker had promised "at quit" to anyone not reading closely (2026-11-04, review P6-2).</summary>
+    public static string QuitMidStage(string version) => $"NeonSidekick {version} wasn't finished, so it didn't install. /update picks it up.";
 
     public static string ReadyLine(string version) => $"NeonSidekick {version} is ready and installs when you quit.";
 
     public static string GoingBackLine(string version) => $"Going back to {version} when you quit.";
+
+    /// <summary>Docs whose earlier copy was altered or gone stay as they are (2026-11-04, review P2-2, the user's call): an edit to a doc shouldn't cost the way back.</summary>
+    public static string GoingBackLine(string version, IReadOnlyList<string> docsStaying)
+    {
+        ArgumentNullException.ThrowIfNull(docsStaying);
+        return docsStaying.Count == 0 ? GoingBackLine(version) : $"{GoingBackLine(version)} The current {string.Join(", ", docsStaying)} stays, since its earlier copy can't come back.";
+    }
+
+    /// <summary>An "is out" line while going back is pending: bare, it told the user to run a command that only says "already pending" (2026-11-04, review P3-14).</summary>
+    public static string IsOutWhileGoingBack(string version) => $"NeonSidekick {version} is out. Going back is pending; /update cancel comes first.";
 
     public static string AlreadyGoingBack(string version) => $"Going back to {version} is already pending. /update cancel takes it back.";
 
@@ -138,11 +179,11 @@ public static class UpdateText
 
     public static string NoPackageLine(string version) => $"NeonSidekick {version} is out, with no package for this system. {ReleasesUrl}";
 
-    public static string CheckFailedLine(string reason) => $"Couldn't check for updates: {reason}. {ReleasesUrl}";
+    public static string CheckFailedLine(string reason) => $"Couldn't check for updates: {Sentence(reason)} {ReleasesUrl}";
 
-    public static string StageFailedLine(string reason) => $"The update stopped: {reason}. {ReleasesUrl}";
+    public static string StageFailedLine(string reason) => $"The update stopped: {Sentence(reason)} {ReleasesUrl}";
 
-    public static string RollbackRefusedLine(string reason) => $"Can't go back: {reason}. {ReleasesUrl}";
+    public static string RollbackRefusedLine(string reason) => $"Can't go back: {Sentence(reason)} {ReleasesUrl}";
 
     public static string NoNotesSaved(string version) => $"No release notes are saved for {version}. {ReleasesUrl}";
 
@@ -218,7 +259,10 @@ public static class UpdateText
 
     public static string PackageRefused(string problem) => $"the package was refused: {problem}";
 
-    public static string ProbeFailedOn(string library) => $"{library} failed to load from the new version, so it was dropped. Antivirus can cause this";
+    public static string ProbeFailedOn(string library) => $"{library} failed to load from the new version. Antivirus can cause this. /update tries again with no download, and /update cancel drops it";
+
+    /// <summary>What a headless run answers /update with (2026-11-04, review P5-12): the offer and its panes are the screen's, and a headless start only settles the folder.</summary>
+    public const string NotHeadless = "/update: updates run in the interactive app, not headless.";
 
     public static string LibraryFailsInBoth(string library) => $"{library} doesn't load here from the installed version either; ignored.";
 
@@ -226,9 +270,27 @@ public static class UpdateText
 
     public static string OldVersionNotSigned(string version) => $"{version} isn't signed by a key this copy trusts, so it won't go back to it";
 
-    public static string OldVersionAltered(string path) => $"the kept copy of {path} has been altered, so it won't go back";
+    public static string OldVersionAltered(string path) => $"the earlier version's copy of {path} has been altered, so it won't go back";
 
-    public static string OldVersionIncomplete(string path) => $"the earlier version's {path} isn't kept, so going back would leave a mix of versions";
+    public static string OldVersionIncomplete(string path) => $"the earlier version's {path} isn't there, so going back would leave a mix of versions";
+
+    public static string OldVersionUnlisted(string path) => $"the earlier version's folder holds {path}, which it doesn't list, so it won't go back";
+
+    public static string StageUnreadable(string problem) => $"the update couldn't be read to check it: {Bare(problem)}; the next exit tries again";
+
+    public static string StageCheckUnreadable(string problem) => $"the update couldn't be read to check it: {Bare(problem)}; /update tries again";
+
+    public static string CouldntDelete(string path) => $"couldn't delete {path}, so it's still pending";
+
+    public static string JournalUnreadable(string problem) => $"Couldn't read the update journal: {Bare(problem)}. The next start tries again.";
+
+    public static string CantRecordName(string name) => $"{name} is in the way and its name can't be recorded, so nothing moved. Move or rename it";
+
+    public static string UndoFoundBoth(string from, string to) => $"The undo found both {from} and {to}, so it left them.";
+
+    public static string KeptFilesLine(string folder) => $"Files the update had to move that weren't its own are in {folder}.";
+
+    public static string UndoAlsoStopped(string reason) => $"{Bare(reason)}, and the undo stopped too, so this install may be a mix of versions until the next start";
 
     public static string StartStepFailed(string problem) => $"The update's start step failed: {problem}.";
 
@@ -244,7 +306,23 @@ public static class UpdateText
 
     public static string BackOnLine(string version) => $"Back on {version}.";
 
-    public static string FailedLine(string reason) => $"The update didn't install: {reason}. {ReleasesUrl}";
+    public static string FailedLine(string reason) => $"The update didn't install: {Sentence(reason)} {ReleasesUrl}";
 
-    public static string WindowCloseFailed(string reason) => $"The update didn't install when the window closed: {reason}. {ReleasesUrl}";
+    public static string WindowCloseFailed(string reason) => $"The update didn't install when the window closed: {Sentence(reason)} {ReleasesUrl}";
+
+    /// <summary>A rollback's own quit words (2026-11-04, review P7-11): "The update didn't install" said nothing true of going back.</summary>
+    public static string GoingBackNow(string version) => $"Going back to {version}...";
+
+    public static string WentBackLine(string version) => $"Done. {version} runs at next launch.";
+
+    public static string WentBackFailedLine(string reason) => $"Didn't go back: {Sentence(reason)} {ReleasesUrl}";
+
+    // A reason as the end of a sentence (2026-11-04, review P1-19): some reasons are whole sentences and others aren't, and "Word.." read as a typo.
+    private static string Sentence(string reason) => Bare(reason) + ".";
+
+    private static string Bare(string reason)
+    {
+        ArgumentNullException.ThrowIfNull(reason);
+        return reason.TrimEnd().TrimEnd('.');
+    }
 }

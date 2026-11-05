@@ -36,6 +36,49 @@ public class UpdateManifestTests
         Assert.Equal(["NeonSidekick.exe", "docs/README.md"], manifest.Files.Select(f => f.Path));
     }
 
+    [Theory]
+    [InlineData("""{"format":1,"version":"0.5.7","rid":"win-x64","exe":"a.exe","files":null}""")]
+    [InlineData("""{"format":1,"version":"0.5.7","rid":"win-x64","exe":"a.exe","files":[null]}""")]
+    [InlineData("""{"format":1,"version":"0.5.7","rid":"win-x64","files":[]}""")]
+    [InlineData("""{"format":1,"version":"0.5.7","rid":"win-x64","exe":null,"files":[]}""")]
+    [InlineData("""{"format":1,"version":"0.5.7","rid":"win-x64","exe":"a.exe","files":[{"path":"a.exe"}]}""")]
+    [InlineData("""{"format":1,"version":"0.5.7","rid":"win-x64","exe":"a.exe","files":[{"path":"a.exe","sha256":null}]}""")]
+    public void NullsInAManifest_AreRefused_NotThrown(string json)
+    {
+        // A null past the deserializer reached the crash catch at a start (2026-11-04, review P1-1).
+        Assert.Null(UpdateManifest.Read(Encoding.UTF8.GetBytes(json), out string? problem));
+        Assert.NotNull(problem);
+    }
+
+    [Theory]
+    [InlineData("CON")]
+    [InlineData("nul.txt")]
+    [InlineData("a/COM1.dll")]
+    [InlineData("LPT9")]
+    [InlineData("aux.tar.gz")]
+    public void ADeviceName_IsRefusedOnWindows(string path)
+    {
+        // CreateFile opens the device, not a file (2026-11-04, review P5-16). None is in today's package, and Unix has no such names.
+        Assert.Equal(!OperatingSystem.IsWindows(), UpdateManifest.IsRelativeInside(path));
+    }
+
+    [Theory]
+    [InlineData("console.dll")]
+    [InlineData("com10.dll")]
+    [InlineData("docs/auxiliary.md")]
+    [InlineData("lpt.dll")]
+    public void ANameThatOnlyStartsLikeADevice_IsFine(string path) => Assert.True(UpdateManifest.IsRelativeInside(path));
+
+    [Fact]
+    public void Versions_CompareByPart_WithNoRoomToOverflow()
+    {
+        // A difference of ints reads a huge part as negative (2026-11-04, review P7-15).
+        Assert.True(new UpdateVersion(int.MaxValue, 0, 0).CompareTo(new UpdateVersion(0, 0, 0)) > 0);
+        Assert.True(new UpdateVersion(0, 5, 10) > new UpdateVersion(0, 5, 9));
+        Assert.True(new UpdateVersion(0, 6, 0) > new UpdateVersion(0, 5, 99));
+        Assert.Equal(0, new UpdateVersion(0, 5, 7).CompareTo(new UpdateVersion(0, 5, 7)));
+    }
+
     [Fact]
     public void AFormatItDoesNotKnow_IsRefused()
     {

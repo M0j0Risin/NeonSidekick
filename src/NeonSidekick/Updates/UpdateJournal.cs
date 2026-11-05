@@ -44,8 +44,9 @@ public sealed class UpdateStep
 /// write goes through a temp file and <see cref="File.Move(string, string, bool)"/>, as <c>AppSettings</c> saves, so a process ended mid-write leaves the old
 /// journal or none.
 ///
-/// <para>Untrusted on read: a planted one would otherwise move files at the next start. <see cref="TryRead"/> takes only relative paths inside the install folder, and one
-/// that fails, or can't be read, is logged and deleted with nothing moved, so it can't be rejected at every start or stand in the next swap's way.</para>
+/// <para>Untrusted on read: a planted one would otherwise move files at the next start. <see cref="TryRead(UpdateFolder, out bool)"/> takes only relative paths inside the install folder, and one
+/// that fails is logged and deleted with nothing moved, so it can't be rejected at every start or stand in the next swap's way. A file that can't be read right now is left alone (2026-11-04, review P1-2: a scanner's sharing
+/// violation just after a kill cost the only record of the moves), and every reader counts it as unfinished, or the next swap's <see cref="Save"/> would write over that record.</para>
 /// </summary>
 public sealed class UpdateJournal
 {
@@ -91,21 +92,43 @@ public sealed class UpdateJournal
         File.Move(temp, folder.Journal, overwrite: true);
     }
 
-    /// <summary>The journal on disk, or null with none. One that can't be read, or that names a path outside the install folder, is logged and deleted with nothing moved.</summary>
-    public static UpdateJournal? TryRead(UpdateFolder folder)
+    /// <summary>The journal on disk, or null with none or with one this copy can't read. See <see cref="TryRead(UpdateFolder, out bool)"/> where the two differ.</summary>
+    public static UpdateJournal? TryRead(UpdateFolder folder) => TryRead(folder, out _);
+
+    /// <summary>
+    /// The journal on disk, or null. One that isn't valid, or that names a path outside the install folder, is logged and deleted with nothing moved. One that can't be read now stays where it is, with <paramref name="unreadable"/> true.
+    /// </summary>
+    public static UpdateJournal? TryRead(UpdateFolder folder, out bool unreadable)
     {
         ArgumentNullException.ThrowIfNull(folder);
+        unreadable = false;
         if (!File.Exists(folder.Journal))
         {
+            return null;
+        }
+
+        byte[] bytes;
+        try
+        {
+            bytes = File.ReadAllBytes(folder.Journal);
+        }
+        catch (FileNotFoundException)
+        {
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            DiagnosticLog.Warn(Category, UpdateText.JournalUnreadable(ex.Message));
+            unreadable = true;
             return null;
         }
 
         UpdateJournal? journal = null;
         try
         {
-            journal = JsonSerializer.Deserialize(File.ReadAllBytes(folder.Journal), UpdateJsonContext.Default.UpdateJournal);
+            journal = JsonSerializer.Deserialize(bytes, UpdateJsonContext.Default.UpdateJournal);
         }
-        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException or NotSupportedException)
+        catch (Exception ex) when (ex is JsonException or NotSupportedException)
         {
             DiagnosticLog.Warn(Category, UpdateText.JournalRejected(ex.Message));
         }
@@ -124,6 +147,9 @@ public sealed class UpdateJournal
         return journal;
     }
 
+    /// <summary>Whether a swap isn't settled: its journal is unfinished, or can't be read and so may be. Nothing may touch the stage or start a swap until it is, since the journal's undo moves files back into it.</summary>
+    public static bool IsUnsettled(UpdateFolder folder) => TryRead(folder, out bool unreadable) is { Finished: false } || unreadable;
+
     /// <summary>Removes the journal; a failure is logged and the next start meets it again.</summary>
     public static void Delete(UpdateFolder folder)
     {
@@ -138,20 +164,19 @@ public sealed class UpdateJournal
         }
     }
 
-    private string? Problem()
+    /// <summary>
+    /// The first path a step names that <see cref="TryRead(UpdateFolder, out bool)"/> would refuse, or null. A swap asks this before its first move (2026-11-04, review P3-5): a stray in the way with a name like Finder's <c>Icon\r</c> would go in the steps,
+    /// and after a kill mid-swap the journal would be rejected and deleted, leaving a half-moved install with no record.
+    /// </summary>
+    internal string? BadPath()
     {
-        if (Format != CurrentFormat)
-        {
-            return UpdateText.ManifestUnknownFormat(Format);
-        }
-
-        if (!UpdateVersion.TryParse(Source, out _) || !UpdateVersion.TryParse(Target, out _))
-        {
-            return UpdateText.ManifestUnreadable;
-        }
-
         foreach (var step in Steps)
         {
+            if (step is null)
+            {
+                return "";
+            }
+
             bool shape = step.Kind switch
             {
                 UpdateStepKind.Move => step.From is not null && step.To is not null,
@@ -161,10 +186,26 @@ public sealed class UpdateJournal
             };
             if (!shape || (step.From is { } from && !UpdateManifest.IsRelativeInside(from)) || (step.To is { } to && !UpdateManifest.IsRelativeInside(to)))
             {
-                return UpdateText.ManifestBadEntry(step.From ?? step.To ?? "");
+                return step.From ?? step.To ?? "";
             }
         }
 
         return null;
+    }
+
+    private string? Problem()
+    {
+        if (Format != CurrentFormat)
+        {
+            return UpdateText.ManifestUnknownFormat(Format);
+        }
+
+        // A JSON null reaches these past their initializers (2026-11-04, review P1-1), and a null must not take the app's start with it.
+        if (!UpdateVersion.TryParse(Source, out _) || !UpdateVersion.TryParse(Target, out _) || Steps is null)
+        {
+            return UpdateText.ManifestUnreadable;
+        }
+
+        return BadPath() is { } bad ? UpdateText.ManifestBadEntry(bad) : null;
     }
 }

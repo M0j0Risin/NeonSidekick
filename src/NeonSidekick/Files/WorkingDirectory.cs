@@ -3249,8 +3249,8 @@ public sealed class WorkingDirectory
         }
 
         // A folder moved takes its databases with it (2026-10-05): refused like moving one of them. Its .git may go along (a project moved).
-        if (move && Directory.Exists(source) && RealLinkTarget(source) is null && Databases?.Invoke() is { } databases
-            && HoldsGuarded(source, git: false, databases, CancellationToken.None) is { } held)
+        if (move && Directory.Exists(source) && RealLinkTarget(source) is null
+            && HoldsGuarded(source, git: false, Databases?.Invoke(), CancellationToken.None) is { } held)
         {
             return new MoveResult(held, Relative(source, isDirectory: true), to, false, false);
         }
@@ -3556,10 +3556,15 @@ public sealed class WorkingDirectory
     /// What under <paramref name="directory"/> a delete or move must not take (2026-10-22, review P9, one walk for both): with
     /// <paramref name="git"/>, a <c>.git</c> (a folder, or the file a worktree or submodule keeps in its place), and with
     /// <paramref name="databases"/>, a database file — the first hit ends the walk, never through a reparse point, an unreadable folder
-    /// passed over. Null when there is neither. Reads <paramref name="cancellationToken"/> between entries.
+    /// passed over. Null when there is neither. Reads <paramref name="cancellationToken"/> between entries. The app's own folders are asked first, with no walk (2026-11-04, review P6-1).
     /// </summary>
     internal static FileOutcome? HoldsGuarded(string directory, bool git, DatabaseGuard? databases, CancellationToken cancellationToken)
     {
+        if (WriteGuard.HoldsAppFolders(directory) is { } appFolder)
+        {
+            return appFolder;
+        }
+
         if (!git && databases is null)
         {
             return null;

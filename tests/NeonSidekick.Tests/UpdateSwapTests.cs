@@ -83,7 +83,7 @@ public sealed class UpdateSwapTests : IDisposable
 
     private bool Has(string path) => File.Exists(_folder.Full(path));
 
-    private UpdateJournal Plan(string[] moved, string[] dropped, UpdateSwap? swap = null)
+    private UpdateJournal Plan(string[] moved, string[] dropped, UpdateSwap? swap = null, string[]? strays = null)
     {
         Install(UpdateManifest.FileName, "old manifest");
         Stage(UpdateManifest.FileName, "new manifest");
@@ -92,8 +92,32 @@ public sealed class UpdateSwapTests : IDisposable
             Stage(path);
         }
 
-        return (swap ?? new UpdateSwap(_folder)).PlanUpdate("0.5.6", "0.5.7", Exe, Exe, moved, dropped);
+        return ForUpdate(swap ?? new UpdateSwap(_folder), moved, dropped, strays);
     }
+
+    /// <summary>An update's journal, with every installed file the recheck's verified one but the named strays.</summary>
+    private UpdateJournal ForUpdate(UpdateSwap swap, IReadOnlyCollection<string> moved, IReadOnlyCollection<string> dropped, string[]? strays = null) =>
+        swap.PlanUpdate("0.5.6", "0.5.7", Exe, Exe, moved, dropped, InstalledFiles(strays));
+
+    /// <summary>A rollback's journal: what <c>previous</c> holds comes in, and every installed file the check's verified one but the named strays.</summary>
+    private UpdateJournal Back(UpdateSwap swap, IReadOnlyCollection<string> added, string[]? strays = null)
+    {
+        var incoming = Directory.Exists(_folder.Previous)
+            ? Directory.EnumerateFiles(_folder.Previous, "*", SearchOption.AllDirectories)
+                .Select(file => Path.GetRelativePath(_folder.Previous, file).Replace('\\', '/'))
+                .Where(path => !path.StartsWith(UpdateFolder.ReleaseName + "/", StringComparison.Ordinal) && path != UpdateManifest.FileName)
+                .ToList()
+            : [];
+        return swap.PlanRollback("0.5.7", "0.5.6", Exe, Exe, incoming, added, InstalledFiles(strays));
+    }
+
+    private List<string> InstalledFiles(string[]? strays = null) =>
+        Directory.EnumerateFiles(_folder.Install, "*", SearchOption.AllDirectories)
+            .Select(file => Path.GetRelativePath(_folder.Install, file).Replace('\\', '/'))
+            .Where(path => !path.StartsWith(UpdateFolder.Name + "/", StringComparison.Ordinal) && !(strays ?? []).Contains(path))
+            .ToList();
+
+    private string KeptPath(string version, string path) => Path.Combine(_folder.Kept, version, path.Replace('/', Path.DirectorySeparatorChar));
 
     private void AssertOldVersionWhole()
     {
@@ -241,7 +265,7 @@ public sealed class UpdateSwapTests : IDisposable
         for (int at = 1; at <= total; at++)
         {
             var files = new Stopping(at, () => new IOException("locked"));
-            var result = new UpdateSwap(_folder, files, _ => { }).Run(clean.PlanUpdate("0.5.6", "0.5.7", Exe, Exe, [Exe, "a.dll", "b/c.dll", "new/d.dll"], []));
+            var result = new UpdateSwap(_folder, files, _ => { }).Run(ForUpdate(clean, [Exe, "a.dll", "b/c.dll", "new/d.dll"], []));
 
             Assert.False(result.Done);
             Assert.True(result.Undone, $"step {at}");
@@ -269,7 +293,7 @@ public sealed class UpdateSwapTests : IDisposable
         {
             var files = new Stopping(at, () => new KilledException());
             var killed = new UpdateSwap(_folder, files);
-            Assert.Throws<KilledException>(() => killed.Run(clean.PlanUpdate("0.5.6", "0.5.7", Exe, Exe, moved, [])));
+            Assert.Throws<KilledException>(() => killed.Run(ForUpdate(clean, moved, [])));
 
             var journal = UpdateJournal.TryRead(_folder);
             Assert.NotNull(journal);
@@ -295,7 +319,7 @@ public sealed class UpdateSwapTests : IDisposable
         for (int stopAt = 1; stopAt <= steps; stopAt++)
         {
             // Killed at the last step: the swap is as far along as it gets with the old exe still running.
-            var run = clean.PlanUpdate("0.5.6", "0.5.7", Exe, Exe, moved, []);
+            var run = ForUpdate(clean, moved, []);
             var swapKilled = new UpdateSwap(_folder, new Stopping(run.Steps.Count, () => new KilledException()));
             Assert.Throws<KilledException>(() => swapKilled.Run(run));
 
@@ -338,16 +362,17 @@ public sealed class UpdateSwapTests : IDisposable
         Install(Exe);
         Install("added.dll", "stray");
         var clean = new UpdateSwap(_folder);
-        var journal = Plan([Exe, "added.dll"], []);
+        var journal = Plan([Exe, "added.dll"], [], strays: ["added.dll"]);
 
         var files = new Stopping(journal.Steps.Count, () => new IOException("locked"));
         var failed = new UpdateSwap(_folder, files, _ => { }).Run(journal);
         Assert.False(failed.Done);
         Assert.Equal("stray", Read("added.dll"));
 
-        Assert.True(clean.Run(clean.PlanUpdate("0.5.6", "0.5.7", Exe, Exe, [Exe, "added.dll"], [])).Done);
+        Assert.True(clean.Run(ForUpdate(clean, [Exe, "added.dll"], [], strays: ["added.dll"])).Done);
         Assert.Equal("new", Read("added.dll"));
-        Assert.Equal("stray", File.ReadAllText(Path.Combine(_folder.Previous, "added.dll")));
+        Assert.Equal("stray", File.ReadAllText(KeptPath("0.5.6", "added.dll")));
+        Assert.False(File.Exists(Path.Combine(_folder.Previous, "added.dll")));
     }
 
     [Fact]
@@ -355,9 +380,9 @@ public sealed class UpdateSwapTests : IDisposable
     {
         Install(Exe);
         Install("plugins", "a stray file");
-        Assert.True(new UpdateSwap(_folder).Run(Plan([Exe, "plugins/a.dll"], [])).Done);
+        Assert.True(new UpdateSwap(_folder).Run(Plan([Exe, "plugins/a.dll"], [], strays: ["plugins"])).Done);
         Assert.Equal("new", Read("plugins/a.dll"));
-        Assert.Equal("a stray file", File.ReadAllText(Path.Combine(_folder.Previous, "plugins")));
+        Assert.Equal("a stray file", File.ReadAllText(KeptPath("0.5.6", "plugins")));
     }
 
     [Fact]
@@ -399,7 +424,7 @@ public sealed class UpdateSwapTests : IDisposable
         Assert.True(failed.Undone);
         Assert.Equal("old", Read("thing/gone.dll"));
 
-        Assert.True(clean.Run(clean.PlanUpdate("0.5.6", "0.5.7", Exe, Exe, moved, ["thing/gone.dll"])).Done);
+        Assert.True(clean.Run(ForUpdate(clean, moved, ["thing/gone.dll"])).Done);
         Assert.Equal("new", Read("thing"));
     }
 
@@ -409,9 +434,9 @@ public sealed class UpdateSwapTests : IDisposable
         Install(Exe);
         Install("thing/stray.txt", "stray");
         Directory.CreateDirectory(_folder.Full("thing/empty"));
-        Assert.True(new UpdateSwap(_folder).Run(Plan([Exe, "thing"], [])).Done);
+        Assert.True(new UpdateSwap(_folder).Run(Plan([Exe, "thing"], [], strays: ["thing/stray.txt"])).Done);
         Assert.Equal("new", Read("thing"));
-        Assert.Equal("stray", File.ReadAllText(Path.Combine(_folder.Previous, "thing", "stray.txt")));
+        Assert.Equal("stray", File.ReadAllText(KeptPath("0.5.6", "thing/stray.txt")));
     }
 
     [Fact]
@@ -435,7 +460,7 @@ public sealed class UpdateSwapTests : IDisposable
         Assert.True(swap.Run(Plan([Exe, "changed.dll", "added/new.dll"], ["dropped/by-new.dll"])).Done);
         File.Delete(_folder.Journal);
 
-        var back = swap.PlanRollback("0.5.7", "0.5.6", Exe, Exe, ["added/new.dll"]);
+        var back = Back(swap, ["added/new.dll"]);
         Assert.True(back.Rollback);
         Assert.True(swap.Run(back).Done);
 
@@ -451,17 +476,19 @@ public sealed class UpdateSwapTests : IDisposable
     }
 
     [Fact]
-    public void Rollback_BringsTheStrayBack()
+    public void Rollback_LeavesADisplacedStrayInKept()
     {
+        // A kept file isn't verified, and putting one beside the exe is what the allow-list refuses (2026-11-04, reviews P4-1, P2-7): COMMANDS.md says to copy it back by hand.
         Install(Exe);
         Install("added.dll", "stray");
         var swap = new UpdateSwap(_folder);
-        Assert.True(swap.Run(Plan([Exe, "added.dll"], [])).Done);
+        Assert.True(swap.Run(Plan([Exe, "added.dll"], [], strays: ["added.dll"])).Done);
         File.Delete(_folder.Journal);
 
-        Assert.True(swap.Run(swap.PlanRollback("0.5.7", "0.5.6", Exe, Exe, ["added.dll"])).Done);
+        Assert.True(swap.Run(Back(swap, ["added.dll"])).Done);
 
-        Assert.Equal("stray", Read("added.dll"));
+        Assert.False(Has("added.dll"));
+        Assert.Equal("stray", File.ReadAllText(KeptPath("0.5.6", "added.dll")));
     }
 
     [Fact]
@@ -476,7 +503,7 @@ public sealed class UpdateSwapTests : IDisposable
         Assert.True(swap.Run(Plan([Exe], [])).Done);
         File.Delete(_folder.Journal);
 
-        Assert.True(swap.Run(swap.PlanRollback("0.5.7", "0.5.6", Exe, Exe, [])).Done);
+        Assert.True(swap.Run(Back(swap, [])).Done);
 
         Assert.Equal("old proof", File.ReadAllText(Path.Combine(_folder.Release, UpdateFolder.ShaName)));
     }
@@ -490,11 +517,11 @@ public sealed class UpdateSwapTests : IDisposable
         Assert.True(swap.Run(Plan([Exe, "changed.dll", "added.dll"], [])).Done);
         File.Delete(_folder.Journal);
 
-        int steps = swap.PlanRollback("0.5.7", "0.5.6", Exe, Exe, ["added.dll"]).Steps.Count;
+        int steps = Back(swap, ["added.dll"]).Steps.Count;
         for (int at = 1; at <= steps; at++)
         {
             var files = new Stopping(at, () => new IOException("locked"));
-            var result = new UpdateSwap(_folder, files, _ => { }).Run(swap.PlanRollback("0.5.7", "0.5.6", Exe, Exe, ["added.dll"]));
+            var result = new UpdateSwap(_folder, files, _ => { }).Run(Back(swap, ["added.dll"]));
             Assert.False(result.Done);
             Assert.True(result.Undone, $"step {at}");
             Assert.Equal("new", Read(Exe));
@@ -566,6 +593,8 @@ public sealed class UpdateSwapTests : IDisposable
     [InlineData("""{"format":2,"source":"0.5.6","target":"0.5.7","steps":[]}""")]
     [InlineData("""{"format":1,"source":"nope","target":"0.5.7","steps":[]}""")]
     [InlineData("""{"format":1,"source":"0.5.6","target":"0.5.7","steps":[{"kind":"Bogus","from":"a","to":"b"}]}""")]
+    [InlineData("""{"format":1,"source":"0.5.6","target":"0.5.7","steps":null}""")]
+    [InlineData("""{"format":1,"source":"0.5.6","target":"0.5.7","steps":[null]}""")]
     public void APlantedJournal_IsRejected_AndDeleted_WithNothingMoved(string json)
     {
         string kept = Install("a", "a file");
@@ -579,6 +608,99 @@ public sealed class UpdateSwapTests : IDisposable
 
     [Fact]
     public void NoJournal_IsNull() => Assert.Null(UpdateJournal.TryRead(_folder));
+
+    [Fact]
+    public void AJournalItCouldntReadBack_FailsBeforeItsFirstMove()
+    {
+        // A stray with a name the journal would refuse: written, then refused at the next start, with the moves it recorded done (2026-11-04, review P3-5).
+        Install(Exe);
+        var journal = new UpdateJournal { Source = "0.5.6", Target = "0.5.7", Steps = [UpdateStep.Move(Exe, "a/../../outside")] };
+
+        var result = new UpdateSwap(_folder).Run(journal);
+
+        Assert.False(result.Done);
+        Assert.True(result.Undone);
+        Assert.Equal(UpdateText.CantRecordName(Exe), result.Reason);
+        Assert.Equal("old", Read(Exe));
+        Assert.False(File.Exists(_folder.Journal));
+    }
+
+    [Fact]
+    public void AnUndoFindingBothPathsOfAStepThatRan_KeepsTheJournal_AndOverwritesNothing()
+    {
+        // Past a step that really ran, both paths mean something new is in the way (2026-11-04, review P3-10). Before that point they mean a step that never ran, which AKill_ holds.
+        Install(Exe);
+        Install("a.dll");
+        var clean = new UpdateSwap(_folder);
+        var moved = new[] { Exe, "a.dll", "new/d.dll" };
+        var plan = Plan(moved, []);
+        int newFile = plan.Steps.FindIndex(s => s.To == "new/d.dll");
+        var killed = new UpdateSwap(_folder, new Stopping(newFile + 2, () => new KilledException()));
+        Assert.Throws<KilledException>(() => killed.Run(ForUpdate(clean, moved, [])));
+        string planted = Path.Combine(_folder.Staging, "a.dll");
+        File.WriteAllText(planted, "planted since");
+
+        var journal = UpdateJournal.TryRead(_folder)!;
+        Assert.False(clean.Undo(journal));
+
+        Assert.True(File.Exists(_folder.Journal));
+        Assert.Equal("planted since", File.ReadAllText(planted));
+    }
+
+    [Fact]
+    public void AFileTheRecheckDidntVerify_GoesToKept_TheOldExeToo()
+    {
+        // Not the old version's, so previous/ never holds it and a rollback can't bring it in (2026-11-04, reviews P4-1, P2-7).
+        Install(Exe, "altered exe");
+        Install("a.dll");
+        Assert.True(new UpdateSwap(_folder).Run(Plan([Exe, "a.dll"], [], strays: [Exe])).Done);
+        Assert.Equal("altered exe", File.ReadAllText(KeptPath("0.5.6", Exe)));
+        Assert.False(File.Exists(Path.Combine(_folder.Previous, Exe)));
+        Assert.Equal("old", File.ReadAllText(Path.Combine(_folder.Previous, "a.dll")));
+    }
+
+    [Fact]
+    public void AnIncomingFileAtTheOldExesName_MovesTheOldExeOutFirst()
+    {
+        // When the exe's own name changes: the move hit the old one, undid, and failed the same at every exit (2026-11-04, review P7-5).
+        Install("Old.exe");
+        Install(UpdateManifest.FileName, "old manifest");
+        Stage(UpdateManifest.FileName, "new manifest");
+        Stage("Old.exe", "new file");
+        Stage("New.exe");
+        var swap = new UpdateSwap(_folder);
+
+        Assert.True(swap.Run(swap.PlanUpdate("0.5.6", "0.5.7", "Old.exe", "New.exe", ["New.exe", "Old.exe"], [], ["Old.exe"])).Done);
+
+        Assert.Equal("new file", Read("Old.exe"));
+        Assert.Equal("new", Read("New.exe"));
+        Assert.Equal("old", File.ReadAllText(Path.Combine(_folder.Previous, "Old.exe")));
+    }
+
+    [Fact]
+    public void AReadOnlyFile_DoesntStopAFolderGoing()
+    {
+        // A read-only file failed the swap's cleanup for good (2026-11-04, review P5-5).
+        string folder = Path.Combine(_root, "going");
+        Directory.CreateDirectory(folder);
+        string file = Path.Combine(folder, "a.dll");
+        File.WriteAllText(file, "x");
+        File.SetAttributes(file, FileAttributes.ReadOnly);
+
+        Assert.True(UpdateFolder.DeleteQuietly(folder));
+
+        Assert.False(Directory.Exists(folder));
+    }
+
+    [Fact]
+    public void NamesDifferingOnlyByCase_DontThrow()
+    {
+        // A case-blind volume's collision read two ways used to end in the crash catch (2026-11-04, review P2-9).
+        var installed = Listing(("A.dll", "aa"), ("a.dll", "bb"));
+        var staged = Listing(("A.dll", "cc"), ("a.dll", "dd"));
+        var comparer = StringComparer.OrdinalIgnoreCase;
+        Assert.NotEmpty(UpdateSwap.Changed(installed, staged, new Dictionary<string, string>(comparer) { ["A.dll"] = "aa" }, comparer));
+    }
 
     [Fact]
     public void TheJournalFormat_IsPinned()

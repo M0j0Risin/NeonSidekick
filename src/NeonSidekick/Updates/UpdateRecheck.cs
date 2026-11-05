@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 using NeonSidekick.Files;
 using NeonSidekick.Llm.Tools;
@@ -17,12 +18,19 @@ public sealed record UpdateContext(UpdateFolder Folder, UpdateVersion Running, I
 
     /// <summary>
     /// Whether the running exe's name is the one the manifest lists. Compared through the folder's case rule, since a process's own path keeps the casing it was launched with. A renamed copy can't stage, and its exit doesn't swap, since it would change the folder
-    /// around an exe the swap can't replace.
+    /// around an exe the swap can't replace. The same file by identity also counts (2026-11-04, review P6-16): a run started as <c>NEONSI~1.EXE</c> keeps the short name in its process path.
     /// </summary>
     public bool IsListedExe(UpdateManifest installed)
     {
         ArgumentNullException.ThrowIfNull(installed);
-        return Comparer.Equals(ExeName, installed.Exe);
+        if (Comparer.Equals(ExeName, installed.Exe))
+        {
+            return true;
+        }
+
+        string running = Path.Combine(Folder.Install, ExeName);
+        string listed = Path.Combine(Folder.Install, installed.Exe);
+        return OperatingSystem.IsWindows() && ExeName.Contains('~', StringComparison.Ordinal) && File.Exists(running) && File.Exists(listed) && FileIdentity.Of(running) is { } one && one == FileIdentity.Of(listed);
     }
 }
 
@@ -30,23 +38,7 @@ public sealed record UpdateContext(UpdateFolder Folder, UpdateVersion Running, I
 public static class UpdateInstall
 {
     /// <summary>The folder of the running exe's real path, with links resolved, so a Mac symlink on <c>PATH</c> still finds it. Null with no process path.</summary>
-    public static string? Locate(string? processPath)
-    {
-        if (string.IsNullOrEmpty(processPath))
-        {
-            return null;
-        }
-
-        try
-        {
-            string real = File.ResolveLinkTarget(processPath, returnFinalTarget: true)?.FullName ?? Path.GetFullPath(processPath);
-            return Path.GetDirectoryName(real);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return Path.GetDirectoryName(Path.GetFullPath(processPath));
-        }
-    }
+    public static string? Locate(string? processPath) => string.IsNullOrEmpty(processPath) ? null : Path.GetDirectoryName(RealPath(processPath));
 
     /// <summary>
     /// The folder the tools' guard holds: <paramref name="folder"/>'s install while it's a package, else null. The start asks once, after its step has undone any interrupted swap, and the value is kept, so deleting the manifest mid-run can't lift the guard.
@@ -58,30 +50,72 @@ public static class UpdateInstall
     }
 
     /// <summary>The running exe's file name, with links resolved the same way.</summary>
-    public static string ExeName(string? processPath)
-    {
-        if (string.IsNullOrEmpty(processPath))
-        {
-            return "";
-        }
+    public static string ExeName(string? processPath) => string.IsNullOrEmpty(processPath) ? "" : Path.GetFileName(RealPath(processPath));
 
+    private static string RealPath(string processPath)
+    {
         try
         {
-            return Path.GetFileName(File.ResolveLinkTarget(processPath, returnFinalTarget: true)?.FullName ?? processPath);
+            return File.ResolveLinkTarget(processPath, returnFinalTarget: true)?.FullName ?? Path.GetFullPath(processPath);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return Path.GetFileName(processPath);
+            return Path.GetFullPath(processPath);
         }
     }
 }
 
+/// <summary>What a proofs folder says of a manifest.</summary>
+public enum UpdateChainAnswer
+{
+    /// <summary>The <c>.sig</c> verifies under a key this copy trusts, the <c>.sha256</c> names this manifest's hash and its version's archive.</summary>
+    Holds,
+
+    /// <summary>The <c>.sha256</c> or the <c>.sig</c> isn't there.</summary>
+    Missing,
+
+    /// <summary>No line of the <c>.sig</c> verifies under a key this copy trusts.</summary>
+    NotSigned,
+
+    /// <summary>The signed text doesn't name this manifest, or its version's archive.</summary>
+    OtherManifest,
+}
+
 /// <summary>
-/// A version's proof files (2026-11-04, self-update): its <c>.sha256</c>, <c>.sig</c> and notes, in <c>release/</c> or <c>previous/release/</c>. They count only if the <c>.sha256</c> names the version its manifest does. Otherwise, as after a package unpacked by hand over
-/// the folder, they're read as none, like a copy installed by hand.
+/// A version's proof files (2026-11-04, self-update): its <c>.sha256</c>, <c>.sig</c> and notes, in <c>release/</c>, <c>staged/</c> or <c>previous/release/</c>. <see cref="Chain"/> is the walk to the embedded keys, one for both directions (review P4-20: two hand-written copies
+/// had drifted, the rollback's failing open, review P2-1).
 /// </summary>
 public static class UpdateProofs
 {
+    /// <summary>
+    /// The chain from <paramref name="proofs"/> to <paramref name="manifest"/>: the <c>.sig</c> over the <c>.sha256</c>'s bytes under <paramref name="keys"/>, the manifest file's hash against the <c>.sha256</c>'s second line, the archive name against the manifest's own version and platform.
+    /// </summary>
+    public static UpdateChainAnswer Chain(string proofs, string manifestPath, UpdateManifest manifest, IReadOnlyList<string> keys)
+    {
+        ArgumentNullException.ThrowIfNull(manifest);
+        byte[] shaBytes;
+        string sigText;
+        try
+        {
+            shaBytes = File.ReadAllBytes(Path.Combine(proofs, UpdateFolder.ShaName));
+            sigText = File.ReadAllText(Path.Combine(proofs, UpdateFolder.SigName));
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return UpdateChainAnswer.Missing;
+        }
+
+        if (!UpdateSignature.Verify(shaBytes, sigText, keys))
+        {
+            return UpdateChainAnswer.NotSigned;
+        }
+
+        var sha = UpdateShaFile.TryParse(Encoding.UTF8.GetString(shaBytes));
+        return sha is not null && UpdateHash.Same(UpdateHash.OfFile(manifestPath), sha.ManifestHash) && sha.ArchiveName == UpdateCheck.ArchiveName(manifest.ParsedVersion, manifest.Rid)
+            ? UpdateChainAnswer.Holds
+            : UpdateChainAnswer.OtherManifest;
+    }
+
     /// <summary>The signed text in <paramref name="folder"/>, if it's <paramref name="manifest"/>'s.</summary>
     public static UpdateShaFile? Read(string folder, UpdateManifest manifest)
     {
@@ -103,7 +137,7 @@ public static class UpdateProofs
         }
     }
 
-    /// <summary>The running version's notes as saved at staging, or null with none: an update keeps them with the version, so <c>/update notes</c> works offline and always matches what runs.</summary>
+    /// <summary>The running version's notes as saved at staging, or null with none: an update keeps them with the version, so <c>/update notes</c> works offline and always matches what runs. Scrubbed here, the one place they're read from disk (2026-11-04, review P2-18: they were scrubbed three times, and no layer owned it).</summary>
     public static string? Notes(UpdateFolder folder, UpdateManifest installed)
     {
         ArgumentNullException.ThrowIfNull(folder);
@@ -125,46 +159,58 @@ public static class UpdateProofs
 }
 
 /// <summary>What the recheck hands the swap.</summary>
-public sealed record UpdatePlanned(UpdateManifest Installed, UpdateManifest Staged, List<string> Moved, List<string> Dropped);
+/// <param name="Installed">The installed manifest.</param>
+/// <param name="Staged">The stage's.</param>
+/// <param name="Moved">The staged files that move in.</param>
+/// <param name="Dropped">What only the installed version lists.</param>
+/// <param name="Verified">The installed files that match the installed manifest now: the only ones that go to <c>previous/</c>.</param>
+/// <param name="ProofsVouch">Whether <c>release/</c> vouches for the installed manifest, or there's none.</param>
+public sealed record UpdatePlanned(UpdateManifest Installed, UpdateManifest Staged, List<string> Moved, List<string> Dropped, List<string> Verified, bool ProofsVouch);
+
+/// <summary>What became of a recheck that didn't pass.</summary>
+public enum UpdateRecheckFailure
+{
+    /// <summary>The stage is at fault: it's dropped.</summary>
+    Drop,
+
+    /// <summary>A failure to read isn't a mismatch (2026-11-04, review P2-4: a scanner's brief sharing violation cost a whole download): the stage stays and the next exit tries again.</summary>
+    Keep,
+}
 
 /// <summary>
 /// The recheck at exit (2026-11-04, self-update). A manifest in the stage can't vouch for itself, since whoever changed a file could change it too, so the chain ends at the embedded keys: the <c>.sig</c> over the <c>.sha256</c>, the stage's manifest against the <c>.sha256</c>'s
-/// second line, the moved files against the manifest, the installed manifest still the one the install hashes were taken against (a Mac doesn't lock a running exe, so a package can be unpacked over the folder during a session), and the version still newer than the running one. Any
-/// mismatch drops the stage. It costs one signature check and hashing the files that move.
+/// second line, the moved files against the manifest, the installed manifest still the one the install hashes were taken against (a Mac doesn't lock a running exe, so a package can be unpacked over the folder during a session), the same platform as the install, and the version still newer than the running one. Any
+/// mismatch drops the stage. It costs one signature check and hashing the files that move, and any file whose length or time changed since staging.
 /// </summary>
 public static class UpdateRecheck
 {
     /// <summary>The chain, or null with the reason. <paramref name="cancellationToken"/> is the window close's time left: a recheck that can't finish throws, and nothing moves.</summary>
-    public static UpdatePlanned? Check(UpdateContext context, CancellationToken cancellationToken, out string? reason)
+    public static UpdatePlanned? Check(UpdateContext context, CancellationToken cancellationToken, out string? reason) => Check(context, cancellationToken, out reason, out _);
+
+    /// <summary>The chain, with <paramref name="failure"/> saying whether a refusal should drop the stage.</summary>
+    public static UpdatePlanned? Check(UpdateContext context, CancellationToken cancellationToken, out string? reason, out UpdateRecheckFailure failure)
     {
         ArgumentNullException.ThrowIfNull(context);
         var folder = context.Folder;
+        failure = UpdateRecheckFailure.Drop;
         try
         {
-            byte[] shaBytes = File.ReadAllBytes(folder.StagedSha);
-            if (!UpdateSignature.Verify(shaBytes, File.ReadAllText(folder.StagedSig), context.Keys))
-            {
-                reason = UpdateText.NotSigned;
-                return null;
-            }
-
-            var sha = UpdateShaFile.TryParse(Encoding.UTF8.GetString(shaBytes));
-            if (sha is null || !UpdateHash.Same(UpdateHash.OfFile(folder.StagingManifest), sha.ManifestHash))
-            {
-                reason = UpdateText.StageChanged;
-                return null;
-            }
-
-            var staged = UpdateManifest.ReadFile(folder.StagingManifest, out reason);
+            // The bytes here, not ReadFile, which reads a file it can't open as a bad one (review P2-4): a held manifest belongs to the catch below, which keeps the stage.
+            var staged = UpdateManifest.Read(File.ReadAllBytes(folder.StagingManifest), out reason);
             if (staged is null)
             {
+                reason = UpdateText.StageChanged;
                 return null;
             }
 
-            if (sha.ArchiveName != UpdateCheck.ArchiveName(staged.ParsedVersion, staged.Rid))
+            switch (UpdateProofs.Chain(folder.Staged, folder.StagingManifest, staged, context.Keys))
             {
-                reason = UpdateText.StageChanged;
-                return null;
+                case UpdateChainAnswer.NotSigned:
+                    reason = UpdateText.NotSigned;
+                    return null;
+                case UpdateChainAnswer.Missing or UpdateChainAnswer.OtherManifest:
+                    reason = UpdateText.StageChanged;
+                    return null;
             }
 
             if (staged.ParsedVersion <= context.Running)
@@ -173,52 +219,85 @@ public static class UpdateRecheck
                 return null;
             }
 
-            var installed = UpdateManifest.ReadFile(folder.Manifest, out reason);
+            var installed = UpdateManifest.Read(File.ReadAllBytes(folder.Manifest), out reason);
             if (installed is null)
             {
                 return null;
             }
 
-            var hashes = System.Text.Json.JsonSerializer.Deserialize(File.ReadAllBytes(folder.StagedInstallHashes), UpdateJsonContext.Default.UpdateInstallHashes);
+            // A validly signed package for another platform, swapped into the stage after its probe, passes every check above (2026-11-04, review P1-10).
+            if (!string.Equals(staged.Rid, installed.Rid, StringComparison.Ordinal))
+            {
+                reason = UpdateText.StageChanged;
+                return null;
+            }
+
+            var hashes = UpdateInstallHashes.TryRead(folder);
             if (hashes is null || !UpdateHash.Same(UpdateHash.OfFile(folder.Manifest), hashes.ManifestHash))
             {
                 reason = UpdateText.InstallChanged;
                 return null;
             }
 
-            var moved = UpdateSwap.Changed(installed, staged, hashes.Files, context.Comparer, context.MoveAll);
+            var current = hashes.Current(folder.Install, installed, cancellationToken);
+            var moved = UpdateSwap.Changed(installed, staged, current, context.Comparer, context.MoveAll);
             var listed = staged.Hashes(context.Comparer);
             foreach (string path in moved)
             {
-                cancellationToken.ThrowIfCancellationRequested();
                 string full = Path.Combine(folder.Staging, path.Replace('/', Path.DirectorySeparatorChar));
-                if (!File.Exists(full) || !UpdateHash.Same(UpdateHash.OfFile(full), listed[path]))
+                if (!File.Exists(full) || !UpdateHash.Same(UpdateHash.OfFile(full, cancellationToken), listed[path]))
                 {
                     reason = UpdateText.StageChanged;
                     return null;
                 }
             }
 
-            return new UpdatePlanned(installed, staged, moved, UpdateSwap.Dropped(installed, staged, context.Comparer));
+            // Once more after the last file (review P7-6): a recheck that ran out with its last hash moves nothing, or the swap starts with no time left.
+            cancellationToken.ThrowIfCancellationRequested();
+            bool vouch = !Directory.Exists(folder.Release) || UpdateProofs.Chain(folder.Release, folder.Manifest, installed, context.Keys) == UpdateChainAnswer.Holds;
+            var verified = installed.Files.Where(file => current.TryGetValue(file.Path, out string? now) && UpdateHash.Same(now, file.Sha256)).Select(file => file.Path).ToList();
+            reason = null;
+            return new UpdatePlanned(installed, staged, moved, UpdateSwap.Dropped(installed, staged, context.Comparer), verified, vouch);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
         {
             reason = UpdateText.StageChanged;
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            reason = UpdateText.StageUnreadable(ex.Message);
+            failure = UpdateRecheckFailure.Keep;
+            return null;
+        }
+        catch (CryptographicException ex)
+        {
+            reason = UpdateText.StageUnreadable(ex.Message);
+            failure = UpdateRecheckFailure.Keep;
             return null;
         }
     }
 }
 
 /// <summary>What a rollback's check hands the swap.</summary>
-public sealed record UpdateRollbackPlan(UpdateManifest Installed, UpdateManifest Target, List<string> Added);
+/// <param name="Installed">The running version's manifest.</param>
+/// <param name="Target">The version going back to.</param>
+/// <param name="Incoming">The files in <c>previous</c> that passed and move in.</param>
+/// <param name="Added">What only the running version lists.</param>
+/// <param name="Verified">The current files that leave and match the running manifest: the only ones that go to <c>outgoing/</c>.</param>
+/// <param name="DocsStaying">Docs the old version's copy of can't come back: altered or gone. The current copy stays, and the Going back line says so.</param>
+public sealed record UpdateRollbackPlan(UpdateManifest Installed, UpdateManifest Target, List<string> Incoming, List<string> Added, List<string> Verified, List<string> DocsStaying);
 
 /// <summary>
-/// The check before going back (2026-11-04, self-update), at the command and again at exit: the same recheck less its "newer" and install-hashes rules, using the old version's manifest, <c>.sha256</c> and <c>.sig</c> kept in <c>previous</c>. It hashes only the files that move, so a file altered
-/// by hand that both versions share stays as it is: a rollback doesn't repair the install. A version installed by hand has no signature files, because signing comes after packaging, so going back to one checks its manifest's hashes only.
+/// The check before going back (2026-11-04, self-update), at the command and again at exit: the same recheck less its "newer" and install-hashes rules, using the old version's manifest, <c>.sha256</c> and <c>.sig</c> kept in <c>previous</c>. It hashes the files that move, so a file altered
+/// by hand that both versions share stays as it is: a rollback doesn't repair the install. It also hashes the current files that leave, under the same limit, and any that doesn't match goes to <c>kept/</c> rather than with <c>outgoing/</c>'s delete. A version installed by hand has no signature files, because signing comes after packaging, so going
+/// back to one checks its manifest's hashes only. Only an absent folder reads that way (review P2-1): a swap moves proofs that don't vouch to <c>outgoing/</c>, so proofs here that don't are tampering.
+///
+/// <para>An altered or missing doc doesn't block it (review P2-2, the user's call): an update that repairs an edited <c>docs/x.md</c> moved the edit to <c>kept/</c>, and an edit to a doc shouldn't cost the way back. The exe and libraries still refuse.</para>
 /// </summary>
 public static class UpdateRollback
 {
-    /// <summary>The plan, or null with the reason. <paramref name="cancellationToken"/> as in <see cref="UpdateRecheck.Check"/>.</summary>
+    /// <summary>The plan, or null with the reason. <paramref name="cancellationToken"/> as in <see cref="UpdateRecheck.Check(UpdateContext, CancellationToken, out string?)"/>.</summary>
     public static UpdateRollbackPlan? Check(UpdateContext context, CancellationToken cancellationToken, out string? reason)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -243,53 +322,102 @@ public static class UpdateRollback
                 return null;
             }
 
-            // Signed versions must still check out. A key this build has dropped fails here, since the bad key is why it went.
-            if (UpdateProofs.Read(folder.PreviousRelease, target) is { } sha)
+            // Only back: a package of the kept version unpacked by hand would journal A to A, and a kill mid-swap would read as finished, leaving a mix (2026-11-04, review P1-5).
+            if (target.ParsedVersion >= context.Running)
             {
-                string shaPath = Path.Combine(folder.PreviousRelease, UpdateFolder.ShaName);
-                string sigPath = Path.Combine(folder.PreviousRelease, UpdateFolder.SigName);
-                if (!File.Exists(sigPath) || !UpdateSignature.Verify(File.ReadAllBytes(shaPath), File.ReadAllText(sigPath), context.Keys))
-                {
-                    reason = UpdateText.OldVersionNotSigned(target.Version);
-                    return null;
-                }
+                reason = UpdateText.NothingToGoBackTo;
+                return null;
+            }
 
-                if (!UpdateHash.Same(UpdateHash.OfFile(folder.PreviousManifest), sha.ManifestHash))
+            // Signed versions must still check out. A key this build has dropped fails here, since the bad key is why it went.
+            if (Directory.Exists(folder.PreviousRelease))
+            {
+                switch (UpdateProofs.Chain(folder.PreviousRelease, folder.PreviousManifest, target, context.Keys))
                 {
-                    reason = UpdateText.OldVersionAltered(UpdateManifest.FileName);
+                    case UpdateChainAnswer.Missing or UpdateChainAnswer.NotSigned:
+                        reason = UpdateText.OldVersionNotSigned(target.Version);
+                        return null;
+                    case UpdateChainAnswer.OtherManifest:
+                        reason = UpdateText.OldVersionAltered(UpdateManifest.FileName);
+                        return null;
+                }
+            }
+
+            // Every file the two versions disagree on must be there, or going back would leave a mix of versions (a package unpacked by hand over the folder), and every listed file held must match. Nothing else may be held (review P2-7): previous/ holds only verified old files, so an unlisted one would land beside the exe unchecked.
+            var comparer = context.Comparer;
+            var current = installed.Hashes(comparer);
+            var was = target.Hashes(comparer);
+            foreach (string held in UpdateSwap.FilesHeldIn(folder.Previous))
+            {
+                if (!was.ContainsKey(held))
+                {
+                    reason = UpdateText.OldVersionUnlisted(held);
                     return null;
                 }
             }
 
-            // Every file the two versions disagree on must be there, or going back would leave a mix of versions (a package unpacked by hand over the folder), and every listed file held must match.
-            var comparer = context.Comparer;
-            var current = installed.Hashes(comparer);
+            var incoming = new List<string>();
+            var docs = new List<string>();
             foreach (var file in target.Files)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 string full = Path.Combine(folder.Previous, file.Path.Replace('/', Path.DirectorySeparatorChar));
                 if (File.Exists(full))
                 {
-                    if (!UpdateHash.Same(UpdateHash.OfFile(full), file.Sha256))
+                    if (UpdateHash.Same(UpdateHash.OfFile(full, cancellationToken), file.Sha256))
+                    {
+                        incoming.Add(file.Path);
+                    }
+                    else if (IsDoc(file.Path))
+                    {
+                        docs.Add(file.Path);
+                    }
+                    else
                     {
                         reason = UpdateText.OldVersionAltered(file.Path);
                         return null;
                     }
                 }
-                else if (!current.TryGetValue(file.Path, out string? now) || !UpdateHash.Same(now, file.Sha256))
+                else if (!current.TryGetValue(file.Path, out string? now) || !UpdateHash.Same(now, file.Sha256) || !File.Exists(folder.Full(file.Path)))
                 {
-                    reason = UpdateText.OldVersionIncomplete(file.Path);
-                    return null;
+                    // The last test is review P7-4: the manifests agreed on a shared library deleted since, and the swap then took away the only way back.
+                    if (!IsDoc(file.Path))
+                    {
+                        reason = UpdateText.OldVersionIncomplete(file.Path);
+                        return null;
+                    }
+
+                    docs.Add(file.Path);
                 }
             }
 
-            var was = target.Hashes(comparer);
-            return new UpdateRollbackPlan(installed, target, [.. installed.Files.Select(f => f.Path).Where(p => !was.ContainsKey(p))]);
+            var added = installed.Files.Select(f => f.Path).Where(p => !was.ContainsKey(p)).ToList();
+            var verified = new List<string>();
+            foreach (string path in incoming.Concat(added))
+            {
+                string full = folder.Full(path);
+                if (current.TryGetValue(path, out string? listed) && File.Exists(full) && UpdateHash.Same(UpdateHash.OfFile(full, cancellationToken), listed))
+                {
+                    verified.Add(path);
+                }
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            reason = null;
+            return new UpdateRollbackPlan(installed, target, incoming, added, verified, docs);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or CryptographicException)
         {
             reason = ex.Message;
             return null;
         }
+    }
+
+    /// <summary>Whether <paramref name="path"/> is a doc: a <c>.md</c>, <c>LICENSE*</c> or <c>README*</c> file, whose copy not coming back breaks nothing.</summary>
+    internal static bool IsDoc(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        string name = path[(path.LastIndexOf('/') + 1)..];
+        return name.EndsWith(".md", StringComparison.OrdinalIgnoreCase) || name.StartsWith("LICENSE", StringComparison.OrdinalIgnoreCase) || name.StartsWith("README", StringComparison.OrdinalIgnoreCase);
     }
 }

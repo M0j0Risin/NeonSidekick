@@ -135,6 +135,8 @@ jobs:
             echo "Release $tag already exists; skipping."
             exit 0
           fi
+          # What this build came from, for tools/ReleaseSign.cs to compare with the tag: a tag moved over a kept draft would otherwise sign the old build under the new commit's subject. A copy ignores it, since it picks assets by exact name.
+          printf '%s\n' "$GITHUB_SHA" > packages/build-commit.txt
           # A draft (2026-11-04, self-update): releases/latest ignores it, so no copy is offered it until tools/ReleaseSign.cs has signed and published it.
           gh release create "$tag" --repo "$GITHUB_REPOSITORY" --draft --verify-tag --generate-notes --title "NeonSidekick $tag" \
-            "${zips[0]}" "${tars[0]}" "${shas[@]}"
+            "${zips[0]}" "${tars[0]}" "${shas[@]}" packages/build-commit.txt

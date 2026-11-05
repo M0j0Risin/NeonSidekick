@@ -64,7 +64,7 @@ public sealed class VcRuntimeTests : IDisposable
     public void Explain_KeepsTodaysDetail_UnlessADllIsMissing()
     {
         Assert.Equal("today's", VcRuntime.Explain("today's", AllLoad));
-        Assert.Equal(VcRuntimeText.Missing(VcRuntime.MainLibrary), VcRuntime.Explain("today's", NoneLoad));
+        Assert.Equal(VcRuntimeText.Missing(VcRuntime.MainLibrary) + " " + VcRuntimeText.Detail("today's"), VcRuntime.Explain("today's", NoneLoad));
     }
 
     private string NotAModel()
@@ -80,7 +80,7 @@ public sealed class VcRuntimeTests : IDisposable
         using (var missing = new WhisperNetTranscriber(NotAModel(), vcLoads: NoneLoad))
         {
             Assert.False(missing.Load(out var detail));
-            Assert.Equal(VcRuntimeText.Missing(VcRuntime.MainLibrary), detail);
+            Assert.StartsWith(VcRuntimeText.Missing(VcRuntime.MainLibrary), detail, StringComparison.Ordinal);
         }
 
         using var present = new WhisperNetTranscriber(NotAModel(), vcLoads: AllLoad);
@@ -94,7 +94,7 @@ public sealed class VcRuntimeTests : IDisposable
         using (var missing = new SileroVad(NotAModel(), vcLoads: NoneLoad))
         {
             Assert.False(missing.Load(out var detail));
-            Assert.Equal(VcRuntimeText.Missing(VcRuntime.MainLibrary), detail);
+            Assert.StartsWith(VcRuntimeText.Missing(VcRuntime.MainLibrary), detail, StringComparison.Ordinal);
         }
 
         using var present = new SileroVad(NotAModel(), vcLoads: AllLoad);
@@ -114,13 +114,23 @@ public sealed class VcRuntimeTests : IDisposable
         {
             var result = await missing.PrepareAsync(CancellationToken.None);
             Assert.False(result.Exists);
-            Assert.Equal(VcRuntimeText.Missing(VcRuntime.MainLibrary), result.Detail);
+            Assert.StartsWith(VcRuntimeText.Missing(VcRuntime.MainLibrary), result.Detail, StringComparison.Ordinal);
         }
 
         using var present = new KokoroInProcessSynthesizer(model, _dir, AllLoad);
         var today = await present.PrepareAsync(CancellationToken.None);
         Assert.False(today.Exists);
         Assert.True(today.Detail.StartsWith("model load failed: ", StringComparison.Ordinal) || today.Detail == KokoroInProcessSynthesizer.MissingRuntimeDetail, today.Detail);
+    }
+
+    [Fact]
+    public void AnEarlyExit_OnlyTheServersOwnDll_BarsTheVulkanFallback()
+    {
+        // An older redist lacking msvcp140_1 plus a missing CUDA DLL stopped a Vulkan build that would have run (2026-11-04, review P4-10).
+        var other = LlamaServerHost.EarlyExit(VcRuntime.DllNotFoundExitCode, "", library => library == VcRuntime.MainLibrary);
+
+        Assert.False(other.RuntimeMissing);
+        Assert.Contains("Visual C++", other.Message, StringComparison.Ordinal);
     }
 
     [Fact]

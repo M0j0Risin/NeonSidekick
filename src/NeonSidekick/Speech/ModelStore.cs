@@ -545,8 +545,8 @@ public sealed class ModelStore
             }
         }
 
-        string partsPath = path + ".parts";
-        string extractPath = $"{path}.{Guid.NewGuid():N}.extracting";
+        string partsPath = PartsPath(path);
+        string extractPath = $"{path}.{Guid.NewGuid():N}{ExtractingSuffix}";
         long total = spec.Parts.Sum(p => p.Bytes);
         try
         {
@@ -568,20 +568,15 @@ public sealed class ModelStore
 
             unpacking?.Invoke();
             DiagnosticLog.Info(_category, $"Unpacking {spec.Display} into {extractPath}.");
-            await Task.Run(() =>
+            foreach (var archive in archives)
             {
-                foreach (var archive in archives)
-                {
-                    if (ArchiveFormat(archive) == ModelFormat.TarGz)
-                    {
-                        ExtractTarGz(archive, extractPath);
-                    }
-                    else
-                    {
-                        ZipFile.ExtractToDirectory(archive, extractPath, overwriteFiles: true);
-                    }
-                }
-            }, cancellationToken).ConfigureAwait(false);
+                // Off this thread, since the first read of a big archive isn't short, and async so a cancel ends an unzip (2026-11-04, review P3-7: /update cancel sat out the rest of it).
+                string unpack = archive;
+                await Task.Run(() => ArchiveFormat(unpack) == ModelFormat.TarGz
+                    ? ExtractTarGzAsync(unpack, extractPath, cancellationToken)
+                    : ZipFile.ExtractToDirectoryAsync(unpack, extractPath, overwriteFiles: true, cancellationToken), cancellationToken).ConfigureAwait(false);
+            }
+
             cancellationToken.ThrowIfCancellationRequested();
 
             string? root = FindModelRoot(extractPath, spec.RequiredFiles);
@@ -590,7 +585,7 @@ public sealed class ModelStore
                 return ModelResult.Failed(path, $"the archives of {spec.Display} do not contain it (no {MissingFileHint(extractPath, spec.RequiredFiles)})");
             }
 
-            System.IO.Directory.Move(root, path);
+            await MoveWithRetryAsync(root, path, cancellationToken).ConfigureAwait(false);
             Files.WorkingDirectory.DeleteDirectoryQuietly(partsPath);
             DiagnosticLog.Info(_category, $"Downloaded {spec.Display} ({SizeLabel(total)}) to {path}.");
             return new ModelResult(true, path, $"downloaded {SizeLabel(total)}");
@@ -622,13 +617,44 @@ public sealed class ModelStore
     /// land outside <paramref name="destination"/> (an <see cref="IOException"/>; checked against <c>../</c> paths and an
     /// <c>../../../etc/passwd</c> link that day). The archives are pinned by SHA-256 before this runs anyway.
     /// </summary>
-    public static void ExtractTarGz(string archive, string destination)
+    public static async Task ExtractTarGzAsync(string archive, string destination, CancellationToken cancellationToken)
     {
         System.IO.Directory.CreateDirectory(destination);
-        using var file = new FileStream(archive, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16);
-        using var gzip = new GZipStream(file, CompressionMode.Decompress);
-        TarFile.ExtractToDirectory(gzip, destination, overwriteFiles: true);
+        await using var file = new FileStream(archive, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, useAsync: true);
+        await using var gzip = new GZipStream(file, CompressionMode.Decompress);
+        await TarFile.ExtractToDirectoryAsync(gzip, destination, overwriteFiles: true, cancellationToken).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// A rename of a freshly unpacked folder, with a brief retry (2026-11-04, review P4-15): a scanner reading hundreds of new files makes it fail with "access denied" for a moment, and the failure cost the whole unpack.
+    /// </summary>
+    private static async Task MoveWithRetryAsync(string from, string to, CancellationToken cancellationToken)
+    {
+        for (int attempt = 1; ; attempt++)
+        {
+            try
+            {
+                System.IO.Directory.Move(from, to);
+                return;
+            }
+            catch (Exception ex) when (attempt < MoveTries && ex is IOException or UnauthorizedAccessException)
+            {
+                await Task.Delay(MoveRetryPause, cancellationToken).ConfigureAwait(false);
+            }
+        }
+    }
+
+    /// <summary>Where <see cref="EnsureArchiveSetAsync"/> collects the archives of <paramref name="path"/>.</summary>
+    public static string PartsPath(string path) => path + ".parts";
+
+    /// <summary>The temporary unpacking folders of an archive set beside its path, by name (2026-11-04, review P6-12: a second copy of the suffix would silently leave hundreds of MB if this one changed).</summary>
+    public const string ExtractingPattern = "*" + ExtractingSuffix;
+
+    private const string ExtractingSuffix = ".extracting";
+
+    private const int MoveTries = 5;
+
+    private static readonly TimeSpan MoveRetryPause = TimeSpan.FromMilliseconds(400);
 
     /// <summary>Where a resumable download of <paramref name="path"/> collects its bytes until verified.</summary>
     public static string PartialPath(string path) => path + ".partial";
