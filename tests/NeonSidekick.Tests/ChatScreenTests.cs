@@ -6511,6 +6511,37 @@ public partial class ChatScreenTests : IDisposable
         Assert.StartsWith("\e[?1049h\e[?1007l" + ScreenPane.PageBackgroundSequence(Theme.Bg), output[enter..]);
     }
 
+    /// <summary>
+    /// A signal close on a Mac gives the terminal back from another thread (2026-11-06, the self-update Mac pass: after a kill or
+    /// Activity Monitor's Quit the shell got the app's last frame): the pane leaves the alternate buffer then, and the run's own end
+    /// after it leaves it no second time.
+    /// </summary>
+    [Fact]
+    public async Task GiveBackTerminal_LeavesTheAlternateBuffer_AndTheRunsOwnEndAddsNoSecondLeave()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _console.EmitAnsiSequences();
+        _console.Profile.Height = 20;
+        _geometry = new ScreenGeometry(() => null);
+        var input = Scripted();
+        string? atGiveBack = null;
+        input.OnWait = () =>
+        {
+            if (atGiveBack is null)
+            {
+                _running!.GiveBackTerminal();
+                atGiveBack = Output;
+                PushLine(input, "/exit");
+            }
+        };
+
+        string output = await RunAsync();
+
+        Assert.NotNull(atGiveBack);
+        Assert.EndsWith(ScreenPane.PageBackgroundResetSequence + "\e[?1007h\e[?1049l", atGiveBack);
+        Assert.Equal(1, Count(output, "\e[?1049l"));
+    }
+
     [Fact]
     public async Task WithGeometry_ThemedBackgroundOff_LeavesTheTerminalsOwn()
     {

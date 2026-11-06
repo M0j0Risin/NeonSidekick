@@ -173,4 +173,14 @@ public partial class SidekickAppTests
         App(dockerServers: () => docker).ConsoleClosing();
         Assert.Empty(docker.Calls);
     }
+
+    /// <summary>A signal close's give-back with no screen live (headless, a check mode, before the screen): nothing to leave (2026-11-06).</summary>
+    [Fact]
+    public void GiveBackTerminal_WithNoScreenLive_DoesNothing()
+    {
+        var stdout = new StringWriter();
+        App(stdout: stdout).GiveBackTerminal();
+        Assert.Empty(stdout.ToString());
+        Assert.Equal("The terminal wasn't given back in time at the close; `reset` in that window restores it.", SidekickApp.TerminalBackLateLogLine);
+    }
 }

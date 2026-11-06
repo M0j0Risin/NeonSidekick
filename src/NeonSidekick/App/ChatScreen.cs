@@ -12415,6 +12415,17 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
+    /// The screen's end from another thread, for a signal close on a Mac (2026-11-06, the self-update Mac pass): the pane closed and
+    /// disposed as the run's own end does, so the shell's screen comes back. Each half takes the pane's lock and runs once, so the
+    /// run's own end after it changes nothing; a draw after it finds the pane disposed.
+    /// </summary>
+    public void GiveBackTerminal()
+    {
+        _pane.Close();
+        _pane.Dispose();
+    }
+
+    /// <summary>
     /// One input line, with the microphone armed around it and the timer alert source published
     /// for the board's signal. With nothing playing, the wake word is armed when it is ready. Over
     /// a tail (the last reply still playing under the line) the turn's interrupt is armed again —

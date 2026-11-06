@@ -374,7 +374,7 @@ System.Diagnostics.Stopwatch? closeStarted = null;   // when the window's close 
 // 5 s kill Windows promises after the close is the classic console's, unconfirmed under ConPTY. The work runs on a thread of its
 // own under CloseDeadline, so a stall in it ends no later. Elsewhere it returns as before. Ctrl+C, Ctrl+Break and /exit take
 // the usual way out.
-void OnClosing(System.Runtime.InteropServices.PosixSignalContext _)
+void OnClosing(System.Runtime.InteropServices.PosixSignalContext context)
 {
     closeStarted = System.Diagnostics.Stopwatch.StartNew();
     if (OperatingSystem.IsWindows())
@@ -388,7 +388,50 @@ void OnClosing(System.Runtime.InteropServices.PosixSignalContext _)
         return;   // only if the call failed: the default handler ends it as before
     }
 
-    CloseWork();
+    try
+    {
+        CloseWork();
+    }
+    finally
+    {
+        // A kill or Activity Monitor's Quit leaves the terminal open (2026-11-06, the self-update Mac pass): the default action ends the
+        // process right after this returns, with no finally of the run's and no Dispose, so the shell got the app's last frame, raw mode
+        // and a reporting mouse. Last, after the swap. Not on SIGHUP: the window is gone, whether or not a write has found that out yet.
+        if (OperatingSystem.IsMacOS() && context.Signal != System.Runtime.InteropServices.PosixSignal.SIGHUP)
+        {
+            GiveBackTerminal();
+        }
+    }
+}
+
+// The pane's end, then the reader's (the run's own order: the screen's teardown, then Program's using), on a thread of its own: a
+// draw holding the pane's lock can't stall the end past a second. Settle flushes a frame still held, or the leave dies with the process.
+void GiveBackTerminal()
+{
+    if (frames.Gone)
+    {
+        return;
+    }
+
+    var giving = new Thread(() =>
+    {
+        try
+        {
+            app.GiveBackTerminal();
+            frames.Settle();
+            unixInput?.Restore();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            DiagnosticLog.Warn(ChatScreen.AppCategory, "Giving the terminal back: " + ex.Message);
+        }
+    })
+    { IsBackground = true, Name = "Terminal back" };
+    giving.Start();
+    if (!giving.Join(TimeSpan.FromSeconds(1)))
+    {
+        DiagnosticLog.Warn(ChatScreen.AppCategory, SidekickApp.TerminalBackLateLogLine);
+    }
 }
 
 void CloseWork()

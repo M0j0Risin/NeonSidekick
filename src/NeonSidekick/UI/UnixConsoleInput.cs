@@ -442,7 +442,13 @@ public sealed class UnixConsoleInput : IAnsiConsoleInput, IInputEvents, IMouseIn
 
     private void OnProcessExit(object? sender, EventArgs e) => Restore();
 
-    private unsafe void Restore()
+    /// <summary>
+    /// The terminal as it was before this reader: the mouse and bracketed paste off, the saved termios back. Once: it sets the disposed
+    /// flag under the gate, so a later capture or raw-mode recheck changes nothing. Public for the signal close on a Mac (2026-11-06,
+    /// the self-update Mac pass): a SIGTERM or SIGQUIT ends the process with no Dispose and no ProcessExit, and left the shell a raw,
+    /// mouse-reporting terminal. Not <see cref="Dispose"/> there, which would complete the events and wake the screen's own teardown.
+    /// </summary>
+    public unsafe void Restore()
     {
         lock (_gate)
         {

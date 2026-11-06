@@ -3186,6 +3186,12 @@ public sealed partial class SidekickApp
     /// </summary>
     public const string WindowClosedLogLine = "Console window closed";
 
+    /// <summary>The live screen's end at a signal close on a Mac (2026-11-06): <see cref="ChatScreen.GiveBackTerminal"/>; nothing when no screen runs (headless, a check mode).</summary>
+    public void GiveBackTerminal() => _screen?.GiveBackTerminal();
+
+    /// <summary>What the log says when giving the terminal back at a signal close didn't finish in time. Pinned.</summary>
+    public const string TerminalBackLateLogLine = "The terminal wasn't given back in time at the close; `reset` in that window restores it.";
+
     /// <summary>
     /// How long the window's close on Windows waits for its work (<see cref="ConsoleClosing"/> under <see cref="CloseBudget"/>,
     /// the UNC unmounts, the settings' flush) before it ends the process all the same (2026-10-24, the leftover process): the 5 s
