@@ -461,7 +461,8 @@ void CloseWork()
     }
 
     // Last, in what's left of the deadline less a margin for the moves (2026-11-04, reviews P1-3, P6-3): a flat 4 s from here could start the swap with no time left, and the kill would land mid-move. A window close can't show anything, so a failure is reported at next start.
-    // On a Mac this path also runs on kill, a logout and Activity Monitor's Quit, where no deadline kills it: the deadline's length limits only the recheck, with nothing taken off (review P14-6), and the moves run to their end.
+    // On a Mac this path also runs on kill and Activity Monitor's Quit, where no deadline kills it: the deadline's length limits only the recheck, with nothing taken off (review P14-6), and the moves run to their end.
+    // Not on a logout under Terminal.app (2026-11-06, the Mac pass): the terminal closed first, so the app took the exit's own way, on end of input.
     if (updateInteractive)
     {
         updateExit?.Run(null, NeonSidekick.Updates.UpdateExit.CloseBudget(SidekickApp.CloseDeadline, closeStarted?.Elapsed ?? TimeSpan.Zero, OperatingSystem.IsWindows()));
