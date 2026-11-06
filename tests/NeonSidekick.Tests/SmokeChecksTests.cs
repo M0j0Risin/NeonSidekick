@@ -291,16 +291,119 @@ public class SmokeChecksTests
             new[]
             {
                 "libonnxruntime.dylib",
-                Path.Combine("runtimes", "macos-arm64", "libwhisper.dylib"),
-                Path.Combine("runtimes", "macos-arm64", "libggml-whisper.dylib"),
                 Path.Combine("runtimes", "macos-arm64", "libggml-base-whisper.dylib"),
                 Path.Combine("runtimes", "macos-arm64", "libggml-cpu-whisper.dylib"),
+                Path.Combine("runtimes", "macos-arm64", "libggml-blas-whisper.dylib"),
+                Path.Combine("runtimes", "macos-arm64", "libggml-metal-whisper.dylib"),
+                Path.Combine("runtimes", "macos-arm64", "libggml-whisper.dylib"),
+                Path.Combine("runtimes", "macos-arm64", "libwhisper.dylib"),
                 "libvosk.dylib",
                 "libgit2-5853918.dylib",
                 "libe_sqlite3.dylib",
                 "libduckdb.dylib",
             },
             SmokeChecks.MacNativeLibraries);
+    }
+
+    /// <summary>
+    /// The update probe loads <see cref="SmokeChecks.MacNativeLibraries"/> one by one by path (2026-11-06, the Mac pass of self-update), and Whisper.net's
+    /// dylibs find each other only as <c>@rpath/…</c> names already loaded: their rpaths are Whisper.net's CI folders. So every <c>@rpath</c> dependency
+    /// of a listed dylib must be the install name of one listed before it. Read from the dylibs this build copied, by their own load commands, so a
+    /// Whisper.net update that adds a backend fails here rather than in <c>build.ps1 -Package</c>'s probe. Whisper first failed every Mac package.
+    /// </summary>
+    [MacFact]
+    public void MacNativeLibraries_LoadInOrder_EachAfterWhatItNeeds()
+    {
+        var loaded = new HashSet<string>(StringComparer.Ordinal);
+        int read = 0;
+        foreach (string library in SmokeChecks.MacNativeLibraries)
+        {
+            string path = Path.Combine(AppContext.BaseDirectory, library);
+            if (!File.Exists(path))
+            {
+                continue;   // the JIT's output keeps some under runtimes/osx-arm64/native, as the smoke's notes say; Whisper.net's are here
+            }
+
+            var (id, needs) = MachODylib.Read(path);
+            foreach (string need in needs.Where(name => name.StartsWith("@rpath/", StringComparison.Ordinal) && name != id))
+            {
+                Assert.True(loaded.Contains(need), $"{library} needs {need}, which no library listed before it is");
+            }
+
+            if (id is not null)
+            {
+                loaded.Add(id);
+            }
+
+            read++;
+        }
+
+        Assert.True(read >= 6, $"only {read} of the listed dylibs are beside the tests");
+    }
+
+    /// <summary>
+    /// A Mach-O 64-bit dylib's install name (LC_ID_DYLIB) and the dylibs it loads (LC_LOAD_DYLIB, weak, re-export): the test's own reader, what <c>otool -D</c>/<c>-L</c> print.
+    /// A universal file (libvosk's) is read at its arm64 slice.
+    /// </summary>
+    private static class MachODylib
+    {
+        private const uint Magic64 = 0xFEEDFACF;
+        private const uint FatMagic = 0xCAFEBABE;
+        private const uint CpuArm64 = 0x0100000C;
+        private const uint IdDylib = 0xD;
+        private const uint LoadDylib = 0xC;
+        private const uint LoadWeakDylib = 0x80000018;
+        private const uint ReexportDylib = 0x8000001F;
+
+        public static (string? Id, List<string> Needs) Read(string path)
+        {
+            byte[] bytes = File.ReadAllBytes(path);
+            int start = 0;
+            if (System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(bytes) == FatMagic)
+            {
+                uint slices = System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(4));
+                start = -1;
+                for (int slice = 0; slice < slices; slice++)
+                {
+                    var entry = bytes.AsSpan(8 + slice * 20);
+                    if (System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(entry) == CpuArm64)
+                    {
+                        start = (int)System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(entry[8..]);
+                    }
+                }
+
+                Assert.True(start > 0, path + " has no arm64 slice");
+            }
+
+            Assert.Equal(Magic64, BitConverter.ToUInt32(bytes, start));
+            uint commands = BitConverter.ToUInt32(bytes, start + 16);
+            int at = start + 32;
+            string? id = null;
+            var needs = new List<string>();
+            for (uint i = 0; i < commands; i++)
+            {
+                uint command = BitConverter.ToUInt32(bytes, at);
+                int size = (int)BitConverter.ToUInt32(bytes, at + 4);
+                if (command is IdDylib or LoadDylib or LoadWeakDylib or ReexportDylib)
+                {
+                    int nameAt = at + (int)BitConverter.ToUInt32(bytes, at + 8);
+                    int end = Array.IndexOf(bytes, (byte)0, nameAt, at + size - nameAt);
+                    string name = System.Text.Encoding.UTF8.GetString(bytes, nameAt, (end < 0 ? at + size : end) - nameAt);
+                    if (command == IdDylib)
+                    {
+                        id = name;
+                    }
+                    else
+                    {
+                        needs.Add(name);
+                    }
+                }
+
+                at += size;
+            }
+
+            return (id, needs);
+        }
     }
 
     [Fact]

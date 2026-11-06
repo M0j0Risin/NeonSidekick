@@ -76,14 +76,20 @@ public static partial class SmokeChecks
     /// universal <c>libvosk.dylib</c> by the build host, which is the target here; ONNX Runtime has no providers_shared on macOS;
     /// libgit2 and e_sqlite3 come flat from their packages' <c>runtimes/osx-arm64/native</c>. SqlClient's SNI is managed on
     /// Unix and WebView2 does not exist, so neither is named.
+    /// <para>Whisper.net's six in load order, each after what it needs (2026-11-06, the Mac pass of self-update): the update probe loads this list
+    /// one by one by path, and these name each other as <c>@rpath/libggml-*-whisper.0.dylib</c> with only Whisper.net's CI folders as rpaths, so one
+    /// loads only once its dependencies are loaded under those names. Whisper first, without BLAS and Metal, failed every Mac <c>-Package</c>.
+    /// <c>SmokeChecksTests.MacNativeLibraries_LoadInOrder_EachAfterWhatItNeeds</c> reads the dylibs' own load commands.</para>
     /// </summary>
     public static string[] MacNativeLibraries =>
     [
         "libonnxruntime.dylib",
-        Path.Combine("runtimes", "macos-arm64", "libwhisper.dylib"),
-        Path.Combine("runtimes", "macos-arm64", "libggml-whisper.dylib"),
         Path.Combine("runtimes", "macos-arm64", "libggml-base-whisper.dylib"),
         Path.Combine("runtimes", "macos-arm64", "libggml-cpu-whisper.dylib"),
+        Path.Combine("runtimes", "macos-arm64", "libggml-blas-whisper.dylib"),
+        Path.Combine("runtimes", "macos-arm64", "libggml-metal-whisper.dylib"),
+        Path.Combine("runtimes", "macos-arm64", "libggml-whisper.dylib"),
+        Path.Combine("runtimes", "macos-arm64", "libwhisper.dylib"),
         "libvosk.dylib",
         Git.GitAccess.MacNativeLibraryFileName,
         "libe_sqlite3.dylib",

@@ -667,13 +667,13 @@ static class Scenarios
             s.Says(await s.Run("all"), "exit: done");
             s.KeptIs(s.Base, "sim-marker.txt", "a stray at a path the new version adds");
             s.KeptIs(s.Base, s.SmallFile, "edited by hand");
-            s.Says(await s.Run("start", asVersion: s.Next), "Updated to " + s.Next, UpdateText.KeptFilesLine(s.KeptFolder(s.Base)));
+            s.Says(await s.Run("start", asVersion: s.Next), "Updated to " + s.Next, UpdateText.KeptFilesLine(s.KeptFolderAsPrinted(s.Base)));
             s.Says(await s.Run("start", asVersion: s.Next), "start: nothing to say");
 
             s.AlterInstalled("sim-marker.txt", "edited again");
             s.Says(await s.Run("rollback", asVersion: s.Next), "rollback: to " + s.Base, "exit: done");
             s.KeptIs(s.Next, "sim-marker.txt", "edited again");
-            s.Says(await s.Run("start"), UpdateText.BackOnLine(s.Base), UpdateText.KeptFilesLine(s.KeptFolder(s.Next)));
+            s.Says(await s.Run("start"), UpdateText.BackOnLine(s.Base), UpdateText.KeptFilesLine(s.KeptFolderAsPrinted(s.Next)));
             s.KeptIs(s.Base, s.SmallFile, "edited by hand");
         }),
         ("headless-exit-keeps-the-stage", async () =>
@@ -1008,14 +1008,18 @@ sealed class Sim
         }
     }
 
-    /// <summary>Ends what the by-hand run started and nothing else: only a copy whose exe is under this run's scratch folder, never the user's own.</summary>
+    /// <summary>
+    /// Ends what the by-hand run started and nothing else: only a copy whose exe is under this run's scratch folder, never the user's own. The scratch as a process's path reads
+    /// (2026-11-06, the Mac pass): a Mac reports <c>/private/var/folders/…</c> for an exe started from <c>/var/folders/…</c>, so the unresolved scratch matched nothing, and q deleted the folder from under a running copy.
+    /// </summary>
     public void StopServedCopies()
     {
+        string scratch = AsPrinted(Scratch);
         foreach (var process in Process.GetProcessesByName(Path.GetFileNameWithoutExtension(ExeName)))
         {
             try
             {
-                if (process.MainModule?.FileName is { } file && file.StartsWith(Scratch, StringComparison.OrdinalIgnoreCase))
+                if (process.MainModule?.FileName is { } file && file.StartsWith(scratch, StringComparison.OrdinalIgnoreCase))
                 {
                     process.Kill(entireProcessTree: true);
                     process.WaitForExit(5000);
@@ -1266,6 +1270,34 @@ sealed class Sim
     public void StageKept() => True(Directory.Exists(Folder.Staging), "a failed test run should keep the stage");
 
     public string KeptFolder(string version) => Path.Combine(Folder.Kept, version);
+
+    /// <summary>
+    /// <see cref="KeptFolder"/> as the app prints it (2026-11-06, the Mac pass): it knows its install from <c>Environment.ProcessPath</c>, which a Mac gives with every link
+    /// resolved, so the scratch under <c>/var/folders</c> prints as <c>/private/var/folders</c>. The scratch itself stays unresolved, so every scenario still launches the exe through a link.
+    /// </summary>
+    public string KeptFolderAsPrinted(string version) => Path.Combine(AsPrinted(Folder.Kept), version);
+
+    /// <summary>A path with each link along it resolved, as a Mac's process path reads; Windows' (<c>GetModuleFileName</c>) keeps a junction, so it's left as it is there.</summary>
+    private static string AsPrinted(string path)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return path;
+        }
+
+        string full = Path.GetFullPath(path);
+        string at = Path.GetPathRoot(full)!;
+        foreach (string part in full[at.Length..].Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries))
+        {
+            at = Path.Combine(at, part);
+            if (new DirectoryInfo(at).ResolveLinkTarget(returnFinalTarget: true) is { } target)
+            {
+                at = target.FullName;
+            }
+        }
+
+        return at;
+    }
 
     public void KeptIs(string version, string path, string text) => True(File.ReadAllText(Path.Combine(KeptFolder(version), path.Replace('/', Path.DirectorySeparatorChar))) == text, path + " in kept isn't what it should be");
 
