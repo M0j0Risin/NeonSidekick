@@ -28,7 +28,7 @@ Get-Content job.txt | NeonSidekick.exe --headless > run_output.txt        # one 
 
 - **A headless run never checks for updates or installs one.** A run started during an [update](COMMANDS.md#updating) waits for it, with nothing added to stdout.
   - Its start still settles the install folder: it undoes an interrupted install and tidies a leftover download. A finished install's line and a failure's report wait for the next interactive start.
-  - An old copy started during or just after an update exits with code 2, nothing run, and says on stderr to start it again.
+  - An old copy started during or just after an update runs nothing, and says on stderr to start it again ([exit codes](#when-a-command-is-refused)).
 - **A fresh profile does little headless.** The model gets only the clock (*Clock tools*), help (*Help tools*), memory, past-session and skill tools, and no server is looked for (*LLM server scan mode* `off`).
   - Set up a server (or `--url`) and the tool groups the job needs first, in the TUI (`/settings`, `/tools`) or `profile.json`.
 - **Tick the "… offered" lists first.** The SQL, Oracle, MySQL, PostgreSQL, SQLite, DuckDB, UNC and ComfyUI tools offer nothing until entries are ticked on `/tools`.
@@ -181,6 +181,7 @@ The run's shell policy comes from `--yolo`, then `NEONSIDEKICK_COMMAND_POLICY` (
 - `yolo`: every `run_command` command and `execute_code` script runs without asking. Use it only when you trust the job and the folder.
 - **`yolo` does not turn off the shell police.** With *Shell police* on (the default), these are still refused and count toward exit code 3:
   - a path outside the working directory;
+  - `.git`, `.neon`, `.claude`, a `.mcp.json`, the project file, the app's home or a release package's install folder, and deleting or moving a folder holding the install or the home ([TOOLS.md](TOOLS.md));
   - the *Shell police forbidden strings* (disk wipes, shutdown, `push --force`, `reset --hard`…; see [Shell guards](SETTINGS.md#shell-guards));
   - reaching a database some other way while its tools are on.
 

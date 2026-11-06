@@ -73,8 +73,10 @@ Under *Shell command policy*. Commands run in the working directory, guarded by 
 | `execute_code` | `language, code, timeout?` | Runs a one-off `python` (`python3` on a Mac), `node` or `powershell` script. It asks like `run_command`; allowing it for the session covers that language. |
 | `process` | `action, session_id?, data?, timeout?, until?, offset?, limit?` | Up to 16 background commands (and the last 64 finished), by id prefix: `list`, `poll`, `log` (last 5,000 lines), `wait` (`until` a line holds a text), `kill`, `write` / `submit`, `close`. |
 
-* **The shell police also refuses** any line, script, `execute_code` script or `process` write naming `.git`, `.neon`, `.claude`, a `.mcp.json`, the project file, the app's home or a release package's install folder (a bare `git` command excepted), a script run before it exists, or one holding a forbidden string. It reads the text, not what runs.
-* **Inside an install folder** it also refuses `.update` and `update-manifest.json` by name, and a relative word naming something that exists there. A home kept inside the folder keeps the home's rules.
+* **The shell police also refuses** any line, script, `execute_code` script or `process` write naming `.git`, `.neon`, `.claude`, a `.mcp.json`, the project file, the app's home or a release package's install folder, a script run before it exists, or one holding a forbidden string. It reads the text, not what runs.
+* **A `git` command** is held only to the install folder, since the rest is git's own business.
+* **Deleting or moving a folder** that holds the install or the home is refused too, wildcards included. `rm -rf ~/*` is refused; `rm ~/*.tmp`, `mv report.txt ~` and `ls ~` pass.
+* **A word that resolves into an install folder**, from where the command runs, is refused for `.update`, `update-manifest.json`, a wildcard, a new `.dll`, `.dylib` or `.exe`, or a name that exists there. A home kept inside the folder keeps the home's rules.
 * **A `cmd` line with an unclosed quote** always asks, whatever the allow list holds.
 
 ### Clock

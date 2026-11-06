@@ -205,6 +205,7 @@ public sealed class WebCommandsTests
     [InlineData("/loop 3 /model", WebCommandKind.Run)]   // the PC's "can't be looped"
     [InlineData("/loop 3 /help", WebCommandKind.Run)]
     [InlineData("/update notes", WebCommandKind.Run)]   // 2026-11-04, self-update: it only reads
+    [InlineData("/update notes x", WebCommandKind.Run)]   // the usage, not "PC only" (review P14-8)
     [InlineData("/update", WebCommandKind.Refused)]     // installing happens at the PC
     [InlineData("/update rollback", WebCommandKind.Refused)]
     [InlineData("/update cancel", WebCommandKind.Refused)]

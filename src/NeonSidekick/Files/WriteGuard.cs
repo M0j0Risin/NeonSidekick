@@ -339,7 +339,7 @@ public static class WriteGuard
     /// Whether <paramref name="full"/> is in the install folder and not in a home kept inside it (<c>NEONSIDEKICK_HOME</c> for a portable setup, or the fallback for a process with no profile folder), which <see cref="InHome"/> has judged by its own
     /// rules. By its spelling and by its identity (<c>subst</c>, <c>\\localhost\D$</c>), and with no pass for a working folder inside it, so <c>--cwd</c> at the folder can't undo the guard.
     /// </summary>
-    private static bool InInstall(string? install, string? home, string full)
+    internal static bool InInstall(string? install, string? home, string full)
     {
         if (string.IsNullOrEmpty(install))
         {
@@ -392,8 +392,16 @@ public static class WriteGuard
             return false;
         }
 
+        // IsInside takes the path itself too, under the folder's own case rule (2026-11-04, review P10-18): a case-blind equality here refused a delete of /Volumes/x/neon as holding the home /Volumes/x/Neon on a case-sensitive volume.
         string inside = Trim(target);
-        return WorkingDirectory.IsInside(folder, inside) || string.Equals(folder, inside, StringComparison.OrdinalIgnoreCase) || (id is { } known && FileIdentity.AncestorWith(inside, known) is not null);
+        return WorkingDirectory.IsInside(folder, inside) || (id is { } known && FileIdentity.AncestorWith(inside, known) is not null);
+    }
+
+    /// <summary>Whether <paramref name="folder"/> is <paramref name="target"/> or a folder above it, by spelling or identity: the shell police's question (2026-11-04, review P19-5), its home and install its own.</summary>
+    internal static bool HoldsFolder(string folder, string? target)
+    {
+        string trimmed = Trim(folder);
+        return Holds(trimmed, FileIdentity.Of(trimmed), target);
     }
 
     private static (string Path, FileId? Id) s_installIdentity;

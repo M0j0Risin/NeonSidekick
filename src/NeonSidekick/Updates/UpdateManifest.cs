@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using NeonSidekick.Files;
 
 namespace NeonSidekick.Updates;
 
@@ -50,6 +51,16 @@ public readonly record struct UpdateVersion(int Major, int Minor, int Patch) : I
     private static bool IsNumber(string part) => part.Length is > 0 and <= 9 && part.All(char.IsAsciiDigit);
 }
 
+/// <summary>
+/// What reading a manifest's file came to (2026-11-04, review P8-8): "can't open it now" isn't "it's bad", or a passing scanner counted as a damaged package, for every caller but the recheck, which had worked round it by hand.
+/// </summary>
+/// <param name="Manifest">The manifest, or null.</param>
+/// <param name="Problem">Why not, in words for a line; null with a manifest.</param>
+/// <param name="Unreadable">It's there and can't be read right now: nobody may read that as the package's fault.</param>
+/// <param name="Missing">It isn't there.</param>
+/// <param name="Bytes">The bytes it was read as, so a chain hashes those and not a second read (review P13-8). Null when it couldn't be read.</param>
+public sealed record UpdateManifestLoad(UpdateManifest? Manifest, string? Problem, bool Unreadable = false, bool Missing = false, byte[]? Bytes = null);
+
 /// <summary>One file a package lists.</summary>
 public sealed class UpdateManifestFile
 {
@@ -76,6 +87,12 @@ public sealed class UpdateManifest
 
     /// <summary>The file's name, at the top of a package.</summary>
     public const string FileName = "update-manifest.json";
+
+    private const int LoadTries = 5;
+
+    private const string ShortNameStem = "UPDATE~";
+
+    private static readonly TimeSpan LoadPause = TimeSpan.FromMilliseconds(200);
 
     [JsonPropertyName("format")]
     public int Format { get; set; }
@@ -126,21 +143,54 @@ public sealed class UpdateManifest
         return problem is null ? manifest : null;
     }
 
-    /// <summary>Reads a manifest from a file; a file that can't be read is the same problem as one that can't be understood.</summary>
+    /// <summary>Reads a manifest from a file, for a caller to whom every failure is the same; one that decides anything from it uses <see cref="Load"/>.</summary>
     public static UpdateManifest? ReadFile(string path, out string? problem)
     {
-        byte[] bytes;
+        var load = Load(path);
+        problem = load.Problem;
+        return load.Manifest;
+    }
+
+    /// <summary>Reads a manifest from a file, saying which way it failed. Over <see cref="UpdateFolder.ReadCap"/> it reads as bad, as bad JSON does.</summary>
+    public static UpdateManifestLoad Load(string path)
+    {
+        byte[]? bytes;
         try
         {
-            bytes = File.ReadAllBytes(path);
+            bytes = UpdateFolder.ReadCapped(path);
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return new UpdateManifestLoad(null, UpdateText.ManifestUnreadable, Missing: true);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            problem = UpdateText.ManifestUnreadable;
-            return null;
+            return new UpdateManifestLoad(null, UpdateText.ManifestHeld, Unreadable: true);
         }
 
-        return Read(bytes, out problem);
+        if (bytes is null)
+        {
+            return new UpdateManifestLoad(null, UpdateText.ManifestUnreadable);
+        }
+
+        var manifest = Read(bytes, out string? problem);
+        return new UpdateManifestLoad(manifest, problem, Bytes: bytes);
+    }
+
+    /// <summary>
+    /// <see cref="Load"/>, tried again for a moment while it can't be read (2026-11-04, reviews P8-2, P8-7): for the two callers with no later try, where a scanner on a fresh manifest would decide something for good.
+    /// </summary>
+    public static UpdateManifestLoad LoadRetrying(string path, Action<TimeSpan> pause)
+    {
+        ArgumentNullException.ThrowIfNull(pause);
+        var load = Load(path);
+        for (int tries = 1; load.Unreadable && tries < LoadTries; tries++)
+        {
+            pause(LoadPause);
+            load = Load(path);
+        }
+
+        return load;
     }
 
     /// <summary>The file's listed hash by path, under <paramref name="comparer"/>.</summary>
@@ -169,23 +219,13 @@ public sealed class UpdateManifest
 
         foreach (string part in path.Split('/'))
         {
-            if (part.Length == 0 || part is "." or ".." || part[^1] is '.' or ' ' || (OperatingSystem.IsWindows() && IsDeviceName(part)))
+            if (part.Length == 0 || part is "." or ".." || part[^1] is '.' or ' ' || (OperatingSystem.IsWindows() && WorkingDirectory.HasDeviceName(part)))
             {
                 return false;
             }
         }
 
         return !System.IO.Path.IsPathRooted(path);
-    }
-
-    // CON, PRN, AUX, NUL, COM1-9 and LPT1-9, in any case and with any extension: Windows reads aux.txt as AUX.
-    private static bool IsDeviceName(string part)
-    {
-        int dot = part.IndexOf('.', StringComparison.Ordinal);
-        string name = (dot < 0 ? part : part[..dot]).TrimEnd(' ').ToUpperInvariant();
-        return name is "CON" or "PRN" or "AUX" or "NUL"
-            || (name.Length == 4 && name[3] is >= '1' and <= '9' && name.StartsWith("COM", StringComparison.Ordinal))
-            || (name.Length == 4 && name[3] is >= '1' and <= '9' && name.StartsWith("LPT", StringComparison.Ordinal));
     }
 
     private string? Problem()
@@ -218,8 +258,12 @@ public sealed class UpdateManifest
     {
         // The release folder too: previous/ holds a package's files beside its own release/ folder, so a top-level one would land in it.
         string top = path.Split('/')[0];
-        return string.Equals(top, UpdateFolder.Name, StringComparison.OrdinalIgnoreCase) || string.Equals(top, UpdateFolder.ReleaseName, StringComparison.OrdinalIgnoreCase) || string.Equals(path, FileName, StringComparison.OrdinalIgnoreCase);
+        return string.Equals(top, UpdateFolder.Name, StringComparison.OrdinalIgnoreCase) || string.Equals(top, UpdateFolder.ReleaseName, StringComparison.OrdinalIgnoreCase) || IsUpdatesShortName(top) || string.Equals(path, FileName, StringComparison.OrdinalIgnoreCase);
     }
+
+    // UPDATE~1, .update's own short name on a volume with 8.3 names (2026-11-04, review P13-10), and only that: a general ~digit rule would fail a swap over a user's stray named like one.
+    private static bool IsUpdatesShortName(string top) =>
+        top.StartsWith(ShortNameStem, StringComparison.OrdinalIgnoreCase) && top.Length > ShortNameStem.Length && top.AsSpan(ShortNameStem.Length).IndexOfAnyExceptInRange('0', '9') < 0;
 
     private static bool IsHash(string? text) => text is { Length: 64 } && text.All(char.IsAsciiHexDigit);
 }
@@ -234,6 +278,12 @@ public static class UpdateHash
     {
         cancellationToken.ThrowIfCancellationRequested();
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, 1 << 16, FileOptions.SequentialScan);
+        return OfStream(stream, cancellationToken);
+    }
+
+    /// <summary>What <see cref="OfFile"/> reads with, a seam so a test can cancel during a read (2026-11-04, review P10-14).</summary>
+    internal static string OfStream(Stream stream, CancellationToken cancellationToken)
+    {
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         byte[] buffer = ArrayPool<byte>.Shared.Rent(1 << 20);
         try
@@ -360,7 +410,12 @@ public sealed class UpdateInstallHashes
         ArgumentNullException.ThrowIfNull(folder);
         try
         {
-            var hashes = JsonSerializer.Deserialize(File.ReadAllBytes(folder.StagedInstallHashes), UpdateJsonContext.Default.UpdateInstallHashes);
+            if (UpdateFolder.ReadCapped(folder.StagedInstallHashes) is not { } bytes)
+            {
+                return null;
+            }
+
+            var hashes = JsonSerializer.Deserialize(bytes, UpdateJsonContext.Default.UpdateInstallHashes);
             return hashes is { ManifestHash: not null, Files: not null } && !hashes.Files.Values.Any(file => file is null or { Sha256: null }) ? hashes : null;
         }
         catch (Exception ex) when (ex is JsonException or FileNotFoundException or DirectoryNotFoundException)
@@ -371,7 +426,7 @@ public sealed class UpdateInstallHashes
 
     /// <summary>
     /// What each listed file hashes to now, by path: the kept answer when its length and time are as staging found them, else hashed again under <paramref name="cancellationToken"/>, so a file edited or quarantined since gets repaired, and one only touched stays verified.
-    /// A file that's gone or can't be read has no entry.
+    /// A file that's gone has no entry. One that can't be read throws, for the recheck's Keep (2026-11-04, review P11-4): read as changed, a real old-version file a read-denying holder had moved to <c>kept/</c>, and the way back was lost.
     /// </summary>
     public Dictionary<string, string> Current(string install, UpdateManifest installed, CancellationToken cancellationToken)
     {
@@ -395,9 +450,9 @@ public sealed class UpdateInstallHashes
             {
                 current[file.Path] = UpdateHash.OfFile(info.FullName, cancellationToken);
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
             {
-                // Unreadable counts as changed, as a missing file does.
+                // Gone since the look above: changed, as a missing file is.
             }
         }
 

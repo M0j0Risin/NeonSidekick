@@ -25,7 +25,7 @@ internal sealed partial class ChatScreen
     private readonly IUpdater? _updater;
 
     // The check and the stage run in the background, so their lines wait here for the idle line: they never break into a streaming reply. A reply to /update typed mid-reply is a Quick command's notice instead.
-    private readonly ConcurrentQueue<(string Text, bool Error)> _updateLines = new();
+    private readonly ConcurrentQueue<UpdateLine> _updateLines = new();
     private readonly CancellationTokenSource _updateStop = new();
     private UpdateScreenState _updateState = UpdateScreenState.Nothing;
     private UpdateCheckResult? _updateAnswer;
@@ -35,6 +35,13 @@ internal sealed partial class ChatScreen
     private readonly IAnsiConsole _updateConsole;
     private int _updateAsked;
     private int _updateAcknowledged;
+    private bool _updateWaitedLong;
+
+    // A real "nothing newer" since the last offer (2026-11-04, review P21-1): a stage of that version, canceled, isn't offered again.
+    private bool _updateSaidLatest;
+
+    // /update's own check while it runs (2026-11-04, review P18-3): its answer, true when it got one, decides whether the start's late one stands.
+    private TaskCompletionSource<bool>? _updateOwnCheck;
 
     // The stage's last word, in a slot of its own (2026-11-04, review P4-12): one queued just as /update cancel ran printed "ready" under "Update canceled.". A cancel empties it.
     private UpdateLine? _updateFinalLine;
@@ -62,7 +69,7 @@ internal sealed partial class ChatScreen
         {
             foreach (string line in said.Split('\n'))
             {
-                _updateLines.Enqueue((line, false));
+                _updateLines.Enqueue(new UpdateLine(line, false));
             }
         }
 
@@ -80,7 +87,12 @@ internal sealed partial class ChatScreen
         {
             var found = await updater.CheckAsync(cancellationToken).ConfigureAwait(false);
 
-            // One that answers after /update has begun is dropped: /update asked for itself, and a late "is out" can't land under a running download's 42%.
+            // /update got an answer of its own: it asked for itself, and a late "is out" can't land under its pane or a running download's 42%. One still running is waited for, whichever comes first, and only an answer drops this one (2026-11-04, review P18-3): a stop or a failed request left no offer at all, for the session.
+            if (Volatile.Read(ref _updateOwnCheck) is { } own)
+            {
+                await own.Task.ConfigureAwait(false);
+            }
+
             if (Volatile.Read(ref _updateAsked) != 0)
             {
                 return;
@@ -89,10 +101,20 @@ internal sealed partial class ChatScreen
             if (found.Kind != UpdateCheckKind.Newer || found.Release is not { } release)
             {
                 DiagnosticLog.Info(UpdateJournal.Category, found.Reason ?? found.Kind.ToString());
+                if (found.Kind == UpdateCheckKind.Latest)
+                {
+                    DropLeftoversForAPulledRelease(updater);
+                }
+
                 return;
             }
 
             var state = Volatile.Read(ref _updateState);
+            if (state is UpdateScreenState.Downloading or UpdateScreenState.Checking)
+            {
+                return;
+            }
+
             if (state is UpdateScreenState.Ready ready && UpdateVersion.TryParse(ready.Version, out var staged) && release.Version <= staged)
             {
                 return;   // what's staged is what's out: no line, and the marker already says "at quit"
@@ -108,7 +130,7 @@ internal sealed partial class ChatScreen
                 return;
             }
 
-            _updateLines.Enqueue((state is UpdateScreenState.GoingBack ? UpdateText.IsOutWhileGoingBack(version) : UpdateText.IsOutLine(version), false));
+            _updateLines.Enqueue(new UpdateLine(state is UpdateScreenState.GoingBack ? UpdateText.IsOutWhileGoingBack(version) : UpdateText.IsOutLine(version), false));
             WebNudge();
         }
         catch (OperationCanceledException)
@@ -123,7 +145,7 @@ internal sealed partial class ChatScreen
     /// <summary>The queued lines, on the screen's task: the idle line's top alone, never under a reply.</summary>
     private void PrintUpdateLines()
     {
-        while (_updateLines.TryDequeue(out var line))
+        void Show(UpdateLine line)
         {
             if (line.Error)
             {
@@ -135,16 +157,14 @@ internal sealed partial class ChatScreen
             }
         }
 
+        while (_updateLines.TryDequeue(out var line))
+        {
+            Show(line);
+        }
+
         if (Interlocked.Exchange(ref _updateFinalLine, null) is { } final)
         {
-            if (final.Error)
-            {
-                _transcript.Error(final.Text);
-            }
-            else
-            {
-                _transcript.Notice(final.Text);
-            }
+            Show(final);
         }
 
         if (_updater is not { } updater)
@@ -161,11 +181,15 @@ internal sealed partial class ChatScreen
         RefreshUpdateFromDisk(updater);   // the marker follows another copy's stage or cancel at each idle line (review P5-7), not only at the next /update
     }
 
-    /// <summary>What a quit says of work still under way, read before the screen ends it, or null. Written by the screen after the alternate buffer has gone, since anything earlier goes with it.</summary>
-    private string? UpdateQuitLine()
+    /// <summary>What a quit says of work that was under way when it began, once the work has ended, or null: nothing when <c>ready</c> is on disk by then, since it installs at this exit (2026-11-04, review P8-16). Written by the screen after the alternate buffer has gone, since anything earlier goes with it.</summary>
+    private string? UpdateQuitLine(UpdateScreenState state)
     {
-        var state = Volatile.Read(ref _updateState);
-        return state is UpdateScreenState.Downloading or UpdateScreenState.Checking ? UpdateText.QuitMidStage(UpdateText.VersionOf(state)) : null;
+        if (state is not (UpdateScreenState.Downloading or UpdateScreenState.Checking))
+        {
+            return null;
+        }
+
+        return _updater?.ReadDisk() is { ReadyVersion: null, ReadyUnknown: false } or null ? UpdateText.QuitMidStage(UpdateText.VersionOf(state)) : null;
     }
 
     /// <summary>The screen's end: a running probe is killed and waited for and the download canceled with its partial file kept, so nothing installs and the next <c>/update</c> resumes it.</summary>
@@ -176,7 +200,7 @@ internal sealed partial class ChatScreen
         {
             try
             {
-                await work.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+                await work.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);   // the wall clock's (review P14-11): a stage ignoring its token can't hang a test's quit on a clock nobody advances
             }
             catch (TimeoutException ex)
             {
@@ -197,16 +221,47 @@ internal sealed partial class ChatScreen
             return;
         }
 
+        // One it can't read keeps what the screen knows, or a placeholder (2026-11-04, reviews P9-6, P11-9), so a passing hold doesn't move the marker and /update cancel still finds it.
         var disk = updater.ReadDisk();
         UpdateScreenState next = disk.RollbackTarget is { } target ? new UpdateScreenState.GoingBack(target)
+            : disk.RollbackUnknown ? state as UpdateScreenState.GoingBack ?? new UpdateScreenState.GoingBack(UpdateText.EarlierNoVersion)
             : disk.ReadyVersion is { } ready ? new UpdateScreenState.Ready(ready)
+            : disk.ReadyUnknown ? state as UpdateScreenState.Ready ?? new UpdateScreenState.Ready(UpdateText.StageNoVersion)
             : state switch
             {
-                UpdateScreenState.Ready gone => new UpdateScreenState.Offered(gone.Version),
-                UpdateScreenState.GoingBack => UpdateScreenState.Nothing,
+                UpdateScreenState.Ready { Version: not UpdateText.StageNoVersion } gone => new UpdateScreenState.Offered(gone.Version),
+                UpdateScreenState.Ready or UpdateScreenState.GoingBack => UpdateOfferStanding(),
                 _ => state,
             };
         Interlocked.CompareExchange(ref _updateState, next, state);
+    }
+
+    // What the marker goes back to when a rollback or a nameless stage ends: the offer the session still holds (2026-11-04, review P13-4: taking back going back lost the 📦 for an update still out).
+    private UpdateScreenState UpdateOfferStanding() =>
+        _updateAnswer is { Release: { } release } ? new UpdateScreenState.Offered(release.Version.ToString()) : UpdateScreenState.Nothing;
+
+    // A real "nothing newer" (2026-11-04, review P18-5): what's left of a pulled release would otherwise stay until a next one came. Off the screen's task, as a delete can take a while, and only with nothing under way or ready.
+    private void DropLeftoversForAPulledRelease(IUpdater updater)
+    {
+        if (Volatile.Read(ref _updateState) is not (UpdateScreenState.None or UpdateScreenState.Offered))
+        {
+            return;
+        }
+
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                if (updater.DropLeftovers() is { } kept)
+                {
+                    DiagnosticLog.Info(UpdateJournal.Category, kept);
+                }
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                DiagnosticLog.Info(UpdateJournal.Category, ex.Message);
+            }
+        }, CancellationToken.None);
     }
 
     /// <summary><c>/update</c> and its forms. Never a tool, and never reachable by the model; on the page only <c>notes</c> runs (<see cref="WebCommands"/>).</summary>
@@ -219,12 +274,7 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        // Only the bare word (2026-11-04, review P1-13): /update notes at once dropped the start's late answer, and the marker never came.
-        if (word.Length == 0)
-        {
-            Volatile.Write(ref _updateAsked, 1);
-        }
-
+        _updateWaitedLong = false;
         if (_updater is not { } updater || !updater.IsPackage)
         {
             if (word == UpdateText.NotesWord && _updater is { } other)
@@ -248,7 +298,7 @@ internal sealed partial class ChatScreen
                     await UpdateRollbackAsync(updater, sink, onWatcher, cancellationToken).ConfigureAwait(false);
                     break;
                 case UpdateText.CancelWord:
-                    await UpdateCancelAsync(updater, sink).ConfigureAwait(false);
+                    await UpdateCancelAsync(updater, sink, onWatcher).ConfigureAwait(false);
                     break;
                 default:
                     await UpdateOpenAsync(updater, sink, onWatcher, cancellationToken).ConfigureAwait(false);
@@ -270,9 +320,21 @@ internal sealed partial class ChatScreen
         }
 
         sink.Notice(UpdateText.NotesHeading(updater.Running));
-        foreach (string line in notes.Split('\n'))
+        PrintUpdateNotes(notes, UpdateText.ReleasesUrl, sink);
+    }
+
+    // One notice a line, so capped (2026-11-04, review P14-7): each is a feed entry on the page, and a long changelog pushed the session off it. The pane scrolls, so it keeps them whole.
+    private static void PrintUpdateNotes(string notes, string link, INoticeSink sink)
+    {
+        string[] lines = notes.Split('\n');
+        foreach (string line in lines.Take(UpdateText.NotesPrintedLines))
         {
             sink.Notice(line);
+        }
+
+        if (lines.Length > UpdateText.NotesPrintedLines)
+        {
+            sink.Notice(UpdateText.NotesCut(lines.Length - UpdateText.NotesPrintedLines, link));
         }
     }
 
@@ -283,7 +345,7 @@ internal sealed partial class ChatScreen
         switch (state)
         {
             case UpdateScreenState.Downloading or UpdateScreenState.Checking or UpdateScreenState.GoingBack:
-                await OfferUpdateCancelAsync(updater, state, sink, cancellationToken).ConfigureAwait(false);
+                await OfferUpdateCancelAsync(updater, state, sink, onWatcher, cancellationToken).ConfigureAwait(false);
                 return;
             case UpdateScreenState.Ready ready:
                 // Asks GitHub first. A newer release gets the usual pane and Install replaces the stage; otherwise, or with no network, it offers to cancel the stage.
@@ -294,7 +356,7 @@ internal sealed partial class ChatScreen
                 }
                 else if (asked is not null)
                 {
-                    await OfferUpdateCancelAsync(updater, state, sink, cancellationToken).ConfigureAwait(false);
+                    await OfferUpdateCancelAsync(updater, state, sink, onWatcher, cancellationToken).ConfigureAwait(false);
                 }
 
                 return;
@@ -327,19 +389,45 @@ internal sealed partial class ChatScreen
 
     private async Task<UpdateCheckResult?> AskReleaseAsync(IUpdater updater, bool onWatcher, CancellationToken cancellationToken)
     {
-        var answer = await UpdateWaitAsync(UpdateText.CheckingSpinner, updater.CheckAsync, onWatcher, cancellationToken).ConfigureAwait(false);
+        var own = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        Volatile.Write(ref _updateOwnCheck, own);
+        UpdateCheckResult? answer = null;
+        try
+        {
+            answer = await UpdateWaitAsync(UpdateText.CheckingSpinner, updater.CheckAsync, onWatcher, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            // Only an answer (2026-11-04, reviews P1-13, P18-3): a stop or a failed request leaves the start's late one standing.
+            bool answered = answer is not null and not { Kind: UpdateCheckKind.Failed };
+            if (answered)
+            {
+                Volatile.Write(ref _updateAsked, 1);
+            }
+
+            Volatile.Write(ref _updateOwnCheck, null);
+            own.TrySetResult(answered);
+        }
+
         if (answer is { Kind: UpdateCheckKind.Newer })
         {
             _updateAnswer = answer;
             _updateAnsweredAt = _time.GetUtcNow();
+            Volatile.Write(ref _updateSaidLatest, false);
         }
-        else if (answer is { Kind: UpdateCheckKind.Latest })
+        else if (answer is { Kind: UpdateCheckKind.Latest or UpdateCheckKind.Unsigned or UpdateCheckKind.NoPackage })
         {
-            // A release pulled since (2026-11-04, review P1-14): the marker and the kept answer went on offering it for the hour.
+            // A release pulled since (2026-11-04, review P1-14), or one that can't be installed (review P13-5): the marker and the kept answer went on offering it for the hour.
             _updateAnswer = null;
             if (Volatile.Read(ref _updateState) is UpdateScreenState.Offered offered)
             {
                 Interlocked.CompareExchange(ref _updateState, UpdateScreenState.Nothing, offered);
+            }
+
+            Volatile.Write(ref _updateSaidLatest, answer.Kind == UpdateCheckKind.Latest);
+            if (answer.Kind == UpdateCheckKind.Latest)
+            {
+                DropLeftoversForAPulledRelease(updater);
             }
         }
 
@@ -348,7 +436,7 @@ internal sealed partial class ChatScreen
 
     // A wait for an answer, up to the check's own 10 s limit, with Esc stopping it. Null when stopped.
     //
-    // At the idle line on the spinner row, as /net does. Keys typed under a wait that took a while are dropped before a pane with buttons opens.
+    // At the idle line on the spinner row, as /net does. Keys typed under a wait that took a while are dropped just before a pane with buttons opens, and only then (2026-11-04, review P8-14): a "latest" answer cost a message being typed.
     // Under a reply (2026-11-04, reviews P2-11, P3-8, P7-1) under a short-lived pane with no buttons: the watch's poll is paused for a line's hook, so a wait with no reader left every key, Esc too, stuck for its length. The answer closes the pane by its token. With no pane to read the keys, it just waits.
     private async Task<T?> UpdateWaitAsync<T>(string label, Func<CancellationToken, Task<T>> work, bool onWatcher, CancellationToken cancellationToken)
         where T : class
@@ -362,16 +450,13 @@ internal sealed partial class ChatScreen
                 answer = await work(token).ConfigureAwait(false);
                 return true;
             }), KeySource.IsTurnCancel, cancellationToken).ConfigureAwait(false);
-            if (stopped)
+            // A finished wait's answer stands even if Esc landed as it finished (2026-11-04, review P8-15): a rollback already written was never reported.
+            if (stopped && answer is null)
             {
                 return null;
             }
 
-            if (_time.GetElapsedTime(began) > UpdateTypedKeysGrace)
-            {
-                _keys.DropTypedKeys();
-            }
-
+            _updateWaitedLong = _time.GetElapsedTime(began) > UpdateTypedKeysGrace;
             return answer;
         }
 
@@ -415,6 +500,15 @@ internal sealed partial class ChatScreen
         }
     }
 
+    private void DropKeysFromALongWait()
+    {
+        if (_updateWaitedLong)
+        {
+            _updateWaitedLong = false;
+            _keys.DropTypedKeys();
+        }
+    }
+
     private async Task OfferUpdateInstallAsync(IUpdater updater, UpdateRelease release, INoticeSink sink, CancellationToken cancellationToken)
     {
         string version = release.Version.ToString();
@@ -432,11 +526,7 @@ internal sealed partial class ChatScreen
         {
             // With no pane to ask on, ShowAsync returns at once with nothing pressed, which would read as Later. A stage ready from an earlier run still installs at exit.
             sink.Notice(UpdateText.PaneHeading(version, size));
-            foreach (string line in notes.Split('\n'))
-            {
-                sink.Notice(line);
-            }
-
+            PrintUpdateNotes(notes, UntrustedText.Scrub(release.PageUrl), sink);
             sink.Notice(UpdateText.CantAskHere);
             return;
         }
@@ -447,6 +537,7 @@ internal sealed partial class ChatScreen
         {
             LineDoubleClicked = line => OpenUpdatePage(page, line, sink),
         };
+        DropKeysFromALongWait();
         await _info.ShowAsync(UpdateText.PaneLabel, [tab], 0, cancellationToken, [UpdateText.InstallAction, UpdateText.LaterAction], noFind: true).ConfigureAwait(false);
         if (_info.Pressed == UpdateText.InstallAction)
         {
@@ -505,6 +596,7 @@ internal sealed partial class ChatScreen
             }
             else
             {
+                _updateAnswer = null;   // the next /update asks again (2026-11-04, review P18-1): a reason like a release gone stood for the hour
                 Volatile.Write(ref _updateState, new UpdateScreenState.Offered(version));
                 Volatile.Write(ref _updateFinalLine, new UpdateLine(UpdateText.StageFailedLine(result.Reason ?? UpdateText.ProbeFailed), true));
             }
@@ -521,6 +613,7 @@ internal sealed partial class ChatScreen
         {
             // One nobody asked for, a request's own timeout included (2026-11-04, review P7-7), is a failure: read as a cancel, it left the marker at 42% for good.
             progress.Close();
+            _updateAnswer = null;
             Volatile.Write(ref _updateState, new UpdateScreenState.Offered(version));
             Volatile.Write(ref _updateFinalLine, new UpdateLine(UpdateText.StageFailedLine(ex.Message), true));
             WebNudge();
@@ -528,7 +621,7 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>The offer to cancel, with no request: Cancel update (<c>c</c>) and Keep (<c>k</c>), its find off, and Esc means Keep. Where there's no pane to ask on, it names <c>/update cancel</c>.</summary>
-    private async Task OfferUpdateCancelAsync(IUpdater updater, UpdateScreenState state, INoticeSink sink, CancellationToken cancellationToken)
+    private async Task OfferUpdateCancelAsync(IUpdater updater, UpdateScreenState state, INoticeSink sink, bool onWatcher, CancellationToken cancellationToken)
     {
         string what = UpdateText.UnderWay(state);
         if (!_pane.Enabled)
@@ -538,14 +631,15 @@ internal sealed partial class ChatScreen
         }
 
         var tab = new InfoTab(UpdateText.PaneTab, () => new Spectre.Console.Text(what));
+        DropKeysFromALongWait();
         await _info.ShowAsync(UpdateText.PaneLabel, [tab], 0, cancellationToken, [UpdateText.CancelAction, UpdateText.KeepAction], noFind: true).ConfigureAwait(false);
         if (_info.Pressed == UpdateText.CancelAction)
         {
-            await UpdateCancelAsync(updater, sink).ConfigureAwait(false);
+            await UpdateCancelAsync(updater, sink, onWatcher).ConfigureAwait(false);
         }
     }
 
-    private async Task UpdateCancelAsync(IUpdater updater, INoticeSink sink)
+    private async Task UpdateCancelAsync(IUpdater updater, INoticeSink sink, bool onWatcher)
     {
         RefreshUpdateFromDisk(updater);
         var state = Volatile.Read(ref _updateState);
@@ -553,12 +647,16 @@ internal sealed partial class ChatScreen
         {
             case UpdateScreenState.Downloading or UpdateScreenState.Checking:
                 // Canceling while it's checking kills the probe and waits for it, as a timeout does, before dropping the stage. Unlike quitting, this deletes the partial file too.
-                _updateWorkStop?.Cancel();
+                if (_updateWorkStop is { } workStop)
+                {
+                    await workStop.CancelAsync().ConfigureAwait(false);   // a stage's callbacks run under it, and a plain Cancel ran them on the screen's task (review P9-14)
+                }
+
                 if (_updateWork is { } work)
                 {
                     try
                     {
-                        await work.WaitAsync(UpdateCancelWait).ConfigureAwait(false);
+                        await work.WaitAsync(UpdateCancelWait, _time).ConfigureAwait(false);
                     }
                     catch (TimeoutException)
                     {
@@ -569,11 +667,20 @@ internal sealed partial class ChatScreen
 
                 Interlocked.Exchange(ref _updateFinalLine, null);
                 Volatile.Write(ref _updateState, new UpdateScreenState.Offered(UpdateText.VersionOf(state)));   // even if the drop is refused (review P1-12): the marker can't stay at 42% over work that stopped
-                ReportUpdateDrop(updater, sink, alsoParts: true, UpdateText.VersionOf(state));
+
+                // A cancel before the newer download touched anything leaves the older stage ready, and it still installs (2026-11-04, review P18-2): "Update canceled." and an Offered marker said otherwise, and the drop would have cost it.
+                if (updater.ReadDisk() is { ReadyVersion: { } older } && older != UpdateText.VersionOf(state))
+                {
+                    Volatile.Write(ref _updateState, new UpdateScreenState.Ready(older));
+                    sink.Notice(UpdateText.CanceledOlderStays(older));
+                    break;
+                }
+
+                await ReportUpdateDropAsync(updater, sink, alsoParts: true, UpdateText.VersionOf(state), onWatcher).ConfigureAwait(false);
                 break;
             case UpdateScreenState.Ready ready:
                 Interlocked.Exchange(ref _updateFinalLine, null);
-                ReportUpdateDrop(updater, sink, alsoParts: false, ready.Version);
+                await ReportUpdateDropAsync(updater, sink, alsoParts: false, ready.Version, onWatcher).ConfigureAwait(false);
                 break;
             case UpdateScreenState.GoingBack:
                 if (updater.CancelRollback() is { } kept)
@@ -582,16 +689,16 @@ internal sealed partial class ChatScreen
                     break;
                 }
 
-                // A stage the rollback left on disk comes back into view (review P3-13).
-                Volatile.Write(ref _updateState, UpdateScreenState.Nothing);
+                // A stage the rollback left on disk comes back into view (review P3-13), or the offer it hid (review P13-4).
+                Volatile.Write(ref _updateState, UpdateOfferStanding());
                 RefreshUpdateFromDisk(updater);
                 sink.Notice(UpdateText.CanceledLine);
                 break;
             default:
                 // A kept partial, or a stage whose test run failed (reviews P4-11, P5-9): nothing else could delete them.
-                if (updater.ReadDisk().Leftovers)
+                if (updater.ReadDisk(withLeftovers: true).Leftovers)
                 {
-                    ReportUpdateDrop(updater, sink, alsoParts: true, UpdateText.VersionOf(state));
+                    await ReportUpdateDropAsync(updater, sink, alsoParts: true, UpdateText.VersionOf(state), onWatcher).ConfigureAwait(false);
                 }
                 else
                 {
@@ -602,15 +709,22 @@ internal sealed partial class ChatScreen
         }
     }
 
-    private void ReportUpdateDrop(IUpdater updater, INoticeSink sink, bool alsoParts, string version)
+    // Off the screen's task (2026-11-04, review P9-13): deleting a whole stage can take seconds on a scanned disk, and the spinner's row says it's under way. No Esc, since a delete can't stop partway. Under a reply there's no row for a spinner, and the watcher's own task is free to wait.
+    private async Task ReportUpdateDropAsync(IUpdater updater, INoticeSink sink, bool alsoParts, string version, bool onWatcher)
     {
-        if (updater.DropStage(alsoParts) is { } busy)
+        var drop = Task.Run(() => updater.DropStage(alsoParts), CancellationToken.None);
+        string? busy = onWatcher ? await drop.ConfigureAwait(false) : await _transcript.WithSpinnerAsync(UpdateText.DroppingSpinner, () => drop).ConfigureAwait(false);
+        if (busy is not null)
         {
             sink.Error(UpdateText.StageFailedLine(busy));
             return;
         }
 
-        if (version.Length > 0)
+        if (Volatile.Read(ref _updateSaidLatest))
+        {
+            Volatile.Write(ref _updateState, UpdateScreenState.Nothing);
+        }
+        else if (version.Length > 0 && version != UpdateText.StageNoVersion)
         {
             Volatile.Write(ref _updateState, new UpdateScreenState.Offered(version));
         }

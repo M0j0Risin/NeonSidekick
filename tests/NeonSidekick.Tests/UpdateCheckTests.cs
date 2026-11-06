@@ -67,7 +67,13 @@ public class UpdateCheckTests
     [InlineData("v0.5")]
     [InlineData("v0.5.10.1")]
     [InlineData("release")]
-    public async Task ATagThatIsNotPlain_CountsAsNoRelease(string tag) => Assert.Equal(UpdateCheckKind.Latest, (await Run(Release(tag))).Kind);
+    public async Task ATagThatIsNotPlain_IsAFailure_WithItsOwnReason(string tag)
+    {
+        // It says nothing of what's newest (2026-11-04, review P13-11): a Latest would have cleared an offer that still stands.
+        var result = await Run(Release(tag));
+        Assert.Equal(UpdateCheckKind.Failed, result.Kind);
+        Assert.Equal(UpdateText.TagNotPlain(tag), result.Reason);
+    }
 
     [Fact]
     public async Task NoSignature_IsNotOffered_AndSaysSo()
@@ -121,6 +127,16 @@ public class UpdateCheckTests
     {
         // It comes from the release's JSON and lands on the screen as a link (2026-11-04, review P1-17).
         Assert.Equal(kept ? raw : UpdateText.ReleasesUrl, UpdateSource.GitHub(AboutText.RepositoryUrl).PageOrReleases(raw));
+    }
+
+    [Fact]
+    public void ALinkWithUserInfo_IsNotOurs()
+    {
+        // https://evil@github.com/ shows a name the repository never gave (review P13-12).
+        var source = UpdateSource.GitHub(AboutText.RepositoryUrl);
+        Assert.False(source.IsAsset(new Uri("https://evil@github.com/M0j0Risin/NeonSidekick/releases/download/v1/a.zip")));
+        Assert.True(source.IsAsset(new Uri("https://github.com/M0j0Risin/NeonSidekick/releases/download/v1/a.zip")));
+        Assert.Equal(UpdateText.ReleasesUrl, source.PageOrReleases("https://evil@github.com/M0j0Risin/NeonSidekick/releases/tag/v1"));
     }
 
     [Fact]

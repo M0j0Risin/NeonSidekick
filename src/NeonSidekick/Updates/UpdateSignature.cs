@@ -17,6 +17,9 @@ public static class UpdateSignature
     /// <summary>A P1363 signature on P-256 is two 32-byte numbers side by side, so anything else on a line isn't one.</summary>
     public const int SignatureBytes = 64;
 
+    // What every P-256 key's SubjectPublicKeyInfo starts with: the two object identifiers (ecPublicKey, prime256v1) and the bit string's header (2026-11-04, review P13-13). The key size alone let secp256k1 and brainpoolP256 through, keys no copy could ever verify with, and comparing bytes needs nothing from each OS's crypto, whose exported curve names differ.
+    private static readonly byte[] P256Header = Convert.FromHexString("3059301306072A8648CE3D020106082A8648CE3D030107034200");
+
     private const int KeyBits = 256;
     private const DSASignatureFormat Format = DSASignatureFormat.IeeeP1363FixedFieldConcatenation;
 
@@ -112,7 +115,7 @@ public static class UpdateSignature
     private static ECDsa? TryLoadPublicKey(string publicKey)
     {
         byte[] bytes = new byte[publicKey.Length];
-        if (!Convert.TryFromBase64String(publicKey, bytes, out int written))
+        if (!Convert.TryFromBase64String(publicKey, bytes, out int written) || !bytes.AsSpan(0, written).StartsWith(P256Header))
         {
             return null;
         }

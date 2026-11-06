@@ -113,13 +113,31 @@ public static class ShellText
     public const string ClaudePoliced =
         "Error: refused by the shell police: the command names Claude Code's settings (.claude or .mcp.json), which /claude loads and only the user changes; tell the user the change, and they can make it";
 
-    /// <summary>The model's sentence for the word that tripped the tripwire: <see cref="ClaudePoliced"/> for Claude Code's files, else <see cref="TrustedPoliced"/>.</summary>
-    public static string TrustedPolicedFor(string token) => TrustedFilesPolice.IsClaudeFile(token) ? ClaudePoliced : TrustedPoliced;
+    /// <summary>The tripwire's sentence for the install (2026-11-04, review P14-3): "use the app's tools" sent the model to tools that refuse it too. Prompt text.</summary>
+    public const string InstallPoliced =
+        "Error: refused by the shell police: the command names the app's install folder or its update files, which only the app's own update changes; no tool here changes them, so tell the user the change, and they can make it";
+
+    /// <summary>The tripwire's sentence for a delete or a move of a folder holding the install or the home (2026-11-04, review P19-5). Prompt text.</summary>
+    public const string HoldsAppFolderPoliced =
+        "Error: refused by the shell police: the command deletes or moves a folder holding the app's install or its home, which would take the app's own files with it; name only what should go, one level down";
+
+    /// <summary>The model's sentence for the word that tripped the tripwire.</summary>
+    public static string TrustedPolicedFor(string token, TrustedFinding finding = TrustedFinding.Trusted) => finding switch
+    {
+        TrustedFinding.Install => InstallPoliced,
+        TrustedFinding.HoldsAppFolder => HoldsAppFolderPoliced,
+        _ => TrustedFilesPolice.IsClaudeFile(token) ? ClaudePoliced : TrustedPoliced,
+    };
 
     /// <summary>The transcript's line for it: the word that tripped it, and the script it was in.</summary>
-    public static string TrustedShown(string token, string? file) =>
+    public static string TrustedShown(string token, string? file, TrustedFinding finding = TrustedFinding.Trusted) =>
         "refused: names " + token + (file is null ? "" : " (in " + file + ")")
-        + (TrustedFilesPolice.IsClaudeFile(token) ? ", Claude Code's settings only the user changes" : ", a file only the app's tools change");
+        + finding switch
+        {
+            TrustedFinding.Install => ", the app's install folder",
+            TrustedFinding.HoldsAppFolder => ", a folder holding the app's own files",
+            _ => TrustedFilesPolice.IsClaudeFile(token) ? ", Claude Code's settings only the user changes" : ", a file only the app's tools change",
+        };
 
     public static string TrustedLogLine(CommandRequest request, string token, string? file) =>
         $"police: trusted files ('{token}'{(file is null ? "" : " in " + file)}) — {request.Kind} {Quote(request.Command)}";

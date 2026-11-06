@@ -207,7 +207,8 @@ public static class WebCommands
             SlashCommand.Vault => settings.ObsidianTools ? WebCommandVerdict.List : Refused(WebUiText.Needs(word, "Obsidian tools")),
             SlashCommand.Process => text.Length == 0 ? WebCommandVerdict.List : Pane(word, "/process"),
             // 2026-11-04, self-update: installing happens at the PC. Notes only read, and the "Updated" line names them.
-            SlashCommand.Update => Is(text, Updates.UpdateText.NotesWord) ? WebCommandVerdict.Run : Refused(WebUiText.PcOnly(text.Length == 0 ? word : word + " " + first)),
+            // Its own first word (2026-11-04, review P14-8): "/update notes x" read as a PC-only command, where the screen's usage line is the answer.
+            SlashCommand.Update => string.Equals(first, Updates.UpdateText.NotesWord, StringComparison.OrdinalIgnoreCase) ? WebCommandVerdict.Run : Refused(WebUiText.PcOnly(text.Length == 0 ? word : word + " " + first)),
             // 2026-10-18: the bare word is /tools comfy (a page on the PC); the status it showed is /comfy status, a list as before.
             SlashCommand.Comfy => Is(text, ChatScreen.ComfyStatusWord) || Is(text, ChatScreen.ComfyOfferedWord) ? WebCommandVerdict.List : Pane(word, "/comfy status or /comfy offered"),
             SlashCommand.Loop => LoopVerdict(args, settings),

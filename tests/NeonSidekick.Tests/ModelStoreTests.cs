@@ -15,6 +15,48 @@ public class ModelStoreTests : IDisposable
         _store = new ModelStore(_dir, new HttpClient(_http));
     }
 
+    [Fact]
+    public async Task AMoveHeldForAMoment_IsTriedAgain()
+    {
+        // A scanner reading hundreds of new files makes the rename fail for a moment (2026-11-04, reviews P4-15, P10-11).
+        int tries = 0;
+        await ModelStore.MoveWithRetryAsync("from", Path.Combine(_dir, "to"), CancellationToken.None, (_, _) =>
+        {
+            if (++tries < 3)
+            {
+                throw new IOException("held");
+            }
+        });
+        Assert.Equal(3, tries);
+    }
+
+    [Fact]
+    public async Task AMoveThatStaysHeld_FailsInTheEnd()
+    {
+        int tries = 0;
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => ModelStore.MoveWithRetryAsync("from", Path.Combine(_dir, "to"), CancellationToken.None, (_, _) =>
+        {
+            tries++;
+            throw new UnauthorizedAccessException("held");
+        }));
+        Assert.True(tries > 1);
+    }
+
+    [Fact]
+    public async Task AMoveOntoADestinationThatExists_FailsAtOnce()
+    {
+        // That isn't a moment's hold (review P8-18).
+        string to = Path.Combine(_dir, "to");
+        Directory.CreateDirectory(to);
+        int tries = 0;
+        await Assert.ThrowsAsync<IOException>(() => ModelStore.MoveWithRetryAsync("from", to, CancellationToken.None, (_, _) =>
+        {
+            tries++;
+            throw new IOException("there");
+        }));
+        Assert.Equal(1, tries);
+    }
+
     public void Dispose()
     {
         try { Directory.Delete(Path.GetDirectoryName(_dir)!, recursive: true); } catch { /* best effort */ }

@@ -5,6 +5,18 @@ using NeonSidekick.EmbeddedLlm;
 
 namespace NeonSidekick.Updates;
 
+/// <summary>What the probe found of its own manifest.</summary>
+public enum UpdateProbeManifest
+{
+    Good,
+
+    /// <summary>Gone, or a manifest this build can't read: a package no copy could later update from, and its fault.</summary>
+    Bad,
+
+    /// <summary>There, and held past the probe's few tries: the machine's doing, so it can't read as the package's (2026-11-04, review P8-7: a scanner on the fresh manifest dropped a whole download).</summary>
+    Unreadable,
+}
+
 /// <summary>
 /// <c>--update-probe &lt;result-file&gt;</c> (2026-11-04, self-update): the staged exe proving it can run from the stage, before anything installs it. A helper mode like <c>--mcp-relay</c> and <c>LlamaGuard</c>: an
 /// <see cref="Asked"/> test at the top of <c>Program.cs</c>, before anything touches the console, the options, the home or the Mac sweeps, so no startup line can reach its result. A lasting contract: the old exe reads what the
@@ -86,9 +98,17 @@ public static class UpdateProbe
         }
 #endif
 
-        // With the app's own reader (2026-11-04, review P2-14): a manifest this build can't read is a package no copy could later update from, and build.ps1's own checks would pass it.
-        bool manifestGood = UpdateManifest.ReadFile(Path.Combine(directory, UpdateManifest.FileName), out _) is not null;
-        return Run(resultFile, directory, version, Libraries(out var existOnly), [.. existOnly, .. SmokeChecks.RequiredContentFiles], library => NativeLibrary.TryLoad(library, out _), manifestGood);
+        return RunHere(resultFile, directory, version, Libraries(out var existOnly), [.. existOnly, .. SmokeChecks.RequiredContentFiles], library => NativeLibrary.TryLoad(library, out _), Thread.Sleep);
+    }
+
+    /// <summary>
+    /// The probe with its own manifest check, the seam a test drives (2026-11-04, review P21-12: a test handing <see cref="Run(string, string, string, IReadOnlyList{string}, IReadOnlyList{string}, Func{string, bool}, UpdateProbeManifest)"/> an answer couldn't fail for a wrong check). With the app's own reader (review P2-14): a manifest this build can't read is a package no copy could later update from, and build.ps1's own checks would pass it.
+    /// </summary>
+    internal static int RunHere(string resultFile, string directory, string version, IReadOnlyList<string> libraries, IReadOnlyList<string> files, Func<string, bool> load, Action<TimeSpan> pause)
+    {
+        var read = UpdateManifest.LoadRetrying(Path.Combine(directory, UpdateManifest.FileName), pause);
+        var manifest = read.Unreadable ? UpdateProbeManifest.Unreadable : read.Manifest is null ? UpdateProbeManifest.Bad : UpdateProbeManifest.Good;
+        return Run(resultFile, directory, version, libraries, files, load, manifest);
     }
 
     /// <summary>Starts a background thread that calls <paramref name="end"/> after <paramref name="limit"/>; it takes both as arguments so a test drives it with a harmless ending.</summary>
@@ -116,7 +136,7 @@ public static class UpdateProbe
     }
 
     /// <summary>The probe over its seams: writes the version, then what's missing, then each load.</summary>
-    public static int Run(string resultFile, string directory, string version, IReadOnlyList<string> libraries, IReadOnlyList<string> files, Func<string, bool> load, bool manifestGood = true)
+    public static int Run(string resultFile, string directory, string version, IReadOnlyList<string> libraries, IReadOnlyList<string> files, Func<string, bool> load, UpdateProbeManifest manifest = UpdateProbeManifest.Good)
     {
         ArgumentNullException.ThrowIfNull(libraries);
         ArgumentNullException.ThrowIfNull(files);
@@ -126,10 +146,10 @@ public static class UpdateProbe
 #if UPDATE_SIM
         writer.WriteLine(SimBuildLine);
 #endif
-        bool passed = manifestGood;
-        if (!manifestGood)
+        bool passed = manifest == UpdateProbeManifest.Good;
+        if (manifest != UpdateProbeManifest.Good)
         {
-            writer.WriteLine(MissingLine + UpdateManifest.FileName);
+            writer.WriteLine((manifest == UpdateProbeManifest.Unreadable ? FailedLine : MissingLine) + UpdateManifest.FileName);
         }
 
         foreach (string file in files.Concat(libraries))
@@ -233,7 +253,7 @@ public sealed record UpdateProbeResult(string? Version, IReadOnlyList<string> Mi
     {
         try
         {
-            return Parse(File.ReadAllText(path));
+            return Parse(UpdateFolder.ReadCappedText(path) ?? "");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

@@ -6,8 +6,10 @@ namespace NeonSidekick.Updates;
 /// <summary>What <c>.update/</c> says is waiting for the next exit.</summary>
 /// <param name="ReadyVersion">The version of a stage that passed its checks, or null.</param>
 /// <param name="RollbackTarget">The version a pending rollback goes back to, or null.</param>
-/// <param name="Leftovers">A kept stage with no <c>ready</c>, or a partial download: nothing installs from them, and <c>/update cancel</c> can still delete them.</param>
-public sealed record UpdateDiskState(string? ReadyVersion, string? RollbackTarget, bool Leftovers = false);
+/// <param name="Leftovers">A kept stage with no <c>ready</c>, or a partial download: nothing installs from them, and <c>/update cancel</c> can still delete them. Read only when asked for.</param>
+/// <param name="ReadyUnknown">A <c>ready</c> whose manifest couldn't be read just now (2026-11-04, reviews P9-6, P11-9): a passing hold read as nothing there, so the marker jumped and <c>/update cancel</c> found nothing.</param>
+/// <param name="RollbackUnknown">The same of a pending rollback, its earlier manifest gone or held.</param>
+public sealed record UpdateDiskState(string? ReadyVersion, string? RollbackTarget, bool Leftovers = false, bool ReadyUnknown = false, bool RollbackUnknown = false);
 
 /// <summary>
 /// The screen's door to the updater (2026-11-04, self-update): a <see cref="SidekickApp"/> factory parameter, <see cref="AppUpdater"/> in the app, <c>Fakes/FakeUpdater</c> in tests, so no test can reach GitHub, and null in
@@ -27,8 +29,8 @@ public interface IUpdater
     /// <summary>Whether this folder holds a package's manifest. Without one the check makes no request and <c>/update</c> says it can't update.</summary>
     bool IsPackage { get; }
 
-    /// <summary>Reads <c>.update/</c>: another copy may have staged or asked for a rollback since this one looked.</summary>
-    UpdateDiskState ReadDisk();
+    /// <summary>Reads <c>.update/</c>: another copy may have staged or asked for a rollback since this one looked. It parses only when something changed (2026-11-04, reviews P8-17, P11-18: this ran at every idle line, on the screen's task). <paramref name="withLeftovers"/> also walks for what <c>/update cancel</c> could delete.</summary>
+    UpdateDiskState ReadDisk(bool withLeftovers = false);
 
     /// <summary>Asks GitHub. Never throws for a network failure: that's a <see cref="UpdateCheckKind.Failed"/> answer.</summary>
     Task<UpdateCheckResult> CheckAsync(CancellationToken cancellationToken);
@@ -41,6 +43,9 @@ public interface IUpdater
 
     /// <summary>Drops the stage under the staging lock, with the partial download when <paramref name="alsoParts"/>. The reason it couldn't, or null.</summary>
     string? DropStage(bool alsoParts);
+
+    /// <summary>Deletes a partial or a kept stage for a release that's no longer out, if nothing is ready (2026-11-04, review P18-5: nothing else would ever delete it). The reason it couldn't, or null.</summary>
+    string? DropLeftovers();
 
     /// <summary>
     /// Checks the version in <c>.update/previous</c> and, if it passes, asks for the rollback. A stage stays on disk until the exit, so <c>/update cancel</c> brings it back. The reason it refused, or null with <paramref name="target"/> set, and <paramref name="docsStaying"/> naming the docs whose current copy stays.
@@ -60,37 +65,80 @@ public sealed class AppUpdater : IUpdater
     private readonly UpdateContext _context;
     private readonly HttpClient _http;
     private readonly UpdateSource _source;
-    private readonly bool _journalMayGo;
-    private readonly bool _failureShown;
+    private readonly UpdateStartResult? _start;
+    private readonly Lock _diskGate = new();
+    private (DateTime Ready, DateTime Rollback, UpdateDiskState State)? _disk;
 
-    public AppUpdater(UpdateContext context, string? startLine, HttpClient? http = null, UpdateSource? source = null, bool journalMayGo = false, bool failureShown = false)
+    public AppUpdater(UpdateContext context, UpdateStartResult? start = null, HttpClient? http = null, UpdateSource? source = null)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
-        StartLine = startLine;
-        _journalMayGo = journalMayGo;
-        _failureShown = failureShown;
+        _start = start;
         _http = http ?? new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
         _source = source ?? UpdateSource.GitHub(AboutText.RepositoryUrl);
     }
 
     public string Running => _context.Running.ToString();
 
-    public string? StartLine { get; }
+    public string? StartLine => _start?.Line;
 
-    public void AcknowledgeStart() => UpdateStartup.Acknowledge(_context.Folder, _journalMayGo, _failureShown);
+    public void AcknowledgeStart() => UpdateStartup.Acknowledge(_context.Folder, _start?.JournalMayGo == true, _start?.FailureShown == true);
 
-    public bool IsPackage => _context.Folder.IsPackage;
+    // Mid-swap too (2026-11-04, review P12-11): /update can say why a killed swap's folder can't update, rather than that it isn't a package.
+    public bool IsPackage => _context.Folder.IsPackageOrMidSwap;
 
-    public UpdateDiskState ReadDisk()
+    public UpdateDiskState ReadDisk(bool withLeftovers = false)
     {
         var folder = _context.Folder;
-        string? target = File.Exists(folder.Rollback) ? UpdateManifest.ReadFile(folder.PreviousManifest, out _)?.Version : null;
-        string? ready = File.Exists(folder.Ready) ? UpdateManifest.ReadFile(folder.StagingManifest, out _)?.Version : null;
-        return new UpdateDiskState(ready, target, HasLeftovers(folder));
+        var ready = Stamp(folder.Ready);
+        var rollback = Stamp(folder.Rollback);
+        UpdateDiskState state;
+        lock (_diskGate)
+        {
+            // One it couldn't read is tried again, or a passing hold would stick for the session.
+            if (_disk is { } last && last.Ready == ready && last.Rollback == rollback && !last.State.ReadyUnknown && !last.State.RollbackUnknown)
+            {
+                state = last.State;
+            }
+            else
+            {
+                state = ParseDisk(folder);
+                _disk = (ready, rollback, state);
+            }
+        }
+
+        return withLeftovers ? state with { Leftovers = HasLeftovers(folder) } : state;
+    }
+
+    private static UpdateDiskState ParseDisk(UpdateFolder folder)
+    {
+        bool rollback = File.Exists(folder.Rollback);
+        bool stage = File.Exists(folder.Ready);
+        string? target = rollback ? UpdateManifest.Load(folder.PreviousManifest).Manifest?.Version : null;
+        string? ready = stage ? UpdateManifest.Load(folder.StagingManifest).Manifest?.Version : null;
+        return new UpdateDiskState(ready, target, ReadyUnknown: stage && ready is null, RollbackUnknown: rollback && target is null);
+    }
+
+    private static DateTime Stamp(string path)
+    {
+        try
+        {
+            return File.GetLastWriteTimeUtc(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Diagnostics.DiagnosticLog.Info(UpdateJournal.Category, ex.Message);
+            return DateTime.MinValue;
+        }
     }
 
     public async Task<UpdateCheckResult> CheckAsync(CancellationToken cancellationToken)
     {
+        // Before anything else (2026-11-04, review P12-11): a stage over this folder would fail at preflight anyway, and the journal is the reason.
+        if (UpdateJournal.IsUnsettled(_context.Folder))
+        {
+            return new UpdateCheckResult(UpdateCheckKind.Failed, Reason: UpdateText.UnsettledSwap);
+        }
+
         // The platform is the installed manifest's RID, not the machine's, so an x64 build under emulation asks for what it is.
         if (UpdateManifest.ReadFile(_context.Folder.Manifest, out string? problem) is not { } installed)
         {
@@ -107,16 +155,49 @@ public sealed class AppUpdater : IUpdater
 
     public string? DropStage(bool alsoParts)
     {
-        using var staging = UpdateLock.TryExclusive(_context.Folder.StagingLock);
-        if (staging is null)
+        // Nothing there asks nothing of the lock, whose folder may not exist. A start's tidy holds it for a moment (2026-11-04, reviews P12-15, P13-6): that read as another copy downloading.
+        var folder = _context.Folder;
+        if (!File.Exists(folder.Ready) && !Directory.Exists(folder.Staging) && !Directory.Exists(folder.Staged) && !(alsoParts && Directory.Exists(folder.StagingParts)))
         {
-            return UpdateText.AnotherCopyStaging;
+            return null;
         }
 
-        UpdateStage.Drop(_context.Folder, alsoParts);
+        using var staging = UpdateLock.TryExclusiveRetrying(folder.StagingLock, UpdateStage.LockWait, Thread.Sleep, out bool held);
+        if (staging is null)
+        {
+            return held ? UpdateText.AnotherCopyStaging : UpdateText.StagingLockCantOpen;
+        }
+
+        if (!UpdateStage.Drop(folder, alsoParts))
+        {
+            return UpdateText.UnsettledSwap;   // "Update canceled." over a stage still there would be false (review P12-8)
+        }
 
         // What matters is ready: while that stands, the stage still installs at quit, and "Update canceled." would be false (2026-11-04, review P3-4). A folder a cleanup left without it installs nothing, and the next start retries it.
-        return File.Exists(_context.Folder.Ready) ? UpdateText.CouldntDelete(_context.Folder.Ready) : null;
+        return File.Exists(folder.Ready) ? UpdateText.CouldntDelete(folder.Ready) : null;
+    }
+
+    public string? DropLeftovers()
+    {
+        var folder = _context.Folder;
+        if (File.Exists(folder.Ready) || !HasLeftovers(folder))
+        {
+            return null;
+        }
+
+        using var staging = UpdateLock.TryExclusive(folder.StagingLock, out bool held);
+        if (staging is null)
+        {
+            return held ? UpdateText.AnotherCopyStaging : UpdateText.StagingLockCantOpen;
+        }
+
+        // Read again under the lock: another copy's stage may have just finished.
+        if (File.Exists(folder.Ready))
+        {
+            return null;
+        }
+
+        return UpdateStage.Drop(folder, alsoParts: true) ? null : UpdateText.UnsettledSwap;
     }
 
     public string? AskRollback(CancellationToken cancellationToken, out string? target, out IReadOnlyList<string> docsStaying)
@@ -137,7 +218,7 @@ public sealed class AppUpdater : IUpdater
                 return UpdateText.RenamedCopy(installed.Exe);
             }
 
-            if (UpdateRollback.Check(_context, cancellationToken, out string? reason) is not { } plan)
+            if (UpdateRollback.Check(_context, cancellationToken, out string? reason, out _) is not { } plan)
             {
                 return reason ?? UpdateText.NothingToGoBackTo;
             }

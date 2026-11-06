@@ -193,7 +193,7 @@ public sealed class KokoroInProcessSynthesizer : ISpeechSynthesizer
         catch (DllNotFoundException ex)
         {
             DiagnosticLog.Error(Category, "Kokoro in-process: " + ex.Message, ex);
-            return VoiceListResult.Missing(App.VcRuntime.Explain(MissingRuntimeDetail, _vcLoads));
+            return VoiceListResult.Missing(App.VcRuntime.ExplainAlone(MissingRuntimeDetail, _vcLoads));
         }
         catch (Exception ex)
         {

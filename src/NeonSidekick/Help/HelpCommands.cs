@@ -552,10 +552,10 @@ public static class HelpCommands
         ]),
         new("/update",
         [
-            new("/update", "Check GitHub for a new version and show its notes, with Install (`i`) and Later (`l`). Install downloads and verifies it while you keep chatting, and it installs when you quit. While one is under way, it offers to cancel. A double-click on the 📦 marker on the lower rule opens it too."),
+            new("/update", "Show the newest version's notes, with Install (`i`) and Later (`l`), asking GitHub unless the start's check found it within the hour. Install downloads and verifies it while you keep chatting, and it installs when you quit. While one is under way, it offers to cancel. A double-click on the 📦 marker on the lower rule opens it too."),
             new("/update notes", "Print the release notes of the version running. They're saved with the update, so this works offline."),
             new("/update rollback", "Go back to the earlier version when you quit, after checking its files. Nothing happens until then, and `/update cancel` takes it back."),
-            new("/update cancel", "Stop a download, or drop a stage or a pending rollback."),
+            new("/update cancel", "Stop a download, delete a downloaded update or a partial one, including one that failed its test start, or take back going back."),
         ]),
         new("/usage",
         [

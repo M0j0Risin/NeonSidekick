@@ -37,8 +37,8 @@ public sealed class UpdateFiles : IUpdateFiles
 /// <summary>What became of a swap.</summary>
 /// <param name="Done">Every file moved.</param>
 /// <param name="Reason">Why not, in words for the quit line.</param>
-/// <param name="Undone">True when a failed swap's undo finished: the old version is whole and a stage stays for the next exit. False leaves the journal for the next start.</param>
-public sealed record UpdateSwapResult(bool Done, string? Reason = null, bool Undone = false);
+/// <param name="MayBeMixed">True only when a failed swap's undo stopped too, leaving the journal for the next start (2026-11-04, review P12-16: it was "Undone", set too for refusals where nothing had moved).</param>
+public sealed record UpdateSwapResult(bool Done, string? Reason = null, bool MayBeMixed = false);
 
 /// <summary>What <see cref="UpdateSwap.Settle"/> did with an unfinished journal.</summary>
 public enum UpdateSettled
@@ -52,8 +52,16 @@ public enum UpdateSettled
     /// <summary>The undo couldn't finish: the journal stays for the next start, and the folder may hold a mix.</summary>
     UndoStopped,
 
-    /// <summary>Neither version: a package unpacked by hand over an interrupted swap. Nothing moved, and the journal is gone.</summary>
+    /// <summary>Neither version, and the folder's manifest names a third: a package unpacked by hand over an interrupted swap. Nothing moved, and the journal is gone.</summary>
     Neither,
+
+    /// <summary>
+    /// A copy that can't say what the folder holds (2026-11-04, reviews P11-1, P15-2): another version with the folder's manifest missing or at the journal's own versions, or a renamed copy of the target over a swap that never finished. Nothing moved, and the journal stays for the listed exe.
+    /// </summary>
+    LeftAlone,
+
+    /// <summary>The undo couldn't run, and the folder's manifest and every file it lists say the running version anyway: a package unpacked by hand over a killed swap. The journal is gone, and there's nothing to say.</summary>
+    AlreadyWhole,
 }
 
 /// <summary>
@@ -77,8 +85,8 @@ public sealed class UpdateSwap
     /// <summary>The pause between tries.</summary>
     public static readonly TimeSpan MoveRetryPause = TimeSpan.FromMilliseconds(150);
 
-    // Hidden and system files too: a stray dotfile still stands in a folder's way. A folder it can't read throws (2026-11-04, review P4-17): skipped, it read as empty, "not empty" then undid the swap at every exit with no cause named.
-    private static readonly EnumerationOptions AllEntries = new() { RecurseSubdirectories = true, AttributesToSkip = 0, IgnoreInaccessible = false };
+    // What a file manager leaves in any folder it shows (2026-11-04, review P11-8): a .DS_Store in previous/ refused every rollback, for a folder the docs invite people to open.
+    private static readonly HashSet<string> FolderMetadata = new(StringComparer.OrdinalIgnoreCase) { ".DS_Store", "Thumbs.db", "desktop.ini" };
 
     private readonly UpdateFolder _folder;
     private readonly IUpdateFiles _files;
@@ -211,13 +219,13 @@ public sealed class UpdateSwap
         ArgumentNullException.ThrowIfNull(journal);
         if (journal.BadPath() is { } bad)
         {
-            return new UpdateSwapResult(false, UpdateText.CantRecordName(bad), Undone: true);
+            return new UpdateSwapResult(false, UpdateText.CantRecordName(bad));
         }
 
         string? reason = PrepareAside();
         if (reason is not null)
         {
-            return new UpdateSwapResult(false, reason, Undone: true);
+            return new UpdateSwapResult(false, reason);
         }
 
         try
@@ -226,11 +234,12 @@ public sealed class UpdateSwap
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return new UpdateSwapResult(false, ex.Message, Undone: true);
+            return new UpdateSwapResult(false, ex.Message);
         }
 
-        foreach (var step in journal.Steps)
+        for (int index = 0; index < journal.Steps.Count; index++)
         {
+            var step = journal.Steps[index];
             try
             {
                 BetweenSteps?.Invoke();
@@ -238,8 +247,15 @@ public sealed class UpdateSwap
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
+                // A folder that won't go matters only if a new file takes its name (2026-11-04, review P13-7): a terminal sitting in a dropped folder undid the whole swap at every exit. It stays, empty, and a later cleanup can have it.
+                if (step.Kind == UpdateStepKind.RemoveFolder && !ALaterStepNeeds(journal.Steps, index, step.From!))
+                {
+                    DiagnosticLog.Info(UpdateJournal.Category, UpdateText.CleanupLeft(step.From!, ex.Message));
+                    continue;
+                }
+
                 DiagnosticLog.Info(UpdateJournal.Category, UpdateText.SwapStopped(step.From ?? step.To ?? "", ex.Message));
-                return new UpdateSwapResult(false, ex.Message, Undone: Undo(journal));
+                return new UpdateSwapResult(false, ex.Message, MayBeMixed: !Undo(journal));
             }
         }
 
@@ -248,95 +264,106 @@ public sealed class UpdateSwap
     }
 
     /// <summary>
-    /// What an unfinished journal comes to, one rule for the start and the exit (2026-11-04, review P6-9: the two had drifted, and a journal of neither version reaching the exit stayed for good). The running version is the target: only the cleanup was left. It's the
-    /// source: undo it, and it never finishes forward, because the old exe would then run on with new DLLs. Neither: a package unpacked by hand over an interrupted swap, where moving anything would leave a mix, so the journal goes and nothing moves.
+    /// What an unfinished journal comes to, one rule for the start and the exit (2026-11-04, review P6-9: the two had drifted, and a journal of neither version reaching the exit stayed for good). The running version is the target: only the cleanup was left, if the moves did finish. It's the
+    /// source: undo it, and it never finishes forward, because the old exe would then run on with new DLLs. Neither: a package unpacked by hand over an interrupted swap, where moving anything would leave a mix, so the journal goes and nothing moves, as long as the folder's manifest says that's what happened.
+    ///
+    /// <para>The target finishes only if the walk reaches the last step, or this exe is what the last step put there, or the folder is whole at this version (2026-11-04, review P15-2): a renamed copy of the target finished a half-done swap forward, deleted the new files it hadn't moved, and said "Updated to X" over the old exe. <paramref name="isRunningExe"/> says whether a name is this exe's.</para>
     /// </summary>
-    public UpdateSettled Settle(UpdateJournal journal, string running)
+    public UpdateSettled Settle(UpdateJournal journal, string running, Func<string, bool>? isRunningExe = null)
     {
         ArgumentNullException.ThrowIfNull(journal);
         if (journal.Target == running)
         {
-            Finish(journal);
-            return UpdateSettled.Finished;
+            if (ReachesTheEnd(journal) || (isRunningExe is not null && LastMoveTo(journal) is { } last && isRunningExe(last)) || IsWholeAt(running))
+            {
+                Finish(journal);
+                return UpdateSettled.Finished;
+            }
+
+            DiagnosticLog.Warn(UpdateJournal.Category, UpdateText.JournalLeftAlone(journal.Source, journal.Target, running));
+            return UpdateSettled.LeftAlone;
         }
 
         if (journal.Source == running)
         {
-            return Undo(journal) ? UpdateSettled.Undone : UpdateSettled.UndoStopped;
+            if (Undo(journal))
+            {
+                return UpdateSettled.Undone;
+            }
+
+            if (IsWholeAt(running))
+            {
+                UpdateJournal.Delete(_folder);
+                return UpdateSettled.AlreadyWhole;
+            }
+
+            return UpdateSettled.UndoStopped;
         }
 
-        DiagnosticLog.Warn(UpdateJournal.Category, UpdateText.JournalRejected(UpdateText.JournalNotThisVersion(journal.Source, journal.Target, running)));
-        UpdateJournal.Delete(_folder);
-        return UpdateSettled.Neither;
+        // Mid-swap the manifest is gone or at one of the journal's versions, and a stray copy of a third version deleted the only record of the moves (2026-11-04, review P11-1).
+        if (UpdateManifest.Load(_folder.Manifest).Manifest is { } manifest && manifest.ParsedVersion.ToString() != journal.Source && manifest.ParsedVersion.ToString() != journal.Target)
+        {
+            DiagnosticLog.Warn(UpdateJournal.Category, UpdateText.JournalRejected(UpdateText.JournalNotThisVersion(journal.Source, journal.Target, running)));
+            UpdateJournal.Delete(_folder);
+            return UpdateSettled.Neither;
+        }
+
+        DiagnosticLog.Warn(UpdateJournal.Category, UpdateText.JournalLeftAlone(journal.Source, journal.Target, running));
+        return UpdateSettled.LeftAlone;
     }
 
     /// <summary>
-    /// Undoes a swap, walking its steps back. Each looks at what's there before it moves anything, so an interrupted undo just runs again. True when it finished, and the journal is gone.
+    /// Undoes a swap: a forward walk finds how far it got (<see cref="Walk"/>), and only that part is undone, in reverse, stopping at the first failure, so what's left is always the first steps of the run, as a kill mid-undo leaves it, and running again goes on from there. True when it finished, and the journal is gone.
     ///
-    /// <para>A move with both of its paths present (2026-11-04, review P3-10) is ignored until the walk meets a step that did run: steps past the kill never ran and look just like that (<c>staging/x</c> and the old <c>x</c>), but steps run in order, so before a step
-    /// that ran, both present means something is in the way of a real restore. That counts as not whole, so the journal stays: deleting it would call a restore done that wasn't.</para>
+    /// <para>2026-11-04, reviews P8-1 and P12-2. It used to walk the whole journal backward, reading "destination there, source gone" as proof a step ran, so a step that never ran, with its staged file quarantined, moved an untouched file out of the install, and a first pass that failed partway left a state the next read as a conflict for good. A move whose two paths are both there when the undo reaches it counts as a failure (review P3-10): deleting the journal would call a restore done that wasn't.</para>
     /// </summary>
     public bool Undo(UpdateJournal journal)
     {
         ArgumentNullException.ThrowIfNull(journal);
-        bool whole = true;
-        bool reached = false;
-        foreach (var step in Enumerable.Reverse(journal.Steps))
+        var walk = Walk(journal.Steps);
+        if (walk.Conflict)
         {
+            var at = journal.Steps[walk.Ran];
+            DiagnosticLog.Warn(UpdateJournal.Category, UpdateText.UndoFoundBoth(at.From!, at.To!));
+            return false;
+        }
+
+        for (int index = walk.Ran - 1; index >= 0; index--)
+        {
+            var step = journal.Steps[index];
             try
             {
                 BetweenSteps?.Invoke();
-                if (step.Kind == UpdateStepKind.Move)
+                if (!UndoOne(step))
                 {
-                    bool there = Exists(_folder.Full(step.To!));
-                    bool source = Exists(_folder.Full(step.From!));
-                    if (there && source && reached)
-                    {
-                        DiagnosticLog.Warn(UpdateJournal.Category, UpdateText.UndoFoundBoth(step.From!, step.To!));
-                        whole = false;
-                        continue;
-                    }
-
-                    reached |= there && !source;
+                    DiagnosticLog.Warn(UpdateJournal.Category, UpdateText.UndoFoundBoth(step.From!, step.To!));
+                    return false;
                 }
-
-                UndoOne(step);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 DiagnosticLog.Warn(UpdateJournal.Category, UpdateText.UndoStopped(step.From ?? step.To ?? "", ex.Message));
-                whole = false;
+                return false;
             }
         }
 
-        if (whole)
-        {
-            UpdateJournal.Delete(_folder);
-        }
-
-        return whole;
+        UpdateJournal.Delete(_folder);
+        return true;
     }
 
     /// <summary>
-    /// What a swap does last: delete <c>ready</c>, <c>rollback</c>, what's left of <c>staging/</c> and <c>staged/</c>, and <c>previous.old/</c> or <c>outgoing/</c>, then mark the journal
-    /// finished. Tolerates files still in use, such as an old guard that hasn't exited: what it can't delete now, it retries next time. Also what the next start does under the new exe.
+    /// What a swap does last: delete <c>ready</c>, <c>rollback</c> and what's left of <c>staging/</c> and <c>staged/</c>, mark the journal finished, and only then delete <c>previous.old/</c>, <c>outgoing/</c> and a rollback's <c>previous/</c>. Tolerates files still in use, such as an old guard that hasn't exited: what it can't delete now, it retries next time. Also what the next start does under the new exe.
+    ///
+    /// <para>That order is the walk's (2026-11-04): those three are what its first step made or moved, so with one deleted and the journal unfinished, a kill just then read as a first step that never ran, and an old copy waiting on the lock undid nothing and ran on over new files. A save that fails deletes none of them. What a kill leaves after the save goes later: <c>previous.old/</c> and <c>outgoing/</c> as <see cref="UpdateStartup"/>'s tidy and the next swap do, a rollback's <c>previous/</c>, which holds no manifest by then and so reads as nothing to go back to, with the next swap's rotation.</para>
     /// </summary>
     public void Finish(UpdateJournal journal)
     {
         ArgumentNullException.ThrowIfNull(journal);
-        DeleteQuietly(_folder.Ready);
-        DeleteQuietly(_folder.Rollback);
+        UpdateFolder.DeleteQuietly(_folder.Ready);
+        UpdateFolder.DeleteQuietly(_folder.Rollback);
         UpdateFolder.DeleteQuietly(_folder.Staging);
         UpdateFolder.DeleteQuietly(_folder.StagingParts);
         UpdateFolder.DeleteQuietly(_folder.Staged);
-        UpdateFolder.DeleteQuietly(_folder.PreviousOld);
-        UpdateFolder.DeleteQuietly(_folder.Outgoing);
-        if (journal.Rollback)
-        {
-            // A second /update rollback says there's nothing to go back to, not "going back" to the newer version; the check offers that one again instead.
-            UpdateFolder.DeleteQuietly(_folder.Previous);
-        }
-
         journal.Finished = true;
         try
         {
@@ -345,6 +372,141 @@ public sealed class UpdateSwap
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             DiagnosticLog.Warn(UpdateJournal.Category, UpdateText.JournalNotDeleted(ex.Message));
+            return;
+        }
+
+        UpdateFolder.DeleteQuietly(_folder.PreviousOld);
+        UpdateFolder.DeleteQuietly(_folder.Outgoing);
+        if (journal.Rollback)
+        {
+            // A second /update rollback says there's nothing to go back to, not "going back" to the newer version; the check offers that one again instead.
+            UpdateFolder.DeleteQuietly(_folder.Previous);
+        }
+
+        // A close's failure from before this swap is old news (2026-11-04, review P16-6): it printed "didn't install" under "Updated to" for the same version.
+        UpdateFolder.DeleteQuietly(_folder.SwapFailed);
+    }
+
+    /// <summary>
+    /// How far a run of <paramref name="steps"/> got, read from the disk, since the journal records no progress: steps run in order, so the first that didn't is where it stopped. A move with its destination there and its source gone ran; with neither there, go on (a source that vanished, or a file a later step moved on); with only its source there, it didn't run. A folder made exists, or it didn't run. A removed folder never decides, since one may have been left standing (review P13-7).
+    ///
+    /// <para>Both of a move's paths there is one of two things. If a later step puts something at its source, that's explained, and it ran: every changed file looks like this once its new copy has moved in. If not, what follows decides: a later step that ran, before any that didn't, means this one ran too, and something is in the way of restoring it, a conflict. Otherwise it never ran, with something in its way (an empty stray folder a kill got to first, a file that appeared since), and the walk stops there. A model of this rule held at every kill point of an update's, a stray folder's, a rollback's and a renamed exe's journal, and at every stop of the undo, and the earlier wording failed nearly all of them (the tests hold the same).</para>
+    /// </summary>
+    /// <returns><c>Ran</c>: how many of the first steps ran. <c>Conflict</c>: true with <c>Ran</c> the index of the step in the way.</returns>
+    internal (int Ran, bool Conflict) Walk(IReadOnlyList<UpdateStep> steps)
+    {
+        ArgumentNullException.ThrowIfNull(steps);
+        for (int index = 0; index < steps.Count; index++)
+        {
+            switch (Look(steps[index]))
+            {
+                case Seen.NotRun:
+                    return (index, false);
+                case Seen.Both when !Explained(steps, index):
+                    return (index, ALaterStepRan(steps, index));
+            }
+        }
+
+        return (steps.Count, false);
+    }
+
+    private enum Seen
+    {
+        Ran,
+        NotRun,
+        Both,
+        NoWord,
+    }
+
+    private Seen Look(UpdateStep step)
+    {
+        switch (step.Kind)
+        {
+            case UpdateStepKind.MakeFolder:
+                return Directory.Exists(_folder.Full(step.To!)) ? Seen.Ran : Seen.NotRun;
+            case UpdateStepKind.Move:
+                bool there = UpdateFolder.Exists(_folder.Full(step.To!));
+                bool source = UpdateFolder.Exists(_folder.Full(step.From!));
+                return there && source ? Seen.Both : source ? Seen.NotRun : there ? Seen.Ran : Seen.NoWord;
+            default:
+                return Seen.NoWord;
+        }
+    }
+
+    private bool Explained(IReadOnlyList<UpdateStep> steps, int index)
+    {
+        var comparer = CaseRule.Comparer(_folder.Install);
+        for (int later = index + 1; later < steps.Count; later++)
+        {
+            if (steps[later].To is { } to && comparer.Equals(to, steps[index].From))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // A folder that exists says nothing here: .update/kept can be there from an earlier swap.
+    private bool ALaterStepRan(IReadOnlyList<UpdateStep> steps, int index)
+    {
+        for (int later = index + 1; later < steps.Count; later++)
+        {
+            var seen = Look(steps[later]);
+            if (seen == Seen.NotRun)
+            {
+                return false;
+            }
+
+            if (steps[later].Kind == UpdateStepKind.Move && (seen == Seen.Ran || (seen == Seen.Both && Explained(steps, later))))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool ALaterStepNeeds(IReadOnlyList<UpdateStep> steps, int index, string folder)
+    {
+        var comparer = CaseRule.Comparer(_folder.Install);
+        var comparison = CaseRule.Comparison(_folder.Install);
+        for (int later = index + 1; later < steps.Count; later++)
+        {
+            if (steps[later].To is { } to && (comparer.Equals(to, folder) || to.StartsWith(folder + "/", comparison)))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // The step alone can read as run when its staged file vanished, so the last move's destination has to be there too.
+    private bool ReachesTheEnd(UpdateJournal journal)
+    {
+        var walk = Walk(journal.Steps);
+        return !walk.Conflict && walk.Ran == journal.Steps.Count && (LastMoveTo(journal) is not { } last || UpdateFolder.Exists(_folder.Full(last)));
+    }
+
+    private static string? LastMoveTo(UpdateJournal journal) => journal.Steps.LastOrDefault(step => step.Kind == UpdateStepKind.Move)?.To;
+
+    // What a package unpacked by hand over a killed swap reads as: the undo can't tell it from a conflict, and the hashes can.
+    private bool IsWholeAt(string running)
+    {
+        if (UpdateManifest.Load(_folder.Manifest).Manifest is not { } manifest || manifest.ParsedVersion.ToString() != running)
+        {
+            return false;
+        }
+
+        try
+        {
+            return manifest.Files.All(file => File.Exists(_folder.Full(file.Path)) && UpdateHash.Same(UpdateHash.OfFile(_folder.Full(file.Path)), file.Sha256));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            DiagnosticLog.Info(UpdateJournal.Category, ex.Message);
+            return false;
         }
     }
 
@@ -357,10 +519,10 @@ public sealed class UpdateSwap
             return held;
         }
 
-        foreach (string file in Directory.EnumerateFiles(folder, "*", AllEntries))
+        foreach (string file in UpdateFolder.EntriesUnder(folder))
         {
             string relative = Path.GetRelativePath(folder, file).Replace(Path.DirectorySeparatorChar, '/');
-            if (relative != UpdateManifest.FileName && !relative.StartsWith(UpdateFolder.ReleaseName + "/", StringComparison.Ordinal))
+            if (relative != UpdateManifest.FileName && !relative.StartsWith(UpdateFolder.ReleaseName + "/", StringComparison.Ordinal) && !FolderMetadata.Contains(Path.GetFileName(file)))
             {
                 held.Add(relative);
             }
@@ -383,28 +545,28 @@ public sealed class UpdateSwap
             for (string? parent = ParentOf(path); parent is not null; parent = ParentOf(parent))
             {
                 needed.Add(parent);
-                if (File.Exists(_folder.Full(parent)))
+                if (IsFileOrLink(_folder.Full(parent)))
                 {
-                    gone.Add(parent);   // a stray file where it needs a folder
+                    gone.Add(parent);   // a stray file where it needs a folder, or a link it would write through
                 }
             }
 
             string full = _folder.Full(path);
-            if (File.Exists(full))
+            if (IsFileOrLink(full))
             {
                 gone.Add(path);   // a changed file, or a stray at a path the new version adds
             }
             else if (Directory.Exists(full))
             {
                 strayFolders.Add(path);   // a folder at a path it needs for a file: what's still in it goes aside too
-                foreach (string file in Directory.EnumerateFiles(full, "*", AllEntries))
+                foreach (string file in UpdateFolder.EntriesUnder(full))
                 {
                     gone.Add(_folder.Relative(file));
                 }
             }
         }
 
-        gone.RemoveWhere(path => !File.Exists(_folder.Full(path)));
+        gone.RemoveWhere(path => !IsFileOrLink(_folder.Full(path)));
         var made = new HashSet<string>(comparer);
         string kept = NewKeptFolder(fromVersion);
         string? oldExeOut = null;
@@ -436,6 +598,16 @@ public sealed class UpdateSwap
         }
 
         steps.AddRange(proofsIn);
+
+        // A new file or folder taking the old exe's name, when the exe's own name changes (2026-11-04, reviews P7-5, P12-6): the old one has to leave first, or the step hits it, undoes, and fails the same at every exit. What takes the name moves in right after (review P12-4), the first of the incoming moves: a kill among the rest left nothing at that name, and nothing to run the undo.
+        bool renamed = !comparer.Equals(oldExe, newExe);
+        bool takesItsName = renamed && (incoming.Contains(oldExe, comparer) || needed.Contains(oldExe));
+        if (oldExeOut is not null && takesItsName)
+        {
+            steps.Add(UpdateStep.Move(oldExeOut, oldExeTo!));
+            oldExeOut = null;
+        }
+
         foreach (string folder in needed.OrderBy(f => f.Length))
         {
             string full = _folder.Full(folder);
@@ -445,15 +617,10 @@ public sealed class UpdateSwap
             }
         }
 
-        // A new file taking the old exe's name, when the exe's own name changes (2026-11-04, review P7-5): the old one has to leave first, or the move hits it, undoes, and fails the same at every exit.
-        if (oldExeOut is not null && !comparer.Equals(oldExe, newExe) && incoming.Contains(oldExe, comparer))
-        {
-            steps.Add(UpdateStep.Move(oldExeOut, oldExeTo!));
-            oldExeOut = null;
-        }
-
+        var comparison = CaseRule.Comparison(_folder.Install);
+        bool TakesItsName(string path) => takesItsName && (comparer.Equals(path, oldExe) || path.StartsWith(oldExe + "/", comparison));
         string? newExeIn = null;
-        foreach (string path in incoming.Order(StringComparer.Ordinal))
+        foreach (string path in incoming.OrderBy(path => TakesItsName(path) ? 0 : 1).ThenBy(path => path, StringComparer.Ordinal))
         {
             if (comparer.Equals(path, newExe))
             {
@@ -521,10 +688,10 @@ public sealed class UpdateSwap
         foreach (string folder in candidates)
         {
             string full = _folder.Full(folder);
-            if (!needed.Contains(folder) && Directory.Exists(full) && IsAllGone(full, gone))
+            if (!needed.Contains(folder) && Directory.Exists(full) && !UpdateFolder.IsLink(full) && IsAllGone(full, gone))
             {
                 emptied.Add(folder);
-                foreach (string sub in Directory.EnumerateDirectories(full, "*", AllEntries))
+                foreach (string sub in UpdateFolder.FoldersUnder(full))
                 {
                     emptied.Add(_folder.Relative(sub));
                 }
@@ -534,8 +701,21 @@ public sealed class UpdateSwap
         return [.. emptied.OrderByDescending(f => f.Count(c => c == '/')).ThenBy(f => f, StringComparer.Ordinal)];
     }
 
-    private bool IsAllGone(string fullFolder, HashSet<string> gone) =>
-        Directory.EnumerateFiles(fullFolder, "*", AllEntries).All(file => gone.Contains(_folder.Relative(file)));
+    // A folder it can't read isn't all gone, and it stays (2026-11-04, review P8-11): a subfolder this account can't open, in a folder the new version drops, stopped the update at every exit.
+    private bool IsAllGone(string fullFolder, HashSet<string> gone)
+    {
+        try
+        {
+            return UpdateFolder.EntriesUnder(fullFolder).All(file => gone.Contains(_folder.Relative(file)));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            DiagnosticLog.Info(UpdateJournal.Category, ex.Message);
+            return false;
+        }
+    }
+
+    private static bool IsFileOrLink(string full) => File.Exists(full) || UpdateFolder.IsLink(full);
 
     private static string? ParentOf(string path)
     {
@@ -568,14 +748,22 @@ public sealed class UpdateSwap
         }
     }
 
-    private void UndoOne(UpdateStep step)
+    // False when a move finds both of its paths there: nothing to overwrite, and the undo stops.
+    private bool UndoOne(UpdateStep step)
     {
         switch (step.Kind)
         {
             case UpdateStepKind.Move:
                 string from = _folder.Full(step.From!);
                 string to = _folder.Full(step.To!);
-                if (Exists(to) && !Exists(from))
+                bool there = UpdateFolder.Exists(to);
+                bool source = UpdateFolder.Exists(from);
+                if (there && source)
+                {
+                    return false;
+                }
+
+                if (there)
                 {
                     if (Path.GetDirectoryName(from) is { } parent)
                     {
@@ -598,6 +786,8 @@ public sealed class UpdateSwap
                 _files.MakeFolder(_folder.Full(step.From!));
                 break;
         }
+
+        return true;
     }
 
     private void Retry(Action move)
@@ -616,17 +806,4 @@ public sealed class UpdateSwap
         }
     }
 
-    private static bool Exists(string path) => File.Exists(path) || Directory.Exists(path);
-
-    private static void DeleteQuietly(string path)
-    {
-        try
-        {
-            File.Delete(path);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            DiagnosticLog.Info(UpdateJournal.Category, UpdateText.CleanupLeft(path, ex.Message));
-        }
-    }
 }

@@ -132,25 +132,36 @@ public static partial class ShellPoliceChecks
             }
         }
 
-        if (TrustedFilesPolice.For(files.Root) is { } trusted)
+        if (TrustedIn(request, command, null, workdir, files, request.IsScript) is { } named)
         {
-            if (TrustedFilesPolice.Find(command, trusted) is { } named)
-            {
-                DiagnosticLog.Info(ShellKinds.Category, ShellText.TrustedLogLine(request, named, null));
-                return new ShellPoliceRefusal(ShellText.TrustedPolicedFor(named), ShellText.TrustedShown(named, null));
-            }
+            return named;
+        }
 
-            foreach (var (name, text) in scripts.Value)
+        foreach (var (name, text) in scripts.Value)
+        {
+            if (TrustedIn(request, text, name, workdir, files, isScript: true) is { } inScript)
             {
-                if (TrustedFilesPolice.Find(text, trusted) is { } inScript)
-                {
-                    DiagnosticLog.Info(ShellKinds.Category, ShellText.TrustedLogLine(request, inScript, name));
-                    return new ShellPoliceRefusal(ShellText.TrustedPolicedFor(inScript), ShellText.TrustedShown(inScript, name));
-                }
+                return inScript;
             }
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// The trusted files' tripwire over one text, and the words it says back, the one helper for a line, a script file and <c>execute_code</c>'s own check before its run (2026-11-04, review P14-3). A relative word means what it means from <paramref name="workdir"/> (reviews P8-3, P16-1). Null when it passes, or with no facts set.
+    /// </summary>
+    public static ShellPoliceRefusal? TrustedIn(CommandRequest request, string text, string? file, string workdir, WorkingDirectory files, bool isScript)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(files);
+        if (TrustedFilesPolice.For(files.Root, workdir) is not { } trusted || TrustedFilesPolice.Find(text, trusted, out var finding, request.Kind, isScript) is not { } named)
+        {
+            return null;
+        }
+
+        DiagnosticLog.Info(ShellKinds.Category, ShellText.TrustedLogLine(request, named, file));
+        return new ShellPoliceRefusal(ShellText.TrustedPolicedFor(named, finding), ShellText.TrustedShown(named, file, finding));
     }
 
     /// <summary>

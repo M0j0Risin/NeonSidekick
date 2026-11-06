@@ -12376,8 +12376,9 @@ internal sealed partial class ChatScreen
             // The Docker log window before its session goes (2026-10-23): its feed's loop never outlives the door it reads through.
             _closeDockerLogWindow?.Invoke();
             _docker.Dispose();
-            string? updateQuitLine = UpdateQuitLine();   // read first: ending the work moves the state on
+            var updateAtQuit = Volatile.Read(ref _updateState);   // read first: ending the work moves the state on
             await EndUpdateWorkAsync().ConfigureAwait(false);   // a running probe killed and waited for, the download's partial kept (2026-11-04, self-update)
+            string? updateQuitLine = UpdateQuitLine(updateAtQuit);   // after it (review P8-16): a stage that finished as the quit landed installs, and "didn't finish" would be false
             _advisorHost.Dispose();
             StopLive();
             _cameraWatch.Dispose();

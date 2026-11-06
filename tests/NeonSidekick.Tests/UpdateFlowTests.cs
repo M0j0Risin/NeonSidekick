@@ -19,9 +19,12 @@ public sealed class UpdateFlowTests : IDisposable
 
     private string Installed(string path) => File.ReadAllText(_f.Folder.Full(path));
 
+    private void InstalledManifestSays(string version) =>
+        File.WriteAllText(_f.Folder.Manifest, UpdateFixture.Manifest(version, new Dictionary<string, string> { [UpdateFixture.Exe] = "old exe", ["a.dll"] = "old a", ["same.dll"] = "same" }));
+
     private string Staged(string path) => Path.Combine(_f.Folder.Staging, path);
 
-    private UpdatePlanned? Recheck(out string? reason, string running = "0.5.6") => UpdateRecheck.Check(_f.Context(running), CancellationToken.None, out reason);
+    private UpdatePlanned? Recheck(out string? reason, string running = "0.5.6") => UpdateRecheck.Check(_f.Context(running), CancellationToken.None, out reason, out _);
 
     private List<string> Exit(string running = "0.5.6", string exeName = UpdateFixture.Exe, IUpdateFiles? files = null)
     {
@@ -91,6 +94,7 @@ public sealed class UpdateFlowTests : IDisposable
     public async Task AStageNoLongerNewer_IsCaught()
     {
         await Ready();
+        InstalledManifestSays("0.5.7");   // or the folder's own check answers first (review P15-1)
         Assert.Null(Recheck(out string? reason, running: "0.5.7"));
         Assert.Equal(UpdateText.NoLongerNewer("0.5.7"), reason);
     }
@@ -131,7 +135,7 @@ public sealed class UpdateFlowTests : IDisposable
         await Ready();
         using var cancel = new CancellationTokenSource();
         await cancel.CancelAsync();
-        Assert.Throws<OperationCanceledException>(() => UpdateRecheck.Check(_f.Context(), cancel.Token, out _));
+        Assert.Throws<OperationCanceledException>(() => UpdateRecheck.Check(_f.Context(), cancel.Token, out _, out _));
         Assert.True(File.Exists(_f.Folder.Ready));
     }
 
@@ -426,7 +430,7 @@ public sealed class UpdateFlowTests : IDisposable
         journal.Save(_f.Folder);
         File.WriteAllText(_f.Folder.Ready, "");
 
-        Assert.Equal([UpdateText.FailedLine(UpdateText.SettledInstead)], Exit("0.5.7"));
+        Assert.Equal([UpdateText.SettledFinished("0.5.7", rollback: false)], Exit("0.5.7"));   // it's installed: "didn't install" was false (review P11-2)
 
         Assert.False(File.Exists(_f.Folder.Ready));
         Assert.True(UpdateJournal.TryRead(_f.Folder)!.Finished);
@@ -595,6 +599,7 @@ public sealed class UpdateFlowTests : IDisposable
     public async Task AStageNoNewerThanTheRunningVersion_IsDropped()
     {
         await Ready();
+        InstalledManifestSays("0.5.7");
         Start("0.5.7", interactive: false);
         Assert.False(Directory.Exists(_f.Folder.Staging));
         Assert.False(File.Exists(_f.Folder.Ready));
@@ -718,7 +723,7 @@ public sealed class UpdateFlowTests : IDisposable
         Exit("0.5.7");
         Start("0.5.6");
 
-        Assert.Null(UpdateRollback.Check(_f.Context("0.5.6"), CancellationToken.None, out string? reason));
+        Assert.Null(UpdateRollback.Check(_f.Context("0.5.6"), CancellationToken.None, out string? reason, out _));
         Assert.Equal(UpdateText.NothingToGoBackTo, reason);
     }
 
@@ -726,7 +731,7 @@ public sealed class UpdateFlowTests : IDisposable
     public void NoPrevious_IsNothingToGoBackTo()
     {
         _f.Usual();
-        Assert.Null(UpdateRollback.Check(_f.Context("0.5.6"), CancellationToken.None, out string? reason));
+        Assert.Null(UpdateRollback.Check(_f.Context("0.5.6"), CancellationToken.None, out string? reason, out _));
         Assert.Equal(UpdateText.NothingToGoBackTo, reason);
     }
 
@@ -736,7 +741,7 @@ public sealed class UpdateFlowTests : IDisposable
         await Updated();
         File.WriteAllText(Path.Combine(_f.Folder.Previous, "a.dll"), "altered");
 
-        Assert.Null(UpdateRollback.Check(_f.Context("0.5.7"), CancellationToken.None, out string? reason));
+        Assert.Null(UpdateRollback.Check(_f.Context("0.5.7"), CancellationToken.None, out string? reason, out _));
 
         Assert.Equal(UpdateText.OldVersionAltered("a.dll"), reason);
         Assert.True(Directory.Exists(_f.Folder.Previous));
@@ -747,7 +752,7 @@ public sealed class UpdateFlowTests : IDisposable
     {
         await Updated();
         File.Delete(Path.Combine(_f.Folder.Previous, "a.dll"));
-        Assert.Null(UpdateRollback.Check(_f.Context("0.5.7"), CancellationToken.None, out string? reason));
+        Assert.Null(UpdateRollback.Check(_f.Context("0.5.7"), CancellationToken.None, out string? reason, out _));
         Assert.Equal(UpdateText.OldVersionIncomplete("a.dll"), reason);
     }
 
@@ -762,7 +767,7 @@ public sealed class UpdateFlowTests : IDisposable
         UpdateFixture.Write(Path.Combine(releaseOf056, UpdateFolder.ShaName), sha);
         UpdateFixture.Write(Path.Combine(releaseOf056, UpdateFolder.SigName), UpdateSignature.SignatureLine(System.Text.Encoding.ASCII.GetBytes(sha), dropped) + "\n");
 
-        Assert.Null(UpdateRollback.Check(_f.Context("0.5.7"), CancellationToken.None, out string? reason));
+        Assert.Null(UpdateRollback.Check(_f.Context("0.5.7"), CancellationToken.None, out string? reason, out _));
 
         Assert.Equal(UpdateText.OldVersionNotSigned("0.5.6"), reason);
     }
@@ -776,7 +781,7 @@ public sealed class UpdateFlowTests : IDisposable
         UpdateFixture.Write(Path.Combine(_f.Folder.PreviousRelease, UpdateFolder.ShaName), sha);
         UpdateFixture.Write(Path.Combine(_f.Folder.PreviousRelease, UpdateFolder.SigName), UpdateSignature.SignatureLine(System.Text.Encoding.ASCII.GetBytes(sha), _f.Key) + "\n");
 
-        Assert.NotNull(UpdateRollback.Check(_f.Context("0.5.7"), CancellationToken.None, out _));
+        Assert.NotNull(UpdateRollback.Check(_f.Context("0.5.7"), CancellationToken.None, out _, out _));
     }
 
     [Fact]
@@ -784,7 +789,7 @@ public sealed class UpdateFlowTests : IDisposable
     {
         await Updated();
         Assert.False(Directory.Exists(_f.Folder.PreviousRelease));
-        var plan = UpdateRollback.Check(_f.Context("0.5.7"), CancellationToken.None, out string? reason);
+        var plan = UpdateRollback.Check(_f.Context("0.5.7"), CancellationToken.None, out string? reason, out _);
         Assert.Null(reason);
         Assert.Equal(["docs/new.md"], plan!.Added);
     }
@@ -798,8 +803,8 @@ public sealed class UpdateFlowTests : IDisposable
 
         var lines = Exit("0.5.7");
 
-        Assert.Single(lines);
-        Assert.Contains("altered", lines[0], StringComparison.Ordinal);
+        Assert.Equal(UpdateText.GoingBackNow("0.5.6"), lines[0]);
+        Assert.Contains("altered", Assert.Single(lines[1..]), StringComparison.Ordinal);
         Assert.False(File.Exists(_f.Folder.Rollback));
         Assert.True(Directory.Exists(_f.Folder.Previous));
         Assert.Equal("new exe", Installed(UpdateFixture.Exe));
@@ -1088,6 +1093,10 @@ public sealed class UpdateFlowTests : IDisposable
         Assert.Null(UpdateInstallHashes.TryRead(_f.Folder));
         UpdateFixture.Write(_f.Folder.StagedInstallHashes, "not json");
         Assert.Null(UpdateInstallHashes.TryRead(_f.Folder));
+
+        // A null entry, which made Current throw on the exit's path (review P21-10).
+        UpdateFixture.Write(_f.Folder.StagedInstallHashes, """{"manifest":"x","files":{"a.dll":null}}""");
+        Assert.Null(UpdateInstallHashes.TryRead(_f.Folder));
     }
 
     [Fact]
@@ -1103,6 +1112,28 @@ public sealed class UpdateFlowTests : IDisposable
     }
 
     [Fact]
+    public void TheHashing_StopsPartway_WhenItsTokenCancelsDuringARead()
+    {
+        // Only the check inside the loop can see this (review P10-14): the token was fine as the hash began.
+        using var stop = new CancellationTokenSource();
+        using var stream = new CancelsAsItReads(stop);
+        Assert.ThrowsAny<OperationCanceledException>(() => UpdateHash.OfStream(stream, stop.Token));
+        Assert.Equal(1, stream.Reads);
+    }
+
+    private sealed class CancelsAsItReads(CancellationTokenSource stop) : MemoryStream(new byte[1 << 16])
+    {
+        public int Reads { get; private set; }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            Reads++;
+            stop.Cancel();
+            return base.Read(buffer, offset, count);
+        }
+    }
+
+    [Fact]
     public void ARunStartedByItsShortName_IsTheListedExe_AndARenameIsnt()
     {
         _f.Usual();
@@ -1111,12 +1142,35 @@ public sealed class UpdateFlowTests : IDisposable
         Assert.False(_f.Context("0.5.6", "Copy.exe").IsListedExe(installed));
         Assert.False(_f.Context("0.5.6", "ABSENT~1.EXE").IsListedExe(installed));
 
-        // Short names can be off on a volume, and then there's nothing to hold (review P6-16).
+        // Over the lookup's seam, as short names can be off on a volume, which left nothing to hold (reviews P6-16, P10-13).
         string shortName = "NEONSI~1.EXE";
-        if (OperatingSystem.IsWindows() && File.Exists(Path.Combine(_f.Root, shortName)))
-        {
-            Assert.True(_f.Context("0.5.6", shortName).IsListedExe(installed));
-        }
+        Assert.True((_f.Context("0.5.6", shortName) with { SameFileAs = (_, _) => true }).IsListedExe(installed));
+        Assert.False((_f.Context("0.5.6", shortName) with { SameFileAs = (_, _) => false }).IsListedExe(installed));
+        Assert.False((_f.Context("0.5.6", "Copy.exe") with { SameFileAs = (_, _) => true }).IsListedExe(installed));   // only a name that can be a short one is asked
+    }
+
+    [Fact]
+    public void TheFolderLayout_IsPinned()
+    {
+        // An old exe swaps the new one, so these names are a lasting contract, and a test reaching them only through the property can't see one move (review P11-13).
+        string Under(string name) => Path.Combine(_f.Root, ".update", name);
+        var folder = _f.Folder;
+        Assert.Equal(Path.Combine(_f.Root, ".update"), folder.Root);
+        Assert.Equal(Path.Combine(_f.Root, "update-manifest.json"), folder.Manifest);
+        Assert.Equal(Under("in-use.lock"), folder.InUseLock);
+        Assert.Equal(Under("staging.lock"), folder.StagingLock);
+        Assert.Equal(Under("staging"), folder.Staging);
+        Assert.Equal(Under("staging.parts"), folder.StagingParts);
+        Assert.Equal(Under("staged"), folder.Staged);
+        Assert.Equal(Under("ready"), folder.Ready);
+        Assert.Equal(Under("release"), folder.Release);
+        Assert.Equal(Under("previous"), folder.Previous);
+        Assert.Equal(Under("previous.old"), folder.PreviousOld);
+        Assert.Equal(Under("outgoing"), folder.Outgoing);
+        Assert.Equal(Under("kept"), folder.Kept);
+        Assert.Equal(Under("swap.json"), folder.Journal);
+        Assert.Equal(Under("rollback"), folder.Rollback);
+        Assert.Equal(Under("swap-failed.txt"), folder.SwapFailed);
     }
 
     // ---- the exit, as the review left it (2026-11-04)
@@ -1373,7 +1427,7 @@ public sealed class UpdateFlowTests : IDisposable
 
     // ---- going back, as the review left it (2026-11-04)
 
-    private UpdateRollbackPlan? BackCheck(out string? reason, string running = "0.5.7") => UpdateRollback.Check(_f.Context(running), CancellationToken.None, out reason);
+    private UpdateRollbackPlan? BackCheck(out string? reason, string running = "0.5.7") => UpdateRollback.Check(_f.Context(running), CancellationToken.None, out reason, out _);
 
     private string InPrevious(string path) => Path.Combine(_f.Folder.Previous, path.Replace('/', Path.DirectorySeparatorChar));
 
@@ -1414,6 +1468,28 @@ public sealed class UpdateFlowTests : IDisposable
     }
 
     [Fact]
+    public async Task ValidlySignedProofsOfAnotherManifest_InPrevious_Refuse()
+    {
+        // The other two ways the chain can fail (review P21-4): it read as installed by hand.
+        await Updated();
+        string sha = UpdateShaFile.Text(new string('a', 64), UpdateCheck.ArchiveName(UpdateFixture.V("0.5.6"), UpdateFixture.Rid), new string('b', 64));
+        UpdateFixture.Write(Path.Combine(_f.Folder.PreviousRelease, UpdateFolder.ShaName), sha);
+        UpdateFixture.Write(Path.Combine(_f.Folder.PreviousRelease, UpdateFolder.SigName), UpdateSignature.SignatureLine(System.Text.Encoding.ASCII.GetBytes(sha), _f.Key) + "\n");
+        Assert.Null(BackCheck(out string? reason));
+        Assert.Equal(UpdateText.OldVersionAltered(UpdateManifest.FileName), reason);
+    }
+
+    [Fact]
+    public async Task AnEmptyProofsFolder_InPrevious_Refuses()
+    {
+        // Only an absent folder reads as installed by hand.
+        await Updated();
+        Directory.CreateDirectory(_f.Folder.PreviousRelease);
+        Assert.Null(BackCheck(out string? reason));
+        Assert.Equal(UpdateText.OldVersionNotSigned("0.5.6"), reason);
+    }
+
+    [Fact]
     public async Task AFileNobodyListed_InPrevious_Refuses()
     {
         // previous/ holds only verified old files now, and a planted DLL would come in beside the exe (reviews P4-1, P2-7).
@@ -1441,7 +1517,7 @@ public sealed class UpdateFlowTests : IDisposable
         AskRollback();
         File.WriteAllText(InPrevious("a.dll"), "altered");
 
-        Assert.Equal([UpdateText.WentBackFailedLine(UpdateText.OldVersionAltered("a.dll"))], Exit("0.5.7"));
+        Assert.Equal([UpdateText.GoingBackNow("0.5.6"), UpdateText.WentBackFailedLine(UpdateText.OldVersionAltered("a.dll"))], Exit("0.5.7"));
 
         Assert.False(File.Exists(_f.Folder.Rollback));
         Assert.Equal("new a", Installed("a.dll"));
@@ -1532,6 +1608,764 @@ public sealed class UpdateFlowTests : IDisposable
         Assert.Equal(_f.Root, UpdateInstall.Locate(exe));
         Assert.Equal(UpdateFixture.Exe, UpdateInstall.ExeName(exe));
         Assert.Null(UpdateInstall.Locate(null));
+    }
+
+    // ---- what review passes 8-21 found (2026-11-04)
+
+    private static FileHold Hold(string path) => FileHold.On(path);
+
+    private async Task KilledMidSwap(int at = 5)
+    {
+        await Ready();
+        var planned = Recheck(out _)!;
+        var swap = new UpdateSwap(_f.Folder, new KillAt(at));
+        Assert.Throws<KilledException>(() => swap.Run(swap.PlanUpdate("0.5.6", "0.5.7", planned.Installed.Exe, planned.Staged.Exe, planned.Moved, planned.Dropped, planned.Verified)));
+    }
+
+    private async Task KilledMidRollback(int at = 3)
+    {
+        await Updated();
+        AskRollback();
+        var plan = BackCheck(out _)!;
+        var swap = new UpdateSwap(_f.Folder, new KillAt(at));
+        Assert.Throws<KilledException>(() => swap.Run(swap.PlanRollback("0.5.7", "0.5.6", plan.Installed.Exe, plan.Target.Exe, plan.Incoming, plan.Added, plan.Verified)));
+    }
+
+    private UpdateStartResult StartAs(string running, string exe, bool interactive = true)
+    {
+        var result = UpdateStartup.Run(_f.Context(running, exe), interactive, null, _ => { });
+        result.Held?.Dispose();
+        return result;
+    }
+
+    // Part 1: a file that can't be read right now
+
+    [Fact]
+    public async Task AHeldStagedManifest_KeepsTheStage_AtAnyStart()
+    {
+        // A brief hold at any start, headless too, deleted ready and the stage with no line (review P8-6).
+        await Ready();
+        using (Hold(_f.Folder.StagingManifest))
+        {
+            Start("0.5.6", interactive: false);
+        }
+
+        Assert.True(File.Exists(_f.Folder.Ready));
+        Assert.True(File.Exists(_f.Folder.StagingManifest));
+    }
+
+    [Fact]
+    public async Task AHeldInstalledManifest_KeepsTheStage_AtAStart_AndAtAnExit()
+    {
+        await Ready();
+        List<string> lines;
+        using (Hold(_f.Folder.Manifest))
+        {
+            Start("0.5.6", interactive: false);
+            lines = Exit();
+        }
+
+        Assert.Equal([UpdateText.FailedLine(UpdateText.InstallManifestHeld)], lines);   // not "this install is damaged" (review P8-8)
+        Assert.True(File.Exists(_f.Folder.Ready));
+        Assert.Equal("old exe", Installed(UpdateFixture.Exe));
+    }
+
+    [Fact]
+    public async Task AMissingInstalledManifest_IsntTheStagesFault()
+    {
+        // A by-hand unpack's moment without one cost a verified stage, blamed on the download (review P20-2).
+        await Ready();
+        File.Delete(_f.Folder.Manifest);
+        Assert.Null(UpdateRecheck.Check(_f.Context(), CancellationToken.None, out string? reason, out var failure));
+        Assert.Equal(UpdateRecheckFailure.Keep, failure);
+        Assert.Contains(UpdateText.ManifestUnreadable, reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AListedFileItCantRead_KeepsTheStage_AndMovesNothingToKept()
+    {
+        // It read as altered, so a genuine old file went to kept/ and the way back was lost (review P11-4).
+        await Ready();
+        File.WriteAllText(_f.Folder.Full("same.dll"), "same, with a new stamp");
+        File.SetLastWriteTimeUtc(_f.Folder.Full("same.dll"), DateTime.UtcNow.AddHours(-3));
+        using (Hold(_f.Folder.Full("same.dll")))
+        {
+            Assert.Null(UpdateRecheck.Check(_f.Context(), CancellationToken.None, out string? reason, out var failure));
+            Assert.Equal(UpdateRecheckFailure.Keep, failure);
+            Assert.NotNull(reason);
+        }
+
+        Assert.False(Directory.Exists(_f.Folder.Kept));
+    }
+
+    [Fact]
+    public async Task AFileInPreviousItCantRead_KeepsThePendingRollback()
+    {
+        // A scanner in previous/ deleted the request, with a raw exception as the reason (review P8-9).
+        await Updated();
+        AskRollback();
+        List<string> lines;
+        using (Hold(InPrevious("a.dll")))
+        {
+            lines = Exit("0.5.7");
+        }
+
+        Assert.Equal(UpdateText.GoingBackNow("0.5.6"), lines[0]);
+        Assert.Contains("; the next quit tries again", lines[1], StringComparison.Ordinal);
+        Assert.StartsWith("Didn't go back: ", lines[1], StringComparison.Ordinal);
+        Assert.True(File.Exists(_f.Folder.Rollback));
+        Assert.Equal(UpdateText.GoingBackNow("0.5.6"), Exit("0.5.7")[0]);
+    }
+
+    [Fact]
+    public async Task AnOldCopyJustAfterASwap_ReadsAHeldManifestAgain_AndIsStillToldToStartAgain()
+    {
+        // A scanner on the fresh manifest read as "stale", so the old exe ran on over new libraries (reviews P8-2, P8-19).
+        await Ready();
+        Exit();
+        var hold = Hold(_f.Folder.Manifest);
+        int pauses = 0;
+
+        var start = Start("0.5.6", interactive: false, pause: _ =>
+        {
+            if (++pauses == 1)
+            {
+                hold.Dispose();
+            }
+        });
+
+        hold.Dispose();
+        Assert.True(start.StartAgain);
+        Assert.Equal(1, pauses);
+        Assert.True(File.Exists(_f.Folder.Journal));
+    }
+
+    [Fact]
+    public async Task AnOldCopyJustAfterASwap_WithAManifestHeldThroughout_LeavesTheJournal_AndRunsOn()
+    {
+        await Ready();
+        Exit();
+        UpdateStartResult start;
+        using (Hold(_f.Folder.Manifest))
+        {
+            start = Start("0.5.6", interactive: false);
+        }
+
+        Assert.False(start.StartAgain);
+        Assert.False(start.JournalMayGo);
+        Printed(start);
+        Assert.True(File.Exists(_f.Folder.Journal));
+    }
+
+    [Fact]
+    public async Task AJournalItCantReadAtTheStart_ReadsAsMixed()
+    {
+        // Review P8-12.
+        await KilledMidSwap();
+        UpdateStartResult start;
+        using (Hold(_f.Folder.Journal))
+        {
+            start = Start("0.5.6");
+        }
+
+        Assert.Contains(UpdateText.MixedLine, start.Line, StringComparison.Ordinal);
+        Assert.True(File.Exists(_f.Folder.Journal));
+    }
+
+    [Fact]
+    public async Task AJournalItCantReadWhileWaiting_IsntOneAnotherCopySettled()
+    {
+        // The retry counted it as settled, so the copy ran on a half-moved install with no warning (review P8-12).
+        await KilledMidSwap();
+        var other = UpdateLock.TryShared(_f.Folder.InUseLock)!;
+        FileHold? hold = null;
+        UpdateStartResult start;
+        try
+        {
+            start = Start("0.5.6", pause: _ => hold ??= Hold(_f.Folder.Journal));
+        }
+        finally
+        {
+            hold?.Dispose();
+            other.Dispose();
+        }
+
+        Assert.Contains(UpdateText.MixedLine, start.Line, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AnUndoAnotherCopyFinishes_AfterTheWait_PrintsNoMixedLine()
+    {
+        // Review P9-5: an undo of 5 s printed a mixed line over a finished undo.
+        await KilledMidSwap();
+        var other = UpdateLock.TryShared(_f.Folder.InUseLock)!;
+        var waited = TimeSpan.Zero;
+        bool done = false;
+
+        var start = Start("0.5.6", pause: time =>
+        {
+            waited += time;
+            if (waited >= UpdateStartup.SettleLimit && !done)
+            {
+                done = true;
+                new UpdateSwap(_f.Folder).Undo(UpdateJournal.TryRead(_f.Folder)!);
+                other.Dispose();
+            }
+        });
+        other.Dispose();
+
+        Assert.DoesNotContain(UpdateText.MixedLine, start.Line ?? "", StringComparison.Ordinal);
+        Assert.False(File.Exists(_f.Folder.Journal));
+    }
+
+    [Fact]
+    public async Task ASwapFailedItCantRead_IsntMarkedShown()
+    {
+        // The acknowledge would delete a failure nobody saw (review P9-8).
+        await Ready();
+        File.WriteAllText(_f.Folder.SwapFailed, "a reason");
+        UpdateStartResult start;
+        using (Hold(_f.Folder.SwapFailed))
+        {
+            start = Start("0.5.6");
+        }
+
+        Assert.False(start.FailureShown);
+        Assert.Null(start.Line);
+        Printed(start);
+        Assert.True(File.Exists(_f.Folder.SwapFailed));
+    }
+
+    [Fact]
+    public async Task AnEmptySwapFailed_IsShown_SoItGoes()
+    {
+        await Ready();
+        File.WriteAllText(_f.Folder.SwapFailed, "");
+        var start = Start("0.5.6");
+        Assert.True(start.FailureShown);
+        Assert.Null(start.Line);
+    }
+
+    [Fact]
+    public async Task AJournalOverTheCap_IsRejected_AsBadJsonIs()
+    {
+        // Review P13-19.
+        await Ready();
+        using (var big = new FileStream(_f.Folder.Journal, FileMode.Create))
+        {
+            big.SetLength(UpdateFolder.ReadCap + 1);
+        }
+
+        Assert.Null(UpdateJournal.TryRead(_f.Folder, out bool unreadable));
+        Assert.False(unreadable);
+        Assert.False(File.Exists(_f.Folder.Journal));
+    }
+
+    [Fact]
+    public async Task TheChain_HashesTheBytesItsGiven_NotTheFileAgain()
+    {
+        // A manifest changed between the parse and the hash passed on the later file's hash (review P13-8).
+        await Ready();
+        byte[] real = File.ReadAllBytes(_f.Folder.StagingManifest);
+        var parsed = UpdateManifest.ReadFile(_f.Folder.StagingManifest, out _)!;
+        Assert.Equal(UpdateChainAnswer.Holds, UpdateProofs.Chain(_f.Folder.Staged, real, parsed, _f.Keys));
+        Assert.Equal(UpdateChainAnswer.OtherManifest, UpdateProofs.Chain(_f.Folder.Staged, [.. real, (byte)' '], parsed, _f.Keys));
+    }
+
+    // Part 2: settling
+
+    [Fact]
+    public async Task AJournalOfNeitherVersion_WithNoManifest_Stays_AndSaysMixed()
+    {
+        // Mid-swap the manifest is gone, and a stray copy of a third version deleted the only record of the moves (review P11-1).
+        await KilledMidSwap();
+        File.Delete(_f.Folder.Manifest);
+        var journalSays = UpdateJournal.TryRead(_f.Folder)!;
+
+        var start = UpdateStartup.Run(_f.Context("0.5.9"), true, null, _ => { });
+        start.Held?.Dispose();
+
+        Assert.Equal("0.5.6", journalSays.Source);
+        Assert.True(File.Exists(_f.Folder.Journal));
+        Assert.Contains(UpdateText.MixedLine, start.Line, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("0.5.6")]
+    [InlineData("0.5.7")]
+    public async Task AJournalOfNeitherVersion_WithAManifestAtOneOfItsVersions_Stays(string held)
+    {
+        await KilledMidSwap();
+        InstalledManifestSays(held);
+
+        var start = Start("0.5.9");
+
+        Assert.True(File.Exists(_f.Folder.Journal));
+        Assert.Contains(UpdateText.MixedLine, start.Line, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ARenamedCopyOfTheTarget_LeavesAHalfDoneSwap_WithTheJournal()
+    {
+        // It finished a swap that never reached its end, and the journal, the only record, went (review P15-2).
+        await KilledMidSwap();
+        var start = StartAs("0.5.7", "Copy.exe");
+        Assert.True(UpdateJournal.TryRead(_f.Folder) is { Finished: false });
+        Assert.Contains(UpdateText.MixedLine, start.Line, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheListedExeOfTheTarget_OverAKilledSwap_FinishesIt()
+    {
+        // The target unpacked by hand over a killed swap: this exe is what the last step puts there (review P15-2).
+        await KilledMidSwap();
+        var start = StartAs("0.5.7", UpdateFixture.Exe);
+        Assert.True(UpdateJournal.TryRead(_f.Folder) is { Finished: true });
+        Assert.DoesNotContain(UpdateText.MixedLine, start.Line ?? "", StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AKilledSwapThenAPackageOfTheOldVersionUnpackedOverIt_ReadsAsWhole()
+    {
+        // Both paths of every step that ran are there, which reads as a conflict, and the hashes say it's whole (review P15-2).
+        await KilledMidSwap(8);
+        _f.Install("0.5.6", new Dictionary<string, string> { [UpdateFixture.Exe] = "old exe", ["a.dll"] = "old a", ["same.dll"] = "same" });
+
+        var start = Start("0.5.6");
+
+        Assert.DoesNotContain(UpdateText.MixedLine, start.Line ?? "", StringComparison.Ordinal);
+        Assert.False(File.Exists(_f.Folder.Journal));
+    }
+
+    [Fact]
+    public async Task ADropOverAnUnsettledSwap_Refuses_AndTheCommandSaysSo()
+    {
+        // Its undo moves files back into staging, and "Update canceled." over a stage still there would be false (reviews P12-1, P12-8).
+        await KilledMidSwap();
+        Assert.False(UpdateStage.Drop(_f.Folder));
+        Assert.True(File.Exists(_f.Folder.Ready));
+        Assert.Equal(UpdateText.UnsettledSwap, new AppUpdater(_f.Context(), null, _f.Client).DropStage(alsoParts: true));
+        Assert.True(Directory.Exists(_f.Folder.Staging));
+    }
+
+    [Fact]
+    public async Task AnExit_WithStageWorkRunning_MovesNothing()
+    {
+        // A window close swapped a ready stage while this process's own install was still fetching proofs (review P12-3).
+        await Ready();
+        List<string> lines;
+        using (UpdateLock.TryExclusive(_f.Folder.StagingLock))
+        {
+            lines = Exit();
+        }
+
+        Assert.Equal([UpdateText.FailedLine(UpdateText.StageWorkRunning)], lines);
+        Assert.Equal("old exe", Installed(UpdateFixture.Exe));
+        Assert.True(File.Exists(_f.Folder.Ready));
+    }
+
+    [Fact]
+    public async Task AnOldExeCopiedBackByHand_IsntToldToStartAgain_ForGood()
+    {
+        // Starting again would repeat at every start (review P9-3). It runs on with the mixed line, once.
+        await Ready();
+        Exit();
+        File.WriteAllText(_f.Folder.Full(UpdateFixture.Exe), "old exe");
+
+        var start = Start("0.5.6");
+
+        Assert.False(start.StartAgain);
+        Assert.Contains(UpdateText.MixedLine, start.Line, StringComparison.Ordinal);
+        Printed(start);
+        Assert.False(File.Exists(_f.Folder.Journal));
+        Assert.Null(Start("0.5.6").Line);
+    }
+
+    [Fact]
+    public async Task AWaitThatRunsOut_OverAnUnsettledSwap_SaysAnUpdateIsStillRunning()
+    {
+        // Not "interrupted" (review P12-10): the other copy is working on it.
+        await KilledMidSwap();
+        using var holder = UpdateLock.TryExclusive(_f.Folder.InUseLock);
+
+        var start = Start("0.5.6");
+
+        Assert.Equal(UpdateText.StillRunningLine, start.Line);
+        Assert.Null(start.Held);
+    }
+
+    [Fact]
+    public async Task AKillBetweenTheManifestMoves_ReadsAsAnUnsettledSwap_NotAsNoPackage()
+    {
+        // Every /update form said this copy wasn't installed from a package (review P12-11).
+        await KilledMidSwap();
+        File.Delete(_f.Folder.Manifest);
+        var updater = new AppUpdater(_f.Context(), null, _f.Client);
+
+        Assert.True(updater.IsPackage);
+        Assert.Equal(UpdateText.UnsettledSwap, (await updater.CheckAsync(CancellationToken.None)).Reason);
+        Assert.Equal(UpdateText.UnsettledSwap, _f.Stage().Preflight(1));
+    }
+
+    [Fact]
+    public void ALoneRollbackWithNothingToGoBackTo_IsTidied()
+    {
+        // It refused every update with "going back is pending", and /update cancel found nothing (review P12-7).
+        _f.Usual();
+        Directory.CreateDirectory(_f.Folder.Root);
+        File.WriteAllText(_f.Folder.Rollback, "");
+
+        Start("0.5.6", interactive: false);
+
+        Assert.False(File.Exists(_f.Folder.Rollback));
+    }
+
+    [Fact]
+    public async Task AKilledSwapUndone_SaysItInstallsAtTheNextExit()
+    {
+        // A window close can run out of time again, so the promise is /exit (review P15-4).
+        await KilledMidSwap();
+        Assert.Equal(UpdateText.UndoneInstallsLine, Start("0.5.6").Line);
+        Assert.True(File.Exists(_f.Folder.Ready));
+    }
+
+    [Fact]
+    public async Task AKilledRollbackUndone_SaysGoingBackRunsThen_NeverThatAnUpdateInstalls()
+    {
+        await KilledMidRollback();
+        Assert.Equal(UpdateText.UndoneBackRunsLine, Start("0.5.7").Line);
+        Assert.True(File.Exists(_f.Folder.Rollback));
+    }
+
+    [Fact]
+    public async Task AKilledRollbackUndone_WithTheRequestAlreadyGone_MakesNoPromise()
+    {
+        await KilledMidRollback();
+        File.Delete(_f.Folder.Rollback);
+        Assert.Equal(UpdateText.UndoneBackLine, Start("0.5.7").Line);
+    }
+
+    [Fact]
+    public async Task AKillInsideTheFinish_UnderTheOldExe_UndoesItAll()
+    {
+        // ready and staging are gone, and the journal isn't finished: previous.old and outgoing still stand for the walk's first steps, as Finish deletes them only after the save (2026-11-04, the walk).
+        await Ready();
+        File.WriteAllText(Path.Combine(Directory.CreateDirectory(_f.Folder.Previous).FullName, "x"), "the older previous");
+        var planned = Recheck(out _)!;
+        var swap = new UpdateSwap(_f.Folder);
+        var journal = swap.PlanUpdate("0.5.6", "0.5.7", planned.Installed.Exe, planned.Staged.Exe, planned.Moved, planned.Dropped, planned.Verified);
+        var blocked = new UpdateSwap(_f.Folder, new SaveBlockerAfterFirstSave(_f.Folder));
+
+        var result = blocked.Run(journal);
+
+        Assert.True(result.Done);
+        Assert.True(UpdateJournal.TryRead(_f.Folder) is { Finished: false });
+        Assert.False(File.Exists(_f.Folder.Ready));
+        Assert.True(Directory.Exists(_f.Folder.PreviousOld));   // a save that fails deletes none of what the walk reads
+        Directory.Delete(_f.Folder.Journal + ".tmp");
+
+        var start = Start("0.5.6");
+
+        Assert.Equal(UpdateText.UndoneLine, start.Line);
+        Assert.Equal("old exe", Installed(UpdateFixture.Exe));
+        Assert.Equal("old a", Installed("a.dll"));
+        Assert.Equal("the older previous", File.ReadAllText(InPrevious("x")));
+        Assert.False(File.Exists(_f.Folder.Journal));
+    }
+
+    /// <summary>Real moves. The journal's first save has to work, so the temp name's folder comes only once a step runs: Finish's save then fails, the state a kill just before it leaves.</summary>
+    private sealed class SaveBlockerAfterFirstSave(UpdateFolder folder) : IUpdateFiles
+    {
+        private readonly UpdateFiles _real = new();
+
+        private void Block() => Directory.CreateDirectory(folder.Journal + ".tmp");
+
+        public void Move(string from, string to)
+        {
+            Block();
+            _real.Move(from, to);
+        }
+
+        public void MakeFolder(string path)
+        {
+            Block();
+            _real.MakeFolder(path);
+        }
+
+        public void RemoveFolder(string path)
+        {
+            Block();
+            _real.RemoveFolder(path);
+        }
+    }
+
+    [Fact]
+    public async Task ARenamedNewerCopysStart_LeavesTheStageAndThePartial()
+    {
+        // The folder holds 0.5.6, whatever this copy is (review P11-7).
+        await Ready();
+        string partial = Path.Combine(_f.Folder.StagingParts, UpdateCheck.ArchiveName(UpdateFixture.V("0.5.9"), UpdateFixture.Rid));
+        UpdateFixture.Write(partial, "part");
+
+        StartAs("0.5.9", "Copy.exe", interactive: false);
+
+        Assert.True(File.Exists(_f.Folder.Ready));
+        Assert.True(File.Exists(partial));
+    }
+
+    [Fact]
+    public async Task AFolderThatNoLongerHoldsThisVersion_RefusesAtEveryStep_AndKeepsTheStage()
+    {
+        // A package unpacked over it mid-session: a quit took 0.5.9 down (review P15-1).
+        await Ready();
+        InstalledManifestSays("0.5.5");
+
+        Assert.Null(UpdateRecheck.Check(_f.Context(), CancellationToken.None, out string? reason, out var failure));
+        Assert.Equal(UpdateText.FolderNotThisVersion("0.5.5", "0.5.6"), reason);
+        Assert.Equal(UpdateRecheckFailure.Keep, failure);
+        Assert.Equal(UpdateText.FolderNotThisVersion("0.5.5", "0.5.6"), _f.Stage().Preflight(1));
+    }
+
+    [Fact]
+    public async Task ARollbackOverAFolderThatNoLongerHoldsThisVersion_Refuses()
+    {
+        await Updated();
+        InstalledManifestSays("0.5.8");
+        Assert.Null(BackCheck(out string? reason));
+        Assert.Equal(UpdateText.FolderNotThisVersion("0.5.8", "0.5.7"), reason);
+    }
+
+    [Fact]
+    public async Task ARollbackToAnotherPlatformsPackage_Refuses()
+    {
+        // Review P9-2.
+        await Updated();
+        File.WriteAllText(_f.Folder.PreviousManifest, UpdateFixture.Manifest("0.5.6", new Dictionary<string, string> { [UpdateFixture.Exe] = "old exe", ["a.dll"] = "old a", ["same.dll"] = "same" }, rid: "osx-arm64"));
+        Assert.Null(BackCheck(out string? reason));
+        Assert.Equal(UpdateText.OldVersionOtherPlatform("osx-arm64"), reason);
+    }
+
+    [Fact]
+    public void AnExeUnderAPackagesUpdateFolder_IsntAnInstall()
+    {
+        // One started from previous/ took a lock of its own and could update (review P15-3).
+        _f.Usual();
+        string inside = Path.Combine(_f.Folder.Previous, "sub");
+        Directory.CreateDirectory(inside);
+        string exe = Path.Combine(inside, UpdateFixture.Exe);
+        File.WriteAllText(exe, "x");
+        string outside = Path.Combine(_f.Root, "elsewhere", UpdateFolder.Name, "a");
+        Directory.CreateDirectory(outside);
+
+        Assert.Null(UpdateInstall.Locate(exe));
+        Assert.Equal(_f.Root, UpdateInstall.InstallAbove(inside));
+        Assert.Equal(_f.Root, UpdateInstall.Locate(_f.Folder.Full(UpdateFixture.Exe)));
+        Assert.Null(UpdateInstall.InstallAbove(outside));   // an .update with no package above it
+    }
+
+    [Fact]
+    public void ALinkInAFolderTheNewVersionNeeds_MovesAsOneEntry_ItsTargetUntouched()
+    {
+        // A junction to Documents: the swap moved the user's real documents into kept (review P8-10).
+        _f.Install("0.5.6", new Dictionary<string, string> { [UpdateFixture.Exe] = "old exe" });
+        string outside = Path.Combine(_f.Root, "..", Path.GetFileName(_f.Root) + "-documents");
+        UpdateFixture.Write(Path.Combine(outside, "mine.txt"), "the user's");
+        try
+        {
+            string stray = _f.Folder.Full("thing");
+            Directory.CreateDirectory(stray);
+            try
+            {
+                Directory.CreateSymbolicLink(Path.Combine(stray, "link"), outside);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return;   // no right to make a link here
+            }
+
+            UpdateFixture.Write(Path.Combine(_f.Folder.Staging, UpdateFixture.Exe), "new");
+            UpdateFixture.Write(Path.Combine(_f.Folder.Staging, "thing"), "a new file");
+            UpdateFixture.Write(_f.Folder.StagingManifest, "m");
+            var swap = new UpdateSwap(_f.Folder);
+            var result = swap.Run(swap.PlanUpdate("0.5.6", "0.5.7", UpdateFixture.Exe, UpdateFixture.Exe, [UpdateFixture.Exe, "thing"], [], [UpdateFixture.Exe]));
+
+            Assert.True(result.Done, result.Reason);
+            Assert.Equal("the user's", File.ReadAllText(Path.Combine(outside, "mine.txt")));
+            Assert.Equal("a new file", Installed("thing"));
+        }
+        finally
+        {
+            Directory.Delete(outside, recursive: true);
+        }
+    }
+
+    [WindowsFact]
+    public async Task AReadyThatWontDelete_StopsANewStage_BeforeAnythingElseGoes()
+    {
+        // Deleting the files under a ready that stays left a stage that fails at quit (review P13-1). A held file can't be deleted on Windows only.
+        await Ready();
+        var newer = _f.Publish("0.5.8", new Dictionary<string, string> { [UpdateFixture.Exe] = "newer exe", ["a.dll"] = "newer a", ["same.dll"] = "same" });
+        _f.Probe.Version = "0.5.8";
+        UpdateStageResult result;
+        using (Hold(_f.Folder.Ready))
+        {
+            result = await _f.Stage().StageAsync(newer, null, CancellationToken.None);
+        }
+
+        Assert.Equal(UpdateText.CouldntDelete(_f.Folder.Ready), result.Reason);
+        Assert.Equal("new exe", File.ReadAllText(Staged(UpdateFixture.Exe)));
+    }
+
+    // Part 3: the exit's words
+
+    [Fact]
+    public async Task ARollbackRefusedAtExit_SaysTheReadyUpdateStillInstalls_AndItDoes()
+    {
+        // COMMANDS said quitting deleted that stage, and the next quit installed it (review P11-3).
+        await Updated();
+        var newer = _f.Publish("0.5.8", new Dictionary<string, string> { [UpdateFixture.Exe] = "newer exe", ["a.dll"] = "newer a", ["same.dll"] = "same", ["docs/new.md"] = "new doc" });
+        _f.Probe.Version = "0.5.8";
+        Assert.True((await _f.Stage("0.5.7").StageAsync(newer, null, CancellationToken.None)).Ok);
+        AskRollback();
+        File.WriteAllText(InPrevious("a.dll"), "altered");
+
+        var lines = Exit("0.5.7");
+
+        Assert.Equal(UpdateText.WentBackFailedLine(UpdateText.ReadyStillInstalls(UpdateText.OldVersionAltered("a.dll"))), lines[^1]);
+        Assert.Contains(UpdateText.InstalledLine("0.5.8"), Exit("0.5.7"));
+        Assert.Equal("newer exe", Installed(UpdateFixture.Exe));
+    }
+
+    [Fact]
+    public async Task APendingRollback_StoppedByARenamedCopy_UsesItsOwnWords_AndLeavesNoFile()
+    {
+        // "The update didn't install" said nothing true of going back (reviews P9-9, P11-10), and the next start may be the listed exe (review P20-1).
+        await Updated();
+        AskRollback();
+        Assert.Equal([UpdateText.WentBackFailedLine(UpdateText.RenamedCopy(UpdateFixture.Exe))], Exit("0.5.7", "Copy.exe"));
+
+        new UpdateExit(_f.Context("0.5.7", "Copy.exe"), null, null).Run(null);
+        Assert.False(File.Exists(_f.Folder.SwapFailed));
+    }
+
+    [Fact]
+    public async Task APendingRollback_StoppedByADamagedManifest_UsesItsOwnWords_AndLeavesNoFile()
+    {
+        await Updated();
+        AskRollback();
+        File.WriteAllText(_f.Folder.Manifest, "{ not a manifest");
+
+        Assert.StartsWith("Didn't go back: ", Assert.Single(Exit("0.5.7")), StringComparison.Ordinal);
+
+        new UpdateExit(_f.Context("0.5.7"), null, null).Run(null);
+        Assert.False(File.Exists(_f.Folder.SwapFailed));
+    }
+
+    [Fact]
+    public async Task AnUnsettledSwapStoppingARollback_SaysGoingBackIsNext()
+    {
+        await KilledMidSwap();
+        File.WriteAllText(_f.Folder.Rollback, "");
+        Assert.Equal([UpdateText.WentBackFailedLine(UpdateText.SettledInsteadBack)], Exit());
+    }
+
+    [Fact]
+    public async Task ARollbackRefusedAtAWindowClose_SavesItsWholeSentence_AndTheStartPrintsItAsItIs()
+    {
+        // A bare reason can't say which it was (review P9-9).
+        await Updated();
+        AskRollback();
+        File.WriteAllText(InPrevious("a.dll"), "altered");
+
+        new UpdateExit(_f.Context("0.5.7"), null, null).Run(null);
+
+        string saved = UpdateText.WindowCloseBackFailed(UpdateText.OldVersionAltered("a.dll"));
+        Assert.Equal(saved, File.ReadAllText(_f.Folder.SwapFailed));
+        var start = Start("0.5.7");
+        Assert.Equal(saved, start.Line);
+        Assert.True(start.FailureShown);
+    }
+
+    [Fact]
+    public async Task ALockThatCantOpen_DoesntBlameAnotherCopy()
+    {
+        // A root-owned lock file read as another copy, for good (review P12-9).
+        await Ready();
+        Directory.CreateDirectory(_f.Folder.InUseLock);
+        Assert.Equal([UpdateText.FailedLine(UpdateText.LockCantOpen(_f.Folder.InUseLock))], Exit());
+    }
+
+    [Fact]
+    public async Task AWindowCloseOutOfTime_LeavesALine_ForTheNextStart()
+    {
+        // Someone who always closes by the X was never told (review P12-12).
+        await Ready();
+        new UpdateExit(_f.Context(), null, null).Run(null, TimeSpan.Zero);
+        Assert.Equal(UpdateText.CloseRanOutLine, File.ReadAllText(_f.Folder.SwapFailed));
+        Assert.Equal("old exe", Installed(UpdateFixture.Exe));
+        Assert.Equal(UpdateText.CloseRanOutLine, Start("0.5.6").Line);
+    }
+
+    [Fact]
+    public async Task ARollbacksWindowCloseOutOfTime_SaysGoingBackRunsThen()
+    {
+        await Updated();
+        AskRollback();
+        new UpdateExit(_f.Context("0.5.7"), null, null).Run(null, TimeSpan.Zero);
+        Assert.Equal(UpdateText.CloseRanOutBackLine, File.ReadAllText(_f.Folder.SwapFailed));
+        Assert.True(File.Exists(_f.Folder.Rollback));
+    }
+
+    [Fact]
+    public void AMacSignalClose_GetsTheDeadlineWhole()
+    {
+        // Nothing kills the Mac path, so nothing is taken off (review P14-6), and a logout still can't hash without limit.
+        var deadline = TimeSpan.FromSeconds(5);
+        Assert.Equal(deadline, UpdateExit.CloseBudget(deadline, TimeSpan.FromSeconds(4), killedAtTheDeadline: false));
+        Assert.True(UpdateExit.CloseBudget(deadline, TimeSpan.FromSeconds(4)) < TimeSpan.FromSeconds(1));
+    }
+
+    [Fact]
+    public async Task AFailureLineToADeadTerminal_AlsoLeavesTheFile()
+    {
+        // Review P19-2.
+        await Ready();
+        File.WriteAllText(Staged("a.dll"), "evil");
+        var lines = new List<string>();
+
+        new UpdateExit(_f.Context(), null, null).Run(lines.Add, terminalGone: () => true);
+
+        Assert.Single(lines, line => line.Contains(UpdateText.StageChanged[1..], StringComparison.Ordinal));
+        Assert.Equal(UpdateText.WindowCloseFailed(UpdateText.StageChanged), File.ReadAllText(_f.Folder.SwapFailed));
+    }
+
+    [Fact]
+    public void AFailureLine_IsOneLine_WithNoControlCharacters_AndACappedLength()
+    {
+        // A stray named with \r or an ESC reached the terminal at /exit, and the rollback's reason can name a file on disk (reviews P11-11, P13-3).
+        string reason = "a\r\nb\u001b[31mc" + new string('x', 5000);
+        foreach (string line in new[] { UpdateText.FailedLine(reason), UpdateText.WentBackFailedLine(reason), UpdateText.WindowCloseFailed(reason), UpdateText.CheckFailedLine(reason), UpdateText.StageFailedLine(reason), UpdateText.RollbackRefusedLine(reason) })
+        {
+            Assert.DoesNotContain(line, char.IsControl);
+            Assert.True(line.Length < 1000, line.Length.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+    }
+
+    [Fact]
+    public async Task AGoneDoc_IsntNamedAsTheCopyThatStays()
+    {
+        // An edited doc the new version dropped is in kept/, and "the current one stays" named a file that wasn't there (review P11-15).
+        _f.Install("0.5.6", new Dictionary<string, string> { [UpdateFixture.Exe] = "old exe", ["docs/a.md"] = "old a" });
+        var release = _f.Publish("0.5.7", new Dictionary<string, string> { [UpdateFixture.Exe] = "new exe" });
+        Assert.True((await _f.Stage().StageAsync(release, null, CancellationToken.None)).Ok);
+        File.WriteAllText(_f.Folder.Full("docs/a.md"), "edited");
+        Exit();
+        Printed(Start("0.5.7"));
+
+        var plan = BackCheck(out string? reason);
+
+        Assert.Null(reason);
+        Assert.Empty(plan!.DocsStaying);
     }
 
     [UnixFact]

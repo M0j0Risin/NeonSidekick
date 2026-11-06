@@ -366,7 +366,7 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
             catch (EmbeddedLlmException ex) when (auto && choice.Backend == LlamaBackend.Cuda && !ex.RuntimeMissing && !ex.VramOnlyRefused && !ex.Killed
                 && !cancellationToken.IsCancellationRequested && !KilledSince(kills))
             {
-                _cudaFailed = true;
+                _cudaFailed = !ex.VisualCppMissing;
                 DiagnosticLog.Warn(Category, EmbeddedLlmText.CudaFallback(ex.Message));
                 return await StartOnAsync(host, LlamaBackend.Vulkan, model, effective, auto, phase, beforeLoad, kills, cancellationToken).ConfigureAwait(false);
             }

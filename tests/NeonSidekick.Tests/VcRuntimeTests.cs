@@ -61,6 +61,14 @@ public sealed class VcRuntimeTests : IDisposable
     }
 
     [Fact]
+    public void ExplainAlone_LeavesOutTheAppsOwnGuess_WhenADllIsMissing()
+    {
+        // Beside the runtime's text it told a PC without it that a file sitting beside the exe was missing (review P14-4).
+        Assert.Equal("the guess", VcRuntime.ExplainAlone("the guess", AllLoad));
+        Assert.Equal(VcRuntimeText.Missing(VcRuntime.MainLibrary), VcRuntime.ExplainAlone("the guess", NoneLoad));
+    }
+
+    [Fact]
     public void Explain_KeepsTodaysDetail_UnlessADllIsMissing()
     {
         Assert.Equal("today's", VcRuntime.Explain("today's", AllLoad));

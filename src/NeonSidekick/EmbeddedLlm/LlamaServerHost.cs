@@ -14,14 +14,20 @@ public sealed record EmbeddedServerInfo(Uri BaseUrl, int Port, string ApiKey, Ll
 /// <summary>An embedded-model failure the user reads as it is (a start that failed, a runtime that would not install, a model not installed).</summary>
 public sealed class EmbeddedLlmException : Exception
 {
-    public EmbeddedLlmException(string message, bool portInUse = false, bool runtimeMissing = false, bool vramOnlyRefused = false, bool killed = false)
+    public EmbeddedLlmException(string message, bool portInUse = false, bool runtimeMissing = false, bool vramOnlyRefused = false, bool killed = false, bool visualCppMissing = false)
         : base(message)
     {
+        VisualCppMissing = visualCppMissing;
         PortInUse = portInUse;
         RuntimeMissing = runtimeMissing;
         VramOnlyRefused = vramOnlyRefused;
         Killed = killed;
     }
+
+    /// <summary>
+    /// True when a Visual C++ DLL is why it ended (2026-11-04, review P10-5): the fallback to Vulkan still runs, but it says nothing about CUDA, so installing the runtime mid-session must bring CUDA back.
+    /// </summary>
+    public bool VisualCppMissing { get; }
 
     /// <summary>
     /// True when the kill switch (Ctrl+Alt+X, 2026-10-01) stopped the start: the user's own act, not a failure, so no CUDA to
@@ -619,7 +625,7 @@ public sealed class LlamaServerHost : ILlamaServerHost
     {
         if (code == App.VcRuntime.DllNotFoundExitCode && App.VcRuntime.Missing(vcLoads) is { } library)
         {
-            return new EmbeddedLlmException(EmbeddedLlmText.StartFailed(App.VcRuntimeText.Missing(library)), runtimeMissing: App.VcRuntime.MainMissing(vcLoads));
+            return new EmbeddedLlmException(EmbeddedLlmText.StartFailed(App.VcRuntimeText.Missing(library)), runtimeMissing: App.VcRuntime.MainMissing(vcLoads), visualCppMissing: true);
         }
 
         bool portInUse = tail.Contains("bind", StringComparison.OrdinalIgnoreCase);

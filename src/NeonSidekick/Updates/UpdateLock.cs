@@ -15,6 +15,8 @@ public sealed class UpdateLock : IDisposable
     /// <summary>The same on Linux, which this app doesn't ship for but the suite can run on.</summary>
     private const int LinuxWouldBlock = 11;
 
+    private static readonly TimeSpan RetryStep = TimeSpan.FromMilliseconds(100);
+
     private readonly FileStream _file;
 
     private UpdateLock(FileStream file)
@@ -27,6 +29,14 @@ public sealed class UpdateLock : IDisposable
 
     /// <summary><see cref="TryShared(string)"/>, with <paramref name="held"/> true only when another holder is why it failed, so only that case waits (2026-11-04, review P5-2: an in-use lock that can't be opened read as an update in progress, 10 s at every start).</summary>
     public static UpdateLock? TryShared(string path, out bool held) => TryOpen(path, FileAccess.Read, FileShare.Read, out held);
+
+    /// <summary>
+    /// <see cref="TryExclusive(string, out bool)"/>, tried again while another holder is why it failed, up to <paramref name="limit"/>, the one such loop for the update's code (2026-11-04, reviews P11-12, P12-15: four had grown by hand, and <c>/update cancel</c>'s had none, so a start's tidy read as another copy downloading). <paramref name="stop"/> ends the wait early, with no hold.
+    /// </summary>
+    public static UpdateLock? TryExclusiveRetrying(string path, TimeSpan limit, Action<TimeSpan> pause, out bool held, Func<bool>? stop = null) => Retrying(path, FileAccess.ReadWrite, FileShare.None, limit, pause, out held, stop);
+
+    /// <summary><see cref="TryShared(string, out bool)"/>, tried again the same way.</summary>
+    public static UpdateLock? TrySharedRetrying(string path, TimeSpan limit, Action<TimeSpan> pause, out bool held) => Retrying(path, FileAccess.Read, FileShare.Read, limit, pause, out held, null);
 
     /// <summary>An exclusive hold, or null when anyone holds it.</summary>
     public static UpdateLock? TryExclusive(string path) => TryOpen(path, FileAccess.ReadWrite, FileShare.None, out _);
@@ -43,6 +53,24 @@ public sealed class UpdateLock : IDisposable
     {
         ArgumentNullException.ThrowIfNull(ex);
         return OperatingSystem.IsWindows() ? WriteResult.IsInUse(ex) : ex.HResult is MacWouldBlock or LinuxWouldBlock;
+    }
+
+    private static UpdateLock? Retrying(string path, FileAccess access, FileShare share, TimeSpan limit, Action<TimeSpan> pause, out bool held, Func<bool>? stop)
+    {
+        ArgumentNullException.ThrowIfNull(pause);
+        var taken = TryOpen(path, access, share, out held);
+        for (var waiting = TimeSpan.Zero; taken is null && held && waiting < limit; waiting += RetryStep)
+        {
+            pause(RetryStep);
+            if (stop?.Invoke() == true)
+            {
+                return null;
+            }
+
+            taken = TryOpen(path, access, share, out held);
+        }
+
+        return taken;
     }
 
     private static UpdateLock? TryOpen(string path, FileAccess access, FileShare share, out bool held)

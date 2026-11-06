@@ -40,7 +40,7 @@ dotnet run --project src/NeonSidekick -c Release
 | `.\build.ps1` | Restore, build, run the tests with coverage, publish the native exe and smoke-test it. |
 | `.\build.ps1 -TestOnly` | Restore, build and test, with no publish. The quickest full check. |
 | `.\build.ps1 -Publish` | Restore, build, publish the native exe and smoke-test it, with no tests. |
-| `.\build.ps1 -Package` | The full run, then the release package in `publish\package\` (a `.zip` on Windows, a `.tar.gz` on a Mac) with the README, docs, license and a `.sha256`. Not with `-TestOnly`. |
+| `.\build.ps1 -Package` | The full run, then the release package in `publish\package\` (a `.zip` on Windows, a `.tar.gz` on a Mac) with the README, docs, license and a `.sha256`, then unpacks it to check it against its manifest. Not with `-TestOnly`. |
 | `.\build.ps1 -Package -Tag v1.2.3` | The same, refusing a tag that isn't `v` plus the project's `<Version>`. |
 | `.\build.ps1 -Publish -Package -UpdateSim` | A simulation build's package, for `tools/UpdateSim.cs` ([below](#making-a-release)). Never a release: `-Tag` refuses it. |
 | `.\build.ps1 -CoverageFloor 0` | Reports coverage without failing under the floor (80% by default). |
@@ -155,13 +155,15 @@ CI builds on a tag and leaves a draft, which `releases/latest` ignores. Nothing 
 2. Write the notes with `gh release edit vX.Y.Z --notes-file <file>`. The Install pane shows them. Their **Updating** line says to use `/update`, and that a copy older than 0.5.7 unpacks a fresh folder.
 3. Run `dotnet run tools/ReleaseSign.cs publish vX.Y.Z --key <file>`, and `--key` again for a second key. It shows the commit and hashes for you to confirm, signs, uploads the `.sig` files and publishes.
 
-Before publishing, it checks that CI built the tag's commit and that the signatures pass `UpdateKeys` and the last published release's keys. A failure stops at the draft, so nothing is offered, and running it again is fine. It says so loudly if `releases/latest` isn't this tag.
+Before publishing, it checks that CI built the tag's commit, that the tag is newer than the latest published release, and that each key passes `UpdateKeys` as of the tag. Any of these failing stops at the draft, so nothing is offered, and running it again is fine. It says so loudly if `releases/latest` isn't this tag.
+
+It then checks the signatures against the keys of every published version since 0.5.7. Copies on a version they'd fail would have to update by hand, so it asks you to type `publish-anyway`. A draft missing a platform's archive asks for `publish-without`.
 
 * **Moving a tag before publishing:** delete the draft as well, since CI skips a tag that already has a release. A forgotten draft stops at the commit check.
-* **Moving `Updates/UpdateKeys.cs`:** the tool can't find the last release's keys, so it asks you to type a confirmation that they weren't checked.
+* **Moving `Updates/UpdateKeys.cs`:** the tool can't find a published version's keys, so it asks you to type `publish-unchecked`.
 * **Pulling a bad release:** mark it a pre-release so `releases/latest` stops offering it, then ship a fix with a higher version. Copies that already downloaded it still install it, and only a higher version reaches them.
-* **A lost or stolen key:** sign the next release with the backup, and put a new key in the source in the bad one's place. Later releases carry the backup's line beside the new key's until copies on older versions have moved on.
-* **Losing both keys** means the next version is installed by hand. The tool asks you to type a confirmation that installed copies will refuse this release.
+* **A lost or stolen key:** sign the next release with the backup, and put a new key in the source in the bad one's place. The tool asks before a release that drops the backup's line while a published version still needs it.
+* **Losing both keys** means the next version is installed by hand. The tool asks you to type `publish-anyway`, since installed copies will refuse this release.
 
 **What a release must keep agreeing with:** the old exe stages and swaps the new one, so `--update-probe`, `update-manifest.json`, the `.sig` and `.sha256` formats, `swap.json` and the `.update` layout, `.update/kept` included, are lasting contracts, each pinned by a test. A fix to the swap itself takes effect one release later.
 

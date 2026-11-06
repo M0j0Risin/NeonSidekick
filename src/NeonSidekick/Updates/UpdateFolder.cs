@@ -1,4 +1,6 @@
+using System.Text;
 using NeonSidekick.Diagnostics;
+using NeonSidekick.Files;
 using NeonSidekick.Speech;
 
 namespace NeonSidekick.Updates;
@@ -35,6 +37,13 @@ public sealed class UpdateFolder
 
     /// <summary>The install hashes' name in <c>staged/</c>.</summary>
     public const string InstallHashesName = "install-hashes.json";
+
+    /// <summary>
+    /// The most any file read under <c>.update</c>, or the manifest, may hold (2026-11-04, review P13-19): far above any real one, since a manifest of hundreds of files is under 100 KB and notes are capped at 2 MB from the network. A stray 1 GB file was read whole on the start's synchronous path, in every mode, and the start's catch lets out-of-memory through.
+    /// </summary>
+    public const long ReadCap = 16 * 1024 * 1024;
+
+    private static readonly EnumerationOptions OneLevel = new() { RecurseSubdirectories = false, AttributesToSkip = 0, IgnoreInaccessible = false };
 
     public UpdateFolder(string install)
     {
@@ -112,9 +121,69 @@ public sealed class UpdateFolder
     /// <summary>A relative path, with forward slashes, for a path under the install (the journal holds these, so moving the folder changes nothing).</summary>
     public string Relative(string full) => Path.GetRelativePath(Install, full).Replace(Path.DirectorySeparatorChar, '/');
 
+    /// <summary>The file at <paramref name="path"/> read under <see cref="ReadCap"/>, or null when it holds more. Throws as a read does.</summary>
+    public static byte[]? ReadCapped(string path) => RegularFiles.ReadAtMost(path, ReadCap);
+
+    /// <summary><see cref="ReadCapped"/> as text.</summary>
+    public static string? ReadCappedText(string path) => ReadCapped(path) is { } bytes ? Encoding.UTF8.GetString(bytes) : null;
+
+    /// <summary>Whether <paramref name="path"/> is a symbolic link or a junction, to a file or a folder, its target there or not.</summary>
+    public static bool IsLink(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        try
+        {
+            return new FileInfo(path).LinkTarget is not null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Whether anything is at <paramref name="path"/>: a file, a folder, or a link whose target is gone.</summary>
+    public static bool Exists(string path) => File.Exists(path) || Directory.Exists(path) || IsLink(path);
+
     /// <summary>
-    /// Deletes a folder of this layout, the one delete for the update's code (2026-11-04, reviews P5-5, P1-20). A read-only file would otherwise fail the delete for good: <c>previous.old</c> stuck that way stopped every later swap with "still in use".
-    /// So a failure clears the attributes and tries once more. True when it's gone; what's left is logged, and something retries it next time.
+    /// The files and links under <paramref name="folder"/>, hidden ones too, a link counted as one entry and never walked through (2026-11-04, reviews P8-10, P10-16): a junction to Documents in a stray folder had a swap plan moves of the user's real documents, and a link loop walked until the path was too long. A folder it can't read throws.
+    /// </summary>
+    public static IEnumerable<string> EntriesUnder(string folder)
+    {
+        foreach (string entry in Directory.EnumerateFileSystemEntries(folder, "*", OneLevel))
+        {
+            if (Directory.Exists(entry) && !IsLink(entry))
+            {
+                foreach (string below in EntriesUnder(entry))
+                {
+                    yield return below;
+                }
+            }
+            else
+            {
+                yield return entry;
+            }
+        }
+    }
+
+    /// <summary>The real folders under <paramref name="folder"/>, by the same walk: a link to a folder is an entry, not one of these.</summary>
+    public static IEnumerable<string> FoldersUnder(string folder)
+    {
+        foreach (string entry in Directory.EnumerateDirectories(folder, "*", OneLevel))
+        {
+            if (!IsLink(entry))
+            {
+                yield return entry;
+                foreach (string below in FoldersUnder(entry))
+                {
+                    yield return below;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Deletes a file or folder of this layout, the one delete for the update's code (2026-11-04, reviews P5-5, P1-20, P9-16). A read-only file would otherwise fail the delete for good: <c>previous.old</c> stuck that way stopped every later swap with "still in use".
+    /// So a failure clears the attributes, the folder's own too, and tries once more. True when it's gone; what's left is logged, and something retries it next time. A link goes as itself.
     /// </summary>
     public static bool DeleteQuietly(string path)
     {
@@ -123,6 +192,7 @@ public sealed class UpdateFolder
         {
             if (!Directory.Exists(path))
             {
+                File.Delete(path);
                 return true;
             }
 
@@ -132,20 +202,42 @@ public sealed class UpdateFolder
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                foreach (string entry in Directory.EnumerateFileSystemEntries(path, "*", new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = 0, IgnoreInaccessible = true }))
-                {
-                    File.SetAttributes(entry, File.GetAttributes(entry) & ~FileAttributes.ReadOnly);
-                }
-
+                ClearReadOnly(path);
                 Directory.Delete(path, recursive: true);
             }
 
+            return true;
+        }
+        catch (DirectoryNotFoundException)
+        {
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             DiagnosticLog.Info(UpdateJournal.Category, UpdateText.CleanupLeft(path, ex.Message));
             return false;
+        }
+    }
+
+    // A link stays as it is: on Unix a chmod would follow it, onto what it points at outside the install.
+    private static void ClearReadOnly(string folder)
+    {
+        File.SetAttributes(folder, File.GetAttributes(folder) & ~FileAttributes.ReadOnly);
+        foreach (string entry in Directory.EnumerateFileSystemEntries(folder, "*", new EnumerationOptions { RecurseSubdirectories = false, AttributesToSkip = 0, IgnoreInaccessible = true }))
+        {
+            if (IsLink(entry))
+            {
+                continue;
+            }
+
+            if (Directory.Exists(entry))
+            {
+                ClearReadOnly(entry);
+            }
+            else
+            {
+                File.SetAttributes(entry, File.GetAttributes(entry) & ~FileAttributes.ReadOnly);
+            }
         }
     }
 }

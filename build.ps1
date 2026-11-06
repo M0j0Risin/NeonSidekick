@@ -519,8 +519,8 @@ if ($Package) {
     $probe = [System.Diagnostics.Process]::Start($probeInfo)
     $probeOut = $probe.StandardOutput.ReadToEndAsync()
     $probeErr = $probe.StandardError.ReadToEndAsync()
-    # The app's own limit (UpdateStage.ProbeLimit), review P5-11: a package taking longer here would pass the build and be refused by every copy.
-    if (-not $probe.WaitForExit(30000)) {
+    # Past the probe's own 60 s limit, review P10-17: a busy runner's first run isn't the user's PC, and a timeout there keeps the stage and tries again, so this only has to catch a probe that never ends.
+    if (-not $probe.WaitForExit(90000)) {
         $probe.Kill()
         Fail "The update probe timed out in the stage."
     }
@@ -548,15 +548,29 @@ if ($Package) {
 
     if (-not $OnWindows) {
         # A tar.gz off Windows (2026-10-06, the macOS build): a zip written here keeps no Unix modes, and the exe and
-        # espeak-ng must stay executable. The system tar (bsdtar on macOS) keeps them.
+        # espeak-ng must stay executable. .NET's own writer (2026-11-04, review P19-1), which keeps them too: bsdtar on APFS writes
+        # sparse entries for many files, .NET 10's reader can't unpack those, and a shipped copy's reader can't be fixed later.
+        # The top folder stays, as a hand unpack expects.
         $tarball = Join-Path $PackageRoot "$stageName.tar.gz"
-        tar -czf $tarball -C $PackageRoot $stageName
-        if ($LASTEXITCODE -ne 0) { Fail "tar FAILED" }
+        Add-Type -AssemblyName System.IO.Compression
+        Add-Type -AssemblyName System.Formats.Tar
+        $tarFile = [System.IO.File]::Create($tarball)
+        try {
+            $tarGzip = New-Object System.IO.Compression.GZipStream($tarFile, [System.IO.Compression.CompressionLevel]::Optimal)
+            try {
+                [System.Formats.Tar.TarFile]::CreateFromDirectory($stage, $tarGzip, $true)
+            } finally {
+                $tarGzip.Dispose()
+            }
+        } finally {
+            $tarFile.Dispose()
+        }
         $hash = (Get-FileHash -Algorithm SHA256 -Path $tarball).Hash.ToLowerInvariant()
         [System.IO.File]::WriteAllText("$tarball.sha256", "$hash *$stageName.tar.gz`n# $manifestHash *update-manifest.json`n", [System.Text.Encoding]::ASCII)
         $tarSize = [Math]::Round((Get-Item $tarball).Length / 1MB, 1)
         Write-Host "  $tarball  ($tarSize MB)" -ForegroundColor Green
         Write-Host "  sha256 $hash"
+        $packaged = $tarball
     } else {
         # Entries are written by hand with forward slashes. Compress-Archive, and ZipFile under
         # Windows PowerShell 5.1 (.NET Framework), write backslash entry names, which some unzippers
@@ -586,6 +600,52 @@ if ($Package) {
         $zipSize = [Math]::Round((Get-Item $zip).Length / 1MB, 1)
         Write-Host "  $zip  ($zipSize MB)" -ForegroundColor Green
         Write-Host "  sha256 $hash"
+        $packaged = $zip
+    }
+
+    # Unpacked again with .NET's own reader, the one a copy uses, and held against the manifest (2026-11-04, review P19-1), in the system's temp folder so no
+    # tool takes it for a package. Modes too off Windows: an exe that lost its bit would pass everything else.
+    $unpackCheck = Join-Path ([System.IO.Path]::GetTempPath()) ("neonsidekick-package-check-" + [Guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Path $unpackCheck | Out-Null
+    try {
+        if ($OnWindows) {
+            [System.IO.Compression.ZipFile]::ExtractToDirectory($packaged, $unpackCheck)
+        } else {
+            $readFile = [System.IO.File]::OpenRead($packaged)
+            try {
+                $readGzip = New-Object System.IO.Compression.GZipStream($readFile, [System.IO.Compression.CompressionMode]::Decompress)
+                try {
+                    [System.Formats.Tar.TarFile]::ExtractToDirectory($readGzip, $unpackCheck, $false)
+                } finally {
+                    $readGzip.Dispose()
+                }
+            } finally {
+                $readFile.Dispose()
+            }
+        }
+
+        $unpackedRoot = Join-Path $unpackCheck $stageName
+        if (-not (Test-Path -LiteralPath (Join-Path $unpackedRoot "update-manifest.json"))) { Fail "$(Split-Path -Leaf $packaged) doesn't unpack to a folder holding update-manifest.json." }
+        if ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $unpackedRoot "update-manifest.json")).Hash.ToLowerInvariant() -cne $manifestHash) { Fail "The packaged update-manifest.json isn't the stage's." }
+        [string[]]$unpackedNow = @(Get-ChildItem -LiteralPath $unpackedRoot -Recurse -File -Force | ForEach-Object { $_.FullName.Substring($unpackedRoot.Length + 1).Replace('', '/') } | Where-Object { $_ -cne "update-manifest.json" })
+        [Array]::Sort($unpackedNow, [StringComparer]::Ordinal)
+        if (($unpackedNow -join "`n") -cne ($manifestListed -join "`n")) { Fail "$(Split-Path -Leaf $packaged) doesn't hold what update-manifest.json lists." }
+        foreach ($entry in $manifestRead.files) {
+            $unpackedFile = Join-Path $unpackedRoot $entry.path
+            if (-not (Test-Path -LiteralPath $unpackedFile)) { Fail "$(Split-Path -Leaf $packaged) lost $($entry.path)." }
+            if ((Get-FileHash -Algorithm SHA256 -LiteralPath $unpackedFile).Hash.ToLowerInvariant() -cne $entry.sha256) { Fail "$(Split-Path -Leaf $packaged) changed $($entry.path)." }
+        }
+
+        if (-not $OnWindows) {
+            $mustRun = @(Join-Path $unpackedRoot (Split-Path -Leaf $Exe)) + @(Get-ChildItem -Path (Join-Path $unpackedRoot "espeak") -Filter "espeak-ng-*.dll" -File | ForEach-Object { $_.FullName })
+            foreach ($path in $mustRun) {
+                if (([System.IO.File]::GetUnixFileMode($path) -band [System.IO.UnixFileMode]::UserExecute) -eq 0) { Fail "$(Split-Path -Leaf $packaged) lost the executable bit of $(Split-Path -Leaf $path)." }
+            }
+        }
+
+        Write-Host "  unpacked again: every listed file matches"
+    } finally {
+        Remove-Item -LiteralPath $unpackCheck -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
 

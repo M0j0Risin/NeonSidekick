@@ -30,6 +30,27 @@ public class KeySourceTests
     }
 
     [Fact]
+    public void DropTypedKeys_TakesClicksToo_AndLeavesTheRest()
+    {
+        // A click under a slow wait landed on the pane that opened where it fell (2026-11-04, review P10-6).
+        // One click waits in the type-ahead and one in the console's queue, since the drop reads each on its own.
+        var input = new ScriptedInput();
+        input.PushClick(3, 4);
+        input.Push(Keys.Char('i'));
+        input.PushClick(5, 6);
+        input.PushWheel(1);
+        var keys = new KeySource(input, FastPoll);
+        Assert.Null(keys.TakeQueued(_ => false));
+        Assert.Equal(1, keys.Buffered);
+
+        keys.DropTypedKeys();
+
+        Assert.Equal(0, input.Queued);
+        Assert.IsType<InputEvent.Wheel>(keys.TakeQueued(e => e is InputEvent.Wheel));
+        Assert.Equal(0, keys.Buffered);
+    }
+
+    [Fact]
     public async Task TakeQueued_TakesWaitingMatches_AndLeavesTheFirstOtherEventNextInOrder()
     {
         // 2026-10-03: a pane folds a held arrow's queued presses into one move.

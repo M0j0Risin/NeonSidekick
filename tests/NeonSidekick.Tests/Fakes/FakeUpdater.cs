@@ -17,6 +17,22 @@ public sealed class FakeUpdater : IUpdater
 
     public bool LeftoversOnDisk { get; set; }
 
+    /// <summary>A stage whose version can't be read right now.</summary>
+    public bool ReadyUnknown { get; set; }
+
+    /// <summary>A rollback whose earlier version can't be read right now.</summary>
+    public bool RollbackUnknown { get; set; }
+
+    /// <summary>How many reads asked for the leftovers too, as the idle refresh doesn't (review P8-17).</summary>
+    public int LeftoverReads { get; private set; }
+
+    /// <summary>How many reads of the disk there have been.</summary>
+    public int DiskReads { get; private set; }
+
+    public string? LeftoversRefusal { get; set; }
+
+    public int LeftoverDrops { get; private set; }
+
     /// <summary>How many times the screen said it had printed the start's line.</summary>
     public int StartsAcknowledged { get; private set; }
 
@@ -28,6 +44,15 @@ public sealed class FakeUpdater : IUpdater
 
     /// <summary>Held open until a test releases it, for a check that answers late.</summary>
     public TaskCompletionSource? CheckGate { get; set; }
+
+    /// <summary>Holds only the first check, the start's, so <c>/update</c>'s own can answer first.</summary>
+    public TaskCompletionSource? FirstCheckGate { get; set; }
+
+    /// <summary>What the first check answers, when it isn't <see cref="Answer"/>.</summary>
+    public UpdateCheckResult? FirstAnswer { get; set; }
+
+    /// <summary>Runs inside a drop, for one that takes its time.</summary>
+    public Action? DropWork { get; set; }
 
     public int Checks => Volatile.Read(ref _checks);
 
@@ -63,13 +88,28 @@ public sealed class FakeUpdater : IUpdater
 
     private int _checks;
 
-    public UpdateDiskState ReadDisk() => new(ReadyOnDisk, RollbackOnDisk, LeftoversOnDisk);
+    public UpdateDiskState ReadDisk(bool withLeftovers = false)
+    {
+        DiskReads++;
+        LeftoverReads += withLeftovers ? 1 : 0;
+        return new UpdateDiskState(ReadyOnDisk, RollbackOnDisk, withLeftovers && LeftoversOnDisk, ReadyUnknown, RollbackUnknown);
+    }
 
     public void AcknowledgeStart() => StartsAcknowledged++;
 
     public async Task<UpdateCheckResult> CheckAsync(CancellationToken cancellationToken)
     {
-        Interlocked.Increment(ref _checks);
+        bool first = Interlocked.Increment(ref _checks) == 1;
+        if (first && FirstCheckGate is { } firstGate)
+        {
+            await firstGate.Task.WaitAsync(TimeSpan.FromSeconds(20), cancellationToken).ConfigureAwait(false);
+        }
+
+        if (first && FirstAnswer is { } firstAnswer)
+        {
+            return firstAnswer;
+        }
+
         if (CheckGate is { } gate)
         {
             // A limit of its own: a test whose gate is never opened fails here rather than hanging the run.
@@ -86,7 +126,10 @@ public sealed class FakeUpdater : IUpdater
         Staged.Add(release);
         if (Stage is { } stage)
         {
-            return await stage(release, progress, cancellationToken).ConfigureAwait(false);
+            // A failed stage leaves what it downloaded, as the real one does (2026-11-04, review P14-10): a test of a failure and then a cancel means nothing without it.
+            var result = await stage(release, progress, cancellationToken).ConfigureAwait(false);
+            LeftoversOnDisk |= !result.Ok;
+            return result;
         }
 
         progress?.Report(new UpdateStagePhase.Downloading(42));
@@ -98,13 +141,26 @@ public sealed class FakeUpdater : IUpdater
     public string? DropStage(bool alsoParts)
     {
         Drops.Add(alsoParts);
+        DropWork?.Invoke();
         if (DropRefusal is null)
         {
             ReadyOnDisk = null;
-            LeftoversOnDisk = false;
+            ReadyUnknown = false;
+            LeftoversOnDisk &= !alsoParts;   // what the real one does (2026-11-04, review P14-9): a drop for a stage's own sake keeps a resumable download
         }
 
         return DropRefusal;
+    }
+
+    public string? DropLeftovers()
+    {
+        LeftoverDrops++;
+        if (LeftoversRefusal is null && ReadyOnDisk is null)
+        {
+            LeftoversOnDisk = false;
+        }
+
+        return LeftoversRefusal;
     }
 
     public string? AskRollback(CancellationToken cancellationToken, out string? target, out IReadOnlyList<string> docsStaying)

@@ -46,6 +46,12 @@ public static class VcRuntime
     public static string Explain(string otherwise, Func<string, bool>? loads = null) =>
         Missing(loads) is { } library ? VcRuntimeText.Missing(library) + " " + VcRuntimeText.Detail(otherwise) : otherwise;
 
+    /// <summary>
+    /// <see cref="Explain"/> for a load that failed because a DLL wasn't found, where <paramref name="otherwise"/> is the app's own guess and not the load's words (2026-11-04, review P14-4): beside the runtime's text it told a PC without it that a file sitting beside the exe was missing, the false line this class exists to stop.
+    /// </summary>
+    public static string ExplainAlone(string otherwise, Func<string, bool>? loads = null) =>
+        Missing(loads) is { } library ? VcRuntimeText.Missing(library) : otherwise;
+
     /// <summary>The real loader: a failed <see cref="NativeLibrary.TryLoad(string, out IntPtr)"/> raises no box under NativeAOT.</summary>
     private static bool Loads(string library)
     {

@@ -105,15 +105,17 @@ public sealed class KeySource : IAnsiConsoleInput
     /// <summary>Keys and pastes the watcher set aside for the next read.</summary>
     public int Buffered => _buffer.Count;
 
+    private static bool IsPress(InputEvent e) => e is InputEvent.Key or InputEvent.Click;
+
     /// <summary>
-    /// Drops the keys typed so far, from the type-ahead and the console's own queue, and only keys (2026-11-04, review P3-8): what a pane with buttons must not read as a press after a wait the user typed through. Only when no reader is running.
+    /// Drops the keys and clicks given so far, from the type-ahead and the console's own queue (2026-11-04, reviews P3-8, P10-6): what a pane with buttons must not read as a press after a wait the user typed or clicked through. Only when no reader is running.
     /// </summary>
     public void DropTypedKeys()
     {
         for (int left = _buffer.Count; left > 0; left--)
         {
             var e = _buffer.Dequeue();
-            if (e is not InputEvent.Key)
+            if (!IsPress(e))
             {
                 _buffer.Enqueue(e);
             }
@@ -123,7 +125,7 @@ public sealed class KeySource : IAnsiConsoleInput
         {
             while (_events.IsAvailable && _events.Read() is { } queued)
             {
-                if (queued is not InputEvent.Key)
+                if (!IsPress(queued))
                 {
                     _buffer.Enqueue(queued);
                 }

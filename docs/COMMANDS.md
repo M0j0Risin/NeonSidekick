@@ -693,12 +693,13 @@ Forty-one more come with the repo in [`assets/voices`](../assets/voices): copy a
 `/update` installs a newer release from GitHub. Only a copy unpacked from a release package can update itself; one you built can't. You keep chatting during the download, and the 📦 marker on the lower rule shows how far it has got ([The screen](INTERFACE.md#the-screen)).
 
 * **What's checked first:** the project's signature, the package and every file against their hashes, and a test start of the new version. Anything wrong refuses it, names the reason and links the Releases page.
-* **A failed test start** keeps the download, since antivirus can cause it: `/update` tries again with no download, and `/update cancel` drops it. Updating by hand always works.
+* **A failed test start** (a library that won't load, a crash or a time-out) keeps the download, since antivirus can cause it: `/update` tries again with no download, and `/update cancel` drops it. Updating by hand always works.
 * **What happens at quit:** the changed files are replaced, the old ones move to `.update/previous` in the install folder, and nothing in `.neonsidekick` changes. `/exit` shows the result, and the new version runs at next launch.
 * **Your own files:** a file you edited or added that stands in the way moves to `.update/kept` in the install folder. The app never deletes them, and the next start names the folder.
-* **Closing the window** installs too if the time fits, otherwise at the next `/exit`. A failure there is reported at next start.
-* **An interrupted install** (a crash, a power cut) is undone at the next start, and the update installs at the next exit.
+* **Closing the window** installs too if the time fits, otherwise at the next `/exit`. The next start says which, and reports a failure.
+* **An interrupted install** (a crash, a power cut) is undone at the next start, which says so, and the update installs at the next `/exit`. Going back works the same way.
 * **Another copy open from that folder** makes the update wait for a later exit. A copy started during an install waits for it, and may then ask you to start it again.
+* **A folder that no longer matches this copy**, after a package was unpacked over it, refuses `/update` and `/update rollback` until you start the app again.
 * **A renamed exe** can't update itself. A headless run or a check never installs one.
 * **Only the app's own use:** the model has no tool for this, and the Web UI runs only `/update notes`. Installing happens at the PC.
 
@@ -708,11 +709,11 @@ Forty-one more come with the repo in [`assets/voices`](../assets/voices): copy a
 * **Settings** the older version doesn't know go back to their defaults, if it saves `profile.json`.
 * **The shopping list, skill records and file checkpoints** can turn off the same way, with their files untouched. The older version's message says "until it is moved away"; don't move them, since updating again brings them back.
 * **A ready update** stays on disk while going back is pending. `/update cancel` brings it back; quitting deletes it.
-* **Refused, with the reason:** an earlier version's file altered by hand or missing (after a package unpacked by hand over the folder), or a version signed only by a key this copy no longer trusts.
-* **Docs** (`.md`, `LICENSE*`, `README*`) altered or missing don't refuse it: your current copy stays, and the Going back line says so.
+* **Refused, with the reason:** an earlier version's file altered by hand or missing, or a version signed only by a key this copy no longer trusts. A ready update still installs at the next quit.
+* **What that check can't catch:** it finds accidents, not an attacker, since whoever can change `.update/previous` can change the exe too. A package unpacked by hand has no proofs to check it against.
+* **A file it can't read right then**, as antivirus can cause, refuses nothing: going back tries again at the next quit.
+* **Docs** (`.md`, `LICENSE*`, `README*`) altered or missing don't refuse it: your current copy stays if you have one, and the Going back line names it. An edited doc the new version dropped is in `.update/kept`.
 * **Files altered by hand** that both versions share stay as they are: going back doesn't repair the install.
 * **A file in the way** moves to `.update/kept` and stays there, even after going back. Copy it back by hand if you want it.
 
-**The way back by hand**, if the new version won't start, is to unpack any version from the [Releases page](https://github.com/M0j0Risin/NeonSidekick/releases) into a fresh folder. Copy anything you want out of `.update/kept` first.
-
-To restore in place instead, move everything in `.update/previous` except its `release` folder over the install folder, then delete `.update`. Files only the new version added stay behind until you delete them; its `update-manifest.json`, before you move the old one over it, lists them.
+**The way back by hand**, if the new version won't start, is to unpack any version from the [Releases page](https://github.com/M0j0Risin/NeonSidekick/releases) into a fresh folder. Copy anything you want out of `.update/kept` first. `.update/previous` holds only the files that changed, so it can't stand in for a package.

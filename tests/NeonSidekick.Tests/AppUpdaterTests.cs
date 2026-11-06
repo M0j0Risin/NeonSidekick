@@ -13,7 +13,7 @@ public sealed class AppUpdaterTests : IDisposable
 
     public void Dispose() => _f.Dispose();
 
-    private AppUpdater Updater(string? startLine = null, string running = "0.5.6") => new(_f.Context(running), startLine, _f.Client);
+    private AppUpdater Updater(string? startLine = null, string running = "0.5.6") => new(_f.Context(running), new UpdateStartResult(null, startLine), _f.Client);
 
     private async Task Ready()
     {
@@ -195,14 +195,103 @@ public sealed class AppUpdaterTests : IDisposable
     {
         // Reviews P4-11, P5-9.
         _f.Usual();
-        Assert.False(Updater().ReadDisk().Leftovers);
+        Assert.False(Updater().ReadDisk(withLeftovers: true).Leftovers);
         UpdateFixture.Write(Path.Combine(_f.Folder.StagingParts, "a.part"), "x");
-        Assert.True(Updater().ReadDisk().Leftovers);
+        Assert.True(Updater().ReadDisk(withLeftovers: true).Leftovers);
+        Assert.False(Updater().ReadDisk().Leftovers);   // only when asked: the idle refresh doesn't walk them (review P8-17)
         Directory.Delete(_f.Folder.StagingParts, recursive: true);
         await _f.Stage().StageAsync(_f.Usual(), null, CancellationToken.None);
-        Assert.False(Updater().ReadDisk().Leftovers);
+        Assert.False(Updater().ReadDisk(withLeftovers: true).Leftovers);
         File.Delete(_f.Folder.Ready);
-        Assert.True(Updater().ReadDisk().Leftovers);
+        Assert.True(Updater().ReadDisk(withLeftovers: true).Leftovers);
+    }
+
+    [Fact]
+    public async Task ReadDisk_ParsesOnlyWhenAFileChanged()
+    {
+        // Every idle line parsed the stage's manifest (review P8-17). A later read proves it by not noticing the manifest's change; a new stamp on ready does.
+        await Ready();
+        var updater = Updater();
+        Assert.Equal("0.5.7", updater.ReadDisk().ReadyVersion);
+        File.WriteAllText(_f.Folder.StagingManifest, "{ not a manifest");
+        Assert.Equal("0.5.7", updater.ReadDisk().ReadyVersion);
+        File.SetLastWriteTimeUtc(_f.Folder.Ready, DateTime.UtcNow.AddMinutes(5));
+        Assert.True(updater.ReadDisk().ReadyUnknown);
+    }
+
+    [Fact]
+    public async Task ReadDisk_AStageItCantReadRightNow_IsThere_WithItsVersionUnknown_AndIsTriedAgain()
+    {
+        // The screen flipped to Offered and /update cancel said there was nothing to cancel, over a stage that still installs (reviews P9-6, P11-9, P11-18).
+        await Ready();
+        var updater = Updater();
+        using (FileHold.On(_f.Folder.StagingManifest))
+        {
+            var held = updater.ReadDisk();
+            Assert.Null(held.ReadyVersion);
+            Assert.True(held.ReadyUnknown);
+        }
+
+        Assert.Equal("0.5.7", updater.ReadDisk().ReadyVersion);
+    }
+
+    [Fact]
+    public async Task ReadDisk_ARollbackWithItsManifestGone_IsThere_WithItsVersionUnknown()
+    {
+        await Ready();
+        Swapped();
+        File.WriteAllText(_f.Folder.Rollback, "");
+        File.Delete(_f.Folder.PreviousManifest);
+        var disk = new AppUpdater(_f.Context("0.5.7"), null, _f.Client).ReadDisk();
+        Assert.Null(disk.RollbackTarget);
+        Assert.True(disk.RollbackUnknown);
+    }
+
+    [Fact]
+    public async Task DropStage_WaitsOutAStartsTidy()
+    {
+        // It read as another copy downloading (reviews P11-12, P12-15, P13-6).
+        await Ready();
+        var tidy = UpdateLock.TryExclusive(_f.Folder.StagingLock)!;
+        var releasing = Task.Run(async () =>
+        {
+            await Task.Delay(200);
+            tidy.Dispose();
+        });
+
+        Assert.Null(Updater().DropStage(alsoParts: false));
+        await releasing;
+        Assert.False(File.Exists(_f.Folder.Ready));
+    }
+
+    [Fact]
+    public async Task DropStage_UnderALockHeldThroughout_BlamesAnotherCopy_AndOneThatCantOpen_DoesNot()
+    {
+        await Ready();
+        using (UpdateLock.TryExclusive(_f.Folder.StagingLock))
+        {
+            Assert.Equal(UpdateText.AnotherCopyStaging, Updater().DropStage(alsoParts: false));
+        }
+
+        File.Delete(_f.Folder.StagingLock);
+        Directory.CreateDirectory(_f.Folder.StagingLock);
+        Assert.Equal(UpdateText.StagingLockCantOpen, Updater().DropStage(alsoParts: false));
+        Assert.True(File.Exists(_f.Folder.Ready));
+    }
+
+    [Fact]
+    public void DropLeftovers_DeletesAPartial_ButNotUnderAReadyStage()
+    {
+        // What's left of a pulled release stayed until a next one came (review P18-5).
+        _f.Usual();
+        UpdateFixture.Write(Path.Combine(_f.Folder.StagingParts, "a.part"), "x");
+        Assert.Null(Updater().DropLeftovers());
+        Assert.False(Directory.Exists(_f.Folder.StagingParts));
+
+        UpdateFixture.Write(Path.Combine(_f.Folder.StagingParts, "a.part"), "x");
+        File.WriteAllText(_f.Folder.Ready, "");
+        Assert.Null(Updater().DropLeftovers());
+        Assert.True(Directory.Exists(_f.Folder.StagingParts));
     }
 
     [Fact]
@@ -217,7 +306,7 @@ public sealed class AppUpdaterTests : IDisposable
         Assert.True(File.Exists(_f.Folder.Journal));
         Assert.True(File.Exists(_f.Folder.SwapFailed));
 
-        new AppUpdater(_f.Context("0.5.7"), null, _f.Client, journalMayGo: true, failureShown: true).AcknowledgeStart();
+        new AppUpdater(_f.Context("0.5.7"), new UpdateStartResult(null, null, JournalMayGo: true, FailureShown: true), _f.Client).AcknowledgeStart();
         Assert.False(File.Exists(_f.Folder.Journal));
         Assert.False(File.Exists(_f.Folder.SwapFailed));
     }

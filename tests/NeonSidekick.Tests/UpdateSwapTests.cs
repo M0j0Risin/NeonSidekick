@@ -1,4 +1,5 @@
 using NeonSidekick.Files;
+using NeonSidekick.Tests.Fakes;
 using NeonSidekick.Updates;
 
 namespace NeonSidekick.Tests;
@@ -268,7 +269,7 @@ public sealed class UpdateSwapTests : IDisposable
             var result = new UpdateSwap(_folder, files, _ => { }).Run(ForUpdate(clean, [Exe, "a.dll", "b/c.dll", "new/d.dll"], []));
 
             Assert.False(result.Done);
-            Assert.True(result.Undone, $"step {at}");
+            Assert.False(result.MayBeMixed, $"step {at}");
             AssertOldVersionWhole();
             Assert.Equal("old", Read("a.dll"));
             Assert.Equal("old", Read("b/c.dll"));
@@ -421,7 +422,7 @@ public sealed class UpdateSwapTests : IDisposable
         var files = new Stopping(journal.Steps.Count, () => new IOException("locked"));
         var failed = new UpdateSwap(_folder, files, _ => { }).Run(journal);
         Assert.False(failed.Done);
-        Assert.True(failed.Undone);
+        Assert.False(failed.MayBeMixed);
         Assert.Equal("old", Read("thing/gone.dll"));
 
         Assert.True(clean.Run(ForUpdate(clean, moved, ["thing/gone.dll"])).Done);
@@ -523,7 +524,7 @@ public sealed class UpdateSwapTests : IDisposable
             var files = new Stopping(at, () => new IOException("locked"));
             var result = new UpdateSwap(_folder, files, _ => { }).Run(Back(swap, ["added.dll"]));
             Assert.False(result.Done);
-            Assert.True(result.Undone, $"step {at}");
+            Assert.False(result.MayBeMixed, $"step {at}");
             Assert.Equal("new", Read(Exe));
             Assert.Equal("new", Read("added.dll"));
             Assert.Equal("new manifest", Read(UpdateManifest.FileName));
@@ -619,7 +620,7 @@ public sealed class UpdateSwapTests : IDisposable
         var result = new UpdateSwap(_folder).Run(journal);
 
         Assert.False(result.Done);
-        Assert.True(result.Undone);
+        Assert.False(result.MayBeMixed);
         Assert.Equal(UpdateText.CantRecordName(Exe), result.Reason);
         Assert.Equal("old", Read(Exe));
         Assert.False(File.Exists(_folder.Journal));
@@ -645,6 +646,384 @@ public sealed class UpdateSwapTests : IDisposable
 
         Assert.True(File.Exists(_folder.Journal));
         Assert.Equal("planted since", File.ReadAllText(planted));
+    }
+
+    // ---- the walk (2026-11-04, reviews P8-1, P12-2, P13-7, P12-4)
+
+    private sealed record Layout(string Name, Func<UpdateSwapTests, UpdateSwap, UpdateJournal> Plan);
+
+    /// <summary>Every file and folder under the root but the journal: what the install and <c>.update</c> are, to compare with after an undo.</summary>
+    private Dictionary<string, string> Snapshot()
+    {
+        var seen = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (string entry in Directory.EnumerateFileSystemEntries(_root, "*", SearchOption.AllDirectories))
+        {
+            string relative = Path.GetRelativePath(_root, entry).Replace('\\', '/');
+            if (entry != _folder.Journal)
+            {
+                seen[relative] = File.Exists(entry) ? File.ReadAllText(entry) : "(folder)";
+            }
+        }
+
+        return seen;
+    }
+
+    private void ClearRoot()
+    {
+        foreach (string entry in Directory.EnumerateFileSystemEntries(_root))
+        {
+            if (Directory.Exists(entry))
+            {
+                Directory.Delete(entry, recursive: true);
+            }
+            else
+            {
+                File.Delete(entry);
+            }
+        }
+
+        Directory.CreateDirectory(_folder.Root);
+    }
+
+    private static readonly Layout[] Layouts =
+    [
+        new("update", (t, swap) =>
+        {
+            t.Install(Exe);
+            t.Install("a.dll");
+            t.Install("same.dll");
+            t.Install("sub/gone.dll");
+            UpdateFixture.Write(Path.Combine(t._folder.Previous, UpdateManifest.FileName), "older previous");
+            t.Install(UpdateManifest.FileName, "old manifest");
+            t.Stage(UpdateManifest.FileName, "new manifest");
+            t.Stage(Exe);
+            t.Stage("a.dll");
+            t.Stage("docs/new.md");
+            return t.ForUpdate(swap, [Exe, "a.dll", "docs/new.md"], ["sub/gone.dll"]);
+        }),
+        new("stray folder", (t, swap) =>
+        {
+            t.Install(Exe);
+            t.Install("a.dll");
+            t.Install("thing/stray.txt", "the user's");
+            t.Install("thing/deep/other.txt", "the user's too");
+            t.Install(UpdateManifest.FileName, "old manifest");
+            t.Stage(UpdateManifest.FileName, "new manifest");
+            t.Stage(Exe);
+            t.Stage("thing");
+            return t.ForUpdate(swap, [Exe, "thing"], [], ["thing/stray.txt", "thing/deep/other.txt"]);
+        }),
+        new("rollback", (t, swap) =>
+        {
+            t.Install(Exe, "the newer exe");
+            t.Install("a.dll", "the newer a");
+            t.Install("added.dll", "only in the newer");
+            t.Install(UpdateManifest.FileName, "new manifest");
+            UpdateFixture.Write(Path.Combine(t._folder.Previous, Exe), "old");
+            UpdateFixture.Write(Path.Combine(t._folder.Previous, "a.dll"), "old a");
+            UpdateFixture.Write(Path.Combine(t._folder.Previous, UpdateManifest.FileName), "old manifest");
+            return t.Back(swap, ["added.dll"]);
+        }),
+        new("renamed exe", (t, swap) =>
+        {
+            t.Install(Exe);
+            t.Install("a.dll");
+            t.Install(UpdateManifest.FileName, "old manifest");
+            t.Stage(UpdateManifest.FileName, "new manifest");
+            t.Stage("Renamed.exe");
+            t.Stage("a.dll");
+            t.Stage(Exe, "a new library taking the old exe's name");
+            return swap.PlanUpdate("0.5.6", "0.5.7", Exe, "Renamed.exe", ["Renamed.exe", "a.dll", Exe], [Exe], t.InstalledFiles());
+        }),
+    ];
+
+    public static TheoryData<string> LayoutNames() => new(Layouts.Select(layout => layout.Name));
+
+    [Theory]
+    [MemberData(nameof(LayoutNames))]
+    public void AKillAtEveryStep_AndAnUndoStoppedAtEveryStep_LeaveTheInstallWhole(string name)
+    {
+        var layout = Layouts.Single(candidate => candidate.Name == name);
+        static void NoPause(TimeSpan _)
+        {
+        }
+
+        int killsTried = 0;
+        for (int killAt = 1; ; killAt++)
+        {
+            // Reaching the run's end means every operation had its kill.
+            ClearRoot();
+            var killed = new UpdateSwap(_folder, new Stopping(killAt, () => new KilledException()), NoPause);
+            var journal = layout.Plan(this, killed);
+            var before = Snapshot();
+            try
+            {
+                Assert.True(killed.Run(journal).Done);
+                break;
+            }
+            catch (KilledException)
+            {
+                killsTried++;
+            }
+
+            var afterKill = Snapshot();
+            for (int undoStopsAt = 1; ; undoStopsAt++)
+            {
+                // Back to the moment of the kill by replaying it, as an undo moved things.
+                ClearRoot();
+                var again = new UpdateSwap(_folder, new Stopping(killAt, () => new KilledException()), NoPause);
+                var plan = layout.Plan(this, again);
+                Assert.Throws<KilledException>(() => again.Run(plan));
+                Assert.Equal(afterKill, Snapshot());
+
+                var saved = UpdateJournal.TryRead(_folder)!;
+                bool stopped = !new UpdateSwap(_folder, new Stopping(undoStopsAt, () => new IOException("held")), NoPause).Undo(saved);
+                if (stopped)
+                {
+                    Assert.True(File.Exists(_folder.Journal), $"{name}, kill {killAt}, undo stop {undoStopsAt}: the journal should stay");
+                    Assert.True(new UpdateSwap(_folder, null, NoPause).Undo(UpdateJournal.TryRead(_folder)!), $"{name}, kill {killAt}, undo stop {undoStopsAt}: the second undo");
+                }
+
+                Assert.Equal(before, Snapshot());
+                if (!stopped)
+                {
+                    break;
+                }
+            }
+
+            // An undone step reads as not run, so the same swap can run again.
+            var rerun = new UpdateSwap(_folder, null, NoPause);
+            Assert.True(rerun.Run(layout.Plan(this, rerun)).Done, $"{name}, kill {killAt}: the rerun");
+        }
+
+        Assert.True(killsTried > 3, name + " should have had several steps");
+    }
+
+    [Fact]
+    public void AnUndoStoppedOnTheExe_RunsAgain_WithNothingLeftConflicting()
+    {
+        // The first undo ran past a locked step and restored what came before it, so at the next start that step's source and destination were both there, and every later start read not whole (review P8-1).
+        var moved = new[] { Exe, "a.dll" };
+        Install(Exe);
+        Install("a.dll");
+        var plan = Plan(moved, []);
+        int exeStep = plan.Steps.FindIndex(step => step.To == Exe);
+        var killed = new UpdateSwap(_folder, new Stopping(exeStep + 1, () => new KilledException()));
+        Assert.Throws<KilledException>(() => killed.Run(ForUpdate(new UpdateSwap(_folder), moved, [])));
+
+        var journal = UpdateJournal.TryRead(_folder)!;
+        Assert.False(new UpdateSwap(_folder, new Stopping(1, () => new IOException("held")), _ => { }).Undo(journal));
+        Assert.True(new UpdateSwap(_folder).Undo(journal));
+        AssertOldVersionWhole();
+        Assert.Equal("old", Read("a.dll"));
+    }
+
+    [Fact]
+    public void AStagedFileThatVanished_ReadsAsNeither_AndTheUndoGoesOnPastIt()
+    {
+        // Both paths gone (review P12-2): the old walk stopped at it, or moved an untouched file to where the journal said it had been.
+        var moved = new[] { "a.dll", "b.dll", Exe };
+        Install(Exe);
+        Install("a.dll");
+        Install("b.dll");
+        var plan = Plan(moved, []);
+        int incoming = plan.Steps.FindIndex(step => step.To == "a.dll");
+        var killed = new UpdateSwap(_folder, new Stopping(incoming + 1, () => new KilledException()));
+        Assert.Throws<KilledException>(() => killed.Run(ForUpdate(new UpdateSwap(_folder), moved, [])));
+        File.Delete(Path.Combine(_folder.Staging, "a.dll"));
+
+        Assert.True(new UpdateSwap(_folder).Undo(UpdateJournal.TryRead(_folder)!));
+
+        AssertOldVersionWhole();
+        Assert.Equal("old", Read("a.dll"));
+        Assert.Equal("old", Read("b.dll"));
+    }
+
+    [Fact]
+    public void AFileInAnIncomingStepsWay_ReadsAsNotRun_AndStays()
+    {
+        // Both paths there, nothing explains it and nothing later ran: that step never ran, and the file appeared since (review P8-1).
+        var moved = new[] { "docs/new.md", Exe };
+        Install(Exe);
+        var plan = Plan(moved, []);
+        int incoming = plan.Steps.FindIndex(step => step.To == "docs/new.md");
+        var killed = new UpdateSwap(_folder, new Stopping(incoming + 1, () => new KilledException()));
+        Assert.Throws<KilledException>(() => killed.Run(ForUpdate(new UpdateSwap(_folder), moved, [])));
+        Install("docs/new.md", "appeared since");
+
+        Assert.True(new UpdateSwap(_folder).Undo(UpdateJournal.TryRead(_folder)!));
+
+        AssertOldVersionWhole();
+        Assert.Equal("appeared since", Read("docs/new.md"));
+        Assert.Equal("new", File.ReadAllText(Path.Combine(_folder.Staging, "docs", "new.md")));
+    }
+
+    [Fact]
+    public void AnUndoFailingPartway_StopsThere_AndDoesntGoOn()
+    {
+        // Strictly last-in-first-out (review P8-1): carrying on past a failure left earlier steps undone with a later one not.
+        var moved = new[] { "a.dll", "b.dll", Exe };
+        Install(Exe);
+        Install("a.dll");
+        Install("b.dll");
+        var plan = Plan(moved, []);
+        var killed = new UpdateSwap(_folder, new Stopping(plan.Steps.Count - 1, () => new KilledException()));
+        Assert.Throws<KilledException>(() => killed.Run(ForUpdate(new UpdateSwap(_folder), moved, [])));
+        var files = new CountingFiles(failFrom: 2);
+
+        Assert.False(new UpdateSwap(_folder, files, _ => { }).Undo(UpdateJournal.TryRead(_folder)!));
+
+        Assert.Equal(1, files.Done);
+        Assert.True(File.Exists(_folder.Journal));
+    }
+
+    /// <summary>Real operations, failing every one from a given count on.</summary>
+    private sealed class CountingFiles(int failFrom) : IUpdateFiles
+    {
+        private readonly UpdateFiles _real = new();
+        private int _count;
+
+        public int Done { get; private set; }
+
+        private void Next()
+        {
+            if (++_count >= failFrom)
+            {
+                throw new IOException("held");
+            }
+
+            Done++;
+        }
+
+        public void Move(string from, string to)
+        {
+            Next();
+            _real.Move(from, to);
+        }
+
+        public void MakeFolder(string folder)
+        {
+            Next();
+            _real.MakeFolder(folder);
+        }
+
+        public void RemoveFolder(string folder)
+        {
+            Next();
+            _real.RemoveFolder(folder);
+        }
+    }
+
+    [Fact]
+    public void AFolderThatWontGo_AndNothingNeedsItsName_StaysAndTheSwapFinishes()
+    {
+        // A terminal sitting in a dropped folder undid the whole swap at every exit (review P13-7).
+        Install(Exe);
+        Install("sub/gone.dll");
+        var plan = Plan([Exe], ["sub/gone.dll"]);
+
+        var result = new UpdateSwap(_folder, new NoRemove(_folder.Full("sub")), _ => { }).Run(ForUpdate(new UpdateSwap(_folder), [Exe], ["sub/gone.dll"]));
+
+        Assert.True(result.Done, result.Reason);
+        Assert.Equal("new", Read(Exe));
+        Assert.True(Directory.Exists(_folder.Full("sub")));
+        Assert.Contains(plan.Steps, step => step.Kind == UpdateStepKind.RemoveFolder);
+    }
+
+    [Fact]
+    public void AFolderThatWontGo_WhenANewFileNeedsItsName_UndoesTheSwap()
+    {
+        Install(Exe);
+        Install("thing/gone.dll");
+        Plan([Exe, "thing"], ["thing/gone.dll"]);
+
+        var result = new UpdateSwap(_folder, new NoRemove(_folder.Full("thing")), _ => { }).Run(ForUpdate(new UpdateSwap(_folder), [Exe, "thing"], ["thing/gone.dll"]));
+
+        Assert.False(result.Done);
+        Assert.False(result.MayBeMixed);
+        AssertOldVersionWhole();
+    }
+
+    private sealed class NoRemove(string held) : IUpdateFiles
+    {
+        private readonly UpdateFiles _real = new();
+
+        public void Move(string from, string to) => _real.Move(from, to);
+
+        public void MakeFolder(string folder) => _real.MakeFolder(folder);
+
+        public void RemoveFolder(string folder)
+        {
+            if (folder == held)
+            {
+                throw new IOException("a terminal sits in it");
+            }
+
+            _real.RemoveFolder(folder);
+        }
+    }
+
+    [Fact]
+    public void ARenamedExe_TheFileTakingTheOldName_MovesInRightAfterTheOldExeLeaves()
+    {
+        // Review P12-4: an interrupted swap with no file at the listed name left nothing to start.
+        Install(Exe);
+        Install("a.dll");
+        Install(UpdateManifest.FileName, "old manifest");
+        Stage(UpdateManifest.FileName, "new manifest");
+        foreach (string path in new[] { "Renamed.exe", "a.dll", Exe })
+        {
+            Stage(path);
+        }
+
+        var renamed = new UpdateSwap(_folder).PlanUpdate("0.5.6", "0.5.7", Exe, "Renamed.exe", ["Renamed.exe", "a.dll", Exe], [Exe], InstalledFiles());
+
+        int leaves = renamed.Steps.FindIndex(step => step.From == Exe);
+        Assert.Equal(Exe, renamed.Steps[leaves + 1].To);
+    }
+
+    [Fact]
+    public void ARenamedExe_WithAFolderAtTheOldName_MovesItOutFirst()
+    {
+        // Review P12-6.
+        Install("Renamed.exe");
+        Install(Exe + "/stray.txt");
+        Install("a.dll");
+        Install(UpdateManifest.FileName, "old manifest");
+        Stage(UpdateManifest.FileName, "new manifest");
+        Stage(Exe, "the new file at that name");
+        Stage("New.exe");
+        var swap = new UpdateSwap(_folder);
+
+        var result = swap.Run(swap.PlanUpdate("0.5.6", "0.5.7", "Renamed.exe", "New.exe", ["New.exe", Exe], ["Renamed.exe"], ["Renamed.exe", "a.dll"]));
+
+        Assert.True(result.Done, result.Reason);
+        Assert.Equal("the new file at that name", Read(Exe));
+        Assert.Equal("new", Read("New.exe"));
+    }
+
+    [Fact]
+    public void ASuccessfulSwap_ClearsAnEarlierFailure()
+    {
+        // It printed "didn't install" under "Updated to" for the same version (review P16-6).
+        Install(Exe);
+        File.WriteAllText(_folder.SwapFailed, "an older failure");
+        var swap = new UpdateSwap(_folder);
+        Assert.True(swap.Run(Plan([Exe], [], swap)).Done);
+        Assert.False(File.Exists(_folder.SwapFailed));
+    }
+
+    [Theory]
+    [InlineData(".DS_Store")]
+    [InlineData("Thumbs.db")]
+    [InlineData("desktop.ini")]
+    public void AFolderMetadataFile_DoesntCountAsHeld(string name)
+    {
+        // Opening .update/previous in Finder blocked the way back for good (review P11-8).
+        UpdateFixture.Write(Path.Combine(_folder.Previous, name), "x");
+        UpdateFixture.Write(Path.Combine(_folder.Previous, "sub", name), "x");
+        UpdateFixture.Write(Path.Combine(_folder.Previous, "a.dll"), "x");
+        Assert.Equal(["a.dll"], UpdateSwap.FilesHeldIn(_folder.Previous));
     }
 
     [Fact]
@@ -695,11 +1074,11 @@ public sealed class UpdateSwapTests : IDisposable
     [Fact]
     public void NamesDifferingOnlyByCase_DontThrow()
     {
-        // A case-blind volume's collision read two ways used to end in the crash catch (2026-11-04, review P2-9).
+        // A case-blind volume's collision read two ways used to end in the crash catch (2026-11-04, review P3-6). An Ordinal dictionary with both is what UpdateInstallHashes.Current builds, and a case-blind copy of it throws (review P21-2).
         var installed = Listing(("A.dll", "aa"), ("a.dll", "bb"));
         var staged = Listing(("A.dll", "cc"), ("a.dll", "dd"));
         var comparer = StringComparer.OrdinalIgnoreCase;
-        Assert.NotEmpty(UpdateSwap.Changed(installed, staged, new Dictionary<string, string>(comparer) { ["A.dll"] = "aa" }, comparer));
+        Assert.NotEmpty(UpdateSwap.Changed(installed, staged, new Dictionary<string, string>(StringComparer.Ordinal) { ["A.dll"] = "aa", ["a.dll"] = "bb" }, comparer));
     }
 
     [Fact]

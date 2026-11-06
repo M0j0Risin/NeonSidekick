@@ -1,4 +1,5 @@
 using NeonSidekick.App;
+using NeonSidekick.Tests.Fakes;
 using NeonSidekick.Updates;
 
 namespace NeonSidekick.Tests;
@@ -28,12 +29,73 @@ public sealed class UpdateProbeTests : IDisposable
     [Fact]
     public void AManifestThatDoesntRead_FailsTheRun_AsAMissingFile()
     {
-        // A package whose manifest this version's reader refuses would install and leave no way to update (2026-11-04, review P2-14).
-        Make("a.dll");
-        int code = UpdateProbe.Run(_result, _root, "0.5.7", ["a.dll"], [], _ => true, manifestGood: false);
+        // A package whose manifest this version's reader refuses would install and leave no way to update (2026-11-04, review P2-14). Through the probe's own check, not a flag the test hands it (review P21-12).
+        Make("a.dll", UpdateManifest.FileName);
+        int code = UpdateProbe.RunHere(_result, _root, "0.5.7", ["a.dll"], [], _ => true, _ => { });
 
         Assert.Equal(UpdateProbe.Failed, code);
         Assert.Contains("missing " + UpdateManifest.FileName + "\n", File.ReadAllText(_result), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void NoManifest_FailsTheRun_AsAMissingFile()
+    {
+        Make("a.dll");
+        Assert.Equal(UpdateProbe.Failed, UpdateProbe.RunHere(_result, _root, "0.5.7", ["a.dll"], [], _ => true, _ => { }));
+        Assert.Contains("missing " + UpdateManifest.FileName + "\n", File.ReadAllText(_result), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AGoodManifest_Passes()
+    {
+        Make("a.dll");
+        File.WriteAllText(Path.Combine(_root, UpdateManifest.FileName), UpdateFixture.Manifest("0.5.7", new Dictionary<string, string> { [UpdateFixture.Exe] = "x" }));
+        Assert.Equal(UpdateProbe.Passed, UpdateProbe.RunHere(_result, _root, "0.5.7", ["a.dll"], [], _ => true, _ => { }));
+    }
+
+    [Fact]
+    public void AManifestItCantOpenRightNow_IsAFailedLoad_NotAMissingFile()
+    {
+        // Missing drops the stage as the package's fault, and this is antivirus on the fresh stage (review P8-7).
+        Make("a.dll");
+        string manifest = Path.Combine(_root, UpdateManifest.FileName);
+        File.WriteAllText(manifest, UpdateFixture.Manifest("0.5.7", new Dictionary<string, string> { [UpdateFixture.Exe] = "x" }));
+        int pauses = 0;
+        int code;
+        using (FileHold.On(manifest))
+        {
+            code = UpdateProbe.RunHere(_result, _root, "0.5.7", ["a.dll"], [], _ => true, _ => pauses++);
+        }
+
+        Assert.Equal(UpdateProbe.Failed, code);
+        Assert.True(pauses > 0);
+        var read = UpdateProbeResult.ParseFile(_result);
+        Assert.Empty(read.Missing);
+        Assert.Equal([UpdateManifest.FileName], read.FailedLoads);
+    }
+
+    [Fact]
+    public void AManifestHeldForAMoment_IsReadAgain()
+    {
+        Make("a.dll");
+        string manifest = Path.Combine(_root, UpdateManifest.FileName);
+        File.WriteAllText(manifest, UpdateFixture.Manifest("0.5.7", new Dictionary<string, string> { [UpdateFixture.Exe] = "x" }));
+        var hold = FileHold.On(manifest);
+        int code = UpdateProbe.RunHere(_result, _root, "0.5.7", ["a.dll"], [], _ => true, _ => hold.Dispose());
+        hold.Dispose();
+        Assert.Equal(UpdateProbe.Passed, code);
+    }
+
+    [Fact]
+    public void AResultFileOverTheCap_IsAnEmptyAnswer()
+    {
+        // Review P13-19.
+        using (var big = new FileStream(_result, FileMode.Create))
+        {
+            big.SetLength(UpdateFolder.ReadCap + 1);
+        }
+
+        Assert.Null(UpdateProbeResult.ParseFile(_result).Version);
     }
 
     [Fact]

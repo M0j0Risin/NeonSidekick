@@ -296,7 +296,7 @@ public sealed class ModelStore
 
             unpacking?.Invoke();
             DiagnosticLog.Info(_category, $"Unpacking {spec.Display} into {extractPath}.");
-            await Task.Run(() => ZipFile.ExtractToDirectory(tempPath, extractPath), cancellationToken).ConfigureAwait(false);
+            await UnpackAsync(tempPath, ModelFormat.Zip, extractPath, cancellationToken).ConfigureAwait(false);   // the Vosk model's way too (2026-11-04, review P14-5): Esc sat out the unzip, and a scanner at the rename cost the whole download
             cancellationToken.ThrowIfCancellationRequested();
 
             string? root = FindModelRoot(extractPath, spec.RequiredFiles);
@@ -305,7 +305,7 @@ public sealed class ModelStore
                 return ModelResult.Failed(path, $"the archive from {url} does not contain a {spec.Display} (no {MissingFileHint(extractPath, spec.RequiredFiles)})");
             }
 
-            System.IO.Directory.Move(root, path);
+            await MoveWithRetryAsync(root, path, cancellationToken).ConfigureAwait(false);
             DiagnosticLog.Info(_category, $"Downloaded {spec.Display} ({SizeLabel(download.Received)}) to {path}.");
             return new ModelResult(true, path, $"downloaded {SizeLabel(download.Received)}");
         }
@@ -570,11 +570,7 @@ public sealed class ModelStore
             DiagnosticLog.Info(_category, $"Unpacking {spec.Display} into {extractPath}.");
             foreach (var archive in archives)
             {
-                // Off this thread, since the first read of a big archive isn't short, and async so a cancel ends an unzip (2026-11-04, review P3-7: /update cancel sat out the rest of it).
-                string unpack = archive;
-                await Task.Run(() => ArchiveFormat(unpack) == ModelFormat.TarGz
-                    ? ExtractTarGzAsync(unpack, extractPath, cancellationToken)
-                    : ZipFile.ExtractToDirectoryAsync(unpack, extractPath, overwriteFiles: true, cancellationToken), cancellationToken).ConfigureAwait(false);
+                await UnpackAsync(archive, ArchiveFormat(archive), extractPath, cancellationToken).ConfigureAwait(false);
             }
 
             cancellationToken.ThrowIfCancellationRequested();
@@ -625,19 +621,25 @@ public sealed class ModelStore
         await TarFile.ExtractToDirectoryAsync(gzip, destination, overwriteFiles: true, cancellationToken).ConfigureAwait(false);
     }
 
+    // Off this thread, since the first read of a big archive isn't short, and async so a cancel ends an unzip (2026-11-04, review P3-7: /update cancel sat out the rest of it).
+    internal static Task UnpackAsync(string archive, ModelFormat format, string destination, CancellationToken cancellationToken) =>
+        Task.Run(() => format == ModelFormat.TarGz
+            ? ExtractTarGzAsync(archive, destination, cancellationToken)
+            : ZipFile.ExtractToDirectoryAsync(archive, destination, overwriteFiles: true, cancellationToken), cancellationToken);
+
     /// <summary>
-    /// A rename of a freshly unpacked folder, with a brief retry (2026-11-04, review P4-15): a scanner reading hundreds of new files makes it fail with "access denied" for a moment, and the failure cost the whole unpack.
+    /// A rename of a freshly unpacked folder, with a brief retry (2026-11-04, review P4-15): a scanner reading hundreds of new files makes it fail with "access denied" for a moment, and the failure cost the whole unpack. A destination that exists isn't a moment's hold (review P8-18), so it fails at once. <paramref name="move"/> stands in for the rename in a test (review P10-11).
     /// </summary>
-    private static async Task MoveWithRetryAsync(string from, string to, CancellationToken cancellationToken)
+    internal static async Task MoveWithRetryAsync(string from, string to, CancellationToken cancellationToken, Action<string, string>? move = null)
     {
         for (int attempt = 1; ; attempt++)
         {
             try
             {
-                System.IO.Directory.Move(from, to);
+                (move ?? System.IO.Directory.Move)(from, to);
                 return;
             }
-            catch (Exception ex) when (attempt < MoveTries && ex is IOException or UnauthorizedAccessException)
+            catch (Exception ex) when (attempt < MoveTries && ex is IOException or UnauthorizedAccessException && !System.IO.Directory.Exists(to) && !File.Exists(to))
             {
                 await Task.Delay(MoveRetryPause, cancellationToken).ConfigureAwait(false);
             }

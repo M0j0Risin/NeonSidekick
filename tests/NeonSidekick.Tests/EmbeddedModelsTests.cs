@@ -779,6 +779,19 @@ public class EmbeddedModelsTests : IDisposable
         Assert.Equal(3, host.Launches.Count);
     }
 
+    [Fact]
+    public async Task AMissingVisualCppDll_FallsBack_ButDoesntStickForTheSession()
+    {
+        // It says nothing of CUDA, so installing the runtime mid-session brings it back (2026-11-04, review P10-5).
+        InstallByHand();
+        var host = new FakeLlamaServerHost { Fail = l => l.Backend == LlamaBackend.Cuda ? new EmbeddedLlmException("no Visual C++", visualCppMissing: true) : null };
+        await using var service = new EmbeddedLlmService(_files, host, Cuda, () => 8L << 30);
+
+        Assert.Equal(LlamaBackend.Vulkan, (await service.StartAsync(_model, new AppSettingsData(), null, CancellationToken.None)).Backend);
+
+        Assert.Equal(LlamaBackend.Cuda, service.Backend(new AppSettingsData()).Backend);
+    }
+
     /// <summary>
     /// The kill switch (Ctrl+Alt+X, 2026-10-01, the user's ask) during a load: the start's model unloaded without waiting for
     /// it, the start failing as the kill's — no Vulkan fallback, CUDA not marked failed — and nothing left to kill after.

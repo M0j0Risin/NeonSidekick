@@ -19,6 +19,8 @@ public sealed class UpdateExit
     private readonly ManualResetEventSlim _done = new();
     private UpdateLock? _held;
     private int _started;
+    private bool _rollback;
+    private Func<bool>? _terminalGone;
 
     public UpdateExit(UpdateContext context, UpdateLock? held, IUpdateFiles? files = null)
     {
@@ -27,18 +29,25 @@ public sealed class UpdateExit
         _files = files;
     }
 
-    /// <summary>What's left for a window close's recheck: the deadline, less what the close has used and the margin for the moves. Never negative: with nothing left it cancels at once, so nothing moves and the install waits for the next exit.</summary>
-    public static TimeSpan CloseBudget(TimeSpan deadline, TimeSpan used)
+    /// <summary>
+    /// What's left for a window close's recheck: the deadline, less what the close has used and the margin for the moves. Never negative: with nothing left it cancels at once, so nothing moves and the install waits for the next exit. <paramref name="killedAtTheDeadline"/> false is a Mac's signal close, which nothing kills (2026-11-04, review P14-6): ordinary close work could use the budget up and skip an install with no reason to wait, so it gets the deadline's full length, and a logout still can't hash without limit.
+    /// </summary>
+    public static TimeSpan CloseBudget(TimeSpan deadline, TimeSpan used, bool killedAtTheDeadline = true)
     {
+        if (!killedAtTheDeadline)
+        {
+            return deadline;
+        }
+
         var left = deadline - used - MoveMargin;
         return left > TimeSpan.Zero ? left : TimeSpan.Zero;
     }
 
     /// <summary>
     /// The exit's work, once. <paramref name="say"/> prints the quit lines and is null for a window close, which can't show anything, so its failure goes in <c>swap-failed.txt</c> for the next interactive start. <paramref name="budget"/> limits the recheck: if it can't finish, nothing moves and the install waits for the next exit.
-    /// On a Windows window close the kill at the deadline is what ends a slow swap, and the journal's undo deals with it. A Mac's signal path has no such kill: the budget only limits the recheck, and the moves run to their end.
+    /// On a Windows window close the kill at the deadline is what ends a slow swap, and the journal's undo deals with it. A Mac's signal path has no such kill: the budget only limits the recheck, and the moves run to their end. <paramref name="terminalGone"/> says a line just said went nowhere (2026-11-04, review P19-2): a closed Terminal's exit can get here first, its failure went to the dead console, and the next start said nothing.
     /// </summary>
-    public void Run(Action<string>? say, TimeSpan? budget = null)
+    public void Run(Action<string>? say, TimeSpan? budget = null, Func<bool>? terminalGone = null)
     {
         if (Interlocked.Exchange(ref _started, 1) != 0)
         {
@@ -52,6 +61,7 @@ public sealed class UpdateExit
 
         // A console gone at quit (a Mac terminal closed, EIO) must not escape past "a failed swap never changes the exit" (2026-11-04, review P2-8).
         Action<string>? safe = say is null ? null : line => SayQuietly(say, line);
+        _terminalGone = terminalGone;
         try
         {
             using var limit = budget is { } time ? new CancellationTokenSource(time) : new CancellationTokenSource();
@@ -60,6 +70,10 @@ public sealed class UpdateExit
         catch (OperationCanceledException)
         {
             DiagnosticLog.Info(UpdateJournal.Category, UpdateText.RecheckOutOfTime);
+            if (say is null)
+            {
+                Save(_rollback ? UpdateText.CloseRanOutBackLine : UpdateText.CloseRanOutLine);   // nothing shows at a close, so the next start says it (review P12-12)
+            }
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -91,35 +105,54 @@ public sealed class UpdateExit
     private void Install(Action<string>? say, CancellationToken cancellationToken)
     {
         var folder = _context.Folder;
-        bool rollback = File.Exists(folder.Rollback);
-        if (!folder.IsPackageOrMidSwap || (!rollback && !File.Exists(folder.Ready)))
+        _rollback = File.Exists(folder.Rollback);
+        if (!folder.IsPackageOrMidSwap || (!_rollback && !File.Exists(folder.Ready)))
         {
             return;
         }
 
         // A renamed copy's exit doesn't swap, by the same name check as preflight: the stage waits for an exit of the listed exe. A manifest set aside by an interrupted swap is what the settling step below puts back. It says so (2026-11-04, review P4-4): the marker promised "at quit".
+        // Neither leaves a file for the next start (review P20-1): that start may be the listed exe, for which "this copy has been renamed" is false.
         if (folder.IsPackage)
         {
-            if (UpdateManifest.ReadFile(folder.Manifest, out string? problem) is not { } current)
+            var load = UpdateManifest.Load(folder.Manifest);
+            if (load.Manifest is not { } current)
             {
-                Report(say, UpdateText.DamagedInstall(problem ?? UpdateText.ManifestUnreadable));
+                Report(say, load.Unreadable ? UpdateText.InstallManifestHeld : UpdateText.DamagedInstall(load.Problem ?? UpdateText.ManifestUnreadable), leaveNoFile: true);
                 return;
             }
 
             if (!_context.IsListedExe(current))
             {
-                Report(say, UpdateText.RenamedCopy(current.Exe));
+                Report(say, UpdateText.RenamedCopy(current.Exe), leaveNoFile: true);
                 return;
             }
         }
 
-        // Closes this copy's own shared handle, then needs the lock exclusively, so if another copy runs from this folder, the stage waits for a later interactive exit.
+        // Closes this copy's own shared handle, then needs the lock exclusively, so if another copy runs from this folder, the stage waits for a later interactive exit. Only a held lock says that (2026-11-04, review P12-9): a root-owned lock file read as another copy, at every quit, for good.
         _held?.Dispose();
-        _held = UpdateLock.TryExclusive(folder.InUseLock);
+        _held = UpdateLock.TryExclusive(folder.InUseLock, out bool inUse);
         if (_held is null)
         {
-            DiagnosticLog.Info(UpdateJournal.Category, UpdateText.OtherCopyOpen);
-            say?.Invoke(UpdateText.OtherCopyOpen);
+            if (inUse)
+            {
+                string open = _rollback ? UpdateText.OtherCopyOpenBack : UpdateText.OtherCopyOpen;
+                DiagnosticLog.Info(UpdateJournal.Category, open);
+                say?.Invoke(open);
+            }
+            else
+            {
+                Report(say, UpdateText.LockCantOpen(folder.InUseLock));
+            }
+
+            return;
+        }
+
+        // Before settling or swapping (2026-11-04, review P12-3): a window close swapped a ready stage while this process's own Install was still fetching proofs, and that stage's Prepare then deleted files under the moves. Stage work holds this from before its proofs.
+        using var staging = UpdateLock.TryExclusive(folder.StagingLock, out bool stageWork);
+        if (staging is null)
+        {
+            Report(say, stageWork ? UpdateText.StageWorkRunning : UpdateText.LockCantOpen(folder.StagingLock));
             return;
         }
 
@@ -129,7 +162,7 @@ public sealed class UpdateExit
             return;
         }
 
-        if (rollback)
+        if (_rollback)
         {
             GoBack(swap, say, cancellationToken);
         }
@@ -155,20 +188,32 @@ public sealed class UpdateExit
             return true;
         }
 
-        var settled = swap.Settle(left, _context.Running.ToString());
-        Report(say, settled == UpdateSettled.UndoStopped ? UpdateText.MixedReason : UpdateText.SettledInstead);
+        switch (swap.Settle(left, _context.Running.ToString(), _context.IsThisExe))
+        {
+            case UpdateSettled.Finished:
+                say?.Invoke(UpdateText.SettledFinished(left.Target, left.Rollback));
+                break;
+            case UpdateSettled.UndoStopped or UpdateSettled.LeftAlone:
+                Report(say, UpdateText.MixedReason);
+                break;
+            default:
+                Report(say, _rollback ? UpdateText.SettledInsteadBack : UpdateText.SettledInstead);
+                break;
+        }
+
         return false;
     }
 
     private void GoForward(UpdateSwap swap, Action<string>? say, CancellationToken cancellationToken)
     {
         var folder = _context.Folder;
-        if (UpdateManifest.ReadFile(folder.StagingManifest, out _) is { } named)
+        var stagedRead = UpdateManifest.Load(folder.StagingManifest);
+        if (stagedRead.Manifest is { } named)
         {
             say?.Invoke(UpdateText.Installing(named.ParsedVersion.ToString()));   // before the recheck: seconds of silence on a slow disk read as a hang (review P4-18)
         }
 
-        var planned = UpdateRecheck.Check(_context, cancellationToken, out string? reason, out var failure);
+        var planned = UpdateRecheck.Check(_context, cancellationToken, out string? reason, out var failure, stagedRead);
         if (planned is null)
         {
             // Any mismatch drops the stage. A failure to read keeps it for the next exit.
@@ -189,22 +234,33 @@ public sealed class UpdateExit
     private void GoBack(UpdateSwap swap, Action<string>? say, CancellationToken cancellationToken)
     {
         var folder = _context.Folder;
-        var plan = UpdateRollback.Check(_context, cancellationToken, out string? reason);
+        if (UpdateManifest.ReadFile(folder.PreviousManifest, out _) is { } named)
+        {
+            say?.Invoke(UpdateText.GoingBackNow(named.ParsedVersion.ToString()));   // before the check, as the forward line is (2026-11-04, review P9-10)
+        }
+
+        var plan = UpdateRollback.Check(_context, cancellationToken, out string? reason, out var failure);
         if (plan is null)
         {
+            string why = reason ?? UpdateText.NothingToGoBackTo;
+            if (failure == UpdateRecheckFailure.Keep)
+            {
+                Report(say, UpdateText.TriesAgainAtQuit(why));
+                return;
+            }
+
             // One that fails at exit drops the pending rollback with its reason, so it can't fail at every exit, and previous stays.
-            File.Delete(folder.Rollback);
-            Report(say, reason ?? UpdateText.NothingToGoBackTo, rollback: true);
+            UpdateFolder.DeleteQuietly(folder.Rollback);
+            Report(say, File.Exists(folder.Ready) ? UpdateText.ReadyStillInstalls(why) : why);
             return;
         }
 
         string target = plan.Target.ParsedVersion.ToString();
-        say?.Invoke(UpdateText.GoingBackNow(target));
         var journal = swap.PlanRollback(_context.Running.ToString(), target, plan.Installed.Exe, plan.Target.Exe, plan.Incoming, plan.Added, plan.Verified);
-        Finish(swap, journal, say, UpdateText.WentBackLine(target), UpdateText.NothingToGoBackTo, rollback: true);
+        Finish(swap, journal, say, UpdateText.WentBackLine(target), UpdateText.NothingToGoBackTo);
     }
 
-    private void Finish(UpdateSwap swap, UpdateJournal journal, Action<string>? say, string done, string fallback, bool rollback = false)
+    private void Finish(UpdateSwap swap, UpdateJournal journal, Action<string>? say, string done, string fallback)
     {
         var result = swap.Run(journal);
         if (result.Done)
@@ -215,20 +271,32 @@ public sealed class UpdateExit
 
         // An undo that stopped too leaves a mix until the next start (review P5-6), which isn't the same news as a clean undo.
         string reason = result.Reason ?? fallback;
-        Report(say, result.Undone ? reason : UpdateText.UndoAlsoStopped(reason), rollback);
+        Report(say, result.MayBeMixed ? UpdateText.UndoAlsoStopped(reason) : reason);
     }
 
-    private void Report(Action<string>? say, string reason, bool rollback = false)
+    // In a rollback's words on every path (2026-11-04, reviews P9-9, P11-10): "the update didn't install" said nothing true of going back, and the broad catch had no way to know.
+    private void Report(Action<string>? say, string reason, bool leaveNoFile = false)
     {
         if (say is not null)
         {
-            say(rollback ? UpdateText.WentBackFailedLine(reason) : UpdateText.FailedLine(reason));
-            return;
+            say(_rollback ? UpdateText.WentBackFailedLine(reason) : UpdateText.FailedLine(reason));
+            if (_terminalGone?.Invoke() != true)
+            {
+                return;
+            }
         }
 
+        if (!leaveNoFile)
+        {
+            Save(_rollback ? UpdateText.WindowCloseBackFailed(reason) : UpdateText.WindowCloseFailed(reason));
+        }
+    }
+
+    private void Save(string sentence)
+    {
         try
         {
-            File.WriteAllText(_context.Folder.SwapFailed, UntrustedText.Scrub(reason));
+            File.WriteAllText(_context.Folder.SwapFailed, UntrustedText.Scrub(sentence));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

@@ -281,11 +281,20 @@ static class Scenarios
         }),
         ("same-or-older", async () =>
         {
-            foreach (string tag in new[] { "v" + s.Base, "v0.0.1", s.Next + "-beta", "v" + s.Next + "-beta" })
+            foreach (string tag in new[] { "v" + s.Base, "v0.0.1" })
             {
                 s.GitHub.Reset();
                 s.GitHub.Latest = FakeGitHub.Json(tag, []);
                 s.Says(await s.Run("all"), "check: Latest");
+                s.ManifestIs(s.Base);
+            }
+
+            // A tag it can't read says nothing of what's newest (review P13-11).
+            foreach (string tag in new[] { s.Next + "-beta", "v" + s.Next + "-beta" })
+            {
+                s.GitHub.Reset();
+                s.GitHub.Latest = FakeGitHub.Json(tag, []);
+                s.Says(await s.Run("all"), "check: Failed", UpdateText.TagNotPlain(tag));
                 s.ManifestIs(s.Base);
             }
         }),
@@ -425,6 +434,16 @@ static class Scenarios
             s.NoStage();
             s.StageKept();
         }),
+        ("probe-hung-with-no-parent", async () =>
+        {
+            // The probe's own limit (review P10-10): the app's 30 s kill dies with the app, and a Mac has no job object, so nothing else ends it.
+            File.WriteAllBytes(s.Folder.Full(Sim.HangMarker), []);
+            var clock = Stopwatch.StartNew();
+            var run = s.RunPlain(UpdateProbe.Flag, Path.Combine(s.Scratch, "probe-with-no-parent-" + s.Name));
+            var finished = await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(90)));
+            s.True(finished == run, "a hung probe should end itself at its limit");
+            s.True(clock.Elapsed >= UpdateProbe.SelfLimit - TimeSpan.FromSeconds(5), $"it ended after {clock.Elapsed.TotalSeconds:F0} s, before its limit, so something else ended it");
+        }),
         ("library-fails-in-both", async () =>
         {
             s.Publish(s.Next, tamper: entries => entries[s.NativeLibrary] = Encoding.UTF8.GetBytes("not a library"), manifestFromEntries: true);
@@ -448,6 +467,36 @@ static class Scenarios
             s.IntactAsBase();
             s.Says(await s.Run("exit", Sim.MoveAll), "exit: done");
             s.ManifestIs(s.Next);
+        }),
+        ("kill-swap-staged-file-gone", async () =>
+        {
+            // A vanished source's step reads as neither there (review P12-2): the undo goes on past it, and it must leave every listed file whole.
+            s.Publish(s.Next);
+            s.Says(await s.Run("stage"), "stage: ready " + s.Next);
+            var run = s.Start("exit", "--update-swap-delay", "300", "--update-move-all");
+            await s.Until(() => File.Exists(s.Folder.Journal), run);
+            await Task.Delay(1000);
+            s.Kill(run);
+            File.Delete(Directory.EnumerateFiles(s.Folder.Staging, "*", SearchOption.AllDirectories).First(file => Path.GetFileName(file) != UpdateManifest.FileName));
+            s.Says(await s.Run("start", Sim.MoveAll), "start:");
+            s.False(File.Exists(s.Folder.Journal), "the start should undo it");
+            s.ManifestIs(s.Base);
+            s.IntactAsBase();
+        }),
+        ("package-unpacked-over-a-killed-swap", async () =>
+        {
+            // Both paths of the steps that ran are there now, which reads as a conflict, and the install is whole: the hash check lets the journal go (review P15-2).
+            s.Publish(s.Next);
+            s.Says(await s.Run("stage"), "stage: ready " + s.Next);
+            var run = s.Start("exit", "--update-swap-delay", "300", "--update-move-all");
+            await s.Until(() => File.Exists(s.Folder.Journal), run);
+            await Task.Delay(1000);
+            s.Kill(run);
+            s.UnpackBaseOver();
+            var started = await s.Run("start", Sim.MoveAll);
+            s.True(!started.Text.Contains(UpdateText.MixedLine, StringComparison.Ordinal), "a whole install shouldn't read as a mix");
+            s.False(File.Exists(s.Folder.Journal), "the journal should go");
+            s.IntactAsBase();
         }),
         ("kill-undo", async () =>
         {
@@ -1225,8 +1274,6 @@ sealed class Sim
     public void NotInPrevious(string path) => False(File.Exists(Path.Combine(Folder.Previous, path.Replace('/', Path.DirectorySeparatorChar))), path + " shouldn't have moved");
 
     public void InstalledIs(string path, string text) => True(File.ReadAllText(Folder.Full(path)) == text, path + " isn't what it should be");
-
-    public void PreviousIs(string path, string text) => True(File.ReadAllText(Path.Combine(Folder.Previous, path.Replace('/', Path.DirectorySeparatorChar))) == text, path + " in previous isn't what it should be");
 
     public string BaseText(string path) => Encoding.UTF8.GetString(BaseBytes(path));
 

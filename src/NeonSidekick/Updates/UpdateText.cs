@@ -1,5 +1,6 @@
 using System.Globalization;
 using NeonSidekick.App;
+using NeonSidekick.Llm.Tools;
 using NeonSidekick.UI;
 
 namespace NeonSidekick.Updates;
@@ -37,6 +38,18 @@ public static class UpdateText
 
     public const string ManifestUnreadable = "its update manifest can't be read";
 
+    /// <summary>A manifest that's there and can't be opened right now: not a damaged package (2026-11-04, review P8-8).</summary>
+    public const string ManifestHeld = "its update manifest can't be read right now";
+
+    /// <summary>The same of the install's own, where the words "this install can't update itself" would be false.</summary>
+    public const string InstallManifestHeld = "the install's update manifest can't be read right now; it tries again next time";
+
+    /// <summary>What a marker says of a stage whose manifest can't be read (2026-11-04, reviews P9-6, P11-9), so <c>/update cancel</c> still finds it.</summary>
+    public const string StageNoVersion = "update";
+
+    /// <summary>The same of a pending rollback.</summary>
+    public const string EarlierNoVersion = "the earlier version";
+
     public const string AnswerUnreadable = "GitHub's answer can't be read";
 
     public const string RateLimited = "GitHub is limiting requests from this address; try again in a while";
@@ -56,6 +69,12 @@ public static class UpdateText
     public const string InstallChanged = "the installed files changed after the update was downloaded, so it was dropped";
 
     public const string AnotherCopyStaging = "another copy is already downloading this update";
+
+    /// <summary>Only a held lock blames another copy (2026-11-04, review P13-6): this one can't be opened at all.</summary>
+    public const string StagingLockCantOpen = "the update's lock file can't be opened, so this folder may not be writable";
+
+    /// <summary>The exit's own words for stage work still under way (2026-11-04, review P12-3): a window close moved files under a running download's cleanup.</summary>
+    public const string StageWorkRunning = "a download or a check is still running; the next quit tries again";
 
     /// <summary>The download's limit, in words from the constant (2026-11-04, review P5-18), so the two can't part.</summary>
     public static string Stalled => string.Create(CultureInfo.InvariantCulture, $"the download stalled with no data for {UpdateStage.StallLimit.TotalSeconds} seconds; /update tries again and picks up where it stopped");
@@ -81,11 +100,32 @@ public static class UpdateText
 
     public const string MixedLine = "The last update was interrupted and couldn't be undone, so this install may be a mix of versions. Restart with no other copy open, or unpack a fresh copy: " + ReleasesUrl;
 
+    /// <summary>A wait that ran out over another copy's swap (2026-11-04, review P12-10): "interrupted" and "a mix" were a false alarm for a swap that finishes seconds later.</summary>
+    public const string StillRunningLine = "An update is still running from another copy, and this one started without waiting for it. Start NeonSidekick again once it's done.";
+
     public const string UnfinishedSwap = "an interrupted update's record can't be read; the next start tries again";
 
     public const string MixedReason = "an interrupted update couldn't be undone, so this install may be a mix of versions; the next start tries again";
 
     public const string SettledInstead = "an interrupted update had to be settled first, so this quit installs nothing; the next one does";
+
+    public const string SettledInsteadBack = "an interrupted update had to be settled first; the next quit goes back";
+
+    /// <summary>A start that undid a killed swap (2026-11-04, review P15-4): a user who quits by the window's X never learned the install didn't happen, and the next close could repeat it.</summary>
+    public const string UndoneLine = "The last update was interrupted, so it was undone.";
+
+    public const string UndoneInstallsLine = UndoneLine + " It installs at the next /exit.";
+
+    public const string UndoneBackLine = "Going back was interrupted, so it was undone.";
+
+    public const string UndoneBackRunsLine = UndoneBackLine + " It runs at the next /exit.";
+
+    /// <summary>A window close with no time left for the recheck (2026-11-04, review P12-12): the marker went on promising "at quit" to a user who always closes by the X.</summary>
+    public const string CloseRanOutLine = "The window closed before the update could install. It installs at /exit.";
+
+    public const string CloseRanOutBackLine = "The window closed before going back could run. It runs at /exit.";
+
+    public const string DroppingSpinner = "Deleting the update...";
 
     public const string CancelWaitRanOut = "The download didn't stop in time. Try /update cancel again.";
 
@@ -96,6 +136,8 @@ public static class UpdateText
     public const string WaitRanOut = "Waited for an update to finish and it hasn't; starting anyway, without the lock.";
 
     public const string OtherCopyOpen = "Another copy is running from this folder, so the update waits for a later exit.";
+
+    public const string OtherCopyOpenBack = "Another copy is running from this folder, so going back waits for a later exit.";
 
     public const string RecheckOutOfTime = "No time left to recheck the update at this close; it waits for the next exit.";
 
@@ -112,7 +154,7 @@ public static class UpdateText
 
     public const string RollbackNote = "go back to the earlier version when you quit";
 
-    public const string CancelNote = "stop a download, or drop a stage or a pending rollback";
+    public const string CancelNote = "stop a download, delete a downloaded update or a partial one, or take back going back";
 
     public const string Usage = "Usage: /update, /update notes, /update rollback or /update cancel";
 
@@ -139,7 +181,10 @@ public static class UpdateText
 
     public const string CancelDownloadFirst = "An update is downloading. /update cancel stops it first.";
 
-    public const string RollbackWarning = "Going back can turn off sessions, the shopping list or skill records a newer version changed, and settings the old version doesn't know go back to their defaults. Updating again brings them back.";
+    public const string RollbackWarning = "Going back can turn off sessions, the shopping list, skill records or file checkpoints a newer version changed, and settings the old version doesn't know go back to their defaults. Updating again brings them back.";
+
+    /// <summary>How many lines of notes print on the transcript (2026-11-04, review P14-7): each is a feed entry on the page, whose feed holds 500, so a long changelog pushed the session off it. The pane scrolls, so it keeps them whole.</summary>
+    public const int NotesPrintedLines = 60;
 
     /// <summary>Install, on the offer's pane: <c>i</c>, as the plan's stray-key note expects.</summary>
     public static readonly InfoAction InstallAction = new("Install", 'i', "install");
@@ -225,6 +270,33 @@ public static class UpdateText
     /// <summary>The check's User-Agent: names the app and its version, and nothing about the user.</summary>
     public static string UserAgent(string version) => "NeonSidekick/" + version;
 
+    public static string NotesCut(int more, string link) => string.Create(CultureInfo.InvariantCulture, $"...and {more} more lines: {link}");
+
+    /// <summary>A cancel that came before a newer download touched anything (2026-11-04, review P18-2): the ready one stands.</summary>
+    public static string CanceledOlderStays(string version) => $"Update canceled. {version} is still ready and installs when you quit.";
+
+    /// <summary>A newest tag that isn't plain <c>vX.Y.Z</c> (2026-11-04, review P13-11): read as "latest", it told the user they were current and took a good offer away.</summary>
+    public static string TagNotPlain(string? tag) => $"the newest release's tag ({tag ?? ""}) isn't a plain version";
+
+    /// <summary>A folder holding another version than the one running (2026-11-04, reviews P11-7, P15-1): a package unpacked over it mid-session, and a stage or a rollback from here would be planned from the wrong version.</summary>
+    public static string FolderNotThisVersion(string folderVersion, string running) => $"this folder now holds {folderVersion} and this copy is {running}; start NeonSidekick again";
+
+    public static string LockCantOpen(string path) => $"{path} can't be opened, so nothing can install from this folder";
+
+    public static string JournalLeftAlone(string source, string target, string running) => $"Left an unfinished update journal alone: it goes from {source} to {target}, this is {running}, and the folder doesn't say it finished.";
+
+    public static string OldVersionOtherPlatform(string rid) => $"the earlier version is for {rid}, not this system, so it won't go back";
+
+    public static string OldVersionUnreadable(string problem) => $"the earlier version couldn't be read to check it: {Bare(problem)}";
+
+    public static string TriesAgainAtQuit(string reason) => $"{Bare(reason)}; the next quit tries again";
+
+    /// <summary>A refused rollback with a stage ready (2026-11-04, review P11-3): the next quit installs it, and the line had said nothing.</summary>
+    public static string ReadyStillInstalls(string reason) => $"{Bare(reason)}. The ready update still installs at the next quit";
+
+    /// <summary>What a quit finds was only a cleanup (2026-11-04, review P11-2): "didn't install" and "the next one does" were both false.</summary>
+    public static string SettledFinished(string version, bool rollback) => rollback ? $"Back on {version}: only an interrupted cleanup was left." : $"{version} is installed: only an interrupted cleanup was left.";
+
     public static string ManifestUnknownFormat(int format) => string.Create(CultureInfo.InvariantCulture, $"it uses a format this version doesn't know ({format})");
 
     public static string ManifestBadEntry(string path) => $"its update manifest has a bad entry ({path})";
@@ -308,21 +380,46 @@ public static class UpdateText
 
     public static string FailedLine(string reason) => $"The update didn't install: {Sentence(reason)} {ReleasesUrl}";
 
+    /// <summary>What <c>swap-failed.txt</c> holds of an update (2026-11-04, review P9-9): the finished sentence, since a bare reason can't say whether it was an update or a rollback.</summary>
     public static string WindowCloseFailed(string reason) => $"The update didn't install when the window closed: {Sentence(reason)} {ReleasesUrl}";
+
+    /// <summary>The same of a rollback.</summary>
+    public static string WindowCloseBackFailed(string reason) => $"Going back didn't run when the window closed: {Sentence(reason)} {ReleasesUrl}";
+
+    /// <summary><c>swap-failed.txt</c>'s text as the start prints it: it's a file on disk, so scrubbed, on one line, and capped.</summary>
+    public static string SwapFailedSaved(string text) => Flatten(text, SavedCap);
 
     /// <summary>A rollback's own quit words (2026-11-04, review P7-11): "The update didn't install" said nothing true of going back.</summary>
     public static string GoingBackNow(string version) => $"Going back to {version}...";
 
-    public static string WentBackLine(string version) => $"Done. {version} runs at next launch.";
+    public static string WentBackLine(string version) => $"Done. Back on {version} at next launch.";
 
     public static string WentBackFailedLine(string reason) => $"Didn't go back: {Sentence(reason)} {ReleasesUrl}";
 
     // A reason as the end of a sentence (2026-11-04, review P1-19): some reasons are whole sentences and others aren't, and "Word.." read as a typo.
-    private static string Sentence(string reason) => Bare(reason) + ".";
+    // Scrubbed, on one line and capped here, the one helper every failure line goes through (reviews P11-11, P13-3): a stray named with an escape sequence or a manifest's bad entry reached the terminal as it was, at any length.
+    private static string Sentence(string reason) => Bare(Flatten(reason, ReasonCap)) + ".";
 
     private static string Bare(string reason)
     {
         ArgumentNullException.ThrowIfNull(reason);
         return reason.TrimEnd().TrimEnd('.');
     }
+
+    private static string Flatten(string text, int cap)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        string flat = string.Join(' ', UntrustedText.Scrub(text).Split(['\n', '\t'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        if (flat.Length <= cap)
+        {
+            return flat;
+        }
+
+        int end = char.IsHighSurrogate(flat[cap - 1]) ? cap - 1 : cap;
+        return flat[..end] + "...";
+    }
+
+    private const int ReasonCap = 400;
+
+    private const int SavedCap = 1000;
 }

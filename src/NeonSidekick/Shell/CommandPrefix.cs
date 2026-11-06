@@ -2041,7 +2041,10 @@ public static partial class CommandPrefix
     }
 
     /// <summary>The whitespace-separated tokens of a segment, a quoted stretch kept as one token with its quotes; an escaped character is literal (2026-10-19), so an escaped space never splits a token and an escaped quote never opens one.</summary>
-    private static List<string> Tokens(string segment, ShellKind shell = ShellKind.PowerShell)
+    private static List<string> Tokens(string segment, ShellKind shell = ShellKind.PowerShell) => Tokens(segment, shell, out _);
+
+    /// <summary><see cref="Tokens(string, ShellKind)"/> for the shell police (2026-11-04, review P16-3), with whether the last word was read to the end from a quote that never closed.</summary>
+    internal static List<string> Tokens(string segment, ShellKind shell, out bool lastIsOpen)
     {
         char escape = EscapeChar(shell);
         var tokens = new List<string>();
@@ -2109,6 +2112,7 @@ public static partial class CommandPrefix
             }
         }
 
+        lastIsOpen = quote != '\0' && current.Length > 0;
         if (current.Length > 0)
         {
             tokens.Add(current.ToString());

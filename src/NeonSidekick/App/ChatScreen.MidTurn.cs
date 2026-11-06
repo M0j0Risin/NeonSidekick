@@ -205,7 +205,7 @@ internal sealed partial class ChatScreen
         SlashCommand.Session => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
         SlashCommand.Rename => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
         SlashCommand.Process => hasArgs ? MidTurnClass.Quick : MidTurnClass.Pane,
-        SlashCommand.Update => hasArgs ? MidTurnClass.Quick : MidTurnClass.Pane,   // 2026-11-04, self-update: the offer over the reply; its forms answer in lines
+        SlashCommand.Update => hasArgs ? MidTurnClass.Quick : MidTurnClass.Pane,   // 2026-11-04, self-update: the offer over the reply; notes and cancel answer in lines, and rollback is the Pane above
         SlashCommand.Skills => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
         // /commands (2026-10-30): the pane over the reply; new and save wait, so "the last message" is the one the reply answers and the editor opens at the idle line.
         SlashCommand.Commands => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
@@ -557,7 +557,7 @@ internal sealed partial class ChatScreen
                 await ShowKeyCheckAsync(_flow, cancellationToken).ConfigureAwait(false);
                 break;
             case SlashCommand.Update:
-                // The bare /update (2026-11-04, self-update): the offer over the reply; its answers through the flow sink.
+                // The bare /update and /update rollback (2026-11-04, self-update, review P11-16): the offer, or the wait under a pane Esc can close, over the reply; their answers through the flow sink.
                 await UpdateCommandAsync(args, _flow, cancellationToken, onWatcher: true).ConfigureAwait(false);
                 break;
             case SlashCommand.Process:
@@ -853,7 +853,7 @@ internal sealed partial class ChatScreen
                 HandleLog(args);
                 break;
             case SlashCommand.Update:
-                // /update notes, rollback and cancel (2026-11-04, self-update): lines through the flow sink, no pane; a wrong word gets the usage.
+                // /update notes and cancel (2026-11-04, self-update, review P11-16): lines through the flow sink, no pane; a wrong word gets the usage.
                 await UpdateCommandAsync(args, _flow, cancellationToken, onWatcher: true).ConfigureAwait(false);
                 break;
             case SlashCommand.Process:

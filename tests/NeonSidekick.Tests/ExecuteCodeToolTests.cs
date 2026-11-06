@@ -175,6 +175,20 @@ public sealed class ExecuteCodeToolTests : IDisposable
     }
 
     [Fact]
+    public async Task TheScript_IsReadByTheInstallsPolice_FromItsRoot_AsAScript()
+    {
+        // Its own check before the run named no root and read code as one line (2026-11-04, review P14-3): a stray apostrophe hid what followed.
+        string install = Path.Combine(_dir, "pkg");
+        Directory.CreateDirectory(install);
+        using var _ = Files.WriteGuard.Configure(new Files.WriteGuardFacts(() => null, () => null, () => [], () => null, () => false, () => null, InstallFolder: () => install));
+
+        var shown = Assert.IsType<ToolShownResult>(await _tool.InvokeAsync(Args(("language", "powershell"), ("code", "// don't touch\nCopy-Item evil ../pkg/update-manifest.json\n// it's fine"))));
+
+        Assert.Equal(ShellText.InstallPoliced, shown.Text);
+        Assert.Empty(_asked);
+    }
+
+    [Fact]
     public async Task SqlitePolice_AScriptReachingSqlite_IsRefusedBeforeTheGate()
     {
         // 2026-10-05: while the SQLite tools are on (the guard set), a script that reaches SQLite never runs, yolo or not.

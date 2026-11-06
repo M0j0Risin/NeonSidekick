@@ -27,6 +27,13 @@ public sealed class UpdateSimFlags
     /// <summary><c>--update-test-key &lt;base64&gt;</c>: a public key to trust. UpdateSim makes a new pair each run, so no private key is ever committed to this public repo.</summary>
     public string? TestKey { get; private set; }
 
+    /// <summary>
+    /// The first flag it couldn't take, in words, or null (2026-11-04, review P13-18): a mistyped mode fell through into the whole flow, swap included, a bad version quietly kept the real one, so a scenario tested the wrong thing, and a missing value was an unhandled exception. <c>Program.cs</c> refuses the run.
+    /// </summary>
+    public string? Problem { get; private set; }
+
+    private static readonly string[] Modes = ["all", "check", "stage", "exit", "start", "disk", "notes", "cancel", "rollback"];
+
     /// <summary>Takes this class's flags off <paramref name="args"/>, leaving the rest for the app's own parser.</summary>
     public static UpdateSimFlags Take(ref string[] args)
     {
@@ -35,26 +42,93 @@ public sealed class UpdateSimFlags
         string[] given = args;
         for (int i = 0; i < given.Length; i++)
         {
-            string Value() => ++i < given.Length ? given[i] : throw new ArgumentException($"{given[i - 1]} needs a value");
-            switch (given[i])
+            string flag = given[i];
+            string? Value()
+            {
+                if (++i < given.Length)
+                {
+                    return given[i];
+                }
+
+                flags.Problem ??= $"{flag} needs a value";
+                return null;
+            }
+
+            void Refuse(string value) => flags.Problem ??= $"{flag} can't take {value}";
+            switch (flag)
             {
                 case "--update-source":
-                    flags.Source = new Uri(Value());
+                    if (Value() is { } source)
+                    {
+                        if (Uri.TryCreate(source, UriKind.Absolute, out var origin) && origin.IsLoopback)
+                        {
+                            flags.Source = origin;
+                        }
+                        else
+                        {
+                            Refuse(source);
+                        }
+                    }
+
                     break;
                 case "--update-as-version":
-                    flags.AsVersion = Value();
+                    if (Value() is { } version)
+                    {
+                        if (UpdateVersion.TryParse(version, out _))
+                        {
+                            flags.AsVersion = version;
+                        }
+                        else
+                        {
+                            Refuse(version);
+                        }
+                    }
+
                     break;
                 case "--update-check":
-                    flags.Check = Value();
+                    if (Value() is { } mode)
+                    {
+                        if (Modes.Contains(mode, StringComparer.Ordinal))
+                        {
+                            flags.Check = mode;
+                        }
+                        else
+                        {
+                            Refuse(mode);
+                        }
+                    }
+
                     break;
                 case "--update-move-all":
                     flags.MoveAll = true;
                     break;
                 case "--update-swap-delay":
-                    flags.SwapDelayMs = int.Parse(Value(), CultureInfo.InvariantCulture);
+                    if (Value() is { } delay)
+                    {
+                        if (int.TryParse(delay, NumberStyles.None, CultureInfo.InvariantCulture, out int ms))
+                        {
+                            flags.SwapDelayMs = ms;
+                        }
+                        else
+                        {
+                            Refuse(delay);
+                        }
+                    }
+
                     break;
                 case "--update-test-key":
-                    flags.TestKey = Value();
+                    if (Value() is { } key)
+                    {
+                        if (UpdateSignature.IsPublicKey(key))
+                        {
+                            flags.TestKey = key;
+                        }
+                        else
+                        {
+                            Refuse(key);
+                        }
+                    }
+
                     break;
                 default:
                     rest.Add(given[i]);
@@ -100,14 +174,14 @@ public static class UpdateSimMode
         say("start: " + (start.Line ?? "nothing to say"));
 
         // Right after the line, in every mode, as the screen would.
-        var updater = new AppUpdater(context, start.Line, source: flags.SourceOrNull(), journalMayGo: start.JournalMayGo, failureShown: start.FailureShown);
+        var updater = new AppUpdater(context, start, source: flags.SourceOrNull());
         updater.AcknowledgeStart();
         switch (mode)
         {
             case "start":
                 return 0;
             case "disk":
-                var disk = updater.ReadDisk();
+                var disk = updater.ReadDisk(withLeftovers: true);
                 say($"disk: ready {disk.ReadyVersion ?? "none"}, rollback {disk.RollbackTarget ?? "none"}, leftovers {(disk.Leftovers ? "yes" : "no")}");
                 return 0;
             case "notes":
@@ -179,7 +253,7 @@ public static class UpdateSimMode
             {
                 case UpdateStagePhase.Downloading downloading when downloading.Percent / 25 != _quarter:
                     _quarter = downloading.Percent / 25;
-                    say($"stage: downloading {downloading.Percent}%");
+                    say(string.Create(CultureInfo.InvariantCulture, $"stage: downloading {downloading.Percent}%"));
                     break;
                 case UpdateStagePhase.Checking when !_checking:
                     _checking = true;

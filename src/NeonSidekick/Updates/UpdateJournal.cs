@@ -107,10 +107,10 @@ public sealed class UpdateJournal
             return null;
         }
 
-        byte[] bytes;
+        byte[]? bytes;
         try
         {
-            bytes = File.ReadAllBytes(folder.Journal);
+            bytes = UpdateFolder.ReadCapped(folder.Journal);
         }
         catch (FileNotFoundException)
         {
@@ -124,13 +124,20 @@ public sealed class UpdateJournal
         }
 
         UpdateJournal? journal = null;
-        try
+        if (bytes is null)
         {
-            journal = JsonSerializer.Deserialize(bytes, UpdateJsonContext.Default.UpdateJournal);
+            DiagnosticLog.Warn(Category, UpdateText.JournalRejected(UpdateText.ManifestUnreadable));
         }
-        catch (Exception ex) when (ex is JsonException or NotSupportedException)
+        else
         {
-            DiagnosticLog.Warn(Category, UpdateText.JournalRejected(ex.Message));
+            try
+            {
+                journal = JsonSerializer.Deserialize(bytes, UpdateJsonContext.Default.UpdateJournal);
+            }
+            catch (Exception ex) when (ex is JsonException or NotSupportedException)
+            {
+                DiagnosticLog.Warn(Category, UpdateText.JournalRejected(ex.Message));
+            }
         }
 
         if (journal is not null && journal.Problem() is { } problem)

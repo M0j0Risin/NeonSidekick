@@ -7,7 +7,7 @@ namespace NeonSidekick.Updates;
 ///
 /// <para>Public, so <c>tools/ReleaseSign.cs</c> checks a signature against the app's own list before publishing: a wrong key file stops at a
 /// draft and can't publish a release every copy refuses. The <c>update:</c> smoke probe fails unless this holds <see cref="Required"/> keys that
-/// parse, so a release can't ship with none or a throwaway one and strand its users.</para>
+/// parse as P-256, so a release can't ship with none or a key of another curve and strand its users. No check can tell a real key from a test one: <c>tools/ReleaseSign.cs</c> checks the private keys it signs with against the tag's list.</para>
 /// </summary>
 public static class UpdateKeys
 {

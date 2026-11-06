@@ -60,6 +60,7 @@ public sealed class UpdateStageTests : IDisposable
         _f.Install("0.5.6", new Dictionary<string, string> { [UpdateFixture.Exe] = "old" });
         var release = _f.Publish("0.5.7", new Dictionary<string, string> { [UpdateFixture.Exe] = "new" }, notes: "safe\u001b[31m text");
         Assert.True((await Stage(release)).Ok);
+        Assert.Contains('\u001b', File.ReadAllText(_f.Folder.StagedNotes));   // as GitHub holds them: three scrubs read the same as one at the end alone (review P21-8)
         new UpdateExit(_f.Context(), null, null).Run(_ => { });
 
         string? notes = UpdateProofs.Notes(_f.Folder, UpdateManifest.ReadFile(_f.Folder.Manifest, out _)!);
@@ -168,6 +169,68 @@ public sealed class UpdateStageTests : IDisposable
         _f.Install("0.5.6", new Dictionary<string, string> { [UpdateFixture.Exe] = "old" });
         var unmapped = new UpdateRelease(UpdateFixture.V("0.5.7"), null, "", "a.zip", new Uri("https://github.com/x/y/releases/download/a.zip"), 10, new Uri("https://github.com/x/y/releases/download/a.zip.sha256"), new Uri("https://github.com/x/y/releases/download/a.zip.sha256.sig"));
         Assert.False((await Stage(unmapped)).Ok);
+    }
+
+    // A proof at an address of its own: the stub keeps the first answer mapped to an address.
+    private static UpdateRelease Moved(UpdateRelease release, bool sha)
+    {
+        Uri There(Uri url) => new(url.AbsoluteUri.Replace(release.ArchiveName, "moved/" + release.ArchiveName, StringComparison.Ordinal));
+        return sha ? release with { ShaUrl = There(release.ShaUrl) } : release with { SigUrl = There(release.SigUrl) };
+    }
+
+    [Fact]
+    public async Task AProofGitHubNoLongerHas_SaysSo_NotThatNoReleaseWasFound()
+    {
+        // What's said of the release list isn't true of one of its files (review P6-7).
+        var release = Moved(_f.Usual(), sha: true);
+        _f.Http.Map(release.ShaUrl.AbsoluteUri, (_, _) => Task.FromResult(StubHttpMessageHandler.Bytes(HttpStatusCode.NotFound, [])));
+        Assert.Equal(UpdateText.AssetGone, (await Stage(release)).Reason);
+    }
+
+    [Fact]
+    public async Task AProofRefusedWith403_SaysTheServersAnswer_NotARateLimit()
+    {
+        var release = Moved(_f.Usual(), sha: false);
+        _f.Http.Map(release.SigUrl.AbsoluteUri, (_, _) => Task.FromResult(StubHttpMessageHandler.Bytes(HttpStatusCode.Forbidden, [])));
+        Assert.Equal(UpdateText.ServerAnswered(403), (await Stage(release)).Reason);
+    }
+
+    [Fact]
+    public async Task APageWhereTheShaShouldBe_IsTheNetwork_NotATrustFailure()
+    {
+        // The .sha256's half (review P4-13): a real .sig over bytes that aren't there.
+        var release = Moved(_f.Usual(), sha: true);
+        _f.Http.Map(release.ShaUrl.AbsoluteUri, (_, _) => Task.FromResult(StubHttpMessageHandler.Bytes(HttpStatusCode.OK, "<html>sign in</html>"u8.ToArray())));
+        Assert.Equal(UpdateText.NotASignature, (await Stage(release)).Reason);
+        Assert.False(Directory.Exists(_f.Folder.Staging));
+    }
+
+    [Fact]
+    public async Task ACompleteStage_WithItsManifestHeld_IsKept()
+    {
+        // A scanner on the fresh manifest cost the whole download (reviews P8-6, P8-8).
+        var release = _f.Usual();
+        Assert.True((await Stage(release)).Ok);
+        File.Delete(_f.Folder.Ready);
+
+        UpdateStageResult held;
+        using (FileHold.On(_f.Folder.StagingManifest))
+        {
+            held = await Stage(release);
+        }
+
+        Assert.Equal(UpdateText.StageCheckUnreadable(UpdateText.ManifestHeld), held.Reason);
+        Assert.True(File.Exists(_f.Folder.StagingManifest));
+        Assert.False(File.Exists(_f.Folder.Ready));
+        Assert.True((await Stage(release)).Ok);
+    }
+
+    [Fact]
+    public void Preflight_WithTheInstalledManifestHeld_DoesntSayDamaged()
+    {
+        _f.Usual();
+        using var _ = FileHold.On(_f.Folder.Manifest);
+        Assert.Equal(UpdateText.InstallManifestHeld, _f.Stage().Preflight(1));
     }
 
     [Fact]
@@ -442,12 +505,35 @@ public sealed class UpdateStageTests : IDisposable
     }
 
     [Fact]
-    public async Task AFailedTestRunsWords_SayItTriesAgain_NotThatItWasDropped()
+    public void AFailedTestRunsWords_SayItTriesAgain_NotThatItWasDropped()
     {
         Assert.DoesNotContain("dropped", UpdateText.ProbeTimedOut, StringComparison.Ordinal);
         Assert.Contains("/update cancel drops it", UpdateText.ProbeFailed, StringComparison.Ordinal);
         Assert.Contains("/update cancel drops it", UpdateText.ProbeFailedOn("a.dll"), StringComparison.Ordinal);
-        await Task.CompletedTask;
+    }
+
+    [Fact]
+    public async Task ACleanLookingRunWithNoVersionLine_IsNoPass()
+    {
+        // It's no proof that this exe ran (review P9-11).
+        _f.Probe.Answer = _ => ("done\n", UpdateProbe.Passed);
+        var result = await Stage(_f.Usual());
+        Assert.Equal(UpdateText.ProbeFailed, result.Reason);
+        Assert.False(File.Exists(_f.Folder.Ready));
+    }
+
+    [Theory]
+    [InlineData("failed a.dll\ndone\n", 1)]               // no version line, so nothing says this exe ran
+    [InlineData("version 0.5.7\nfailed a.dll\n", 5)]      // dies outside a load
+    [InlineData("version 0.5.7\nfailed a.dll\ndone\n", 5)]   // wrote done and crashed at exit
+    public async Task ALibraryFailingInBoth_ExcusesOnlyARunThatGotAnAnswer(string staged, int code)
+    {
+        // The rest of a run that died for another reason went unread (reviews P8-13, P9-11).
+        _f.Probe.Answer = exe => exe.Contains(UpdateFolder.Name, StringComparison.Ordinal) ? (staged.Replace("\\n", "\n", StringComparison.Ordinal), code) : ("version 0.5.6\nfailed a.dll\ndone\n", UpdateProbe.Failed);
+        var result = await Stage(_f.Usual());
+        Assert.False(result.Ok);
+        Assert.False(File.Exists(_f.Folder.Ready));
+        Assert.True(File.Exists(_f.Folder.StagingManifest));   // may be the machine's, so the stage stays
     }
 
     [Fact]
@@ -556,11 +642,18 @@ public sealed class UpdateStageTests : IDisposable
     [Fact]
     public async Task Preflights_AtOnce_DontFailEachOther()
     {
-        // Fixed temp names: two copies failed each other's rename and read as a read-only folder (review P1-9).
+        // Fixed temp names: two copies failed each other's rename and read as a read-only folder (review P1-9). A held file of the old name fails the old code every time, not when eight tasks happen to interleave (review P21-18).
         _f.Usual();
-        var answers = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => Task.Run(() => _f.Stage().Preflight(1))));
-        Assert.All(answers, Assert.Null);
-        Assert.Empty(Directory.EnumerateFiles(_f.Folder.Root, "preflight-*"));
+        Directory.CreateDirectory(_f.Folder.Root);
+        string oldName = Path.Combine(_f.Folder.Root, "preflight.tmp");
+        await File.WriteAllTextAsync(oldName, "");
+        using (new FileStream(oldName, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            var answers = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => Task.Run(() => _f.Stage().Preflight(1))));
+            Assert.All(answers, Assert.Null);
+        }
+
+        Assert.Equal([oldName], Directory.EnumerateFiles(_f.Folder.Root, "preflight*"));
     }
 
     [Theory]
@@ -589,11 +682,62 @@ public sealed class UpdateStageTests : IDisposable
     public void ThePartsFolder_IsModelStoresOwnName() => Assert.Equal(ModelStore.PartsPath(_f.Folder.Staging), _f.Folder.StagingParts);
 
     [Fact]
-    public void TheWordsWithANumber_ReadItFromTheConstant()
+    public void TheWordsWithANumber_AgreeWithTheConstants()
     {
         // Review P5-18.
         Assert.Contains(UpdateStage.ProbeLimit.TotalSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture), UpdateText.ProbeTimedOut, StringComparison.Ordinal);
         Assert.Contains(UpdateStage.StallLimit.TotalSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture), UpdateText.Stalled, StringComparison.Ordinal);
+    }
+
+    private async Task ACancelPartwayEndsTheUnpack(string archive, ModelFormat format, int entries)
+    {
+        string output = Path.Combine(_f.Root, "out-" + format);
+        using var stop = new CancellationTokenSource();
+        var unpack = ModelStore.UnpackAsync(archive, format, output, stop.Token);
+        while (!unpack.IsCompleted && !(Directory.Exists(output) && Directory.EnumerateFileSystemEntries(output, "*", SearchOption.AllDirectories).Any()))
+        {
+            await Task.Delay(1);
+        }
+
+        Assert.False(unpack.IsCompleted);
+        await stop.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => unpack);
+        Assert.True(Directory.EnumerateFiles(output, "*", SearchOption.AllDirectories).Count() < entries, "the unpack ran to its end");
+    }
+
+    [Fact]
+    public async Task ACancelPartway_EndsAZipsUnpack()
+    {
+        // The branch /update cancel uses on Windows, and an already-canceled token can't tell (review P10-9).
+        const int Entries = 20_000;
+        string archive = Path.Combine(_f.Root, "many.zip");
+        using (var zip = System.IO.Compression.ZipFile.Open(archive, System.IO.Compression.ZipArchiveMode.Create))
+        {
+            for (int i = 0; i < Entries; i++)
+            {
+                zip.CreateEntry("f" + i.ToString(System.Globalization.CultureInfo.InvariantCulture), System.IO.Compression.CompressionLevel.NoCompression);
+            }
+        }
+
+        await ACancelPartwayEndsTheUnpack(archive, ModelFormat.Zip, Entries);
+    }
+
+    [Fact]
+    public async Task ACancelPartway_EndsATarsUnpack()
+    {
+        const int Entries = 20_000;
+        string archive = Path.Combine(_f.Root, "many.tar.gz");
+        await using (var file = File.Create(archive))
+        await using (var gzip = new System.IO.Compression.GZipStream(file, System.IO.Compression.CompressionLevel.Fastest))
+        await using (var tar = new System.Formats.Tar.TarWriter(gzip))
+        {
+            for (int i = 0; i < Entries; i++)
+            {
+                tar.WriteEntry(new System.Formats.Tar.PaxTarEntry(System.Formats.Tar.TarEntryType.RegularFile, "f" + i.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+            }
+        }
+
+        await ACancelPartwayEndsTheUnpack(archive, ModelFormat.TarGz, Entries);
     }
 
     [Fact]

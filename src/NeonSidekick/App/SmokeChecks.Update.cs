@@ -32,7 +32,7 @@ public static partial class SmokeChecks
     }
 
     /// <summary>
-    /// <c>update:keys</c> (2026-11-04): two embedded keys that parse, so a release can't ship with none or a throwaway one and strand its users. A simulation build skips this: its keys come from its own run.
+    /// <c>update:keys</c> (2026-11-04): two different embedded P-256 keys, so a release can't ship with none or a key of another curve and strand its users. It can't tell a real key from a test one (review P13-13): <c>tools/ReleaseSign.cs</c> checks the keys it signs with against the tag's list. A simulation build skips this: its keys come from its own run.
     /// </summary>
     public static SmokeCheck ProbeUpdateKeys()
     {
@@ -42,7 +42,7 @@ public static partial class SmokeChecks
 #else
         var keys = UpdateKeys.Embedded;
         bool good = keys.Count == UpdateKeys.Required && keys.All(UpdateSignature.IsPublicKey) && keys.Distinct(StringComparer.Ordinal).Count() == keys.Count;
-        return new SmokeCheck(name, good, good ? "the daily and backup keys are embedded" : string.Create(CultureInfo.InvariantCulture, $"needs {UpdateKeys.Required} different keys that parse, has {keys.Count}"));
+        return new SmokeCheck(name, good, good ? "the daily and backup keys are embedded" : string.Create(CultureInfo.InvariantCulture, $"needs {UpdateKeys.Required} different P-256 keys, has {keys.Count}"));
 #endif
     }
 

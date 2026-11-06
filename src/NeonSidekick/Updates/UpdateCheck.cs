@@ -52,7 +52,7 @@ public enum UpdateCheckKind
     /// <summary>A newer release this copy can install: <see cref="UpdateCheckResult.Release"/>.</summary>
     Newer,
 
-    /// <summary>Nothing newer, or a tag that isn't plain <c>vX.Y.Z</c>.</summary>
+    /// <summary>Nothing newer.</summary>
     Latest,
 
     /// <summary>A newer release with this platform's archive and no signature. Never offered; <c>/update</c> says so.</summary>
@@ -61,7 +61,7 @@ public enum UpdateCheckKind
     /// <summary>A newer release with nothing for this platform.</summary>
     NoPackage,
 
-    /// <summary>The check failed: <see cref="UpdateCheckResult.Reason"/>. Silent at start; <c>/update</c> says why.</summary>
+    /// <summary>The check failed, a newest tag that isn't plain <c>vX.Y.Z</c> among the ways it can: <see cref="UpdateCheckResult.Reason"/>. Silent at start; <c>/update</c> says why.</summary>
     Failed,
 }
 
@@ -104,7 +104,16 @@ public sealed class UpdateSource
 
 #if UPDATE_SIM
     /// <summary>A simulation build's fake GitHub: the one loopback origin stands in for <c>github.com</c> and HTTPS, for the assets too.</summary>
-    public static UpdateSource Simulated(Uri origin) => new(new Uri(origin, "repos/sim/releases/latest"), origin.Scheme, origin.Host, origin.Port, "/sim");
+    public static UpdateSource Simulated(Uri origin)
+    {
+        ArgumentNullException.ThrowIfNull(origin);
+        if (!origin.IsLoopback)
+        {
+            throw new ArgumentException($"--update-source must be a loopback address, not {origin}", nameof(origin));   // what stands in for HTTPS and github.com is this machine alone (2026-11-04, review P13-17)
+        }
+
+        return new(new Uri(origin, "repos/sim/releases/latest"), origin.Scheme, origin.Host, origin.Port, "/sim");
+    }
 #endif
 
     /// <summary>Whether <paramref name="url"/> is an asset this repository published.</summary>
@@ -115,14 +124,16 @@ public sealed class UpdateSource
     }
 
     /// <summary>
-    /// What's shown for a release's page: <paramref name="raw"/> if it's on this repository, else the Releases link (2026-11-04, review P1-17). It comes from the release's JSON and lands in the transcript as a link, so it must not be able to name another site or carry control characters.
+    /// What's shown for a release's page: its canonical address if it's on this repository, else the Releases link (2026-11-04, reviews P1-17, P13-12). It comes from the release's JSON and lands in the transcript as a link, so it must not be able to name another site or carry control characters, and it's the parsed address that was checked, so that's the one shown: a browser can read odd spellings of the raw text differently.
     /// </summary>
     public string PageOrReleases(string? raw) =>
-        raw is not null && !raw.Any(char.IsControl) && Uri.TryCreate(raw, UriKind.Absolute, out var url) && IsOurs(url, _pagePrefix) ? raw : UpdateText.ReleasesUrl;
+        raw is not null && !raw.Any(char.IsControl) && Uri.TryCreate(raw, UriKind.Absolute, out var url) && IsOurs(url, _pagePrefix) ? url.AbsoluteUri : UpdateText.ReleasesUrl;
 
     // The repository's path ignores case (2026-11-04, review P1-18, the user's call): GitHub does, so a change of its capitals mustn't read as a release with no assets. That assets come from this repository stays, so a true rename still means one update by hand.
+    // No user-info (review P13-12): https://github.com@evil.example/ has another host, but https://evil@github.com/ shows a name the repository never gave.
     private bool IsOurs(Uri url, string prefix) =>
         url.IsAbsoluteUri
+        && url.UserInfo.Length == 0
         && string.Equals(url.Scheme, _assetScheme, StringComparison.OrdinalIgnoreCase)
         && string.Equals(url.Host, _assetHost, StringComparison.OrdinalIgnoreCase)
         && url.Port == _assetPort
@@ -268,7 +279,13 @@ public sealed class UpdateCheck
 
     private UpdateCheckResult Judge(GitHubRelease release)
     {
-        if (!UpdateVersion.TryParseTag(release.Tag, out var version) || version <= _running)
+        // A tag it can't read says nothing of what's newest (2026-11-04, review P13-11): read as "latest", it told the user they were current and took a good offer away.
+        if (!UpdateVersion.TryParseTag(release.Tag, out var version))
+        {
+            return new UpdateCheckResult(UpdateCheckKind.Failed, Reason: UpdateText.TagNotPlain(release.Tag));
+        }
+
+        if (version <= _running)
         {
             return new UpdateCheckResult(UpdateCheckKind.Latest);
         }

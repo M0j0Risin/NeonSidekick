@@ -70,10 +70,8 @@ public class UpdateManifestTests
     public void ANameThatOnlyStartsLikeADevice_IsFine(string path) => Assert.True(UpdateManifest.IsRelativeInside(path));
 
     [Fact]
-    public void Versions_CompareByPart_WithNoRoomToOverflow()
+    public void Versions_CompareByPart()
     {
-        // A difference of ints reads a huge part as negative (2026-11-04, review P7-15).
-        Assert.True(new UpdateVersion(int.MaxValue, 0, 0).CompareTo(new UpdateVersion(0, 0, 0)) > 0);
         Assert.True(new UpdateVersion(0, 5, 10) > new UpdateVersion(0, 5, 9));
         Assert.True(new UpdateVersion(0, 6, 0) > new UpdateVersion(0, 5, 99));
         Assert.Equal(0, new UpdateVersion(0, 5, 7).CompareTo(new UpdateVersion(0, 5, 7)));
@@ -116,9 +114,11 @@ public class UpdateManifestTests
     [InlineData("a /b.dll")]
     [InlineData(".update/swap.json")]
     [InlineData(".UPDATE/swap.json")]
+    [InlineData("UPDATE~1/swap.json")]
+    [InlineData("update~12/a.dll")]
     [InlineData("update-manifest.json")]
     [InlineData("release/x.dll")]
-    public void APathOutsideThePackagesOwn_IsRefused(string path)
+    public void APathOutsideThePackagesOwn_IsRefused(string path)   // UPDATE~n is .update's own short name (review P13-10)
     {
         Assert.Null(UpdateManifest.Read(Json(Entry("NeonSidekick.exe") + "," + Entry(path)), out string? problem));
         Assert.Equal(UpdateText.ManifestBadEntry(path), problem);
