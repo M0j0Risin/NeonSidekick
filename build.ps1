@@ -627,7 +627,7 @@ if ($Package) {
         $unpackedRoot = Join-Path $unpackCheck $stageName
         if (-not (Test-Path -LiteralPath (Join-Path $unpackedRoot "update-manifest.json"))) { Fail "$(Split-Path -Leaf $packaged) doesn't unpack to a folder holding update-manifest.json." }
         if ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $unpackedRoot "update-manifest.json")).Hash.ToLowerInvariant() -cne $manifestHash) { Fail "The packaged update-manifest.json isn't the stage's." }
-        # FullName expands a short name in the temp path (C:\Users\RUNNER~1), so the root is cut by its own expanded length, as $stageRoot is above.
+        # The root is cut as Get-ChildItem spells it, as $stageRoot is above. No fix for a short temp path: GetTempPath already expands one (2026-11-06, PowerShell 5.1 and 7.6).
         $unpackedRoot = (Get-Item -LiteralPath $unpackedRoot).FullName.TrimEnd('\', '/')
         [string[]]$unpackedNow = @(Get-ChildItem -LiteralPath $unpackedRoot -Recurse -File -Force | ForEach-Object { $_.FullName.Substring($unpackedRoot.Length + 1).Replace('\', '/') } | Where-Object { $_ -cne "update-manifest.json" })
         [Array]::Sort($unpackedNow, [StringComparer]::Ordinal)
