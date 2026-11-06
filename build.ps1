@@ -627,7 +627,7 @@ if ($Package) {
         $unpackedRoot = Join-Path $unpackCheck $stageName
         if (-not (Test-Path -LiteralPath (Join-Path $unpackedRoot "update-manifest.json"))) { Fail "$(Split-Path -Leaf $packaged) doesn't unpack to a folder holding update-manifest.json." }
         if ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $unpackedRoot "update-manifest.json")).Hash.ToLowerInvariant() -cne $manifestHash) { Fail "The packaged update-manifest.json isn't the stage's." }
-        [string[]]$unpackedNow = @(Get-ChildItem -LiteralPath $unpackedRoot -Recurse -File -Force | ForEach-Object { $_.FullName.Substring($unpackedRoot.Length + 1).Replace('', '/') } | Where-Object { $_ -cne "update-manifest.json" })
+        [string[]]$unpackedNow = @(Get-ChildItem -LiteralPath $unpackedRoot -Recurse -File -Force | ForEach-Object { $_.FullName.Substring($unpackedRoot.Length + 1).Replace('\', '/') } | Where-Object { $_ -cne "update-manifest.json" })
         [Array]::Sort($unpackedNow, [StringComparer]::Ordinal)
         if (($unpackedNow -join "`n") -cne ($manifestListed -join "`n")) { Fail "$(Split-Path -Leaf $packaged) doesn't hold what update-manifest.json lists." }
         foreach ($entry in $manifestRead.files) {
