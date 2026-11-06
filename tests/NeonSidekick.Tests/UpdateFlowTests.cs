@@ -1622,6 +1622,176 @@ public sealed class UpdateFlowTests : IDisposable
         Assert.Throws<KilledException>(() => swap.Run(swap.PlanUpdate("0.5.6", "0.5.7", planned.Installed.Exe, planned.Staged.Exe, planned.Moved, planned.Dropped, planned.Verified)));
     }
 
+    // ---- what review passes 22-23 found in settling (2026-11-05)
+
+    [Fact]
+    public async Task GoingBack_NamesWhatItChecked_FromOneRead()
+    {
+        // Review P23-12: two reads, so the line could name what the check didn't vouch for. What the line named is what's checked, whatever the disk says after it.
+        await Updated();
+        AskRollback();
+        var lines = new List<string>();
+
+        new UpdateExit(_f.Context("0.5.7"), null, null).Run(line =>
+        {
+            lines.Add(line);
+            if (line == UpdateText.GoingBackNow("0.5.6"))
+            {
+                File.WriteAllText(_f.Folder.PreviousManifest, "{ not a manifest");
+            }
+        });
+
+        Assert.Equal([UpdateText.GoingBackNow("0.5.6"), UpdateText.WentBackLine("0.5.6")], lines);
+    }
+
+    [Fact]
+    public void Find_ReadsThePathOnce_ForBothAnswers()
+    {
+        // Review P23-13.
+        _f.Usual();
+        string exe = _f.Folder.Full(UpdateFixture.Exe);
+        string underUpdate = Path.Combine(_f.Folder.Staging, UpdateFixture.Exe);
+        UpdateFixture.Write(underUpdate, "x");
+
+        Assert.Equal(UpdateInstall.FolderOf(exe), UpdateInstall.Find(exe, out string? none));
+        Assert.Null(none);
+        Assert.Null(UpdateInstall.Find(underUpdate, out string? above));
+        Assert.NotNull(above);
+        Assert.Null(UpdateInstall.Find(null, out above));
+        Assert.Null(above);
+    }
+
+    private sealed class FailingMoves(string fromHolding) : IUpdateFiles
+    {
+        private readonly UpdateFiles _real = new();
+
+        public void Move(string from, string to)
+        {
+            if (from.Contains(fromHolding, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new IOException("held");
+            }
+
+            _real.Move(from, to);
+        }
+
+        public void MakeFolder(string folder) => _real.MakeFolder(folder);
+
+        public void RemoveFolder(string folder) => _real.RemoveFolder(folder);
+    }
+
+    [Fact]
+    public async Task AnUndoStoppedByAHold_OnItsLastStep_KeepsTheJournal_AndTheEarlierVersion()
+    {
+        // Review P23-3: every file was back, so it read as a hand-unpacked package: the journal went, the tidy took previous.old, and /update rollback was lost with no line.
+        UpdateFixture.Write(Path.Combine(_f.Folder.Previous, "earlier.dll"), "earlier");
+        await KilledMidSwap();
+        var journal = UpdateJournal.TryRead(_f.Folder)!;
+
+        var settled = new UpdateSwap(_f.Folder, new FailingMoves("previous.old"), _ => { }).Settle(journal, "0.5.6");
+
+        Assert.Equal(UpdateSettled.UndoStopped, settled);
+        Assert.True(File.Exists(_f.Folder.Journal));
+        Assert.True(File.Exists(Path.Combine(_f.Folder.PreviousOld, "earlier.dll")));
+
+        Assert.Equal(UpdateSettled.Undone, new UpdateSwap(_f.Folder).Settle(UpdateJournal.TryRead(_f.Folder)!, "0.5.6"));
+        Assert.True(File.Exists(Path.Combine(_f.Folder.Previous, "earlier.dll")));
+    }
+
+    // A kill, then the old version's package unpacked by hand over the result.
+    private async Task UnpackedOverAKill()
+    {
+        await KilledMidSwap();
+        _f.Install("0.5.6", new Dictionary<string, string> { [UpdateFixture.Exe] = "old exe", ["a.dll"] = "old a", ["same.dll"] = "same" });
+    }
+
+    [Fact]
+    public async Task APackageUnpackedOverAKill_EndsTheJournal_AndTheStage()
+    {
+        // Review P23-3's other half: ready stayed over a stage missing what moved, so the next quit said "the update changed".
+        await UnpackedOverAKill();
+
+        Assert.Equal(UpdateSettled.AlreadyWhole, new UpdateSwap(_f.Folder).Settle(UpdateJournal.TryRead(_f.Folder)!, "0.5.6"));
+
+        Assert.False(File.Exists(_f.Folder.Journal));
+        Assert.False(File.Exists(_f.Folder.Ready));
+        Assert.Empty(Exit());
+    }
+
+    [Fact]
+    public async Task AConflictOverWholeFiles_IsInTheWay_Too()
+    {
+        // Review P23-3's other road to "in the way": the walk itself finds both paths of a step, with a later step having run.
+        await Ready();
+        var planned = Recheck(out _)!;
+        var plan = new UpdateSwap(_f.Folder).PlanUpdate("0.5.6", "0.5.7", planned.Installed.Exe, planned.Staged.Exe, planned.Moved, planned.Dropped, planned.Verified);
+        var swap = new UpdateSwap(_f.Folder, new KillAt(plan.Steps.Count - 1));
+        Assert.Throws<KilledException>(() => swap.Run(plan));
+        _f.Install("0.5.6", new Dictionary<string, string> { [UpdateFixture.Exe] = "old exe", ["a.dll"] = "old a", ["same.dll"] = "same" });
+        UpdateFixture.Write(Staged("a.dll"), "put back");
+        var journal = UpdateJournal.TryRead(_f.Folder)!;
+        Assert.True(new UpdateSwap(_f.Folder).Walk(journal.Steps).Conflict);
+
+        Assert.Equal(UpdateSettled.AlreadyWhole, new UpdateSwap(_f.Folder).Settle(journal, "0.5.6"));
+
+        Assert.False(File.Exists(_f.Folder.Journal));
+    }
+
+    [Fact]
+    public async Task HashingAtTheExit_StopsWithTheBudget_AndTheJournalStays()
+    {
+        // Review P22-12: a Mac logout that found a conflict hashed the whole install with no limit.
+        await UnpackedOverAKill();
+
+        new UpdateExit(_f.Context("0.5.6"), null, null).Run(_ => { }, TimeSpan.Zero);
+
+        Assert.True(File.Exists(_f.Folder.Journal));
+    }
+
+    [Fact]
+    public async Task ABudgetThatRanOut_ReadsAsNotWhole_RatherThanThrowing()
+    {
+        await UnpackedOverAKill();
+
+        Assert.Equal(UpdateSettled.UndoStopped, new UpdateSwap(_f.Folder).Settle(UpdateJournal.TryRead(_f.Folder)!, "0.5.6", null, new CancellationToken(canceled: true)));
+    }
+
+    [Fact]
+    public async Task HashingWithTheBudgetLeft_StillEndsTheJournal()
+    {
+        await UnpackedOverAKill();
+        File.Delete(_f.Folder.Rollback);
+
+        new UpdateExit(_f.Context("0.5.6"), null, null).Run(_ => { }, TimeSpan.FromMinutes(1));
+
+        Assert.False(File.Exists(_f.Folder.Journal));
+    }
+
+    [Fact]
+    public async Task AJournalHeldForAMoment_AtStart_IsStillSettled()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;   // A Unix read doesn't care about an open file.
+        }
+
+        // Review P22-10: a scanner on the file skipped the undo for the whole session.
+        await KilledMidSwap();
+        var held = new FileStream(_f.Folder.Journal, FileMode.Open, FileAccess.Read, FileShare.None);
+        var pauses = new List<TimeSpan>();
+
+        var start = Start("0.5.6", pause: time =>
+        {
+            pauses.Add(time);
+            held.Dispose();
+        });
+
+        Assert.NotEmpty(pauses);
+        Assert.DoesNotContain(UpdateText.MixedLine, start.Line ?? "", StringComparison.Ordinal);
+        Assert.False(File.Exists(_f.Folder.Journal));
+        Assert.Equal("old exe", Installed(UpdateFixture.Exe));
+    }
+
     private async Task KilledMidRollback(int at = 3)
     {
         await Updated();

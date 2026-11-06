@@ -92,6 +92,22 @@ public sealed class UpdateJournal
         File.Move(temp, folder.Journal, overwrite: true);
     }
 
+    /// <summary>
+    /// <see cref="TryRead(UpdateFolder, out bool)"/>, tried again for a moment while it can't be read (2026-11-05, review P22-10): the start's one read, where a scanner on the file skipped the undo for the whole session and ran the old exe over a half-moved install. The manifest's <see cref="UpdateManifest.LoadRetrying"/> in the same shape.
+    /// </summary>
+    public static UpdateJournal? TryReadRetrying(UpdateFolder folder, Action<TimeSpan> pause, out bool unreadable)
+    {
+        ArgumentNullException.ThrowIfNull(pause);
+        var journal = TryRead(folder, out unreadable);
+        for (int tries = 1; unreadable && tries < UpdateManifest.LoadTries; tries++)
+        {
+            pause(UpdateManifest.LoadPause);
+            journal = TryRead(folder, out unreadable);
+        }
+
+        return journal;
+    }
+
     /// <summary>The journal on disk, or null with none or with one this copy can't read. See <see cref="TryRead(UpdateFolder, out bool)"/> where the two differ.</summary>
     public static UpdateJournal? TryRead(UpdateFolder folder) => TryRead(folder, out _);
 

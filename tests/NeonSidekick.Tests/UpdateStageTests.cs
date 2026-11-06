@@ -206,6 +206,26 @@ public sealed class UpdateStageTests : IDisposable
     }
 
     [Fact]
+    public async Task TheFlush_IsWhatASwapWouldMoveIn_AndTheProofs()
+    {
+        // Reviews P23-6, P23-10: every listed file cost seconds under Checking, while the proofs the swap also moves were never flushed.
+        var release = _f.Usual();
+        Assert.True((await Stage(release)).Ok);
+        var staged = UpdateManifest.ReadFile(_f.Folder.StagingManifest, out _)!;
+        string Staged(string path) => Path.Combine(_f.Folder.Staging, path.Replace('/', Path.DirectorySeparatorChar));
+
+        var list = UpdateStage.FlushList(_f.Folder, new VerifiedStage(staged, ["a.dll", "docs/new.md"])).ToList();
+
+        Assert.Contains(Staged("a.dll"), list);
+        Assert.Contains(Staged("docs/new.md"), list);
+        Assert.DoesNotContain(Staged("same.dll"), list);
+        Assert.Contains(_f.Folder.StagingManifest, list);
+        Assert.Contains(_f.Folder.StagedSha, list);
+        Assert.Contains(_f.Folder.StagedSig, list);
+        Assert.Contains(_f.Folder.StagedNotes, list);
+    }
+
+    [Fact]
     public async Task ACompleteStage_WithItsManifestHeld_IsKept()
     {
         // A scanner on the fresh manifest cost the whole download (reviews P8-6, P8-8).

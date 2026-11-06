@@ -75,7 +75,7 @@ Under *Shell command policy*. Commands run in the working directory, guarded by 
 
 * **The shell police also refuses** any line, script, `execute_code` script or `process` write naming `.git`, `.neon`, `.claude`, a `.mcp.json`, the project file, the app's home or a release package's install folder, a script run before it exists, or one holding a forbidden string. It reads the text, not what runs.
 * **A `git` command** is held only to the install folder, since the rest is git's own business.
-* **Deleting or moving a folder** that holds the install or the home is refused too, wildcards included. `rm -rf ~/*` is refused; `rm ~/*.tmp`, `mv report.txt ~` and `ls ~` pass.
+* **Deleting or moving a folder** that holds the install or the home is refused too, from any working folder. A wildcard counts for a move or a recursive delete, so `rm -rf *` is refused there and `rm -f *` isn't.
 * **A word that resolves into an install folder**, from where the command runs, is refused for `.update`, `update-manifest.json`, a wildcard, a new `.dll`, `.dylib` or `.exe`, or a name that exists there. A home kept inside the folder keeps the home's rules.
 * **A `cmd` line with an unclosed quote** always asks, whatever the allow list holds.
 

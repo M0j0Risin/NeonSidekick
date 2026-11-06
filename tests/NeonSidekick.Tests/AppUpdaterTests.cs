@@ -236,6 +236,48 @@ public sealed class AppUpdaterTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadDisk_ABadManifest_IsNotParsedAgain_UntilAStampChanges()
+    {
+        // Review P23-7: only a passing hold is worth another read, or a bad manifest was parsed at every idle pass. A later read proves it by not noticing the repair.
+        await Ready();
+        string good = File.ReadAllText(_f.Folder.StagingManifest);
+        File.WriteAllText(_f.Folder.StagingManifest, "{ not a manifest");
+        var updater = Updater();
+        Assert.True(updater.ReadDisk().ReadyUnknown);
+
+        File.WriteAllText(_f.Folder.StagingManifest, good);
+        Assert.True(updater.ReadDisk().ReadyUnknown);
+
+        File.SetLastWriteTimeUtc(_f.Folder.Ready, DateTime.UtcNow.AddMinutes(5));
+        Assert.Equal("0.5.7", updater.ReadDisk().ReadyVersion);
+    }
+
+    [Fact]
+    public async Task DropParts_TakesThePartial_AndLeavesTheStage()
+    {
+        // Review P22-13.
+        await Ready();
+        UpdateFixture.Write(Path.Combine(_f.Folder.StagingParts, "newer.zip"), "part");
+
+        Assert.Null(Updater().DropParts());
+
+        Assert.False(Directory.Exists(_f.Folder.StagingParts));
+        Assert.True(File.Exists(_f.Folder.Ready));
+        Assert.Equal("0.5.7", Updater().ReadDisk().ReadyVersion);
+    }
+
+    [Fact]
+    public async Task DropParts_WaitsForTheLock_AndSaysSo_WithAnotherCopyStaging()
+    {
+        await Ready();
+        UpdateFixture.Write(Path.Combine(_f.Folder.StagingParts, "newer.zip"), "part");
+        using var other = UpdateLock.TryExclusive(_f.Folder.StagingLock);
+
+        Assert.Equal(UpdateText.AnotherCopyStaging, Updater().DropParts());
+        Assert.True(Directory.Exists(_f.Folder.StagingParts));
+    }
+
+    [Fact]
     public async Task ReadDisk_ARollbackWithItsManifestGone_IsThere_WithItsVersionUnknown()
     {
         await Ready();

@@ -1133,6 +1133,7 @@ public partial class ChatScreenTests
         await RunAsync();
 
         Assert.Empty(_updater.Drops);
+        Assert.Equal(1, _updater.PartsDrops);   // review P22-13: the newer release's partial, which nothing else would delete
     }
 
     [Fact]

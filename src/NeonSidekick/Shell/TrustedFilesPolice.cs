@@ -23,9 +23,9 @@ public enum TrustedFinding
 /// review P12-2: <c>/claude</c> loads both), the project file (<see cref="Llm.ProjectFile.FileNames"/>), the app's home or a package's install folder (2026-11-04, self-update) is
 /// refused, the same inputs and callers as <see cref="SqlitePolice"/>, under <c>Shell police</c>.
 ///
-/// <para>A <c>git</c> command is read for the install alone (review P9-1): git reaching its own folder is git's business, and <c>git add CLAUDE.md</c> must go on working, but <c>git -C</c> into the install isn't. Words come from <see cref="CommandPrefix"/>'s own reading of each shell, so a quoted run stays whole and a comment, which runs nothing, doesn't trip it (reviews P16-3, P19-4). Install checks ask <see cref="WriteGuard"/> itself, identity included, so a package in a home, an 8.3 name, a link, <c>/tmp</c> and NFC can't make the two disagree (reviews P8-4, P16-4, P19-3).</para>
+/// <para>A <c>git</c> command is read for the install alone (review P9-1): git reaching its own folder is git's business, and <c>git add CLAUDE.md</c> must go on working, but <c>git -C</c> into the install isn't. Words come from <see cref="CommandPrefix"/>'s own reading of each shell, so a quoted run is read whole and a comment, which runs nothing, doesn't trip it (reviews P16-3, P19-4), and a word holding a blank or punctuation is read in pieces too, so <c>os.system("rm -rf .git")</c> and <c>open('.git/config','w')</c> name what they name (reviews P22-3, P22-4). Install checks ask <see cref="WriteGuard"/> itself, identity included, so a package in a home, an 8.3 name, a link, <c>/tmp</c> and NFC can't make the two disagree (reviews P8-4, P16-4, P19-3).</para>
 ///
-/// <para>A tripwire like the others: lexical, it sees the text, not what runs (a name built at run time passes), and says so in TOOLS.md. It's for plain spellings with no false refusals (the user's call, 2026-11-04): the write guard is the real protection. Pure but for the facts and, for a word that could resolve into the install, a look at the disk, each distinct word and folder once, since a script can be 1 MB.</para>
+/// <para>A tripwire like the others: lexical, it sees the text, not what runs (a name built at run time passes), and says so in TOOLS.md. It's for plain spellings with no false refusals (the user's call, 2026-11-04): the write guard is the real protection. Pure but for the facts and, for a word that could resolve into the install, a look at the disk, each distinct word and folder once, since a script can be 1 MB. Never a look at another computer (review P22-1): a URL's <c>//host/a/b</c> is a UNC path to Windows, and opening it would send the user's credentials there before anyone approved the line.</para>
 /// </summary>
 public static class TrustedFilesPolice
 {
@@ -33,6 +33,9 @@ public static class TrustedFilesPolice
     public sealed record Guard(string? Home, string Root, string? InstallFolder = null, string? Workdir = null)
     {
         internal string Base => Workdir ?? Root;
+
+        /// <summary>The tests' seam: each path about to be looked at on disk, so a test can hold that none is on another computer (review P22-1).</summary>
+        internal Action<string>? Looked { get; init; }
     }
 
     /// <summary>The guard over <paramref name="root"/> with the process's facts, or null while none are set (tests without an app).</summary>
@@ -59,7 +62,7 @@ public static class TrustedFilesPolice
             ShellKinds.TryParse(kind, out shell);
         }
 
-        var judging = new Judging(guard);
+        var judging = new Judging(guard, shell, isScript);
         if (judging.BaseInUpdateFolder())
         {
             finding = TrustedFinding.Install;
@@ -74,31 +77,33 @@ public static class TrustedFilesPolice
                 bool git = IsGit(words);
                 foreach (string raw in words)
                 {
-                    string word = raw.Trim(WordEdges);
-                    if (word.Length == 0 || IsSwitch(word, shell))
+                    foreach (string word in Readings(raw, git))
                     {
-                        continue;
-                    }
-
-                    foreach (string spelled in Spellings(word, isScript))
-                    {
-                        foreach (string value in ValuesOf(spelled))
+                        if (word.Length == 0 || IsSwitch(word, shell))
                         {
-                            if (!git && NamesTrusted(value, guard))
-                            {
-                                return word;
-                            }
+                            continue;
+                        }
 
-                            if (judging.NamesInstall(value))
+                        foreach (string spelled in Spellings(word, isScript))
+                        {
+                            foreach (string value in ValuesOf(spelled))
                             {
-                                finding = TrustedFinding.Install;
-                                return word;
+                                if (!git && NamesTrusted(value, guard, shell, isScript))
+                                {
+                                    return word;
+                                }
+
+                                if (judging.NamesInstall(value))
+                                {
+                                    finding = TrustedFinding.Install;
+                                    return word;
+                                }
                             }
                         }
                     }
                 }
 
-                if (!git && judging.DropsAppFolder(segment, words, shell, isScript) is { } dropped)
+                if (!git && judging.DropsAppFolder(segment, words) is { } dropped)
                 {
                     finding = TrustedFinding.HoldsAppFolder;
                     return dropped;
@@ -126,6 +131,14 @@ public static class TrustedFilesPolice
 
     private static readonly string[] DestinationOptions = ["-destination", "-newname", "--target-directory"];
 
+    // The programs that run the line they're given (2026-11-05, review P22-5): cmd /c rd /s /q C:\Users\me passed where rm -rf C:\Users\me didn't.
+    private static readonly IReadOnlySet<string> ShellPrograms = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "cmd", "pwsh", "powershell", "bash", "sh", "zsh",
+    };
+
+    private const string ShortDeleteFlags = "rRfvdiI";
+
     /// <summary>
     /// A segment's words as its shell reads them. A word read to the end from an unbalanced apostrophe is read again split at blanks (review P16-3): in <c>echo don't touch .git/x</c> the apostrophe is literal to a reader, and it mustn't hide the rest.
     /// </summary>
@@ -142,19 +155,37 @@ public static class TrustedFilesPolice
         return tokens;
     }
 
-    /// <summary>Whether a segment is a git command: <c>git</c> (or <c>git.exe</c>) as its program, after any variable assignments.</summary>
+    /// <summary>
+    /// What to read of one word (2026-11-05, reviews P22-3, P22-4): the word whole, so <c>--out="C:/My Apps/x.dll"</c> and <c>--git-dir=.git</c> keep their names, then, outside a git line, its pieces. A word holding a call or a string names what's in it: <c>os.system("rm -rf .git")</c> passed once words stopped being cut at quotes, as did <c>open('.git/config','w')</c>. A git line's quoted text is a message, and a message runs nothing.
+    /// </summary>
+    private static IEnumerable<string> Readings(string raw, bool git)
+    {
+        yield return raw.Trim(WordEdges);
+        if (!git && HasBreak(raw))
+        {
+            foreach (string piece in PathPolice.Tokens(raw))
+            {
+                yield return piece;
+            }
+        }
+    }
+
+    private static bool HasBreak(string word) => word.Any(c => char.IsWhiteSpace(c) || PathPolice.Delimiters.Contains(c));
+
+    /// <summary>Whether a segment is a git command: <c>git</c> (or <c>git.exe</c>) as its program, after any variable assignments. A script's <c>git = shutil.rmtree( '.git' )</c> assigns to a variable of that name, and loses no checks (2026-11-05, review P22-8).</summary>
     private static bool IsGit(List<string> words)
     {
-        foreach (string raw in words)
+        for (int i = 0; i < words.Count; i++)
         {
-            string word = raw.Trim('"', '\'');
+            string word = words[i].Trim('"', '\'');
             if (word.Contains('=', StringComparison.Ordinal) && !word.StartsWith('-'))
             {
                 continue;   // FOO=1 git …
             }
 
             string name = Path.GetFileName(word.Replace('\\', '/'));
-            return name.Equals("git", StringComparison.OrdinalIgnoreCase) || name.Equals("git.exe", StringComparison.OrdinalIgnoreCase);
+            return (name.Equals("git", StringComparison.OrdinalIgnoreCase) || name.Equals("git.exe", StringComparison.OrdinalIgnoreCase))
+                && !(i + 1 < words.Count && words[i + 1] is var next && (next.StartsWith('=') || next.StartsWith("+=", StringComparison.Ordinal) || next.StartsWith(":=", StringComparison.Ordinal)));
         }
 
         return false;
@@ -190,28 +221,31 @@ public static class TrustedFilesPolice
         return values;
     }
 
+    // A loop over the piece, no copies (2026-11-05, review P22-2): recursing per = or : ended the app with a stack overflow on a few hundred KB of minified JSON in a script, and copied the rest each time.
     private static void AddValues(string piece, List<string> values)
     {
-        int cut = IsRooted(piece) ? -1 : piece.IndexOfAny(['=', ':']);
-        if (cut < 0)
+        int start = 0;
+        while (start < piece.Length)
         {
-            values.Add(piece);
-            return;
-        }
+            var rest = piece.AsSpan(start);
+            int cut = IsRooted(rest) ? -1 : rest.IndexOfAny('=', ':');
+            if (cut < 0)
+            {
+                values.Add(rest.ToString());
+                return;
+            }
 
-        if (cut > 0)
-        {
-            values.Add(piece[..cut]);
-        }
+            if (cut > 0)
+            {
+                values.Add(rest[..cut].ToString());
+            }
 
-        if (cut + 1 < piece.Length)
-        {
-            AddValues(piece[(cut + 1)..], values);
+            start += cut + 1;
         }
     }
 
-    private static bool IsRooted(string value) =>
-        value.StartsWith('/') || value.StartsWith('~') || (OperatingSystem.IsWindows() && value.Length >= 3 && char.IsAsciiLetter(value[0]) && value[1] == ':' && value[2] == '/');
+    private static bool IsRooted(ReadOnlySpan<char> value) =>
+        (value.Length > 0 && value[0] is '/' or '~') || (OperatingSystem.IsWindows() && value.Length >= 3 && char.IsAsciiLetter(value[0]) && value[1] == ':' && value[2] == '/');
 
     private static string[] PartsOf(string value) => value.Split('/', StringSplitOptions.RemoveEmptyEntries);
 
@@ -233,7 +267,7 @@ public static class TrustedFilesPolice
     }
 
     /// <summary>Whether <paramref name="value"/> names <c>.git</c>, <c>.neon</c>, Claude Code's files, the project file, the app's folder name, or a path under the home. It can't tell a read from a write, so a full path there is refused either way; a relative one from a working folder inside the home passes.</summary>
-    private static bool NamesTrusted(string value, Guard guard)
+    private static bool NamesTrusted(string value, Guard guard, ShellKind shell, bool isScript)
     {
         if (IsClaudeValue(value))
         {
@@ -256,15 +290,17 @@ public static class TrustedFilesPolice
             return true;
         }
 
-        return IsRooted(value) && guard.Home is { Length: > 0 } home && Full(value, guard) is { } full && WorkingDirectory.IsInside(Path.GetFullPath(home), Path.TrimEndingDirectorySeparator(full));
+        return IsRooted(value) && guard.Home is { Length: > 0 } home && Full(value, guard, shell, isScript) is { } full && WorkingDirectory.IsInside(Path.GetFullPath(home), Path.TrimEndingDirectorySeparator(full));
     }
 
     // The word on disk, from the folder the command runs in. Null for one no path can be made of.
-    private static string? Full(string value, Guard guard)
+    private static string? Full(string value, Guard guard, ShellKind shell, bool isScript)
     {
         try
         {
-            string spelled = value.StartsWith('~') ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), value.TrimStart('~', '/')) : value;
+            string spelled = value.StartsWith('~') ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), value.TrimStart('~', '/'))
+                : (isScript || shell == ShellKind.Bash) && PathPolice.IsBashDrive(value, shell, isScript) ? char.ToUpperInvariant(value[1]) + ":/" + (value.Length > 3 ? value[3..] : "")   // review P22-6: a script's own shell isn't known
+                : value;
             return Path.GetFullPath(spelled, Path.GetFullPath(guard.Base));   // the base's own drive for a rooted /x, not the current one's
         }
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
@@ -273,11 +309,62 @@ public static class TrustedFilesPolice
         }
     }
 
-    // The ? of a \\?\ prefix is no wildcard (2026-11-05, found writing review P10-12's test): the write guard's own spelling read as a pattern that matched nothing.
-    private static bool HasWildcard(string path) =>
-        (path.StartsWith(@"\\?\", StringComparison.Ordinal) ? path.AsSpan(4) : path.AsSpan()).IndexOfAny('*', '?') >= 0;
+    // The ? of a \\?\ prefix is no wildcard (2026-11-05, found writing review P10-12's test): the write guard's own spelling read as a pattern that matched nothing. Nor is it a step (review P22-7).
+    private static string Bare(string path) =>
+        path.StartsWith(@"\\?\", StringComparison.Ordinal) || path.StartsWith(@"\\.\", StringComparison.Ordinal) ? path[4..] : path;
 
-    private static string[] Steps(string path) => path.Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries);
+    private static bool HasWildcard(string path) => Bare(path).AsSpan().IndexOfAny('*', '?') >= 0;
+
+    private static string[] Steps(string path) => Bare(path).Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries);
+
+    /// <summary>
+    /// Whether a full path is on another computer, so that only its spelling may be judged (2026-11-05, review P22-1): any look at it (<see cref="FileIdentity"/>, <c>File.Exists</c>, a volume's case rule) opens a connection nobody approved, and hands that host the user's NTLM credentials. A <c>\\?\X:\</c> or <c>\\.\X:\</c> is a local spelling, and the loopback's <c>\\localhost\D$</c> reaches nowhere, so both keep their look: they're how the install gets spelled around its name.
+    /// </summary>
+    internal static bool IsRemote(string full)
+    {
+        ArgumentNullException.ThrowIfNull(full);
+        if (!OperatingSystem.IsWindows() || !full.StartsWith(@"\\", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        string rest = full[2..];
+        if (rest.StartsWith(@"?\", StringComparison.Ordinal) || rest.StartsWith(@".\", StringComparison.Ordinal))
+        {
+            return !(rest.Length >= 4 && char.IsAsciiLetter(rest[2]) && rest[3] == ':');
+        }
+
+        return !(rest.StartsWith(@"localhost\", StringComparison.OrdinalIgnoreCase) || rest.StartsWith(@"127.0.0.1\", StringComparison.Ordinal));
+    }
+
+    // Whether a remote folder holds a target, under the target's case rule: a look at the folder's own would open it.
+    private static bool SpelledAbove(string folder, string target)
+    {
+        var comparison = CaseRule.Comparison(target);
+        return string.Equals(folder, target, comparison)
+            || (target.Length > folder.Length && target.StartsWith(folder, comparison) && (Path.EndsInDirectorySeparator(folder) || target[folder.Length] is '/' or '\\'));
+    }
+
+    // A delete's recursive switch, in each shell's spelling (2026-11-05, review P22-9): rm -rf, rm -R, --recursive, -Recurse by any start PowerShell takes, and cmd's /s. -Force is none of them.
+    private static bool IsRecursive(string word, ShellKind shell)
+    {
+        if (word.Length >= 3 && "--recursive".StartsWith(word, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (word.Length >= 2 && "-recurse".StartsWith(word, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (word.Length >= 2 && word[0] == '-' && word.AsSpan(1).IndexOfAnyExcept(ShortDeleteFlags) < 0 && word.AsSpan(1).IndexOfAny('r', 'R') >= 0)
+        {
+            return true;
+        }
+
+        return IsSwitch(word, shell) && word[1] is 's' or 'S';
+    }
 
     // A wildcard path against a target, step by step, under the target's case rule: true when every step they share could match. The caller decides what a shorter or longer pattern means.
     private static bool StepsMatch(string[] pattern, string[] target, string caseFolder)
@@ -295,11 +382,12 @@ public static class TrustedFilesPolice
     }
 
     /// <summary>One <see cref="Find(string, Guard, out TrustedFinding, string?, bool)"/>'s answers, each distinct word and folder judged once (review P8-3's cost): relative words now reach the disk, identity opens every ancestor, and a script can be 1 MB.</summary>
-    private sealed class Judging(Guard guard)
+    private sealed class Judging(Guard guard, ShellKind shell, bool isScript)
     {
         private readonly string? _install = guard.InstallFolder is { Length: > 0 } install ? Path.GetFullPath(install) : null;
         private readonly Dictionary<string, bool> _words = new(StringComparer.Ordinal);
         private readonly Dictionary<string, bool> _folders = new(StringComparer.Ordinal);
+        private readonly Dictionary<(string Full, string Target), bool> _holds = [];
         private bool? _baseInInstall;
 
         public bool BaseInUpdateFolder() =>
@@ -332,7 +420,7 @@ public static class TrustedFilesPolice
                 return false;
             }
 
-            if (Full(value, guard) is not { } full || !Into(full, install))
+            if (Full(value, guard, shell, isScript) is not { } full || !Into(full, install))
             {
                 return false;
             }
@@ -347,9 +435,19 @@ public static class TrustedFilesPolice
                 && (parts.Any(part => part.Equals(Updates.UpdateFolder.Name, StringComparison.OrdinalIgnoreCase))
                     || parts[^1].Equals(Updates.UpdateManifest.FileName, StringComparison.OrdinalIgnoreCase)
                     || HasWildcard(value)
-                    || File.Exists(full)
-                    || Directory.Exists(full)
+                    || Exists(full)
                     || Path.GetExtension(parts[^1]) is { } extension && (extension.Equals(".dll", StringComparison.OrdinalIgnoreCase) || extension.Equals(".dylib", StringComparison.OrdinalIgnoreCase) || extension.Equals(".exe", StringComparison.OrdinalIgnoreCase)));
+        }
+
+        private bool Exists(string full)
+        {
+            if (IsRemote(full))
+            {
+                return false;
+            }
+
+            guard.Looked?.Invoke(full);
+            return File.Exists(full) || Directory.Exists(full);
         }
 
         private bool BaseInInstall(string install)
@@ -372,15 +470,21 @@ public static class TrustedFilesPolice
 
                 int wild = Array.FindIndex(pattern, step => HasWildcard(step));
                 string fixedPart = string.Join(Path.DirectorySeparatorChar, pattern[..wild]);
-                return wild > 0 && FolderInInstall(full.StartsWith('/') ? Path.DirectorySeparatorChar + fixedPart : fixedPart, install);
+                return wild > 0 && !IsRemote(full) && FolderInInstall(full.StartsWith('/') ? Path.DirectorySeparatorChar + fixedPart : fixedPart, install);
             }
 
             string plain = Path.TrimEndingDirectorySeparator(full);
+            if (IsRemote(plain))
+            {
+                return WorkingDirectory.IsInside(install, plain);
+            }
+
             if (Path.GetDirectoryName(plain) is { } folder && FolderInInstall(folder, install))
             {
                 return true;
             }
 
+            guard.Looked?.Invoke(plain);
             return Directory.Exists(plain) && WriteGuard.InInstall(install, guard.Home, plain);
         }
 
@@ -388,6 +492,7 @@ public static class TrustedFilesPolice
         {
             if (!_folders.TryGetValue(folder, out bool inside))
             {
+                guard.Looked?.Invoke(folder);
                 inside = WriteGuard.InInstall(install, guard.Home, folder);
                 _folders[folder] = inside;
             }
@@ -396,23 +501,47 @@ public static class TrustedFilesPolice
         }
 
         /// <summary>
-        /// The word of a delete or move that takes a folder holding the install or the home, or null (2026-11-04, review P19-5, the user's call): <c>rm -rf /Users/me/*</c> took the app with it, as the file tools refuse. Read with <see cref="CommandPrefix.Of"/>, so <c>env</c> and <c>nohup</c> are read through; for what it can't read (<c>sudo</c>, <c>xargs</c>, <c>eval</c>) any word on the list counts. A move's destination doesn't count, so <c>mv report.txt ~</c> passes, and <c>ls ~</c> does, since only this list counts.
+        /// The word of a delete or move that takes a folder holding the install or the home, or null (2026-11-04, review P19-5, the user's call): <c>rm -rf /Users/me/*</c> took the app with it, as the file tools refuse. Read with <see cref="CommandPrefix.Of"/>, so <c>env</c> and <c>nohup</c> are read through; for what it can't read (<c>sudo</c>, <c>xargs</c>, <c>eval</c>) or a shell given a line (<c>cmd /c rd /s /q …</c>, <c>pwsh -c "Remove-Item … -Recurse"</c>; review P22-5) any word on the list counts, in a quoted string too. A move's destination doesn't count, so <c>mv report.txt ~</c> passes, and <c>ls ~</c> does, since only this list counts. A delete's wildcard counts only with a recursive switch (review P22-9): <c>del *.*</c> and <c>rm -f *</c> take top-level files, never the folder.
         /// </summary>
-        public string? DropsAppFolder(string segment, List<string> words, ShellKind shell, bool isScript)
+        public string? DropsAppFolder(string segment, List<string> words)
         {
             if (_install is null && guard.Home is not { Length: > 0 })
             {
                 return null;
             }
 
+            // The cheap test first, as most segments delete nothing (review P22-14): CommandPrefix.Of is the costly part.
+            var pieces = words.SelectMany(word => HasBreak(word) ? PathPolice.Tokens(word) : [word]).ToList();
+            if (!pieces.Exists(IsDropWord))
+            {
+                return null;
+            }
+
             string prefix = CommandPrefix.Of(segment, shell: shell);
-            int program = words.FindIndex(word => DropPrograms.Contains(CommandPrefix.Program(word.Trim(WordEdges))));
-            if (program < 0 || (prefix != CommandPrefix.Unreadable && !DropPrograms.Contains(CommandPrefix.Program(prefix.Split(' ')[0]))))
+            bool unreadable = prefix == CommandPrefix.Unreadable;
+            string first = CommandPrefix.Program(prefix.Split(' ')[0]);
+            if (unreadable || ShellPrograms.Contains(first))
+            {
+                return Dropped(words, unreadable) ?? Dropped(pieces, unreadable);
+            }
+
+            return DropPrograms.Contains(first) ? Dropped(words, unreadable: false) : null;
+        }
+
+        private static bool IsDropWord(string word) => DropPrograms.Contains(CommandPrefix.Program(word.Trim(WordEdges)));
+
+        private string? Dropped(List<string> words, bool unreadable)
+        {
+            int program = words.FindIndex(IsDropWord);
+            if (program < 0)
             {
                 return null;
             }
 
             int destination = DestinationAt(words, program);
+            bool wildcardsCount = unreadable
+                || MovePrograms.Contains(CommandPrefix.Program(words[program].Trim(WordEdges)))
+                || words.Skip(program + 1).Any(word => IsRecursive(word.Trim(WordEdges), shell));
             for (int i = program + 1; i < words.Count; i++)
             {
                 string word = words[i].Trim(WordEdges);
@@ -425,7 +554,7 @@ public static class TrustedFilesPolice
                 {
                     foreach (string value in ValuesOf(spelled))
                     {
-                        if (!value.StartsWith('-') && Full(value, guard) is { } full && (Holds(full, _install) || Holds(full, guard.Home)))
+                        if (!value.StartsWith('-') && Full(value, guard, shell, isScript) is { } full && (wildcardsCount || !HasWildcard(full)) && (Holds(full, _install) || Holds(full, guard.Home)))
                         {
                             return word;
                         }
@@ -466,22 +595,41 @@ public static class TrustedFilesPolice
             return plain >= 2 ? lastPlain : -1;
         }
 
-        private static bool Holds(string full, string? target)
+        private bool Holds(string full, string? target)
         {
             if (target is not { Length: > 0 })
             {
                 return false;
             }
 
-            string goal = Path.GetFullPath(target);
+            // Each word and target once (review P22-15): 1,000 rm lines opened every ancestor twice per word before the pane.
+            if (!_holds.TryGetValue((full, target), out bool holds))
+            {
+                holds = HoldsNow(full, Path.GetFullPath(target));
+                _holds[(full, target)] = holds;
+            }
+
+            return holds;
+        }
+
+        private bool HoldsNow(string full, string goal)
+        {
             if (HasWildcard(full))
             {
-                string[] pattern = Steps(full);
+                // cmd's *.* is every name, a dot or none (review P22-9); Git Bash's needs the dot.
+                string[] pattern = Steps(full).Select(step => step == "*.*" && OperatingSystem.IsWindows() && shell != ShellKind.Bash ? "*" : step).ToArray();
                 string[] steps = Steps(goal);
                 return pattern.Length <= steps.Length && StepsMatch(pattern, steps, goal);
             }
 
-            return WriteGuard.HoldsFolder(Path.TrimEndingDirectorySeparator(full), goal);
+            string plain = Path.TrimEndingDirectorySeparator(full);
+            if (IsRemote(plain))
+            {
+                return SpelledAbove(plain, goal);
+            }
+
+            guard.Looked?.Invoke(plain);
+            return WriteGuard.HoldsFolder(plain, goal);
         }
     }
 

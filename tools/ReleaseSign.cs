@@ -107,6 +107,11 @@ static int Publish(string tag, List<string> keyFiles, string[] platforms)
     // Nothing stops two drafts sharing one tag, and a live release's .sig files must never be replaced, so it stops unless exactly one has the tag and that one is still a draft.
     using var list = JsonDocument.Parse(Gh("api", $"repos/{repository}/releases?per_page=100"));
     var matches = list.RootElement.EnumerateArray().Where(r => r.GetProperty("tag_name").GetString() == tag).ToList();
+    if (matches.Count == 0)
+    {
+        throw new StopException($"No release has the tag {tag} yet. CI makes the draft when the tag's build finishes, so check that run and the tag's spelling.");
+    }
+
     if (matches.Count != 1)
     {
         throw new StopException($"{matches.Count} releases have the tag {tag}. Delete the extras, so there's one draft.");

@@ -360,6 +360,12 @@ public static class UpdateText
 
     public static string UndoFoundBoth(string from, string to) => $"The undo found both {from} and {to}, so it left them.";
 
+    /// <summary>A stray folder a new file needs the name of, which can't be listed.</summary>
+    public static string StrayFolderUnreadable(string folder, string problem) => $"Can't read the folder {folder}, and a new file needs that name: {Bare(problem)}. Move the folder out of the install and try again.";
+
+    /// <summary>A link to a folder the update has to replace, with a file behind it that the version keeps.</summary>
+    public static string LinkHoldsKeptFile(string link, string file) => $"{link} is a link, and {file} behind it stays in this version. Make {link} a plain folder and try again.";
+
     public static string KeptFilesLine(string folder) => $"Files the update had to move that weren't its own are in {folder}.";
 
     public static string UndoAlsoStopped(string reason) => $"{Bare(reason)}, and the undo stopped too, so this install may be a mix of versions until the next start";

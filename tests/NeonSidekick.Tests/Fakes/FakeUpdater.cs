@@ -152,6 +152,14 @@ public sealed class FakeUpdater : IUpdater
         return DropRefusal;
     }
 
+    public int PartsDrops { get; private set; }
+
+    public string? DropParts()
+    {
+        PartsDrops++;
+        return null;
+    }
+
     public string? DropLeftovers()
     {
         LeftoverDrops++;

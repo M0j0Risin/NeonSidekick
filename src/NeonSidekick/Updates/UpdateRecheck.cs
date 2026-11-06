@@ -50,14 +50,19 @@ public static class UpdateInstall
     /// <summary>
     /// The folder of the running exe's real path, with links resolved, so a Mac symlink on <c>PATH</c> still finds it. Null with no process path, and for an exe under a package's <c>.update</c> (2026-11-04, review P15-3): one started from <c>previous/</c> made a lock there, which the rule that nothing unlisted may be held there then took for a reason to refuse every rollback, and it held no lock on the real install.
     /// </summary>
-    public static string? Locate(string? processPath)
+    public static string? Locate(string? processPath) => Find(processPath, out _);
+
+    /// <summary><see cref="Locate"/>, with the install above an exe under a <c>.update</c> in <paramref name="above"/>, from one look at the path (2026-11-05, review P23-13).</summary>
+    public static string? Find(string? processPath, out string? above)
     {
-        if (string.IsNullOrEmpty(processPath) || Path.GetDirectoryName(RealPath(processPath)) is not { } folder)
+        above = null;
+        if (FolderOf(processPath) is not { } folder)
         {
             return null;
         }
 
-        return InstallAbove(folder) is null ? folder : null;
+        above = InstallAbove(folder);
+        return above is null ? folder : null;
     }
 
     /// <summary>The install a folder sits inside the <c>.update</c> of, or null: the folder above that <c>.update</c> holds a manifest or a journal. What the write guard holds for a copy started from there.</summary>
@@ -355,7 +360,7 @@ public static class UpdateRollback
     /// <summary>
     /// The plan, or null with the reason, and <paramref name="failure"/> saying whether a refusal should drop a pending rollback: a failure to read isn't a mismatch (2026-11-04, review P8-9: a scanner in <c>previous/</c> deleted the request at quit, with a raw exception for a reason). <paramref name="cancellationToken"/> as in <see cref="UpdateRecheck.Check"/>.
     /// </summary>
-    public static UpdateRollbackPlan? Check(UpdateContext context, CancellationToken cancellationToken, out string? reason, out UpdateRecheckFailure failure)
+    public static UpdateRollbackPlan? Check(UpdateContext context, CancellationToken cancellationToken, out string? reason, out UpdateRecheckFailure failure, UpdateManifestLoad? targetRead = null)
     {
         ArgumentNullException.ThrowIfNull(context);
         var folder = context.Folder;
@@ -368,7 +373,7 @@ public static class UpdateRollback
 
         try
         {
-            var targetLoad = UpdateManifest.Load(folder.PreviousManifest);
+            var targetLoad = targetRead ?? UpdateManifest.Load(folder.PreviousManifest);
             if (targetLoad.Unreadable)
             {
                 reason = UpdateText.OldVersionUnreadable(UpdateManifest.FileName);

@@ -88,11 +88,11 @@ public sealed class UpdateManifest
     /// <summary>The file's name, at the top of a package.</summary>
     public const string FileName = "update-manifest.json";
 
-    private const int LoadTries = 5;
+    internal const int LoadTries = 5;
 
     private const string ShortNameStem = "UPDATE~";
 
-    private static readonly TimeSpan LoadPause = TimeSpan.FromMilliseconds(200);
+    internal static readonly TimeSpan LoadPause = TimeSpan.FromMilliseconds(200);
 
     [JsonPropertyName("format")]
     public int Format { get; set; }

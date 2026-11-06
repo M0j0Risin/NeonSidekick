@@ -192,11 +192,12 @@ NeonSidekick.Updates.UpdateContext? updateKept = null;
 NeonSidekick.Updates.UpdateSource? updateSource = null;
 
 // An exe started from under a package's .update (2026-11-04, review P15-3): no install of its own, so no lock and no update, but the guard still holds the real one above it.
-if (NeonSidekick.Updates.UpdateInstall.FolderOf(Environment.ProcessPath) is { } updateRunFolder && NeonSidekick.Updates.UpdateInstall.InstallAbove(updateRunFolder) is { } updateRealInstall)
+string? updateInstall = NeonSidekick.Updates.UpdateInstall.Find(Environment.ProcessPath, out string? updateRealInstall);
+if (updateRealInstall is not null)
 {
     updateGuarded = NeonSidekick.Updates.UpdateInstall.Guarded(new NeonSidekick.Updates.UpdateFolder(updateRealInstall));
 }
-else if (NeonSidekick.Updates.UpdateInstall.Locate(Environment.ProcessPath) is { } updateInstall)
+else if (updateInstall is not null)
 {
     var updateContext = new NeonSidekick.Updates.UpdateContext(
         new NeonSidekick.Updates.UpdateFolder(updateInstall),

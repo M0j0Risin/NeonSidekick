@@ -329,10 +329,13 @@ public static partial class PathPolice
     /// Git Bash's drive form: <c>/d/…</c> in every shell (rule 3 from the start), and <c>/d</c> alone in a bash command line,
     /// where it is the D drive (2026-10-03, the review: <c>cd /c</c>); anywhere else a lone <c>/d</c> is a switch.
     /// </summary>
-    private static bool IsBashDrive(string token, Judging judging) =>
+    private static bool IsBashDrive(string token, Judging judging) => IsBashDrive(token, judging.Shell, judging.IsScript);
+
+    /// <summary>The same reading for the trusted files' police (2026-11-05, review P22-6): it read <c>/d/apps/x.dll</c> as <c>D:\d\apps\x.dll</c>, so a word this police saw as inside the root passed that one.</summary>
+    internal static bool IsBashDrive(string token, ShellKind shell, bool isScript) =>
         OperatingSystem.IsWindows()
         && token.Length >= 2 && token[0] == '/' && char.IsAsciiLetter(token[1])
-        && (token.Length == 2 ? !judging.IsScript && judging.Shell == ShellKind.Bash : token[2] == '/');
+        && (token.Length == 2 ? !isScript && shell == ShellKind.Bash : token[2] == '/');
 
     /// <summary>The tokens of <paramref name="text"/>: cut on whitespace and <see cref="Delimiters"/>, trailing punctuation off, the empty ones dropped.</summary>
     public static IReadOnlyList<string> Tokens(string text)

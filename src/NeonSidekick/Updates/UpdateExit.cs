@@ -157,7 +157,7 @@ public sealed class UpdateExit
         }
 
         var swap = new UpdateSwap(folder, _files) { BetweenSteps = _context.BetweenSteps };
-        if (!SettleLeftover(swap, say))
+        if (!SettleLeftover(swap, say, cancellationToken))
         {
             return;
         }
@@ -174,7 +174,7 @@ public sealed class UpdateExit
 
     // An unfinished journal this far means the start couldn't deal with it (a locked file, another copy holding the lock). A new swap would write over the only record of those moves, so it's settled first, and this exit swaps
     // nothing either way: what the recheck read was the disk before the undo. True only with no journal to settle. It says why this quit installs nothing (2026-11-04, review P3-12).
-    private bool SettleLeftover(UpdateSwap swap, Action<string>? say)
+    private bool SettleLeftover(UpdateSwap swap, Action<string>? say, CancellationToken cancellationToken)
     {
         var left = UpdateJournal.TryRead(_context.Folder, out bool unreadable);
         if (unreadable)
@@ -188,7 +188,7 @@ public sealed class UpdateExit
             return true;
         }
 
-        switch (swap.Settle(left, _context.Running.ToString(), _context.IsThisExe))
+        switch (swap.Settle(left, _context.Running.ToString(), _context.IsThisExe, cancellationToken))
         {
             case UpdateSettled.Finished:
                 say?.Invoke(UpdateText.SettledFinished(left.Target, left.Rollback));
@@ -234,12 +234,14 @@ public sealed class UpdateExit
     private void GoBack(UpdateSwap swap, Action<string>? say, CancellationToken cancellationToken)
     {
         var folder = _context.Folder;
-        if (UpdateManifest.ReadFile(folder.PreviousManifest, out _) is { } named)
+        // One read for the line and the check (2026-11-05, review P23-12), as the forward path has: "Going back to X" named what the check hadn't vouched for.
+        var targetRead = UpdateManifest.Load(folder.PreviousManifest);
+        if (targetRead.Manifest is { } named)
         {
             say?.Invoke(UpdateText.GoingBackNow(named.ParsedVersion.ToString()));   // before the check, as the forward line is (2026-11-04, review P9-10)
         }
 
-        var plan = UpdateRollback.Check(_context, cancellationToken, out string? reason, out var failure);
+        var plan = UpdateRollback.Check(_context, cancellationToken, out string? reason, out var failure, targetRead);
         if (plan is null)
         {
             string why = reason ?? UpdateText.NothingToGoBackTo;

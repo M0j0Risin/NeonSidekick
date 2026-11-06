@@ -7,7 +7,7 @@ namespace NeonSidekick.Updates;
 /// <param name="ReadyVersion">The version of a stage that passed its checks, or null.</param>
 /// <param name="RollbackTarget">The version a pending rollback goes back to, or null.</param>
 /// <param name="Leftovers">A kept stage with no <c>ready</c>, or a partial download: nothing installs from them, and <c>/update cancel</c> can still delete them. Read only when asked for.</param>
-/// <param name="ReadyUnknown">A <c>ready</c> whose manifest couldn't be read just now (2026-11-04, reviews P9-6, P11-9): a passing hold read as nothing there, so the marker jumped and <c>/update cancel</c> found nothing.</param>
+/// <param name="ReadyUnknown">A <c>ready</c> whose manifest gave no version, as it's gone, bad, or couldn't be read just now (2026-11-04, reviews P9-6, P11-9): a passing hold read as nothing there, so the marker jumped and <c>/update cancel</c> found nothing.</param>
 /// <param name="RollbackUnknown">The same of a pending rollback, its earlier manifest gone or held.</param>
 public sealed record UpdateDiskState(string? ReadyVersion, string? RollbackTarget, bool Leftovers = false, bool ReadyUnknown = false, bool RollbackUnknown = false);
 
@@ -47,6 +47,9 @@ public interface IUpdater
     /// <summary>Deletes a partial or a kept stage for a release that's no longer out, if nothing is ready (2026-11-04, review P18-5: nothing else would ever delete it). The reason it couldn't, or null.</summary>
     string? DropLeftovers();
 
+    /// <summary>Deletes the partial download alone, under the staging lock, leaving a stage that's ready (2026-11-05, review P22-13). The reason it couldn't, or null.</summary>
+    string? DropParts();
+
     /// <summary>
     /// Checks the version in <c>.update/previous</c> and, if it passes, asks for the rollback. A stage stays on disk until the exit, so <c>/update cancel</c> brings it back. The reason it refused, or null with <paramref name="target"/> set, and <paramref name="docsStaying"/> naming the docs whose current copy stays.
     /// </summary>
@@ -67,7 +70,7 @@ public sealed class AppUpdater : IUpdater
     private readonly UpdateSource _source;
     private readonly UpdateStartResult? _start;
     private readonly Lock _diskGate = new();
-    private (DateTime Ready, DateTime Rollback, UpdateDiskState State)? _disk;
+    private (DateTime Ready, DateTime Rollback, UpdateDiskState State, bool Held)? _disk;
 
     public AppUpdater(UpdateContext context, UpdateStartResult? start = null, HttpClient? http = null, UpdateSource? source = null)
     {
@@ -94,27 +97,30 @@ public sealed class AppUpdater : IUpdater
         UpdateDiskState state;
         lock (_diskGate)
         {
-            // One it couldn't read is tried again, or a passing hold would stick for the session.
-            if (_disk is { } last && last.Ready == ready && last.Rollback == rollback && !last.State.ReadyUnknown && !last.State.RollbackUnknown)
+            // One it couldn't read is tried again, or a passing hold would stick for the session. Only that (2026-11-05, review P23-7): a gone or bad manifest was parsed again at every idle pass, and stays what it is until a stamp changes.
+            if (_disk is { } last && last.Ready == ready && last.Rollback == rollback && !last.Held)
             {
                 state = last.State;
             }
             else
             {
-                state = ParseDisk(folder);
-                _disk = (ready, rollback, state);
+                state = ParseDisk(folder, out bool held);
+                _disk = (ready, rollback, state, held);
             }
         }
 
         return withLeftovers ? state with { Leftovers = HasLeftovers(folder) } : state;
     }
 
-    private static UpdateDiskState ParseDisk(UpdateFolder folder)
+    private static UpdateDiskState ParseDisk(UpdateFolder folder, out bool held)
     {
         bool rollback = File.Exists(folder.Rollback);
         bool stage = File.Exists(folder.Ready);
-        string? target = rollback ? UpdateManifest.Load(folder.PreviousManifest).Manifest?.Version : null;
-        string? ready = stage ? UpdateManifest.Load(folder.StagingManifest).Manifest?.Version : null;
+        var targetLoad = rollback ? UpdateManifest.Load(folder.PreviousManifest) : null;
+        var readyLoad = stage ? UpdateManifest.Load(folder.StagingManifest) : null;
+        held = targetLoad is { Unreadable: true } || readyLoad is { Unreadable: true };
+        string? target = targetLoad?.Manifest?.Version;
+        string? ready = readyLoad?.Manifest?.Version;
         return new UpdateDiskState(ready, target, ReadyUnknown: stage && ready is null, RollbackUnknown: rollback && target is null);
     }
 
@@ -198,6 +204,23 @@ public sealed class AppUpdater : IUpdater
         }
 
         return UpdateStage.Drop(folder, alsoParts: true) ? null : UpdateText.UnsettledSwap;
+    }
+
+    public string? DropParts()
+    {
+        var folder = _context.Folder;
+        if (!Directory.Exists(folder.StagingParts))
+        {
+            return null;
+        }
+
+        using var staging = UpdateLock.TryExclusiveRetrying(folder.StagingLock, UpdateStage.LockWait, Thread.Sleep, out bool held);
+        if (staging is null)
+        {
+            return held ? UpdateText.AnotherCopyStaging : UpdateText.StagingLockCantOpen;
+        }
+
+        return UpdateFolder.DeleteQuietly(folder.StagingParts) ? null : UpdateText.CouldntDelete(folder.StagingParts);
     }
 
     public string? AskRollback(CancellationToken cancellationToken, out string? target, out IReadOnlyList<string> docsStaying)

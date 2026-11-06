@@ -111,7 +111,7 @@ public static class UpdateStartup
             }
         }
 
-        var journal = UpdateJournal.TryRead(folder, out bool unreadable);
+        var journal = UpdateJournal.TryReadRetrying(folder, pause, out bool unreadable);
         bool mixed = unreadable;
         var unfinished = journal is { Finished: false } ? journal : null;
         UpdateSettled? settled = null;
@@ -183,14 +183,9 @@ public static class UpdateStartup
             state.Line = line;
         }
 
-        string? failed = interactive ? ReadSwapFailed(folder, out bool shown) : NotRead(out shown);
+        bool shown = false;
+        string? failed = interactive ? ReadSwapFailed(folder, out shown) : null;
         return new UpdateStartResult(state.Held, Line: JoinLines(line, failed), JournalMayGo: mayGo, FailureShown: shown);
-    }
-
-    private static string? NotRead(out bool shown)
-    {
-        shown = false;
-        return null;
     }
 
     // Whether the file at the listed name is what the manifest lists. One it can't read counts as yes, since a passing hold mustn't end the journal.

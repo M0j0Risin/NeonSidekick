@@ -148,6 +148,9 @@ public sealed record UpdateStageResult(string? Reason)
     public bool Ok => Reason is null;
 }
 
+/// <summary>What <c>Verify</c> proved of a stage: the staged manifest, and the files a swap of it would move in.</summary>
+internal sealed record VerifiedStage(UpdateManifest Staged, List<string> Changed);
+
 /// <summary>
 /// Preflight, download, verification and the probe (2026-11-04, self-update). Staged in <c>.update/staging</c>, on the install's volume because the swap renames files, and over <see cref="ModelStore.EnsureArchiveSetAsync"/>: resume, size and SHA-256 checks, unpacking that refuses paths outside the folder, the
 /// package's top folder unwrapped, and tar's exec bits and symlinks kept. Only after the probe passes is <c>ready</c> written, and only a stage with one is ever swapped. <c>ready</c> is deleted first whenever a stage is started, replaced or dropped, because the recheck vouches for the files and not for the
@@ -275,11 +278,12 @@ public sealed class UpdateStage
             {
                 File.WriteAllText(first, "");
                 File.Move(first, second, overwrite: true);
-                File.Delete(second);
             }
             finally
             {
-                UpdateFolder.DeleteQuietly(first);   // a refused rename left it there, one more at every /update (review P16-7)
+                // A refused rename left the first there, one more at every /update (review P16-7). The create and the rename are the test, so a scanner on the fresh file refusing a delete is no read-only folder (2026-11-05, review P23-8).
+                UpdateFolder.DeleteQuietly(first);
+                UpdateFolder.DeleteQuietly(second);
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -402,10 +406,10 @@ public sealed class UpdateStage
             return new UpdateStageResult(ex.Message);
         }
 
-        var (bad, drop) = await Task.Run(() => Verify(release, sha, cancellationToken), cancellationToken).ConfigureAwait(false);
+        var (bad, drop, proved) = await Task.Run(() => Verify(release, sha, cancellationToken), cancellationToken).ConfigureAwait(false);
         if (bad is null)
         {
-            (bad, drop) = await ProbeAsync(release, cancellationToken).ConfigureAwait(false);
+            (bad, drop) = await ProbeAsync(release, proved!.Staged, cancellationToken).ConfigureAwait(false);
         }
 
         if (bad is not null)
@@ -418,7 +422,7 @@ public sealed class UpdateStage
             return new UpdateStageResult(bad);
         }
 
-        await Task.Run(() => FlushStage(cancellationToken), cancellationToken).ConfigureAwait(false);
+        await Task.Run(() => FlushStage(proved!, cancellationToken), cancellationToken).ConfigureAwait(false);
 
         // Last before ready (2026-11-04, review P3-9): a cancel landing just after the probe would otherwise answer "canceled" over a stage that installs at quit.
         cancellationToken.ThrowIfCancellationRequested();
@@ -435,14 +439,9 @@ public sealed class UpdateStage
     }
 
     // The stage on disk before ready says it may install (2026-11-04, review P12-13): a power loss soon after could leave a ready over files still in the OS's cache, and the swap would move them in. Opened for writing, since a read handle flushes nothing. A failure is only logged: the recheck at quit still hashes what moves.
-    private void FlushStage(CancellationToken cancellationToken)
+    private void FlushStage(VerifiedStage proved, CancellationToken cancellationToken)
     {
-        if (UpdateManifest.Load(Folder.StagingManifest).Manifest is not { } staged)
-        {
-            return;
-        }
-
-        foreach (string path in staged.Files.Select(file => Path.Combine(Folder.Staging, file.Path.Replace('/', Path.DirectorySeparatorChar))).Append(Folder.StagingManifest))
+        foreach (string path in FlushList(Folder, proved))
         {
             cancellationToken.ThrowIfCancellationRequested();
             try
@@ -454,6 +453,23 @@ public sealed class UpdateStage
             {
                 DiagnosticLog.Info(UpdateJournal.Category, ex.Message);
             }
+        }
+    }
+
+    /// <summary>What a swap would move in, and only that (2026-11-05, reviews P23-6, P23-10): the files that differ, the manifest, and all of <c>staged/</c>. Every listed file cost seconds under Checking and most never move, while the proofs do, and an empty <c>.sig</c> after a power cut sent a later rollback down the unsigned path.</summary>
+    internal static IEnumerable<string> FlushList(UpdateFolder folder, VerifiedStage proved)
+    {
+        ArgumentNullException.ThrowIfNull(folder);
+        ArgumentNullException.ThrowIfNull(proved);
+        foreach (string path in proved.Changed)
+        {
+            yield return Path.Combine(folder.Staging, path.Replace('/', Path.DirectorySeparatorChar));
+        }
+
+        yield return folder.StagingManifest;
+        foreach (string proof in Directory.Exists(folder.Staged) ? Directory.GetFiles(folder.Staged) : [])
+        {
+            yield return proof;
         }
     }
 
@@ -553,7 +569,8 @@ public sealed class UpdateStage
     }
 
     // A failed hash or a missing file is the package's fault and drops it. A file it can't read for now isn't (2026-11-04, review P2-4): a scanner's brief hold cost a whole download.
-    private (string? Reason, bool Drop) Verify(UpdateRelease release, UpdateShaFile sha, CancellationToken cancellationToken)
+    // What it proved comes back with it (2026-11-05, reviews P23-10, P23-11): three reads of one manifest could disagree, and the last, skipping the flush if a scanner held the file, let a stage go ready unflushed.
+    private (string? Reason, bool Drop, VerifiedStage? Proved) Verify(UpdateRelease release, UpdateShaFile sha, CancellationToken cancellationToken)
     {
         try
         {
@@ -561,34 +578,34 @@ public sealed class UpdateStage
             var stagedLoad = UpdateManifest.Load(Folder.StagingManifest);
             if (stagedLoad.Unreadable)
             {
-                return (UpdateText.StageCheckUnreadable(stagedLoad.Problem ?? UpdateText.ManifestHeld), false);
+                return (UpdateText.StageCheckUnreadable(stagedLoad.Problem ?? UpdateText.ManifestHeld), false, null);
             }
 
             if (stagedLoad.Bytes is not { } stagedBytes || !UpdateHash.Same(UpdateHash.Of(stagedBytes), sha.ManifestHash))
             {
-                return (UpdateText.PackageBad(UpdateManifest.FileName), true);
+                return (UpdateText.PackageBad(UpdateManifest.FileName), true, null);
             }
 
             if (stagedLoad.Manifest is not { } staged)
             {
-                return (UpdateText.PackageRefused(stagedLoad.Problem ?? UpdateText.ManifestUnreadable), true);
+                return (UpdateText.PackageRefused(stagedLoad.Problem ?? UpdateText.ManifestUnreadable), true, null);
             }
 
             var installedLoad = UpdateManifest.Load(Folder.Manifest);
             if (installedLoad is not { Manifest: { } installed, Bytes: { } installedBytes })
             {
-                return (installedLoad.Unreadable ? UpdateText.InstallManifestHeld : UpdateText.DamagedInstall(installedLoad.Problem ?? UpdateText.ManifestUnreadable), false);
+                return (installedLoad.Unreadable ? UpdateText.InstallManifestHeld : UpdateText.DamagedInstall(installedLoad.Problem ?? UpdateText.ManifestUnreadable), false, null);
             }
 
             // Nothing is wrong with the package (review P15-1), so it stays.
             if (installed.ParsedVersion != _context.Running)
             {
-                return (UpdateText.FolderNotThisVersion(installed.Version, _context.Running.ToString()), false);
+                return (UpdateText.FolderNotThisVersion(installed.Version, _context.Running.ToString()), false, null);
             }
 
             if (staged.ParsedVersion != release.Version || !string.Equals(staged.Rid, installed.Rid, StringComparison.Ordinal))
             {
-                return (UpdateText.PackageRefused(UpdateText.ManifestNotThisRelease(staged.Version, staged.Rid)), true);
+                return (UpdateText.PackageRefused(UpdateText.ManifestNotThisRelease(staged.Version, staged.Rid)), true, null);
             }
 
             foreach (var file in staged.Files)
@@ -597,7 +614,7 @@ public sealed class UpdateStage
                 string full = Path.Combine(Folder.Staging, file.Path.Replace('/', Path.DirectorySeparatorChar));
                 if (!File.Exists(full) || !UpdateHash.Same(UpdateHash.OfFile(full, cancellationToken), file.Sha256))
                 {
-                    return (UpdateText.PackageBad(file.Path), true);
+                    return (UpdateText.PackageBad(file.Path), true, null);
                 }
             }
 
@@ -607,15 +624,18 @@ public sealed class UpdateStage
             string writing = Folder.StagedInstallHashes + ".tmp";
             File.WriteAllBytes(writing, JsonSerializer.SerializeToUtf8Bytes(hashes, UpdateJsonContext.Default.UpdateInstallHashes));
             File.Move(writing, Folder.StagedInstallHashes, overwrite: true);
-            return (null, false);
+
+            // From what was just taken, with no second look at the install: a file held now is the recheck's to judge, and counting it as changed only flushes one more.
+            var taken = hashes.Files.ToDictionary(file => file.Key, file => file.Value.Sha256, StringComparer.Ordinal);
+            return (null, false, new VerifiedStage(staged, UpdateSwap.Changed(installed, staged, taken, _context.Comparer, _context.MoveAll)));
         }
         catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
         {
-            return (UpdateText.PackageBad(UpdateManifest.FileName), true);
+            return (UpdateText.PackageBad(UpdateManifest.FileName), true, null);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return (UpdateText.StageCheckUnreadable(ex.Message), false);
+            return (UpdateText.StageCheckUnreadable(ex.Message), false, null);
         }
     }
 
@@ -626,19 +646,8 @@ public sealed class UpdateStage
     // A refusal that may be the machine's keeps the stage (2026-11-04, review P4-14, the user's call): antivirus holding a new exe for a scan, the usual cause, cost a whole download. It never installs without a pass: the retry verifies and tests again, with no download. A missing file or a run naming another version is the package's fault, and drops it. So does nothing else.
     // A timeout asks the installed exe too (review P5-10): a library that hangs in both is the machine's, as one that crashes in both is, and the installed run's own timeout still leaves its result file naming what it hung on.
     // A pass needs this release's version line (2026-11-04, review P9-11), or the probe is no proof that this exe ran. And libraries failing in both versions only excuse a run that got an answer (review P8-13): one that reached its end with 0 or 1, or stopped on a library. A run that wrote "failed a.dll" and died anywhere else never finished its test.
-    private async Task<(string? Reason, bool Drop)> ProbeAsync(UpdateRelease release, CancellationToken cancellationToken)
+    private async Task<(string? Reason, bool Drop)> ProbeAsync(UpdateRelease release, UpdateManifest staged, CancellationToken cancellationToken)
     {
-        var stagedLoad = UpdateManifest.Load(Folder.StagingManifest);
-        if (stagedLoad.Unreadable)
-        {
-            return (UpdateText.StageCheckUnreadable(stagedLoad.Problem ?? UpdateText.ManifestHeld), false);
-        }
-
-        if (stagedLoad.Manifest is not { } staged)
-        {
-            return (UpdateText.PackageBad(UpdateManifest.FileName), true);
-        }
-
         string stagedExe = Path.Combine(Folder.Staging, staged.Exe);
         int? code = await RunProbeAsync(stagedExe, Folder.ProbeResult, cancellationToken).ConfigureAwait(false);
         var result = UpdateProbeResult.ParseFile(Folder.ProbeResult);
@@ -687,28 +696,20 @@ public sealed class UpdateStage
         int? code = await _probe.RunAsync(exe, resultFile, Folder.ProbeStderr, ProbeLimit, cancellationToken).ConfigureAwait(false);
         if (code != UpdateProbe.Passed)
         {
-            TryDo(() =>
+            try
             {
                 if (File.Exists(Folder.ProbeStderr) && UpdateFolder.ReadCappedText(Folder.ProbeStderr) is { } said)
                 {
                     DiagnosticLog.Info(UpdateJournal.Category, UntrustedText.Scrub(said));
                 }
-            });
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                DiagnosticLog.Info(UpdateJournal.Category, ex.Message);
+            }
         }
 
         return code;
-    }
-
-    private static void TryDo(Action action)
-    {
-        try
-        {
-            action();
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            DiagnosticLog.Info(UpdateJournal.Category, ex.Message);
-        }
     }
 
     // ModelStore's progress is reported inline: Progress<T> would post to a context, and the stall's clock must see each report.

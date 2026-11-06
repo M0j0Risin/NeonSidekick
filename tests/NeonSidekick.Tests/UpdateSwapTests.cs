@@ -877,6 +877,239 @@ public sealed class UpdateSwapTests : IDisposable
         Assert.True(File.Exists(_folder.Journal));
     }
 
+    // ---- what review passes 22-23 found (2026-11-05)
+
+    private string LinkedFolder(string name, params string[] files)
+    {
+        string real = Directory.CreateTempSubdirectory("neon-link-").FullName;
+        foreach (string file in files)
+        {
+            File.WriteAllText(Path.Combine(real, file), "theirs");
+        }
+
+        string link = _folder.Full(name);
+        Directory.CreateDirectory(Path.GetDirectoryName(link)!);
+        if (OperatingSystem.IsWindows())
+        {
+            Junction.Make(link, real);
+        }
+        else
+        {
+            Directory.CreateSymbolicLink(link, real);
+        }
+
+        return real;
+    }
+
+    private static void DropLink(string link, string real)
+    {
+        if (OperatingSystem.IsWindows() && Directory.Exists(link))
+        {
+            Directory.Delete(link);
+        }
+        else if (File.Exists(link) || UpdateFolder.IsLink(link))
+        {
+            File.Delete(link);
+        }
+
+        Directory.Delete(real, recursive: true);
+    }
+
+    [Fact]
+    public void ALinkAFileComesThrough_MovesWhole_AndNothingBehindItMoves()
+    {
+        // Review P23-2: it planned the link's move and then a move through it, which threw and undid at every exit.
+        Install(Exe);
+        string real = LinkedFolder("docs", "b.md");
+        try
+        {
+            var plan = Plan([Exe, "docs/b.md"], []);
+
+            Assert.True(new UpdateSwap(_folder).Run(plan).Done);
+
+            Assert.False(UpdateFolder.IsLink(_folder.Full("docs")));
+            Assert.Equal("new", Read("docs/b.md"));
+            Assert.Equal("theirs", File.ReadAllText(Path.Combine(real, "b.md")));
+            Assert.True(UpdateFolder.IsLink(KeptPath("0.5.6", "docs")));
+        }
+        finally
+        {
+            DropLink(KeptPath("0.5.6", "docs"), real);
+        }
+    }
+
+    [Fact]
+    public void AFileInASubfolderBehindALink_GetsItsFolderMade()
+    {
+        // The subfolder exists through the link at plan time, and not once the link has gone.
+        Install(Exe);
+        string real = LinkedFolder("docs");
+        Directory.CreateDirectory(Path.Combine(real, "sub"));
+        File.WriteAllText(Path.Combine(real, "sub", "b.md"), "theirs");
+        try
+        {
+            var plan = Plan([Exe, "docs/sub/b.md"], []);
+
+            Assert.True(new UpdateSwap(_folder).Run(plan).Done);
+
+            Assert.Equal("new", Read("docs/sub/b.md"));
+            Assert.Equal("theirs", File.ReadAllText(Path.Combine(real, "sub", "b.md")));
+        }
+        finally
+        {
+            DropLink(KeptPath("0.5.6", "docs"), real);
+        }
+    }
+
+    [Fact]
+    public void ADroppedFileBehindALink_StaysInTheLinksRealFolder()
+    {
+        Install(Exe);
+        string link = _folder.Full("docs");
+        string real = LinkedFolder("docs", "old.md");
+        try
+        {
+            var plan = Plan([Exe], ["docs/old.md"]);
+
+            Assert.True(new UpdateSwap(_folder).Run(plan).Done);
+
+            Assert.True(File.Exists(Path.Combine(real, "old.md")));
+            Assert.True(UpdateFolder.IsLink(link));
+        }
+        finally
+        {
+            DropLink(link, real);
+        }
+    }
+
+    [Fact]
+    public void AKeptFileBehindALinkThatMustGo_IsRefused_NamingIt_WithNothingMoved()
+    {
+        // Moving the link whole would lose docs/kept.md from the install, as an unchanged file never moves in.
+        Install(Exe);
+        string link = _folder.Full("docs");
+        string real = LinkedFolder("docs", "kept.md", "b.md");
+        try
+        {
+            var ex = Assert.Throws<IOException>(() => Plan([Exe, "docs/b.md"], []));
+
+            Assert.Equal(UpdateText.LinkHoldsKeptFile("docs", "docs/kept.md"), ex.Message);
+            Assert.True(UpdateFolder.IsLink(link));
+            Assert.False(File.Exists(_folder.Journal));
+        }
+        finally
+        {
+            DropLink(link, real);
+        }
+    }
+
+    [Fact]
+    public void AStrayFolderItCantRead_IsNamedInTheRefusal()
+    {
+        // Review P22-11: every quit failed with a bare "Access denied".
+        Install(Exe);
+        string stray = _folder.Full("x");
+        string locked = Path.Combine(stray, "locked");
+        Directory.CreateDirectory(locked);
+        using var denied = new DeniedFolder(locked);
+
+        var ex = Assert.Throws<IOException>(() => new UpdateSwap(_folder).PlanUpdate("0.5.6", "0.5.7", Exe, Exe, [Exe, "x"], [], [Exe]));
+
+        Assert.StartsWith("Can't read the folder x,", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("try again", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AFilesManagersLeavings_DontStopAnUndo()
+    {
+        // Review P23-5: a .DS_Store in a folder the swap made kept that folder there, so the move before it found both paths and the undo stopped for good.
+        var moved = new[] { Exe };
+        Install(Exe);
+        Directory.CreateDirectory(_folder.Release);
+        File.WriteAllText(Path.Combine(_folder.Release, UpdateFolder.ShaName), "old proofs");
+        Directory.CreateDirectory(_folder.Staged);
+        File.WriteAllText(_folder.StagedSha, "new proofs");
+        var plan = Plan(moved, []);
+        var killed = new UpdateSwap(_folder, new Stopping(plan.Steps.Count, () => new KilledException()));
+        Assert.Throws<KilledException>(() => killed.Run(ForUpdate(new UpdateSwap(_folder), moved, [])));
+        File.WriteAllText(Path.Combine(_folder.Release, ".DS_Store"), "x");
+        File.WriteAllText(Path.Combine(_folder.Release, "Thumbs.db"), "x");
+
+        Assert.True(new UpdateSwap(_folder, new UpdateFiles(), _ => { }).Undo(UpdateJournal.TryRead(_folder)!));
+
+        AssertOldVersionWhole();
+        Assert.Equal("old proofs", File.ReadAllText(Path.Combine(_folder.Release, UpdateFolder.ShaName)));
+        Assert.False(File.Exists(Path.Combine(_folder.Release, ".DS_Store")));
+    }
+
+    [Fact]
+    public void AFolderTheSwapMade_HoldingARealFile_StillStops()
+    {
+        var moved = new[] { Exe };
+        Install(Exe);
+        Directory.CreateDirectory(_folder.Release);
+        File.WriteAllText(Path.Combine(_folder.Release, UpdateFolder.ShaName), "old proofs");
+        var plan = Plan(moved, []);
+        var killed = new UpdateSwap(_folder, new Stopping(plan.Steps.Count, () => new KilledException()));
+        Assert.Throws<KilledException>(() => killed.Run(ForUpdate(new UpdateSwap(_folder), moved, [])));
+        File.WriteAllText(Path.Combine(_folder.Release, "someone's.txt"), "x");
+        File.WriteAllText(Path.Combine(_folder.Release, ".DS_Store"), "x");
+
+        Assert.False(new UpdateSwap(_folder, new UpdateFiles(), _ => { }).Undo(UpdateJournal.TryRead(_folder)!));
+
+        Assert.True(File.Exists(Path.Combine(_folder.Release, "someone's.txt")));
+        Assert.True(File.Exists(_folder.Journal));
+    }
+
+    /// <summary>A folder this account can't list, until the scope ends.</summary>
+    private sealed class DeniedFolder : IDisposable
+    {
+        private readonly string _path;
+
+        public DeniedFolder(string path)
+        {
+            _path = path;
+            if (OperatingSystem.IsWindows())
+            {
+                Rule(deny: true);
+            }
+            else
+            {
+                File.SetUnixFileMode(path, UnixFileMode.None);
+            }
+        }
+
+        public void Dispose()
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                Rule(deny: false);
+            }
+            else
+            {
+                File.SetUnixFileMode(_path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+        }
+
+        [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+        private void Rule(bool deny)
+        {
+            var info = new DirectoryInfo(_path);
+            var security = info.GetAccessControl();
+            var rule = new System.Security.AccessControl.FileSystemAccessRule(System.Security.Principal.WindowsIdentity.GetCurrent().User!, System.Security.AccessControl.FileSystemRights.ListDirectory, System.Security.AccessControl.AccessControlType.Deny);
+            if (deny)
+            {
+                security.AddAccessRule(rule);
+            }
+            else
+            {
+                security.RemoveAccessRule(rule);
+            }
+
+            info.SetAccessControl(security);
+        }
+    }
+
     /// <summary>Real operations, failing every one from a given count on.</summary>
     private sealed class CountingFiles(int failFrom) : IUpdateFiles
     {

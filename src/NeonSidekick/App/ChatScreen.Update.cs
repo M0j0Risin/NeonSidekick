@@ -673,6 +673,13 @@ internal sealed partial class ChatScreen
                 {
                     Volatile.Write(ref _updateState, new UpdateScreenState.Ready(older));
                     sink.Notice(UpdateText.CanceledOlderStays(older));
+
+                    // The newer release's partial goes (2026-11-05, review P22-13): the tidy keeps it as newer, and a second cancel sees only a stage. A refusal is a line in the log, as what was just said is still true.
+                    if (await Task.Run(updater.DropParts, CancellationToken.None).ConfigureAwait(false) is { } partsKept)
+                    {
+                        DiagnosticLog.Info(UpdateJournal.Category, partsKept);
+                    }
+
                     break;
                 }
 
