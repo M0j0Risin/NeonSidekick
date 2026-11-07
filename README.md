@@ -42,7 +42,7 @@ It's one app for research, IT and admin work (Active Directory, event logs, data
   - [Headless and scripted runs](docs/HEADLESS.md)
   - [Command-line options](docs/COMMANDLINE.md)
   - [Environment variables](docs/ENVIRONMENT.md)
-  - Setup guides: [SearXNG](docs/DOCKER_WINDOWS_SEARXNG.md), [vLLM](docs/DOCKER_WINDOWS_VLLM.md), [SGLang](docs/DOCKER_WINDOWS_SGLANG.md) and [Home Assistant with MQTT](docs/DOCKER_WINDOWS_HOMEASSISTANT.md) in Docker (vLLM and SGLang on Windows only)
+  - Setup guides: [SearXNG](docs/DOCKER_SEARXNG_WIN_MAC.md), [vLLM](docs/DOCKER_VLLM_WIN.md), [SGLang](docs/DOCKER_SGLANG_WIN.md) and [Home Assistant with MQTT](docs/DOCKER_HOMEASSISTANT_WIN_MAC.md) in Docker (vLLM and SGLang on Windows only)
 - For developers:
   - [Building from source](docs/BUILD.md)
   - [Components & libraries](docs/COMPONENTS.md)
@@ -67,7 +67,7 @@ It's one app for research, IT and admin work (Active Directory, event logs, data
 * **Local servers:** finds OpenAI-compatible servers on the app's computer or your network, or takes a URL.
 * **Embedded model:** downloads a Gemma, Qwen or Muse model (all read pictures and call tools) and runs it on a built-in llama.cpp.
 * **Model sizes:** builds for 8 GB cards and up, best at 16–32 GB, and NVFP4 builds for NVIDIA's Blackwell cards (Windows only).
-* **Docker servers (Windows only):** your vLLM or SGLang containers as `/server` choices, one at a time ([vLLM](docs/DOCKER_WINDOWS_VLLM.md), [SGLang](docs/DOCKER_WINDOWS_SGLANG.md)).
+* **Docker servers (Windows only):** your vLLM or SGLang containers as `/server` choices, one at a time ([vLLM](docs/DOCKER_VLLM_WIN.md), [SGLang](docs/DOCKER_SGLANG_WIN.md)).
 * **Cloud models:** the Anthropic and OpenAI APIs (your key) or Claude Code as the server (`/claude` sends it one message); off until you turn them on.
 * **Advisors:** any other profile, local or frontier, can be one, with read-only tools only; `/advisor` asks it yourself.
 * **Benchmarks & meters:** `/test` benchmarks the model; the performance bar shows CPU, RAM, GPU and network.
@@ -139,7 +139,7 @@ Only for some features:
 * **`bash` on Windows:** Git Bash. **PowerShell on a Mac:** PowerShell 7 (`pwsh`).
 * **The video and Browser windows on Windows 10:** the free Microsoft Edge WebView2 Runtime (Windows 11 has it).
 * **Voice and the embedded model on Windows:** [Microsoft's Visual C++ runtime](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist). Most PCs have it, and the app says so if yours doesn't.
-* **Other web search:** a SearXNG server ([setup with Docker](docs/DOCKER_WINDOWS_SEARXNG.md)), or an MCP web-search server.
+* **Other web search:** a SearXNG server ([setup with Docker](docs/DOCKER_SEARXNG_WIN_MAC.md)), or an MCP web-search server.
 * **The integrations:** the thing itself, such as Home Assistant, ComfyUI, Docker Desktop, an Obsidian vault or a YouTube API key.
 
 **On a Mac?** A few features need Windows or macOS 14; [On a Mac](docs/MAC.md) covers setup and every difference.

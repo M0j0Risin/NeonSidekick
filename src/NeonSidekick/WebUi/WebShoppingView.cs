@@ -11,7 +11,7 @@ namespace NeonSidekick.WebUi;
 /// helper per action the page posts — add typed items, re-add or forget a past item, a line's quantity, rename and remove, tick all or none,
 /// clear the ticked — each shaped like <see cref="Check"/>: the line found by id (gone meanwhile: not found), an explicit target where there is
 /// one (a repeat changes nothing and logs nothing), refused on a failed write or an unavailable list, and an <c>out</c> text for the audit line.
-/// Placing a line, the stores beyond the picker and the layout stay at the PC.
+/// 2026-11-06 (the user's ask): placing a line too (<see cref="Places"/>, <see cref="Place"/>). The stores beyond the picker and the layout stay at the PC.
 /// </summary>
 public static class WebShoppingView
 {
@@ -310,6 +310,116 @@ public static class WebShoppingView
 
         from = item.Name;
         to = trimmed;
+        return new WebReply(WebOutcome.Ok, answer);
+    }
+
+    /// <summary>
+    /// The ⌖ place sheet for line <paramref name="id"/> (2026-11-06), what the PC's picker offers through the same store (<see cref="ShoppingList.StoreFor"/>):
+    /// <see cref="ShoppingList.PlaceChoices"/> with the row the line is on now, and whether a fact of its name can be forgotten. Null when the line is
+    /// gone or the list unavailable. No store, or a store with no layout, is a sheet with a note and no rows.
+    /// </summary>
+    public static WebShopPlaces? Places(ShoppingList list, long id)
+    {
+        ArgumentNullException.ThrowIfNull(list);
+        if (Closed(list) is not null || Line(list, id) is not { } item)
+        {
+            return null;
+        }
+
+        string title = ShoppingText.PlaceTitle(item);
+        if (list.StoreFor(null, out _) is not { } shop)
+        {
+            return new WebShopPlaces(title, null, [], -1, false, ShoppingText.NoStoresYet);   // ShoppingText.NoStore is written to the model
+        }
+
+        var locations = list.Store.Locations(shop.Id);
+        var sections = list.Store.Sections(shop.Id);
+        if (locations.Count == 0 && sections.Count == 0)
+        {
+            return new WebShopPlaces(title, shop.Id, [], -1, false, WebUiText.NoLayoutOnPage(shop));
+        }
+
+        var places = ShoppingList.PlaceChoices(locations, sections);
+        var now = list.PlaceOf(item.Name, shop);
+        return new WebShopPlaces(
+            title,
+            shop.Id,
+            places.Select(c => new WebShopPlaceChoice(c.Label, c.Location?.Id, c.Section?.Id)).ToList(),
+            ShoppingList.PlaceChoiceIndex(places, sections, now.Location?.Id, now.Section?.Id),
+            list.ItemFacts(shop, item.Name).Count > 0,
+            null);
+    }
+
+    /// <summary>
+    /// ⌖ place's post (2026-11-06), checked as it may have aged since the sheet opened: the line still there (else not found), the store still the
+    /// one the sheet showed, exactly one of a location, a section or forget, and that location or section still the store's; then
+    /// <see cref="ShoppingList.PlaceItem"/> or <see cref="ShoppingList.ForgetItem"/>, whose sentence is the reply's and whose <c>Error: </c> answer is refused
+    /// with its text. A forget whose fact is already gone is Ok with nothing written or logged, as a rename to the same name is.
+    /// <paramref name="name"/> is the line's name when something changed; <paramref name="where"/> the place's label, null for a forget.
+    /// </summary>
+    public static WebReply Place(ShoppingList list, WebShopPlace request, out string? name, out string? where)
+    {
+        ArgumentNullException.ThrowIfNull(list);
+        ArgumentNullException.ThrowIfNull(request);
+        name = null;
+        where = null;
+        if (Closed(list) is { } closed)
+        {
+            return closed;
+        }
+
+        if (Line(list, request.Id) is not { } item)
+        {
+            return new WebReply(WebOutcome.NotFound, WebUiText.NoSuchItem);
+        }
+
+        if (list.StoreFor(null, out _) is not { } shop)
+        {
+            return new WebReply(WebOutcome.Refused, ShoppingText.NoStoresYet);
+        }
+
+        if (shop.Id != request.Store)
+        {
+            return new WebReply(WebOutcome.Refused, WebUiText.PlaceStoreChanged(shop));
+        }
+
+        if ((request.Location is null ? 0 : 1) + (request.Section is null ? 0 : 1) + (request.Forget ? 1 : 0) != 1)
+        {
+            return new WebReply(WebOutcome.Refused, WebUiText.PlaceNeedsOne);
+        }
+
+        if (request.Forget)
+        {
+            if (list.ItemFacts(shop, item.Name).Count == 0)
+            {
+                return WebReply.Ok;
+            }
+
+            string forgot = list.ForgetItem(shop, item);
+            if (forgot.StartsWith("Error: ", StringComparison.Ordinal))
+            {
+                return new WebReply(WebOutcome.Refused, forgot);
+            }
+
+            name = item.Name;
+            return new WebReply(WebOutcome.Ok, forgot);
+        }
+
+        var location = request.Location is { } l ? list.Store.Locations(shop.Id).FirstOrDefault(x => x.Id == l) : null;
+        var section = request.Section is { } s ? list.Store.Sections(shop.Id).FirstOrDefault(x => x.Id == s) : null;
+        if (location is null && section is null)
+        {
+            return new WebReply(WebOutcome.Refused, WebUiText.NoSuchPlace(shop));
+        }
+
+        string answer = list.PlaceItem(shop, item, location, section);
+        if (answer.StartsWith("Error: ", StringComparison.Ordinal))
+        {
+            return new WebReply(WebOutcome.Refused, answer);
+        }
+
+        name = item.Name;
+        where = location?.Label ?? section!.Name;
         return new WebReply(WebOutcome.Ok, answer);
     }
 

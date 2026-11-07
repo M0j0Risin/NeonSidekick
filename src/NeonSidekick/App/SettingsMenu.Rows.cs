@@ -124,12 +124,12 @@ internal sealed partial class SettingsMenu
     /// <c>/settings</c> look on the other panes' menus): each heading over the field it names, every menu headed, even the short
     /// ones. The YouTube menu moved its autoplay and voice rows under the search rows to sit under Playing (the user's call, as
     /// <see cref="TabSections"/>' four tabs did). The File menu's Checkpoints section came on 2026-10-28 (the checkpoints plan, the user's ask),
-    /// after the Recycle bin row it works with. The Web menu's Web metasearch section came on 2026-11-06 (the user's ask), under Search. Pinned.
+    /// after the Recycle bin row it works with. The Web menu's metasearch section came on 2026-11-06 (the user's ask), under Search; since 2026-11-07 (the user's ask) it reads Metasearch, the switch has a section of its own at the top, and the SearXNG URL has one under Metasearch. Pinned.
     /// </summary>
     public static readonly IReadOnlyList<IReadOnlyList<(SettingsField First, string Title)>> ToolsMenuSections =
     [
         [(SettingsField.AskUser, "Questions"), (SettingsField.AskMaxQuestions, "Limits")],
-        [(SettingsField.WebTools, "Browser"), (SettingsField.WebSearchMethod, "Search"), (SettingsField.WebMetasearchEngines, "Web metasearch"), (SettingsField.WebDownloadMaxMegabytes, "Downloads")],
+        [(SettingsField.WebTools, "Web"), (SettingsField.WebBrowserMode, "Browser"), (SettingsField.WebSearchMethod, "Search"), (SettingsField.WebMetasearchEngines, "Metasearch"), (SettingsField.WebSearxngUrl, "SearXNG (external)"), (SettingsField.WebDownloadMaxMegabytes, "Downloads")],
         [(SettingsField.ShellCommandPolicy, "Policy"), (SettingsField.ShellPolice, "Guards"), (SettingsField.ShellPreferNative, "Commands"), (SettingsField.ShellCodeLanguages, "Scripts")],
         [(SettingsField.FileTools, "Files"), (SettingsField.FileCheckpoints, "Checkpoints"), (SettingsField.FileTreeMaxLength, "/tree"), (SettingsField.FileMentionFolderMode, "Browsing"), (SettingsField.FileViewImageMaxPerCall, "Limits")],
         [(SettingsField.ImageTools, "Editing"), (SettingsField.ImageEditOutputFolder, "Folders")],

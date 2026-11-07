@@ -36,7 +36,7 @@ public static class ThemeLibrary
     /// <summary>The built-ins, A to Z.</summary>
     public static IReadOnlyList<ThemePalette> All => s_embedded.Value.Themes;
 
-    /// <summary>The default theme (<see cref="ThemeName.Default"/>, collider since 2026-10-05).</summary>
+    /// <summary>The default theme (<see cref="ThemeName.Default"/>, synthwave since 2026-11-07).</summary>
     public static ThemePalette Default => s_embedded.Value.Default;
 
     /// <summary>The whole load: the themes, their categories and what went wrong.</summary>

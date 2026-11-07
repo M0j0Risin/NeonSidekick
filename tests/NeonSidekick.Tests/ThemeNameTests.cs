@@ -8,15 +8,15 @@ namespace NeonSidekick.Tests;
 public class ThemeNameTests
 {
     [Fact]
-    public void Names_AreTheBuiltIns_AToZ_ColliderTheDefault()
+    public void Names_AreTheBuiltIns_AToZ_SynthwaveTheDefault()
     {
-        // A to Z since 2026-10-03 (the user's ask); the built-ins are assets/themes' files since 2026-10-05, collider the default.
+        // A to Z since 2026-10-03 (the user's ask); the built-ins are assets/themes' files since 2026-10-05, synthwave the default since 2026-11-07.
         Assert.Equal(ShippedThemes.All.Select(p => p.Name), ThemeName.Names);
         Assert.Equal(ThemeName.Names.Order(StringComparer.Ordinal), ThemeName.Names);
-        Assert.Equal("collider", ThemeName.Default);
+        Assert.Equal("synthwave", ThemeName.Default);
         Assert.Equal(ThemeName.Default, new AppSettingsData().Theme);
         Assert.Contains("synthwave", ThemeName.Names);
-        Assert.Same(ThemeLibrary.Default, ThemeLibrary.Get("collider"));
+        Assert.Same(ThemeLibrary.Default, ThemeLibrary.Get("synthwave"));
     }
 
     [Theory]
@@ -79,7 +79,7 @@ public class ThemeNameTests
         }
 
         var warning = Assert.Single(warnings);
-        Assert.Contains($"Theme='matrix' is not one of {string.Join(", ", ThemeName.Names)}. Using collider.", warning.Message);
+        Assert.Contains($"Theme='matrix' is not one of {string.Join(", ", ThemeName.Names)}. Using synthwave.", warning.Message);
     }
 
     [Fact]

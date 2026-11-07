@@ -3467,6 +3467,7 @@ public sealed partial class SidekickApp
             mouse.PointerMoved = screen.PointerMoved;
             mouse.FocusChanged = screen.FocusChanged;
             screen.UseHover(mouse.Hover);
+            screen.GuardStaleClicks();
         }
 
         _screen = screen;

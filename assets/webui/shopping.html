@@ -50,7 +50,12 @@
         <input type="text" class="shop-input" id="rename-text" autocomplete="off" enterkeyhint="done">
         <button type="button" id="rename-save" disabled></button>
       </div>
-      <div class="sheet-actions"><button type="button" class="shop-remove" id="remove"></button></div>
+      <div class="sheet-actions"><button type="button" class="shop-place-open" id="place"></button><button type="button" class="shop-remove" id="remove"></button></div>
+    </div>
+    <div class="hidden" id="place-body">
+      <input type="search" class="shop-input shop-filter hidden" id="place-filter" autocomplete="off">
+      <div class="shop-past-list" id="place-list"></div>
+      <p class="shop-note hidden" id="place-none"></p>
     </div>
     <div class="hidden" id="past-body">
       <p class="shop-note" id="past-caption"></p>

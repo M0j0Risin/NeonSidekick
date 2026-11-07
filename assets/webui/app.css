@@ -629,6 +629,9 @@ button:disabled { opacity: 0.45; cursor: default; }
 .shop-remove.armed, .shop-clear.armed, .shop-forget.armed { background: var(--error, #c0392b); color: #fff; border-color: transparent; }
 .shop-note { color: var(--dim); font-size: 14px; margin: 0 0 8px; }
 .shop-filter { width: 100%; margin: 0 0 8px; }
+.shop-place { width: 100%; text-align: left; }
+.shop-place.here { border-color: var(--accent); font-weight: 600; }
+.shop-place.armed { background: var(--error, #c0392b); color: #fff; border-color: transparent; }
 .shop-past-list { display: flex; flex-direction: column; gap: 4px; }
 .shop-past-row { display: flex; gap: 6px; align-items: stretch; }
 .shop-past-add { flex: 1; min-width: 0; text-align: left; }

@@ -225,7 +225,7 @@ public static class WebText
     public static string OpenedHeader(int count) => $"Opened {count.ToString(CultureInfo.InvariantCulture)} links in your browser:";
     public static string OpenedLine(string url) => "- " + url;
 
-    /// <summary>A link opened in the Browser window under <c>Web open links in</c> <c>browser-window</c> (later still on 2026-10-13): the model's line, not the user's cookie notice.</summary>
+    /// <summary>A link opened in the Browser window under <c>Web browser open</c> <c>browser-window</c> (later still on 2026-10-13): the model's line, not the user's cookie notice.</summary>
     public static string OpenedInWindow(string url) => $"Opened {url} in the app's Browser window";
 
     /// <summary>The links past the first under <c>browser-window</c>: the window shows one page at a time, so they were not opened.</summary>

@@ -57,7 +57,7 @@ public static class WebUiText
 
     // ── Opening it on this PC (later on 2026-10-15, /webui browser and the pane's link) ──
 
-    /// <summary><c>/webui browser</c>'s flag: the default browser, whatever <i>Web open links in</i> says.</summary>
+    /// <summary><c>/webui browser</c>'s flag: the default browser, whatever <i>Web browser open</i> says.</summary>
     public const string ExternalFlag = "--external";
 
     /// <summary>The address <c>/webui browser</c> opens: one host, so one cookie, under either reach.</summary>
@@ -881,7 +881,11 @@ public static class WebUiText
         Remove: "🗑️ remove",
         RemoveArmed: "Tap again to remove",
         Close: "Close",
-        Gone: NoSuchItem);
+        Gone: NoSuchItem,
+        Place: Shopping.ShoppingText.PlaceButton,
+        PlaceFilter: "Filter the places",
+        ForgetPlace: Shopping.ShoppingText.ForgetPlaceRow,
+        ForgetPlaceArmed: "Tap again to forget where it is");
 
     /// <summary>A button word with its runs of spaces made one.</summary>
     internal static string Collapsed(string text) => string.Join(' ', text.Split(' ', StringSplitOptions.RemoveEmptyEntries));
@@ -906,6 +910,21 @@ public static class WebUiText
 
     /// <summary>A line renamed from the page, flashed on the PC's hint row (2026-10-16).</summary>
     public static string RenamedFlash(string from, string to) => Glyph + "renamed: " + from + " → " + to;
+
+    /// <summary>A line placed from the page, or its place forgotten (null <paramref name="where"/>), flashed on the PC's hint row (2026-11-06).</summary>
+    public static string PlacedFlash(string name, string? where) => Glyph + (where is null ? "forgot the place of: " + name : "placed: " + name + " → " + where);
+
+    /// <summary>A store with no layout, on the ⌖ place sheet (2026-11-06): <see cref="Shopping.ShoppingText.NoLayoutYet"/> names the PC's keys, which a phone has none of.</summary>
+    public static string NoLayoutOnPage(Shopping.ShopStore shop) => shop.Name + " has no aisles or sections yet: add them at the PC, or ask the model.";
+
+    /// <summary>The store changed while the ⌖ place sheet was open (2026-11-06): its rows were another store's.</summary>
+    public static string PlaceStoreChanged(Shopping.ShopStore shop) => "The store changed to " + shop.Name + " meanwhile: pick the place again.";
+
+    /// <summary>⌖ place's post naming none or more than one of a location, a section or forget (2026-11-06; the page sends one).</summary>
+    public const string PlaceNeedsOne = "Pick one place for the line.";
+
+    /// <summary>A location or section that isn't the store's, gone since the ⌖ place sheet opened (2026-11-06).</summary>
+    public static string NoSuchPlace(Shopping.ShopStore shop) => "That place is gone from " + shop.Name + ".";
 
     /// <summary>A line removed from the page, flashed on the PC's hint row (2026-10-16).</summary>
     public static string RemovedFlash(string line) => Glyph + "removed: " + line;
@@ -1194,6 +1213,10 @@ public static class WebUiText
     /// <summary>A line renamed from the phone (audit, 2026-10-16); a merge into another line reads the same.</summary>
     public static string RenamedLogLine(string from, string to, IPAddress? remote) =>
         "Web UI renamed \"" + from + "\" to \"" + to + "\" on the shopping list from " + Where(remote) + ".";
+
+    /// <summary>A line placed from the phone, or its place forgotten (null <paramref name="where"/>) (audit, 2026-11-06).</summary>
+    public static string PlacedLogLine(string name, string? where, IPAddress? remote) =>
+        (where is null ? "Web UI forgot where \"" + name + "\" is" : "Web UI placed \"" + name + "\" at \"" + where + "\"") + " on the shopping list from " + Where(remote) + ".";
 
     /// <summary>A line removed from the phone (audit, 2026-10-16).</summary>
     public static string RemovedLogLine(string line, IPAddress? remote) => "Web UI removed \"" + line + "\" from the shopping list from " + Where(remote) + ".";

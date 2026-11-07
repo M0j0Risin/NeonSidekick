@@ -247,6 +247,7 @@ public sealed partial class WebUiHostTests : IAsyncLifetime
             ("/api/shopping/forget", "{\"id\":5}", "forget 5"),
             ("/api/shopping/quantity", "{\"id\":7,\"qty\":3}", "quantity 7 3"),
             ("/api/shopping/rename", "{\"id\":7,\"name\":\"Oat milk\"}", "rename 7 Oat milk"),
+            ("/api/shopping/place", "{\"id\":7,\"store\":2,\"location\":3}", "place 7 store 2 location 3"),
             ("/api/shopping/remove", "{\"id\":7}", "remove 7"),
             ("/api/shopping/checkall", "{\"on\":true}", "checkall True"),
             ("/api/shopping/clear", "", "clear"),
@@ -284,6 +285,26 @@ public sealed partial class WebUiHostTests : IAsyncLifetime
         _backend.BoughtList = null;
         using var none = await _client.SendAsync(Get("/api/shopping/bought"));
         Assert.Equal(HttpStatusCode.NotFound, none.StatusCode);
+
+        // The ⌖ place sheet (2026-11-06): no-store as the 🕘 sheet's; a line gone, a missing id and a bad one are all a 404, the last two never asking.
+        _backend.PlacesList = new WebShopPlaces("⌖ Where is Milk?", 2, [new WebShopPlaceChoice("Aisle 2", 3, null)], 0, true, null);
+        using var places = await _client.SendAsync(Get("/api/shopping/places?id=7"));
+        Assert.Equal(HttpStatusCode.OK, places.StatusCode);
+        Assert.Equal("no-store", places.Headers.CacheControl?.ToString());
+        var sheet = System.Text.Json.JsonSerializer.Deserialize(await places.Content.ReadAsStringAsync(), WebUiJsonContext.Default.WebShopPlaces)!;
+        Assert.Equal(("Aisle 2", 3L, true), (sheet.Choices[0].Label, sheet.Choices[0].Location!.Value, sheet.CanForget));
+        Assert.Contains("places 7", _backend.ShopCalls);
+        int asked = _backend.ShopCalls.Count;
+        foreach (string bad2 in new[] { "/api/shopping/places", "/api/shopping/places?id=x", "/api/shopping/places?id=-1", "/api/shopping/places?id=1.5" })
+        {
+            using var noLine = await _client.SendAsync(Get(bad2));
+            Assert.Equal(HttpStatusCode.NotFound, noLine.StatusCode);
+        }
+
+        Assert.Equal(asked, _backend.ShopCalls.Count);
+        _backend.PlacesList = null;
+        using var lineGone = await _client.SendAsync(Get("/api/shopping/places?id=7"));
+        Assert.Equal(HttpStatusCode.NotFound, lineGone.StatusCode);
     }
 
     [Fact]

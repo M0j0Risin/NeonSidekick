@@ -171,6 +171,12 @@ public sealed class FolderPane
                     }
                     else if (at - HeaderRows is int i && i >= 0 && i < _shown)
                     {
+                        if (_pane.ClickIsStale(click.X, at))
+                        {
+                            _clicks.Reset();
+                            continue;
+                        }
+
                         int row = _first + i;
                         var node = tree.Visible[row];
                         if (click.X < FolderText.NameColumn(node.Depth))
@@ -418,6 +424,13 @@ public sealed class FolderPane
             lines.Add(new Markup(Theme.DimMarkup(MenuPane.NoPointer + MenuPane.MoreHint(_first, _shown, count))));
         }
 
-        _pane.ShowOverlay(new Rows(lines), _hint, close: true);
+        // What's on show (2026-11-07): a row's path, so opening a folder leaves its own row the same.
+        var targets = new List<OverlayTarget>(_shown);
+        for (int i = 0; i < _shown; i++)
+        {
+            targets.Add(new OverlayTarget(HeaderRows + i, 0, Math.Max(1, _pane.Profile.Width) - 1, tree.Visible[_first + i].Path, _first + i == _cursor));
+        }
+
+        _pane.ShowOverlay(new Rows(lines), _hint, close: true, aim: new OverlayAim(_title, targets));
     }
 }

@@ -216,7 +216,7 @@ public static class EmbeddedContextSize
 /// The <c>Embedded VRAM budget</c> setting (later on 2026-09-29, the user's ask: "a maximum VRAM budget, like 92%, to force it
 /// to stay at or under that amount"): <see cref="Off"/> — llama.cpp's own fit margin of 1 GiB per device — or a whole percent
 /// from <see cref="Min"/> to <see cref="Max"/> of the biggest GPU's dedicated memory, the rest passed as <c>--fit-target</c>
-/// (<see cref="LlamaArguments"/>). <see cref="Default"/> is 91 % since 2026-09-30 (the user's call; off until then): a profile
+/// (<see cref="LlamaArguments"/>). <see cref="Default"/> is 92 % since 2026-11-06 (the user's call; 91 % from 2026-09-30, off before that): a profile
 /// that saved off keeps it.
 /// </summary>
 public static class EmbeddedVramBudget
@@ -224,7 +224,7 @@ public static class EmbeddedVramBudget
     public const int Off = 0;
 
     /// <summary>A new profile's budget. Pinned.</summary>
-    public const int Default = 91;
+    public const int Default = 92;
     public const int Min = 50;
     public const int Max = 99;
 

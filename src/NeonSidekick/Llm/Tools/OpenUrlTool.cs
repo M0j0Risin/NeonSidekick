@@ -14,7 +14,7 @@ namespace NeonSidekick.Llm.Tools;
 /// <c>Opened … in your browser</c>; several a header and a line each, a bad one its <c>Error:</c>
 /// line in place. Offered under the setting <c>Web tools</c> with the other two.
 ///
-/// <para><b>The Browser window</b> (later still on 2026-10-13, the user's ask: <c>Web open links in</c>, <see cref="OpenLinksIn"/>): under
+/// <para><b>The Browser window</b> (later still on 2026-10-13, the user's ask: <c>Web browser open</c>, <see cref="OpenLinksIn"/>): under
 /// <c>browser-window</c>, with a window hook given (the screen on Windows), a link opens in the app's Browser window instead, through the
 /// one open every caller uses (<c>ChatScreen.OpenInBrowser</c>: one close notice per visit, the cookies handed over on close). The window
 /// shows one page at a time, so only the first link opens and the rest are named as not opened (the user's pick), and the schema offers
@@ -24,7 +24,7 @@ namespace NeonSidekick.Llm.Tools;
 /// <para><b>YouTube links</b> (2026-10-16, <c>YouTube open links in</c>): with a YouTube hook given (the screen with a video player), each
 /// link goes to it first, before either path above. A link it plays has its answer as its line (a player of the app's own, or the Browser
 /// window: one at a time, so the next playable links are named as not opened; the default browser: each one); a link it passes on goes on
-/// through <c>Web open links in</c>, its note (if any) before that line. The hook passes on whatever is not a video or <c>list=</c> link,
+/// through <c>Web browser open</c>, its note (if any) before that line. The hook passes on whatever is not a video or <c>list=</c> link,
 /// whatever YouTube refused in the player, and everything while YouTube tools are off. Headless gives no hook.</para>
 /// </summary>
 public sealed class OpenUrlTool : AIFunction
@@ -69,7 +69,7 @@ public sealed class OpenUrlTool : AIFunction
     private readonly Func<Uri, CancellationToken, Task<YouTubeLinkOutcome>>? _openYouTube;
 
     /// <param name="web">The default browser's opener (<see cref="WebAccess.OpenUrl"/>).</param>
-    /// <param name="effective">The settings in force, read at each call for <c>Web open links in</c>; null keeps the default browser.</param>
+    /// <param name="effective">The settings in force, read at each call for <c>Web browser open</c>; null keeps the default browser.</param>
     /// <param name="openInWindow">Opens a link in the Browser window and returns null, or returns why it cannot now (<c>IBrowserWindow.Unavailable</c>)
     /// without opening; null (headless, macOS) keeps the default browser.</param>
     /// <param name="openYouTube">A YouTube link played where <c>YouTube open links in</c> says (2026-10-16; <c>ChatScreen.OpenYouTubeForToolAsync</c>),
@@ -91,7 +91,7 @@ public sealed class OpenUrlTool : AIFunction
 
     public override JsonElement JsonSchema => InWindow ? WindowSchema : Schema;
 
-    /// <summary>Whether links go to the Browser window now: <c>Web open links in</c> is <c>browser-window</c> and there is a window to ask.</summary>
+    /// <summary>Whether links go to the Browser window now: <c>Web browser open</c> is <c>browser-window</c> and there is a window to ask.</summary>
     private bool InWindow => _openInWindow is not null && _effective is not null && OpenLinksIn.Resolve(_effective()) == OpenLinksInKind.BrowserWindow;
 
     /// <summary>Opens each link and describes what happened. The argument reading is <see cref="InvokeCoreAsync"/>'s.</summary>
@@ -286,7 +286,7 @@ public sealed class OpenUrlTool : AIFunction
 /// <summary>
 /// What open_url's YouTube hook did with a link (2026-10-16): <see cref="Answer"/> its whole line when it played or handed it off (and
 /// <see cref="OnePlayer"/> when the place shows one at a time: the video window, the Web UI's tab, the Browser window), or null to pass the
-/// link on through <c>Web open links in</c>, <see cref="Note"/> (if any) before that line.
+/// link on through <c>Web browser open</c>, <see cref="Note"/> (if any) before that line.
 /// </summary>
 public sealed record YouTubeLinkOutcome(string? Answer, string? Note = null, bool OnePlayer = false)
 {

@@ -153,7 +153,7 @@ public sealed partial class WebToolsTests : IDisposable
         Assert.Empty(_opened);
     }
 
-    // ── open_url under Web open links in (later still on 2026-10-13) ────────
+    // ── open_url under Web browser open (later still on 2026-10-13) ────────
 
     [Fact]
     public async Task Open_InTheWindow_GoesThere_NotToTheBrowser()

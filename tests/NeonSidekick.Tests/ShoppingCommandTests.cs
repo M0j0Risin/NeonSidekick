@@ -433,6 +433,67 @@ public sealed class ShoppingCommandTests : IDisposable
         pane.Dispose();
     }
 
+    /// <summary>Forget removes every spelling of the name (2026-11-06, the user's call): the pane's took the first, so a second left the line placed after the answer said it was forgotten.</summary>
+    [Fact]
+    public async Task ThePane_Forget_RemovesEverySpelling_AndTheLineIsUnplaced()
+    {
+        await Run("store add H-E-B");
+        var shop = _list.StoreFor(null, out _)!;
+        _list.AddLocation(shop, "Aisle 7", null);
+        await Run("add Eggs");
+        Assert.DoesNotContain("Error", _list.Place(shop, "Egg", ShoppingKinds.Item, "Aisle 7", null, ShoppingSources.User), StringComparison.Ordinal);
+        Assert.DoesNotContain("Error", _list.Place(shop, "Eggs", ShoppingKinds.Item, "Aisle 7", null, ShoppingSources.User), StringComparison.Ordinal);
+        Assert.Equal(2, _list.ItemFacts(shop, "eggs").Count);
+        var (menu, pane, input) = PaneWithInput();
+        input.Push(Keys.Char('p'), Keys.Down, Keys.Enter);      // Aisle 7, (forget where it is)
+        input.Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Empty(_list.Store.Placements(shop.Id));
+        Assert.Null(_list.PlaceOf("Eggs", shop).Location);
+        pane.Dispose();
+    }
+
+    /// <summary>A place made elsewhere (2026-11-06, the user's call: the Web UI's ⌖ place, the model's <c>shopping_place</c>) moves a line without changing the line: the watch's key holds the placements too.</summary>
+    [Fact]
+    public async Task TheOpenPane_FollowsAPlaceMadeElsewhere_OnItsWatch()
+    {
+        await Run("store add H-E-B");
+        var shop = _list.StoreFor(null, out _)!;
+        _list.AddLocation(shop, "Aisle 7", null);
+        await Run("add Kombucha");
+        var pane = new ScreenPane(_console, new ScreenGeometry(() => null, () => 100), _time) { Hint = () => "idle" };
+        var input = new ScriptedInput();
+        var menu = new ShoppingMenu(_list, new MenuPane(pane, new KeySource(input, TimeSpan.FromMilliseconds(1))), time: _time);
+        pane.Show();
+        int waits = 0;
+        bool placed = false;
+        input.OnWait = () =>
+        {
+            if (++waits == 1)
+            {
+                _list.PlaceItem(shop, _list.Store.Items().Single(), _list.Store.Locations(shop.Id).Single(), null);
+                placed = true;
+                _time.Advance(ShoppingMenu.WatchEvery);
+            }
+            else if (placed && _console.Output.Contains("Aisle 7", StringComparison.Ordinal))
+            {
+                placed = false;
+                input.Push(Keys.Escape);   // drawn again under its place: done
+            }
+            else if (waits > 200)
+            {
+                input.Push(Keys.Escape);   // never redrawn: the assertion below says so
+            }
+        };
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.False(placed, "the pane never drew the place made elsewhere");
+        pane.Dispose();
+    }
+
     [Fact]
     public async Task TheOpenPane_FollowsAStoreOrATickMadeElsewhere_OnItsWatch()
     {

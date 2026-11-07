@@ -609,7 +609,7 @@ public sealed class AppSettingsData
     /// <summary>
     /// The look (2026-09-23, the user's ask): a theme's name — a built-in (<see cref="UI.ThemeName.Names"/>, every
     /// <c>assets/themes</c> file since 2026-10-05) or one of the home's <c>themes</c> folder; anything else reads as
-    /// <see cref="UI.ThemeName.Default"/> (<c>collider</c> since 2026-10-05, the user's call; <c>synthwave</c> until then).
+    /// <see cref="UI.ThemeName.Default"/> (<c>synthwave</c> since 2026-11-07, the user's call; <c>collider</c> from 2026-10-05, <c>synthwave</c> before that).
     /// Put in force at startup; a change on the row or with <c>/theme</c> starts over the way
     /// <c>/splash</c> does (the user's call: a fresh session and the splash in the new colours,
     /// <c>/sessions</c> brings the old one back). No variable.
@@ -3409,8 +3409,8 @@ public sealed class AppSettingsData
     /// How much of the GPU's dedicated memory the embedded server may fill (later on 2026-09-29, the user's ask: "a maximum
     /// VRAM budget, like 92%"): 0 is off (llama.cpp's fit leaves 1 GiB free per device), else
     /// <see cref="EmbeddedLlm.EmbeddedVramBudget.Min"/> to <see cref="EmbeddedLlm.EmbeddedVramBudget.Max"/> % of the adapter
-    /// with the most memory — the rest, passed as <c>--fit-target</c>, is left free. The default is 91 since 2026-09-30 (the
-    /// user's call; off until then), and a profile saved with it off keeps it off. It sizes only what fit may: an
+    /// with the most memory — the rest, passed as <c>--fit-target</c>, is left free. The default is 92 since 2026-11-06 (the
+    /// user's call; 91 from 2026-09-30, off before that), and a profile saved with it off keeps it off. It sizes only what fit may: an
     /// <see cref="EmbeddedContextSize"/> of 0 and <see cref="EmbeddedGpuLayers"/> <c>auto</c>; with a set context that does not fit
     /// under it, fit's one lever is the layers, which then go to the CPU, slowly. CUDA and Vulkan only; a change restarts the
     /// server. No variable.
@@ -3662,12 +3662,12 @@ public sealed class AppSettingsData
     public string WebUiToken { get; set; } = "";
 
     /// <summary>
-    /// Whether a turn offers the timer tools (later on 2026-10-15, the user's ask: the Timers tab on <c>/tools</c> › Core): on (the default,
-    /// as before) <c>start_timer</c>, <c>stop_timer</c> and <c>list_timers</c> stand beside the clock; off the model has none, its prompt drops
+    /// Whether a turn offers the timer tools (later on 2026-10-15, the user's ask: the Timers tab on <c>/tools</c> › Core): on
+    /// <c>start_timer</c>, <c>stop_timer</c> and <c>list_timers</c> stand beside the clock; off (the default since 2026-11-07, the user's call; on until then) the model has none, its prompt drops
     /// the timer sentence, and bots and advisors have none either. <c>/timer</c> and the timers already running are the user's own hand and
     /// keep working. Read at each turn. No variable.
     /// </summary>
-    public bool TimerTools { get; set; } = true;
+    public bool TimerTools { get; set; }
 
     /// <summary>
     /// The tone a countdown rings with when it goes off (2026-10-18, the user's ask: with TTS off nothing was heard): one of

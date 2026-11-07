@@ -80,11 +80,17 @@ internal sealed class ShoppingMenu
         _pane = pane ?? throw new ArgumentNullException(nameof(pane));
     }
 
-    /// <summary>What the open list shows, as a key (2026-10-15): the active store and every line's state; another means it changed elsewhere.</summary>
+    /// <summary>
+    /// What the open list shows, as a key (2026-10-15): the active store, its placements and every line's state; another means it changed elsewhere.
+    /// The placements since 2026-11-06 (the user's call): a place made elsewhere moves a line without changing the line itself, so the Web UI's ⌖ place
+    /// and the model's <c>shopping_place</c> left an open pane drawn as it was. A fact's term and kind decide which lines it places, so they count too.
+    /// </summary>
     private string ListKey()
     {
         var store = _list.Store;
-        return store.ActiveStore()?.Id.ToString(System.Globalization.CultureInfo.InvariantCulture) + "|"
+        var active = store.ActiveStore();
+        string placed = active is null ? "" : string.Join(",", store.Placements(active.Id).Select(p => string.Join(":", p.Id.ToString(System.Globalization.CultureInfo.InvariantCulture), p.Term, p.Kind, p.LocationId?.ToString(System.Globalization.CultureInfo.InvariantCulture), p.SectionId?.ToString(System.Globalization.CultureInfo.InvariantCulture), p.Source)));
+        return active?.Id.ToString(System.Globalization.CultureInfo.InvariantCulture) + "|" + placed + "|"
             + string.Join(",", store.Items().Select(i => i.Id.ToString(System.Globalization.CultureInfo.InvariantCulture) + (i.Checked ? "+" : "-") + i.Quantity.ToString(System.Globalization.CultureInfo.InvariantCulture) + i.Name));
     }
 
@@ -369,13 +375,11 @@ internal sealed class ShoppingMenu
             return;
         }
 
-        string key = ShoppingPlacer.Key(item.Name);
-        var fact = store.Placements(shop.Id).FirstOrDefault(p => p.Kind == ShoppingKinds.Item && ShoppingPlacer.Key(p.Term) == key);
         var now = _list.PlaceOf(item.Name, shop);
         var choices = new List<(string Label, ShopLocation? Location, ShopSection? Section, bool Forget)>();
         var places = ShoppingList.PlaceChoices(locations, sections);
         choices.AddRange(places.Select(c => (c.Label, c.Location, c.Section, false)));
-        if (fact is not null)
+        if (_list.ItemFacts(shop, item.Name).Count > 0)
         {
             choices.Add((ShoppingText.ForgetPlaceRow, null, null, true));
         }
@@ -405,7 +409,7 @@ internal sealed class ShoppingMenu
             }
 
             var choice = choices[shown[pick.Row]];
-            Say(choice.Forget ? _list.RemoveFact(shop, fact!) : _list.PlaceItem(shop, item, choice.Location, choice.Section));
+            Say(choice.Forget ? _list.ForgetItem(shop, item) : _list.PlaceItem(shop, item, choice.Location, choice.Section));
             return;
         }
     }

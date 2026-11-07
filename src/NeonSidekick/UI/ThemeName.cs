@@ -14,11 +14,11 @@ namespace NeonSidekick.UI;
 public static class ThemeName
 {
     /// <summary>
-    /// The default theme, pinned by <c>AppSettingsTests</c>: a fresh profile's and what an unknown name reads as. Collider since
-    /// 2026-10-05 (the user's call; synthwave until then); the name of an <c>assets/themes</c> file, which the tests hold to
+    /// The default theme, pinned by <c>AppSettingsTests</c>: a fresh profile's and what an unknown name reads as. Synthwave since
+    /// 2026-11-07 (the user's call; collider from 2026-10-05, synthwave before that); the name of an <c>assets/themes</c> file, which the tests hold to
     /// being shipped.
     /// </summary>
-    public const string Default = "collider";
+    public const string Default = "synthwave";
 
     /// <summary>The built-ins' names A to Z (since 2026-10-03; <see cref="ThemeLibrary"/>'s since 2026-10-05); a scan's own are <see cref="ThemeScan.Names"/>.</summary>
     public static readonly string[] Names = [.. ThemeLibrary.All.Select(p => p.Name)];

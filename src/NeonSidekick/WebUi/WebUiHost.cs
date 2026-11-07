@@ -408,6 +408,20 @@ public sealed class WebUiHost : IWebUiHost
                         }
 
                         return;
+                    case ShopPlacesPath:
+                        // The ⌖ place sheet (2026-11-06): read when it opens. A missing or bad id is a 404, as a line that's gone.
+                        if (long.TryParse(context.Request.Query["id"].ToString(), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out long placeLine)
+                            && _backend.ShopPlaces(placeLine) is { } places)
+                        {
+                            response.Headers.CacheControl = "no-store";
+                            await JsonAsync(context, StatusCodes.Status200OK, places, WebUiJsonContext.Default.WebShopPlaces).ConfigureAwait(false);
+                        }
+                        else
+                        {
+                            response.StatusCode = StatusCodes.Status404NotFound;
+                        }
+
+                        return;
                     case "/api/prompts":
                         // The saved prompts sheet (later on 2026-10-15): read each time it opens.
                         response.Headers.CacheControl = "no-store";
@@ -500,6 +514,7 @@ public sealed class WebUiHost : IWebUiHost
                     ShopQuantityPath => await ReadAsync(context, WebUiJsonContext.Default.WebShopQuantity).ConfigureAwait(false) is { } qty ? _backend.ShopQuantity(qty, remote) : null,
                     ShopRenamePath => await ReadAsync(context, WebUiJsonContext.Default.WebShopRename).ConfigureAwait(false) is { } rename ? _backend.ShopRename(rename, remote) : null,
                     ShopRemovePath => await ReadAsync(context, WebUiJsonContext.Default.WebShopId).ConfigureAwait(false) is { } line ? _backend.ShopRemove(line, remote) : null,
+                    ShopPlacePath => await ReadAsync(context, WebUiJsonContext.Default.WebShopPlace).ConfigureAwait(false) is { } place ? _backend.ShopPlace(place, remote) : null,
                     ShopCheckAllPath => await ReadAsync(context, WebUiJsonContext.Default.WebShopCheckAll).ConfigureAwait(false) is { } all ? _backend.ShopCheckAll(all, remote) : null,
                     ShopClearPath => _backend.ShopClearTicked(remote),   // the body is not read, as Stop's
                     "/api/strip/select" => await ReadAsync(context, WebUiJsonContext.Default.WebStripSelect).ConfigureAwait(false) is { } pick ? _backend.SelectStripPicture(pick, remote) : null,
@@ -851,7 +866,10 @@ public sealed class WebUiHost : IWebUiHost
     /// <summary>The Shopping tab's 🕘 sheet (2026-10-16): what was bought before and is not on the list now.</summary>
     public const string ShopBoughtPath = "/api/shopping/bought";
 
-    /// <summary>The add box (2026-10-16): <c>{text}</c>; the eight posts below are in the <see cref="WebRateBucket.Act"/> bucket, as a tick.</summary>
+    /// <summary>The ⌖ place sheet (2026-11-06): where a line can go, <c>?id=</c> its line.</summary>
+    public const string ShopPlacesPath = "/api/shopping/places";
+
+    /// <summary>The add box (2026-10-16): <c>{text}</c>; the nine posts below are in the <see cref="WebRateBucket.Act"/> bucket, as a tick.</summary>
     public const string ShopAddPath = "/api/shopping/add";
 
     /// <summary>A past item added again (2026-10-16): <c>{id}</c>.</summary>
@@ -874,6 +892,9 @@ public sealed class WebUiHost : IWebUiHost
 
     /// <summary>The ticked lines cleared (2026-10-16); the body is not read.</summary>
     public const string ShopClearPath = "/api/shopping/clear";
+
+    /// <summary>⌖ place (2026-11-06): a location, a section or forget for a line, as the PC's picker does.</summary>
+    public const string ShopPlacePath = "/api/shopping/place";
 
     /// <summary>The YouTube tab's event stream (2026-10-16): <c>?page=&amp;load=[&amp;claim=1]</c>, per page, apart from Chat's.</summary>
     public const string YouTubeEventsPath = "/api/youtube/events";

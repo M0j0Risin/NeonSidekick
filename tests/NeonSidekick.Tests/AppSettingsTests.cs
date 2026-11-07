@@ -33,7 +33,7 @@ public class AppSettingsTests : IDisposable
         EmbeddedBackend = "vulkan",
         EmbeddedContextSize = 8192,
         EmbeddedGpuLayers = "20",
-        EmbeddedVramBudget = 92,
+        EmbeddedVramBudget = 93,
         EmbeddedHfDownloadType = "single",
         EmbeddedVision = false,
         EmbeddedLlmServer = true,
@@ -752,6 +752,21 @@ public class AppSettingsTests : IDisposable
         }
 
         Assert.Null(new AppSettingsData().SqlConnectionsOffered);   // every profile starts not narrowed
+    }
+
+    /// <summary><c>Timer tools</c> off by default since 2026-11-07 (the user's call, no migration): a profile that saved it on keeps it on, and one from before the key reads off.</summary>
+    [Theory]
+    [InlineData("\"TimerTools\": true, ", true)]
+    [InlineData("\"TimerTools\": false, ", false)]
+    [InlineData("", false)]
+    public void TimerTools_ASavedValueStands_AndNoKeyReadsOff(string entry, bool expected)
+    {
+        Directory.CreateDirectory(Profiles.Directory(_dir, Profiles.DefaultName));
+        File.WriteAllText(Profiles.ProfileFile(_dir, Profiles.DefaultName), "{ " + entry + "\"SchemaVersion\": 2 }");
+
+        using var settings = new AppSettings(_dir);
+
+        Assert.Equal(expected, settings.Current.TimerTools);
     }
 
     /// <summary><c>Web metasearch engines</c>: every engine (null), none ([]) and a list each survive a save and a reload as themselves.</summary>
@@ -1741,7 +1756,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(0, s.LlmMaxTurns);
         Assert.Equal(10000, s.LlmMaxToolIterations);
         Assert.Equal("small", s.ImageThumbnailSize);
-        Assert.Equal("collider", s.Theme);   // the default since 2026-10-05
+        Assert.Equal("synthwave", s.Theme);   // the default since 2026-11-07 (collider from 2026-10-05)
         Assert.Equal(500, s.FileTreeMaxLength);
         Assert.True(s.FileTreeShowSizes);
         Assert.Equal(10, s.FileViewImageMaxPerCall);   // 2026-09-19 (a constant 4 in the tool until then)
@@ -1753,6 +1768,7 @@ public class AppSettingsTests : IDisposable
         Assert.False(s.LlmSamplingFromHuggingFace);
         Assert.Equal("off", s.LlmScanMode);   // "local" until 2026-09-29 (the user's call: a fresh profile scans nothing)
         Assert.False(s.WebTools);   // on until 2026-09-29 (the user's call: every tool group off in a fresh profile)
+        Assert.False(s.TimerTools);   // on until 2026-11-07 (the user's call)
         Assert.Equal("auto", s.WebBrowserMode);
         Assert.Equal("", s.WebBrowserPath);
         Assert.Equal("internet", s.WebBrowserNetworkMode);
@@ -1794,7 +1810,7 @@ public class AppSettingsTests : IDisposable
         Assert.Null(s.PerformanceBarItems);   // the performance bar (2026-09-29): off, the user's call; no meter checked since the checklist, 2026-09-30; null the four since 2026-10-02, the user's ask
         Assert.Null(s.PerformanceBarLastItems);   // what a bare /perfbar brings back: CPU, RAM, GPU and VRAM until it hides one (2026-09-30)
         Assert.Equal("led", s.PerformanceBarLook);   // the look (later on 2026-09-29); led since 2026-10-02, the user's ask (text before)
-        Assert.Equal(91, s.EmbeddedVramBudget);       // 91 since 2026-09-30 (the user's call; off from later on 2026-09-29)
+        Assert.Equal(92, s.EmbeddedVramBudget);       // 92 since 2026-11-06 (the user's call; 91 from 2026-09-30, off from later on 2026-09-29)
         Assert.Equal("parallel", s.EmbeddedHfDownloadType);   // 2026-09-30, the user's pick
         Assert.Equal(0, s.EmbeddedContextSize);       // fit (later on 2026-09-29; 32768 until then)
         Assert.True(s.ThemedBackground);   // 2026-10-03

@@ -441,7 +441,7 @@ public sealed class ThemeFileTests : IDisposable
             DiagnosticLog.Emitted -= capture;
         }
 
-        Assert.Contains($"Theme='gone' is not one of {string.Join(", ", AToZ("other"))}. Using collider.", Assert.Single(warnings).Message);
+        Assert.Contains($"Theme='gone' is not one of {string.Join(", ", AToZ("other"))}. Using synthwave.", Assert.Single(warnings).Message);
     }
 
     // ── Export ─────────────────────────────────────────────────────────────

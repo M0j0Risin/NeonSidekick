@@ -62,8 +62,8 @@ public sealed record EmbeddedModel(
 
     /// <summary>
     /// Whether the model is an uncensored build (later on 2026-09-29, for the model lists' <c>uncensored</c> filter): its name
-    /// says so — every HauhauCS build in the catalog carries "Uncensored" in <see cref="Display"/>, Gemma and Qwen alike, and
-    /// no other does. A new uncensored model keeps the word in its name.
+    /// says so — every HauhauCS build in the catalog carries "Uncensored" in <see cref="Display"/>, Gemma and Qwen alike, as does
+    /// TrevorJS's Muse Glimmer (2026-11-06), and no other does. A new uncensored model keeps the word in its name.
     /// </summary>
     public bool Uncensored => Display.Contains("Uncensored", StringComparison.Ordinal);   // one mark for every such build since 2026-10-14 (the user's ask): the aggressive kind, ⛓️‍💥⚔️, retired
 }
@@ -122,6 +122,12 @@ public sealed record EmbeddedModel(
 /// (ggml-org/llama.cpp#27178, still open that day, the fix only in gabrielcosi's fork, which ships no builds) and that a
 /// stock build loads them but generates garbage; they come in with a llama.cpp pin past the fix, with a projector and
 /// drafter from another repository (theirs carries neither).</para>
+///
+/// <para>On 2026-11-06 (the user's pick) TrevorJS's abliterated Muse Glimmer 30B joined, in Q4_K_M. The file names are the
+/// repository's real ones at the pinned commit (<c>Muse-Glimmer-30B-abliterated-s1.0-…</c>); its README says
+/// <c>-uncensored-Q4_K_M.gguf</c>, which doesn't exist there. Its projector is F16 (3.85 GB), the only one it ships. It ships
+/// no drafter, and <see cref="Url"/> fetches every file from the model's own repository, so Unsloth's DFlash file can't be
+/// reused without a catalog change. Its card gives no sampling, so Meta's values.</para>
 ///
 /// <para>On 2026-10-05 (the user's picks) Unsloth's Gemma 4 E2B and E4B joined in four more builds each — UD-Q5_K_XL,
 /// UD-Q6_K_XL, UD-Q8_K_XL and BF16 — from the commits already pinned (neither repository's <c>main</c> had moved), so each
@@ -488,6 +494,15 @@ public static class EmbeddedModelCatalog
             Muse,
             MuseDrafter,
             Draft: DraftKind.DFlash),
+        new(
+            "muse-glimmer-30b-uncensored",
+            "Muse Glimmer 30B Uncensored",
+            "Q4_K_M",
+            "TrevorJS/Muse-Glimmer-30B-uncensored-GGUF",
+            "ce4ff13f8b7794f558f5655a17fdefae19fa0200",
+            new EmbeddedFile("Muse-Glimmer-30B-abliterated-s1.0-Q4_K_M.gguf", 16_935_292_096, "b78d9c89c5ba42cab7f59baaeddb3726715649227eea35b11ca29fcdd7dd48d9"),
+            new EmbeddedFile("mmproj-Muse-Glimmer-30B-abliterated-s1.0-F16.gguf", 3_847_368_000, "31552cc1418a2b1beb1d2ab61afec163bd30bbad5c8dc294e61be53f87b86e90"),
+            Muse),
         new(
             "qwen3.6-35b-a3b",
             "Qwen3.6 35B A3B",

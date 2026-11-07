@@ -216,6 +216,86 @@ public sealed partial class WebUiPageTests
         Assert.Equal("forget 5", Assert.Single(_backend.ShopCalls));
     }
 
+    private const string PlaceRows = "document.querySelectorAll('#place-list .shop-place').length";
+
+    private async Task<HeadlessPage?> PlaceSheetAsync(int rows)
+    {
+        if (await ShoppingPageAsync() is not { } page)
+        {
+            return null;
+        }
+
+        await OpenMilkAsync(page);
+        await page.EvalAsync("document.getElementById('place').click()");
+        await page.WaitAsync(PlaceRows + " === " + rows.ToString(System.Globalization.CultureInfo.InvariantCulture), "the place rows");
+        return page;
+    }
+
+    /// <summary>⌖ place (2026-11-06, the user's ask): the rows from the GET, the line's marked; a pick takes one tap, posts, closes the sheet and reads the list again, and a label with markup in it shows as text.</summary>
+    [WindowsFact]
+    public async Task Shopping_ThePlaceSheet_ListsThePlaces_APickPosts_AndALabelIsText()
+    {
+        const string Hostile = "<img src=x onerror=\"window.hit=1\">Aisle 3";
+        _backend.PlacesList = new WebShopPlaces("⌖ Where is Milk?", 2, [new WebShopPlaceChoice("Aisle 2", 3, null), new WebShopPlaceChoice(Hostile, 4, null), new WebShopPlaceChoice("Section: Bakery", null, 5)], 1, false, null);
+        if (await PlaceSheetAsync(3) is not { } page)
+        {
+            return;
+        }
+
+        Assert.Equal("⌖ Where is Milk?", await page.TextAsync("document.getElementById('sheet-title').textContent"));
+        Assert.Equal(Hostile, await page.TextAsync("document.querySelectorAll('#place-list .shop-place')[1].textContent"));
+        Assert.Equal(0, (await page.EvalAsync("document.querySelectorAll('#place-list img').length")).GetInt32());
+        Assert.True((await page.EvalAsync("document.querySelectorAll('#place-list .shop-place')[1].classList.contains('here')")).GetBoolean());
+        Assert.True((await page.EvalAsync("document.getElementById('place-filter').classList.contains('hidden')")).GetBoolean());   // 8 rows or fewer
+        Assert.True((await page.EvalAsync("document.getElementById('line-body').classList.contains('hidden')")).GetBoolean());
+
+        await page.EvalAsync("document.querySelectorAll('#place-list .shop-place')[2].click()");   // one tap
+        await page.WaitAsync("document.getElementById('sheet-back').classList.contains('hidden')", "the sheet closed");
+        await WaitForAsync(() => _backend.ShopCalls.Contains("place 7 store 2 section 5"));
+    }
+
+    /// <summary>The forget row takes two taps, as the page's other removals; a store with no layout shows its note and no rows.</summary>
+    [WindowsFact]
+    public async Task Shopping_ThePlaceSheet_ForgetTakesTwoTaps_AndANoteStandsInForNoRows()
+    {
+        _backend.PlacesList = new WebShopPlaces("⌖ Where is Milk?", 2, [new WebShopPlaceChoice("Aisle 2", 3, null)], 0, true, null);
+        if (await PlaceSheetAsync(2) is not { } page)
+        {
+            return;
+        }
+
+        const string Forget = "document.querySelectorAll('#place-list .shop-place')[1]";
+        Assert.Equal(WebUiText.ShopWords.ForgetPlace, await page.TextAsync(Forget + ".textContent"));
+        await page.EvalAsync(Forget + ".click()");
+        Assert.True((await page.EvalAsync(Forget + ".classList.contains('armed')")).GetBoolean());
+        Assert.DoesNotContain(_backend.ShopCalls, c => c.StartsWith("place ", StringComparison.Ordinal));
+        await page.EvalAsync(Forget + ".click()");
+        await WaitForAsync(() => _backend.ShopCalls.Contains("place 7 store 2 forget"));
+
+        _backend.PlacesList = new WebShopPlaces("⌖ Where is Milk?", 2, [], -1, false, "No aisles yet.");
+        await page.WaitAsync("document.getElementById('sheet-back').classList.contains('hidden')", "the sheet closed");
+        await OpenMilkAsync(page);
+        await page.EvalAsync("document.getElementById('place').click()");
+        await page.WaitAsync("document.getElementById('sheet-note').textContent === 'No aisles yet.'", "the note");
+        Assert.Equal(0, (await page.EvalAsync(PlaceRows)).GetInt32());
+    }
+
+    /// <summary>A line gone while the sheet opens says so and closes.</summary>
+    [WindowsFact]
+    public async Task Shopping_ThePlaceSheet_ForALineGone_ClosesWithTheSentence()
+    {
+        _backend.PlacesList = null;
+        if (await ShoppingPageAsync() is not { } page)
+        {
+            return;
+        }
+
+        await OpenMilkAsync(page);
+        await page.EvalAsync("document.getElementById('place').click()");
+        await page.WaitAsync("document.getElementById('sheet-back').classList.contains('hidden')", "the sheet closed");
+        await page.WaitAsync("document.getElementById('message').textContent === " + JsonSerializer.Serialize(WebUiText.ShopWords.Gone), "the sentence");
+    }
+
     [WindowsFact]
     public async Task Shopping_EscAndBack_CloseASheet()
     {

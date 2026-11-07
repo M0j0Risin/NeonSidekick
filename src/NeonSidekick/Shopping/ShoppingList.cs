@@ -314,6 +314,41 @@ public sealed partial class ShoppingList(Func<ShoppingStore> store)
         return answer;
     }
 
+    /// <summary>
+    /// The item facts of <paramref name="name"/> at <paramref name="shop"/>, every spelling folded alike (<see cref="ShoppingPlacer.Key"/>), for the
+    /// place pickers (2026-11-06: moved here from the pane's, so the Web UI's sheet reads the same): any at all is what offers "forget where it is".
+    /// </summary>
+    public IReadOnlyList<ShopPlacement> ItemFacts(ShopStore shop, string name)
+    {
+        ArgumentNullException.ThrowIfNull(shop);
+        string key = ShoppingPlacer.Key(name);
+        return _store().Placements(shop.Id).Where(p => p.Kind == ShoppingKinds.Item && ShoppingPlacer.Key(p.Term) == key).ToList();
+    }
+
+    /// <summary>
+    /// Forgets where <paramref name="item"/> is at <paramref name="shop"/>: every item fact of its name (2026-11-06, the user's call: the pane's forget
+    /// took only the first, so a second spelling left the line placed after the answer said it was forgotten). The answer as a sentence;
+    /// <see cref="ShoppingText.NotPlaced"/> with none to forget.
+    /// </summary>
+    public string ForgetItem(ShopStore shop, ShopItem item)
+    {
+        ArgumentNullException.ThrowIfNull(shop);
+        ArgumentNullException.ThrowIfNull(item);
+        var facts = ItemFacts(shop, item.Name);
+        if (facts.Count == 0)
+        {
+            return ShoppingText.NotPlaced(shop, item.Name);
+        }
+
+        bool all = true;
+        foreach (var fact in facts)
+        {
+            all &= _store().RemovePlacement(fact.Id);
+        }
+
+        return all ? Logged(ShoppingText.Unplaced(shop, facts[0].Term)) : "Error: " + ShoppingText.WriteFailed;
+    }
+
     /// <summary>A fact moved to <paramref name="location"/> (or <paramref name="section"/> alone), its kind and note kept, the user's from then on.</summary>
     public string MoveFact(ShopStore shop, ShopPlacement fact, ShopLocation? location, ShopSection? section)
     {

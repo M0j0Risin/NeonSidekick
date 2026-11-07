@@ -66,6 +66,7 @@ public sealed partial class WebUiHostTests
     [InlineData("/api/picture/0123456789abcdef0123456789abcdef/1/thumb", WebTab.Chat)]
     [InlineData("/api/shopping", WebTab.Shopping)]
     [InlineData("/api/shopping/bought", WebTab.Shopping)]   // the 🕘 sheet (2026-10-16)
+    [InlineData("/api/shopping/places?id=1", WebTab.Shopping)]   // the ⌖ place sheet (2026-11-06)
     [InlineData("/api/home", WebTab.Home)]
     [InlineData("/api/home/sheet?ref=x", WebTab.Home)]
     [InlineData("/api/home/camera?ref=x", WebTab.Home)]   // a camera's still (2026-10-27)
@@ -104,6 +105,7 @@ public sealed partial class WebUiHostTests
     [InlineData("/api/shopping/forget", "{\"id\":1}", WebTab.Shopping)]
     [InlineData("/api/shopping/quantity", "{\"id\":1,\"qty\":2}", WebTab.Shopping)]
     [InlineData("/api/shopping/rename", "{\"id\":1,\"name\":\"x\"}", WebTab.Shopping)]
+    [InlineData("/api/shopping/place", "{\"id\":1,\"store\":1,\"forget\":true}", WebTab.Shopping)]
     [InlineData("/api/shopping/remove", "{\"id\":1}", WebTab.Shopping)]
     [InlineData("/api/shopping/checkall", "{\"on\":true}", WebTab.Shopping)]
     [InlineData("/api/shopping/clear", "{}", WebTab.Shopping)]
@@ -394,6 +396,8 @@ public sealed partial class WebUiHostTests
     [InlineData("/api/shopping", WebTab.Shopping)]
     [InlineData("/api/shopping/store", WebTab.Shopping)]
     [InlineData("/api/shopping/bought", WebTab.Shopping)]
+    [InlineData("/api/shopping/places", WebTab.Shopping)]
+    [InlineData("/api/shopping/place", WebTab.Shopping)]
     [InlineData("/api/shopping/checkall", WebTab.Shopping)]
     [InlineData("/api/shoppingx", null)]
     [InlineData("/api/home", WebTab.Home)]

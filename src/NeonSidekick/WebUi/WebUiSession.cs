@@ -923,6 +923,25 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
         return reply;
     }
 
+    public WebShopPlaces? ShopPlaces(long id) => _shopping() is { } list ? WebShoppingView.Places(list, id) : null;
+
+    public WebReply ShopPlace(WebShopPlace request, IPAddress? remote)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (_shopping() is not { } list)
+        {
+            return NoList;
+        }
+
+        var reply = WebShoppingView.Place(list, request, out string? name, out string? where);
+        if (reply.Outcome == WebOutcome.Ok && name is not null)
+        {
+            ShopChanged(WebUiText.PlacedLogLine(name, where, remote), WebUiText.PlacedFlash(name, where));
+        }
+
+        return reply;
+    }
+
     public WebReply ShopRename(WebShopRename request, IPAddress? remote)
     {
         ArgumentNullException.ThrowIfNull(request);

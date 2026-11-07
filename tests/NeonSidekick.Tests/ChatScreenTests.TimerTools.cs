@@ -33,7 +33,7 @@ public partial class ChatScreenTests
     public async Task Turn_TimerToolsOn_OffersTheThree()
     {
         _settings.Update(d => d.TtsOutput = false);
-        Assert.True(_settings.Current.TimerTools);   // the default
+        Assert.True(_settings.Current.TimerTools);   // the fixture's (PreFlipDefaults): off by default since 2026-11-07
         _chat.EnqueueText("Hello.");
         PushLine("hi");
         PushLine("/exit");
@@ -45,6 +45,24 @@ public partial class ChatScreenTests
         Assert.Contains(StopTimerTool.ToolName, offered);
         Assert.Contains(ListTimersTool.ToolName, offered);
         Assert.Contains(Assistant.TimerRule, _chat.Requests[0][0].Text!);
+    }
+
+    /// <summary>A fresh profile's default (2026-11-07, the user's call): no timer tool and no timer sentence, while <c>/timer</c> still starts one.</summary>
+    [Fact]
+    public async Task Turn_AFreshProfilesDefault_OffersNoTimerTool_AndTheCommandStillWorks()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.TimerTools = new AppSettingsData().TimerTools; });
+        _chat.EnqueueText("Hello.");
+        PushLine("hi");
+        PushLine("/timer 10m cooking");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        var offered = _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray();
+        Assert.DoesNotContain(offered, n => n is StartTimerTool.ToolName or StopTimerTool.ToolName or ListTimersTool.ToolName);
+        Assert.DoesNotContain(Assistant.TimerRule, _chat.Requests[0][0].Text!);
+        Assert.Contains("  · " + CookingStarted, output);
     }
 
     [Fact]

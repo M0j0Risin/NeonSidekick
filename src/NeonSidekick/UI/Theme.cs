@@ -185,6 +185,11 @@ public static class Theme
     public static Style HelpSlot => s_current[ThemeStyleSlot.HelpSlot];
     /// <summary>The highlighted row of a selection menu.</summary>
     public static Style MenuHighlight => s_current[ThemeStyleSlot.MenuHighlight];
+    /// <summary>
+    /// The row under the pointer (2026-11-07, menu clicks): <see cref="MenuHighlight"/>'s background alone, over the row's own text colors,
+    /// which reads on an emoji too. Derived, as <see cref="ToolbarOff"/> is: every theme has its own.
+    /// </summary>
+    public static Style MenuHover => new(background: MenuHighlight.Background);
     /// <summary>The dim part of a highlighted row (the note beside a command or skill name on the input line's list, 2026-09-16).</summary>
     public static Style MenuHighlightDim => s_current[ThemeStyleSlot.MenuHighlightDim];
     /// <summary>

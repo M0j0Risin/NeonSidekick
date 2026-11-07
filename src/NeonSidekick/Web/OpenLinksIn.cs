@@ -14,7 +14,7 @@ public enum OpenLinksInKind
 }
 
 /// <summary>
-/// The setting <c>Web open links in</c> (2026-10-13, the user's ask and name): <c>default-browser</c> or <c>browser-window</c>, the
+/// The setting <c>Web browser open</c> since 2026-11-06, the user's wording; <c>Web open links in</c> before that (2026-10-13, the user's ask and name): <c>default-browser</c> or <c>browser-window</c>, the
 /// <see cref="Viewer.BrowserPrivacy"/> shape. It moves <c>open_url</c> alone (the user's call): the file tool <c>open</c>, the video
 /// window's links, <c>/docker</c>'s port links and the Browser window's own open-in-default button keep the default browser. Under
 /// <c>browser-window</c> a link goes to the Browser window when one can be had now, else to the default browser with the reason

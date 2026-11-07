@@ -8,7 +8,7 @@ namespace NeonSidekick.Tests;
 
 /// <summary>
 /// open_url and YouTube's links (2026-10-16, YouTube open links in): a video or list= link goes through youtube_play's tool, its answer the line;
-/// the id the player refused, a channel, YouTube tools off and no player pass on to Web open links in; a refusal now passes on with a note; one
+/// the id the player refused, a channel, YouTube tools off and no player pass on to Web browser open; a refusal now passes on with a note; one
 /// player at a time names the rest, the default browser opens each; a saved video resumes and a mix's link plays its video.
 /// </summary>
 public sealed partial class WebToolsTests

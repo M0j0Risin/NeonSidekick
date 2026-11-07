@@ -9,12 +9,13 @@ namespace NeonSidekick.Tests.Fakes;
 /// the scripts offer every tool group, <c>ask</c>, the <c>local</c> scan finding the stub on port 1234), then two on 2026-10-21
 /// (the user's calls): <c>Embedded servers enabled</c> off (the embedded scripts were written with it on) and <c>Plan gap max
 /// passes</c> 50 (the gap scripts' messages say "of 5" and run to that limit), and later that day <c>Welcome splash</c> <c>off</c>
-/// (the splash scripts were written with the picture at startup). The fresh-profile picture is pinned by
+/// (the splash scripts were written with the picture at startup), and on 2026-11-07 (the user's call) <c>Timer tools</c> off (the scripts were
+/// written with the timers among the standing tools). The fresh-profile picture is pinned by
 /// <c>AppSettingsTests.Defaults</c> and the tests that start from <c>new AppSettingsData()</c> on purpose.
 /// </summary>
 internal static class PreFlipDefaults
 {
-    /// <summary>Puts the eleven back on <paramref name="data"/>.</summary>
+    /// <summary>Puts the twelve back on <paramref name="data"/>.</summary>
     public static void Apply(AppSettingsData data)
     {
         ArgumentNullException.ThrowIfNull(data);
@@ -29,9 +30,10 @@ internal static class PreFlipDefaults
         data.EmbeddedLlmServer = true;
         data.PlanGapPasses = 5;
         data.WelcomeSplashMode = "image";
+        data.TimerTools = true;
     }
 
-    /// <summary>A fresh profile's settings with the eleven put back.</summary>
+    /// <summary>A fresh profile's settings with the twelve put back.</summary>
     public static AppSettingsData Data()
     {
         var data = new AppSettingsData();

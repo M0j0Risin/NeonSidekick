@@ -47,7 +47,7 @@ public static class WebUiReach
     public static string Describe(string name) => name switch
     {
         "local" => "localhost only",                         // the user's wording, 2026-10-14
-        "lan" => "your home network and your tailnet",       // the user's wording, 2026-10-14 (Tailscale's tab, /webui)
+        "lan" => "local area network",                       // the user's wording, 2026-11-06 ("your home network and your tailnet" from 2026-10-14; it still reaches the tailnet, as docs/SETTINGS.md says)
         _ => "",
     };
 

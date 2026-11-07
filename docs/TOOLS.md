@@ -38,7 +38,7 @@ Under *Web tools*.
 |---|---|---|
 | `web_search` | `query, max_results?` | Searches with *Web search method* (the built-in metasearch, DuckDuckGo or SearXNG): title, URL, snippet. |
 | `web_fetch` | `url, offset?` | A page as Markdown, 32,000 characters at a time (a `#anchor` starts there). Also text, JSON, XML, CSV, and a PDF's outline and first 40 pages ([Reading PDFs](#reading-pdfs)). |
-| `open_url` | `url?, urls?` | Opens up to five links in your browser, or one in the [Browser window](#the-browser-window) under *Web open links in*; a YouTube link where *YouTube open links in* says. |
+| `open_url` | `url?, urls?` | Opens up to five links in your browser, or one in the [Browser window](#the-browser-window) under *Web browser open*; a YouTube link where *YouTube open links in* says. |
 | `web_links` | `filter?` | Your saved links (as `/browser list` shows), at most 100; `filter` keeps those holding all its words. |
 | `web_save_link` | `action, url, name?` | `add`, `remove` or `rename` a saved link; `url` may be its `web_links` number, or `current` for the Browser window's page. |
 | `download_file` | `url, path?, overwrite?` | Downloads into the working directory (needs *File tools*), up to *Web download max (MB)*. Marked as from the internet (Mark of the Web, a Mac's quarantine), so SmartScreen, Gatekeeper and Office's Protected View check it; `unzip` passes the mark on. |
@@ -91,7 +91,7 @@ Under *Clock tools* (on by default).
 
 ### Timers
 
-Under *Timer tools* (on by default); not offered headless. A timer going off rings *Timer tone*, whoever started it. The model can't start a stopwatch (`/timer stopwatch` is yours), but `list_timers` and `stop_timer` include them.
+Under *Timer tools* (off by default); not offered headless. A timer going off rings *Timer tone*, whoever started it. The model can't start a stopwatch (`/timer stopwatch` is yours), but `list_timers` and `stop_timer` include them.
 
 | Tool | Arguments | What it does |
 |---|---|---|
@@ -331,7 +331,7 @@ Containers that serve an OpenAI-compatible API (vLLM, SGLang…) can be `/server
 
 Turn on *Docker servers enabled* and tick them in *Docker server containers* (`/settings` › Servers › Docker); the Docker tools needn't be on.
 
-* The list holds containers matching *Docker server match words* or labeled `neonsidekick.llm=true`. Examples: [vLLM](DOCKER_WINDOWS_VLLM.md), [SGLang](DOCKER_WINDOWS_SGLANG.md).
+* The list holds containers matching *Docker server match words* or labeled `neonsidekick.llm=true`. Examples: [vLLM](DOCKER_VLLM_WIN.md), [SGLang](DOCKER_SGLANG_WIN.md).
 * **Picking one:** `/server` lists a row per chosen container; `docker:<container>` picks one (also in `--url` and `NEONSIDEKICK_LLM_URL`).
 * **Switching** stops the other chosen containers, then starts this one and waits until it's ready (*Docker server stop timeout (s)*, *Docker server post-stop delay (s)*, *Docker server ready timeout (s)*). A failed stop starts nothing. Esc or Ctrl+C cancels the wait, not a stop or start already sent.
 * **Clearing the GPU:** before the embedded model loads or a server on this computer connects (`localhost`, `0.0.0.0`, a blank *LLM URL*), the running chosen containers stop, even ones the app didn't start, as the transcript says.
@@ -1011,7 +1011,7 @@ Under *Print tools*. `/print` and these tools print on any installed printer; *P
 
 ### Home Assistant
 
-Under *Home Assistant tools*, with *Home Assistant URL* and *Home Assistant API key* (a long-lived token). [The home bar](INTERFACE.md#the-home-bar) lets you control the home yourself with just the URL and key. No server yet? [Home Assistant with Docker](DOCKER_WINDOWS_HOMEASSISTANT.md).
+Under *Home Assistant tools*, with *Home Assistant URL* and *Home Assistant API key* (a long-lived token). [The home bar](INTERFACE.md#the-home-bar) lets you control the home yourself with just the URL and key. No server yet? [Home Assistant with Docker](DOCKER_HOMEASSISTANT_WIN_MAC.md).
 
 * **Names, not ids:** "the den", "kitchen and hallway" or "all"; a room uses its group light if it has one. An ambiguous name comes back as a question.
 * *Home Assistant action policy* decides what runs unasked; under `ask` only safe services do.

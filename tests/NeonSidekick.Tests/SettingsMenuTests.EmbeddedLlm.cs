@@ -69,7 +69,7 @@ public partial class SettingsMenuTests
         Assert.Equal("fit", SettingsMenu.EmbeddedContextFitLabel);
         Assert.Equal(SettingsMenu.EmbeddedContextFitLabel, SettingsMenu.FieldValue(SettingsField.EmbeddedContextSize, data, "C:\\p"));
         Assert.Equal("32,768 tokens", SettingsMenu.FieldValue(SettingsField.EmbeddedContextSize, new AppSettingsData { EmbeddedContextSize = 32_768 }, "C:\\p"));
-        Assert.Equal("91 %", SettingsMenu.FieldValue(SettingsField.EmbeddedVramBudget, data, "C:\\p"));   // 91 by default since 2026-09-30 (the user's call)
+        Assert.Equal("92 %", SettingsMenu.FieldValue(SettingsField.EmbeddedVramBudget, data, "C:\\p"));   // 92 by default since 2026-11-06 (the user's call)
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.EmbeddedVramBudget, new AppSettingsData { EmbeddedVramBudget = 0 }, "C:\\p"));
         Assert.Equal("92 %", SettingsMenu.FieldValue(SettingsField.EmbeddedVramBudget, new AppSettingsData { EmbeddedVramBudget = 92 }, "C:\\p"));
         Assert.Equal("auto", SettingsMenu.FieldValue(SettingsField.EmbeddedGpuLayers, data, "C:\\p"));
@@ -127,7 +127,7 @@ public partial class SettingsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("1 of 49 installed (4.3 GB)", Output);
+        Assert.Contains("1 of 50 installed (4.3 GB)", Output);
         Assert.Contains("auto (cuda: fake driver)", Output);
         pane.Dispose();
     }
@@ -480,7 +480,7 @@ public partial class SettingsMenuTests
         Push(Keys.Enter);                       // refused
         Push(Keys.Enter);
         Backspace(10);
-        _console.Input.PushText("92 %");
+        _console.Input.PushText("93 %");
         Push(Keys.Enter);
         Push(Keys.Escape);
 
@@ -488,9 +488,9 @@ public partial class SettingsMenuTests
 
         Assert.Equal(16_384, _settings.Current.EmbeddedContextSize);
         Assert.Equal("all", _settings.Current.EmbeddedGpuLayers);
-        Assert.Equal(92, _settings.Current.EmbeddedVramBudget);
+        Assert.Equal(93, _settings.Current.EmbeddedVramBudget);
         Assert.Contains("Embedded context length " + EmbeddedContextSize.Error + "; keeping 0.", Output);   // fit, the default since later on 2026-09-29
-        Assert.Contains("Embedded VRAM budget (%) " + EmbeddedVramBudget.Error + "; keeping 91.", Output);   // the default since 2026-09-30
+        Assert.Contains("Embedded VRAM budget (%) " + EmbeddedVramBudget.Error + "; keeping 92.", Output);   // the default since 2026-11-06 (91 from 2026-09-30)
         pane.Dispose();
     }
 

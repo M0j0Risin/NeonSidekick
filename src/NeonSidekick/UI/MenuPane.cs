@@ -571,6 +571,12 @@ public sealed class MenuPane : INoticeSink
     private bool _moreShown;
     private int _captionRows;
     private int _stripRows = 1;
+
+    // The status lines' rows as drawn, or the spacer's one (2026-11-07): a status added or cleared since the last draw moves no click.
+    private int _statusRows = 1;
+
+    // The row a click put the cursor on (2026-11-07), -1 none: a click never scrolls the list, so while the cursor stays there Show brings no heading in.
+    private int _clickedRow = -1;
     private int _subRows;
     private int _inputRows;
     private int _sideWidth;
@@ -828,6 +834,11 @@ public sealed class MenuPane : INoticeSink
         {
             // Another tab (a host that moved on) starts at the top of its list; the same one re-shown keeps its viewport.
             _first = 0;
+            _clickedRow = -1;
+        }
+        else if (!string.Equals(_page.Title, page.Title, StringComparison.Ordinal))
+        {
+            _clickedRow = -1;
         }
 
         _page = page;
@@ -967,7 +978,13 @@ public sealed class MenuPane : INoticeSink
                         if (at - Header is int g && g >= 0 && g < _shown && _first + g < _lines.Count
                             && grid.CellAt(_lines[_first + g], click.X) is int cell && page.IsStop(cell))
                         {
-                            MoveTo(cell);
+                            if (_pane.ClickIsStale(click.X, at))
+                            {
+                                _clicks.Reset();
+                                continue;
+                            }
+
+                            MoveTo(cell, clicked: true);
                             if (_clicks.Second(cell))
                             {
                                 _status.Clear();
@@ -982,8 +999,14 @@ public sealed class MenuPane : INoticeSink
                     else if (at - Header is int i && i >= 0 && i < _shown && page.IsStop(_first + i))
                     {
                         // A heading or a gap (2026-10-03) is no row to land on: the else below, as a miss.
+                        if (_pane.ClickIsStale(click.X, at))
+                        {
+                            _clicks.Reset();
+                            continue;
+                        }
+
                         int hitRow = _first + i;
-                        MoveTo(hitRow);
+                        MoveTo(hitRow, clicked: true);
                         if (count > 0 && _clicks.Second(hitRow))
                         {
                             _status.Clear();
@@ -1185,9 +1208,10 @@ public sealed class MenuPane : INoticeSink
             return null;
         }
 
-        // The cursor onto another row: redrawn and reported; the same row is nothing.
-        void MoveTo(int next)
+        // The cursor onto another row: redrawn and reported; the same row is nothing. A key or the wheel may bring a section's heading in; a click leaves the rows where they are.
+        void MoveTo(int next, bool clicked = false)
         {
+            _clickedRow = clicked ? next : -1;
             if (next == _cursor)
             {
                 return;
@@ -1269,6 +1293,7 @@ public sealed class MenuPane : INoticeSink
         int count = _page.Rows.Count;
         _cursor = _page.StopFrom(page.TabCursors is { } cursors && tab < cursors.Count && count > 0 ? cursors[tab] : 0, +1);
         _first = 0;
+        _clickedRow = -1;
         _status.Clear();
         Show();
         _page.TabShown?.Invoke(tab);
@@ -1381,7 +1406,9 @@ public sealed class MenuPane : INoticeSink
         _page = null;
         _status.Clear();
         _first = 0;
+        _clickedRow = -1;
         _captionRows = 0;
+        _statusRows = 1;
         _inputRows = 0;
         _pane.CloseOverlay();
         _mouse?.Invoke(false);
@@ -1419,8 +1446,12 @@ public sealed class MenuPane : INoticeSink
     /// <summary>The window less the toolbar's row (<see cref="ScreenPane.LayoutHeight"/>, 2026-09-21): what the pane's caps are counted over.</summary>
     private int Height => _pane.Profile.Height > 0 ? _pane.LayoutHeight : DefaultHeight;
 
-    /// <summary>The overlay rows above the first list row: the title (or the tab strip's rows), the caption's rows, then the status lines or the one spacer.</summary>
-    private int Header => _stripRows + _captionRows + Math.Max(1, _status.Count);
+    /// <summary>
+    /// The overlay rows above the first list row, as last drawn: the title (or the tab strip's rows), the caption's rows, then the status lines
+    /// or the one spacer. Measured by <see cref="Show"/> since 2026-11-07: <c>Overflow.Ellipsis</c> still word-wraps a sentence, so a status or a
+    /// title wider than the window took a row more than a count of lines says, and every click picked the row below the one aimed at.
+    /// </summary>
+    private int Header => _stripRows + _captionRows + _statusRows;
 
     /// <summary>The title row of <paramref name="page"/>: the tab strip on a tabbed page, the title with its buttons as a strip nobody is on (2026-09-21), else the title alone. Pinned.</summary>
     public static string TopMarkup(MenuPage page)
@@ -1505,14 +1536,18 @@ public sealed class MenuPane : INoticeSink
         _sideWidth = page.Side is not null && page.Rows.Count > 0 ? SideWidth(Width) : 0;
         _listWidth = _sideWidth > 0 ? Width - 1 - _sideWidth - SideGap : Width;
         var top = TopRows(page, Width);
-        _stripRows = top.Count;
+        var topLines = top.Select(row => (IRenderable)new Markup(row).Overflow(Overflow.Ellipsis)).ToList();
+        var statusLines = _status.Select(status => (IRenderable)new Markup(StatusMarkup(status.Kind, status.Text)).Overflow(Overflow.Ellipsis)).ToList();
+        _stripRows = DrawnRows(topLines, sided: false);
+        _statusRows = statusLines.Count == 0 ? 1 : DrawnRows(statusLines, _sideWidth > 0);
         _subRows = SubStripRows(page, Width).Count;
         int footer = page.Footer is null ? 0 : FooterRuleRows + FooterRows;
         int content = _pane.MenuContentRows(Height, _inputRows);
         // A question's caption (2026-10-10, CaptionGrows) takes what the room leaves over a few list rows, not three.
-        int captionMax = page.CaptionGrows ? CaptionRoom(content, _stripRows, Math.Max(1, _status.Count), footer, page.Rows.Count) : CaptionMaxRows;
+        int captionMax = page.CaptionGrows ? CaptionRoom(content, _stripRows, _statusRows, footer, page.Rows.Count) : CaptionMaxRows;
         IReadOnlyList<string> caption = page.Caption is { } captionText ? CaptionRows(captionText, _listWidth, captionMax) : [];
-        _captionRows = caption.Count;
+        var captionLines = caption.Select(row => (IRenderable)new Markup(Markup.Escape(row), Theme.Body).Overflow(Overflow.Ellipsis)).ToList();
+        _captionRows = DrawnRows(captionLines, _sideWidth > 0);
         int header = Header;
         int capacity = content - header - footer;
         bool more;
@@ -1527,7 +1562,7 @@ public sealed class MenuPane : INoticeSink
                 leadLine--;
             }
 
-            if (leadLine < _first && line - leadLine < capacity - 1)
+            if (_cursor != _clickedRow && leadLine < _first && line - leadLine < capacity - 1)
             {
                 _first = leadLine;
             }
@@ -1538,7 +1573,7 @@ public sealed class MenuPane : INoticeSink
         else
         {
             _lines = [];
-            if (page.LeadRow(_cursor) is int lead && lead < _first && _cursor - lead < capacity - 1)
+            if (_cursor != _clickedRow && page.LeadRow(_cursor) is int lead && lead < _first && _cursor - lead < capacity - 1)
             {
                 // The cursor at the top of a section (2026-10-03): its heading and gap come into view with it.
                 _first = lead;
@@ -1559,16 +1594,8 @@ public sealed class MenuPane : INoticeSink
         }
 
         var lines = new List<IRenderable>(header + _shown + 1 + Math.Max(0, pad));
-        foreach (var row in top)
-        {
-            lines.Add(new Markup(row).Overflow(Overflow.Ellipsis));
-        }
-
-        foreach (var row in caption)
-        {
-            lines.Add(new Markup(Markup.Escape(row), Theme.Body).Overflow(Overflow.Ellipsis));
-        }
-
+        lines.AddRange(topLines);
+        lines.AddRange(captionLines);
         if (_status.Count == 0)
         {
             // A space, not an empty Text: Rows adds a line break only after a child that rendered something.
@@ -1576,10 +1603,7 @@ public sealed class MenuPane : INoticeSink
         }
         else
         {
-            foreach (var (kind, text) in _status)
-            {
-                lines.Add(new Markup(StatusMarkup(kind, text)).Overflow(Overflow.Ellipsis));
-            }
+            lines.AddRange(statusLines);
         }
 
         for (int i = 0; i < _shown; i++)
@@ -1645,7 +1669,43 @@ public sealed class MenuPane : INoticeSink
             }
         }
 
-        _pane.ShowOverlay(new Rows(lines), page.Hint, input: _inputRows > 0, close: true);
+        _pane.ShowOverlay(new Rows(lines), page.Hint, input: _inputRows > 0, close: true, aim: Aim(page, header));
+    }
+
+    /// <summary>The rows <paramref name="lines"/> take as drawn; under a side column, whose page draws only each one's first row, one each.</summary>
+    private int DrawnRows(IReadOnlyList<IRenderable> lines, bool sided) =>
+        sided ? lines.Count : lines.Count == 0 ? 0 : ScreenPane.MeasureRows(new Rows(lines), _pane, Width);
+
+    /// <summary>
+    /// What this draw has on show (2026-11-07): the list's rows across the list's width, so never the side column, or a grid's cells across
+    /// their own columns, each with the text the host gave. Headings and gaps are no target.
+    /// </summary>
+    private OverlayAim Aim(MenuPage page, int header)
+    {
+        var targets = new List<OverlayTarget>(_shown);
+        for (int i = 0; i < _shown; i++)
+        {
+            int r = _first + i;
+            if (page.Grid is { } grid)
+            {
+                var line = _lines[r];
+                for (int c = 0; line.IsCells && c < line.Count; c++)
+                {
+                    int cell = line.First + c;
+                    int first = TextCells.Width(NoPointer) + c * grid.CellWidth;
+                    if (page.IsStop(cell))
+                    {
+                        targets.Add(new OverlayTarget(header + i, first, first + grid.CellWidth - 1, page.Rows[cell], cell == _cursor));
+                    }
+                }
+            }
+            else if (page.IsStop(r))
+            {
+                targets.Add(new OverlayTarget(header + i, 0, _listWidth - 1, page.Rows[r], r == _cursor));
+            }
+        }
+
+        return new OverlayAim(string.Join('\n', page.Title, page.Tab, page.Sub, header), targets);
     }
 
     /// <summary>What the band says for <paramref name="row"/>: the shown tab's own footer (2026-10-10, <see cref="MenuTab.Footer"/>), else the page's.</summary>
@@ -1674,12 +1734,13 @@ public sealed class MenuPane : INoticeSink
 
         public IEnumerable<Segment> Render(RenderOptions options, int maxWidth)
         {
-            var row = FirstRow(left, options, leftWidth);
-            int cells = Segment.CellCount(row);
+            // Measured as FittedMarkup measures (2026-11-07): a glyph Spectre counts short must not push the side column past the edge.
+            var row = FittedMarkup.Fit(FirstRow(left, options, leftWidth), leftWidth);
+            int cells = FittedMarkup.RowCells(row);
             if (right is not null)
             {
                 row.Add(new Segment(new string(' ', Math.Max(0, leftWidth - cells) + gap)));
-                row.AddRange(FirstRow(right, options, rightWidth));
+                row.AddRange(FittedMarkup.Fit(FirstRow(right, options, rightWidth), rightWidth));
             }
 
             return row;

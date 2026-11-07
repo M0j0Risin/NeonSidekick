@@ -4,6 +4,24 @@ using Spectre.Console.Testing;
 
 namespace NeonSidekick.Tests;
 
+/// <summary>A heading holding a glyph Spectre counts short (2026-11-07): the rule stops at the width by both counts.</summary>
+public class SectionRuleWidthTests
+{
+    [Theory]
+    [InlineData("🛠️ Tools")]
+    [InlineData("⛓️‍💥 Links")]
+    [InlineData("plain")]
+    public void AHeadingsRule_StaysWithinTheWidth(string label)
+    {
+        using var console = new Spectre.Console.Testing.TestConsole();
+        var options = Spectre.Console.Rendering.RenderOptions.Create(console, console.Profile.Capabilities);
+        var segments = ((Spectre.Console.Rendering.IRenderable)new SectionRule(SectionRule.Markup(label))).Render(options, 30).ToList();
+
+        Assert.True(TextCells.Width(string.Concat(segments.Select(s => s.Text))) <= 30);
+        Assert.True(Spectre.Console.Rendering.Segment.CellCount(segments) <= 30);
+    }
+}
+
 /// <summary>The heading rule of <c>/tools</c>, <c>/sys</c> and <c>/mcp</c> (2026-10-03, the user's call).</summary>
 public class SectionRuleTests
 {

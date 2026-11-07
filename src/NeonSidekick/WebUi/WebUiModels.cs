@@ -558,8 +558,8 @@ public sealed record WebShopStore(long Id, string Name);
 /// The Shopping tab's words for the list's controls (2026-10-16, <see cref="WebUiText.ShopWords"/>): the add box's placeholder and its ⊕, the
 /// 🕘 past items and their sheet (title, filter, no-match line with <c>{0}</c> the filter, the forget 🗑️ and its armed words), ☑ all / ☐ none,
 /// ⊠ clear ticked and its armed form, a row's › (<c>{0}</c> the line's name), the line's sheet (− and + quantity labels, the quantity's
-/// name, rename and Save, the remove 🗑️ and its armed form), the sheets' close, and the sentence for a line gone while its sheet was open
-/// (<see cref="WebUiText.NoSuchItem"/>). <c>ShoppingText</c>'s button words where they exist, the
+/// name, rename and Save, the remove 🗑️ and its armed form, ⌖ place), the place sheet (its filter and the forget row's armed form; 2026-11-06), the
+/// sheets' close, and the sentence for a line gone while its sheet was open (<see cref="WebUiText.NoSuchItem"/>). <c>ShoppingText</c>'s button words where they exist, the
 /// spacing that Windows Terminal's two-cell glyphs need collapsed.
 /// </summary>
 public sealed record WebShopWords(
@@ -584,7 +584,11 @@ public sealed record WebShopWords(
     string Remove,
     string RemoveArmed,
     string Close,
-    string Gone);
+    string Gone,
+    string Place,
+    string PlaceFilter,
+    string ForgetPlace,
+    string ForgetPlaceArmed);
 
 /// <summary>
 /// What was bought before and is not on the list now (2026-10-16, the 🕘 sheet), the most often first, and the caption the PC's add page
@@ -594,6 +598,31 @@ public sealed record WebBought(IReadOnlyList<WebBoughtItem> Items, string Captio
 
 /// <summary>A past item: its id, its row as the PC's add page reads it (name, last quantity, how often, when last), its name and last quantity.</summary>
 public sealed record WebBoughtItem(long Id, string Text, string Name, int Qty);
+
+/// <summary>
+/// The ⌖ place sheet for a line (2026-11-06, the user's ask: what the PC's picker offers): its title, the store it is walked through (the post names it
+/// back, so a store switched mid-pick is refused), the places in the PC's order, the row the line is on now (-1: none), whether "forget where it is"
+/// applies, and the note that stands in for the rows with no store or no layout. A location or a section's name can come from the model or a store's
+/// documents: the page puts it in as text.
+/// </summary>
+public sealed record WebShopPlaces(string Title, long? Store, IReadOnlyList<WebShopPlaceChoice> Choices, int Current, bool CanForget, string? Note);
+
+/// <summary>A row of the ⌖ place sheet (2026-11-06): its label and the one id it stands for, a location's or a section's alone.</summary>
+public sealed record WebShopPlaceChoice(string Label, long? Location, long? Section);
+
+/// <summary>⌖ place's post (2026-11-06): the line, the store the sheet showed, and exactly one of a location, a section or forget.</summary>
+public sealed class WebShopPlace
+{
+    public long Id { get; set; }
+
+    public long Store { get; set; }
+
+    public long? Location { get; set; }
+
+    public long? Section { get; set; }
+
+    public bool Forget { get; set; }
+}
 
 /// <summary>A line or a past item named by its id (2026-10-16): re-add, forget, remove.</summary>
 public sealed class WebShopId
@@ -820,6 +849,9 @@ public sealed class WebVideoReport
 [JsonSerializable(typeof(WebShopQuantity))]
 [JsonSerializable(typeof(WebShopRename))]
 [JsonSerializable(typeof(WebShopCheckAll))]
+[JsonSerializable(typeof(WebShopPlaces))]
+[JsonSerializable(typeof(WebShopPlaceChoice))]
+[JsonSerializable(typeof(WebShopPlace))]
 [JsonSerializable(typeof(WebVideoHello))]
 [JsonSerializable(typeof(WebVideoWords))]
 [JsonSerializable(typeof(WebVideoSeen))]

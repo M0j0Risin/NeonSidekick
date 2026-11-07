@@ -54,12 +54,12 @@ public static class SearchMethod
         _ => "duckduckgo",
     };
 
-    /// <summary>The menu hint next to a method. Pinned.</summary>
+    /// <summary>The menu hint next to a method (the user's wording, 2026-11-07). Pinned.</summary>
     public static string Describe(string name) => name switch
     {
-        "duckduckgo" => "the built-in DuckDuckGo scrape, no setup",
-        "searxng" => "the instance named in Web SearXNG URL; the metasearch until one is set",
-        "metasearch" => "built in, no setup: asks the engines in Web metasearch engines at once, all five by default",
+        "duckduckgo" => "built-in DuckDuckGo scrape, no setup",
+        "searxng" => "external SearXNG instance at Web SearXNG URL",
+        "metasearch" => "built-in SearXNG port, no setup",
         _ => "",
     };
 

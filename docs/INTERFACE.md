@@ -83,7 +83,7 @@ From top to bottom:
 A list opens over the input line as you type `/` at the start, a command's argument, or `@`, `#`, `$`, `%`, `^` or `*` before a word.
 
 * **Keys:** ↑/↓ move the highlight, Enter or Tab applies it, Esc closes the list (it stays closed for that word).
-* **Mouse:** a click highlights a row, a double-click applies it. The wheel over the list moves the highlight; elsewhere it scrolls the transcript. A click on the `▲▼` row pages.
+* **Mouse:** the row under the pointer is marked. A click highlights a row, a double-click applies it. The wheel over the list moves the highlight; elsewhere it scrolls the transcript. A click on the `▲▼` row pages.
 
 ## Panes
 
@@ -96,7 +96,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 * **Lettered buttons** (`/webui`, an `/ad` card, `/help`'s key check…): a letter presses its button; Shift+letter starts the filter or the find.
 * **Pasting** into a filter or a find (Ctrl+V or a right-click) adds its first line, up to 40 characters.
 * **Asking first:** a remove asks, with No highlighted; `y` or `n` answers.
-* **Mouse:** a click moves the cursor, a double-click picks a row or tab, a click on the `▲▼` row pages. The × at the top right is Esc; a double-click outside a pane closes it.
+* **Mouse:** the row under the pointer is marked. A click moves the cursor, a double-click picks a row or tab, a click on the `▲▼` row pages. The × at the top right is Esc; a double-click outside a pane closes it.
 * **On a Mac:** selecting terminal text with the mouse, and going back in a find: [What differs](MAC.md#what-differs).
 
 ### Pane keys
@@ -580,7 +580,7 @@ Each page links to this version's source code on GitHub, and the sign-in page to
 
 #### On the app's computer: `/webui browser`
 
-* `/webui browser` (or Ctrl+W) opens the Web UI signed in: in the Browser window under *Web open links in* `browser-window`, else in your default browser (always, with `--external`).
+* `/webui browser` (or Ctrl+W) opens the Web UI signed in: in the Browser window under *Web browser open* `browser-window`, else in your default browser (always, with `--external`).
 * **The link:** the default browser signs in as *Web browser sign in mode* says. The Browser window gets a one-time link (good once, for a minute) while *Web browser privacy* is `keep-history`, else the usual one.
 * The transcript and the log say where it opened, never the link. The Browser window keeps no sign-in link in its history or saved links, never shows one to the model, and never hands the Web UI's cookie to the web tools.
 
@@ -664,9 +664,9 @@ The page is plain HTTP. Tailscale Serve puts HTTPS in front of it with a real ce
 
 * **The list** in the active store's aisle order, as the model reads it; a tap ticks or unticks a line. With two or more stores, a *Store* picker switches the active one (as `/shopping store <name>`).
 * **Adding:** the *Add items* box takes what `/shopping add` does (`2 milk, eggs`), at most 100 at once. 🕘 lists past items, to add again or forget.
-* **A line's sheet** (its ›, or a long-press): − and + change the quantity, rename (another line's name merges the two), 🗑️ removes.
+* **A line's sheet** (its ›, or a long-press): − and + change the quantity, rename (another line's name merges the two), ⌖ place picks where it is or forgets it, 🗑️ removes.
 * **The whole list:** ☑ all ticks every line (☐ none unticks them); ⊠ clear ticked takes the ticked lines off as bought. Removes and clears take two taps.
-* **At the PC only:** placing a line, adding, renaming or removing stores, the layout editor, a store's folder and reindex, and clearing the whole list.
+* **At the PC only:** adding, renaming or removing stores, the layout editor, a store's folder and reindex, and clearing the whole list.
 * **The PC follows:** its open `/shopping` pane shows the page's changes within a second.
 
 ### The Home tab

@@ -624,6 +624,12 @@ public sealed class InfoPane
                         && _pane.TryHitOverlay(click.X, click.Y, out int row) && row > _stripRows && row <= _stripRows + _shown && _content is { } shownLines)
                     {
                         int line = _first + row - _stripRows - 1;
+                        if (_pane.ClickIsStale(click.X, row))
+                        {
+                            _clicks.Reset();
+                            continue;
+                        }
+
                         if (line < shownLines.Count && _clicks.Second(ContentClickBase + line))
                         {
                             string text = TextFind.LineText(shownLines[line]);
@@ -899,7 +905,9 @@ public sealed class InfoPane
         var strip = _actions.Count > 0 ? TabStripRows(label, _actions, titles, titles.Length == 0 ? -1 : active, width, toggle is null ? null : (toggle.Title, toggled))
             : toggle is null ? TabStripRows(label, titles, active, width) : TabStripRows(label, titles, active, width, (toggle.Title, toggled));
         _width = width;
-        _stripRows = strip.Count;
+        var stripLines = strip.Select(row => (IRenderable)new Markup(row).Overflow(Overflow.Ellipsis)).ToList();
+        // As drawn (2026-11-07): a long label wraps though the strip's rows are counted one each, and the capacity and the clicks read this.
+        _stripRows = ScreenPane.MeasureRows(new Rows(stripLines), _pane, width);
         int capacity = _pane.MenuContentRows(height, 0) - HeaderRows - (_stripRows - 1);
         if (_content is null || _contentTab != active || _contentWidth != width || _contentToggled != toggled)
         {
@@ -966,11 +974,7 @@ public sealed class InfoPane
         // The spacer is a space, not an empty Text: Rows adds a line break only after a child that
         // rendered something, so an empty one would collapse the blank line.
         var lines = new List<IRenderable>(HeaderRows + _stripRows + _shown + Math.Max(0, pad));
-        foreach (var row in strip)
-        {
-            lines.Add(new Markup(row).Overflow(Overflow.Ellipsis));
-        }
-
+        lines.AddRange(stripLines);
         lines.Add(new Text(" "));
         int h = _hits.FindIndex(hit => hit.Line >= _first);
         for (int i = 0; i < _shown; i++)
@@ -1004,6 +1008,19 @@ public sealed class InfoPane
             : _actions.Count > 0 ? ButtonsHint([.. _actions.Select(a => (a.Key, a.Word)), .. toggle is null ? Array.Empty<(char, string)>() : [(toggle.Key, toggle.Word)]], tabs: tabs.Count > 1, cells: width - 1, find: !_noFind)
             : toggle is not null ? ToggleHint(toggle.Key, toggle.Word, tabs: tabs.Count > 1, cells: width - 1)
             : tabs.Count == 1 ? SingleTabHintText : HintText;
-        _pane.ShowOverlay(new Rows(lines), hint, close: true);
+        // Only a tab whose lines do something on a click has targets (the same test as the click's), so a plain text page shows no slab (2026-11-07).
+        OverlayAim? aim = null;
+        if ((tabs[active].LineDoubleClicked is not null || tabs[active].LineChosen is not null) && !toggled)
+        {
+            var targets = new List<OverlayTarget>(_shown);
+            for (int i = 0; i < _shown; i++)
+            {
+                targets.Add(new OverlayTarget(_stripRows + 1 + i, 0, width - 1, TextFind.LineText(content[_first + i])));
+            }
+
+            aim = new OverlayAim(string.Join('\n', label, active, _stripRows), targets);
+        }
+
+        _pane.ShowOverlay(new Rows(lines), hint, close: true, aim: aim);
     }
 }

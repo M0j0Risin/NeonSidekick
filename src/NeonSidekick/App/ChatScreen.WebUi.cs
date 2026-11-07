@@ -922,7 +922,7 @@ internal sealed partial class ChatScreen
     ];
 
     /// <summary><c>/webui browser</c>'s flag's note for the completion list.</summary>
-    public const string ExternalNote = "in the default browser, whatever Web open links in says";
+    public const string ExternalNote = "in the default browser, whatever Web browser open says";
 
     /// <summary>
     /// <c>/webui [on|off|copy|reset]</c> (2026-10-14): bare, the pane with the state and the sign-in links (an info pane, so the token stays
@@ -1053,7 +1053,7 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// The Web UI opened on this PC at <paramref name="baseAddress"/> (later on 2026-10-15, the user's ask; a base address since 2026-11-01, the
     /// review's P1-11): <c>/webui browser</c> (null: 127.0.0.1 at the port served, read once the server is up) and a double-click on the pane's
-    /// link (its tab's <c>http://host:port</c> or <c>https://host[:port]</c>). <i>Web open links in</i> <c>browser-window</c> (and not <paramref name="external"/>) opens
+    /// link (its tab's <c>http://host:port</c> or <c>https://host[:port]</c>). <i>Web browser open</i> <c>browser-window</c> (and not <paramref name="external"/>) opens
     /// the app's Browser window with the usual sign-in link, or a one-time link under <i>Web browser privacy</i> <c>keep-history</c>, whose kept
     /// history would hold the token; a window that can't take it now, and <c>default-browser</c>, go to the default browser, signed in as
     /// <i>Web browser sign in mode</i> says. The notice and the log name where, never the link; the window hands none of its cookies over.

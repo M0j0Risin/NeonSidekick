@@ -179,6 +179,7 @@ Not yet tried on a Mac:
 * **Switching the audio output mid-reply** (to AirPods, say); the next reply plays on the new default output.
 * **Screen capture on macOS 14.0–15.1, and on a 1× screen beside a Retina one.**
 * **The robot splash following the mouse.** Terminal.app reports the mouse only with View › Allow Mouse Reporting on.
+* **The menus marking the row under the pointer.** The same setting in Terminal.app.
 
 Known limits:
 * **YouTube may ask for consent each run:** WebKit blocks the player's third-party cookies, so a consent isn't kept.

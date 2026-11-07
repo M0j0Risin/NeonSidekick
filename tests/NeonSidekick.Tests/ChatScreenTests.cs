@@ -203,7 +203,7 @@ public partial class ChatScreenTests : IDisposable
 
     public void Dispose()
     {
-        // A profile switch puts the new profile's theme in force, collider for a fresh one since 2026-10-05: synthwave back for the
+        // A profile switch puts the new profile's theme in force, synthwave for a fresh one since 2026-11-07 (collider from 2026-10-05), but a test's may differ: synthwave back for the
         // tests after (ThemeScope's contract, which a test that never meant to change the theme does not take).
         Theme.Use(ShippedThemes.Synthwave);
         _mcp?.Dispose();
@@ -9331,7 +9331,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task ProfilePushServers_Yes_WritesTheServerSettings_AndLeavesTheRestOfTheTargetAlone()
     {
         _console.Profile.Width = 320;   // the question and its keys on one row
-        Profiles.Create(_dir, "work", new AppSettingsData { LlmModel = "work-model", LlmApiKey = "work-llm", Theme = "synthwave", EmbeddedBackend = "cuda", DockerServers = false });
+        Profiles.Create(_dir, "work", new AppSettingsData { LlmModel = "work-model", LlmApiKey = "work-llm", Theme = "noir", EmbeddedBackend = "cuda", DockerServers = false });
         _settings.Update(d => { d.EmbeddedBackend = "vulkan"; d.DockerServers = true; d.DockerServerContainers = ["vllm_qwen"]; d.AnthropicApi = true; d.OpenAIApi = true; d.EmbeddedContextSize = 16384; });
         PushLine("/profile push servers work");
         PickYes();
@@ -9345,7 +9345,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(("vulkan", true, true, true, 16384), (work.EmbeddedBackend, work.DockerServers, work.AnthropicApi, work.OpenAIApi, work.EmbeddedContextSize));
         Assert.Equal(["vllm_qwen"], work.DockerServerContainers!);
         Assert.Equal((_settings.Current.LlmUrl, _settings.Current.LlmModel), (work.LlmUrl, work.LlmModel));
-        Assert.Equal(("work-llm", "synthwave"), (work.LlmApiKey, work.Theme));   // the keys are the keys section's; the rest round-trips
+        Assert.Equal(("work-llm", "noir"), (work.LlmApiKey, work.Theme));   // the keys are the keys section's; the rest round-trips
         Assert.Equal(Profiles.DefaultName, _settings.ProfileName);
         Assert.Empty(_chat.Requests);
     }
@@ -9588,7 +9588,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task ProfilePushToolbar_Yes_WritesTheToolbar_AndLeavesTheRestAlone()
     {
         _console.Profile.Width = 320;   // the question and its keys on one row
-        Profiles.Create(_dir, "work", new AppSettingsData { ToolbarItems = ["settings"], ToolbarRight = [], PerformanceBarItems = ["cpu"], BarOrder = ["home", "perf", "toolbar", "status", "hints"], Theme = "synthwave" });
+        Profiles.Create(_dir, "work", new AppSettingsData { ToolbarItems = ["settings"], ToolbarRight = [], PerformanceBarItems = ["cpu"], BarOrder = ["home", "perf", "toolbar", "status", "hints"], Theme = "noir" });
         _settings.Update(d => { d.ToolbarItems = ["tools", "path"]; d.ToolbarLastItems = ["tools"]; d.ToolbarOrder = ["path", "tools"]; d.ToolbarRight = ["path"]; d.PerformanceBarItems = ["ram"]; d.BarOrder = null; });
         PushLine("/profile push toolbar work");
         PickYes();
@@ -9605,7 +9605,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(["path"], work.ToolbarRight!);
         Assert.Equal(["cpu"], work.PerformanceBarItems!);   // the other bars are their own sections
         Assert.Equal(["home", "perf", "toolbar", "status", "hints"], work.BarOrder!);
-        Assert.Equal("synthwave", work.Theme);
+        Assert.Equal("noir", work.Theme);
         Assert.Equal(Profiles.DefaultName, _settings.ProfileName);
     }
 

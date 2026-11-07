@@ -216,7 +216,7 @@ internal sealed partial class ChatScreen
             window.LinksChanged);
 
     /// <summary>
-    /// Where <c>open_url</c> puts a link under <c>Web open links in</c> <c>browser-window</c> (later still on 2026-10-13): why the window
+    /// Where <c>open_url</c> puts a link under <c>Web browser open</c> <c>browser-window</c> (later still on 2026-10-13): why the window
     /// cannot take it now (<see cref="IBrowserWindow.Unavailable"/>; the tool then hands it to the default browser), else the one open
     /// every caller uses, <see cref="OpenInBrowser"/>, and null. The tool's own line tells the model; the user sees the window.
     /// </summary>

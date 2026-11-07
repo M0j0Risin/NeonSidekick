@@ -5,6 +5,7 @@
 // items' sheet, ☑ all / ☐ none and ⊠ clear ticked (two taps); each row's › (or a long-press) opens the line's sheet: − qty + (shown at once,
 // posted once the taps stop), rename with Save, a two-tap 🗑️ remove. The sheets are the Home tab's (a back drop, a history entry, Back, ✕, Esc
 // or a tap outside closes one), written here after home.js's. The read is tagged (a 304 keeps what is shown), and every word comes with the list.
+// 2026-11-06 (the user's ask): ⌖ place on the line's sheet opens a third sheet, the PC's place picker: a tap places the line, the forget row takes two.
 'use strict';
 
 const { el, say, post } = Neon;
@@ -31,6 +32,11 @@ const qtyMore = document.getElementById('qty-more');
 const renameText = document.getElementById('rename-text');
 const renameSave = document.getElementById('rename-save');
 const removeButton = document.getElementById('remove');
+const placeButton = document.getElementById('place');
+const placeBody = document.getElementById('place-body');
+const placeFilter = document.getElementById('place-filter');
+const placeList = document.getElementById('place-list');
+const placeNone = document.getElementById('place-none');
 const pastBody = document.getElementById('past-body');
 const pastCaption = document.getElementById('past-caption');
 const pastFilter = document.getElementById('past-filter');
@@ -44,8 +50,9 @@ let active = null;
 let list = null;          // the last full body (a 304 keeps it)
 let drawn = false;
 let words = null;
-let openSheet = null;     // { kind: 'line', id, qty, mayGo } | { kind: 'past' }
+let openSheet = null;     // { kind: 'line', id, qty, mayGo } | { kind: 'past' } | { kind: 'place', id, mayGo }
 let bought = null;
+let places = null;        // the place sheet's rows, read when it opens
 let adding = false;
 
 function held() {
@@ -275,7 +282,7 @@ Neon.armTwice(clearButton, paintClear, () => act('/api/shopping/clear', {}));
 pastButton.addEventListener('click', openPast);
 
 // ── The sheets ───────────────────────────────────────────────────────
-// One at a time: a line's or the past items'. It pushes a history entry, so Back, ✕, Esc or a tap outside closes it; an installed iPhone app
+// One at a time: a line's, the past items' or a line's place. It pushes a history entry, so Back, ✕, Esc or a tap outside closes it; an installed iPhone app
 // has no back swipe, so the ✕ always shows. The 5 s read redraws the list alone; the open line's sheet follows its line by id.
 
 function showSheet(sheet) {
@@ -287,6 +294,7 @@ function showSheet(sheet) {
   sheetClose.title = words ? words.close : 'Close';
   lineBody.classList.toggle('hidden', sheet.kind !== 'line');
   pastBody.classList.toggle('hidden', sheet.kind !== 'past');
+  placeBody.classList.toggle('hidden', sheet.kind !== 'place');
   sheetBack.classList.remove('hidden');
   if (!wasOpen) history.pushState({ sheet: true }, '');
   sheetClose.focus();
@@ -335,12 +343,13 @@ function openLine(id) {
   renameSave.textContent = words.save;
   syncRename();
   paintRemove(false);
+  placeButton.textContent = words.place;
 }
 
 // The 5 s read: the open sheet's quantity and name follow the line unless a change waits or the rename box has focus; a line gone meanwhile
 // closes the sheet with the sentence (quietly after a rename that merged it into another line, whose sentence is shown already).
 function followLine(l) {
-  if (!openSheet || openSheet.kind !== 'line') return;
+  if (!openSheet || (openSheet.kind !== 'line' && openSheet.kind !== 'place')) return;
   const item = allItems(l).find(i => i.id === openSheet.id);
   if (!item) {
     const quiet = openSheet.mayGo;
@@ -348,6 +357,7 @@ function followLine(l) {
     if (!quiet && words) say(words.gone);
     return;
   }
+  if (openSheet.kind !== 'line') return;   // the place sheet's title is its question, not the line's name
   sheetTitle.textContent = item.name || item.text;
   if (!pendingQty) {
     openSheet.qty = item.qty || 1;
@@ -424,6 +434,87 @@ Neon.armTwice(removeButton, paintRemove, () => {
   closeSheet();
   act('/api/shopping/remove', { id });
 });
+
+// ── The place sheet ─────────────────────────────────────────────────
+// The PC's place picker: the store's places, the line's row marked, a filter over 8 rows. A tap places the line, closes the sheet and reads the list
+// again, so the line moves to its new group; the forget row takes two taps. Every label goes in as text: a location's name can come from the model or
+// a store's documents.
+
+async function openPlace() {
+  const s = openSheet;
+  if (!s || s.kind !== 'line' || !words) return;
+  const id = s.id;
+  if (pendingQty) await flushQty();
+  showSheet({ kind: 'place', id, mayGo: false });
+  places = null;
+  placeList.replaceChildren();
+  placeNone.classList.add('hidden');
+  placeFilter.value = '';
+  placeFilter.classList.add('hidden');
+  placeFilter.placeholder = words.placeFilter;
+  placeFilter.setAttribute('aria-label', words.placeFilter);
+  const r = await Neon.get('/api/shopping/places?id=' + encodeURIComponent(String(id)), false);
+  if (!openSheet || openSheet.kind !== 'place' || openSheet.id !== id) return;
+  if (r.status === 404) {
+    closeSheet();
+    say(words.gone);
+    return;
+  }
+
+  if (!r.ok || !r.json) return;
+  places = r.json;
+  sheetTitle.textContent = places.title;
+  tell(places.note || '');
+  drawPlaces();
+}
+
+function drawPlaces() {
+  if (!places || !words) return;
+  Neon.disarm();
+  const choices = places.choices || [];
+  const rows = choices.length + (places.canForget ? 1 : 0);
+  placeFilter.classList.toggle('hidden', rows <= 8);
+  const typed = placeFilter.classList.contains('hidden') ? '' : placeFilter.value.trim();
+  const q = typed.toLowerCase();
+  const shown = [];
+  choices.forEach((choice, i) => { if (!q || choice.label.toLowerCase().includes(q)) shown.push(placeRow(choice, i === places.current)); });
+  if (places.canForget && (!q || words.forgetPlace.toLowerCase().includes(q))) shown.push(forgetPlaceRow());
+  placeList.replaceChildren(...shown);
+  const none = rows > 0 && shown.length === 0 ? words.noMatch.replace('{0}', typed) : '';
+  placeNone.textContent = none;
+  placeNone.classList.toggle('hidden', !none);
+}
+
+function placeRow(choice, here) {
+  const b = el('button', 'shop-place' + (here ? ' here' : ''), choice.label);
+  b.type = 'button';
+  if (here) b.setAttribute('aria-current', 'true');
+  const pick = {};
+  if (choice.location !== undefined && choice.location !== null) pick.location = choice.location; else pick.section = choice.section;
+  b.addEventListener('click', () => postPlace(pick));
+  return b;
+}
+
+function forgetPlaceRow() {
+  const b = el('button', 'shop-place', words.forgetPlace);
+  b.type = 'button';
+  Neon.armTwice(b, on => {
+    b.classList.toggle('armed', on);
+    b.textContent = on ? words.forgetPlaceArmed : words.forgetPlace;
+  }, () => postPlace({ forget: true }));
+  return b;
+}
+
+function postPlace(pick) {
+  if (!openSheet || openSheet.kind !== 'place' || !places) return;
+  const body = Object.assign({ id: openSheet.id, store: places.store }, pick);
+  openSheet.mayGo = true;
+  closeSheet();
+  act('/api/shopping/place', body);
+}
+
+placeButton.addEventListener('click', openPlace);
+placeFilter.addEventListener('input', drawPlaces);
 
 // ── The past items' sheet ────────────────────────────────────────────
 // What was bought before and is not on the list now, the PC's add page: a tap adds one again at its last quantity (the row leaves, the sheet

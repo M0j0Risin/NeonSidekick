@@ -46,6 +46,11 @@ public class NeonHelpCatalogTests
 
     private static ToolHelp Entry(string name) => HelpToolCatalog.All.Single(e => e.Name == name);
 
+    /// <summary>The switch line reads a fresh profile's default (<see cref="HelpToolCatalog"/>), so <c>Timer tools</c> going off on 2026-11-07 changed it with no edit here.</summary>
+    [Fact]
+    public void ATimerToolsSwitchLine_SaysItIsOffByDefault() =>
+        Assert.Contains("Timer tools at /tools › Core › Timers › Timer tools (off by default)", Win(NeonSidekick.Llm.Tools.StartTimerTool.ToolName), StringComparison.Ordinal);
+
     // ── The catalog ──────────────────────────────────────────────────────────
 
     private static IReadOnlyList<string> EveryToolName() =>

@@ -591,7 +591,7 @@ A monitor, every monitor or one window, nothing to install (macOS 14 or later on
 
 ### Custom themes
 
-The sixty built-in themes are JSON files in [`assets/themes`](../assets/themes), one folder per category; the default is `collider`. [`Theme Atlas.html`](../assets/themes/Theme%20Atlas.html) previews them all.
+The sixty built-in themes are JSON files in [`assets/themes`](../assets/themes), one folder per category; the default is `synthwave`. [`Theme Atlas.html`](../assets/themes/Theme%20Atlas.html) previews them all.
 
 | Folder | Themes |
 |--------|--------|

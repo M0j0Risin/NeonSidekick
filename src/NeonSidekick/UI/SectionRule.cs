@@ -65,7 +65,7 @@ internal sealed class SectionRule : IRenderable
     public IEnumerable<Segment> Render(RenderOptions options, int maxWidth)
     {
         var segments = ((IRenderable)_head).Render(options, maxWidth).ToList();
-        int fill = maxWidth - Segment.CellCount(segments) - 1;
+        int fill = maxWidth - FittedMarkup.RowCells(segments) - 1;
         if (_stops is { } stops)
         {
             // Gradient rules (2026-11-01): the lead's two glyphs and the fill shade along the theme's quiet gradient across the width the
@@ -75,7 +75,7 @@ internal sealed class SectionRule : IRenderable
 
         if (fill > 0)
         {
-            int column = Segment.CellCount(segments) + 1;
+            int column = FittedMarkup.RowCells(segments) + 1;
             segments.Add(new Segment(" "));
             if (_stops is { } fillStops)
             {

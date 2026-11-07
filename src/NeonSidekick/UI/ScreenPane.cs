@@ -441,7 +441,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     private int _stripButtonCells;
     private int _stripCloseColumn = -1;
 
-    private sealed record Overlay(IRenderable Content, string Hint, bool Input, bool Close);
+    private sealed record Overlay(IRenderable Content, string Hint, bool Input, bool Close, OverlayAim? Aim);
 
     /// <summary>
     /// The overlay on show, taken by a pane that opens over it (2026-10-14: <see cref="InfoPane"/>, <see cref="FolderPane"/>) and
@@ -4529,8 +4529,10 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     /// its place (a menu's value picker, a yes/no, a page with fewer rows) gets blank rows under its content up to the
     /// tallest pane drawn since it opened, so the top rule stays put; a taller one grows the pane and is held from then on.
     /// <see cref="CloseOverlay"/> ends the hold, as do a change of the window's height and a new Menus max height.</para>
+    /// <para>With <paramref name="aim"/> (2026-11-07) the pane says what's on show: a click aimed at an older layout can be told
+    /// (<see cref="ClickIsStale"/>) and the row under the pointer gets a slab, hidden by this draw until the pointer next moves.</para>
     /// </summary>
-    public void ShowOverlay(IRenderable content, string hint, bool input = false, bool close = false)
+    public void ShowOverlay(IRenderable content, string hint, bool input = false, bool close = false, OverlayAim? aim = null)
     {
         ArgumentNullException.ThrowIfNull(content);
         ArgumentNullException.ThrowIfNull(hint);
@@ -4551,8 +4553,9 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
                 _floorMenuHeight = null;
             }
 
-            _overlay = new Overlay(content, hint, input, close);
+            _overlay = new Overlay(content, hint, input, close, aim);
             _dismissHit = null;
+            HideHoverLocked();
             Redraw();
         }
     }
@@ -4578,6 +4581,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             // The drawn rows stay until the redraw: the lift steps up over them (Draw resets them). A pane closing is a natural
             // redraw (2026-10-14): the Hints bar's row goes with its keys unless another hint stands.
             _overlay = null;
+            _hoverTarget = null;
             _hintsCollapseDue = true;
             Redraw();
         }
@@ -4629,6 +4633,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         {
             Dismissed = false;
             _overlay = (Overlay)mark.Shown!;
+            HideHoverLocked();
             bool same = mark.Height == Height;
             _paneFloor = same ? mark.Floor : 0;
             _floorMenuHeight = same ? mark.MenuHeight : null;
@@ -5110,6 +5115,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
                     }
 
                     _overlay = null;
+            _hoverTarget = null;
                     _overlayRows = 0;
                     _drawnOverlay = false;
                     _drawnInput = false;
@@ -6380,6 +6386,12 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         {
             overlayLines = Segment.SplitLines(overlay.Content.GetSegments(_inner), w);
             overlayRows = Math.Clamp(overlayLines.Count, 0, MaxOverlayRows(h - barRows - scrollRows, shown?.Rows.Count ?? 0));
+            if (_hoverTarget is { } hovered && hovered.Row < overlayLines.Count)
+            {
+                // The row under the pointer (2026-11-07), up to the last column, which the bars leave too.
+                overlayLines[hovered.Row] = OverlayAim.Slab(overlayLines[hovered.Row], hovered.First, Math.Min(hovered.Last, w - 2), Theme.MenuHover.Background);
+            }
+
             if (overlay.Close && overlayRows > 0)
             {
                 // The close glyph in column w − 2 of the first row, TrailerGap cells clear of the
@@ -6857,6 +6869,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         _windowStale = false;   // the window drawn as the store holds it (2026-11-02, review P7-4)
         _closeColumn = closeColumn;
         _drawn = true;
+        NoteAimDrawnLocked();
     }
 
     /// <summary>
@@ -9050,13 +9063,13 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>
-    /// Whether the reader should be asked for the mouse's moves (2026-11-01, one owner of the switch): while the companion stands or the
-    /// store holds a link, never after the pane's end. The new value when it differs from the last one asked, else null. Under the lock;
+    /// Whether the reader should be asked for the mouse's moves (2026-11-01, one owner of the switch): while the companion stands, the
+    /// store holds a link or an overlay has targets (2026-11-07), never after the pane's end. The new value when it differs from the last one asked, else null. Under the lock;
     /// the caller asks after leaving it (<see cref="AskHover"/>), as the reader on a Mac writes under its own lock.
     /// </summary>
     private bool? HoverChangeLocked()
     {
-        bool wanted = !_disposed && Enabled && (_companion is not null || _store.AnyLinks);
+        bool wanted = !_disposed && Enabled && (_companion is not null || _store.AnyLinks || _overlay?.Aim is { Targets.Count: > 0 });
         if (wanted == _hoverAsked)
         {
             return null;
@@ -9173,6 +9186,9 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
 
                 return;
             }
+
+            // The pointer on another row (2026-11-07): those rows again, in place.
+            HoverTargetChangedLocked();
 
             if (!ReferenceEquals(Theme.Current, _seenPalette))
             {

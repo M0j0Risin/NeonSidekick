@@ -45,7 +45,7 @@ public static class YouTubeOpenUrl
         }
 
         bool wontEmbed = player.Snapshot is { Error: 101 or 150 or 152 or 153 } now && (id is null || now.VideoId == id);
-        DiagnosticLog.Info(Category, $"open_url's {link} did not play ({answer}); passed on to Web open links in.");
+        DiagnosticLog.Info(Category, $"open_url's {link} did not play ({answer}); passed on to Web browser open.");
         return new YouTubeLinkOutcome(null, wontEmbed ? YouTubeText.WontEmbedHere : YouTubeText.CouldNotPlay(answer["Error: ".Length..]));
     }
 }

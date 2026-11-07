@@ -74,7 +74,7 @@ public static class BrowserWindow
     /// <summary>
     /// What the bar's open button hands the page to: the user's default browser (<see cref="Llm.PersonaFile.OpenInBrowser"/>, the
     /// counted process-start site, as <see cref="VideoWindow.OpenLink"/>), web addresses only. Called on the window's thread. Never follows
-    /// <c>Web open links in</c> (later still on 2026-10-13): under <c>browser-window</c> it would hand the page back to this window.
+    /// <c>Web browser open</c> (later still on 2026-10-13): under <c>browser-window</c> it would hand the page back to this window.
     /// </summary>
     public static Action<string> OpenLink { get; set; } = Llm.PersonaFile.OpenInBrowser;
 

@@ -7,7 +7,35 @@ namespace NeonSidekick.Tests;
 /// <summary>The built-in metasearch's two rows on <c>/tools</c>' Web tab (2026-11-06).</summary>
 public partial class ToolsMenuTests
 {
-    private const int MetasearchEnginesRow = 12;
+    private const int MetasearchEnginesRow = 11;
+
+    /// <summary>The Web tab's sections (2026-11-07, the user's ask): the switch alone under Web, the SearXNG URL alone under SearXNG (external), and its row still typed.</summary>
+    [Fact]
+    public async Task TheSwitchAndTheSearxngUrl_EachHaveASectionOfTheirOwn()
+    {
+        var rows = TabFields(ToolsText.WebTabTitle).ToList();
+        var sections = SettingsMenu.ToolsMenuSections[ToolsText.MenuIndex(ToolsText.WebTabTitle)];
+        (int From, int To) Span(string title)
+        {
+            int at = sections.ToList().FindIndex(s => s.Title == title);
+            return (rows.IndexOf(sections[at].First), at + 1 < sections.Count ? rows.IndexOf(sections[at + 1].First) : rows.Count);
+        }
+
+        Assert.Equal((0, 1), Span("Web"));
+        var (from, to) = Span("SearXNG (external)");
+        Assert.Equal(1, to - from);
+        Assert.Equal(SettingsField.WebSearxngUrl, rows[from]);
+
+        var (menu, pane, _) = PaneMenu();
+        OpenWebRow(from);
+        _console.Input.PushText("http://localhost:8888");
+        Push(Keys.Enter, Keys.Escape);
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal("http://localhost:8888", _settings.Current.WebSearxngUrl);
+        Assert.Contains(Heading("── SearXNG (external)"), Output);
+        pane.Dispose();
+    }
 
     /// <summary>The Web tab (<see cref="ToTab"/>), then the row and Enter.</summary>
     private void OpenWebRow(int row) => Push([.. ToTab(ToolsText.WebTabTitle), .. Enumerable.Repeat(Keys.Down, row), Keys.Enter]);
@@ -19,8 +47,8 @@ public partial class ToolsMenuTests
 
         Assert.Equal(MetasearchEnginesRow, rows.IndexOf(SettingsField.WebMetasearchEngines));
         Assert.Equal(rows.IndexOf(SettingsField.WebSearchMaxResults) + 1, rows.IndexOf(SettingsField.WebMetasearchEngines));
-        Assert.Equal(rows.IndexOf(SettingsField.WebDownloadMaxMegabytes) - 1, rows.IndexOf(SettingsField.WebMetasearchSafeSearch));
-        Assert.Equal("Web metasearch", SettingsMenu.ToolsMenuSections[ToolsText.MenuIndex(ToolsText.WebTabTitle)].Single(s => s.First == SettingsField.WebMetasearchEngines).Title);
+        Assert.Equal(rows.IndexOf(SettingsField.WebSearxngUrl) - 1, rows.IndexOf(SettingsField.WebMetasearchSafeSearch));
+        Assert.Equal("Metasearch", SettingsMenu.ToolsMenuSections[ToolsText.MenuIndex(ToolsText.WebTabTitle)].Single(s => s.First == SettingsField.WebMetasearchEngines).Title);
         Assert.Equal("Web metasearch engines", SettingsMenu.FieldName(SettingsField.WebMetasearchEngines));
         Assert.Equal("Web metasearch safe search", SettingsMenu.FieldName(SettingsField.WebMetasearchSafeSearch));
     }
@@ -124,5 +152,5 @@ public partial class ToolsMenuTests
 
     [Fact]
     public void TheSearchMethodHint_LeavesTheEnginesToTheirRow() =>
-        Assert.Equal("built in, no setup: asks the engines in Web metasearch engines at once, all five by default", SearchMethod.Describe("metasearch"));
+        Assert.Equal("built-in SearXNG port, no setup", SearchMethod.Describe("metasearch"));
 }

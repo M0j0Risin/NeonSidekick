@@ -56,7 +56,7 @@ public partial class ToolsMenuTests
         Assert.False(SettingsMenu.IsToggle(SettingsField.YouTubeOpenLinksIn));
         Assert.Equal("youtube-window", SettingsMenu.FieldValue(SettingsField.YouTubeOpenLinksIn, new AppSettingsData { YouTubeOpenLinksIn = "phone" }, _settings.ProfileDirectory));
         Assert.Equal("browser-window", SettingsMenu.FieldValue(SettingsField.YouTubeOpenLinksIn, new AppSettingsData { YouTubeOpenLinksIn = " Browser-Window " }, _settings.ProfileDirectory));
-        Assert.Equal("youtube-window  ", Spectre.Console.Markup.Remove(SettingsMenu.YouTubeOpenLinksInLabel("youtube-window"))[..16]);   // padded to sixteen, as Web open links in's
+        Assert.Equal("youtube-window  ", Spectre.Console.Markup.Remove(SettingsMenu.YouTubeOpenLinksInLabel("youtube-window"))[..16]);   // padded to sixteen, as Web browser open's
         pane.Dispose();
     }
 

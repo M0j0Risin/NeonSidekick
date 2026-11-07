@@ -1353,7 +1353,7 @@ public enum SettingsField
     /// </summary>
     CheckForUpdatesAtStart,
 
-    /// <summary>A checklist over <see cref="Web.BuiltInMetaSearch.EngineNames"/> (<see cref="Settings.AppSettingsData.WebMetasearchEngines"/>, 2026-11-06). First under the Web tab's Web metasearch heading; read at the next search, no reconnect.</summary>
+    /// <summary>A checklist over <see cref="Web.BuiltInMetaSearch.EngineNames"/> (<see cref="Settings.AppSettingsData.WebMetasearchEngines"/>, 2026-11-06). First under the Web tab's Metasearch heading; read at the next search, no reconnect.</summary>
     WebMetasearchEngines,
 
     /// <summary>A picker over <see cref="Web.BuiltInMetaSearch.SafeSearchNames"/> (<see cref="Settings.AppSettingsData.WebMetasearchSafeSearch"/>, 2026-11-06). After <see cref="WebMetasearchEngines"/>; read at the next search, no reconnect.</summary>
@@ -1900,7 +1900,7 @@ internal sealed partial class SettingsMenu
     /// Files (2026-09-15) is the file-tools switch (the Safe edits switch under it from 2026-09-17 until 2026-10-01, when File safe edits
     /// went, the user's call), the two <c>/tree</c> rows (once General's last two), the @-mention folder mode
     /// (General's until 2026-09-17), the <c>/cwd browse</c> mode under it (2026-09-21) and the <c>view_image</c> cap last (2026-09-19); Web is the seven web rows (2026-09-15, once on General under Memory; the tab read Browser
-    /// until later that day), the search method above the Web SearXNG URL it governs. The group switch stays each tab's first row.
+    /// until later that day), the search method above the Web SearXNG URL it governs (right above until 2026-11-07, when the URL got its own section under Metasearch). The group switch stays each tab's first row.
     /// Since later still on 2026-09-19 (the user's ask) every Files and Web row carries its tab's word (<c>File /tree max length</c>, <c>Web SearXNG URL</c>, …) and the six JSON keys that
     /// differed followed (<c>FileTreeMaxLength</c>, <c>FileTreeShowSizes</c>, <c>FileMentionFolderMode</c>, <c>FileViewImageMaxPerCall</c>, <c>WebSearxngUrl</c>) — no migration, the old key skipped on load.
     /// Git (2026-09-20; Git (native) from 2026-09-21, its rows <c>Git native …</c>; GitLib since 2026-09-30, the tab and its rows) is its switch, the diff cap, the log cap and the identity pair;
@@ -1920,7 +1920,7 @@ internal sealed partial class SettingsMenu
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> ToolsTabFields =
     [
         [SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices],
-        [SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserBotcheckWindow, SettingsField.WebBrowserHomePage, SettingsField.BrowserPrivacy, SettingsField.WebOpenLinksIn, SettingsField.WebBrowserSignInMode, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebMetasearchEngines, SettingsField.WebMetasearchSafeSearch, SettingsField.WebDownloadMaxMegabytes],
+        [SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserBotcheckWindow, SettingsField.WebBrowserHomePage, SettingsField.BrowserPrivacy, SettingsField.WebOpenLinksIn, SettingsField.WebBrowserSignInMode, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearchMaxResults, SettingsField.WebMetasearchEngines, SettingsField.WebMetasearchSafeSearch, SettingsField.WebSearxngUrl, SettingsField.WebDownloadMaxMegabytes],
         [SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPolice, SettingsField.ShellPoliceForbiddenStrings, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds],
         [SettingsField.FileTools, SettingsField.FileDeletesToRecycleBin, SettingsField.FileCheckpoints, SettingsField.FileCheckpointKeepDays, SettingsField.FileCheckpointMaxMegabytes, SettingsField.FileCheckpointLargestFileMegabytes, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults],
         [SettingsField.ImageTools, SettingsField.ImageEditQuality, SettingsField.ImageEditMetadata, SettingsField.ImageEditMode, SettingsField.ImageEditOutputFolder, SettingsField.PastedImagesFolder],
@@ -2675,7 +2675,7 @@ internal sealed partial class SettingsMenu
         SettingsField.WebBrowserBotcheckWindow => "Web browser botcheck window",
         SettingsField.WebBrowserHomePage => "Web browser home page",
         SettingsField.BrowserPrivacy => "Web browser privacy",
-        SettingsField.WebOpenLinksIn => "Web open links in",
+        SettingsField.WebOpenLinksIn => "Web browser open",
         SettingsField.WebBrowserSignInMode => "Web browser sign in mode",
         SettingsField.WebBrowserNetworkMode => "Web browser network mode",
         SettingsField.WebSearxngUrl => "Web SearXNG URL",
@@ -4065,7 +4065,7 @@ internal sealed partial class SettingsMenu
     public static string BrowserPrivacyLabel(string name) =>
         Markup.Escape(name.PadRight(14)) + Theme.DimMarkup(Viewer.BrowserPrivacy.Describe(name));
 
-    /// <summary>One row of the Web open links in picker (later still on 2026-10-13): the choice and its hint, padded to sixteen (<c>default-browser</c> is fifteen).</summary>
+    /// <summary>One row of the Web browser open picker (later still on 2026-10-13): the choice and its hint, padded to sixteen (<c>default-browser</c> is fifteen).</summary>
     public static string WebOpenLinksInLabel(string name) =>
         Markup.Escape(name.PadRight(16)) + Theme.DimMarkup(Web.OpenLinksIn.Describe(name));
 
@@ -9007,7 +9007,7 @@ internal sealed partial class SettingsMenu
         return true;
     }
 
-    /// <summary>The Web open links in picker (later still on 2026-10-13): one <see cref="WebOpenLinksInLabel"/> row per <see cref="Web.OpenLinksIn.Names"/> entry, the saved one under the cursor.</summary>
+    /// <summary>The Web browser open picker (later still on 2026-10-13): one <see cref="WebOpenLinksInLabel"/> row per <see cref="Web.OpenLinksIn.Names"/> entry, the saved one under the cursor.</summary>
     private async Task<bool> PickWebOpenLinksInAsync(AppSettingsData saved, CancellationToken cancellationToken)
     {
         var names = Web.OpenLinksIn.Names;

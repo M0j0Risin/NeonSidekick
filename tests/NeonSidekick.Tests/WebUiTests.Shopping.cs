@@ -54,6 +54,149 @@ public sealed partial class WebUiTests
 
     private ShopItem OnList(string name) => _list.Store.Items().Single(i => i.Name == name);
 
+    // ── ⌖ place (2026-11-06, the user's ask) ─────────────────────────────────
+
+    /// <summary>A store with Aisle 2 in Dairy, a section of its own (Bakery), and Milk on the list.</summary>
+    private (ShopStore Shop, ShopLocation Aisle, ShopSection Bakery, ShopItem Milk) PlaceFixture()
+    {
+        Assert.DoesNotContain("Error", _list.AddStore("H-E-B"), StringComparison.Ordinal);
+        var shop = _list.StoreFor(null, out _)!;
+        _list.AddLocation(shop, "Aisle 2", "Dairy");
+        _list.AddSection(shop, "Bakery");
+        var milk = _list.Add("Milk", 1, shop)!.Item;
+        return (shop, _list.Store.Locations(shop.Id).Single(), _list.Store.Sections(shop.Id).Single(s => s.Name == "Bakery"), milk);
+    }
+
+    [Fact]
+    public void ShopPlaces_IsWhatThePcsPickerOffers_ItsRowMarked_ForgetOnlyWithAFact()
+    {
+        var (shop, aisle, _, milk) = PlaceFixture();
+
+        var before = _session.ShopPlaces(milk.Id)!;
+        Assert.Equal(ShoppingText.PlaceTitle(milk), before.Title);
+        Assert.Equal(shop.Id, before.Store);
+        Assert.Equal(ShoppingList.PlaceChoices(_list.Store.Locations(shop.Id), _list.Store.Sections(shop.Id)).Select(c => c.Label), before.Choices.Select(c => c.Label));
+        Assert.Equal(-1, before.Current);
+        Assert.False(before.CanForget);
+        Assert.Null(before.Note);
+
+        _list.PlaceItem(shop, milk, aisle, null);
+        var after = _session.ShopPlaces(milk.Id)!;
+        Assert.Equal(aisle.Id, after.Choices[after.Current].Location);
+        Assert.True(after.CanForget);
+
+        Assert.Null(_session.ShopPlaces(milk.Id + 100));   // a line gone
+    }
+
+    [Fact]
+    public void ShopPlaces_WithNoStore_OrNoLayout_IsANoteAndNoRows()
+    {
+        var bare = _list.Add("Milk", 1, null)!.Item;
+        var none = _session.ShopPlaces(bare.Id)!;
+        Assert.Equal((ShoppingText.NoStoresYet, null, 0), (none.Note, none.Store, none.Choices.Count));
+
+        _list.AddStore("Aldi");
+        var shop = _list.StoreFor(null, out _)!;
+        var empty = _session.ShopPlaces(bare.Id)!;
+        Assert.Equal((WebUiText.NoLayoutOnPage(shop), shop.Id, 0), (empty.Note, empty.Store, empty.Choices.Count));
+        Assert.DoesNotContain("(s, then l)", empty.Note, StringComparison.Ordinal);   // no PC keys on a phone
+    }
+
+    [Fact]
+    public void ShopPlace_AtALocation_Audits_Flashes_AndClearsTheGuessMark()
+    {
+        using var watch = new ShopWatch(_session);
+        var (shop, aisle, _, milk) = PlaceFixture();
+        _list.Place(shop, "Milk", ShoppingKinds.Category, "Aisle 2", null, ShoppingSources.Guess);
+        Assert.True(_list.PlaceOf("Milk", shop).IsGuess);
+
+        var reply = _session.ShopPlace(new WebShopPlace { Id = milk.Id, Store = shop.Id, Location = aisle.Id }, IPAddress.Loopback);
+
+        Assert.Equal(WebOutcome.Ok, reply.Outcome);
+        Assert.Contains("Aisle 2", reply.Message, StringComparison.Ordinal);
+        Assert.Equal(aisle.Id, _list.PlaceOf("Milk", shop).Location?.Id);
+        Assert.False(_list.PlaceOf("Milk", shop).IsGuess);
+        Assert.Equal(WebUiText.PlacedLogLine("Milk", "Aisle 2", IPAddress.Loopback), Assert.Single(watch.Lines));
+        Assert.Equal(WebUiText.PlacedFlash("Milk", "Aisle 2"), watch.NextFlash());
+        Assert.Equal(1, _shoppingChanges);
+    }
+
+    [Fact]
+    public void ShopPlace_ASectionAlone_PlacesItThere()
+    {
+        var (shop, _, bakery, milk) = PlaceFixture();
+
+        var reply = _session.ShopPlace(new WebShopPlace { Id = milk.Id, Store = shop.Id, Section = bakery.Id }, null);
+
+        Assert.Equal(WebOutcome.Ok, reply.Outcome);
+        var place = _list.PlaceOf("Milk", shop);
+        Assert.Null(place.Location);
+        Assert.Equal(bakery.Id, place.Section?.Id);
+    }
+
+    [Fact]
+    public void ShopPlace_Forget_RemovesEverySpelling_AndAGoneFactChangesNothing()
+    {
+        using var watch = new ShopWatch(_session);
+        var (shop, _, _, _) = PlaceFixture();
+        var eggs = _list.Add("Eggs", 1, shop)!.Item;
+        _list.Place(shop, "Egg", ShoppingKinds.Item, "Aisle 2", null, ShoppingSources.User);
+        _list.Place(shop, "Eggs", ShoppingKinds.Item, "Aisle 2", null, ShoppingSources.User);
+        Assert.Equal(2, _list.ItemFacts(shop, eggs.Name).Count);
+
+        var reply = _session.ShopPlace(new WebShopPlace { Id = eggs.Id, Store = shop.Id, Forget = true }, IPAddress.Loopback);
+
+        Assert.Equal(WebOutcome.Ok, reply.Outcome);
+        Assert.Empty(_list.ItemFacts(shop, eggs.Name));
+        Assert.Equal(WebUiText.PlacedLogLine("Eggs", null, IPAddress.Loopback), Assert.Single(watch.Lines));
+        Assert.Equal(WebUiText.PlacedFlash("Eggs", null), watch.NextFlash());
+
+        var again = _session.ShopPlace(new WebShopPlace { Id = eggs.Id, Store = shop.Id, Forget = true }, IPAddress.Loopback);
+        Assert.Equal(WebOutcome.Ok, again.Outcome);
+        Assert.Single(watch.Lines);
+        Assert.Equal(1, _shoppingChanges);
+    }
+
+    [Fact]
+    public void ShopPlace_RefusesWhatHasAged_AndAnythingButOneChoice()
+    {
+        var (shop, aisle, bakery, milk) = PlaceFixture();
+        using var watch = new ShopWatch(_session);
+
+        // A line gone meanwhile.
+        var gone = _session.ShopPlace(new WebShopPlace { Id = milk.Id + 100, Store = shop.Id, Location = aisle.Id }, null);
+        Assert.Equal((WebOutcome.NotFound, WebUiText.NoSuchItem), (gone.Outcome, gone.Message));
+
+        // Naming none, or two, of a location, a section or forget.
+        foreach (var pick in new[]
+        {
+            new WebShopPlace { Id = milk.Id, Store = shop.Id },
+            new WebShopPlace { Id = milk.Id, Store = shop.Id, Location = aisle.Id, Section = bakery.Id },
+            new WebShopPlace { Id = milk.Id, Store = shop.Id, Location = aisle.Id, Forget = true },
+            new WebShopPlace { Id = milk.Id, Store = shop.Id, Section = bakery.Id, Forget = true },
+        })
+        {
+            var refused = _session.ShopPlace(pick, null);
+            Assert.Equal((WebOutcome.Refused, WebUiText.PlaceNeedsOne), (refused.Outcome, refused.Message));
+        }
+
+        // A location of another store, and a store switched mid-pick.
+        _list.AddStore("Aldi");
+        var aldi = _list.Store.FindStore("Aldi")!;
+        _list.AddLocation(aldi, "Aisle 9", null);
+        var other = _list.Store.Locations(aldi.Id).Single();
+        var foreign = _session.ShopPlace(new WebShopPlace { Id = milk.Id, Store = shop.Id, Location = other.Id }, null);
+        Assert.Equal((WebOutcome.Refused, WebUiText.NoSuchPlace(shop)), (foreign.Outcome, foreign.Message));
+
+        _list.UseStore(aldi);
+        var switched = _session.ShopPlace(new WebShopPlace { Id = milk.Id, Store = shop.Id, Location = aisle.Id }, null);
+        Assert.Equal((WebOutcome.Refused, WebUiText.PlaceStoreChanged(aldi)), (switched.Outcome, switched.Message));
+
+        Assert.Empty(_list.ItemFacts(shop, "Milk"));
+        Assert.Empty(watch.Lines);
+        Assert.Equal(0, _shoppingChanges);
+    }
+
     [Fact]
     public void ShopAdd_ParsesTheBoxAsThePcsAddPage_AuditsOnce_Flashes_AndRecounts()
     {
@@ -279,6 +422,7 @@ public sealed partial class WebUiTests
             session.ShopQuantity(new WebShopQuantity { Id = 1, Qty = 2 }, null),
             session.ShopRename(new WebShopRename { Id = 1, Name = "x" }, null),
             session.ShopRemove(new WebShopId { Id = 1 }, null),
+            session.ShopPlace(new WebShopPlace { Id = 1, Store = 1, Forget = true }, null),
             session.ShopCheckAll(new WebShopCheckAll { On = true }, null),
             session.ShopClearTicked(null),
             session.Check(new WebCheckRequest { Id = 1, On = true }, null),

@@ -105,7 +105,7 @@ public class EmbeddedModelFilterTests
     {
         var uncensored = EmbeddedModelCatalog.Models.Where(m => m.Uncensored).ToList();
         Assert.NotEmpty(uncensored);
-        Assert.All(uncensored, m => Assert.Contains("HauhauCS", m.Repository, StringComparison.Ordinal));   // every one is a HauhauCS build
+        Assert.All(uncensored, m => Assert.True(m.Repository.Contains("HauhauCS", StringComparison.Ordinal) || m.Repository.StartsWith("TrevorJS/", StringComparison.Ordinal), m.Id));   // HauhauCS's builds, and TrevorJS's Muse Glimmer since 2026-11-06
         Assert.All(EmbeddedModelCatalog.Models.Where(m => m.Repository.StartsWith("HauhauCS/", StringComparison.Ordinal)), m => Assert.True(m.Uncensored, m.Id));
 
 

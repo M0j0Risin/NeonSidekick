@@ -136,8 +136,12 @@ public sealed partial class ScreenPane
         Interlocked.Increment(ref _pointerMoves);
     }
 
-    /// <summary>The window gained or lost focus: the next frame hands it to the companion. Any thread; never blocks.</summary>
-    public void FocusChanged(bool focused) => Interlocked.Exchange(ref _focusChange, focused ? 1 : 2);
+    /// <summary>The window gained or lost focus: the next frame hands it to the companion, and the next tick hides the row hover. Any thread; never blocks.</summary>
+    public void FocusChanged(bool focused)
+    {
+        Interlocked.Exchange(ref _focusChange, focused ? 1 : 2);
+        Volatile.Write(ref _focusLost, focused ? 0 : 1);   // the hover's (2026-11-07): _focusChange is taken by its one reader
+    }
 
     /// <summary>Stops the frames and forgets the companion and where it stood. Under the gate.</summary>
     private void StopCompanionLocked()

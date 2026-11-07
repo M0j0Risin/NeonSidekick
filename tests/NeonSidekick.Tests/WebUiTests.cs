@@ -1347,7 +1347,7 @@ public sealed partial class WebUiTests : IDisposable
     public void TheReach_IsDescribedInPlainWords()
     {
         Assert.Equal("localhost only", WebUiReach.Describe("local"));
-        Assert.Equal("your home network and your tailnet", WebUiReach.Describe("lan"));
+        Assert.Equal("local area network", WebUiReach.Describe("lan"));
         Assert.Equal("", WebUiReach.Describe("wan"));
     }
 

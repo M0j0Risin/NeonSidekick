@@ -1072,6 +1072,9 @@ internal sealed partial class ChatScreen
     /// <summary>The input reader's hover switch (<see cref="IMouseInput.Hover"/>, 2026-10-20), which the pane turns on while the robot stands.</summary>
     public void UseHover(Action<bool>? hover) => _pane.Hover = hover;
 
+    /// <summary>A real mouse (2026-11-07): a click aimed at a pane's older layout is dropped (<see cref="ScreenPane.ClickIsStale"/>).</summary>
+    public void GuardStaleClicks() => _pane.GuardsStaleClicks = true;
+
     /// <summary>Whether the welcome splash's robot is on the pane (2026-10-20; tests).</summary>
     public bool RobotSplashStanding => _pane.HasCompanion;
 
@@ -6947,7 +6950,7 @@ internal sealed partial class ChatScreen
     /// <c>/settings</c> applies at the next call. <paramref name="botCheck"/> (2026-10-13) shows a bot check the tools cannot get past
     /// to the user in the Browser window; null in headless, where nobody can be asked. With <paramref name="links"/> (later still on 2026-10-13)
     /// the saved-link tools, <c>web_links</c> and <c>web_save_link</c>, come after <c>open_url</c> (<c>download_file</c> stays last for
-    /// <see cref="WebToolsFor"/>); <paramref name="openInWindow"/> is where <c>open_url</c> puts a link under <c>Web open links in</c>
+    /// <see cref="WebToolsFor"/>); <paramref name="openInWindow"/> is where <c>open_url</c> puts a link under <c>Web browser open</c>
     /// <c>browser-window</c> (the screen on Windows; null keeps the default browser).
     /// </summary>
     public static IReadOnlyList<AIFunction> WebTools(WebAccess web, WorkingDirectory files, Func<AppSettingsData> effective, BotCheckSolver? botCheck = null, WebLinkHooks? links = null, Func<Uri, string?>? openInWindow = null, Func<Uri, CancellationToken, Task<YouTubeLinkOutcome>>? openYouTube = null)

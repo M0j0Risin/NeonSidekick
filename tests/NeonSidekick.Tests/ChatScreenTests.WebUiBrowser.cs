@@ -8,7 +8,7 @@ using NeonSidekick.WebUi;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// <c>/webui browser [--external]</c> and the pane's link (later on 2026-10-15, the user's asks): where it opens (<i>Web open links in</i>, the
+/// <c>/webui browser [--external]</c> and the pane's link (later on 2026-10-15, the user's asks): where it opens (<i>Web browser open</i>, the
 /// window unavailable, <c>--external</c>), how it signs in (<i>Web browser sign in mode</i>; the window's usual link, or a one-time one under
 /// <c>keep-history</c>), no token in the transcript or the log, the refusals, a server still starting, under a reply at once, the pane's copy
 /// button and a double-click on the pane's link.

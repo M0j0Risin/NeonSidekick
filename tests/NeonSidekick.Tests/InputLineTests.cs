@@ -2945,6 +2945,41 @@ public class InputLineTests : IDisposable
         Assert.Equal("@test/thing.txt", submitted.Text);
     }
 
+    /// <summary>A click on a list only just drawn is taken as aimed at what was there (2026-11-07): dropped, and the next one counts, as a first.</summary>
+    [Fact]
+    public async Task TheList_DropsAStaleClick_TheNextOneCounts()
+    {
+        var (line, keys, pane, _) = MentionLine();
+        pane.GuardsStaleClicks = true;
+        int waits = 0;
+        keys.Push(Chars("@t"));
+        keys.OnWait = () =>
+        {
+            switch (waits++)
+            {
+                case 0:
+                    keys.PushClick(5, ListTop(pane) + 1);
+                    break;
+                case 1:
+                    Assert.DoesNotContain(Highlighted("test/thing.txt"), _console.Output);
+                    keys.PushClick(5, ListTop(pane) + 1);
+                    break;
+                case 2:
+                    Assert.Contains(Highlighted("test/thing.txt"), _console.Output);
+                    Assert.True(pane.OverlayOpen);
+                    keys.Push(Keys.Enter);
+                    break;
+                default:
+                    keys.Push(Keys.Enter);
+                    break;
+            }
+        };
+
+        var submitted = Assert.IsType<InputResult.Submitted>(await line.ReadAsync(multiline: true, mentions: MentionFolderAction.Apply));
+
+        Assert.Equal("@test/thing.txt", submitted.Text);
+    }
+
     /// <summary>Two clicks on two matches are two firsts: nothing applied. A right-click on the list pastes nothing (2026-10-14).</summary>
     [Fact]
     public async Task TheList_ClicksOnTwoMatches_ApplyNothing_ARightClickPastesNothing()

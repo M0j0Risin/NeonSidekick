@@ -81,12 +81,12 @@ public sealed class ThemeLibraryTests
     }
 
     [Fact]
-    public void TheBuiltIns_AreAToZ_AndBuiltIn_TheDefaultCollider()
+    public void TheBuiltIns_AreAToZ_AndBuiltIn_TheDefaultSynthwave()
     {
         Assert.Equal(ThemeLibrary.All.Select(t => t.Name).Order(StringComparer.Ordinal), ThemeLibrary.All.Select(t => t.Name));
         Assert.All(ThemeLibrary.All, t => Assert.True(t.IsBuiltIn, t.Name));
-        Assert.Equal("collider", ThemeLibrary.Default.Name);
-        Assert.Equal("machines", ThemeLibrary.CategoryOf("collider"));
+        Assert.Equal("synthwave", ThemeLibrary.Default.Name);
+        Assert.Equal("nights", ThemeLibrary.CategoryOf("synthwave"));
         Assert.NotSame(ThemePalette.Emergency, ThemeLibrary.Default);
         Assert.True(ThemeLibrary.TryGet(" NOIR ", out var noir) && noir.Name == "noir");
         Assert.False(ThemeLibrary.TryGet("matrix", out var none));
@@ -137,16 +137,16 @@ public sealed class ThemeLibraryTests
     {
         var loaded = ThemeLibrary.Load(
         [
-            Resource("night\\collider.json", ThemeJson.File("\"name\": \"collider\"")),
+            Resource("night\\synthwave.json", ThemeJson.File("\"name\": \"synthwave\"")),
             Resource("loose.json", ThemeJson.File()),
             Resource("a/b/deep.json", ThemeJson.File()),
             Resource("night/partial.json", """{ "colors": { "primary": "#123456" } }"""),
             Resource("night/broken.json", "{"),
         ]);
 
-        Assert.Equal(["collider"], loaded.Themes.Select(t => t.Name));
-        Assert.Equal("night", loaded.Categories["collider"]);
-        Assert.Equal("collider", loaded.Default.Name);
+        Assert.Equal(["synthwave"], loaded.Themes.Select(t => t.Name));
+        Assert.Equal("night", loaded.Categories["synthwave"]);
+        Assert.Equal("synthwave", loaded.Default.Name);
         Assert.Null(loaded.Themes[0].SourcePath);
         Assert.Equal(
             ["a/b/deep.json", "loose.json", "night/broken.json", "night/partial.json"],

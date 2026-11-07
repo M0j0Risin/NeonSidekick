@@ -48,8 +48,8 @@ public class SearchMethodTests
             Assert.NotEqual("", SearchMethod.Describe(name));
         }
 
-        Assert.Equal("the built-in DuckDuckGo scrape, no setup", SearchMethod.Describe("duckduckgo"));
-        Assert.Equal("the instance named in Web SearXNG URL; the metasearch until one is set", SearchMethod.Describe("searxng"));
+        Assert.Equal("built-in DuckDuckGo scrape, no setup", SearchMethod.Describe("duckduckgo"));
+        Assert.Equal("external SearXNG instance at Web SearXNG URL", SearchMethod.Describe("searxng"));
         Assert.Equal("", SearchMethod.Describe("google"));
     }
 

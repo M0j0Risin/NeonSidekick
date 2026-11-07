@@ -64,6 +64,7 @@ public sealed class WebRateLimitTests
     [InlineData("/api/shopping/remove", WebRateBucket.Act)]
     [InlineData("/api/shopping/checkall", WebRateBucket.Act)]
     [InlineData("/api/shopping/clear", WebRateBucket.Act)]
+    [InlineData("/api/shopping/place", WebRateBucket.Act)]   // ⌖ place (2026-11-06)
     [InlineData("/api/home/tap", WebRateBucket.Act)]
     [InlineData("/api/home/act", WebRateBucket.Act)]
     [InlineData("/api/home/scene", WebRateBucket.Act)]
@@ -93,6 +94,7 @@ public sealed class WebRateLimitTests
     [InlineData("/api/memory", false)]
     [InlineData("/api/shopping", false)]
     [InlineData("/api/shopping/bought", false)]
+    [InlineData("/api/shopping/places", false)]
     public void EverythingElse_IsNotLimited(string path, bool post)
     {
         Assert.Null(WebRateLimit.BucketOf(path, post));

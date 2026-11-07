@@ -113,6 +113,14 @@ internal sealed class FakeWebUiBackend : IWebUiBackend
 
     public WebReply ShopRemove(WebShopId request, IPAddress? remote) => Shop("remove " + Num(request.Id));
 
+    /// <summary>The ⌖ place sheet's rows (2026-11-06); null reads as a line gone.</summary>
+    public WebShopPlaces? PlacesList { get; set; } = new("⌖ Where is it?", 1, [], -1, false, null);
+
+    public WebShopPlaces? ShopPlaces(long id) { ShopCalls.Enqueue("places " + Num(id)); return PlacesList; }
+
+    public WebReply ShopPlace(WebShopPlace request, IPAddress? remote) =>
+        Shop("place " + Num(request.Id) + " store " + Num(request.Store) + (request.Location is { } l ? " location " + Num(l) : "") + (request.Section is { } s ? " section " + Num(s) : "") + (request.Forget ? " forget" : ""));
+
     public WebReply ShopCheckAll(WebShopCheckAll request, IPAddress? remote) => Shop("checkall " + request.On);
 
     public WebReply ShopClearTicked(IPAddress? remote) => Shop("clear");

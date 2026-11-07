@@ -1340,6 +1340,12 @@ public sealed partial class InputLine
             _anchor = -1;
             if (click.Button == MouseButton.Left && row < _listShown)
             {
+                if (_line._pane.ClickIsStale(click.X, row))
+                {
+                    hintClicks.Reset();
+                    return EditOutcome.Handled;
+                }
+
                 int index = open.First + row;
                 _list = open with { Cursor = index };
                 ShowList();
@@ -1536,7 +1542,7 @@ public sealed partial class InputLine
                 // A command or skill row is cut at the edge with an ellipsis, never wrapped.
                 var (fitted, at) = MentionCompleter.WordRows(_list, capacity);
                 _list = _list with { First = at };
-                pane.ShowOverlay(new Rows(fitted), MentionCompleter.Hint, input: true);
+                pane.ShowOverlay(new Rows(fitted), MentionCompleter.Hint, input: true, aim: ListAim(_list));
                 return;
             }
 
@@ -1544,7 +1550,21 @@ public sealed partial class InputLine
             _list = _list with { First = first };
             // One row per match whatever its length (FittedMarkup, 2026-10-14, as the menus' rows): a path with a space wrapped onto a second
             // row before, and a click on the list then landed a row off.
-            pane.ShowOverlay(new Rows(rows.Select(r => new FittedMarkup(r))), MentionCompleter.Hint, input: true);
+            pane.ShowOverlay(new Rows(rows.Select(r => new FittedMarkup(r))), MentionCompleter.Hint, input: true, aim: ListAim(_list));
+        }
+
+        // What the list has on show (2026-11-07): each match in view, across the window.
+        private OverlayAim ListAim(MentionList list)
+        {
+            int width = Math.Max(1, _line._pane.Profile.Width);
+            var targets = new List<OverlayTarget>(_listShown);
+            for (int i = 0; i < _listShown; i++)
+            {
+                int index = list.First + i;
+                targets.Add(new OverlayTarget(i, 0, width - 1, list.Matches[index], index == list.Cursor));
+            }
+
+            return new OverlayAim(list.Prefix, targets);
         }
 
         // The highlighted word in place of the typed one — a command or a skill name with a space

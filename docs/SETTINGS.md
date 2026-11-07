@@ -50,7 +50,7 @@ Every setting on the `/settings`, `/skills`, `/tools` and `/mcp` panes, its defa
 | Copy user prompt | `/copy` puts your prompt above the reply. | on |
 | User line style | Your sent line, here and on the Web UI's Chat tab: `quiet` (plain), `slab` (on a faint fill) or `bold` (in the user color). | `bold` |
 | Reply footer | A dim line under each reply: time, tokens, speed, tool calls, model, and a tool's time from 2 s (not counting time you spent answering; PC only). | off |
-| Theme | One of sixty built-in themes, or your own from the home's `themes` folder ([Custom themes](COMMANDS.md#custom-themes)). A wide window previews the highlighted one. | `collider` |
+| Theme | One of sixty built-in themes, or your own from the home's `themes` folder ([Custom themes](COMMANDS.md#custom-themes)). A wide window previews the highlighted one. | `synthwave` |
 | Themed background | The terminal takes the theme's background while the app runs. | on |
 | Themed external windows | The [app's own windows](INTERFACE.md#the-apps-windows) wear the theme; off, they stay black. | on |
 | Gradient rules | The rules around the input line and pane headings shade along the theme's gradient. Solid themes and a theme's own `paneRule` stay flat. | on |
@@ -126,7 +126,7 @@ A browser front end for this profile, for a phone on the home network: the chat,
 | Web UI profile theme | Dresses the pages in the profile's theme, following a `/theme` at once; your lines and review lines take the terminal's colors. Off, they keep their own look. | on |
 | Web UI chat controls | Shows the Chat tab: transcript, message line and the app's questions. Off, the page opens on another [tab](INTERFACE.md#web-ui); the PC is unchanged. | on |
 | Web UI home controls | Shows the [Home tab](INTERFACE.md#the-home-tab) and lets it act. Unlocking, opening a garage, gate or door, and disarming still ask; `/ha` in the chat follows *Web UI commands*. | off |
-| Web UI shopping controls | Shows the Shopping tab: add, tick, change and remove lines, and change the store. `/shopping` at the PC is unchanged. | off |
+| Web UI shopping controls | Shows the Shopping tab: add, tick, change, place and remove lines, and change the store. `/shopping` at the PC is unchanged. | off |
 | Web UI YouTube controls | Shows the [YouTube tab](INTERFACE.md#the-youtube-tab) (macOS 14+ on a Mac): it plays videos started there and keeps the saved list. Off, *YouTube open links in* `webui-window` plays in the PC's video window. | off |
 
 ### Servers
@@ -209,7 +209,7 @@ A model the app downloads and runs itself on llama.cpp's `llama-server`, on Wind
 The catalog, one row per model; the pane lists each build with its size.
 
 * **An id's suffix** is the quantization: none is UD-Q4_K_XL; `-q5`, `-q6`, `-q8` are UD-Q5_K_XL, UD-Q6_K_XL, UD-Q8_K_XL; `-bf16` is BF16; `-qat` is a QAT build at UD-Q4_K_XL.
-* **Builds:** the quantized ones are Unsloth's, the uncensored ones HauhauCS's.
+* **Builds:** the quantized ones are Unsloth's, the uncensored ones HauhauCS's, plus TrevorJS's Muse Glimmer.
 
 | Model | Ids | Download | Drafter |
 |---|---|---|---|
@@ -225,6 +225,7 @@ The catalog, one row per model; the pane lists each build with its size.
 | Gemma 4 31B | `gemma-4-31b`, `-q5`, `-qat` | 18.8–23.6 GB | MTP (file) |
 | Gemma 4 31B QAT Uncensored | `gemma-4-31b-qat-uncensored` (Q4_K_M) | 20.2 GB | MTP (file) |
 | Muse Glimmer 30B | `muse-glimmer-30b`, `-q5` | 19.6–25.5 GB | DFlash (file) |
+| Muse Glimmer 30B Uncensored | `muse-glimmer-30b-uncensored` (Q4_K_M) | 20.8 GB | — |
 | Qwen3.6 35B A3B | `qwen3.6-35b-a3b`, `-q5` | 23.3–27.5 GB | — |
 | Qwen3.6 35B A3B Uncensored | `qwen3.6-35b-a3b-uncensored` (Q4_K_P) | 24.3 GB | — |
 | Qwen3.8 27B | `qwen3.8-27b`, `-q5`, `-q6` | 18.5–26.2 GB | MTP (built in) |
@@ -241,7 +242,7 @@ The catalog, one row per model; the pane lists each build with its size.
 | Embedded backend | The llama.cpp build: `auto` (CUDA with NVIDIA driver 580+, else Vulkan, else CPU), `cuda`, `vulkan` or `cpu`. On a Mac, `auto` and `metal` both pick Metal. | `auto` |
 | Embedded context length | The context window in tokens: 0 (**fit**) is the largest that fits on the GPU within *Embedded VRAM budget (%)*, else 512–262,144. | 0 (fit) |
 | Embedded GPU layers | Layers on the GPU: `auto` (as many as free VRAM holds), `all`, or a number (0 runs on the CPU). | `auto` |
-| Embedded VRAM budget (%) | GPU memory the server may fill: `off` (llama.cpp leaves 1 GiB free) or 50–99 %. It shrinks the context first, then moves layers to the CPU (much slower). A change restarts the server. | 91 % |
+| Embedded VRAM budget (%) | GPU memory the server may fill: `off` (llama.cpp leaves 1 GiB free) or 50–99 %. It shrinks the context first, then moves layers to the CPU (much slower). A change restarts the server. | 92 % |
 | Embedded VRAM only | Keeps the whole model on the GPU: if any lands in system RAM, the server stops and says what to lower. Refused on the CPU backend. | on |
 | Embedded vision | Loads the vision projector so the model reads images (about 1 GB more for most). Off, images sent to it are refused. | on |
 | Embedded drafter | Drafts tokens ahead and checks them, for faster replies with the same text. Turn it off if a model misbehaves. | on |
@@ -497,14 +498,14 @@ The tools most profiles use, and the pane's own options.
 | Web browser botcheck window | A bot check the web tools can't pass: `ask` asks (at the PC and on a connected Web UI page), then opens it in the Browser window for you to solve; `automatic` opens it unasked; `off` never. Windows and macOS 14+. | `ask` |
 | Web browser home page | Where the Browser window's home button and a bare `/browser` go: an address (`example.com`, `localhost:3000`), or empty for a blank page. | empty |
 | Web browser privacy | `keep-history` keeps the Browser window's visited pages for its history menu; `clear-history` clears them on close. Cookies and sign-ins stay (`/browser clear all` removes them). | `clear-history` |
-| Web open links in | Where `open_url` links go: `default-browser`, or `browser-window` (the app's Browser window, one page at a time; else the default browser). A YouTube link follows *YouTube open links in* under *YouTube tools*. | `default-browser` |
+| Web browser open | Where `open_url` links go: `default-browser`, or `browser-window` (the app's Browser window, one page at a time; else the default browser). A YouTube link follows *YouTube open links in* under *YouTube tools*. | `default-browser` |
 | Web browser sign in mode | How `/webui browser` and a double-click on `/webui`'s link or QR code sign your default browser in: `one-time-link` (good once, for a minute, so history keeps no token) or `url-with-token` (the usual link, which history may keep). See [Web UI](INTERFACE.md#web-ui). | `one-time-link` |
 | Web browser network mode | Where a fetch may reach: `internet` (public addresses), `lan` (the app's computer and the LAN, its adapters' prefixes included) or `both`. | `internet` |
 | Web search method | `metasearch` (built in: asks the engines in *Web metasearch engines*, never opens a bot check, skips an engine that refuses), `duckduckgo` (built in) or `searxng`. A profile keeps its saved method. | `metasearch` |
-| Web SearXNG URL | The SearXNG instance, for `searxng`. With no usable address, `searxng` uses the metasearch. | empty |
 | Web search max results | Hits per search (1–20). | 20 |
 | Web metasearch engines | Which engines `metasearch` asks: Bing, Brave, DuckDuckGo, Startpage and Wikipedia. With none on, a search says so and asks nobody. | all |
 | Web metasearch safe search | The filter `metasearch` asks for: `off`, `moderate` or `strict`. It reaches Bing, Brave and Startpage, and can't change DuckDuckGo's own default. | `off` |
+| Web SearXNG URL | The SearXNG instance, for `searxng`. With no usable address, `searxng` uses the metasearch. | empty |
 | Web download max (MB) | The largest file `download_file` saves (1–102,400). | 50 |
 
 #### Shell
@@ -565,7 +566,7 @@ The tools most profiles use, and the pane's own options.
 
 | Setting | What it does | Default |
 |---|---|---|
-| Timer tools | Offers `start_timer`, `stop_timer` and `list_timers`. Off, the prompt drops the timer sentence; `/timer` and running timers keep working. `/tools timers` opens its on/off page. | on |
+| Timer tools | Offers `start_timer`, `stop_timer` and `list_timers`. Off, the prompt drops the timer sentence; `/timer` and running timers keep working. `/tools timers` opens its on/off page. | off |
 | Timer tone | What a timer rings at each repeat until silenced or stopped, mid-reply too: `silent`, `chime`, `bell`, `beep` or `alarm`. For `/timer`'s and the model's timers, even with *Timer tools* off; never a stopwatch or on the Web UI. The picker plays each. | silent |
 
 #### Ask

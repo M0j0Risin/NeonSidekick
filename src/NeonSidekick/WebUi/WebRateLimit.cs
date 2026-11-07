@@ -88,7 +88,7 @@ public sealed class WebRateLimit
                 or WebUiHost.YouTubeSavedPlayPath or WebUiHost.YouTubeSavedRemovePath or WebUiHost.YouTubeSavedClearPath or WebUiHost.YouTubeSavedMovePath
                 or WebUiHost.YouTubeSavedSavePath   // the YouTube tab's saved list (later on 2026-10-16)
                 or WebUiHost.ShopAddPath or WebUiHost.ShopReAddPath or WebUiHost.ShopForgetPath or WebUiHost.ShopQuantityPath or WebUiHost.ShopRenamePath
-                or WebUiHost.ShopRemovePath or WebUiHost.ShopCheckAllPath or WebUiHost.ShopClearPath => WebRateBucket.Act,   // the Shopping tab's list controls (2026-10-16)
+                or WebUiHost.ShopRemovePath or WebUiHost.ShopCheckAllPath or WebUiHost.ShopClearPath or WebUiHost.ShopPlacePath => WebRateBucket.Act,   // the Shopping tab's list controls (2026-10-16; ⌖ place 2026-11-06)
             "/api/home/say" => WebRateBucket.Say,
             WebUiAuth.SignInPath => WebRateBucket.SignIn,
             WebUiHost.YouTubeReportPath or WebUiHost.YouTubeSeenPath => WebRateBucket.Report,   // the YouTube tab's (2026-10-16; seen later that day); its stream's GET is unlimited, as Chat's

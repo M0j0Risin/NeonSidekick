@@ -104,7 +104,7 @@ public class ThemeTests
     {
         using var scope = new ThemeScope();
         Assert.Same(ShippedThemes.Synthwave, Theme.Current);   // ModuleInit and ThemeScope: the renders the tests pin
-        Assert.Equal("collider", ThemeLibrary.Default.Name);  // what Theme starts on in the app (2026-10-05)
+        Assert.Equal("synthwave", ThemeLibrary.Default.Name);  // what Theme starts on in the app (2026-11-07)
         Assert.Equal(ShippedThemes.Synthwave.GradientStops, Theme.GradientStops);
     }
 

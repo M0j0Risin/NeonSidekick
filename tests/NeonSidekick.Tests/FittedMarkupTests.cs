@@ -30,6 +30,33 @@ public class FittedMarkupTests
         Assert.Equal(["a [b]"], Render(40, "a [[b]]"));
     }
 
+    /// <summary>
+    /// A row holding a glyph the terminal and Spectre count differently (2026-11-07): at every width it fits by both counts, so it can't pass
+    /// the window's edge or be split by the overlay's draw, and a glyph is never parted from its selector or joiner.
+    /// </summary>
+    [Theory]
+    [InlineData("🛠️")]
+    [InlineData("⚙️")]
+    [InlineData("⛓️‍💥")]
+    public void ARowHoldingAWideGlyph_FitsByBothCounts_AndKeepsTheGlyphWhole(string glyph)
+    {
+        using var console = new TestConsole();
+        var options = RenderOptions.Create(console, console.Profile.Capabilities);
+        string text = "abc" + glyph + "defghij" + glyph + "klm";
+        for (int width = 1; width <= 26; width++)
+        {
+            var segments = new FittedMarkup("[bold]" + text + "[/]").Render(options, width).ToList();
+            string drawn = string.Concat(segments.Select(s => s.Text));
+
+            Assert.True(TextCells.Width(drawn) <= width, $"{width}: {drawn}");
+            Assert.True(Segment.CellCount(segments) <= width, $"{width}: {drawn}");
+            string rest = drawn.Replace(glyph, "", StringComparison.Ordinal);   // what's left once every whole glyph is gone: no selector, no joiner
+            Assert.DoesNotContain('\uFE0F', rest);
+            Assert.DoesNotContain('\u200D', rest);
+            Assert.All(segments, s => Assert.Equal(Decoration.Bold, s.Style.Decoration));
+        }
+    }
+
     /// <summary>The cut lands inside the segment that overflows, and the ellipsis takes that segment's style; the segments before it are whole.</summary>
     [Fact]
     public void TheCut_IsInsideTheOverflowingSegment_TheEllipsisInItsStyle()
