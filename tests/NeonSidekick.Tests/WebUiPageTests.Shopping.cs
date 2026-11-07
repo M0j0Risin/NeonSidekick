@@ -296,6 +296,129 @@ public sealed partial class WebUiPageTests
         await page.WaitAsync("document.getElementById('message').textContent === " + JsonSerializer.Serialize(WebUiText.ShopWords.Gone), "the sentence");
     }
 
+    /// <summary>
+    /// The place sheet's note stays in the sheet, never under the page once it closes; a read that fails (not a line gone) keeps the sheet open and
+    /// says so; an unavailable list's sheet, with no title, keeps the line's (2026-11-07, the code review).
+    /// </summary>
+    [WindowsFact]
+    public async Task Shopping_ThePlaceSheet_KeepsItsNoteToItself_AndAFailedReadSaysSo()
+    {
+        _backend.PlacesList = new WebShopPlaces("⌖ Where is Milk?", 2, [], -1, false, "No aisles yet.");
+        if (await ShoppingPageAsync() is not { } page)
+        {
+            return;
+        }
+
+        await OpenMilkAsync(page);
+        await page.EvalAsync("document.getElementById('place').click()");
+        await page.WaitAsync("document.getElementById('sheet-note').textContent === 'No aisles yet.'", "the note");
+        Assert.NotEqual("No aisles yet.", await page.TextAsync("document.getElementById('message').textContent"));
+        await KeyAsync(page, "Escape", "document");
+        await page.WaitAsync("!(" + Sheet + ")", "closed");
+        Assert.NotEqual("No aisles yet.", await page.TextAsync("document.getElementById('message').textContent"));
+
+        _backend.PlacesFail = true;
+        await OpenMilkAsync(page);
+        await page.EvalAsync("document.getElementById('place').click()");
+        await page.WaitAsync("document.getElementById('sheet-note').textContent === " + JsonSerializer.Serialize(WebUiText.ShopWords.PlaceFailed), "the failed read's sentence");
+        Assert.True((await page.EvalAsync(Sheet)).GetBoolean());
+        Assert.False((await page.EvalAsync("document.getElementById('place-body').classList.contains('hidden')")).GetBoolean());
+
+        _backend.PlacesFail = false;
+        _backend.PlacesList = WebShoppingView.UnavailablePlaces;
+        await KeyAsync(page, "Escape", "document");
+        await page.WaitAsync("!(" + Sheet + ")", "closed again");
+        await OpenMilkAsync(page);
+        await page.EvalAsync("document.getElementById('place').click()");
+        await page.WaitAsync("document.getElementById('sheet-note').textContent === " + JsonSerializer.Serialize(Shopping.ShoppingText.Unavailable), "the unavailable list's note");
+        Assert.Equal("Milk", await page.TextAsync("document.getElementById('sheet-title').textContent"));
+    }
+
+    /// <summary>
+    /// ⌖ with a name typed and not saved (2026-11-07, the code review: it was dropped): the name is saved first and the place sheet opens; a refused
+    /// rename leaves the line's sheet open with the reason, and nothing is read.
+    /// </summary>
+    [WindowsFact]
+    public async Task Shopping_ThePlaceButton_SavesATypedName_AndStopsWhenTheRenameIsRefused()
+    {
+        if (await ShoppingPageAsync() is not { } page)
+        {
+            return;
+        }
+
+        await OpenMilkAsync(page);
+        await SetInputAsync(page, "rename-text", "Oat milk");
+        await page.EvalAsync("document.getElementById('place').click()");
+        await page.WaitAsync("!document.getElementById('place-body').classList.contains('hidden')", "the place sheet");
+        await WaitForAsync(() => _backend.ShopCalls.Contains("places 7"));
+        Assert.Equal(["rename 7 Oat milk", "places 7"], _backend.ShopCalls);
+
+        await KeyAsync(page, "Escape", "document");
+        await page.WaitAsync("!(" + Sheet + ")", "closed");
+        _backend.ShopCalls.Clear();
+        _backend.ShopReply = new WebReply(WebOutcome.Refused, "That name is taken.");
+        await OpenMilkAsync(page);
+        await SetInputAsync(page, "rename-text", "Eggs");
+        await page.EvalAsync("document.getElementById('place').click()");
+        await page.WaitAsync("document.getElementById('sheet-note').textContent === 'That name is taken.'", "the refusal");
+        Assert.False((await page.EvalAsync("document.getElementById('line-body').classList.contains('hidden')")).GetBoolean());
+        await Task.Delay(300);
+        Assert.Equal(["rename 7 Eggs"], _backend.ShopCalls);
+    }
+
+    /// <summary>The sheet closed while ⌖'s save is on its way stays closed (2026-11-07, the code review: the place sheet came back over the list).</summary>
+    [WindowsFact]
+    public async Task Shopping_ThePlaceButton_ClosedWhileSaving_StaysClosed()
+    {
+        if (await ShoppingPageAsync() is not { } page)
+        {
+            return;
+        }
+
+        using var arrived = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        _backend.OnShop = call =>
+        {
+            if (call.StartsWith("rename ", StringComparison.Ordinal))
+            {
+                arrived.Set();
+                release.Wait(TimeSpan.FromSeconds(20));
+            }
+        };
+        await OpenMilkAsync(page);
+        await SetInputAsync(page, "rename-text", "Oat milk");
+        await page.EvalAsync("document.getElementById('place').click()");
+        Assert.True(arrived.Wait(TimeSpan.FromSeconds(10)), "the rename never posted");
+        await KeyAsync(page, "Escape", "document");
+        await page.WaitAsync("!(" + Sheet + ")", "closed mid-save");
+        release.Set();
+        await Task.Delay(500);
+        Assert.False((await page.EvalAsync(Sheet)).GetBoolean());
+        Assert.DoesNotContain("places 7", _backend.ShopCalls);
+    }
+
+    /// <summary>A $ pattern typed in the place filter, and one in a line's name, are text (2026-11-07, the code review: replace() read $& as its match).</summary>
+    [WindowsFact]
+    public async Task Shopping_DollarPatterns_InTheFilterAndAName_AreText()
+    {
+        WebShopPlaceChoice[] nine = [.. Enumerable.Range(1, 9).Select(i => new WebShopPlaceChoice("Aisle " + i.ToString(System.Globalization.CultureInfo.InvariantCulture), i, null))];
+        _backend.PlacesList = new WebShopPlaces("⌖ Where is Milk?", 2, nine, -1, false, null);
+        if (await PlaceSheetAsync(9) is not { } page)
+        {
+            return;
+        }
+
+        await SetInputAsync(page, "place-filter", "a $& b $1");
+        await page.WaitAsync("document.getElementById('place-none').textContent.includes('a $& b $1')", "the filter as typed");
+        Assert.Equal(WebUiText.ShopWords.NoMatch.Replace("{0}", "a $& b $1", StringComparison.Ordinal), await page.TextAsync("document.getElementById('place-none').textContent"));
+
+        const string Named = "Tea $& cakes";
+        _backend.List = _backend.List! with { Groups = [new WebShopGroup("Unplaced", [ShopLine(7, Named)])] };
+        await SignedInAsync("/shopping");
+        await page.WaitAsync("document.querySelectorAll('.shop-row .shop-more').length === 1", "the one line");
+        Assert.Equal(WebUiText.ShopWords.Options.Replace("{0}", Named, StringComparison.Ordinal), await page.TextAsync("document.querySelector('.shop-more').getAttribute('aria-label')"));
+    }
+
     [WindowsFact]
     public async Task Shopping_EscAndBack_CloseASheet()
     {

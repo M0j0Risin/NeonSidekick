@@ -328,7 +328,7 @@ public sealed class WindowsConsoleInput : IAnsiConsoleInput, IInputEvents, IMous
                                     DiagnosticLog.Debug(Category, $"Mouse {click.Button} click at column {click.X}, buffer row {click.Y}.");
                                 }
 
-                                _events.Writer.TryWrite(mouse);
+                                _events.Writer.TryWrite(InputEvent.Stamped(mouse, TimeProvider.System.GetTimestamp()));
                             }
                         }
                         else if (wheel)
@@ -378,7 +378,7 @@ public sealed class WindowsConsoleInput : IAnsiConsoleInput, IInputEvents, IMous
                     DiagnosticLog.Debug(Category, $"Paste of {paste.Text.Length} characters{(joins ? " (continued)" : "")}.");
                 }
 
-                _events.Writer.TryWrite(e);
+                _events.Writer.TryWrite(InputEvent.Stamped(e, TimeProvider.System.GetTimestamp()));
             }
 
             pasteEndedAt = endsAsPaste ? Stopwatch.GetTimestamp() : null;

@@ -836,8 +836,12 @@ public sealed class MenuPane : INoticeSink
             _first = 0;
             _clickedRow = -1;
         }
-        else if (!string.Equals(_page.Title, page.Title, StringComparison.Ordinal))
+        else if (!string.Equals(_page.Title, page.Title, StringComparison.Ordinal)
+            || !string.Equals(_page.Filter, page.Filter, StringComparison.Ordinal) || _page.Rows.Count != page.Rows.Count)
         {
+            // Other rows under the clicked index (2026-11-07, the code review: a filter typed after a click kept the heading hidden): the click
+            // no longer holds them still. Not the rows' own text: many hosts build them anew on every draw, and a live row changing after a click
+            // mustn't bring a heading in under the pointer.
             _clickedRow = -1;
         }
 
@@ -927,7 +931,7 @@ public sealed class MenuPane : INoticeSink
                         _clicks.Reset();
                         int main = _stripRows - _subRows;
                         if (at >= main && page.Tabs is { } held && held[page.Tab].SubTabs is { Count: > 0 } subs
-                            && InfoPane.SubTabAt(page.Title, Titles(subs), Width, click.X, at - main, Badges(subs)) is int sub && sub != page.Sub)
+                            && InfoPane.SubTabAt(StripLabel(page, Width), Titles(subs), Width, click.X, at - main, Badges(subs)) is int sub && sub != page.Sub)
                         {
                             count = SwitchTab(page, held, page.Tab, sub);
                         }
@@ -978,9 +982,8 @@ public sealed class MenuPane : INoticeSink
                         if (at - Header is int g && g >= 0 && g < _shown && _first + g < _lines.Count
                             && grid.CellAt(_lines[_first + g], click.X) is int cell && page.IsStop(cell))
                         {
-                            if (_pane.ClickIsStale(click.X, at))
+                            if (Stale(click, at))
                             {
-                                _clicks.Reset();
                                 continue;
                             }
 
@@ -999,9 +1002,8 @@ public sealed class MenuPane : INoticeSink
                     else if (at - Header is int i && i >= 0 && i < _shown && page.IsStop(_first + i))
                     {
                         // A heading or a gap (2026-10-03) is no row to land on: the else below, as a miss.
-                        if (_pane.ClickIsStale(click.X, at))
+                        if (Stale(click, at))
                         {
-                            _clicks.Reset();
                             continue;
                         }
 
@@ -1220,6 +1222,18 @@ public sealed class MenuPane : INoticeSink
             _cursor = next;
             Show();
             highlighted?.Invoke(_cursor);
+        }
+
+        // A click on a list row aimed at the rows before a change (ScreenPane.ClickIsStale): dropped, and the double-click pair with it.
+        bool Stale(InputEvent.Click click, int at)
+        {
+            if (!_pane.ClickIsStale(click.X, at, click.At))
+            {
+                return false;
+            }
+
+            _clicks.Reset();
+            return true;
         }
     }
 
@@ -1484,8 +1498,35 @@ public sealed class MenuPane : INoticeSink
     {
         ArgumentNullException.ThrowIfNull(page);
         return page.Tabs is { } tabs && page.Tab >= 0 && page.Tab < tabs.Count && tabs[page.Tab].SubTabs is { Count: > 0 } subs
-            ? InfoPane.SubStripRows(page.Title, Titles(subs), page.Sub, width, Badges(subs), Offs(subs))
+            ? InfoPane.SubStripRows(StripLabel(page, width), Titles(subs), page.Sub, width, Badges(subs), Offs(subs))
             : [];
+    }
+
+    /// <summary>
+    /// <paramref name="page"/>'s title as its strips show it at <paramref name="width"/> (2026-11-07, <see cref="InfoPane.StripLabel"/> over the first
+    /// strip's titles): the second strip, its clicks and the tabs' height indent by it, so they take it from here, never cutting it again. Pure.
+    /// </summary>
+    public static string StripLabel(MenuPage page, int width)
+    {
+        ArgumentNullException.ThrowIfNull(page);
+        var (titles, badges) = FirstStrip(page);
+        return InfoPane.StripLabel(page.Title, titles, width, badges);
+    }
+
+    /// <summary>The titles of <paramref name="page"/>'s first strip and their badges, as <see cref="TopRows"/> draws them; none on a title alone.</summary>
+    private static (List<string> Titles, List<string?>? Badges) FirstStrip(MenuPage page)
+    {
+        if (page.Tabs is { } withButtons && page.TabButtons && page.Buttons is { Count: > 0 } tabButtons)
+        {
+            return ([.. Titles(withButtons), .. Titles(tabButtons)], null);
+        }
+
+        if (page.Tabs is { } tabs)
+        {
+            return (Titles(tabs), Badges(tabs));
+        }
+
+        return (page.Buttons is { Count: > 0 } buttons ? Titles(buttons) : [], null);
     }
 
     /// <summary>
@@ -1508,7 +1549,7 @@ public sealed class MenuPane : INoticeSink
         {
             if (tab.SubTabs is { Count: > 0 } subs)
             {
-                int strip = InfoPane.SubStripLayout(page.Title, Titles(subs), width, Badges(subs)).Rows;
+                int strip = InfoPane.SubStripLayout(StripLabel(page, width), Titles(subs), width, Badges(subs)).Rows;
                 tallest = Math.Max(tallest, strip + subs.Max(s => Body(s)));
                 continue;
             }
@@ -1536,18 +1577,21 @@ public sealed class MenuPane : INoticeSink
         _sideWidth = page.Side is not null && page.Rows.Count > 0 ? SideWidth(Width) : 0;
         _listWidth = _sideWidth > 0 ? Width - 1 - _sideWidth - SideGap : Width;
         var top = TopRows(page, Width);
-        var topLines = top.Select(row => (IRenderable)new Markup(row).Overflow(Overflow.Ellipsis)).ToList();
-        var statusLines = _status.Select(status => (IRenderable)new Markup(StatusMarkup(status.Kind, status.Text)).Overflow(Overflow.Ellipsis)).ToList();
-        _stripRows = DrawnRows(topLines, sided: false);
-        _statusRows = statusLines.Count == 0 ? 1 : DrawnRows(statusLines, _sideWidth > 0);
+        // A strip with titles is drawn one row per layout row (2026-11-07, the code review), its label cut to fit (StripLabel), so the clicks'
+        // rows are the drawn ones; a title alone, or a strip whose buttons are all hidden, wraps, with nothing to misclick.
+        bool titled = FirstStrip(page).Titles.Count > 0;
+        var topLines = Drawn(top.Select(row => titled ? new FittedMarkup(row) : (IRenderable)new Markup(row).Overflow(Overflow.Ellipsis)).ToList(), sided: false);
+        var statusLines = Drawn(_status.Select(status => (IRenderable)new Markup(StatusMarkup(status.Kind, status.Text)).Overflow(Overflow.Ellipsis)).ToList(), _sideWidth > 0);
+        _stripRows = topLines.Count;
+        _statusRows = statusLines.Count == 0 ? 1 : statusLines.Count;
         _subRows = SubStripRows(page, Width).Count;
         int footer = page.Footer is null ? 0 : FooterRuleRows + FooterRows;
         int content = _pane.MenuContentRows(Height, _inputRows);
         // A question's caption (2026-10-10, CaptionGrows) takes what the room leaves over a few list rows, not three.
         int captionMax = page.CaptionGrows ? CaptionRoom(content, _stripRows, _statusRows, footer, page.Rows.Count) : CaptionMaxRows;
         IReadOnlyList<string> caption = page.Caption is { } captionText ? CaptionRows(captionText, _listWidth, captionMax) : [];
-        var captionLines = caption.Select(row => (IRenderable)new Markup(Markup.Escape(row), Theme.Body).Overflow(Overflow.Ellipsis)).ToList();
-        _captionRows = DrawnRows(captionLines, _sideWidth > 0);
+        var captionLines = Drawn(caption.Select(row => (IRenderable)new Markup(Markup.Escape(row), Theme.Body).Overflow(Overflow.Ellipsis)).ToList(), _sideWidth > 0);
+        _captionRows = captionLines.Count;
         int header = Header;
         int capacity = content - header - footer;
         bool more;
@@ -1661,20 +1705,25 @@ public sealed class MenuPane : INoticeSink
         {
             // Under the title, each row is the list's part, the gap and the side's line (2026-10-02); the title row keeps
             // the window's width, so the × keeps its corner.
-            int rows = lines.Count - top.Count;
+            int rows = lines.Count - topLines.Count;
             var side = page.Side!(_cursor, _sideWidth, rows);
             for (int i = 0; i < rows; i++)
             {
-                lines[top.Count + i] = new SideBySide(lines[top.Count + i], _listWidth, SideGap, i < side.Count ? side[i] : null, _sideWidth);
+                lines[topLines.Count + i] = new SideBySide(lines[topLines.Count + i], _listWidth, SideGap, i < side.Count ? side[i] : null, _sideWidth);
             }
         }
 
-        _pane.ShowOverlay(new Rows(lines), page.Hint, input: _inputRows > 0, close: true, aim: Aim(page, header));
+        // No targets under an edit (2026-11-07, the code review): the rows take no click while the input slot is open, so none lights up.
+        _pane.ShowOverlay(new Rows(lines), page.Hint, input: _inputRows > 0, close: true, aim: _inputRows > 0 ? null : Aim(page, header));
     }
 
-    /// <summary>The rows <paramref name="lines"/> take as drawn; under a side column, whose page draws only each one's first row, one each.</summary>
-    private int DrawnRows(IReadOnlyList<IRenderable> lines, bool sided) =>
-        sided ? lines.Count : lines.Count == 0 ? 0 : ScreenPane.MeasureRows(new Rows(lines), _pane, Width);
+    /// <summary>
+    /// <paramref name="lines"/> as drawn, one entry per row, so the count is the rows they take. Rendered here once, across the window, and drawn
+    /// as rendered (2026-11-07, the code review: they were rendered once to count and again to draw). Under a side column, whose page draws
+    /// only each one's first row, they stay as they are, one row each.
+    /// </summary>
+    private List<IRenderable> Drawn(List<IRenderable> lines, bool sided) =>
+        sided || lines.Count == 0 ? lines : [.. ScreenPane.RenderLines(new Rows(lines), _pane, Width).Select(row => (IRenderable)new SegmentLines(row))];
 
     /// <summary>
     /// What this draw has on show (2026-11-07): the list's rows across the list's width, so never the side column, or a grid's cells across
@@ -1699,14 +1748,26 @@ public sealed class MenuPane : INoticeSink
                     }
                 }
             }
-            else if (page.IsStop(r))
+            else if (page.IsStop(r) && !IsPlaceholder(page, r))
             {
                 targets.Add(new OverlayTarget(header + i, 0, _listWidth - 1, page.Rows[r], r == _cursor));
             }
         }
 
-        return new OverlayAim(string.Join('\n', page.Title, page.Tab, page.Sub, header), targets);
+        return new OverlayAim(string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{page.Title}\n{page.Tab}\n{page.Sub}\n{header}"), targets);
     }
+
+    /// <summary>
+    /// Whether <paramref name="row"/> stands in for rows the page doesn't have (2026-11-07, the code review: they lit up under the pointer): a page's
+    /// only row when it's all dim (<see cref="Theme.IsAllDim"/>, an empty list's notice), or the filter's no-match row
+    /// (<see cref="MenuFilter.NoMatchRow"/>, <see cref="MenuFilter.NoMatchNameRow"/>), under other rows too. A dim row among others is a real one:
+    /// <c>/mcp</c> draws a tool that's off all dim, and it takes a click. Pure.
+    /// </summary>
+    private static bool IsPlaceholder(MenuPage page, int row) =>
+        (page.Rows.Count == 1 && Theme.IsAllDim(page.Rows[0]))
+        || (page.Filter is { Length: > 0 } filter
+            && (string.Equals(page.Rows[row], MenuFilter.NoMatchRow(filter), StringComparison.Ordinal)
+                || string.Equals(page.Rows[row], MenuFilter.NoMatchNameRow(filter), StringComparison.Ordinal)));
 
     /// <summary>What the band says for <paramref name="row"/>: the shown tab's own footer (2026-10-10, <see cref="MenuTab.Footer"/>), else the page's.</summary>
     private static MenuFooter? FooterFor(MenuPage page, int row) =>

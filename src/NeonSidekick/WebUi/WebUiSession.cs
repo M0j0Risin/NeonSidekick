@@ -923,7 +923,7 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
         return reply;
     }
 
-    public WebShopPlaces? ShopPlaces(long id) => _shopping() is { } list ? WebShoppingView.Places(list, id) : null;
+    public WebShopPlaces? ShopPlaces(long id) => _shopping() is { } list ? WebShoppingView.Places(list, id) : WebShoppingView.UnavailablePlaces;
 
     public WebReply ShopPlace(WebShopPlace request, IPAddress? remote)
     {

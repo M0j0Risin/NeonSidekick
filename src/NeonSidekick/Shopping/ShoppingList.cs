@@ -293,25 +293,35 @@ public sealed partial class ShoppingList(Func<ShoppingStore> store)
     /// <see cref="ShoppingPlacer.Key"/>) is the one moved, its note kept, and any more such are forgotten (2026-10-11 review: a second fact
     /// of the same key lost the tie to the old one, so the line stayed where it was while the answer said it moved). The answer as a sentence.
     /// </summary>
-    public string PlaceItem(ShopStore shop, ShopItem item, ShopLocation? location, ShopSection? section)
+    /// <param name="facts">The item facts of its name when the caller already read them (<see cref="ItemFacts"/>); null reads them.</param>
+    public string PlaceItem(ShopStore shop, ShopItem item, ShopLocation? location, ShopSection? section, IReadOnlyList<ShopPlacement>? facts = null)
     {
         ArgumentNullException.ThrowIfNull(shop);
         ArgumentNullException.ThrowIfNull(item);
-        var store = _store();
-        string key = ShoppingPlacer.Key(item.Name);
-        var same = store.Placements(shop.Id).Where(p => p.Kind == ShoppingKinds.Item && ShoppingPlacer.Key(p.Term) == key).ToList();
+        var same = facts ?? ItemFacts(shop, item.Name);
         string answer = same.Count > 0
             ? Place(shop, same[0].Term, ShoppingKinds.Item, location?.Label, location is null ? section?.Name : null, ShoppingSources.User, same[0].Note)
             : Place(shop, item.Name, ShoppingKinds.Item, location?.Label, location is null ? section?.Name : null, ShoppingSources.User);
-        if (!answer.StartsWith("Error: ", StringComparison.Ordinal))
+        if (!answer.StartsWith("Error: ", StringComparison.Ordinal) && same.Count > 1)
         {
-            foreach (var extra in same.Skip(1))
-            {
-                store.RemovePlacement(extra.Id);
-            }
+            _store().RemovePlacements([.. same.Skip(1).Select(extra => extra.Id)]);
         }
 
         return answer;
+    }
+
+    /// <summary>
+    /// Whether placing a line whose item facts are <paramref name="facts"/> at <paramref name="location"/> (or in <paramref name="section"/> alone)
+    /// would change nothing (2026-11-07, the code review: the Web UI's ⌖ on the row a line was on rewrote it, logged a move and flashed on the PC):
+    /// its one fact is the user's and says just what <see cref="PlaceItem"/> would write, the location with no section of its own or the section
+    /// with no location. A second fact (<see cref="PlaceItem"/> cleans those up) or a model's guess (a tap makes it the user's) is a change. Pure.
+    /// </summary>
+    public static bool IsPlacedAt(IReadOnlyList<ShopPlacement> facts, ShopLocation? location, ShopSection? section)
+    {
+        ArgumentNullException.ThrowIfNull(facts);
+        return facts is [var only] && only.Source == ShoppingSources.User
+            && (location is not null ? only.LocationId == location.Id && only.SectionId is null
+                : section is not null && only.LocationId is null && only.SectionId == section.Id);
     }
 
     /// <summary>
@@ -334,19 +344,30 @@ public sealed partial class ShoppingList(Func<ShoppingStore> store)
     {
         ArgumentNullException.ThrowIfNull(shop);
         ArgumentNullException.ThrowIfNull(item);
-        var facts = ItemFacts(shop, item.Name);
+        return ForgetFacts(shop, item, ItemFacts(shop, item.Name));
+    }
+
+    /// <summary>
+    /// <see cref="ForgetItem"/> over <paramref name="facts"/>, the item facts the caller already read (2026-11-07, the code review: the Web UI's forget
+    /// read them twice). All of them go in one transaction or none do; none left to forget (another device was first) is
+    /// <see cref="ShoppingText.NotPlaced"/>.
+    /// </summary>
+    public string ForgetFacts(ShopStore shop, ShopItem item, IReadOnlyList<ShopPlacement> facts)
+    {
+        ArgumentNullException.ThrowIfNull(shop);
+        ArgumentNullException.ThrowIfNull(item);
+        ArgumentNullException.ThrowIfNull(facts);
         if (facts.Count == 0)
         {
             return ShoppingText.NotPlaced(shop, item.Name);
         }
 
-        bool all = true;
-        foreach (var fact in facts)
+        return _store().RemovePlacements([.. facts.Select(f => f.Id)]) switch
         {
-            all &= _store().RemovePlacement(fact.Id);
-        }
-
-        return all ? Logged(ShoppingText.Unplaced(shop, facts[0].Term)) : "Error: " + ShoppingText.WriteFailed;
+            null => "Error: " + ShoppingText.WriteFailed,
+            0 => ShoppingText.NotPlaced(shop, item.Name),
+            _ => Logged(ShoppingText.Unplaced(shop, facts[0].Term)),
+        };
     }
 
     /// <summary>A fact moved to <paramref name="location"/> (or <paramref name="section"/> alone), its kind and note kept, the user's from then on.</summary>

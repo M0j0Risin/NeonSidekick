@@ -129,10 +129,10 @@ public enum SettingsField
     /// <summary>A picker over <see cref="Web.NetworkMode.Names"/>: where <c>web_fetch</c> may reach (<see cref="Settings.AppSettingsData.WebBrowserNetworkMode"/>; the on/off <c>Browser allow LAN</c> until 2026-09-18, this slot kept). On the Web tab; no reconnect (read at each connect).</summary>
     WebBrowserNetworkMode,
 
-    /// <summary>A SearXNG instance's URL, read while <see cref="WebSearchMethod"/> is <c>searxng</c>, or empty (<see cref="Settings.AppSettingsData.WebSearxngUrl"/>). On the Web tab under <see cref="WebSearchMethod"/>; typed, no reconnect (read at each search).</summary>
+    /// <summary>A SearXNG instance's URL, read while <see cref="WebSearchMethod"/> is <c>searxng</c>, or empty (<see cref="Settings.AppSettingsData.WebSearxngUrl"/>). On the Web tab under <see cref="WebMetasearchSafeSearch"/>, its own SearXNG (external) section; typed, no reconnect (read at each search).</summary>
     WebSearxngUrl,
 
-    /// <summary>How many hits a <c>web_search</c> without <c>max_results</c> returns (<see cref="Settings.AppSettingsData.WebSearchMaxResults"/>). The Web tab's last row; typed, no reconnect.</summary>
+    /// <summary>How many hits a <c>web_search</c> without <c>max_results</c> returns (<see cref="Settings.AppSettingsData.WebSearchMaxResults"/>). On the Web tab under <see cref="WebSearchMethod"/>; typed, no reconnect.</summary>
     WebSearchMaxResults,
 
     /// <summary>Whether the voice pickers speak <see cref="SettingsMenu.VoicePreviewText"/> in the highlighted voice, and the mix and speed rows the blend at the value they just saved (<see cref="Settings.AppSettingsData.TtsVoicePreview"/>). On the TTS tab, last; a toggle on by default, no reconnect (read at the next pick or save).</summary>
@@ -141,7 +141,7 @@ public enum SettingsField
     /// <summary>Whether a turn offers the file tools (seventeen with convert_to_pdf since the image tools, 2026-10-04; fifteen once those became their own group, 2026-10-10, with read_pdf, 2026-10-14, sixteen with pdf_edit later that day, seventeen with read_office, 2026-10-28, nineteen with convert_to_docx and convert_to_xlsx, 2026-10-29; <see cref="Settings.AppSettingsData.FileTools"/>). The Files tab's first row (2026-09-15); a toggle, no reconnect (read at each turn).</summary>
     FileTools,
 
-    /// <summary>A picker over <see cref="Web.SearchMethod.Names"/>: which engine <c>web_search</c> asks (<see cref="Settings.AppSettingsData.WebSearchMethod"/>). On the Web tab above <see cref="WebSearxngUrl"/> (2026-09-15); no reconnect (read at each search).</summary>
+    /// <summary>A picker over <see cref="Web.SearchMethod.Names"/>: which engine <c>web_search</c> asks (<see cref="Settings.AppSettingsData.WebSearchMethod"/>). On the Web tab above <see cref="WebSearchMaxResults"/>; no reconnect (read at each search).</summary>
     WebSearchMethod,
 
     /// <summary>Whether a turn offers the question tool <c>ask_user</c> (<see cref="Settings.AppSettingsData.AskUser"/>). The Ask tab's first row (2026-09-15); a toggle, no reconnect (read at each turn), the pane still a gate.</summary>

@@ -885,7 +885,11 @@ public static class WebUiText
         Place: Shopping.ShoppingText.PlaceButton,
         PlaceFilter: "Filter the places",
         ForgetPlace: Shopping.ShoppingText.ForgetPlaceRow,
-        ForgetPlaceArmed: "Tap again to forget where it is");
+        ForgetPlaceArmed: "Tap again to forget where it is",
+        PlaceFailed: PlacesNotRead);
+
+    /// <summary>The ⌖ place sheet's read failed (2026-11-07, the code review: the sheet stayed empty and said nothing). Close it and try again.</summary>
+    public const string PlacesNotRead = "Couldn't read the places. Close this and try again.";
 
     /// <summary>A button word with its runs of spaces made one.</summary>
     internal static string Collapsed(string text) => string.Join(' ', text.Split(' ', StringSplitOptions.RemoveEmptyEntries));

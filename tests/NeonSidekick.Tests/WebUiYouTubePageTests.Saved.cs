@@ -149,6 +149,11 @@ public sealed partial class WebUiYouTubePageTests
         await page.EvalAsync("(() => { const f = document.getElementById('saved-filter'); f.value = 'nothing like it'; f.dispatchEvent(new Event('input')); })()");
         await page.WaitAsync("document.querySelectorAll('.yt-row').length === 0", "no rows");
         Assert.Equal(WebUiText.VideoWords.Saved!.NoMatch.Replace("{0}", "nothing like it", StringComparison.Ordinal), await page.TextAsync("document.getElementById('saved-note').textContent"));
+
+        // A $ pattern in the filter is text (2026-11-07, the code review: replace() read $& as the matched placeholder).
+        await page.EvalAsync("(() => { const f = document.getElementById('saved-filter'); f.value = 'a $& b $1'; f.dispatchEvent(new Event('input')); })()");
+        await page.WaitAsync("document.getElementById('saved-note').textContent.includes('a $& b $1')", "the filter as typed");
+        Assert.Equal(WebUiText.VideoWords.Saved!.NoMatch.Replace("{0}", "a $& b $1", StringComparison.Ordinal), await page.TextAsync("document.getElementById('saved-note').textContent"));
     }
 
     [WindowsFact]

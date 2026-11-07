@@ -1,3 +1,4 @@
+using NeonSidekick.App;
 using NeonSidekick.Tests.Fakes;
 using NeonSidekick.UI;
 using Spectre.Console;
@@ -611,6 +612,66 @@ public class InfoPaneTests : IDisposable
         var pane = new ScreenPane(_console, new ScreenGeometry(() => null, () => cursorTop), _time) { Hint = () => "idle" };
         var input = new ScriptedInput();
         return (pane, input, new KeySource(input, TimeSpan.FromMilliseconds(1)));
+    }
+
+    // ── A long label beside the strip (2026-11-07, the code review) ─────────
+
+    [Fact]
+    public void StripLabel_KeepsAShortLabel_AndCutsALongOneToItsCap()
+    {
+        string[] tasks = ["Ready", "Running", "Disabled", "All", "⟳ refresh", "computer", "folder", "Windows' own: shown"];
+        Assert.Equal(InfoPane.Title, InfoPane.StripLabel(InfoPane.Title, ["One", "Two", "Three"], 40));
+        Assert.Equal("anything", InfoPane.StripLabel("anything", [], 20));   // nothing to click: never cut
+
+        // Everything up to the last " · " whole, the path keeping its innermost folders.
+        string label = @"🗓️ Tasks · DESKTOP-4K2M9QX · \Microsoft\Windows\Customer Experience Improvement Program";
+        string cut = InfoPane.StripLabel(label, tasks, 80);
+        Assert.StartsWith("🗓️ Tasks · DESKTOP-4K2M9QX · …", cut, StringComparison.Ordinal);
+        Assert.EndsWith(" Program", cut, StringComparison.Ordinal);
+        Assert.Equal(40, TextCells.Width(cut));          // half the window
+
+        // Too little left after the last " · ": both ends around one "…".
+        string plain = new string('a', 30) + new string('z', 30);
+        string even = InfoPane.StripLabel(plain, tasks, 60);
+        Assert.Equal(1, even.Count(c => c == '…'));
+        Assert.StartsWith("a", even, StringComparison.Ordinal);
+        Assert.EndsWith("z", even, StringComparison.Ordinal);
+        Assert.InRange(TextCells.Width(even), InfoPane.MinLabelCells, 30);
+        Assert.InRange(even.IndexOf('…', StringComparison.Ordinal), (TextCells.Width(even) / 2) - 1, (TextCells.Width(even) / 2) + 1);
+    }
+
+    public static TheoryData<string> TaskFolders() => [.. StripChecks.TaskFolders];
+
+    /// <summary>
+    /// The reproduction's task detail pane (2026-11-07, the code review): a task's path as the label, the seven buttons dead at 80 and 100
+    /// columns. At every width the strip is drawn as laid out and every button's click presses it.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(TaskFolders))]
+    public async Task ATaskDetailPane_DrawsAsLaidOut_AndEveryButtonsClickLands_AtEveryWidth(string path)
+    {
+        InfoAction[] actions = [TasksMenu.CopyAction, TasksMenu.AskAction, TasksMenu.RunAction, TasksMenu.EndAction, TasksMenu.EnableAction, TasksMenu.DisableAction, TasksMenu.HistoryAction];
+        string[] titles = [.. actions.Select(a => a.Title)];
+        string label = TasksMenu.TitleFor("DESKTOP-4K2M9QX", path);
+        foreach (int width in StripChecks.Widths)
+        {
+            _console.Profile.Width = width;
+            var layout = InfoPane.TabStripLayout(label, titles, width);
+            StripChecks.DrawnAsLaidOut(InfoPane.TabStripRows(label, actions, [], -1, width), layout, titles, width);
+            for (int i = 0; i < actions.Length; i++)
+            {
+                var (pane, input, keys) = ClickablePane(cursorTop: 100);
+                using var _ = pane;
+                pane.Show();
+                input.PushClick(layout.Places[i].Column + 1, 100 + layout.Places[i].Row);
+                input.Push(Keys.Escape);
+                var info = new InfoPane(pane, keys);
+
+                await info.ShowAsync(label, [Tab("Consolidator", "the task")], 0, CancellationToken.None, actions);
+
+                Assert.True(ReferenceEquals(actions[i], info.Pressed), $"{width}, {titles[i]}: {info.Pressed?.Title}");
+            }
+        }
     }
 
     [Fact]

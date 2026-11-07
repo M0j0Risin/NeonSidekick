@@ -37,8 +37,14 @@ internal sealed class FittedMarkup : IRenderable
         return Fit(segments, maxWidth);
     }
 
-    /// <summary>The cells a row takes: the wider of what the terminal draws (<see cref="TextCells"/>) and what Spectre counts. Control codes take none. Pure.</summary>
-    public static int RowCells(IReadOnlyList<Segment> segments)
+    /// <summary>The cells a row takes: the wider of what the terminal draws (<see cref="DrawnCells"/>) and what Spectre counts. Control codes take none. Pure.</summary>
+    public static int RowCells(IReadOnlyList<Segment> segments) => Math.Max(DrawnCells(segments), Segment.CellCount(segments));
+
+    /// <summary>
+    /// The cells the terminal draws a row in (<see cref="TextCells"/>), control codes none (2026-11-07, the code review): where the cursor
+    /// stops, so what decides whether a row leaves old cells to erase. Pure.
+    /// </summary>
+    public static int DrawnCells(IReadOnlyList<Segment> segments)
     {
         ArgumentNullException.ThrowIfNull(segments);
         int cells = 0;
@@ -47,7 +53,7 @@ internal sealed class FittedMarkup : IRenderable
             cells += segment.IsControlCode ? 0 : TextCells.Width(segment.Text);
         }
 
-        return Math.Max(cells, Segment.CellCount(segments));
+        return cells;
     }
 
     /// <summary><paramref name="segments"/> as they are when they fit <paramref name="maxWidth"/> (<see cref="RowCells"/>), else cut with the ellipsis. Pure.</summary>

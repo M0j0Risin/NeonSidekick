@@ -171,7 +171,7 @@ public sealed class FolderPane
                     }
                     else if (at - HeaderRows is int i && i >= 0 && i < _shown)
                     {
-                        if (_pane.ClickIsStale(click.X, at))
+                        if (_pane.ClickIsStale(click.X, at, click.At))
                         {
                             _clicks.Reset();
                             continue;
@@ -406,7 +406,8 @@ public sealed class FolderPane
         int capacity = _pane.MenuContentRows(Height, 0) - HeaderRows;   // within Menus max height (2026-10-01)
         (_first, _shown) = MenuPane.Viewport(count, _cursor, capacity, _first);
 
-        var lines = new List<IRenderable>(HeaderRows + _shown + 1) { new Markup(StripMarkup(_title)) };
+        // One row, however narrow the window (2026-11-07, the code review): the rows' targets count HeaderRows.
+        var lines = new List<IRenderable>(HeaderRows + _shown + 1) { new FittedMarkup(StripMarkup(_title)) };
         string second = _status is { } status ? _statusIsNote ? TranscriptRenderer.NoticeMarkup(status) : TranscriptRenderer.ErrorMarkup(status)
             : count == 0 ? " "
             : FolderText.PathMarkup(tree.Visible[_cursor].Path);

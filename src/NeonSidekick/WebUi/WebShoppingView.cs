@@ -316,12 +316,18 @@ public static class WebShoppingView
     /// <summary>
     /// The ⌖ place sheet for line <paramref name="id"/> (2026-11-06), what the PC's picker offers through the same store (<see cref="ShoppingList.StoreFor"/>):
     /// <see cref="ShoppingList.PlaceChoices"/> with the row the line is on now, and whether a fact of its name can be forgotten. Null when the line is
-    /// gone or the list unavailable. No store, or a store with no layout, is a sheet with a note and no rows.
+    /// gone. No store, or a store with no layout, is a sheet with a note and no rows, and so is a list that is unavailable
+    /// (<see cref="UnavailablePlaces"/>, 2026-11-07, the code review: it was null, and the page said the line was gone).
     /// </summary>
     public static WebShopPlaces? Places(ShoppingList list, long id)
     {
         ArgumentNullException.ThrowIfNull(list);
-        if (Closed(list) is not null || Line(list, id) is not { } item)
+        if (Closed(list) is not null)
+        {
+            return UnavailablePlaces;
+        }
+
+        if (Line(list, id) is not { } item)
         {
             return null;
         }
@@ -388,17 +394,19 @@ public static class WebShoppingView
             return new WebReply(WebOutcome.Refused, WebUiText.PlaceNeedsOne);
         }
 
+        // The facts read once (2026-11-07, the code review), for the forget, the place and the test of a place that changes nothing.
+        var facts = list.ItemFacts(shop, item.Name);
         if (request.Forget)
         {
-            if (list.ItemFacts(shop, item.Name).Count == 0)
-            {
-                return WebReply.Ok;
-            }
-
-            string forgot = list.ForgetItem(shop, item);
+            string forgot = list.ForgetFacts(shop, item, facts);
             if (forgot.StartsWith("Error: ", StringComparison.Ordinal))
             {
                 return new WebReply(WebOutcome.Refused, forgot);
+            }
+
+            if (facts.Count == 0 || string.Equals(forgot, ShoppingText.NotPlaced(shop, item.Name), StringComparison.Ordinal))
+            {
+                return WebReply.Ok;   // nothing to forget, or another device was first: no flash, no log line
             }
 
             name = item.Name;
@@ -412,7 +420,12 @@ public static class WebShoppingView
             return new WebReply(WebOutcome.Refused, WebUiText.NoSuchPlace(shop));
         }
 
-        string answer = list.PlaceItem(shop, item, location, section);
+        if (ShoppingList.IsPlacedAt(facts, location, section))
+        {
+            return WebReply.Ok;   // already there (2026-11-07, the code review): nothing rewritten, logged or flashed
+        }
+
+        string answer = list.PlaceItem(shop, item, location, section, facts);
         if (answer.StartsWith("Error: ", StringComparison.Ordinal))
         {
             return new WebReply(WebOutcome.Refused, answer);
@@ -494,6 +507,9 @@ public static class WebShoppingView
     private static readonly WebReply WriteFailed = new(WebOutcome.Refused, WebUiText.ShoppingWriteFailed);
 
     /// <summary>The refusal every post gets while the list is unavailable (2026-10-16: <see cref="WebShopping.Writable"/> false), or null.</summary>
+    /// <summary>The place sheet of a list that can't be read (the file off, or no list at all): no title of its own, no rows, and the reason.</summary>
+    public static WebShopPlaces UnavailablePlaces { get; } = new("", null, [], -1, false, ShoppingText.Unavailable);
+
     private static WebReply? Closed(ShoppingList list) =>
         list.Store.Available ? null : new WebReply(WebOutcome.Refused, ShoppingText.Unavailable);
 

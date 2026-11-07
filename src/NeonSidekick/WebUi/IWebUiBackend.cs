@@ -103,7 +103,7 @@ public interface IWebUiBackend
     /// <summary>A line's quantity, absolute, floored at 1.</summary>
     WebReply ShopQuantity(WebShopQuantity request, IPAddress? remote) => new(WebOutcome.NotFound);
 
-    /// <summary>The ⌖ place sheet for line <paramref name="id"/> (2026-11-06); null when the line is gone, or for a backend without a list.</summary>
+    /// <summary>The ⌖ place sheet for line <paramref name="id"/> (2026-11-06); null when the line is gone, or for a backend without a list. A list that can't be read is a sheet with only a note (2026-11-07).</summary>
     WebShopPlaces? ShopPlaces(long id) => null;
 
     /// <summary>A line placed, or its place forgotten (2026-11-06), as the PC's picker does.</summary>

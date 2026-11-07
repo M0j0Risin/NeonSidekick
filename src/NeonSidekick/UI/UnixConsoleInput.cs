@@ -343,7 +343,7 @@ public sealed class UnixConsoleInput : IAnsiConsoleInput, IInputEvents, IMouseIn
                         DiagnosticLog.Debug(Category, $"Paste of {paste.Text.Length} characters.");
                     }
 
-                    _events.Writer.TryWrite(e);
+                    _events.Writer.TryWrite(InputEvent.Stamped(e, TimeProvider.System.GetTimestamp()));
                     break;
 
                 case InputEvent.Wheel when !(_wheelWanted && MouseCaptured):
@@ -359,7 +359,7 @@ public sealed class UnixConsoleInput : IAnsiConsoleInput, IInputEvents, IMouseIn
                             DiagnosticLog.Debug(Category, $"Mouse {click.Button} click at column {click.X}, screen row {click.Y}.");
                         }
 
-                        _events.Writer.TryWrite(e);
+                        _events.Writer.TryWrite(InputEvent.Stamped(e, TimeProvider.System.GetTimestamp()));
                     }
 
                     break;

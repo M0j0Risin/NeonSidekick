@@ -29,9 +29,18 @@ public abstract record InputEvent
     /// <summary>
     /// A mouse button pressed at a cell; <see cref="X"/> / <see cref="Y"/> are screen-buffer coordinates, 0-based. <see cref="Opener"/>
     /// (2026-11-01, clickable links and paths): a left click with the OS's link chord held, Ctrl on Windows, Option or Shift on a Mac
-    /// (<see cref="LinkText.Chord"/>); a right click never carries it.
+    /// (<see cref="LinkText.Chord"/>); a right click never carries it. <see cref="At"/> (2026-11-07, the code review): when the reader queued it, a
+    /// <see cref="TimeProvider.System"/> timestamp (<see cref="Stamped"/>), so a click read late is judged by when it was pressed
+    /// (<see cref="ScreenPane.ClickIsStale"/>); 0 for one that was never stamped (the parser's, a test's).
     /// </summary>
-    public sealed record Click(int X, int Y, MouseButton Button, bool Opener = false) : InputEvent;
+    public sealed record Click(int X, int Y, MouseButton Button, bool Opener = false, long At = 0) : InputEvent;
+
+    /// <summary>
+    /// <paramref name="input"/> as a reader queues it (2026-11-07): a <see cref="Click"/> stamped with <paramref name="now"/>, unless it carries a time
+    /// already; anything else as it is. Pure.
+    /// </summary>
+    public static InputEvent Stamped(InputEvent input, long now) =>
+        input is Click { At: 0 } click ? click with { At = now } : input;
 
     /// <summary>
     /// The mouse moved to a cell with the left button held (a selection being dragged); the same

@@ -62,6 +62,11 @@ function held() {
 // The reply's sentence under the page, and in the open sheet, which covers it.
 function tell(text) {
   say(text || '');
+  sheetSay(text);
+}
+
+// A sentence in the open sheet alone (2026-11-07, the code review): the place sheet's note, which would otherwise stay under the page once it closed.
+function sheetSay(text) {
   sheetNote.textContent = openSheet ? (text || '') : '';
   sheetNote.classList.toggle('hidden', !sheetNote.textContent);
 }
@@ -126,7 +131,7 @@ function row(item, guessMark) {
     longPress(b, () => openLine(item.id));
     const more = el('button', 'shop-more', '›');
     more.type = 'button';
-    const label = words.options.replace('{0}', item.name || item.text);
+    const label = words.options.replace('{0}', () => item.name || item.text);
     more.setAttribute('aria-label', label);
     more.title = label;
     more.addEventListener('click', () => openLine(item.id));
@@ -395,10 +400,11 @@ function syncRename() {
   renameSave.disabled = renameText.value.trim() === '';
 }
 
+// Whether it went through (2026-11-07: ⌖ place saves a typed name first and goes on only then).
 async function saveRename() {
   const s = openSheet;
   const name = renameText.value.trim();
-  if (!s || s.kind !== 'line' || name === '') return;
+  if (!s || s.kind !== 'line' || name === '') return false;
   if (pendingQty) await flushQty();
   const r = await act('/api/shopping/rename', { id: s.id, name });
   if (r.ok) {
@@ -407,6 +413,16 @@ async function saveRename() {
   } else if (r.status === 404 && openSheet === s) {
     closeSheet();
   }
+  return r.ok;
+}
+
+// Whether the rename box holds a name other than the line's in the last read (2026-11-07), what ⌖ place saves before it opens.
+function renameTyped() {
+  const s = openSheet;
+  const typed = renameText.value.trim();
+  if (!s || s.kind !== 'line' || typed === '' || !list) return false;
+  const item = allItems(list).find(i => i.id === s.id);
+  return !!item && typed !== (item.name || '');
 }
 
 renameText.addEventListener('input', syncRename);
@@ -440,12 +456,21 @@ Neon.armTwice(removeButton, paintRemove, () => {
 // again, so the line moves to its new group; the forget row takes two taps. Every label goes in as text: a location's name can come from the model or
 // a store's documents.
 
+// ⌖ place (2026-11-07, the code review): a typed name is saved first, as Save would (it was dropped), then a waiting quantity is posted, and the
+// sheet opens only while the line's sheet is still the open one: closed meanwhile, it stays closed. After a rename the line may have merged into
+// another, which shows only at the next read, so the place sheet then closes quietly when the line is gone; the rename said what happened.
 async function openPlace() {
   const s = openSheet;
   if (!s || s.kind !== 'line' || !words) return;
   const id = s.id;
+  let renamed = false;
+  if (renameTyped()) {
+    if (!await saveRename()) return;   // refused or the line gone: its sentence is shown
+    renamed = true;
+  }
   if (pendingQty) await flushQty();
-  showSheet({ kind: 'place', id, mayGo: false });
+  if (openSheet !== s) return;
+  showSheet({ kind: 'place', id, mayGo: renamed });
   places = null;
   placeList.replaceChildren();
   placeNone.classList.add('hidden');
@@ -456,15 +481,19 @@ async function openPlace() {
   const r = await Neon.get('/api/shopping/places?id=' + encodeURIComponent(String(id)), false);
   if (!openSheet || openSheet.kind !== 'place' || openSheet.id !== id) return;
   if (r.status === 404) {
+    const quiet = openSheet.mayGo;
     closeSheet();
-    say(words.gone);
+    if (!quiet) say(words.gone);
     return;
   }
 
-  if (!r.ok || !r.json) return;
+  if (!r.ok || !r.json) {
+    sheetSay(words.placeFailed);   // the sheet stays, saying so (2026-11-07: it stayed empty)
+    return;
+  }
   places = r.json;
-  sheetTitle.textContent = places.title;
-  tell(places.note || '');
+  if (places.title) sheetTitle.textContent = places.title;   // an unavailable list's sheet has none: the line's name stays
+  sheetSay(places.note || '');
   drawPlaces();
 }
 
@@ -480,7 +509,7 @@ function drawPlaces() {
   choices.forEach((choice, i) => { if (!q || choice.label.toLowerCase().includes(q)) shown.push(placeRow(choice, i === places.current)); });
   if (places.canForget && (!q || words.forgetPlace.toLowerCase().includes(q))) shown.push(forgetPlaceRow());
   placeList.replaceChildren(...shown);
-  const none = rows > 0 && shown.length === 0 ? words.noMatch.replace('{0}', typed) : '';
+  const none = rows > 0 && shown.length === 0 ? words.noMatch.replace('{0}', () => typed) : '';
   placeNone.textContent = none;
   placeNone.classList.toggle('hidden', !none);
 }
@@ -550,7 +579,7 @@ function drawPast() {
   const q = pastFilter.classList.contains('hidden') ? '' : pastFilter.value.trim().toLowerCase();
   const shown = items.filter(i => !q || i.name.toLowerCase().includes(q));
   pastList.replaceChildren(...shown.map(pastRow));
-  const none = items.length > 0 && shown.length === 0 ? words.noMatch.replace('{0}', pastFilter.value.trim()) : '';
+  const none = items.length > 0 && shown.length === 0 ? words.noMatch.replace('{0}', () => pastFilter.value.trim()) : '';
   pastNone.textContent = none;
   pastNone.classList.toggle('hidden', !none);
 }

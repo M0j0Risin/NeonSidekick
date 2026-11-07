@@ -494,6 +494,62 @@ public sealed class ShoppingCommandTests : IDisposable
         pane.Dispose();
     }
 
+    /// <summary>
+    /// The rest of what the pane draws from the file (2026-11-07, the code review): a location renamed and the store renamed elsewhere redraw it,
+    /// and so does a line added through another connection to the file, as a headless run's store would make, which the watch's stamp sees.
+    /// </summary>
+    [Fact]
+    public async Task TheOpenPane_FollowsALayoutAStoreNameAndAnotherConnection_OnItsWatch()
+    {
+        await Run("store add H-E-B");
+        var shop = _list.StoreFor(null, out _)!;
+        _list.AddLocation(shop, "Aisle 7", null);
+        await Run("add Kombucha");
+        _list.PlaceItem(shop, _list.Store.Items().Single(), _list.Store.Locations(shop.Id).Single(), null);
+        long aisle = _list.Store.Locations(shop.Id).Single().Id;
+
+        await FollowsAsync(() => _list.Store.RenameLocation(aisle, "Aisle 9"), "Aisle 9");
+        await FollowsAsync(() => _list.Store.RenameStore(shop.Id, "Central Market"), "Central Market");
+        using var headless = new ShoppingStore(_dir, _time);
+        await FollowsAsync(() => headless.AddItem("Sourdough", 1), "Sourdough");
+    }
+
+    /// <summary>Opens the pane, makes <paramref name="change"/> once it waits, and asserts it is drawn again showing <paramref name="shows"/>.</summary>
+    private async Task FollowsAsync(Action change, string shows)
+    {
+        var pane = new ScreenPane(_console, new ScreenGeometry(() => null, () => 100), _time) { Hint = () => "idle" };
+        var input = new ScriptedInput();
+        var menu = new ShoppingMenu(_list, new MenuPane(pane, new KeySource(input, TimeSpan.FromMilliseconds(1))), time: _time);
+        pane.Show();
+        int mark = _console.Output.Length;
+        int waits = 0;
+        bool changed = false;
+        input.OnWait = () =>
+        {
+            if (++waits == 1)
+            {
+                mark = _console.Output.Length;
+                change();
+                changed = true;
+                _time.Advance(ShoppingMenu.WatchEvery);
+            }
+            else if (changed && _console.Output[mark..].Contains(shows, StringComparison.Ordinal))
+            {
+                changed = false;
+                input.Push(Keys.Escape);   // drawn again: done
+            }
+            else if (waits > 200)
+            {
+                input.Push(Keys.Escape);   // never redrawn: the assertion below says so
+            }
+        };
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.False(changed, "the pane never drew " + shows);
+        pane.Dispose();
+    }
+
     [Fact]
     public async Task TheOpenPane_FollowsAStoreOrATickMadeElsewhere_OnItsWatch()
     {

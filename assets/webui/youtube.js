@@ -461,7 +461,7 @@ function drawSaved() {
   const shown = saved.items.filter(v => matches(filter, v));
   savedList.replaceChildren(...shown.map(v => savedRow(v, sw, !filter)));
   const note = saved.items.length === 0 ? saved.empty
-    : shown.length === 0 ? sw.noMatch.replace('{0}', filter)
+    : shown.length === 0 ? sw.noMatch.replace('{0}', () => filter)
     : saved.looking ? sw.looking
     : '';
   savedNote.textContent = note;

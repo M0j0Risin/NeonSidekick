@@ -1,3 +1,4 @@
+using NeonSidekick.App;
 using NeonSidekick.Files;
 using NeonSidekick.Tests.Fakes;
 using NeonSidekick.UI;
@@ -28,10 +29,10 @@ public class MenuClicksTests : IDisposable
 
     private string Output => _console.Output;
 
-    private (ScreenPane Pane, ScriptedInput Input, KeySource Keys) Rig()
+    private (ScreenPane Pane, ScriptedInput Input, KeySource Keys) Rig(Func<int?>? windowTop = null)
     {
         // The window's top at buffer row 0, so a pointer's row is its screen row (OverlayTopRow's frame).
-        var pane = new ScreenPane(_console, new ScreenGeometry(() => null, () => 100, () => 0), _time) { Hint = () => "idle" };
+        var pane = new ScreenPane(_console, new ScreenGeometry(() => null, () => 100, windowTop ?? (() => 0)), _time) { Hint = () => "idle" };
         pane.Show();
         var input = new ScriptedInput();
         return (pane, input, new KeySource(input, TimeSpan.FromMilliseconds(1)));
@@ -186,6 +187,109 @@ public class MenuClicksTests : IDisposable
         menu.Close();
     }
 
+    // ── A long label beside the strip ─────────────────────────────
+
+    /// <summary>A <c>/tasks</c> page on <paramref name="folder"/>, as <see cref="TasksMenu"/> builds it: four tabs, then four buttons.</summary>
+    private static MenuPage TasksPage(string folder) =>
+        MenuPage.Tabbed(TasksMenu.TitleFor("DESKTOP-4K2M9QX", folder), [.. TasksMenu.TabTitles.Select(title => new MenuTab(title, ["a task"]))], 0, TasksMenu.Keys)
+            with { Buttons = [new("⟳ refresh", 'r'), new("computer", 'c'), new("folder", 'f'), new("Windows' own: shown", 'w')], TabButtons = true };
+
+    public static TheoryData<string> TaskFolders() => [.. StripChecks.TaskFolders];
+
+    /// <summary>
+    /// The reproduction (2026-11-07, the code review): <c>/tasks</c> on a long folder, where at 90 columns ⟳ refresh wrapped and a click on folder
+    /// pressed Windows' own, and at 80 nothing answered. At every width the strip is drawn as laid out and every title's click lands on it.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(TaskFolders))]
+    public async Task TheTasksStrip_DrawsAsLaidOut_AndEveryTitlesClickLands_AtEveryWidth(string folder)
+    {
+        foreach (int width in StripChecks.Widths)
+        {
+            _console.Profile.Width = width;
+            var page = TasksPage(folder);
+            string[] titles = [.. TasksMenu.TabTitles, .. page.Buttons!.Select(b => b.Title)];
+            var layout = InfoPane.TabStripLayout(page.Title, titles, width);
+            StripChecks.DrawnAsLaidOut(MenuPane.TopRows(page, width), layout, titles, width);
+            for (int i = 0; i < titles.Length; i++)
+            {
+                var (pane, input, keys) = Rig();
+                using var _ = pane;
+                var menu = new MenuPane(pane, keys);
+                var (row, column) = layout.Places[i];
+                input.PushClick(column + 1, 100 + row);
+                input.Push(Keys.Enter);                  // a tab's click switches to it and Enter picks there; a button's click answers itself
+
+                var pick = await menu.PickAsync(page, 0, CancellationToken.None);
+                menu.Close();
+
+                var expected = i < TasksMenu.TabTitles.Count ? (i, -1) : (0, i - TasksMenu.TabTitles.Count);
+                Assert.True(expected == (pick?.Tab, pick?.Button), $"{width}, {titles[i]}: {pick}");
+            }
+        }
+    }
+
+    /// <summary>A wide window keeps the whole label, the strip as it was.</summary>
+    [Fact]
+    public void AWideWindow_KeepsTheWholeLabel()
+    {
+        var page = TasksPage(StripChecks.TaskFolders[1]);
+        Assert.Equal(page.Title, MenuPane.StripLabel(page, 130));
+        Assert.StartsWith(TextCells.Spaced(page.Title), Markup.Remove(MenuPane.TopRows(page, 130)[0]), StringComparison.Ordinal);
+        Assert.NotEqual(page.Title, MenuPane.StripLabel(page, 90));
+    }
+
+    /// <summary>
+    /// A long label holding ⚙️ over a tab with sub-tabs (2026-11-07): the second strip indents by the label the first shows, cut, so its titles
+    /// are drawn where its clicks look, and a click on one picks it.
+    /// </summary>
+    [Fact]
+    public async Task ASubStrip_UnderACutLabel_IsDrawnAndClickedAsLaidOut()
+    {
+        const int width = 80;
+        _console.Profile.Width = width;
+        var page = MenuPage.Tabbed(
+            "⚙️ Settings · " + string.Join(" · ", Enumerable.Repeat("a long part", 6)),
+            [new MenuTab("One", ["a"]), new MenuTab("Group", []) { SubTabs = [new MenuTab("X", ["x1"]), new MenuTab("Y", ["y1"]), new MenuTab("Z", ["z1"])] }, new MenuTab("Three", ["d"])],
+            1,
+            "Enter = pick · Esc = back");
+        string label = MenuPane.StripLabel(page, width);
+        Assert.NotEqual(page.Title, label);
+        Assert.StartsWith("⚙️ Settings · ", label, StringComparison.Ordinal);
+        int main = InfoPane.TabStripLayout(page.Title, ["One", "Group", "Three"], width).Rows;
+        var sub = InfoPane.SubStripLayout(label, ["X", "Y", "Z"], width);
+        StripChecks.DrawnAsLaidOut(MenuPane.SubStripRows(page, width), sub, ["X", "Y", "Z"], width);
+
+        var (pane, input, keys) = Rig();
+        using var _ = pane;
+        var menu = new MenuPane(pane, keys);
+        input.PushClick(sub.Places[1].Column + 1, 100 + main + sub.Places[1].Row);   // Y
+        input.Push(Keys.Enter);
+
+        var pick = await menu.PickAsync(page, 0, CancellationToken.None);
+        menu.Close();
+
+        Assert.Equal((1, 1, 0), (pick?.Tab, pick?.Sub, pick?.Row));
+    }
+
+    /// <summary>A page whose buttons are all hidden (the monitors' names page) has nothing to click in its strip: its long title still wraps whole.</summary>
+    [Fact]
+    public async Task APageWhoseButtonsAreAllHidden_StillWrapsItsTitle()
+    {
+        string title = "🖥️ Monitors · " + string.Join(" · ", Enumerable.Repeat("a long part", 5)) + " · the end";
+        var page = new MenuPage(title, ["one"], "Esc = back") { Buttons = [new MenuButton("rename", 'r') { Hidden = true }] };
+        Assert.Equal(title, MenuPane.StripLabel(page, 40));
+        var (pane, input, keys) = Rig();
+        using var _ = pane;
+        var menu = new MenuPane(pane, keys);
+        input.Push(Keys.Escape);
+
+        await menu.PickAsync(page, 0, CancellationToken.None);
+        menu.Close();
+
+        Assert.Contains("the end", Output);
+    }
+
     // ── A click never scrolls the list ────────────────────────────
 
     // head A 0, a1–a4 1–4, the gap 5, head B 6, b1–b5 7–11: at a height of 12, five rows and the more row in view.
@@ -244,6 +348,41 @@ public class MenuClicksTests : IDisposable
         Assert.Equal(new MenuPick(0, 7), await menu.PickAsync(Sections(), 11, CancellationToken.None));
         Assert.DoesNotContain("head B", Output);
         menu.Close();
+    }
+
+    /// <summary>
+    /// A filter typed after a click (2026-11-07, the code review): other rows under the clicked index, so the heading comes back in; the same page
+    /// drawn again (the same filter, as many rows) still leaves the rows where the click left them.
+    /// </summary>
+    [Fact]
+    public async Task AFilterAfterAClick_BringsTheHeadingBack_ARebuildOfTheSameRowsDoesnt()
+    {
+        _console.Profile.Height = 12;
+        var (pane, input, keys) = Rig();
+        using var _ = pane;
+        var menu = new MenuPane(pane, keys);
+        input.PushClick(3, 102);            // b1, the heading out of view
+        input.Push(Keys.Char('x'));         // typed into the filter: back to the host
+
+        var typed = await menu.PickAsync(Sections() with { Filter = "" }, 11, CancellationToken.None);
+        Assert.Equal("x", typed?.Filter);
+
+        int mark = Output.Length;
+        input.Push(Keys.Enter);
+        Assert.Equal(new MenuPick(0, 7), await menu.PickAsync(Sections() with { Filter = "x" }, 7, CancellationToken.None));
+        Assert.Contains("head B", Output[mark..]);
+        menu.Close();
+
+        // The same rows and filter again after a click: they stay put.
+        var again = new MenuPane(pane, keys);
+        input.PushClick(3, 102);
+        input.Push(Keys.Char('x'));
+        await again.PickAsync(Sections() with { Filter = "" }, 11, CancellationToken.None);
+        mark = Output.Length;
+        input.Push(Keys.Enter);
+        Assert.Equal(new MenuPick(0, 7), await again.PickAsync(Sections() with { Filter = "" }, 7, CancellationToken.None));
+        Assert.DoesNotContain("head B", Output[mark..]);
+        again.Close();
     }
 
     // head A 0, cells 1–16, the gap 17, head B 18, cells 19–42: four to a line at a width of 40.
@@ -411,6 +550,77 @@ public class MenuClicksTests : IDisposable
         menu.Close();
     }
 
+    /// <summary>
+    /// Judged by the press (2026-11-07, the code review): a click pressed before a change but read long after it, behind a slow callback, is still
+    /// aimed at the old rows; one pressed well after the change is not, however late it's read.
+    /// </summary>
+    [Fact]
+    public void AClickPressedBeforeAChange_IsStale_HoweverLateItIsRead()
+    {
+        var (pane, _, _) = Guarded();
+        using var _1 = pane;
+        ShowRows(pane, "p", "one", "two");
+        PastTheGrace();
+        long pressed = _time.GetTimestamp();
+        _time.Advance(TimeSpan.FromMilliseconds(10));
+        ShowRows(pane, "q", "two", "one");
+        _time.Advance(TimeSpan.FromMilliseconds(600));   // read late: past the grace from the change
+
+        Assert.False(pane.ClickIsStale(3, 1));   // read time alone would let it land
+        Assert.True(pane.ClickIsStale(3, 1, pressed));
+
+        _time.Advance(ScreenPane.DroppedClickPass + TimeSpan.FromMilliseconds(1));
+        ShowRows(pane, "r", "one", "two");
+        PastTheGrace();
+        long later = _time.GetTimestamp();
+        _time.Advance(TimeSpan.FromSeconds(2));
+        Assert.False(pane.ClickIsStale(3, 1, later));
+    }
+
+    /// <summary>A press time from another clock, later than the pane's now, is taken as now: the check is as it was without one.</summary>
+    [Fact]
+    public void APressStampedAfterNow_IsTakenAsNow()
+    {
+        var (pane, _, _) = Guarded();
+        using var _1 = pane;
+        ShowRows(pane, "p", "one", "two");
+        PastTheGrace();
+        Assert.False(pane.ClickIsStale(3, 1, _time.GetTimestamp() + TimeSpan.TicksPerHour));
+    }
+
+    /// <summary>The readers' stamp (2026-11-07): a click gets the time unless it has one; anything else passes untouched.</summary>
+    [Fact]
+    public void Stamped_TimesAClickOnce_AndNothingElse()
+    {
+        Assert.Equal(new InputEvent.Click(1, 2, MouseButton.Left, At: 42), InputEvent.Stamped(new InputEvent.Click(1, 2, MouseButton.Left), 42));
+        Assert.Equal(new InputEvent.Click(1, 2, MouseButton.Left, At: 7), InputEvent.Stamped(new InputEvent.Click(1, 2, MouseButton.Left, At: 7), 42));
+        var key = new InputEvent.Key(Keys.Enter);
+        Assert.Same(key, InputEvent.Stamped(key, 42));
+        var drag = new InputEvent.Drag(1, 2);
+        Assert.Same(drag, InputEvent.Stamped(drag, 42));
+    }
+
+    /// <summary>Through the menu: a click pressed before the page changed under it, read after the grace, moves nothing.</summary>
+    [Fact]
+    public async Task AMenuClick_PressedBeforeTheRowsChanged_IsDropped_ThoughReadLate()
+    {
+        var (pane, input, keys) = Guarded();
+        using var _ = pane;
+        var menu = new MenuPane(pane, keys);
+        _time.Advance(TimeSpan.FromMilliseconds(1));   // the test clock starts at 0, which is "no press time"
+        long pressed = _time.GetTimestamp();
+        input.OnWait = () =>
+        {
+            input.OnWait = null;
+            _time.Advance(TimeSpan.FromSeconds(1));   // the page drew after the press, and the click is read a second later
+            input.PushClick(3, 103, at: pressed);
+            input.Push(Keys.Enter);
+        };
+
+        Assert.Equal(new MenuPick(0, 0), await menu.PickAsync(Page("one", "two", "three"), 0, CancellationToken.None));
+        menu.Close();
+    }
+
     /// <summary>A page changing faster than the grace never stops answering.</summary>
     [Fact]
     public void APageChangingFasterThanTheGrace_StillAnswers()
@@ -514,6 +724,88 @@ public class MenuClicksTests : IDisposable
         });
     }
 
+    /// <summary>
+    /// An idle tick looks nothing up again (2026-11-07, the code review): no window top read, no targets scanned, until the pointer moves; and the
+    /// slab still hides when focus goes.
+    /// </summary>
+    [Fact]
+    public async Task AnIdleTick_LooksTheHoverUpOnce_AMoveLooksAgain()
+    {
+        int reads = 0;
+        var (pane, input, keys) = Rig(() =>
+        {
+            reads++;
+            return 0;
+        });
+        using var _ = pane;
+        await WhileOpen(pane, input, keys, Page("one", "two", "three"), _ =>
+        {
+            Tick();
+            pane.PointerMoved(3, pane.OverlayTopRow + 3);   // "two"
+            Tick();
+            Assert.Equal("two", pane.HoverTargetNow?.Text);
+            int looked = reads;
+
+            Tick();
+            Tick();
+            Tick();
+            Assert.Equal(looked, reads);
+            Assert.Equal("two", pane.HoverTargetNow?.Text);
+
+            pane.PointerMoved(3, pane.OverlayTopRow + 4);   // "three"
+            Tick();
+            Assert.True(reads > looked);
+            Assert.Equal("three", pane.HoverTargetNow?.Text);
+
+            pane.FocusChanged(false);
+            Tick();
+            Assert.Null(pane.HoverTargetNow);
+        });
+    }
+
+    /// <summary>
+    /// The slab's repaint takes the rows the last draw rendered (2026-11-07, the code review): crossing rows renders the overlay no more, and
+    /// the first row, left again, keeps its ×.
+    /// </summary>
+    [Fact]
+    public void TheRepaint_RendersNothingAgain_AndTheFirstRowKeepsItsClose()
+    {
+        _console.EmitAnsiSequences();
+        var (pane, _, _) = Rig();
+        using var shown = pane;
+        var content = new Counted(new Rows(new Text("title"), new Text("one"), new Text("two")));
+        pane.ShowOverlay(content, "hint", close: true, aim: new OverlayAim("p", [new(0, 0, 4, "title"), new(1, 0, 2, "one"), new(2, 0, 2, "two")]));
+        Tick();
+        int renders = content.Renders;
+
+        pane.PointerMoved(1, pane.OverlayTopRow);
+        Tick();
+        Assert.Equal("title", pane.HoverTargetNow?.Text);
+        pane.PointerMoved(1, pane.OverlayTopRow + 1);
+        int mark = Output.Length;
+        Tick();
+        Assert.Equal("one", pane.HoverTargetNow?.Text);
+        Assert.Contains(ScreenPane.CloseGlyph, Output[mark..]);
+        pane.PointerMoved(1, pane.OverlayTopRow + 2);
+        Tick();
+        Assert.Equal("two", pane.HoverTargetNow?.Text);
+        Assert.Equal(renders, content.Renders);
+    }
+
+    /// <summary>A renderable that counts its renders.</summary>
+    private sealed class Counted(IRenderable inner) : IRenderable
+    {
+        public int Renders { get; private set; }
+
+        public Measurement Measure(RenderOptions options, int maxWidth) => inner.Measure(options, maxWidth);
+
+        public IEnumerable<Segment> Render(RenderOptions options, int maxWidth)
+        {
+            Renders++;
+            return inner.Render(options, maxWidth);
+        }
+    }
+
     [Fact]
     public async Task TheSlab_IsPaintedBehindTheRowAndToTheListsEdge()
     {
@@ -527,7 +819,7 @@ public class MenuClicksTests : IDisposable
             pane.PointerMoved(3, pane.OverlayTopRow + 3);
             int mark = Output.Length;
             Tick();
-            var back = Theme.MenuHover.Background;
+            var back = Theme.MenuHover;
             Assert.Matches($@"48;2;{back.R};{back.G};{back.B}m  two {{20,}}", Output[mark..]);
         });
     }
@@ -651,6 +943,100 @@ public class MenuClicksTests : IDisposable
         await new InfoPane(pane, keys).ShowAsync("Help", [new InfoTab("One", () => new Text("line1\nline2")) { LineDoubleClicked = _ => { } }], 0, CancellationToken.None);
     }
 
+    /// <summary>A blank line of an info tab whose lines act is no target (2026-11-07, the code review): no slab, and a double-click on it does nothing.</summary>
+    [Fact]
+    public async Task AnInfoTabsBlankLine_GetsNoSlab_AndADoubleClickOnItDoesNothing()
+    {
+        var (pane, input, keys) = Rig();
+        using var _ = pane;
+        var clicked = new List<string>();
+        input.OnWait = () =>
+        {
+            input.OnWait = null;
+            Tick();
+            pane.PointerMoved(3, pane.OverlayTopRow + 3);   // the blank line
+            Tick();
+            Assert.Null(pane.HoverTargetNow);
+            pane.PointerMoved(3, pane.OverlayTopRow + 4);
+            Tick();
+            Assert.Equal("line3", pane.HoverTargetNow?.Text);
+            input.PushClick(3, 103);
+            input.PushClick(3, 103);
+            input.Push(Keys.Escape);
+        };
+        await new InfoPane(pane, keys).ShowAsync("Help", [new InfoTab("One", () => new Text("line1\n\nline3")) { LineDoubleClicked = clicked.Add }], 0, CancellationToken.None);
+
+        Assert.Empty(clicked);
+    }
+
+    /// <summary>Under an edit the rows take no click, so none lights up (2026-11-07, the code review).</summary>
+    [Fact]
+    public async Task UnderAnEdit_NoRowLightsUp()
+    {
+        var (pane, input, keys) = Rig();
+        using var _ = pane;
+        var menu = new MenuPane(pane, keys);
+        var line = new InputLine(pane, keys);
+        input.OnWait = () =>
+        {
+            input.OnWait = null;
+            Tick();
+            pane.PointerMoved(3, pane.OverlayTopRow + 3);   // "two"
+            Tick();
+            Assert.Null(pane.HoverTargetNow);
+            input.Push(Keys.Escape);
+        };
+
+        Assert.IsType<InputResult.Cancelled>(await menu.EditAsync(Page("one", "two", "three"), 0, line, "old", allowEmpty: false, CancellationToken.None));
+        menu.Close();
+    }
+
+    /// <summary>
+    /// Rows that stand in for rows (2026-11-07, the code review) are no target: a filter's no-match row takes no slab, under another row too, and a
+    /// page of one such row, or of an empty list's one dim notice, has no target at all, so the mouse's moves aren't even asked for. A dim row among
+    /// real ones (a tool that's off) is still one.
+    /// </summary>
+    [Fact]
+    public async Task PlaceholderRows_AreNoTarget_ADimRowAmongOthersIs()
+    {
+        var (pane, input, keys) = Rig();
+        using var _ = pane;
+        var hover = new List<bool>();
+        pane.Hover = hover.Add;
+
+        async Task<string?> Over(MenuPage page, int row)
+        {
+            string? text = "unset";
+            await WhileOpen(pane, input, keys, page, _ =>
+            {
+                Tick();
+                pane.PointerMoved(3, pane.OverlayTopRow + 2 + row);
+                Tick();
+                text = pane.HoverTargetNow?.Text;
+            });
+            Tick();
+            return text;
+        }
+
+        Assert.Null(await Over(Page("+ new", MenuFilter.NoMatchRow("zz")) with { Filter = "zz" }, 1));
+        Assert.Equal(Theme.DimMarkup("off tool"), await Over(Page("on tool", Theme.DimMarkup("off tool")), 1));
+        hover.Clear();
+        await Over(Page(MenuFilter.NoMatchNameRow("zz")) with { Filter = "zz" }, 0);
+        await Over(Page(Theme.DimMarkup("Nothing saved yet.")), 0);
+        Assert.Empty(hover);
+    }
+
+    /// <summary><see cref="Theme.IsAllDim"/>: dim text with no markup of its own, escaped brackets allowed.</summary>
+    [Fact]
+    public void IsAllDim_IsDimMarkupsOutputAlone()
+    {
+        Assert.True(Theme.IsAllDim(Theme.DimMarkup("Nothing here [yet]")));
+        Assert.False(Theme.IsAllDim("Nothing"));
+        Assert.False(Theme.IsAllDim(Theme.DimMarkup("a") + Theme.DimMarkup("b")));
+        Assert.False(Theme.IsAllDim(Theme.DimMarkup("") ));
+        Assert.False(Theme.IsAllDim(Theme.AccentMarkup("Nothing")));
+    }
+
     [Fact]
     public async Task NoRedraw_BeforeAnyMove_OrForAMoveWithinOneTarget()
     {
@@ -730,6 +1116,54 @@ public class MenuClicksTests : IDisposable
             pane.PointerMoved(3, pane.OverlayTopRow + 3);
             Tick();
             Assert.NotNull(pane.HoverTargetNow);
+        });
+    }
+
+    /// <summary>
+    /// Focus lost under one pane and never reported back (a terminal may not, while reporting is off): hover asked for afresh by the next pane takes
+    /// focus as here, so its slab shows on the first move (2026-11-07, the code review).
+    /// </summary>
+    [Fact]
+    public async Task HoverAskedForAgain_TakesFocusAsHere()
+    {
+        var (pane, input, keys) = Rig();
+        using var _ = pane;
+        await WhileOpen(pane, input, keys, Page("one", "two", "three"), _ =>
+        {
+            Tick();
+            pane.FocusChanged(false);
+            Tick();
+        });
+        Tick();
+
+        await WhileOpen(pane, input, keys, Page("one", "two", "three"), _ =>
+        {
+            Tick();
+            pane.PointerMoved(3, pane.OverlayTopRow + 3);
+            Tick();
+            Assert.Equal("two", pane.HoverTargetNow?.Text);
+        });
+    }
+
+    /// <summary>A resize draws the pane again with no slab: the old size's target is on another row now (2026-11-07, the code review).</summary>
+    [Fact]
+    public async Task AResize_DrawsNoSlab_UntilThePointerNextMoves()
+    {
+        var (pane, input, keys) = Rig();
+        using var _ = pane;
+        await WhileOpen(pane, input, keys, Page("one", "two", "three"), _ =>
+        {
+            Tick();
+            pane.PointerMoved(3, pane.OverlayTopRow + 3);
+            Tick();
+            Assert.Equal("two", pane.HoverTargetNow?.Text);
+
+            int mark = Output.Length;
+            _console.Profile.Width = 90;
+            Tick();
+            var back = Theme.MenuHover;
+            Assert.DoesNotContain($"48;2;{back.R};{back.G};{back.B}m", Output[mark..], StringComparison.Ordinal);
+            Assert.Null(pane.HoverTargetNow);
         });
     }
 

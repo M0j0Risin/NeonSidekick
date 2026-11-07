@@ -175,6 +175,13 @@ public sealed class InfoPane
     private readonly Action<bool>? _mouse;
     private readonly DoubleClick _clicks;
 
+    /// <summary>
+    /// Whether a double-click on tab <paramref name="active"/>'s lines does something: a handler for them, its toggle (if any) off. The click's
+    /// test and the aim's, one rule (2026-11-07, the code review).
+    /// </summary>
+    private bool LinesAct(IReadOnlyList<InfoTab> tabs, int active) =>
+        (tabs[active].LineDoubleClicked is not null || tabs[active].LineChosen is not null) && !(tabs[active].Toggle is not null && _toggled.Contains(active));
+
     private int _first;
     private int _shown;
     private int _count;
@@ -268,13 +275,76 @@ public sealed class InfoPane
     /// The budget is the one <see cref="ScreenPane"/> tests before drawing the
     /// <see cref="ScreenPane.CloseGlyph"/>, so the first row always keeps the ×; the later rows take the
     /// same budget so the columns stay even. A title too wide for any row sits alone on its own. A badge counts in its
-    /// title's cells (<see cref="TitleCells"/>). Pure.
+    /// title's cells (<see cref="TitleCells"/>). The label is the one the strip shows (<see cref="StripLabel"/>, 2026-11-07). Pure.
     /// </summary>
     public static (int Rows, (int Row, int Column)[] Places) TabStripLayout(string label, IReadOnlyList<string> titles, int width, IReadOnlyList<string?>? badges = null)
     {
         ArgumentNullException.ThrowIfNull(label);
-        return Layout(StripIndent(label), titles, width, badges);
+        return Layout(StripIndent(StripLabel(label, titles, width, badges)), titles, width, badges);
     }
+
+    /// <summary>
+    /// <paramref name="label"/> as the strip of <paramref name="titles"/> shows it in a window <paramref name="width"/> cells wide (2026-11-07, the
+    /// code review: <c>/tasks</c>' label holds the folder's path, and a long one pushed the titles onto more rows than the clicks counted and off
+    /// the window). Whole while it fits its cap, or while the whole label still lays the strip out in <see cref="MaxStripRows"/> rows or fewer
+    /// with every title on its row, so a wide window that works stays as it is. Else cut to the cap: half the window, less if the widest title
+    /// needs more room, never under <see cref="MinLabelCells"/>. The cut keeps everything up to the last <see cref="LabelPartSeparator"/> whole
+    /// when that leaves <see cref="MinLabelTailCells"/> or more for the rest, which then loses its front (a path keeps its innermost folders);
+    /// else the label keeps both its ends around the "…". A strip with no titles keeps its label: it wraps, with nothing to misclick. Only the
+    /// first strip decides: the second strip (<see cref="SubStripLayout"/>) is handed the label already cut. Pure.
+    /// </summary>
+    public static string StripLabel(string label, IReadOnlyList<string> titles, int width, IReadOnlyList<string?>? badges = null)
+    {
+        ArgumentNullException.ThrowIfNull(label);
+        ArgumentNullException.ThrowIfNull(titles);
+        if (titles.Count == 0)
+        {
+            return label;
+        }
+
+        int budget = StripBudget(width);
+        int widest = Enumerable.Range(0, titles.Count).Max(i => TitleCells(titles, badges, i));
+        int spacing = TextCells.Width(TextCells.Spaced(label)) - TextCells.Width(label);   // a selector's space where the terminal draws it narrow
+        int cap = Math.Max(MinLabelCells, Math.Min(width / 2, budget - widest - LabelGap - spacing));
+        if (TextCells.Width(label) <= cap)
+        {
+            return label;
+        }
+
+        var (rows, places) = Layout(StripIndent(label), titles, width, badges);
+        bool runsOff = Enumerable.Range(0, titles.Count).Any(i => places[i].Column + TitleCells(titles, badges, i) > budget);
+        if (rows <= MaxStripRows && !runsOff)
+        {
+            return label;
+        }
+
+        int split = label.LastIndexOf(LabelPartSeparator, StringComparison.Ordinal);
+        if (split >= 0)
+        {
+            string head = label[..(split + LabelPartSeparator.Length)];
+            int rest = cap - TextCells.Width(head);
+            if (rest >= MinLabelTailCells)
+            {
+                return head + ScreenPane.FitTail(label[head.Length..], rest);
+            }
+        }
+
+        // Both ends around one "…": the front's cut leaves its own, the back's is dropped.
+        int front = (cap - 1) / 2;
+        return ScreenPane.Fit(label, front + 1) + ScreenPane.FitTail(label, cap - front)[1..];
+    }
+
+    /// <summary>The most rows a strip takes with its whole label before <see cref="StripLabel"/> cuts it (2026-11-07).</summary>
+    public const int MaxStripRows = 3;
+
+    /// <summary>The fewest cells <see cref="StripLabel"/> cuts a label to (2026-11-07).</summary>
+    public const int MinLabelCells = 12;
+
+    /// <summary>The fewest cells <see cref="StripLabel"/> keeps for what follows the last <see cref="LabelPartSeparator"/> (2026-11-07).</summary>
+    public const int MinLabelTailCells = 8;
+
+    /// <summary>The separator between a label's parts (<c>🗓️ Tasks · PC · \Folder</c>): <see cref="StripLabel"/> keeps what comes before the last one whole when it can.</summary>
+    public const string LabelPartSeparator = " · ";
 
     /// <summary>
     /// The second strip under a tab that holds sub-tabs (2026-10-10, the user's call: <c>/tools</c>' Database and Media), laid out as
@@ -296,10 +366,13 @@ public sealed class InfoPane
     /// <summary>The column the first title's highlight starts in, after <paramref name="label"/> and the <see cref="LabelSeparator"/>.</summary>
     private static int StripIndent(string label) => TextCells.Width(TextCells.Spaced(label)) + LabelGap;
 
+    /// <summary>The cells a strip's row has for its titles: the window less the last column and the ×'s room.</summary>
+    private static int StripBudget(int width) => width - 1 - ScreenPane.TrailerGap - TextCells.Width(ScreenPane.CloseGlyph);
+
     private static (int Rows, (int Row, int Column)[] Places) Layout(int indent, IReadOnlyList<string> titles, int width, IReadOnlyList<string?>? badges)
     {
         ArgumentNullException.ThrowIfNull(titles);
-        int budget = width - 1 - ScreenPane.TrailerGap - TextCells.Width(ScreenPane.CloseGlyph);
+        int budget = StripBudget(width);
         var places = new (int Row, int Column)[titles.Count];
         int row = 0;
         int column = indent;
@@ -386,7 +459,14 @@ public sealed class InfoPane
         ArgumentNullException.ThrowIfNull(label);
         ArgumentNullException.ThrowIfNull(titles);
         ArgumentNullException.ThrowIfNull(active);
-        var (rows, places) = sub ? SubStripLayout(label, titles, width, badges) : TabStripLayout(label, titles, width, badges);
+        // The first strip's label cut once, here, and laid out with it (2026-11-07): never cut again from the cut one. The second strip's
+        // arrives cut (MenuPane passes the first strip's).
+        if (!sub)
+        {
+            label = StripLabel(label, titles, width, badges);
+        }
+
+        var (rows, places) = sub ? SubStripLayout(label, titles, width, badges) : Layout(StripIndent(label), titles, width, badges);
         string separator = Theme.TabSeparator.ToMarkup();
         string bar = $"[{separator}]{Markup.Escape(LabelSeparator)}[/]";
         var lines = new System.Text.StringBuilder[rows];
@@ -620,11 +700,18 @@ public sealed class InfoPane
 
                     // A double-click on a content line (later on 2026-10-15) goes to the tab's handlers, when it has one: a chosen line closes
                     // the pane (a /ad card's row, the AD gaps plan), otherwise the pane stays.
-                    if (click.Button == MouseButton.Left && (tabs[active].LineDoubleClicked is not null || tabs[active].LineChosen is not null) && !(tabs[active].Toggle is not null && _toggled.Contains(active))
+                    if (click.Button == MouseButton.Left && LinesAct(tabs, active)
                         && _pane.TryHitOverlay(click.X, click.Y, out int row) && row > _stripRows && row <= _stripRows + _shown && _content is { } shownLines)
                     {
                         int line = _first + row - _stripRows - 1;
-                        if (_pane.ClickIsStale(click.X, row))
+                        if (_pane.ClickIsStale(click.X, row, click.At))
+                        {
+                            _clicks.Reset();
+                            continue;
+                        }
+
+                        // A blank line is no target (2026-11-07, the code review): no slab, and a double-click on it does nothing.
+                        if (line < shownLines.Count && string.IsNullOrWhiteSpace(TextFind.LineText(shownLines[line])))
                         {
                             _clicks.Reset();
                             continue;
@@ -905,9 +992,12 @@ public sealed class InfoPane
         var strip = _actions.Count > 0 ? TabStripRows(label, _actions, titles, titles.Length == 0 ? -1 : active, width, toggle is null ? null : (toggle.Title, toggled))
             : toggle is null ? TabStripRows(label, titles, active, width) : TabStripRows(label, titles, active, width, (toggle.Title, toggled));
         _width = width;
-        var stripLines = strip.Select(row => (IRenderable)new Markup(row).Overflow(Overflow.Ellipsis)).ToList();
-        // As drawn (2026-11-07): a long label wraps though the strip's rows are counted one each, and the capacity and the clicks read this.
-        _stripRows = ScreenPane.MeasureRows(new Rows(stripLines), _pane, width);
+        // A strip with something to click is drawn one row per layout row (2026-11-07, the code review), its label cut to fit
+        // (StripLabel), so the clicks' rows are the drawn ones. One with nothing to click (one tab, no buttons, no toggle) wraps its label and
+        // is counted as drawn: the capacity reads this.
+        bool clickable = _actions.Count > 0 || titles.Length > 0 || toggle is not null;
+        var stripLines = strip.Select(row => clickable ? new FittedMarkup(row) : (IRenderable)new Markup(row).Overflow(Overflow.Ellipsis)).ToList();
+        _stripRows = clickable ? stripLines.Count : ScreenPane.MeasureRows(new Rows(stripLines), _pane, width);
         int capacity = _pane.MenuContentRows(height, 0) - HeaderRows - (_stripRows - 1);
         if (_content is null || _contentTab != active || _contentWidth != width || _contentToggled != toggled)
         {
@@ -1010,15 +1100,19 @@ public sealed class InfoPane
             : tabs.Count == 1 ? SingleTabHintText : HintText;
         // Only a tab whose lines do something on a click has targets (the same test as the click's), so a plain text page shows no slab (2026-11-07).
         OverlayAim? aim = null;
-        if ((tabs[active].LineDoubleClicked is not null || tabs[active].LineChosen is not null) && !toggled)
+        if (LinesAct(tabs, active))
         {
             var targets = new List<OverlayTarget>(_shown);
             for (int i = 0; i < _shown; i++)
             {
-                targets.Add(new OverlayTarget(_stripRows + 1 + i, 0, width - 1, TextFind.LineText(content[_first + i])));
+                string text = TextFind.LineText(content[_first + i]);
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    targets.Add(new OverlayTarget(_stripRows + 1 + i, 0, width - 1, text));
+                }
             }
 
-            aim = new OverlayAim(string.Join('\n', label, active, _stripRows), targets);
+            aim = new OverlayAim(string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{label}\n{active}\n{_stripRows}"), targets);
         }
 
         _pane.ShowOverlay(new Rows(lines), hint, close: true, aim: aim);

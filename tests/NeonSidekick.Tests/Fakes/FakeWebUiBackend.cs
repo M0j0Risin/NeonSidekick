@@ -116,7 +116,14 @@ internal sealed class FakeWebUiBackend : IWebUiBackend
     /// <summary>The ⌖ place sheet's rows (2026-11-06); null reads as a line gone.</summary>
     public WebShopPlaces? PlacesList { get; set; } = new("⌖ Where is it?", 1, [], -1, false, null);
 
-    public WebShopPlaces? ShopPlaces(long id) { ShopCalls.Enqueue("places " + Num(id)); return PlacesList; }
+    /// <summary>The place sheet's read throws (2026-11-07), which the host answers with a 500: a read that failed, not a line gone.</summary>
+    public bool PlacesFail { get; set; }
+
+    public WebShopPlaces? ShopPlaces(long id)
+    {
+        ShopCalls.Enqueue("places " + Num(id));
+        return PlacesFail ? throw new InvalidOperationException("The place sheet's read failed (a test's).") : PlacesList;
+    }
 
     public WebReply ShopPlace(WebShopPlace request, IPAddress? remote) =>
         Shop("place " + Num(request.Id) + " store " + Num(request.Store) + (request.Location is { } l ? " location " + Num(l) : "") + (request.Section is { } s ? " section " + Num(s) : "") + (request.Forget ? " forget" : ""));

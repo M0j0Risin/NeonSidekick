@@ -220,6 +220,71 @@ public sealed class ShoppingStoreTests : IDisposable
         Assert.Equal([ShoppingStore.SchemaMismatchWarning(99)], warnings);
     }
 
+    /// <summary>
+    /// The watch's stamp (2026-11-07, the code review): it moves on every kind of write this store makes, an upsert that only updates and a
+    /// cascade included, and on a commit by another connection to the file, as a headless run's store would make. A read moves nothing.
+    /// </summary>
+    [Fact]
+    public void ChangeStamp_MovesOnEveryWrite_AnUpsertsUpdateAndAnotherConnectionsToo()
+    {
+        var heb = _store.AddStore("H-E-B", "heb")!;
+        var costco = _store.AddStore("Costco", "costco")!;
+        var dairy = _store.EnsureSection(heb.Id, "Dairy")!;
+        var bakery = _store.EnsureSection(heb.Id, "Bakery")!;
+        var aisle = _store.EnsureLocation(heb.Id, "Aisle 2")!;
+        var other = _store.EnsureLocation(heb.Id, "Aisle 3")!;
+        Assert.True(_store.Place(heb.Id, "Milk", ShoppingKinds.Item, aisle.Id, null, ShoppingSources.User));
+        var milk = _store.AddItem("Milk", 1)!;
+
+        var stamp = _store.ChangeStamp();
+        Assert.NotNull(stamp);
+        _ = _store.Items();
+        _ = _store.Placements(heb.Id);
+        Assert.Equal(stamp, _store.ChangeStamp());   // reads are no change
+
+        void Moves(Action write, string what)
+        {
+            var before = _store.ChangeStamp();
+            write();
+            Assert.True(!Equals(before, _store.ChangeStamp()), what);
+        }
+
+        Moves(() => _store.SetQuantity(milk.Id, 2), "a plain write");
+        Moves(() => _store.Place(heb.Id, "Milk", ShoppingKinds.Item, other.Id, null, ShoppingSources.User), "a placement moved (an upsert's update)");
+        Moves(() => _store.EnsureLocation(heb.Id, "Aisle 2", dairy.Id), "a location's section changed (an upsert's update)");
+        Moves(() => _store.SetActiveStore(costco.Id), "another active store (an upsert's update)");
+        Moves(() => _store.RemoveItem(milk.Id, milk), "a transaction");
+        Moves(() => _store.RemoveSection(bakery.Id), "a section removed");
+        Moves(() => _store.RemoveLocation(other.Id), "a cascading delete");
+
+        using var headless = new ShoppingStore(_dir, _time);
+        Moves(() => headless.AddItem("Bread", 1), "another connection's write");
+    }
+
+    /// <summary>
+    /// A line's facts forgotten together (2026-11-07, the code review): one transaction, how many went, and 0 for facts already gone, which the
+    /// list answers as not placed rather than as a failure.
+    /// </summary>
+    [Fact]
+    public void RemovePlacements_TakesThemTogether_AndFactsAlreadyGoneAreNoFailure()
+    {
+        var heb = _store.AddStore("H-E-B", "heb")!;
+        var aisle = _store.EnsureLocation(heb.Id, "Aisle 2")!;
+        Assert.True(_store.Place(heb.Id, "Egg", ShoppingKinds.Item, aisle.Id, null, ShoppingSources.User));
+        Assert.True(_store.Place(heb.Id, "Eggs", ShoppingKinds.Item, aisle.Id, null, ShoppingSources.User));
+        Assert.True(_store.Place(heb.Id, "Milk", ShoppingKinds.Item, aisle.Id, null, ShoppingSources.User));
+        long[] eggs = [.. _store.Placements(heb.Id).Where(p => p.Term.StartsWith("Egg", StringComparison.Ordinal)).Select(p => p.Id)];
+
+        Assert.Equal(2, _store.RemovePlacements(eggs));
+        Assert.Equal(["Milk"], _store.Placements(heb.Id).Select(p => p.Term));
+        Assert.Equal(0, _store.RemovePlacements(eggs));
+
+        var list = new ShoppingList(() => _store);
+        var item = _store.AddItem("Eggs", 1)!;
+        var stale = new List<ShopPlacement> { new(eggs[0], heb.Id, "Egg", ShoppingKinds.Item, aisle.Id, null, ShoppingSources.User, "") };
+        Assert.Equal(ShoppingText.NotPlaced(heb, "Eggs"), list.ForgetFacts(heb, item, stale));
+    }
+
     /// <summary>The home bar's 🛒 count (later on 2026-10-12): the unticked lines.</summary>
     [Fact]
     public void OpenCount_IsTheUntickedLines()

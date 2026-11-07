@@ -588,7 +588,8 @@ public sealed record WebShopWords(
     string Place,
     string PlaceFilter,
     string ForgetPlace,
-    string ForgetPlaceArmed);
+    string ForgetPlaceArmed,
+    string PlaceFailed);
 
 /// <summary>
 /// What was bought before and is not on the list now (2026-10-16, the 🕘 sheet), the most often first, and the caption the PC's add page

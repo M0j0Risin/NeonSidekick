@@ -157,6 +157,44 @@ public sealed partial class WebUiTests
         Assert.Equal(1, _shoppingChanges);
     }
 
+    /// <summary>
+    /// A tap on the place a line already has (2026-11-07, the code review): nothing rewritten, logged or flashed, at a location and in a section alone.
+    /// A model's guess there is still taken as the user's, and a name with two facts is still cleaned up to one.
+    /// </summary>
+    [Fact]
+    public void ShopPlace_WhereTheLineAlreadyIs_ChangesNothing_ButAGuessOrASecondFactStillDoes()
+    {
+        using var watch = new ShopWatch(_session);
+        var (shop, aisle, bakery, milk) = PlaceFixture();
+        Assert.Equal(WebOutcome.Ok, _session.ShopPlace(new WebShopPlace { Id = milk.Id, Store = shop.Id, Location = aisle.Id }, null).Outcome);
+        Assert.Single(watch.Lines);
+        watch.NextFlash();
+
+        var again = _session.ShopPlace(new WebShopPlace { Id = milk.Id, Store = shop.Id, Location = aisle.Id }, null);
+        Assert.Equal((WebOutcome.Ok, (string?)null), (again.Outcome, again.Message));
+        Assert.Single(watch.Lines);
+        Assert.Equal(1, _shoppingChanges);
+
+        Assert.Equal(WebOutcome.Ok, _session.ShopPlace(new WebShopPlace { Id = milk.Id, Store = shop.Id, Section = bakery.Id }, null).Outcome);
+        Assert.Equal(2, watch.Lines.Count);
+        Assert.Equal(WebOutcome.Ok, _session.ShopPlace(new WebShopPlace { Id = milk.Id, Store = shop.Id, Section = bakery.Id }, null).Outcome);
+        Assert.Equal(2, watch.Lines.Count);
+
+        // A guess at the same spot is still made the user's.
+        var bread = _list.Add("Bread", 1, shop)!.Item;
+        _list.Place(shop, "Bread", ShoppingKinds.Item, null, "Bakery", ShoppingSources.Guess);
+        _session.ShopPlace(new WebShopPlace { Id = bread.Id, Store = shop.Id, Section = bakery.Id }, null);
+        Assert.Equal(ShoppingSources.User, Assert.Single(_list.ItemFacts(shop, "Bread")).Source);
+        Assert.Equal(3, watch.Lines.Count);
+
+        // Two spellings at the very place: the tap still leaves one.
+        var eggs = _list.Add("Eggs", 1, shop)!.Item;
+        _list.Place(shop, "Egg", ShoppingKinds.Item, "Aisle 2", null, ShoppingSources.User);
+        _list.Place(shop, "Eggs", ShoppingKinds.Item, "Aisle 2", null, ShoppingSources.User);
+        _session.ShopPlace(new WebShopPlace { Id = eggs.Id, Store = shop.Id, Location = aisle.Id }, null);
+        Assert.Single(_list.ItemFacts(shop, "Eggs"));
+    }
+
     [Fact]
     public void ShopPlace_RefusesWhatHasAged_AndAnythingButOneChoice()
     {
@@ -413,6 +451,12 @@ public sealed partial class WebUiTests
         Assert.False(page.Writable);
         Assert.Equal(ShoppingText.Unavailable, page.Note);
         Assert.Empty(session.ShopBought()!.Items);
+
+        // The place sheet says why (2026-11-07, the code review): a null was a 404, which the page reads as the line gone.
+        var sheet = session.ShopPlaces(1)!;
+        Assert.Equal(("", ShoppingText.Unavailable, 0), (sheet.Title, sheet.Note, sheet.Choices.Count));
+        using var noList = new WebUiSession(State, _ => WebReply.Ok, () => null, () => changes++, _time);
+        Assert.Equal(ShoppingText.Unavailable, noList.ShopPlaces(1)!.Note);
 
         WebReply[] replies =
         [

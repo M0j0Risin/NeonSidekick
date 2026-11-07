@@ -21,14 +21,18 @@ public sealed partial class ScreenPane
     private int _aimTop;
     private OverlayAim? _aimBefore;
     private int _aimBeforeTop;
-    private long _aimChangedAt;
-    private bool _aimChanged;
-    private long _clickDroppedAt;
-    private bool _clickDropped;
+    private long? _aimChangedAt;
+    private long? _clickDroppedAt;
 
     // The target with the slab, and the pointer's move count it's hidden until. Under the gate.
     private OverlayTarget? _hoverTarget;
     private int _hoverQuietMoves;
+
+    // The overlay's rows as the last draw rendered them, before the slab, and the overlay and width they're for. Under the gate.
+    private (Overlay Overlay, int Width, List<SegmentLine> Lines)? _overlayDrawnLines;
+
+    // What the last lookup found and what it was worked out from: the pointer's move count, the aim, the drawn top row. Under the gate.
+    private (int Moves, OverlayAim Aim, int Top, OverlayTarget? Found)? _hoverLookedUp;
 
     // Written by the input reader's thread (FocusChanged). _focusChange has its one reader, the companion, so this is its own.
     private int _focusLost;
@@ -53,12 +57,14 @@ public sealed partial class ScreenPane
 
     /// <summary>
     /// Whether a click on overlay row <paramref name="row"/>, column <paramref name="x"/> should be dropped: the overlay's rows changed
-    /// within <see cref="ClickGrace"/>, and that spot on the old layout didn't show what it shows now, so the click was aimed at something
-    /// else. A queued click is read right after the draw, so it falls inside the grace, and no press time is needed. Costs one click at
-    /// most: for <see cref="DroppedClickPass"/> after a drop, every click counts. Only for clicks on list rows: the ×, the strip and the
-    /// ▲▼ row work at any speed. The caller resets its double-click pair on a drop.
+    /// before, or within <see cref="ClickGrace"/> after, the click was pressed (<paramref name="pressedAt"/>, <see cref="InputEvent.Click.At"/>), and that
+    /// spot on the old layout didn't show what it shows now, so the click was aimed at something else. Measured from the press since 2026-11-07
+    /// (the code review: from the read, a click waiting behind a slow callback outlived the grace and landed on the new row); a click with no
+    /// press time (0, scripted input) or one stamped after now (another clock) is taken as pressed now. Costs one click at most: for
+    /// <see cref="DroppedClickPass"/> after a drop, every click counts. Only for clicks on list rows: the ×, the strip and the ▲▼ row work at
+    /// any speed. The caller resets its double-click pair on a drop.
     /// </summary>
-    public bool ClickIsStale(int x, int row)
+    public bool ClickIsStale(int x, int row, long pressedAt = 0)
     {
         if (!GuardsStaleClicks || !Enabled)
         {
@@ -68,8 +74,9 @@ public sealed partial class ScreenPane
         lock (_gate)
         {
             long now = _time.GetTimestamp();
-            if (!_aimChanged || _time.GetElapsedTime(_aimChangedAt, now) > ClickGrace
-                || (_clickDropped && _time.GetElapsedTime(_clickDroppedAt, now) <= DroppedClickPass))
+            long pressed = pressedAt > 0 && pressedAt < now ? pressedAt : now;
+            if (_aimChangedAt is not { } changed || _time.GetElapsedTime(changed, pressed) > ClickGrace
+                || (_clickDroppedAt is { } dropped && _time.GetElapsedTime(dropped, now) <= DroppedClickPass))
             {
                 return false;
             }
@@ -81,7 +88,6 @@ public sealed partial class ScreenPane
                 return false;   // the same page, and this spot shows what it showed
             }
 
-            _clickDropped = true;
             _clickDroppedAt = now;
             return true;
         }
@@ -105,7 +111,7 @@ public sealed partial class ScreenPane
         }
 
         long now = _time.GetTimestamp();
-        if (!_aimChanged || _time.GetElapsedTime(_aimChangedAt, now) > ClickGrace)
+        if (_aimChangedAt is not { } changed || _time.GetElapsedTime(changed, now) > ClickGrace)
         {
             _aimBefore = _aimShown;
             _aimBeforeTop = _aimTop;
@@ -114,7 +120,6 @@ public sealed partial class ScreenPane
         _aimShown = aim;
         _aimTop = top;
         _aimChangedAt = now;
-        _aimChanged = true;
     }
 
     /// <summary>A new draw by a pane (a key, a click, a refresh): the slab hides until the pointer next moves, so it never competes with the keys' highlight or sits on a row that moved. Under the gate.</summary>
@@ -128,8 +133,11 @@ public sealed partial class ScreenPane
     /// The target under the pointer worked out on the tick, as <see cref="LinkHintLocked"/> does for links, never from the pointer's
     /// callback, and painted when it changed. Never asks the terminal where the cursor is. A pointer leaving the window sends nothing, so the slab
     /// can stay until focus goes, and focus coming back doesn't bring it back before the pointer next moves. Under the gate.
+    /// <para>Looked up again only when the pointer moved, the aim changed or a draw moved the overlay's top row (2026-11-07, the code review): an
+    /// idle tick reads no window top and scans no targets. A console scrolled with no move and no draw keeps the slab where it was until the next
+    /// move; clicks don't depend on it.</para>
     /// </summary>
-    private bool HoverTargetChangedLocked()
+    private void TrackHoverLocked()
     {
         int moves = Volatile.Read(ref _pointerMoves);
         if (Volatile.Read(ref _focusLost) == 1)
@@ -138,27 +146,35 @@ public sealed partial class ScreenPane
         }
 
         OverlayTarget? wanted = null;
-        if (_hoverAsked && _overlay?.Aim is { } aim && moves != _hoverQuietMoves && _drawnOverlay && !ResizePending && _geometry?.WindowTop() is int windowTop)
+        if (_hoverAsked && _overlay?.Aim is { } aim && moves != _hoverQuietMoves && _drawnOverlay && !ResizePending)
         {
-            long at = Volatile.Read(ref _pointerAt);
-            wanted = aim.At((int)(uint)at - windowTop - OverlayTopRow, (int)(at >> 32)) is { Cursor: false } target ? target : null;
+            if (_hoverLookedUp is { } seen && seen.Moves == moves && ReferenceEquals(seen.Aim, aim) && seen.Top == _aimTop)
+            {
+                wanted = seen.Found;
+            }
+            else if (_geometry?.WindowTop() is int windowTop)
+            {
+                long at = Volatile.Read(ref _pointerAt);
+                wanted = aim.At((int)(uint)at - windowTop - OverlayTopRow, (int)(at >> 32)) is { Cursor: false } target ? target : null;
+                _hoverLookedUp = (moves, aim, _aimTop, wanted);
+            }
         }
 
         if (wanted == _hoverTarget)
         {
-            return false;
+            return;
         }
 
         var was = _hoverTarget;
         _hoverTarget = wanted;
         RepaintHoverRows(was, wanted);
-        return true;
     }
 
     /// <summary>
     /// The rows the slab left and came to, again in place, nothing else: a whole pane for a pointer's move would flicker where the terminal has no
     /// synchronized output. The rest of a row is erased only when the row leaves some: an erase on a full row, its cursor waiting at the
-    /// edge, wipes the last cell (seen in Windows Terminal: every cut row lost its ellipsis). Under the gate.
+    /// edge, wipes the last cell (seen in Windows Terminal: every cut row lost its ellipsis). The rows are the last draw's (2026-11-07, the code
+    /// review: rendering the whole overlay again for each row crossed), so a repaint matches what's on the screen. Under the gate.
     /// </summary>
     private void RepaintHoverRows(OverlayTarget? was, OverlayTarget? now)
     {
@@ -168,7 +184,9 @@ public sealed partial class ScreenPane
         }
 
         int w = Width;
-        var lines = Segment.SplitLines(overlay.Content.GetSegments(_inner), w);
+        var lines = _overlayDrawnLines is { } drawn && ReferenceEquals(drawn.Overlay, overlay) && drawn.Width == w
+            ? drawn.Lines
+            : Segment.SplitLines(overlay.Content.GetSegments(_inner), w);
         if (was is { } left && left.Row != now?.Row)
         {
             Repaint(left.Row, null);
@@ -186,14 +204,11 @@ public sealed partial class ScreenPane
                 return;
             }
 
-            var line = slab is { } s ? OverlayAim.Slab(lines[row], s.First, Math.Min(s.Last, w - 2), Theme.MenuHover.Background) : lines[row];
+            var line = slab is { } s ? OverlayAim.Slab(lines[row], s.First, Math.Min(s.Last, w - 2), Theme.MenuHover) : lines[row];
             RedrawRow(row - CursorDepth, () =>
             {
                 _inner.Write(new SegmentList(line));
-                if (FittedMarkup.RowCells(line) < w)
-                {
-                    _inner.Write(EraseLineEnd);
-                }
+                EraseRowRest(line, w);
             });
         }
     }

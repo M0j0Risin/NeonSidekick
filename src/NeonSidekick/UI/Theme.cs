@@ -186,10 +186,11 @@ public static class Theme
     /// <summary>The highlighted row of a selection menu.</summary>
     public static Style MenuHighlight => s_current[ThemeStyleSlot.MenuHighlight];
     /// <summary>
-    /// The row under the pointer (2026-11-07, menu clicks): <see cref="MenuHighlight"/>'s background alone, over the row's own text colors,
-    /// which reads on an emoji too. Derived, as <see cref="ToolbarOff"/> is: every theme has its own.
+    /// The row under the pointer's background (2026-11-07, menu clicks): <see cref="MenuHighlight"/>'s, laid behind the row's own text colors,
+    /// which reads on an emoji too. Derived, as <see cref="ToolbarOff"/> is: every theme has its own. A color since later that day (the code review):
+    /// the slab only ever took its background.
     /// </summary>
-    public static Style MenuHover => new(background: MenuHighlight.Background);
+    public static Color MenuHover => MenuHighlight.Background;
     /// <summary>The dim part of a highlighted row (the note beside a command or skill name on the input line's list, 2026-09-16).</summary>
     public static Style MenuHighlightDim => s_current[ThemeStyleSlot.MenuHighlightDim];
     /// <summary>
@@ -378,6 +379,37 @@ public static class Theme
     /// <summary>Dim secondary text. The text is escaped.</summary>
     public static string DimMarkup(string text) =>
         string.Concat("[", ToHex(Dim), "]", Markup.Escape(text), "[/]");
+
+    /// <summary>
+    /// Whether <paramref name="markup"/> is nothing but <see cref="DimMarkup"/>'s output under the palette in force: dim text with no markup of its
+    /// own (2026-11-07, the code review: a menu's empty or placeholder row, which takes no slab). Pure.
+    /// </summary>
+    public static bool IsAllDim(string markup)
+    {
+        ArgumentNullException.ThrowIfNull(markup);
+        string open = string.Concat("[", ToHex(Dim), "]");
+        if (markup.Length <= open.Length + 3 || !markup.StartsWith(open, StringComparison.Ordinal) || !markup.EndsWith("[/]", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        // Inside, every [ and ] is escaped (doubled): any other is a tag of its own.
+        var inner = markup.AsSpan(open.Length, markup.Length - open.Length - 3);
+        for (int i = 0; i < inner.Length; i++)
+        {
+            if (inner[i] is '[' or ']')
+            {
+                if (i + 1 >= inner.Length || inner[i + 1] != inner[i])
+                {
+                    return false;
+                }
+
+                i++;
+            }
+        }
+
+        return true;
+    }
 
     /// <summary>
     /// Text in a theme slot's style (2026-10-04: <see cref="SystemText"/> and <see cref="ErrorText"/> had been defined and

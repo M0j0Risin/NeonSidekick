@@ -5115,7 +5115,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
                     }
 
                     _overlay = null;
-            _hoverTarget = null;
+                    _hoverTarget = null;
                     _overlayRows = 0;
                     _drawnOverlay = false;
                     _drawnInput = false;
@@ -6386,12 +6386,6 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         {
             overlayLines = Segment.SplitLines(overlay.Content.GetSegments(_inner), w);
             overlayRows = Math.Clamp(overlayLines.Count, 0, MaxOverlayRows(h - barRows - scrollRows, shown?.Rows.Count ?? 0));
-            if (_hoverTarget is { } hovered && hovered.Row < overlayLines.Count)
-            {
-                // The row under the pointer (2026-11-07), up to the last column, which the bars leave too.
-                overlayLines[hovered.Row] = OverlayAim.Slab(overlayLines[hovered.Row], hovered.First, Math.Min(hovered.Last, w - 2), Theme.MenuHover.Background);
-            }
-
             if (overlay.Close && overlayRows > 0)
             {
                 // The close glyph in column w − 2 of the first row, TrailerGap cells clear of the
@@ -6408,6 +6402,20 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
                     overlayLines[0].Add(new Segment(CloseGlyph, Theme.DimText));
                 }
             }
+
+            // The rows as drawn, the × with them, before the slab: the hover's repaint takes its rows from here (2026-11-07, the code review).
+            _overlayDrawnLines = (overlay, w, [.. overlayLines]);
+            if (_hoverTarget is { } hovered && hovered.Row < overlayLines.Count)
+            {
+                // The row under the pointer (2026-11-07), up to the last column, which the bars leave too.
+                overlayLines[hovered.Row] = OverlayAim.Slab(overlayLines[hovered.Row], hovered.First, Math.Min(hovered.Last, w - 2), Theme.MenuHover);
+            }
+        }
+        else
+        {
+            // No pane: nothing kept of the last one's rows or its aim.
+            _overlayDrawnLines = null;
+            _hoverLookedUp = null;
         }
 
         _paneRows = 3 + overlayRows + (shown?.Rows.Count ?? 0) + barRows + stripRows + scrollRows;
@@ -6986,12 +6994,25 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     /// </summary>
     private void EndRow(List<Segment> line, int width)
     {
-        if (_overpaint && FittedMarkup.RowCells(line) < width)
+        if (_overpaint)
         {
-            _inner.Write(EraseLineEnd);
+            EraseRowRest(line, width);
         }
 
         _inner.WriteLine();
+    }
+
+    /// <summary>
+    /// The rest of a just-drawn row of <paramref name="line"/> erased, unless the row reached the edge of a window <paramref name="width"/> cells wide:
+    /// there the cursor waits and an erase wipes the last cell. Counted as the terminal draws (<see cref="FittedMarkup.DrawnCells"/>, 2026-11-07, the
+    /// code review), since that's where the cursor stops. One rule for a drawn row and a hover repaint.
+    /// </summary>
+    private void EraseRowRest(List<Segment> line, int width)
+    {
+        if (FittedMarkup.DrawnCells(line) < width)
+        {
+            _inner.Write(EraseLineEnd);
+        }
     }
 
     /// <summary>
@@ -9091,6 +9112,13 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         }
 
         _hoverAsked = wanted;
+        if (wanted)
+        {
+            // Asked for afresh (2026-11-07, the code review): focus taken as here, since a terminal may not report focus coming back while reporting
+            // was off, and a lost-focus left from then would keep the slab hidden for good.
+            Volatile.Write(ref _focusLost, 0);
+        }
+
         return wanted;
     }
 
@@ -9192,6 +9220,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
                 _col = 0;
                 _lineFull = false;
                 MarkBuilt(w, h);
+                HideHoverLocked();   // the old size's target is on another row now (2026-11-07, the code review); the next move finds it again
                 Draw();
                 EndSync();
                 if (_overlay is not null)
@@ -9203,7 +9232,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             }
 
             // The pointer on another row (2026-11-07): those rows again, in place.
-            HoverTargetChangedLocked();
+            TrackHoverLocked();
 
             if (!ReferenceEquals(Theme.Current, _seenPalette))
             {

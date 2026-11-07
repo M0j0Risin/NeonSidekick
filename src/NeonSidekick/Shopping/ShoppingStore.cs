@@ -144,6 +144,18 @@ public sealed class ShoppingStore : IDisposable
         }
     }
 
+    /// <summary>
+    /// What a watcher compares to know the file changed without reading it all (2026-11-07, the code review: <c>/shopping</c> read every line and
+    /// placement each second): this connection's own writes as <c>total_changes()</c> (a cascade's rows and an upsert's update count), and a commit by
+    /// any other connection as <c>PRAGMA data_version</c>, another process's too (a headless run on the profile holds its own store). Only two
+    /// stamps of one store compare. Null when the file is off.
+    /// </summary>
+    public (long Own, long Others)? ChangeStamp()
+    {
+        var rows = Query("SELECT total_changes(), data_version FROM pragma_data_version", null, r => (r.GetInt64(0), r.GetInt64(1)), "read the change stamp");
+        return rows.Count > 0 ? rows[0] : null;
+    }
+
     // ---- stores ----
 
     /// <summary>Every store, by name.</summary>
@@ -439,6 +451,29 @@ public sealed class ShoppingStore : IDisposable
     /// <summary>Forgets a placement by its id (2026-10-11, the layout editor). False when there was none.</summary>
     public bool RemovePlacement(long placementId) =>
         Execute("DELETE FROM placements WHERE id = $id", c => c.Parameters.AddWithValue("$id", placementId), "forget a placement") is > 0;
+
+    /// <summary>
+    /// Forgets the placements <paramref name="placementIds"/> in one transaction (2026-11-07, the code review: forgetting a line's facts one by one, a
+    /// failure partway left some behind): how many went (0 when another device forgot them first), null when a statement failed and none did.
+    /// </summary>
+    public int? RemovePlacements(IReadOnlyCollection<long> placementIds)
+    {
+        ArgumentNullException.ThrowIfNull(placementIds);
+        return InTransaction("forget placements", (connection, transaction) =>
+        {
+            int removed = 0;
+            foreach (long id in placementIds)
+            {
+                using var command = connection.CreateCommand();
+                command.Transaction = transaction;
+                command.CommandText = "DELETE FROM placements WHERE id = $id";
+                command.Parameters.AddWithValue("$id", id);
+                removed += command.ExecuteNonQuery();
+            }
+
+            return removed;
+        });
+    }
 
     /// <summary>Forgets where <paramref name="term"/> is at a store (any case). False when there was no such placement.</summary>
     public bool Unplace(long storeId, string term) =>

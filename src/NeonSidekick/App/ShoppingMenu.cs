@@ -84,21 +84,52 @@ internal sealed class ShoppingMenu
     /// What the open list shows, as a key (2026-10-15): the active store, its placements and every line's state; another means it changed elsewhere.
     /// The placements since 2026-11-06 (the user's call): a place made elsewhere moves a line without changing the line itself, so the Web UI's ⌖ place
     /// and the model's <c>shopping_place</c> left an open pane drawn as it was. A fact's term and kind decide which lines it places, so they count too.
+    /// Since 2026-11-07 (the code review) everything else the pane draws from the file: the store's name (the pane's label), its locations and
+    /// sections (the headings and their walk order) and each line's note.
     /// </summary>
     private string ListKey()
     {
+        var invariant = System.Globalization.CultureInfo.InvariantCulture;
         var store = _list.Store;
         var active = store.ActiveStore();
-        string placed = active is null ? "" : string.Join(",", store.Placements(active.Id).Select(p => string.Join(":", p.Id.ToString(System.Globalization.CultureInfo.InvariantCulture), p.Term, p.Kind, p.LocationId?.ToString(System.Globalization.CultureInfo.InvariantCulture), p.SectionId?.ToString(System.Globalization.CultureInfo.InvariantCulture), p.Source)));
-        return active?.Id.ToString(System.Globalization.CultureInfo.InvariantCulture) + "|" + placed + "|"
-            + string.Join(",", store.Items().Select(i => i.Id.ToString(System.Globalization.CultureInfo.InvariantCulture) + (i.Checked ? "+" : "-") + i.Quantity.ToString(System.Globalization.CultureInfo.InvariantCulture) + i.Name));
+        var key = new System.Text.StringBuilder();
+        if (active is not null)
+        {
+            key.Append(invariant, $"{active.Id}:{active.Name}|");
+            foreach (var p in store.Placements(active.Id))
+            {
+                key.Append(invariant, $"{p.Id}:{p.Term}:{p.Kind}:{p.LocationId}:{p.SectionId}:{p.Source},");
+            }
+
+            key.Append('|');
+            foreach (var l in store.Locations(active.Id))
+            {
+                key.Append(invariant, $"{l.Id}:{l.Label}:{l.SectionId}:{l.Walk},");
+            }
+
+            key.Append('|');
+            foreach (var s in store.Sections(active.Id))
+            {
+                key.Append(invariant, $"{s.Id}:{s.Name},");
+            }
+        }
+
+        key.Append('|');
+        foreach (var i in store.Items())
+        {
+            key.Append(invariant, $"{i.Id}{(i.Checked ? "+" : "-")}{i.Quantity}:{i.Name}:{i.Note},");
+        }
+
+        return key.ToString();
     }
 
     /// <summary>
-    /// Re-reads the list every <see cref="WatchEvery"/> while a pick waits, and ends it (the page's <c>stale</c> token) when the key differs from
-    /// <paramref name="drawn"/>; nothing without a clock. Ends quietly with the pick.
+    /// Watches the file every <see cref="WatchEvery"/> while a pick waits, and ends it (the page's <c>stale</c> token) when the key differs from
+    /// <paramref name="drawn"/>; nothing without a clock. Ends quietly with the pick. The key is built only when the store's
+    /// <see cref="ShoppingStore.ChangeStamp"/> (or the store itself, a profile switch) moved from <paramref name="seen"/>, read before
+    /// <paramref name="drawn"/> was, so a write in between still redraws (2026-11-07, the code review: it read the whole list each second).
     /// </summary>
-    private async Task Watch(string drawn, CancellationTokenSource stale, CancellationToken cancellationToken)
+    private async Task Watch(string drawn, (ShoppingStore Store, (long, long)? Stamp) seen, CancellationTokenSource stale, CancellationToken cancellationToken)
     {
         if (_time is null)
         {
@@ -111,6 +142,13 @@ internal sealed class ShoppingMenu
             while (true)
             {
                 await Task.Delay(WatchEvery, _time, both.Token).ConfigureAwait(false);
+                var now = Seen();
+                if (ReferenceEquals(now.Store, seen.Store) && Equals(now.Stamp, seen.Stamp))
+                {
+                    continue;
+                }
+
+                seen = now;
                 if (!string.Equals(ListKey(), drawn, StringComparison.Ordinal))
                 {
                     await stale.CancelAsync().ConfigureAwait(false);
@@ -122,6 +160,13 @@ internal sealed class ShoppingMenu
         {
             // The pick ended, or the change was found.
         }
+    }
+
+    /// <summary>The store on show and its change stamp, for <see cref="Watch"/>.</summary>
+    private (ShoppingStore Store, (long, long)? Stamp) Seen()
+    {
+        var store = _list.Store;
+        return (store, store.ChangeStamp());
     }
 
     /// <summary>The page's rows over <paramref name="view"/>: markup, the headings' indexes, and the line each row stands for (null on a heading).</summary>
@@ -167,7 +212,8 @@ internal sealed class ShoppingMenu
             while (true)
             {
                 // The key before the view (2026-10-19, the review: taken after, a change made in between counted as drawn and never redrew): a
-                // change in between now costs one redraw at most.
+                // change in between now costs one redraw at most. The watch's stamp before the key (2026-11-07), for the same reason.
+                var seen = Seen();
                 string drawn = ListKey();
                 var shop = _list.StoreFor(null, out _);
                 var view = _list.View(shop);
@@ -193,7 +239,7 @@ internal sealed class ShoppingMenu
                 MenuPick? picked;
                 using (var stale = new CancellationTokenSource())
                 {
-                    var watching = Watch(drawn, stale, cancellationToken);
+                    var watching = Watch(drawn, seen, stale, cancellationToken);
                     try
                     {
                         picked = await _pane.PickAsync(page, cursor, cancellationToken, stale: stale.Token).ConfigureAwait(false);
