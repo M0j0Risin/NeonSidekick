@@ -40,7 +40,7 @@ dotnet run --project src/NeonSidekick -c Release
 | `.\build.ps1` | Restore, build, run the tests with coverage, publish the native exe and smoke-test it. |
 | `.\build.ps1 -TestOnly` | Restore, build and test, with no publish. The quickest full check. |
 | `.\build.ps1 -Publish` | Restore, build, publish the native exe and smoke-test it, with no tests. |
-| `.\build.ps1 -Package` | The full run, then the release package in `publish\package\` (a `.zip` on Windows, a `.tar.gz` on a Mac) with the README, docs, license and a `.sha256`, then unpacks it to check it against its manifest. Not with `-TestOnly`. |
+| `.\build.ps1 -Package` | The full run, then the release package in `publish\package\` (a `.zip` on Windows, a `.tar.gz` on a Mac) with the README, docs, licenses and a `.sha256`, then unpacks it to check it against its manifest. Not with `-TestOnly`. |
 | `.\build.ps1 -Package -Tag v1.2.3` | The same, refusing a tag that isn't `v` plus the project's `<Version>`. |
 | `.\build.ps1 -Publish -Package -UpdateSim` | A simulation build's package, for `tools/UpdateSim.cs` ([below](#making-a-release)). Never a release: `-Tag` refuses it. |
 | `.\build.ps1 -CoverageFloor 0` | Reports coverage without failing under the floor (80% by default). |
@@ -83,6 +83,8 @@ dotnet test tests/NeonSidekick.Tests -c Release --filter "FullyQualifiedName~Ass
 * **Live tests** (a real LLM server, database, camera, microphone, speech model…) skip unless their resource is there. [ENVIRONMENT.md](ENVIRONMENT.md#test-suite) lists the variables that turn each on, [TESTCONTAINERS.md](TESTCONTAINERS.md) the Docker containers they use.
 * **Browser PDF tests** read and edit hand-written PDFs (an outline, a locked file, Japanese text, a form) in the machine's Edge, Chrome or Brave (or Chromium on a Mac), headless. Without one they pass unproven; the `pdf:cmap`, `pdf:edit` and `shopping:pdf-read` smoke checks prove the published exe.
 * **GPU tests:** two tests load an embedded model onto the GPU, so `build.ps1` leaves them out. Run them with `dotnet test tests/NeonSidekick.Tests -c Release --filter Category=LoadsEmbeddedModel` while no other model holds the GPU.
+
+The metasearch's tests read pages saved by hand from real engines. `tools/searxng` trims those pages and regenerates the tables and expected output from them, and fetches nothing. Those scripts need Python and a SearXNG checkout, and building and testing don't. `src/NeonSidekick/SearXNG/README.md` has the commands.
 
 ## Checking the native exe
 

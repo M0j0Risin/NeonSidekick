@@ -454,6 +454,8 @@ public class ProfilesTests : IDisposable
         Assert.Equal(["ausaa34-uid4355/0f"], kept.MonitorPcInputs);   // this PC's inputs, the same cabling (later on 2026-10-23)
         Assert.Equal(["ausaa34-uid4355/0f", "ausaa34-uid4355/11"], kept.MonitorInputsSeen);   // what the monitors last reported (2026-10-27)
         Assert.Equal(23, Profiles.ResetKeptSettings.Length);   // the monitors' input names and hidden inputs 2026-10-23, this PC's inputs later that day, the inputs seen 2026-10-27
+        Assert.DoesNotContain(nameof(AppSettingsData.WebMetasearchEngines), Profiles.ResetKeptSettings);   // nothing hard to re-enter: a reset turns all five back on (2026-11-06, the user's call)
+        Assert.DoesNotContain(nameof(AppSettingsData.WebMetasearchSafeSearch), Profiles.ResetKeptSettings);   // and returns it to off
 
         Profiles.Create(_dir, "home", mine);
         Profiles.Reset(_dir, "home", all: true);

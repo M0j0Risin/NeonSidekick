@@ -195,6 +195,7 @@ public static partial class SmokeChecks
         results.Add(ProbePdfEdit());
         results.Add(PicturesHere ? ProbeSplash() : NotWindows("splash:decode"));
         results.Add(ProbeWebMarkdown());
+        results.Add(ProbeMetaSearch());
         results.Add(ProbeTranscriptMarkdown());
         results.Add(ProbeOnnxRuntime());
         results.Add(ProbeSessions());

@@ -342,11 +342,11 @@ if ($LASTEXITCODE -ne 0) { Fail "Publish FAILED" }
 # Third-party AOT warnings (Whisper.net's library loader, the OpenAI SDK) are reported and
 # tolerated; a warning that points into our own code fails the build. ILC appends the project
 # path "[...NeonSidekick.csproj]" to EVERY warning line, so that suffix is stripped before
-# deciding whose warning it is: ours name a NeonSidekick.* symbol or a src/NeonSidekick/*.cs file.
+# deciding whose warning it is: ours name a NeonSidekick.* or SearXNG.Net.* symbol, or a src/NeonSidekick/*.cs file.
 $aotWarnings = @($publishLog | Where-Object { $_ -match 'warning IL\d+' } | Sort-Object -Unique)
 $ownWarnings = @($aotWarnings | Where-Object {
     $text = $_ -replace '\s*\[[^\]]*\.csproj\]\s*$', ''
-    ($text -match 'src[\\/]NeonSidekick[\\/].*\.cs') -or ($text -match '\bNeonSidekick\.[A-Z]')
+    ($text -match 'src[\\/]NeonSidekick[\\/].*\.cs') -or ($text -match '\bNeonSidekick\.[A-Z]') -or ($text -match '\bSearXNG\.Net\.[A-Z]')
 })
 $aotWarnings | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
 Write-Host ""
@@ -484,6 +484,7 @@ if ($Package) {
         if (-not (Test-Path (Join-Path (Join-Path $stage "espeak") $espeakOwn))) { Fail "The package lost $espeakOwn." }
     }
     Copy-Item -Path (Join-Path $ProjectRoot "LICENSE") -Destination $stage
+    Copy-Item -Path (Join-Path $ProjectRoot "LICENSE-AGPL") -Destination $stage
     Copy-Item -Path (Join-Path $ProjectRoot "README.md") -Destination $stage
     # README links into docs\ (the full references and HEADLESS.md, moved there on 2026-10-05), so the zip keeps that layout.
     $stageDocs = Join-Path $stage "docs"

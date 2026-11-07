@@ -3,3 +3,5 @@
 assets/pdfjs/*.mjs -text
 # pdf-lib (2026-10-14, pdf_edit): the same for its build (assets/pdflib/README.md).
 assets/pdflib/*.js -text
+# The metasearch's recorded pages (2026-11-06): GoldenTests compares them with what SearXNG's code read from these exact bytes.
+tests/NeonSidekick.Tests/Fixtures/searxng/** -text

@@ -272,6 +272,7 @@ public sealed class BrowserToolbarTests
         Assert.Equal("http://box:8080/search?q=a%20b", BrowserAddress.SearchUrl(new AppSettingsData { WebSearchMethod = "searxng", WebSearxngUrl = "http://box:8080/" }, "a b").AbsoluteUri);
         Assert.Equal("http://box:8080/searx/search?q=x", BrowserAddress.SearchUrl(new AppSettingsData { WebSearchMethod = "searxng", WebSearxngUrl = "http://box:8080/searx/search?q=old" }, "x").AbsoluteUri);
         Assert.Equal("http://box:8080/search?q=x", SearxngSearch.PageUrl(new Uri("http://box:8080/search"), "x").AbsoluteUri);
+        Assert.Equal("https://duckduckgo.com/?q=x", BrowserAddress.SearchUrl(new AppSettingsData { WebSearchMethod = "metasearch", WebSearxngUrl = "http://box:8080/" }, "x").AbsoluteUri);   // it has no results page of its own
     }
 
     [Fact]

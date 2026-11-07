@@ -75,6 +75,9 @@
     <!-- The managed LDAP client's known-answer bytes (2026-10-18, the Mac AD plan's phase 0): cleartext messages the spike exchanged with
          a local Samba DC of the made-up LAB.NEON.TEST, the bind's SASL credentials replaced by a placeholder; no Kerberos token. -->
     <None Include="Fixtures\ldap\*.txt" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The metasearch's pages, real ones from 2026-11-06 reduced to what the engines parse, and what SearXNG's own code did
+         with them (SearXNG/GoldenTests.cs; tools/searxng regenerates that from the saved pages, and fetches nothing). -->
+    <None Include="Fixtures\searxng\**\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

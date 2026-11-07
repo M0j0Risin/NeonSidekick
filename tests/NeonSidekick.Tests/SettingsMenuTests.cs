@@ -1093,6 +1093,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.GradientRules,   // 2026-11-01, the gradient rules
                 SettingsField.ReplyFooter,   // 2026-11-01, the reply footer (feature idea #4)
                 SettingsField.CheckForUpdatesAtStart,   // 2026-11-04, self-update
+                SettingsField.WebMetasearchEngines, SettingsField.WebMetasearchSafeSearch,   // 2026-11-06, the metasearch
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
@@ -1445,7 +1446,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.DoesNotContain(ToolsMenuTests.TabFields(ToolsText.FileMenuTitle), f => SettingsMenu.FieldName(f).Contains("safe edits", StringComparison.OrdinalIgnoreCase));   // gone 2026-10-01
         Assert.Equal(ToolsMenuTests.TabFields(ToolsText.FileMenuTitle).Max(f => SettingsMenu.FieldName(f).Length) + 2, SettingsMenu.LabelWidthOf(ToolsMenuTests.TabFields(ToolsText.FileMenuTitle)));
         // The web rows (2026-09-15): the Web tab (titled Browser until later that day; /tools' last from 2026-09-19, third since later on 2026-09-21), in this order, none a reconnect — one toggle, three pickers (the network mode in the LAN switch's slot since 2026-09-18; the search method above the URL it governs), two typed rows that may be empty, a typed count.
-        Assert.Equal(new[] { SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserBotcheckWindow, SettingsField.WebBrowserHomePage, SettingsField.BrowserPrivacy, SettingsField.WebOpenLinksIn, SettingsField.WebBrowserSignInMode, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes }, ToolsMenuTests.TabFields(ToolsText.WebTabTitle));   // the download cap last (2026-10-01)
+        Assert.Equal(new[] { SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserBotcheckWindow, SettingsField.WebBrowserHomePage, SettingsField.BrowserPrivacy, SettingsField.WebOpenLinksIn, SettingsField.WebBrowserSignInMode, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebMetasearchEngines, SettingsField.WebMetasearchSafeSearch, SettingsField.WebDownloadMaxMegabytes }, ToolsMenuTests.TabFields(ToolsText.WebTabTitle));   // the download cap last (2026-10-01)
         // The shell rows (2026-09-21): the Shell tab (between Git and Web that day, between Files and Ask since later on) — the policy (the group's switch, a picker), the allowed list, the default shell (a picker), then the three typed caps,
         // the languages and their timeout (the tool bridge's toggle and its tool-call cap below them from later that day until 2026-10-23); none a reconnect. The outside-paths police (2026-09-22) sits third, under the list it guards beside.
         // Shell prefer native tools (2026-09-26) sits under the police, the other guard in front of the gate; the forbidden strings (2026-10-03) between them, the police's own list.
@@ -1537,10 +1538,10 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("gitlib tools disabled", SettingsMenu.ToggleDescribe(SettingsField.GitLibTools, false));
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.GitLibTools));
         Assert.Equal("Web search method", SettingsMenu.FieldName(SettingsField.WebSearchMethod));
-        Assert.Equal("duckduckgo", SettingsMenu.FieldValue(SettingsField.WebSearchMethod, data, _settings.ProfileDirectory));
+        Assert.Equal("metasearch", SettingsMenu.FieldValue(SettingsField.WebSearchMethod, data, _settings.ProfileDirectory));
         Assert.Equal("searxng", SettingsMenu.FieldValue(SettingsField.WebSearchMethod, new AppSettingsData { WebSearchMethod = "searxng" }, _settings.ProfileDirectory));
         Assert.Equal("duckduckgo [#9A8BB8]the built-in DuckDuckGo scrape, no setup[/]", SettingsMenu.SearchMethodLabel("duckduckgo"));
-        Assert.Equal("searxng    [#9A8BB8]the instance named in Web SearXNG URL; DuckDuckGo until one is set[/]", SettingsMenu.SearchMethodLabel("searxng"));
+        Assert.Equal("searxng    [#9A8BB8]the instance named in Web SearXNG URL; the metasearch until one is set[/]", SettingsMenu.SearchMethodLabel("searxng"));
         foreach (var f in ToolsMenuTests.TabFields(ToolsText.GitTabTitle))
         {
             Assert.False(SettingsMenu.IsLlmField(f) || SettingsMenu.IsTtsField(f) || SettingsMenu.IsVoiceField(f));
@@ -4383,8 +4384,8 @@ public partial class SettingsMenuTests : IDisposable
     public async Task WebSearchMethod_IsRow48_APicker_NoReconnect()
     {
         Down(47);
-        Push(Keys.Enter);                           // the picker opens on duckduckgo (the first row)
-        Push(Keys.Down, Keys.Enter);                // searxng
+        Push(Keys.Enter);                           // the picker opens on metasearch (the first row)
+        Push(Keys.Down, Keys.Down, Keys.Enter);     // searxng
         Push(Keys.Escape);
 
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
@@ -4393,7 +4394,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Contains(Breadcrumb("Web search method"), Output);
         Assert.Contains("  · Web search method: searxng", Output);
         Assert.Contains("the built-in DuckDuckGo scrape, no setup", Output);
-        Assert.Contains("the instance named in Web SearXNG URL; DuckDuckGo until one is set", Output);
+        Assert.Contains("the instance named in Web SearXNG URL; the metasearch until one is set", Output);
         Assert.Equal(0, _synth.ListCalls);
     }
 
@@ -5523,6 +5524,7 @@ public partial class SettingsMenuTests : IDisposable
 
         // A few by name.
         Assert.Equal(["Questions", "Limits"], SettingsMenu.ToolsMenuSections[0].Select(s => s.Title));
+        Assert.Equal(["Browser", "Search", "Web metasearch", "Downloads"], SettingsMenu.ToolsMenuSections[ToolsText.MenuIndex(ToolsText.WebTabTitle)].Select(s => s.Title));
         Assert.Equal(["Policy", "Guards", "Commands", "Scripts"], SettingsMenu.ToolsMenuSections[2].Select(s => s.Title));
         Assert.Equal(["Access", "Connections", "Queries", "Files"], SettingsMenu.ToolsMenuSections[ToolsText.MenuIndex(ToolsText.SqlTabTitle)].Select(s => s.Title));
         Assert.Equal(["Connection", "Search", "Playing"], SettingsMenu.ToolsMenuSections[ToolsText.MenuIndex(ToolsText.YouTubeTabTitle)].Select(s => s.Title));

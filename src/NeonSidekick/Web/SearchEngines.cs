@@ -55,14 +55,13 @@ public sealed class DuckDuckGoSearch : ISearchEngine
 
     private const string Category = "Web";
     private readonly WebFetcher _fetcher;
-    private readonly TimeProvider _time;
-    private readonly object _gate = new();
-    private DateTimeOffset _last = DateTimeOffset.MinValue;
+    private readonly SearchPacer _pacer;
 
     public DuckDuckGoSearch(WebFetcher fetcher, TimeProvider time)
     {
         _fetcher = fetcher ?? throw new ArgumentNullException(nameof(fetcher));
-        _time = time ?? throw new ArgumentNullException(nameof(time));
+        ArgumentNullException.ThrowIfNull(time);
+        _pacer = new SearchPacer(time, MinInterval);
     }
 
     public string Name => WebText.DuckDuckGoName;
@@ -204,7 +203,7 @@ public sealed class DuckDuckGoSearch : ISearchEngine
     {
         ArgumentNullException.ThrowIfNull(query);
         ArgumentNullException.ThrowIfNull(options);
-        await PaceAsync(cancellationToken).ConfigureAwait(false);
+        await _pacer.WaitAsync(cancellationToken).ConfigureAwait(false);
         // Judged like any fetch (2026-09-18): under local_area_network the public endpoint is refused — the user's call.
         var url = QueryUrl(query);
         var page = await _fetcher.FetchAsync(url, options with { Referer = Endpoint }, cancellationToken).ConfigureAwait(false);
@@ -247,22 +246,6 @@ public sealed class DuckDuckGoSearch : ISearchEngine
         }
 
         return new SearchOutcome(results.Take(max).ToArray(), "");
-    }
-
-    private async Task PaceAsync(CancellationToken cancellationToken)
-    {
-        TimeSpan wait;
-        lock (_gate)
-        {
-            var now = _time.GetUtcNow();
-            wait = MinInterval - (now - _last);
-            _last = now + (wait > TimeSpan.Zero ? wait : TimeSpan.Zero);
-        }
-
-        if (wait > TimeSpan.Zero)
-        {
-            await Task.Delay(wait, _time, cancellationToken).ConfigureAwait(false);
-        }
     }
 }
 

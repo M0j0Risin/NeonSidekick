@@ -175,6 +175,7 @@ Not yet tried on a Mac:
 * **Deleting on a volume with no Trash** (a network or FAT volume).
 * **A trace's hops** (the routers' Time Exceeded replies).
 * **The SearXNG and Home Assistant setup guides.**
+* **The built-in metasearch** (`metasearch` under *Web search method*).
 * **Switching the audio output mid-reply** (to AirPods, say); the next reply plays on the new default output.
 * **Screen capture on macOS 14.0–15.1, and on a 1× screen beside a Retina one.**
 * **The robot splash following the mouse.** Terminal.app reports the mouse only with View › Allow Mouse Reporting on.

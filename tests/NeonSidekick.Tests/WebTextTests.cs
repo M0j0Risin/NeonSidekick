@@ -40,6 +40,8 @@ public class WebTextTests
         Assert.Equal("Error: SearXNG at http://localhost:8080 refused the JSON format (HTTP 403); add json to search.formats in its settings.yml", WebText.SearxngRefused("http://localhost:8080"));
         Assert.Equal("Error: SearXNG at http://localhost:8080 did not answer (connection refused)", WebText.SearxngUnreachable("http://localhost:8080", "connection refused"));
         Assert.Equal("Error: DuckDuckGo could not be searched (no answer)", WebText.SearchFailed("DuckDuckGo", "no answer"));
+        Assert.Equal("Error: Metasearch's engines refused the search (bing: Too many requests); they are resting, for seconds to days depending on the refusal, so searching again now won't help, and restarting the app clears the rests", WebText.MetaSearchRefused("bing: Too many requests"));
+        Assert.Equal("Error: the built-in metasearch asks search engines on the internet, which Web browser network mode 'lan' keeps off limits", WebText.MetaSearchNeedsInternet);
     }
 
     [Fact]

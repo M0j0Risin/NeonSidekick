@@ -71,6 +71,8 @@
 
   <ItemGroup>
     <PackageReference Include="Spectre.Console" Version="0.57.2" />
+    <!-- The metasearch's page parser (SearXNG/): Bing, DuckDuckGo and Startpage are read with it. -->
+    <PackageReference Include="HtmlAgilityPack" Version="1.13.1" />
     <PackageReference Include="Microsoft.Extensions.AI" Version="10.8.3" />
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.8.3" />
     <PackageReference Include="Whisper.net" Version="1.9.1" />
@@ -260,6 +262,8 @@
     <!-- The repository's LICENSE (GPL-3.0 since 2026-09-20) rides inside the exe too: /about's License tab
          reads it from the manifest (AboutText.LicenseText), so the pane and the file can never disagree. -->
     <EmbeddedResource Include="..\..\LICENSE" LogicalName="LICENSE" Visible="false" />
+    <!-- The metasearch's license (2026-11-06), the one copy of the AGPL text: /about's License (AGPL) tab reads it. -->
+    <EmbeddedResource Include="..\..\LICENSE-AGPL" LogicalName="LICENSE-AGPL" Visible="false" />
     <!-- The icon a Mac's /shortcut gives its .command file (2026-10-08, MacShortcutWriter): ApplicationIcon is a Win32
          resource only, so a Mac build reads the same file from here. -->
     <EmbeddedResource Include="Assets\app.ico" LogicalName="app.ico" Visible="false" />

@@ -31,7 +31,7 @@ Elsewhere:
 | `/help` | The commands (everyday ones on Basic, the rest on Advanced) and the keys; on the Keys tab, `k` swaps in `/keycheck`'s list. |
 | `/help <words>` | Asks the model to look the words up in the app's manual (`neon_help`); with no model, or `neon_help` off, the manual answers. Waits during a reply. |
 | `/help <your command>` | Shows one of your [custom commands](#custom-commands): its description and file, or why a skipped file doesn't run. No model is asked; more words ask the manual (`/help about review`). |
-| `/about` | The version, runtime, folders, components, the embedded models' Hugging Face pages and the license. |
+| `/about` | The version, runtime, folders, components, the embedded models' Hugging Face pages and the licenses. |
 | `/keycheck` | Lists the app's key chords and whether another program holds each (a held chord never reaches the app). On a Mac, also macOS shortcuts and an Option key that types characters. |
 | `/update` | Shows the newest release's notes, with Install and Later; Install downloads and checks it, and it installs when you quit. With one under way, offers to cancel it ([Updating](#updating)). |
 | `/update notes` | Prints the release notes of the version running. Works offline. |

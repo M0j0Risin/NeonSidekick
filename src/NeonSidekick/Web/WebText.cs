@@ -66,6 +66,7 @@ public static class WebText
     /// <summary>The search engine names on a search header.</summary>
     public const string DuckDuckGoName = "DuckDuckGo";
     public const string SearxngName = "SearXNG";
+    public const string MetaSearchName = "Metasearch";
 
     /// <summary>
     /// Why a browser run made nothing when another browser held its profile folder (2026-10-11: an Edge that relaunched itself
@@ -165,6 +166,23 @@ public static class WebText
     public static string SearxngRefused(string url) => $"Error: SearXNG at {url} refused the JSON format (HTTP 403); add json to search.formats in its settings.yml";
     public static string SearxngUnreachable(string url, string detail) => $"Error: SearXNG at {url} did not answer ({detail})";
     public static string SearchFailed(string engine, string detail) => $"Error: {engine} could not be searched ({detail})";
+
+    /// <summary>
+    /// The metasearch's refusal (2026-11-06), not <see cref="SearchRefused"/>: "try again in a minute" is wrong here, since a refused engine
+    /// rests for up to 15 days, in memory only.
+    /// </summary>
+    public static string MetaSearchRefused(string detail) => $"Error: {MetaSearchName}'s engines refused the search ({detail}); they are resting, for seconds to days depending on the refusal, so searching again now won't help, and restarting the app clears the rests";
+
+    public const string SafeSearchOffHint = "asks Bing, Brave and Startpage not to filter";
+    public const string SafeSearchModerateHint = "asks them for their moderate filter";
+    public const string SafeSearchStrictHint = "asks them for their strict filter";
+
+    /// <summary>What the metasearch says with every engine switched off, or only names it doesn't know (2026-11-06).</summary>
+    public const string MetaSearchNoEngines = "Error: no search engine is turned on in Web metasearch engines";
+
+    /// <summary>What the metasearch says under network mode <c>lan</c> (2026-11-06): it has no engine on the LAN to ask.</summary>
+    public const string MetaSearchNeedsInternet = "Error: the built-in metasearch asks search engines on the internet, which Web browser network mode 'lan' keeps off limits";
+
     public static string OpenFailed(string url, string detail) => $"Error: could not open '{url}' in your browser: {detail}";
     public static string BadUrlList(string argument, string raw) => $"Error: '{raw.Trim()}' is not a list of links for '{argument}'";
     public static string NoneOpened(int count) => $"Error: none of the {count.ToString(CultureInfo.InvariantCulture)} links could be opened";

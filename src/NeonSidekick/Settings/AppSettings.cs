@@ -1404,6 +1404,8 @@ public sealed class AppSettings : IDisposable
         WebDownloadMaxMegabytes = source.WebDownloadMaxMegabytes,
         WebSearchMethod = source.WebSearchMethod,
         WebSearxngUrl = source.WebSearxngUrl,
+        WebMetasearchEngines = source.WebMetasearchEngines is null ? null : [.. source.WebMetasearchEngines],
+        WebMetasearchSafeSearch = source.WebMetasearchSafeSearch,
         WebTools = source.WebTools,
         McpConnectTimeoutSeconds = source.McpConnectTimeoutSeconds,
         McpServers = source.McpServers,

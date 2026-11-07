@@ -14,12 +14,19 @@ public static class WebHttp
     /// <summary>How long a pooled connection lives before it is replaced.</summary>
     public static readonly TimeSpan ConnectionLifetime = TimeSpan.FromMinutes(5);
 
+    /// <summary>
+    /// Set on a request that keeps out of the jar, neither sending from it nor adding to it, though a <c>Cookie</c> header the request
+    /// carries itself still goes. The metasearch's (<see cref="BuiltInMetaSearch"/>): the jar holds the headless browser's cookies, and
+    /// what a search engine sets would otherwise link one search to the next and follow <c>web_fetch</c> to that site.
+    /// </summary>
+    public static readonly HttpRequestOptionsKey<bool> NoCookiesKey = new("NeonSidekick.Web.NoCookies");
+
     /// <param name="cookies">The jar to send from (2026-10-11: <see cref="WebAccess"/> hands the same one to its fetcher, which fills it from the headless browser); a new one when null.</param>
     /// <remarks>
     /// One pool per judgement (2026-10-23, the admin review's U2): the reach is judged as a socket is opened, and a pooled socket was reused for 5
     /// minutes, so one opened by the app's exempt SearXNG request, or under the reach before a change in <c>/settings</c>, carried a later request
-    /// past the check. Now an exempt request has a pool of its own, and every other request goes to the pool of the reach in force as it is sent,
-    /// each pool's sockets judged under that reach alone.
+    /// past the check. Now an exempt request uses the <c>both</c> pool, and every other request goes to the pool of the reach in force as it is sent,
+    /// each pool's sockets judged under that reach alone. Cookies are a separate choice, so a <see cref="NoCookiesKey"/> request has its own pools.
     /// </remarks>
     public static HttpClient Create(LanPolicy policy, CookieContainer? cookies = null)
     {
@@ -32,27 +39,35 @@ public static class WebHttp
         };
     }
 
-    /// <summary>A sockets handler whose connects are judged under <paramref name="reach"/> alone.</summary>
-    private static SocketsHttpHandler Pool(NetworkReach reach, CookieContainer cookies) => new()
+    /// <summary>A sockets handler whose connects are judged under <paramref name="reach"/> alone; with no <paramref name="cookies"/> it keeps none.</summary>
+    private static SocketsHttpHandler Pool(NetworkReach reach, CookieContainer? cookies)
     {
-        AutomaticDecompression = DecompressionMethods.All,
-        AllowAutoRedirect = false,
-        UseCookies = true,
-        CookieContainer = cookies,
-        PooledConnectionLifetime = ConnectionLifetime,
-        ConnectCallback = new LanPolicy(() => reach).ConnectAsync,
-    };
+        var pool = new SocketsHttpHandler
+        {
+            AutomaticDecompression = DecompressionMethods.All,
+            AllowAutoRedirect = false,
+            UseCookies = cookies is not null,
+            PooledConnectionLifetime = ConnectionLifetime,
+            ConnectCallback = new LanPolicy(() => reach).ConnectAsync,
+        };
+        if (cookies is not null)
+        {
+            pool.CookieContainer = cookies;
+        }
 
-    /// <summary>The request's pool: the exempt one for <see cref="LanPolicy.ExemptKey"/>, else the reach's in force now (U2).</summary>
+        return pool;
+    }
+
+    /// <summary>The request's pool: <c>both</c>'s for <see cref="LanPolicy.ExemptKey"/>, else the reach's in force now (U2), apart for <see cref="NoCookiesKey"/>.</summary>
     private sealed class PerReachHandler(LanPolicy policy, CookieContainer cookies) : HttpMessageHandler
     {
-        private readonly System.Collections.Concurrent.ConcurrentDictionary<NetworkReach, HttpMessageInvoker> _pools = new();
-        private readonly Lazy<HttpMessageInvoker> _exempt = new(() => new HttpMessageInvoker(Pool(NetworkReach.Both, cookies), disposeHandler: true));
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<(NetworkReach Reach, bool NoCookies), HttpMessageInvoker> _pools = new();
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             bool exempt = request.Options.TryGetValue(LanPolicy.ExemptKey, out bool value) && value;
-            var pool = exempt ? _exempt.Value : _pools.GetOrAdd(policy.Reach, reach => new HttpMessageInvoker(Pool(reach, cookies), disposeHandler: true));
+            bool none = request.Options.TryGetValue(NoCookiesKey, out bool off) && off;
+            var pool = _pools.GetOrAdd((exempt ? NetworkReach.Both : policy.Reach, none), key => new HttpMessageInvoker(Pool(key.Reach, key.NoCookies ? null : cookies), disposeHandler: true));
             return pool.SendAsync(request, cancellationToken);
         }
 
@@ -63,11 +78,6 @@ public static class WebHttp
                 foreach (var pool in _pools.Values)
                 {
                     pool.Dispose();
-                }
-
-                if (_exempt.IsValueCreated)
-                {
-                    _exempt.Value.Dispose();
                 }
             }
 

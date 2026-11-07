@@ -97,7 +97,7 @@ It's one app for research, IT and admin work (Active Directory, event logs, data
 * **Code audit:** `/code-audit` reviews the code with read-only tools, pass after pass, into a report you can turn into a plan.
 
 ### Research & notes
-* **Web search & pages:** DuckDuckGo or your own SearXNG server; reads pages (in a real browser when needed) and downloads files.
+* **Web search & pages:** a built-in metasearch, DuckDuckGo, or your own SearXNG server; reads pages (in a real browser when needed) and downloads files.
 * **A web browser** (`/browser`, macOS 14+ on a Mac): sign in to a site or pass its bot check, and the web tools borrow its cookies.
 * **PDFs:** read on disk or the web, attached to a message or `/view`ed; merge, split, rotate and fill them in.
 * **Office files:** the model reads Word documents, Excel workbooks and PowerPoint decks, and writes Word and Excel files (`/docx`, and query results to Excel); `/read` reads a document or deck aloud.
@@ -139,7 +139,7 @@ Only for some features:
 * **`bash` on Windows:** Git Bash. **PowerShell on a Mac:** PowerShell 7 (`pwsh`).
 * **The video and Browser windows on Windows 10:** the free Microsoft Edge WebView2 Runtime (Windows 11 has it).
 * **Voice and the embedded model on Windows:** [Microsoft's Visual C++ runtime](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist). Most PCs have it, and the app says so if yours doesn't.
-* **Better web search:** a SearXNG server ([setup with Docker](docs/DOCKER_WINDOWS_SEARXNG.md)), or an MCP web-search server.
+* **Other web search:** a SearXNG server ([setup with Docker](docs/DOCKER_WINDOWS_SEARXNG.md)), or an MCP web-search server.
 * **The integrations:** the thing itself, such as Home Assistant, ComfyUI, Docker Desktop, an Obsidian vault or a YouTube API key.
 
 **On a Mac?** A few features need Windows or macOS 14; [On a Mac](docs/MAC.md) covers setup and every difference.
@@ -267,4 +267,4 @@ A [command-line option](docs/COMMANDLINE.md) or an [environment variable](docs/E
 
 **Why "Neon":** I was trying synthwave-style themes in Spectre.Console while testing the Vosk voice integration, and needed a short, punchy wake word. "Neon" fit the look, and the name stuck.
 
-**License:** GPLv3; see [LICENSE](LICENSE). Built on the libraries in [COMPONENTS.md](docs/COMPONENTS.md).
+**License:** GPLv3; see [LICENSE](LICENSE). The built-in metasearch is AGPL-3.0-or-later; see [its license](LICENSE-AGPL), which a release package carries as `LICENSE-AGPL`. Built on the libraries in [COMPONENTS.md](docs/COMPONENTS.md).

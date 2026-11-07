@@ -23,6 +23,13 @@ public class SafeTextTests
         Assert.Null(SafeText.WebLink(null));
     }
 
+    /// <summary>It parses, but reading its host throws.</summary>
+    [Fact]
+    public void WebLink_OfAHostItCantRead_IsNoLink()
+    {
+        Assert.Null(SafeText.WebLink("https://xn--\u00fc.de/"));
+    }
+
     [Fact]
     public void WebLink_RefusesHiddenCharacters_AndPastTheCap()
     {

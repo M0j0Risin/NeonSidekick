@@ -532,7 +532,7 @@ A browser window of the app's own (Windows; macOS 14+ on a Mac, where it is WebK
 
 * **What opens it:** the web tools, for a bot check ([TOOLS.md](TOOLS.md#the-browser-window)), which a Web UI page can also see and drive ([A bot check from the page](#a-bot-check-from-the-page)). `/browser [url]` opens it for you (bare, on *Web browser home page*).
 * **The bar:** back, forward, reload (✕ stops a load), home, a padlock (https) or a warning (http), the address box, Go, and open in your default browser.
-* **The address box:** words that aren't an address search with *Web search method*; `file:`, `javascript:` and local paths are refused.
+* **The address box:** words that aren't an address search with *Web search method* (DuckDuckGo's site under `metasearch`, which has no results page); `file:`, `javascript:` and local paths are refused.
 * **Keys:** Ctrl+W closes; F5 or Ctrl+R reloads; Alt+← / Alt+→ go back and forward; Ctrl+L, Alt+D or F6 go to the address box (Esc there restores it).
 * **More keys:** Ctrl+H the history; Ctrl+D saves or unsaves the page; Ctrl+Shift+O the saved links; Esc stops a load and never closes the window.
 * **Its keys win:** inside it, Ctrl+W and Ctrl+H are its own, not the terminal's. Ctrl+B in the terminal opens and closes it (never under tmux, whose prefix is Ctrl+B).
@@ -556,6 +556,8 @@ A browser window of the app's own (Windows; macOS 14+ on a Mac, where it is WebK
 A browser front end for the loaded profile, on your phone or another computer: the chat as it happens, the questions the model's tools ask, the house, the shopping list and a video player.
 
 Turn it on with `/webui on` or *Web UI* (`/settings` › Client › Web UI). Not headless.
+
+Each page links to this version's source code on GitHub, and the sign-in page to the repository's home. A build between releases may link to a tag that doesn't exist yet, or to an older one without its changes.
 
 ### Signing in
 

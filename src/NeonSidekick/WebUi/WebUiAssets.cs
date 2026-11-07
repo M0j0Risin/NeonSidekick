@@ -86,6 +86,19 @@ public static class WebUiAssets
         return copy.ToArray();
     }
 
+    private static byte[] WithThisVersionsSource(string name, byte[] bytes)
+    {
+        if (name == SignInPage || !name.EndsWith(".html", StringComparison.Ordinal))
+        {
+            return bytes;
+        }
+
+        return Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(bytes).Replace(
+            "class=\"source-link\" href=\"" + AboutText.RepositoryUrl + "\"",
+            "class=\"source-link\" href=\"" + AboutText.SourceUrl(SidekickApp.Version) + "\"",
+            StringComparison.Ordinal));
+    }
+
     private static IReadOnlyDictionary<string, WebAsset> Load()
     {
         var assets = new Dictionary<string, WebAsset>(StringComparer.Ordinal);
@@ -93,6 +106,7 @@ public static class WebUiAssets
         {
             // The icons are bytes (2026-10-15, Add to Home Screen); the rest text.
             byte[] bytes = name.EndsWith(".png", StringComparison.Ordinal) ? ReadBytes("webui/" + name) : Encoding.UTF8.GetBytes(EmbeddedText.Read("webui/" + name, "The Web UI's file"));
+            bytes = WithThisVersionsSource(name, bytes);
             string etag = "\"" + Convert.ToHexStringLower(SHA256.HashData(bytes))[..16] + "\"";
             assets[name] = new WebAsset(name, bytes, ContentTypeOf(name), etag);
         }

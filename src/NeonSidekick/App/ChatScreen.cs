@@ -3262,6 +3262,7 @@ internal sealed partial class ChatScreen
         new(AboutText.ComponentsTabTitle, AboutText.ComponentsTab),
         new(AboutText.ModelsTabTitle, AboutText.ModelsTab),
         new(AboutText.LicenseTabTitle, AboutText.LicenseTab),
+        new(AboutText.AgplLicenseTabTitle, AboutText.AgplLicenseTab),
     ];
 
     /// <summary>This process and the loaded profile's folders, as <c>/about</c> shows them.</summary>

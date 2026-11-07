@@ -5360,7 +5360,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task Turn_ModelSearchesThenFetches_ShowsOneDimLineEach()
     {
-        _settings.Update(d => d.TtsOutput = false);
+        _settings.Update(d => { d.TtsOutput = false; d.WebSearchMethod = "duckduckgo"; });
         _http.Map("https://html.duckduckgo.com/html/", HttpStatusCode.OK, File.ReadAllText(DuckDuckGoSearchTests.FixturePath), "text/html");
         _http.Map("https://doc.rust-lang.org/book/ch17-05-traits-for-async.html", HttpStatusCode.OK, "<html><head><title>Traits for Async</title></head><body><h1>Traits for Async</h1><p>The Future trait.</p></body></html>", "text/html");
         _chat.Enqueue(FakeChatClient.Call("c1", WebSearchTool.ToolName, new Dictionary<string, object?> { ["query"] = "rust async traits", ["max_results"] = 2 }));
@@ -11489,13 +11489,14 @@ public partial class ChatScreenTests : IDisposable
         _console.Input.PushKey(Keys.Right);
         _console.Input.PushKey(Keys.Right);
         _console.Input.PushKey(Keys.Right);
+        _console.Input.PushKey(Keys.Right);
         _console.Input.PushKey(Keys.Escape);
         PushLine("/exit");
 
         string raw = await RunAsync();
 
         string rule = new(ScreenPane.RuleGlyph, 240);
-        string strip = rule + "\n" + Titled(AboutText.Label + " │ General · Components · Models · License ") + "\n \n";   // Models since 2026-10-09
+        string strip = rule + "\n" + Titled(AboutText.Label + " │ General · Components · Models · License · License (AGPL) ") + "\n \n";   // Models since 2026-10-09; License (AGPL) since 2026-11-06
         // The grid pads its cells to the widest value: compare with the row ends trimmed.
         string output = string.Join("\n", raw.Split('\n').Select(l => l.TrimEnd()));
         // The About tab: the title with the live version, the copyright, the runtime as this test process runs (the JIT), the loaded profile's folders.
@@ -11508,13 +11509,14 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(strip.TrimEnd() + "\n\n" + AboutText.ModelsCaption + "\n\n" + AboutText.ModelRepositories[0].Name + "  ", output);
         Assert.Contains("\n  " + AboutText.ModelRepositories[0].Url + "\n", output);
         Assert.Contains(strip.TrimEnd() + "\n\n                    GNU GENERAL PUBLIC LICENSE\n                       Version 3, 29 June 2007\n", output);
+        Assert.Contains(strip.TrimEnd() + "\n\n" + AboutText.AgplLicenseText.Split('\n')[0].TrimEnd() + "\n", output);   // → the metasearch's
         // Nothing in the transcript; ESC brings the input row back.
         Assert.DoesNotContain("  · NeonSidekick", output);
         Assert.EndsWith(rule + "\n" + InputLine.PromptGlyph + ChatScreen.InputPlaceholder + "\n" + rule + "\n" + Row(ChatScreen.HintLine(null)) + "\n", raw);
     }
 
     [Fact]
-    public async Task WithoutGeometry_AboutPrintsTheFourTabs()
+    public async Task WithoutGeometry_AboutPrintsTheFiveTabs()
     {
         _settings.Update(d => d.TtsOutput = false);
         PushLine("/about");
@@ -11530,6 +11532,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · Models\n  ·   " + AboutText.ModelsCaption + "\n", output);
         Assert.Contains("\n  ·     " + AboutText.ModelRepositories[^1].Url + "\n  · License\n", output);
         Assert.Contains("  · License\n  ·                       GNU GENERAL PUBLIC LICENSE\n", output);
+        Assert.Contains("  · License (AGPL)\n", output);
         Assert.DoesNotContain(InfoPane.HintText, output);
     }
 

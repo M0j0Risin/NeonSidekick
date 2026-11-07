@@ -21,6 +21,9 @@ What Neon Sidekick is built on. Back to the [README](../README.md).
 * `Vosk`
 * `PhotoSauce.MagicScaler`
 * `Markdig`
+* `HtmlAgilityPack` (MIT: the metasearch's HTML parser)
+* `SearXNG.Net` (AGPL-3.0-or-later: the built-in metasearch, a .Net port of [SearXNG](https://github.com/searxng/searxng) at commit `3e95f6c`, whose copyright stays with the SearXNG authors)
+  * Its generated tables come from Babel 2.18.0's locale data (BSD-3-Clause) and Python's HTML5 entity list
 * `LibGit2Sharp` (with its native `libgit2`)
 * `Microsoft.Web.WebView2` (Windows: its loader DLL, for the video and Browser windows)
 * `ASP.NET Core` (Kestrel, part of .NET: the Web UI's HTTP server)

@@ -3116,8 +3116,8 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// Which engine <c>web_search</c> asks: one of <see cref="Web.SearchMethod.Names"/> —
-    /// <c>duckduckgo</c> (the built-in scrape) or <c>searxng</c> (the instance <see cref="WebSearxngUrl"/>
-    /// names; DuckDuckGo until it holds an http(s) URL). Anything else reads as
+    /// <c>metasearch</c> (built in, asking several engines), <c>duckduckgo</c> (the built-in scrape) or <c>searxng</c> (the instance
+    /// <see cref="WebSearxngUrl"/> names; the metasearch until it holds an http(s) URL). Anything else reads as
     /// <see cref="Web.SearchMethod.Default"/>. No variable.
     /// </summary>
     public string WebSearchMethod { get; set; } = Web.SearchMethod.Default;
@@ -3125,10 +3125,24 @@ public sealed class AppSettingsData
     /// <summary>
     /// A SearXNG instance's URL (<c>http://localhost:8080</c>), read only while
     /// <see cref="WebSearchMethod"/> is <c>searxng</c>; blank or not an http(s) URL there = the
-    /// built-in DuckDuckGo scrape until one is set. Variable <c>NEONSIDEKICK_SEARXNG_URL</c>
+    /// built-in metasearch until one is set. Variable <c>NEONSIDEKICK_SEARXNG_URL</c>
     /// (the URL alone — the method still picks the engine).
     /// </summary>
     public string WebSearxngUrl { get; set; } = "";
+
+    /// <summary>
+    /// Which engines the built-in metasearch asks (2026-11-06), by <see cref="Web.BuiltInMetaSearch.EngineNames"/>' words, read under <c>metasearch</c>
+    /// only: null for all of them, so an engine added later starts on, and an empty list for none, when a search says so instead of asking.
+    /// A name it doesn't know is skipped with a warning. No variable.
+    /// </summary>
+    public List<string>? WebMetasearchEngines { get; set; }
+
+    /// <summary>
+    /// The filter the built-in metasearch asks for (2026-11-06, the user's call: off by default): <see cref="Web.BuiltInMetaSearch.SafeSearchNames"/>'
+    /// words, anything else reading as off with a warning. It reaches Bing, Brave and Startpage. DuckDuckGo gets no value under any of them, as in
+    /// SearXNG, and Wikipedia has no filter to set. No variable.
+    /// </summary>
+    public string WebMetasearchSafeSearch { get; set; } = Web.BuiltInMetaSearch.DefaultSafeSearch;
 
     /// <summary>
     /// Whether a turn offers the model <c>web_search</c> and <c>web_fetch</c>; read at each turn like

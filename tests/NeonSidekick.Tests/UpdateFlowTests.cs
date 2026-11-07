@@ -1552,6 +1552,7 @@ public sealed class UpdateFlowTests : IDisposable
     [InlineData("docs/a.md", true)]
     [InlineData("A.MD", true)]
     [InlineData("LICENSE", true)]
+    [InlineData("LICENSE-AGPL", true)]
     [InlineData("docs/LICENSE.txt", true)]
     [InlineData("README", true)]
     [InlineData("docs/README.txt", true)]

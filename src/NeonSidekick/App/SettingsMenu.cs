@@ -1352,6 +1352,12 @@ public enum SettingsField
     /// Toggle: ask GitHub for a new version at every launch (<see cref="Settings.AppSettingsData.CheckForUpdatesAtStart"/>, 2026-11-04, self-update). The Chat tab's first run, under <see cref="MemoryMode"/>'s line of app-wide behavior. Last in the enum.
     /// </summary>
     CheckForUpdatesAtStart,
+
+    /// <summary>A checklist over <see cref="Web.BuiltInMetaSearch.EngineNames"/> (<see cref="Settings.AppSettingsData.WebMetasearchEngines"/>, 2026-11-06). First under the Web tab's Web metasearch heading; read at the next search, no reconnect.</summary>
+    WebMetasearchEngines,
+
+    /// <summary>A picker over <see cref="Web.BuiltInMetaSearch.SafeSearchNames"/> (<see cref="Settings.AppSettingsData.WebMetasearchSafeSearch"/>, 2026-11-06). After <see cref="WebMetasearchEngines"/>; read at the next search, no reconnect.</summary>
+    WebMetasearchSafeSearch,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1914,7 +1920,7 @@ internal sealed partial class SettingsMenu
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> ToolsTabFields =
     [
         [SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices],
-        [SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserBotcheckWindow, SettingsField.WebBrowserHomePage, SettingsField.BrowserPrivacy, SettingsField.WebOpenLinksIn, SettingsField.WebBrowserSignInMode, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebDownloadMaxMegabytes],
+        [SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserBotcheckWindow, SettingsField.WebBrowserHomePage, SettingsField.BrowserPrivacy, SettingsField.WebOpenLinksIn, SettingsField.WebBrowserSignInMode, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearxngUrl, SettingsField.WebSearchMaxResults, SettingsField.WebMetasearchEngines, SettingsField.WebMetasearchSafeSearch, SettingsField.WebDownloadMaxMegabytes],
         [SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPolice, SettingsField.ShellPoliceForbiddenStrings, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds],
         [SettingsField.FileTools, SettingsField.FileDeletesToRecycleBin, SettingsField.FileCheckpoints, SettingsField.FileCheckpointKeepDays, SettingsField.FileCheckpointMaxMegabytes, SettingsField.FileCheckpointLargestFileMegabytes, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults],
         [SettingsField.ImageTools, SettingsField.ImageEditQuality, SettingsField.ImageEditMetadata, SettingsField.ImageEditMode, SettingsField.ImageEditOutputFolder, SettingsField.PastedImagesFolder],
@@ -2673,6 +2679,8 @@ internal sealed partial class SettingsMenu
         SettingsField.WebBrowserSignInMode => "Web browser sign in mode",
         SettingsField.WebBrowserNetworkMode => "Web browser network mode",
         SettingsField.WebSearxngUrl => "Web SearXNG URL",
+        SettingsField.WebMetasearchEngines => "Web metasearch engines",
+        SettingsField.WebMetasearchSafeSearch => "Web metasearch safe search",
         SettingsField.WebSearchMaxResults => "Web search max results",
         SettingsField.WebDownloadMaxMegabytes => "Web download max (MB)",
         SettingsField.TtsVoicePreview => "TTS voice preview",
@@ -3128,6 +3136,8 @@ internal sealed partial class SettingsMenu
             SettingsField.McpConnectTimeoutSeconds => Seconds(data.McpConnectTimeoutSeconds),
             SettingsField.WebBrowserNetworkMode => data.WebBrowserNetworkMode,
             SettingsField.WebSearxngUrl => string.IsNullOrWhiteSpace(data.WebSearxngUrl) ? NoSearxngUrlLabel : data.WebSearxngUrl,
+            SettingsField.WebMetasearchEngines => MetasearchEnginesValue(data.WebMetasearchEngines),
+            SettingsField.WebMetasearchSafeSearch => data.WebMetasearchSafeSearch,
             SettingsField.WebSearchMaxResults => Results(data.WebSearchMaxResults),
             SettingsField.WebDownloadMaxMegabytes => Megabytes(data.WebDownloadMaxMegabytes),
             SettingsField.TtsVoicePreview => OnOff(data.TtsVoicePreview),
@@ -5770,6 +5780,16 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.WebSearchMethod)
         {
             return await PickSearchMethodAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.WebMetasearchEngines)
+        {
+            return await EditMetasearchEnginesAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.WebMetasearchSafeSearch)
+        {
+            return await PickMetasearchSafeSearchAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.Theme)

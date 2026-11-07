@@ -75,6 +75,7 @@ public class AboutTextTests
             ["MySqlConnector"] = "MySqlConnector",
             ["Npgsql"] = "Npgsql",
             ["DuckDB.NET.Data.Full"] = "DuckDB.NET.Data.Full",
+            ["HtmlAgilityPack"] = "HtmlAgilityPack",
             ["Microsoft.Web.WebView2"] = "Microsoft.Web.WebView2",
             ["System.Security.Cryptography.Pkcs"] = "System.Security.Cryptography.Pkcs",   // pinned past the drivers' audited 9.0.18 (2026-10-14)
         };
@@ -128,11 +129,22 @@ public class AboutTextTests
         Assert.DoesNotContain(AboutText.Components, c => c.Name.StartsWith("CLDR", StringComparison.Ordinal) || c.Name.Contains("Kokoro-FastAPI", StringComparison.Ordinal));
         Assert.Equal("MCP client", Assert.Single(AboutText.Components, c => c.Name == "ModelContextProtocol.Core").Role);
         Assert.Equal(
-            ["Spectre.Console", "Microsoft.Extensions.AI (+ .OpenAI)", "OpenAI (.NET SDK)", "Microsoft.ML.OnnxRuntime", "Microsoft.Data.Sqlite", "ModelContextProtocol.Core", "LibGit2Sharp", "LibGit2Sharp.NativeBinaries", "Microsoft.Data.SqlClient", "SqlServer.TransactSql.ScriptDom", "Oracle.ManagedDataAccess.Core", "MySqlConnector", "Npgsql", "DuckDB.NET.Data.Full", "KokoroSharp", "Kokoro-82M in-process", "Whisper.net", "Whisper ggml models", "Vosk", "Vosk models", "Silero VAD", "PhotoSauce.MagicScaler", "Markdig", "Microsoft.Web.WebView2", "llama.cpp (llama-server)", "ASP.NET Core (Kestrel)", "System.Security.Cryptography.Pkcs"],
+            ["Spectre.Console", "Microsoft.Extensions.AI (+ .OpenAI)", "OpenAI (.NET SDK)", "Microsoft.ML.OnnxRuntime", "Microsoft.Data.Sqlite", "ModelContextProtocol.Core", "LibGit2Sharp", "LibGit2Sharp.NativeBinaries", "Microsoft.Data.SqlClient", "SqlServer.TransactSql.ScriptDom", "Oracle.ManagedDataAccess.Core", "MySqlConnector", "Npgsql", "DuckDB.NET.Data.Full", "KokoroSharp", "Kokoro-82M in-process", "Whisper.net", "Whisper ggml models", "Vosk", "Vosk models", "Silero VAD", "PhotoSauce.MagicScaler", "Markdig", "Microsoft.Web.WebView2", "llama.cpp (llama-server)", "ASP.NET Core (Kestrel)", "System.Security.Cryptography.Pkcs", "SearXNG.Net", "HtmlAgilityPack"],
             AboutText.Components.Select(c => c.Name));
-        Assert.Equal(27, AboutText.Components.Count);   // DuckDB.NET since 2026-10-25; ASP.NET Core and the Pkcs pin since 2026-10-14; WebView2 since 2026-10-05; Npgsql since 2026-10-04; the Gemma 4 row gone 2026-10-03; ODP.NET Core and MySqlConnector since 2026-09-30; llama.cpp and the Gemma 4 models since 2026-09-29; SqlClient and ScriptDom since 2026-09-23
+        Assert.Equal(29, AboutText.Components.Count);   // SearXNG.Net and HtmlAgilityPack since 2026-11-06; DuckDB.NET since 2026-10-25; ASP.NET Core and the Pkcs pin since 2026-10-14; WebView2 since 2026-10-05; Npgsql since 2026-10-04; the Gemma 4 row gone 2026-10-03; ODP.NET Core and MySqlConnector since 2026-09-30; llama.cpp and the Gemma 4 models since 2026-09-29; SqlClient and ScriptDom since 2026-09-23
         Assert.Equal("b11258", Assert.Single(AboutText.Components, c => c.Name == "llama.cpp (llama-server)").Version);
         Assert.All(AboutText.Components, c => Assert.False(string.IsNullOrWhiteSpace(c.License)));
+    }
+
+    [Fact]
+    public void AgplLicenseText_IsTheMetasearchsLicense()
+    {
+        // The one copy of the AGPL text, LF-normalized with one trailing line break, as LicenseText is.
+        string license = File.ReadAllText(Path.Combine(RepoRoot(), "LICENSE-AGPL")).Replace("\r\n", "\n").TrimEnd('\n') + "\n";
+        Assert.Equal(license, AboutText.AgplLicenseText);
+        Assert.Contains("GNU AFFERO GENERAL PUBLIC LICENSE\n", AboutText.AgplLicenseText);
+        Assert.Equal("LICENSE-AGPL", AboutText.AgplLicenseResourceName);
+        Assert.Equal("License (AGPL)", AboutText.AgplLicenseTabTitle);
     }
 
     [Fact]
@@ -210,7 +222,10 @@ public class AboutTextTests
         int license = Array.IndexOf(lines, "License");
         Assert.Equal(models + 2 + 2 * AboutText.ModelRepositories.Count, license);
         Assert.Equal("                      GNU GENERAL PUBLIC LICENSE", lines[license + 1]);   // the FSF's own centring, verbatim
-        Assert.Equal("  <https://www.gnu.org/licenses/why-not-lgpl.html>.", lines[^1]);
+        int agpl = Array.IndexOf(lines, AboutText.AgplLicenseTabTitle);   // 2026-11-06, the metasearch's, after the app's own
+        Assert.Equal("  <https://www.gnu.org/licenses/why-not-lgpl.html>.", lines[agpl - 1]);
+        Assert.Contains("GNU AFFERO GENERAL PUBLIC LICENSE", lines[agpl + 1]);
+        Assert.Equal("  <http://www.gnu.org/licenses/>.", lines[^1]);
     }
 
     // ── The tabs through a console ──────────────────────────────────────────
@@ -300,5 +315,14 @@ public class AboutTextTests
         console.Write(AboutText.LicenseTab());
 
         Assert.Equal(AboutText.LicenseText.TrimEnd(), console.Output);
+    }
+
+    [Fact]
+    public void TheMetasearchRow_SaysWhoseVersionItIs_AndKeepsTheUsersWords()
+    {
+        var row = AboutText.Components.Single(c => c.Name == "SearXNG.Net");
+
+        Assert.Equal("SearXNG 3e95f6c", row.Version);
+        Assert.Equal("the built-in metasearch, a .Net port of SearXNG", row.Role);
     }
 }

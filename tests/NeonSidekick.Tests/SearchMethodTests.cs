@@ -9,14 +9,16 @@ public class SearchMethodTests
     [Fact]
     public void Names_ArePinned_InMenuOrder()
     {
-        Assert.Equal(new[] { "duckduckgo", "searxng" }, SearchMethod.Names);
-        Assert.Equal("duckduckgo", SearchMethod.Default);
+        Assert.Equal(new[] { "metasearch", "duckduckgo", "searxng" }, SearchMethod.Names);
+        Assert.Equal("metasearch", SearchMethod.Default);   // the user's call, 2026-11-06
         Assert.Equal(SearchMethod.Default, new AppSettingsData().WebSearchMethod);
     }
 
     [Theory]
     [InlineData("duckduckgo", SearchProvider.DuckDuckGo)]
     [InlineData("searxng", SearchProvider.Searxng)]
+    [InlineData("metasearch", SearchProvider.MetaSearch)]
+    [InlineData(" MetaSearch ", SearchProvider.MetaSearch)]
     [InlineData("  SearXNG ", SearchProvider.Searxng)]
     [InlineData("DuckDuckGo", SearchProvider.DuckDuckGo)]
     public void TryParse_TrimsAndIgnoresCase(string text, SearchProvider expected)
@@ -47,7 +49,7 @@ public class SearchMethodTests
         }
 
         Assert.Equal("the built-in DuckDuckGo scrape, no setup", SearchMethod.Describe("duckduckgo"));
-        Assert.Equal("the instance named in Web SearXNG URL; DuckDuckGo until one is set", SearchMethod.Describe("searxng"));
+        Assert.Equal("the instance named in Web SearXNG URL; the metasearch until one is set", SearchMethod.Describe("searxng"));
         Assert.Equal("", SearchMethod.Describe("google"));
     }
 
@@ -56,7 +58,7 @@ public class SearchMethodTests
     {
         Assert.Equal(SearchProvider.Searxng, SearchMethod.Resolve(new AppSettingsData { WebSearchMethod = "searxng" }));
         Assert.Equal(SearchProvider.Searxng, SearchMethod.Resolve(new AppSettingsData { WebSearchMethod = "SearXNG" }));
-        Assert.Equal(SearchProvider.DuckDuckGo, SearchMethod.Resolve(new AppSettingsData()));
+        Assert.Equal(SearchProvider.MetaSearch, SearchMethod.Resolve(new AppSettingsData()));
     }
 
     [Fact]
@@ -67,7 +69,7 @@ public class SearchMethodTests
         DiagnosticLog.Emitted += capture;
         try
         {
-            Assert.Equal(SearchProvider.DuckDuckGo, SearchMethod.Resolve(new AppSettingsData { WebSearchMethod = "google" }));
+            Assert.Equal(SearchProvider.MetaSearch, SearchMethod.Resolve(new AppSettingsData { WebSearchMethod = "google" }));
         }
         finally
         {
@@ -75,6 +77,6 @@ public class SearchMethodTests
         }
 
         var warning = Assert.Single(warnings);
-        Assert.Contains("WebSearchMethod='google' is not one of duckduckgo, searxng. Using duckduckgo.", warning.Message);
+        Assert.Contains("WebSearchMethod='google' is not one of metasearch, duckduckgo, searxng. Using metasearch.", warning.Message);
     }
 }

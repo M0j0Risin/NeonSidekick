@@ -17,7 +17,7 @@ public sealed partial class WebToolsTests : IDisposable
     private readonly StubHttpMessageHandler _http = new();
     private readonly FakeHeadlessBrowser _browser = new();
     private readonly ManualTimeProvider _time = new();
-    private readonly AppSettingsData _settings = new();
+    private readonly AppSettingsData _settings = new() { WebSearchMethod = "duckduckgo" };   // these pin DuckDuckGo's path, the default until 2026-11-06
     private readonly WebAccess _web;
     private readonly WebSearchTool _search;
     private readonly WebFetchTool _fetch;
@@ -302,11 +302,11 @@ public sealed partial class WebToolsTests : IDisposable
         _settings.WebSearchMethod = "searxng";
         Assert.Equal("Searched \"x\" (1 result, SearXNG):\n1. A — https://a/\n   one", await _search.InvokeAsync(Args(("query", "x")), CancellationToken.None));
 
-        // searxng with no usable URL falls back to DuckDuckGo quietly; the URL keeps its value across a switch back.
+        // searxng with no usable URL falls back to the metasearch quietly; the URL keeps its value across a switch back.
         _settings.WebSearxngUrl = "not a url";
-        Assert.Same(_web.DuckDuckGo, _web.Engine(_settings));
+        Assert.Equal(WebText.MetaSearchName, _web.Engine(_settings).Name);
         _settings.WebSearxngUrl = "";
-        Assert.Same(_web.DuckDuckGo, _web.Engine(_settings));
+        Assert.Equal(WebText.MetaSearchName, _web.Engine(_settings).Name);
         _settings.WebSearxngUrl = "http://localhost:8080";
         Assert.IsType<SearxngSearch>(_web.Engine(_settings));
         _settings.WebSearchMethod = "duckduckgo";
@@ -314,7 +314,19 @@ public sealed partial class WebToolsTests : IDisposable
         Assert.Equal("http://localhost:8080", _settings.WebSearxngUrl);
         // A hand-edited method reads as the default.
         _settings.WebSearchMethod = "google";
-        Assert.Same(_web.DuckDuckGo, _web.Engine(_settings));
+        Assert.Equal(WebText.MetaSearchName, _web.Engine(_settings).Name);
+    }
+
+    /// <summary>The fallback honors the metasearch's own settings, and never reaches DuckDuckGo's scrape.</summary>
+    [Fact]
+    public async Task Search_SearxngWithNoUrl_IsTheMetasearch_UnderItsOwnSettings()
+    {
+        _settings.WebSearchMethod = "searxng";
+        _settings.WebSearxngUrl = "";
+        _settings.WebMetasearchEngines = [];
+
+        Assert.Equal(WebText.MetaSearchNoEngines, await _search.InvokeAsync(Args(("query", "x")), CancellationToken.None));
+        Assert.Empty(_http.Requests);
     }
 
     [Fact]

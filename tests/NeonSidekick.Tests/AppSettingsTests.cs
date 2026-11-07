@@ -148,6 +148,8 @@ public class AppSettingsTests : IDisposable
         ImageEditOutputFolder = "thumbs",
         PastedImagesFolder = "clips",
         WebSearxngUrl = "http://localhost:8080",
+        WebMetasearchEngines = ["bing", "wikipedia"],
+        WebMetasearchSafeSearch = "strict",
         WebBrowserMode = "browser",
         WebBrowserNetworkMode = "both",
         WebBrowserPath = @"C:\tools\chrome.exe",
@@ -302,6 +304,8 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.ImageEditOutputFolder, actual.ImageEditOutputFolder);
         Assert.Equal(expected.PastedImagesFolder, actual.PastedImagesFolder);
         Assert.Equal(expected.WebSearxngUrl, actual.WebSearxngUrl);
+        Assert.Equal(expected.WebMetasearchEngines, actual.WebMetasearchEngines);
+        Assert.Equal(expected.WebMetasearchSafeSearch, actual.WebMetasearchSafeSearch);
         Assert.Equal(expected.WebBrowserMode, actual.WebBrowserMode);
         Assert.Equal(expected.WebBrowserNetworkMode, actual.WebBrowserNetworkMode);
         Assert.Equal(expected.WebBrowserPath, actual.WebBrowserPath);
@@ -511,6 +515,8 @@ public class AppSettingsTests : IDisposable
             d.ImageEditOutputFolder = full.ImageEditOutputFolder;
             d.PastedImagesFolder = full.PastedImagesFolder;
             d.WebSearxngUrl = full.WebSearxngUrl;
+            d.WebMetasearchEngines = full.WebMetasearchEngines;
+            d.WebMetasearchSafeSearch = full.WebMetasearchSafeSearch;
             d.WebBrowserMode = full.WebBrowserMode;
             d.WebBrowserNetworkMode = full.WebBrowserNetworkMode;
             d.WebBrowserPath = full.WebBrowserPath;
@@ -672,6 +678,8 @@ public class AppSettingsTests : IDisposable
                 d.ImageEditOutputFolder = full.ImageEditOutputFolder;
                 d.PastedImagesFolder = full.PastedImagesFolder;
                 d.WebSearxngUrl = full.WebSearxngUrl;
+                d.WebMetasearchEngines = full.WebMetasearchEngines;
+                d.WebMetasearchSafeSearch = full.WebMetasearchSafeSearch;
                 d.WebBrowserMode = full.WebBrowserMode;
                 d.WebBrowserNetworkMode = full.WebBrowserNetworkMode;
                 d.WebBrowserPath = full.WebBrowserPath;
@@ -744,6 +752,25 @@ public class AppSettingsTests : IDisposable
         }
 
         Assert.Null(new AppSettingsData().SqlConnectionsOffered);   // every profile starts not narrowed
+    }
+
+    /// <summary><c>Web metasearch engines</c>: every engine (null), none ([]) and a list each survive a save and a reload as themselves.</summary>
+    [Fact]
+    public async Task WebMetasearchEngines_KeepsNullEmptyAndAList_ApartAcrossAReload()
+    {
+        foreach (var engines in new List<string>?[] { null, [], ["bing", "wikipedia"] })
+        {
+            using (var settings = new AppSettings(_dir))
+            {
+                settings.Update(d => d.WebMetasearchEngines = engines is null ? null : [.. engines]);
+                await settings.FlushAsync();
+            }
+
+            using var reloaded = new AppSettings(_dir);
+            Assert.Equal(engines, reloaded.Current.WebMetasearchEngines);
+        }
+
+        Assert.Null(new AppSettingsData().WebMetasearchEngines);   // every profile starts with all of them on
     }
 
     /// <summary><c>Show toolbar</c> (2026-09-29, a checklist): every item (null), none ([]) and a list each survive a save and a reload as themselves.</summary>
@@ -1742,7 +1769,9 @@ public class AppSettingsTests : IDisposable
         Assert.True(s.EmbeddedDrafter);   // MTP (2026-09-29): on
         Assert.Equal(50, s.PlanGapPasses);   // 2026-10-21, the user's ask (5 until then)
         Assert.Equal(5, s.CodeAuditPasses);   // the audit keeps its own
-        Assert.Equal("duckduckgo", s.WebSearchMethod);
+        Assert.Equal("metasearch", s.WebSearchMethod);   // the user's call, 2026-11-06
+        Assert.Null(s.WebMetasearchEngines);   // all of them, so one added later starts on
+        Assert.Equal("off", s.WebMetasearchSafeSearch);   // the user's call, 2026-11-06
         // The Ask tab (2026-09-15): the tool on, ten questions of ten choices; a choice needs two, so the choices floor is 2.
         Assert.True(s.AskUser);
         Assert.Equal(10, s.AskMaxQuestions);

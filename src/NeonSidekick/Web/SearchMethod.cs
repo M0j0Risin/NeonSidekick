@@ -11,23 +11,26 @@ public enum SearchProvider
 
     /// <summary>The SearXNG instance the setting <c>Web SearXNG URL</c> names (<see cref="SearxngSearch"/>).</summary>
     Searxng,
+
+    /// <summary>The built-in metasearch, with no server to run (<see cref="BuiltInMetaSearch"/>).</summary>
+    MetaSearch,
 }
 
 /// <summary>
-/// The setting <c>Browser search method</c>: the two words the operator picks from (<c>duckduckgo</c>,
-/// <c>searxng</c>) and their mapping to <see cref="SearchProvider"/>, the <see cref="BrowserMode"/>
+/// The setting <c>Browser search method</c>: the words the operator picks from (<c>metasearch</c>,
+/// <c>duckduckgo</c>, <c>searxng</c>) and their mapping to <see cref="SearchProvider"/>, the <see cref="BrowserMode"/>
 /// shape. The URL alone chose the engine until 2026-09-15 (the user's call): now <c>Web SearXNG URL</c>
 /// keeps its value while this row switches the engine, and it is read only under <c>searxng</c>.
 /// <see cref="Resolve"/> is the one place the saved string becomes the enum: a hand-edited value that
-/// is neither falls back to <see cref="Default"/> with a warning.
+/// is none of them falls back to <see cref="Default"/> with a warning.
 /// </summary>
 public static class SearchMethod
 {
-    /// <summary>The built-in DuckDuckGo. The compiled default, pinned by <c>AppSettingsTests</c>.</summary>
-    public const string Default = "duckduckgo";
+    /// <summary>The built-in metasearch (2026-11-06, the user's call; DuckDuckGo before). The compiled default, pinned by <c>AppSettingsTests</c>. A profile keeps the method it saved.</summary>
+    public const string Default = "metasearch";
 
     /// <summary>The methods in menu order.</summary>
-    public static readonly string[] Names = { "duckduckgo", "searxng" };
+    public static readonly string[] Names = { "metasearch", "duckduckgo", "searxng" };
 
     private const string Category = "Web";
 
@@ -38,6 +41,7 @@ public static class SearchMethod
         {
             case "duckduckgo": provider = SearchProvider.DuckDuckGo; return true;
             case "searxng": provider = SearchProvider.Searxng; return true;
+            case "metasearch": provider = SearchProvider.MetaSearch; return true;
             default: provider = SearchProvider.DuckDuckGo; return false;
         }
     }
@@ -46,6 +50,7 @@ public static class SearchMethod
     public static string Name(SearchProvider provider) => provider switch
     {
         SearchProvider.Searxng => "searxng",
+        SearchProvider.MetaSearch => "metasearch",
         _ => "duckduckgo",
     };
 
@@ -53,7 +58,8 @@ public static class SearchMethod
     public static string Describe(string name) => name switch
     {
         "duckduckgo" => "the built-in DuckDuckGo scrape, no setup",
-        "searxng" => "the instance named in Web SearXNG URL; DuckDuckGo until one is set",
+        "searxng" => "the instance named in Web SearXNG URL; the metasearch until one is set",
+        "metasearch" => "built in, no setup: asks the engines in Web metasearch engines at once, all five by default",
         _ => "",
     };
 

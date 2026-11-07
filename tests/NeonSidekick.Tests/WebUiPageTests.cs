@@ -68,6 +68,24 @@ public sealed partial class WebUiPageTests : IAsyncLifetime
     // ── Chat ────────────────────────────────────────────────────────────────
 
     [WindowsFact]
+    public async Task TheSourceLink_OpensOnlyFromItsWords()
+    {
+        _backend.Snap = new WebSnapshot([], [], State(), WebUiText.Words, null, null);
+        if (await SignedInAsync("/") is not { } page)
+        {
+            return;
+        }
+
+        string rows = await page.TextAsync("(() => { const a = document.querySelector('.source-link'), m = a.closest('main'), r = a.getBoundingClientRect(), p = m.getBoundingClientRect(); return JSON.stringify({ viewport: innerWidth, link: Math.round(r.width), main: Math.round(p.width), centered: Math.abs((r.left + r.right) / 2 - (p.left + p.right) / 2) <= 1, room: a.offsetHeight + parseFloat(getComputedStyle(a).marginTop), sideways: document.documentElement.scrollWidth > innerWidth, href: a.href }); })()");
+        using var parsed = System.Text.Json.JsonDocument.Parse(rows);
+        var root = parsed.RootElement;
+        Assert.True(root.GetProperty("link").GetInt32() * 2 < root.GetProperty("main").GetInt32(), rows);
+        Assert.True(root.GetProperty("centered").GetBoolean(), rows);
+        Assert.False(root.GetProperty("sideways").GetBoolean(), rows);
+        Assert.Contains("/tree/v", root.GetProperty("href").GetString(), StringComparison.Ordinal);
+    }
+
+    [WindowsFact]
     public async Task Chat_TheStatusRow_ShowsTheLabelItsClockAndTheUsage_AndANarrowPhoneDropsTheTokens()
     {
         _backend.Snap = new WebSnapshot([], [], State(busy: true), WebUiText.Words, null, new WebStatus("pondering", 12_000, null, new WebUsage("4.6k / 151.4k", "3%", "42 tok/s")));

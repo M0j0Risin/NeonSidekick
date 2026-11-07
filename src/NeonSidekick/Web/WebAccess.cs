@@ -23,6 +23,7 @@ public sealed class WebAccess
         Fetcher = new WebFetcher(http, browser, resolve, cookies, time) { HostInterval = hostInterval };
         Pages = new PageCache(time);
         DuckDuckGo = new DuckDuckGoSearch(Fetcher, time);
+        MetaSearch = new BuiltInMetaSearch(http, time);
     }
 
     /// <summary>The app's own: the client over <see cref="LanPolicy"/> and the real browser, sharing one cookie jar, a host's requests a second apart.</summary>
@@ -42,22 +43,30 @@ public sealed class WebAccess
     public ResultReferers Referers { get; } = new();
     public DuckDuckGoSearch DuckDuckGo { get; }
 
+    /// <summary>The built-in metasearch: one for the app, as it remembers which engines are resting.</summary>
+    public BuiltInMetaSearch MetaSearch { get; }
+
     /// <summary>Opens a URL on the user's screen; throws when the shell refuses.</summary>
     public Action<string> OpenUrl { get; }
 
     /// <summary>
     /// The engine the settings name: SearXNG when <see cref="AppSettingsData.WebSearchMethod"/> is
-    /// <c>searxng</c> AND <see cref="AppSettingsData.WebSearxngUrl"/> is an http(s) URL, else DuckDuckGo
-    /// (a <c>searxng</c> pick with no usable URL falls back quietly — the 🛠️ header names the engine
-    /// that ran). Under <c>duckduckgo</c> the URL is ignored, so it keeps its value between switches.
+    /// <c>searxng</c> AND <see cref="AppSettingsData.WebSearxngUrl"/> is an http(s) URL; a <c>searxng</c> pick with no usable URL falls
+    /// back quietly to <see cref="MetaSearch"/> (the 🛠️ header names the engine that ran). Under <c>duckduckgo</c> the URL is ignored,
+    /// so it keeps its value between switches, and likewise under <c>metasearch</c>, which asks <see cref="MetaSearch"/>.
     /// </summary>
     public ISearchEngine Engine(AppSettingsData effective)
     {
         ArgumentNullException.ThrowIfNull(effective);
-        return SearxngBase(effective) is { } url ? new SearxngSearch(Http, url) : DuckDuckGo;
+        return SearchMethod.Resolve(effective) switch
+        {
+            SearchProvider.DuckDuckGo => DuckDuckGo,
+            SearchProvider.Searxng when SearxngBase(effective) is { } url => new SearxngSearch(Http, url),
+            _ => MetaSearch.For(effective),
+        };
     }
 
-    /// <summary>The SearXNG instance <see cref="Engine"/> would ask under <paramref name="effective"/>; null when that is DuckDuckGo.</summary>
+    /// <summary>The SearXNG instance <see cref="Engine"/> would ask under <paramref name="effective"/>; null when it would ask none.</summary>
     public static Uri? SearxngBase(AppSettingsData effective)
     {
         ArgumentNullException.ThrowIfNull(effective);

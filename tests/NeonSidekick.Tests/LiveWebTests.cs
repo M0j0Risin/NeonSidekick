@@ -82,4 +82,34 @@ public class LiveWebTests
             Assert.All(outcome.Results, r => Assert.StartsWith("http", r.Url));
         }
     }
+
+    [LiveWebFact]
+    public async Task Search_Metasearch_OverTheRealClient()
+    {
+        var outcome = await Web().MetaSearch.For(new NeonSidekick.Settings.AppSettingsData()).SearchAsync("example domain reserved iana", 3, new FetchOptions(FetchEngine.HttpClient, "", NetworkReach.Internet), CancellationToken.None);
+
+        // A refusal or an empty page reports and stops, as in the DuckDuckGo test, since this runs on CI's datacenter addresses too. So does
+        // "could not be searched" (2026-11-06): five 3-second timeouts on a slow runner end there. What this proves: a real search neither hits an
+        // engine's bug, which would read "SomeException: ..." in the error, nor hands out a bad link. It doesn't prove any engine answered.
+        Assert.True(
+            outcome.Ok || outcome.Error.Contains("refused the search", StringComparison.Ordinal) || outcome.Error.Contains("could not be searched", StringComparison.Ordinal),
+            outcome.Error);
+        Assert.DoesNotContain("Exception:", outcome.Error, StringComparison.Ordinal);
+        Assert.InRange(outcome.Results.Count, 0, 3);
+        Assert.All(outcome.Results, r => Assert.True(Uri.TryCreate(r.Url, UriKind.Absolute, out var url) && WebFetcher.IsHttp(url), r.Url));
+    }
+
+    /// <summary>The early answer under <c>lan</c> would hide the socket check from a test that says <c>lan</c>, so this says <c>Both</c> and only the socket policy judges.</summary>
+    [LiveWebFact]
+    public async Task Search_Metasearch_IsRefused_UnderLocalAreaNetwork_AtTheSocket()
+    {
+        var refused = await Web(NetworkReach.LocalAreaNetwork).MetaSearch.For(new NeonSidekick.Settings.AppSettingsData()).SearchAsync("example domain reserved iana", 3, new FetchOptions(FetchEngine.HttpClient, "", NetworkReach.Both), CancellationToken.None);
+
+        Assert.False(refused.Ok);
+        Assert.Empty(refused.Results);
+        Assert.Contains("could not be searched", refused.Error);
+
+        // Every engine's own words are the socket's refusal, and not, say, a timeout that would pass the line above. The address depends on DNS.
+        Assert.Contains(WebText.InternetRefused("").Split("''", 2)[1], refused.Error, StringComparison.Ordinal);
+    }
 }

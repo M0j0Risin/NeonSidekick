@@ -27,7 +27,7 @@ public sealed class BotCheckTests : IDisposable
     private readonly StubHttpMessageHandler _http = new();
     private readonly FakeHeadlessBrowser _browser = new();
     private readonly ManualTimeProvider _time = new();
-    private readonly AppSettingsData _settings = new() { WebTools = true, FileTools = true };
+    private readonly AppSettingsData _settings = new() { WebTools = true, FileTools = true, WebSearchMethod = "duckduckgo" };   // the one method with a bot check to show, not the default since 2026-11-06
     private readonly CookieContainer _jar = new();
     private readonly WebAccess _web;
     private readonly List<BotCheckRequest> _asked = new();

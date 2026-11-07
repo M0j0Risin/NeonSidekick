@@ -78,6 +78,9 @@ public static class AboutText
     public const string ModelsTabTitle = "Models";
     public const string LicenseTabTitle = "License";
 
+    /// <summary>The tab for the metasearch's license (2026-11-06), titled so it can't be taken for the app's own. Pinned.</summary>
+    public const string AgplLicenseTabTitle = "License (AGPL)";
+
     /// <summary>The Models tab's first line (2026-10-09). Pinned.</summary>
     public const string ModelsCaption = "The embedded LLM's catalog (/settings › Servers › Embedded), each from its Hugging Face repository, pinned to a commit:";
 
@@ -103,6 +106,9 @@ public static class AboutText
     /// </summary>
     public const string RepositoryName = "NeonSidekick on GitHub";
     public const string RepositoryUrl = "https://github.com/M0j0Risin/NeonSidekick";
+
+    /// <summary>The source of one version: its tag.</summary>
+    public static string SourceUrl(string version) => RepositoryUrl + "/tree/v" + version;
 
     /// <summary>The About tab's row labels, in order.</summary>
     public const string RuntimeLabel = "Runtime";
@@ -178,23 +184,32 @@ public static class AboutText
         new("llama.cpp (llama-server)", EmbeddedLlm.LlamaRelease.Tag, "MIT", "embedded LLM server, downloaded on first use"),   // 2026-09-29; the user's wording 2026-10-03
         new("ASP.NET Core (Kestrel)", Environment.Version.ToString(3), "MIT", "the Web UI's HTTP server, part of .NET"),   // 2026-10-14
         new("System.Security.Cryptography.Pkcs", "10.0.13", "MIT", "the SQL Server and Oracle clients' signing, pinned past an audited version"),   // 2026-10-14
+        new("SearXNG.Net", "SearXNG 3e95f6c", "AGPL-3.0-or-later", "the built-in metasearch, a .Net port of SearXNG"),   // 2026-11-06
+        new("HtmlAgilityPack", "1.13.1", "MIT", "the metasearch's HTML parser"),   // 2026-11-06
     ];   // the Gemma 4 (GGUF) row gone 2026-10-03, the user's call
 
     /// <summary>The manifest resource the project file embeds the repository's <c>LICENSE</c> as.</summary>
     public const string LicenseResourceName = "LICENSE";
+
+    /// <summary>The manifest resource the project file embeds the metasearch's <c>LICENSE-AGPL</c> as (2026-11-06).</summary>
+    public const string AgplLicenseResourceName = "LICENSE-AGPL";
 
     /// <summary>
     /// The repository's <c>LICENSE</c>, verbatim (the GPL-3.0 text since 2026-09-20, MIT before): embedded
     /// by the project file and read once from the manifest, LF-normalised with one trailing line break;
     /// a test compares it with the file. Empty when the resource is missing (a build without it), never a throw.
     /// </summary>
-    public static string LicenseText => _licenseText ??= ReadLicense();
+    public static string LicenseText => _licenseText ??= ReadLicense(LicenseResourceName);
+
+    /// <summary>The metasearch's license, verbatim, read and normalized as <see cref="LicenseText"/> is (2026-11-06).</summary>
+    public static string AgplLicenseText => _agplLicenseText ??= ReadLicense(AgplLicenseResourceName);
 
     private static string? _licenseText;
+    private static string? _agplLicenseText;
 
-    private static string ReadLicense()
+    private static string ReadLicense(string resource)
     {
-        using var stream = typeof(AboutText).Assembly.GetManifestResourceStream(LicenseResourceName);
+        using var stream = typeof(AboutText).Assembly.GetManifestResourceStream(resource);
         if (stream is null)
         {
             return "";
@@ -339,9 +354,12 @@ public static class AboutText
     /// <summary>The Licence tab: the text, verbatim.</summary>
     public static IRenderable LicenseTab() => new Text(LicenseText.TrimEnd('\n'), Theme.Body);
 
+    /// <summary>The metasearch's license tab: the text, verbatim.</summary>
+    public static IRenderable AgplLicenseTab() => new Text(AgplLicenseText.TrimEnd('\n'), Theme.Body);
+
     // ── Plain lines ─────────────────────────────────────────────────────────
 
-    /// <summary>The four tabs as plain lines, for a console without the pane: each tab's title as a heading, its content indented (Models since 2026-10-09).</summary>
+    /// <summary>The five tabs as plain lines, for a console without the pane: each tab's title as a heading, its content indented (Models since 2026-10-09).</summary>
     public static IEnumerable<string> Lines(AboutFacts facts)
     {
         ArgumentNullException.ThrowIfNull(facts);
@@ -370,6 +388,12 @@ public static class AboutText
 
         yield return LicenseTabTitle;
         foreach (var line in LicenseText.TrimEnd('\n').Split('\n'))
+        {
+            yield return "  " + line;
+        }
+
+        yield return AgplLicenseTabTitle;
+        foreach (var line in AgplLicenseText.TrimEnd('\n').Split('\n'))
         {
             yield return "  " + line;
         }

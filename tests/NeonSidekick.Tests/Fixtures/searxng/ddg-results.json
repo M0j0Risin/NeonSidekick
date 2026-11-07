@@ -1,0 +1,57 @@
+{
+  "results": [
+    {
+      "t": "Native AOT deployment overview - .NET | Microsoft Learn",
+      "a": "Check out the <b>Native</b> <b>AOT</b> samples available in the <b>dotnet</b>/samples repository on GitHub. The samples include Linux and Windows Dockerfiles that demonstrate how to automate installation of prerequisites and publish .NET projects with <b>Native</b> <b>AOT</b> using containers.",
+      "u": "https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/"
+    },
+    {
+      "t": "ASP.NET Core support for Native AOT | Microsoft Learn",
+      "a": "Review ASP.NET Core support for <b>Native</b> ahead-of-time (<b>AOT</b>) applications, including publishing and deployment.",
+      "u": "https://learn.microsoft.com/en-us/aspnet/core/fundamentals/native-aot?view=aspnetcore-10.0"
+    },
+    {
+      "t": "Native AOT Explained: Where It Fits in C# and .NET",
+      "a": "Even with PublishAot in the project, everyday <b>dotnet</b> run stays on the JIT and the real <b>Native</b> <b>AOT</b> compilation happens at publish time, which is why keeping the setting in the project and watching the build and publish analysis daily matters.",
+      "u": "https://comcomponent.com/en/blog/2026/03/13/001-dotnet-native-aot-what-is/"
+    },
+    {
+      "t": "docs/docs/core/deploying/native-aot/index.md at main · dotnet/docs",
+      "a": "Check out the <b>Native</b> <b>AOT</b> samples available in the <b>dotnet</b>/samples repository on GitHub. The samples include Linux and Windows Dockerfiles that demonstrate how to automate installation of prerequisites and publish .NET projects with <b>Native</b> <b>AOT</b> using containers.",
+      "u": "https://github.com/dotnet/docs/blob/main/docs/core/deploying/native-aot/index.md"
+    },
+    {
+      "t": "How to make libraries compatible with native AOT - .NET Blog",
+      "a": "<b>Native</b> <b>AOT</b> is an exciting new way to publish your .NET applications. Over the years we heard feedback from .NET developers who wanted their apps to start faster, use less memory, and have smaller on disk size than traditional self-contained apps built with .NET. Starting with .NET 7, we added support for publishing console applications to <b>native</b> <b>AOT</b>, and continuing in .NET 8, we brought this ...",
+      "u": "https://devblogs.microsoft.com/dotnet/creating-aot-compatible-libraries/"
+    },
+    {
+      "t": "Native AOT in .NET 10: When to Use It and When to Skip It",
+      "a": "<b>Native</b> <b>AOT</b> compiles your .NET app to a self-contained <b>native</b> binary. What you get, what you give up, and how to tell whether it fits your project.",
+      "u": "https://sanjaychaudhari.com/blog/native-aot-dotnet-10/"
+    },
+    {
+      "t": "Native AOT in .NET 10: From 450ms to 50ms Startup Time",
+      "a": "<b>Native</b> Ahead-of-Time (<b>AOT</b>) compilation promises to eliminate that pain—and in .NET 10, it delivers. Let&#x27;s explore how <b>Native</b> <b>AOT</b> transforms your apps into blazing-fast, memory-efficient executables. What Is <b>Native</b> <b>AOT</b> and Why Does It Matter?",
+      "u": "https://blog.adellajil.com/blog/native-aot-dotnet-10-guide/"
+    },
+    {
+      "t": ".NET Native AOT Explained - NDepend Blog",
+      "a": ".NET <b>Native</b> <b>AOT</b> is a feature to compile .NET applications ahead-of-time into <b>native</b> code, making it more performance at runtime.",
+      "u": "https://blog.ndepend.com/net-native-aot-explained/"
+    },
+    {
+      "t": "Native AOT Compilation in .NET: A Complete Guide",
+      "a": "What is <b>Native</b> <b>AOT</b> Compilation in .NET? <b>Native</b> <b>AOT</b> is a compilation technology that converts your .NET application into a <b>native</b> executable, eliminating the need for a JIT compiler and runtime.",
+      "u": "https://thecodeforge.io/csharp/native-aot-dotnet/"
+    },
+    {
+      "t": "Are you using native AOT? What is your experience? : r/dotnet",
+      "a": "<b>Native</b> <b>AOT</b> improves startup time and removes the need for the runtime, but it makes the app non portable, limits the features you can use and will decrease overall performance in long running apps because the runtime can&#x27;t optimise based on actual usage.",
+      "u": "https://www.reddit.com/r/dotnet/comments/1d6lfjh/are_you_using_native_aot_what_is_your_experience/"
+    },
+    {
+      "n": "/d.js?q=dotnet%20native%20aot&l=us-en&p=&s=10&a=h_&ex=-1&o=json&dl=en&ct=US&sp=SCRUBBED&vqd=SCRUBBED&bing_market=en-US&host_region=SCRUBBED&dp=SCRUBBED"
+    }
+  ]
+}

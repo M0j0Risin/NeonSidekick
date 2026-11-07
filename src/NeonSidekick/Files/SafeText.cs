@@ -79,7 +79,16 @@ public static class SafeText
             return new SafeWebLink(uri, target, target);
         }
 
-        string host = uri.IdnHost;
+        string host;
+        try
+        {
+            host = uri.IdnHost;
+        }
+        catch (UriFormatException)
+        {
+            return null;
+        }
+
         if (!host.Equals(uri.Host, StringComparison.OrdinalIgnoreCase))
         {
             target = new UriBuilder(uri) { Host = host }.Uri.AbsoluteUri;
