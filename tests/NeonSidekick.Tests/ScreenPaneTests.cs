@@ -5169,6 +5169,54 @@ public partial class ScreenPaneTests : IDisposable
         Assert.Equal(0, pane.FlowRow);
     }
 
+    /// <summary>
+    /// A full row painted over the old frame clears nothing (2026-11-07): the cursor waits at the edge, where an erase wipes the row's last cell, as
+    /// Windows Terminal showed on a pane's rows. A shorter row still clears the old frame's rest.
+    /// </summary>
+    [Fact]
+    public void Overpaint_ALiveRowFillingTheWidth_KeepsItsLastCell()
+    {
+        _console.EmitAnsiSequences();
+        _console.Profile.Width = 20;
+        _console.Profile.Height = 8;
+        using var pane = Pane();
+        pane.Show();
+        string full = new('x', 20);
+        pane.SetLive(new RawText(full));
+        _time.Advance(ScreenPane.Tick);
+
+        pane.SetLive(new RawText(full + "\nshort"));
+        int mark = Output.Length;
+        _time.Advance(ScreenPane.Tick);
+        string written = Output[mark..];
+
+        Assert.Matches(full + @"(\e\[[0-9;]*m)*\r?\n", written);
+        Assert.Matches(@"short(\e\[[0-9;]*m)*\e\[K\r?\n", written);
+    }
+
+    /// <summary>A pane open while a reply grows under it (2026-11-07): the same for its rows.</summary>
+    [Fact]
+    public void Overpaint_AnOverlayRowFillingTheWidth_KeepsItsLastCell()
+    {
+        _console.EmitAnsiSequences();
+        _console.Profile.Width = 20;
+        _console.Profile.Height = 12;
+        using var pane = Pane();
+        pane.Show();
+        string full = new('y', 20);
+        pane.ShowOverlay(new Rows(new Text(full), new Text("short")), "hint");
+        pane.SetLive(new RawText("a"));
+        _time.Advance(ScreenPane.Tick);
+
+        pane.SetLive(new RawText("a\nb"));
+        int mark = Output.Length;
+        _time.Advance(ScreenPane.Tick);
+        string written = Output[mark..];
+
+        Assert.Matches(full + @"(\e\[[0-9;]*m)*\r?\n", written);
+        Assert.Matches(@"short(\e\[[0-9;]*m)*\e\[K\r?\n", written);
+    }
+
     /// <summary>The Unix twin of <see cref="SetLive_Again_LiftsOverTheLiveRows_AndLaysTheBlockOutAgain"/> (2026-10-06, the macOS build): a newline is <c>\n</c> there, the terminal returning the carriage itself.</summary>
     [UnixFact]
     public void SetLive_Again_LiftsOverTheLiveRows_AndLaysTheBlockOutAgain_Unix()

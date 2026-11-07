@@ -6675,7 +6675,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
                 foreach (var line in live)
                 {
                     _inner.Write(new SegmentList(line));
-                    EndRow();
+                    EndRow(line, w);
                 }
             }
 
@@ -6717,7 +6717,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             foreach (var line in stripLines)
             {
                 _inner.Write(new SegmentList(line));
-                EndRow();
+                EndRow(line, w);
             }
         }
 
@@ -6727,7 +6727,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             for (int i = 0; i < overlayRows; i++)
             {
                 _inner.Write(new SegmentList(overlayLines[i]));
-                EndRow();
+                EndRow(overlayLines[i], w);
             }
         }
 
@@ -6972,6 +6972,21 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     private void EndRow()
     {
         if (_overpaint)
+        {
+            _inner.Write(EraseLineEnd);
+        }
+
+        _inner.WriteLine();
+    }
+
+    /// <summary>
+    /// <see cref="EndRow()"/> for a row of <paramref name="line"/> in a window <paramref name="width"/> cells wide (2026-11-07): a full row has no rest to
+    /// clear, and an erase with the cursor waiting at the edge wipes its last cell (Windows Terminal: a reply's or a pane's full rows lost theirs on
+    /// every over-paint).
+    /// </summary>
+    private void EndRow(List<Segment> line, int width)
+    {
+        if (_overpaint && FittedMarkup.RowCells(line) < width)
         {
             _inner.Write(EraseLineEnd);
         }
