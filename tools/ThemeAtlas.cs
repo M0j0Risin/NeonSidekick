@@ -76,7 +76,7 @@ using (var json = new Utf8JsonWriter(buffer))
 }
 
 string themesLine = "const THEMES = " + Encoding.UTF8.GetString(buffer.ToArray()) + ";";
-page = Replace(page, new Regex(@"^const THEMES = \[.*\];$", RegexOptions.Multiline), themesLine, "the THEMES line");
+page = Replace(page, new Regex(@"^const THEMES = \[.*\];(?=\r?$)", RegexOptions.Multiline), themesLine, "the THEMES line");
 
 // FILTERS: the categories in their old order, new ones after, gone ones out.
 var block = new Regex(@"const FILTERS = \[\n(?<body>.*?)\n\];", RegexOptions.Singleline);
