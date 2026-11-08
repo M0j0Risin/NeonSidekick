@@ -40,11 +40,11 @@ public partial class ChatScreenTests
         _settings.Update(d => { d.TtsOutput = false; d.HelpTools = false; });   // the manual answers itself, a block drawn as a reply
         _console.Profile.Height = 10;
         _geometry = new ScreenGeometry(() => null);
-        StepsWhenIdle(Line("/help usage"), Key(Keys.Ctrl(ConsoleKey.UpArrow)), Key(Keys.Ctrl(ConsoleKey.End)), Line("/exit"));
+        StepsWhenIdle(Line("/help claude"), Key(Keys.Ctrl(ConsoleKey.UpArrow)), Key(Keys.Ctrl(ConsoleKey.End)), Line("/exit"));
 
         string output = await RunAsync();
 
-        // Its answer starts inside the bottom window, so Ctrl+Up goes to the line above it: the first of two.
+        // Its answer starts inside the bottom window, so Ctrl+Up goes to the line above it: the first of two. (/help usage until 2026-11-07, when its third form made it taller than the window.)
         Assert.Contains("message 1 of 2", output, StringComparison.Ordinal);
     }
 }

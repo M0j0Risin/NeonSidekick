@@ -74,7 +74,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// Whether the event-log group is offered (2026-10-15): the setting <c>Event log tools</c> on, on Windows, with a reader. With nothing
-    /// ticked it still is, for the working directory's <c>.evtx</c> files alone (<c>/sys</c> says so).
+    /// ticked it still is, for the working directory's <c>.evtx</c> files alone (<c>/usage</c> says so).
     /// </summary>
     public static bool EventLogOffered(AppSettingsData effective, EventLogAccess access)
     {

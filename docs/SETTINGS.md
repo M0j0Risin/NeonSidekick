@@ -1,6 +1,6 @@
 # Settings & menus
 
-Every setting on the `/settings`, `/skills`, `/tools` and `/mcp` panes, its default, and what `/sys` shows. Keys, bars and windows are in [Using the app](INTERFACE.md), the basics in the [README](../README.md#using-the-app).
+Every setting on the `/settings`, `/skills`, `/tools` and `/mcp` panes, its default, and what `/usage` shows of the system prompt. Keys, bars and windows are in [Using the app](INTERFACE.md), the basics in the [README](../README.md#using-the-app).
 
 * In the app, a pane's highlighted row explains itself, and the model's `neon_help` answers questions about any setting.
 * One-launch overrides: [Environment variables](ENVIRONMENT.md). Paths use Windows' `\`; on a Mac read `/`.
@@ -15,13 +15,13 @@ Every setting on the `/settings`, `/skills`, `/tools` and `/mcp` panes, its defa
 - [Skills settings (`/skills`)](#skills-settings-skills): Offered, Reflection, Options, and managing skills
 - [Tools settings (`/tools`)](#tools-settings-tools): Offered · [Core](#core) · [Files](#files) · [Apps](#apps) · [Admin](#admin) · [Databases](#databases) · [Devices](#devices) · [Home](#home)
 - [MCP servers (`/mcp`)](#mcp-servers-mcp)
-- [System prompt (`/sys`)](#system-prompt-sys)
+- [System prompt (`/usage`)](#system-prompt-usage)
 
 ## Panes
 
 * `/settings`: the app (Client), the LLM and its servers (Servers), advisors, the gap review, Ralph loop and code audit (Automation), and voice.
 * `/skills`: agent skills and self-reflection. `/tools`: the model's tools, by the tabs below. `/mcp`: external MCP servers.
-* `/sys`: a read-only view of what the model is sent. `/usage`: LLM usage statistics (tok/s, time to first token…), no settings.
+* `/usage`: LLM usage statistics (tok/s, time to first token…), what fills the context, and a read-only view of what the model is sent; no settings.
 
 ## App settings (`/settings`)
 
@@ -60,9 +60,9 @@ Every setting on the `/settings`, `/skills`, `/tools` and `/mcp` panes, its defa
 | Menus max height | How much of the window a pane may take: `half`, `three-quarters` or `full`. Longer lists scroll. | `full` |
 | Hints bar | `auto` (its own bar over the status bar while there is a hint, held until the next send), `always`, or `off` (hints share the status bar). See [The hints bar](INTERFACE.md#the-hints-bar). | `auto` |
 | Status bar | The status bar's sections, order and sides. Enter opens the [checklist](INTERFACE.md#bar-checklists); see [The status bar](INTERFACE.md#the-status-bar). | `default`: every section but Working directory; Model and Working directory pinned right |
-| Tool bar | The toolbar's icons, order and sides. Enter (or `/toolbar edit`) opens the checklist ([The toolbar](INTERFACE.md#the-toolbar)). | Settings, Tools, Skills, Memory, Saved prompts, Queue, Shell allowed commands, Shell police, Shell, Files, Image, Web, Web UI, path (14 of 49), with three dividers |
-| Performance bar | Its meters and places: Enter (or `/perfbar edit`) opens the checklist. **look:** (`l`) or `/perfbar text`, `gauge` or `led` picks the look ([The performance bar](INTERFACE.md#the-performance-bar)). | CPU, RAM, GPU, VRAM, `led` |
-| Home bar | Home Assistant rooms and devices, and the shopping list's 🛒, as chips on their own row. Enter (or `/homebar edit`) opens the [picker](INTERFACE.md#the-home-bar). | off |
+| Tool bar | The toolbar's icons, order and sides. Enter (or `/toolbar edit`) opens the checklist ([The toolbar](INTERFACE.md#the-toolbar)); **bar:** (`h`) hides or shows it. | Settings, Tools, Skills, Commands, Usage, Memory, Saved prompts, Queue, Ask, Shell allowed commands, Shell police, Shell, Files, Image, Web, Web UI, path (17 of 48), with three dividers |
+| Performance bar | Its meters and places: Enter (or `/perfbar edit`) opens the checklist. **look:** (`l`) or `/perfbar text`, `gauge` or `led` picks the look ([The performance bar](INTERFACE.md#the-performance-bar)); **bar:** (`h`) hides or shows it. | CPU, RAM, GPU, VRAM, `led` |
+| Home bar | Home Assistant rooms and devices, and the shopping list's 🛒, as chips on their own row. Enter (or `/homebar edit`) opens the [picker](INTERFACE.md#the-home-bar); a click on **bar:** hides or shows it. | off |
 | Toolbar order | The order of the five bars under the input line (**Order** on the pane). Enter opens the list; Shift+↑/↓ moves a bar. | `default` (hints bar, status bar, toolbar, performance bar, home bar) |
 | Draft editor | The program `/draft` opens (`code --wait`, `notepad`…); it must wait for the file to close. | empty (the system's editor for `.txt` files) |
 | Image viewer | Where a double-clicked picture opens: empty for the [picture viewer](INTERFACE.md#the-picture-viewer), `system` for the system's app, or a command given the path (`mspaint`). | empty (the picture viewer) |
@@ -505,7 +505,7 @@ The tools most profiles use, and the pane's own options.
 | Web search max results | Hits per search (1–20). | 20 |
 | Web metasearch engines | Which engines `metasearch` asks: Bing, Brave, DuckDuckGo, Startpage and Wikipedia. With none on, a search says so and asks nobody. | all |
 | Web metasearch safe search | The filter `metasearch` asks for: `off`, `moderate` or `strict`. It reaches Bing, Brave and Startpage, and can't change DuckDuckGo's own default. | `off` |
-| Web Brave Search API key | A [Brave Search API](https://brave.com/search/api/) key. While set, Brave is asked through its API instead of its results page; searches count against your Brave plan. Saved encrypted. | empty |
+| Web metasearch Brave API key | A [Brave Search API](https://brave.com/search/api/) key. While set, Brave is asked through its API instead of its results page; searches count against your Brave plan. Saved encrypted. | empty |
 | Web SearXNG URL | The SearXNG instance, for `searxng`. With no usable address, `searxng` uses the metasearch. | empty |
 | Web download max (MB) | The largest file `download_file` saves (1–102,400). | 50 |
 
@@ -979,9 +979,9 @@ Every connected server's tools, as `<server>__<tool>`, with their descriptions; 
 | MCP servers enabled | The master switch: every enabled server starts at launch and its tools are offered. | off |
 | MCP connect timeout (s) | How long a server gets to connect and list its tools (5–300). | 30 |
 
-## System prompt (`/sys`)
+## System prompt (`/usage`)
 
-A read-only view of exactly what the next request sends the model. `/sys persona`, `/sys operata` and `/sys vocalia` open its three files in your editor (`reset` restores the default); `/profile push|pull persona|operata|vocalia <name> [overwrite]` copies one to or from another profile.
+The Prompt, Tools and Skills tabs of `/usage` (`/usage prompt`, `tools`, `skills`) are a read-only view of exactly what the next request sends the model. `/sys persona`, `/sys operata` and `/sys vocalia` open its three files in your editor (`reset` restores the default); `/profile push|pull persona|operata|vocalia <name> [overwrite]` copies one to or from another profile.
 
 ### Prompt
 
@@ -991,9 +991,12 @@ The system prompt section by section, each with its status:
 * **Operating rules** (built in, or `operata.md`)
 * **Project notes** (`NEON.md`, else `AGENTS.md`, else `CLAUDE.md`; see *Project file*)
 * **Memory**
-* **Skills** (the catalog)
 * **Voice directive** (`vocalia.md`, when it has text; spoken turns only)
 
 ### Tools
 
 Every tool the reply may call, grouped as on `/tools` (plus one group per MCP server, and Plan in plan mode), with the description the model reads. Switched-off tools are left out.
+
+### Skills
+
+The skills catalog the model is offered: each skill with its scope (profile, global or external), whether it's locked, its description and its `SKILL.md` file. When the catalog isn't sent, the heading says why (*Agent skills* or *LLM offer tools* off).

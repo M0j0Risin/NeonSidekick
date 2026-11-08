@@ -92,7 +92,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 * **Under the list:** the row's description and default. A number after a tab's name (`Client³`) counts its settings changed from the default.
 * **Dim tabs** (`/tools`): a menu whose switch is off is dim and italic, as is a group whose menus are all off.
 * **Type to filter** on `/sessions`, `/server`, `/model`, `/docker`, the saved lists, the allowed commands and the Offered tabs; the first Esc clears it.
-* **Find** on the read-only panes (`/help`, `/sys`, `/about`, `/tree`, `/docker logs --pane`…): type to mark every match; Enter or F3 goes to the next, Shift+Enter or Shift+F3 back.
+* **Find** on the read-only panes (`/help`, `/usage`, `/about`, `/tree`, `/docker logs --pane`…): type to mark every match; Enter or F3 goes to the next, Shift+Enter or Shift+F3 back.
 * **Lettered buttons** (`/webui`, an `/ad` card, `/help`'s key check…): a letter presses its button; Shift+letter starts the filter or the find.
 * **Pasting** into a filter or a find (Ctrl+V or a right-click) adds its first line, up to 40 characters.
 * **Asking first:** a remove asks, with No highlighted; `y` or `n` answers.
@@ -122,7 +122,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | A Ralph loop's by-hand check | `w` it works · `r` redo with a note (typed below) · `v` view the changes (where it opens, so Enter alone ticks nothing) · `s` stop the loop · Esc stops |
 | A code audit's done pane | `p` fix via plan (with a finding open) · `g` more passes… · `k` keep the report · `d` discard it · Esc keeps |
 | `/find` | type to find (a paste or right-click adds a first line) · Enter or F3 older · Shift+Enter or Shift+F3 newer · PgUp/PgDn scroll · Ctrl+↑/↓ previous or next message · Esc, Ctrl+F or a double-click outside done |
-| Info panes (`/help`, `/sys`, `/about`, `/tree`…) | ↑/↓, PgUp/PgDn scroll · ←/→ or Tab switch tabs · type to find · Esc closes |
+| Info panes (`/help`, `/usage`, `/about`, `/tree`…) | ↑/↓, PgUp/PgDn scroll · ←/→ or Tab switch tabs · type to find · Esc closes |
 | `/update` | `i` install · `l` later · ↑/↓, PgUp/PgDn scroll · a double-click on the release link opens it · Esc is later. Typing finds nothing here. |
 | `/update`, with one under way | `c` cancel update · `k` keep · Esc keeps. Typing finds nothing here. |
 | `/update` or `/update rollback` checking, under a reply | Esc stops it. |
@@ -241,7 +241,6 @@ Each runs its command as if typed and keeps your draft. The last column says wha
 | Ctrl+T | `/tools` | over it |
 | Ctrl+U | `/usage` | over it |
 | Ctrl+W | `/webui browser` (the [Web UI](#web-ui) on the app's computer) | at once |
-| Ctrl+Y | `/sys` | over it |
 | Ctrl+Z | `/theme` | waits |
 | Ctrl+Alt+B | `/botchat --resume` | ends a running botchat at once, else waits |
 | Ctrl+Alt+C | `/clear` | stops it first |
@@ -274,7 +273,7 @@ Each runs its command as if typed and keeps your draft. The last column says wha
 ## Commands typed during a reply
 
 * **Open their pane over the reply:**
-  * Info: `/help`, `/sys` (and `/sys persona`, `/sys operata`, `/sys vocalia`), `/about`, `/usage`, `/keycheck`, `/tree`, `/vault`, `/browse`
+  * Info: `/help`, `/sys persona`, `/sys operata`, `/sys vocalia`, `/about`, `/usage`, `/keycheck`, `/tree`, `/vault`, `/browse`
   * Settings: `/settings`, `/tools`, `/mcp`, `/skills`, `/commands`, `/comfy`, `/reasoning`, `/sampling`, `/webui`, `/toolbar edit`, `/perfbar edit`, `/homebar edit`, a home bar chip's pane
   * Conversation: `/memory`, `/queue`, `/sessions`, `/sessions title`, `/rename`, `/msgclear`, `/prompts`
   * Lists: `/docker`, `/eventlog`, `/net`, `/services`, `/tasks`, `/monitor`, `/ad`, `/youtube`, `/shopping`, `/browser list`, `/camera list`, `/ha states`, `/process`, `/update`, `/update rollback`
@@ -282,7 +281,7 @@ Each runs its command as if typed and keeps your draft. The last column says wha
   * Display: `/mark`, `/header`, `/toolbar`, `/perfbar`, `/homebar` (and `on`, `off`), `/expand`, `/collapse`, `/window`, `/log`, `/terminal`, `/shortcut`, `/explore`, `/open`, `/cwd`
   * Voice and camera: `/tts`, `/stt` (and `wake`, `interrupt`), `/camera live`, `watch`, `off`, `use`, `view` and `thumbs`, `/screen view` and `thumbs`
   * Pictures: `/view <path>` (and `--thumbs`), and `view` or `thumbs` after `/comfy`, `/splash`, `/pasted` or `/ha stills`
-  * The reply's settings: `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/queue mode <word>`, `/queue cancel <word>`
+  * The reply's settings: `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/queue send`, `/queue mode <word>`, `/queue cancel <word>`
   * Others: `/update notes` and `cancel`, `/copy`, `/remember`, `/timer`, `/ha`, `/webui copy`, `/webui browser`, `/browser <url>`, `/prompts <n>`, `/process <id>`, `/docker logs <container>`, `/monitor list`, `/commands save <name>` (saves the message the reply answers)
 * **Stop the reply first:** `/clear`, `/new`, `/splash`, `/rewind`, `/undo` (`/undo purge` waits instead), `/exit`
 * **Everything else** waits for the reply, queued behind earlier messages (*Queue cancel mode* applies).
@@ -339,7 +338,7 @@ Icons under the status bar (*Tool bar*), each shown while checked there. A click
 
 | Toolbar item | Shown | Opens |
 |---|---|---|
-| ⚙️ 🪪 🧮 🔌 🪄 🎭 💬 📊 | always | `/settings`, `/profile`, `/theme`, `/mcp`, `/commands`, `/sys`, `/sessions`, `/usage` |
+| ⚙️ 🪪 🧮 🔌 🪄 💬 📊 | always | `/settings`, `/profile`, `/theme`, `/mcp`, `/commands`, `/sessions`, `/usage` |
 | 🛠️ | dark while no tool is offered (*LLM offer tools* off, or all off on `/tools`' Offered tab) | `/tools` |
 | 🎓 | dark while *Agent skills* is off | `/skills` |
 | 📱 | dark while *Web UI* is off | `/webui` |
@@ -399,18 +398,19 @@ Chips for Home Assistant rooms and devices, the shopping list and this PC's moni
 * **Other tabs:** **Rooms** (by floor), **Lights**, **Switches** (and fans), **Sensors**, **Climate**, **Media**, **Scenes** (and scripts), **Security** (locks, covers, alarms, cameras), **Zones** (people in each), **Other**, **Monitors** (Windows only), **Shopping**.
   * Space or Enter adds or removes; typing filters by name, id, room or label.
   * Without Home Assistant only **On the bar**, **Monitors** and **Shopping** show.
+* **bar:** at the end of the tab strip hides the bar and keeps its chips, as `/homebar` does; a second click brings them back. It has no key, because the tabs filter as you type; click it, or use `/homebar`.
 
 ## Bar checklists
 
 The *Status bar*, *Tool bar* (`/toolbar edit`) and *Performance bar* (`/perfbar edit`) checklists, and the home bar's **On the bar**, share these keys:
 
-* Space or Enter checks or unchecks; Delete unchecks (on the home bar, takes off). None checked hides the toolbar or the performance bar.
+* Space or Enter checks or unchecks; Delete unchecks (on the home bar, takes off). None checked hides the toolbar or the performance bar. **bar:** on their title rows (`h`) hides the bar and keeps its items, as `/toolbar` and `/perfbar` do; `h` again brings them back.
 * `a`, `n` and `d` pick all, none or the default; `d` also puts back the default order, sides and dividers.
 * Shift+←/→ (or Alt+←/→) pins the item to the other side; on the performance and home bars, to the next group over (left ↔ center ↔ right).
 * Shift+↑/↓ (or Alt+↑/↓) moves it a place, crossing into the next group at the edge; Shift+Home/End to its group's top or bottom.
 * **Performance bar:** **look:** on the title row (`l`) steps text, gauge, led.
 * **Status bar:** the Spinner can only be moved, not unchecked. The row reads `default`, `all`, `none`, or the left group's sections, `|`, then the right group's.
-* **Tool bar dividers:** `+` (*+ divider* on the title row) puts a dim `│` after the item under the cursor; it moves like an item, and Delete takes it out. The default has three: `⚙️ 🛠️ 🎓 │ 💾 📣 ⏳ │ 🔒 👮 🐚 │ 📁 🖼️ 🌐 📱`.
+* **Tool bar dividers:** `+` (*+ divider* on the title row) puts a dim `│` after the item under the cursor; it moves like an item, and Delete takes it out. The default has three: `⚙️ 🛠️ 🎓 🪄 │ 📊 💾 📣 ⏳ │ 🙋 🔒 👮 🐚 │ 📁 🖼️ 🌐 📱`.
 
 *Toolbar order* orders the five bars: Shift+↑/↓ (or Alt+↑/↓) moves the bar under the cursor, Shift+Home/End to the top or bottom, `d` the default. A bar that is off keeps its place.
 

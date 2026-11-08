@@ -39,7 +39,7 @@ internal sealed partial class ChatScreen
 
     private bool MonitorOffered(AppSettingsData effective) => MonitorOffered(effective, _monitors is not null, _pane.Enabled);
 
-    /// <summary>The Monitors group of <c>/tools</c>' Offered tab, <c>/sys</c> and the botchat checklist; null off Windows (the menu is left out there).</summary>
+    /// <summary>The Monitors group of <c>/tools</c>' Offered tab, <c>/usage</c> and the botchat checklist; null off Windows (the menu is left out there).</summary>
     private AdminGroupSpec? MonitorGroup(AppSettingsData effective)
     {
         if (!ToolsText.MenuHere(ToolsText.MonitorsMenuTitle))

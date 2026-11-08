@@ -728,7 +728,7 @@ public partial class ChatScreenTests
         _geometry = new ScreenGeometry(() => null);
         StepsWhenIdle(
             Line("hi"),
-            Line("/sys"),
+            Line("/usage prompt"),   // /sys' Prompt tab until 2026-11-07
             input => input.Push(Keys.Right, Keys.Escape),
             Line("/exit"));
 

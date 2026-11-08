@@ -26,7 +26,7 @@ namespace NeonSidekick.App;
 /// </summary>
 internal sealed partial class ChatScreen
 {
-    /// <summary>The /sys Tools tab's name for the group that holds <c>finish_step</c> during a pass.</summary>
+    /// <summary>The /usage Tools tab's name for the group that holds <c>finish_step</c> during a pass.</summary>
     public const string RalphGroupName = "Ralph";
 
     /// <summary>The loop running now; null between loops (a paused one is <see cref="_executingPlan"/> with <see cref="StoredPlan.Ralph"/>).</summary>

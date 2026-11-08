@@ -5,7 +5,7 @@ namespace NeonSidekick.UI;
 
 /// <summary>
 /// A section's heading drawn as a rule to the edge of the room it is given (2026-10-03, the user's call: the
-/// <c>/tools</c> Offered tab's, the <c>/sys</c> Tools and Prompt tabs' and the <c>/mcp</c> Tools tab's bare violet
+/// <c>/tools</c> Offered tab's, the <c>/usage</c> Prompt and Tools tabs' and the <c>/mcp</c> Tools tab's bare violet
 /// headings looked poor): <c>── Files · 12 of 14 ─────…</c>, a note between two runs of the rule when there is one
 /// (<c>── GitLib · 11 ── off: GitLib tools is off ───…</c>). The glyphs in <see cref="Theme.PaneRule"/>, the pane's own
 /// rule; the label in <see cref="Theme.SectionHeading"/>, never dimmed (the 2026-09-20 rule); the count and the note dim.

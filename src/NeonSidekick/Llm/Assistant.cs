@@ -799,7 +799,7 @@ public sealed class Assistant
 
     /// <summary>
     /// The default operating rules for a turn, the one composition behind <see cref="SystemPrompt(bool, IReadOnlyList{string}?, string?, string?, string?, bool, bool, bool, AskLimits?, ProjectNotes?, IReadOnlyList{Skills.Skill}?, bool)"/>
-    /// and <c>/sys</c>: the reply-format sentence (<see cref="TextRule"/>), then with <paramref name="tools"/>
+    /// and <c>/usage</c>: the reply-format sentence (<see cref="TextRule"/>), then with <paramref name="tools"/>
     /// the <see cref="ToolRules"/>, <see cref="FileRule"/> with <paramref name="files"/>, <see cref="WebRule"/>
     /// with <paramref name="web"/> (and <see cref="DownloadRule"/> with both, unless <paramref name="download"/> is false —
     /// <c>download_file</c> switched off by name on <c>/tools</c>, 2026-09-19), <see cref="AskRule"/> with <paramref name="ask"/>,

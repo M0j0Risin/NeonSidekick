@@ -14,11 +14,11 @@ public sealed class ToolbarItemsTests
         // switches, the log and the two viewers in the user's order, the chart moved behind the log (2026-10-03) and behind the viewers later that day, the last glyph.
         Assert.Equal(
         [
-            "settings", "profile", "themes", "webui", "tools", "mcp", "skills", "commands", "sys", "sessions", "usage", "memory", "prompts", "queue", "ask", "cmdlist", "police",
+            "settings", "profile", "themes", "webui", "tools", "mcp", "skills", "commands", "sessions", "usage", "memory", "prompts", "queue", "ask", "cmdlist", "police",
             "shell", "files", "image", "web", "advisors", "docker", "eventlog", "network", "services", "tasks", "directory", "obsidian", "sql", "oracle", "mysql", "sqlite", "duckdb", "postgres", "unc", "ha", "comfy", "camera", "print",
             "log", "process", "comfyview", "comfythumbs", "youtube", "browserlinks", "shoppinglist", "path", "model",
-        ], ToolbarItems.Names);   // the model's name after the path (2026-10-12, the user's ask); "perf" before the path until it was retired (2026-10-14)
-        Assert.Equal("⚙️ 🪪 🧮 📱 🛠️ 🔌 🎓 🪄 🎭 💬 📊 💾 📣 ⏳ 🙋 🔒 👮 🐚 📁 🖼️ 🌐 🦉 🐳 🪵 📡 🧩 📅 🏢 💎 🛢️ 🔮 🐬 🪶 🦆 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 ⭐ 🛒 📂", string.Join(" ", ToolbarItems.Names.SkipLast(1).Select(ToolbarItems.Glyph)));   // the folder since 2026-09-29
+        ], ToolbarItems.Names);   // the model's name after the path (2026-10-12, the user's ask); "perf" before the path until it was retired (2026-10-14); "sys" after "commands" until it was (2026-11-07)
+        Assert.Equal("⚙️ 🪪 🧮 📱 🛠️ 🔌 🎓 🪄 💬 📊 💾 📣 ⏳ 🙋 🔒 👮 🐚 📁 🖼️ 🌐 🦉 🐳 🪵 📡 🧩 📅 🏢 💎 🛢️ 🔮 🐬 🪶 🦆 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 ⭐ 🛒 📂", string.Join(" ", ToolbarItems.Names.SkipLast(1).Select(ToolbarItems.Glyph)));   // the folder since 2026-09-29
         Assert.Equal("", ToolbarItems.Glyph(ToolbarItems.Model));   // no glyph: the name itself
         Assert.Equal(ChatScreen.ToolbarStrip, string.Join(" ", ToolbarItems.Names.Where(id => id is not ("cmdlist" or "police" or "path" or "model")).Select(ToolbarItems.Glyph)));   // one source for the glyphs
         Assert.Equal(FolderText.FolderGlyph, ToolbarItems.Glyph(ToolbarItems.Path));   // the Folders pane's, one source
@@ -38,7 +38,7 @@ public sealed class ToolbarItemsTests
         // Settings, Tools, Skills, Memory, the lock, the officer, the Shell, Files and Web switches and the path since 2026-10-05
         // (the user's pick; the last seven alone from 2026-10-03; the lock, the officer and the path from 2026-10-02; Settings, Tools, Skills, Sessions and the path from later on 2026-09-29, every
         // item before).
-        Assert.Equal(["settings", "webui", "tools", "skills", "memory", "prompts", "queue", "cmdlist", "police", "shell", "files", "image", "web", "path"], ToolbarItems.Defaults);   // 🌄 since 2026-10-10, ⏳ since 2026-10-13, 📣 since 2026-10-14, 📱 since 2026-10-17 (drawn after 🌐)
+        Assert.Equal(["settings", "webui", "tools", "skills", "commands", "usage", "memory", "prompts", "queue", "ask", "cmdlist", "police", "shell", "files", "image", "web", "path"], ToolbarItems.Defaults);   // 🌄 since 2026-10-10, ⏳ since 2026-10-13, 📣 since 2026-10-14, 📱 since 2026-10-17 (drawn after 🌐), 🪄 📊 🙋 since 2026-11-07
         Assert.Equal(ToolbarItems.Defaults, ToolbarItems.Names.Where(ToolbarItems.Resolve(null).Contains));
         Assert.Equal(ToolbarItems.Names, ToolbarItems.Names.Where(ToolbarItems.Resolve([.. ToolbarItems.Names]).Contains));
         Assert.Empty(ToolbarItems.Resolve([]));
@@ -74,7 +74,7 @@ public sealed class ToolbarItemsTests
     [Fact]
     public void Save_TheDefaultsAreNull_ElseStripOrder_EveryItemAFullList()
     {
-        Assert.Null(ToolbarItems.Save(new HashSet<string> { "path", "web", "webui", "image", "files", "shell", "police", "cmdlist", "queue", "prompts", "memory", "skills", "tools", "settings" }));
+        Assert.Null(ToolbarItems.Save(new HashSet<string> { "path", "web", "webui", "image", "files", "shell", "police", "cmdlist", "ask", "queue", "prompts", "memory", "usage", "commands", "skills", "tools", "settings" }));   // ask, usage and commands since 2026-11-07
         Assert.Equal(ToolbarItems.Names, ToolbarItems.Save(ToolbarItems.Names.ToHashSet()));
         Assert.Equal([], ToolbarItems.Save(new HashSet<string>()));
         Assert.Equal(["usage", "path"], ToolbarItems.Save(new HashSet<string> { "path", "usage" }));
@@ -124,10 +124,10 @@ public sealed class ToolbarItemsTests
     [Fact]
     public void Value_AndLabels_ArePinned()
     {
-        Assert.Equal("14 of 49", ToolbarItems.Value(null));   // the defaults (of 48 until 🪄, 2026-11-01; of 47 until 🦆, 2026-10-25; 13 until 📱, 2026-10-17; of 43 until 📡 🧩 📅 🏢, later still on 2026-10-15; of 42 until 🪵, 2026-10-15; of 41 since 📈 went, 2026-10-14; 📣 2026-10-14; ⏳ 2026-10-13, of 40 with it; 🌄 2026-10-10; 2026-10-05; 7 from 2026-10-03, 3 from 2026-10-02, of 13 until 2026-10-03; of 37 since 🙋, 2026-10-09; of 39 since Model name, 2026-10-12)
+        Assert.Equal("17 of 48", ToolbarItems.Value(null));   // the defaults (14 until 🪄, 📊 and 🙋 became defaults, of 49 until 🎭 went, 2026-11-07; of 48 until 🪄, 2026-11-01; of 47 until 🦆, 2026-10-25; 13 until 📱, 2026-10-17; of 43 until 📡 🧩 📅 🏢, later still on 2026-10-15; of 42 until 🪵, 2026-10-15; of 41 since 📈 went, 2026-10-14; 📣 2026-10-14; ⏳ 2026-10-13, of 40 with it; 🌄 2026-10-10; 2026-10-05; 7 from 2026-10-03, 3 from 2026-10-02, of 13 until 2026-10-03; of 37 since 🙋, 2026-10-09; of 39 since Model name, 2026-10-12)
         Assert.Equal("all", ToolbarItems.Value([.. ToolbarItems.Names]));
         Assert.Equal("off", ToolbarItems.Value([]));
-        Assert.Equal("2 of 49", ToolbarItems.Value(["usage", "path"]));   // of 48 until 🪄 (2026-11-01)
+        Assert.Equal("2 of 48", ToolbarItems.Value(["usage", "path"]));   // of 49 until 🎭 went (2026-11-07); of 48 until 🪄 (2026-11-01)
         Assert.Equal("[[x]] ⚙️  Settings                " + Theme.DimMarkup("/settings"), ToolbarItems.Label("settings", true));
         Assert.Equal("[[ ]] 📂  Working directory path  " + Theme.DimMarkup("/cwd browse"), ToolbarItems.Label("path", false));
         Assert.Equal("[[x]] 💾  Memory                  " + Theme.DimMarkup("/memory"), ToolbarItems.Label("memory", true));
@@ -135,6 +135,12 @@ public sealed class ToolbarItemsTests
         Assert.Equal("[[x]] 🪪  Profile                 " + Theme.DimMarkup("/profile"), ToolbarItems.Label("profile", true));
         Assert.DoesNotContain("perf", ToolbarItems.Resolve(["perf", "shell"]));   // 📈 Performance until it was retired (2026-10-14): a saved one is dropped
         Assert.DoesNotContain("perf", ToolbarItems.Order(["perf", "shell"]));
+        // 🎭 /sys until it was retired (2026-11-07, the user's ask: its tabs went to /usage): a saved one is dropped, in the checks, the order and the right side.
+        Assert.Equal(["shell"], ToolbarItems.Resolve(["sys", "shell"]));
+        Assert.Equal(ToolbarItems.Order(["settings", "divider:1", "tools"]), ToolbarItems.Order(["settings", "sys", "divider:1", "tools"]));
+        Assert.DoesNotContain("sys", ToolbarItems.Order(["sys"]));
+        Assert.DoesNotContain("sys", ToolbarItems.ResolveRight(["sys", "path"]));
+        Assert.Equal("1 of 48", ToolbarItems.Value(["sys", "shell"]));
         // The tool switches, the log and the viewers (2026-10-03, the user's names).
         Assert.Equal("[[x]] 🐚  Shell                   " + Theme.DimMarkup("/tools shell"), ToolbarItems.Label("shell", true));
         Assert.DoesNotContain("claude", ToolbarItems.Resolve(["claude", "shell"]));   // ✴️ the Claude Code advisor until it was retired (2026-10-10): a saved one is dropped

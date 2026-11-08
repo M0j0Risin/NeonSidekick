@@ -109,7 +109,7 @@ public static class Keys
     /// the console's own control one for the letter (ETX, SO, DC3; a test builds <c>'\0'</c>): AltGr is Ctrl+Alt, and an AltGr
     /// key that types a character (ć, ń, ś on some layouts) stays that character. Null for every other key.
     /// Eleven more came later on 2026-09-30 (the user's ask), each its bare command as typed: Ctrl+Alt+T <c>/tools</c>, K
-    /// <c>/skills</c>, P <c>/profile</c>, Y <c>/sys</c> (plain Ctrl+Y since 2026-10-03, below), G <c>/usage</c>, E <c>/perfbar</c> (the performance bar shown or hidden),
+    /// <c>/skills</c>, P <c>/profile</c>, Y <c>/sys</c> (plain Ctrl+Y from 2026-10-03 until 2026-11-07, below), G <c>/usage</c>, E <c>/perfbar</c> (the performance bar shown or hidden),
     /// M <c>/memory</c>, D <c>/mcp</c>, L <c>/cmdlist</c>, O <c>/police</c> (the Shell police page; <c>/tools shell allowed</c> and <c>/tools shell police</c> since 2026-10-09, the words folded under the shell's switch) and B <c>/toolbar</c> (the
     /// toolbar shown or hidden). Under a reply each goes where its typed line would: a pane over the reply, <c>/perfbar</c> and
     /// <c>/toolbar</c> at once, <c>/profile</c> left for the idle line. Their control characters (DC4, VT, DLE, EM, BEL, ENQ, CR,
@@ -147,7 +147,8 @@ public static class Keys
     /// an AltGr key that types one (@ on AltGr+V, € on AltGr+U on some layouts) stays that character. Ctrl+Alt+V was never
     /// the line's paste (Ctrl+V or Alt+V, one of the two). Later on 2026-10-02 (the user's ask) each closes its window when it
     /// is open (<c>ChatScreen.CloseByChord</c>); the typed command still opens it or brings it forward.
-    /// On 2026-10-03 (the user's ask) <c>/sys</c> moved to plain Ctrl+Y and Ctrl+Alt+Y went: its EM counts as no character.
+    /// On 2026-10-03 (the user's ask) <c>/sys</c> moved to plain Ctrl+Y and Ctrl+Alt+Y went: its EM counts as no character (plain Ctrl+Y freed
+    /// on 2026-11-07, below).
     /// Later on 2026-10-03 (the user's ask) Ctrl+Alt+E is <c>/sessions</c>, free since <c>/perfbar</c> left it for Ctrl+F: its ENQ
     /// counts as no character, and an AltGr+E that types € is still €. Under a reply it opens the list over the reply, as the
     /// typed line does.
@@ -186,6 +187,8 @@ public static class Keys
     /// (Ctrl+Alt+E until then) and Ctrl+Alt+Z <c>/splash</c> (Ctrl+Alt+P until then); Ctrl+Alt+E, H, L and R are free. Their STX, ACK,
     /// SO, DC4, ETB, DLE, EM and SUB count as no character, and an AltGr key that types one (ż on AltGr+Z, € on AltGr+E) is still that
     /// character. A freed chord does nothing and says nothing (the user's pick): the editor types no control character.
+    /// On 2026-11-07 (the user's pick) plain Ctrl+Y went with the bare <c>/sys</c>, whose pane's tabs moved to <c>/usage</c> (Ctrl+U): its EM
+    /// counts as no character, and the chord does nothing.
     /// </summary>
     public static string? ShortcutLine(ConsoleKeyInfo key)
     {
@@ -218,7 +221,7 @@ public static class Keys
                 (ConsoleKey.T, '\0' or '\x14') => "/tools",   // 2026-10-18, the user's pick (Ctrl+Alt+T until then; /toolbar before)
                 (ConsoleKey.U, '\0' or '\x15') => "/usage",
                 (ConsoleKey.W, '\0' or '\x17') => "/webui browser",   // 2026-10-18, the user's pick (/homebar until then)
-                (ConsoleKey.Y, '\0' or '\x19') => "/sys",
+                // Ctrl+Y was /sys until 2026-11-07 (the user's pick): freed with the bare command.
                 (ConsoleKey.Z, '\0' or '\x1a') => "/theme",
                 (ConsoleKey.Oem2, '\0' or '\x1f') => "/settings",
                 (ConsoleKey.OemPeriod, '\0') => "/terminal",

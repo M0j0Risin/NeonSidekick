@@ -126,7 +126,7 @@ public static class UsageText
     /// <summary>
     /// The Statistics tab: a heading per scope over its rows. The heading in the section style, the rows in the label style: two
     /// tiers, not one cyan column. Since 2026-10-10 (the user's ask: the <c>/settings</c> look on every pane) each heading is a
-    /// <see cref="SectionRule"/> with its note (the source, the replies that reported no usage…) dim on the rule, the <c>/sys</c> tabs' shape,
+    /// <see cref="SectionRule"/> with its note (the source, the replies that reported no usage…) dim on the rule, the <c>/usage</c> Prompt and Tools tabs' shape,
     /// and its rows <see cref="SystemPromptSummary.BodyIndent"/> cells in under it; one label width for every section
     /// (<see cref="LabelWidth"/>), so the value column sits at the same place under every heading as the one grid kept it until then.
     /// </summary>
@@ -308,8 +308,37 @@ public static class UsageText
     /// <summary>The argument list's note beside <see cref="ContextWord"/>.</summary>
     public const string ContextWordNote = "what fills the context window";
 
-    /// <summary>The refusal of any other argument. Pinned.</summary>
-    public const string UsageError = "/usage takes context, or nothing for the pane.";
+    // ── The tabs from /sys (2026-11-07, the user's ask: one pane for what the model is sent) ──
+
+    /// <summary>The Prompt tab's index among <c>/usage</c>'s tabs (2026-11-07): the system message, <c>/sys</c>' first tab until then.</summary>
+    public const int PromptTabIndex = 2;
+
+    /// <summary>The Tools tab's index (2026-11-07): the tools the next turn offers, <c>/sys</c>' second tab until then.</summary>
+    public const int ToolsTabIndex = 3;
+
+    /// <summary>The Skills tab's index (2026-11-07): the skills catalog, a section of <c>/sys</c>' Prompt tab until then.</summary>
+    public const int SkillsTabIndex = 4;
+
+    /// <summary>The word <c>/usage prompt</c> takes (2026-11-07). Pinned.</summary>
+    public const string PromptWord = "prompt";
+
+    /// <summary>The argument list's note beside <see cref="PromptWord"/>.</summary>
+    public const string PromptWordNote = "the system prompt the next turn sends";
+
+    /// <summary>The word <c>/usage tools</c> takes (2026-11-07). Pinned.</summary>
+    public const string ToolsWord = "tools";
+
+    /// <summary>The argument list's note beside <see cref="ToolsWord"/>.</summary>
+    public const string ToolsWordNote = "the tools the next turn offers";
+
+    /// <summary>The word <c>/usage skills</c> takes (2026-11-07). Pinned.</summary>
+    public const string SkillsWord = "skills";
+
+    /// <summary>The argument list's note beside <see cref="SkillsWord"/>.</summary>
+    public const string SkillsWordNote = "the skills the next turn offers";
+
+    /// <summary>The refusal of any other argument (the three words from <c>/sys</c> since 2026-11-07). Pinned.</summary>
+    public const string UsageError = "/usage takes context, prompt, tools or skills, or nothing for the pane.";
 
     /// <summary>The tab's one line on the Claude Code server, which keeps the conversation itself. Pinned.</summary>
     public const string ClaudeCodeContext = "The Claude Code server manages its own context, so there is nothing here to break down.";

@@ -1370,9 +1370,9 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(HintsBarMode.Off, SettingsMenu.FieldValue(SettingsField.HintsBar, new AppSettingsData { HintsBar = " OFF " }, _settings.ProfileDirectory));
         Assert.Equal(HintsBarMode.Auto, SettingsMenu.FieldValue(SettingsField.HintsBar, new AppSettingsData { HintsBar = "nonsense" }, _settings.ProfileDirectory));
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.HintsBar) || SettingsMenu.IsLlmField(SettingsField.HintsBar));
-        Assert.Equal("14 of 49", SettingsMenu.FieldValue(SettingsField.ToolbarItems, data, _settings.ProfileDirectory));   // the defaults (of 48 until 🪄, 2026-11-01; 📱 since 2026-10-17; 📣 since 2026-10-14; ⏳ since 2026-10-13, of 40 with it; 🌄 since 2026-10-10): 5 of 13 from later on 2026-09-29, 3 from 2026-10-02; of 30 and 7 from 2026-10-03; 10 since 2026-10-05; of 39 with Model name, 2026-10-12
+        Assert.Equal("17 of 48", SettingsMenu.FieldValue(SettingsField.ToolbarItems, data, _settings.ProfileDirectory));   // the defaults (14 until 🪄, 📊 and 🙋 became defaults, of 49 until 🎭 went, 2026-11-07; of 48 until 🪄, 2026-11-01; 📱 since 2026-10-17; 📣 since 2026-10-14; ⏳ since 2026-10-13, of 40 with it; 🌄 since 2026-10-10): 5 of 13 from later on 2026-09-29, 3 from 2026-10-02; of 30 and 7 from 2026-10-03; 10 since 2026-10-05; of 39 with Model name, 2026-10-12
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ToolbarItems, new AppSettingsData { ToolbarItems = [] }, _settings.ProfileDirectory));
-        Assert.Equal("3 of 49", SettingsMenu.FieldValue(SettingsField.ToolbarItems, new AppSettingsData { ToolbarItems = ["usage", "PATH", " tools ", "nonsense"] }, _settings.ProfileDirectory));
+        Assert.Equal("3 of 48", SettingsMenu.FieldValue(SettingsField.ToolbarItems, new AppSettingsData { ToolbarItems = ["usage", "PATH", " tools ", "nonsense"] }, _settings.ProfileDirectory));   // of 49 until 🎭 went (2026-11-07)
         Assert.Equal("all", SettingsMenu.FieldValue(SettingsField.ToolbarItems, new AppSettingsData { ToolbarItems = [.. ToolbarItems.Names] }, _settings.ProfileDirectory));
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.ToolbarItems) || SettingsMenu.IsLlmField(SettingsField.ToolbarItems) || SettingsMenu.IsTtsField(SettingsField.ToolbarItems) || SettingsMenu.IsVoiceField(SettingsField.ToolbarItems));
         // Welcome splash (2026-09-18): the General tab's row before Show working directory (the user's order), no reconnect; a picker since 2026-09-24.
@@ -1825,7 +1825,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(30, SettingsMenu.TabLabelWidth(SettingsTab.Stt));       // "STT interrupt echo guard (%)" (2026-10-13; 26 without the unit)
         Assert.Equal(28, SettingsMenu.TabLabelWidth(SettingsTab.BotChat));   // "Botchat stop extra servers" and "Botchat image mention mode" (2026-10-27, when "Botchat ComfyUI limited workflows", 35, became "Botchat limited workflows"; that one from later on 2026-10-04; "Botchat stop extra servers", 29, from later on 2026-09-29; "Botchat txt2img workflow" from 2026-09-27, "Botchat images enabled" before)
         Assert.Equal(21, SettingsMenu.LabelWidthOf(ToolsMenuTests.TabFields(ToolsText.OptionsTabTitle)));   // the Options tab (index 7 since SQL, 2026-09-23): "Tool collapse count" (2026-09-22; "$-mention enabled", 19, the Options tab's one row from later on 2026-09-19)
-        Assert.Equal(29, SettingsMenu.LabelWidthOf(ToolsMenuTests.TabFields(ToolsText.WebTabTitle)));   // "Web browser botcheck window" (2026-10-13); "Web browser network mode", 26, until then (the Web-prefixed labels, later still on 2026-09-19; "Web search max results", 24, before)
+        Assert.Equal(30, SettingsMenu.LabelWidthOf(ToolsMenuTests.TabFields(ToolsText.WebTabTitle)));   // "Web metasearch Brave API key" (2026-11-07, the user's name); "Web browser botcheck window", 29 (2026-10-13); "Web browser network mode", 26, until then (the Web-prefixed labels, later still on 2026-09-19; "Web search max results", 24, before)
         Assert.Equal(SettingsMenu.FieldName(SettingsField.FileCheckpointLargestFileMegabytes).Length + 2, SettingsMenu.LabelWidthOf(ToolsMenuTests.TabFields(ToolsText.FileMenuTitle)));   // "File checkpoints per file (MB)" since 2026-10-28; "File deletes to Recycle bin" from later on 2026-10-15; "File view image max images" (the File-prefixed labels, later still on 2026-09-19; "Stale line number guard", 25, that morning; "Always return line numbers", 28, from 2026-09-17 until it went; "Tree max length", 17, before)
         Assert.Equal(32, SettingsMenu.LabelWidthOf(ToolsMenuTests.TabFields(ToolsText.ShellTabTitle)));   // "Shell police forbidden strings" (2026-10-03; "Shell tool bridge max calls", 29, before) (the Shell tab, 2026-09-21; the row was "Shell code max tool calls", 27, until later that day)
         Assert.Equal(30, SettingsMenu.LabelWidthOf(ToolsMenuTests.TabFields(ToolsText.AskTabTitle)));   // "Ask max choices per question"
@@ -3476,7 +3476,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.StartsWith("(", cwd);
         Assert.EndsWith(@"\profiles\neon\files)", cwd);
         // The rows and the footer, then blank rows to the tallest tab's height (Common since its Ralph loop run, 2026-10-18), then the rule.
-        Assert.Matches(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(Rule(240) + "\n" + Head(SettingsTab.Chat) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      neon (" + _settings.ProfileDirectory + ")\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n  Model avatar                 🤖 robot\n  User avatar                  🙊 speak-no-evil monkey\n" + "  Check for updates at start   on\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue mode                   automatic\n  Queue cancel mode            empty\n  Keep message history         on\n  Command typo intercept       on\n  Show /exit in autocomplete   off\n  Emoji picker                 on\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n  Reply footer                 off\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        synthwave\n  Themed background            on\n  Themed external windows      on\n  Gradient rules               on\n  Welcome splash               image\n  Show header                  on\n  Working directory in header  off\n  Menus max height             full\n" + MenuLayout.Heading("Tool bars", 240) + "\n  Hints bar                    auto\n  Status bar                   default\n  Tool bar                     14 of 49\n  Performance bar              CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · led\n  Home bar                     off\n  Order                        default\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240)) + "(?: *\\n)*" + System.Text.RegularExpressions.Regex.Escape(Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n")), Output);
+        Assert.Matches(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(Rule(240) + "\n" + Head(SettingsTab.Chat) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      neon (" + _settings.ProfileDirectory + ")\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n  Model avatar                 🤖 robot\n  User avatar                  🙊 speak-no-evil monkey\n" + "  Check for updates at start   on\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue mode                   automatic\n  Queue cancel mode            empty\n  Keep message history         on\n  Command typo intercept       on\n  Show /exit in autocomplete   off\n  Emoji picker                 on\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n  Reply footer                 off\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        synthwave\n  Themed background            on\n  Themed external windows      on\n  Gradient rules               on\n  Welcome splash               image\n  Show header                  on\n  Working directory in header  off\n  Menus max height             full\n" + MenuLayout.Heading("Tool bars", 240) + "\n  Hints bar                    auto\n  Status bar                   default\n  Tool bar                     17 of 48\n  Performance bar              CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · led\n  Home bar                     off\n  Order                        default\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240)) + "(?: *\\n)*" + System.Text.RegularExpressions.Regex.Escape(Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n")), Output);
         Assert.DoesNotContain("File /tree max entries", Output);   // the Files tab's since 2026-09-15
         Assert.DoesNotContain("LLM URL", Output);
         Assert.False(pane.OverlayOpen);
@@ -3501,7 +3501,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.StartsWith("(", cwd);
         Assert.EndsWith(@"/profiles/neon/files)", cwd);
         // The rows and the footer, then blank rows to the tallest tab's height (Common since its Ralph loop run, 2026-10-18), then the rule.
-        Assert.Matches(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(Rule(240) + "\n" + Head(SettingsTab.Chat) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      neon (" + _settings.ProfileDirectory + ")\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n  Model avatar                 🤖 robot\n  User avatar                  🙊 speak-no-evil monkey\n" + "  Check for updates at start   on\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue mode                   automatic\n  Queue cancel mode            empty\n  Keep message history         on\n  Command typo intercept       on\n  Show /exit in autocomplete   off\n  Emoji picker                 on\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n  Reply footer                 off\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        synthwave\n  Themed background            on\n  Themed external windows      on\n  Gradient rules               on\n  Welcome splash               image\n  Show header                  on\n  Working directory in header  off\n  Menus max height             full\n" + MenuLayout.Heading("Tool bars", 240) + "\n  Hints bar                    auto\n  Status bar                   default\n  Tool bar                     14 of 49\n  Performance bar              CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · led\n  Home bar                     off\n  Order                        default\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240)) + "(?: *\\n)*" + System.Text.RegularExpressions.Regex.Escape(Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n")), Output);
+        Assert.Matches(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(Rule(240) + "\n" + Head(SettingsTab.Chat) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      neon (" + _settings.ProfileDirectory + ")\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n  Model avatar                 🤖 robot\n  User avatar                  🙊 speak-no-evil monkey\n" + "  Check for updates at start   on\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue mode                   automatic\n  Queue cancel mode            empty\n  Keep message history         on\n  Command typo intercept       on\n  Show /exit in autocomplete   off\n  Emoji picker                 on\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n  Reply footer                 off\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        synthwave\n  Themed background            on\n  Themed external windows      on\n  Gradient rules               on\n  Welcome splash               image\n  Show header                  on\n  Working directory in header  off\n  Menus max height             full\n" + MenuLayout.Heading("Tool bars", 240) + "\n  Hints bar                    auto\n  Status bar                   default\n  Tool bar                     17 of 48\n  Performance bar              CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · led\n  Home bar                     off\n  Order                        default\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240)) + "(?: *\\n)*" + System.Text.RegularExpressions.Regex.Escape(Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n")), Output);
         Assert.DoesNotContain("File /tree max entries", Output);   // the Files tab's since 2026-09-15
         Assert.DoesNotContain("LLM URL", Output);
         Assert.False(pane.OverlayOpen);
@@ -4907,7 +4907,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
-        Assert.Equal(["webui", "tools", "skills", "memory", "prompts", "queue", "cmdlist", "police", "shell", "files", "image", "web"], _settings.Current.ToolbarItems);   // 📱 a default since 2026-10-17
+        Assert.Equal(["webui", "tools", "skills", "commands", "usage", "memory", "prompts", "queue", "ask", "cmdlist", "police", "shell", "files", "image", "web"], _settings.Current.ToolbarItems);   // 📱 a default since 2026-10-17; 🪄 📊 🙋 since 2026-11-07
         Assert.Contains("[x] ⚙️  Settings", Output);
         Assert.Contains("[ ] ⚙️  Settings", Output);
         Assert.Contains("[x] 📂  Working directory path", Output);
@@ -4915,8 +4915,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Contains("[ ] 🔌  MCP", Output);
         Assert.Contains("[ ] 🪪  Profile", Output);
         Assert.DoesNotContain("📈  Performance", Output);   // retired (2026-10-14)
-        Assert.Contains("  · Tool bar: 13 of 49", Output);   // of 48 until 🪄 (2026-11-01); "Toolbar" until later on 2026-10-12; 12 until 📱 became a default, 2026-10-17
-        Assert.Contains("  · Tool bar: 12 of 49", Output);   // 11 until 📱 became a default, 2026-10-17
+        Assert.Contains("  · Tool bar: 16 of 48", Output);   // 13 of 49 until 🪄, 📊 and 🙋 became defaults and 🎭 went (2026-11-07); of 48 until 🪄 (2026-11-01); "Toolbar" until later on 2026-10-12; 12 until 📱 became a default, 2026-10-17
+        Assert.Contains("  · Tool bar: 15 of 48", Output);   // 12 of 49 until 2026-11-07; 11 until 📱 became a default, 2026-10-17
         pane.Dispose();
     }
 
@@ -5266,6 +5266,119 @@ public partial class SettingsMenuTests : IDisposable
         Assert.StartsWith("[[x]] web_search", rows[4].Markup);
     }
 
+    /// <summary>The bars' show/hide button (2026-11-07, the user's ask). Pinned: its words say the state, <c>h</c> on the two checklists.</summary>
+    [Fact]
+    public void ShowBarButton_IsPinned()
+    {
+        Assert.Equal("bar: shown", SettingsMenu.ShowBarButton(true));
+        Assert.Equal("bar: hidden", SettingsMenu.ShowBarButton(false));
+        Assert.Equal('h', SettingsMenu.ShowBarKey);
+        Assert.DoesNotContain("h = ", SettingsMenu.PerfBarToggleKeys);   // the hints are full: the key is in the docs and neon_help
+    }
+
+    /// <summary>
+    /// The Tool bar page's <c>bar:</c> button (2026-11-07, the user's ask): <c>h</c> hides the bar as <c>/toolbar</c> does, the items kept in
+    /// the last list, the row's own notice; <c>h</c> again shows exactly them.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_ShowToolbar_TheBarButton_HidesKeepingTheItems_AndShowsThemAgain()
+    {
+        _settings.Update(d => d.ToolbarItems = ["usage", "memory"]);
+        var (menu, pane) = PaneMenu();
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ToolbarItems));
+        Push(Keys.Enter);
+        Push(Keys.Char(SettingsMenu.ShowBarKey));   // hidden
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Empty(_settings.Current.ToolbarItems!);
+        Assert.Equal(["usage", "memory"], _settings.Current.ToolbarLastItems);
+        Assert.Contains(SettingsMenu.ShowBarButton(true), Output);
+        Assert.Contains(SettingsMenu.ShowBarButton(false), Output);   // the page again, the button on the new state
+        Assert.Contains("  · Tool bar: off", Output);
+        pane.Dispose();
+
+        (menu, pane) = PaneMenu();
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ToolbarItems));
+        Push(Keys.Enter);
+        Push(Keys.Char(SettingsMenu.ShowBarKey));   // shown again
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(["usage", "memory"], _settings.Current.ToolbarItems);
+        Assert.Contains("  · Tool bar: 2 of 48", Output);
+        pane.Dispose();
+    }
+
+    /// <summary>
+    /// The Performance bar page's <c>bar:</c> button (2026-11-07): as the Tool bar's, the look untouched; from a bar hidden with no last list
+    /// it shows the default meters, as <c>/perfbar</c> does.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_ShowPerformanceBar_TheBarButton_HidesKeepingTheMeters_AndShowsThemAgain()
+    {
+        _settings.Update(d => { d.PerformanceBarItems = ["cpu", "ram"]; d.PerformanceBarLook = "gauge"; });
+        var (menu, pane) = PaneMenu();
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ShowPerformanceBar));
+        Push(Keys.Enter);
+        Push(Keys.Char(SettingsMenu.ShowBarKey));
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Empty(_settings.Current.PerformanceBarItems!);
+        Assert.Equal(["cpu", "ram"], _settings.Current.PerformanceBarLastItems);
+        Assert.Equal("gauge", _settings.Current.PerformanceBarLook);
+        Assert.Contains(SettingsMenu.ShowBarButton(false), Output);
+        Assert.Contains("  · Performance bar: " + NeonSidekick.Perf.PerfText.NoMeters, Output);
+        pane.Dispose();
+
+        (menu, pane) = PaneMenu();
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ShowPerformanceBar));
+        Push(Keys.Enter);
+        Push(Keys.Char(SettingsMenu.ShowBarKey));
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(["cpu", "ram"], _settings.Current.PerformanceBarItems);
+        Assert.Equal("gauge", _settings.Current.PerformanceBarLook);
+        pane.Dispose();
+
+        _settings.Update(d => { d.PerformanceBarItems = []; d.PerformanceBarLastItems = null; });
+        (menu, pane) = PaneMenu();
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ShowPerformanceBar));
+        Push(Keys.Enter);
+        Push(Keys.Char(SettingsMenu.ShowBarKey));
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(PerfBarItems.Resolve(null), PerfBarItems.Resolve(_settings.Current.PerformanceBarItems));
+        pane.Dispose();
+    }
+
+    /// <summary>The Status bar page has no <c>bar:</c> button (2026-11-07): its spinner is always on, so the bar never hides; <c>h</c> does nothing.</summary>
+    [Fact]
+    public async Task OnThePane_StatusBarItems_HasNoBarButton()
+    {
+        var before = _settings.Current.StatusBarItems;
+        var (menu, pane) = PaneMenu();
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.StatusBarItems));
+        Push(Keys.Enter);
+        Push(Keys.Char(SettingsMenu.ShowBarKey));
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(before, _settings.Current.StatusBarItems);
+        Assert.DoesNotContain(SettingsMenu.ShowBarButton(true), Output);
+        Assert.DoesNotContain(SettingsMenu.ShowBarButton(false), Output);
+        pane.Dispose();
+    }
+
     /// <summary>
     /// Checked back to exactly the defaults (later on 2026-09-29): saved as null, so the profile follows them; every item was
     /// null until the defaults narrowed that day.
@@ -5273,7 +5386,7 @@ public partial class SettingsMenuTests : IDisposable
     [Fact]
     public async Task OnThePane_ShowToolbar_TheDefaultsAgain_SaveNull()
     {
-        _settings.Update(d => d.ToolbarItems = ["settings", "webui", "tools", "skills", "memory", "prompts", "queue", "cmdlist", "police", "shell", "files", "image", "web"]);
+        _settings.Update(d => d.ToolbarItems = [.. ToolbarItems.Defaults.Where(id => id != ToolbarItems.Path)]);   // from the defaults since 2026-11-07: a hand copy fell behind them
         var (menu, pane) = PaneMenu();
         Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ToolbarItems));
         Push(Keys.Enter);
@@ -5284,7 +5397,7 @@ public partial class SettingsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Null(_settings.Current.ToolbarItems);
-        Assert.Contains("  · Tool bar: 14 of 49", Output);   // of 48 until 🪄 (2026-11-01)
+        Assert.Contains("  · Tool bar: 17 of 48", Output);   // 14 of 49 until 🪄, 📊 and 🙋 became defaults and 🎭 went (2026-11-07); of 48 until 🪄 (2026-11-01)
         pane.Dispose();
     }
 

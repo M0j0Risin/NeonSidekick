@@ -2684,7 +2684,7 @@ internal sealed partial class SettingsMenu
         SettingsField.WebSearxngUrl => "Web SearXNG URL",
         SettingsField.WebMetasearchEngines => "Web metasearch engines",
         SettingsField.WebMetasearchSafeSearch => "Web metasearch safe search",
-        SettingsField.WebMetasearchBraveApiKey => "Web Brave Search API key",
+        SettingsField.WebMetasearchBraveApiKey => "Web metasearch Brave API key",   // the user's name (2026-11-07): "Web Brave Search API key" until then
         SettingsField.WebSearchMaxResults => "Web search max results",
         SettingsField.WebDownloadMaxMegabytes => "Web download max (MB)",
         SettingsField.TtsVoicePreview => "TTS voice preview",
@@ -3500,7 +3500,7 @@ internal sealed partial class SettingsMenu
     public static string YouTubeApiKeyPlainWarning(string reason) => $"YouTube API key saved unencrypted: {reason}.";
 
     /// <summary>The warning when DPAPI could not encrypt the Brave Search API key (2026-11-07): it is kept as typed. Pinned.</summary>
-    public static string BraveApiKeyPlainWarning(string reason) => $"Brave Search API key saved unencrypted: {reason}.";
+    public static string BraveApiKeyPlainWarning(string reason) => $"Web metasearch Brave API key saved unencrypted: {reason}.";   // the row's name since later on 2026-11-07
 
     /// <summary>How the menu shows an empty <see cref="AppSettingsData.YouTubeRegion"/> (2026-10-08): no region asked for. Pinned.</summary>
     public const string NoYouTubeRegionLabel = "(any region)";
@@ -3712,6 +3712,23 @@ internal sealed partial class SettingsMenu
 
     /// <summary>The Performance bar checklist's look button's index (2026-10-14): after <see cref="DefaultChecklistButtons"/>, where the tool bar's divider is.</summary>
     private const int LookIndex = 3;
+
+    /// <summary>
+    /// The show/hide button on the Tool bar, Performance bar and Home bar pages (2026-11-07, the user's ask: "no way to show/hide" a bar from its
+    /// page): the bar's state, in the look button's form. A press does what <c>/toolbar</c>, <c>/perfbar</c> or <c>/homebar</c> alone does, so
+    /// hiding keeps the items and a second press brings them back, where <c>n</c> forgets them. Pinned.
+    /// </summary>
+    public static string ShowBarButton(bool shown) => shown ? "bar: shown" : "bar: hidden";
+
+    /// <summary>
+    /// The key that is <see cref="ShowBarButton"/> on the Tool bar and Performance bar pages (2026-11-07). The hints leave it out: they are 115
+    /// and 112 cells, and <c>· h = hide</c> would pass the 119-cell row; the docs and <c>neon_help</c> name it. The Home bar picker's button has
+    /// no key (the user's pick), since its tabs filter as you type. Pinned.
+    /// </summary>
+    public const char ShowBarKey = 'h';
+
+    /// <summary>The show/hide button's index (2026-11-07): last, after the tool bar's divider and the performance bar's look (both index 3).</summary>
+    private const int ShowBarIndex = 4;
 
     /// <summary>
     /// Show performance bar's hint: <see cref="ToolbarToggleKeys"/>' words, the same page since 2026-10-12 (the user's ask), without

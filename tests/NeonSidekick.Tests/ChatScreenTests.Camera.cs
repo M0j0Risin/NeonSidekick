@@ -666,7 +666,7 @@ public partial class ChatScreenTests
     public async Task SysTools_ListsCameraCapture_OnlyWhileItIsOffered()
     {
         TallCameraPane(on: true);
-        PushLine("/sys");
+        PushLine("/usage prompt");   // /sys' Prompt tab until 2026-11-07
         _console.Input.PushKey(Keys.Right);   // the Tools tab
         _console.Input.PushKey(Keys.Escape);
         PushLine("/exit");
@@ -681,7 +681,7 @@ public partial class ChatScreenTests
     public async Task SysTools_LeavesTheCameraOut_WhileCameraToolIsOff()
     {
         TallCameraPane(on: false);
-        PushLine("/sys");
+        PushLine("/usage prompt");   // /sys' Prompt tab until 2026-11-07
         _console.Input.PushKey(Keys.Right);
         _console.Input.PushKey(Keys.Escape);
         PushLine("/exit");

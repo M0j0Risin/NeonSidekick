@@ -427,7 +427,7 @@ public sealed partial class ChatScreenTests
     [Fact]
     public async Task CustomCommands_TheToolbarsItem_OpensThePane_TheDraftStays()
     {
-        Assert.DoesNotContain(ToolbarItems.Commands, ToolbarItems.Defaults);
+        Assert.Contains(ToolbarItems.Commands, ToolbarItems.Defaults);   // on by default since 2026-11-07 (the user's ask); off until then
         _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [ToolbarItems.Commands]; });
         _console.Profile.Height = 40;
         _console.Profile.Width = 240;

@@ -612,7 +612,7 @@ public class SlashCommandsTests
     public void BasicCommands_AreRealCommands_AndTheTabTitlesArePinned()
     {
         // The basic tab's list (later on 2026-09-27, the user's): a rename or a typo would drop a row silently.
-        Assert.Equal(37, SlashCommands.BasicCommands.Count);   // /commands 2026-10-30 (the custom commands plan)   // /undo 2026-10-28 (the checkpoints plan)   // /mark and /theme 2026-10-25   // /prompts 2026-10-13   // /avatar 2026-10-11   // /msgclear 2026-10-10   // /wake gone 2026-10-09 (into /stt)   // /rename 2026-10-05   // /terminal later on 2026-10-03; /about, /explore, /perfbar, /stt, /toolbar, /tts and /wake 2026-10-03; /rewind 2026-09-30, the user's picks
+        Assert.Equal(38, SlashCommands.BasicCommands.Count);   // /usage 2026-11-07 (the user's pick)   // /commands 2026-10-30 (the custom commands plan)   // /undo 2026-10-28 (the checkpoints plan)   // /mark and /theme 2026-10-25   // /prompts 2026-10-13   // /avatar 2026-10-11   // /msgclear 2026-10-10   // /wake gone 2026-10-09 (into /stt)   // /rename 2026-10-05   // /terminal later on 2026-10-03; /about, /explore, /perfbar, /stt, /toolbar, /tts and /wake 2026-10-03; /rewind 2026-09-30, the user's picks
         Assert.All(SlashCommands.BasicCommands, c => Assert.Contains(SlashCommands.HelpEntries, e => e.Command == c));
         Assert.Equal("Basic", SlashCommands.BasicTabTitle);
         Assert.Equal("Advanced", SlashCommands.AdvancedTabTitle);

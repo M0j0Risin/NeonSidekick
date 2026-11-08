@@ -13,7 +13,7 @@ namespace NeonSidekick.Web;
 /// lives on <see cref="WebAccess"/>, unlike <see cref="SearxngSearch"/>'s one per call, because the library remembers which engines are
 /// resting after a refusal; <see cref="For"/> carries a search's settings over it. Every request goes through the app's client (<see cref="HostClientHandler"/>), so
 /// <see cref="LanPolicy"/> judges every connection, but stays out of its cookie jar (<see cref="WebHttp.NoCookiesKey"/>).
-/// A search reaches several outside services instead of one. With a <c>Web Brave Search API key</c> (2026-11-07, the user's ask), the
+/// A search reaches several outside services instead of one. With a <c>Web metasearch Brave API key</c> (2026-11-07, the user's ask), the
 /// <c>brave</c> row asks the Brave Search API (<see cref="BraveApiEngine"/>) instead of reading Brave's results page.
 /// </summary>
 public sealed class BuiltInMetaSearch

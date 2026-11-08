@@ -36,6 +36,72 @@ public partial class SettingsMenuTests
         Assert.Equal("2 · den, kettle", SettingsMenu.FieldValue(SettingsField.ShowHomeBar, new AppSettingsData { HomeBarItems = ["area:den", "entity:switch.kettle"] }, "C:\\p"));
     }
 
+    /// <summary>The picker's <c>bar:</c> button as a click at the end of the strip (2026-11-07): the column read off the drawn strip.</summary>
+    private static int ShowBarColumn(string output, bool shown)
+    {
+        string button = SettingsMenu.ShowBarButton(shown);
+        string row = output.Split('\n').Last(l => l.Contains(button, StringComparison.Ordinal));
+        return TextCells.Width(row[..row.IndexOf(button, StringComparison.Ordinal)]) + 2;
+    }
+
+    /// <summary>
+    /// The picker's <c>bar:</c> button (2026-11-07, the user's ask; click-only, the user's pick): a click hides the bar as <c>/homebar</c> does,
+    /// the items kept in the last list, and a second shows them again; <c>h</c> on the bar's tab touches nothing.
+    /// </summary>
+    [Fact]
+    public async Task ThePicker_TheBarButton_AClickHides_AndShowsAgain_AndHIsNoKeyForIt()
+    {
+        _console.Profile.Width = 240;
+        _settings.Update(d =>
+        {
+            d.HomeAssistantUrl = "http://ha.test:8123";
+            d.HomeAssistantToken = "secret";
+            d.HomeBarItems = ["area:den", "entity:switch.kettle"];
+        });
+        var (menu, pane, input) = ClickablePaneMenu(cursorTop: 100);
+        menu.HomeCatalog = _ => Task.FromResult<(HaCatalog?, string?)>((HomeCatalog(), null));
+        input.Push(Keys.Char('h'), Keys.Escape);   // no key: nothing changes
+
+        Assert.False(await menu.EditHomeBarAsync(own: true, CancellationToken.None));
+        Assert.Equal(["area:den", "entity:switch.kettle"], _settings.Current.HomeBarItems);
+        Assert.Contains(SettingsMenu.ShowBarButton(true), Output);
+
+        int column = ShowBarColumn(Output, shown: true);
+        input.PushClick(column, 100);              // hidden
+        input.Push(Keys.Escape);
+        Assert.True(await menu.EditHomeBarAsync(own: true, CancellationToken.None));
+        Assert.Empty(_settings.Current.HomeBarItems!);
+        Assert.Equal(["area:den", "entity:switch.kettle"], _settings.Current.HomeBarLastItems);
+        Assert.Contains(SettingsMenu.ShowBarButton(false), Output);
+        Assert.Contains("  · Home bar: " + HomeBarText.NoItems, Output);
+
+        input.PushClick(ShowBarColumn(Output, shown: false), 100);   // shown again
+        input.Push(Keys.Escape);
+        Assert.True(await menu.EditHomeBarAsync(own: true, CancellationToken.None));
+        Assert.Equal(["area:den", "entity:switch.kettle"], _settings.Current.HomeBarItems);
+        pane.Dispose();
+    }
+
+    /// <summary>With nothing ever picked the button has nothing to show (2026-11-07): the notice, nothing saved.</summary>
+    [Fact]
+    public async Task ThePicker_TheBarButton_WithNothingEverPicked_SaysSo_AndSavesNothing()
+    {
+        _console.Profile.Width = 240;
+        var (menu, pane, input) = ClickablePaneMenu(cursorTop: 100);
+        input.Push(Keys.Escape);
+        Assert.False(await menu.EditHomeBarAsync(own: true, CancellationToken.None));
+
+        input.PushClick(ShowBarColumn(Output, shown: false), 100);
+        input.Push(Keys.Escape);
+        Assert.False(await menu.EditHomeBarAsync(own: true, CancellationToken.None));
+
+        Assert.Equal("Nothing to show yet: add rooms and devices from the other tabs", HomeBarText.NothingToShow);
+        Assert.Contains("  · " + HomeBarText.NothingToShow, Output);
+        Assert.Null(_settings.Current.HomeBarItems);
+        Assert.Null(_settings.Current.HomeBarLastItems);
+        pane.Dispose();
+    }
+
     [Fact]
     public async Task ThePicker_AddsFromRoomsAndLights_ThenTheMoveKeysAndDeleteChangeTheBar()
     {

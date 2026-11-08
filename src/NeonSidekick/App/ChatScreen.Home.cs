@@ -53,7 +53,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The Home Assistant tools a turn leaves out and why, as notes (2026-10-27, <c>ha_camera</c>; <see cref="NetworkToolNotes"/>'s way, so
-    /// <c>/tools</c>, <c>/sys</c> and <c>neon_help</c>'s live line say "not offered: …" rather than "switched off on /tools"): <c>ha_camera</c>
+    /// <c>/tools</c>, <c>/usage</c> and <c>neon_help</c>'s live line say "not offered: …" rather than "switched off on /tools"): <c>ha_camera</c>
     /// with no codecs to decode a picture (<see cref="HaText.NoPictureSupportReason"/>), or under a model that reads none
     /// (<see cref="ToolsText.BlindReason"/>, the embedded server without vision). Pure.
     /// </summary>

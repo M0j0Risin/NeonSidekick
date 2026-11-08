@@ -336,7 +336,7 @@ internal sealed partial class ChatScreen
         ];
 
         // A family only Windows has is left out elsewhere (2026-10-22, the user's ask): no Services or Tasks group on a Mac's Offered tab,
-        // /sys or the botchat checklist, as /tools shows no menu for them (ToolsText.WindowsOnlyMenus).
+        // /usage or the botchat checklist, as /tools shows no menu for them (ToolsText.WindowsOnlyMenus).
         return groups.Where(g => ToolsText.MenuHere(g.Title)).ToList();
     }
 

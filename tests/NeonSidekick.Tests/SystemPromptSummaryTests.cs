@@ -531,10 +531,11 @@ public class SystemPromptSummaryTests : IDisposable
                 NoNotesHeading,
                 "Memory — read-write, directive (the list rides the opening recall_memory call)",
                 "  " + MemoryPrompt.Directive,
-                NoSkillsHeading,
-                "  " + SkillsPrompt.DirectiveWithoutSkills,
             ],
-            lines);   // nothing after the skills since 2026-09-26: no tool-group headings, no Also sent part
+            lines);   // nothing after the memory: no tool-group headings, no Also sent part (2026-09-26); the skills on their own tab since 2026-11-07
+
+        // The section stays in the prompt itself, so the Context tab's totals hold (2026-11-07).
+        Assert.Contains(SystemPromptSummary.PromptSections(Facts(memories: ["Their name is Chris."])), s => s.Heading == NoSkillsHeading);
     }
 
     [Fact]
@@ -551,8 +552,98 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal(" ", lines[2]);
         Assert.Equal(RuleLine("── Operating rules ── default", 2000), lines[3]);
         Assert.Equal("  " + Assistant.OperatingRules, lines[4]);
-        Assert.Contains(RuleLine("── Skills ── on, none installed", 2000), lines);
+        Assert.DoesNotContain(lines, l => l.StartsWith("── Skills", StringComparison.Ordinal));   // on the Skills tab since 2026-11-07
         Assert.DoesNotContain(lines, l => l.StartsWith("Request", StringComparison.Ordinal) || l.StartsWith("Opening", StringComparison.Ordinal) || l.StartsWith("Also sent", StringComparison.Ordinal));
+    }
+
+    // ── The Skills tab (2026-11-07, the user's ask) ─────────────────────────
+
+    /// <summary>A skill under a temp folder, so its <c>SKILL.md</c> path is the system's own spelling (the Mac's too).</summary>
+    private Skill TestSkill(string name, string description, SkillScope scope, string? warning = null) =>
+        new(name, description, scope, Path.Combine(_dir, scope.ToString(), name), warning);
+
+    [Fact]
+    public void SkillsTab_Pins()
+    {
+        Assert.Equal("Skills", SystemPromptSummary.SkillsTabTitle);
+        Assert.Equal("No skill installed: /skills adds one.", SystemPromptSummary.NoSkillsLine);
+        Assert.Equal("🔒 locked", SystemPromptSummary.SkillLockedNote);
+        Assert.Equal("⛔ disabled", SystemPromptSummary.SkillDisabledNote);
+    }
+
+    [Fact]
+    public void SkillsLines_NoneInstalled_TheHeadingAndTheLine()
+    {
+        Assert.Equal([NoSkillsHeading, "  " + SystemPromptSummary.NoSkillsLine], SystemPromptSummary.SkillsLines(Facts()));
+    }
+
+    [Fact]
+    public void SkillsLines_SkillsOff_OrToolsOff_TheHeadingAlone_WithItsReason()
+    {
+        var haiku = TestSkill("haiku", "Writes haiku.", SkillScope.Profile);
+        Assert.Equal(["Skills — off (agent skills is off)"], SystemPromptSummary.SkillsLines(Facts(skills: false, catalog: [haiku])));
+        Assert.Equal(["Skills — not included (LLM offer tools is off)"], SystemPromptSummary.SkillsLines(Facts(tools: false, catalog: [haiku])));
+    }
+
+    [Fact]
+    public void SkillsLines_EachSkill_ItsScopeAndState_ThenDescriptionPathAndWarning()
+    {
+        var haiku = TestSkill("haiku", "Writes haiku.", SkillScope.Profile);
+        var notes = TestSkill("notes", "Keeps notes.", SkillScope.Global) with { Locked = true };
+        var deploy = TestSkill("deploy", "Deploys the site.", SkillScope.External, warning: "  name differs from its folder  ");
+        var old = TestSkill("old", "Retired.", SkillScope.Profile) with { Disabled = true, Locked = true };
+
+        string[] lines = SystemPromptSummary.SkillsLines(Facts(catalog: [haiku, notes, deploy, old]) with { GlobalSkills = false }).ToArray();
+
+        Assert.Equal(
+            [
+                "Skills — on, 4 skills (1 external, global off)",
+                "haiku — profile",
+                "  Writes haiku.",
+                "  " + haiku.FilePath,
+                "notes — global, " + SystemPromptSummary.SkillLockedNote,
+                "  Keeps notes.",
+                "  " + notes.FilePath,
+                "deploy — external",
+                "  Deploys the site.",
+                "  " + deploy.FilePath,
+                "  name differs from its folder",
+                "old — profile, " + SystemPromptSummary.SkillDisabledNote,
+                "  Retired.",
+                "  " + old.FilePath,
+            ],
+            lines);
+        Assert.EndsWith(Path.Combine("haiku", SkillCatalog.FileName), haiku.FilePath, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SkillsTab_RendersTheHeadingRule_ThenARulePerSkill()
+    {
+        var haiku = TestSkill("haiku", "Writes haiku.", SkillScope.Profile);
+        using var console = new TestConsole();
+        console.Profile.Width = 2000;
+        console.Write(SystemPromptSummary.SkillsTab(Facts(catalog: [haiku])));
+
+        string[] lines = console.Output.Split('\n');
+        Assert.Equal(RuleLine("── Skills ── on, 1 skill", 2000), lines[0]);
+        Assert.Equal(" ", lines[1]);
+        Assert.Equal(RuleLine("── haiku ── profile", 2000), lines[2]);
+        Assert.Equal("  Writes haiku.", lines[3]);
+        Assert.Equal("  " + haiku.FilePath, lines[4]);
+    }
+
+    [Fact]
+    public void SkillsTab_NoneInstalled_SaysHowToAddOne_AndOff_TheRuleAlone()
+    {
+        using var console = new TestConsole();
+        console.Profile.Width = 2000;
+        console.Write(SystemPromptSummary.SkillsTab(Facts()));
+        Assert.Equal([RuleLine("── Skills ── on, none installed", 2000), "  " + SystemPromptSummary.NoSkillsLine], console.Output.TrimEnd('\n').Split('\n'));
+
+        using var off = new TestConsole();
+        off.Profile.Width = 2000;
+        off.Write(SystemPromptSummary.SkillsTab(Facts(skills: false)));
+        Assert.Equal([RuleLine("── Skills ── off (agent skills is off)", 2000)], off.Output.TrimEnd('\n').Split('\n'));
     }
 
     /// <summary>A heading rule as a console <paramref name="width"/> cells wide prints it (2026-10-03): <paramref name="text"/>, a space, the rule to the edge.</summary>

@@ -52,8 +52,8 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// What the <c>/usage</c> Context tab shows (2026-11-01), read as the next turn would build it and with none of a turn's side effects:
-    /// the system prompt's sections (<see cref="SystemPromptSummary.PromptSections"/>, what <c>/sys</c> shows), the offered tool groups
-    /// (<see cref="ToolGroups"/>, <c>/sys</c>' Tools tab), and the history's breakdown with the thinking the next request sends back
+    /// the system prompt's sections (<see cref="SystemPromptSummary.PromptSections"/>, what the Prompt and Skills tabs show), the offered tool groups
+    /// (<see cref="ToolGroups"/>, the Tools tab), and the history's breakdown with the thinking the next request sends back
     /// (none of an earlier turn's unless <c>LLM preserve thinking</c> is on, since the next request starts a turn). While a reply runs the
     /// history is the turn's own list, appended to without a lock, so it is not read (2026-11-02, the review): the tab shows the main
     /// assistant's <see cref="Assistant.LastSentEstimate"/> (marked as last sent), else works the history out from the server's count. The
@@ -113,12 +113,19 @@ internal sealed partial class ChatScreen
             .Select(s => (s.Label, (long)(s.Body.Length / ConversationCompactor.CharsPerToken)))
             .ToList();
 
-    /// <summary>The tab <c>/usage</c>'s argument names: 0 for none (Statistics), <see cref="UsageText.ContextTabIndex"/> for <c>context</c>, null for anything else.</summary>
+    /// <summary>
+    /// The tab <c>/usage</c>'s argument names: 0 for none (Statistics), <see cref="UsageText.ContextTabIndex"/> for <c>context</c>, and since
+    /// 2026-11-07 (the user's ask: /sys' tabs folded in) the Prompt, Tools and Skills tabs for <c>prompt</c>, <c>tools</c> and <c>skills</c>;
+    /// null for anything else.
+    /// </summary>
     internal static int? UsageTab(string args)
     {
         string word = args.Trim();
         return word.Length == 0 ? 0
             : string.Equals(word, UsageText.ContextWord, StringComparison.OrdinalIgnoreCase) ? UsageText.ContextTabIndex
+            : string.Equals(word, UsageText.PromptWord, StringComparison.OrdinalIgnoreCase) ? UsageText.PromptTabIndex
+            : string.Equals(word, UsageText.ToolsWord, StringComparison.OrdinalIgnoreCase) ? UsageText.ToolsTabIndex
+            : string.Equals(word, UsageText.SkillsWord, StringComparison.OrdinalIgnoreCase) ? UsageText.SkillsTabIndex
             : null;
     }
 }

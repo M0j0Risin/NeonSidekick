@@ -357,7 +357,7 @@ public static class HelpCommands
             new("/profile rename <name> <new-name>", "Rename a profile."),
             new("/profile reset [<name>] [--all]", "Reset a profile to the defaults (the loaded one when no name is given), keeping its URLs, paths and keys; `--all` resets those too."),
             new("/profile push|pull <name>", "Copy every setting but the working directory to another profile (`push`) or from it into this one (`pull`). A pull clears the conversation; a section pulled (the forms below) applies at once, like a settings change, and the conversation stays."),
-            new("/profile push|pull keys <name>", "Copy the six API keys (*LLM API key*, *Anthropic API key*, *OpenAI API key*, *Home Assistant API key*, *YouTube API key*, *Web Brave Search API key*) to another profile or from it, after a yes. They are mirrored: a key the source lacks is cleared in the target. Only saved keys are copied, encrypted ones as they are; a key set only by a `NEONSIDEKICK_*` variable is not."),
+            new("/profile push|pull keys <name>", "Copy the six API keys (*LLM API key*, *Anthropic API key*, *OpenAI API key*, *Home Assistant API key*, *YouTube API key*, *Web metasearch Brave API key*) to another profile or from it, after a yes. They are mirrored: a key the source lacks is cleared in the target. Only saved keys are copied, encrypted ones as they are; a key set only by a `NEONSIDEKICK_*` variable is not."),
             new("/profile push|pull servers <name>", "Copy the server settings to another profile or from it, after a yes, replacing the target's. They are which server, model and reasoning (*LLM server scan mode*, *LLM URL*, *LLM model*, *LLM reasoning*), *LLM reasoning estimate*, every model's sampling overrides and *LLM sampling from Hugging Face*, and the rows of the Embedded, Docker, Anthropic and OpenAI tabs but the API keys and *Embedded download mode*. The saved values are copied, not a `--url` or variable that overrides only this run; installed embedded models are shared by every profile already."),
             new("/profile push|pull homeassistant <name>", "Copy the Home Assistant settings, the *Home Assistant API key* included, and the home bar (items, sides, names, emoji) to another profile or from it, after a yes, replacing the target's. Safe services come too; the saved values are copied, not a variable's."),
             new("/profile push|pull toolbar <name>", "Copy the toolbar's setup (its items, their order and sides, and what a bare `/toolbar` brings back) to another profile or from it, after a yes, replacing the target's."),
@@ -391,7 +391,8 @@ public static class HelpCommands
         ]),
         new("/queue",
         [
-            new("/queue [clear]", "List and prune the messages queued during a reply; Enter or Delete removes one (it asks); **⊠ clear all** (`c`) drops them all, and `/queue clear` does so without the pane. **mode: …** (`m`) and **cancel: …** (`k`) on the title row step *Queue mode* and *Queue cancel mode*, on the empty queue too. While the queue is held (*Queue cancel mode* `hold`, after a canceled reply), and always under *Queue mode* `manual`, **➤ send** (`s`) sends the next message now (under a reply, when it ends). The toolbar's ⏳ and Ctrl+Q open it; Ctrl+Alt+Q runs `/queue clear`."),
+            new("/queue [clear]", "List and prune the messages queued during a reply; Enter or Delete removes one (it asks); **⊠ clear all** (`c`) drops them all, and `/queue clear` does so without the pane. **mode: …** (`m`) and **cancel: …** (`k`) on the title row step *Queue mode* and *Queue cancel mode*, on the empty queue too. While the queue is held (*Queue cancel mode* `hold`, after a canceled reply), and always under *Queue mode* `manual`, **➤ send** (`s`) sends the next message now (under a reply, when it ends), and `/queue send` does so without the pane. The toolbar's ⏳ and Ctrl+Q open it; Ctrl+Alt+Q runs `/queue clear`."),
+            new("/queue send", "Send the next queued message now, as **➤ send** does: while the queue is held, or always under *Queue mode* `manual`; under a reply it goes when the reply ends. Otherwise the queue sends by itself and nothing is taken off it."),
             new("/queue mode automatic|manual|off", "Set *Queue mode*: `automatic` queues what you send during a reply and sends it when the reply ends, `manual` queues every message for **➤ send**, `off` keeps no list. Works while a reply runs."),
             new("/queue cancel hold|drain|empty", "Set *Queue cancel mode*, what a canceled reply does to the queue: `hold` keeps it until your next message has run, `drain` sends the next one at once, `empty` drops them all. Works while a reply runs."),
         ]),
@@ -497,7 +498,6 @@ public static class HelpCommands
         ]),
         new("/sys",
         [
-            new("/sys", "Show the system prompt and the tools sent to the model."),
             new("/sys persona [reset]", "Edit `persona.md` (the persona) in your editor, or reset it to the default."),
             new("/sys operata [reset]", "Edit `operata.md` (the operating rules) in your editor, or reset it to the default. A missing file is created with the rules in use now, the sentences for the tools that are on included."),
             new("/sys vocalia [reset]", "Edit `vocalia.md` (the spoken-reply directive, added last to every spoken reply; empty by default) in your editor, or remove it."),
@@ -559,8 +559,9 @@ public static class HelpCommands
         ]),
         new("/usage",
         [
-            new("/usage", "Show token usage and performance statistics; a `~` marks a reasoning count the app estimated (*LLM reasoning estimate*). Ctrl+U runs it too."),
+            new("/usage", "Show token usage and performance statistics; a `~` marks a reasoning count the app estimated (*LLM reasoning estimate*). Its other tabs show what fills the context, the system prompt, the tools and the skills. Ctrl+U runs it too."),
             new("/usage context", "Open it on the Context tab: what fills the context window (the system prompt, each tool group, the history, pictures and thinking) and, with the window known, what turning a switchable group off would save."),
+            new("/usage prompt|tools|skills", "Open it on the Prompt tab (the system message the next turn sends: persona, rules, project notes, memory, plan mode and the voice directive), the Tools tab (each tool it offers, grouped) or the Skills tab (each skill it offers with its scope, description and `SKILL.md` file, or why the skills are off)."),
         ]),
         new("/vault",
         [

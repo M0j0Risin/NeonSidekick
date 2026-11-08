@@ -79,7 +79,8 @@ public enum SlashCommand
     Cmd,
 
     /// <summary>
-    /// <c>/sys</c>: the system prompt the next turn sends and the tools it offers, in the info pane. Named <c>/sysprompt</c> until
+    /// <c>/sys</c>: the system prompt the next turn sends and the tools it offers, in the info pane, until 2026-11-07 (the user's ask: <c>/usage</c>'s
+    /// Prompt, Tools and Skills tabs since; a bare <c>/sys</c> is <see cref="ChatScreen.SysUsageError"/>). Named <c>/sysprompt</c> until
     /// 2026-09-21, when the retired short alias became the one word. Since 2026-10-09 (the user's ask) <c>/sys persona|operata|vocalia
     /// [reset]</c> edits or resets the three files the prompt is made from (and <c>copy &lt;profile&gt; [force]</c> copied them until 2026-10-10,
     /// <c>/profile push|pull persona|operata|vocalia &lt;name&gt; [overwrite]</c> since) — <c>/persona</c>,
@@ -544,7 +545,7 @@ public static class SlashCommands
             new("/read", "read text, PDF, Word or slides aloud"),
             new("/splash", "start over with the splash screen"),
             new("/stt", "toggle voice input and the wake word"),
-            new("/sys", "show or edit the system prompt"),
+            new("/sys", "edit the persona, rules or voice"),   // "show or edit the system prompt" until 2026-11-07, when /usage took the showing
             new("/terminal", "open a terminal in a folder"),
             new("/test", "benchmark the connected model"),
             new("/theme", "switch or export the color theme"),
@@ -555,7 +556,7 @@ public static class SlashCommands
             new("/tree", "show the working directory's tree"),
             new("/tts", "toggle speech output"),
             new(Updates.UpdateText.Word, "update the app from its GitHub releases"),
-            new("/usage", "token usage and what fills the context"),
+            new("/usage", "usage, context, prompt, tools, skills"),   // "token usage and what fills the context" until 2026-11-07 (/sys' tabs folded in)
             new("/vault", "show the Obsidian vault's tree"),
             new("/view", "view images, a folder of them, or a PDF"),
             new("/webui", "serve the chat to a browser"),
@@ -567,7 +568,7 @@ public static class SlashCommands
     /// <summary>
     /// The commands on <c>/help</c>'s <see cref="BasicTabTitle"/> tab (2026-09-27, the user's list): the everyday ones, so the
     /// first tab is a short list (it fit without scrolling until 2026-10-03, when <c>/about</c>, <c>/explore</c>, <c>/perfbar</c>,
-    /// <c>/stt</c>, <c>/toolbar</c>, <c>/tts</c> and <c>/wake</c> came over from the advanced tab, the user's pick; <c>/wake</c> folded into <c>/stt</c> on 2026-10-09; <c>/msgclear</c> came over on 2026-10-10 and <c>/avatar</c> on 2026-10-11, the user's picks; <c>/prompts</c> on 2026-10-13, offered in its review and kept; <c>/mark</c> and <c>/theme</c> on 2026-10-25, the user's pick; <c>/undo</c> beside <c>/rewind</c> on 2026-10-28, the user's pick; <c>/commands</c> on 2026-10-30, the custom commands plan). Every other command (<c>/log</c> among them) is on
+    /// <c>/stt</c>, <c>/toolbar</c>, <c>/tts</c> and <c>/wake</c> came over from the advanced tab, the user's pick; <c>/wake</c> folded into <c>/stt</c> on 2026-10-09; <c>/msgclear</c> came over on 2026-10-10 and <c>/avatar</c> on 2026-10-11, the user's picks; <c>/prompts</c> on 2026-10-13, offered in its review and kept; <c>/mark</c> and <c>/theme</c> on 2026-10-25, the user's pick; <c>/undo</c> beside <c>/rewind</c> on 2026-10-28, the user's pick; <c>/commands</c> on 2026-10-30, the custom commands plan; <c>/usage</c> on 2026-11-07, the user's pick, once it showed what the model is sent). Every other command (<c>/log</c> among them) is on
     /// <see cref="AdvancedTabTitle"/>. Only the pane is split: <see cref="HelpText"/>, <see cref="Completions"/> and
     /// <see cref="LabelWidth"/> stay the one A-to-Z list. Pinned.
     /// </summary>
@@ -575,7 +576,7 @@ public static class SlashCommands
     {
         "/about", "/avatar", "/clear", "/compact", "/copy", "/cwd", "/draft", "/exit", "/explore", "/help", "/mark", "/memory", "/model", "/msgclear", "/new", "/perfbar", "/profile",
         "/prompts", "/commands", "/queue", "/reasoning", "/remember", "/rename", "/rewind", "/server", "/sessions", "/settings", "/skills", "/stt", "/sys", "/terminal", "/theme", "/toolbar",
-        "/tools", "/tree", "/tts", "/undo",
+        "/tools", "/tree", "/tts", "/undo", "/usage",
     };
 
     /// <summary>Whether <paramref name="entry"/> is on the <see cref="BasicTabTitle"/> tab (<see cref="BasicCommands"/>).</summary>

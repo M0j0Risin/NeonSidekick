@@ -19,7 +19,7 @@ It's one app for research, IT and admin work (Active Directory, event logs, data
 * **Guardrails in code, not in the prompt:** databases are read-only by default, Active Directory always, and the shell police blocks harmful commands and paths outside the working folder, even under `yolo`.
 * **Set up without editing files:** it finds a server on your network, downloads a model or takes a key; wizards add databases, shares and remote computers, warning when an account could change data.
 * **Talk to it, or use your phone:** voice in and out, and the Web UI puts your phone in the same live session.
-* **No black box:** `/sys` shows the exact prompt and every tool, and the persona and operating rules are files you can edit.
+* **No black box:** `/usage` shows the exact prompt, every tool and every skill, and the persona and operating rules are files you can edit.
 
 <p align="center">
   <img src="assets/screenshots/screen_splash.png" alt="The model writing a Rust Hello World and then editing it: folded thinking and tool calls, the edit's highlighted diff, then its reply" width="50%">
@@ -251,8 +251,7 @@ Everything is set from panes; the highlighted row's description and default show
 | `/tools` | Ctrl+T | Which tools the model may use, and their options. |
 | `/skills` | Ctrl+Alt+S | Agent skills and self-learning. |
 | `/mcp` | Ctrl+Alt+D | External MCP servers. |
-| `/sys` | Ctrl+Y | What the model is sent. |
-| `/usage` | Ctrl+U | Speed and token statistics, and what fills the context. |
+| `/usage` | Ctrl+U | Speed and token statistics, what fills the context, and what the model is sent: the prompt, the tools and the skills. |
 
 A [command-line option](docs/COMMANDLINE.md) or an [environment variable](docs/ENVIRONMENT.md) can override a few settings for one launch.
 

@@ -57,6 +57,12 @@ public static class HomeBarText
     /// <summary>A show with nothing ever picked where the picker cannot open (under a reply, a chord in a pane). Pinned.</summary>
     public const string NothingPicked = "Nothing is on the home bar yet: /homebar edit chooses its rooms and devices";
 
+    /// <summary>
+    /// The picker's <c>bar: hidden</c> button pressed with nothing ever picked (2026-11-07, the user's ask: show/hide on the bar's page): the
+    /// picker is open already, so the notice points at its tabs, not <c>/homebar edit</c>; nothing is saved. Pinned.
+    /// </summary>
+    public const string NothingToShow = "Nothing to show yet: add rooms and devices from the other tabs";
+
     /// <summary>A <c>tap</c> or <c>show</c> naming nothing on the bar.</summary>
     public static string NotOnBar(string item) => $"'{item.Trim()}' is not on the home bar";
 

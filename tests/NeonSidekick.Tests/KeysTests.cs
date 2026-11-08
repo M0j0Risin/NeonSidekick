@@ -131,7 +131,7 @@ public class KeysTests
     [InlineData(ConsoleKey.T, '\x14', "/tools")]     // 2026-10-18, the user's pick (Ctrl+Alt+T until then; /toolbar before)
     [InlineData(ConsoleKey.U, '\x15', "/usage")]     // from Ctrl+Alt+G
     [InlineData(ConsoleKey.W, '\x17', "/webui browser")]   // 2026-10-18, the user's pick (/homebar until then)
-    [InlineData(ConsoleKey.Y, '\x19', "/sys")]       // from Ctrl+Alt+Y on 2026-10-03 (the user's ask)
+    // Ctrl+Y was /sys from 2026-10-03 (Ctrl+Alt+Y before) until 2026-11-07 (the user's pick): KeysTests.ShortcutLine_CtrlY_IsFree.
     [InlineData(ConsoleKey.Z, '\x1a', "/theme")]     // 2026-10-04 (the user's ask)
     public void ShortcutLine_ThePlainCtrlChords_AreTheirBareCommands_AndATypedLetterStaysALetter(ConsoleKey key, char control, string line)
     {
@@ -146,6 +146,15 @@ public class KeysTests
         Assert.Null(Keys.ShortcutLine(Keys.Char(char.ToLowerInvariant(key.ToString()[0]))));
         Assert.False(Keys.IsInterrupt(new ConsoleKeyInfo(control, key, shift: false, alt: false, control: true)));
         Assert.False(Keys.IsToolToggle(new ConsoleKeyInfo(control, key, shift: false, alt: false, control: true)));
+    }
+
+    /// <summary>Ctrl+Y is free since 2026-11-07 (the user's pick): it went with the bare <c>/sys</c>, whose pane is <c>/usage</c>'s tabs now; its EM is no character.</summary>
+    [Fact]
+    public void ShortcutLine_CtrlY_IsFree()
+    {
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\x19', ConsoleKey.Y, shift: false, alt: false, control: true)));
+        Assert.Null(Keys.ShortcutLine(Keys.Ctrl(ConsoleKey.Y)));
+        Assert.Equal("/sessions", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.Y)));   // Ctrl+Alt+Y stays
     }
 
     /// <summary>

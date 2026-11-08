@@ -538,13 +538,11 @@ internal sealed partial class ChatScreen
             case SlashCommand.Help:
                 await _info.ShowAsync(InfoPane.Title, HelpTabs(), 0, cancellationToken).ConfigureAwait(false);
                 break;
-            case SlashCommand.Sys when args.Trim().Length > 0:
+            case SlashCommand.Sys:
                 // /sys persona|operata|vocalia (2026-10-09; /persona and its siblings until then, panes the same way): a file the
                 // running turn's prompt was read from already; the yes/no is a pane and every line goes through the flow sink.
+                // A bare /sys is its usage error since 2026-11-07 (the user's ask): its tabs are /usage's now.
                 await HandleSysFileAsync(args, cancellationToken).ConfigureAwait(false);
-                break;
-            case SlashCommand.Sys:
-                await _info.ShowAsync(SystemPromptSummary.Label, SysPromptTabs(), 0, cancellationToken).ConfigureAwait(false);
                 break;
             case SlashCommand.Usage when UsageTab(args) is { } usageTab:
                 await _info.ShowAsync(UsageText.Label, UsageTabs(), usageTab, cancellationToken).ConfigureAwait(false);
@@ -789,7 +787,7 @@ internal sealed partial class ChatScreen
 
                 break;
             case SlashCommand.Queue:
-                HandleQueueArgs(args);
+                HandleQueueArgs(args, underReply: true);
                 break;
             case SlashCommand.Commands:
                 // /commands save under a reply (2026-10-31, review P8-2): on the turn task, so the history read is the turn's own.

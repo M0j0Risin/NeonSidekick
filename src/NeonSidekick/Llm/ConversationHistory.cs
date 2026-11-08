@@ -314,7 +314,7 @@ public sealed class ConversationHistory
 
     private readonly List<ChatMessage> _messages = new();
     // Kept by Recount after every write that can change it, so a reader on another task (the
-    // /sys pane opened mid-turn) gets a number and never walks the list the turn appends to.
+    // /usage pane opened mid-turn) gets a number and never walks the list the turn appends to.
     private volatile int _turnCount;
     // The skills loaded now (2026-10-12, /skills › Offered › loaded), kept the same way as an immutable list a pane on the watcher task
     // reads whole; Replace holds the recount until its list is in, so no reader sees a half-built one.

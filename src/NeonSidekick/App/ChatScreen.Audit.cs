@@ -19,7 +19,7 @@ namespace NeonSidekick.App;
 /// </summary>
 internal sealed partial class ChatScreen
 {
-    /// <summary>The /sys Tools tab's name for the group that holds <c>present_audit</c>.</summary>
+    /// <summary>The /usage Tools tab's name for the group that holds <c>present_audit</c>.</summary>
     public const string AuditGroupName = "Audit";
 
     /// <summary>The strip with the audit's glyph and pass ahead of the rest while a pass runs (<c>🔎 2/5</c>). Pinned.</summary>

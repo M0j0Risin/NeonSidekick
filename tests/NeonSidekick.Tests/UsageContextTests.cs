@@ -307,6 +307,13 @@ public class UsageContextTests
     [InlineData("", 0)]
     [InlineData("context", UsageText.ContextTabIndex)]
     [InlineData(" Context ", UsageText.ContextTabIndex)]
+    [InlineData("prompt", UsageText.PromptTabIndex)]   // the three from /sys (2026-11-07, the user's ask)
+    [InlineData(" Prompt ", UsageText.PromptTabIndex)]
+    [InlineData("tools", UsageText.ToolsTabIndex)]
+    [InlineData("TOOLS", UsageText.ToolsTabIndex)]
+    [InlineData("skills", UsageText.SkillsTabIndex)]
+    [InlineData(" Skills", UsageText.SkillsTabIndex)]
+    [InlineData("persona", null)]
     [InlineData("reset", null)]
     public void TheArgument_NamesTheTab(string args, int? tab)
     {

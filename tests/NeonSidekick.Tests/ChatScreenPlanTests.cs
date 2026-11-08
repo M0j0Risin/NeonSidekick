@@ -263,7 +263,8 @@ public partial class ChatScreenTests
         _chat.EnqueueText("Saved; approve with /plan approve.");
         _chat.EnqueueText("Done.");
         PushLine("/plan Add a guide");
-        PushLine("/sys");
+        PushLine("/usage prompt");   // /sys' Prompt tab until 2026-11-07
+        PushLine("/usage tools");
         PushLine("/plan approve --fresh");
         PushLine("/exit");
 

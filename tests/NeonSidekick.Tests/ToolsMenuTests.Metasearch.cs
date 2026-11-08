@@ -52,7 +52,7 @@ public partial class ToolsMenuTests
         Assert.Equal("Metasearch", SettingsMenu.ToolsMenuSections[ToolsText.MenuIndex(ToolsText.WebTabTitle)].Single(s => s.First == SettingsField.WebMetasearchEngines).Title);
         Assert.Equal("Web metasearch engines", SettingsMenu.FieldName(SettingsField.WebMetasearchEngines));
         Assert.Equal("Web metasearch safe search", SettingsMenu.FieldName(SettingsField.WebMetasearchSafeSearch));
-        Assert.Equal("Web Brave Search API key", SettingsMenu.FieldName(SettingsField.WebMetasearchBraveApiKey));
+        Assert.Equal("Web metasearch Brave API key", SettingsMenu.FieldName(SettingsField.WebMetasearchBraveApiKey));   // the user's name (2026-11-07): "Web Brave Search API key" until then
     }
 
     [Theory]

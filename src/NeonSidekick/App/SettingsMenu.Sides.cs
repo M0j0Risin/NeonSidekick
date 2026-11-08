@@ -9,7 +9,8 @@ namespace NeonSidekick.App;
 /// left in their order, a heading, the items pinned right in theirs (<see cref="ItemOrder.Sided"/>). Shift+←/→ pins the cursor's item
 /// to the other side (to the right group's start, the left group's end: next to the gap); Shift+↑↓ moves it within its group,
 /// crossing into the other at the group's edge; Shift+Home/End to the top or the bottom of its group. The checks, Delete and the
-/// title row's buttons are the checklists' as before; <c>⊡ default</c> puts back the sides with the checks and the order. The rows'
+/// title row's buttons are the checklists' as before; <c>⊡ default</c> puts back the sides with the checks and the order. Since 2026-11-07
+/// (the user's ask) the Tool bar's and the Performance bar's end with <see cref="ShowBarButton"/>, which hides or shows the bar. The rows'
 /// helpers also lay out an order in three groups (later on 2026-10-13, the home bar's On the bar tab, <see cref="PinnedCenterHeading"/>),
 /// and the Performance bar's checklist is one in three (later still that day, <see cref="PerfBarChecklist"/>): Shift+←/→ a group over.
 /// </summary>
@@ -103,7 +104,9 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// What a sided checklist reads and writes: the field it saves under, its ids and labels, and its three saved lists; the ids that
-    /// are always on and the notice when one is asked to go (2026-10-13, the hint bar's spinner).
+    /// are always on and the notice when one is asked to go (2026-10-13, the hint bar's spinner). <paramref name="Shown"/> and
+    /// <paramref name="FlipShown"/> (2026-11-07, the user's ask) put <see cref="ShowBarButton"/> on the title row: whether the bar shows, and
+    /// the bare command's toggle; null on the Status bar, whose spinner is always on, so it can't be hidden.
     /// </summary>
     private sealed record SidedChecklist(
         SettingsField Field,
@@ -121,7 +124,9 @@ internal sealed partial class SettingsMenu
         string? FixedNotice = null,
         bool Dividers = false,
         bool Look = false,
-        Func<SettingsMenu, string, bool>? Here = null);
+        Func<SettingsMenu, string, bool>? Here = null,
+        Func<AppSettingsData, bool>? Shown = null,
+        Action<AppSettingsData>? FlipShown = null);
 
     /// <summary>
     /// Which Tool bar items show here (2026-10-22, the user's ask): <see cref="App.ToolbarItems.IsHere(string)"/> unless the screen hands its
@@ -146,7 +151,15 @@ internal sealed partial class SettingsMenu
             && App.ToolbarItems.SaveOrder(App.ToolbarItems.Sides(d.ToolbarOrder, d.ToolbarRight).All) is null
             && App.ToolbarItems.SaveRight(App.ToolbarItems.ResolveRight(d.ToolbarRight)) is null,
         Dividers: true,
-        Here: (menu, id) => menu.ToolbarItemHere(id));   // a Mac lists no 🧩 or 📅 (2026-10-22)
+        Here: (menu, id) => menu.ToolbarItemHere(id),   // a Mac lists no 🧩 or 📅 (2026-10-22)
+        Shown: d => App.ToolbarItems.Resolve(d.ToolbarItems).Count > 0,
+        FlipShown: d =>
+        {
+            // /toolbar's own toggle (2026-11-07): never null for no word.
+            var next = App.ToolbarItems.Toggle("", d.ToolbarItems, d.ToolbarLastItems)!.Value;
+            d.ToolbarItems = next.Items;
+            d.ToolbarLastItems = next.LastItems;
+        });
 
     /// <summary>The Status bar's checklist (<see cref="EditStatusBarAsync"/>; the Hint bar's until 2026-10-14).</summary>
     private static readonly SidedChecklist StatusBarChecklist = new(
@@ -184,12 +197,22 @@ internal sealed partial class SettingsMenu
         d => PerfBarItems.Resolve(d.PerformanceBarItems).SetEquals(PerfBarItems.Defaults)
             && PerfBarItems.Sides(d.PerformanceBarOrder, d.PerformanceBarLeft, d.PerformanceBarRight) is var sides
             && sides.Left.Count == 0 && sides.Right.Count == 0 && PerfBarItems.SaveOrder(sides.All) is null,
-        Look: true);
+        Look: true,
+        Shown: d => PerfBarItems.Resolve(d.PerformanceBarItems).Count > 0,
+        FlipShown: d =>
+        {
+            // /perfbar's own toggle (2026-11-07): never null for no word; the look comes back as it was.
+            var next = PerfBarMode.Toggle("", d.PerformanceBarItems, d.PerformanceBarLastItems, d.PerformanceBarLook)!;
+            d.PerformanceBarItems = next.Items;
+            d.PerformanceBarLastItems = next.LastItems;
+            d.PerformanceBarLook = next.Look;
+        });
 
     /// <summary>
     /// A checklist in two groups (or three, the performance bar's) under the settings list (2026-10-13): Enter or Space flips the cursor's item and saves at once, the
     /// move keys and Shift+←/→ (<see cref="MenuPage.Sides"/>) reorder it and save, Delete unchecks it, the title row's select all,
-    /// select none and default; re-shown until ESC, the bar redrawing under it. True when anything changed.
+    /// select none and default, the tool bar's divider or the performance bar's look, and since 2026-11-07 (the user's ask) the show/hide
+    /// button last (<see cref="ShowBarButton"/>, <c>h</c>); re-shown until ESC, the bar redrawing under it. True when anything changed.
     /// </summary>
     private async Task<bool> EditSidedChecklistAsync(SidedChecklist list, CancellationToken cancellationToken)
     {
@@ -208,9 +231,14 @@ internal sealed partial class SettingsMenu
             var all = sides.All;
             var (rows, headings) = SidedRows(sides, id => list.Label(id, on.Contains(id)));
             var page = new MenuPage(Crumb(FieldName(list.Field)), rows, list.Hint) { SpaceToggles = true, Headings = headings };
-            var buttons = list.Dividers ? DividerChecklistButtons
+            IReadOnlyList<MenuButton> buttons = list.Dividers ? DividerChecklistButtons
                 : list.Look ? [.. DefaultChecklistButtons, new(PerfBarMode.LookButton(PerfBarMode.Parse(saved.PerformanceBarLook)), PerfBarMode.LookKey)]
                 : DefaultChecklistButtons;
+            if (list.Shown is { } isShown)
+            {
+                buttons = [.. buttons, new(ShowBarButton(isShown(saved)), ShowBarKey)];   // 2026-11-07: last, index ShowBarIndex
+            }
+
             var picked = await PickSidedChecklistAsync(page, SidedRowOf(sides, Math.Clamp(index, 0, all.Count - 1)), buttons, cancellationToken).ConfigureAwait(false);
             if (picked is not { } pick)
             {
@@ -238,6 +266,14 @@ internal sealed partial class SettingsMenu
             {
                 // The look button (2026-10-14, the user's ask, the Queue pane's mode button): the next look, saved with the row's notice.
                 Apply(list.Field, d => d.PerformanceBarLook = PerfBarMode.Name(PerfBarMode.Next(PerfBarMode.Parse(d.PerformanceBarLook))));
+                changed = true;
+                continue;
+            }
+
+            if (pick.Button == ShowBarIndex && list.FlipShown is { } flip)
+            {
+                // The show/hide button (2026-11-07, the user's ask): the bare command's toggle, so hiding keeps the items; the row's notice.
+                Apply(list.Field, flip);
                 changed = true;
                 continue;
             }

@@ -417,12 +417,14 @@ public sealed class AppSettingsData
     /// What the toolbar under the hint row shows (2026-09-21, the user's ask; a checklist since 2026-09-29, the user's
     /// ask, in place of the <c>ShowToolbar</c> switch — a saved <c>false</c> there is dropped as any retired key, so the
     /// row comes back once): ids from <see cref="App.ToolbarItems.Names"/>. The pane glyphs sit at its left (a
-    /// double-click opens <c>/settings</c>, <c>/tools</c>, <c>/mcp</c>, <c>/skills</c>, <c>/sys</c>, <c>/sessions</c>,
+    /// double-click opens <c>/settings</c>, <c>/tools</c>, <c>/mcp</c>, <c>/skills</c>, <c>/sessions</c>,
     /// <c>/usage</c> (📊, since 2026-09-29), then 💾 <c>/memory</c> while <see cref="Memory"/> is on, the lock
     /// <c>/tools shell allowed</c> (<c>/cmdlist</c> until 2026-10-09) that follows <see cref="ShellCommandPolicy"/>, and 👮 while <see cref="ShellPolice"/>
     /// is on, 🥷 while it is off (2026-10-02) — the lock since later that day, the disk and the officer since 2026-09-22), the working directory in force
-    /// (<c>/cwd browse</c>) at its right. Null is <see cref="App.ToolbarItems.Defaults"/> — Settings, Tools, Skills, Memory, Shell
-    /// allowed commands, Shell police, the Shell, Files, Image (2026-10-10) and Web switches and the path since 2026-10-05 (the user's pick; the last
+    /// (<c>/cwd browse</c>) at its right. Null is <see cref="App.ToolbarItems.Defaults"/> — Settings, the Web UI, Tools, Skills, Commands, Usage, Memory, Saved prompts, Queue, Ask,
+    /// Shell allowed commands, Shell police, the Shell, Files, Image and Web switches and the path since 2026-11-07 (the user's ask: Commands,
+    /// Usage and Ask added; 🎭 <c>/sys</c> retired the same day); Settings, Tools, Skills, Memory, Shell
+    /// allowed commands, Shell police, the Shell, Files, Image (2026-10-10) and Web switches and the path from 2026-10-05 (the user's pick; the last
     /// seven alone from 2026-10-03; Shell allowed commands,
     /// Shell police and the path from 2026-10-02; Settings, Tools, Skills, Sessions and the path from later on 2026-09-29,
     /// every item before); an empty list draws no row at all.
@@ -3145,7 +3147,7 @@ public sealed class AppSettingsData
     public string WebMetasearchSafeSearch { get; set; } = Web.BuiltInMetaSearch.DefaultSafeSearch;
 
     /// <summary>
-    /// A Brave Search API key (<c>Web Brave Search API key</c>, 2026-11-07, the user's ask): while one is set, the metasearch's <c>brave</c> row asks the API
+    /// A Brave Search API key (<c>Web metasearch Brave API key</c>, 2026-11-07, the user's ask): while one is set, the metasearch's <c>brave</c> row asks the API
     /// (through <see cref="Web.BuiltInMetaSearch"/>) instead of reading Brave's results page, which can refuse a client; empty keeps the page.
     /// Kept encrypted with DPAPI as <see cref="YouTubeApiKey"/> is, sent only to api.search.brave.com, in the <c>X-Subscription-Token</c> header
     /// (never in a URL, and left behind by a redirect to another site). Copied by <c>/profile push|pull keys</c> and kept by a plain

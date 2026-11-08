@@ -14,7 +14,7 @@ using Spectre.Console.Rendering;
 namespace NeonSidekick.App;
 
 /// <summary>
-/// What <c>/sys</c>' Prompt tab shows: the live state a turn's system message is built from, read the way
+/// What <c>/usage</c>' Prompt and Skills tabs show: the live state a turn's system message is built from, read the way
 /// <see cref="ChatScreen.PrepareTurn"/> and <see cref="Assistant.RunTurnAsync"/> read it.
 /// </summary>
 /// <param name="Persona">The <c>persona.md</c> text, null for the default persona.</param>
@@ -340,7 +340,7 @@ public sealed record ToolGroup(string Name, string Note, IReadOnlyList<AIFunctio
 }
 
 /// <summary>
-/// The <c>/sys</c> content: pure builders with pinned wording over <see cref="SystemPromptFacts"/>
+/// The system prompt's content on <c>/usage</c>' Prompt, Tools and Skills tabs (<c>/sys</c>' own pane until 2026-11-07): pure builders with pinned wording over <see cref="SystemPromptFacts"/>
 /// and the tool lists. The Prompt tab is the system message the next turn sends, section by section
 /// under a status heading, in the order <see cref="Assistant.SystemPrompt(bool, IReadOnlyList{string}, string, string, string)"/>
 /// joins them — the bodies of the sections marked in the prompt, joined by a blank line, ARE that
@@ -355,12 +355,12 @@ public sealed record ToolGroup(string Name, string Note, IReadOnlyList<AIFunctio
 /// </summary>
 public static class SystemPromptSummary
 {
-    /// <summary>The info pane's strip label: the toolbar's glyph, then the name (the glyph since later on 2026-09-21).</summary>
-    public const string Label = ChatScreen.SysToolGlyph + " System prompt";
-
     /// <summary>The tab titles.</summary>
     public const string PromptTabTitle = "Prompt";
     public const string ToolsTabTitle = "Tools";
+
+    /// <summary>The Skills tab's title (2026-11-07, the user's ask: the catalog's own tab on <c>/usage</c>).</summary>
+    public const string SkillsTabTitle = "Skills";
 
     /// <summary>The tail of the Memory group while the setting <c>Memory mode</c> is disabled (2026-10-04; <c>memory is off</c> until then). Pinned.</summary>
     public const string MemoryOffSuffix = "memory mode is off";
@@ -562,33 +562,7 @@ public static class SystemPromptSummary
         }
 
         // The skills block (2026-09-16): after the memory section, only with tools to load one.
-        if (!facts.SkillsEnabled)
-        {
-            sections.Add(new(SkillsLabel, $"off ({SkillsOffSuffix})", ""));
-        }
-        else if (!facts.ToolsEnabled)
-        {
-            sections.Add(new(SkillsLabel, $"not included ({ToolsOffSuffix})", ""));
-        }
-        else
-        {
-            var skills = facts.Skills ?? [];
-            int external = skills.Count(s => s.Scope == SkillScope.External);
-            var notes = new List<string>(2);
-            if (external > 0)
-            {
-                notes.Add($"{external.ToString(CultureInfo.InvariantCulture)} external");
-            }
-
-            if (!facts.GlobalSkills)
-            {
-                notes.Add(GlobalOffSuffix);
-            }
-
-            string count = (skills.Count == 0 ? "none installed" : skills.Count == 1 ? "1 skill" : $"{skills.Count.ToString(CultureInfo.InvariantCulture)} skills")
-                + (notes.Count > 0 ? $" ({string.Join(", ", notes)})" : "");
-            sections.Add(new(SkillsLabel, $"on, {count}", SkillsPrompt.Section(skills, facts.GlobalSkills)));
-        }
+        sections.Add(new(SkillsLabel, SkillsStatus(facts), facts.SkillsEnabled && facts.ToolsEnabled ? SkillsPrompt.Section(facts.Skills ?? [], facts.GlobalSkills) : ""));
 
         // Plan mode's directive only while planning (2026-09-26), where the prompt carries it: after the skills, ahead of the voice.
         if (facts.ToolsEnabled && !string.IsNullOrWhiteSpace(facts.PlanDirective))
@@ -605,6 +579,41 @@ public static class SystemPromptSummary
         }
 
         return sections;
+    }
+
+    /// <summary>
+    /// The Skills section's status: <c>off (agent skills is off)</c>, <c>not included (LLM offer tools is off)</c>, or <c>on, 2 skills (1 external,
+    /// global off)</c>. Out of <see cref="PromptSections"/> on 2026-11-07 so the Skills tab's heading says the same (the user's ask: skills got a tab).
+    /// </summary>
+    public static string SkillsStatus(SystemPromptFacts facts)
+    {
+        ArgumentNullException.ThrowIfNull(facts);
+        if (!facts.SkillsEnabled)
+        {
+            return $"off ({SkillsOffSuffix})";
+        }
+
+        if (!facts.ToolsEnabled)
+        {
+            return $"not included ({ToolsOffSuffix})";
+        }
+
+        var skills = facts.Skills ?? [];
+        int external = skills.Count(s => s.Scope == SkillScope.External);
+        var notes = new List<string>(2);
+        if (external > 0)
+        {
+            notes.Add($"{external.ToString(CultureInfo.InvariantCulture)} external");
+        }
+
+        if (!facts.GlobalSkills)
+        {
+            notes.Add(GlobalOffSuffix);
+        }
+
+        string count = (skills.Count == 0 ? "none installed" : skills.Count == 1 ? "1 skill" : $"{skills.Count.ToString(CultureInfo.InvariantCulture)} skills")
+            + (notes.Count > 0 ? $" ({string.Join(", ", notes)})" : "");
+        return $"on, {count}";
     }
 
     /// <summary>The system message the next turn sends for <paramref name="facts"/>: the Prompt tab's sections, joined.</summary>
@@ -677,6 +686,13 @@ public static class SystemPromptSummary
     private const string SkillsLabel = "Skills";
 
     /// <summary>
+    /// The sections the Prompt tab shows: <see cref="PromptSections"/> without the skills catalog, which has had the Skills tab to itself since
+    /// 2026-11-07 (the user's ask). <see cref="PromptSections"/> keeps it: the Context tab's prompt count and <see cref="SystemPrompt"/>'s test add it in.
+    /// </summary>
+    private static IEnumerable<SystemPromptSection> PromptTabSections(SystemPromptFacts facts) =>
+        PromptSections(facts).Where(section => section.Label != SkillsLabel);
+
+    /// <summary>
     /// The Prompt tab: every section's heading as a rule (<see cref="SectionRule"/>, 2026-10-03, the user's ask: the
     /// Tools tab's look) — its label, then its status dim between two runs of the rule — and, when it has one, its text
     /// <see cref="BodyIndent"/> cells in under it.
@@ -684,7 +700,7 @@ public static class SystemPromptSummary
     public static IRenderable PromptTab(SystemPromptFacts facts)
     {
         var rows = new List<IRenderable>();
-        foreach (var section in PromptSections(facts))
+        foreach (var section in PromptTabSections(facts))
         {
             rows.Add(new SectionRule(SectionRule.Markup(section.Label, note: section.Status)));
             if (section.Body.Length > 0)
@@ -699,10 +715,10 @@ public static class SystemPromptSummary
         return new Rows(rows);
     }
 
-    /// <summary>The Prompt tab as plain lines, for a console without the pane.</summary>
+    /// <summary>The Prompt tab as plain lines, for a console without the pane (the skills catalog under <see cref="SkillsLines"/> since 2026-11-07).</summary>
     public static IEnumerable<string> PromptLines(SystemPromptFacts facts)
     {
-        foreach (var section in PromptSections(facts))
+        foreach (var section in PromptTabSections(facts))
         {
             yield return section.Heading;
             if (section.Body.Length > 0)
@@ -711,6 +727,91 @@ public static class SystemPromptSummary
                 {
                     yield return "  " + line;
                 }
+            }
+        }
+    }
+
+    // ── The Skills tab ──────────────────────────────────────────────────────
+
+    /// <summary>The Skills tab's body when the catalog is on and empty (2026-11-07). Pinned.</summary>
+    public const string NoSkillsLine = "No skill installed: /skills adds one.";
+
+    /// <summary>A locked skill's note on its rule (2026-11-07): the glyph of <c>/skills</c> and one word, never <see cref="SkillRecordText.LockedFooter"/>'s instructions. Pinned.</summary>
+    public const string SkillLockedNote = SkillRecordText.LockGlyph + " locked";
+
+    /// <summary>A disabled skill's note on its rule (2026-11-07), as <see cref="SkillLockedNote"/>. Pinned.</summary>
+    public const string SkillDisabledNote = SkillRecordText.DisabledGlyph + " disabled";
+
+    /// <summary>
+    /// The note on one skill's rule (2026-11-07): its scope (<see cref="SkillScopes.Name"/>), then <see cref="SkillDisabledNote"/> or
+    /// <see cref="SkillLockedNote"/>; disabled says the lock too, as the catalog's tags do. The turn's catalog holds no disabled skill
+    /// (<see cref="SkillCatalog.Skills"/>), so that note is for a list that does. Pinned.
+    /// </summary>
+    public static string SkillNote(Skill skill)
+    {
+        ArgumentNullException.ThrowIfNull(skill);
+        string scope = SkillScopes.Name(skill.Scope);
+        return skill.Disabled ? scope + ", " + SkillDisabledNote : skill.Locked ? scope + ", " + SkillLockedNote : scope;
+    }
+
+    /// <summary>The body under one skill's rule (2026-11-07): the description, the <c>SKILL.md</c> path, and the loader's warning when there is one.</summary>
+    private static IEnumerable<string> SkillBody(Skill skill)
+    {
+        yield return skill.Description;
+        yield return skill.FilePath;
+        if (!string.IsNullOrWhiteSpace(skill.Warning))
+        {
+            yield return skill.Warning.Trim();
+        }
+    }
+
+    /// <summary>The skills the tab lists: the turn's own catalog (<see cref="SystemPromptFacts.Skills"/>), and none while the block is not sent.</summary>
+    private static IReadOnlyList<Skill> SkillsShown(SystemPromptFacts facts) =>
+        facts.SkillsEnabled && facts.ToolsEnabled ? facts.Skills ?? [] : [];
+
+    /// <summary>
+    /// The Skills tab (2026-11-07, the user's ask: the catalog out of the Prompt tab, with more to say): the section's own heading and status
+    /// (<see cref="SkillsStatus"/>), then one rule per skill the next turn offers (its name, then <see cref="SkillNote"/>) over its
+    /// description, its <c>SKILL.md</c> path and any warning. A shadowed skill is never sent, so it is not here; <c>/skills</c> lists it.
+    /// </summary>
+    public static IRenderable SkillsTab(SystemPromptFacts facts)
+    {
+        ArgumentNullException.ThrowIfNull(facts);
+        var rows = new List<IRenderable> { new SectionRule(SectionRule.Markup(SkillsLabel, note: SkillsStatus(facts))) };
+        var skills = SkillsShown(facts);
+        if (facts.SkillsEnabled && facts.ToolsEnabled && skills.Count == 0)
+        {
+            rows.Add(new Indented(new Text(NoSkillsLine, Theme.DimText), BodyIndent));
+        }
+
+        foreach (var skill in skills)
+        {
+            // A space, not an empty Text: Rows adds a line break only after a child that rendered something.
+            rows.Add(new Text(" "));
+            rows.Add(new SectionRule(SectionRule.Markup(skill.Name, note: SkillNote(skill))));
+            rows.Add(new Indented(new Text(string.Join('\n', SkillBody(skill)), Theme.Body), BodyIndent));
+        }
+
+        return new Rows(rows);
+    }
+
+    /// <summary>The Skills tab as plain lines, for a console without the pane (2026-11-07): headings as the Prompt lines write them, bodies two spaces in.</summary>
+    public static IEnumerable<string> SkillsLines(SystemPromptFacts facts)
+    {
+        ArgumentNullException.ThrowIfNull(facts);
+        yield return new SystemPromptSection(SkillsLabel, SkillsStatus(facts), "").Heading;
+        var skills = SkillsShown(facts);
+        if (facts.SkillsEnabled && facts.ToolsEnabled && skills.Count == 0)
+        {
+            yield return "  " + NoSkillsLine;
+        }
+
+        foreach (var skill in skills)
+        {
+            yield return new SystemPromptSection(skill.Name, SkillNote(skill), "").Heading;
+            foreach (var line in SkillBody(skill))
+            {
+                yield return "  " + line;
             }
         }
     }
@@ -726,7 +827,7 @@ public static class SystemPromptSummary
     /// own reason first). Since 2026-09-19 a tool switched off by name (<paramref name="disabled"/>,
     /// <c>/tools</c>) is noted on its row (<see cref="ToolGroup.ToolNotes"/>) and the group's name counts
     /// what is left — <c>Files (12 of 14)</c>; <paramref name="skillInstalled"/> false notes <c>load_skill</c>
-    /// as dropped (the <c>/tools</c> list passes it; <c>/sys</c> keeps the plain names). Pinned.
+    /// as dropped (the <c>/tools</c> list passes it; <c>/usage</c> keeps the plain names). Pinned.
     /// </summary>
     public static IReadOnlyList<ToolGroup> ToolGroups(
         IReadOnlyList<AIFunction> clock,
@@ -996,7 +1097,7 @@ public static class SystemPromptSummary
 
         if (web is not null)
         {
-            // download_file rides only with the file tools (2026-09-18): a whole web list under File tools off notes it (the /tools list; /sys passes the list already cut).
+            // download_file rides only with the file tools (2026-09-18): a whole web list under File tools off notes it (the /tools list; /usage passes the list already cut).
             var notes = !filesEnabled && web.Any(t => t is DownloadFileTool) ? new Dictionary<string, string>(StringComparer.Ordinal) { [DownloadFileTool.ToolName] = NotOffered(FilesOffSuffix) } : null;
             groups.Add(Group("Web", web, webNote, webEnabled && toolsEnabled, SettingsField.WebTools, disabled, notes));
         }
@@ -1040,7 +1141,7 @@ public static class SystemPromptSummary
 
     /// <summary>
     /// The groups in alphabetical order by their bare label (2026-10-04, the user's ask; the order the turn offers them until then), any case;
-    /// the sort is stable, so several MCP servers keep their own order on a tie. One source for <c>/tools</c>' Offered tab, <c>/sys</c>' Tools
+    /// the sort is stable, so several MCP servers keep their own order on a tie. One source for <c>/tools</c>' Offered tab, <c>/usage</c>' Tools
     /// tab, the <c>$</c> completion and the Botchat limited tools checklist. What a turn sends is built elsewhere and keeps its own order.
     /// </summary>
     public static IReadOnlyList<ToolGroup> SortedGroups(IEnumerable<ToolGroup> groups) =>
@@ -1060,7 +1161,7 @@ public static class SystemPromptSummary
             }
         }
 
-        // The name counts the /tools list alone: a tool dropped for another reason (download_file, load_skill) keeps its group's plain count, as /sys has always shown it.
+        // The name counts the /tools list alone: a tool dropped for another reason (download_file, load_skill) keeps its group's plain count, as /usage has always shown it.
         int left = disabled is null ? tools.Count : tools.Count(t => !disabled.Contains(t.Name));
         return new ToolGroup(GroupName(name, left, tools.Count), note, tools, offered)
         {
@@ -1072,7 +1173,7 @@ public static class SystemPromptSummary
     }
 
     /// <summary>
-    /// The groups cut to what the next turn sends, for <c>/sys</c>' Tools tab (2026-09-26, the user's call): a
+    /// The groups cut to what the next turn sends, for <c>/usage</c>' Tools tab (2026-09-26, the user's call): a
     /// group not offered goes, header and all; in an offered one, a tool with a note (switched off on <c>/tools</c>,
     /// <c>load_skill</c> with no skill …) goes; a group left with no tool
     /// goes too. The names recount what is left — <c>Files (13)</c>, never <c>13 of 14</c> — since the tab now

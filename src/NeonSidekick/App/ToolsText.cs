@@ -6,7 +6,7 @@ namespace NeonSidekick.App;
 
 /// <summary>
 /// What <c>/tools</c>' Offered tab shows, read when it opens and again after every flip: the groups
-/// as <c>/sys</c> lists them (<see cref="SystemPromptSummary.ToolGroups"/>, over the whole web
+/// as <c>/usage</c> lists them (<see cref="SystemPromptSummary.ToolGroups"/>, over the whole web
 /// list and with <c>load_skill</c> noted when no skill is installed), the setting <c>LLM offer tools</c>,
 /// and the names switched off on the tab (<c>ToolsDisabled</c>, as a set).
 /// </summary>
@@ -269,10 +269,10 @@ public static class ToolsText
     /// <summary>The Home Assistant tools' tab (2026-09-28), after Docker, before ComfyUI, since 2026-10-03 (the user's order; second to last, after GitLib, before Options, from later on 2026-10-01; after Claude, before Print, until then). "HA" since 2026-10-01 (the user's call: strip width); "Home Assistant" until then, which the group keeps (<see cref="HomeAssistantGroupTitle"/>). "Home" since 2026-10-09 (the user's ask; the toolbar's item keeps "HA"); "HomeAssistant" since 2026-10-10 (the user's ask; the toolbar's item keeps "Home", the user's pick). On the Home tab, before Shopping, since 2026-10-11 (the user's ask).</summary>
     public const string HomeAssistantTabTitle = "HomeAssistant";
 
-    /// <summary>The profile advisors' group heading on <c>/tools</c>' Offered tab and <c>/sys</c> (2026-10-10). Pinned.</summary>
+    /// <summary>The profile advisors' group heading on <c>/tools</c>' Offered tab and <c>/usage</c> (2026-10-10). Pinned.</summary>
     public const string AdvisorsGroupTitle = "Advisors";
 
-    /// <summary>The Home Assistant tools' group on <c>/sys</c> and the Offered tab (2026-09-28): the full name, the tab's short one being for the strip alone (2026-10-01).</summary>
+    /// <summary>The Home Assistant tools' group on <c>/usage</c> and the Offered tab (2026-09-28): the full name, the tab's short one being for the strip alone (2026-10-01).</summary>
     public const string HomeAssistantGroupTitle = "Home Assistant";
 
     /// <summary>The print tools' tab and group (2026-09-28), after UNC, before Camera, since 2026-10-03 (the user's order; after Claude, before Obsidian, from later on 2026-10-01; after Home Assistant until then); Devices' last, after Screen, since 2026-10-16 (the user's order).</summary>
@@ -297,7 +297,7 @@ public static class ToolsText
 
     /// <summary>
     /// The settings menus in <see cref="SettingsMenu.ToolsTabFields"/>' order, each list's title (2026-10-09): every one was a tab of its own
-    /// until then, and the constants above stay its name — the Offered tab's group heading and <c>/sys</c>' group too. Pinned.
+    /// until then, and the constants above stay its name — the Offered tab's group heading and <c>/usage</c>' group too. Pinned.
     /// </summary>
     public static readonly IReadOnlyList<string> MenuTitles = [AskTabTitle, WebTabTitle, ShellTabTitle, FileMenuTitle, ImageMenuTitle, UncTabTitle, PrintTabTitle, CameraTabTitle, ScreenTabTitle, ObsidianTabTitle, SqlTabTitle, MySqlTabTitle, SqliteTabTitle, PostgresTabTitle, OracleTabTitle, DockerTabTitle, HomeAssistantTabTitle, ComfyTabTitle, YouTubeTabTitle, GitTabTitle, OptionsTabTitle, ShoppingMenuTitle, EventLogTabTitle, TimersMenuTitle, NetworkMenuTitle, ServicesMenuTitle, TasksMenuTitle, DirectoryMenuTitle, ClockMenuTitle, HelpMenuTitle, MonitorsMenuTitle, DuckDbTabTitle];
 

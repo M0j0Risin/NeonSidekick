@@ -152,7 +152,7 @@ public static class Theme
     public static Style GoodText => s_current[ThemeStyleSlot.GoodText];
     /// <summary>A warning line.</summary>
     public static Style WarnText => s_current[ThemeStyleSlot.WarnText];
-    /// <summary>A section heading over cyan row labels in an info pane (<c>/usage</c>'s Context / Last reply, <c>/sys</c>'s Persona / Clock (3) …): violet bold, so the heading and its rows read as two tiers — the user's call, 2026-09-16.</summary>
+    /// <summary>A section heading over cyan row labels in an info pane (<c>/usage</c>'s Context / Last reply, <c>/usage</c>'s Persona / Clock (3) …): violet bold, so the heading and its rows read as two tiers — the user's call, 2026-09-16.</summary>
     public static Style SectionHeading => s_current[ThemeStyleSlot.SectionHeading];
 
     /// <summary>The border for panels.</summary>

@@ -43,7 +43,7 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// Whether <c>Advisor list</c> holds an advisor (2026-10-10): the Advisors group shows on <c>/tools</c>, <c>/sys</c> and the Botchat
+    /// Whether <c>Advisor list</c> holds an advisor (2026-10-10): the Advisors group shows on <c>/tools</c>, <c>/usage</c> and the Botchat
     /// checklist only then — with none there is nothing it could ask, and its switch lives on <c>/settings › Advisors</c> beside the list. Pure.
     /// </summary>
     public static bool AdvisorsListed(AppSettingsData effective)

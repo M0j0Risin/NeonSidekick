@@ -309,6 +309,12 @@ public enum QueueAction
     /// <summary><c>clear</c>: every queued message dropped.</summary>
     Clear,
 
+    /// <summary>
+    /// <c>send</c> (2026-11-07, the user's ask): the front queued message sent, as the queue pane's ➤ send does, and only when that button
+    /// would be offered.
+    /// </summary>
+    Send,
+
     /// <summary><c>mode automatic|manual|disabled</c> (2026-10-13, the user's ask): <c>Queue mode</c> set, <see cref="QueueCommand.Mode"/>.</summary>
     Mode,
 
@@ -582,6 +588,22 @@ internal sealed partial class ChatScreen
     public const string QueueClearWord = "clear";
     public const string QueueClearNote = "drop every queued message";
 
+    /// <summary>
+    /// The <c>/queue</c> word that sends the front queued message (2026-11-07, the user's ask: the pane's ➤ send as a command, the button's rule);
+    /// case folded.
+    /// </summary>
+    public const string QueueSendWord = "send";
+    public const string QueueSendNote = "send the next queued message now";
+
+    /// <summary>
+    /// <c>/queue send</c> while ➤ send isn't offered (2026-11-07): the queue isn't held and <c>Queue mode</c> is automatic, so the queue goes by
+    /// itself and nothing is taken off it. Pinned.
+    /// </summary>
+    public const string QueueSendsItselfNotice = "(" + NoticeGlyphs.Queue + "the queue sends by itself when the reply ends; ➤ send is for a held queue or Queue mode manual)";
+
+    /// <summary><c>/queue send</c> under a reply (2026-11-07): the message taken waits for the idle line, which sends it first. Pinned.</summary>
+    public const string QueueSendWaitsNotice = "(" + NoticeGlyphs.Queue + "sends when the reply ends)";
+
     /// <summary>The <c>/queue</c> word that sets <c>Queue mode</c> (2026-10-13, the user's ask); case folded.</summary>
     public const string QueueModeWord = "mode";
     public const string QueueModeNote = "set Queue mode: automatic, manual or off";
@@ -590,7 +612,7 @@ internal sealed partial class ChatScreen
     public const string QueueCancelWord = "cancel";
     public const string QueueCancelNote = "set Queue cancel mode: hold, drain or empty";
 
-    public const string QueueUsageError = "/queue lists the queued messages; /queue clear drops them all; /queue mode automatic|manual|off sets Queue mode; /queue cancel hold|drain|empty sets Queue cancel mode.";
+    public const string QueueUsageError = "/queue lists the queued messages; /queue clear drops them all; /queue send sends the next one; /queue mode automatic|manual|off sets Queue mode; /queue cancel hold|drain|empty sets Queue cancel mode.";
 
 
     // The /memory grammar's words, their notes on the argument list and the usage error (2026-09-22,
@@ -1689,7 +1711,7 @@ internal sealed partial class ChatScreen
         _info = new InfoPane(_pane, keys, menuMouse, clipboard) { Opening = PaneOpening };
         _folderPane = new FolderPane(_pane, keys, menuMouse);
         _menuPane = new MenuPane(_pane, keys, menuMouse, clipboard) { Opening = PaneOpening };
-        // The question tool's pane and the tool itself: built always (the /sys Tools tab
+        // The question tool's pane and the tool itself: built always (the /usage Tools tab
         // lists it either way), offered only while the setting Ask user and the pane say so (RunTurnAsync).
         _questionMenu = new QuestionMenu(_menuPane, _input);
         // The approval's whole-command view (2026-10-07): the info pane over the question, which comes back on ESC.
@@ -1882,7 +1904,6 @@ internal sealed partial class ChatScreen
     public const string ToolsToolGlyph = "🛠️";
     public const string McpToolGlyph = McpText.Glyph;
     public const string SkillsToolGlyph = "🎓";
-    public const string SysToolGlyph = "🎭";
     public const string SessionsToolGlyph = "💬";
     public const string UsageToolGlyph = "📊";
     public const string MemoryToolGlyph = "💾";
@@ -2619,7 +2640,6 @@ internal sealed partial class ChatScreen
         SkillsToolGlyph => SlashCommands.SkillsWord,
         ToolsToolGlyph => SlashCommands.ToolsWord,
         McpToolGlyph => SlashCommands.McpWord,
-        SysToolGlyph => SlashCommands.SysWord,
         SessionsToolGlyph => SlashCommands.SessionsWord,
         UsageToolGlyph => SlashCommands.UsageWord,
         MemoryToolGlyph => SlashCommands.MemoryWord,
@@ -2967,7 +2987,8 @@ internal sealed partial class ChatScreen
     /// to plain Ctrl+H, P and U (the user's ask), their rows' wording kept: A, C, E, H, M, O, P, R, S, U, X.
     /// Ctrl+Alt+G (<c>/log</c>), U (<c>/comfy view</c>) and V (<c>/camera live</c>) on 2026-10-02, the user's ask, each in its letter's place;
     /// <c>/log</c> moved to plain Ctrl+G on 2026-10-12 (the user's ask), its row's wording kept, after Ctrl+F.
-    /// <c>/sys</c> moved from Ctrl+Alt+Y to plain Ctrl+Y on 2026-10-03 (the user's ask), its row's wording kept, after Ctrl+X.
+    /// <c>/sys</c> moved from Ctrl+Alt+Y to plain Ctrl+Y on 2026-10-03 (the user's ask), its row's wording kept, after Ctrl+X; the row went
+    /// on 2026-11-07 (the user's pick) with the bare <c>/sys</c>, whose pane is <c>/usage</c>'s tabs now (Ctrl+U).
     /// Ctrl+Alt+E (<c>/sessions</c>) later on 2026-10-03, the user's ask and wording, in its letter's place; Ctrl+. (<c>/terminal</c>)
     /// the same day, ahead of Ctrl+/.
     /// Ctrl+L (the background learning's cancel, <see cref="Keys.IsLearnCancel"/>) on 2026-10-04, the user's ask and wording, in its
@@ -3078,7 +3099,6 @@ internal sealed partial class ChatScreen
         rows.Add(new("Ctrl+T", "open the tools pane", "/tools"));   // 2026-10-18, the user's pick (Ctrl+Alt+T until then)
         rows.Add(new("Ctrl+U", "open the usage pane", "/usage"));
         rows.Add(new("Ctrl+W", "open the Web UI in a browser, signed in", "/webui browser"));   // 2026-10-18, the user's pick
-        rows.Add(new("Ctrl+Y", "open the system prompt pane", "/sys"));
         rows.Add(new("Ctrl+Z", "open the theme picker", "/theme"));
         if (mac)
         {
@@ -3214,25 +3234,27 @@ internal sealed partial class ChatScreen
     internal static Grid TwoColumns() =>
         new Grid().AddColumn(new GridColumn().NoWrap().PadRight(SlashCommands.HelpColumnGap)).AddColumn(new GridColumn().PadRight(0));
 
-    /// <summary>The tabs <c>/sys</c> opens: the system message the next turn sends, and the tools it offers; both from the live state.</summary>
-    private IReadOnlyList<InfoTab> SysPromptTabs() =>
-    [
-        new(SystemPromptSummary.PromptTabTitle, () => SystemPromptSummary.PromptTab(SystemPromptFacts())),
-        new(SystemPromptSummary.ToolsTabTitle, () => SystemPromptSummary.ToolsTab(ToolGroups(), _effective().LlmOfferTools)),
-    ];
-
     /// <summary>
     /// The tabs <c>/usage</c> opens: the tally as it stands when shown (the Notes tab gone since 2026-09-28), and since 2026-11-01 what
     /// fills the context window (<see cref="ContextFacts"/>), built when shown so reopening after a <c>/tools</c> change shows the new numbers.
+    /// Since 2026-11-07 (the user's ask: one pane for what the model is sent) also <c>/sys</c>' two tabs, the system message and the tools the
+    /// next turn offers, and the skills catalog on a tab of its own; all from the live state.
     /// </summary>
-    /// <remarks>The Context tab's facts are built once per call (2026-11-02, the review), shared by the pane's measure pass and the tab shown.</remarks>
+    /// <remarks>
+    /// The Context tab's facts are built once per call (2026-11-02, the review), shared by the pane's measure pass and the tab shown; the
+    /// Prompt and Skills tabs' facts likewise (2026-11-07).
+    /// </remarks>
     private IReadOnlyList<InfoTab> UsageTabs()
     {
         var context = new Lazy<ContextFacts>(ContextFacts);
+        var prompt = new Lazy<SystemPromptFacts>(SystemPromptFacts);
         return
         [
             new(UsageText.StatisticsTabTitle, () => UsageText.StatisticsTab(_session.Usage, _session.ContextLength)),
             new(UsageText.ContextTabTitle, () => UsageText.ContextTab(context.Value)),
+            new(SystemPromptSummary.PromptTabTitle, () => SystemPromptSummary.PromptTab(prompt.Value)),
+            new(SystemPromptSummary.ToolsTabTitle, () => SystemPromptSummary.ToolsTab(ToolGroups(), _effective().LlmOfferTools)),
+            new(SystemPromptSummary.SkillsTabTitle, () => SystemPromptSummary.SkillsTab(prompt.Value)),
         ];
     }
 
@@ -3241,7 +3263,8 @@ internal sealed partial class ChatScreen
     /// console) — the tally in the transcript. The typed command's path and, since 2026-09-21, the
     /// double-click's on the hint row's tally (<see cref="ScreenPane.HintZone.Usage"/>). Since 2026-11-01 <paramref name="tab"/> is the
     /// tab it opens on (<see cref="UsageText.ContextTabIndex"/> for <c>/usage context</c>); with no pane a bare <c>/usage</c> prints the
-    /// Statistics lines and the Context lines after them, and <c>/usage context</c> the Context lines alone.
+    /// Statistics lines and the Context lines after them, and <c>/usage context</c> the Context lines alone. Since 2026-11-07
+    /// <c>/usage prompt</c>, <c>tools</c> and <c>skills</c> print that tab's lines alone.
     /// </summary>
     private async Task ShowUsageAsync(int tab, CancellationToken cancellationToken)
     {
@@ -3251,8 +3274,15 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        var lines = tab == UsageText.ContextTabIndex ? [] : UsageText.Lines(_session.Usage, _session.ContextLength);
-        foreach (var line in lines.Concat(UsageText.ContextLines(ContextFacts())))
+        IEnumerable<string> lines = tab switch
+        {
+            UsageText.PromptTabIndex => SystemPromptSummary.PromptLines(SystemPromptFacts()),
+            UsageText.ToolsTabIndex => SystemPromptSummary.ToolLines(ToolGroups(), _effective().LlmOfferTools),
+            UsageText.SkillsTabIndex => SystemPromptSummary.SkillsLines(SystemPromptFacts()),
+            UsageText.ContextTabIndex => UsageText.ContextLines(ContextFacts()),
+            _ => UsageText.Lines(_session.Usage, _session.ContextLength).Concat(UsageText.ContextLines(ContextFacts())),
+        };
+        foreach (var line in lines)
         {
             _transcript.Notice(line);
         }
@@ -3727,8 +3757,8 @@ internal sealed partial class ChatScreen
     public static QueueAction ParseQueueArgs(string args) => ParseQueueCommand(args).Action;
 
     /// <summary>
-    /// The <c>/queue</c> grammar, pure (2026-09-21): nothing ⇒ the pane; <c>clear</c> (ignoring case) ⇒ drop every one; since
-    /// 2026-10-13 (the user's ask) <c>mode</c> and one of <see cref="QueueMode.Names"/> ⇒ <c>Queue mode</c> set, <c>cancel</c> and one
+    /// The <c>/queue</c> grammar, pure (2026-09-21): nothing ⇒ the pane; <c>clear</c> (ignoring case) ⇒ drop every one; <c>send</c> alone
+    /// (2026-11-07, the user's ask) ⇒ send the front one; since 2026-10-13 (the user's ask) <c>mode</c> and one of <see cref="QueueMode.Names"/> ⇒ <c>Queue mode</c> set, <c>cancel</c> and one
     /// of <see cref="QueueCancelMode.Names"/> ⇒ <c>Queue cancel mode</c> set, every word folding case; anything else ⇒ invalid.
     /// </summary>
     public static QueueCommand ParseQueueCommand(string args)
@@ -3742,6 +3772,11 @@ internal sealed partial class ChatScreen
         if (words.Length == 1 && words[0].Equals(QueueClearWord, StringComparison.OrdinalIgnoreCase))
         {
             return new(QueueAction.Clear);
+        }
+
+        if (words.Length == 1 && words[0].Equals(QueueSendWord, StringComparison.OrdinalIgnoreCase))
+        {
+            return new(QueueAction.Send);
         }
 
         if (words.Length == 2 && words[0].Equals(QueueModeWord, StringComparison.OrdinalIgnoreCase) && QueueMode.TryParse(words[1], out var mode))
@@ -3831,20 +3866,46 @@ internal sealed partial class ChatScreen
 
                 break;
             default:
-                HandleQueueArgs(args);
+                HandleQueueArgs(args, underReply: false);
                 break;
         }
     }
 
     /// <summary>
     /// The half of <see cref="HandleQueueAsync"/> that needs no pane: the mid-turn quick act for <c>/queue clear</c> (2026-09-21), on the
-    /// turn task; since 2026-10-13 <c>/queue mode …</c> and <c>/queue cancel …</c> too, the rows' own save and notice.
+    /// turn task; since 2026-10-13 <c>/queue mode …</c> and <c>/queue cancel …</c> too, the rows' own save and notice. Since 2026-11-07
+    /// <c>/queue send</c> (<paramref name="underReply"/> true on the turn task), the pane's ➤ send under the button's own rule: at the idle line
+    /// while the queue is held or <c>Queue mode</c> is manual, under a reply only under manual (the line then waits and goes first).
     /// </summary>
-    private void HandleQueueArgs(string args)
+    private void HandleQueueArgs(string args, bool underReply)
     {
         var command = ParseQueueCommand(args);
         switch (command.Action)
         {
+            case QueueAction.Send:
+                if (_queue.Count == 0)
+                {
+                    _transcript.Notice(QueueMenu.EmptyNotice);
+                }
+                else if (!(QueueModeNow() == Queueing.Manual || (!underReply && _queue.Held)))
+                {
+                    _transcript.Notice(QueueSendsItselfNotice);
+                }
+                else if (_queue.TryDequeue(out var next))
+                {
+                    // Left for the idle loop's top, which takes a pending line ahead of the hold, as the pane's ➤ send does: sent as if typed.
+                    Pend(next.Line);
+                    if (underReply)
+                    {
+                        _transcript.Notice(QueueSendWaitsNotice);
+                    }
+                }
+                else
+                {
+                    _transcript.Notice(QueueMenu.EmptyNotice);   // the loop took the last meanwhile
+                }
+
+                break;
             case QueueAction.Mode:
                 _menu.SetQueueMode(command.Mode);
                 break;
@@ -4775,7 +4836,7 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// The operating rules the next reply would send without <c>operata.md</c> (2026-10-04, the user's ask: <c>/operata</c> seeded
     /// the bare <see cref="Assistant.OperatingRules"/>, losing every tool sentence the turn's offer adds): the reply-format sentence
-    /// as the turn picks it (<see cref="MarkdownTurn"/>, spoken while speech output is on and ready, as <c>/sys</c> reads it), then,
+    /// as the turn picks it (<see cref="MarkdownTurn"/>, spoken while speech output is on and ready, as <c>/usage</c> reads it), then,
     /// with tools on, the sentences of the groups <see cref="ComposeTurnTools"/> offers from <see cref="TurnInputs"/>. Plan mode is
     /// left out: its read-only narrowing is one turn's, and its directive lives outside the rules, so a file written while planning
     /// keeps the write tools' sentences. A code audit's narrowing (its <c>OnlyTools</c>, 2026-10-18) is left out the same way. A read only.
@@ -5509,8 +5570,14 @@ internal sealed partial class ChatScreen
                 return MentionCompleter.Matches(ToolbarItems.Words.Select(word => new CompletionItem(word, ToolbarItems.DescribeWord(word))).ToList(), argText);
 
             case SlashCommand.Usage:
-                // context (2026-11-01): the pane opened on its Context tab.
-                return MentionCompleter.Matches([new CompletionItem(UsageText.ContextWord, UsageText.ContextWordNote)], argText);
+                // context (2026-11-01): the pane opened on its Context tab; prompt, tools and skills (2026-11-07, /sys' tabs folded in) in tab order.
+                return MentionCompleter.Matches(
+                [
+                    new CompletionItem(UsageText.ContextWord, UsageText.ContextWordNote),
+                    new CompletionItem(UsageText.PromptWord, UsageText.PromptWordNote),
+                    new CompletionItem(UsageText.ToolsWord, UsageText.ToolsWordNote),
+                    new CompletionItem(UsageText.SkillsWord, UsageText.SkillsWordNote),
+                ], argText);
 
             case SlashCommand.Header:
                 return MentionCompleter.Matches(HeaderToggle.Words.Select(word => new CompletionItem(word, HeaderToggle.DescribeWord(word))).ToList(), argText);
@@ -5689,7 +5756,8 @@ internal sealed partial class ChatScreen
             }
 
             case SlashCommand.Queue:
-                // clear, mode and cancel; after "mode " or "cancel " their words (2026-10-13, the /copy branch's shape).
+                // clear, send (2026-11-07, after clear so "cl" still completes to clear alone), mode and cancel; after "mode " or "cancel "
+                // their words (2026-10-13, the /copy branch's shape).
                 if (argText.StartsWith(QueueModeWord + " ", StringComparison.OrdinalIgnoreCase))
                 {
                     return MentionCompleter.Matches(QueueMode.Names.Select(name => new CompletionItem(QueueModeWord + " " + name, QueueMode.Describe(name))).ToList(), argText);
@@ -5700,7 +5768,7 @@ internal sealed partial class ChatScreen
                     return MentionCompleter.Matches(QueueCancelMode.Names.Select(name => new CompletionItem(QueueCancelWord + " " + name, QueueCancelMode.Describe(name))).ToList(), argText);
                 }
 
-                return MentionCompleter.Matches([new(QueueClearWord, QueueClearNote), new(QueueModeWord, QueueModeNote), new(QueueCancelWord, QueueCancelNote)], argText);
+                return MentionCompleter.Matches([new(QueueClearWord, QueueClearNote), new(QueueSendWord, QueueSendNote), new(QueueModeWord, QueueModeNote), new(QueueCancelWord, QueueCancelNote)], argText);
 
             case SlashCommand.Memory:
             {
@@ -6381,7 +6449,7 @@ internal sealed partial class ChatScreen
         return _catalog.Skills;
     }
 
-    /// <summary>The <c>/sys</c> Tools tab's groups: only what the next turn sends (<see cref="SystemPromptSummary.OfferedOnly"/>, 2026-09-26) — <c>/tools</c> builds its own full list (<see cref="ToolsFacts"/>).</summary>
+    /// <summary>The <c>/usage</c> Tools tab's groups: only what the next turn sends (<see cref="SystemPromptSummary.OfferedOnly"/>, 2026-09-26) — <c>/tools</c> builds its own full list (<see cref="ToolsFacts"/>).</summary>
     private IReadOnlyList<ToolGroup> ToolGroups() => ToolGroups(_effective());
 
     /// <summary><see cref="ToolGroups()"/> over <paramref name="effective"/> and <paramref name="disabled"/> already worked out (2026-11-02, the review).</summary>
@@ -6815,7 +6883,7 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// Whether <c>/help &lt;words&gt;</c> may hand its words to the model (2026-10-14): the turn offers tools at all, <c>Help tools</c> is on
     /// (<paramref name="helpTools"/>, 2026-10-18) and <c>neon_help</c> is not switched off in <paramref name="disabled"/> — the screen's turn set (<see cref="TurnDisabled"/>), the saved one headless, as
-    /// <c>/sys</c> counts the Help group. Otherwise the manual answers itself. Shared with headless. Pure.
+    /// <c>/usage</c> counts the Help group. Otherwise the manual answers itself. Shared with headless. Pure.
     /// </summary>
     public static bool HelpLookupOffered(bool offerTools, bool helpTools, IReadOnlySet<string> disabled) =>
         offerTools && helpTools && !disabled.Contains(NeonHelpTool.ToolName);
@@ -7037,7 +7105,7 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// <paramref name="tools"/> less <c>vault_delete</c> while the setting <c>Obsidian allow delete</c> is off (2026-09-22,
     /// the user's ask: off by default; the <see cref="ShellToolsFor"/> shape), so the tool shows nowhere — not the turn,
-    /// <c>/tools</c>' Offered tab, <c>/sys</c> or the <c>$</c>-mentions — until it is on. Pure.
+    /// <c>/tools</c>' Offered tab, <c>/usage</c> or the <c>$</c>-mentions — until it is on. Pure.
     /// </summary>
     public static IReadOnlyList<AIFunction> ObsidianToolsFor(IReadOnlyList<AIFunction> tools, AppSettingsData effective)
     {
@@ -7896,7 +7964,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// Whether a main-chat turn offers the ask group (<c>ask_user</c> and its kin): the pane to answer on, and <see cref="AppSettingsData.AskUser"/>
-    /// on (2026-10-21, a review: one reading for the turn's tools, <c>/sys</c>'s facts and <see cref="GapMayAsk"/>, which had its own copy).
+    /// on (2026-10-21, a review: one reading for the turn's tools, <c>/usage</c>'s facts and <see cref="GapMayAsk"/>, which had its own copy).
     /// </summary>
     private bool AskOffered(AppSettingsData effective) => _pane.Enabled && effective.AskUser;
 
@@ -9076,7 +9144,7 @@ internal sealed partial class ChatScreen
     private const string OpenAIKeyName = "OpenAI API key";
     internal const string HomeAssistantKeyName = "Home Assistant API key";
     private const string YouTubeKeyName = "YouTube API key";   // 2026-10-05, the user's ask
-    private const string BraveKeyName = "Brave Search API key";   // 2026-11-07: the row's words after "Web"
+    private const string BraveKeyName = "metasearch Brave API key";   // 2026-11-07: the row's words after "Web" (renamed later that day, the user's ask)
 
     /// <summary><c>a</c>, <c>a and b</c>, <c>a, b and c</c>.</summary>
     private static string KeySeries(IReadOnlyList<string> items) =>
@@ -14720,29 +14788,10 @@ internal sealed partial class ChatScreen
                 await HandleSessionAsync(RenameAsSessionArgs(args), cancellationToken).ConfigureAwait(false);
                 return false;
 
-            case SlashCommand.Sys when args.Trim().Length > 0:
-                // /sys persona|operata|vocalia [reset] (2026-10-09, the user's ask: /persona, /operata and /vocalia folded in; copy <profile> [force] until 2026-10-10, /profile push|pull persona since).
-                await HandleSysFileAsync(args, cancellationToken).ConfigureAwait(false);
-                return false;
-
             case SlashCommand.Sys:
-                if (_pane.Enabled)
-                {
-                    await _info.ShowAsync(SystemPromptSummary.Label, SysPromptTabs(), 0, cancellationToken).ConfigureAwait(false);
-                    return false;
-                }
-
-                // No pane to open (a redirected console): the summary in the transcript.
-                foreach (var line in SystemPromptSummary.PromptLines(SystemPromptFacts()))
-                {
-                    _transcript.Notice(line);
-                }
-
-                foreach (var line in SystemPromptSummary.ToolLines(ToolGroups(), _effective().LlmOfferTools))
-                {
-                    _transcript.Notice(line);
-                }
-
+                // /sys persona|operata|vocalia [reset] (2026-10-09, the user's ask: /persona, /operata and /vocalia folded in; copy <profile> [force] until 2026-10-10, /profile push|pull persona since).
+                // A bare /sys is its usage error since 2026-11-07 (the user's ask): its pane's tabs are /usage's now.
+                await HandleSysFileAsync(args, cancellationToken).ConfigureAwait(false);
                 return false;
 
             case SlashCommand.Profile:

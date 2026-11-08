@@ -55,7 +55,8 @@ internal sealed partial class SettingsMenu
     /// Rooms (the areas by floor) and one tab per kind of device (<see cref="HomeDomainTabs"/>; Zones since later that day, the user's ask), each in sections by area, where
     /// Space or Enter puts an item on the bar's end or takes it off, and typing filters by name, id, area or label. Every change
     /// saves at once and the bar under the pane follows. Read from <see cref="HomeCatalog"/> once a visit. <paramref name="own"/>
-    /// (<c>/homebar edit</c>): the pane is this picker's and closes as it ends. True when anything changed.
+    /// (<c>/homebar edit</c>): the pane is this picker's and closes as it ends. Since 2026-11-07 (the user's ask) the strip ends with
+    /// <see cref="ShowBarButton"/>, a click that hides or shows the bar as <c>/homebar</c> alone does. True when anything changed.
     /// </summary>
     public async Task<bool> EditHomeBarAsync(bool own, CancellationToken cancellationToken)
     {
@@ -106,7 +107,10 @@ internal sealed partial class SettingsMenu
                 var sides = HomeBarItems.Sides(saved.HomeBarItems, saved.HomeBarLeft, saved.HomeBarRight);
                 var items = sides.All;
                 var built = HomePickerTabs(catalog, sides, filter, saved.HomeBarAliases, saved.HomeBarGlyphs, home, monitors);
-                var page = MenuPage.Tabbed(Crumb(FieldName(SettingsField.ShowHomeBar)), built.Select(b => b.Tab).ToList(), tab, built[Math.Clamp(tab, 0, built.Count - 1)].Tab.Hint ?? "");
+                var page = MenuPage.Tabbed(Crumb(FieldName(SettingsField.ShowHomeBar)), built.Select(b => b.Tab).ToList(), tab, built[Math.Clamp(tab, 0, built.Count - 1)].Tab.Hint ?? "")
+                    // The show/hide button (2026-11-07, the user's ask) at the strip's end: click-only (the user's pick), since a key would beat the
+                    // filtering tabs' first letter and the pane keeps a page's buttons across its tabs.
+                    with { Buttons = [new(ShowBarButton(HomeBarItems.Resolve(saved.HomeBarItems).Count > 0), null)], TabButtons = true };
                 var picked = await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false);
                 if (picked is not { } pick)
                 {
@@ -124,6 +128,26 @@ internal sealed partial class SettingsMenu
                 {
                     filter = typed;
                     cursor = 0;
+                    continue;
+                }
+
+                if (pick.Button == 0)
+                {
+                    // bar: shown / bar: hidden (2026-11-07): /homebar's own toggle, the tab kept; the sides stay as /homebar off leaves them.
+                    var next = HomeBarItems.Toggle("", saved.HomeBarItems, saved.HomeBarLastItems)!;
+                    if (next.NeedsPicker)
+                    {
+                        Sink.Notice(HomeBarText.NothingToShow);
+                        continue;
+                    }
+
+                    Apply(SettingsField.ShowHomeBar, d =>
+                    {
+                        d.HomeBarItems = next.Items;
+                        d.HomeBarLastItems = next.LastItems;
+                    });
+                    cursor = 0;   // the On the bar rows change
+                    changed = true;
                     continue;
                 }
 

@@ -61,6 +61,7 @@ Elsewhere:
 | `/expand`, `/collapse` | Unfold every tool run, code block, diff and thinking block from here on, or fold them again. |
 | `/queue [clear]` | Lists the messages queued during a reply, to remove, clear or send; `clear` drops them all. |
 | `/queue mode automatic\|manual\|off` | Sets *Queue mode*: queued messages go when the reply ends, wait for **➤ send**, or aren't kept. |
+| `/queue send` | Sends the next queued message now, as **➤ send** does: while the queue is held, or under *Queue mode* `manual` (under a reply, when it ends). |
 | `/queue cancel hold\|drain\|empty` | Sets *Queue cancel mode*: after a canceled reply, keep the queue, send the next, or drop them all. |
 | `/prompts` | Your saved prompts (per profile, never shown to the model): send one as if typed, put it on the draft line, or save it as a [custom command](#custom-commands). |
 | `/prompts <n>`, `/prompts save <text>`, `/prompts remove <n>` | Sends prompt *n* as if typed, saves the rest of the line (a pasted block too), or removes prompt *n*. |
@@ -80,6 +81,7 @@ Elsewhere:
 | `/msgclear` | Clears this profile's message history (what ↑/↓ recall) after a yes; from the Web UI, it asks on the page and the PC. |
 | `/usage` | Token usage and performance, with rows for `/claude`, `/botchat` and the advisors; `~` marks an estimate. |
 | `/usage context` | The Context tab: what fills the window (the system prompt, each tool group, the history, pictures, thinking) and, with the window known, what turning a switchable group off would save. |
+| `/usage prompt\|tools\|skills` | The Prompt tab (the system message the next turn sends), the Tools tab (each tool it offers) or the Skills tab (each skill it offers, with its scope and file). |
 
 ### Models and servers
 
@@ -128,7 +130,6 @@ The push and pull forms copy to (`push`) or from (`pull`) another profile, after
 | `/skills add <source> [--global\|--profile]` | Installs an [Agent Skill](https://agentskills.io) after a preview: search words, `owner/repo[/skill]`, a GitHub URL or a `.zip` URL. See [Installing skills](SETTINGS.md#installing-skills). |
 | `/skills purge list\|commit <age>` | Lists the skills unused for that long, or deletes them after a yes. See [Skill records](SETTINGS.md#skill-records-and-purging-unused-skills). |
 | `/mcp` | Connects [MCP servers](INTERFACE.md#words-used-here) (outside programs offering the model more tools) and switches their tools on or off. |
-| `/sys` | Shows the system prompt and the tools sent to the model. |
 | `/sys persona [reset]`, `/sys operata [reset]`, `/sys vocalia [reset]` | Edits `persona.md`, `operata.md` (the operating rules) or `vocalia.md` (added to every spoken reply) in your editor, or resets it after a yes. |
 | `/avatar` | Opens the emoji picker for the *Model avatar* ([The avatar picker](INTERFACE.md#the-avatar-picker)). |
 | `/avatar <emoji>`, `/avatar <words>`, `/avatar clear` | Sets that emoji, opens the picker on the words, or clears it (replies open with ● again). |

@@ -175,7 +175,7 @@ internal sealed partial class ChatScreen
         };
     }
 
-    /// <summary>The /sys Tools tab's name for the group that holds <c>present_plan</c>.</summary>
+    /// <summary>The /usage Tools tab's name for the group that holds <c>present_plan</c>.</summary>
     public const string PlanGroupName = "Plan";
 
     public const string PlanVerdictLogPrefix = "present_plan: ";
@@ -437,7 +437,7 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// The <c>/tools</c> list as the next turn applies it: widened by every tool plan mode drops while planning (<see cref="PlanTools.Widen"/>), so <c>/sys</c> shows what is sent;
+    /// The <c>/tools</c> list as the next turn applies it: widened by every tool plan mode drops while planning (<see cref="PlanTools.Widen"/>), so <c>/usage</c> shows what is sent;
     /// since 2026-10-18 also by the tools that wait on the user while a gap pass may not (<see cref="GapAsksBarred"/>).
     /// </summary>
     private IReadOnlySet<string> TurnDisabled(AppSettingsData effective)
@@ -484,7 +484,7 @@ internal sealed partial class ChatScreen
     private bool AuditMayAsk(AppSettingsData effective, IReadOnlySet<string>? disabled = null) => effective.CodeAuditAskUser && AskUserOffered(effective, disabled);
 
     /// <summary>
-    /// The /sys Tools tab's groups with <c>present_plan</c>'s while planning, in its alphabetical place (2026-10-04, the groups' order since;
+    /// The /usage Tools tab's groups with <c>present_plan</c>'s while planning, in its alphabetical place (2026-10-04, the groups' order since;
     /// ahead of the questions, where the turn offers it, until then).
     /// </summary>
     private IReadOnlyList<ToolGroup> WithPlanGroup(IReadOnlyList<ToolGroup> groups)
@@ -496,14 +496,14 @@ internal sealed partial class ChatScreen
 
         if (RalphPassTurn() is { } pass && !_plan.Active)
         {
-            // finish_step's group during a Ralph pass (2026-10-18), so /sys says what the turn sends.
+            // finish_step's group during a Ralph pass (2026-10-18), so /usage says what the turn sends.
             var ralph = new ToolGroup(SystemPromptSummary.GroupName(RalphGroupName, 1, 1), "", [pass.Tool], true) { Label = RalphGroupName };
             return SystemPromptSummary.SortedGroups([.. groups, ralph]);
         }
 
         if (_audit.Reviewing && !_plan.Active)
         {
-            // present_audit's group during a code audit's pass (2026-10-18), so /sys says what the turn sends.
+            // present_audit's group during a code audit's pass (2026-10-18), so /usage says what the turn sends.
             var audit = new ToolGroup(SystemPromptSummary.GroupName(AuditGroupName, 1, 1), "", [_presentAudit], true) { Label = AuditGroupName };
             return SystemPromptSummary.SortedGroups([.. groups, audit]);
         }

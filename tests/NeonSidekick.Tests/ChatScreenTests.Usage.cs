@@ -12,8 +12,12 @@ namespace NeonSidekick.Tests;
 /// </summary>
 public partial class ChatScreenTests
 {
-    /// <summary>The <c>/usage</c> pane's title row: its label, then the two tabs (one tab, the label alone, until the Context tab on 2026-11-01).</summary>
-    private static string UsagePaneTitle => UsageText.Label + " │ " + UsageText.StatisticsTabTitle + " · " + UsageText.ContextTabTitle + " ";
+    /// <summary>
+    /// The <c>/usage</c> pane's title row: its label, then the five tabs (one tab, the label alone, until the Context tab on 2026-11-01; two until
+    /// /sys' Prompt and Tools tabs and the new Skills tab came on 2026-11-07).
+    /// </summary>
+    private static string UsagePaneTitle => UsageText.Label + " │ " + UsageText.StatisticsTabTitle + " · " + UsageText.ContextTabTitle + " · "
+        + SystemPromptSummary.PromptTabTitle + " · " + SystemPromptSummary.ToolsTabTitle + " · " + SystemPromptSummary.SkillsTabTitle + " ";
 
     [Fact]
     public async Task WithGeometry_UsageContext_OpensOnTheContextTab()
@@ -96,8 +100,15 @@ public partial class ChatScreenTests
     {
         var sources = new ChatScreen.ArgumentSources(() => [], "default", [], _ => [], _ => new Files.MentionResult(Files.FileOutcome.Ok, [], false), _ => new Files.MentionResult(Files.FileOutcome.Ok, [], false));
 
-        Assert.Equal(new CompletionItem(UsageText.ContextWord, UsageText.ContextWordNote), Assert.Single(ChatScreen.ArgumentItems("/usage", "", sources)));
+        Assert.Equal(
+        [
+            new CompletionItem(UsageText.ContextWord, UsageText.ContextWordNote),
+            new CompletionItem(UsageText.PromptWord, UsageText.PromptWordNote),   // the three from /sys in tab order (2026-11-07)
+            new CompletionItem(UsageText.ToolsWord, UsageText.ToolsWordNote),
+            new CompletionItem(UsageText.SkillsWord, UsageText.SkillsWordNote),
+        ], ChatScreen.ArgumentItems("/usage", "", sources));
         Assert.Single(ChatScreen.ArgumentItems("/usage", "co", sources));
+        Assert.Equal(UsageText.SkillsWord, Assert.Single(ChatScreen.ArgumentItems("/usage", "s", sources)).Text);
         Assert.Empty(ChatScreen.ArgumentItems("/usage", "x", sources));
     }
 }

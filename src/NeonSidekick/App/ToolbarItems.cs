@@ -28,7 +28,9 @@ namespace NeonSidekick.App;
 /// picker's move keys on this checklist): <see cref="Order"/> over <see cref="Settings.AppSettingsData.ToolbarOrder"/>, the path
 /// always last until 2026-10-13; <see cref="Names"/> is the default order, which <c>⊡ default</c> puts back with the checks. Since
 /// 2026-10-13 (the user's ask) every item is pinned left or right (<see cref="Sides"/> over <see cref="Settings.AppSettingsData.ToolbarRight"/>,
-/// <see cref="RightDefaults"/> the path and the model's name, the row as it was), each side in the order's own order.
+/// <see cref="RightDefaults"/> the path and the model's name, the row as it was), each side in the order's own order. 🎭 System prompt retired on
+/// 2026-11-07 (the user's ask: <c>/sys</c>' pane folded into <c>/usage</c>, 📊): a saved <c>sys</c> is an unknown word, dropped as <c>perf</c> and
+/// <c>liveview</c> are, so a profile that had 🎭 simply loses it.
 /// </summary>
 public static class ToolbarItems
 {
@@ -39,13 +41,12 @@ public static class ToolbarItems
     public const string Tools = "tools";
     public const string Mcp = "mcp";
     public const string Skills = "skills";
-    public const string Commands = "commands";   // 2026-11-01, the user's ask: 🪄, /commands' pane, right after Skills, off by default
-    public const string Sys = "sys";
+    public const string Commands = "commands";   // 2026-11-01, the user's ask: 🪄, /commands' pane, right after Skills (on by default since 2026-11-07, the user's ask)
     public const string Sessions = "sessions";
     public const string Usage = "usage";
     public const string Memory = "memory";
     public const string Queue = "queue";       // 2026-10-13, the user's ask: ⏳, the /queue pane, after the disk (checked by default)
-    public const string Ask = "ask";           // 2026-10-09, the user's ask: 🙋, the Ask user switch (/tools ask), between the disk and the lock
+    public const string Ask = "ask";           // 2026-10-09, the user's ask: 🙋, the Ask user switch (/tools ask), between the disk and the lock (on by default since 2026-11-07)
     public const string CmdList = "cmdlist";
     public const string Police = "police";
 
@@ -100,22 +101,22 @@ public static class ToolbarItems
     /// </summary>
     public static readonly string[] Names =
     [
-        Settings, Profile, Themes, WebUi, Tools, Mcp, Skills, Commands, Sys, Sessions, Usage, Memory, Prompts, Queue, Ask, CmdList, Police,
+        Settings, Profile, Themes, WebUi, Tools, Mcp, Skills, Commands, Sessions, Usage, Memory, Prompts, Queue, Ask, CmdList, Police,
         Shell, Files, Image, Web, Advisors, Docker, EventLog, Network, Services, Tasks, Directory, Obsidian, Sql, Oracle, MySql, Sqlite, DuckDb, Postgres, Unc, Ha, Comfy, Camera, Print,
         Log, Process, ComfyView, ComfyThumbs, YouTube, BrowserLinks, ShoppingList, Path, Model,
     ];
 
     /// <summary>
     /// What a profile that never chose shows (2026-10-05, the user's pick): Settings, the Web UI (2026-10-17, the user's ask; drawn after Web,
-    /// <see cref="DefaultOrder"/>), Tools, Skills, Memory, Saved prompts (2026-10-14, the user's ask),
-    /// Queue (2026-10-13, the user's pick), Shell allowed
+    /// <see cref="DefaultOrder"/>), Tools, Skills, Commands, Usage (2026-11-07, the user's ask, with Ask), Memory, Saved prompts (2026-10-14, the user's ask),
+    /// Queue (2026-10-13, the user's pick), Ask, Shell allowed
     /// commands, Shell police, the Shell, Files, Image (2026-10-10, the user's ask) and Web switches and the path — the lock and the officer still only under a
     /// policy other than off. Tools, Shell allowed commands, Shell police, the three switches and the path from 2026-10-03; Shell
     /// allowed commands, Shell police and the path from 2026-10-02; Settings, Tools, Skills, Sessions and the path from later on
     /// 2026-09-29, every item before; a profile that saved the defaults as null follows. In <see cref="Names"/> order, which
     /// <see cref="Save"/> compares by. Pinned.
     /// </summary>
-    public static readonly string[] Defaults = [Settings, WebUi, Tools, Skills, Memory, Prompts, Queue, CmdList, Police, Shell, Files, Image, Web, Path];
+    public static readonly string[] Defaults = [Settings, WebUi, Tools, Skills, Commands, Usage, Memory, Prompts, Queue, Ask, CmdList, Police, Shell, Files, Image, Web, Path];
 
     /// <summary>
     /// The glyph an item draws on the checklist (the lock's closed one for <see cref="CmdList"/>; the folder for the path
@@ -131,7 +132,6 @@ public static class ToolbarItems
         Mcp => ChatScreen.McpToolGlyph,
         Skills => ChatScreen.SkillsToolGlyph,
         Commands => ChatScreen.CommandsToolGlyph,
-        Sys => ChatScreen.SysToolGlyph,
         Sessions => ChatScreen.SessionsToolGlyph,
         Usage => ChatScreen.UsageToolGlyph,
         Memory => ChatScreen.MemoryToolGlyph,
@@ -185,7 +185,6 @@ public static class ToolbarItems
         Mcp => "MCP",
         Skills => "Skills",
         Commands => "Commands",
-        Sys => "System prompt",
         Sessions => "Sessions",
         Usage => "Usage",
         Memory => "Memory",
@@ -243,7 +242,6 @@ public static class ToolbarItems
         Mcp => "/mcp",
         Skills => "/skills",
         Commands => ChatScreen.CommandsToolLine,
-        Sys => "/sys",
         Sessions => "/sessions",
         Usage => "/usage",
         Memory => "/memory",
@@ -343,13 +341,15 @@ public static class ToolbarItems
     /// <summary>
     /// The default order (2026-10-13, the user's ask: <c>⚙️ 🛠️ 🎓 | 💾 📣 ⏳ | 🔒 👮 🐚 | 📁 🖼️ 🌐 📱</c>, 📣 since 2026-10-14, 📱 after 🌐 since 2026-10-17, 🖼️ in place of 🌄 since 2026-10-27): <see cref="Names"/> with a divider ahead of
     /// Memory (later still that day, the user's ask; after Usage, so 💾 📣 ⏳ stay together when System prompt, Sessions or Usage is checked), one after
-    /// Queue (ahead of Ask, unchecked by default; after Memory until Queue came later that day) and one after Shell, numbered from the left. A
+    /// Queue (ahead of Ask, checked by default since 2026-11-07; after Memory until Queue came later that day) and one after Shell, numbered from the left.
+    /// Since 2026-11-07 (the user's ask: 📊 on by default, just right of the first divider) the first divider is ahead of Usage, not Memory:
+    /// <c>⚙️ 🛠️ 🎓 🪄 │ 📊 💾 📣 ⏳ │ 🙋 🔒 👮 🐚 │ 📁 🖼️ 🌐 📱</c>. A
     /// divider whose neighbours are hidden is not drawn (<see cref="ItemOrder.ShownDividers"/>). Pinned.
     /// </summary>
     public static readonly string[] DefaultOrder =
     [
-        .. DefaultNames.TakeWhile(id => id != Memory), ItemOrder.DividerPrefix + "1",
-        .. DefaultNames.SkipWhile(id => id != Memory).TakeWhile(id => id != Ask), ItemOrder.DividerPrefix + "2",
+        .. DefaultNames.TakeWhile(id => id != Usage), ItemOrder.DividerPrefix + "1",
+        .. DefaultNames.SkipWhile(id => id != Usage).TakeWhile(id => id != Ask), ItemOrder.DividerPrefix + "2",
         .. DefaultNames.SkipWhile(id => id != Ask).TakeWhile(id => id != Files), ItemOrder.DividerPrefix + "3",
         .. DefaultNames.SkipWhile(id => id != Files),
     ];

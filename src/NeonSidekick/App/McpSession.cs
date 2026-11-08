@@ -24,7 +24,7 @@ public sealed record McpServerStatus(string Name, McpScope Scope, McpScope? Shad
     public bool Startable => ShadowedBy is null;
 }
 
-/// <summary>One connected server's tools, for the <c>/sys</c> and <c>/mcp</c> groups.</summary>
+/// <summary>One connected server's tools, for the <c>/usage</c> and <c>/mcp</c> groups.</summary>
 public sealed record McpServerTools(string Name, IReadOnlyList<AIFunction> Tools);
 
 /// <summary>
@@ -78,7 +78,7 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
     /// <summary>Every connected server's tools, flat, in server order: what a turn offers.</summary>
     public IReadOnlyList<AIFunction> Tools { get { lock (_snapshot) { return _tools; } } }
 
-    /// <summary>Every connected server's tools by server: the <c>/sys</c> and <c>/mcp</c> groups.</summary>
+    /// <summary>Every connected server's tools by server: the <c>/usage</c> and <c>/mcp</c> groups.</summary>
     public IReadOnlyList<McpServerTools> ServerTools { get { lock (_snapshot) { return _serverTools; } } }
 
     /// <summary>Whether either file names a server or has a problem worth showing.</summary>

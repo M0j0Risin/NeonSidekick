@@ -5,7 +5,7 @@ namespace NeonSidekick.UI;
 
 /// <summary>
 /// A renderable laid out <paramref name="cells"/> cells narrower and every line of it led by that many spaces (2026-10-03:
-/// the <c>/sys</c> tabs' text under a <see cref="SectionRule"/>). Spectre's <see cref="Padder"/> does the left side too but
+/// the <c>/usage</c> Prompt and Tools tabs' text under a <see cref="SectionRule"/>). Spectre's <see cref="Padder"/> does the left side too but
 /// pads every line on the right to the longest one; this leaves a line's end where its text ends.
 /// </summary>
 internal sealed class Indented(IRenderable child, int cells) : IRenderable

@@ -2,7 +2,7 @@
 
 Every tool the model can call, grouped as the tabs of `/tools` show them. Back to the [README](../README.md).
 
-Each group has a switch (*File tools*, *Web tools*…), and the Offered tab of `/tools` switches single tools ([Panes](INTERFACE.md#panes)). `/sys` › Tools shows what the model is offered right now.
+Each group has a switch (*File tools*, *Web tools*…), and the Offered tab of `/tools` switches single tools ([Panes](INTERFACE.md#panes)). `/usage tools` shows what the model is offered right now.
 
 Settings in *italics* are in [SETTINGS.md](SETTINGS.md), with their values and defaults.
 

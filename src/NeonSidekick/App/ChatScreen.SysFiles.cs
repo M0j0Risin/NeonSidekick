@@ -19,7 +19,8 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The words after <c>/sys</c> and the file each edits (2026-10-09, the user's ask: <c>/persona</c>, <c>/operata</c> and
-    /// <c>/vocalia</c> folded under the command that shows the prompt they make), in the prompt's order. Pinned.
+    /// <c>/vocalia</c> folded under the command that showed the prompt they make, until <c>/usage</c> took that over on 2026-11-07), in the
+    /// prompt's order. Pinned.
     /// </summary>
     public static readonly IReadOnlyList<(string Word, string File)> SysFileWords =
     [
@@ -34,13 +35,17 @@ internal sealed partial class ChatScreen
     /// <summary><c>/sys</c>'s completion note beside a file word: <c>edit persona.md</c>. Pinned.</summary>
     public static string SysFileNote(string fileName) => "edit " + fileName;
 
-    /// <summary><c>/sys</c> given a first word that is none of the three files. Pinned.</summary>
-    public static readonly string SysUsageError = "/sys takes " + string.Join(", ", SysFileWords.Select(f => f.Word)) + ", or nothing for the system prompt.";
+    /// <summary>
+    /// <c>/sys</c> given nothing, or a first word that is none of the three files. Pinned. Since 2026-11-07 (the user's ask) a bare <c>/sys</c>
+    /// opens no pane, so the error points at <c>/usage prompt</c>, where the system prompt went.
+    /// </summary>
+    public static readonly string SysUsageError = "/sys takes " + SysPersonaWord + ", " + SysOperataWord + " or " + SysVocaliaWord + "; "
+        + SlashCommands.UsageWord + " " + UsageText.PromptWord + " shows the system prompt.";
 
     /// <summary>
     /// <c>/sys persona|operata|vocalia [reset]</c> (2026-10-09; <c>copy &lt;profile&gt; [force]</c> too until 2026-10-10): the file's word, then
-    /// <see cref="HandlePromptFileAsync"/> with the rest, as <c>/persona</c> and its siblings ran it from 2026-09-16; a first word
-    /// that is no file is <see cref="SysUsageError"/>. The lines go through the flow sink, so the same call serves a pane under a reply.
+    /// <see cref="HandlePromptFileAsync"/> with the rest, as <c>/persona</c> and its siblings ran it from 2026-09-16; no word (since
+    /// 2026-11-07) or a first word that is no file is <see cref="SysUsageError"/>. The lines go through the flow sink, so the same call serves a pane under a reply.
     /// </summary>
     private async Task HandleSysFileAsync(string args, CancellationToken cancellationToken)
     {
