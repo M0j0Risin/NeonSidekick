@@ -38,7 +38,7 @@ public class SkillCompactModeTests
     [Fact]
     public void EveryMode_HasAHint()
     {
-        Assert.Equal("loaded skills survive a prune and the mid-turn guard", SkillCompactMode.Describe("protected"));
+        Assert.Equal("loaded skills are kept through a prune, during a reply too", SkillCompactMode.Describe("protected"));
         Assert.Equal("loaded skills prune like any tool result", SkillCompactMode.Describe("unprotected"));
         Assert.Equal("", SkillCompactMode.Describe("prune"));
     }

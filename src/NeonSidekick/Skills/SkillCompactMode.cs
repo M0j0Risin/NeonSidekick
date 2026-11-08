@@ -37,7 +37,7 @@ public static class SkillCompactMode
     /// <summary>The menu hint next to a mode. Pinned.</summary>
     public static string Describe(string name) => name switch
     {
-        Protected => "loaded skills survive a prune and the mid-turn guard",
+        Protected => "loaded skills are kept through a prune, during a reply too",
         Unprotected => "loaded skills prune like any tool result",
         _ => "",
     };

@@ -706,7 +706,7 @@ public sealed class AppSettingsData
     /// Which session names the rule above the input row shows at its right edge (2026-09-18): one
     /// of <see cref="Sessions.SessionShowName.Names"/> — <c>all-names</c> (the first line, then the
     /// model's slug in its place), <c>model-written</c> (a model-written or typed name alone, never
-    /// the first line) or <c>none</c> (the rule stays bare). Anything else reads as
+    /// the first line) or <c>none</c> (no name shows above the input row). Anything else reads as
     /// <see cref="Sessions.SessionShowName.Default"/> with a warning. Read at each draw; no reconnect. No variable.
     /// </summary>
     public string SessionShowName { get; set; } = Sessions.SessionShowName.Default;
@@ -1073,7 +1073,7 @@ public sealed class AppSettingsData
     public string LlmUrl { get; set; } = "";
 
     /// <summary>
-    /// Whether the thinking spinner reads a random verb from <see cref="App.ThinkingVerbs.All"/>
+    /// Whether the thinking spinner shows a random verb from <see cref="App.ThinkingVerbs.All"/>
     /// (<c>bafflering</c>, <c>zonkerating</c>, …) picked each time it starts, instead of
     /// <see cref="App.ChatScreen.ThinkingLabel"/>. No variable.
     /// </summary>

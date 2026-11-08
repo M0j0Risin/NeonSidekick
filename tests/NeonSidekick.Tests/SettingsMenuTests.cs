@@ -1122,8 +1122,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("LLM compact show summary", SettingsMenu.FieldName(SettingsField.LlmCompactShowSummary));
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.LlmCompactShowSummary, data, _settings.ProfileDirectory));
         Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.LlmCompactShowSummary, new AppSettingsData { LlmCompactShowSummary = true }, _settings.ProfileDirectory));
-        Assert.Equal("the summary's lines or the pruned results, then the protected counts", SettingsMenu.ToggleDescribe(SettingsField.LlmCompactShowSummary, true));
-        Assert.Equal("the one compact notice alone", SettingsMenu.ToggleDescribe(SettingsField.LlmCompactShowSummary, false));
+        Assert.Equal("the summary or the pruned results, then how many messages were kept", SettingsMenu.ToggleDescribe(SettingsField.LlmCompactShowSummary, true));
+        Assert.Equal("just the one compact notice", SettingsMenu.ToggleDescribe(SettingsField.LlmCompactShowSummary, false));
         // The Common tab (2026-10-10, the user's call: the LLM tab less the six rows only an OpenAI-compatible HTTP server reads) in the LLM tab's five runs (2026-10-01, the user's call):
         // the connection, how it answers, tools and limits, the context, the pictures and fun verbs; the tools toggle still ABOVE the tool-compact picker (the user's order, 2026-09-15).
         Assert.Equal(new[] { SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmReasoning, SettingsField.LlmShowThinking, SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmMaxTurns, SettingsField.LlmAutoCompactPercent, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmToolCompactType, SettingsField.LlmPictureKeep, SettingsField.LlmPictureMegabytes, SettingsField.LlmUseFunVerbs }, SettingsMenu.TabFields[(int)SettingsTab.Common]);
@@ -1285,7 +1285,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.ExternalSkills, new AppSettingsData { ExternalSkills = true }, _settings.ProfileDirectory));
         Assert.Equal("protected", SettingsMenu.FieldValue(SettingsField.SkillCompactMode, data, _settings.ProfileDirectory));
         Assert.Equal("unprotected", SettingsMenu.FieldValue(SettingsField.SkillCompactMode, new AppSettingsData { SkillCompactMode = "unprotected" }, _settings.ProfileDirectory));
-        Assert.Equal("protected   [#9A8BB8]loaded skills survive a prune and the mid-turn guard[/]", SettingsMenu.SkillCompactModeLabel("protected"));
+        Assert.Equal("protected   [#9A8BB8]loaded skills are kept through a prune, during a reply too[/]", SettingsMenu.SkillCompactModeLabel("protected"));
         Assert.Equal("unprotected [#9A8BB8]loaded skills prune like any tool result[/]", SettingsMenu.SkillCompactModeLabel("unprotected"));
         Assert.Equal(14, SettingsMenu.TabFields.Count);   // Automation since 2026-10-21; Web UI since 2026-10-14; the LLM tab two (Common and Http) and Advisors since 2026-10-10; Claude and OpenAI since 2026-10-03; Docker since 2026-10-02; the Claude (API) tab went to /tools' Claude tab on 2026-09-29; Embedded LLM since 2026-09-29; Claude (API) since later on 2026-09-27; Claude on 2026-09-27 until later that day (to /tools); Botchat since 2026-09-25; 9 until 2026-09-19, when Ask, Files and Web moved to /tools (ToolsTabFields) and, later that day, Skills to /skills (SkillsTabFields)
         Assert.Equal(32, SettingsMenu.ToolsTabFields.Count);   // DuckDB 2026-10-25; Monitors 2026-10-23; Clock and Help 2026-10-18; Network, Services, Tasks and Directory later still on 2026-10-15; Timers later on 2026-10-15; EventLog 2026-10-15; Shopping 2026-10-11; ClaudeCode gone later on 2026-10-10; Image 2026-10-10; YouTube 2026-10-05; Screen, SQLite and Postgres 2026-10-04; Camera and Docker 2026-10-02; UNC later still on 2026-09-30; MySQL and Oracle since 2026-09-30; Print since later on 2026-09-28; Home Assistant since 2026-09-28; Claude since 2026-09-27; Images since 2026-09-24; SQL since 2026-09-23; Obsidian since 2026-09-22 and Options last later that day (first since later on 2026-09-19); Git between Files and Web since 2026-09-20; Shell between Git and Web since 2026-09-21
@@ -1795,7 +1795,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.ExternalSkills, new AppSettingsData { ExternalSkills = true }, _settings.ProfileDirectory));
         Assert.Equal("protected", SettingsMenu.FieldValue(SettingsField.SkillCompactMode, data, _settings.ProfileDirectory));
         Assert.Equal("unprotected", SettingsMenu.FieldValue(SettingsField.SkillCompactMode, new AppSettingsData { SkillCompactMode = "unprotected" }, _settings.ProfileDirectory));
-        Assert.Equal("protected   [#9A8BB8]loaded skills survive a prune and the mid-turn guard[/]", SettingsMenu.SkillCompactModeLabel("protected"));
+        Assert.Equal("protected   [#9A8BB8]loaded skills are kept through a prune, during a reply too[/]", SettingsMenu.SkillCompactModeLabel("protected"));
         Assert.Equal("unprotected [#9A8BB8]loaded skills prune like any tool result[/]", SettingsMenu.SkillCompactModeLabel("unprotected"));
         Assert.Equal([SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount, SettingsField.ShowFileDiffs, SettingsField.DiffMaxLines, SettingsField.DiffCollapseCount], ToolsMenuTests.TabFields(ToolsText.OptionsTabTitle));   // the Options tab, later on 2026-09-19 (index 7 since the SQL tab, 2026-09-23, 9 since the Claude tab, 2026-09-27, 11 since the Print tab, 2026-09-28); the fold's count under the switch 2026-09-22, the code fold's under it later that day
         Assert.Equal([SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices], ToolsMenuTests.TabFields(ToolsText.AskTabTitle));   // the Ask tab: second after Options until later on 2026-09-21, between Shell and Git (native) since
@@ -4696,7 +4696,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Contains("\n▸ Session retention (days)    30 days\n", Output);
         Assert.Contains("\n  · Session naming mode: first-line\n", Output);
         Assert.Contains("\n▸ Session naming mode         first-line\n", Output);
-        AssertPickerEnds("\n" + Titled(GroupBreadcrumb(SettingsTab.Sessions, "Session show name")) + "\n \n▸ all            every session name shows on the line above the input row\n  model-written  only a model-written or typed name shows; the first line never does\n  none           the rule stays bare\n", 120);
+        AssertPickerEnds("\n" + Titled(GroupBreadcrumb(SettingsTab.Sessions, "Session show name")) + "\n \n▸ all            every session name shows on the line above the input row\n  model-written  only a model-written or typed name shows; the first line never does\n  none           no name shows above the input row\n", 120);
         Assert.Contains("\n  · Session show name: none\n", Output);
         Assert.Contains("\n▸ Session show name           none\n", Output);
         Assert.False(SettingsMenu.IsToggle(SettingsField.SessionShowName));

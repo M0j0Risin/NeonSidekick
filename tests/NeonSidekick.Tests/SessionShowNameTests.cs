@@ -30,7 +30,7 @@ public class SessionShowNameTests
         Assert.Equal("none", SessionShowName.Name(SessionNameDisplay.None));
         Assert.Equal("every session name shows on the line above the input row", SessionShowName.Describe("all"));
         Assert.Equal("only a model-written or typed name shows; the first line never does", SessionShowName.Describe("model-written"));
-        Assert.Equal("the rule stays bare", SessionShowName.Describe("none"));
+        Assert.Equal("no name shows above the input row", SessionShowName.Describe("none"));
         Assert.Equal("", SessionShowName.Describe("other"));
         Assert.Equal(SessionShowName.Default, new AppSettingsData().SessionShowName);
     }

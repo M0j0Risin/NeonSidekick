@@ -63,7 +63,7 @@ public static class SessionShowName
     {
         "all" => "every session name shows on the line above the input row",
         "model-written" => "only a model-written or typed name shows; the first line never does",
-        "none" => "the rule stays bare",
+        "none" => "no name shows above the input row",
         _ => "",
     };
 
