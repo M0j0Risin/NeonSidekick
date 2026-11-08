@@ -450,11 +450,7 @@ internal sealed partial class ChatScreen
             return next;
         }
 
-        _settings.Update(d =>
-        {
-            d.HomeBarItems = next.Items;
-            d.HomeBarLastItems = next.LastItems;
-        });
+        _settings.Update(next.SaveTo);
         _transcript.Notice(next.Items.Count > 0 ? HomeBarText.Shown : HomeBarText.Hidden);
         return next;
     }

@@ -3499,7 +3499,7 @@ internal sealed partial class SettingsMenu
     /// <summary>The warning when DPAPI could not encrypt the YouTube API key (2026-10-05): it is kept as typed. Pinned.</summary>
     public static string YouTubeApiKeyPlainWarning(string reason) => $"YouTube API key saved unencrypted: {reason}.";
 
-    /// <summary>The warning when DPAPI could not encrypt the Brave Search API key (2026-11-07): it is kept as typed. Pinned.</summary>
+    /// <summary>The warning when DPAPI could not encrypt the Web metasearch Brave API key (2026-11-07): it is kept as typed. Pinned.</summary>
     public static string BraveApiKeyPlainWarning(string reason) => $"Web metasearch Brave API key saved unencrypted: {reason}.";   // the row's name since later on 2026-11-07
 
     /// <summary>How the menu shows an empty <see cref="AppSettingsData.YouTubeRegion"/> (2026-10-08): no region asked for. Pinned.</summary>
@@ -3726,9 +3726,6 @@ internal sealed partial class SettingsMenu
     /// no key (the user's pick), since its tabs filter as you type. Pinned.
     /// </summary>
     public const char ShowBarKey = 'h';
-
-    /// <summary>The show/hide button's index (2026-11-07): last, after the tool bar's divider and the performance bar's look (both index 3).</summary>
-    private const int ShowBarIndex = 4;
 
     /// <summary>
     /// Show performance bar's hint: <see cref="ToolbarToggleKeys"/>' words, the same page since 2026-10-12 (the user's ask), without

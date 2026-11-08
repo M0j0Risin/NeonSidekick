@@ -37,7 +37,7 @@ Every setting on the `/settings`, `/skills`, `/tools` and `/mcp` panes, its defa
 | Model avatar | The profile's emoji, leading its replies, `/botchat` lines and the window title. Enter (or `/avatar`) opens the [avatar picker](INTERFACE.md#the-avatar-picker). | 🤖 |
 | User avatar | Your emoji, leading your lines in place of `›`. Enter opens the [picker](INTERFACE.md#the-avatar-picker); 🚫 goes back to `›`. | 🙊 |
 | Check for updates at start | Asks GitHub for a newer release at each start, sending nothing about you, and shows a line and the 📦 marker. Off, nothing is asked; [`/update`](COMMANDS.md#updating) still works. | on |
-| Queue mode | `automatic`: a message sent during a reply waits in `/queue` and goes when it ends. `manual`: each waits for `➤ send` (`s`). `off`: no list. | `automatic` |
+| Queue mode | `automatic`: a message sent during a reply waits in `/queue` and goes when it ends. `manual`: each waits for `➤ send` (`s`) or `/queue send`. `off`: no list. | `automatic` |
 | Queue cancel mode | A canceled reply's queue: `hold` keeps it until your next message (a Web UI message too; the page's **Resume** sends it), `drain` sends the next at once, `empty` drops it. | `empty` |
 | Keep message history | Saves the ↑/↓ history (newest 100 lines, the Web UI's too) in `sessions.db`. Off deletes it at the next profile load; `/msgclear` empties it. | on |
 | Command typo intercept | A command typed without its slash (`clear`), or with extra ones, asks *Did you mean /clear?* first. | on |
@@ -60,9 +60,9 @@ Every setting on the `/settings`, `/skills`, `/tools` and `/mcp` panes, its defa
 | Menus max height | How much of the window a pane may take: `half`, `three-quarters` or `full`. Longer lists scroll. | `full` |
 | Hints bar | `auto` (its own bar over the status bar while there is a hint, held until the next send), `always`, or `off` (hints share the status bar). See [The hints bar](INTERFACE.md#the-hints-bar). | `auto` |
 | Status bar | The status bar's sections, order and sides. Enter opens the [checklist](INTERFACE.md#bar-checklists); see [The status bar](INTERFACE.md#the-status-bar). | `default`: every section but Working directory; Model and Working directory pinned right |
-| Tool bar | The toolbar's icons, order and sides. Enter (or `/toolbar edit`) opens the checklist ([The toolbar](INTERFACE.md#the-toolbar)); **bar:** (`h`) hides or shows it. | Settings, Tools, Skills, Commands, Usage, Memory, Saved prompts, Queue, Ask, Shell allowed commands, Shell police, Shell, Files, Image, Web, Web UI, path (17 of 48), with three dividers |
-| Performance bar | Its meters and places: Enter (or `/perfbar edit`) opens the checklist. **look:** (`l`) or `/perfbar text`, `gauge` or `led` picks the look ([The performance bar](INTERFACE.md#the-performance-bar)); **bar:** (`h`) hides or shows it. | CPU, RAM, GPU, VRAM, `led` |
-| Home bar | Home Assistant rooms and devices, and the shopping list's 🛒, as chips on their own row. Enter (or `/homebar edit`) opens the [picker](INTERFACE.md#the-home-bar); a click on **bar:** hides or shows it. | off |
+| Tool bar | The toolbar's icons, order and sides. Enter (or `/toolbar edit`) opens the checklist ([The toolbar](INTERFACE.md#the-toolbar)); [**bar:**](INTERFACE.md#bar-checklists) (`h`) hides or shows it. | Settings, Tools, Skills, Commands, Usage, Memory, Saved prompts, Queue, Ask, Shell allowed commands, Shell police, Shell, Files, Image, Web, Web UI, path (17 of 48), with three dividers |
+| Performance bar | Its meters and places: Enter (or `/perfbar edit`) opens the checklist. **look:** (`l`) or `/perfbar text`, `gauge` or `led` picks the look ([The performance bar](INTERFACE.md#the-performance-bar)); [**bar:**](INTERFACE.md#bar-checklists) (`h`) hides or shows it. | CPU, RAM, GPU, VRAM, `led` |
+| Home bar | Home Assistant rooms and devices, and the shopping list's 🛒, as chips on their own row. Enter (or `/homebar edit`) opens the [picker](INTERFACE.md#the-home-bar); [**bar:**](INTERFACE.md#bar-checklists) hides or shows it. | off |
 | Toolbar order | The order of the five bars under the input line (**Order** on the pane). Enter opens the list; Shift+↑/↓ moves a bar. | `default` (hints bar, status bar, toolbar, performance bar, home bar) |
 | Draft editor | The program `/draft` opens (`code --wait`, `notepad`…); it must wait for the file to close. | empty (the system's editor for `.txt` files) |
 | Image viewer | Where a double-clicked picture opens: empty for the [picture viewer](INTERFACE.md#the-picture-viewer), `system` for the system's app, or a command given the path (`mspaint`). | empty (the picture viewer) |
@@ -981,7 +981,7 @@ Every connected server's tools, as `<server>__<tool>`, with their descriptions; 
 
 ## System prompt (`/usage`)
 
-The Prompt, Tools and Skills tabs of `/usage` (`/usage prompt`, `tools`, `skills`) are a read-only view of exactly what the next request sends the model. `/sys persona`, `/sys operata` and `/sys vocalia` open its three files in your editor (`reset` restores the default); `/profile push|pull persona|operata|vocalia <name> [overwrite]` copies one to or from another profile.
+The Prompt, Tools and Skills tabs of `/usage` (`/usage prompt`, `tools`, `skills`) are a read-only view of what the next request sends the model: the prompt section by section, every tool, and the skills block. `/sys persona`, `/sys operata` and `/sys vocalia` open its three files in your editor (`reset` restores the default); `/profile push|pull persona|operata|vocalia <name> [overwrite]` copies one to or from another profile.
 
 ### Prompt
 
@@ -999,4 +999,4 @@ Every tool the reply may call, grouped as on `/tools` (plus one group per MCP se
 
 ### Skills
 
-The skills catalog the model is offered: each skill with its scope (profile, global or external), whether it's locked, its description and its `SKILL.md` file. When the catalog isn't sent, the heading says why (*Agent skills* or *LLM offer tools* off).
+The skills block's directive, word for word, then each skill the model is offered. Each shows its scope (profile, global or external), whether it's locked, its description, its `SKILL.md` file and any warning from loading it. When the catalog isn't sent, the heading says why (*Agent skills* or *LLM offer tools* off).

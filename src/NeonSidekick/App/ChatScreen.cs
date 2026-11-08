@@ -597,9 +597,9 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// <c>/queue send</c> while ➤ send isn't offered (2026-11-07): the queue isn't held and <c>Queue mode</c> is automatic, so the queue goes by
-    /// itself and nothing is taken off it. Pinned.
+    /// itself and nothing is taken off it. No "when the reply ends" (2026-11-08, the review): it shows at the idle line too. Pinned.
     /// </summary>
-    public const string QueueSendsItselfNotice = "(" + NoticeGlyphs.Queue + "the queue sends by itself when the reply ends; ➤ send is for a held queue or Queue mode manual)";
+    public const string QueueSendsItselfNotice = "(" + NoticeGlyphs.Queue + "the queue sends by itself; ➤ send is for a held queue or Queue mode manual)";
 
     /// <summary><c>/queue send</c> under a reply (2026-11-07): the message taken waits for the idle line, which sends it first. Pinned.</summary>
     public const string QueueSendWaitsNotice = "(" + NoticeGlyphs.Queue + "sends when the reply ends)";
@@ -1740,6 +1740,8 @@ internal sealed partial class ChatScreen
             HomeCatalog = _homeLive.CatalogAsync,
             // The Tool bar checklist lists the items this system shows (2026-10-22): the screen's, read at each call, since tests set it after the build.
             ToolbarItemHere = id => this.ToolbarItemHere(id),
+            // The Tool bar page's bar: reads what the row would draw (2026-11-08, the review): 🔒 and 👮 alone draw nothing under the policy off.
+            ToolbarDrawn = d => ToolbarParts(d) is not null,
         };
         // The mode buttons (2026-10-13, the user's ask): after the settings menu, whose rows save them; the saved words, read without the turn's warning; set through the rows' own save.
         _queueMenu = new QueueMenu(_queue, _flow, _menuPane, () => SavedQueueMode(_settings.Current), mode => _menu.SetQueueMode(mode), () => SavedQueueCancel(_settings.Current), mode => _menu.SetQueueCancelMode(mode));
@@ -2323,12 +2325,7 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        _settings.Update(d =>
-        {
-            d.PerformanceBarItems = next.Items;
-            d.PerformanceBarLastItems = next.LastItems;
-            d.PerformanceBarLook = next.Look;
-        });
+        _settings.Update(next.SaveTo);
         _transcript.Notice(Perf.PerfText.BarNotice(PerfBarItems.Resolve(next.Items).Count == 0 ? PerfBarMode.OffWord : next.Look));
     }
 
@@ -2345,11 +2342,7 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        _settings.Update(d =>
-        {
-            d.ToolbarItems = next.Items;
-            d.ToolbarLastItems = next.LastItems;
-        });
+        _settings.Update(next.SaveTo);
         _transcript.Notice(ToolbarItems.Notice(ToolbarItems.Resolve(next.Items).Count > 0));
     }
 
@@ -2504,9 +2497,14 @@ internal sealed partial class ChatScreen
         }
     }
 
-    private ScreenPane.ToolbarParts? ToolbarParts()
+    private ScreenPane.ToolbarParts? ToolbarParts() => ToolbarParts(_effective());
+
+    /// <summary>
+    /// The toolbar's groups under <paramref name="shown"/>, null when nothing is drawn; out of <see cref="ToolbarParts()"/> on 2026-11-08 (the review)
+    /// so the Tool bar page's <b>bar:</b> reads the same answer for the saved settings (<see cref="SettingsMenu.ToolbarDrawn"/>).
+    /// </summary>
+    private ScreenPane.ToolbarParts? ToolbarParts(AppSettingsData shown)
     {
-        var shown = _effective();
         // The profile folder as ~ (2026-10-04, the UI review).
         string path = WorkingDirectoryLabel(shown);
         // The model's name (2026-10-12, the user's ask: Model name), its reasoning glyph after it since later that day (the user's ask), as on the hint row.
@@ -3241,20 +3239,21 @@ internal sealed partial class ChatScreen
     /// next turn offers, and the skills catalog on a tab of its own; all from the live state.
     /// </summary>
     /// <remarks>
-    /// The Context tab's facts are built once per call (2026-11-02, the review), shared by the pane's measure pass and the tab shown; the
-    /// Prompt and Skills tabs' facts likewise (2026-11-07).
+    /// The Context tab's facts are built once per call (2026-11-02, the review), shared by the pane's measure pass and the tab shown. The
+    /// Prompt, Tools and Skills tabs build theirs fresh each time the pane builds the tab (2026-11-08, the review: a facts object kept for the
+    /// pane's life went stale over a reply, as <c>/sys</c>' never did). The pane builds a tab only on a switch or a width change, so that is
+    /// a few file reads per switch.
     /// </remarks>
     private IReadOnlyList<InfoTab> UsageTabs()
     {
         var context = new Lazy<ContextFacts>(ContextFacts);
-        var prompt = new Lazy<SystemPromptFacts>(SystemPromptFacts);
         return
         [
             new(UsageText.StatisticsTabTitle, () => UsageText.StatisticsTab(_session.Usage, _session.ContextLength)),
             new(UsageText.ContextTabTitle, () => UsageText.ContextTab(context.Value)),
-            new(SystemPromptSummary.PromptTabTitle, () => SystemPromptSummary.PromptTab(prompt.Value)),
+            new(SystemPromptSummary.PromptTabTitle, () => SystemPromptSummary.PromptTab(SystemPromptFacts())),
             new(SystemPromptSummary.ToolsTabTitle, () => SystemPromptSummary.ToolsTab(ToolGroups(), _effective().LlmOfferTools)),
-            new(SystemPromptSummary.SkillsTabTitle, () => SystemPromptSummary.SkillsTab(prompt.Value)),
+            new(SystemPromptSummary.SkillsTabTitle, () => SystemPromptSummary.SkillsTab(SystemPromptFacts())),
         ];
     }
 
@@ -3703,6 +3702,12 @@ internal sealed partial class ChatScreen
     private bool QueueDrains => !_queue.Held && QueueModeNow() != Queueing.Manual;
 
     /// <summary>
+    /// The ➤ send button's rule (2026-11-08, the review: one copy for the idle pane, the mid-turn pane and <c>/queue send</c>): always under
+    /// <c>Queue mode</c> <c>manual</c>; at the idle line also while the queue is held; never otherwise, since the queue then sends by itself.
+    /// </summary>
+    private bool SendOffered(bool underReply) => QueueModeNow() == Queueing.Manual || (!underReply && _queue.Held);
+
+    /// <summary>
     /// The chat line's take hook (2026-10-09, the user's ask: <c>Queue mode</c> <c>manual</c> queues every typed message, at the
     /// idle line too): a message — a line no command parses, or any line of a <c>/draft</c> replay, which is a message whatever it
     /// reads — joins the queue rather than going to the model; a command is left to run. False under any other mode.
@@ -3859,7 +3864,7 @@ internal sealed partial class ChatScreen
                 // The send button (2026-10-05, the user's ask): the front message of a held queue, left for the idle loop's
                 // top, which takes a pending line ahead of the hold — sent as if typed, hold's rule after it. Under Queue mode
                 // manual (2026-10-09) it is always offered: the one way a message leaves the queue, one per press.
-                if (await _queueMenu.ShowAsync(cancellationToken, () => _queue.Held || QueueModeNow() == Queueing.Manual).ConfigureAwait(false) is { } send)
+                if (await _queueMenu.ShowAsync(cancellationToken, () => SendOffered(underReply: false)).ConfigureAwait(false) is { } send)
                 {
                     Pend(send);
                 }
@@ -3887,7 +3892,7 @@ internal sealed partial class ChatScreen
                 {
                     _transcript.Notice(QueueMenu.EmptyNotice);
                 }
-                else if (!(QueueModeNow() == Queueing.Manual || (!underReply && _queue.Held)))
+                else if (!SendOffered(underReply))
                 {
                     _transcript.Notice(QueueSendsItselfNotice);
                 }

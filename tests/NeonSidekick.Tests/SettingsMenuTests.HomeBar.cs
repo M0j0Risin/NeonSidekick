@@ -95,10 +95,47 @@ public partial class SettingsMenuTests
         input.Push(Keys.Escape);
         Assert.False(await menu.EditHomeBarAsync(own: true, CancellationToken.None));
 
-        Assert.Equal("Nothing to show yet: add rooms and devices from the other tabs", HomeBarText.NothingToShow);
+        Assert.Equal("Nothing to show yet: pick items on the other tabs", HomeBarText.NothingToShow);   // no "rooms and devices" since 2026-11-08 (the review)
         Assert.Contains("  · " + HomeBarText.NothingToShow, Output);
         Assert.Null(_settings.Current.HomeBarItems);
         Assert.Null(_settings.Current.HomeBarLastItems);
+        pane.Dispose();
+    }
+
+    /// <summary>
+    /// The picker's <c>bar:</c> keeps the cursor on a tab other than On the bar (2026-11-08, the review: it went to the top on every tab):
+    /// on Rooms, two rows down, a click on <c>bar:</c> and Enter toggle the third room, not the first.
+    /// </summary>
+    [Fact]
+    public async Task ThePicker_TheBarButton_OnTheRoomsTab_KeepsTheCursorRow()
+    {
+        _console.Profile.Width = 240;
+        _settings.Update(d =>
+        {
+            d.HomeAssistantUrl = "http://ha.test:8123";
+            d.HomeAssistantToken = "secret";
+            d.HomeBarItems = ["entity:switch.kettle"];
+        });
+        var catalog = new HaCatalog(
+            [new HaFloor("ground", "Ground", 0)],
+            [new HaAreaEntry("attic", "Attic", "ground"), new HaAreaEntry("den", "Den", "ground"), new HaAreaEntry("hall", "Hall", "ground")],
+            [],
+            [],
+            [],
+            []);
+        var (menu, pane, input) = ClickablePaneMenu(cursorTop: 100);
+        menu.HomeCatalog = _ => Task.FromResult<(HaCatalog?, string?)>((catalog, null));
+        input.Push(Keys.Escape);
+        Assert.False(await menu.EditHomeBarAsync(own: true, CancellationToken.None));
+        int column = ShowBarColumn(Output, shown: true);
+
+        input.Push(Keys.Right, Keys.Down, Keys.Down);   // Rooms, the third row
+        input.PushClick(column, 100);                   // hidden, the cursor kept
+        input.Push(Keys.Enter, Keys.Escape);            // the third room on
+        Assert.True(await menu.EditHomeBarAsync(own: true, CancellationToken.None));
+
+        Assert.Equal(["area:hall"], _settings.Current.HomeBarItems);
+        Assert.Equal(["entity:switch.kettle"], _settings.Current.HomeBarLastItems);
         pane.Dispose();
     }
 

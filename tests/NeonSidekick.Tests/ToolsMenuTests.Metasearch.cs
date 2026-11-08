@@ -53,6 +53,7 @@ public partial class ToolsMenuTests
         Assert.Equal("Web metasearch engines", SettingsMenu.FieldName(SettingsField.WebMetasearchEngines));
         Assert.Equal("Web metasearch safe search", SettingsMenu.FieldName(SettingsField.WebMetasearchSafeSearch));
         Assert.Equal("Web metasearch Brave API key", SettingsMenu.FieldName(SettingsField.WebMetasearchBraveApiKey));   // the user's name (2026-11-07): "Web Brave Search API key" until then
+        Assert.Equal("Web metasearch Brave API key saved unencrypted: no DPAPI.", SettingsMenu.BraveApiKeyPlainWarning("no DPAPI"));   // pinned, as its siblings (2026-11-08, the review)
     }
 
     [Theory]

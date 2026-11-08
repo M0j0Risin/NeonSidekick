@@ -67,9 +67,20 @@ public static class SkillsPrompt
     public static string Section(IReadOnlyList<Skill> skills, bool global = true)
     {
         ArgumentNullException.ThrowIfNull(skills);
+        string directive = DirectiveFor(skills, global);
+        return skills.Count == 0 ? directive : directive + "\n\n" + Catalog(skills);
+    }
+
+    /// <summary>
+    /// The block's directive alone (2026-11-08, the review: <c>/usage</c>' Skills tab shows it word for word): <see cref="Directive"/> or
+    /// <see cref="DirectiveWithoutSkills"/> by whether <paramref name="skills"/> holds any, each in its profile-only form when <paramref name="global"/> is false.
+    /// </summary>
+    public static string DirectiveFor(IReadOnlyList<Skill> skills, bool global = true)
+    {
+        ArgumentNullException.ThrowIfNull(skills);
         return skills.Count == 0
             ? (global ? DirectiveWithoutSkills : DirectiveWithoutSkillsProfileOnly)
-            : (global ? Directive : DirectiveProfileOnly) + "\n\n" + Catalog(skills);
+            : (global ? Directive : DirectiveProfileOnly);
     }
 
     /// <summary>The load-only block (2026-09-27, the <c>/botchat</c> bots): <see cref="LoadOnlyDirective"/>, a blank line and the catalog. Only for a non-empty list.</summary>

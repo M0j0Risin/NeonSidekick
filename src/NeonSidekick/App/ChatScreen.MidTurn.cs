@@ -636,7 +636,7 @@ internal sealed partial class ChatScreen
             case SlashCommand.Queue:
                 // Under Queue mode manual (2026-10-09, the user's ask) the send is offered over the reply too: the message it takes
                 // waits for the idle line, which sends it first once the reply ends.
-                if (await _queueMenu.ShowAsync(cancellationToken, () => QueueModeNow() == Queueing.Manual).ConfigureAwait(false) is { } send)
+                if (await _queueMenu.ShowAsync(cancellationToken, () => SendOffered(underReply: true)).ConfigureAwait(false) is { } send)
                 {
                     Pend(send);
                 }

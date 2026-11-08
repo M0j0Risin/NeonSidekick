@@ -5274,6 +5274,66 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("bar: hidden", SettingsMenu.ShowBarButton(false));
         Assert.Equal('h', SettingsMenu.ShowBarKey);
         Assert.DoesNotContain("h = ", SettingsMenu.PerfBarToggleKeys);   // the hints are full: the key is in the docs and neon_help
+        Assert.DoesNotContain("h = ", SettingsMenu.ToolbarToggleKeys);   // the Tool bar's too (2026-11-08, the review)
+    }
+
+    /// <summary>
+    /// The Tool bar page's <c>bar:</c> reads what the row draws (2026-11-08, the review), not what is checked: 🔒 and 👮 alone under
+    /// <c>Shell command policy</c> <c>off</c> draw nothing, so it reads hidden; <c>h</c> still does what <c>/toolbar</c> does (the user's
+    /// pick), the two kept in the last list.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_ShowToolbar_TheBarButton_ReadsHidden_WhenOnlyTheLockAndTheOfficerAreChecked_UnderThePolicyOff()
+    {
+        _settings.Update(d => { d.ToolbarItems = ["cmdlist", "police"]; d.ShellCommandPolicy = "off"; });
+        var (menu, pane) = PaneMenu();
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ToolbarItems));
+        Push(Keys.Enter);
+        Push(Keys.Char(SettingsMenu.ShowBarKey));
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(SettingsMenu.ShowBarButton(false), Output);
+        Assert.DoesNotContain(SettingsMenu.ShowBarButton(true), Output);
+        Assert.Empty(_settings.Current.ToolbarItems!);
+        Assert.Equal(["cmdlist", "police"], _settings.Current.ToolbarLastItems);
+        pane.Dispose();
+    }
+
+    /// <summary>With <c>Shell command policy</c> <c>ask</c> the same two draw, so <c>bar:</c> reads shown (2026-11-08, the review).</summary>
+    [Fact]
+    public async Task OnThePane_ShowToolbar_TheBarButton_ReadsShown_WhenTheLockAndTheOfficerDraw()
+    {
+        _settings.Update(d => { d.ToolbarItems = ["cmdlist", "police"]; d.ShellCommandPolicy = "ask"; });
+        var (menu, pane) = PaneMenu();
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ToolbarItems));
+        Push(Keys.Enter);
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(SettingsMenu.ShowBarButton(true), Output);
+        Assert.DoesNotContain(SettingsMenu.ShowBarButton(false), Output);
+        pane.Dispose();
+    }
+
+    /// <summary>On a Mac 🧩 and 📅 are never drawn (2026-11-08, the review): with only them checked, <c>bar:</c> reads hidden.</summary>
+    [Fact]
+    public async Task OnThePane_ShowToolbar_TheBarButton_ReadsHidden_OnAMac_WithOnlyServicesAndTasksChecked()
+    {
+        _settings.Update(d => d.ToolbarItems = ["services", "tasks"]);
+        var (menu, pane) = PaneMenu();
+        menu.ToolbarItemHere = id => ToolbarItems.IsHere(id, windows: false);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ToolbarItems));
+        Push(Keys.Enter);
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(SettingsMenu.ShowBarButton(false), Output);
+        Assert.DoesNotContain(SettingsMenu.ShowBarButton(true), Output);
+        pane.Dispose();
     }
 
     /// <summary>

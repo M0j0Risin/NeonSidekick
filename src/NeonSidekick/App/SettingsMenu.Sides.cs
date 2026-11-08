@@ -106,7 +106,8 @@ internal sealed partial class SettingsMenu
     /// What a sided checklist reads and writes: the field it saves under, its ids and labels, and its three saved lists; the ids that
     /// are always on and the notice when one is asked to go (2026-10-13, the hint bar's spinner). <paramref name="Shown"/> and
     /// <paramref name="FlipShown"/> (2026-11-07, the user's ask) put <see cref="ShowBarButton"/> on the title row: whether the bar shows, and
-    /// the bare command's toggle; null on the Status bar, whose spinner is always on, so it can't be hidden.
+    /// the bare command's toggle; null on the Status bar, whose spinner is always on, so it can't be hidden. Since 2026-11-08 (the review)
+    /// <paramref name="Shown"/> gets the menu, as <paramref name="Here"/> does: the Tool bar's reads <see cref="ToolbarDrawsFor"/>.
     /// </summary>
     private sealed record SidedChecklist(
         SettingsField Field,
@@ -125,7 +126,7 @@ internal sealed partial class SettingsMenu
         bool Dividers = false,
         bool Look = false,
         Func<SettingsMenu, string, bool>? Here = null,
-        Func<AppSettingsData, bool>? Shown = null,
+        Func<SettingsMenu, AppSettingsData, bool>? Shown = null,
         Action<AppSettingsData>? FlipShown = null);
 
     /// <summary>
@@ -134,6 +135,29 @@ internal sealed partial class SettingsMenu
     /// their places and their sides.
     /// </summary>
     public Func<string, bool> ToolbarItemHere { get; set; } = App.ToolbarItems.IsHere;
+
+    /// <summary>
+    /// Whether the tool bar row draws anything under the settings it's given (2026-11-08, the review): the screen's own answer
+    /// (<see cref="ChatScreen"/>'s toolbar parts), so the Tool bar page's <b>bar:</b> reads hidden when only items that draw nothing are checked.
+    /// Null without a screen: <see cref="ToolbarDrawsFor"/> works it out.
+    /// </summary>
+    public Func<AppSettingsData, bool>? ToolbarDrawn { get; set; }
+
+    /// <summary>
+    /// <see cref="ToolbarDrawn"/>, or without it the same reading from the settings alone (2026-11-08, the review): an item checked and shown
+    /// here (<see cref="ToolbarItemHere"/>) is the path, the model name or a glyph the strip draws, so 🔒 and 👮 alone under <c>Shell command
+    /// policy</c> <c>off</c>, or 🧩 and 📅 alone on a Mac, read hidden.
+    /// </summary>
+    private bool ToolbarDrawsFor(AppSettingsData d)
+    {
+        if (ToolbarDrawn is { } drawn)
+        {
+            return drawn(d);
+        }
+
+        var items = App.ToolbarItems.Resolve(d.ToolbarItems).Where(ToolbarItemHere).ToHashSet(StringComparer.Ordinal);
+        return items.Contains(App.ToolbarItems.Path) || items.Contains(App.ToolbarItems.Model) || ChatScreen.ToolbarStripFor(items, d).Strip.Length > 0;
+    }
 
     /// <summary>The Tool bar's checklist (<see cref="EditToolbarItemsAsync"/>).</summary>
     private static readonly SidedChecklist ToolbarChecklist = new(
@@ -152,14 +176,10 @@ internal sealed partial class SettingsMenu
             && App.ToolbarItems.SaveRight(App.ToolbarItems.ResolveRight(d.ToolbarRight)) is null,
         Dividers: true,
         Here: (menu, id) => menu.ToolbarItemHere(id),   // a Mac lists no 🧩 or 📅 (2026-10-22)
-        Shown: d => App.ToolbarItems.Resolve(d.ToolbarItems).Count > 0,
-        FlipShown: d =>
-        {
-            // /toolbar's own toggle (2026-11-07): never null for no word.
-            var next = App.ToolbarItems.Toggle("", d.ToolbarItems, d.ToolbarLastItems)!.Value;
-            d.ToolbarItems = next.Items;
-            d.ToolbarLastItems = next.LastItems;
-        });
+        Shown: (menu, d) => menu.ToolbarDrawsFor(d),   // what the row draws (2026-11-08, the review), not what is checked
+        // /toolbar's own toggle (2026-11-07): never null for no word. Checked items that draw nothing read hidden, and a press still hides
+        // them into the last items, as /toolbar does (the user's pick, 2026-11-08).
+        FlipShown: d => App.ToolbarItems.Toggle("", d.ToolbarItems, d.ToolbarLastItems)!.Value.SaveTo(d));
 
     /// <summary>The Status bar's checklist (<see cref="EditStatusBarAsync"/>; the Hint bar's until 2026-10-14).</summary>
     private static readonly SidedChecklist StatusBarChecklist = new(
@@ -198,15 +218,9 @@ internal sealed partial class SettingsMenu
             && PerfBarItems.Sides(d.PerformanceBarOrder, d.PerformanceBarLeft, d.PerformanceBarRight) is var sides
             && sides.Left.Count == 0 && sides.Right.Count == 0 && PerfBarItems.SaveOrder(sides.All) is null,
         Look: true,
-        Shown: d => PerfBarItems.Resolve(d.PerformanceBarItems).Count > 0,
-        FlipShown: d =>
-        {
-            // /perfbar's own toggle (2026-11-07): never null for no word; the look comes back as it was.
-            var next = PerfBarMode.Toggle("", d.PerformanceBarItems, d.PerformanceBarLastItems, d.PerformanceBarLook)!;
-            d.PerformanceBarItems = next.Items;
-            d.PerformanceBarLastItems = next.LastItems;
-            d.PerformanceBarLook = next.Look;
-        });
+        Shown: (_, d) => PerfBarItems.Resolve(d.PerformanceBarItems).Count > 0,
+        // /perfbar's own toggle (2026-11-07): never null for no word; the look comes back as it was.
+        FlipShown: d => PerfBarMode.Toggle("", d.PerformanceBarItems, d.PerformanceBarLastItems, d.PerformanceBarLook)!.SaveTo(d));
 
     /// <summary>
     /// A checklist in two groups (or three, the performance bar's) under the settings list (2026-10-13): Enter or Space flips the cursor's item and saves at once, the
@@ -234,9 +248,11 @@ internal sealed partial class SettingsMenu
             IReadOnlyList<MenuButton> buttons = list.Dividers ? DividerChecklistButtons
                 : list.Look ? [.. DefaultChecklistButtons, new(PerfBarMode.LookButton(PerfBarMode.Parse(saved.PerformanceBarLook)), PerfBarMode.LookKey)]
                 : DefaultChecklistButtons;
+            int showBarIndex = -1;
             if (list.Shown is { } isShown)
             {
-                buttons = [.. buttons, new(ShowBarButton(isShown(saved)), ShowBarKey)];   // 2026-11-07: last, index ShowBarIndex
+                showBarIndex = buttons.Count;   // last (2026-11-07); its index from the count (2026-11-08, the review), not a constant
+                buttons = [.. buttons, new(ShowBarButton(isShown(this, saved)), ShowBarKey)];
             }
 
             var picked = await PickSidedChecklistAsync(page, SidedRowOf(sides, Math.Clamp(index, 0, all.Count - 1)), buttons, cancellationToken).ConfigureAwait(false);
@@ -270,7 +286,7 @@ internal sealed partial class SettingsMenu
                 continue;
             }
 
-            if (pick.Button == ShowBarIndex && list.FlipShown is { } flip)
+            if (pick.Button == showBarIndex && list.FlipShown is { } flip)
             {
                 // The show/hide button (2026-11-07, the user's ask): the bare command's toggle, so hiding keeps the items; the row's notice.
                 Apply(list.Field, flip);

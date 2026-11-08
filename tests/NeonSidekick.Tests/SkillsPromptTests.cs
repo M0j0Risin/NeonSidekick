@@ -84,9 +84,28 @@ public class SkillsPromptTests
         Assert.Equal("a &amp; b &lt;c&gt; \"d\"", SkillsPrompt.Escape("a & b <c> \"d\""));
     }
 
+    /// <summary>
+    /// The directive alone (2026-11-08, the review: <c>/usage</c>' Skills tab shows it): one of the four by the list and the global switch,
+    /// and the block is that directive, then the catalog, so the sent text is unchanged.
+    /// </summary>
+    [Fact]
+    public void DirectiveFor_PicksOneOfTheFour_AndTheSectionStartsWithIt()
+    {
+        Assert.Equal(SkillsPrompt.Directive, SkillsPrompt.DirectiveFor([Haiku]));
+        Assert.Equal(SkillsPrompt.DirectiveProfileOnly, SkillsPrompt.DirectiveFor([Haiku], global: false));
+        Assert.Equal(SkillsPrompt.DirectiveWithoutSkills, SkillsPrompt.DirectiveFor([]));
+        Assert.Equal(SkillsPrompt.DirectiveWithoutSkillsProfileOnly, SkillsPrompt.DirectiveFor([], global: false));
+        foreach (bool global in new[] { true, false })
+        {
+            Assert.Equal(SkillsPrompt.DirectiveFor([Haiku, Pdf], global) + "\n\n" + SkillsPrompt.Catalog([Haiku, Pdf]), SkillsPrompt.Section([Haiku, Pdf], global));
+            Assert.Equal(SkillsPrompt.DirectiveFor([], global), SkillsPrompt.Section([], global));
+        }
+    }
+
     [Fact]
     public void NullList_Throws()
     {
+        Assert.Throws<ArgumentNullException>(() => SkillsPrompt.DirectiveFor(null!));
         Assert.Throws<ArgumentNullException>(() => SkillsPrompt.Section(null!));
         Assert.Throws<ArgumentNullException>(() => SkillsPrompt.Catalog(null!));
     }

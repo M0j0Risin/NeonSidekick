@@ -61,7 +61,7 @@ Elsewhere:
 | `/expand`, `/collapse` | Unfold every tool run, code block, diff and thinking block from here on, or fold them again. |
 | `/queue [clear]` | Lists the messages queued during a reply, to remove, clear or send; `clear` drops them all. |
 | `/queue mode automatic\|manual\|off` | Sets *Queue mode*: queued messages go when the reply ends, wait for **➤ send**, or aren't kept. |
-| `/queue send` | Sends the next queued message now, as **➤ send** does: while the queue is held, or under *Queue mode* `manual` (under a reply, when it ends). |
+| `/queue send` | Sends the next queued message now, as **➤ send** does: at the idle line while the queue is held or under *Queue mode* `manual`; under a reply only under `manual`, when it ends. |
 | `/queue cancel hold\|drain\|empty` | Sets *Queue cancel mode*: after a canceled reply, keep the queue, send the next, or drop them all. |
 | `/prompts` | Your saved prompts (per profile, never shown to the model): send one as if typed, put it on the draft line, or save it as a [custom command](#custom-commands). |
 | `/prompts <n>`, `/prompts save <text>`, `/prompts remove <n>` | Sends prompt *n* as if typed, saves the rest of the line (a pasted block too), or removes prompt *n*. |
@@ -81,7 +81,7 @@ Elsewhere:
 | `/msgclear` | Clears this profile's message history (what ↑/↓ recall) after a yes; from the Web UI, it asks on the page and the PC. |
 | `/usage` | Token usage and performance, with rows for `/claude`, `/botchat` and the advisors; `~` marks an estimate. |
 | `/usage context` | The Context tab: what fills the window (the system prompt, each tool group, the history, pictures, thinking) and, with the window known, what turning a switchable group off would save. |
-| `/usage prompt\|tools\|skills` | The Prompt tab (the system message the next turn sends), the Tools tab (each tool it offers) or the Skills tab (each skill it offers, with its scope and file). |
+| `/usage prompt\|tools\|skills` | The Prompt tab (the system message, less the skills block), the Tools tab (each tool offered) or the Skills tab (the skills block: its directive, then each skill with its scope and file). |
 
 ### Models and servers
 

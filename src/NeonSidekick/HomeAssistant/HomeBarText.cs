@@ -59,9 +59,10 @@ public static class HomeBarText
 
     /// <summary>
     /// The picker's <c>bar: hidden</c> button pressed with nothing ever picked (2026-11-07, the user's ask: show/hide on the bar's page): the
-    /// picker is open already, so the notice points at its tabs, not <c>/homebar edit</c>; nothing is saved. Pinned.
+    /// picker is open already, so the notice points at its tabs, not <c>/homebar edit</c>; nothing is saved. No "rooms and devices" (2026-11-08,
+    /// the review): without Home Assistant the other tabs are Monitors and Shopping. Pinned.
     /// </summary>
-    public const string NothingToShow = "Nothing to show yet: add rooms and devices from the other tabs";
+    public const string NothingToShow = "Nothing to show yet: pick items on the other tabs";
 
     /// <summary>A <c>tap</c> or <c>show</c> naming nothing on the bar.</summary>
     public static string NotOnBar(string item) => $"'{item.Trim()}' is not on the home bar";

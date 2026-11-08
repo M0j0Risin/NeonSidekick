@@ -3016,7 +3016,7 @@ public partial class ChatScreenTests : IDisposable
     /// The column of <paramref name="glyph"/> on the toolbar row the saved settings draw now (2026-11-07, the user's ask: a toolbar item added
     /// or removed broke every click by number). Read when the step runs, so a switch flipped by an earlier step (the lock, the officer) counts.
     /// </summary>
-    private int Tb(string glyph) => ToolbarColumns.X(_settings.Current, glyph);
+    private int Tb(string glyph) => ToolbarColumns.X(_settings.Current, glyph, _toolbarHere);
 
     /// <summary>Two clicks on one cell, pushed to the scripted input.</summary>
     private void PushDoubleClick(int x, int y)
@@ -7035,7 +7035,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public void QueueSend_Notices_ArePinned()
     {
-        Assert.Equal("(⏳ the queue sends by itself when the reply ends; ➤ send is for a held queue or Queue mode manual)", ChatScreen.QueueSendsItselfNotice);
+        Assert.Equal("(⏳ the queue sends by itself; ➤ send is for a held queue or Queue mode manual)", ChatScreen.QueueSendsItselfNotice);   // no "when the reply ends" since 2026-11-08 (the review)
         Assert.Equal("(⏳ sends when the reply ends)", ChatScreen.QueueSendWaitsNotice);
         Assert.Equal("send the next queued message now", ChatScreen.QueueSendNote);
     }
@@ -11380,14 +11380,16 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         string rule = new(ScreenPane.RuleGlyph, 240);
-        // The Prompt tab: the default persona, the rules, memory on with nothing stored — and nothing after the skills (2026-09-26): no voice heading on a silent turn, no Also sent part.
+        // The /usage Prompt tab: the default persona, the rules, memory on with nothing stored — and nothing after the memory (2026-09-26; the skills on their own tab since 2026-11-07): no voice heading on a silent turn, no Also sent part.
         Assert.Contains(rule + "\n" + Titled(UsagePaneTitle) + "\n \n" + HeadingRow("── Persona ── default") + "\n" + Indent(Assistant.DefaultPersona.Split('\n')[0]) + "\n", output);
         Assert.Contains("\n" + Indent(Assistant.DefaultPersona.Split('\n')[^1]) + "\n \n" + HeadingRow("── Operating rules ── default") + "\n", output);   // the persona is lines since 2026-10-03; the headings rules, the text two cells in, since later that day
         Assert.Contains("\n" + HeadingRow("── Memory ── read-write, directive (the list rides the opening recall_memory call)") + "\n" + Indent(MemoryPrompt.Directive[..120]), output);
         // The skills catalog on a tab of its own since 2026-11-07: never on the Prompt tab, so its heading is first drawn after the Tools tab.
         int toolsTab = output.IndexOf(HeadingRow("── Clock · 3"), StringComparison.Ordinal);
         Assert.True(toolsTab >= 0 && output.IndexOf(HeadingRow("── Skills ── on, none installed"), StringComparison.Ordinal) > toolsTab, output);
-        Assert.Contains("\n" + HeadingRow("── Skills ── on, none installed") + "\n" + Indent(SystemPromptSummary.NoSkillsLine) + "\n", output);
+        // The block's directive under the heading (2026-11-08, the review), its opening words: it wraps at the pane's width; then the line.
+        Assert.Contains("\n" + HeadingRow("── Skills ── on, none installed") + "\n" + Indent(SkillsPrompt.DirectiveWithoutSkills[..60]), output);
+        Assert.Contains("\n" + Indent(SystemPromptSummary.NoSkillsLine) + "\n", output);
         Assert.DoesNotContain("Voice directive", output);
         Assert.DoesNotContain("Also sent", output);
         Assert.DoesNotContain("Opening clock call", output);
@@ -11425,14 +11427,16 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         string rule = new(ScreenPane.RuleGlyph, 240);
-        // The Prompt tab: the default persona, the rules, memory on with nothing stored — and nothing after the skills (2026-09-26): no voice heading on a silent turn, no Also sent part.
+        // The /usage Prompt tab: the default persona, the rules, memory on with nothing stored — and nothing after the memory (2026-09-26; the skills on their own tab since 2026-11-07): no voice heading on a silent turn, no Also sent part.
         Assert.Contains(rule + "\n" + Titled(UsagePaneTitle) + "\n \n" + HeadingRow("── Persona ── default") + "\n" + Indent(Assistant.DefaultPersona.Split('\n')[0]) + "\n", output);
         Assert.Contains("\n" + Indent(Assistant.DefaultPersona.Split('\n')[^1]) + "\n \n" + HeadingRow("── Operating rules ── default") + "\n", output);   // the persona is lines since 2026-10-03; the headings rules, the text two cells in, since later that day
         Assert.Contains("\n" + HeadingRow("── Memory ── read-write, directive (the list rides the opening recall_memory call)") + "\n" + Indent(MemoryPrompt.Directive[..120]), output);
         // The skills catalog on a tab of its own since 2026-11-07: never on the Prompt tab, so its heading is first drawn after the Tools tab.
         int toolsTab = output.IndexOf(HeadingRow("── Clock · 3"), StringComparison.Ordinal);
         Assert.True(toolsTab >= 0 && output.IndexOf(HeadingRow("── Skills ── on, none installed"), StringComparison.Ordinal) > toolsTab, output);
-        Assert.Contains("\n" + HeadingRow("── Skills ── on, none installed") + "\n" + Indent(SystemPromptSummary.NoSkillsLine) + "\n", output);
+        // The block's directive under the heading (2026-11-08, the review), its opening words: it wraps at the pane's width; then the line.
+        Assert.Contains("\n" + HeadingRow("── Skills ── on, none installed") + "\n" + Indent(SkillsPrompt.DirectiveWithoutSkills[..60]), output);
+        Assert.Contains("\n" + Indent(SystemPromptSummary.NoSkillsLine) + "\n", output);
         Assert.DoesNotContain("Voice directive", output);
         Assert.DoesNotContain("Also sent", output);
         Assert.DoesNotContain("Opening clock call", output);
@@ -11536,7 +11540,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task WithoutGeometry_SysPromptPrintsTheSummary()
+    public async Task Usage_WithoutThePane_PromptThenTools_PrintsBoth()
     {
         _settings.Update(d => d.TtsOutput = false);
         PushLine("/usage prompt");   // /sys' Prompt tab until 2026-11-07
@@ -11558,9 +11562,9 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain(InfoPane.HintText, output);
     }
 
-    /// <summary>The Unix twin of <see cref="WithoutGeometry_SysPromptPrintsTheSummary"/> (2026-10-06, the macOS build): three file tools fewer where there are no picture codecs (`Pictures`; a Mac has them since 2026-10-07); zsh the default shell.</summary>
+    /// <summary>The Unix twin of <see cref="Usage_WithoutThePane_PromptThenTools_PrintsBoth"/> (2026-10-06, the macOS build): three file tools fewer where there are no picture codecs (`Pictures`; a Mac has them since 2026-10-07); zsh the default shell.</summary>
     [UnixFact]
-    public async Task WithoutGeometry_SysPromptPrintsTheSummary_Unix()
+    public async Task Usage_WithoutThePane_PromptThenTools_PrintsBoth_Unix()
     {
         _settings.Update(d => d.TtsOutput = false);
         PushLine("/usage prompt");   // /sys' Prompt tab until 2026-11-07
@@ -12207,9 +12211,10 @@ public partial class ChatScreenTests : IDisposable
 
     /// <summary>
     /// <see cref="ToolbarColumns.X"/> is where the drawn toolbar row has each glyph (2026-11-07, the user's ask: the click tests click through
-    /// it, so it must not drift from the real row): every item on, at 240 columns, each glyph the click tests use.
+    /// it, so it must not drift from the real row): every item on, at 240 columns, each glyph the click tests use. A [Fact] since 2026-11-08
+    /// (the review): every glyph it checks comes before the Windows-only 🧩 📅, and the fixture draws every item on a Mac too.
     /// </summary>
-    [WindowsFact]
+    [Fact]
     public async Task ToolbarColumns_X_IsWhereTheDrawnRowHasEachGlyph()
     {
         _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names.Where(id => id != ToolbarItems.Model)]; });
@@ -19664,19 +19669,21 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("keep", UserText(_chat.Requests[0]));
     }
 
-    /// <summary>Ctrl+Y does nothing since 2026-11-07 (the user's pick: freed with the bare /sys, whose pane was its; Ctrl+Alt+Y until 2026-10-03): no pane, nothing typed.</summary>
+    /// <summary>
+    /// Ctrl+Y does nothing since 2026-11-07 (the user's pick: freed with the bare /sys, whose pane was its; Ctrl+Alt+Y until 2026-10-03): no pane,
+    /// nothing typed. The key as the console sends it, EM (0x19), since 2026-11-08 (the review): typed, it would make the next line a message.
+    /// </summary>
     [Fact]
     public async Task CtrlY_DoesNothing()
     {
         _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full"; });
         _console.Profile.Height = 112;
         _geometry = new ScreenGeometry(() => null);
-        StepsWhenIdle(Key(Keys.Ctrl(ConsoleKey.Y)), Line("/exit"));
+        StepsWhenIdle(Key(new ConsoleKeyInfo('\x19', ConsoleKey.Y, shift: false, alt: false, control: true)), Line("/exit"));
 
         string output = await RunAsync();
 
         Assert.DoesNotContain(UsageText.Label + " │ ", output);
-        Assert.DoesNotContain(ChatScreen.UnknownCommandError("/exit"), output);   // nothing typed ahead of the next line
         Assert.Null(Keys.ShortcutLine(Keys.Ctrl(ConsoleKey.Y)));
         Assert.Empty(_chat.Requests);
     }

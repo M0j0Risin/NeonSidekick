@@ -108,6 +108,28 @@ public partial class ChatScreenTests
     /// opens its row's checklist on the pane, N unchecks every item there and saves at once, and ESC closes it — no turn. Under a
     /// reply the edit waits on the watcher as a pane does, while the bare word and the others stay quick.
     /// </summary>
+    /// <summary>
+    /// The screen hands the Tool bar page its own answer for <c>bar:</c> (2026-11-08, the review: <c>ToolbarDrawn</c>, the row's parts): only
+    /// 🔒 and 👮 checked under <c>Shell command policy</c> <c>off</c> draw no row, so <c>/toolbar edit</c> reads hidden.
+    /// </summary>
+    [Fact]
+    public async Task Toolbar_TheBarButton_ReadsHidden_WhenNothingCheckedIsDrawn()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = ["cmdlist", "police"]; d.ShellCommandPolicy = "off"; });
+        _console.Profile.Width = 120;
+        _console.Profile.Height = 60;
+        _geometry = new ScreenGeometry(() => null);
+        PushLine("/toolbar edit");
+        _console.Input.PushKey(Keys.Escape);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(" › " + SettingsMenu.FieldName(SettingsField.ToolbarItems) + " ", output);
+        Assert.Contains(SettingsMenu.ShowBarButton(false), output);
+        Assert.DoesNotContain(SettingsMenu.ShowBarButton(true), output);
+    }
+
     [Fact]
     public async Task ToolbarEdit_AndPerfbarEdit_OpenTheirChecklists()
     {

@@ -15,7 +15,16 @@ public enum HomeItemKind
 }
 
 /// <summary>What <c>/homebar</c> saves (<see cref="HomeBarItems.Toggle"/>): the items shown (empty: hidden), the ones a later show brings back, and whether there is nothing to show yet (the picker opens instead).</summary>
-public sealed record HomeToggle(List<string> Items, List<string>? LastItems, bool NeedsPicker = false);
+public sealed record HomeToggle(List<string> Items, List<string>? LastItems, bool NeedsPicker = false)
+{
+    /// <summary>Writes the toggle into <paramref name="d"/> (2026-11-08, the review: one writer for <c>/homebar</c> and the picker's <b>bar:</b>).</summary>
+    public void SaveTo(Settings.AppSettingsData d)
+    {
+        ArgumentNullException.ThrowIfNull(d);
+        d.HomeBarItems = Items;
+        d.HomeBarLastItems = LastItems;
+    }
+}
 
 /// <summary>
 /// The home bar's items (2026-10-12, the user's ask: a bar of Home Assistant rooms and devices under the perf bar, the user

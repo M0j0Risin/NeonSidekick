@@ -568,13 +568,13 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal("Skills", SystemPromptSummary.SkillsTabTitle);
         Assert.Equal("No skill installed: /skills adds one.", SystemPromptSummary.NoSkillsLine);
         Assert.Equal("🔒 locked", SystemPromptSummary.SkillLockedNote);
-        Assert.Equal("⛔ disabled", SystemPromptSummary.SkillDisabledNote);
     }
 
+    /// <summary>The block's directive under the heading (2026-11-08, the review: the Prompt tab no longer shows it), then the line.</summary>
     [Fact]
-    public void SkillsLines_NoneInstalled_TheHeadingAndTheLine()
+    public void SkillsLines_NoneInstalled_TheHeadingTheDirectiveAndTheLine()
     {
-        Assert.Equal([NoSkillsHeading, "  " + SystemPromptSummary.NoSkillsLine], SystemPromptSummary.SkillsLines(Facts()));
+        Assert.Equal([NoSkillsHeading, "  " + SkillsPrompt.DirectiveWithoutSkills, "  " + SystemPromptSummary.NoSkillsLine], SystemPromptSummary.SkillsLines(Facts()));
     }
 
     [Fact]
@@ -585,19 +585,20 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal(["Skills — not included (LLM offer tools is off)"], SystemPromptSummary.SkillsLines(Facts(tools: false, catalog: [haiku])));
     }
 
+    /// <summary>The profile-only directive while Global skills is off (2026-11-08, the review), word for word as the block sends it.</summary>
     [Fact]
     public void SkillsLines_EachSkill_ItsScopeAndState_ThenDescriptionPathAndWarning()
     {
         var haiku = TestSkill("haiku", "Writes haiku.", SkillScope.Profile);
         var notes = TestSkill("notes", "Keeps notes.", SkillScope.Global) with { Locked = true };
         var deploy = TestSkill("deploy", "Deploys the site.", SkillScope.External, warning: "  name differs from its folder  ");
-        var old = TestSkill("old", "Retired.", SkillScope.Profile) with { Disabled = true, Locked = true };
 
-        string[] lines = SystemPromptSummary.SkillsLines(Facts(catalog: [haiku, notes, deploy, old]) with { GlobalSkills = false }).ToArray();
+        string[] lines = SystemPromptSummary.SkillsLines(Facts(catalog: [haiku, notes, deploy]) with { GlobalSkills = false }).ToArray();
 
         Assert.Equal(
             [
-                "Skills — on, 4 skills (1 external, global off)",
+                "Skills — on, 3 skills (1 external, global off)",
+                "  " + SkillsPrompt.DirectiveProfileOnly,
                 "haiku — profile",
                 "  Writes haiku.",
                 "  " + haiku.FilePath,
@@ -608,9 +609,6 @@ public class SystemPromptSummaryTests : IDisposable
                 "  Deploys the site.",
                 "  " + deploy.FilePath,
                 "  name differs from its folder",
-                "old — profile, " + SystemPromptSummary.SkillDisabledNote,
-                "  Retired.",
-                "  " + old.FilePath,
             ],
             lines);
         Assert.EndsWith(Path.Combine("haiku", SkillCatalog.FileName), haiku.FilePath, StringComparison.Ordinal);
@@ -626,10 +624,11 @@ public class SystemPromptSummaryTests : IDisposable
 
         string[] lines = console.Output.Split('\n');
         Assert.Equal(RuleLine("── Skills ── on, 1 skill", 2000), lines[0]);
-        Assert.Equal(" ", lines[1]);
-        Assert.Equal(RuleLine("── haiku ── profile", 2000), lines[2]);
-        Assert.Equal("  Writes haiku.", lines[3]);
-        Assert.Equal("  " + haiku.FilePath, lines[4]);
+        Assert.Equal("  " + SkillsPrompt.Directive, lines[1]);   // 2026-11-08, the review
+        Assert.Equal(" ", lines[2]);
+        Assert.Equal(RuleLine("── haiku ── profile", 2000), lines[3]);
+        Assert.Equal("  Writes haiku.", lines[4]);
+        Assert.Equal("  " + haiku.FilePath, lines[5]);
     }
 
     [Fact]
@@ -638,7 +637,7 @@ public class SystemPromptSummaryTests : IDisposable
         using var console = new TestConsole();
         console.Profile.Width = 2000;
         console.Write(SystemPromptSummary.SkillsTab(Facts()));
-        Assert.Equal([RuleLine("── Skills ── on, none installed", 2000), "  " + SystemPromptSummary.NoSkillsLine], console.Output.TrimEnd('\n').Split('\n'));
+        Assert.Equal([RuleLine("── Skills ── on, none installed", 2000), "  " + SkillsPrompt.DirectiveWithoutSkills, "  " + SystemPromptSummary.NoSkillsLine], console.Output.TrimEnd('\n').Split('\n'));
 
         using var off = new TestConsole();
         off.Profile.Width = 2000;

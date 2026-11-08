@@ -339,13 +339,16 @@ public static class ToolbarItems
     }
 
     /// <summary>
-    /// The default order (2026-10-13, the user's ask: <c>⚙️ 🛠️ 🎓 | 💾 📣 ⏳ | 🔒 👮 🐚 | 📁 🖼️ 🌐 📱</c>, 📣 since 2026-10-14, 📱 after 🌐 since 2026-10-17, 🖼️ in place of 🌄 since 2026-10-27): <see cref="Names"/> with a divider ahead of
-    /// Memory (later still that day, the user's ask; after Usage, so 💾 📣 ⏳ stay together when System prompt, Sessions or Usage is checked), one after
-    /// Queue (ahead of Ask, checked by default since 2026-11-07; after Memory until Queue came later that day) and one after Shell, numbered from the left.
-    /// Since 2026-11-07 (the user's ask: 📊 on by default, just right of the first divider) the first divider is ahead of Usage, not Memory:
-    /// <c>⚙️ 🛠️ 🎓 🪄 │ 📊 💾 📣 ⏳ │ 🙋 🔒 👮 🐚 │ 📁 🖼️ 🌐 📱</c>. A
-    /// divider whose neighbours are hidden is not drawn (<see cref="ItemOrder.ShownDividers"/>). Pinned.
+    /// The default order, <c>⚙️ 🛠️ 🎓 🪄 │ 📊 💾 📣 ⏳ │ 🙋 🔒 👮 🐚 │ 📁 🖼️ 🌐 📱</c>: <see cref="Names"/> with a divider ahead of Usage, one after
+    /// Queue (ahead of Ask) and one after Shell, numbered from the left; Sessions, when checked, sits left of the first. A divider whose
+    /// neighbours are hidden is not drawn (<see cref="ItemOrder.ShownDividers"/>). Pinned.
     /// </summary>
+    /// <remarks>
+    /// 2026-10-13 (the user's ask): <c>⚙️ 🛠️ 🎓 | 💾 📣 ⏳ | 🔒 👮 🐚 | 📁 🖼️ 🌐 📱</c>, the first divider ahead of Memory and after Usage, so
+    /// 💾 📣 ⏳ stayed together when Sessions or Usage was checked; the second after Memory until Queue came later that day. 📣 since 2026-10-14,
+    /// 📱 after 🌐 since 2026-10-17, 🖼️ in place of 🌄 since 2026-10-27. Since 2026-11-07 (the user's ask: 📊 on by default, just right of the
+    /// first divider) the first divider is ahead of Usage, and Ask is checked by default after the second. 🎭 left the strip that day.
+    /// </remarks>
     public static readonly string[] DefaultOrder =
     [
         .. DefaultNames.TakeWhile(id => id != Usage), ItemOrder.DividerPrefix + "1",
@@ -421,7 +424,16 @@ public static class ToolbarItems
     public const string UsageError = "/toolbar takes on, off or edit, or nothing to toggle.";
 
     /// <summary>What <c>/toolbar</c> saves: the toolbar's items, and the ones a later <c>/toolbar</c> brings back.</summary>
-    public readonly record struct ToolbarToggle(List<string>? Items, List<string>? LastItems);
+    public readonly record struct ToolbarToggle(List<string>? Items, List<string>? LastItems)
+    {
+        /// <summary>Writes the toggle into <paramref name="d"/> (2026-11-08, the review: one writer for <c>/toolbar</c> and the page's <b>bar:</b>).</summary>
+        public void SaveTo(Settings.AppSettingsData d)
+        {
+            ArgumentNullException.ThrowIfNull(d);
+            d.ToolbarItems = Items;
+            d.ToolbarLastItems = LastItems;
+        }
+    }
 
     /// <summary>
     /// What <c>/toolbar</c> saves, pure (later on 2026-09-30, the user's ask, <see cref="PerfBarMode.Toggle"/>'s shape): bare, the

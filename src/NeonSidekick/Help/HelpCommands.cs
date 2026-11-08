@@ -215,7 +215,7 @@ public static class HelpCommands
         new("/homebar",
         [
             new("/homebar [on|off]", "Show or hide the home bar, the row of Home Assistant chips and the shopping list's 🛒 (*Home bar*; under the performance bar unless *Toolbar order* moves it). Alone, it hides the bar or shows it again with its last items; the first time, with nothing picked, it opens the picker. Works while a reply runs."),
-            new("/homebar edit", "Choose the bar's items, their order and their sides on the picker. Its first tab lists the items under Pinned left, center and right: Shift+←/→ pins one a group over, Shift+↑/↓ moves it, Shift+Home/End to its group's top or bottom, Delete takes it off, and Enter offers the same as a list plus Rename on the bar…, Change emoji… and their defaults. The other tabs (Rooms, Lights, Switches, Sensors, Climate, Media, Scenes, Security, Zones, Other and Shopping) add or remove an item with Space or Enter; typing filters. Without Home Assistant it opens with the bar and Shopping alone."),
+            new("/homebar edit", "Choose the bar's items, their order and their sides on the picker. Its first tab lists the items under Pinned left, center and right: Shift+←/→ pins one a group over, Shift+↑/↓ moves it, Shift+Home/End to its group's top or bottom, Delete takes it off, and Enter offers the same as a list plus Rename on the bar…, Change emoji… and their defaults. The other tabs (Rooms, Lights, Switches, Sensors, Climate, Media, Scenes, Security, Zones, Other, Monitors (Windows only) and Shopping) add or remove an item with Space or Enter; typing filters. Without Home Assistant it opens with the bar, Monitors (Windows only) and Shopping. **bar:** at the end of the tab strip hides or shows the bar (a click)."),
             new("/homebar tap <item>", "Do what a double-click on a chip does, by its item (`entity:light.desk`, `area:kitchen`) or its name. A light, switch or fan toggles, a room's lights go off or on, a scene or script runs, a player plays or pauses. Unlocking, opening a garage, gate or door, and disarming an alarm ask first."),
             new("/homebar show <item>", "Open a chip's pane, as a right-click does: its actions (on, off, brightness, volume, open, close, lock…), or a room's devices to switch one by one."),
             new("/homebar name <item> = <alias>", "Show an item's chip under a name of your own (`/homebar name Den PC Monitor = PC`), the item named by its id, name or alias. Nothing after the `=` shows the chip's emoji alone (no name and no value: a room's 🏠 without its count); `default` puts its own name back. Only the chip's label changes: a click's note and its pane keep Home Assistant's name."),
@@ -318,7 +318,7 @@ public static class HelpCommands
         new("/perfbar",
         [
             new("/perfbar [off|text|gauge|led]", "Show or hide the performance bar (*Performance bar*). Alone, it hides the bar or shows it again with its last meters (CPU, RAM, GPU and VRAM the first time); `off` hides it, and a look (`text`, `gauge`, `led`) sets that look and shows the bar. Works while a reply runs."),
-            new("/perfbar edit", "Choose the bar's meters, their order and their sides on the *Performance bar* checklist. Enter or Space checks a meter, Shift+←/→ pins it a group over (left, center, right), Shift+↑/↓ moves it, Shift+Home/End to its group's top or bottom, Delete unchecks; `a`, `n` and `d` pick all, none or the default."),
+            new("/perfbar edit", "Choose the bar's meters, their order and their sides on the *Performance bar* checklist. Enter or Space checks a meter, Shift+←/→ pins it a group over (left, center, right), Shift+↑/↓ moves it, Shift+Home/End to its group's top or bottom, Delete unchecks; `a`, `n` and `d` pick all, none or the default; `h` hides or shows the bar, keeping its items."),
         ]),
         new("/plan",
         [
@@ -391,8 +391,8 @@ public static class HelpCommands
         ]),
         new("/queue",
         [
-            new("/queue [clear]", "List and prune the messages queued during a reply; Enter or Delete removes one (it asks); **⊠ clear all** (`c`) drops them all, and `/queue clear` does so without the pane. **mode: …** (`m`) and **cancel: …** (`k`) on the title row step *Queue mode* and *Queue cancel mode*, on the empty queue too. While the queue is held (*Queue cancel mode* `hold`, after a canceled reply), and always under *Queue mode* `manual`, **➤ send** (`s`) sends the next message now (under a reply, when it ends), and `/queue send` does so without the pane. The toolbar's ⏳ and Ctrl+Q open it; Ctrl+Alt+Q runs `/queue clear`."),
-            new("/queue send", "Send the next queued message now, as **➤ send** does: while the queue is held, or always under *Queue mode* `manual`; under a reply it goes when the reply ends. Otherwise the queue sends by itself and nothing is taken off it."),
+            new("/queue [clear]", "List and prune the messages queued during a reply; Enter or Delete removes one (it asks); **⊠ clear all** (`c`) drops them all, and `/queue clear` does so without the pane. **mode: …** (`m`) and **cancel: …** (`k`) on the title row step *Queue mode* and *Queue cancel mode*, on the empty queue too. While the queue is held (*Queue cancel mode* `hold`, after a canceled reply), and always under *Queue mode* `manual`, **➤ send** (`s`) sends the next message now (under a reply, under `manual` only, when it ends), and `/queue send` does so without the pane. The toolbar's ⏳ and Ctrl+Q open it; Ctrl+Alt+Q runs `/queue clear`."),
+            new("/queue send", "Send the next queued message now, as **➤ send** does. At the idle line it works while the queue is held or under *Queue mode* `manual`; under a reply only under `manual`, and the message goes when the reply ends. Otherwise the queue sends by itself and nothing is taken off it."),
             new("/queue mode automatic|manual|off", "Set *Queue mode*: `automatic` queues what you send during a reply and sends it when the reply ends, `manual` queues every message for **➤ send**, `off` keeps no list. Works while a reply runs."),
             new("/queue cancel hold|drain|empty", "Set *Queue cancel mode*, what a canceled reply does to the queue: `hold` keeps it until your next message has run, `drain` sends the next one at once, `empty` drops them all. Works while a reply runs."),
         ]),
@@ -528,7 +528,7 @@ public static class HelpCommands
         new("/toolbar",
         [
             new("/toolbar [on|off]", "Show or hide the toolbar (*Tool bar*): alone it hides the toolbar, or shows it again with the items it last had (the default items the first time); `on` and `off` say which. Works while a reply runs."),
-            new("/toolbar edit", "Choose the toolbar's items, their sides and their order on the *Tool bar* checklist. Enter or Space checks an item, Shift+←/→ pins it left or right, Shift+↑/↓ moves it, Shift+Home/End to its group's top or bottom, Delete unchecks, and `+` adds a divider after it; `a`, `n` and `d` pick all, none or the default."),
+            new("/toolbar edit", "Choose the toolbar's items, their sides and their order on the *Tool bar* checklist. Enter or Space checks an item, Shift+←/→ pins it left or right, Shift+↑/↓ moves it, Shift+Home/End to its group's top or bottom, Delete unchecks, and `+` adds a divider after it; `a`, `n` and `d` pick all, none or the default; `h` hides or shows the bar, keeping its items."),
         ]),
         new("/tools",
         [
@@ -561,7 +561,7 @@ public static class HelpCommands
         [
             new("/usage", "Show token usage and performance statistics; a `~` marks a reasoning count the app estimated (*LLM reasoning estimate*). Its other tabs show what fills the context, the system prompt, the tools and the skills. Ctrl+U runs it too."),
             new("/usage context", "Open it on the Context tab: what fills the context window (the system prompt, each tool group, the history, pictures and thinking) and, with the window known, what turning a switchable group off would save."),
-            new("/usage prompt|tools|skills", "Open it on the Prompt tab (the system message the next turn sends: persona, rules, project notes, memory, plan mode and the voice directive), the Tools tab (each tool it offers, grouped) or the Skills tab (each skill it offers with its scope, description and `SKILL.md` file, or why the skills are off)."),
+            new("/usage prompt|tools|skills", "Open it on the Prompt tab (the system message the next turn sends, apart from the skills block: persona, rules, project notes, memory, plan mode and the voice directive), the Tools tab (each tool it offers, grouped) or the Skills tab (the skills block's directive, then each skill it offers with its scope, description and `SKILL.md` file, or why the skills are off)."),
         ]),
         new("/vault",
         [

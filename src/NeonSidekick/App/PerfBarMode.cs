@@ -16,7 +16,17 @@ public enum PerfBarStyle
 }
 
 /// <summary>What <c>/perfbar</c> saves (<see cref="PerfBarMode.Toggle"/>): the meters shown (empty: the bar hidden; null until 2026-10-02, when null became the defaults), the ones a later show brings back, and the look.</summary>
-public sealed record PerfToggle(List<string>? Items, List<string>? LastItems, string Look);
+public sealed record PerfToggle(List<string>? Items, List<string>? LastItems, string Look)
+{
+    /// <summary>Writes the toggle into <paramref name="d"/> (2026-11-08, the review: one writer for <c>/perfbar</c> and the page's <b>bar:</b>).</summary>
+    public void SaveTo(AppSettingsData d)
+    {
+        ArgumentNullException.ThrowIfNull(d);
+        d.PerformanceBarItems = Items;
+        d.PerformanceBarLastItems = LastItems;
+        d.PerformanceBarLook = Look;
+    }
+}
 
 /// <summary>
 /// The performance bar's look (2026-09-29, the user's ask: a third bar, under the toolbar — "let's do all of them" for the

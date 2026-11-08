@@ -624,7 +624,7 @@ public partial class ChatScreenTests
         Assert.All(_chat.Requests, request => Assert.Empty(request[^1].Contents.OfType<DataContent>()));
     }
 
-    /// <summary>The camera fixture with a pane tall and wide enough for the whole Offered tab and /sys' Tools tab on one screen.</summary>
+    /// <summary>The camera fixture with a pane tall and wide enough for the whole Offered tab and /usage' Tools tab on one screen.</summary>
     private void TallCameraPane(bool on)
     {
         CameraPane();

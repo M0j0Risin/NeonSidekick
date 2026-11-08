@@ -562,7 +562,7 @@ public static class SystemPromptSummary
         }
 
         // The skills block (2026-09-16): after the memory section, only with tools to load one.
-        sections.Add(new(SkillsLabel, SkillsStatus(facts), facts.SkillsEnabled && facts.ToolsEnabled ? SkillsPrompt.Section(facts.Skills ?? [], facts.GlobalSkills) : ""));
+        sections.Add(new(SkillsLabel, SkillsStatus(facts), SkillsSent(facts) ? SkillsPrompt.Section(facts.Skills ?? [], facts.GlobalSkills) : ""));
 
         // Plan mode's directive only while planning (2026-09-26), where the prompt carries it: after the skills, ahead of the voice.
         if (facts.ToolsEnabled && !string.IsNullOrWhiteSpace(facts.PlanDirective))
@@ -616,7 +616,10 @@ public static class SystemPromptSummary
         return $"on, {count}";
     }
 
-    /// <summary>The system message the next turn sends for <paramref name="facts"/>: the Prompt tab's sections, joined.</summary>
+    /// <summary>
+    /// The system message the next turn sends for <paramref name="facts"/>: <see cref="PromptSections"/> joined, the Prompt tab's sections plus
+    /// the Skills tab's block (2026-11-08, the review: the skills left the Prompt tab on 2026-11-07).
+    /// </summary>
     public static string SystemPrompt(SystemPromptFacts facts)
     {
         ArgumentNullException.ThrowIfNull(facts);
@@ -739,19 +742,15 @@ public static class SystemPromptSummary
     /// <summary>A locked skill's note on its rule (2026-11-07): the glyph of <c>/skills</c> and one word, never <see cref="SkillRecordText.LockedFooter"/>'s instructions. Pinned.</summary>
     public const string SkillLockedNote = SkillRecordText.LockGlyph + " locked";
 
-    /// <summary>A disabled skill's note on its rule (2026-11-07), as <see cref="SkillLockedNote"/>. Pinned.</summary>
-    public const string SkillDisabledNote = SkillRecordText.DisabledGlyph + " disabled";
-
     /// <summary>
-    /// The note on one skill's rule (2026-11-07): its scope (<see cref="SkillScopes.Name"/>), then <see cref="SkillDisabledNote"/> or
-    /// <see cref="SkillLockedNote"/>; disabled says the lock too, as the catalog's tags do. The turn's catalog holds no disabled skill
-    /// (<see cref="SkillCatalog.Skills"/>), so that note is for a list that does. Pinned.
+    /// The note on one skill's rule (2026-11-07): its scope (<see cref="SkillScopes.Name"/>), then <see cref="SkillLockedNote"/> when locked.
+    /// No disabled note (2026-11-08, the review): the turn's catalog never holds a disabled skill (<see cref="SkillCatalog.Skills"/>). Pinned.
     /// </summary>
     public static string SkillNote(Skill skill)
     {
         ArgumentNullException.ThrowIfNull(skill);
         string scope = SkillScopes.Name(skill.Scope);
-        return skill.Disabled ? scope + ", " + SkillDisabledNote : skill.Locked ? scope + ", " + SkillLockedNote : scope;
+        return skill.Locked ? scope + ", " + SkillLockedNote : scope;
     }
 
     /// <summary>The body under one skill's rule (2026-11-07): the description, the <c>SKILL.md</c> path, and the loader's warning when there is one.</summary>
@@ -765,23 +764,34 @@ public static class SystemPromptSummary
         }
     }
 
+    /// <summary>Whether the next turn sends the skills block (2026-11-08, the review: one rule, not four copies): <c>Agent skills</c> on, with tools to load one.</summary>
+    private static bool SkillsSent(SystemPromptFacts facts) => facts.SkillsEnabled && facts.ToolsEnabled;
+
     /// <summary>The skills the tab lists: the turn's own catalog (<see cref="SystemPromptFacts.Skills"/>), and none while the block is not sent.</summary>
     private static IReadOnlyList<Skill> SkillsShown(SystemPromptFacts facts) =>
-        facts.SkillsEnabled && facts.ToolsEnabled ? facts.Skills ?? [] : [];
+        SkillsSent(facts) ? facts.Skills ?? [] : [];
+
+    /// <summary>The block's directive as the next turn sends it (2026-11-08, the review), when it sends the block.</summary>
+    private static string SkillsDirective(SystemPromptFacts facts) => SkillsPrompt.DirectiveFor(facts.Skills ?? [], facts.GlobalSkills);
 
     /// <summary>
     /// The Skills tab (2026-11-07, the user's ask: the catalog out of the Prompt tab, with more to say): the section's own heading and status
-    /// (<see cref="SkillsStatus"/>), then one rule per skill the next turn offers (its name, then <see cref="SkillNote"/>) over its
-    /// description, its <c>SKILL.md</c> path and any warning. A shadowed skill is never sent, so it is not here; <c>/skills</c> lists it.
+    /// (<see cref="SkillsStatus"/>), then, while the block is sent, its directive word for word (2026-11-08, the review: the Prompt tab no
+    /// longer shows it), then one rule per catalog entry (its name, then <see cref="SkillNote"/>) over its description, its <c>SKILL.md</c>
+    /// path and any warning. A shadowed skill is never sent, so it is not here; <c>/skills</c> lists it.
     /// </summary>
     public static IRenderable SkillsTab(SystemPromptFacts facts)
     {
         ArgumentNullException.ThrowIfNull(facts);
         var rows = new List<IRenderable> { new SectionRule(SectionRule.Markup(SkillsLabel, note: SkillsStatus(facts))) };
         var skills = SkillsShown(facts);
-        if (facts.SkillsEnabled && facts.ToolsEnabled && skills.Count == 0)
+        if (SkillsSent(facts))
         {
-            rows.Add(new Indented(new Text(NoSkillsLine, Theme.DimText), BodyIndent));
+            rows.Add(new Indented(new Text(SkillsDirective(facts), Theme.Body), BodyIndent));
+            if (skills.Count == 0)
+            {
+                rows.Add(new Indented(new Text(NoSkillsLine, Theme.DimText), BodyIndent));
+            }
         }
 
         foreach (var skill in skills)
@@ -795,15 +805,22 @@ public static class SystemPromptSummary
         return new Rows(rows);
     }
 
-    /// <summary>The Skills tab as plain lines, for a console without the pane (2026-11-07): headings as the Prompt lines write them, bodies two spaces in.</summary>
+    /// <summary>
+    /// The Skills tab as plain lines, for a console without the pane (2026-11-07): headings as the Prompt lines write them, bodies two spaces in;
+    /// the directive first while the block is sent (2026-11-08, the review), as on the tab.
+    /// </summary>
     public static IEnumerable<string> SkillsLines(SystemPromptFacts facts)
     {
         ArgumentNullException.ThrowIfNull(facts);
         yield return new SystemPromptSection(SkillsLabel, SkillsStatus(facts), "").Heading;
         var skills = SkillsShown(facts);
-        if (facts.SkillsEnabled && facts.ToolsEnabled && skills.Count == 0)
+        if (SkillsSent(facts))
         {
-            yield return "  " + NoSkillsLine;
+            yield return "  " + SkillsDirective(facts);
+            if (skills.Count == 0)
+            {
+                yield return "  " + NoSkillsLine;
+            }
         }
 
         foreach (var skill in skills)

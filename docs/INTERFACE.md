@@ -398,13 +398,16 @@ Chips for Home Assistant rooms and devices, the shopping list and this PC's moni
 * **Other tabs:** **Rooms** (by floor), **Lights**, **Switches** (and fans), **Sensors**, **Climate**, **Media**, **Scenes** (and scripts), **Security** (locks, covers, alarms, cameras), **Zones** (people in each), **Other**, **Monitors** (Windows only), **Shopping**.
   * Space or Enter adds or removes; typing filters by name, id, room or label.
   * Without Home Assistant only **On the bar**, **Monitors** and **Shopping** show.
-* **bar:** at the end of the tab strip hides the bar and keeps its chips, as `/homebar` does; a second click brings them back. It has no key, because the tabs filter as you type; click it, or use `/homebar`.
+* **bar:** at the end of the tab strip: see [Bar checklists](#bar-checklists).
 
 ## Bar checklists
 
 The *Status bar*, *Tool bar* (`/toolbar edit`) and *Performance bar* (`/perfbar edit`) checklists, and the home bar's **On the bar**, share these keys:
 
-* Space or Enter checks or unchecks; Delete unchecks (on the home bar, takes off). None checked hides the toolbar or the performance bar. **bar:** on their title rows (`h`) hides the bar and keeps its items, as `/toolbar` and `/perfbar` do; `h` again brings them back.
+* Space or Enter checks or unchecks; Delete unchecks (on the home bar, takes off). None checked hides the toolbar or the performance bar.
+* **bar:** on the title row hides the bar and keeps its items, as `/toolbar`, `/perfbar` and `/homebar` do; again brings them back. Its key is `h` on the Tool bar and Performance bar pages.
+* On the home bar picker, **bar:** is at the end of the tab strip and has no key, because the tabs filter as you type.
+* The Tool bar's **bar:** reads hidden whenever nothing checked is drawn: 🔒 and 👮 with *Shell command policy* off, or 🧩 and 📅 on a Mac.
 * `a`, `n` and `d` pick all, none or the default; `d` also puts back the default order, sides and dividers.
 * Shift+←/→ (or Alt+←/→) pins the item to the other side; on the performance and home bars, to the next group over (left ↔ center ↔ right).
 * Shift+↑/↓ (or Alt+↑/↓) moves it a place, crossing into the next group at the edge; Shift+Home/End to its group's top or bottom.

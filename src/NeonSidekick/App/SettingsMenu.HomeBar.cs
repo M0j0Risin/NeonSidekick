@@ -141,12 +141,12 @@ internal sealed partial class SettingsMenu
                         continue;
                     }
 
-                    Apply(SettingsField.ShowHomeBar, d =>
+                    Apply(SettingsField.ShowHomeBar, next.SaveTo);
+                    if (tab == 0)
                     {
-                        d.HomeBarItems = next.Items;
-                        d.HomeBarLastItems = next.LastItems;
-                    });
-                    cursor = 0;   // the On the bar rows change
+                        cursor = 0;   // the On the bar rows change; another tab's stay put (2026-11-08, the review)
+                    }
+
                     changed = true;
                     continue;
                 }

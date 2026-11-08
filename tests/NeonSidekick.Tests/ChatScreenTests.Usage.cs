@@ -95,6 +95,77 @@ public partial class ChatScreenTests
         Assert.Contains(UsageText.UsageError, output, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// <c>/usage prompt</c> without a pane (2026-11-08, the review: each word on its own, so a wrong tab or a fall-through to the
+    /// Statistics lines would fail): the Prompt lines alone, no tool and no skills heading.
+    /// </summary>
+    [Fact]
+    public async Task Usage_WithoutThePane_Prompt_PrintsThePromptAlone()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        PushLine("/usage prompt");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  · Persona — default", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("  · Files (", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("  · Skills — ", output, StringComparison.Ordinal);
+        Assert.DoesNotContain(UsageText.NothingCounted, output, StringComparison.Ordinal);
+    }
+
+    /// <summary><c>/usage tools</c> without a pane (2026-11-08, the review): the tool lines alone.</summary>
+    [Fact]
+    public async Task Usage_WithoutThePane_Tools_PrintsTheToolsAlone()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        PushLine("/usage tools");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  · Files (19)", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("  · Persona — ", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("  · Skills — ", output, StringComparison.Ordinal);
+        Assert.DoesNotContain(UsageText.NothingCounted, output, StringComparison.Ordinal);
+    }
+
+    /// <summary><c>/usage skills</c> without a pane (2026-11-08, the review: no test typed it): the heading, the block's directive and the line, nothing else.</summary>
+    [Fact]
+    public async Task Usage_WithoutThePane_Skills_PrintsTheSkillsAlone()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        PushLine("/usage skills");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  · Skills — on, none installed", output, StringComparison.Ordinal);
+        Assert.Contains("  ·   " + Skills.SkillsPrompt.DirectiveWithoutSkills[..60], output, StringComparison.Ordinal);
+        Assert.Contains("  ·   " + SystemPromptSummary.NoSkillsLine, output, StringComparison.Ordinal);
+        Assert.DoesNotContain("  · Persona — ", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("  · Files (", output, StringComparison.Ordinal);
+        Assert.DoesNotContain(UsageText.NothingCounted, output, StringComparison.Ordinal);
+    }
+
+    /// <summary><c>/usage skills</c> with the pane (2026-11-08, the review): it opens on the Skills tab, not the Prompt tab.</summary>
+    [Fact]
+    public async Task Usage_WithGeometry_Skills_OpensOnTheSkillsTab()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full"; });
+        _console.Profile.Height = 80;
+        _geometry = new ScreenGeometry(() => null);
+        PushLine("/usage skills");
+        _console.Input.PushKey(Keys.Escape);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(HeadingRow("── Skills ── on, none installed"), output, StringComparison.Ordinal);
+        Assert.DoesNotContain(HeadingRow("── Persona ── default"), output, StringComparison.Ordinal);
+        Assert.DoesNotContain(UsageText.NothingCounted, output, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Usage_ArgumentList_OffersContext()
     {
