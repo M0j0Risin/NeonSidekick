@@ -4,6 +4,7 @@ using NeonSidekick.Llm.Tools;
 using NeonSidekick.Settings;
 using NeonSidekick.Tasks;
 using NeonSidekick.Tests.Fakes;
+using TaskColumns = NeonSidekick.App.TaskColumns;
 
 namespace NeonSidekick.Tests;
 
@@ -506,5 +507,68 @@ public sealed class TasksTests
         Assert.True(ok, text);
         _system.FailWith = unchecked((int)0x80070005);
         Assert.False((await TaskAccess.TestAsync(_system, new Computer<TaskComputerConfig>("local", new TaskComputerConfig()), _time, CancellationToken.None)).Ok);
+    }
+
+    // ── /tasks' columns (2026-11-08, the user's ask: uniform columns; the next run goes first when short of room) ──
+
+    private static readonly DateTime Ran = new(2026, 10, 15, 3, 0, 0);
+
+    private static List<TaskEntry> ColumnList() =>
+    [
+        new(@"\Short", "Short", TaskRunState.Ready, true, Ran, 0, Ran.AddDays(1), 0),
+        new(@"\A\Very\Long\Folder\Path\That\Runs\Well\Past\Sixty\Cells\For\Sure\Task", "Task", TaskRunState.Disabled, false, Ran, unchecked((int)0x8004EE04), null, 0),
+        new(@"\Never", "Never", TaskRunState.Ready, true, null, 0x41303, Ran.AddDays(2), 0),
+        new(@"\Running", "Running", TaskRunState.Running, true, Ran, 0x41301, null, 0),
+    ];
+
+    private static string PlainRow(TaskEntry entry, TaskColumns columns) => Spectre.Console.Markup.Remove(NeonSidekick.App.TasksMenu.RowMarkup(entry, columns));
+
+    [Fact]
+    public void TaskRows_LineUpEveryColumn_WhenWide()
+    {
+        var all = ColumnList();
+        var columns = TaskColumns.Of(all, 160);
+        Assert.Equal(new TaskColumns(TaskColumns.PathCap, 8, TaskColumns.ResultCap, true), columns);
+        int stateAt = columns.Path + 2, lastAt = stateAt + columns.State + 2, resultAt = lastAt + TaskColumns.WhenCells + 2, nextAt = resultAt + columns.Result + 2;
+        foreach (var entry in all)
+        {
+            string row = PlainRow(entry, columns);
+            Assert.StartsWith(TaskText.StateWord(entry.State), row[stateAt..], StringComparison.Ordinal);
+            Assert.StartsWith(TaskColumns.LastText(entry), row[lastAt..], StringComparison.Ordinal);
+            Assert.StartsWith(NeonSidekick.UI.TextCells.Cut(TaskColumns.ResultText(entry), columns.Result), row[resultAt..], StringComparison.Ordinal);
+            Assert.Equal(TaskColumns.NextText(entry), row[nextAt..]);
+        }
+
+        Assert.StartsWith(@"\A\Very\Long\Folder\Path\That\Runs\Well\Past\Sixty\Cells\Fo…  ", PlainRow(all[1], columns), StringComparison.Ordinal);
+        Assert.Equal(new string(' ', columns.Result), PlainRow(all[2], columns)[resultAt..(resultAt + columns.Result)]);   // never run: a blank result
+        Assert.EndsWith(NeonSidekick.UI.Theme.DimMarkup("next never"), NeonSidekick.App.TasksMenu.RowMarkup(all[1], columns), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TaskColumns_DropTheNextRunFirst_ThenShrinkTheResult_ThenThePath()
+    {
+        var all = ColumnList();
+        var narrower = TaskColumns.Of(all, 130);
+        Assert.Equal(new TaskColumns(TaskColumns.PathCap, 8, TaskColumns.ResultCap, false), narrower);
+        foreach (var entry in all)
+        {
+            string row = PlainRow(entry, narrower);
+            Assert.DoesNotContain("next ", row, StringComparison.Ordinal);
+            Assert.False(row.EndsWith(' '), row);   // the last column is not padded
+            Assert.True(NeonSidekick.UI.TextCells.Width(row) <= TaskColumns.Room(130));
+        }
+
+        Assert.EndsWith("last never", PlainRow(all[2], narrower), StringComparison.Ordinal);
+
+        var narrow = TaskColumns.Of(all, 60);
+        Assert.Equal(new TaskColumns(TaskColumns.PathFloor, 8, TaskColumns.ResultFloor, false), narrow);
+        Assert.StartsWith(@"\A\Very\Long\Folder…  disabled", PlainRow(all[1], narrow), StringComparison.Ordinal);
+
+        // Between the two, the result stops at its floor and the path takes what is left.
+        Assert.Equal(new TaskColumns(TaskColumns.Room(100) - 47, 8, TaskColumns.ResultFloor, false), TaskColumns.Of(all, 100));
+
+        // No task ever run: no result column, and no double gap for it.
+        var unrun = new List<TaskEntry> { new(@"\Never", "Never", TaskRunState.Ready, true, null, 0x41303, Ran, 0) };
+        Assert.Equal(@"\Never  ready  " + "last never".PadRight(TaskColumns.WhenCells) + "  next 2026-10-15 03:00", PlainRow(unrun[0], TaskColumns.Of(unrun, 160)));
     }
 }

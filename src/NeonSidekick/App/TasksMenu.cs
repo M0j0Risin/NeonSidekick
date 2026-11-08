@@ -35,13 +35,28 @@ internal sealed class TasksMenu
 
     public const string AskOffNotice = TaskText.AskOffNotice;
 
-    public static string RowMarkup(TaskEntry entry, int width)
+    /// <summary>
+    /// One row in <paramref name="columns"/>: the path fitted to its column (cut at the end), then the state, the last run and its result in
+    /// the row's color (good running, bad after a failed last run, dim otherwise), then the next run dim when there is room for it. Since
+    /// 2026-11-08 (the user's ask: uniform columns) the widths come from the whole list (<see cref="TaskColumns.Of"/>); before, the path took
+    /// what the row's own tail left, and the results run from "succeeded" to some seventy characters, so no field lined up. A task never run
+    /// has a blank result cell. The last column is not padded. Pinned.
+    /// </summary>
+    public static string RowMarkup(TaskEntry entry, TaskColumns columns)
     {
         ArgumentNullException.ThrowIfNull(entry);
-        string tail = TaskText.StateWord(entry.State) + "  last " + TaskText.When(entry.LastRun) + (entry.LastRun is null ? "" : " " + TaskWords.Result(entry.LastResult)) + "  next " + TaskText.When(entry.NextRun);
-        string path = ScreenPane.Fit(UntrustedText.Scrub(entry.Path), Math.Max(20, width - TextCells.Width(tail) - 6));
+        ArgumentNullException.ThrowIfNull(columns);
+        var cells = new List<string> { TextCells.Cell(TaskText.StateWord(entry.State), columns.State), TextCells.Cell(TaskColumns.LastText(entry), TaskColumns.WhenCells) };
+        if (columns.Result > 0)
+        {
+            cells.Add(TextCells.Cell(TaskColumns.ResultText(entry), columns.Result));
+        }
+
+        string colored = string.Join(TaskColumns.Gap, cells);
+        colored = columns.Next ? colored : colored.TrimEnd();
         var color = entry.State == TaskRunState.Running ? Theme.Good : entry.LastRun is not null && entry.LastResult is not (0 or 0x41301 or 0x41303) ? Theme.Bad : Theme.Dim;
-        return Markup.Escape(path) + "  " + Theme.ColorMarkup(color, tail);
+        string row = Markup.Escape(TextCells.Cell(UntrustedText.Scrub(entry.Path), columns.Path)) + TaskColumns.Gap + Theme.ColorMarkup(color, colored);
+        return columns.Next ? row + TaskColumns.Gap + Theme.DimMarkup(TaskColumns.NextText(entry)) : row;
     }
 
     private readonly TaskAccess _access;
@@ -144,9 +159,10 @@ internal sealed class TasksMenu
 
             int width = Math.Max(40, _width());
             var lists = TabTitles.Select((_, i) => (all ?? []).Where(t => InTab(t, i) && MenuFilter.Matches(filters[i], t.Path, t.Name)).ToList()).ToList();
+            var columns = TaskColumns.Of(all ?? [], width);
             var tabs = TabTitles.Select((title, i) => new MenuTab(title, lists[i].Count == 0
                     ? [Theme.DimMarkup(error ?? (filters[i].Length > 0 ? MenuFilter.NoMatchLine(filters[i]) : "none"))]
-                    : lists[i].Select(t => RowMarkup(t, width)).ToList())
+                    : lists[i].Select(t => RowMarkup(t, columns)).ToList())
             {
                 Filter = filters[i],
                 Hint = MenuFilter.Hint(Keys, filters[i]),
@@ -366,4 +382,69 @@ internal sealed class TasksMenu
 
         return fresh with { Redacted = false };
     }
+}
+
+/// <summary>
+/// The widths of <c>/tasks</c>' columns — path · state · last run · result · next run — worked out once over the whole list, so typing a
+/// filter or switching tabs never moves them (2026-11-08, the user's ask: draw the pane in clean columns, as the other list panes are
+/// drawn). The path is the widest one up to <see cref="PathCap"/>; the state the widest state word; the last run <see cref="WhenCells"/>;
+/// the result the widest one among the tasks that have run, up to <see cref="ResultCap"/> (none when no task has run). When the row is too
+/// wide, the next run goes first (the user's call), then the result gives way to <see cref="ResultFloor"/>, then the path to
+/// <see cref="PathFloor"/>; past that, the pane's own cut handles it. No header row, as in the other list panes.
+/// </summary>
+internal sealed record TaskColumns(int Path, int State, int Result, bool Next)
+{
+    /// <summary>The blanks between two columns.</summary>
+    public const string Gap = "  ";
+
+    public const int PathCap = 60;
+    public const int PathFloor = 20;
+    public const int ResultCap = 28;
+    public const int ResultFloor = 12;
+
+    /// <summary>The cells a row may fill at window <paramref name="width"/>, as in <c>/services</c> (<see cref="ServiceColumns.Room"/>). Pure.</summary>
+    public static int Room(int width) => ServiceColumns.Room(width);
+
+    /// <summary>The last run's cell: <c>last 2026-10-15 03:00</c>, the widest <see cref="LastText"/>.</summary>
+    public const int WhenCells = 21;
+
+    /// <summary>The last run's words: <c>last 2026-10-15 03:00</c>, or <c>last never</c>.</summary>
+    public static string LastText(TaskEntry entry) => "last " + TaskText.When(entry.LastRun);
+
+    /// <summary>The next run's words: <c>next 2026-10-15 03:00</c>, or <c>next never</c>.</summary>
+    public static string NextText(TaskEntry entry) => "next " + TaskText.When(entry.NextRun);
+
+    /// <summary>The last run's result in words, or nothing for a task never run.</summary>
+    public static string ResultText(TaskEntry entry) => entry.LastRun is null ? "" : TaskWords.Result(entry.LastResult);
+
+    /// <summary>The columns for <paramref name="all"/> at window <paramref name="width"/>. Pure.</summary>
+    public static TaskColumns Of(IReadOnlyList<TaskEntry> all, int width)
+    {
+        ArgumentNullException.ThrowIfNull(all);
+        int room = Room(width);
+        int gap = Gap.Length;
+        int path = Math.Min(PathCap, Widest(all.Select(t => UntrustedText.Scrub(t.Path))));
+        int state = Widest(all.Select(t => TaskText.StateWord(t.State)));
+        int result = Math.Min(ResultCap, Widest(all.Select(ResultText)));
+        int next = Widest(all.Select(NextText));
+        int Total(bool withNext) => path + gap + state + gap + WhenCells + (result > 0 ? gap + result : 0) + (withNext ? gap + next : 0);
+        if (Total(withNext: true) <= room)
+        {
+            return new TaskColumns(path, state, result, true);
+        }
+
+        if (result > 0 && Total(withNext: false) > room)
+        {
+            result = Math.Max(Math.Min(result, ResultFloor), result - (Total(withNext: false) - room));
+        }
+
+        if (Total(withNext: false) > room)
+        {
+            path = Math.Max(Math.Min(path, PathFloor), path - (Total(withNext: false) - room));
+        }
+
+        return new TaskColumns(path, state, result, false);
+    }
+
+    private static int Widest(IEnumerable<string> texts) => texts.Select(TextCells.Width).DefaultIfEmpty(0).Max();
 }

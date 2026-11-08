@@ -221,6 +221,17 @@ public static class TextCells
         return cells;
     }
 
+    /// <summary>
+    /// <paramref name="text"/> in exactly <paramref name="cells"/> cells: <see cref="Cut"/> to fit, then blanks to the width, so a list's
+    /// next column starts at the same cell on every row (2026-11-08, the user's ask: <c>/services</c> and <c>/tasks</c> in uniform columns,
+    /// as the other list panes draw theirs). A cut that ends a cell short of a wide glyph is padded too. Nothing for 0 cells or fewer. Pure.
+    /// </summary>
+    public static string Cell(string text, int cells)
+    {
+        string cut = Cut(text, cells);
+        return cells <= 0 ? "" : cut + new string(' ', Math.Max(0, cells - Width(cut)));
+    }
+
     /// <summary>Cells occupied by <paramref name="text"/>; a surrogate pair is one two-cell glyph.</summary>
     public static int Width(string text)
     {

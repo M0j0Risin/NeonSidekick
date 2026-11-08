@@ -35,16 +35,24 @@ internal sealed class ServicesMenu
 
     public const string AskOffNotice = ServiceText.AskOffNotice;
 
-    /// <summary>One row: the name padded, the display name, the state. Pinned.</summary>
-    public static string RowMarkup(ServiceEntry entry, int nameWidth, int width)
+    /// <summary>
+    /// One row in <paramref name="columns"/>: the name and the display name each fitted to its column, then the state (and a failed
+    /// service's exit code) in its color, unpadded at the end. Since 2026-11-08 (the user's ask: uniform columns) the widths come from the
+    /// whole list (<see cref="ServiceColumns.Of"/>); before, the display name took what the row's own state left, so the state wandered.
+    /// Each cell is scrubbed, then fitted, then escaped — escaping first could part an escaped bracket pair. Pinned.
+    /// </summary>
+    public static string RowMarkup(ServiceEntry entry, ServiceColumns columns)
     {
         ArgumentNullException.ThrowIfNull(entry);
-        string name = UntrustedText.Scrub(entry.Name);
-        string state = ServiceText.StateWord(entry.State) + (ServiceRender.Failed(entry) ? " (exit " + ServiceRender.ExitCode(entry.Win32ExitCode, entry.ServiceExitCode) + ")" : "");
-        int room = Math.Max(10, width - nameWidth - TextCells.Width(state) - 8);
-        string display = ScreenPane.Fit(UntrustedText.Scrub(entry.DisplayName), room);
+        ArgumentNullException.ThrowIfNull(columns);
+        string name = TextCells.Cell(UntrustedText.Scrub(entry.Name), columns.Name);
+        string display = TextCells.Cell(UntrustedText.Scrub(entry.DisplayName), columns.Display);
+        // A column too narrow for any of the exit code shows the bare word: a cut there would end "stoppe…" and lose the word itself.
+        string word = ServiceText.StateWord(entry.State);
+        string full = ServiceText.PaneState(entry);
+        string state = TextCells.Cut(TextCells.Width(full) <= columns.State || columns.State > TextCells.Width(word) + 1 ? full : word, columns.State);
         var color = entry.State == ServiceRunState.Running ? Theme.Good : ServiceRender.Failed(entry) ? Theme.Bad : Theme.Dim;
-        return Markup.Escape(name.PadRight(nameWidth)) + "  " + Markup.Escape(display) + "  " + Theme.ColorMarkup(color, state);
+        return Markup.Escape(name) + ServiceColumns.Gap + Markup.Escape(display) + ServiceColumns.Gap + Theme.ColorMarkup(color, state);
     }
 
     private readonly ServiceAccess _access;
@@ -127,10 +135,10 @@ internal sealed class ServicesMenu
 
             int width = Math.Max(40, _width());
             var lists = TabTitles.Select((_, i) => (all ?? []).Where(e => InTab(e, i) && MenuFilter.Matches(filters[i], e.Name, e.DisplayName)).ToList()).ToList();
-            int nameWidth = Math.Min(32, (all ?? []).Select(e => e.Name.Length).DefaultIfEmpty(10).Max());
+            var columns = ServiceColumns.Of(all ?? [], width);
             var tabs = TabTitles.Select((title, i) => new MenuTab(title, lists[i].Count == 0
                     ? [Theme.DimMarkup(error ?? (filters[i].Length > 0 ? MenuFilter.NoMatchLine(filters[i]) : "none"))]
-                    : lists[i].Select(e => RowMarkup(e, nameWidth, width)).ToList())
+                    : lists[i].Select(e => RowMarkup(e, columns)).ToList())
             {
                 Filter = filters[i],
                 Hint = MenuFilter.Hint(Keys, filters[i]),
@@ -326,4 +334,50 @@ internal sealed class ServicesMenu
 
         return fresh with { Redacted = false };
     }
+}
+
+/// <summary>
+/// The widths of <c>/services</c>' columns — name · display name · state — worked out once over the whole list, so typing a filter or
+/// switching tabs never moves them (2026-11-08, the user's ask: draw the pane in clean columns, as the other list panes are drawn). The
+/// name is the widest one up to <see cref="NameCap"/>; the state the widest state text (<see cref="ServiceText.PaneState"/>) up to
+/// <see cref="StateCap"/>; the display name takes what the row has left. When the row is still too wide, the display name gives way to
+/// <see cref="DisplayFloor"/>, then the state to its widest state word (an exit code is cut, the word stays), then the name to what is left,
+/// never under <see cref="NameFloor"/>; past that, the pane's own cut handles it. No header row, as in the other list panes.
+/// </summary>
+internal sealed record ServiceColumns(int Name, int Display, int State)
+{
+    /// <summary>The blanks between two columns.</summary>
+    public const string Gap = "  ";
+
+    public const int NameCap = 32;
+    public const int StateCap = 28;
+    public const int DisplayFloor = 10;
+    public const int NameFloor = 12;
+
+    /// <summary>
+    /// The cells a row may fill at window <paramref name="width"/>: the pane draws each row after its pointer (<see cref="MenuPane.NoPointer"/>)
+    /// and never writes the last column. Pure.
+    /// </summary>
+    public static int Room(int width) => width - TextCells.Width(MenuPane.NoPointer) - 1;
+
+    /// <summary>The columns for <paramref name="all"/> at window <paramref name="width"/>. Pure.</summary>
+    public static ServiceColumns Of(IReadOnlyList<ServiceEntry> all, int width)
+    {
+        ArgumentNullException.ThrowIfNull(all);
+        int room = Room(width);
+        int gaps = 2 * Gap.Length;
+        int name = Math.Min(NameCap, Widest(all.Select(e => UntrustedText.Scrub(e.Name))));
+        int state = Math.Min(StateCap, Widest(all.Select(ServiceText.PaneState)));
+        int widestDisplay = Widest(all.Select(e => UntrustedText.Scrub(e.DisplayName)));
+        int display = Math.Min(widestDisplay, Math.Max(DisplayFloor, room - name - state - gaps));
+        if (name + display + state + gaps > room)
+        {
+            state = Math.Max(Math.Min(state, Widest(all.Select(e => ServiceText.StateWord(e.State)))), room - name - display - gaps);
+            name = Math.Min(name, Math.Max(NameFloor, room - display - state - gaps));
+        }
+
+        return new ServiceColumns(name, display, state);
+    }
+
+    private static int Widest(IEnumerable<string> texts) => texts.Select(TextCells.Width).DefaultIfEmpty(0).Max();
 }

@@ -5,6 +5,7 @@ using NeonSidekick.Llm.Tools;
 using NeonSidekick.Services;
 using NeonSidekick.Settings;
 using NeonSidekick.Tests.Fakes;
+using ServiceColumns = NeonSidekick.App.ServiceColumns;
 
 namespace NeonSidekick.Tests;
 
@@ -481,5 +482,58 @@ public sealed class ServicesTests : IDisposable
         Assert.Equal(ServiceText.TestOk("local", 5, 4), text);
         _system.FailWith = 1722;
         Assert.False((await ServiceAccess.TestAsync(_system, new Computer<ServiceComputerConfig>("local", new ServiceComputerConfig()), _time, CancellationToken.None)).Ok);
+    }
+
+    // ── /services' columns (2026-11-08, the user's ask: uniform columns) ──
+
+    private static List<ServiceEntry> ColumnList() =>
+    [
+        new("A", "Short", ServiceRunState.Running, 1, ServiceKinds.Win32OwnProcess, 0, 0),
+        new("AVeryLongServiceNameThatRunsPastThirtyTwoCells", "Long display name for a service", ServiceRunState.Stopped, 0, ServiceKinds.Win32OwnProcess, 0, 0),
+        new("Broken", "日本語のサービス", ServiceRunState.Stopped, 0, ServiceKinds.Win32OwnProcess, 1067, 0),
+        new("Mid", "Brackets [x] here", ServiceRunState.Running, 2, ServiceKinds.Win32OwnProcess, 0, 0),
+    ];
+
+    private static string PlainRow(ServiceEntry entry, ServiceColumns columns) => Spectre.Console.Markup.Remove(NeonSidekick.App.ServicesMenu.RowMarkup(entry, columns));
+
+    [Fact]
+    public void ServiceRows_PutEveryStateInOneColumn()
+    {
+        var all = ColumnList();
+        var columns = ServiceColumns.Of(all, 160);
+        Assert.Equal(new ServiceColumns(ServiceColumns.NameCap, 31, 19), columns);
+        var rows = all.Select(e => PlainRow(e, columns)).ToList();
+        int stateAt = columns.Name + 2 + columns.Display + 2;
+        foreach (var (row, entry) in rows.Zip(all))
+        {
+            // Measured in cells: the wide display name is padded by cells, not chars.
+            string word = ServiceText.StateWord(entry.State);
+            Assert.Equal(stateAt, NeonSidekick.UI.TextCells.Width(row[..row.LastIndexOf(word, StringComparison.Ordinal)]));
+        }
+
+        Assert.StartsWith("AVeryLongServiceNameThatRunsPas…  ", rows[1], StringComparison.Ordinal);
+        Assert.EndsWith("  stopped (exit 1067)", rows[2], StringComparison.Ordinal);
+        Assert.Contains("Brackets [x] here", rows[3], StringComparison.Ordinal);   // escaped once
+        Assert.Equal(columns, ServiceColumns.Of(all, 160));   // pure: the whole list gives the same columns whatever the filter shows
+    }
+
+    [Fact]
+    public void ServiceColumns_GiveWayInOrder_DownToTheFloor()
+    {
+        var all = ColumnList();
+        int room = ServiceColumns.Room(40);
+        Assert.Equal(37, room);
+        var columns = ServiceColumns.Of(all, 40);
+        Assert.Equal(ServiceColumns.DisplayFloor, columns.Display);
+        Assert.Equal(7, columns.State);   // the widest word, "stopped": the exit code goes, the word stays
+        Assert.Equal(room - 10 - 7 - 4, columns.Name);
+        var rows = all.Select(e => PlainRow(e, columns)).ToList();
+        Assert.All(rows, row => Assert.Equal(room, NeonSidekick.UI.TextCells.Width(row)));
+        Assert.EndsWith("  stopped", rows[2], StringComparison.Ordinal);
+
+        // A little wider: the display name holds at 10, the name is whole again, and the exit code shows what fits.
+        var wider = ServiceColumns.Of(all, 60);
+        Assert.Equal(new ServiceColumns(ServiceColumns.NameCap, ServiceColumns.DisplayFloor, 11), wider);
+        Assert.EndsWith("  stopped (e…", PlainRow(all[2], wider), StringComparison.Ordinal);
     }
 }

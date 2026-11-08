@@ -43,6 +43,21 @@ public sealed class TextCellsNarrowTests
         Assert.Equal("", TextCells.Cut(text, 0));
     }
 
+    /// <summary>A list column's cell (2026-11-08, /services' and /tasks' columns): exactly its width, cut with "…" or padded.</summary>
+    [Theory]
+    [InlineData("ab", 5, "ab   ")]
+    [InlineData("abcdef", 4, "abc…")]
+    [InlineData("", 3, "   ")]
+    [InlineData("abc", 0, "")]
+    [InlineData("🎓", 4, "🎓  ")]
+    [InlineData("🎓🎓🎓", 4, "🎓… ")]   // the cut is a cell short of the next wide glyph, so it is padded too
+    public void Cell_IsExactlyItsWidth(string text, int cells, string expected)
+    {
+        string cell = TextCells.Cell(text, cells);
+        Assert.Equal(expected, cell);
+        Assert.Equal(cells, TextCells.Width(cell));
+    }
+
     [Theory]
     [InlineData("⚙️", 1, 2)]   // U+2699 U+FE0F: the base one cell, the selector none in Terminal.app, one elsewhere
     [InlineData("🛠️", 1, 2)]   // U+1F6E0 U+FE0F: a pair with its selector, one cell there

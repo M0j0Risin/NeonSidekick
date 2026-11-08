@@ -190,7 +190,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 Windows only.
 
 * **`/services`:** a row per service (name, display name, state, a failure's exit code), a tab per state.
-* **`/tasks`:** the scheduled tasks (path, state, last run and result, next run); Windows' own under `\Microsoft\` stay hidden until `w`.
+* **`/tasks`:** the scheduled tasks (path, state, last run and result, next run when there's room); Windows' own under `\Microsoft\` stay hidden until `w`.
 * **Enter** opens one whole, with the actions its computer allows as buttons. Each asks first; a refusal (protected, a driver, privileged, not in `control`) says why.
 * Times are the computer's own clock.
 

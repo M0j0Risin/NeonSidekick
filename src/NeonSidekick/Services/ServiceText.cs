@@ -236,6 +236,16 @@ public static class ServiceText
         _ => "unknown",
     };
 
+    /// <summary>
+    /// The state column of <c>/services</c>' rows: the state word, and a failed service's exit code after it — <c>stopped (exit 1066 …)</c>
+    /// (2026-11-08, the user's ask: uniform columns; it sat inline in the menu until the columns needed it measured over the whole list).
+    /// </summary>
+    public static string PaneState(ServiceEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        return StateWord(entry.State) + (ServiceRender.Failed(entry) ? " (exit " + ServiceRender.ExitCode(entry.Win32ExitCode, entry.ServiceExitCode) + ")" : "");
+    }
+
     public static string StartWord(ServiceStartType start, bool delayed) => start switch
     {
         ServiceStartType.Automatic => delayed ? "delayed" : "automatic",
