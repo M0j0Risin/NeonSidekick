@@ -153,6 +153,112 @@ public class BraveEngineTests
     }
 }
 
+public class BraveApiEngineTests
+{
+    private const string Answer = """
+        {"query":{"original":"dotnet"},"web":{"results":[
+          {"title":"Native AOT","url":"https://learn.microsoft.com/aot","description":"Ahead-of-time &amp; <strong>fast</strong>"},
+          {"title":"No link","description":"skipped"},
+          {"title":"Second","url":"https://b.example/"}
+        ]}}
+        """;
+
+    [Fact]
+    public async Task SearchAsync_SendsTheKeyInAHeader_AndParses()
+    {
+        var handler = new StubHandler(_ => StubHandler.Text(Answer));
+        using var http = new HttpClient(handler);
+
+        var results = await new BraveApiEngine(() => " key-1 ").SearchAsync(new EngineQuery("dotnet native aot", 2, SafeSearch.Strict), http, CancellationToken.None);
+
+        Assert.Equal(["https://learn.microsoft.com/aot", "https://b.example/"], results.Select(r => r.Url));
+        Assert.Equal("Ahead-of-time & fast", results[0].Content);
+        Assert.Equal("", results[1].Content);
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal("https://api.search.brave.com/res/v1/web/search?q=dotnet+native+aot&count=20&offset=1&text_decorations=false&safesearch=strict", request.RequestUri!.AbsoluteUri);
+        Assert.Equal("key-1", request.Headers.NonValidated["X-Subscription-Token"].ToString());
+        Assert.DoesNotContain("key-1", request.RequestUri.AbsoluteUri, StringComparison.Ordinal);
+    }
+
+    /// <summary>Read at each search, so a host's new key is sent without a new engine.</summary>
+    [Fact]
+    public async Task SearchAsync_ReadsTheKeyEachTime()
+    {
+        var handler = new StubHandler(_ => StubHandler.Text(Answer));
+        using var http = new HttpClient(handler);
+        string key = "one";
+        var engine = new BraveApiEngine(() => key);
+
+        await engine.SearchAsync(new EngineQuery("x"), http, CancellationToken.None);
+        key = "two";
+        await engine.SearchAsync(new EngineQuery("x"), http, CancellationToken.None);
+
+        Assert.Equal(["one", "two"], handler.Requests.Select(r => r.Headers.NonValidated["X-Subscription-Token"].ToString()));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("  ")]
+    public async Task SearchAsync_WithNoKey_SendsNothing_AndDoesNotRest(string? key)
+    {
+        var handler = new StubHandler(_ => StubHandler.Text(Answer));
+        using var http = new HttpClient(handler);
+
+        var e = await Assert.ThrowsAsync<EngineException>(() => new BraveApiEngine(() => key).SearchAsync(new EngineQuery("x"), http, CancellationToken.None));
+
+        Assert.Equal(EngineFailureKind.AccessDenied, e.Kind);
+        Assert.Equal(TimeSpan.Zero, e.SuspendFor);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public async Task SearchAsync_PastThePageLimit_AsksNothing()
+    {
+        var handler = new StubHandler(_ => StubHandler.Text(Answer));
+        using var http = new HttpClient(handler);
+
+        Assert.Empty(await new BraveApiEngine(() => "k").SearchAsync(new EngineQuery("x", 11), http, CancellationToken.None));
+        Assert.Empty(handler.Requests);
+    }
+
+    [Theory]
+    [InlineData(422, """{"type":"ErrorResponse","error":{"code":"SUBSCRIPTION_TOKEN_INVALID","status":422}}""", EngineFailureKind.AccessDenied, "The Brave Search API rejected the key.")]
+    [InlineData(401, """{"error":{"code":"SUBSCRIPTION_TOKEN_INVALID"}}""", EngineFailureKind.AccessDenied, "The Brave Search API rejected the key.")]
+    [InlineData(429, """{"error":{"code":"RATE_LIMITED"}}""", EngineFailureKind.TooManyRequests, "Too many requests (RATE_LIMITED)")]
+    [InlineData(402, "not json", EngineFailureKind.AccessDenied, "HTTP error 402")]
+    [InlineData(500, """{"error":{"code":"has spaces, so left out"}}""", EngineFailureKind.HttpError, "HTTP error 500")]
+    [InlineData(422, """{"error":{"code":"VALIDATION"}}""", EngineFailureKind.HttpError, "HTTP error 422 (VALIDATION)")]
+    public async Task SearchAsync_ReadsTheApisErrors(int status, string body, EngineFailureKind kind, string message)
+    {
+        using var http = new HttpClient(new StubHandler(_ => StubHandler.Text(body, (HttpStatusCode)status)));
+
+        var e = await Assert.ThrowsAsync<EngineException>(() => new BraveApiEngine(() => "k").SearchAsync(new EngineQuery("x"), http, CancellationToken.None));
+
+        Assert.Equal((kind, message), (e.Kind, e.Message));
+        Assert.Null(e.RefusedUrl);   // nothing a person could open
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("""{"web":null}""")]
+    [InlineData("""{"web":{}}""")]
+    [InlineData("""{"web":{"results":[]}}""")]
+    public void Parse_NoWebResults_IsNoResults(string json)
+    {
+        Assert.Empty(BraveApiEngine.Parse(json));
+    }
+
+    [Theory]
+    [InlineData("[]")]
+    [InlineData("""{"web":{"results":{}}}""")]
+    [InlineData("not json")]
+    public void Parse_AnUnexpectedAnswer_IsAFailure(string json)
+    {
+        Assert.Equal(EngineFailureKind.UnexpectedResponse, Assert.Throws<EngineException>(() => BraveApiEngine.Parse(json)).Kind);
+    }
+}
+
 public class StartpageEngineTests
 {
     private const string Home = "<form id=\"search\"><input name=\"sc\" value=\"CODE\"></form>";

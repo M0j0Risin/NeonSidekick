@@ -1406,6 +1406,7 @@ public sealed class AppSettings : IDisposable
         WebSearxngUrl = source.WebSearxngUrl,
         WebMetasearchEngines = source.WebMetasearchEngines is null ? null : [.. source.WebMetasearchEngines],
         WebMetasearchSafeSearch = source.WebMetasearchSafeSearch,
+        WebMetasearchBraveApiKey = source.WebMetasearchBraveApiKey,
         WebTools = source.WebTools,
         McpConnectTimeoutSeconds = source.McpConnectTimeoutSeconds,
         McpServers = source.McpServers,

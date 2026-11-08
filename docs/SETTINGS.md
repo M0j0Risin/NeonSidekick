@@ -505,6 +505,7 @@ The tools most profiles use, and the pane's own options.
 | Web search max results | Hits per search (1–20). | 20 |
 | Web metasearch engines | Which engines `metasearch` asks: Bing, Brave, DuckDuckGo, Startpage and Wikipedia. With none on, a search says so and asks nobody. | all |
 | Web metasearch safe search | The filter `metasearch` asks for: `off`, `moderate` or `strict`. It reaches Bing, Brave and Startpage, and can't change DuckDuckGo's own default. | `off` |
+| Web Brave Search API key | A [Brave Search API](https://brave.com/search/api/) key. While set, Brave is asked through its API instead of its results page; searches count against your Brave plan. Saved encrypted. | empty |
 | Web SearXNG URL | The SearXNG instance, for `searxng`. With no usable address, `searxng` uses the metasearch. | empty |
 | Web download max (MB) | The largest file `download_file` saves (1–102,400). | 50 |
 

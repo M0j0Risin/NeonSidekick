@@ -98,7 +98,7 @@ public enum ProfileSection
     /// <summary>No section word: every setting but the target's working directory (<c>Profiles.CopySettings</c>).</summary>
     All,
 
-    /// <summary><c>keys</c>: the five API keys, mirrored (a key unset in the source clears the target's). <c>/keycopy</c> until 2026-10-09.</summary>
+    /// <summary><c>keys</c>: the six API keys, mirrored (a key unset in the source clears the target's). <c>/keycopy</c> until 2026-10-09.</summary>
     Keys,
 
     /// <summary><c>servers</c>: <c>ChatScreen.ProfileSettingGroups</c>, mirrored. <c>/srvcopy</c> until 2026-10-09.</summary>
@@ -9076,13 +9076,14 @@ internal sealed partial class ChatScreen
     private const string OpenAIKeyName = "OpenAI API key";
     internal const string HomeAssistantKeyName = "Home Assistant API key";
     private const string YouTubeKeyName = "YouTube API key";   // 2026-10-05, the user's ask
+    private const string BraveKeyName = "Brave Search API key";   // 2026-11-07: the row's words after "Web"
 
     /// <summary><c>a</c>, <c>a and b</c>, <c>a, b and c</c>.</summary>
     private static string KeySeries(IReadOnlyList<string> items) =>
         items.Count <= 1 ? string.Concat(items) : string.Join(", ", items.Take(items.Count - 1)) + " and " + items[^1];
 
     /// <summary>The keys' names split by whether the source has them set, in the settings pane's order.</summary>
-    private static (List<string> Set, List<string> Unset) KeyNames(bool llmSet, bool claudeSet, bool openAISet, bool haSet, bool youTubeSet)
+    private static (List<string> Set, List<string> Unset) KeyNames(bool llmSet, bool claudeSet, bool openAISet, bool haSet, bool youTubeSet, bool braveSet)
     {
         var set = new List<string>();
         var unset = new List<string>();
@@ -9091,19 +9092,21 @@ internal sealed partial class ChatScreen
         (openAISet ? set : unset).Add(OpenAIKeyName);
         (haSet ? set : unset).Add(HomeAssistantKeyName);
         (youTubeSet ? set : unset).Add(YouTubeKeyName);
+        (braveSet ? set : unset).Add(BraveKeyName);
         return (set, unset);
     }
 
-    /// <summary>Which of <paramref name="data"/>'s five keys are set, the LLM's placeholder key counting as unset.</summary>
-    private static (bool Llm, bool Anthropic, bool OpenAI, bool HomeAssistant, bool YouTube) KeysSet(AppSettingsData data) => (
+    /// <summary>Which of <paramref name="data"/>'s six keys are set, the LLM's placeholder key counting as unset.</summary>
+    private static (bool Llm, bool Anthropic, bool OpenAI, bool HomeAssistant, bool YouTube, bool Brave) KeysSet(AppSettingsData data) => (
         !string.IsNullOrWhiteSpace(data.LlmApiKey) && data.LlmApiKey.Trim() != LlmEndpoint.DefaultApiKey,
         !string.IsNullOrWhiteSpace(data.AnthropicApiKey),
         !string.IsNullOrWhiteSpace(data.OpenAIApiKey),
         !string.IsNullOrWhiteSpace(data.HomeAssistantToken),
-        !string.IsNullOrWhiteSpace(data.YouTubeApiKey));
+        !string.IsNullOrWhiteSpace(data.YouTubeApiKey),
+        !string.IsNullOrWhiteSpace(data.WebMetasearchBraveApiKey));
 
     /// <summary>
-    /// The five keys copied as stored, mirrored: a key unset in <paramref name="from"/> clears <paramref name="to"/>'s. A <c>dpapi:</c>
+    /// The six keys copied as stored, mirrored: a key unset in <paramref name="from"/> clears <paramref name="to"/>'s. A <c>dpapi:</c>
     /// value reads the same in any profile of this Windows user on this machine, as <see cref="Profiles.KeepOnReset"/> already relies on.
     /// The values are never shown or logged.
     /// </summary>
@@ -9116,6 +9119,7 @@ internal sealed partial class ChatScreen
         to.OpenAIApiKey = from.OpenAIApiKey;
         to.HomeAssistantToken = from.HomeAssistantToken;
         to.YouTubeApiKey = from.YouTubeApiKey;
+        to.WebMetasearchBraveApiKey = from.WebMetasearchBraveApiKey;
     }
 
     /// <summary>
@@ -9123,11 +9127,11 @@ internal sealed partial class ChatScreen
     /// into this profile?</c>), and when a key is not set in the source what the mirror does — <c> "work"'s Anthropic API key is cleared:
     /// none here.</c>, pulled <c> This profile's Anthropic API key is cleared: none in "work".</c> — so the clearing is never a surprise.
     /// </summary>
-    public static string ProfileKeysPrompt(string profile, bool llmSet, bool claudeSet, bool openAISet, bool haSet, bool youTubeSet, bool pull = false)
+    public static string ProfileKeysPrompt(string profile, bool llmSet, bool claudeSet, bool openAISet, bool haSet, bool youTubeSet, bool braveSet, bool pull = false)
     {
-        string series = KeySeries([LlmKeyName, "the " + AnthropicKeyName, "the " + OpenAIKeyName, "the " + HomeAssistantKeyName, "the " + YouTubeKeyName]);
+        string series = KeySeries([LlmKeyName, "the " + AnthropicKeyName, "the " + OpenAIKeyName, "the " + HomeAssistantKeyName, "the " + YouTubeKeyName, "the " + BraveKeyName]);
         string question = pull ? $"Copy the {series} from \"{profile}\" into this profile?" : $"Copy the {series} into \"{profile}\"?";
-        var (_, unset) = KeyNames(llmSet, claudeSet, openAISet, haSet, youTubeSet);
+        var (_, unset) = KeyNames(llmSet, claudeSet, openAISet, haSet, youTubeSet, braveSet);
         if (unset.Count == 0)
         {
             return question;
@@ -9144,9 +9148,9 @@ internal sealed partial class ChatScreen
     /// <c>(copied the LLM API key into "work"; its Anthropic API key cleared)</c>, none <c>(cleared "work"'s LLM API key, …)</c>. A pull
     /// says <c>from "work"</c> and <c>this profile's</c>.
     /// </summary>
-    public static string ProfileKeysCopiedNotice(string profile, bool llmSet, bool claudeSet, bool openAISet, bool haSet, bool youTubeSet, bool pull = false)
+    public static string ProfileKeysCopiedNotice(string profile, bool llmSet, bool claudeSet, bool openAISet, bool haSet, bool youTubeSet, bool braveSet, bool pull = false)
     {
-        var (set, unset) = KeyNames(llmSet, claudeSet, openAISet, haSet, youTubeSet);
+        var (set, unset) = KeyNames(llmSet, claudeSet, openAISet, haSet, youTubeSet, braveSet);
         string owner = pull ? "this profile's" : $"\"{profile}\"'s";
         if (set.Count == 0)
         {
@@ -9204,12 +9208,12 @@ internal sealed partial class ChatScreen
         {
             case ProfileSection.Keys:
             {
-                var (llm, anthropic, openAI, homeAssistant, youTube) = KeysSet(from);
+                var (llm, anthropic, openAI, homeAssistant, youTube, brave) = KeysSet(from);
                 return new(
                     null,
-                    ProfileKeysPrompt(profile, llm, anthropic, openAI, homeAssistant, youTube, pull),
+                    ProfileKeysPrompt(profile, llm, anthropic, openAI, homeAssistant, youTube, brave, pull),
                     target => CopyKeys(from, target),
-                    (_, _) => ProfileKeysCopiedNotice(profile, llm, anthropic, openAI, homeAssistant, youTube, pull));
+                    (_, _) => ProfileKeysCopiedNotice(profile, llm, anthropic, openAI, homeAssistant, youTube, brave, pull));
             }
 
             case ProfileSection.Commands:
@@ -11525,7 +11529,7 @@ internal sealed partial class ChatScreen
     /// <summary>The <c>/profile push|pull</c> section words (2026-10-09), in the order the argument list offers them, each with its note. Pinned.</summary>
     public static readonly IReadOnlyList<(string Word, ProfileSection Section, string Note)> ProfileSectionWords =
     [
-        ("keys", ProfileSection.Keys, "the five API keys, mirrored"),
+        ("keys", ProfileSection.Keys, "the six API keys, mirrored"),
         ("servers", ProfileSection.Servers, "the server settings: Common, Http, Embedded, Docker, Anthropic and OpenAI"),
         // 2026-10-26 (the user's ask): the home and the bars, mirrored.
         ("homeassistant", ProfileSection.HomeAssistant, "the Home Assistant settings, API key included, and the home bar"),

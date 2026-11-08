@@ -336,21 +336,25 @@ public class BuiltInMetaSearchTests
         Assert.Equal("Agent/1 (odd; value)", agent);
     }
 
+    /// <summary>An engine's cookie, and since 2026-11-07 the Brave Search API's key, stay with the site they were sent to.</summary>
     [Theory]
-    [InlineData("https://a.example/next", true)] // The same site keeps its cookies.
-    [InlineData("https://b.example/next", false)] // Another site doesn't get them.
-    public async Task Handler_SendsCookiesToTheirOwnSiteOnly(string target, bool kept)
+    [InlineData("https://a.example/next", true, "Cookie")] // The same site keeps its cookies.
+    [InlineData("https://b.example/next", false, "Cookie")] // Another site doesn't get them.
+    [InlineData("https://a.example/next", true, "X-Subscription-Token")]
+    [InlineData("https://b.example/next", false, "X-Subscription-Token")]
+    [InlineData("https://b.example/next", false, "Authorization")]
+    public async Task Handler_SendsCookiesToTheirOwnSiteOnly(string target, bool kept, string header)
     {
         bool? hadCookie = null;
         var http = new StubHttpMessageHandler()
             .Map(target, (request, _) =>
             {
-                hadCookie = request.Headers.NonValidated.Contains("Cookie");
+                hadCookie = request.Headers.NonValidated.Contains(header);
                 return Task.FromResult(StubHttpMessageHandler.Json(HttpStatusCode.OK, "end"));
             })
             .Map("https://a.example/start", (_, _) => Task.FromResult(Redirect(target)));
         using var request = new HttpRequestMessage(HttpMethod.Get, "https://a.example/start");
-        request.Headers.TryAddWithoutValidation("Cookie", "secret=1");
+        request.Headers.TryAddWithoutValidation(header, "secret=1");
 
         using var response = await Client(http).SendAsync(request);
 
@@ -561,7 +565,87 @@ public class BuiltInMetaSearchTests
     public void TheEngineNames_AreTheRealEngines()
     {
         Assert.Equal(["bing", "brave", "duckduckgo", "startpage", "wikipedia"], BuiltInMetaSearch.EngineNames);
-        Assert.Equal(BuiltInMetaSearch.EngineNames, BuiltInMetaSearch.RealEngines(_time).Select(e => e.Name));
+        Assert.Equal(["bing", "brave", "braveapi", "duckduckgo", "startpage", "wikipedia"], BuiltInMetaSearch.RealEngines(_time, () => null).Select(e => e.Name));
+        Assert.Equal(BuiltInMetaSearch.EngineNames, BuiltInMetaSearch.RealEngines(_time, () => null).Select(e => e.Name).Where(n => n != BuiltInMetaSearch.BraveApiName));
+    }
+
+    /// <summary>With a key (2026-11-07, the user's ask), the brave row asks the API in place of the page; without one, the page as before. Never both.</summary>
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData("brave", false)]
+    [InlineData(null, true)]
+    [InlineData("brave", true)]
+    public async Task BraveApiKey_SwapsTheBraveRow_ForTheApi(string? listed, bool withKey)
+    {
+        var bing = new FakeEngine("bing");
+        var page = new FakeEngine("brave");
+        var api = new FakeEngine(BuiltInMetaSearch.BraveApiName);
+        var settings = new AppSettingsData { WebMetasearchEngines = listed is null ? null : [listed], WebMetasearchBraveApiKey = withKey ? "k" : "" };
+
+        await Search(bing, page, api).For(settings).SearchAsync("x", 5, Options, CancellationToken.None);
+
+        Assert.Equal(listed is null ? 1 : 0, bing.Queries.Count);
+        Assert.Equal(withKey ? 0 : 1, page.Queries.Count);
+        Assert.Equal(withKey ? 1 : 0, api.Queries.Count);
+    }
+
+    [Fact]
+    public async Task BraveApiKey_WithTheBraveRowOff_AsksNeither()
+    {
+        var page = new FakeEngine("brave");
+        var api = new FakeEngine(BuiltInMetaSearch.BraveApiName);
+
+        await Search(new FakeEngine("bing"), page, api).For(new AppSettingsData { WebMetasearchEngines = ["bing"], WebMetasearchBraveApiKey = "k" }).SearchAsync("x", 5, Options, CancellationToken.None);
+
+        Assert.Empty(page.Queries);
+        Assert.Empty(api.Queries);
+    }
+
+    /// <summary>Through the real engines: the saved key, decrypted, goes to the API in its header, and Brave's page isn't asked.</summary>
+    [Fact]
+    public async Task BraveApiKey_ReachesTheApi_ThroughTheRealEngines()
+    {
+        string? sent = null;
+        bool pageAsked = false;
+        var http = new StubHttpMessageHandler()
+            .Map("https://api.search.brave.com/", (request, _) =>
+            {
+                sent = request.Headers.NonValidated["X-Subscription-Token"].ToString();
+                return Task.FromResult(StubHttpMessageHandler.Json(HttpStatusCode.OK, """{"web":{"results":[{"title":"A","url":"https://a.example/","description":"d"}]}}"""));
+            })
+            .Map("https://search.brave.com/", (_, _) =>
+            {
+                pageAsked = true;
+                return Task.FromResult(StubHttpMessageHandler.Json(HttpStatusCode.OK, ""));
+            });
+        var settings = new AppSettingsData { WebMetasearchEngines = ["brave"], WebMetasearchBraveApiKey = " the-key " };
+
+        var outcome = await new BuiltInMetaSearch(new HttpClient(http), _time).For(settings).SearchAsync("x", 5, Options, CancellationToken.None);
+
+        Assert.Equal("https://a.example/", Assert.Single(outcome.Results).Url);
+        Assert.Equal("the-key", sent);
+        Assert.False(pageAsked);
+    }
+
+    /// <summary>Each search sends its own profile's key, read from the search's flow, and none is left behind it.</summary>
+    [Fact]
+    public async Task BraveApiKey_EachSearch_SendsItsOwn()
+    {
+        var seen = new List<string?>();
+        BuiltInMetaSearch? search = null;
+        var api = new FakeEngine(BuiltInMetaSearch.BraveApiName, query =>
+        {
+            seen.Add(search!.CurrentBraveApiKey());
+            return Task.FromResult<IReadOnlyList<EngineResult>>([]);
+        });
+        search = Search(api);
+
+        await search.For(new AppSettingsData { WebMetasearchBraveApiKey = "one" }).SearchAsync("first", 5, Options, CancellationToken.None);
+        _time.Advance(BuiltInMetaSearch.MinInterval);
+        await search.For(new AppSettingsData { WebMetasearchBraveApiKey = "two" }).SearchAsync("second", 5, Options, CancellationToken.None);
+
+        Assert.Equal(["one", "two"], seen);
+        Assert.Null(search.CurrentBraveApiKey());
     }
 
     [Fact]

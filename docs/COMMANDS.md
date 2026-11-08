@@ -104,7 +104,7 @@ The push and pull forms copy to (`push`) or from (`pull`) another profile, after
 | `/profile add\|delete <name>`, `/profile rename <name> <new-name>` | Creates a profile (from this one's settings, memories and saved prompts), deletes one, or renames one. |
 | `/profile reset [<name>] [--all]` | Resets a profile to the defaults, keeping its URLs, paths, keys and avatars (and *Embedded servers enabled* with an embedded URL) unless `--all`. |
 | `/profile push\|pull <name>` | Copies every setting but the working directory; a pull clears the conversation. |
-| `/profile push\|pull keys <name>` | Copies the five API keys; one the source lacks is cleared in the target, one set only by a variable isn't copied. |
+| `/profile push\|pull keys <name>` | Copies the six API keys; one the source lacks is cleared in the target, one set only by a variable isn't copied. |
 | `/profile push\|pull servers <name>` | Replaces the target's server settings (server, model, reasoning, sampling, the Embedded, Docker, Anthropic and OpenAI tabs but the keys). |
 | `/profile push\|pull homeassistant <name>` | Replaces the target's Home Assistant settings (API key included) and home bar. |
 | `/profile push\|pull toolbar <name>`, `/profile push\|pull perfbar <name>`, `/profile push\|pull statusbar <name>`, `/profile push\|pull barorder <name>` | Replaces the target's toolbar, performance bar or Status bar setup, or the bars' order. |

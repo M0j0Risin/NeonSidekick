@@ -99,6 +99,7 @@ Each starts with `NEONSIDEKICK_`, overrides a setting for one launch and is neve
 | `NEONSIDEKICK_COMFY_URL` | *ComfyUI URL* | The server's URL (`http://gpu-box:8188`). |
 | `NEONSIDEKICK_HA_URL` | *Home Assistant URL* | The server's URL (`http://localhost:8123`). |
 | `NEONSIDEKICK_HA_TOKEN` | *Home Assistant API key* | A long-lived token as issued. Never logged. |
+| `NEONSIDEKICK_BRAVE_API_KEY` | *Web Brave Search API key* | A Brave Search API key as issued. Never logged. |
 | `NEONSIDEKICK_YOUTUBE_API_KEY` | *YouTube API key* | A YouTube Data API v3 key as issued. Never logged. Each search costs 100 of its daily quota units. |
 | `NEONSIDEKICK_DOCKER_PIPE` | *Docker engine pipe* (*Docker engine socket* on a Mac) | A pipe name, `\\.\pipe\name` or `npipe:////./pipe/name`; on a Mac a socket's path or `unix:///path` (see below). |
 

@@ -13,7 +13,8 @@ namespace NeonSidekick.Web;
 /// lives on <see cref="WebAccess"/>, unlike <see cref="SearxngSearch"/>'s one per call, because the library remembers which engines are
 /// resting after a refusal; <see cref="For"/> carries a search's settings over it. Every request goes through the app's client (<see cref="HostClientHandler"/>), so
 /// <see cref="LanPolicy"/> judges every connection, but stays out of its cookie jar (<see cref="WebHttp.NoCookiesKey"/>).
-/// A search reaches several outside services instead of one.
+/// A search reaches several outside services instead of one. With a <c>Web Brave Search API key</c> (2026-11-07, the user's ask), the
+/// <c>brave</c> row asks the Brave Search API (<see cref="BraveApiEngine"/>) instead of reading Brave's results page.
 /// </summary>
 public sealed class BuiltInMetaSearch
 {
@@ -36,22 +37,33 @@ public sealed class BuiltInMetaSearch
     /// <summary>The setting's words in menu order.</summary>
     public static readonly string[] SafeSearchNames = [DefaultSafeSearch, "moderate", "strict"];
 
+    /// <summary>The library's name for Brave over its API, which stands in for <c>brave</c> while a key is set. Not one of <see cref="EngineNames"/>: the menu has one Brave row.</summary>
+    internal const string BraveApiName = "braveapi";
+
     // The same language the other two engines ask for.
     private const string Locale = "en-US";
     private const string Category = "Web";
 
     private readonly MetaSearch _search;
     private readonly SearchPacer _pacer;
+    private readonly IReadOnlyList<string> _engineNames;
+
+    /// <summary>
+    /// The Brave Search API key of the search under way, read by <see cref="BraveApiEngine"/>. Async-local, not a field, so two searches under
+    /// two profiles' keys (bots on their own profiles) each send their own: the engines run in the search's flow, so they see its value.
+    /// </summary>
+    private readonly AsyncLocal<string?> _braveApiKey = new();
 
     public BuiltInMetaSearch(HttpClient http, TimeProvider time)
-        : this(RealEngines(time), http, time)
+        : this(engines: null, http, time)
     {
     }
 
-    internal static IEngine[] RealEngines(TimeProvider time) =>
+    internal static IEngine[] RealEngines(TimeProvider time, Func<string?> braveApiKey) =>
     [
         new BingEngine(),
         new BraveEngine(),
+        new BraveApiEngine(braveApiKey),
         new DuckDuckGoEngine(time),
         new StartpageEngine(time),
 
@@ -59,13 +71,38 @@ public sealed class BuiltInMetaSearch
         new WikipediaEngine { UserAgent = App.SidekickApp.Name + "/" + App.SidekickApp.Version + " (+" + App.AboutText.RepositoryUrl + ")" },
     ];
 
-    internal BuiltInMetaSearch(IEnumerable<IEngine> engines, HttpClient http, TimeProvider time)
+    /// <param name="engines">The engines to ask; null for <see cref="RealEngines"/>, reading this instance's key.</param>
+    internal BuiltInMetaSearch(IEnumerable<IEngine>? engines, HttpClient http, TimeProvider time)
     {
         ArgumentNullException.ThrowIfNull(http);
         ArgumentNullException.ThrowIfNull(time);
         _pacer = new SearchPacer(time, MinInterval);
         var client = new HttpClient(new HostClientHandler(http), disposeHandler: true) { Timeout = Timeout.InfiniteTimeSpan, MaxResponseContentBufferSize = MaxResponseBytes };
-        _search = new MetaSearch(engines, client, new MetaSearchOptions(), time);
+        var asked = (engines ?? RealEngines(time, CurrentBraveApiKey)).ToList();
+        _engineNames = asked.Select(e => e.Name).ToList();
+        _search = new MetaSearch(asked, client, new MetaSearchOptions(), time);
+    }
+
+    /// <summary>The key <see cref="BraveApiEngine"/> sends in this search, for an engine list a test passes in.</summary>
+    internal string? CurrentBraveApiKey() => _braveApiKey.Value;
+
+    /// <summary>The Brave Search API key under <paramref name="effective"/>, decrypted at use as <c>YouTubeDataApi.Key</c> does; null with none set.</summary>
+    public static string? BraveKey(AppSettingsData effective)
+    {
+        ArgumentNullException.ThrowIfNull(effective);
+        return SettingsSecrets.Reveal(effective.WebMetasearchBraveApiKey) is { Length: > 0 } key && !string.IsNullOrWhiteSpace(key) ? key.Trim() : null;
+    }
+
+    /// <summary>
+    /// The library's names to ask: for no saved list, every engine this instance has but the Brave it isn't using; for a list, its names with
+    /// <c>brave</c> as <see cref="BraveApiName"/> while there's a key. Always a list, so the two Braves are never asked together.
+    /// </summary>
+    private IReadOnlySet<string> LibraryNames(IReadOnlyList<string>? saved, bool braveKey)
+    {
+        string unused = braveKey ? "brave" : BraveApiName;
+        return saved is null
+            ? _engineNames.Where(name => name != unused).ToHashSet(StringComparer.Ordinal)
+            : EnginesOn(saved).Select(name => braveKey && name == "brave" ? BraveApiName : name).ToHashSet(StringComparer.Ordinal);
     }
 
     /// <summary>
@@ -81,7 +118,8 @@ public sealed class BuiltInMetaSearch
             DiagnosticLog.Warn(Category, $"{nameof(AppSettingsData.WebMetasearchEngines)} has '{unknown}', which is not one of {string.Join(", ", EngineNames)}. Skipping it.");
         }
 
-        return new Configured(this, saved is null ? null : EnginesOn(saved).ToHashSet(StringComparer.Ordinal), ResolveSafeSearch(effective.WebMetasearchSafeSearch));
+        var key = BraveKey(effective);
+        return new Configured(this, LibraryNames(saved, key is not null), ResolveSafeSearch(effective.WebMetasearchSafeSearch), key);
     }
 
     /// <summary>The engines a saved list turns on, in <see cref="EngineNames"/>' order: all of them for null, the known names in any case otherwise.</summary>
@@ -112,7 +150,7 @@ public sealed class BuiltInMetaSearch
     }
 
     /// <summary>One search's settings over the shared instance.</summary>
-    private sealed class Configured(BuiltInMetaSearch core, IReadOnlySet<string>? engines, SafeSearch safeSearch) : ISearchEngine
+    private sealed class Configured(BuiltInMetaSearch core, IReadOnlySet<string> engines, SafeSearch safeSearch, string? braveApiKey) : ISearchEngine
     {
         public string Name => WebText.MetaSearchName;
 
@@ -122,13 +160,16 @@ public sealed class BuiltInMetaSearch
         public Task<SearchOutcome> SearchAsync(string query, int max, FetchOptions options, CancellationToken cancellationToken) =>
             engines is { Count: 0 }
                 ? Task.FromResult(SearchOutcome.Failed(WebText.MetaSearchNoEngines))
-                : core.SearchAsync(query, max, options, engines, safeSearch, cancellationToken);
+                : core.SearchAsync(query, max, options, engines, safeSearch, braveApiKey, cancellationToken);
     }
 
-    private async Task<SearchOutcome> SearchAsync(string query, int max, FetchOptions options, IReadOnlySet<string>? engines, SafeSearch safeSearch, CancellationToken cancellationToken)
+    private async Task<SearchOutcome> SearchAsync(string query, int max, FetchOptions options, IReadOnlySet<string> engines, SafeSearch safeSearch, string? braveApiKey, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
         ArgumentNullException.ThrowIfNull(options);
+
+        // Set in this method's flow, so it goes back when the method returns and reaches only this search's engines.
+        _braveApiKey.Value = braveApiKey;
 
         // Every engine is on the internet (2026-11-06). Asking would make five DNS lookups to hear the same refusal five times, then leave
         // every engine resting for a moment after a switch back. The socket check stays the real enforcement.
@@ -186,7 +227,7 @@ public sealed class BuiltInMetaSearch
     /// <summary>
     /// Hands the library's requests to the app's client. That client follows no redirects, because <see cref="WebFetcher"/> judges each
     /// hop, but some engines rely on them (Wikipedia's API sends a title on to its article's). So this follows them, with each hop a new
-    /// request through the same client. It only follows to https, sends an engine's cookie to that site alone, and leaves a redirect that
+    /// request through the same client. It only follows to https, sends an engine's cookie and key (<see cref="CredentialHeaders"/>) to that site alone, and leaves a redirect that
     /// would resend a form for the engine to report. The app's client only reads the headers, so a body is buffered once, under
     /// <see cref="MaxResponseBytes"/>.
     /// </summary>
@@ -194,10 +235,13 @@ public sealed class BuiltInMetaSearch
     {
         internal const int MaxRedirects = 3;
 
+        /// <summary>The headers a hop to another site leaves behind: an engine's cookie, and the Brave Search API's key (2026-11-07).</summary>
+        internal static readonly IReadOnlySet<string> CredentialHeaders = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Cookie", "Authorization", BraveApiEngine.KeyHeader };
+
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             // A message can only be sent once, and the library's HttpClient has already sent this one.
-            var current = Copy(request, request.Method, request.RequestUri!, request.Content, keepCookie: true);
+            var current = Copy(request, request.Method, request.RequestUri!, request.Content, keepCredentials: true);
             for (int hop = 0; ; hop++)
             {
                 var response = await http.SendAsync(current, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);   // the outer client reads the body, under its cap
@@ -208,7 +252,7 @@ public sealed class BuiltInMetaSearch
                 }
 
                 response.Dispose();
-                current = Copy(current, HttpMethod.Get, target, content: null, keepCookie: SameOrigin(current.RequestUri!, target));
+                current = Copy(current, HttpMethod.Get, target, content: null, keepCredentials: SameOrigin(current.RequestUri!, target));
             }
         }
 
@@ -234,7 +278,7 @@ public sealed class BuiltInMetaSearch
         private static bool SameOrigin(Uri a, Uri b) =>
             a.Scheme == b.Scheme && a.Port == b.Port && string.Equals(a.Host, b.Host, StringComparison.OrdinalIgnoreCase);
 
-        private static HttpRequestMessage Copy(HttpRequestMessage request, HttpMethod method, Uri url, HttpContent? content, bool keepCookie)
+        private static HttpRequestMessage Copy(HttpRequestMessage request, HttpMethod method, Uri url, HttpContent? content, bool keepCredentials)
         {
             var copy = new HttpRequestMessage(method, url)
             {
@@ -245,7 +289,7 @@ public sealed class BuiltInMetaSearch
             copy.Options.Set(WebHttp.NoCookiesKey, true);
             foreach (var header in request.Headers.NonValidated)
             {
-                if (keepCookie || !header.Key.Equals("Cookie", StringComparison.OrdinalIgnoreCase))
+                if (keepCredentials || !CredentialHeaders.Contains(header.Key))
                 {
                     foreach (var value in header.Value)
                     {

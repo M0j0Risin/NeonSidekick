@@ -3721,6 +3721,7 @@ public void ViewerBrowsed(string path) => _screen?.ViewerBrowsed(path);
         SettingsField.OpenAIApi => _environment.OpenAIApi is not null ? EnvironmentOverrides.OpenAIApiVariable : null,
         SettingsField.OpenAIApiKey => _environment.OpenAIApiKey is not null ? EnvironmentOverrides.OpenAIApiKeyVariable : null,
         SettingsField.YouTubeApiKey => _environment.YouTubeApiKey is not null ? EnvironmentOverrides.YouTubeApiKeyVariable : null,
+        SettingsField.WebMetasearchBraveApiKey => _environment.BraveApiKey is not null ? EnvironmentOverrides.BraveApiKeyVariable : null,
         SettingsField.DockerEnginePipe => _environment.DockerPipe is not null ? EnvironmentOverrides.DockerPipeVariable : null,
         _ => null,
     };

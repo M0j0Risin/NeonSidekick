@@ -1358,6 +1358,9 @@ public enum SettingsField
 
     /// <summary>A picker over <see cref="Web.BuiltInMetaSearch.SafeSearchNames"/> (<see cref="Settings.AppSettingsData.WebMetasearchSafeSearch"/>, 2026-11-06). After <see cref="WebMetasearchEngines"/>; read at the next search, no reconnect.</summary>
     WebMetasearchSafeSearch,
+
+    /// <summary>Typed, masked: a Brave Search API key, saved DPAPI-encrypted (<see cref="Settings.AppSettingsData.WebMetasearchBraveApiKey"/>, 2026-11-07, the user's ask); empty clears it. After <see cref="WebMetasearchSafeSearch"/>; read at the next search, no reconnect.</summary>
+    WebMetasearchBraveApiKey,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1920,7 +1923,7 @@ internal sealed partial class SettingsMenu
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> ToolsTabFields =
     [
         [SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices],
-        [SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserBotcheckWindow, SettingsField.WebBrowserHomePage, SettingsField.BrowserPrivacy, SettingsField.WebOpenLinksIn, SettingsField.WebBrowserSignInMode, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearchMaxResults, SettingsField.WebMetasearchEngines, SettingsField.WebMetasearchSafeSearch, SettingsField.WebSearxngUrl, SettingsField.WebDownloadMaxMegabytes],
+        [SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserBotcheckWindow, SettingsField.WebBrowserHomePage, SettingsField.BrowserPrivacy, SettingsField.WebOpenLinksIn, SettingsField.WebBrowserSignInMode, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearchMaxResults, SettingsField.WebMetasearchEngines, SettingsField.WebMetasearchSafeSearch, SettingsField.WebMetasearchBraveApiKey, SettingsField.WebSearxngUrl, SettingsField.WebDownloadMaxMegabytes],
         [SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPolice, SettingsField.ShellPoliceForbiddenStrings, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds],
         [SettingsField.FileTools, SettingsField.FileDeletesToRecycleBin, SettingsField.FileCheckpoints, SettingsField.FileCheckpointKeepDays, SettingsField.FileCheckpointMaxMegabytes, SettingsField.FileCheckpointLargestFileMegabytes, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults],
         [SettingsField.ImageTools, SettingsField.ImageEditQuality, SettingsField.ImageEditMetadata, SettingsField.ImageEditMode, SettingsField.ImageEditOutputFolder, SettingsField.PastedImagesFolder],
@@ -2681,6 +2684,7 @@ internal sealed partial class SettingsMenu
         SettingsField.WebSearxngUrl => "Web SearXNG URL",
         SettingsField.WebMetasearchEngines => "Web metasearch engines",
         SettingsField.WebMetasearchSafeSearch => "Web metasearch safe search",
+        SettingsField.WebMetasearchBraveApiKey => "Web Brave Search API key",
         SettingsField.WebSearchMaxResults => "Web search max results",
         SettingsField.WebDownloadMaxMegabytes => "Web download max (MB)",
         SettingsField.TtsVoicePreview => "TTS voice preview",
@@ -3138,6 +3142,7 @@ internal sealed partial class SettingsMenu
             SettingsField.WebSearxngUrl => string.IsNullOrWhiteSpace(data.WebSearxngUrl) ? NoSearxngUrlLabel : data.WebSearxngUrl,
             SettingsField.WebMetasearchEngines => MetasearchEnginesValue(data.WebMetasearchEngines),
             SettingsField.WebMetasearchSafeSearch => data.WebMetasearchSafeSearch,
+            SettingsField.WebMetasearchBraveApiKey => ApiKeyLabel(data.WebMetasearchBraveApiKey),
             SettingsField.WebSearchMaxResults => Results(data.WebSearchMaxResults),
             SettingsField.WebDownloadMaxMegabytes => Megabytes(data.WebDownloadMaxMegabytes),
             SettingsField.TtsVoicePreview => OnOff(data.TtsVoicePreview),
@@ -3493,6 +3498,9 @@ internal sealed partial class SettingsMenu
 
     /// <summary>The warning when DPAPI could not encrypt the YouTube API key (2026-10-05): it is kept as typed. Pinned.</summary>
     public static string YouTubeApiKeyPlainWarning(string reason) => $"YouTube API key saved unencrypted: {reason}.";
+
+    /// <summary>The warning when DPAPI could not encrypt the Brave Search API key (2026-11-07): it is kept as typed. Pinned.</summary>
+    public static string BraveApiKeyPlainWarning(string reason) => $"Brave Search API key saved unencrypted: {reason}.";
 
     /// <summary>How the menu shows an empty <see cref="AppSettingsData.YouTubeRegion"/> (2026-10-08): no region asked for. Pinned.</summary>
     public const string NoYouTubeRegionLabel = "(any region)";
@@ -4311,6 +4319,7 @@ internal sealed partial class SettingsMenu
         SettingsField.OpenAIApiKey => "",
         SettingsField.HomeAssistantToken => "",
         SettingsField.YouTubeApiKey => "",
+        SettingsField.WebMetasearchBraveApiKey => "",
         SettingsField.YouTubeRegion => data.YouTubeRegion,
         SettingsField.YouTubeLanguage => data.YouTubeLanguage,
         SettingsField.HomeAssistantUrl => data.HomeAssistantUrl,
@@ -5479,7 +5488,12 @@ internal sealed partial class SettingsMenu
 
         if (field == SettingsField.YouTubeApiKey)
         {
-            return await SetYouTubeApiKeyAsync(page, row, cancellationToken).ConfigureAwait(false);
+            return await SetPlainKeyAsync(field, YouTubeApiKeyPlainWarning, (d, stored) => d.YouTubeApiKey = stored, page, row, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.WebMetasearchBraveApiKey)
+        {
+            return await SetPlainKeyAsync(field, BraveApiKeyPlainWarning, (d, stored) => d.WebMetasearchBraveApiKey = stored, page, row, cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.LlmCompactType)
@@ -7694,10 +7708,11 @@ internal sealed partial class SettingsMenu
     /// the file (<see cref="HomeAssistant.HaSession.Protect"/>); where DPAPI fails, kept as typed and said so.
     /// </summary>
     /// <summary>
-    /// The YouTube API key (2026-10-05): <see cref="SetHomeAssistantTokenAsync"/>'s masked field, typed or pasted, never put back
-    /// on the line; empty clears it. Saved DPAPI-encrypted, kept as typed (with a warning) when DPAPI refuses.
+    /// A key that needs nothing else, the YouTube API key (2026-10-05) and the Brave Search API key (2026-11-07):
+    /// <see cref="SetHomeAssistantTokenAsync"/>'s masked field, typed or pasted, never put back on the line; empty clears it. Saved
+    /// DPAPI-encrypted, kept as typed (with <paramref name="plainWarning"/>) when DPAPI refuses.
     /// </summary>
-    private async Task<bool> SetYouTubeApiKeyAsync(MenuPage page, int row, CancellationToken cancellationToken)
+    private async Task<bool> SetPlainKeyAsync(SettingsField field, Func<string, string> plainWarning, Action<AppSettingsData, string> set, MenuPage page, int row, CancellationToken cancellationToken)
     {
         InputResult result;
         if (_pane.Enabled)
@@ -7706,7 +7721,7 @@ internal sealed partial class SettingsMenu
         }
         else
         {
-            Flow.Notice(PromptTitle(FieldName(SettingsField.YouTubeApiKey), EditKeys));
+            Flow.Notice(PromptTitle(FieldName(field), EditKeys));
             result = await _input.ReadAsync("", remember: false, allowEmpty: true, cancellationToken: cancellationToken, escapeCancels: true, mask: true).ConfigureAwait(false);
         }
 
@@ -7718,10 +7733,10 @@ internal sealed partial class SettingsMenu
         string stored = SettingsSecrets.Protect(submitted.Text.Trim(), out string? protectError);
         if (protectError is not null)
         {
-            Sink.Warning(YouTubeApiKeyPlainWarning(protectError));
+            Sink.Warning(plainWarning(protectError));
         }
 
-        Apply(SettingsField.YouTubeApiKey, d => d.YouTubeApiKey = stored);
+        Apply(field, d => set(d, stored));
         return true;
     }
 

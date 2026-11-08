@@ -57,6 +57,7 @@ public sealed class EnvironmentOverrides
     public const string EmbeddedContextVariable = Prefix + "EMBEDDED_CONTEXT";
     public const string DockerPipeVariable = Prefix + "DOCKER_PIPE";
     public const string YouTubeApiKeyVariable = Prefix + "YOUTUBE_API_KEY";
+    public const string BraveApiKeyVariable = Prefix + "BRAVE_API_KEY";
     public const string AdvisorsVariable = Prefix + "ADVISORS";
 
     /// <summary>The terminal's own variable, read by <see cref="TerminalProgram"/>: not an override, so not in <see cref="AllVariables"/>.</summary>
@@ -83,6 +84,7 @@ public sealed class EnvironmentOverrides
         AnthropicApiVariable, AnthropicApiKeyVariable, LlmSamplingVariable, HomeAssistantUrlVariable,
         HomeAssistantTokenVariable, EmbeddedBackendVariable, EmbeddedContextVariable, ClaudeCodeServerVariable,
         DockerPipeVariable, OpenAIApiVariable, OpenAIApiKeyVariable, YouTubeApiKeyVariable, AdvisorsVariable,
+        BraveApiKeyVariable,
     };
 
     /// <summary>
@@ -123,6 +125,7 @@ public sealed class EnvironmentOverrides
         [OpenAIApiVariable] = App.SettingsField.OpenAIApi,
         [OpenAIApiKeyVariable] = App.SettingsField.OpenAIApiKey,
         [YouTubeApiKeyVariable] = App.SettingsField.YouTubeApiKey,
+        [BraveApiKeyVariable] = App.SettingsField.WebMetasearchBraveApiKey,
         [DockerPipeVariable] = App.SettingsField.DockerEnginePipe,
     };
 
@@ -240,6 +243,9 @@ public sealed class EnvironmentOverrides
 
     /// <summary>The YouTube Data API key for this launch, plain (2026-10-05); never logged (<see cref="Describe"/> shows <see cref="SecretSet"/>).</summary>
     public string? YouTubeApiKey => Read(YouTubeApiKeyVariable);
+
+    /// <summary>The Brave Search API key for this launch, plain (2026-11-07); never logged (<see cref="Describe"/> shows <see cref="SecretSet"/>).</summary>
+    public string? BraveApiKey => Read(BraveApiKeyVariable);
 
     /// <summary>The Home Assistant server's URL, or null (2026-09-28). Checked where it is used (a non-http(s) value offers no Home Assistant tool), not here.</summary>
     public string? HomeAssistantUrl => Read(HomeAssistantUrlVariable);
@@ -397,7 +403,7 @@ public sealed class EnvironmentOverrides
         var parts = new List<string>(active.Count);
         foreach (var name in active)
         {
-            parts.Add(name + "=" + (name is LlmApiKeyVariable or AnthropicApiKeyVariable or OpenAIApiKeyVariable or HomeAssistantTokenVariable or YouTubeApiKeyVariable ? SecretSet : Read(name)));
+            parts.Add(name + "=" + (name is LlmApiKeyVariable or AnthropicApiKeyVariable or OpenAIApiKeyVariable or HomeAssistantTokenVariable or YouTubeApiKeyVariable or BraveApiKeyVariable ? SecretSet : Read(name)));
         }
 
         return string.Join(", ", parts);
@@ -443,6 +449,7 @@ public sealed class EnvironmentOverrides
         if (OpenAIApi is { } openAIApi) effective.OpenAIApi = openAIApi;
         if (OpenAIApiKey is { } openAIApiKey) effective.OpenAIApiKey = openAIApiKey;
         if (YouTubeApiKey is { } youTubeApiKey) effective.YouTubeApiKey = youTubeApiKey;
+        if (BraveApiKey is { } braveApiKey) effective.WebMetasearchBraveApiKey = braveApiKey;
         if (HomeAssistantUrl is { } haUrl) effective.HomeAssistantUrl = haUrl;
         if (HomeAssistantToken is { } haToken) effective.HomeAssistantToken = haToken;
         if (DockerPipe is { } dockerPipe) effective.DockerEnginePipe = dockerPipe;

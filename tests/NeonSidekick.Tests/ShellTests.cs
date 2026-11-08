@@ -819,7 +819,7 @@ public sealed class ShellTests
         Assert.Equal("mine", mcp["NEONSIDEKICK_HA_TOKEN"]);
         Assert.Equal("1", mcp["X"]);
         Assert.All(mcp.Where(p => p.Key is not ("NEONSIDEKICK_HA_TOKEN" or "X")), p => Assert.True(p.Value is null && ChildEnvironment.IsWithheld(p.Key)));
-        Assert.Equal(["NEONSIDEKICK_LLM_API_KEY", "NEONSIDEKICK_ANTHROPIC_API_KEY", "NEONSIDEKICK_OPENAI_API_KEY", "NEONSIDEKICK_HA_TOKEN", "NEONSIDEKICK_YOUTUBE_API_KEY"], ChildEnvironment.Withheld);
+        Assert.Equal(["NEONSIDEKICK_LLM_API_KEY", "NEONSIDEKICK_ANTHROPIC_API_KEY", "NEONSIDEKICK_OPENAI_API_KEY", "NEONSIDEKICK_HA_TOKEN", "NEONSIDEKICK_YOUTUBE_API_KEY", "NEONSIDEKICK_BRAVE_API_KEY"], ChildEnvironment.Withheld);
         Assert.Equal(["NO_COLOR", "FORCE_COLOR", "CLICOLOR", "TERM", "PYTHONIOENCODING", "PYTHONUTF8", "PYTHONUNBUFFERED", "GIT_TERMINAL_PROMPT", "GIT_PAGER", "PAGER", "DOTNET_NOLOGO", "DOTNET_CLI_TELEMETRY_OPTOUT", "NoDefaultCurrentDirectoryInExePath"], ChildEnvironment.Overrides.Select(p => p.Key));
     }
 

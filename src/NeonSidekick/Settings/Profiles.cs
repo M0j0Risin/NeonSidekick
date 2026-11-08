@@ -504,6 +504,7 @@ public static class Profiles
         nameof(AppSettingsData.HomeAssistantUrl),
         nameof(AppSettingsData.HomeAssistantToken),
         nameof(AppSettingsData.YouTubeApiKey),
+        nameof(AppSettingsData.WebMetasearchBraveApiKey),
         nameof(AppSettingsData.ModelAvatar),
         nameof(AppSettingsData.UserAvatar),
         nameof(AppSettingsData.WebUiToken),
@@ -532,6 +533,7 @@ public static class Profiles
         to.HomeAssistantUrl = from.HomeAssistantUrl;
         to.HomeAssistantToken = from.HomeAssistantToken;
         to.YouTubeApiKey = from.YouTubeApiKey;   // 2026-10-05, the user's ask: a plain reset keeps it, as the other keys
+        to.WebMetasearchBraveApiKey = from.WebMetasearchBraveApiKey;   // 2026-11-07, as the other keys
         to.ModelAvatar = from.ModelAvatar;       // 2026-10-10: the profile's face, as its name, not a taste a reset puts back
         to.UserAvatar = from.UserAvatar;         // 2026-10-12: the user's own face, kept as the model's is
         to.WebUiToken = from.WebUiToken;         // 2026-10-14: a phone signed in stays signed in once the Web UI is on again

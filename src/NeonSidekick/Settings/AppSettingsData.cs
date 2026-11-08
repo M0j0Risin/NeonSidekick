@@ -3145,6 +3145,16 @@ public sealed class AppSettingsData
     public string WebMetasearchSafeSearch { get; set; } = Web.BuiltInMetaSearch.DefaultSafeSearch;
 
     /// <summary>
+    /// A Brave Search API key (<c>Web Brave Search API key</c>, 2026-11-07, the user's ask): while one is set, the metasearch's <c>brave</c> row asks the API
+    /// (through <see cref="Web.BuiltInMetaSearch"/>) instead of reading Brave's results page, which can refuse a client; empty keeps the page.
+    /// Kept encrypted with DPAPI as <see cref="YouTubeApiKey"/> is, sent only to api.search.brave.com, in the <c>X-Subscription-Token</c> header
+    /// (never in a URL, and left behind by a redirect to another site). Copied by <c>/profile push|pull keys</c> and kept by a plain
+    /// <c>/profile reset</c>, the other keys' way. Never logged (<see cref="SettingsDiff.Secrets"/>). Variable
+    /// <see cref="EnvironmentOverrides.BraveApiKeyVariable"/> (plain).
+    /// </summary>
+    public string WebMetasearchBraveApiKey { get; set; } = "";
+
+    /// <summary>
     /// Whether a turn offers the model <c>web_search</c> and <c>web_fetch</c>; read at each turn like
     /// <see cref="Memory"/>, no reconnect. Off, the default rules lose their web sentence.
     /// The row is the one switch (<c>/web</c> went 2026-09-18). Off by default since 2026-09-29 (the user's call, with

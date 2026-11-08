@@ -417,6 +417,7 @@ public class ProfilesTests : IDisposable
             HomeAssistantUrl = "http://localhost:8123",
             HomeAssistantToken = "dpapi:ha",
             YouTubeApiKey = "dpapi:yt",
+            WebMetasearchBraveApiKey = "dpapi:brave",
             LlmApiKey = "dpapi:llm",
             ModelAvatar = "🦊",
             UserAvatar = "🦉",
@@ -445,6 +446,7 @@ public class ProfilesTests : IDisposable
         Assert.Equal("dpapi:ha", kept.HomeAssistantToken);   // the Home Assistant pair (2026-09-28)
         Assert.Equal("dpapi:oa", kept.OpenAIApiKey);   // the OpenAI API key (2026-10-03)
         Assert.Equal("dpapi:yt", kept.YouTubeApiKey);   // the YouTube API key (2026-10-05, the user's ask)
+        Assert.Equal("dpapi:brave", kept.WebMetasearchBraveApiKey);   // the Brave API key (2026-11-07), as the other keys
         Assert.Equal("🦊", kept.ModelAvatar);   // the profile's face (2026-10-10)
         Assert.Equal("🦉", kept.UserAvatar);    // the user's own (2026-10-12)
         Assert.Equal("dpapi:web", kept.WebUiToken);   // the Web UI's token (2026-10-14): a signed-in phone stays signed in
@@ -453,7 +455,7 @@ public class ProfilesTests : IDisposable
         Assert.Equal(["ausaa34-uid4355/12"], kept.MonitorInputsHidden);
         Assert.Equal(["ausaa34-uid4355/0f"], kept.MonitorPcInputs);   // this PC's inputs, the same cabling (later on 2026-10-23)
         Assert.Equal(["ausaa34-uid4355/0f", "ausaa34-uid4355/11"], kept.MonitorInputsSeen);   // what the monitors last reported (2026-10-27)
-        Assert.Equal(23, Profiles.ResetKeptSettings.Length);   // the monitors' input names and hidden inputs 2026-10-23, this PC's inputs later that day, the inputs seen 2026-10-27
+        Assert.Equal(24, Profiles.ResetKeptSettings.Length);   // the monitors' input names and hidden inputs 2026-10-23, this PC's inputs later that day, the inputs seen 2026-10-27, the Brave API key 2026-11-07
         Assert.DoesNotContain(nameof(AppSettingsData.WebMetasearchEngines), Profiles.ResetKeptSettings);   // nothing hard to re-enter: a reset turns all five back on (2026-11-06, the user's call)
         Assert.DoesNotContain(nameof(AppSettingsData.WebMetasearchSafeSearch), Profiles.ResetKeptSettings);   // and returns it to off
 

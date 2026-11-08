@@ -47,10 +47,12 @@ public partial class ToolsMenuTests
 
         Assert.Equal(MetasearchEnginesRow, rows.IndexOf(SettingsField.WebMetasearchEngines));
         Assert.Equal(rows.IndexOf(SettingsField.WebSearchMaxResults) + 1, rows.IndexOf(SettingsField.WebMetasearchEngines));
-        Assert.Equal(rows.IndexOf(SettingsField.WebSearxngUrl) - 1, rows.IndexOf(SettingsField.WebMetasearchSafeSearch));
+        Assert.Equal(rows.IndexOf(SettingsField.WebMetasearchSafeSearch) + 1, rows.IndexOf(SettingsField.WebMetasearchBraveApiKey));   // the Brave API key last in the section (2026-11-07)
+        Assert.Equal(rows.IndexOf(SettingsField.WebSearxngUrl) - 1, rows.IndexOf(SettingsField.WebMetasearchBraveApiKey));
         Assert.Equal("Metasearch", SettingsMenu.ToolsMenuSections[ToolsText.MenuIndex(ToolsText.WebTabTitle)].Single(s => s.First == SettingsField.WebMetasearchEngines).Title);
         Assert.Equal("Web metasearch engines", SettingsMenu.FieldName(SettingsField.WebMetasearchEngines));
         Assert.Equal("Web metasearch safe search", SettingsMenu.FieldName(SettingsField.WebMetasearchSafeSearch));
+        Assert.Equal("Web Brave Search API key", SettingsMenu.FieldName(SettingsField.WebMetasearchBraveApiKey));
     }
 
     [Theory]

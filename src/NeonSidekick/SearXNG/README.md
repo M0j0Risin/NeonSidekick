@@ -14,7 +14,7 @@ Generated tables keep their data's own terms. `Locales/LocaleData.cs` comes from
 |---|---|
 | Parallel search, timeouts, resting failed engines | Ported |
 | Result merging and ranking (`searx/results.py`) | Ported for main results |
-| Engines | Bing, Brave, DuckDuckGo, Startpage, Wikipedia |
+| Engines | Bing, Brave, Brave Search API (`braveapi`, with a key), DuckDuckGo, Startpage, Wikipedia |
 | Answers, infoboxes, plugins, web UI, bot limiter | Not ported, and not planned |
 
 ## Tests
@@ -57,6 +57,7 @@ Each of these is deliberate.
 | Non-web URLs (`javascript:`, `data:`, `file:`) and URLs with no host are dropped | SearXNG leaves this to its templates. A library has none. |
 | A refused or changed DuckDuckGo, Bing or Startpage page is a failure, not "no results" | SearXNG logs it or returns nothing, which hides blocks and site changes. |
 | DuckDuckGo links must stay on `https://*.duckduckgo.com` | They come from scraped pages, and shouldn't be able to send the host's client elsewhere. |
+| `braveapi` sends `text_decorations=false`, and reads a key at each search | SearXNG sends Python's `False`; the API documents a boolean. A host's key can change without a new `MetaSearch`, which would forget the rests. |
 | Text after a Bing snippet icon is kept | lxml's `remove` also drops the text after the element, which looks unintended. |
 | Bing markets are sent as `mkt`, not `setlang` and `cc`, except for the US, China and Russia | In a small test from one home IP on 2026-11-06, `cc` gave off-topic results for `en-GB` and `de-DE` with both `HttpClient` and `curl_cffi`, where `mkt` gave relevant ones. Those three markets keep SearXNG's `setlang` alone, because `mkt` was off-topic for Russia and generic for China. It isn't a full fix: in one search each across 11 markets, `en-AU` was still off-topic and `en-CA` generic. |
 | Locale tags read the same in any case | SearXNG only finds an engine's locale in the exact case, so on Bing `en-in` goes to `hi-in` while `en-IN` goes to `en-in`. |

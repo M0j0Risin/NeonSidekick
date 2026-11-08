@@ -69,7 +69,8 @@ public class EnvironmentOverridesTests
             (EnvironmentOverrides.OpenAIApiVariable, " Yes "),
             (EnvironmentOverrides.OpenAIApiKeyVariable, " sk-openai-env "),
             (EnvironmentOverrides.YouTubeApiKeyVariable, " AIza-yt-env "),
-            (EnvironmentOverrides.AdvisorsVariable, " on "));
+            (EnvironmentOverrides.AdvisorsVariable, " on "),
+            (EnvironmentOverrides.BraveApiKeyVariable, " BSA-env "));
 
         var e = env.ApplyTo(new AppSettingsData());
 
@@ -108,6 +109,7 @@ public class EnvironmentOverridesTests
         Assert.True(e.OpenAIApi);   // a switch word (2026-10-03)
         Assert.Equal("sk-openai-env", e.OpenAIApiKey);   // trimmed (2026-10-03)
         Assert.Equal("AIza-yt-env", e.YouTubeApiKey);   // trimmed (2026-10-05)
+        Assert.Equal("BSA-env", e.WebMetasearchBraveApiKey);   // trimmed (2026-11-07)
         Assert.True(e.Advisors);   // a switch word (2026-10-10)
         Assert.Equal(EnvironmentOverrides.AllVariables.Length - 2, env.ActiveVariables().Count);   // everything but HOME and PROFILE
     }

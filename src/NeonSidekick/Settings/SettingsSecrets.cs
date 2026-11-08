@@ -99,6 +99,11 @@ public static class SettingsSecrets
             changed |= Swap(data.YouTubeApiKey, v => data.YouTubeApiKey = v, ref error);
         }
 
+        if (NeedsProtecting(data.WebMetasearchBraveApiKey))
+        {
+            changed |= Swap(data.WebMetasearchBraveApiKey, v => data.WebMetasearchBraveApiKey = v, ref error);
+        }
+
         if (NeedsProtecting(data.WebUiToken))
         {
             changed |= Swap(data.WebUiToken, v => data.WebUiToken = v, ref error);

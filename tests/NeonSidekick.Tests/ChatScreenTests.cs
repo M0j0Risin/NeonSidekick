@@ -9780,22 +9780,23 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task ProfilePushKeys_Yes_WritesEveryKeyIntoTheOtherProfile()
     {
-        Profiles.Create(_dir, "work", new AppSettingsData { LlmModel = "work-model", LlmApiKey = "work-llm", AnthropicApiKey = "work-claude", OpenAIApiKey = "work-openai", HomeAssistantToken = "work-ha", YouTubeApiKey = "work-yt" });
-        _settings.Update(d => { d.LlmApiKey = "my-llm"; d.AnthropicApiKey = "dpapi:AQAAAN"; d.OpenAIApiKey = "dpapi:AQAAOA"; d.HomeAssistantToken = "dpapi:AQAAHA"; d.YouTubeApiKey = "dpapi:AQAAYT"; });
+        Profiles.Create(_dir, "work", new AppSettingsData { LlmModel = "work-model", LlmApiKey = "work-llm", AnthropicApiKey = "work-claude", OpenAIApiKey = "work-openai", HomeAssistantToken = "work-ha", YouTubeApiKey = "work-yt", WebMetasearchBraveApiKey = "work-brave" });
+        _settings.Update(d => { d.LlmApiKey = "my-llm"; d.AnthropicApiKey = "dpapi:AQAAAN"; d.OpenAIApiKey = "dpapi:AQAAOA"; d.HomeAssistantToken = "dpapi:AQAAHA"; d.YouTubeApiKey = "dpapi:AQAAYT"; d.WebMetasearchBraveApiKey = "dpapi:AQAABR"; });
         PushLine("/profile push keys work");
         PickYes();
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.ProfileKeysPrompt("work", llmSet: true, claudeSet: true, openAISet: true, haSet: true, youTubeSet: true), SettingsMenu.ConfirmKeys), output);
-        Assert.Contains("  · " + ChatScreen.ProfileKeysCopiedNotice("work", llmSet: true, claudeSet: true, openAISet: true, haSet: true, youTubeSet: true), output);
+        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.ProfileKeysPrompt("work", llmSet: true, claudeSet: true, openAISet: true, haSet: true, youTubeSet: true, braveSet: true), SettingsMenu.ConfirmKeys), output);
+        Assert.Contains("  · " + ChatScreen.ProfileKeysCopiedNotice("work", llmSet: true, claudeSet: true, openAISet: true, haSet: true, youTubeSet: true, braveSet: true), output);
         var work = ReadProfile(Profiles.ProfileFile(_dir, "work"));
         Assert.Equal("my-llm", work.LlmApiKey);
         Assert.Equal("dpapi:AQAAAN", work.AnthropicApiKey);   // as stored: never decrypted on the way
         Assert.Equal("dpapi:AQAAOA", work.OpenAIApiKey);   // the OpenAI API key too (2026-10-03)
         Assert.Equal("dpapi:AQAAHA", work.HomeAssistantToken);   // the Home Assistant API key too (2026-09-28)
         Assert.Equal("dpapi:AQAAYT", work.YouTubeApiKey);   // the YouTube API key too (2026-10-05, the user's ask)
+        Assert.Equal("dpapi:AQAABR", work.WebMetasearchBraveApiKey);   // the Brave Search API key too (2026-11-07)
         Assert.Equal("work-model", work.LlmModel);         // the rest of the file round-trips
         Assert.DoesNotContain("my-llm", output);           // the values are never shown
         Assert.Equal(Profiles.DefaultName, _settings.ProfileName);
@@ -9805,9 +9806,9 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task ProfilePushKeys_Mirrors_AKeyNotSetHereClearsTheTargets()
     {
-        _console.Profile.Width = 320;   // the question and its keys on one row: 245 cells since "Anthropic API key" (2026-10-04), 301 with the YouTube API key (2026-10-05)
+        _console.Profile.Width = 400;   // the question and its keys on one row: 245 cells since "Anthropic API key" (2026-10-04), 301 with the YouTube API key (2026-10-05), more with the Brave Search API key (2026-11-07)
         // The user's call: the target ends with exactly this profile's keys; the question says which ones go.
-        Profiles.Create(_dir, "work", new AppSettingsData { LlmApiKey = "work-llm", AnthropicApiKey = "work-claude", OpenAIApiKey = "work-openai", HomeAssistantToken = "work-ha", YouTubeApiKey = "work-yt" });
+        Profiles.Create(_dir, "work", new AppSettingsData { LlmApiKey = "work-llm", AnthropicApiKey = "work-claude", OpenAIApiKey = "work-openai", HomeAssistantToken = "work-ha", YouTubeApiKey = "work-yt", WebMetasearchBraveApiKey = "work-brave" });
         _settings.Update(d => { d.LlmApiKey = "my-llm"; d.AnthropicApiKey = ""; d.HomeAssistantToken = ""; });
         PushLine("/profile push keys work");
         PickYes();
@@ -9815,14 +9816,15 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.ProfileKeysPrompt("work", llmSet: true, claudeSet: false, openAISet: false, haSet: false, youTubeSet: false), SettingsMenu.ConfirmKeys), output);
-        Assert.Contains("  · " + ChatScreen.ProfileKeysCopiedNotice("work", llmSet: true, claudeSet: false, openAISet: false, haSet: false, youTubeSet: false), output);
+        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.ProfileKeysPrompt("work", llmSet: true, claudeSet: false, openAISet: false, haSet: false, youTubeSet: false, braveSet: false), SettingsMenu.ConfirmKeys), output);
+        Assert.Contains("  · " + ChatScreen.ProfileKeysCopiedNotice("work", llmSet: true, claudeSet: false, openAISet: false, haSet: false, youTubeSet: false, braveSet: false), output);
         var work = ReadProfile(Profiles.ProfileFile(_dir, "work"));
         Assert.Equal("my-llm", work.LlmApiKey);
         Assert.Equal("", work.AnthropicApiKey);
         Assert.Equal("", work.OpenAIApiKey);
         Assert.Equal("", work.HomeAssistantToken);
         Assert.Equal("", work.YouTubeApiKey);
+        Assert.Equal("", work.WebMetasearchBraveApiKey);
     }
 
     [Fact]
@@ -9836,7 +9838,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("  · " + ChatScreen.ProfileKeysCopiedNotice("neon", llmSet: true, claudeSet: true, openAISet: false, haSet: false, youTubeSet: false), output);
+        Assert.Contains("  · " + ChatScreen.ProfileKeysCopiedNotice("neon", llmSet: true, claudeSet: true, openAISet: false, haSet: false, youTubeSet: false, braveSet: false), output);
         var data = ReadProfile(Profiles.ProfileFile(_dir, Profiles.DefaultName));
         // "work"'s plain keys were encrypted as it loaded (2026-09-28) and copied as stored.
         Assert.Equal("work-llm", SettingsSecrets.Reveal(data.LlmApiKey));
@@ -9882,8 +9884,8 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task ProfilePullKeys_Mirrors_IntoThisProfile()
     {
-        _console.Profile.Width = 320;
-        Profiles.Create(_dir, "work", new AppSettingsData { LlmApiKey = "work-llm", YouTubeApiKey = "work-yt" });
+        _console.Profile.Width = 400;
+        Profiles.Create(_dir, "work", new AppSettingsData { LlmApiKey = "work-llm", YouTubeApiKey = "work-yt", WebMetasearchBraveApiKey = "work-brave" });
         _settings.Update(d => { d.LlmApiKey = "my-llm"; d.AnthropicApiKey = "sk-ant-x"; d.YouTubeApiKey = "my-yt"; });
         PushLine("/profile pull keys work");
         PickYes();
@@ -9891,9 +9893,9 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.ProfileKeysPrompt("work", llmSet: true, claudeSet: false, openAISet: false, haSet: false, youTubeSet: true, pull: true), SettingsMenu.ConfirmKeys), output);
-        Assert.Contains("  · " + ChatScreen.ProfileKeysCopiedNotice("work", llmSet: true, claudeSet: false, openAISet: false, haSet: false, youTubeSet: true, pull: true), output);
-        Assert.Equal(("work-llm", "", "work-yt"), (_settings.Current.LlmApiKey, _settings.Current.AnthropicApiKey, _settings.Current.YouTubeApiKey));
+        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.ProfileKeysPrompt("work", llmSet: true, claudeSet: false, openAISet: false, haSet: false, youTubeSet: true, braveSet: true, pull: true), SettingsMenu.ConfirmKeys), output);
+        Assert.Contains("  · " + ChatScreen.ProfileKeysCopiedNotice("work", llmSet: true, claudeSet: false, openAISet: false, haSet: false, youTubeSet: true, braveSet: true, pull: true), output);
+        Assert.Equal(("work-llm", "", "work-yt", "work-brave"), (_settings.Current.LlmApiKey, _settings.Current.AnthropicApiKey, _settings.Current.YouTubeApiKey, SettingsSecrets.Reveal(_settings.Current.WebMetasearchBraveApiKey)));
         Assert.DoesNotContain("work-llm", output);
         Assert.Equal("work-llm", ReadProfile(Profiles.ProfileFile(_dir, "work")).LlmApiKey);   // the source untouched
     }
@@ -9902,31 +9904,32 @@ public partial class ChatScreenTests : IDisposable
     public void ProfileKeysText_IsPinned()
     {
         // The question's wording is the contract (the clearing clause is what makes the mirror safe to say yes to).
-        const string Question = "Copy the LLM API key, the Anthropic API key, the OpenAI API key, the Home Assistant API key and the YouTube API key into \"work\"?";
-        Assert.Equal(Question, ChatScreen.ProfileKeysPrompt("work", llmSet: true, claudeSet: true, openAISet: true, haSet: true, youTubeSet: true));
-        Assert.Equal(Question + " \"work\"'s Anthropic API key is cleared: none here.", ChatScreen.ProfileKeysPrompt("work", llmSet: true, claudeSet: false, openAISet: true, haSet: true, youTubeSet: true));
-        Assert.Equal(Question + " \"work\"'s OpenAI API key is cleared: none here.", ChatScreen.ProfileKeysPrompt("work", llmSet: true, claudeSet: true, openAISet: false, haSet: true, youTubeSet: true));
-        Assert.Equal(Question + " \"work\"'s Home Assistant API key is cleared: none here.", ChatScreen.ProfileKeysPrompt("work", llmSet: true, claudeSet: true, openAISet: true, haSet: false, youTubeSet: true));
-        Assert.Equal(Question + " \"work\"'s YouTube API key is cleared: none here.", ChatScreen.ProfileKeysPrompt("work", llmSet: true, claudeSet: true, openAISet: true, haSet: true, youTubeSet: false));
-        Assert.Equal(Question + " \"work\"'s LLM API key and Home Assistant API key are cleared: none here.", ChatScreen.ProfileKeysPrompt("work", llmSet: false, claudeSet: true, openAISet: true, haSet: false, youTubeSet: true));
-        Assert.Equal(Question + " \"work\"'s LLM API key, Anthropic API key, OpenAI API key, Home Assistant API key and YouTube API key are cleared: none here.", ChatScreen.ProfileKeysPrompt("work", llmSet: false, claudeSet: false, openAISet: false, haSet: false, youTubeSet: false));
-        const string Pulled = "Copy the LLM API key, the Anthropic API key, the OpenAI API key, the Home Assistant API key and the YouTube API key from \"work\" into this profile?";
-        Assert.Equal(Pulled, ChatScreen.ProfileKeysPrompt("work", llmSet: true, claudeSet: true, openAISet: true, haSet: true, youTubeSet: true, pull: true));
-        Assert.Equal(Pulled + " This profile's Anthropic API key and OpenAI API key are cleared: none in \"work\".", ChatScreen.ProfileKeysPrompt("work", llmSet: true, claudeSet: false, openAISet: false, haSet: true, youTubeSet: true, pull: true));
-        Assert.Equal("(copied the LLM API key, the Anthropic API key, the OpenAI API key, the Home Assistant API key and the YouTube API key into \"work\")", ChatScreen.ProfileKeysCopiedNotice("work", llmSet: true, claudeSet: true, openAISet: true, haSet: true, youTubeSet: true));
-        Assert.Equal("(copied the LLM API key and the Anthropic API key into \"work\"; its OpenAI API key, Home Assistant API key and YouTube API key cleared)", ChatScreen.ProfileKeysCopiedNotice("work", llmSet: true, claudeSet: true, openAISet: false, haSet: false, youTubeSet: false));
-        Assert.Equal("(copied the Home Assistant API key into \"work\"; its LLM API key, Anthropic API key, OpenAI API key and YouTube API key cleared)", ChatScreen.ProfileKeysCopiedNotice("work", llmSet: false, claudeSet: false, openAISet: false, haSet: true, youTubeSet: false));
-        Assert.Equal("(copied the YouTube API key into \"work\"; its LLM API key, Anthropic API key, OpenAI API key and Home Assistant API key cleared)", ChatScreen.ProfileKeysCopiedNotice("work", llmSet: false, claudeSet: false, openAISet: false, haSet: false, youTubeSet: true));
-        Assert.Equal("(cleared \"work\"'s LLM API key, Anthropic API key, OpenAI API key, Home Assistant API key and YouTube API key)", ChatScreen.ProfileKeysCopiedNotice("work", llmSet: false, claudeSet: false, openAISet: false, haSet: false, youTubeSet: false));
-        Assert.Equal("(copied the LLM API key from \"work\"; this profile's Anthropic API key, OpenAI API key, Home Assistant API key and YouTube API key cleared)", ChatScreen.ProfileKeysCopiedNotice("work", llmSet: true, claudeSet: false, openAISet: false, haSet: false, youTubeSet: false, pull: true));
-        Assert.Equal("(cleared this profile's LLM API key, Anthropic API key, OpenAI API key, Home Assistant API key and YouTube API key)", ChatScreen.ProfileKeysCopiedNotice("work", llmSet: false, claudeSet: false, openAISet: false, haSet: false, youTubeSet: false, pull: true));
+        const string Question = "Copy the LLM API key, the Anthropic API key, the OpenAI API key, the Home Assistant API key, the YouTube API key and the Brave Search API key into \"work\"?";
+        Assert.Equal(Question, ChatScreen.ProfileKeysPrompt("work", llmSet: true, claudeSet: true, openAISet: true, haSet: true, youTubeSet: true, braveSet: true));
+        Assert.Equal(Question + " \"work\"'s Anthropic API key is cleared: none here.", ChatScreen.ProfileKeysPrompt("work", llmSet: true, claudeSet: false, openAISet: true, haSet: true, youTubeSet: true, braveSet: true));
+        Assert.Equal(Question + " \"work\"'s OpenAI API key is cleared: none here.", ChatScreen.ProfileKeysPrompt("work", llmSet: true, claudeSet: true, openAISet: false, haSet: true, youTubeSet: true, braveSet: true));
+        Assert.Equal(Question + " \"work\"'s Home Assistant API key is cleared: none here.", ChatScreen.ProfileKeysPrompt("work", llmSet: true, claudeSet: true, openAISet: true, haSet: false, youTubeSet: true, braveSet: true));
+        Assert.Equal(Question + " \"work\"'s YouTube API key and Brave Search API key are cleared: none here.", ChatScreen.ProfileKeysPrompt("work", llmSet: true, claudeSet: true, openAISet: true, haSet: true, youTubeSet: false, braveSet: false));
+        Assert.Equal(Question + " \"work\"'s Brave Search API key is cleared: none here.", ChatScreen.ProfileKeysPrompt("work", llmSet: true, claudeSet: true, openAISet: true, haSet: true, youTubeSet: true, braveSet: false));
+        Assert.Equal(Question + " \"work\"'s LLM API key and Home Assistant API key are cleared: none here.", ChatScreen.ProfileKeysPrompt("work", llmSet: false, claudeSet: true, openAISet: true, haSet: false, youTubeSet: true, braveSet: true));
+        Assert.Equal(Question + " \"work\"'s LLM API key, Anthropic API key, OpenAI API key, Home Assistant API key, YouTube API key and Brave Search API key are cleared: none here.", ChatScreen.ProfileKeysPrompt("work", llmSet: false, claudeSet: false, openAISet: false, haSet: false, youTubeSet: false, braveSet: false));
+        const string Pulled = "Copy the LLM API key, the Anthropic API key, the OpenAI API key, the Home Assistant API key, the YouTube API key and the Brave Search API key from \"work\" into this profile?";
+        Assert.Equal(Pulled, ChatScreen.ProfileKeysPrompt("work", llmSet: true, claudeSet: true, openAISet: true, haSet: true, youTubeSet: true, braveSet: true, pull: true));
+        Assert.Equal(Pulled + " This profile's Anthropic API key and OpenAI API key are cleared: none in \"work\".", ChatScreen.ProfileKeysPrompt("work", llmSet: true, claudeSet: false, openAISet: false, haSet: true, youTubeSet: true, braveSet: true, pull: true));
+        Assert.Equal("(copied the LLM API key, the Anthropic API key, the OpenAI API key, the Home Assistant API key, the YouTube API key and the Brave Search API key into \"work\")", ChatScreen.ProfileKeysCopiedNotice("work", llmSet: true, claudeSet: true, openAISet: true, haSet: true, youTubeSet: true, braveSet: true));
+        Assert.Equal("(copied the LLM API key and the Anthropic API key into \"work\"; its OpenAI API key, Home Assistant API key, YouTube API key and Brave Search API key cleared)", ChatScreen.ProfileKeysCopiedNotice("work", llmSet: true, claudeSet: true, openAISet: false, haSet: false, youTubeSet: false, braveSet: false));
+        Assert.Equal("(copied the Home Assistant API key into \"work\"; its LLM API key, Anthropic API key, OpenAI API key, YouTube API key and Brave Search API key cleared)", ChatScreen.ProfileKeysCopiedNotice("work", llmSet: false, claudeSet: false, openAISet: false, haSet: true, youTubeSet: false, braveSet: false));
+        Assert.Equal("(copied the YouTube API key and the Brave Search API key into \"work\"; its LLM API key, Anthropic API key, OpenAI API key and Home Assistant API key cleared)", ChatScreen.ProfileKeysCopiedNotice("work", llmSet: false, claudeSet: false, openAISet: false, haSet: false, youTubeSet: true, braveSet: true));
+        Assert.Equal("(cleared \"work\"'s LLM API key, Anthropic API key, OpenAI API key, Home Assistant API key, YouTube API key and Brave Search API key)", ChatScreen.ProfileKeysCopiedNotice("work", llmSet: false, claudeSet: false, openAISet: false, haSet: false, youTubeSet: false, braveSet: false));
+        Assert.Equal("(copied the LLM API key from \"work\"; this profile's Anthropic API key, OpenAI API key, Home Assistant API key, YouTube API key and Brave Search API key cleared)", ChatScreen.ProfileKeysCopiedNotice("work", llmSet: true, claudeSet: false, openAISet: false, haSet: false, youTubeSet: false, braveSet: false, pull: true));
+        Assert.Equal("(cleared this profile's LLM API key, Anthropic API key, OpenAI API key, Home Assistant API key, YouTube API key and Brave Search API key)", ChatScreen.ProfileKeysCopiedNotice("work", llmSet: false, claudeSet: false, openAISet: false, haSet: false, youTubeSet: false, braveSet: false, pull: true));
     }
 
     [Fact]
     public async Task ProfilePushKeys_TheDefaultLlmKey_CountsAsNotSet()
     {
         // LlmEndpoint.DefaultApiKey ("empty") is the placeholder a local server ignores: mirrored as it is, and said to clear.
-        _console.Profile.Width = 320;   // the question on one row: past the fixture's width since the YouTube API key joined (2026-10-05)
+        _console.Profile.Width = 400;   // the question on one row: past the fixture's width since the YouTube API key joined (2026-10-05)
         Profiles.Create(_dir, "work", new AppSettingsData { LlmApiKey = "work-llm", AnthropicApiKey = "work-claude" });
         _settings.Update(d => { d.LlmApiKey = LlmEndpoint.DefaultApiKey; d.AnthropicApiKey = "sk-ant-x"; });
         PushLine("/profile push keys work");
@@ -9935,7 +9938,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.ProfileKeysPrompt("work", llmSet: false, claudeSet: true, openAISet: false, haSet: false, youTubeSet: false), SettingsMenu.ConfirmKeys), output);
+        Assert.Contains(SettingsMenu.PromptTitle(ChatScreen.ProfileKeysPrompt("work", llmSet: false, claudeSet: true, openAISet: false, haSet: false, youTubeSet: false, braveSet: false), SettingsMenu.ConfirmKeys), output);
         var work = ReadProfile(Profiles.ProfileFile(_dir, "work"));
         Assert.Equal(LlmEndpoint.DefaultApiKey, work.LlmApiKey);
         Assert.Equal("sk-ant-x", work.AnthropicApiKey);

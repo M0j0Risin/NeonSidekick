@@ -109,6 +109,7 @@ public static class ChildEnvironment
         EnvironmentOverrides.OpenAIApiKeyVariable,
         EnvironmentOverrides.HomeAssistantTokenVariable,
         EnvironmentOverrides.YouTubeApiKeyVariable,
+        EnvironmentOverrides.BraveApiKeyVariable,
     ];
 
     /// <summary>Takes out every <see cref="IsWithheld"/> name, applies <see cref="Overrides"/>, then <paramref name="launch"/>'s own variables, to <paramref name="start"/>.</summary>
