@@ -97,7 +97,7 @@ It's one app for research, IT and admin work (Active Directory, event logs, data
 * **Code audit:** `/code-audit` reviews the code with read-only tools, pass after pass, into a report you can turn into a plan.
 
 ### Research & notes
-* **Web search & pages:** a built-in metasearch, DuckDuckGo, or your own SearXNG server; reads pages (in a real browser when needed) and downloads files.
+* **Web search & pages:** a built-in metasearch (Bing, Brave, DuckDuckGo, Startpage, Wikipedia) or your own SearXNG server; reads pages (in a real browser when needed) and downloads files.
 * **A web browser** (`/browser`, macOS 14+ on a Mac): sign in to a site or pass its bot check, and the web tools borrow its cookies.
 * **PDFs:** read on disk or the web, attached to a message or `/view`ed; merge, split, rotate and fill them in.
 * **Office files:** the model reads Word documents, Excel workbooks and PowerPoint decks, and writes Word and Excel files (`/docx`, and query results to Excel); `/read` reads a document or deck aloud.

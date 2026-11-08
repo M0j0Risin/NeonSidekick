@@ -501,7 +501,7 @@ The tools most profiles use, and the pane's own options.
 | Web browser open | Where `open_url` links go: `default-browser`, or `browser-window` (the app's Browser window, one page at a time; else the default browser). A YouTube link follows *YouTube open links in* under *YouTube tools*. | `default-browser` |
 | Web browser sign in mode | How `/webui browser` and a double-click on `/webui`'s link or QR code sign your default browser in: `one-time-link` (good once, for a minute, so history keeps no token) or `url-with-token` (the usual link, which history may keep). See [Web UI](INTERFACE.md#web-ui). | `one-time-link` |
 | Web browser network mode | Where a fetch may reach: `internet` (public addresses), `lan` (the app's computer and the LAN, its adapters' prefixes included) or `both`. | `internet` |
-| Web search method | `metasearch` (built in: asks the engines in *Web metasearch engines*, never opens a bot check, skips an engine that refuses), `duckduckgo` (built in) or `searxng`. A profile keeps its saved method. | `metasearch` |
+| Web search method | `metasearch` (built in: asks the engines in *Web metasearch engines*, never opens a bot check, skips an engine that refuses) or `searxng`. A profile keeps its saved method; the old `duckduckgo` reads as `metasearch`. | `metasearch` |
 | Web search max results | Hits per search (1–20). | 20 |
 | Web metasearch engines | Which engines `metasearch` asks: Bing, Brave, DuckDuckGo, Startpage and Wikipedia. With none on, a search says so and asks nobody. | all |
 | Web metasearch safe search | The filter `metasearch` asks for: `off`, `moderate` or `strict`. It reaches Bing, Brave and Startpage, and can't change DuckDuckGo's own default. | `off` |

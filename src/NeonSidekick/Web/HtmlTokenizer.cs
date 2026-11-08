@@ -18,31 +18,11 @@ public sealed record HtmlToken(HtmlTokenKind Kind, string Name, string Text, IRe
 {
     /// <summary>The attribute's decoded value, or null.</summary>
     public string? Attribute(string name) => Attributes is not null && Attributes.TryGetValue(name, out var value) ? value : null;
-
-    /// <summary>Whether the <c>class</c> attribute lists <paramref name="className"/> as one of its words.</summary>
-    public bool HasClass(string className)
-    {
-        var classes = Attribute("class");
-        if (classes is null)
-        {
-            return false;
-        }
-
-        foreach (var word in classes.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            if (string.Equals(word, className, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
 }
 
 /// <summary>
-/// A hand-rolled HTML scanner — the ONE HTML reader in the app (the Markdown converter and the
-/// DuckDuckGo result parser both walk its tokens). It knows what it needs and no more: tags with
+/// A hand-rolled HTML scanner — the ONE HTML reader in the app (the Markdown converter walks its tokens; the DuckDuckGo result parser
+/// did too until the scrape went, 2026-11-07). It knows what it needs and no more: tags with
 /// attributes (quoted or bare, entities decoded), text with entities decoded, comments / doctype /
 /// CDATA / processing instructions skipped, the raw-text elements (<c>script</c>, <c>style</c>,
 /// <c>textarea</c>, <c>title</c>) read to their end tag without looking for tags inside, the void

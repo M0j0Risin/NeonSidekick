@@ -7,7 +7,6 @@ public class WebTextTests
     [Fact]
     public void Constants_ArePinned()
     {
-        Assert.Equal("DuckDuckGo", WebText.DuckDuckGoName);
         Assert.Equal("SearXNG", WebText.SearxngName);
         Assert.Equal("Error: max_results must be 1 to 20", WebText.BadResultCount);
         Assert.Equal("Error: open_url takes at most 5 links at a time", WebText.TooManyLinks);
@@ -36,7 +35,6 @@ public class WebTextTests
         Assert.Equal("Error: the headless browser could not load 'https://a/': exit code 1", WebText.BrowserFailed("https://a/", "exit code 1"));
         Assert.Equal("Error: could not fetch 'https://a/': No such host is known", WebText.CouldNot("https://a/", "No such host is known"));
         Assert.Equal("Error: offset 50000 is past the end of the page (2,100 characters)", WebText.OffsetPastEnd(50000, 2100));
-        Assert.Equal("Error: DuckDuckGo refused the search (HTTP 429 Too Many Requests); try again in a minute", WebText.SearchRefused("DuckDuckGo", "HTTP 429 Too Many Requests"));
         Assert.Equal("Error: SearXNG at http://localhost:8080 refused the JSON format (HTTP 403); add json to search.formats in its settings.yml", WebText.SearxngRefused("http://localhost:8080"));
         Assert.Equal("Error: SearXNG at http://localhost:8080 did not answer (connection refused)", WebText.SearxngUnreachable("http://localhost:8080", "connection refused"));
         Assert.Equal("Error: DuckDuckGo could not be searched (no answer)", WebText.SearchFailed("DuckDuckGo", "no answer"));

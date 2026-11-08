@@ -14,7 +14,8 @@ namespace NeonSidekick.Settings;
 /// snake_case, no word repeating its row's name), still read. Each picker class keeps its own <c>Retired</c> map (old word → new),
 /// which its <c>TryParse</c> reads through <see cref="Current"/>, so a typed <c>/queue mode disabled</c> still works; and
 /// <see cref="Upgrade"/> swaps a loaded profile's old words for the new ones, so the menus show (and the next save writes) today's.
-/// No migration step: a profile file keeps its old word until something is saved.
+/// No migration step: a profile file keeps its old word until something is saved. Later retirements join the same way: <c>Web search method</c>'s
+/// <c>duckduckgo</c> on 2026-11-07, when the scrape it named went.
 /// </summary>
 public static class RetiredWords
 {
@@ -45,6 +46,7 @@ public static class RetiredWords
         data.QueueMode = Swap(data.QueueMode, QueueMode.Retired);
         data.BotChatImageMentionMode = Swap(data.BotChatImageMentionMode, BotChatImageMentionMode.Retired);
         data.CameraPreview = Swap(data.CameraPreview, CameraPreviewMode.Retired);
+        data.WebSearchMethod = Swap(data.WebSearchMethod, SearchMethod.Retired);   // 2026-11-07: the DuckDuckGo scrape went, its word reading as the metasearch
     }
 
     /// <summary><paramref name="value"/>, or its successor when it is a retired word (case and blanks aside).</summary>

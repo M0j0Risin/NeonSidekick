@@ -6957,7 +6957,7 @@ internal sealed partial class ChatScreen
     {
         var tools = new List<AIFunction>
         {
-            new WebSearchTool(web, effective, botCheck),
+            new WebSearchTool(web, effective),
             new WebFetchTool(web, effective, botCheck),
             new OpenUrlTool(web, effective, openInWindow, openYouTube),   // YouTube's links first where YouTube open links in says (2026-10-16)
         };

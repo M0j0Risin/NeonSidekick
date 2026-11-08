@@ -4149,7 +4149,7 @@ internal sealed partial class SettingsMenu
     public static string MenuMaxHeightLabel(string name) =>
         Markup.Escape(name.PadRight(15)) + Theme.DimMarkup(UI.MenuHeight.Describe(name));
 
-    /// <summary>One row of the search-method picker: the method and its hint (padded to eleven: <c>duckduckgo</c> is ten). Pinned.</summary>
+    /// <summary>One row of the search-method picker: the method and its hint (padded to eleven, as when <c>duckduckgo</c>, ten, was one). Pinned.</summary>
     public static string SearchMethodLabel(string name) =>
         Markup.Escape(name.PadRight(11)) + Theme.DimMarkup(Web.SearchMethod.Describe(name));
 

@@ -6,9 +6,6 @@ public enum BotCheckUse
     /// <summary><c>web_fetch</c>: the page the check let through is the answer.</summary>
     Fetch,
 
-    /// <summary><c>web_search</c>: DuckDuckGo's results page, refused as a bot (<see cref="DuckDuckGoSearch.LooksRefused"/>).</summary>
-    Search,
-
     /// <summary><c>download_file</c>: the clearance's cookies for the HTTP client's second try.</summary>
     Download,
 
@@ -142,13 +139,25 @@ public static class BotCheck
 
     /// <summary>
     /// Whether the window's page is still a check: a challenge page (<see cref="WebFetcher.LooksLikeChallenge"/>), or DuckDuckGo's
-    /// "bots use DuckDuckGo too" on a short page (<see cref="DuckDuckGoSearch.LooksRefused"/>). Pure; pinned.
+    /// "bots use DuckDuckGo too" on a short page (<see cref="LooksLikeDuckDuckGoRefusal"/>), which a <c>web_fetch</c> of its results can still meet. Pure; pinned.
     /// </summary>
     public static bool StillGated(string html, string readable)
     {
         ArgumentNullException.ThrowIfNull(html);
         ArgumentNullException.ThrowIfNull(readable);
         return WebFetcher.LooksLikeChallenge(html, readable)
-            || (readable.Length <= WebFetcher.ChallengeTextChars && DuckDuckGoSearch.LooksRefused(html));
+            || (readable.Length <= WebFetcher.ChallengeTextChars && LooksLikeDuckDuckGoRefusal(html));
+    }
+
+    /// <summary>
+    /// DuckDuckGo's "bots use DuckDuckGo too" page, served with nothing to read: the DuckDuckGo scrape's test, kept here when the scrape went
+    /// (2026-11-07). Pinned.
+    /// </summary>
+    public static bool LooksLikeDuckDuckGoRefusal(string html)
+    {
+        ArgumentNullException.ThrowIfNull(html);
+        return html.Contains("anomaly-modal", StringComparison.OrdinalIgnoreCase)
+            || html.Contains("bots use DuckDuckGo too", StringComparison.OrdinalIgnoreCase)
+            || html.Contains("challenge-form", StringComparison.OrdinalIgnoreCase);
     }
 }

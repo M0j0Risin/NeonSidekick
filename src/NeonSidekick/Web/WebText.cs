@@ -63,8 +63,7 @@ public static class WebText
     /// <summary>The page the user let through a bot check in the Browser window (2026-10-13, <see cref="BotCheck"/>).</summary>
     public const string WindowEngine = "browser window";
 
-    /// <summary>The search engine names on a search header.</summary>
-    public const string DuckDuckGoName = "DuckDuckGo";
+    /// <summary>The search engine name on a SearXNG search's header.</summary>
     public const string SearxngName = "SearXNG";
     public const string MetaSearchName = "Metasearch";
 
@@ -162,13 +161,12 @@ public static class WebText
     public static string CouldNot(string url, string detail) => $"Error: could not fetch '{url}': {detail}";
     public static string OffsetPastEnd(int offset, int total) =>
         $"Error: offset {offset.ToString(CultureInfo.InvariantCulture)} is past the end of the page ({total.ToString("N0", CultureInfo.InvariantCulture)} characters)";
-    public static string SearchRefused(string engine, string detail) => $"Error: {engine} refused the search ({detail}); try again in a minute";
     public static string SearxngRefused(string url) => $"Error: SearXNG at {url} refused the JSON format (HTTP 403); add json to search.formats in its settings.yml";
     public static string SearxngUnreachable(string url, string detail) => $"Error: SearXNG at {url} did not answer ({detail})";
     public static string SearchFailed(string engine, string detail) => $"Error: {engine} could not be searched ({detail})";
 
     /// <summary>
-    /// The metasearch's refusal (2026-11-06), not <see cref="SearchRefused"/>: "try again in a minute" is wrong here, since a refused engine
+    /// The metasearch's refusal (2026-11-06), not the DuckDuckGo scrape's "try again in a minute" (gone 2026-11-07): that's wrong here, since a refused engine
     /// rests for up to 15 days, in memory only.
     /// </summary>
     public static string MetaSearchRefused(string detail) => $"Error: {MetaSearchName}'s engines refused the search ({detail}); they are resting, for seconds to days depending on the refusal, so searching again now won't help, and restarting the app clears the rests";

@@ -18,7 +18,7 @@ namespace NeonSidekick.Web;
 /// </summary>
 public sealed class BuiltInMetaSearch
 {
-    /// <summary>The gap between two searches, as <see cref="DuckDuckGoSearch.MinInterval"/>: a model can search in bursts, and these sites rate-limit.</summary>
+    /// <summary>The gap between two searches, as the DuckDuckGo scrape's was until it went (2026-11-07): a model can search in bursts, and these sites rate-limit.</summary>
     public static readonly TimeSpan MinInterval = TimeSpan.FromMilliseconds(1500);
 
     /// <summary>
@@ -153,9 +153,6 @@ public sealed class BuiltInMetaSearch
     private sealed class Configured(BuiltInMetaSearch core, IReadOnlySet<string> engines, SafeSearch safeSearch, string? braveApiKey) : ISearchEngine
     {
         public string Name => WebText.MetaSearchName;
-
-        /// <summary>None: the hits come from several engines, so no one results page is theirs.</summary>
-        public Uri? ResultReferer => null;
 
         public Task<SearchOutcome> SearchAsync(string query, int max, FetchOptions options, CancellationToken cancellationToken) =>
             engines is { Count: 0 }

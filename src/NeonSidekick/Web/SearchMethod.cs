@@ -6,9 +6,6 @@ namespace NeonSidekick.Web;
 /// <summary>Which engine <c>web_search</c> asks (<see cref="WebAccess.Engine"/>).</summary>
 public enum SearchProvider
 {
-    /// <summary>The built-in DuckDuckGo scrape (<see cref="DuckDuckGoSearch"/>).</summary>
-    DuckDuckGo,
-
     /// <summary>The SearXNG instance the setting <c>Web SearXNG URL</c> names (<see cref="SearxngSearch"/>).</summary>
     Searxng,
 
@@ -17,9 +14,10 @@ public enum SearchProvider
 }
 
 /// <summary>
-/// The setting <c>Browser search method</c>: the words the operator picks from (<c>metasearch</c>,
-/// <c>duckduckgo</c>, <c>searxng</c>) and their mapping to <see cref="SearchProvider"/>, the <see cref="BrowserMode"/>
-/// shape. The URL alone chose the engine until 2026-09-15 (the user's call): now <c>Web SearXNG URL</c>
+/// The setting <c>Web search method</c>: the words the operator picks from (<c>metasearch</c>, <c>searxng</c>) and their mapping to
+/// <see cref="SearchProvider"/>, the <see cref="BrowserMode"/> shape. The built-in DuckDuckGo scrape, <c>duckduckgo</c>, went on
+/// 2026-11-07 (the user's call, once a published build had proven the metasearch, which asks DuckDuckGo among its engines): the word
+/// is retired to <c>metasearch</c> (<see cref="Retired"/>), so a profile that saved it searches with the metasearch and saves that. The URL alone chose the engine until 2026-09-15 (the user's call): now <c>Web SearXNG URL</c>
 /// keeps its value while this row switches the engine, and it is read only under <c>searxng</c>.
 /// <see cref="Resolve"/> is the one place the saved string becomes the enum: a hand-edited value that
 /// is none of them falls back to <see cref="Default"/> with a warning.
@@ -30,19 +28,24 @@ public static class SearchMethod
     public const string Default = "metasearch";
 
     /// <summary>The methods in menu order.</summary>
-    public static readonly string[] Names = { "metasearch", "duckduckgo", "searxng" };
+    public static readonly string[] Names = { "metasearch", "searxng" };
+
+    /// <summary>Retired words and their successors (<see cref="Settings.RetiredWords"/>): the DuckDuckGo scrape's, 2026-11-07.</summary>
+    public static readonly IReadOnlyDictionary<string, string> Retired = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["duckduckgo"] = "metasearch",
+    };
 
     private const string Category = "Web";
 
-    /// <summary>Trims and ignores case; false (and <see cref="SearchProvider.DuckDuckGo"/>) for anything that is not one of <see cref="Names"/>.</summary>
+    /// <summary>Trims and ignores case, a retired word read as its successor; false (and <see cref="SearchProvider.MetaSearch"/>) for anything that is not one of <see cref="Names"/>.</summary>
     public static bool TryParse(string? text, out SearchProvider provider)
     {
-        switch (text?.Trim().ToLowerInvariant())
+        switch (RetiredWords.Current(text, Retired))
         {
-            case "duckduckgo": provider = SearchProvider.DuckDuckGo; return true;
             case "searxng": provider = SearchProvider.Searxng; return true;
             case "metasearch": provider = SearchProvider.MetaSearch; return true;
-            default: provider = SearchProvider.DuckDuckGo; return false;
+            default: provider = SearchProvider.MetaSearch; return false;
         }
     }
 
@@ -50,14 +53,12 @@ public static class SearchMethod
     public static string Name(SearchProvider provider) => provider switch
     {
         SearchProvider.Searxng => "searxng",
-        SearchProvider.MetaSearch => "metasearch",
-        _ => "duckduckgo",
+        _ => "metasearch",
     };
 
     /// <summary>The menu hint next to a method (the user's wording, 2026-11-07). Pinned.</summary>
     public static string Describe(string name) => name switch
     {
-        "duckduckgo" => "built-in DuckDuckGo scrape, no setup",
         "searxng" => "external SearXNG instance at Web SearXNG URL",
         "metasearch" => "built-in SearXNG port, no setup",
         _ => "",
@@ -74,7 +75,6 @@ public static class SearchMethod
 
         DiagnosticLog.Warn(Category,
             $"{nameof(AppSettingsData.WebSearchMethod)}='{effective.WebSearchMethod}' is not one of {string.Join(", ", Names)}. Using {Default}.");
-        TryParse(Default, out provider);
-        return provider;
+        return SearchProvider.MetaSearch;
     }
 }

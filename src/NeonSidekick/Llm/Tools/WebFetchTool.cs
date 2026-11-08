@@ -170,8 +170,9 @@ public sealed class WebFetchTool : AIFunction
         var page = _web.Pages.TryGet(key);
         if (page is null)
         {
-            // A hit web_search listed goes as a click from its results page would (2026-10-11).
-            var options = WebAccess.Options(_effective()) with { Referer = _web.Referers.For(parsed) };
+            // No Referer since the DuckDuckGo scrape went (2026-11-07): it was the one engine whose hits went as a click from its results page
+            // would (2026-10-11), and neither SearXNG's pages nor the metasearch send one.
+            var options = WebAccess.Options(_effective());
             page = await _web.Fetcher.FetchAsync(parsed, options, cancellationToken).ConfigureAwait(false);
             if (_botCheck is not null && BotCheck.Offers(page))
             {

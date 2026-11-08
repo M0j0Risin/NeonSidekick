@@ -5360,8 +5360,11 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task Turn_ModelSearchesThenFetches_ShowsOneDimLineEach()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.WebSearchMethod = "duckduckgo"; });
-        _http.Map("https://html.duckduckgo.com/html/", HttpStatusCode.OK, File.ReadAllText(DuckDuckGoSearchTests.FixturePath), "text/html");
+        // A SearXNG instance: one engine over the stub client, since the DuckDuckGo scrape this used went (2026-11-07).
+        _settings.Update(d => { d.TtsOutput = false; d.WebSearchMethod = "searxng"; d.WebSearxngUrl = "http://localhost:8080"; });
+        _http.Map("http://localhost:8080/search", HttpStatusCode.OK,
+            "{\"results\":[{\"url\":\"https://doc.rust-lang.org/book/ch17-05-traits-for-async.html\",\"title\":\"Traits for Async\",\"content\":\"The book\"},"
+            + "{\"url\":\"https://b.example/\",\"title\":\"B\",\"content\":\"two\"},{\"url\":\"https://c.example/\",\"title\":\"C\",\"content\":\"three\"}]}");
         _http.Map("https://doc.rust-lang.org/book/ch17-05-traits-for-async.html", HttpStatusCode.OK, "<html><head><title>Traits for Async</title></head><body><h1>Traits for Async</h1><p>The Future trait.</p></body></html>", "text/html");
         _chat.Enqueue(FakeChatClient.Call("c1", WebSearchTool.ToolName, new Dictionary<string, object?> { ["query"] = "rust async traits", ["max_results"] = 2 }));
         _chat.Enqueue(FakeChatClient.Call("c2", WebFetchTool.ToolName, new Dictionary<string, object?> { ["url"] = "https://doc.rust-lang.org/book/ch17-05-traits-for-async.html" }));
@@ -5371,12 +5374,12 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("🛠️ Searched \"rust async traits\" (2 results, DuckDuckGo): 1. ", output);
+        Assert.Contains("🛠️ Searched \"rust async traits\" (2 results, SearXNG): 1. ", output);
         Assert.Contains("🛠️ Traits for Async — https://doc.rust-lang.org/book/ch17-05-traits-for-async.html (chars 1–37 of 37, http)", output);
         Assert.DoesNotContain("web_search(", output);
         Assert.Contains("The book covers it.", output);
         var search = Assert.Single(_chat.Requests[1][^1].Contents.OfType<FunctionResultContent>());
-        Assert.StartsWith("Searched \"rust async traits\" (2 results, DuckDuckGo):\n1. ", (string)search.Result!);
+        Assert.StartsWith("Searched \"rust async traits\" (2 results, SearXNG):\n1. ", (string)search.Result!);
         var fetch = Assert.Single(_chat.Requests[2][^1].Contents.OfType<FunctionResultContent>());
         Assert.Equal("Traits for Async — https://doc.rust-lang.org/book/ch17-05-traits-for-async.html (chars 1–37 of 37, http)\n\n# Traits for Async\n\nThe Future trait.", fetch.Result);
     }

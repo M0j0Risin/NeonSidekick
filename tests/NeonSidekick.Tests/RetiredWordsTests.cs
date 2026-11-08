@@ -92,7 +92,8 @@ public class RetiredWordsTests : IDisposable
               "MemoryMode": "Disabled",
               "QueueMode": "disabled",
               "BotChatImageMentionMode": "disabled",
-              "CameraPreview": "disabled"
+              "CameraPreview": "disabled",
+              "WebSearchMethod": "duckduckgo"
             }
             """);
 
@@ -106,6 +107,10 @@ public class RetiredWordsTests : IDisposable
 
         // Another profile's file read for a copy (/profile push|pull, botchat, advisors) reads the same way.
         Assert.Equal("lan", Profiles.ReadProfileFile(path).WebBrowserNetworkMode);
+
+        // The DuckDuckGo scrape's word (2026-11-07, the user's call): the metasearch, which asks DuckDuckGo among its engines.
+        Assert.Equal("metasearch", d.WebSearchMethod);
+        Assert.Equal("metasearch", Profiles.ReadProfileFile(path).WebSearchMethod);
     }
 
     [Theory]

@@ -17,7 +17,12 @@ public sealed partial class WebToolsTests : IDisposable
     private readonly StubHttpMessageHandler _http = new();
     private readonly FakeHeadlessBrowser _browser = new();
     private readonly ManualTimeProvider _time = new();
-    private readonly AppSettingsData _settings = new() { WebSearchMethod = "duckduckgo" };   // these pin DuckDuckGo's path, the default until 2026-11-06
+    // These search a stubbed SearXNG instance (SearxngHits): one engine over the stub client, since the DuckDuckGo scrape they used went (2026-11-07).
+    private readonly AppSettingsData _settings = new() { WebSearchMethod = "searxng", WebSearxngUrl = "http://localhost:8080" };
+
+    /// <summary>Ten hits, https://r1.example/ to https://r10.example/, as SearXNG's JSON API answers.</summary>
+    private static readonly string SearxngHits =
+        "{\"results\":[" + string.Join(",", Enumerable.Range(1, 10).Select(i => $"{{\"url\":\"https://r{i}.example/\",\"title\":\"Hit {i}\",\"content\":\"snippet {i}\"}}")) + "]}";
     private readonly WebAccess _web;
     private readonly WebSearchTool _search;
     private readonly WebFetchTool _fetch;
@@ -251,22 +256,22 @@ public sealed partial class WebToolsTests : IDisposable
     [Fact]
     public async Task Search_NoArgument_TakesTheSettingsCount()
     {
-        _http.Map("https://html.duckduckgo.com/html/", HttpStatusCode.OK, File.ReadAllText(DuckDuckGoSearchTests.FixturePath), "text/html");
+        _http.Map("http://localhost:8080/search", HttpStatusCode.OK, SearxngHits);
         _settings.WebSearchMaxResults = 3;
 
         string answer = (string)(await _search.InvokeAsync(Args(("query", Json("\"rust async traits\""))), CancellationToken.None))!;
 
-        Assert.StartsWith("Searched \"rust async traits\" (3 results, DuckDuckGo):\n1. ", answer);
+        Assert.StartsWith("Searched \"rust async traits\" (3 results, SearXNG):\n1. ", answer);
         Assert.Equal(3, answer.Split('\n').Count(l => l.Length > 1 && char.IsDigit(l[0]) && l[1] == '.'));
-        Assert.Contains(" — https://doc.rust-lang.org/book/ch17-05-traits-for-async.html\n   ", answer);
+        Assert.Contains(" — https://r1.example/\n   ", answer);
     }
 
     [Fact]
     public async Task Search_TheArgument_Overrides_UpToTheCap()
     {
-        _http.Map("https://html.duckduckgo.com/html/", HttpStatusCode.OK, File.ReadAllText(DuckDuckGoSearchTests.FixturePath), "text/html");
+        _http.Map("http://localhost:8080/search", HttpStatusCode.OK, SearxngHits);
 
-        Assert.StartsWith("Searched \"x\" (2 results, DuckDuckGo):", (string)(await _search.InvokeAsync(Args(("query", "x"), ("max_results", Json("2"))), CancellationToken.None))!);
+        Assert.StartsWith("Searched \"x\" (2 results, SearXNG):", (string)(await _search.InvokeAsync(Args(("query", "x"), ("max_results", Json("2"))), CancellationToken.None))!);
         Assert.Equal(WebText.BadResultCount, await _search.InvokeAsync(Args(("query", "x"), ("max_results", Json("25"))), CancellationToken.None));
         Assert.Equal(WebText.BadResultCount, await _search.InvokeAsync(Args(("query", "x"), ("max_results", 0)), CancellationToken.None));
         Assert.Equal("Error: 'lots' is not a whole number for 'max_results'", await _search.InvokeAsync(Args(("query", "x"), ("max_results", Json("\"lots\""))), CancellationToken.None));
@@ -296,8 +301,9 @@ public sealed partial class WebToolsTests : IDisposable
         _http.Map("http://localhost:8080/search", HttpStatusCode.OK, "{\"results\":[{\"url\":\"https://a/\",\"title\":\"A\",\"content\":\"one\"}]}");
         _settings.WebSearxngUrl = "http://localhost:8080";
 
-        // The URL alone no longer switches the engine (2026-09-15): duckduckgo ignores it.
-        Assert.Same(_web.DuckDuckGo, _web.Engine(_settings));
+        // The URL alone no longer switches the engine (2026-09-15): metasearch ignores it.
+        _settings.WebSearchMethod = "metasearch";
+        Assert.Equal(WebText.MetaSearchName, _web.Engine(_settings).Name);
 
         _settings.WebSearchMethod = "searxng";
         Assert.Equal("Searched \"x\" (1 result, SearXNG):\n1. A — https://a/\n   one", await _search.InvokeAsync(Args(("query", "x")), CancellationToken.None));
@@ -309,15 +315,15 @@ public sealed partial class WebToolsTests : IDisposable
         Assert.Equal(WebText.MetaSearchName, _web.Engine(_settings).Name);
         _settings.WebSearxngUrl = "http://localhost:8080";
         Assert.IsType<SearxngSearch>(_web.Engine(_settings));
-        _settings.WebSearchMethod = "duckduckgo";
-        Assert.Same(_web.DuckDuckGo, _web.Engine(_settings));
+        _settings.WebSearchMethod = "duckduckgo";   // the scrape's word, retired to the metasearch (2026-11-07)
+        Assert.Equal(WebText.MetaSearchName, _web.Engine(_settings).Name);
         Assert.Equal("http://localhost:8080", _settings.WebSearxngUrl);
         // A hand-edited method reads as the default.
         _settings.WebSearchMethod = "google";
         Assert.Equal(WebText.MetaSearchName, _web.Engine(_settings).Name);
     }
 
-    /// <summary>The fallback honors the metasearch's own settings, and never reaches DuckDuckGo's scrape.</summary>
+    /// <summary>The fallback honors the metasearch's own settings.</summary>
     [Fact]
     public async Task Search_SearxngWithNoUrl_IsTheMetasearch_UnderItsOwnSettings()
     {
@@ -332,41 +338,28 @@ public sealed partial class WebToolsTests : IDisposable
     [Fact]
     public async Task Search_AnErrorSentence_IsTheAnswer()
     {
-        _http.Map("https://html.duckduckgo.com/html/", HttpStatusCode.TooManyRequests, "<p>no</p>", "text/html");
-        _settings.WebBrowserMode = "httpclient";
+        _http.Map("http://localhost:8080/search", HttpStatusCode.Forbidden, "{\"message\":\"forbidden\"}");
 
-        Assert.Equal("Error: DuckDuckGo refused the search (HTTP 429 Too Many Requests); try again in a minute", await _search.InvokeAsync(Args(("query", "x")), CancellationToken.None));
+        string answer = (string)(await _search.InvokeAsync(Args(("query", "x")), CancellationToken.None))!;
+
+        Assert.StartsWith("Error: SearXNG at ", answer);
+        Assert.Contains("refused the JSON format (HTTP 403)", answer);
     }
 
     [Fact]
-    public async Task Fetch_ADuckDuckGoHit_GoesAsAClickFromItsResultsPage_AndNothingElseDoes()
+    public async Task Fetch_AHitASearchListed_SendsNoReferer()
     {
-        // 2026-10-11, the user's ask: a hit web_search listed is fetched with the results page's origin as Referer, cross-site.
-        const string Hit = "https://doc.rust-lang.org/book/ch17-05-traits-for-async.html";
+        // 2026-10-11 to 2026-11-07, a DuckDuckGo hit went as a click from its results page; no engine left names a results page to send.
         var seen = new List<HttpRequestMessage>();
-        _http.Map("https://html.duckduckgo.com/html/", HttpStatusCode.OK, File.ReadAllText(DuckDuckGoSearchTests.FixturePath), "text/html");
         _http.Map("http://localhost:8080/search", HttpStatusCode.OK, "{\"results\":[{\"url\":\"https://a.example/\",\"title\":\"A\",\"content\":\"one\"}]}");
-        foreach (var page in new[] { Hit, "https://example.com/", "https://a.example/" })
-        {
-            _http.Map(page, (r, _) => { seen.Add(r); return Task.FromResult(StubHttpMessageHandler.Json(HttpStatusCode.OK, Article, "text/html")); });
-        }
+        _http.Map("https://a.example/", (r, _) => { seen.Add(r); return Task.FromResult(StubHttpMessageHandler.Json(HttpStatusCode.OK, Article, "text/html")); });
 
-        await _search.InvokeAsync(Args(("query", "rust async traits")), CancellationToken.None);
-        _settings.WebSearchMethod = "searxng";
-        _settings.WebSearxngUrl = "http://localhost:8080";
         await _search.InvokeAsync(Args(("query", "x")), CancellationToken.None);
-        await _fetch.InvokeAsync(Args(("url", Hit)), CancellationToken.None);
-        await _fetch.InvokeAsync(Args(("url", "https://example.com/")), CancellationToken.None);
         await _fetch.InvokeAsync(Args(("url", "https://a.example/")), CancellationToken.None);
 
-        Assert.Equal(3, seen.Count);
-        Assert.Equal(DuckDuckGoSearch.Origin.AbsoluteUri, seen[0].Headers.GetValues("Referer").Single());
-        Assert.Equal("cross-site", seen[0].Headers.GetValues("Sec-Fetch-Site").Single());
-        Assert.All(seen.Skip(1), r =>
-        {
-            Assert.False(r.Headers.Contains("Referer"));
-            Assert.Equal("none", r.Headers.GetValues("Sec-Fetch-Site").Single());
-        });
+        var request = Assert.Single(seen);
+        Assert.False(request.Headers.Contains("Referer"));
+        Assert.Equal("none", request.Headers.GetValues("Sec-Fetch-Site").Single());
     }
 
     // ── web_fetch ───────────────────────────────────────────────────────────

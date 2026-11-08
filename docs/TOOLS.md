@@ -36,7 +36,7 @@ Under *Web tools*.
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `web_search` | `query, max_results?` | Searches with *Web search method* (the built-in metasearch, DuckDuckGo or SearXNG): title, URL, snippet. |
+| `web_search` | `query, max_results?` | Searches with *Web search method* (the built-in metasearch or SearXNG): title, URL, snippet. |
 | `web_fetch` | `url, offset?` | A page as Markdown, 32,000 characters at a time (a `#anchor` starts there). Also text, JSON, XML, CSV, and a PDF's outline and first 40 pages ([Reading PDFs](#reading-pdfs)). |
 | `open_url` | `url?, urls?` | Opens up to five links in your browser, or one in the [Browser window](#the-browser-window) under *Web browser open*; a YouTube link where *YouTube open links in* says. |
 | `web_links` | `filter?` | Your saved links (as `/browser list` shows), at most 100; `filter` keeps those holding all its words. |
@@ -51,7 +51,7 @@ Under *Web tools*.
 
 The app's own browser (macOS 14+ on a Mac), for a bot check the web tools can't pass. Its bar, keys, history and saved links: [The Browser window](INTERFACE.md#the-browser-window).
 
-* **When:** `web_fetch`, `web_search` (not under `metasearch`), `download_file` and `convert_to_pdf` offer it on a 403 or 503 page, or a check's page; never for a rate limit, an API's JSON or XML refusal, or headless. *Web browser botcheck window* says whether it asks first.
+* **When:** `web_fetch`, `download_file` and `convert_to_pdf` offer it on a 403 or 503 page, or a check's page; never for a rate limit, an API's JSON or XML refusal, or headless. *Web browser botcheck window* says whether it asks first.
 * **Solving:** Esc, *Give up*, closing the window or 5 minutes gives up. Once the check is gone and the page settles, the window closes and the tool goes on with that page.
 * **From the phone:** the Web UI's Chat tab can answer it and, with *Web UI bot check control*, drive the window ([A bot check from the page](INTERFACE.md#a-bot-check-from-the-page)).
 * **Cookies:** the site's cookies go to the web tools for this run. A page that ends on another site is refused, and none of its cookies are read. On a Mac: [The Browser window on a Mac](MAC.md#the-browser-window-on-a-mac).

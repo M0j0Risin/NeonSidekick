@@ -1541,7 +1541,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("Web search method", SettingsMenu.FieldName(SettingsField.WebSearchMethod));
         Assert.Equal("metasearch", SettingsMenu.FieldValue(SettingsField.WebSearchMethod, data, _settings.ProfileDirectory));
         Assert.Equal("searxng", SettingsMenu.FieldValue(SettingsField.WebSearchMethod, new AppSettingsData { WebSearchMethod = "searxng" }, _settings.ProfileDirectory));
-        Assert.Equal("duckduckgo [#9A8BB8]built-in DuckDuckGo scrape, no setup[/]", SettingsMenu.SearchMethodLabel("duckduckgo"));
+        Assert.Equal("metasearch [#9A8BB8]built-in SearXNG port, no setup[/]", SettingsMenu.SearchMethodLabel("metasearch"));
         Assert.Equal("searxng    [#9A8BB8]external SearXNG instance at Web SearXNG URL[/]", SettingsMenu.SearchMethodLabel("searxng"));
         foreach (var f in ToolsMenuTests.TabFields(ToolsText.GitTabTitle))
         {
@@ -4386,7 +4386,7 @@ public partial class SettingsMenuTests : IDisposable
     {
         Down(47);
         Push(Keys.Enter);                           // the picker opens on metasearch (the first row)
-        Push(Keys.Down, Keys.Down, Keys.Enter);     // searxng
+        Push(Keys.Down, Keys.Enter);                // searxng, the second row since the DuckDuckGo scrape went (2026-11-07)
         Push(Keys.Escape);
 
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
@@ -4394,7 +4394,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("searxng", _settings.Current.WebSearchMethod);
         Assert.Contains(Breadcrumb("Web search method"), Output);
         Assert.Contains("  · Web search method: searxng", Output);
-        Assert.Contains("built-in DuckDuckGo scrape, no setup", Output);
+        Assert.Contains("built-in SearXNG port, no setup", Output);
         Assert.Contains("external SearXNG instance at Web SearXNG URL", Output);
         Assert.Equal(0, _synth.ListCalls);
     }

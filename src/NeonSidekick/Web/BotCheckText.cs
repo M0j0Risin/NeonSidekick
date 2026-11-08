@@ -20,10 +20,9 @@ public static class BotCheckText
     /// <summary>The waiting pane's hint.</summary>
     public const string WaitHint = "Enter / Esc = give up";
 
-    /// <summary>What the tool was doing, for the pane: <c>reading</c>, <c>searching</c>, <c>downloading</c>, <c>printing</c>.</summary>
+    /// <summary>What the tool was doing, for the pane: <c>reading</c>, <c>downloading</c>, <c>printing</c> (<c>searching</c> went with the DuckDuckGo scrape, 2026-11-07).</summary>
     public static string Doing(BotCheckUse use) => use switch
     {
-        BotCheckUse.Search => "searching",
         BotCheckUse.Download => "downloading",
         BotCheckUse.Pdf => "printing",
         _ => "reading",

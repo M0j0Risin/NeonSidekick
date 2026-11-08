@@ -15,8 +15,6 @@ public class HtmlTokenizerTests
         Assert.Equal(HtmlTokenKind.Open, tokens[0].Kind);
         Assert.Equal("p", tokens[0].Name);
         Assert.Equal("a b", tokens[0].Attribute("class"));
-        Assert.True(tokens[0].HasClass("b"));
-        Assert.False(tokens[0].HasClass("ab"));
         Assert.False(tokens[0].SelfClosing);
         Assert.Equal(HtmlTokenKind.Text, tokens[1].Kind);
         Assert.Equal("Fish & chips", tokens[1].Text);

@@ -103,19 +103,20 @@ public class WebFetcherTests
     public async Task ARedirect_KeepsTheFetchsOwnReferer_AndFoldsTheSiteOverTheChain()
     {
         // Code review, 2026-10-11: each hop named the hop before it as its Referer and judged the site afresh from there.
+        var resultsPage = new Uri("https://search.example/");
         var seen = new List<HttpRequestMessage>();
         HttpResponseMessage Moved(string to) => new(HttpStatusCode.MovedPermanently) { Headers = { Location = new Uri(to) } };
         _http.Map("http://example.com/page", (r, _) => { seen.Add(r); return Task.FromResult(Moved("https://www.example.com/page")); });
         _http.Map("https://example.com/typed", (r, _) => { seen.Add(r); return Task.FromResult(Moved("https://www.example.com/page")); });
         _http.Map("https://www.example.com/page", (r, _) => { seen.Add(r); return Task.FromResult(Html(HttpStatusCode.OK, Article)); });
 
-        await Fetcher().FetchAsync(new Uri("http://example.com/page"), Options() with { Referer = DuckDuckGoSearch.Origin }, CancellationToken.None);
+        await Fetcher().FetchAsync(new Uri("http://example.com/page"), Options() with { Referer = resultsPage }, CancellationToken.None);
         await Fetcher().FetchAsync(new Uri("https://example.com/typed"), Options(), CancellationToken.None);
         await Fetcher().FetchAsync(new Uri("https://example.com/typed"), Options() with { Referer = new Uri("https://example.com/from#frag") }, CancellationToken.None);
 
         // A click from the results page: none to the plain-http hop (a downgrade), the results page's origin after; cross-site throughout.
         Assert.False(seen[0].Headers.Contains("Referer"));
-        Assert.Equal(DuckDuckGoSearch.Origin.AbsoluteUri, seen[1].Headers.GetValues("Referer").Single());
+        Assert.Equal(resultsPage.AbsoluteUri, seen[1].Headers.GetValues("Referer").Single());
         Assert.All(seen.Take(2), r => Assert.Equal("cross-site", r.Headers.GetValues("Sec-Fetch-Site").Single()));
 
         // A typed address stays typed, redirected or not.

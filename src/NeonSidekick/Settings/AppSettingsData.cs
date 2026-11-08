@@ -3060,7 +3060,7 @@ public sealed class AppSettingsData
     /// What a bot check the web tools cannot get past does (2026-10-13, the user's ask and name): one of
     /// <see cref="Web.BotcheckWindow.Names"/> — <c>ask</c> (the default: the pane asks before the Browser window opens on it, the user
     /// solves it there, and the page and its cookies come back to the tool), <c>automatic</c> (the window opens without asking) or
-    /// <c>disabled</c> (never; the tool reports the refusal). Read by <c>web_fetch</c>, <c>web_search</c>'s DuckDuckGo,
+    /// <c>disabled</c> (never; the tool reports the refusal). Read by <c>web_fetch</c> (and <c>web_search</c>'s DuckDuckGo scrape until it went, 2026-11-07),
     /// <c>download_file</c> and <c>convert_to_pdf</c>; under every <see cref="WebBrowserMode"/>. Headless, and off Windows, never opens
     /// it. Anything else reads as <see cref="Web.BotcheckWindow.Default"/>. No variable.
     /// </summary>
@@ -3116,9 +3116,9 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// Which engine <c>web_search</c> asks: one of <see cref="Web.SearchMethod.Names"/> —
-    /// <c>metasearch</c> (built in, asking several engines), <c>duckduckgo</c> (the built-in scrape) or <c>searxng</c> (the instance
-    /// <see cref="WebSearxngUrl"/> names; the metasearch until it holds an http(s) URL). Anything else reads as
-    /// <see cref="Web.SearchMethod.Default"/>. No variable.
+    /// <c>metasearch</c> (built in, asking several engines) or <c>searxng</c> (the instance <see cref="WebSearxngUrl"/> names; the
+    /// metasearch until it holds an http(s) URL). <c>duckduckgo</c>, the built-in scrape until 2026-11-07, reads as <c>metasearch</c>
+    /// (<see cref="Web.SearchMethod.Retired"/>); anything else as <see cref="Web.SearchMethod.Default"/>, with a warning. No variable.
     /// </summary>
     public string WebSearchMethod { get; set; } = Web.SearchMethod.Default;
 

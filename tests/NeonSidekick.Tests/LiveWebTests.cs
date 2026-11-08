@@ -69,21 +69,6 @@ public class LiveWebTests
     }
 
     [LiveWebFact]
-    public async Task Search_DuckDuckGo_OverTheRealClient()
-    {
-        var outcome = await Web().DuckDuckGo.SearchAsync("example domain reserved iana", 3, new FetchOptions(FetchEngine.HttpClient, "", NetworkReach.Internet), CancellationToken.None);
-
-        // A refusal is the endpoint's rate limit, not a bug: the test reports it and stops rather than failing.
-        // So is an OK page with no hits (2026-11-04, the flake open since 2026-10-23, failed 2 of 3 alone, on a third of the time a page with hits takes). This test can't tell that from a parser gone wrong, so DuckDuckGoSearchTests holds the parsing on a saved page.
-        Assert.True(outcome.Ok || outcome.Error.Contains("refused the search", StringComparison.Ordinal), outcome.Error);
-        if (outcome is { Ok: true, Results.Count: > 0 })
-        {
-            Assert.InRange(outcome.Results.Count, 1, 3);
-            Assert.All(outcome.Results, r => Assert.StartsWith("http", r.Url));
-        }
-    }
-
-    [LiveWebFact]
     public async Task Search_Metasearch_OverTheRealClient()
     {
         var outcome = await Web().MetaSearch.For(new NeonSidekick.Settings.AppSettingsData()).SearchAsync("example domain reserved iana", 3, new FetchOptions(FetchEngine.HttpClient, "", NetworkReach.Internet), CancellationToken.None);

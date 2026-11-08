@@ -5,7 +5,7 @@ namespace NeonSidekick.Web;
 /// <summary>
 /// Everything the two web tools share, built once per app (the screen and headless hand the same
 /// one to <c>ChatScreen.WebTools</c>): the client, the fetcher over it and the headless browser,
-/// the page cache, and the built-in DuckDuckGo engine with its pacing. A SearXNG engine is made per
+/// the page cache, and the built-in metasearch with its pacing. A SearXNG engine is made per
 /// call from the setting, so a URL typed in <c>/settings</c> applies at the next search. Tests build
 /// one over a stub client and a fake browser.
 /// </summary>
@@ -22,7 +22,6 @@ public sealed class WebAccess
         Time = time ?? throw new ArgumentNullException(nameof(time));
         Fetcher = new WebFetcher(http, browser, resolve, cookies, time) { HostInterval = hostInterval };
         Pages = new PageCache(time);
-        DuckDuckGo = new DuckDuckGoSearch(Fetcher, time);
         MetaSearch = new BuiltInMetaSearch(http, time);
     }
 
@@ -39,10 +38,6 @@ public sealed class WebAccess
     public WebFetcher Fetcher { get; }
     public PageCache Pages { get; }
 
-    /// <summary>The hits <c>web_search</c> listed and the results page each was on, for <c>web_fetch</c>'s <c>Referer</c> (2026-10-11).</summary>
-    public ResultReferers Referers { get; } = new();
-    public DuckDuckGoSearch DuckDuckGo { get; }
-
     /// <summary>The built-in metasearch: one for the app, as it remembers which engines are resting.</summary>
     public BuiltInMetaSearch MetaSearch { get; }
 
@@ -52,15 +47,14 @@ public sealed class WebAccess
     /// <summary>
     /// The engine the settings name: SearXNG when <see cref="AppSettingsData.WebSearchMethod"/> is
     /// <c>searxng</c> AND <see cref="AppSettingsData.WebSearxngUrl"/> is an http(s) URL; a <c>searxng</c> pick with no usable URL falls
-    /// back quietly to <see cref="MetaSearch"/> (the 🛠️ header names the engine that ran). Under <c>duckduckgo</c> the URL is ignored,
-    /// so it keeps its value between switches, and likewise under <c>metasearch</c>, which asks <see cref="MetaSearch"/>.
+    /// back quietly to <see cref="MetaSearch"/> (the 🛠️ header names the engine that ran). Under <c>metasearch</c>, which asks
+    /// <see cref="MetaSearch"/>, the URL is ignored, so it keeps its value between switches.
     /// </summary>
     public ISearchEngine Engine(AppSettingsData effective)
     {
         ArgumentNullException.ThrowIfNull(effective);
         return SearchMethod.Resolve(effective) switch
         {
-            SearchProvider.DuckDuckGo => DuckDuckGo,
             SearchProvider.Searxng when SearxngBase(effective) is { } url => new SearxngSearch(Http, url),
             _ => MetaSearch.For(effective),
         };

@@ -22,7 +22,6 @@ public sealed class BotCheckTests : IDisposable
     private const string Article = "<html><head><title>Example Domain</title></head><body><h1>Example Domain</h1><p>This domain is for use in illustrative examples in documents.</p></body></html>";
     private const string Cloudflare = "<html><head><title>Just a moment...</title></head><body><div id=\"cf-chl-widget\">Checking your browser before accessing the site.</div><script src=\"/cdn-cgi/challenge-platform/h/b/orchestrate/jsch/v1\"></script></body></html>";
     private const string DuckAnomaly = "<html><body><div class=\"anomaly-modal__title\">Unfortunately, bots use DuckDuckGo too.</div><form id=\"challenge-form\"></form></body></html>";
-    private const string DuckResults = "<html><body><div class=\"result\"><a class=\"result__a\" href=\"https://example.com/\">Example Domain</a><a class=\"result__snippet\">For use in examples.</a></div></body></html>";
 
     private readonly StubHttpMessageHandler _http = new();
     private readonly FakeHeadlessBrowser _browser = new();
@@ -165,6 +164,9 @@ public sealed class BotCheckTests : IDisposable
     {
         Assert.True(BotCheck.StillGated(Cloudflare, HtmlToMarkdown.Convert(Cloudflare, new Uri("https://example.com/")).Markdown));
         Assert.True(BotCheck.StillGated(DuckAnomaly, "Unfortunately, bots use DuckDuckGo too."));
+        Assert.True(BotCheck.LooksLikeDuckDuckGoRefusal(DuckAnomaly));   // the scrape's test, kept for web_fetch (2026-11-07)
+        Assert.True(BotCheck.LooksLikeDuckDuckGoRefusal("<form id=\"challenge-form\">"));
+        Assert.False(BotCheck.LooksLikeDuckDuckGoRefusal(Article));
         Assert.False(BotCheck.StillGated(Article, "Example Domain"));
         string longPage = "<p>" + new string('x', 2000) + " a captcha and bots use DuckDuckGo too</p>";
         Assert.False(BotCheck.StillGated(longPage, new string('x', 2000)));   // a long page that only mentions them
@@ -181,8 +183,8 @@ public sealed class BotCheckTests : IDisposable
     {
         var request = new BotCheckRequest(new Uri("https://example.com/page"), BotCheckUse.Fetch, "HTTP 403 Forbidden");
         Assert.Equal("example.com wants a person to pass a bot check (HTTP 403 Forbidden) before reading https://example.com/page. Open it in the Browser window to solve it?", BotCheckText.AskCaption(request));
-        Assert.Equal("example.com wants a person to pass a bot check before searching https://example.com/page. Open it in the Browser window to solve it?", BotCheckText.AskCaption(request with { Use = BotCheckUse.Search, Why = "" }));
-        Assert.Equal(["reading", "searching", "downloading", "printing"], new[] { BotCheckUse.Fetch, BotCheckUse.Search, BotCheckUse.Download, BotCheckUse.Pdf }.Select(BotCheckText.Doing));
+        Assert.Equal("example.com wants a person to pass a bot check before downloading https://example.com/page. Open it in the Browser window to solve it?", BotCheckText.AskCaption(request with { Use = BotCheckUse.Download, Why = "" }));
+        Assert.Equal(["reading", "downloading", "printing"], new[] { BotCheckUse.Fetch, BotCheckUse.Download, BotCheckUse.Pdf }.Select(BotCheckText.Doing));   // searching went with the DuckDuckGo scrape (2026-11-07)
         Assert.Equal("Solve the check for example.com in the Browser window; it closes by itself once the page is through. Esc gives up.", BotCheckText.WaitCaption(request));
 
         string url = "https://example.com/";
@@ -613,41 +615,6 @@ public sealed class BotCheckTests : IDisposable
         string limited = await new WebFetchTool(_web, () => _settings, Solve).FetchAsync("https://example.com/limited", null, CancellationToken.None);
         Assert.Contains("the site asks to wait", limited, StringComparison.Ordinal);
         Assert.Empty(_asked);
-    }
-
-    [Fact]
-    public async Task WebSearch_DuckDuckGosCheck_IsShown_AndItsResultsPageRead()
-    {
-        _http.Map("https://html.duckduckgo.com/html/", HttpStatusCode.OK, DuckAnomaly, "text/html");
-        _answer = r => FakeBrowserWindow.Cleared(r, DuckResults);
-        var search = new WebSearchTool(_web, () => _settings, Solve);
-
-        string result = await search.SearchAsync("example", null, CancellationToken.None);
-
-        Assert.Equal("Searched \"example\" (1 result, DuckDuckGo):\n1. Example Domain — https://example.com/\n   For use in examples.", result);
-        var asked = Assert.Single(_asked);
-        Assert.Equal(BotCheckUse.Search, asked.Use);
-        Assert.Equal(DuckDuckGoSearch.QueryUrl("example"), asked.Url);
-        Assert.Equal(DuckDuckGoSearch.BotCheckDetail, asked.Why);
-        Assert.Equal("cf_clearance=solved", _jar.GetCookieHeader(new Uri("https://html.duckduckgo.com/html/")));
-
-        _answer = r => BotCheckResult.Ended(BotCheckEnd.GaveUp, r.Url.AbsoluteUri);
-        _time.Advance(DuckDuckGoSearch.MinInterval);   // its pace, on the test's clock
-        Assert.Equal("Error: DuckDuckGo refused the search (a bot check; the user gave up on it in the Browser window); try again in a minute", await search.SearchAsync("other", null, CancellationToken.None));
-    }
-
-    /// <summary>The search's hand-off judges where the window ended as the other tools' do (2026-10-20, the code review: it judged nothing).</summary>
-    [Fact]
-    public async Task WebSearch_AnEndingOnAnotherSite_IsRefused_AndItsCookiesNotTaken()
-    {
-        _http.Map("https://html.duckduckgo.com/html/", HttpStatusCode.OK, DuckAnomaly, "text/html");
-        _answer = r => FakeBrowserWindow.Cleared(r, DuckResults) with { FinalUrl = "https://example.com/" };
-        var search = new WebSearchTool(_web, () => _settings, Solve);
-
-        string result = await search.SearchAsync("example", null, CancellationToken.None);
-
-        Assert.Contains(BotCheckText.LeftTheSite("https://example.com/"), result, StringComparison.Ordinal);
-        Assert.Equal("", _jar.GetCookieHeader(new Uri("https://html.duckduckgo.com/html/")));
     }
 
     [Fact]

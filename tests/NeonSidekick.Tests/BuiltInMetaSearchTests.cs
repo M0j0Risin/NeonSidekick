@@ -285,12 +285,11 @@ public class BuiltInMetaSearchTests
     }
 
     [Fact]
-    public void TheRealEngine_NamesItself_AndSendsNoReferer()
+    public void TheRealEngine_NamesItself()
     {
         var search = new BuiltInMetaSearch(new HttpClient(_http), _time);
 
         Assert.Equal(WebText.MetaSearchName, search.For(new AppSettingsData()).Name);
-        Assert.Null(search.For(new AppSettingsData()).ResultReferer);
     }
 
     [Fact]
@@ -546,9 +545,8 @@ public class BuiltInMetaSearchTests
 
         Assert.NotSame(first, second);
         Assert.Equal(WebText.MetaSearchName, first.Name);
-        Assert.Null(first.ResultReferer);
         Assert.Null(WebAccess.SearxngBase(settings));
-        Assert.Same(web.DuckDuckGo, web.Engine(new AppSettingsData { WebSearchMethod = "duckduckgo" }));
+        Assert.Equal(WebText.MetaSearchName, web.Engine(new AppSettingsData { WebSearchMethod = "duckduckgo" }).Name);   // the scrape's word, retired (2026-11-07)
         Assert.Equal(WebText.MetaSearchName, web.Engine(new AppSettingsData()).Name);   // the default since 2026-11-06
 
         await first.SearchAsync("Rust", 5, Options, CancellationToken.None);

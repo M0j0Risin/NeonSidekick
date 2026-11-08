@@ -9,18 +9,18 @@ public class SearchMethodTests
     [Fact]
     public void Names_ArePinned_InMenuOrder()
     {
-        Assert.Equal(new[] { "metasearch", "duckduckgo", "searxng" }, SearchMethod.Names);
+        Assert.Equal(new[] { "metasearch", "searxng" }, SearchMethod.Names);   // duckduckgo went 2026-11-07
         Assert.Equal("metasearch", SearchMethod.Default);   // the user's call, 2026-11-06
         Assert.Equal(SearchMethod.Default, new AppSettingsData().WebSearchMethod);
     }
 
     [Theory]
-    [InlineData("duckduckgo", SearchProvider.DuckDuckGo)]
     [InlineData("searxng", SearchProvider.Searxng)]
     [InlineData("metasearch", SearchProvider.MetaSearch)]
     [InlineData(" MetaSearch ", SearchProvider.MetaSearch)]
     [InlineData("  SearXNG ", SearchProvider.Searxng)]
-    [InlineData("DuckDuckGo", SearchProvider.DuckDuckGo)]
+    [InlineData("duckduckgo", SearchProvider.MetaSearch)]   // the scrape's word, retired to the metasearch (2026-11-07)
+    [InlineData(" DuckDuckGo ", SearchProvider.MetaSearch)]
     public void TryParse_TrimsAndIgnoresCase(string text, SearchProvider expected)
     {
         Assert.True(SearchMethod.TryParse(text, out var provider));
@@ -32,10 +32,10 @@ public class SearchMethodTests
     [InlineData("")]
     [InlineData("google")]
     [InlineData("ddg")]
-    public void TryParse_RejectsAnythingElse_AsDuckDuckGo(string? text)
+    public void TryParse_RejectsAnythingElse_AsTheMetasearch(string? text)
     {
         Assert.False(SearchMethod.TryParse(text, out var provider));
-        Assert.Equal(SearchProvider.DuckDuckGo, provider);
+        Assert.Equal(SearchProvider.MetaSearch, provider);
     }
 
     [Fact]
@@ -48,7 +48,7 @@ public class SearchMethodTests
             Assert.NotEqual("", SearchMethod.Describe(name));
         }
 
-        Assert.Equal("built-in DuckDuckGo scrape, no setup", SearchMethod.Describe("duckduckgo"));
+        Assert.Equal("", SearchMethod.Describe("duckduckgo"));   // not offered
         Assert.Equal("external SearXNG instance at Web SearXNG URL", SearchMethod.Describe("searxng"));
         Assert.Equal("", SearchMethod.Describe("google"));
     }
@@ -56,6 +56,7 @@ public class SearchMethodTests
     [Fact]
     public void Resolve_MapsTheSavedMethod()
     {
+        Assert.Equal(SearchProvider.MetaSearch, SearchMethod.Resolve(new AppSettingsData { WebSearchMethod = "duckduckgo" }));   // quietly: a retired word, not an unknown one
         Assert.Equal(SearchProvider.Searxng, SearchMethod.Resolve(new AppSettingsData { WebSearchMethod = "searxng" }));
         Assert.Equal(SearchProvider.Searxng, SearchMethod.Resolve(new AppSettingsData { WebSearchMethod = "SearXNG" }));
         Assert.Equal(SearchProvider.MetaSearch, SearchMethod.Resolve(new AppSettingsData()));
@@ -77,6 +78,6 @@ public class SearchMethodTests
         }
 
         var warning = Assert.Single(warnings);
-        Assert.Contains("WebSearchMethod='google' is not one of metasearch, duckduckgo, searxng. Using metasearch.", warning.Message);
+        Assert.Contains("WebSearchMethod='google' is not one of metasearch, searxng. Using metasearch.", warning.Message);
     }
 }
