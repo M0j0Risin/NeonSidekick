@@ -16,6 +16,14 @@ public static partial class YouTubeIds
     private static readonly string[] Hosts = ["youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtube-nocookie.com", "www.youtube-nocookie.com"];
     private static readonly string[] PathKinds = ["shorts", "embed", "live", "v"];
 
+    /// <summary>
+    /// The prefixes of the playlists a bare id may name (2026-11-08, the review; checked against the Archive Team wiki's table of YouTube
+    /// ids): <c>PL</c> a user's list, <c>UU</c> a channel's uploads (with <c>UULV</c>, <c>UUMO</c>, <c>UUSH</c>), <c>UL</c>, <c>FL</c> and
+    /// <c>LL</c> favorites and likes, <c>OL</c> an album (<c>OLAK5uy_</c>), <c>PU</c>, <c>SP</c>, <c>EL</c> and <c>CL</c>. The ones it calls
+    /// broken, private or temporary are left out; a mix (<c>RD</c>) is never one (<see cref="IsMix"/>).
+    /// </summary>
+    private static readonly string[] PlaylistPrefixes = ["PL", "UU", "UL", "FL", "LL", "OL", "PU", "SP", "EL", "CL"];
+
     /// <summary>The video <paramref name="text"/> names, and the start a link gives (0 without one); false when it names none.</summary>
     public static bool TryParse(string? text, out string id, out double start)
     {
@@ -76,8 +84,8 @@ public static partial class YouTubeIds
     }
 
     /// <summary>
-    /// The public playlist <paramref name="text"/> names (2026-10-08, the user's ask): a bare playlist id (<see cref="VideoRequest.IsPlaylistId"/>),
-    /// a link with <c>list=</c> (<c>/playlist?list=</c>, <c>/watch?v=…&amp;list=…</c>, <c>youtu.be/…?list=…</c>), or a channel — its id
+    /// The public playlist <paramref name="text"/> names (2026-10-08, the user's ask): a bare playlist id with a known prefix
+    /// (<see cref="IsPlaylistPrefix"/>, 2026-11-08, the review: <c>lofi-hip-hop-radio</c> is words to search for, not a list), a link with <c>list=</c> (<c>/playlist?list=</c>, <c>/watch?v=…&amp;list=…</c>, <c>youtu.be/…?list=…</c>), or a channel — its id
     /// <c>UC…</c> or a <c>/channel/UC…</c> link — as its uploads list (<c>UU…</c>, <see cref="Uploads"/>). The entry is a link's
     /// <c>index=</c> (1-based there, 0-based here); without one, a watch link's video is where to start (<paramref name="videoId"/>),
     /// and the start its <c>t=</c>. False when it names no playlist, a plain video link among them — and a mix (<see cref="IsMix"/>,
@@ -110,10 +118,10 @@ public static partial class YouTubeIds
             return true;
         }
 
-        if (VideoRequest.IsPlaylistId(text))
+        if (VideoRequest.IsPlaylistId(text) && IsPlaylistPrefix(text))
         {
             list = text;
-            return !IsMix(text);
+            return true;
         }
 
         string link = text.Contains("://", StringComparison.Ordinal) ? text : "https://" + text;
@@ -161,6 +169,21 @@ public static partial class YouTubeIds
     /// watch, and the embedded player cannot load it as a list (the wait for its entry ran to the cap), so it is never played as one.
     /// </summary>
     public static bool IsMix(string? list) => list?.StartsWith("RD", StringComparison.Ordinal) == true;
+
+    /// <summary>
+    /// Whether <paramref name="id"/> starts as a playlist's id does (<see cref="PlaylistPrefixes"/>, 2026-11-08): a bare word of a playlist
+    /// id's shape is a list only then, and a list is saved only then, so every saved one plays again by its bare id.
+    /// </summary>
+    public static bool IsPlaylistPrefix(string? id) =>
+        id is { Length: > 2 } && PlaylistPrefixes.Any(p => id.StartsWith(p, StringComparison.Ordinal));
+
+    /// <summary>
+    /// Whether <paramref name="text"/> names a playlist (or a mix) and no video (2026-11-08, the review: one rule for the save, the removal
+    /// and the saved list's lookup): a list's id, a <c>/playlist?list=</c> or <c>watch?list=</c> link, a channel. A <c>watch?v=…&amp;list=…</c>
+    /// link names its video, so it is no list here.
+    /// </summary>
+    public static bool NamesPlaylistOnly(string? text) =>
+        !string.IsNullOrWhiteSpace(text) && !TryParse(text, out _, out _) && (TryParsePlaylist(text, out _, out _, out _, out _) || NamesMix(text));
 
     /// <summary>Whether <paramref name="text"/> names a mix: its id, or a link whose <c>list=</c> is one.</summary>
     public static bool NamesMix(string? text)

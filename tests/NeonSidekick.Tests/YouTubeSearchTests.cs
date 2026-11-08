@@ -52,6 +52,8 @@ public class YouTubeSearchTests
     [InlineData("https://music.youtube.com/playlist?list=OLAK5uy_abcdefghijklmnop", "OLAK5uy_abcdefghijklmnop", 0, null, 0)]
     [InlineData("UCSMOQeBJ2RAnuFungnQOxLg", "UUSMOQeBJ2RAnuFungnQOxLg", 0, null, 0)]
     [InlineData("https://www.youtube.com/channel/UCSMOQeBJ2RAnuFungnQOxLg/videos", "UUSMOQeBJ2RAnuFungnQOxLg", 0, null, 0)]
+    [InlineData("UUSMOQeBJ2RAnuFungnQOxLg", "UUSMOQeBJ2RAnuFungnQOxLg", 0, null, 0)]   // bare ids with known prefixes (2026-11-08)
+    [InlineData("OLAK5uy_abcdefghijklmnop", "OLAK5uy_abcdefghijklmnop", 0, null, 0)]
     public void TryParsePlaylist_ReadsTheListAndWhereToStart(string text, string list, int entry, string? video, double start)
     {
         Assert.True(YouTubeIds.TryParsePlaylist(text, out string parsed, out int at, out string? id, out double from));
@@ -68,10 +70,38 @@ public class YouTubeSearchTests
     [InlineData("https://example.com/playlist?list=PLabcdefghijklmnopq")]
     [InlineData("https://www.youtube.com/@Blender")]
     [InlineData("lofi beats")]
+    [InlineData("lofi-hip-hop-radio")]                                   // a long word: words to search for (2026-11-08, the review)
+    [InlineData("XYabcdefghijklmnopq")]                                  // a playlist id's shape, no known prefix
     [InlineData(null)]
     public void TryParsePlaylist_RefusesWhatNamesNoPlaylist(string? text)
     {
         Assert.False(YouTubeIds.TryParsePlaylist(text, out _, out _, out _, out _));
+    }
+
+    /// <summary>
+    /// One rule for what names a list and no video (2026-11-08, the review): a list's id or link, a channel, a mix; a <c>watch?v=</c> link
+    /// with a list names its video. Only a list with a known prefix, and no mix, is saved, so each plays again by its bare id.
+    /// </summary>
+    [Fact]
+    public void NamesPlaylistOnly_IsAListNamingNoVideo_AndCanSavePlaylist_NeedsAKnownPrefix()
+    {
+        const string List = "PLabcdefghijklmnopq";
+        Assert.True(YouTubeIds.NamesPlaylistOnly(List));
+        Assert.True(YouTubeIds.NamesPlaylistOnly("https://www.youtube.com/playlist?list=" + List));
+        Assert.True(YouTubeIds.NamesPlaylistOnly("https://www.youtube.com/watch?list=" + List + "&index=3"));
+        Assert.True(YouTubeIds.NamesPlaylistOnly("https://www.youtube.com/channel/UCSMOQeBJ2RAnuFungnQOxLg"));
+        Assert.True(YouTubeIds.NamesPlaylistOnly("RDdQw4w9WgXcQ"));
+        Assert.False(YouTubeIds.NamesPlaylistOnly("https://www.youtube.com/watch?v=aqz-KE-bpKQ&list=" + List));
+        Assert.False(YouTubeIds.NamesPlaylistOnly("aqz-KE-bpKQ"));
+        Assert.False(YouTubeIds.NamesPlaylistOnly("lofi-hip-hop-radio"));
+        Assert.False(YouTubeIds.NamesPlaylistOnly(""));
+
+        Assert.True(YouTubeLibrary.CanSavePlaylist(List));
+        Assert.True(YouTubeLibrary.CanSavePlaylist("UUSMOQeBJ2RAnuFungnQOxLg"));
+        Assert.False(YouTubeLibrary.CanSavePlaylist("RDabcdefghijklmnopq"));   // a mix
+        Assert.False(YouTubeLibrary.CanSavePlaylist("XYabcdefghijklmnopq"));   // a link may carry it; its bare id would never play again
+        Assert.True(YouTubeIds.TryParsePlaylist("https://www.youtube.com/playlist?list=XYabcdefghijklmnopq", out _, out _, out _, out _));
+        Assert.False(YouTubeLibrary.CanSavePlaylist("aqz-KE-bpKQ"));
     }
 
     [Fact]
@@ -437,11 +467,11 @@ public class YouTubeSearchTests
     }
 
     /// <summary>
-    /// A saved playlist's title (2026-11-08): oEmbed of its playlist page with no key (its thumbnail the first video's), then
+    /// A saved playlist's title (2026-11-08): oEmbed of its playlist page with no key (its thumbnail the list's thumbnail video), then
     /// playlists.list with the key only when oEmbed fails.
     /// </summary>
     [Fact]
-    public async Task LookupPlaylist_AsksOEmbedWithoutAKey_TakingTheFirstVideo_AndFallsBackToTheDataApi_OnlyWithOne()
+    public async Task LookupPlaylist_AsksOEmbedWithoutAKey_TakingTheThumbnailVideo_AndFallsBackToTheDataApi_OnlyWithOne()
     {
         const string List = "PLabcdefghijklmnopq";
         var keys = new List<string?>();
@@ -464,9 +494,13 @@ public class YouTubeSearchTests
         Assert.Null(await new YouTubeDataApi(new HttpClient(stub)).LookupPlaylistAsync(List, null, CancellationToken.None));   // no key: oEmbed's refusal is the end
         Assert.Null(await new YouTubeDataApi(new HttpClient(new StubHttpMessageHandler())).LookupPlaylistAsync(List, null, CancellationToken.None));   // no connection: null, not thrown
 
-        // A thumbnail that names no video leaves the first video unknown; no title is no answer.
-        Assert.Null(YouTubeDataApi.ParsePlaylistOEmbed(List, "{ \"title\": \"T\", \"thumbnail_url\": \"https://i.ytimg.com/vi/not-a-video-id/hqdefault.jpg\" }")!.FirstVideo);
-        Assert.Null(YouTubeDataApi.ParsePlaylistOEmbed(List, "{ \"title\": \"T\", \"thumbnail_url\": \"not a url\" }")!.FirstVideo);
+        // A thumbnail that names no video leaves the thumbnail video unknown; no title is no answer.
+        Assert.Null(YouTubeDataApi.ParsePlaylistOEmbed(List, "{ \"title\": \"T\", \"thumbnail_url\": \"https://i.ytimg.com/vi/not-a-video-id/hqdefault.jpg\" }")!.ThumbnailVideo);
+        Assert.Null(YouTubeDataApi.ParsePlaylistOEmbed(List, "{ \"title\": \"T\", \"thumbnail_url\": \"not a url\" }")!.ThumbnailVideo);
+        // One reader for both answers (2026-11-08, the review): a video's oEmbed and a playlist's read the same title and channel.
+        Assert.Equal(new YouTubePlaylistInfo(List, "T", "A", "aqz-KE-bpKQ"), YouTubeDataApi.ParsePlaylistOEmbed(List, "{ \"title\": \"T\", \"author_name\": \"A\", \"thumbnail_url\": \"https://i.ytimg.com/vi/aqz-KE-bpKQ/hqdefault.jpg\" }"));
+        Assert.Equal(new YouTubeVideoInfo("aqz-KE-bpKQ", "T", "A"), YouTubeDataApi.ParseOEmbed("aqz-KE-bpKQ", "{ \"title\": \"T\", \"author_name\": \"A\", \"thumbnail_url\": \"x\" }"));
+        Assert.Null(YouTubeDataApi.ParseOEmbed("aqz-KE-bpKQ", "[1]"));
         Assert.Null(YouTubeDataApi.ParsePlaylistOEmbed(List, "{ \"author_name\": \"A\" }"));
         Assert.Null(YouTubeDataApi.ParsePlaylistOEmbed(List, "not json"));
     }

@@ -1028,7 +1028,8 @@ public static class WebUiText
             Saved: "★ Saved",
             Looking: YouTube.YouTubeText.LookingUpTitles,
             SaveList: "☆ Save the playlist",
-            ListSaved: "★ Playlist saved"),
+            ListSaved: "★ Playlist saved",
+            PlaylistMark: YouTube.YouTubeText.PlaylistMark),
     };
 
     /// <summary>A saved list's play from a page whose stream isn't open (later on 2026-10-16): it reconnects by itself.</summary>
@@ -1059,7 +1060,8 @@ public static class WebUiText
     public const string SavedSaveListFlash = Glyph + "YouTube tab: saved the playing playlist";
 
     /// <summary>A saved list's change from the page (audit, no titles): <paramref name="what"/> is <c>played</c>, <c>removed</c>, <c>cleared</c>, <c>moved</c> or <c>saved</c>.</summary>
-    public static string SavedLogLine(string what, IPAddress? remote) => "Web UI: the YouTube tab " + what + " " + (what == "cleared" ? "the saved videos" : "a saved video") + " from " + Where(remote) + ".";
+    public static string SavedLogLine(string what, IPAddress? remote, bool playlist = false) =>
+        "Web UI: the YouTube tab " + what + " " + (what == "cleared" ? "the saved videos" : playlist ? "a saved playlist" : "a saved video") + " from " + Where(remote) + ".";
 
     /// <summary><c>/youtube list</c> typed in the page's Chat (later on 2026-10-16), or the bare <c>/youtube</c> (2026-10-18): the YouTube tab's saved list does it.</summary>
     public const string UseYouTubePage = "The saved videos (/youtube, /youtube list) are on the YouTube tab here: its saved list plays, moves and removes them.";

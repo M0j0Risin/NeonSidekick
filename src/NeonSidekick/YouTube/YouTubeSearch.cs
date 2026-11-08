@@ -82,10 +82,11 @@ public sealed record YouTubeVideoInfo(string Id, string Title, string Author, do
 public delegate Task<YouTubeVideoInfo?> YouTubeLookup(string videoId, CancellationToken cancellationToken);
 
 /// <summary>
-/// What a lookup found of one playlist (2026-11-08, saved playlists): its title and channel, its first video when the answer names one
-/// (oEmbed's thumbnail is that video's), and how many entries it holds when known (0 otherwise).
+/// What a lookup found of one playlist (2026-11-08, saved playlists): its title and channel, its thumbnail video when the answer names one
+/// (oEmbed's thumbnail: the list's thumbnail video, the owner's pick, not always its first entry), and how many entries it holds when
+/// known (0 otherwise).
 /// </summary>
-public sealed record YouTubePlaylistInfo(string Id, string Title, string Author, string? FirstVideo = null, int Count = 0);
+public sealed record YouTubePlaylistInfo(string Id, string Title, string Author, string? ThumbnailVideo = null, int Count = 0);
 
 /// <summary>A playlist's title looked up by its id (2026-11-08): <see cref="IYouTubeSearch.LookupPlaylistAsync"/> with the key in force; null when none was found.</summary>
 public delegate Task<YouTubePlaylistInfo?> YouTubePlaylistLookup(string playlistId, CancellationToken cancellationToken);
@@ -276,7 +277,7 @@ public sealed partial class YouTubeDataApi : IYouTubeSearch
 
     /// <summary>
     /// YouTube's oEmbed address for <paramref name="playlistId"/>'s playlist page (2026-11-08, checked live that day): no key; its answer
-    /// names the list's title and channel, and its thumbnail is the first video's. Pinned.
+    /// names the list's title and channel, and its thumbnail is the list's thumbnail video, the owner's pick. Pinned.
     /// </summary>
     public static Uri PlaylistOEmbedUrl(string playlistId) =>
         new("https://www.youtube.com/oembed?format=json&url=" + Uri.EscapeDataString(YouTubeIds.PlaylistUrl(playlistId)));
@@ -338,43 +339,40 @@ public sealed partial class YouTubeDataApi : IYouTubeSearch
     }
 
     /// <summary>
-    /// A playlist's oEmbed answer (2026-11-08): its <c>title</c> and <c>author_name</c>, and the first video from its
+    /// A playlist's oEmbed answer (2026-11-08): its <c>title</c> and <c>author_name</c>, and the list's thumbnail video from its
     /// <c>thumbnail_url</c> (<c>…/vi/&lt;id&gt;/…</c>, kept only when it is a video id); null without a title. Pure; pinned.
     /// </summary>
     public static YouTubePlaylistInfo? ParsePlaylistOEmbed(string playlistId, string json)
     {
-        try
-        {
-            using var doc = JsonDocument.Parse(json);
-            if (doc.RootElement.ValueKind != JsonValueKind.Object || Text(doc.RootElement, "title") is not { Length: > 0 } title)
-            {
-                return null;
-            }
-
-            string? first = null;
-            if (Uri.TryCreate(Text(doc.RootElement, "thumbnail_url"), UriKind.Absolute, out var thumb))
-            {
-                string[] segments = thumb.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
-                int vi = Array.IndexOf(segments, "vi");
-                first = vi >= 0 && vi + 1 < segments.Length && Viewer.VideoRequest.IsVideoId(segments[vi + 1]) ? segments[vi + 1] : null;
-            }
-
-            return new YouTubePlaylistInfo(playlistId, title, Text(doc.RootElement, "author_name"), first);
-        }
-        catch (JsonException)
+        if (ReadOEmbed(json) is not (var title, var author, var thumbnail))
         {
             return null;
         }
+
+        string? video = null;
+        if (Uri.TryCreate(thumbnail, UriKind.Absolute, out var thumb))
+        {
+            string[] segments = thumb.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            int vi = Array.IndexOf(segments, "vi");
+            video = vi >= 0 && vi + 1 < segments.Length && Viewer.VideoRequest.IsVideoId(segments[vi + 1]) ? segments[vi + 1] : null;
+        }
+
+        return new YouTubePlaylistInfo(playlistId, title, author, video);
     }
 
     /// <summary>An oEmbed answer's <c>title</c> and <c>author_name</c>; null without a title. Pure; pinned.</summary>
-    public static YouTubeVideoInfo? ParseOEmbed(string videoId, string json)
+    public static YouTubeVideoInfo? ParseOEmbed(string videoId, string json) =>
+        ReadOEmbed(json) is (var title, var author, _) ? new YouTubeVideoInfo(videoId, title, author) : null;
+
+    // An oEmbed answer's title, author and thumbnail address, a video's and a playlist's alike (2026-11-08, the review: one reader); null
+    // without a title or for what is no JSON object.
+    private static (string Title, string Author, string Thumbnail)? ReadOEmbed(string json)
     {
         try
         {
             using var doc = JsonDocument.Parse(json);
             return doc.RootElement.ValueKind == JsonValueKind.Object && Text(doc.RootElement, "title") is { Length: > 0 } title
-                ? new YouTubeVideoInfo(videoId, title, Text(doc.RootElement, "author_name"))
+                ? (title, Text(doc.RootElement, "author_name"), Text(doc.RootElement, "thumbnail_url"))
                 : null;
         }
         catch (JsonException)

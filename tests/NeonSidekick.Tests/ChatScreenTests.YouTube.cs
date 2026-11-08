@@ -459,11 +459,57 @@ public partial class ChatScreenTests
         var library = new YouTubeLibrary(_settings.ProfileDirectory);
         Assert.Equal(["UUSMOQeBJ2RAnuFungnQOxLg", "jNQXAC9IVRw", "PLabcdefghijklmnopq"], library.List().Select(v => v.Id));
         var uploads = library.Find("UUSMOQeBJ2RAnuFungnQOxLg")!;
-        Assert.Equal((true, "Blender", 689), (uploads.Playlist, uploads.Title, uploads.Count));
+        Assert.Equal((true, "Blender", (string?)null, 689), (uploads.Playlist, uploads.Title, uploads.Author, uploads.Count));   // the channel's name once (2026-11-08, the review)
         var list = library.Find("PLabcdefghijklmnopq")!;
         Assert.Equal((true, "Open Movies & Shorts", "Blender", 3, 0, (string?)"aqz-KE-bpKQ"), (list.Playlist, list.Title, list.Author, list.Count, list.Entry, list.EntryVideo));
         Assert.Contains("Saved the playlist \"Open Movies & Shorts\"; it resumes at the entry and place it is left at.", output);
         Assert.Empty(_videoPlayer!.Plays);
+    }
+
+    /// <summary>
+    /// l on a list playlists.list doesn't know (2026-11-08, the review): no count saved (only the entries read; the player counts it at the
+    /// first play), at its first listed entry's own place and video.
+    /// </summary>
+    [Fact]
+    public async Task YouTube_ThePlaylistPickersL_OnAnUnlistedList_SavesNoCount_AtTheFirstListedEntry()
+    {
+        _http.Map("https://www.googleapis.com/youtube/v3/playlistItems?", (request, _) => Task.FromResult(Fakes.StubHttpMessageHandler.Json(HttpStatusCode.OK,
+            YouTubeFixtureFile(request.RequestUri!.Query.Contains("PLunlistedunlistedu", StringComparison.Ordinal) || request.RequestUri.Query.Contains("pageToken=", StringComparison.Ordinal)
+                ? "playlistItems-2.json" : "playlistItems-1.json"))));   // the unlisted list's one entry sits at position 2
+        YouTubeFixture();
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        PushLine("/youtube playlist https://www.youtube.com/playlist?list=PLunlistedunlistedu");
+        _console.Input.PushKey(Keys.Char('l'));
+        _console.Input.PushKey(Keys.Escape);
+        PushLine("/exit");
+
+        await RunAsync();
+
+        var list = Assert.Single(new YouTubeLibrary(_settings.ProfileDirectory).List());
+        Assert.Equal(("PLunlistedunlistedu", 0, 2, (string?)"dQw4w9WgXcQ"), (list.Id, list.Count, list.Entry, list.EntryVideo));
+    }
+
+    /// <summary>s on a hit whose list can't be saved (2026-11-08, the review): said so, never a write failure, nothing written.</summary>
+    [Fact]
+    public async Task YouTube_ThePickersSaveKey_OnAnUnsavableList_SaysSo()
+    {
+        _http.Map("https://www.googleapis.com/youtube/v3/search?part=snippet&type=playlist", HttpStatusCode.OK,
+            YouTubeFixtureFile("search-playlists.json").Replace("PLzyxwvutsrqponmlk", "XYzyxwvutsrqponmlk", StringComparison.Ordinal));
+        YouTubeFixture();
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        PushLine("/youtube search --playlists lofi");
+        _console.Input.PushKey(Keys.Down);
+        _console.Input.PushKey(Keys.Char('s'));
+        _console.Input.PushKey(Keys.Escape);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(YouTubeText.CannotSaveHit, output);
+        Assert.DoesNotContain(YouTubeText.SaveFailed, output);
+        Assert.Empty(new YouTubeLibrary(_settings.ProfileDirectory).List());
     }
 
     [Fact]

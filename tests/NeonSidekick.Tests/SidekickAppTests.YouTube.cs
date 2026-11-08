@@ -50,7 +50,7 @@ public partial class SidekickAppTests
         Assert.Contains("1. ▤ Open Movies & Shorts — Blender · not played yet · playlist id PLabcdefghijklmnopq", output);
         Assert.Contains("[error] " + YouTubeText.NoPlaylistToSave, output);   // headless leads a refusal so
         var saved = Assert.Single(new YouTubeLibrary(_settings.ProfileDirectory).List());
-        Assert.Equal((true, (string?)"aqz-KE-bpKQ"), (saved.Playlist, saved.EntryVideo));
+        Assert.Equal((true, (string?)null, (string?)"aqz-KE-bpKQ"), (saved.Playlist, saved.EntryVideo, saved.Thumbnail));   // the list's thumbnail, never played from
 
         output = await Headless("/youtube unsave " + Link + "\n");
         Assert.Contains("Removed the playlist \"Open Movies & Shorts\" from the saved videos.", output);

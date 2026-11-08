@@ -13,6 +13,7 @@ public sealed partial class YouTubeLibraryTests
 {
     private const string List = "PLabcdefghijklmnopq";
     private const string Song = "dQw4w9WgXcQ";
+    private const string Other = "PLzyxwvutsrqponmlkj";
 
     private void Entry(VideoState state, string video, int? entry, double position, int? count = 3, double duration = 300) =>
         _player.Report(new VideoSnapshot(state, video, "A video's title", "A video's channel", position, duration, PlaylistId: List, PlaylistEntry: entry, PlaylistCount: count));
@@ -59,7 +60,7 @@ public sealed partial class YouTubeLibraryTests
     }
 
     [Fact]
-    public void Resolve_ReadsAPlaylistsId_LinkOrNumber_AWatchLinkMatchingItsVideoFirst()
+    public void Resolve_ReadsAPlaylistsId_LinkOrNumber_AWatchLinkMatchingOnlyItsVideo()
     {
         var library = Library();
         library.Add(Bunny);
@@ -69,7 +70,7 @@ public sealed partial class YouTubeLibraryTests
         Assert.Equal(List, library.Resolve("https://www.youtube.com/playlist?list=" + List)!.Id);
         Assert.Equal(List, library.Resolve("2")!.Id);
         Assert.Equal(Bunny, library.Resolve("https://www.youtube.com/watch?v=" + Bunny + "&list=" + List)!.Id);   // the video first
-        Assert.Equal(List, library.Resolve("https://www.youtube.com/watch?v=" + Zoo + "&list=" + List)!.Id);     // then the list
+        Assert.Null(library.Resolve("https://www.youtube.com/watch?v=" + Zoo + "&list=" + List));                // names Zoo, not saved: never the list (2026-11-08, the review)
         Assert.Null(library.Resolve("PLzzzzzzzzzzzzzzzzz"));
     }
 
@@ -77,7 +78,7 @@ public sealed partial class YouTubeLibraryTests
     public void ResumePlaylist_IsTheEntryItsVideoAndThePlaceLessThreeSeconds_HeldBelowTheCount()
     {
         var library = Library();
-        Assert.Equal((0, (string?)null, 0.0), library.ResumePlaylist(List));   // not saved
+        Assert.Null(library.ResumePlaylist(List));   // not saved
         library.AddPlaylist(List);
         Assert.Equal((0, (string?)null, 0.0), library.ResumePlaylist(List));
 
@@ -88,7 +89,7 @@ public sealed partial class YouTubeLibraryTests
         Assert.Equal((3, (string?)Zoo, 0.0), library.ResumePlaylist(List));   // under the minimum: the entry's start
 
         library.Update(List, v => v with { Count = 2 });
-        Assert.Equal(1, library.ResumePlaylist(List).Entry);   // the list shrank: its last entry
+        Assert.Equal(1, library.ResumePlaylist(List)!.Value.Entry);   // the list shrank: its last entry
         Assert.Equal(0, library.ResumeAt(List));                // a video's resume never reads a list's place
     }
 
@@ -125,6 +126,75 @@ public sealed partial class YouTubeLibraryTests
         Assert.Equal(new YouTubeImport(YouTubeImportOutcome.Done, 2, 0), library.Import(theirs, overwrite: false));
         Assert.Equal([List, Bunny], library.List().Select(v => v.Id));
         Assert.Equal(theirs[0], library.Find(List));
+    }
+
+    [Fact]
+    public void AListsThumbnail_IsKept_ButNeverResumedFrom()
+    {
+        var library = Library();
+        library.AddPlaylist(List, thumbnail: Zoo);
+        Assert.Equal(((string?)Zoo, (string?)null), (library.Find(List)!.Thumbnail, library.Find(List)!.EntryVideo));
+        Assert.Equal((0, (string?)null, 0.0), library.ResumePlaylist(List));
+    }
+
+    [Fact]
+    public void Import_TakesNoLengthForAList_AndAsksAboutAPulledTitleAgain()
+    {
+        var library = Library();
+        library.AddPlaylist(List);
+        YouTubeSaved[] theirs =
+        [
+            new() { Id = List, Playlist = true, Duration = 500, Thumbnail = Zoo },
+            new() { Id = Other, Playlist = true, TitleTried = _time.GetUtcNow() },
+        ];
+
+        library.Import(theirs, overwrite: false);
+        Assert.Equal((0.0, (string?)Zoo), (library.Find(List)!.Duration, library.Find(List)!.Thumbnail));   // the entry's length is no list's
+        Assert.Null(library.Find(Other)!.TitleTried);
+    }
+
+    /// <summary>Another list playing the same video is a switch: the list before is written where it stopped.</summary>
+    [Fact]
+    public void ASwitchToAnotherList_WithTheSameVideo_WritesTheOldList()
+    {
+        var library = WatchingList();
+        Entry(VideoState.Playing, Zoo, 1, 20);
+        _time.Advance(TimeSpan.FromSeconds(5));
+        Entry(VideoState.Playing, Zoo, 1, 40);   // within the 15 s: not written yet
+        _player.Report(new VideoSnapshot(VideoState.Playing, Zoo, "A video's title", "A video's channel", 41, 300, PlaylistId: Other, PlaylistEntry: 0, PlaylistCount: 3));
+        Assert.Equal(40, library.Find(List)!.Position);
+    }
+
+    /// <summary>A title not found is asked again only after the hour (2026-11-08, the review); a stamp in the future is due at once.</summary>
+    [Fact]
+    public async Task AMissingTitle_IsAskedAgain_OnlyAfterTheHour()
+    {
+        var library = Library();
+        library.AddPlaylist(List);
+        int asked = 0;
+        YouTubePlaylistLookup nothing = (_, _) =>
+        {
+            Interlocked.Increment(ref asked);
+            return Task.FromResult<YouTubePlaylistInfo?>(null);
+        };
+
+        await YouTubeTitles.FillMissingAsync(library, null, nothing, CancellationToken.None);
+        Assert.Equal(1, asked);
+        Assert.Equal(_time.GetUtcNow(), library.Find(List)!.TitleTried);
+        Assert.False(YouTubeTitles.AnyMissing(library));
+        await YouTubeTitles.FillMissingAsync(library, null, nothing, CancellationToken.None);
+        Assert.Equal(1, asked);
+
+        _time.Advance(YouTubeTitles.RetryAfter);
+        Assert.True(YouTubeTitles.AnyMissing(library));
+        await YouTubeTitles.FillMissingAsync(library, null, nothing, CancellationToken.None);
+        Assert.Equal(2, asked);
+
+        library.Update(List, v => v with { TitleTried = _time.GetUtcNow().AddDays(1) });
+        Assert.True(YouTubeTitles.AnyMissing(library));   // a clock set back, or a hand edit
+
+        await YouTubeTitles.FillMissingAsync(library, null, (_, _) => Task.FromResult<YouTubePlaylistInfo?>(new YouTubePlaylistInfo(List, "  The list  ", " Its channel ")), CancellationToken.None);
+        Assert.Equal(("The list", "Its channel", (DateTimeOffset?)null), (library.Find(List)!.Title, library.Find(List)!.Author, library.Find(List)!.TitleTried));   // trimmed
     }
 
     // ── The resume of a saved playlist ─────────────────────────────────────────

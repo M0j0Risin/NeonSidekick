@@ -42,6 +42,9 @@ public class YouTubeCommandTests
     [InlineData("unsave 2", YouTubeVerb.Unsave, "2", null, null)]
     [InlineData("unsave aqz-KE-bpKQ", YouTubeVerb.Unsave, "aqz-KE-bpKQ", null, null)]
     [InlineData("unsave the date", YouTubeVerb.Search, "unsave the date", null, null)]
+    [InlineData("save lofi-hip-hop-radio", YouTubeVerb.Search, "save lofi-hip-hop-radio", null, null)]      // a long word is no playlist id (2026-11-08, the review)
+    [InlineData("unsave lofi-hip-hop-radio", YouTubeVerb.Search, "unsave lofi-hip-hop-radio", null, null)]
+    [InlineData("play lofi-hip-hop-radio", YouTubeVerb.Search, "play lofi-hip-hop-radio", null, null)]
     [InlineData("next", YouTubeVerb.Next, "", null, null)]                                        // playlists (2026-10-08)
     [InlineData("next level", YouTubeVerb.Search, "next level", null, null)]
     [InlineData("prev", YouTubeVerb.Previous, "", null, null)]

@@ -57,7 +57,7 @@ public sealed partial class YouTubeSavedToolsTests : IDisposable
     public async Task Save_AddsByLink_OrTheCurrentVideoWithWhereItIs_AndRemovesByNumberIdOrCurrent()
     {
         Assert.Equal("Saved video jNQXAC9IVRw; it resumes where it is left.", await Call(Save(), ("action", "add"), ("video", "https://www.youtube.com/watch?v=jNQXAC9IVRw")));
-        Assert.Equal("video jNQXAC9IVRw is saved already (not played yet).", await Call(Save(), ("action", "add"), ("video", Zoo)));
+        Assert.Equal("Video jNQXAC9IVRw is saved already (not played yet).", await Call(Save(), ("action", "add"), ("video", Zoo)));
 
         _player.Play(new VideoRequest(Bunny, 75));
         Assert.Equal("Saved \"Big Buck Bunny 60fps 4K - Official Blender Foundation Short Film\"; it resumes where it is left.", await Call(Save(), ("action", "ADD"), ("video", "current")));
@@ -140,7 +140,7 @@ public sealed partial class YouTubeSavedToolsTests : IDisposable
         Assert.Contains("1. Me at the zoo — jawed · not played yet · id jNQXAC9IVRw", list);
         Assert.Contains("2. video aqz-KE-bpKQ · not played yet · id aqz-KE-bpKQ", list);
         Assert.Equal([Bunny, Zoo], _lookup.Asked.Order());                           // the titled one is not asked about
-        Assert.Equal(0, await YouTubeTitles.FillMissingAsync(Library(), null, CancellationToken.None));
+        Assert.Equal(0, await YouTubeTitles.FillMissingAsync(Library(), null, null, CancellationToken.None));
         Assert.Equal(new YouTubeSaved { Id = Zoo, Title = "Me at the zoo", Author = "jawed", Duration = 19 }, YouTubeTitles.Fill(new YouTubeSaved { Id = Zoo }, _lookup.Found[Zoo]));
     }
 

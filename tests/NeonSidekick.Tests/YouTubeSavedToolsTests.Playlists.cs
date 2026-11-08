@@ -27,7 +27,7 @@ public sealed partial class YouTubeSavedToolsTests
         var save = SaveLists();
 
         Assert.Equal("Saved the playlist \"The list\"; it resumes at the entry and place it is left at.", await Call(save, ("action", "add"), ("playlist", "https://www.youtube.com/playlist?list=" + List)));
-        Assert.Equal((true, "The list", "Its channel", (string?)Zoo), (Library().Find(List)!.Playlist, Library().Find(List)!.Title, Library().Find(List)!.Author, Library().Find(List)!.EntryVideo));
+        Assert.Equal((true, "The list", "Its channel", (string?)null, (string?)Zoo), (Library().Find(List)!.Playlist, Library().Find(List)!.Title, Library().Find(List)!.Author, Library().Find(List)!.EntryVideo, Library().Find(List)!.Thumbnail));
         Assert.Equal("The playlist \"The list\" is saved already (not played yet).", await Call(save, ("action", "add"), ("playlist", List)));
         Assert.Equal([List], _lists.Asked);   // saved already: not asked again
 
@@ -62,7 +62,7 @@ public sealed partial class YouTubeSavedToolsTests
     public async Task Saved_NamesAnUntitledPlaylist_ThroughTheGroupsLookup_AndANullLookupLeavesIt()
     {
         Library().AddPlaylist(List);
-        Assert.Equal(0, await YouTubeTitles.FillMissingAsync(Library(), _lookup.Lookup, CancellationToken.None));   // no playlist lookup: left
+        Assert.Equal(0, await YouTubeTitles.FillMissingAsync(Library(), _lookup.Lookup, null, CancellationToken.None));   // no playlist lookup: left
         Assert.Null(Library().Find(List)!.Title);
 
         var search = new PlaylistSearch(new YouTubePlaylistInfo(List, "The list", "Its channel", Zoo));
@@ -70,7 +70,7 @@ public sealed partial class YouTubeSavedToolsTests
         string listed = await Call(saved);
 
         Assert.Contains("1. ▤ The list — Its channel · not played yet · playlist id " + List, listed);
-        Assert.Equal((string?)Zoo, Library().Find(List)!.EntryVideo);   // the first video, for the thumbnail
+        Assert.Equal(((string?)null, (string?)Zoo), (Library().Find(List)!.EntryVideo, Library().Find(List)!.Thumbnail));   // the list's thumbnail, shown only
     }
 
     [Fact]
@@ -110,6 +110,120 @@ public sealed partial class YouTubeSavedToolsTests
 
         Assert.Equal(YouTubeText.ResumedEntry(1, 97) + "Opened it in the browser.", answer);
         Assert.Equal("https://www.youtube.com/watch?v=" + Zoo + "&t=97s&list=" + List, YouTubeIds.UrlFor(sent!));
+    }
+
+    // ── The review's fixes (2026-11-08) ────────────────────────────────────────
+
+    private void Playing(string list, int? entry, string video = Zoo, double position = 40, double duration = 300, int? count = 3) =>
+        _player.Report(new VideoSnapshot(VideoState.Playing, video, "A video", "A channel", position, duration, PlaylistId: list, PlaylistEntry: entry, PlaylistCount: count));
+
+    /// <summary>A link that names a video removes only that video, a list's only that list: never the other one by a fallback.</summary>
+    [Fact]
+    public async Task Remove_ByAWatchLink_TakesNeitherTheWrongVideoNorTheWrongList()
+    {
+        Library().Add(Zoo);
+        Library().AddPlaylist(List);
+        var save = SaveLists();
+
+        Assert.Equal(YouTubeText.NotSaved("https://www.youtube.com/watch?v=" + Zoo + "&list=" + Other),
+            await Call(save, ("action", "remove"), ("playlist", "https://www.youtube.com/watch?v=" + Zoo + "&list=" + Other)));
+        Assert.Equal(YouTubeText.NotSaved("https://www.youtube.com/watch?v=" + Bunny + "&list=" + List),
+            await Call(save, ("action", "remove"), ("video", "https://www.youtube.com/watch?v=" + Bunny + "&list=" + List)));
+        Assert.Equal([Zoo, List], Library().List().Select(v => v.Id));
+    }
+
+    [Fact]
+    public async Task SaveCurrent_RefusesAMix_AnUnknownPrefix_AndAListNotSayingItsEntry_AndNeitherArgument()
+    {
+        var save = SaveLists();
+        Playing("RDabcdefghijklmnopq", 0);
+        Assert.Equal(YouTubeText.Mix("RDabcdefghijklmnopq"), await Call(save, ("action", "add"), ("playlist", "current")));
+        Playing("XYabcdefghijklmnopq", 0);
+        Assert.Equal(YouTubeText.NotAPlaylist("XYabcdefghijklmnopq"), await Call(save, ("action", "add"), ("playlist", "current")));
+        Playing(List, null);
+        Assert.Equal("Error: " + YouTubeText.PlaylistNotReady, await Call(save, ("action", "add"), ("playlist", "current")));
+        Assert.Equal(YouTubeText.NameVideoOrPlaylist, await Call(save, ("action", "add")));
+        Assert.Equal(YouTubeText.NameVideoOrPlaylist, await Call(save, ("action", "remove")));
+        Assert.Empty(Library().List());
+        Assert.Throws<ArgumentException>(() => Library().AddPlaylist("XYabcdefghijklmnopq"));
+    }
+
+    [Fact]
+    public async Task Save_ByLink_KeepsItsIndexVideoAndTime()
+    {
+        var save = SaveLists();
+        await Call(save, ("action", "add"), ("playlist", "https://www.youtube.com/watch?list=" + List + "&index=3"));
+        await Call(save, ("action", "add"), ("playlist", "https://www.youtube.com/watch?v=" + Zoo + "&list=" + Other + "&t=90"));
+
+        var indexed = Library().Find(List)!;
+        var timed = Library().Find(Other)!;
+        Assert.Equal((2, (string?)null, 0.0), (indexed.Entry, indexed.EntryVideo, indexed.Position));
+        Assert.Equal((0, (string?)Zoo, 90.0), (timed.Entry, timed.EntryVideo, timed.Position));
+    }
+
+    [Fact]
+    public async Task SaveCurrent_InAnEntrysLastSeconds_MovesOn_TheLastBackToTheFirst()
+    {
+        var save = SaveLists();
+        Playing(List, 1, position: 295);
+        await Call(save, ("action", "add"), ("playlist", "current"));
+        Playing(Other, 2, position: 295);
+        await Call(save, ("action", "add"), ("playlist", "current"));
+
+        var next = Library().Find(List)!;
+        var wrapped = Library().Find(Other)!;
+        Assert.Equal((2, (string?)null, 0.0, false), (next.Entry, next.EntryVideo, next.Position, next.Watched));
+        Assert.Equal((0, (string?)null, 0.0, true), (wrapped.Entry, wrapped.EntryVideo, wrapped.Position, wrapped.Watched));
+    }
+
+    /// <summary>The place is read after the lookup while the same list plays; closed (or another list) meanwhile, the first read's place.</summary>
+    [Fact]
+    public async Task SaveCurrent_ReadsThePlaceAfterTheLookup_OrKeepsTheFirstRead()
+    {
+        Playing(List, 1, position: 40);
+        var moving = new YouTubeSaveTool(Library, _player, null, null, (id, _) =>
+        {
+            Playing(List, 2, video: Bunny, position: 7);
+            return Task.FromResult<YouTubePlaylistInfo?>(null);
+        });
+        await Call(moving, ("action", "add"), ("playlist", "current"));
+        var later = Library().Find(List)!;
+        Assert.Equal((2, (string?)Bunny, 7.0), (later.Entry, later.EntryVideo, later.Position));
+
+        Playing(Other, 1, position: 40);
+        var closing = new YouTubeSaveTool(Library, _player, null, null, (id, _) =>
+        {
+            _player.Report(null);
+            return Task.FromResult<YouTubePlaylistInfo?>(null);
+        });
+        await Call(closing, ("action", "add"), ("playlist", "current"));
+        var first = Library().Find(Other)!;
+        Assert.Equal((1, (string?)Zoo, 40.0), (first.Entry, first.EntryVideo, first.Position));
+    }
+
+    /// <summary>A browser opens what the link names: with no entry video there is no time in it, so only the entry is claimed.</summary>
+    [Fact]
+    public async Task Play_HandsASavedPlaylistWithNoEntryVideo_ToABrowser_ClaimingOnlyTheEntry()
+    {
+        var library = Library();
+        library.AddPlaylist(List);
+        library.Update(List, v => v with { Entry = 2, Position = 100 });
+        VideoRequest? sent = null;
+        var play = new YouTubePlayTool(_player, () => _settings, _time, Library, route: request => { sent = request; return new VideoRouted(false, "Opened it in the browser."); });
+
+        Assert.Equal(YouTubeText.ResumedEntry(2, 0) + "Opened it in the browser.", await Call(play, ("playlist", List)));
+        Assert.Equal("https://www.youtube.com/watch?list=" + List + "&index=3", YouTubeIds.UrlFor(sent!));
+
+        library.Update(List, v => v with { Entry = 0 });
+        Assert.Equal("Opened it in the browser.", await Call(play, ("playlist", List)));   // from the list's start: nothing to claim
+    }
+
+    [Fact]
+    public void TheCaption_WithOnlyPlaylists_CountsThemAlone()
+    {
+        Assert.Equal("2 saved playlists; each resumes where it was left.", YouTubeText.SavedCaption(2, 2));
+        Assert.Equal("1 saved playlist; each resumes where it was left.", YouTubeText.SavedCaption(1, 1));
+        Assert.Equal("1 saved video and 1 playlist; each resumes where it was left.", YouTubeText.SavedCaption(2, 1));
     }
 
     private static (string?, int, string?, double) Request(VideoRequest request) => (request.PlaylistId, request.Entry, request.VideoId, request.Start);

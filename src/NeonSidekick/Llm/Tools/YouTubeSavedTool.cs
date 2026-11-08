@@ -40,7 +40,7 @@ public sealed class YouTubeSavedTool : AIFunction
     protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         var library = _library();
-        await YouTubeTitles.FillMissingAsync(library, _lookup, cancellationToken, _playlistLookup).ConfigureAwait(false);
+        await YouTubeTitles.FillMissingAsync(library, _lookup, _playlistLookup, cancellationToken).ConfigureAwait(false);
         return YouTubeText.SavedList(library.List());
     }
 }

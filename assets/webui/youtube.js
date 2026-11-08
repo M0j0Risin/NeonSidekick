@@ -390,10 +390,10 @@ function savedRow(v, sw, moving) {
   const play = Neon.el('button', 'yt-play');
   play.type = 'button';
   play.setAttribute('aria-label', v.title || v.id);
-  // A saved playlist (2026-11-08): the thumbnail of the video it was left on, or a ▤ tile with none known. A null thumb arrives as a
-  // missing field, so the test is falsy, never === null.
+  // A saved playlist (2026-11-08): the thumbnail of the video it was left on, else the list's own thumbnail, or a tile with its mark (the
+  // words' playlistMark) with neither known. A null thumb arrives as a missing field, so the test is falsy, never === null.
   if (v.playlist && !v.thumb) {
-    play.appendChild(Neon.el('span', 'yt-thumb yt-list-tile', '▤'));
+    play.appendChild(Neon.el('span', 'yt-thumb yt-list-tile', sw.playlistMark));
   } else {
     const thumb = Neon.el('img', 'yt-thumb');
     thumb.alt = '';
@@ -403,7 +403,7 @@ function savedRow(v, sw, moving) {
     play.appendChild(thumb);
   }
   const text = Neon.el('span', 'yt-text');
-  text.appendChild(Neon.el('span', 'yt-title', (v.playlist ? '▤ ' : '') + (v.title || v.id)));
+  text.appendChild(Neon.el('span', 'yt-title', (v.playlist ? sw.playlistMark + ' ' : '') + (v.title || v.id)));
   if (v.channel) text.appendChild(Neon.el('span', 'yt-channel', v.channel));
   text.appendChild(Neon.el('span', 'yt-place', v.place));
   play.appendChild(text);

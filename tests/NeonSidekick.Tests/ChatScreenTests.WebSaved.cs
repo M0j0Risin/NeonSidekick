@@ -129,6 +129,51 @@ public partial class ChatScreenTests
         Assert.Equal(WebOutcome.NotFound, removeGone.Outcome);
     }
 
+    /// <summary>
+    /// The playlist's ☆ (2026-11-08, the review): offered only for a list that can be saved (never a mix), its save logged as a playlist's;
+    /// a saved list with no entry video shows its own thumbnail.
+    /// </summary>
+    [Fact]
+    public async Task TheSavedList_OffersOnlyASavableList_LogsAListsSave_AndShowsAListsOwnThumbnail()
+    {
+        YouTubeRouteFixture(YouTubeOpenLinksIn.YouTubeWindow, webUi: true);
+        new YouTubeLibrary(_settings.ProfileDirectory).AddPlaylist("PLzyxwvutsrqponmlkj", "Another list", thumbnail: ZooId);
+        WebSavedVideos? mix = null, list = null;
+        WebReply saved = default;
+        var lines = new List<string>();
+        void Record(DiagnosticEvent e) { lock (lines) { lines.Add(e.Message); } }
+        DiagnosticLog.Emitted += Record;
+        try
+        {
+            var input = WhenIdle(
+                i =>
+                {
+                    UntilServing();
+                    _videoPlayer!.Report(new VideoSnapshot(VideoState.Playing, ZooId, "Me at the zoo", "jawed", 10, 19, PlaylistId: "RDabcdefghijklmnopq", PlaylistEntry: 0));
+                    mix = Web.SavedVideos();
+                    _videoPlayer.Report(new VideoSnapshot(VideoState.Playing, ZooId, "Me at the zoo", "jawed", 10, 19, PlaylistId: "PLabcdefghijklmnopq", PlaylistEntry: 1, PlaylistCount: 3));
+                    list = Web.SavedVideos();
+                    saved = Web.SaveCurrentList(IPAddress.Loopback);
+                    PushLine(i, "/exit");
+                });
+
+            await RunAsync(input);
+        }
+        finally
+        {
+            DiagnosticLog.Emitted -= Record;
+        }
+
+        Assert.Equal((ZooId, (string?)null), (mix!.Playing!.Id, mix.Playing.PlaylistId));   // a mix: no ☆ for it
+        Assert.Equal((string?)ZooId, mix.Items[0].Thumb);                                       // the list's own thumbnail, no entry video yet
+        Assert.Equal(("PLabcdefghijklmnopq", false), (list!.Playing!.PlaylistId, list.Playing.ListSaved));
+        Assert.Equal(WebOutcome.Ok, saved.Outcome);
+        lock (lines)
+        {
+            Assert.Contains(WebUiText.SavedLogLine("saved", IPAddress.Loopback, playlist: true), lines);
+        }
+    }
+
     [Fact]
     public async Task AMissingTitle_StartsALookup_AndTheListSaysItLooks()
     {

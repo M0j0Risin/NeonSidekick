@@ -56,9 +56,9 @@ public sealed class YouTubeResume
                 return;
             }
 
-            if (last is { VideoId: { } before } && before != snapshot.VideoId)
+            if (last is { VideoId: not null } && Key(last) != Key(snapshot))
             {
-                Write(last, stopped: true);   // switched to another video: the one before stopped where it was
+                Write(last, stopped: true);   // switched to another video or list: the one before stopped where it was
             }
 
             switch (snapshot.State)
@@ -137,15 +137,15 @@ public sealed class YouTubeResume
             };
         }
 
-        bool last = count > 0 && entry >= count - 1;
+        var (next, watched) = YouTubeLibrary.EntryAfter(entry, count);
         return saved with
         {
-            Entry = last ? 0 : entry + 1,
+            Entry = next,
             EntryVideo = null,
             Count = count,
             Position = 0,
             Duration = 0,
-            Watched = saved.Watched || last,
+            Watched = saved.Watched || watched,
             LastPlayed = now,
         };
     }

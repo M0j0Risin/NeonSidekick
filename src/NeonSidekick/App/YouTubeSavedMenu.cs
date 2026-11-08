@@ -214,10 +214,10 @@ internal sealed class YouTubeSavedMenu
 
     /// <summary>
     /// What the open list shows, as a key: each video's id, title and place, in order; another means it changed elsewhere. A playlist's entry
-    /// (2026-11-08) is in its place already, and in the key again so a move to another entry from the start is never missed.
+    /// (2026-11-08) is in its place already: any entry but the first of a list never played reads "entry n".
     /// </summary>
     private static string ListKey(IReadOnlyList<YouTubeSaved> videos) =>
-        string.Join("\n", videos.Select(v => v.Id + "|" + v.Title + "|" + YouTubeText.Place(v) + (v.Playlist ? "|" + v.Entry.ToString(System.Globalization.CultureInfo.InvariantCulture) : "")));
+        string.Join("\n", videos.Select(v => v.Id + "|" + v.Title + "|" + YouTubeText.Place(v)));
 
     /// <summary>
     /// Re-reads the list every <see cref="WatchEvery"/> while a pick waits, and ends it (the page's <c>stale</c> token) when its key differs from

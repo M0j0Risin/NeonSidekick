@@ -685,7 +685,8 @@ public sealed record WebVideoWords(string Waiting, string PlayHere, string TapFo
 /// <summary>
 /// The saved list's words on the YouTube tab (later on 2026-10-16): the filter's placeholder and its no-match line (<c>{0}</c> the filter), the
 /// row's details toggle, the moves, the two-tap delete and clear all (each with its armed words), the save button's two faces, the line
-/// while titles are looked up, and the playlist's save button's two faces (2026-11-08).
+/// while titles are looked up, the playlist's save button's two faces (2026-11-08), and the mark before a saved playlist's title (the PC's
+/// <c>YouTubeText.PlaylistMark</c>, one home for it; 2026-11-08, the review).
 /// </summary>
 public sealed record WebSavedWords(
     string Filter,
@@ -703,7 +704,8 @@ public sealed record WebSavedWords(
     string Saved,
     string Looking,
     string SaveList,
-    string ListSaved);
+    string ListSaved,
+    string PlaylistMark);
 
 /// <summary>
 /// The YouTube tab's saved list (later on 2026-10-16, the user's ask: <c>/youtube list</c> under the player): the videos in the user's order, the
@@ -714,8 +716,8 @@ public sealed record WebSavedVideos(IReadOnlyList<WebSavedVideo> Items, string C
 /// <summary>
 /// One saved video: its id (every post names it; the page builds its thumbnail from it), title and channel (null until known), where it was
 /// left, whether it was watched to its end, and the PC pane's footer as two lines (in the PC's time zone). A saved playlist (2026-11-08)
-/// says so (<see cref="Playlist"/>), its thumbnail the video of the entry it was left on (<see cref="Thumb"/>; null for none known, the
-/// page then draws a ▤ tile). A video's thumbnail is still built from its id.
+/// says so (<see cref="Playlist"/>), its thumbnail the video of the entry it was left on, else the list's own thumbnail video (<see cref="Thumb"/>;
+/// null for neither known, the page then draws a ▤ tile). A video's thumbnail is still built from its id.
 /// </summary>
 public sealed record WebSavedVideo(string Id, string? Title, string? Channel, string Place, bool Watched, string Heading, string Details, bool Playlist = false, string? Thumb = null);
 

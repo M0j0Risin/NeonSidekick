@@ -3372,8 +3372,9 @@ public sealed partial class SidekickApp
         var playlistLookup = YouTube.YouTubeTitles.PlaylistLookup(api, () => EffectiveSettings);
         if (line.Verb == YouTube.YouTubeVerb.Save)
         {
+            // A playlist by the text typed, not its bare id: a link's index=, v= and t= are where it is saved at (2026-11-08, the review).
             return line.PlaylistId is { } list
-                ? [await Llm.Tools.YouTubeSaveTool.AddPlaylistAsync(library, null, list, playlistLookup, cancellationToken).ConfigureAwait(false)]
+                ? [await Llm.Tools.YouTubeSaveTool.AddPlaylistAsync(library, null, list == Llm.Tools.YouTubeSaveTool.Current ? list : line.Text, playlistLookup, cancellationToken).ConfigureAwait(false)]
                 : [await Llm.Tools.YouTubeSaveTool.AddAsync(library, null, line.VideoId ?? "", lookup, cancellationToken).ConfigureAwait(false)];
         }
 
@@ -3387,7 +3388,7 @@ public sealed partial class SidekickApp
             return [YouTube.YouTubeText.ClearAnswer(library.Clear())];
         }
 
-        await YouTube.YouTubeTitles.FillMissingAsync(library, lookup, cancellationToken, playlistLookup).ConfigureAwait(false);
+        await YouTube.YouTubeTitles.FillMissingAsync(library, lookup, playlistLookup, cancellationToken).ConfigureAwait(false);
         var videos = library.List();
         return videos.Count == 0 ? [YouTube.YouTubeText.NoneSaved] : YouTube.YouTubeText.SavedList(videos).Split('\n');
     }

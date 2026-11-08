@@ -511,6 +511,24 @@ public static class YouTubeText
     /// <summary>The spinner's label while <c>/youtube save &lt;id|link&gt;</c> looks the video up (2026-10-07).</summary>
     public const string LookingUp = "Looking the video up on YouTube…";
 
+    /// <summary>The spinner's label while <c>/youtube save</c> looks a playlist up (2026-11-08, the review).</summary>
+    public const string LookingUpPlaylist = "Looking the playlist up on YouTube…";
+
+    /// <summary>
+    /// A save of the playlist playing before the player has said which entry it is on (2026-11-08, the review): saved then, it would pair
+    /// one entry's number with another's video.
+    /// </summary>
+    public const string PlaylistNotReady = "The playlist hasn't said which entry it's on yet; try again in a moment.";
+
+    /// <summary>youtube_save's add or remove with neither <c>video</c> nor <c>playlist</c> (2026-11-08, the review).</summary>
+    public const string NameVideoOrPlaylist = "Error: give \"video\" or \"playlist\" (\"current\" for the one playing).";
+
+    /// <summary>
+    /// The search picker's <c>s</c>, or the playlist picker's <c>l</c>, on a list that can't be saved (2026-11-08, the review): a mix, or a
+    /// list whose id the player can't play again by itself.
+    /// </summary>
+    public const string CannotSaveHit = "This one can't be saved: the player can't play it again from the saved list.";
+
     /// <summary>
     /// The spinner's label while <c>/youtube</c> waits for the player to start a video or playlist, or move through one (2026-10-09:
     /// the wait, up to <see cref="YouTubeWait.Play"/>, held the screen with nothing on it, found playing a channel the page never started).
@@ -541,7 +559,7 @@ public static class YouTubeText
         return video.Title is { Length: > 0 } title ? $"\"{title}\"" : "video " + video.Id;
     }
 
-    // A name that leads a sentence.
+    // A name that leads a sentence: "video …" and "playlist …" capitalized.
     private static string Lead(string name) => name.Length > 0 && char.IsAsciiLetterLower(name[0]) ? char.ToUpperInvariant(name[0]) + name[1..] : name;
 
     /// <summary>Where a saved video stands: <c>at 12:34 of 45:00</c>, <c>watched</c> (and where a rewatch was left), or <c>not played yet</c>.</summary>
@@ -553,9 +571,7 @@ public static class YouTubeText
             return PlaylistPlace(video);
         }
 
-        string at = video.Position <= 0 ? ""
-            : video.Duration > 0 ? $"at {YouTubeIds.FormatTime(video.Position)} of {YouTubeIds.FormatTime(video.Duration)}"
-            : $"at {YouTubeIds.FormatTime(video.Position)}";
+        string at = video.Position <= 0 ? "" : At(video.Position, video.Duration);
         if (video.Watched)
         {
             return at.Length > 0 ? "watched · " + at : "watched";
@@ -586,11 +602,15 @@ public static class YouTubeText
         parts.Add("entry " + (list.Entry + 1).ToString(CultureInfo.InvariantCulture) + (list.Count > 0 ? " of " + list.Count.ToString(CultureInfo.InvariantCulture) : ""));
         if (list.Position > 0)
         {
-            parts.Add(list.Duration > 0 ? $"at {YouTubeIds.FormatTime(list.Position)} of {YouTubeIds.FormatTime(list.Duration)}" : $"at {YouTubeIds.FormatTime(list.Position)}");
+            parts.Add(At(list.Position, list.Duration));
         }
 
         return string.Join(" · ", parts);
     }
+
+    // "at 3:10 of 12:00", or "at 3:10" with no length known: a video's place and a playlist entry's alike (2026-11-08, one phrase).
+    private static string At(double position, double duration) =>
+        duration > 0 ? $"at {YouTubeIds.FormatTime(position)} of {YouTubeIds.FormatTime(duration)}" : $"at {YouTubeIds.FormatTime(position)}";
 
     /// <summary>A saved video as the pane's row and the printed list's: <c>Title — Channel · at 12:34 of 45:00</c>; a playlist's title after <see cref="PlaylistMark"/>.</summary>
     public static string SavedRow(YouTubeSaved video)
@@ -684,7 +704,7 @@ public static class YouTubeText
 
     /// <summary>
     /// The count over the pane's rows and the printed list: <paramref name="count"/> rows, <paramref name="playlists"/> of them playlists
-    /// (2026-11-08), counted apart when there are any.
+    /// (2026-11-08), counted apart when there are any, and alone when there are only playlists (the review: never "0 saved videos").
     /// </summary>
     public static string SavedCaption(int count, int playlists = 0)
     {
@@ -694,6 +714,11 @@ public static class YouTubeText
         }
 
         int videos = Math.Max(0, count - playlists);
+        if (videos == 0)
+        {
+            return $"{playlists.ToString(CultureInfo.InvariantCulture)} saved playlist{(playlists == 1 ? "" : "s")}; each resumes where it was left.";
+        }
+
         return $"{videos.ToString(CultureInfo.InvariantCulture)} saved video{(videos == 1 ? "" : "s")} and {playlists.ToString(CultureInfo.InvariantCulture)} playlist{(playlists == 1 ? "" : "s")}; each resumes where it was left.";
     }
 
@@ -725,7 +750,7 @@ public static class YouTubeText
     /// <summary>A save done, or found done already.</summary>
     public static string Saved(YouTubeSaved video, YouTubeSaveOutcome outcome) => outcome switch
     {
-        YouTubeSaveOutcome.AlreadySaved => $"{(video.Playlist ? Lead(Name(video)) : Name(video))} is saved already ({Place(video)}).",
+        YouTubeSaveOutcome.AlreadySaved => $"{Lead(Name(video))} is saved already ({Place(video)}).",
         YouTubeSaveOutcome.Failed => "Error: " + SaveFailed,
         _ when video.Playlist => $"Saved {Name(video)}; it resumes at the entry and place it is left at.",
         _ => $"Saved {Name(video)}; it resumes where it is left.",

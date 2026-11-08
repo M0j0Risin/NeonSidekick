@@ -299,6 +299,9 @@ public sealed partial class WebUiYouTubePageTests
         Assert.Equal("https://i.ytimg.com/vi/jNQXAC9IVRw/mqdefault.jpg", await page.TextAsync("document.querySelectorAll('.yt-row')[0].querySelector('.yt-thumb').getAttribute('src')"));
         Assert.Equal("SPAN", await page.TextAsync("document.querySelectorAll('.yt-row')[1].querySelector('.yt-thumb').tagName"));
         Assert.True((await page.EvalAsync("document.querySelectorAll('.yt-row')[1].querySelector('.yt-thumb').classList.contains('yt-list-tile')")).GetBoolean());
+        // The mark comes with the words (2026-11-08, the review): the PC's own, one home for it.
+        Assert.Equal(NeonSidekick.YouTube.YouTubeText.PlaylistMark, WebUiText.VideoWords.Saved!.PlaylistMark);
+        Assert.Equal(WebUiText.VideoWords.Saved!.PlaylistMark, await page.TextAsync("document.querySelectorAll('.yt-row')[1].querySelector('.yt-thumb').textContent"));
         Assert.False((await page.EvalAsync("[...document.querySelectorAll('img.yt-thumb')].some(i => i.src.includes('undefined'))")).GetBoolean());
         Assert.Equal("Me at the zoo", await page.TextAsync("document.querySelectorAll('.yt-row')[2].querySelector('.yt-title').textContent"));
     }

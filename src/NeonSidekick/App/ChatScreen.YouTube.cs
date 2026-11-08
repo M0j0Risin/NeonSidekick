@@ -136,12 +136,14 @@ internal sealed partial class ChatScreen
         {
             case YouTubeVerb.Save:
             {
-                // A video named by its id or link is looked up for its title first (2026-10-07), under the spinner; a playlist too (2026-11-08).
+                // A video named by its id or link is looked up for its title first (2026-10-07), under the spinner; a playlist too (2026-11-08),
+                // by the text typed rather than its bare id, so a link's index=, v= and t= are where it is saved at (the review).
                 Func<Task<string>> save = line.PlaylistId is { } list
-                    ? () => YouTubeSaveTool.AddPlaylistAsync(YouTubeLibraryNow(), _videoPlayer, list, YouTubeTitles.PlaylistLookup(_youTubeSearch, _effective), cancellationToken)
+                    ? () => YouTubeSaveTool.AddPlaylistAsync(YouTubeLibraryNow(), _videoPlayer, list == YouTubeSaveTool.Current ? list : line.Text, YouTubeTitles.PlaylistLookup(_youTubeSearch, _effective), cancellationToken)
                     : () => YouTubeSaveTool.AddAsync(YouTubeLibraryNow(), _videoPlayer, line.VideoId ?? "", YouTubeTitles.Lookup(_youTubeSearch, _effective), cancellationToken);
                 bool named = line.VideoId is not null || line.PlaylistId is not null;
-                Show(spinner && named ? await _transcript.WithSpinnerAsync(YouTubeText.LookingUp, save).ConfigureAwait(false) : await save().ConfigureAwait(false), sink);
+                string label = line.PlaylistId is null ? YouTubeText.LookingUp : YouTubeText.LookingUpPlaylist;
+                Show(spinner && named ? await _transcript.WithSpinnerAsync(label, save).ConfigureAwait(false) : await save().ConfigureAwait(false), sink);
                 return;
             }
 
@@ -157,7 +159,7 @@ internal sealed partial class ChatScreen
                 var library = YouTubeLibraryNow();
                 if (YouTubeTitles.AnyMissing(library))
                 {
-                    var fill = () => YouTubeTitles.FillMissingAsync(library, YouTubeTitles.Lookup(_youTubeSearch, _effective), cancellationToken, YouTubeTitles.PlaylistLookup(_youTubeSearch, _effective));
+                    var fill = () => YouTubeTitles.FillMissingAsync(library, YouTubeTitles.Lookup(_youTubeSearch, _effective), YouTubeTitles.PlaylistLookup(_youTubeSearch, _effective), cancellationToken);
                     _ = spinner ? await _transcript.WithSpinnerAsync(YouTubeText.LookingUpTitles, fill).ConfigureAwait(false) : await fill().ConfigureAwait(false);
                 }
 
@@ -199,7 +201,8 @@ internal sealed partial class ChatScreen
     }
 
     // The search: the key's refusal, the hits on the picker (Enter plays), or listed where there is no pane or no window. Its switches
-    // (2026-10-08) are checked over the saved choices first; a playlist plays from its first entry and a channel its uploads.
+    // (2026-10-08) are checked over the saved choices first; a playlist plays from its first entry and a channel its uploads, unless it is
+    // saved: then it resumes where it was left, as a saved video does (youtube_play's resume, 2026-11-08).
     private async Task SearchYouTubeAsync(string query, YouTubeSearchChoices choices, INoticeSink sink, bool spinner, CancellationToken cancellationToken)
     {
         var effective = _effective();
@@ -268,13 +271,20 @@ internal sealed partial class ChatScreen
                     YouTubeKind.Channel => YouTubeIds.Uploads(hit.Id) ?? hit.Id,
                     _ => hit.Id,
                 };
+                if (hit.Kind is YouTubeKind.Playlist or YouTubeKind.Channel && !YouTubeLibrary.CanSavePlaylist(id))
+                {
+                    Show(YouTubeText.CannotSaveHit, _menuPane);   // nothing was written: no write failure to report (2026-11-08, the review)
+                    continue;
+                }
+
                 int entries = hit.Count is { } n ? (int)Math.Clamp(n, 0, int.MaxValue) : 0;
                 var added = hit.Kind switch
                 {
-                    // A channel's uploads are named after the channel (2026-11-08): the hit's title is its name.
-                    YouTubeKind.Playlist or YouTubeKind.Channel when VideoRequest.IsPlaylistId(id) => library.AddPlaylist(id, hit.Title, hit.Channel, entries),
-                    YouTubeKind.Video => library.Add(id, hit.Title, hit.Channel, hit.Duration?.TotalSeconds ?? 0),
-                    _ => YouTubeSaveOutcome.Failed,
+                    // A channel's uploads are named after the channel (2026-11-08): the hit's title is its name, so its channel, the same
+                    // name again, is left out (the review).
+                    YouTubeKind.Channel => library.AddPlaylist(id, hit.Title, hit.Channel == hit.Title ? null : hit.Channel, entries),
+                    YouTubeKind.Playlist => library.AddPlaylist(id, hit.Title, hit.Channel, entries),
+                    _ => library.Add(id, hit.Title, hit.Channel, hit.Duration?.TotalSeconds ?? 0),
                 };
                 Show(library.Find(id) is { } saved ? YouTubeText.Saved(saved, added) : "Error: " + YouTubeText.SaveFailed, _menuPane);
             }
@@ -345,8 +355,18 @@ internal sealed partial class ChatScreen
                 var library = YouTubeLibraryNow();
                 if (picked.Button == 1)
                 {
-                    // The whole playlist (2026-11-08), from its start: its first video seeds the thumbnail.
-                    var listed = library.AddPlaylist(list, playlist.Title, playlist.Channel, playlist.Count, 0, entries[0].VideoId);
+                    if (!YouTubeLibrary.CanSavePlaylist(list))
+                    {
+                        Show(YouTubeText.CannotSaveHit, _menuPane);
+                        continue;
+                    }
+
+                    // The whole playlist (2026-11-08), from its start: its first listed entry, at that entry's own place (one before it may be
+                    // private or gone, 2026-11-08, the review). The count only when playlists.list listed the list (it has a title then);
+                    // otherwise it is only the entries read, and the player's own count fills it in at the first play.
+                    var first = entries[0];
+                    int count = playlist.Title.Length > 0 ? playlist.Count : 0;
+                    var listed = library.AddPlaylist(list, playlist.Title, playlist.Channel, count, first.Position, first.VideoId);
                     Show(library.Find(list) is { } savedList ? YouTubeText.Saved(savedList, listed) : "Error: " + YouTubeText.SaveFailed, _menuPane);
                     continue;
                 }

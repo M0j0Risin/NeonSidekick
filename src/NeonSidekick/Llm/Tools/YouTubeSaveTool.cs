@@ -15,8 +15,9 @@ namespace NeonSidekick.Llm.Tools;
 ///
 /// <para>A playlist (2026-11-08, the user's ask: saved playlists in the same list): <c>playlist</c> in place of <c>video</c> — an id, a
 /// link with <c>list=</c>, or a channel for its uploads; <c>current</c> the list playing, saved at its entry and place — or such a link
-/// given as <c>video</c>. Exactly one of the two. It is looked up for its title the same way (oEmbed needs no key), and resumes at the
-/// entry and place it is left at. A mix is refused: the player cannot load one.</para>
+/// given as <c>video</c>. Exactly one of the two (2026-11-08, the review: neither is refused, never read as the video playing). It is
+/// looked up for its title the same way (oEmbed needs no key), and resumes at the entry and place it is left at. A mix is refused: the
+/// player cannot load one.</para>
 /// </summary>
 public sealed class YouTubeSaveTool : AIFunction
 {
@@ -104,6 +105,11 @@ public sealed class YouTubeSaveTool : AIFunction
             return YouTubeText.VideoOrPlaylist;
         }
 
+        if (video.Length == 0 && playlist.Length == 0)
+        {
+            return YouTubeText.NameVideoOrPlaylist;
+        }
+
         // A playlist's link or id given as the video is the playlist (2026-11-08), as youtube_play takes one.
         if (playlist.Length == 0 && NamesPlaylist(video))
         {
@@ -122,60 +128,115 @@ public sealed class YouTubeSaveTool : AIFunction
             : Remove(_library(), _player, video);
     }
 
-    /// <summary>Whether <paramref name="text"/>, given as a video, names a playlist (or a mix) and no video: a <c>/playlist?list=</c> link, a list's id.</summary>
+    /// <summary>
+    /// Whether <paramref name="text"/>, given as a video, names a playlist (or a mix) and no video (<see cref="YouTubeIds.NamesPlaylistOnly"/>):
+    /// a <c>/playlist?list=</c> link, a list's id. A <c>watch?v=…&amp;list=…</c> link given as the video saves the video, on purpose
+    /// (2026-11-08, the review): it names one, and <c>playlist</c> is there for the list. <c>youtube_play</c> plays such a link's list, as
+    /// YouTube does.
+    /// </summary>
     public static bool NamesPlaylist(string text) =>
-        text.Length > 0 && !text.Equals(Current, StringComparison.OrdinalIgnoreCase) && !YouTubeIds.TryParse(text, out _, out _)
-        && (YouTubeIds.TryParsePlaylist(text, out _, out _, out _, out _) || YouTubeIds.NamesMix(text));
+        !string.Equals(text, Current, StringComparison.OrdinalIgnoreCase) && YouTubeIds.NamesPlaylistOnly(text);
 
     /// <summary>
     /// <paramref name="playlist"/> saved (2026-11-08): <see cref="Current"/> (or empty) the list playing, at its entry and place, else an id,
-    /// a link or a channel, from its start. Looked up through <paramref name="lookup"/> first when not saved yet. The answer as a sentence;
-    /// <c>Error: </c> leads a refusal. Shared with <c>/youtube save</c>, headless and the Web UI.
+    /// a channel, or a link from its place (its <c>index=</c>, <c>v=</c> and <c>t=</c>; 2026-11-08, the review). Looked up through
+    /// <paramref name="lookup"/> first when not saved yet. <c>current</c> is refused for a mix, an id without a known prefix (it could never
+    /// play again by itself) and a list that hasn't said its entry yet; its place is read again after the lookup, while the same list
+    /// plays, so a slow lookup doesn't save where it was a moment ago. The answer as a sentence; <c>Error: </c> leads a refusal. Shared with
+    /// <c>/youtube save</c>, headless and the Web UI.
     /// </summary>
     public static async Task<string> AddPlaylistAsync(YouTubeLibrary library, IVideoPlayer? player, string playlist, YouTubePlaylistLookup? lookup, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(library);
+        var named = Named(player, playlist);
+        if (named.Refusal is { } refusal)
+        {
+            return refusal;
+        }
+
+        var info = library.Find(named.List) is null && lookup is not null ? await lookup(named.List, cancellationToken).ConfigureAwait(false) : null;
+        return Save(library, player, named, info);
+    }
+
+    /// <summary>
+    /// <see cref="AddPlaylistAsync"/>'s core without a lookup (2026-11-08, the Web UI's ☆ list; split from it in the review, as <see cref="Add"/>
+    /// is from <see cref="AddAsync"/>): a playlist saved untitled until the list is next read.
+    /// </summary>
+    public static string AddPlaylist(YouTubeLibrary library, IVideoPlayer? player, string playlist)
+    {
+        ArgumentNullException.ThrowIfNull(library);
+        var named = Named(player, playlist);
+        return named.Refusal ?? Save(library, player, named, null);
+    }
+
+    // What a save names: the list playing (its first read) or the list a link or id gives, with the link's place; else the refusal.
+    private readonly record struct NamedList(string List, VideoSnapshot? Playing, int Entry, string? Video, double Start, string? Refusal);
+
+    private static NamedList Named(IVideoPlayer? player, string? playlist)
+    {
         playlist = (playlist ?? "").Trim();
         if (playlist.Length == 0 || playlist.Equals(Current, StringComparison.OrdinalIgnoreCase))
         {
             if (player?.Snapshot is not { PlaylistId: { } playing } snapshot || snapshot.State is VideoState.Failed)
             {
-                return "Error: " + YouTubeText.NoPlaylistToSave;
+                return Refused("Error: " + YouTubeText.NoPlaylistToSave);
             }
 
-            var found = library.Find(playing) is null && lookup is not null ? await lookup(playing, cancellationToken).ConfigureAwait(false) : null;
-            var added = library.AddPlaylist(playing, found?.Title, found?.Author, snapshot.PlaylistCount ?? found?.Count ?? 0,
-                snapshot.PlaylistEntry ?? 0, snapshot.VideoId, snapshot.Position, snapshot.Duration);
-            return library.Find(playing) is { } kept ? YouTubeText.Saved(kept, added) : "Error: " + YouTubeText.SaveFailed;
+            if (YouTubeIds.IsMix(playing))
+            {
+                return Refused(YouTubeText.Mix(playing));
+            }
+
+            if (!YouTubeLibrary.CanSavePlaylist(playing))
+            {
+                return Refused(YouTubeText.NotAPlaylist(playing));
+            }
+
+            return snapshot.PlaylistEntry is { } entry
+                ? new NamedList(playing, snapshot, entry, snapshot.VideoId, snapshot.Position, null)
+                : Refused("Error: " + YouTubeText.PlaylistNotReady);
         }
 
-        if (!YouTubeIds.TryParsePlaylist(playlist, out string list, out _, out _, out _))
+        if (!YouTubeIds.TryParsePlaylist(playlist, out string list, out int linkEntry, out string? linkVideo, out double linkStart))
         {
-            return YouTubeIds.NamesMix(playlist) ? YouTubeText.Mix(playlist) : YouTubeText.NotAPlaylist(playlist);
+            return Refused(YouTubeIds.NamesMix(playlist) ? YouTubeText.Mix(playlist) : YouTubeText.NotAPlaylist(playlist));
         }
 
-        var info = library.Find(list) is null && lookup is not null ? await lookup(list, cancellationToken).ConfigureAwait(false) : null;
-        var outcome = library.AddPlaylist(list, info?.Title, info?.Author, info?.Count ?? 0, 0, info?.FirstVideo);
-        return library.Find(list) is { } saved ? YouTubeText.Saved(saved, outcome) : "Error: " + YouTubeText.SaveFailed;
+        return new NamedList(list, null, linkEntry, linkVideo, linkStart, null);
+
+        static NamedList Refused(string why) => new("", null, 0, null, 0, why);
     }
 
-    /// <summary><see cref="AddPlaylistAsync"/> without a lookup (2026-11-08, the Web UI's ☆ list): a playlist saved untitled until the list is next read.</summary>
-    public static string AddPlaylist(YouTubeLibrary library, IVideoPlayer? player, string playlist)
+    // The save itself: a list playing at its place (read again now, while the same list plays and says its entry; else the first read's),
+    // or a named list at its link's place; with what the lookup found.
+    private static string Save(YouTubeLibrary library, IVideoPlayer? player, NamedList named, YouTubePlaylistInfo? info)
     {
-        var answer = AddPlaylistAsync(library, player, playlist, null, CancellationToken.None);
-        return answer.IsCompleted ? answer.GetAwaiter().GetResult() : throw new InvalidOperationException("A save with no lookup finishes at once.");
+        YouTubeSaveOutcome outcome;
+        if (named.Playing is { } first)
+        {
+            var now = player?.Snapshot is { PlaylistEntry: not null, State: not VideoState.Failed } fresh && fresh.PlaylistId == named.List ? fresh : first;
+            outcome = library.AddPlaylist(named.List, info?.Title, info?.Author, now.PlaylistCount ?? info?.Count ?? 0,
+                now.PlaylistEntry ?? named.Entry, now.VideoId, now.Position, now.Duration, info?.ThumbnailVideo);
+        }
+        else
+        {
+            outcome = library.AddPlaylist(named.List, info?.Title, info?.Author, info?.Count ?? 0, named.Entry, named.Video, named.Start, 0, info?.ThumbnailVideo);
+        }
+
+        return library.Find(named.List) is { } saved ? YouTubeText.Saved(saved, outcome) : "Error: " + YouTubeText.SaveFailed;
     }
 
     /// <summary>
-    /// <paramref name="playlist"/> taken off the list (2026-11-08): <see cref="Current"/> the list playing, else its number, id or link.
-    /// Shared with <c>/youtube unsave</c>.
+    /// <paramref name="playlist"/> taken off the list (2026-11-08): <see cref="Current"/> the list playing, else its number, id or link. Text
+    /// that reads as a playlist removes that saved list or nothing (2026-11-08, the review: a <c>watch?v=…&amp;list=…</c> link with the list
+    /// not saved once removed its video instead). Shared with <c>/youtube unsave</c>.
     /// </summary>
     public static string RemovePlaylist(YouTubeLibrary library, IVideoPlayer? player, string playlist)
     {
         ArgumentNullException.ThrowIfNull(library);
         var saved = playlist.Equals(Current, StringComparison.OrdinalIgnoreCase)
             ? player?.Snapshot is { PlaylistId: { } playing } ? library.Find(playing) : null
-            : YouTubeIds.TryParsePlaylist(playlist, out string list, out _, out _, out _) && library.Find(list) is { Playlist: true } named ? named
+            : YouTubeIds.TryParsePlaylist(playlist, out string list, out _, out _, out _) ? library.Find(list) is { Playlist: true } named ? named : null
             : library.Resolve(playlist);
         if (saved is null)
         {

@@ -96,7 +96,18 @@ public sealed class YouTubePlayTool : AIFunction
 
     private const string Then = "Then " + YouTubeControlTool.ToolName + " pauses, seeks, sets the volume or moves through a playlist, and " + YouTubeStatusTool.ToolName + " says where it is. ";
 
-    private const string Saved = "A saved video (" + YouTubeSavedTool.ToolName + ") resumes where it was left unless start is given, a saved playlist at its entry and place unless entry is given.";
+    private const string Saved = "A saved video (" + YouTubeSavedTool.ToolName + ") resumes where it was left unless start is given, a saved playlist at its entry and place unless entry or start is given.";
+
+    /// <summary>
+    /// Where a play of the saved playlist <paramref name="saved"/> resumes (2026-11-08; shared with the Web UI's saved list in the review, so
+    /// the two never drift): the entry, that entry's video and the start (<see cref="YouTubeLibrary.ResumePlaylist(YouTubeSaved)"/>), and the
+    /// answer's lead (<see cref="YouTubeText.ResumedEntry"/>; empty from the very start).
+    /// </summary>
+    public static (int Entry, string? Video, double Start, string Lead) ResumeOf(YouTubeSaved saved)
+    {
+        var (entry, video, start) = YouTubeLibrary.ResumePlaylist(saved);
+        return (entry, video, start, entry > 0 || start > 0 ? YouTubeText.ResumedEntry(entry, start) : "");
+    }
 
     public override JsonElement JsonSchema => Schema;
 
@@ -227,11 +238,12 @@ public sealed class YouTubePlayTool : AIFunction
         // upstream: the page then plays the entry by its number, so the wait takes any entry of the list.
         string? waitVideo = startVideo;
         string resumedLead = "";
-        if (entry is null && startNamed is null && startVideo is null && !indexed && _library?.Invoke() is { } library && library.Find(list) is { Playlist: true })
+        bool resumed = false;
+        if (entry is null && startNamed is null && startVideo is null && !indexed && _library?.Invoke() is { } library && library.Find(list) is { Playlist: true } saved)
         {
-            (startEntry, startVideo, start) = library.ResumePlaylist(list);
+            (startEntry, startVideo, start, resumedLead) = ResumeOf(saved);
             waitVideo = null;
-            resumedLead = startEntry > 0 || start > 0 ? YouTubeText.ResumedEntry(startEntry, start) : "";
+            resumed = true;
         }
 
         bool autoplay = _effective().YouTubeAutoplay;
@@ -248,7 +260,9 @@ public sealed class YouTubePlayTool : AIFunction
 
         if (!routed.Wait)
         {
-            return (routed.Note ?? "") + resumedLead + routed.Answer;
+            // A browser opens what the link names (2026-11-08, the review): with no entry video the link has no time, so only the entry is claimed.
+            string handoffLead = !resumed || startVideo is not null ? resumedLead : startEntry > 0 ? YouTubeText.ResumedEntry(startEntry, 0) : "";
+            return (routed.Note ?? "") + handoffLead + routed.Answer;
         }
 
         // Paused is an answer only when the play asked for none (2026-10-09, seen on the real player): an open window switched to a

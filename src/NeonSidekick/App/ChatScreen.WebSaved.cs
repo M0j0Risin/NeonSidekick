@@ -23,7 +23,9 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The saved list as the tab shows it: the videos in the user's order, each with the PC pane's footer as two lines in the PC's time zone; the
-    /// video the player has open (and whether it is saved) for the ☆; a missing title's lookup started on the pool when none runs.
+    /// video the player has open (and whether it is saved) for the ☆, and its playlist only when that can be saved (2026-11-08, the review:
+    /// <see cref="YouTubeLibrary.CanSavePlaylist"/>, so the page never offers a save that is refused); a missing title's lookup started on the
+    /// pool when none runs. A saved playlist's thumbnail is the video it was left on, else the list's own.
     /// </summary>
     private WebSavedVideos WebSavedNow()
     {
@@ -33,10 +35,14 @@ internal sealed partial class ChatScreen
         var items = videos.Select(v =>
         {
             var footer = YouTubeText.SavedFooter(v, zone);
-            return new WebSavedVideo(v.Id, v.Title, v.Author, YouTubeText.Place(v), v.Watched, footer.Text, footer.Last ?? "", v.Playlist, v.Playlist ? v.EntryVideo : null);
+            return new WebSavedVideo(v.Id, v.Title, v.Author, YouTubeText.Place(v), v.Watched, footer.Text, footer.Last ?? "", v.Playlist, v.Playlist ? v.EntryVideo ?? v.Thumbnail : null);
         }).ToList();
+
+        // The ☆s' states from the list read above, not two more reads of the file (2026-11-08, the review).
         WebSavedPlaying? playing = _videoPlayer?.Snapshot is { VideoId: { } id, State: not VideoState.Failed, Held: null } open
-            ? new WebSavedPlaying(id, open.Title, library.Find(id) is not null, open.PlaylistId, open.PlaylistId is { } list && library.Find(list) is not null)
+            ? new WebSavedPlaying(id, open.Title, videos.Any(v => v.Id == id),
+                open.PlaylistId is { } list && YouTubeLibrary.CanSavePlaylist(list) ? list : null,
+                open.PlaylistId is { } saved && videos.Any(v => v.Id == saved))
             : null;
         bool looking = Volatile.Read(ref _webSavedLooking) == 1;
         if (!looking && YouTubeTitles.AnyMissing(library) && Interlocked.CompareExchange(ref _webSavedLooking, 1, 0) == 0)
@@ -49,7 +55,7 @@ internal sealed partial class ChatScreen
                 using var cap = new CancellationTokenSource(WebSavedLookupCap);
                 try
                 {
-                    await YouTubeTitles.FillMissingAsync(library, lookup, cap.Token, playlistLookup).ConfigureAwait(false);
+                    await YouTubeTitles.FillMissingAsync(library, lookup, playlistLookup, cap.Token).ConfigureAwait(false);
                 }
                 catch (Exception e) when (e is OperationCanceledException or HttpRequestException or IOException or InvalidOperationException)
                 {
@@ -69,7 +75,9 @@ internal sealed partial class ChatScreen
     /// A saved video played on the tapping page: the page claims the player (a waiting page's tap is its Play here), then the video plays on the
     /// router's web player directly — not through <see cref="RouteVideo"/>: a play started on the tab plays on the tab whatever <i>YouTube open
     /// links in</i> says (the user's call, twice on 2026-10-16), a playing PC window closed by the router's switch with its place saved. Nothing
-    /// waits: the page's own reports drive the snapshot. A saved playlist (2026-11-08) plays from its entry and place.
+    /// waits: the page's own reports drive the snapshot. A saved playlist (2026-11-08) plays from its entry and place, as youtube_play's resume
+    /// gives them (<see cref="YouTubePlayTool.ResumeOf"/>), from the one read of the list. Autoplay stays on whatever the setting says: the tap
+    /// is the user's own gesture to play.
     /// </summary>
     private WebReply WebPlaySaved(WebSavedPlay request, IPAddress? remote)
     {
@@ -96,14 +104,14 @@ internal sealed partial class ChatScreen
 
         if (saved.Playlist)
         {
-            var (entry, video, from) = library.ResumePlaylist(id);
+            var (entry, video, from, lead) = YouTubePlayTool.ResumeOf(saved);
             router.Play(VideoRequest.Playlist(id, entry, video, from), VideoSink.Web);
             _webUi.FlashPc(WebUiText.SavedPlayFlash);
-            DiagnosticLog.Info(WebUiCategory, WebUiText.SavedLogLine("played", remote));
-            return new WebReply(WebOutcome.Ok, entry > 0 || from > 0 ? YouTubeText.ResumedEntry(entry, from).Trim() : null);
+            DiagnosticLog.Info(WebUiCategory, WebUiText.SavedLogLine("played", remote, playlist: true));
+            return new WebReply(WebOutcome.Ok, lead.Length > 0 ? lead.Trim() : null);
         }
 
-        double start = library.ResumeAt(id);
+        double start = YouTubeLibrary.ResumeStart(saved.Position);
         router.Play(new VideoRequest(id, start), VideoSink.Web);
         _webUi.FlashPc(WebUiText.SavedPlayFlash);
         DiagnosticLog.Info(WebUiCategory, WebUiText.SavedLogLine("played", remote));
@@ -172,10 +180,10 @@ internal sealed partial class ChatScreen
     /// Kestrel thread): the next read of the list looks its title up, as for any untitled row.
     /// </summary>
     private WebReply WebSaveCurrentList(IPAddress? remote) =>
-        SavedChange(YouTubeSaveTool.AddPlaylist(YouTubeLibraryNow(), _videoPlayer, YouTubeSaveTool.Current), WebUiText.SavedSaveListFlash, "saved", remote);
+        SavedChange(YouTubeSaveTool.AddPlaylist(YouTubeLibraryNow(), _videoPlayer, YouTubeSaveTool.Current), WebUiText.SavedSaveListFlash, "saved", remote, playlist: true);
 
     // An answer from the shared path: a sentence starting "Error: " refused (422) without it; else the PC told, the log written, the sentence back.
-    private WebReply SavedChange(string answer, string flash, string what, IPAddress? remote)
+    private WebReply SavedChange(string answer, string flash, string what, IPAddress? remote, bool playlist = false)
     {
         if (answer.StartsWith("Error: ", StringComparison.Ordinal))
         {
@@ -183,7 +191,7 @@ internal sealed partial class ChatScreen
         }
 
         _webUi.FlashPc(flash);
-        DiagnosticLog.Info(WebUiCategory, WebUiText.SavedLogLine(what, remote));
+        DiagnosticLog.Info(WebUiCategory, WebUiText.SavedLogLine(what, remote, playlist));
         return new WebReply(WebOutcome.Ok, answer);
     }
 }
