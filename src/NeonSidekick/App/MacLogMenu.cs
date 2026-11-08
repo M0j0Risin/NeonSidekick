@@ -331,6 +331,7 @@ internal sealed class MacLogMenu
             Filter = tab.Filter,
             Caption = MenuFilter.CaptionOrNull(tab.Filter, listed.Count, tab.Rows.Count),
             Hint = MenuFilter.Hint(Keys, tab.Filter),
+            Placeholder = listed.Count == 0,
         };
         return (menuTab, behind);
     }

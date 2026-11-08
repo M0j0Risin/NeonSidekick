@@ -704,9 +704,8 @@ public sealed class InfoPane
                         && _pane.TryHitOverlay(click.X, click.Y, out int row) && row > _stripRows && row <= _stripRows + _shown && _content is { } shownLines)
                     {
                         int line = _first + row - _stripRows - 1;
-                        if (_pane.ClickIsStale(click.X, row, click.At))
+                        if (_pane.DropsStaleClick(click, row, _clicks))
                         {
-                            _clicks.Reset();
                             continue;
                         }
 

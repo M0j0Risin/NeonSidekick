@@ -171,9 +171,8 @@ public sealed class FolderPane
                     }
                     else if (at - HeaderRows is int i && i >= 0 && i < _shown)
                     {
-                        if (_pane.ClickIsStale(click.X, at, click.At))
+                        if (_pane.DropsStaleClick(click, at, _clicks))
                         {
-                            _clicks.Reset();
                             continue;
                         }
 

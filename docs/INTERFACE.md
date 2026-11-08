@@ -97,7 +97,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 * **Pasting** into a filter or a find (Ctrl+V or a right-click) adds its first line, up to 40 characters.
 * **Asking first:** a remove asks, with No highlighted; `y` or `n` answers.
 * **Mouse:** the row under the pointer is marked. A click moves the cursor, a double-click picks a row or tab, a click on the `▲▼` row pages. The × at the top right is Esc; a double-click outside a pane closes it.
-* **A long label** beside the tabs (a folder's path on `/tasks`) is shortened with `…` when the whole label would push the tabs and buttons past three rows or off the edge. What comes before the last ` · ` stays whole, such as the computer's name, and the path keeps its last folders.
+* **A long label** beside the tabs and buttons (a folder's path on `/tasks`) is shortened with `…` when it would push them past three rows or off the edge. What comes before the last ` · ` stays whole.
 * **On a Mac:** selecting terminal text with the mouse, and going back in a find: [What differs](MAC.md#what-differs).
 
 ### Pane keys

@@ -397,6 +397,122 @@ public sealed partial class WebUiPageTests
         Assert.DoesNotContain("places 7", _backend.ShopCalls);
     }
 
+    private const string Renamed = "Renamed it to Oat milk.";
+
+    private static string MessageIs(string text) => "document.getElementById('message').textContent === " + JsonSerializer.Serialize(text);
+
+    private void ListWith(params WebShopItem[] lines) =>
+        _backend.List = _backend.List! with { Groups = [new WebShopGroup("Unplaced", lines)] };
+
+    /// <summary>
+    /// ⌖ after a typed name (2026-11-07, the second review: showing the place sheet wiped the rename's sentence): the sentence leads the sheet's
+    /// note, and the failed read's sentence too.
+    /// </summary>
+    [WindowsFact]
+    public async Task Shopping_ThePlaceButton_KeepsTheRenamesSentence_AheadOfTheNoteOrTheFailure()
+    {
+        _backend.ShopReply = new WebReply(WebOutcome.Ok, Renamed);
+        _backend.PlacesList = new WebShopPlaces("⌖ Where is Milk?", 2, [], -1, false, "No aisles yet.");
+        if (await ShoppingPageAsync() is not { } page)
+        {
+            return;
+        }
+
+        await OpenMilkAsync(page);
+        await SetInputAsync(page, "rename-text", "Oat milk");
+        await page.EvalAsync("document.getElementById('place').click()");
+        await page.WaitAsync("document.getElementById('sheet-note').textContent === " + JsonSerializer.Serialize(Renamed + " No aisles yet."), "the rename's sentence, then the note");
+
+        await KeyAsync(page, "Escape", "document");
+        await page.WaitAsync("!(" + Sheet + ")", "closed");
+        _backend.PlacesFail = true;
+        await OpenMilkAsync(page);
+        await SetInputAsync(page, "rename-text", "Oat milk");
+        await page.EvalAsync("document.getElementById('place').click()");
+        await page.WaitAsync("document.getElementById('sheet-note').textContent === " + JsonSerializer.Serialize(Renamed + " " + WebUiText.ShopWords.PlaceFailed), "the rename's sentence, then the failure");
+    }
+
+    /// <summary>
+    /// A rename through ⌖ that kept the line (2026-11-07, the second review: the sheet stayed quiet for good after any rename): the line removed
+    /// later by another device closes the place sheet with the sentence.
+    /// </summary>
+    [WindowsFact]
+    public async Task Shopping_ThePlaceSheet_AfterARenameThatKeptTheLine_SaysWhenTheLineGoes()
+    {
+        _backend.ShopReply = new WebReply(WebOutcome.Ok, Renamed);
+        _backend.PlacesList = new WebShopPlaces("⌖ Where is Oat milk?", 2, [new WebShopPlaceChoice("Aisle 2", 3, null)], 0, false, null);
+        if (await ShoppingPageAsync() is not { } page)
+        {
+            return;
+        }
+
+        _backend.OnShop = call =>
+        {
+            if (call.StartsWith("rename ", StringComparison.Ordinal))
+            {
+                ListWith(ShopLine(7, "Oat milk", 2), ShopLine(8, "Eggs"));
+            }
+        };
+        await OpenMilkAsync(page);
+        await SetInputAsync(page, "rename-text", "Oat milk");
+        await page.EvalAsync("document.getElementById('place').click()");
+        await page.WaitAsync(PlaceRows + " === 1", "the place rows");
+
+        ListWith(ShopLine(8, "Eggs"));
+        await page.WaitAsync("!(" + Sheet + ")", "closed for the line gone", 15);
+        await page.WaitAsync(MessageIs(WebUiText.ShopWords.Gone), "the sentence");
+    }
+
+    /// <summary>
+    /// A rename to the line's own name writes nothing, so every read after it is a 304 (2026-11-07, the second review): once one has come back, the
+    /// line removed by another device closes the line's sheet with the sentence.
+    /// </summary>
+    [WindowsFact]
+    public async Task Shopping_TheLinesSheet_AfterARenameToItsOwnName_SaysWhenTheLineGoes()
+    {
+        _backend.ShopReply = new WebReply(WebOutcome.Ok, "Milk is named Milk already.");
+        if (await ShoppingPageAsync() is not { } page)
+        {
+            return;
+        }
+
+        await OpenMilkAsync(page);
+        await SetInputAsync(page, "rename-text", "Milk");
+        await page.EvalAsync("document.getElementById('rename-save').click()");
+        await WaitForAsync(() => _backend.ShopCalls.Contains("rename 7 Milk"));
+        await page.WaitAsync("openSheet !== null && openSheet.quietFrom !== undefined && shownFrom >= openSheet.quietFrom", "a read started after the rename");
+
+        ListWith(ShopLine(8, "Eggs"));
+        await page.WaitAsync("!(" + Sheet + ")", "closed for the line gone", 15);
+        await page.WaitAsync(MessageIs(WebUiText.ShopWords.Gone), "the sentence");
+    }
+
+    /// <summary>A rename that merged the line into another closes its sheet quietly at the next read: the rename's sentence said what happened.</summary>
+    [WindowsFact]
+    public async Task Shopping_TheLinesSheet_AfterARenameThatMerged_ClosesQuietly()
+    {
+        const string Merged = "Merged Milk into Eggs.";
+        _backend.ShopReply = new WebReply(WebOutcome.Ok, Merged);
+        if (await ShoppingPageAsync() is not { } page)
+        {
+            return;
+        }
+
+        _backend.OnShop = call =>
+        {
+            if (call.StartsWith("rename ", StringComparison.Ordinal))
+            {
+                ListWith(ShopLine(8, "Eggs", 3));
+            }
+        };
+        await OpenMilkAsync(page);
+        await SetInputAsync(page, "rename-text", "Eggs");
+        await page.EvalAsync("document.getElementById('rename-save').click()");
+        await page.WaitAsync("!(" + Sheet + ")", "closed for the merge", 15);
+        await page.WaitAsync("document.querySelectorAll('.shop-row').length === 1", "the merged list");
+        Assert.Equal(Merged, await page.TextAsync("document.getElementById('message').textContent"));
+    }
+
     /// <summary>A $ pattern typed in the place filter, and one in a line's name, are text (2026-11-07, the code review: replace() read $& as its match).</summary>
     [WindowsFact]
     public async Task Shopping_DollarPatterns_InTheFilterAndAName_AreText()

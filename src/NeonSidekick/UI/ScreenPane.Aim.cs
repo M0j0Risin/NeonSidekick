@@ -16,13 +16,19 @@ public sealed partial class ScreenPane
     /// <summary>How long after a dropped click every click counts, so a page changing faster than the grace never stops answering.</summary>
     public static readonly TimeSpan DroppedClickPass = TimeSpan.FromSeconds(1);
 
-    // What the last draw showed and where, what was on show before the last change, and when that was. Under the gate.
+    /// <summary>How many of the layouts the overlay showed <see cref="ClickIsStale"/> remembers (2026-11-07, the second code review).</summary>
+    private const int AimHistoryLength = 8;
+
+    // What the last draw showed and where, and when that changed. Under the gate.
     private OverlayAim? _aimShown;
     private int _aimTop;
-    private OverlayAim? _aimBefore;
-    private int _aimBeforeTop;
     private long? _aimChangedAt;
     private long? _clickDroppedAt;
+
+    // The layouts the overlay showed, oldest first, each with the moment it went on show (2026-11-07, the second code review: a click compared
+    // the one before a burst of changes with the last, so two changes after a press, the second past the grace, judged it against a layout
+    // it was never aimed at). Under the gate.
+    private readonly List<(OverlayAim? Aim, int Top, long From)> _aimHistory = [];
 
     // The target with the slab, and the pointer's move count it's hidden until. Under the gate.
     private OverlayTarget? _hoverTarget;
@@ -57,12 +63,14 @@ public sealed partial class ScreenPane
 
     /// <summary>
     /// Whether a click on overlay row <paramref name="row"/>, column <paramref name="x"/> should be dropped: the overlay's rows changed
-    /// before, or within <see cref="ClickGrace"/> after, the click was pressed (<paramref name="pressedAt"/>, <see cref="InputEvent.Click.At"/>), and that
-    /// spot on the old layout didn't show what it shows now, so the click was aimed at something else. Measured from the press since 2026-11-07
-    /// (the code review: from the read, a click waiting behind a slow callback outlived the grace and landed on the new row); a click with no
-    /// press time (0, scripted input) or one stamped after now (another clock) is taken as pressed now. Costs one click at most: for
-    /// <see cref="DroppedClickPass"/> after a drop, every click counts. Only for clicks on list rows: the ×, the strip and the ▲▼ row work at
-    /// any speed. The caller resets its double-click pair on a drop.
+    /// after, or within <see cref="ClickGrace"/> before, the click was pressed (<paramref name="pressedAt"/>, <see cref="InputEvent.Click.At"/>), and that
+    /// spot on the layout the click was aimed at, the one on show <see cref="ClickGrace"/> before the press, didn't show what it shows now. Measured
+    /// from the press since 2026-11-07 (the code review: from the read, a click waiting behind a slow callback outlived the grace and landed on the
+    /// new row), and against the remembered layouts since later that day (the second review), so any number of changes after the press count. A
+    /// press older than every layout remembered is taken as stale. A click with no press time (0, scripted input) or one stamped after now
+    /// (another clock) is taken as pressed now. Costs one click at most: for <see cref="DroppedClickPass"/> after a drop, every click counts. Only
+    /// for clicks on list rows: the ×, the strip and the ▲▼ row work at any speed. The caller resets its double-click pair on a drop
+    /// (<see cref="DropsStaleClick"/>).
     /// </summary>
     public bool ClickIsStale(int x, int row, long pressedAt = 0)
     {
@@ -81,8 +89,8 @@ public sealed partial class ScreenPane
                 return false;
             }
 
-            if (_aimBefore is { } before && _aimShown is { } shown && string.Equals(before.Page, shown.Page, StringComparison.Ordinal)
-                && shown.At(row, x) is { } here && before.At(row + _aimTop - _aimBeforeTop, x) is { } there
+            if (AimedAtLocked(pressed) is { Aim: { } before } aimed && _aimShown is { } shown && string.Equals(before.Page, shown.Page, StringComparison.Ordinal)
+                && shown.At(row, x) is { } here && before.At(row + _aimTop - aimed.Top, x) is { } there
                 && string.Equals(here.Text, there.Text, StringComparison.Ordinal))
             {
                 return false;   // the same page, and this spot shows what it showed
@@ -93,12 +101,29 @@ public sealed partial class ScreenPane
         }
     }
 
+    /// <summary>
+    /// <see cref="ClickIsStale"/> for <paramref name="click"/> on overlay row <paramref name="row"/>, judged from its press, and on a drop
+    /// <paramref name="pair"/> reset, so the click after it starts a new pair (2026-11-07, the second code review: every click site wrote both out).
+    /// </summary>
+    public bool DropsStaleClick(InputEvent.Click click, int row, DoubleClick pair)
+    {
+        ArgumentNullException.ThrowIfNull(click);
+        ArgumentNullException.ThrowIfNull(pair);
+        if (!ClickIsStale(click.X, row, click.At))
+        {
+            return false;
+        }
+
+        pair.Reset();
+        return true;
+    }
+
     /// <summary>The window row of the overlay's first row as last drawn, the pane being at the window's foot. Never asks the terminal, so a hover can read it.</summary>
     internal int OverlayTopRow => Height - 1 - LastRowBelowCursor - CursorDepth;
 
     /// <summary>
-    /// Told at the end of every draw: when what the overlay shows or where it stands differs from the last draw's, the moment is noted. A
-    /// second change within the grace keeps the first layout as the old one, what a click still in the queue was aimed at.
+    /// Told at the end of every draw: when what the overlay shows or where it stands differs from the last draw's, the moment is noted and the
+    /// layout joins the remembered ones (<see cref="AimHistoryLength"/>), what a click still in the queue may have been aimed at.
     /// </summary>
     private void NoteAimDrawnLocked()
     {
@@ -111,15 +136,30 @@ public sealed partial class ScreenPane
         }
 
         long now = _time.GetTimestamp();
-        if (_aimChangedAt is not { } changed || _time.GetElapsedTime(changed, now) > ClickGrace)
+        if (_aimHistory.Count == AimHistoryLength)
         {
-            _aimBefore = _aimShown;
-            _aimBeforeTop = _aimTop;
+            _aimHistory.RemoveAt(0);
         }
 
+        _aimHistory.Add((aim, top, now));
         _aimShown = aim;
         _aimTop = top;
         _aimChangedAt = now;
+    }
+
+    /// <summary>The layout on show <see cref="ClickGrace"/> before <paramref name="pressed"/>, what a click pressed then was aimed at; null when none remembered reaches back that far. Under the gate.</summary>
+    private (OverlayAim? Aim, int Top)? AimedAtLocked(long pressed)
+    {
+        for (int i = _aimHistory.Count - 1; i >= 0; i--)
+        {
+            var (aim, top, from) = _aimHistory[i];
+            if (from <= pressed && _time.GetElapsedTime(from, pressed) >= ClickGrace)
+            {
+                return (aim, top);
+            }
+        }
+
+        return null;
     }
 
     /// <summary>A new draw by a pane (a key, a click, a refresh): the slab hides until the pointer next moves, so it never competes with the keys' highlight or sits on a row that moved. Under the gate.</summary>

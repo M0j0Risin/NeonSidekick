@@ -218,7 +218,8 @@ internal sealed class ShoppingMenu
                 var shop = _list.StoreFor(null, out _);
                 var view = _list.View(shop);
                 var (rows, headings, items) = Rows(view);
-                if (rows.Count == 0)
+                bool empty = rows.Count == 0;
+                if (empty)
                 {
                     // The empty list: one dim row and the same bar, so add (and the stores) work on it (2026-10-11).
                     rows = [Theme.DimMarkup(ShoppingText.EmptyList)];
@@ -235,6 +236,7 @@ internal sealed class ShoppingMenu
                     SpaceToggles = true,
                     Caption = ShoppingText.PaneCaption(view.Groups.Sum(g => g.Items.Count), view.Ticked.Count, guesses),
                     Removes = items.Any(i => i is not null),   // Delete is remove (2026-10-16); a heading is never a stop
+                    Placeholder = empty,   // the empty list's one line
                 };
                 MenuPick? picked;
                 using (var stale = new CancellationTokenSource())

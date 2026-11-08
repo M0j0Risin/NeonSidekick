@@ -73,8 +73,9 @@ internal sealed partial class SettingsMenu
                     Filter = filter,
                     Caption = MenuFilter.CaptionOrNull(filter, shownFacts.Count, facts.Count),
                     Removes = shownFacts.Count > 0,
+                    Placeholder = shownFacts.Count == 0,
                 },
-                new(ShoppingText.GuessesTitle(guesses.Count), guessRows) { Hint = ShoppingText.LayoutKeys, Removes = guesses.Count > 0 },
+                new(ShoppingText.GuessesTitle(guesses.Count), guessRows) { Hint = ShoppingText.LayoutKeys, Removes = guesses.Count > 0, Placeholder = guesses.Count == 0 },
             };
             var page = MenuPage.Tabbed(Crumb(ShoppingText.LayoutTitle(shop)), tabs, tab, ShoppingText.LayoutKeys) with { TabCursors = [locations.Count > 0 ? 1 : 0, sections.Count > 0 ? 1 : 0, 0, 0] };
             if (await _pane.PickAsync(page, cursor < 0 ? (page.TabCursors![tab]) : cursor, cancellationToken).ConfigureAwait(false) is not { } pick)

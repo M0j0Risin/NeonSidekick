@@ -282,7 +282,7 @@ public sealed class ShoppingStoreTests : IDisposable
         var list = new ShoppingList(() => _store);
         var item = _store.AddItem("Eggs", 1)!;
         var stale = new List<ShopPlacement> { new(eggs[0], heb.Id, "Egg", ShoppingKinds.Item, aisle.Id, null, ShoppingSources.User, "") };
-        Assert.Equal(ShoppingText.NotPlaced(heb, "Eggs"), list.ForgetFacts(heb, item, stale));
+        Assert.Equal((ShoppingText.NotPlaced(heb, "Eggs"), false), list.ForgetFacts(heb, item, stale));
     }
 
     /// <summary>The home bar's 🛒 count (later on 2026-10-12): the unticked lines.</summary>

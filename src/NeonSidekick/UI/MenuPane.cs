@@ -45,6 +45,9 @@ public sealed record MenuTab(string Title, IReadOnlyList<string> Rows)
     /// <summary>The tab's <see cref="MenuPage.Filter"/>; null for a tab that does not filter.</summary>
     public string? Filter { get; init; }
 
+    /// <summary>The tab's <see cref="MenuPage.Placeholder"/> (2026-11-07): its rows are an empty list's line, not picks.</summary>
+    public bool Placeholder { get; init; }
+
     /// <summary>
     /// Space flips on this tab (2026-10-04: every settings tab, <see cref="App.SettingsMenu.FieldsTab"/>), whatever the page's
     /// <see cref="MenuPage.SpaceToggles"/> says (<see cref="MenuPage.SpaceFlips"/>); false leaves it to the page.
@@ -246,6 +249,12 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
     public string? Filter { get; init; }
 
     /// <summary>
+    /// Whether the rows stand in for a list that is empty (2026-11-07, the second code review: guessed from the one row being all dim, which a real
+    /// row can be, an ended process in <c>/process</c>): the host's line saying so, no target under the pointer. Taken from the tab on a tabbed page.
+    /// </summary>
+    public bool Placeholder { get; init; }
+
+    /// <summary>
     /// The rows are cells of a grid (2026-10-10, the avatar picker's emoji, <see cref="MenuGrid"/>): laid out left to right in lines of
     /// the width, a heading or a gap a line of its own; ←/→ and ↑/↓ move in two dimensions, so on a tabbed grid page only Tab and
     /// Shift+Tab step tabs; the cursor's cell alone is highlighted, a click lands on a cell. Null for a list (every other page).
@@ -300,7 +309,7 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
 
         tab = Math.Clamp(tab, 0, tabs.Count - 1);
         var shown = tabs[tab].Shown;
-        return new MenuPage(title, shown.Rows, shown.Hint ?? hint) { Tabs = tabs, Tab = tab, Caption = shown.Caption, BaseHint = hint, Headings = shown.Headings, Filter = shown.Filter, Marks = shown.Marks, Moves = shown.Moves, Removes = shown.Removes, Sides = shown.Sides };
+        return new MenuPage(title, shown.Rows, shown.Hint ?? hint) { Tabs = tabs, Tab = tab, Caption = shown.Caption, BaseHint = hint, Headings = shown.Headings, Filter = shown.Filter, Placeholder = shown.Placeholder, Marks = shown.Marks, Moves = shown.Moves, Removes = shown.Removes, Sides = shown.Sides };
     }
 
     /// <summary>Whether the cursor may rest on <paramref name="row"/>: any row of a page without <see cref="Headings"/>; on one with them, a row neither a heading nor empty. Pure.</summary>
@@ -837,11 +846,11 @@ public sealed class MenuPane : INoticeSink
             _clickedRow = -1;
         }
         else if (!string.Equals(_page.Title, page.Title, StringComparison.Ordinal)
-            || !string.Equals(_page.Filter, page.Filter, StringComparison.Ordinal) || _page.Rows.Count != page.Rows.Count)
+            || !string.Equals(_page.Filter, page.Filter, StringComparison.Ordinal))
         {
             // Other rows under the clicked index (2026-11-07, the code review: a filter typed after a click kept the heading hidden): the click
-            // no longer holds them still. Not the rows' own text: many hosts build them anew on every draw, and a live row changing after a click
-            // mustn't bring a heading in under the pointer.
+            // no longer holds them still. Not the rows' own text, nor their count (the second review): many hosts build them anew on every draw,
+            // and a live row changing, or one added by another device, after a click mustn't bring a heading in under the pointer.
             _clickedRow = -1;
         }
 
@@ -982,7 +991,7 @@ public sealed class MenuPane : INoticeSink
                         if (at - Header is int g && g >= 0 && g < _shown && _first + g < _lines.Count
                             && grid.CellAt(_lines[_first + g], click.X) is int cell && page.IsStop(cell))
                         {
-                            if (Stale(click, at))
+                            if (_pane.DropsStaleClick(click, at, _clicks))   // aimed at the rows before a change: dropped, and the pair with it
                             {
                                 continue;
                             }
@@ -1002,7 +1011,7 @@ public sealed class MenuPane : INoticeSink
                     else if (at - Header is int i && i >= 0 && i < _shown && page.IsStop(_first + i))
                     {
                         // A heading or a gap (2026-10-03) is no row to land on: the else below, as a miss.
-                        if (Stale(click, at))
+                        if (_pane.DropsStaleClick(click, at, _clicks))   // aimed at the rows before a change: dropped, and the pair with it
                         {
                             continue;
                         }
@@ -1223,18 +1232,6 @@ public sealed class MenuPane : INoticeSink
             Show();
             highlighted?.Invoke(_cursor);
         }
-
-        // A click on a list row aimed at the rows before a change (ScreenPane.ClickIsStale): dropped, and the double-click pair with it.
-        bool Stale(InputEvent.Click click, int at)
-        {
-            if (!_pane.ClickIsStale(click.X, at, click.At))
-            {
-                return false;
-            }
-
-            _clicks.Reset();
-            return true;
-        }
     }
 
     /// <summary>
@@ -1303,7 +1300,7 @@ public sealed class MenuPane : INoticeSink
 
         // A `with`, never Tabbed() again: the hotkeys, the toggle and the cursors would go with a rebuild.
         var shown = tabs[tab].Shown;
-        _page = page with { Tabs = tabs, Rows = shown.Rows, Tab = tab, Caption = shown.Caption, Hint = shown.Hint ?? page.BaseHint ?? page.Hint, Headings = shown.Headings, Filter = shown.Filter, Marks = shown.Marks, Moves = shown.Moves, Removes = shown.Removes, Sides = shown.Sides };
+        _page = page with { Tabs = tabs, Rows = shown.Rows, Tab = tab, Caption = shown.Caption, Hint = shown.Hint ?? page.BaseHint ?? page.Hint, Headings = shown.Headings, Filter = shown.Filter, Placeholder = shown.Placeholder, Marks = shown.Marks, Moves = shown.Moves, Removes = shown.Removes, Sides = shown.Sides };
         int count = _page.Rows.Count;
         _cursor = _page.StopFrom(page.TabCursors is { } cursors && tab < cursors.Count && count > 0 ? cursors[tab] : 0, +1);
         _first = 0;
@@ -1382,7 +1379,6 @@ public sealed class MenuPane : INoticeSink
         return null;
     }
 
-    /// <summary>The overlay closed and the status forgotten; nothing when no visit is open.</summary>
     /// <summary>The hint row of an empty list's pane (<see cref="ShowEmptyAsync"/>). Pinned.</summary>
     public const string EmptyKeys = "Esc = close";
 
@@ -1397,7 +1393,7 @@ public sealed class MenuPane : INoticeSink
         ArgumentNullException.ThrowIfNull(line);
         try
         {
-            var page = new MenuPage(title, [Theme.DimMarkup(line)], EmptyKeys);
+            var page = new MenuPage(title, [Theme.DimMarkup(line)], EmptyKeys) { Placeholder = true };
             while (await PickAsync(page, 0, cancellationToken).ConfigureAwait(false) is not null)
             {
                 // Enter on the one row: nothing to do; the page again.
@@ -1409,6 +1405,7 @@ public sealed class MenuPane : INoticeSink
         }
     }
 
+    /// <summary>The overlay closed and the status forgotten; nothing when no visit is open.</summary>
     public void Close()
     {
         if (!_open)
@@ -1545,11 +1542,12 @@ public sealed class MenuPane : INoticeSink
         }
 
         int tallest = 0;
+        string label = StripLabel(page, width);   // the page's, whichever tab is on show: worked out once (2026-11-07, the second code review)
         foreach (var tab in tabs)
         {
             if (tab.SubTabs is { Count: > 0 } subs)
             {
-                int strip = InfoPane.SubStripLayout(StripLabel(page, width), Titles(subs), width, Badges(subs)).Rows;
+                int strip = InfoPane.SubStripLayout(label, Titles(subs), width, Badges(subs)).Rows;
                 tallest = Math.Max(tallest, strip + subs.Max(s => Body(s)));
                 continue;
             }
@@ -1583,7 +1581,7 @@ public sealed class MenuPane : INoticeSink
         var topLines = Drawn(top.Select(row => titled ? new FittedMarkup(row) : (IRenderable)new Markup(row).Overflow(Overflow.Ellipsis)).ToList(), sided: false);
         var statusLines = Drawn(_status.Select(status => (IRenderable)new Markup(StatusMarkup(status.Kind, status.Text)).Overflow(Overflow.Ellipsis)).ToList(), _sideWidth > 0);
         _stripRows = topLines.Count;
-        _statusRows = statusLines.Count == 0 ? 1 : statusLines.Count;
+        _statusRows = _status.Count == 0 ? 1 : statusLines.Count;   // the spacer only when there's no status; one that renders nothing takes no row
         _subRows = SubStripRows(page, Width).Count;
         int footer = page.Footer is null ? 0 : FooterRuleRows + FooterRows;
         int content = _pane.MenuContentRows(Height, _inputRows);
@@ -1758,13 +1756,13 @@ public sealed class MenuPane : INoticeSink
     }
 
     /// <summary>
-    /// Whether <paramref name="row"/> stands in for rows the page doesn't have (2026-11-07, the code review: they lit up under the pointer): a page's
-    /// only row when it's all dim (<see cref="Theme.IsAllDim"/>, an empty list's notice), or the filter's no-match row
-    /// (<see cref="MenuFilter.NoMatchRow"/>, <see cref="MenuFilter.NoMatchNameRow"/>), under other rows too. A dim row among others is a real one:
-    /// <c>/mcp</c> draws a tool that's off all dim, and it takes a click. Pure.
+    /// Whether <paramref name="row"/> stands in for rows the page doesn't have (2026-11-07, the code review: they lit up under the pointer): every
+    /// row of a page its host marks <see cref="MenuPage.Placeholder"/> (an empty list's line; the second review: no longer guessed from the row
+    /// being all dim), or the filter's no-match row (<see cref="MenuFilter.NoMatchRow"/>, <see cref="MenuFilter.NoMatchNameRow"/>), under other
+    /// rows too. A dim row is otherwise a real one: <c>/mcp</c> draws a tool that's off all dim, <c>/process</c> an ended process. Pure.
     /// </summary>
     private static bool IsPlaceholder(MenuPage page, int row) =>
-        (page.Rows.Count == 1 && Theme.IsAllDim(page.Rows[0]))
+        page.Placeholder
         || (page.Filter is { Length: > 0 } filter
             && (string.Equals(page.Rows[row], MenuFilter.NoMatchRow(filter), StringComparison.Ordinal)
                 || string.Equals(page.Rows[row], MenuFilter.NoMatchNameRow(filter), StringComparison.Ordinal)));

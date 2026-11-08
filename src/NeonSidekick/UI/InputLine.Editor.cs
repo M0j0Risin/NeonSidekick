@@ -1340,9 +1340,8 @@ public sealed partial class InputLine
             _anchor = -1;
             if (click.Button == MouseButton.Left && row < _listShown)
             {
-                if (_line._pane.ClickIsStale(click.X, row, click.At))
+                if (_line._pane.DropsStaleClick(click, row, hintClicks))
                 {
-                    hintClicks.Reset();
                     return EditOutcome.Handled;
                 }
 

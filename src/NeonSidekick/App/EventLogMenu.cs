@@ -456,6 +456,7 @@ internal sealed class EventLogMenu
             Filter = tab.Filter,
             Caption = MenuFilter.CaptionOrNull(tab.Filter, listed.Count, tab.Events.Count),
             Hint = MenuFilter.Hint(Keys, tab.Filter),
+            Placeholder = listed.Count == 0,
         };
         return (menuTab, behind);
     }

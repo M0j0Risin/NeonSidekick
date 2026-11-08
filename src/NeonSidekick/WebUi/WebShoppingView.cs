@@ -398,13 +398,13 @@ public static class WebShoppingView
         var facts = list.ItemFacts(shop, item.Name);
         if (request.Forget)
         {
-            string forgot = list.ForgetFacts(shop, item, facts);
+            var (forgot, any) = list.ForgetFacts(shop, item, facts);
             if (forgot.StartsWith("Error: ", StringComparison.Ordinal))
             {
                 return new WebReply(WebOutcome.Refused, forgot);
             }
 
-            if (facts.Count == 0 || string.Equals(forgot, ShoppingText.NotPlaced(shop, item.Name), StringComparison.Ordinal))
+            if (!any)
             {
                 return WebReply.Ok;   // nothing to forget, or another device was first: no flash, no log line
             }
@@ -506,10 +506,10 @@ public static class WebShoppingView
 
     private static readonly WebReply WriteFailed = new(WebOutcome.Refused, WebUiText.ShoppingWriteFailed);
 
-    /// <summary>The refusal every post gets while the list is unavailable (2026-10-16: <see cref="WebShopping.Writable"/> false), or null.</summary>
     /// <summary>The place sheet of a list that can't be read (the file off, or no list at all): no title of its own, no rows, and the reason.</summary>
     public static WebShopPlaces UnavailablePlaces { get; } = new("", null, [], -1, false, ShoppingText.Unavailable);
 
+    /// <summary>The refusal every post gets while the list is unavailable (2026-10-16: <see cref="WebShopping.Writable"/> false), or null.</summary>
     private static WebReply? Closed(ShoppingList list) =>
         list.Store.Available ? null : new WebReply(WebOutcome.Refused, ShoppingText.Unavailable);
 

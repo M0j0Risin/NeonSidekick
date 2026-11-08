@@ -50,7 +50,9 @@ let active = null;
 let list = null;          // the last full body (a 304 keeps it)
 let drawn = false;
 let words = null;
-let openSheet = null;     // { kind: 'line', id, qty, mayGo } | { kind: 'past' } | { kind: 'place', id, mayGo }
+let openSheet = null;     // { kind: 'line', id, qty, mayGo, quietFrom } | { kind: 'past' } | { kind: 'place', id, mayGo, quietFrom }
+let readsStarted = 0;     // each read of the list is numbered as it starts
+let shownFrom = 0;        // the number of the last read that came back ok (a 304 too): the list on show is as of then
 let bought = null;
 let places = null;        // the place sheet's rows, read when it opens
 let adding = false;
@@ -227,8 +229,10 @@ function render(l) {
 
 async function load() {
   if (held()) return;
+  const n = ++readsStarted;
   const r = await Neon.get('/api/shopping', true);
   if (!r.ok) return;
+  shownFrom = n;
   if (r.json) {
     if (Neon.staleAssets(r.json.assets)) return;
     list = r.json;
@@ -352,7 +356,8 @@ function openLine(id) {
 }
 
 // The 5 s read: the open sheet's quantity and name follow the line unless a change waits or the rename box has focus; a line gone meanwhile
-// closes the sheet with the sentence (quietly after a rename that merged it into another line, whose sentence is shown already).
+// closes the sheet with the sentence (quietly after a rename that merged it into another line, whose sentence is shown already). A read that
+// started after the rename and still has the line shows it didn't merge, so a later removal says gone again (2026-11-07, the second review).
 function followLine(l) {
   if (!openSheet || (openSheet.kind !== 'line' && openSheet.kind !== 'place')) return;
   const item = allItems(l).find(i => i.id === openSheet.id);
@@ -362,6 +367,7 @@ function followLine(l) {
     if (!quiet && words) say(words.gone);
     return;
   }
+  if (openSheet.quietFrom !== undefined && shownFrom >= openSheet.quietFrom) openSheet.mayGo = false;
   if (openSheet.kind !== 'line') return;   // the place sheet's title is its question, not the line's name
   sheetTitle.textContent = item.name || item.text;
   if (!pendingQty) {
@@ -400,20 +406,22 @@ function syncRename() {
   renameSave.disabled = renameText.value.trim() === '';
 }
 
-// Whether it went through (2026-11-07: ⌖ place saves a typed name first and goes on only then).
+// The reply, or null when nothing was posted (2026-11-07: ⌖ place saves a typed name first, goes on only if it went through, and shows its sentence).
 async function saveRename() {
   const s = openSheet;
   const name = renameText.value.trim();
-  if (!s || s.kind !== 'line' || name === '') return false;
+  if (!s || s.kind !== 'line' || name === '') return null;
   if (pendingQty) await flushQty();
+  const from = readsStarted + 1;   // no read starts while the post runs (held), so the next one is the first to see the rename
   const r = await act('/api/shopping/rename', { id: s.id, name });
   if (r.ok) {
     s.mayGo = true;   // a merge takes this line away: the sheet then closes without a second sentence
+    s.quietFrom = from;
     renameText.blur();
   } else if (r.status === 404 && openSheet === s) {
     closeSheet();
   }
-  return r.ok;
+  return r;
 }
 
 // Whether the rename box holds a name other than the line's in the last read (2026-11-07), what ⌖ place saves before it opens.
@@ -458,19 +466,23 @@ Neon.armTwice(removeButton, paintRemove, () => {
 
 // ⌖ place (2026-11-07, the code review): a typed name is saved first, as Save would (it was dropped), then a waiting quantity is posted, and the
 // sheet opens only while the line's sheet is still the open one: closed meanwhile, it stays closed. After a rename the line may have merged into
-// another, which shows only at the next read, so the place sheet then closes quietly when the line is gone; the rename said what happened.
+// another, which shows only at the next read, so the place sheet then closes quietly when the line is gone; the rename said what happened, and
+// its sentence leads the place sheet's note (2026-11-07, the second review: showing the sheet wiped it).
 async function openPlace() {
   const s = openSheet;
   if (!s || s.kind !== 'line' || !words) return;
   const id = s.id;
-  let renamed = false;
+  let said = '';
   if (renameTyped()) {
-    if (!await saveRename()) return;   // refused or the line gone: its sentence is shown
-    renamed = true;
+    const r = await saveRename();
+    if (!r || !r.ok) return;   // refused or the line gone: its sentence is shown
+    said = r.message || '';
   }
   if (pendingQty) await flushQty();
   if (openSheet !== s) return;
-  showSheet({ kind: 'place', id, mayGo: renamed });
+  showSheet({ kind: 'place', id, mayGo: s.mayGo, quietFrom: s.quietFrom });
+  const withSaid = text => [said, text].filter(Boolean).join(' ');
+  sheetSay(said);
   places = null;
   placeList.replaceChildren();
   placeNone.classList.add('hidden');
@@ -488,12 +500,13 @@ async function openPlace() {
   }
 
   if (!r.ok || !r.json) {
-    sheetSay(words.placeFailed);   // the sheet stays, saying so (2026-11-07: it stayed empty)
+    sheetSay(withSaid(words.placeFailed));   // the sheet stays, saying so (2026-11-07: it stayed empty)
     return;
   }
+  openSheet.mayGo = false;   // read after the rename and the line is there: it didn't merge
   places = r.json;
   if (places.title) sheetTitle.textContent = places.title;   // an unavailable list's sheet has none: the line's name stays
-  sheetSay(places.note || '');
+  sheetSay(withSaid(places.note));
   drawPlaces();
 }
 

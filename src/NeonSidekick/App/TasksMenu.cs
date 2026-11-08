@@ -150,6 +150,7 @@ internal sealed class TasksMenu
             {
                 Filter = filters[i],
                 Hint = MenuFilter.Hint(Keys, filters[i]),
+                Placeholder = lists[i].Count == 0,
             }).ToList();
             var buttons = new List<MenuButton> { new("⟳ refresh", 'r') };
             if (showComputer)

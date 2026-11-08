@@ -585,6 +585,7 @@ internal sealed partial class SettingsMenu
             Filter = filter,
             SpaceToggles = true,
             Hint = MenuFilter.Hint(HomeBarText.PickHint + " · " + MenuFilter.TypeAndCloseKeys, filter),
+            Placeholder = total == 0,
         };
         return new HomeTab(tab, refs);
     }

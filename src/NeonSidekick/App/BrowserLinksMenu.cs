@@ -89,6 +89,7 @@ internal sealed class BrowserLinksMenu
                 {
                     Buttons = Buttons,
                     Filter = empty ? null : filter,
+                    Placeholder = shown.Count == 0,
                     Caption = empty ? null : MenuFilter.CaptionOrNull(filter, shown.Count, links.Count) ?? BrowserLinkText.Caption(links.Count, _window),
                     Footer = (_, row) => !empty && row < shown.Count ? BrowserLinkText.Footer(links[shown[row]], _zone) : null,
                     Moves = !empty && filter.Length == 0,   // the order is the whole list's: no moves while a filter shows part of it

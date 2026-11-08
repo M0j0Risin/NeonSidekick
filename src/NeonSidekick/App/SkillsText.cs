@@ -319,6 +319,16 @@ public static class SkillsText
         return Enumerable.Range(0, rows.Count).Where(i => rows[i].Heading).ToHashSet();
     }
 
+    /// <summary>
+    /// Whether <paramref name="rows"/> are one line standing in for a list (2026-11-07, <see cref="MenuTab.Placeholder"/>): skills off, none,
+    /// none in the scope, none loaded, or the filter's no match. Real rows always come under a heading, so a lone row naming no skill is one.
+    /// </summary>
+    public static bool IsPlaceholder(IReadOnlyList<(string Markup, Skill? Skill, bool Heading)> rows)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        return rows is [(_, null, false)];
+    }
+
     /// <summary>The Offered tab's first sub-tab (2026-10-10, the user's ask): every root's skills, the list as it was. Pinned.</summary>
     public const string AllSubTitle = "all";
 

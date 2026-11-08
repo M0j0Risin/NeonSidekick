@@ -301,6 +301,7 @@ internal sealed class DockerMenu
                 {
                     Buttons = ButtonsFor(llmOnly),
                     Filter = filter,
+                    Placeholder = shown.Count == 0,
                     Caption = llmOnly ? LlmCaption(shown.Count, listed.Count) : MenuFilter.CaptionOrNull(filter, shown.Count, listed.Count),
                     Footer = (_, row) => row < shown.Count ? Footer(listed[shown[row]]) : null,
                 };

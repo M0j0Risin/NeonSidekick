@@ -381,37 +381,6 @@ public static class Theme
         string.Concat("[", ToHex(Dim), "]", Markup.Escape(text), "[/]");
 
     /// <summary>
-    /// Whether <paramref name="markup"/> is nothing but <see cref="DimMarkup"/>'s output under the palette in force: dim text with no markup of its
-    /// own (2026-11-07, the code review: a menu's empty or placeholder row, which takes no slab). Pure.
-    /// </summary>
-    public static bool IsAllDim(string markup)
-    {
-        ArgumentNullException.ThrowIfNull(markup);
-        string open = string.Concat("[", ToHex(Dim), "]");
-        if (markup.Length <= open.Length + 3 || !markup.StartsWith(open, StringComparison.Ordinal) || !markup.EndsWith("[/]", StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        // Inside, every [ and ] is escaped (doubled): any other is a tag of its own.
-        var inner = markup.AsSpan(open.Length, markup.Length - open.Length - 3);
-        for (int i = 0; i < inner.Length; i++)
-        {
-            if (inner[i] is '[' or ']')
-            {
-                if (i + 1 >= inner.Length || inner[i + 1] != inner[i])
-                {
-                    return false;
-                }
-
-                i++;
-            }
-        }
-
-        return true;
-    }
-
-    /// <summary>
     /// Text in a theme slot's style (2026-10-04: <see cref="SystemText"/> and <see cref="ErrorText"/> had been defined and
     /// never used, so a user theme's override of either changed nothing). A style that is a colour alone writes exactly
     /// <see cref="ColorMarkup"/>'s form; anything more (bold, a background) its full markup. The text is escaped.

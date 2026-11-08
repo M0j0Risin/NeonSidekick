@@ -344,29 +344,30 @@ public sealed partial class ShoppingList(Func<ShoppingStore> store)
     {
         ArgumentNullException.ThrowIfNull(shop);
         ArgumentNullException.ThrowIfNull(item);
-        return ForgetFacts(shop, item, ItemFacts(shop, item.Name));
+        return ForgetFacts(shop, item, ItemFacts(shop, item.Name)).Reply;
     }
 
     /// <summary>
     /// <see cref="ForgetItem"/> over <paramref name="facts"/>, the item facts the caller already read (2026-11-07, the code review: the Web UI's forget
     /// read them twice). All of them go in one transaction or none do; none left to forget (another device was first) is
-    /// <see cref="ShoppingText.NotPlaced"/>.
+    /// <see cref="ShoppingText.NotPlaced"/>. <c>Forgot</c> (the second review: the Web UI told it from the sentence) is whether any went, which is
+    /// when the answer is audited.
     /// </summary>
-    public string ForgetFacts(ShopStore shop, ShopItem item, IReadOnlyList<ShopPlacement> facts)
+    public (string Reply, bool Forgot) ForgetFacts(ShopStore shop, ShopItem item, IReadOnlyList<ShopPlacement> facts)
     {
         ArgumentNullException.ThrowIfNull(shop);
         ArgumentNullException.ThrowIfNull(item);
         ArgumentNullException.ThrowIfNull(facts);
         if (facts.Count == 0)
         {
-            return ShoppingText.NotPlaced(shop, item.Name);
+            return (ShoppingText.NotPlaced(shop, item.Name), false);
         }
 
         return _store().RemovePlacements([.. facts.Select(f => f.Id)]) switch
         {
-            null => "Error: " + ShoppingText.WriteFailed,
-            0 => ShoppingText.NotPlaced(shop, item.Name),
-            _ => Logged(ShoppingText.Unplaced(shop, facts[0].Term)),
+            null => ("Error: " + ShoppingText.WriteFailed, false),
+            0 => (ShoppingText.NotPlaced(shop, item.Name), false),
+            _ => (Logged(ShoppingText.Unplaced(shop, facts[0].Term)), true),
         };
     }
 

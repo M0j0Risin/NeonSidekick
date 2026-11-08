@@ -309,7 +309,7 @@ internal sealed class QueueMenu
             while (_queue.Count == 0 && Modes is { } modes)
             {
                 var buttons = Buttons(send: false, modes, empty: true);
-                var page = new MenuPage(Title, [Theme.DimMarkup(EmptyNotice)], EmptyKeys) { Buttons = buttons };
+                var page = new MenuPage(Title, [Theme.DimMarkup(EmptyNotice)], EmptyKeys) { Buttons = buttons, Placeholder = true };
                 var picked = await _pane.PickAsync(page, 0, cancellationToken).ConfigureAwait(false);
                 if (picked is null)
                 {

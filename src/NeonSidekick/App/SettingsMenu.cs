@@ -5189,6 +5189,7 @@ internal sealed partial class SettingsMenu
                 var page = new MenuPage(title, text.Length > 0 && shown.Count == 0 ? [MenuFilter.NoMatchRow(text)] : FilteredRows(labels, shown), MenuFilter.HintBeforeEsc(baseHint, text, letteredButtons: embedded))
                 {
                     Filter = text,
+                    Placeholder = shown.Count == 0,
                     Caption = MenuFilter.CaptionOrNull(text, shown.Count, servers.Count),
                     Footer = (_, row) => row < shown.Count ? ServerFooter(servers[shown[row]]) : null,
                 };
@@ -8781,7 +8782,7 @@ internal sealed partial class SettingsMenu
             // Every row laid out over the whole catalog, so a filter does not move the columns.
             var labels = EmbeddedModelLabels(embedded.Catalog, embedded.State, embedded.BytesToDownload);
             var shown = filter.Arrange(Enumerable.Range(0, embedded.Catalog.Count).Where(i => filter.Matches(embedded.Catalog[i], embedded.State(embedded.Catalog[i]).IsInstalled)).ToList(), i => embedded.Catalog[i]);
-            var page = new MenuPage(Crumb(FieldName(SettingsField.EmbeddedModels)), FilteredRows(labels, shown), EmbeddedModelsKeys);
+            var page = new MenuPage(Crumb(FieldName(SettingsField.EmbeddedModels)), FilteredRows(labels, shown), EmbeddedModelsKeys) { Placeholder = shown.Count == 0 };
             if (await PickChecklistAsync(page, Math.Max(0, shown.IndexOf(cursor)), cancellationToken, filter.Buttons(withInstalled: true)).ConfigureAwait(false) is not { } pick)
             {
                 return Unchanged();

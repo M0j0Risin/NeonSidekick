@@ -122,6 +122,7 @@ internal sealed class SavedPromptsMenu
                 {
                     Buttons = Buttons,
                     Filter = empty ? null : filter,
+                    Placeholder = shown.Count == 0,
                     Caption = empty ? null : MenuFilter.CaptionOrNull(filter, shown.Count, prompts.Count) ?? SavedPromptText.PaneCaption(prompts.Count),
                     Footer = (_, row) => !empty && row < shown.Count ? SavedPromptText.Footer(prompts[shown[row]], _zone) : null,
                     Moves = !empty && filter.Length == 0,   // the order is the whole list's: no moves while a filter shows part of it

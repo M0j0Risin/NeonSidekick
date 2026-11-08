@@ -415,6 +415,7 @@ internal sealed class SkillsMenu
                 Caption = MenuFilter.CaptionOrNull(filter, rows.Count(r => r.Skill is not null), session.Count),
                 Footer = row => row >= 0 && row < rows.Count && rows[row].Skill is { } skill ? new MenuFooter(skill.Description, LockedLast(skill)) : null,
                 Badge = SkillsText.LoadedBadge(session),
+                Placeholder = SkillsText.IsPlaceholder(rows),
             });
         }
 
@@ -448,6 +449,7 @@ internal sealed class SkillsMenu
             Filter = filter,
             Caption = MenuFilter.CaptionOrNull(filter, rows.Count(r => r.Skill is not null), facts.Skills.Concat(facts.Shadowed).Count(s => scope is null || s.Scope == scope)),
             Footer = row => row >= 0 && row < rows.Count && rows[row].Skill is { } skill ? new MenuFooter(skill.Description, LockedLast(skill)) : null,
+            Placeholder = SkillsText.IsPlaceholder(rows),
         };
     }
 

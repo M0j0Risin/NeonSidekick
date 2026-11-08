@@ -186,6 +186,7 @@ internal sealed class ProcessMenu
                 {
                     Buttons = ButtonsFor(running),
                     Caption = Caption(sessions),
+                    Placeholder = shown.Count == 0,
                     Footer = (_, row) => row < shown.Count ? ProcessWindowText.Footer(shown[row]) : null,   // the whole command (2026-10-07)
                 };
                 var picked = await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false);

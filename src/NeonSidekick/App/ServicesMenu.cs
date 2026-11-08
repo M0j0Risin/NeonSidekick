@@ -134,6 +134,7 @@ internal sealed class ServicesMenu
             {
                 Filter = filters[i],
                 Hint = MenuFilter.Hint(Keys, filters[i]),
+                Placeholder = lists[i].Count == 0,
             }).ToList();
             var page = MenuPage.Tabbed(TitleFor(source.Where), tabs, tab, Keys) with
             {

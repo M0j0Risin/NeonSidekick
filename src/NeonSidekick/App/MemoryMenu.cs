@@ -260,7 +260,7 @@ internal sealed class MemoryMenu
                     string hint = entries.Count > 0 ? SwitchKeys : EmptySwitchKeys;
                     list = entries.Count > 0
                         ? new MenuPage(Title, entries.Select(RowMarkup).ToList(), add ? hint : WithoutAdd(hint)) { Footer = (_, row) => Footer(shown, row) }
-                        : new MenuPage(Title, [Theme.DimMarkup(EmptyNotice)], add ? hint : WithoutAdd(hint));
+                        : new MenuPage(Title, [Theme.DimMarkup(EmptyNotice)], add ? hint : WithoutAdd(hint)) { Placeholder = true };
                     list = list with { Buttons = Buttons(mode, add), Removes = entries.Count > 0 };
                     pick = await _pane.PickAsync(list, cursor, cancellationToken).ConfigureAwait(false);
                     if (pick is { Button: ModeIndex } pressed)
@@ -276,7 +276,7 @@ internal sealed class MemoryMenu
                     bool add = Line is not null;
                     list = entries.Count > 0
                         ? new MenuPage(Title, entries.Select(RowMarkup).ToList(), add ? Keys : PlainKeys) { Footer = (_, row) => Footer(shown, row) }
-                        : new MenuPage(Title, [Theme.DimMarkup(EmptyNotice)], add ? Keys : PlainKeys);
+                        : new MenuPage(Title, [Theme.DimMarkup(EmptyNotice)], add ? Keys : PlainKeys) { Placeholder = true };
                     list = list with { Buttons = add ? [new MenuButton(AddButton, AddKey)] : null, Removes = entries.Count > 0 };
                     pick = await _pane.PickAsync(list, cursor, cancellationToken).ConfigureAwait(false);
                     if (pick is { Button: >= 0 } adding)

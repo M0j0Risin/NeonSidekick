@@ -150,6 +150,7 @@ internal sealed partial class SettingsMenu
                 var page = new MenuPage(Crumb(SearchCrumbLabel(query)), rows, SearchKeys)
                 {
                     Filter = query,
+                    Placeholder = found.Count == 0,
                     Footer = (_, row) => row < found.Count ? FieldFooter(found[row].Field, _settings.Current) : null,
                 };
                 if (await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { } pick)
@@ -234,6 +235,7 @@ internal sealed partial class SettingsMenu
                 var page = new MenuPage(Crumb(ChangedLabel), rows, ChangedKeys)
                 {
                     Buttons = changed.Count > 0 ? [new MenuButton(ResetButton, ResetKey)] : null,
+                    Placeholder = changed.Count == 0,
                     Footer = (_, row) => row < changed.Count ? FieldFooter(changed[row].Field) : null,
                 };
                 if (await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { } pick)
