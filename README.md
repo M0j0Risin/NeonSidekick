@@ -15,10 +15,11 @@ It's one app for research, IT and admin work (Active Directory, event logs, data
 * **Built for local models:** it recovers when a model fumbles a tool call or runs short of context, and downloads only models tested with its tools.
 * **Long jobs on a small context window:** `/plan` reviews the plan until no gaps remain, then the Ralph loop runs each step in a fresh conversation, checked before the next.
 * **Frontier help when you want it:** a frontier advisor helps your local model when it's stuck, reviews its plans and checks its steps, so frontier tokens go only where they count.
-* **Built in, not scripted:** the database, admin and smart-home tools are native code that talks to each system directly, so a small model makes one call, with nothing to install.
+* **Built in, not scripted:** databases, Active Directory, event logs, services, Docker, Office files and Home Assistant are native code that talks to each system directly, so a small model makes one call.
 * **Guardrails in code, not in the prompt:** databases are read-only by default, Active Directory always, and the shell police blocks harmful commands and paths outside the working folder, even under `yolo`.
 * **Set up without editing files:** it finds a server on your network, downloads a model or takes a key; wizards add databases, shares and remote computers, warning when an account could change data.
 * **Talk to it, or use your phone:** voice in and out, and the Web UI puts your phone in the same live session.
+* **More than a terminal:** its own windows show pictures, the camera, a web browser, YouTube, the log and background output when text isn't enough.
 * **No black box:** `/usage` shows the prompt, every tool and every skill the model is sent, and the persona and operating rules are files you can edit.
 
 <p align="center">
@@ -262,7 +263,7 @@ A [command-line option](docs/COMMANDLINE.md) or an [environment variable](docs/E
 
 ## About
 
-**Inspiration:** I started out with Claude Code, Hermes Agent and Cline, and kept wishing one app had the parts I liked from each, with more utilitarian tools, on my own hardware. Neon Sidekick is that app.
+**Inspiration:** A big reason for Neon Sidekick was tools. Claude Code, Hermes Agent and Cline showed me what an agent could do. I wanted more utilitarian tools for databases, admin work and the house, built in as native code rather than scripts or add-on servers, on my own hardware.
 
 **Why "Neon":** I was trying synthwave-style themes in Spectre.Console while testing the Vosk voice integration, and needed a short, punchy wake word. "Neon" fit the look, and the name stuck.
 
