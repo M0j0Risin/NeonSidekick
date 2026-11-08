@@ -5665,10 +5665,10 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("LLM server scan mode", SettingsMenu.RowName(SettingsField.LlmScanMode, SettingsMenu.HttpTabTitle));   // whole on the Http tab (2026-10-10)
         Assert.Equal("Session logging", SettingsMenu.RowName(SettingsField.SessionLogging, "Sessions"));
         Assert.Equal("Theme", SettingsMenu.RowName(SettingsField.Theme, SettingsMenu.ChatTabTitle));
-        // The footer: the help's text without its Markdown, the default on its own line.
+        // The footer: the brief without its Markdown, the default on its own line.
         var footer = SettingsMenu.FieldFooter(SettingsField.MemoryMode);
         Assert.DoesNotContain("`", footer.Text);
-        Assert.StartsWith("What the model may do with long-term memory", footer.Text);
+        Assert.StartsWith("The model's long-term memory. read-write", footer.Text);   // the brief, not the manual's text, since 2026-11-08
         Assert.Equal("Default: read-write", footer.Last);
         Assert.Equal("a b c", SettingsMenu.PlainHelp("`a` *b* c"));
     }

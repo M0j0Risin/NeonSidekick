@@ -7,9 +7,10 @@ namespace NeonSidekick.Help;
 /// embedded README), for <c>neon_help</c> (<see cref="NeonHelp"/>). Seeded from README's "What it does" columns; a new
 /// <see cref="SettingsField"/> needs its line here as it needs its docs/SETTINGS.md row, README's until 2026-10-05 (<c>NeonHelpCatalogTests</c> fails on a field
 /// without one). Where the row lives and its default are worked out from the menus' own lists (<see cref="HelpLocation"/>),
-/// never written here.
+/// never written here. Since 2026-11-08 (the user's call: the band under a settings list read like the manual) each row has two
+/// texts: this full one for the manual, and a short one for the band (<see cref="Brief"/>, in <c>HelpSettings.Briefs.cs</c>).
 /// </summary>
-public static class HelpSettings
+public static partial class HelpSettings
 {
     /// <summary>The row's purpose, plain text (backticks and <c>*Setting*</c> names kept); on macOS <see cref="HelpMac.Settings"/>' text where it has one (2026-10-06).</summary>
     public static string Describe(SettingsField field) =>

@@ -241,6 +241,12 @@ public sealed class MacTidyUpTests : IDisposable
             Assert.NotEqual("", text);
         }
 
+        foreach (var (field, text) in HelpMac.Briefs)   // a Mac brief stands in for a brief the table holds (2026-11-08)
+        {
+            Assert.NotEqual("", HelpSettings.BriefAsWritten(field));
+            Assert.NotEqual("", text);
+        }
+
         var syntaxes = HelpCommands.AsWritten.SelectMany(c => c.Forms).Select(f => f.Syntax).ToHashSet(StringComparer.Ordinal);
         foreach (string syntax in HelpMac.Forms.Keys)
         {
@@ -260,6 +266,11 @@ public sealed class MacTidyUpTests : IDisposable
         foreach (var field in HelpMac.Settings.Keys)
         {
             Assert.Equal(HelpSettings.DescribeAsWritten(field), HelpSettings.Describe(field));
+        }
+
+        foreach (var field in HelpMac.Briefs.Keys)   // the band's briefs too (2026-11-08)
+        {
+            Assert.Equal(HelpSettings.BriefAsWritten(field), HelpSettings.Brief(field));
         }
     }
 
@@ -283,6 +294,11 @@ public sealed class MacTidyUpTests : IDisposable
             Assert.DoesNotContain("Credential Manager", text);
             Assert.DoesNotContain("%USERPROFILE%", text);
             Assert.DoesNotContain("cmdkey", text);
+            string brief = HelpSettings.Brief(field);   // the band's brief too (2026-11-08)
+            Assert.DoesNotContain("DPAPI", brief);
+            Assert.DoesNotContain("Credential Manager", brief);
+            Assert.DoesNotContain("Recycle bin", brief);
+            Assert.DoesNotContain("cmdkey", brief);
         }
 
         var forms = HelpCommands.Commands.SelectMany(c => c.Forms).ToDictionary(f => f.Syntax, f => f.Meaning, StringComparer.Ordinal);

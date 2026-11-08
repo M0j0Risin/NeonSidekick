@@ -97,6 +97,49 @@ public class NeonHelpTests
     }
 
     /// <summary>
+    /// Every setting has a brief for the band under the list (2026-11-08, the user's call: the band showed the manual's text), and every
+    /// brief, a Mac's too, is short plain text: at most 200 characters, whole in the band's rows at 80 columns, no Markdown, no OS tag
+    /// (a Mac never shows the Windows-only menus) and no "by default" (the band's last line is the default).
+    /// </summary>
+    [Fact]
+    public void EverySetting_HasABrief_ThatFitsTheBand()
+    {
+        var problems = new List<string>();
+        var texts = Enum.GetValues<SettingsField>().Select(f => (Field: f, Text: HelpSettings.BriefAsWritten(f), Mac: false))
+            .Concat(NeonSidekick.Help.HelpMac.Briefs.Select(p => (Field: p.Key, Text: p.Value, Mac: true)));
+        foreach (var (field, text, mac) in texts)
+        {
+            string name = field + (mac ? " (Mac)" : "");
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                problems.Add(name + ": no brief");
+                continue;
+            }
+
+            var lines = NeonSidekick.UI.MenuPane.FooterLines(new NeonSidekick.UI.MenuFooter(text, SettingsMenu.DefaultLabel + "x"), 80 - NeonSidekick.UI.MenuPane.NoPointer.Length);
+            string shown = string.Join(' ', lines.Take(lines.Count - 1));
+            if (text.Length > 200)
+            {
+                problems.Add($"{name}: {text.Length} characters");
+            }
+            else if (shown != text)
+            {
+                problems.Add(name + ": cut in the band at 80 columns");
+            }
+
+            foreach (string banned in new[] { "`", "*", "Windows only", "by default" })
+            {
+                if (text.Contains(banned, StringComparison.Ordinal))
+                {
+                    problems.Add($"{name}: has \"{banned}\"");
+                }
+            }
+        }
+
+        Assert.True(problems.Count == 0, string.Join("\n", problems));
+    }
+
+    /// <summary>
     /// Off Windows the help leaves out the menus only Windows has (2026-10-22, the user's ask): the Services and Tasks menus' rows, and
     /// those alone, so <c>neon_help</c>, its search and <c>/settings</c>' search and changed page never name a row a Mac does not show.
     /// </summary>

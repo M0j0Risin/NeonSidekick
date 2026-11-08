@@ -282,11 +282,12 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// What the pane says under the list about <paramref name="field"/> (2026-10-04, the UI review: no row said what it does, while
-    /// <c>neon_help</c> had every one's description): <see cref="HelpSettings.Describe"/> as plain text (its Markdown's backticks
-    /// and asterisks dropped), then its compiled default on a last line of its own (<see cref="HelpLocation.Default"/>). Pinned.
+    /// <c>neon_help</c> had every one's description): <see cref="HelpSettings.Brief"/> as plain text (the manual's long
+    /// <see cref="HelpSettings.Describe"/> until 2026-11-08, the user's call: it read like the manual and ran past the band), then its
+    /// compiled default on a last line of its own (<see cref="HelpLocation.Default"/>). Pinned.
     /// </summary>
     public static MenuFooter FieldFooter(SettingsField field) =>
-        new(PlainHelp(HelpSettings.Describe(field)), DefaultLabel + HelpLocation.Default(field));
+        new(PlainHelp(HelpSettings.Brief(field)), DefaultLabel + HelpLocation.Default(field));
 
     /// <summary>The start of the footer's last line. Pinned.</summary>
     public const string DefaultLabel = "Default: ";

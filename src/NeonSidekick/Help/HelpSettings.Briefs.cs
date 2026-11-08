@@ -1,0 +1,531 @@
+using NeonSidekick.App;
+
+namespace NeonSidekick.Help;
+
+public static partial class HelpSettings
+{
+    /// <summary>
+    /// The row's short text for the band under a settings list (<see cref="SettingsMenu.FieldFooter(SettingsField)"/>), 2026-11-08,
+    /// the user's call: the band showed <see cref="Describe"/>, the manual's text, which read oddly there and ran past the band's
+    /// rows. A few short plain sentences, at most 200 characters (<c>NeonHelpTests</c> holds them to it); the manual keeps the
+    /// detail. On macOS <see cref="HelpMac.Briefs"/>' text where it has one.
+    /// </summary>
+    public static string Brief(SettingsField field) =>
+        OperatingSystem.IsMacOS() && HelpMac.Brief(field) is { } mac ? mac : BriefAsWritten(field);
+
+    /// <summary>The row's short text as written here, every system's but where <see cref="HelpMac.Briefs"/> has a Mac text. In the menus' order.</summary>
+    internal static string BriefAsWritten(SettingsField field) => field switch
+    {
+        // /settings › Client › Chat
+        SettingsField.Profile => "Switches to another profile for this run. Each profile has its own settings, persona, memory, skills and sessions.",
+        SettingsField.WorkingDirectory => "The folder the file and git tools work in. Empty uses the profile's own files folder. Enter opens a folder picker.",
+        SettingsField.MemoryMode => "The model's long-term memory. read-write: it saves and recalls. read-only: it recalls only (your /remember still saves). off: no memory at all.",
+        SettingsField.ModelAvatar => "The profile's emoji, shown at the start of each reply, on its /botchat lines and in the window title. Enter opens the emoji picker.",
+        SettingsField.UserAvatar => "Your emoji, shown at the start of each of your lines in the transcript in place of ›. Enter opens the emoji picker; clearing it brings back ›.",
+        SettingsField.CheckForUpdatesAtStart => "Checks GitHub for a new version at each launch and shows a notice when one is out. It sends no user data. Off, /update still works by hand.",
+        SettingsField.QueueMode => "automatic: messages sent during a reply wait in /queue and go when it ends. manual: every message waits until you send it from /queue. off: no queue.",
+        SettingsField.QueueCancelMode => "When you cancel a reply: hold keeps the queue until your next message, drain sends the next queued message at once, and empty clears the queue.",
+        SettingsField.KeepMessageHistory => "Saves your ↑/↓ input history (the newest 100 lines) so it survives restarts and profile switches. Off deletes the saved lines when the profile next loads.",
+        SettingsField.CommandTypoIntercept => "Asks \"Did you mean /clear?\" when you type a command without its slash, or with extra slashes, instead of sending it to the model.",
+        SettingsField.HideExitAutocomplete => "Lists /exit in the / autocomplete. Off leaves it out, so a stray pick can't close the app; typing /exit in full still works.",
+        SettingsField.EmojiPicker => "Shows a ☺ at the right end of the input line. Clicking it opens the emoji picker and puts the emoji you pick at the cursor.",
+        SettingsField.TranscriptMarkdown => "Renders replies as Markdown, with syntax-highlighted code blocks. Off shows replies as plain text.",
+        SettingsField.PastePreviewLines => "Lines of a long paste shown dimmed under its [Pasted text #n] placeholder (0–200; 0 = the placeholder alone).",
+        SettingsField.ShowImageThumbnails => "Shows thumbnails in the transcript of pictures you send, pictures the tools fetch or make, and /botchat drawings. /view and /imagine show theirs either way.",
+        SettingsField.ImageThumbnailSize => "The size of the transcript's thumbnails, from tiny (32×8 cells) to xlarge (96×24), or fullsize to draw each picture as large as the transcript allows.",
+        SettingsField.CopyUserPrompt => "/copy includes your prompt above the reply. Off, it copies the reply alone.",
+        SettingsField.UserLineStyle => "The look of your sent lines in the transcript and the Web UI: quiet (only the › in your color), slab (the line on a faint fill) or bold (all of it bold).",
+        SettingsField.ReplyFooter => "Adds a dim line under each reply with its time, tokens, speed, tool calls and model.",
+        SettingsField.Theme => "The app's color theme: one of the sixty built-in themes, or your own from the home folder's themes folder.",
+        SettingsField.ThemedBackground => "Paints the terminal's background in the theme's color while the app runs, and puts yours back when it exits. Off keeps your terminal's own background.",
+        SettingsField.ThemedExternalWindows => "The app's own windows (the picture viewer, the log windows, the video and Browser windows…) take the theme's colors and a matching title bar. Off, they stay black.",
+        SettingsField.GradientRules => "Shades the rules around the input line and pane headings along the theme's gradient. Off keeps them flat.",
+        SettingsField.WelcomeSplash => "Shows a picture (image) or an animated robot (robot) under the banner at startup, until your first message. Pictures in the profile's splash folder replace the built-in ones.",
+        SettingsField.ShowHeader => "Shows the banner (title, version and rule) at startup and after /clear, /theme or a profile switch. Off, the screen starts with the transcript.",
+        SettingsField.ShowWorkingDirectory => "Shows the working directory at the right of the banner's title line.",
+        SettingsField.MenuMaxHeight => "The most of the window a menu or info pane may take: half, three-quarters or full. A longer list scrolls inside it.",
+        SettingsField.HintsBar => "Gives the key hints a bar of their own above the Status bar. auto shows it while there is a hint, always keeps it, off puts the hints on the Status bar.",
+        SettingsField.StatusBarItems => "Which sections the Status bar under the input line shows, in what order and on which side. Enter opens the checklist.",
+        SettingsField.ToolbarItems => "Which icons and items the tool bar shows, in what order and on which side. Enter opens the checklist, where you can also add dividers or hide the bar.",
+        SettingsField.ShowPerformanceBar => "Which meters the performance bar shows (CPU, RAM, GPU and its memory, network, background processes), where, and how they look. Enter opens the checklist.",
+        SettingsField.ShowHomeBar => "A bar of chips for Home Assistant rooms and devices (and the shopping list) that shows their state and switches them. Enter opens the picker.",
+        SettingsField.BarOrder => "The top-to-bottom order of the bars under the input line: Hints, Status, Tool, Performance and Home. Each bar's own row shows or hides it.",
+        SettingsField.DraftEditor => "The program /draft opens your draft in (such as code --wait); it must wait until the file is closed. Empty uses your default editor for .txt files.",
+        SettingsField.ImageEditor => "Where a picture you double-click, or the model opens, is shown. Empty: the built-in viewer. system: your system's app for the file type. Anything else: a command.",
+
+        // /settings › Client › Sessions
+        SettingsField.SessionLogging => "Saves every finished turn to the profile's session database, so /sessions can list, search and restore it.",
+        SettingsField.SessionSaveThinking => "Saves each reply's thinking with the session, so a resumed session can send it back while LLM preserve thinking is on. Makes the database bigger.",
+        SettingsField.SessionRetentionDays => "Deletes sessions at startup once their last turn is older than this many days (0–3650; 0 = keep forever).",
+        SettingsField.SessionNamingMode => "A session's title: model-written asks the model for a short name after the first turn; first-line uses the first line you sent.",
+        SettingsField.SessionShowName => "Which session titles show above the input row: all, model-written (only names the model wrote or you typed) or none.",
+        SettingsField.SessionTool => "Offers the model session_manager, to search, list and read this profile's earlier sessions. It can never restore or delete them.",
+        SettingsField.SessionSearchMaxResults => "The most sessions one session_manager search or list returns (1–20).",
+
+        // /settings › Client › Botchat
+        SettingsField.BotChatLlmMode => "Whose LLM the bots use. single: this profile's server, model and reasoning for every bot. multi: each bot uses its own profile's.",
+        SettingsField.BotChatMultiEmbedded => "In LLM mode multi, a bot whose profile names another embedded model: parent-server uses the running model; multi-server starts an extra server for it (more memory).",
+        SettingsField.BotChatMultiEmbeddedKill => "Stops the extra embedded servers when the botchat ends. Off keeps them running for later botchats until /botchat --kill or you quit.",
+        SettingsField.BotChatLimitedComfyWorkflows => "The ComfyUI workflows the bots may draw with. With none ticked, the chat is talk only. Needs ComfyUI tools on and a ComfyUI URL.",
+        SettingsField.BotChatImageMode => "Who draws: automatic, the app draws a picture from each reply; autonomous, the bots get generate_image and draw when they choose.",
+        SettingsField.BotChatImg2ImgMode => "Which picture a rework starts from: the latest one, or any of the last 8 (chat-history). Needs an image-to-image workflow among the bots' workflows.",
+        SettingsField.BotChatImageMentionMode => "When a bot mentions a picture it never drew: off ignores it, generate has ComfyUI draw it. Only with Botchat image mode autonomous.",
+        SettingsField.BotChatImageAsync => "Lets the next bot speak while a picture renders; the picture appears when nothing is streaming. Off holds each reply until its picture is drawn.",
+        SettingsField.BotChatNonTtsDelaySeconds => "A pause after each reply when no voice plays, so you have time to read it (0–30 s; 0 = no pause). Sending a line ends the pause.",
+        SettingsField.BotChatLimitedTools => "The tools the bots get: camera, clock, image, questions, screen, timers, web and YouTube. A tool is offered only while this chat would offer it too.",
+        SettingsField.BotChatLimitedSkills => "The skills the bots may load. With none ticked, the bots get no skill tool. Needs Agent skills.",
+        SettingsField.BotChatMemory => "Gives every bot long-term memory, whatever each profile's Memory mode says. Botchat memory mode says whose memories they use.",
+        SettingsField.BotChatMemoryMode => "Whose memories the bots use: shared-parent, the starting profile's for every bot; independent, each bot its own profile's.",
+        SettingsField.BotChatVision => "Shows each bot the chat's newest pictures on its turn. Only for models that read images: a text-only server fails the turn.",
+        SettingsField.BotChatCamera => "Lets the bots see you: the camera stays on for the chat and each bot's turn gets a fresh photo, kept in memory and never saved. Needs a model that reads images.",
+        SettingsField.BotChatRecentContext => "Gives every bot the last 10 messages of this chat from when /botchat began, so the topic can build on them. Off, the bots know the topic alone.",
+
+        // /settings › Client › Web UI
+        SettingsField.WebUi => "Hosts the Web UI: a browser on your phone or another computer shows the chat live, sends messages and answers the app's questions. /webui shows the sign-in link.",
+        SettingsField.WebUiPort => "The TCP port the Web UI listens on (1024–65535). Changing it signs browsers out; run tailscale serve again if you use it.",
+        SettingsField.WebUiReach => "Who can reach the Web UI: local (this computer, and a proxy on it such as Tailscale Serve) or lan (your home network and tailnet). Browsers still need the sign-in link.",
+        SettingsField.WebUiHttpsAddress => "The https address /webui offers first: auto finds Tailscale Serve's, off hides it, or type your own proxy's. Its link holds the sign-in token, so type only an address that reaches this computer.",
+        SettingsField.WebUiCommands => "Lets the Web UI's Chat tab run slash commands. Commands that need the PC's own windows or panes are refused. Off, the page only sends messages.",
+        SettingsField.WebUiConnectionDetails => "Shows each database connection's and share's server and database in the Web UI's mention dropdown. Off, it shows their names alone.",
+        SettingsField.WebUiBotCheckControl => "Lets the Web UI show and control the Browser window during a bot check, so you can pass the check from your phone.",
+        SettingsField.WebUiProfileTheme => "Dresses the Web UI's pages in the profile's theme, following theme changes. Off, the pages keep their own look.",
+        SettingsField.WebUiChatControls => "Shows the Web UI's Chat tab: the transcript, the message box, and answers to the PC's questions.",
+        SettingsField.WebUiHomeControls => "Shows the Web UI's Home tab, which controls Home Assistant devices, rooms and scenes. Unlocking and opening doors still ask first.",
+        SettingsField.WebUiShoppingControls => "Shows the Web UI's Shopping tab, to see and change the shopping list from your phone.",
+        SettingsField.WebUiYouTubeControls => "Shows the Web UI's YouTube tab, which plays videos and keeps the saved list. A video started there plays there.",
+
+        // /settings › Servers › Common
+        SettingsField.LlmUrl => "The LLM server: an OpenAI-compatible base URL, embedded for the built-in model, or docker:<container>. Empty scans for a server and lets you pick one at startup.",
+        SettingsField.LlmModel => "The model id. Empty takes the first model the server lists. /model picks one.",
+        SettingsField.LlmReasoning => "The model's thinking effort, sent with every request: none (thinking off), low, medium, high or xhigh.",
+        SettingsField.LlmShowThinking => "Streams a reasoning model's thinking as a dim block that folds away when the answer starts. Needs Transcript markdown.",
+        SettingsField.LlmOfferTools => "Gives the model its tools. Turn it off for chat templates with no tool role. Changing it starts a new conversation.",
+        SettingsField.LlmMaxToolIterations => "The most tool round trips one message may make before the turn stops (1–10000).",
+        SettingsField.LlmRequestTimeoutSeconds => "The longest one HTTP request to the server may take (up to 3600 s).",
+        SettingsField.LlmTurnTimeoutSeconds => "The longest one whole turn may take, its tool calls included (up to 21,600 s).",
+        SettingsField.LlmContextLength => "The model's context window in tokens, used for the usage percentage. 0 takes the server's own figure.",
+        SettingsField.LlmMidTurnUsage => "The token usage on the status bar during a reply: estimate updates it live (marked ~); last-known shows the last finished request's figures.",
+        SettingsField.LlmMaxTurns => "The user turns the model sees before the oldest drop off (1–500). auto keeps them all while auto compact can run, and 24 otherwise.",
+        SettingsField.LlmAutoCompactPercent => "Compacts the conversation before your next message once the context window is this full (1–100 %; 0 = off). LLM tool compact mode acts at the same share mid-reply.",
+        SettingsField.LlmCompactType => "/compact's method: summary folds the older turns into one summary the model writes; prune replaces bulky tool results with short stubs and keeps every turn.",
+        SettingsField.LlmCompactKeepRecent => "The most recent user turns a compact keeps word for word (0–24).",
+        SettingsField.LlmCompactShowSummary => "After a compact, shows what it did: the summary, or a line per pruned tool result.",
+        SettingsField.LlmToolCompactType => "When one reply's tool calls fill the context to the auto compact share: compact summarizes, prune stubs old results, stop ends the turn, off does nothing.",
+        SettingsField.LlmPictureKeep => "The most pictures one request carries, a PDF counting as one (0–500; 0 = no cap). Past it the oldest leave the conversation; the newest message's always stay.",
+        SettingsField.LlmPictureMegabytes => "The most megabytes of pictures and PDFs one request carries (0–1000; 0 = no cap). Past it the oldest leave. It also caps what one message may attach.",
+        SettingsField.LlmUseFunVerbs => "The thinking spinner shows a random verb instead of thinking or writing.",
+
+        // /settings › Servers › Http
+        SettingsField.LlmScanMode => "Where the app looks for a server while LLM URL is empty: local (this machine), lan (the local network), both, or off (set it by hand or pick one in /server).",
+        SettingsField.LlmApiKey => "The bearer token the server expects, saved encrypted. Leave it empty for a local server that needs none.",
+        SettingsField.LlmPreserveThinking => "Sends the model's thinking from earlier turns back to a local server and asks the chat template to keep it. It costs context.",
+        SettingsField.LlmReasoningEstimate => "Fills in /usage's Reasoning count when the server doesn't count thinking: chars estimates from its length, tokenize asks llama.cpp for the exact count, off shows —.",
+        SettingsField.LlmSampling => "Sampling overrides per model (temperature, top_p, top_k and more). The row lists the models that have some; Enter opens the /sampling pane.",
+        SettingsField.LlmSamplingFromHuggingFace => "Shows a model's recommended sampling from its Hugging Face model card when the server reports none. For display only; your API key is never sent.",
+
+        // /settings › Servers › Embedded
+        SettingsField.EmbeddedLlmServer => "Offers the embedded models in /server. Off, none is offered and a running embedded server stops; installed models stay on disk.",
+        SettingsField.EmbeddedModels => "The embedded models, each with its size and state. Enter on one installs, uses or removes it. The title row's buttons filter and sort the list.",
+        SettingsField.EmbeddedHfDownloadType => "Model downloads from Hugging Face: parallel uses 8 connections per file, about twice as fast; single uses one.",
+        SettingsField.EmbeddedBackend => "Which llama.cpp build runs the model: auto picks CUDA, then Vulkan, then the CPU; or choose cuda, vulkan or cpu. The row shows what auto picked.",
+        SettingsField.EmbeddedContextSize => "The server's context window in tokens (512–262,144). 0 fits the largest context that keeps every layer on the GPU.",
+        SettingsField.EmbeddedGpuLayers => "The model's layers on the GPU: auto (as many as free VRAM holds), all, or a number (0 runs on the CPU).",
+        SettingsField.EmbeddedVramBudget => "The share of GPU memory the embedded server may fill: off, or 50–99 %. To fit, the context shrinks first, then layers move to the CPU, which is much slower.",
+        SettingsField.EmbeddedVramOnly => "Keeps the whole model on the GPU: every layer goes there, and the server stops, saying what to lower, if it does not all fit.",
+        SettingsField.EmbeddedVision => "Loads the model's vision projector so it can read images, at the cost of more memory (about 1 GB for most models). Off, images are refused.",
+        SettingsField.EmbeddedDrafter => "Speeds up replies: the model drafts tokens ahead and checks them, so the text is the same, only faster. Turn it off if a model misbehaves with it.",
+
+        // /settings › Servers › Docker
+        SettingsField.DockerServers => "Offers the chosen Docker containers as LLM servers in /server. Turning it off while one is in use stops it at the reconnect.",
+        SettingsField.DockerServerContainers => "Which containers are LLM servers, ticked from those the engine lists that match Docker server match words or carry the neonsidekick.llm=true label.",
+        SettingsField.DockerServerMatchWords => "Words that mark a container as an LLM server when found in its image or command (vllm, sglang, ollama…). Empty lists every container.",
+        SettingsField.DockerServerStopTimeoutSeconds => "The time a stopping container gets before the engine kills it (0–120 s).",
+        SettingsField.DockerServerPostStopDelaySeconds => "The wait between stopping the other containers and starting this one, so the GPU's memory is free (0–60 s).",
+        SettingsField.DockerServerReadyTimeoutSeconds => "The time a started container gets to answer on /v1/models (30–3600 s). Past it the switch fails and the container is left running.",
+        SettingsField.DockerServerStopOnExit => "Stops the container in use when the app exits. Off, it keeps running.",
+
+        // /settings › Servers › Anthropic
+        SettingsField.ClaudeCodeExecutable => "The Claude Code CLI to run. Empty looks for claude on the PATH and in its usual install folders. A path you set must exist.",
+        SettingsField.ClaudeCodeServer => "Offers Claude Code as a server in /server while it is found.",
+        SettingsField.ClaudeCodePermissions => "Claude's rights in a /claude run: read-only reads and searches files and the web; read-write may also edit files. Commands are denied, nothing is asked. It runs outside the app's sandbox.",
+        SettingsField.ClaudeCodeModel => "The model /claude runs: Claude Code's default, fable, opus, sonnet or haiku, or another name you type.",
+        SettingsField.ClaudeCodeEffort => "The effort /claude runs at: Claude Code's default, low, medium, high, xhigh or max.",
+        SettingsField.AnthropicApi => "Offers the Anthropic API in /server while a key is set.",
+        SettingsField.AnthropicApiKey => "Your Anthropic API key (sk-ant-…), saved encrypted. Typing replaces it; an empty entry clears it.",
+        SettingsField.AnthropicApiMaxTokens => "The output cap per request, thinking included (1,024–128,000). A reply that hits it stops short.",
+        SettingsField.AnthropicApiPromptCaching => "Uses Anthropic's prompt cache, so each request re-reads the previous one's content at a fraction of the price.",
+
+        // /settings › Servers › OpenAI
+        SettingsField.OpenAIApi => "Offers the OpenAI API in /server while a key is set. Every message is billed.",
+        SettingsField.OpenAIApiKey => "Your OpenAI API key (sk-…), saved encrypted and sent only to api.openai.com. Typing replaces it; an empty entry clears it.",
+        SettingsField.OpenAIApiMaxTokens => "The output cap per request, reasoning included (1,024–128,000; 0 = the model's own limit). A reply that hits it stops short.",
+        SettingsField.OpenAIApiOrganization => "The organization requests are billed to, for an account in several. Empty uses the key's default organization.",
+        SettingsField.OpenAIApiProject => "The project requests are billed to. Empty sends none; a project key already names its project.",
+
+        // /settings › Advisors
+        SettingsField.Advisors => "Lets the model ask an advisor (another profile, on its own server and model) for advice. /advisor asks one yourself either way.",
+        SettingsField.AdvisorList => "The advisors: other profiles, each with the role it advises in, such as database architect. Enter adds an advisor or changes one's role.",
+        SettingsField.AdvisorContext => "What an advisor call sends: brief, the model's question and context; recent, also the last 10 messages. /advisor always sends them.",
+        SettingsField.AdvisorCallsPerTurn => "The most advisor calls one reply may make, all advisors together (1–10).",
+        SettingsField.AdvisorMaxToolIterations => "The tool round trips an advisor may make before it answers (0–10; 0 = no tools, text only).",
+        SettingsField.AdvisorConfirm => "Each advisor call waits for your yes; a no tells the model to carry on without it.",
+        SettingsField.AdvisorThreadPairs => "The earlier questions and answers each advisor remembers (1–50), the oldest dropped first. The threads are saved with the session.",
+        SettingsField.AdvisorEmbedded => "For an advisor whose profile names another embedded model: parent-server answers on the running model; multi-server starts an extra server for it (more memory).",
+
+        // /settings › Automation
+        SettingsField.PlanGapPasses => "The most passes plan mode's Close gaps review may run before the plan goes back to the approval pane (0–100; 0 = no cap).",
+        SettingsField.PlanGapCleanPasses => "The passes in a row that must find no gaps before plan mode's Close gaps review ends (1–5).",
+        SettingsField.PlanGapAskUser => "Lets a Close gaps pass ask you questions, take a photo or capture the screen. Off, decisions only you can make go into the plan as open questions.",
+        SettingsField.PlanGapStopTone => "The tone played when plan mode's Close gaps review stops on its own: silent, chime, bell, beep or alarm. Never for a stop you caused. This PC only.",
+        SettingsField.RalphLoopReviewer => "Who checks a Ralph loop step after its check command passes: off (the checks alone), model, advisor, or any (an advisor when there is one, else the model).",
+        SettingsField.RalphLoopCheckpoint => "Pauses a Ralph loop every N steps for you to look (0–20; 0 = no regular pauses). At a pause you keep, redo, view the changes or stop.",
+        SettingsField.RalphLoopPasses => "The most passes a Ralph loop runs (0–200; 0 = three for each remaining step).",
+        SettingsField.RalphLoopPassesPerStep => "The most passes one Ralph loop step may take before the loop stops on it (1–20). Two failed checks in a row stop it sooner.",
+        SettingsField.RalphLoopCheckTimeoutSeconds => "The longest a Ralph loop's check command may run before it is stopped and counts as failed (30–3600 s).",
+        SettingsField.RalphLoopTokenBudget => "The most tokens one Ralph loop run may spend, its passes and reviews together (0 = no limit). Counted from each start or resume.",
+        SettingsField.RalphLoopStopTone => "The tone played when a Ralph loop ends, or waits for your check: silent, chime, bell, beep or alarm. Never for a stop you caused. This PC only.",
+        SettingsField.CodeAuditPasses => "The most passes a /code-audit may run before it reports (0–100; 0 = no cap).",
+        SettingsField.CodeAuditCleanPasses => "The passes in a row that must find nothing new before a code audit ends (1–5).",
+        SettingsField.CodeAuditAskUser => "Lets a code audit pass ask you questions, take a photo or capture the screen. Off, its questions go into the report.",
+        SettingsField.CodeAuditFocus => "The areas a /code-audit covers when you name none: security, correctness, performance, maintainability and tests. At least one stays ticked.",
+        SettingsField.CodeAuditWebResearch => "Gives code audit passes web search and fetch. Audited code may carry instructions that would send code out, so turn it on only for code you trust.",
+        SettingsField.CodeAuditPassToolCalls => "The tool calls an audit pass is asked to report within (0–500; 0 = no budget). Guidance only: the next pass picks up what one left.",
+        SettingsField.CodeAuditStopTone => "The tone played when a /code-audit stops on its own: silent, chime, bell, beep or alarm. Never for a stop you caused. This PC only.",
+
+        // /settings › Voice › TTS
+        SettingsField.TtsOutput => "Reads replies aloud. Code blocks and tables are never read.",
+        SettingsField.TtsSource => "in-process runs the Kokoro voice inside the app (downloaded on first use); http uses a Kokoro-FastAPI server at TTS HTTP URL.",
+        SettingsField.TtsHttpUrl => "The Kokoro-FastAPI server's base URL, used while TTS source is http.",
+        SettingsField.TtsVoicePreview => "The voice pickers speak the highlighted voice as you move through them.",
+        SettingsField.TtsVoicePreset => "Sets the voice, second voice, mix and speed in one go. Built-in presets, plus your own JSON files in the home folder's voices folder.",
+        SettingsField.TtsVoice => "The Kokoro voice.",
+        SettingsField.TtsVoice2 => "A second voice blended into the first, or (none) for the first voice alone.",
+        SettingsField.TtsVoiceMix => "The first voice's share of the blend (0–100 %).",
+        SettingsField.TtsSpeed => "The speaking speed, as a multiplier (0.5–2.0).",
+
+        // /settings › Voice › STT
+        SettingsField.SttInput => "Turns the microphone on: the push-to-talk key records a spoken message.",
+        SettingsField.SttDestination => "Where your speech goes: chat sends it to the model at once; draft adds it to the input line for you to edit and send.",
+        SettingsField.SttPushToTalkKey => "The key that records: F1–F8, Insert, Home, End, PageUp or PageDown.",
+        SettingsField.SttWhisperModel => "The Whisper model that turns speech into text: tiny, base or small (downloaded on first use). A larger one is more accurate and slower.",
+        SettingsField.SttWake => "Saying the wake phrase at the idle line starts listening, with no key.",
+        SettingsField.SttWakePhrase => "The wake phrase, one to three words. It is also the interrupt phrase.",
+        SettingsField.SttVoskModel => "The Vosk model that listens for the wake phrase and the interrupt.",
+        SettingsField.SttInterrupt => "Saying the wake phrase while a reply is spoken cuts it short and listens.",
+        SettingsField.SttInterruptEchoGuard => "Ignores the assistant's own voice when it is at least this close to the wake phrase, so it can't interrupt itself (50–100 %; 100 = the exact phrase only).",
+        SettingsField.SttInterruptConfirmMs => "The time the phrase must keep showing in early recognition results before it counts (0–2000 ms).",
+
+        // /tools › Core › Web
+        SettingsField.WebTools => "Gives the model the web tools: search, fetch pages, open links, download files, and read or save the profile's links.",
+        SettingsField.WebBrowserMode => "Page fetching: auto uses HTTP, then a headless browser when a page is blocked or empty; http never falls back; browser uses the browser for every page.",
+        SettingsField.WebBrowserPath => "The Chromium-based browser for headless fetches and PDF work. Empty finds Edge, Chrome or Brave in their usual folders.",
+        SettingsField.WebBrowserBotcheckWindow => "A bot check the web tools can't pass: ask asks you, then opens it in the Browser window for you to solve; automatic opens it without asking; off reports the refusal.",
+        SettingsField.WebBrowserHomePage => "The page the Browser window's home button and a bare /browser open, such as example.com. Empty opens a blank page.",
+        SettingsField.BrowserPrivacy => "keep-history keeps the Browser window's visited pages in its history; clear-history clears them when it closes. Cookies and sign-ins stay either way.",
+        SettingsField.WebOpenLinksIn => "Where links the model opens with open_url go: your default browser, or the app's Browser window. Other links always use your default browser.",
+        SettingsField.WebBrowserSignInMode => "The Web UI sign-in link /webui opens in your browser: one-time-link works once within a minute, so history keeps no token; url-with-token is the usual link.",
+        SettingsField.WebBrowserNetworkMode => "Where fetches may reach: internet (public addresses only), lan (this machine and the local network only) or both.",
+        SettingsField.WebSearchMethod => "metasearch asks several engines at once, with no setup; searxng uses the SearXNG instance in Web SearXNG URL.",
+        SettingsField.WebSearchMaxResults => "The most hits a search returns (1–20).",
+        SettingsField.WebMetasearchEngines => "The engines metasearch asks: Bing, Brave, DuckDuckGo, Startpage and Wikipedia. With none on, a search asks nobody.",
+        SettingsField.WebMetasearchSafeSearch => "The safe search filter metasearch asks for: off, moderate or strict. Bing, Brave and Startpage use it.",
+        SettingsField.WebMetasearchBraveApiKey => "Your Brave Search API key, saved encrypted. While set, metasearch asks Brave through its API instead of its results page; searches count against your Brave plan.",
+        SettingsField.WebSearxngUrl => "A SearXNG instance's base URL, used while Web search method is searxng. Without a usable address, searches use metasearch.",
+        SettingsField.WebDownloadMaxMegabytes => "The largest file download_file saves (1–102,400 MB).",
+
+        // /tools › Core › Shell
+        SettingsField.ShellCommandPolicy => "Shell commands for the model: off offers no shell tools; ask needs your approval for commands not on the allowed list; yolo runs everything without asking.",
+        SettingsField.ShellCommandAllowed => "Command prefixes that run without asking (git status, dotnet build…). Enter on one removes it; the approval pane's Allow always adds one.",
+        SettingsField.ShellPolice => "Refuses shell commands that reach outside the working directory or into places like .git or the app's home. Turning it off asks first and drops the forbidden strings and database rules too.",
+        SettingsField.ShellPoliceForbiddenStrings => "Strings the shell police refuses, even under yolo, whatever their case or spacing; only while Shell police is on. A tripwire, not a sandbox: text built in pieces gets past it.",
+        SettingsField.ShellPreferNative => "Sends a shell command back to the model, once a turn, when one of the app's own tools covers it (cat → read_file, curl → web_fetch).",
+        SettingsField.ShellDefault => "The shell run_command uses when the call names none: powershell, cmd or bash.",
+        SettingsField.ShellTimeoutSeconds => "The time a foreground command without its own timeout may run before it is killed (1–3600 s).",
+        SettingsField.ShellForegroundCapSeconds => "The longest any foreground command may run, whatever its timeout says (10–3600 s).",
+        SettingsField.ShellOutputMaxChars => "The most output one command result carries back (2000–500000 characters). Past it the start and end are kept, and the whole goes to a log file.",
+        SettingsField.ShellCodeLanguages => "The languages execute_code may run: powershell, python, node. A language is offered only while its interpreter is found.",
+        SettingsField.ShellCodeTimeoutSeconds => "The time an execute_code script without its own timeout may run before it is killed (1–3600 s).",
+
+        // /tools › Core › Clock, Timers, Ask, Help
+        SettingsField.ClockTools => "Gives the model the clock tools (the current time, date math) and starts each conversation with the time.",
+        SettingsField.TimerTools => "Gives the model tools to start, stop and list timers. /timer and running timers work either way.",
+        SettingsField.TimerTone => "The tone a timer rings with: silent, chime, bell, beep or alarm. It rings again until you silence or stop the timer. This PC only.",
+        SettingsField.AskUser => "Lets the model ask you multiple-choice questions (ask_user).",
+        SettingsField.AskMaxQuestions => "The most questions one ask_user call may ask (1–10).",
+        SettingsField.AskMaxChoices => "The most options one question may offer (2–15).",
+        SettingsField.HelpTools => "Gives the model neon_help, the app's own manual, to answer questions about the app.",
+
+        // /tools › Core › Options
+        SettingsField.ToolsDollarMention => "Typing $ and part of a name on the input line lists the tools the next turn offers; a pick writes $name.",
+        SettingsField.ToolCollapseCount => "A run of more tool calls than this folds under one summary line (0–100; 0 = never fold).",
+        SettingsField.CodeCollapseCount => "A code block longer than this many lines folds to its label once complete (0–100; 0 = never fold). Needs Transcript markdown.",
+        SettingsField.ShowFileDiffs => "Shows a colored diff under each file edit. The model's result is the same either way.",
+        SettingsField.DiffMaxLines => "The most rows of an edit's diff shown (0–500; 0 = the summary line alone).",
+        SettingsField.DiffCollapseCount => "An edit's diff of more rows than this folds once its tool run ends (0–500; 0 = never fold).",
+
+        // /tools › Files › File
+        SettingsField.FileTools => "Gives the model the file tools (read, write, patch, search, move, zip, PDF and Office files…). They reach only files under the working directory.",
+        SettingsField.FileDeletesToRecycleBin => "Sends what the app deletes to the Recycle bin, where it can be restored, except on shares and removable drives. Off, they delete directly. A shell command's own deletes never follow it.",
+        SettingsField.FileCheckpoints => "Keeps a copy of each file the tools change or delete, so /undo and /rewind can put it back. Shell commands, git and databases aren't undone.",
+        SettingsField.FileCheckpointKeepDays => "Clears file checkpoints older than this when the profile loads (0–3650 days; 0 = never by age).",
+        SettingsField.FileCheckpointMaxMegabytes => "The most one working folder's checkpoints may hold (100–102,400 MB); the oldest go first.",
+        SettingsField.FileCheckpointLargestFileMegabytes => "The largest file a checkpoint copies (1–2,048 MB). A bigger file is still changed, but can't be undone.",
+        SettingsField.FileTreeMaxLength => "The most entries /tree prints before it stops (1–10000).",
+        SettingsField.FileTreeShowSizes => "/tree shows each file's size.",
+        SettingsField.FileMentionFolderMode => "Picking a folder from the @ list: remain keeps the list open inside it; apply writes @folder/ and closes.",
+        SettingsField.FileBrowserMode => "Hidden files in the folder browsers, /tree and /browse: hide-hidden leaves out hidden and system entries and dot-folders; show-hidden lists them.",
+        SettingsField.FileViewImageMaxPerCall => "The most pictures one view_image call loads, and pages one read_pdf call draws (1–100).",
+        SettingsField.FileSearchMaxResults => "The most rows one search_files or unc_search call returns, whatever it asks for (1–5000).",
+
+        // /tools › Files › Image
+        SettingsField.ImageTools => "Gives the model the picture tools: view, inspect and edit pictures, and add them to the splash. They reach the working directory and the profile's images folder.",
+        SettingsField.ImageEditQuality => "The JPEG quality image_edit writes at when the model names none (1–100).",
+        SettingsField.ImageEditMetadata => "The metadata image_edit keeps: none, basic (author, date, camera…) or all, which also keeps the GPS position.",
+        SettingsField.ImageEditMode => "Where an edited picture goes: beside-original writes a new file; overwrite-original replaces the source. No confirmation either way.",
+        SettingsField.ImageEditOutputFolder => "Where image_edit writes when the model names no file: a folder under the profile's images folder. Empty writes beside the source.",
+        SettingsField.PastedImagesFolder => "The folder under the profile's images folder where pictures pasted from the clipboard are saved. Empty uses the images folder itself.",
+
+        // /tools › Files › UNC
+        SettingsField.UncTools => "Gives the model the share tools (list, search, read, fetch) over the shares in unc.json.",
+        SettingsField.UncWrites => "The master switch for changes on shares. On, a readwrite share also gets the write, move, copy and delete tools. Changes there are permanent.",
+        SettingsField.UncSharesOffered => "A checklist of the shares in both unc.json files. Nothing is offered until you tick it.",
+        SettingsField.UncSetPassword => "Pick a runas share and type its password. It is saved encrypted.",
+        SettingsField.UncAddShare => "A wizard to add a share or edit a saved one. It can test the share before saving.",
+        SettingsField.UncStarMention => "Typing an asterisk and part of a name on the input line lists the offered shares; a pick writes the share as a mention.",
+        SettingsField.UncSharesProfile => "Opens this profile's unc.json in your editor (made with examples when missing).",
+        SettingsField.UncSharesGlobal => "Opens the global unc.json, which every profile reads, in your editor. On a name clash, the profile's entry wins.",
+
+        // /tools › Files › GitLib
+        SettingsField.GitLibTools => "Gives the model the git tools (status, log, diff, blame, commit, stash…) for the repository in the working directory. They run inside the app, with no git program.",
+        SettingsField.GitLibDiffMaxLines => "Where a gitlib_diff patch is cut (20–5000 lines).",
+        SettingsField.GitLibLogMaxCommits => "The commits gitlib_log returns unless the call asks otherwise (1–200).",
+        SettingsField.GitLibEmail => "The user.email /gituser writes into the repository's config.",
+        SettingsField.GitLibName => "The user.name /gituser writes into the repository's config.",
+
+        // /tools › Apps › Docker
+        SettingsField.DockerTools => "Gives the model the Docker tools: list containers and read their logs, details, stats and compose projects.",
+        SettingsField.DockerWrites => "The master switch for the model's Docker changes: start, stop, pull, remove and prune. Every such call waits for your yes.",
+        SettingsField.DockerEnginePipe => "The Docker engine's named pipe. Empty uses Docker Desktop's.",
+
+        // /tools › Apps › ComfyUI
+        SettingsField.ComfyTools => "Gives the model generate_image, once ComfyUI URL is set and a workflow is installed.",
+        SettingsField.ComfyUrl => "The ComfyUI server's address, often another machine on your network (http://gpu-box:8188).",
+        SettingsField.ComfyWorkflowsOffered => "A checklist of the installed workflows the model is offered. Nothing is offered until you tick it.",
+        SettingsField.ComfyAddWorkflow => "A wizard that builds a standard workflow from your server's checkpoints, or imports one exported from ComfyUI.",
+        SettingsField.ComfyCaretMention => "Typing ^ and part of a name on the input line lists the offered workflows; a pick writes ^name to use that workflow.",
+        SettingsField.ComfyTimeoutSeconds => "The time the tool waits for one picture, queue included (10–3600 s). The job may still finish in ComfyUI.",
+        SettingsField.ComfyMaxPicturesPerCall => "The most pictures one generate_image call or /imagine --count makes (1–16).",
+        SettingsField.ComfyReinforceNegatives => "When the model writes the prompt, adds a few tags to the negative prompt where the image model tends to drift.",
+        SettingsField.ComfyShowPrompts => "Shows the prompt, negative prompt and parameters under each picture. The model sees the same either way.",
+        SettingsField.ComfyPictureStrip => "Keeps the session's ComfyUI pictures as thumbnails in a strip above the input line, to open or attach to a message.",
+        SettingsField.ComfyOutputFolder => "The folder under the profile's images folder where the pictures are saved. Empty uses the images folder itself.",
+
+        // /tools › Apps › YouTube
+        SettingsField.YouTubeTools => "Gives the model the YouTube tools: search, play videos and playlists, and keep saved videos. Searching needs a YouTube API key.",
+        SettingsField.YouTubeApiKey => "Your YouTube Data API v3 key, for searching (about 100 free searches a day). Saved encrypted.",
+        SettingsField.YouTubeSearchMaxResults => "The most videos, playlists or channels a search lists (1–20). The quota cost is the same whatever the count.",
+        SettingsField.YouTubeSearchOrder => "The order a search lists in: relevance, date, views, rating or title.",
+        SettingsField.YouTubeSafeSearch => "The restricted content a search leaves out: none, moderate (YouTube's own default) or strict.",
+        SettingsField.YouTubeRegion => "A two-letter country code (US, GB, DE) a search favors. Empty for any region.",
+        SettingsField.YouTubeLanguage => "A language code (en, es, zh-Hans) a search favors; other results still show. Empty for any language.",
+        SettingsField.YouTubeOpenLinksIn => "Where YouTube videos play: the app's video window, its Browser window, your default browser, or the Web UI's YouTube tab.",
+        SettingsField.YouTubeAutoplay => "A played video starts at once, sound included. Off, it waits until you or the model press play.",
+        SettingsField.YouTubeVoice => "A playing video while the app speaks or listens: pause stops it until after, duck turns it down to 15 %, none lets it play on.",
+
+        // /tools › Apps › Obsidian
+        SettingsField.ObsidianTools => "Gives the model the vault tools (search, read, links, daily notes, write, move) over the vault in Obsidian vault.",
+        SettingsField.ObsidianVault => "The Obsidian vault's folder (the one holding .obsidian), separate from the working directory. Enter opens a folder picker.",
+        SettingsField.ObsidianAllowDelete => "Gives the model vault_delete, which moves a note to the system's bin or the vault's .trash, as Obsidian's own setting says. Never deleted for good.",
+
+        // /tools › Admin › Network
+        SettingsField.NetworkTools => "Gives the model read-only network checks, one host at a time: DNS, ping, traceroute, open ports and TLS certificates.",
+        SettingsField.NetworkToolsReach => "Where the network tools may reach: same-as-web follows Web browser network mode; internet, lan or both set it for these tools alone.",
+        SettingsField.NetworkMaxHostsPerTurn => "The most different hosts the network tools may check in one turn (1–64). Past it, calls are refused.",
+        SettingsField.NetworkMaxPortsPerTurn => "The most different host:port pairs the network tools may check in one turn (1–256). Past it, calls are refused.",
+        SettingsField.NetworkAllowedHosts => "The hosts the network tools may check: names, wildcard names or address blocks (10.20.0.0/16). Empty allows anything the reach admits.",
+        SettingsField.NetworkDeniedHosts => "Hosts the network tools never check, in the same forms as the allowed list. A match always wins.",
+        SettingsField.NetworkCertificateStores => "Also offers net_certs, which lists this machine's certificate stores (subjects, issuers, end dates). Nothing is exported.",
+
+        // /tools › Admin › EventLog
+        SettingsField.EventLogTools => "Gives the model read-only event log tools over the computers ticked in Event log computers offered and the .evtx files in the working directory.",
+        SettingsField.EventLogComputersOffered => "A checklist of the computers the event log tools may read: local (this PC) first, then each computer in both eventlog.json files.",
+        SettingsField.EventLogSetPassword => "Pick a runas computer and type its password. It is saved encrypted.",
+        SettingsField.EventLogAddComputer => "A wizard to add a computer or edit a saved one, with the logs it may read and their detail. It can test it before saving.",
+        SettingsField.EventLogMaxEvents => "The events eventlog_search lists when the model names no limit, and a page of /eventlog's list (1–100).",
+        SettingsField.EventLogScanLimit => "The most events one search or summary reads before it stops and says how far back it got (1,000–30,000).",
+        SettingsField.EventLogComputersProfile => "Opens this profile's eventlog.json in your editor (made with examples when missing).",
+        SettingsField.EventLogComputersGlobal => "Opens the global eventlog.json, which every profile reads, in your editor. On a name clash, the profile's entry wins.",
+
+        // /tools › Admin › Services
+        SettingsField.ServiceTools => "Gives the model service tools (list, details) over the computers ticked in Service computers offered. They only read unless Service writes is on.",
+        SettingsField.ServiceWrites => "Lets the model start, stop, restart or change the start type of allowed services, each call asking you first. Only where services.json allows it.",
+        SettingsField.ServiceComputersOffered => "A checklist of the computers the service tools may reach: local (this PC) first, then each computer in both services.json files.",
+        SettingsField.ServiceSetPassword => "Pick a runas computer and type its password. It is saved encrypted.",
+        SettingsField.ServiceAddComputer => "A wizard to add a computer or edit a saved one: its sign-in, its access, the services it shows and what may change. It can test it.",
+        SettingsField.ServiceComputersProfile => "Opens this profile's services.json in your editor (made with examples when missing).",
+        SettingsField.ServiceComputersGlobal => "Opens the global services.json, which every profile reads, in your editor. On a name clash, the profile's entry wins.",
+
+        // /tools › Admin › Tasks
+        SettingsField.TaskTools => "Gives the model scheduled task tools (list, details) over the computers ticked in Task computers offered. They only read unless Task writes is on.",
+        SettingsField.TaskWrites => "Lets the model run, end, enable or disable allowed scheduled tasks, each call asking you first. Only where tasks.json allows it.",
+        SettingsField.TaskComputersOffered => "A checklist of the computers the task tools may reach: local (this PC) first, then each computer in both tasks.json files.",
+        SettingsField.TaskSetPassword => "Pick a runas computer and type its password. It is saved encrypted.",
+        SettingsField.TaskAddComputer => "A wizard to add a computer or edit a saved one: its sign-in, its access, the folders it shows and what may change. It can test it.",
+        SettingsField.TaskComputersProfile => "Opens this profile's tasks.json in your editor (made with examples when missing).",
+        SettingsField.TaskComputersGlobal => "Opens the global tasks.json, which every profile reads, in your editor. On a name clash, the profile's entry wins.",
+
+        // /tools › Admin › Directory
+        SettingsField.DirectoryTools => "Gives the model read-only Active Directory tools (users, groups, computers, OUs, the domain) over the domains ticked in Directory domains offered.",
+        SettingsField.DirectoryDomainsOffered => "A checklist of the domains the directory tools may read: current (this PC's own, when joined) first, then each domain in both ad.json files.",
+        SettingsField.DirectorySetPassword => "Pick a runas domain and type its password. It is saved encrypted.",
+        SettingsField.DirectoryAddDomain => "A wizard to add a domain or edit a saved one: its name, server, search base, LDAPS and sign-in. It can test the sign-in before saving.",
+        SettingsField.DirectoryDomainsProfile => "Opens this profile's ad.json in your editor (made with examples when missing).",
+        SettingsField.DirectoryDomainsGlobal => "Opens the global ad.json, which every profile reads, in your editor. On a name clash, the profile's entry wins.",
+
+        // /tools › Databases › SQL
+        SettingsField.SqlTools => "Gives the model SQL Server tools (tables, columns, indexes, queries) over the connections in sql.json. Each reaches its own database only. They only read unless SQL mode is read-write.",
+        SettingsField.SqlMode => "read-only: the SQL tools only read. read-write: sql_execute is offered too, on readwrite connections; each change asks you first and is committed as it runs.",
+        SettingsField.SqlStatementsAllowed => "Under SQL mode read-write, the kinds of statement sql_execute may run (changing data, deleting, creating, dropping…). With none ticked, it isn't offered.",
+        SettingsField.SqlConnectionsOffered => "A checklist of the connections in both sql.json files. Nothing is offered until you tick it, and a hidden one is invisible to every SQL tool.",
+        SettingsField.SqlSetPassword => "Pick a connection that takes a password and type it. It is saved encrypted.",
+        SettingsField.SqlAddConnection => "A wizard to add a connection or edit a saved one. The database is required. It can test the connection before saving.",
+        SettingsField.SqlPercentMention => "Typing % and part of a name on the input line lists the database connections; a pick writes %name.",
+        SettingsField.SqlQueryMaxRows => "The rows sql_query returns unless the call asks otherwise (1–100,000).",
+        SettingsField.SqlQueryTimeoutSeconds => "The longest one SQL tool's batch may run on the server (1–600 s).",
+        SettingsField.QueryResultMaxChars => "The most characters of table one SQL Server, Oracle or MySQL query result carries (1,000–1,000,000). Rows past it are left off.",
+        SettingsField.SqlConnectionsProfile => "Opens this profile's sql.json in your editor (made with examples when missing).",
+        SettingsField.SqlConnectionsGlobal => "Opens the global sql.json, which every profile reads, in your editor. On a name clash, the profile's entry wins.",
+
+        // /tools › Databases › MySQL
+        SettingsField.MySqlTools => "Gives the model MySQL and MariaDB tools (tables, columns, queries) over the connections in mysql.json. Each reaches its own database only. They only read unless MySQL mode is read-write.",
+        SettingsField.MySqlMode => "read-only: the MySQL tools only read. read-write: mysql_execute is offered too, on readwrite connections; each change asks you first and is committed as it runs.",
+        SettingsField.MySqlStatementsAllowed => "Under MySQL mode read-write, the kinds of statement mysql_execute may run (changing data, deleting, creating, dropping…). With none ticked, it isn't offered.",
+        SettingsField.MySqlConnectionsOffered => "A checklist of the connections in both mysql.json files. Nothing is offered until you tick it.",
+        SettingsField.MySqlSetPassword => "Pick a connection and type its password. It is saved encrypted.",
+        SettingsField.MySqlAddConnection => "A wizard to add a connection or edit a saved one. The database is required. It can test the connection before saving.",
+        SettingsField.MySqlPercentMention => "Typing % and part of a name also lists the MySQL connections; a pick writes %name.",
+        SettingsField.MySqlQueryMaxRows => "The rows mysql_query returns unless the call asks otherwise (1–100,000).",
+        SettingsField.MySqlQueryTimeoutSeconds => "The longest one MySQL statement may run (1–600 s).",
+        SettingsField.MySqlConnectionsProfile => "Opens this profile's mysql.json in your editor (made with examples when missing).",
+        SettingsField.MySqlConnectionsGlobal => "Opens the global mysql.json, which every profile reads, in your editor. On a name clash, the profile's entry wins.",
+
+        // /tools › Databases › PostgreSQL
+        SettingsField.PostgresTools => "Gives the model PostgreSQL tools (schemas, tables, columns, queries) over the connections in postgres.json. Each reaches its own database only. They only read unless PostgreSQL mode is read-write.",
+        SettingsField.PostgresMode => "read-only: the PostgreSQL tools only read. read-write: postgres_execute is offered too, on readwrite connections; each change asks you first and is committed as it runs.",
+        SettingsField.PostgresStatementsAllowed => "Under PostgreSQL mode read-write, the kinds of statement postgres_execute may run (changing data, deleting, creating, dropping…). With none ticked, it isn't offered.",
+        SettingsField.PostgresConnectionsOffered => "A checklist of the connections in both postgres.json files. Nothing is offered until you tick it.",
+        SettingsField.PostgresSetPassword => "Pick a connection and type its password. It is saved encrypted.",
+        SettingsField.PostgresAddConnection => "A wizard to add a connection or edit a saved one. The database is required; a schema to hold it to is optional. It can test it before saving.",
+        SettingsField.PostgresPercentMention => "Typing % and part of a name also lists the PostgreSQL connections; a pick writes %name.",
+        SettingsField.PostgresQueryMaxRows => "The rows postgres_query returns unless the call asks otherwise (1–100,000).",
+        SettingsField.PostgresQueryTimeoutSeconds => "The longest one PostgreSQL statement may run on the server (1–600 s).",
+        SettingsField.PostgresConnectionsProfile => "Opens this profile's postgres.json in your editor (made with examples when missing).",
+        SettingsField.PostgresConnectionsGlobal => "Opens the global postgres.json, which every profile reads, in your editor. On a name clash, the profile's entry wins.",
+
+        // /tools › Databases › Oracle
+        SettingsField.OracleTools => "Gives the model Oracle tools (tables, columns, indexes, queries) over the connections in oracle.json. Each is held to one schema. They only read unless Oracle mode is read-write.",
+        SettingsField.OracleMode => "read-only: the Oracle tools only read. read-write: oracle_execute is offered too, on readwrite connections; each change asks you first and is committed as it runs.",
+        SettingsField.OracleStatementsAllowed => "Under Oracle mode read-write, the kinds of statement oracle_execute may run (changing data, deleting, creating, dropping…). With none ticked, it isn't offered.",
+        SettingsField.OracleConnectionsOffered => "A checklist of the connections in both oracle.json files. Nothing is offered until you tick it.",
+        SettingsField.OracleSetPassword => "Pick a connection and type its password. It is saved encrypted.",
+        SettingsField.OracleAddConnection => "A wizard to add a connection or edit a saved one, with the schema it is held to. It can test the connection before saving.",
+        SettingsField.OraclePercentMention => "Typing % and part of a name also lists the Oracle connections; a pick writes %name.",
+        SettingsField.OracleQueryMaxRows => "The rows oracle_query returns unless the call asks otherwise (1–100,000).",
+        SettingsField.OracleQueryTimeoutSeconds => "The longest one Oracle statement may run on the server (1–600 s).",
+        SettingsField.OracleConnectionsProfile => "Opens this profile's oracle.json in your editor (made with examples when missing).",
+        SettingsField.OracleConnectionsGlobal => "Opens the global oracle.json, which every profile reads, in your editor. On a name clash, the profile's entry wins.",
+
+        // /tools › Databases › SQLite
+        SettingsField.SqliteTools => "Gives the model SQLite tools over sqlite.json's databases; they only read unless SQLite mode is read-write. While on, file tools never change a SQLite file and Shell police blocks commands to it.",
+        SettingsField.SqliteMode => "read-only: the SQLite tools only read. read-write: sqlite_execute is offered too; each change asks you first and is committed as it runs.",
+        SettingsField.SqliteStatementsAllowed => "Under SQLite mode read-write, the kinds of statement sqlite_execute may run (changing data, deleting, creating, dropping…). With none ticked, it isn't offered.",
+        SettingsField.SqliteDatabasesOffered => "A checklist of the databases in both sqlite.json files. Nothing is offered until you tick it.",
+        SettingsField.SqliteSandboxFiles => "Lets the model also open any SQLite file inside the working directory by its path.",
+        SettingsField.SqliteAddDatabase => "A wizard to add a database or edit a saved one. Its test opens the file read-only and counts the tables.",
+        SettingsField.SqlitePercentMention => "Typing % and part of a name also lists the SQLite databases; a pick writes %name.",
+        SettingsField.SqliteQueryMaxRows => "The rows sqlite_query returns unless the call asks otherwise (1–100,000).",
+        SettingsField.SqliteQueryTimeoutSeconds => "The longest one SQLite statement may run before it is interrupted (1–600 s).",
+        SettingsField.SqliteDatabasesProfile => "Opens this profile's sqlite.json in your editor (made with an example when missing).",
+        SettingsField.SqliteDatabasesGlobal => "Opens the global sqlite.json, which every profile reads, in your editor. On a name clash, the profile's entry wins.",
+
+        // /tools › Databases › DuckDB
+        SettingsField.DuckDbTools => "Gives the model DuckDB tools over duckdb.json's databases; they only read unless DuckDB mode is read-write. While on, file tools never change a DuckDB file and Shell police blocks commands to it.",
+        SettingsField.DuckDbMode => "read-only: the DuckDB tools only read. read-write: duckdb_execute is offered too; each change asks you first and is committed as it runs.",
+        SettingsField.DuckDbStatementsAllowed => "Under DuckDB mode read-write, the kinds of statement duckdb_execute may run (changing data, deleting, creating, dropping…). With none ticked, it isn't offered.",
+        SettingsField.DuckDbDatabasesOffered => "A checklist of the databases in both duckdb.json files. Nothing is offered until you tick it.",
+        SettingsField.DuckDbSandboxFiles => "Lets the model also open any DuckDB file inside the working directory by its path, and query its CSV, Parquet and JSON files.",
+        SettingsField.DuckDbAddDatabase => "A wizard to add a database or edit a saved one. Its test opens the file read-only and counts the tables.",
+        SettingsField.DuckDbPercentMention => "Typing % and part of a name also lists the DuckDB databases; a pick writes %name.",
+        SettingsField.DuckDbQueryMaxRows => "The rows duckdb_query returns unless the call asks otherwise (1–100,000).",
+        SettingsField.DuckDbQueryTimeoutSeconds => "The longest one DuckDB statement may run before it is interrupted (1–600 s).",
+        SettingsField.DuckDbDatabasesProfile => "Opens this profile's duckdb.json in your editor (made with an example when missing).",
+        SettingsField.DuckDbDatabasesGlobal => "Opens the global duckdb.json, which every profile reads, in your editor. On a name clash, the profile's entry wins.",
+
+        // /tools › Devices › Camera
+        SettingsField.CameraTools => "Lets the model ask you for a photo (camera_capture). Not offered headless, or to an embedded model without vision.",
+        SettingsField.CameraShutter => "Who takes the model's photo: user, you frame and take it in the camera pane; model, you allow it once or for the session, and it is taken at once.",
+        SettingsField.CameraPreview => "The view while you take a photo: live shows the camera in a window of its own; post opens the viewer on the photo once taken; off shows nothing.",
+        SettingsField.CameraDevice => "The camera to use, picked from those connected. (first camera) uses the first one.",
+        SettingsField.CameraResolution => "The size the camera is asked for: 640x480, 1280x720 or 1920x1080.",
+        SettingsField.CameraOutputFolder => "The folder under the profile's images folder where photos are saved. Empty uses the images folder itself.",
+        SettingsField.CameraKeepInSessions => "Keeps camera photos in saved sessions. Off, a saved session keeps only a line naming the photo, so a resumed session doesn't carry your face.",
+        SettingsField.CameraWatchSeconds => "The time between /camera watch's looks (2–3600 s).",
+        SettingsField.CameraWatchThreshold => "The share of the picture that must change for watch mode to keep a frame (1–100 %). Changes in brightness don't count.",
+        SettingsField.CameraWatchUnprompted => "Lets watch mode show the model a changed picture unasked, while nothing else is going on. Off, it rides along with your next message.",
+        SettingsField.CameraWatchMinGapSeconds => "The least time between two unprompted watch turns (30–3600 s).",
+
+        // /tools › Devices › Screen, Monitors, Print
+        SettingsField.ScreenTools => "Lets the model see a monitor, every monitor or one window (screen_capture). Not offered headless, or to an embedded model without vision.",
+        SettingsField.ScreenAsk => "ask: each capture asks first, naming what it would capture and why; allow: captures are taken without asking.",
+        SettingsField.ScreenPreview => "Opens the picture viewer on each screenshot taken, so you see exactly what was sent.",
+        SettingsField.ScreenOutputFolder => "The folder under the profile's images folder where screenshots are saved. Empty uses the images folder itself.",
+        SettingsField.ScreenKeepInSessions => "Keeps screenshots in saved sessions. Off, a saved session keeps only a line naming the file, since a screenshot can hold anything that was on the screen.",
+        SettingsField.MonitorTools => "Gives the model tools to list monitors, switch a monitor's input and change the layout. Each change asks you first.",
+        SettingsField.PrintTools => "Gives the model list_printers and print_file. /print works either way.",
+        SettingsField.PrintActionPolicy => "Printing by the model: off lists printers but never prints; ask waits for your yes on each print; allow prints without asking.",
+        SettingsField.PrintDefaultPrinter => "The printer a print goes to when none is named.",
+        SettingsField.PrintFontSize => "The body text size for printed listings and Markdown files (6–24 pt).",
+        SettingsField.PdfEngine => "The PDF maker: auto uses a Chromium browser, else Microsoft Print to PDF; browser or printer uses that one alone. Editing PDFs always needs the browser.",
+
+        // /tools › Home › HomeAssistant, Shopping
+        SettingsField.HomeAssistantTools => "Gives the model the Home Assistant tools (states, history, cameras, lights, scenes, media, to-dos, services), once a URL and token are set.",
+        SettingsField.HomeAssistantUrl => "Your Home Assistant server's address, such as http://localhost:8123.",
+        SettingsField.HomeAssistantToken => "A long-lived access token, from your Home Assistant profile's Security page. Saved encrypted and never logged.",
+        SettingsField.HomeAssistantTest => "Checks the saved URL and token by asking the server for its version.",
+        SettingsField.HomeAssistantActionPolicy => "Home Assistant changes by the model: off only reads; ask runs lights, scenes, media and to-dos and asks for anything else; allow runs everything.",
+        SettingsField.HomeAssistantAssistAgent => "The conversation agent ha_assist and /ha say talk to. Empty uses Home Assistant's own.",
+        SettingsField.HomeAssistantTimeoutSeconds => "The longest one request may take (2–60 s); a camera picture gets at least 15 s.",
+        SettingsField.ShoppingTools => "Gives the model the shopping list tools, for the list itself and for each store's aisle layout and reference documents.",
+        SettingsField.ShoppingList => "Opens the shopping list's checklist, to tick, add, place, rename or remove items.",
+        SettingsField.ShoppingStores => "Opens the stores manager: add, rename or remove stores, pick the one the list is ordered for, and edit its layout.",
+
+        // /skills › Options
+        SettingsField.AgentSkills => "Lists the skills in the prompt and gives the model load_skill and skill_editor. Off also turns off Project file.",
+        SettingsField.GlobalSkills => "Also reads the global skills every profile shares. Off, this profile sees only its own. Needs Agent skills.",
+        SettingsField.ExternalSkills => "Also reads, read-only, the skills in the .agents folder in your user folder.",
+        SettingsField.ProjectFile => "Reads NEON.md (else AGENTS.md, else CLAUDE.md) from the working directory into the prompt as project notes. Needs Agent skills.",
+        SettingsField.SkillCompactMode => "protected keeps a loaded skill's instructions through a prune; unprotected prunes them like any tool result.",
+        SettingsField.SkillHashMention => "Typing # and part of a name on the input line lists the loaded skills; a pick writes #name.",
+
+        // /skills › Reflection
+        SettingsField.ReflectionAutoLearn => "Lets the app learn from your work: after enough tool calls, or an error the model recovered from, a background reflection writes or improves a skill.",
+        SettingsField.ReflectionReasoning => "The reasoning effort for reflections alone, or profile for the profile's own level.",
+        SettingsField.ReflectionWindow => "The last turns a reflection reads (1–5): the latest in full, the earlier ones trimmed.",
+        SettingsField.ReflectionMinToolCalls => "The model's own tool calls since the last reflection that make a task worth a skill (3–20).",
+        SettingsField.ReflectionMaxRequests => "The most model requests one reflection may spend before it gives up (1–20).",
+        SettingsField.ReflectionIncludesSessions => "A reflection starts with the earlier sessions that match the turn, and can search them.",
+        SettingsField.ReflectionCooldownMinutes => "The wait before another automatic reflection, after one wrote a skill (0–1440 min; 0 = off).",
+        SettingsField.ReflectionCooldownMode => "last-written-skill makes only turns that used the new skill wait; all-skills makes every automatic reflection wait.",
+        SettingsField.ReflectionYieldsToTurns => "Pauses a reflection when you send a message, so the reply gets the server, and runs it again after. Turn it off if your server handles requests in parallel.",
+        SettingsField.ReflectionMode => "create-update lets a reflection write a new skill or improve one; update-only lets it only improve the skills that exist.",
+        SettingsField.ReflectionConfirmMode => "When a reflection asks before writing: none, never; all, before any write; new, before a new skill; edit, before an edit.",
+        SettingsField.ReflectionEditsSupportingFiles => "Lets a reflection also change a skill's supporting files (data, examples, scripts beside its SKILL.md). Off, it writes SKILL.md alone.",
+        SettingsField.ReflectionInstalledSkills => "Skills installed with /skills add: read-only, a reflection never changes them; allow-and-mark, it may, and the next update from their source warns first.",
+
+        // /mcp › Options
+        SettingsField.McpServers => "The master switch: on, every enabled MCP server starts at launch and its tools are offered; off, none starts.",
+        SettingsField.McpConnectTimeoutSeconds => "The time a server gets to start and list its tools before it is marked failed (5–300 s).",
+
+        _ => "",
+    };
+}

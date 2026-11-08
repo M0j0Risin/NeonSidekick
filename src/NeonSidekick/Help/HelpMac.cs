@@ -16,7 +16,7 @@ namespace NeonSidekick.Help;
 /// socket), so their rows say how a Mac finds the engine; Docker servers say why they still need Windows.
 /// <c>HelpMacTests</c> pins that every key still names a setting or a form the tables hold, so the layer cannot go stale.
 /// </summary>
-public static class HelpMac
+public static partial class HelpMac
 {
     /// <summary>The settings whose text differs on a Mac, by field.</summary>
     public static readonly IReadOnlyDictionary<SettingsField, string> Settings = new Dictionary<SettingsField, string>
