@@ -3361,16 +3361,20 @@ public sealed partial class SidekickApp
 
     /// <summary>
     /// Headless <c>/youtube save &lt;id|link&gt;</c>, <c>unsave &lt;n|id|link&gt;</c> and <c>list</c> (2026-10-07; <c>saved</c> until 2026-10-08): the answer's lines, a
-    /// refusal led by <c>Error: </c>. With no window, a bare <c>save</c> has nothing to save. <c>list --clear</c> (2026-10-08) asks
-    /// nothing: there is no pane to ask on, and the switch typed is the act.
+    /// refusal led by <c>Error: </c>. With no window, a bare <c>save</c> has nothing to save, nor <c>save playlist</c>. <c>list --clear</c> (2026-10-08) asks
+    /// nothing: there is no pane to ask on, and the switch typed is the act. A playlist's id, link or channel saves it (2026-11-08).
     /// </summary>
     private async Task<IReadOnlyList<string>> HeadlessSavedVideosAsync(YouTube.YouTubeCommandLine line, CancellationToken cancellationToken)
     {
         var library = HeadlessYouTubeLibrary();
-        var lookup = YouTube.YouTubeTitles.Lookup(new YouTube.YouTubeDataApi(_web.Http), () => EffectiveSettings);
+        var api = new YouTube.YouTubeDataApi(_web.Http);
+        var lookup = YouTube.YouTubeTitles.Lookup(api, () => EffectiveSettings);
+        var playlistLookup = YouTube.YouTubeTitles.PlaylistLookup(api, () => EffectiveSettings);
         if (line.Verb == YouTube.YouTubeVerb.Save)
         {
-            return [await Llm.Tools.YouTubeSaveTool.AddAsync(library, null, line.VideoId ?? "", lookup, cancellationToken).ConfigureAwait(false)];
+            return line.PlaylistId is { } list
+                ? [await Llm.Tools.YouTubeSaveTool.AddPlaylistAsync(library, null, list, playlistLookup, cancellationToken).ConfigureAwait(false)]
+                : [await Llm.Tools.YouTubeSaveTool.AddAsync(library, null, line.VideoId ?? "", lookup, cancellationToken).ConfigureAwait(false)];
         }
 
         if (line.Verb == YouTube.YouTubeVerb.Unsave)
@@ -3383,7 +3387,7 @@ public sealed partial class SidekickApp
             return [YouTube.YouTubeText.ClearAnswer(library.Clear())];
         }
 
-        await YouTube.YouTubeTitles.FillMissingAsync(library, lookup, cancellationToken).ConfigureAwait(false);
+        await YouTube.YouTubeTitles.FillMissingAsync(library, lookup, cancellationToken, playlistLookup).ConfigureAwait(false);
         var videos = library.List();
         return videos.Count == 0 ? [YouTube.YouTubeText.NoneSaved] : YouTube.YouTubeText.SavedList(videos).Split('\n');
     }

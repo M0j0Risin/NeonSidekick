@@ -1,3 +1,4 @@
+using System.Net;
 using NeonSidekick.YouTube;
 
 namespace NeonSidekick.Tests;
@@ -31,5 +32,28 @@ public partial class SidekickAppTests
         Assert.Contains("Me at the zoo", output);
         Assert.DoesNotContain("[error]", output);
         Assert.DoesNotContain(YouTubeText.NeedsScreen, output);
+    }
+
+    /// <summary>
+    /// Headless saved playlists (2026-11-08): <c>save &lt;list link&gt;</c> saves the playlist, its title from oEmbed with no key;
+    /// <c>save playlist</c> has no window to read one from; <c>unsave &lt;list link&gt;</c> takes it off.
+    /// </summary>
+    [Fact]
+    public async Task Headless_YouTubeSave_APlaylistsLink_SavesThePlaylist()
+    {
+        _http.Map("https://www.youtube.com/oembed", HttpStatusCode.OK, File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "youtube", "oembed-playlist.json")));
+        const string Link = "https://www.youtube.com/playlist?list=PLabcdefghijklmnopq";
+
+        string output = await Headless("/youtube save " + Link + "\n/youtube\n/youtube save playlist\n");
+
+        Assert.Contains("Saved the playlist \"Open Movies & Shorts\"; it resumes at the entry and place it is left at." + Environment.NewLine, output);
+        Assert.Contains("1. ▤ Open Movies & Shorts — Blender · not played yet · playlist id PLabcdefghijklmnopq", output);
+        Assert.Contains("[error] " + YouTubeText.NoPlaylistToSave, output);   // headless leads a refusal so
+        var saved = Assert.Single(new YouTubeLibrary(_settings.ProfileDirectory).List());
+        Assert.Equal((true, (string?)"aqz-KE-bpKQ"), (saved.Playlist, saved.EntryVideo));
+
+        output = await Headless("/youtube unsave " + Link + "\n");
+        Assert.Contains("Removed the playlist \"Open Movies & Shorts\" from the saved videos.", output);
+        Assert.Empty(new YouTubeLibrary(_settings.ProfileDirectory).List());
     }
 }

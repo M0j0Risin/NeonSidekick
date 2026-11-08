@@ -11,7 +11,7 @@ using NeonSidekick.YouTube;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// <c>/profile push|pull mcp|links|videos|monitors|skills</c> (2026-10-25, the user's ask): each section's yes, its overwrite, its nothing to
+/// <c>/profile push|pull mcp|links|youtube|monitors|skills</c> (2026-10-25, the user's ask; youtube was videos until 2026-11-08): each section's yes, its overwrite, its nothing to
 /// copy (nothing asked) and its no, over the files of two profiles in the fixture's home.
 /// </summary>
 public sealed partial class ChatScreenTests
@@ -221,7 +221,7 @@ public sealed partial class ChatScreenTests
         here.Add("dQw4w9WgXcQ", "Song", "Rick", 212, position: 60);
         here.Add("aaaaaaaaaaa", "Other");
         new YouTubeLibrary(ProfileDir("work")).Add("aaaaaaaaaaa");
-        PushLine("/profile push videos work");
+        PushLine("/profile push youtube work");
         PickYes();
         PushLine("/exit");
 
@@ -241,7 +241,7 @@ public sealed partial class ChatScreenTests
         new YouTubeLibrary(_settings.ProfileDirectory).Add("dQw4w9WgXcQ", "Song");
         string path = new YouTubeLibrary(ProfileDir("work")).FilePath;
         WriteFile(path, "{ not json");
-        PushLine("/profile push videos work");
+        PushLine("/profile push youtube work");
         PickYes();
         PushLine("/exit");
 

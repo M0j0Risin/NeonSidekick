@@ -81,6 +81,15 @@ public sealed record YouTubeVideoInfo(string Id, string Title, string Author, do
 /// <summary>A video's title looked up by its id (2026-10-07): <see cref="IYouTubeSearch.LookupAsync"/> with the key in force; null when none was found.</summary>
 public delegate Task<YouTubeVideoInfo?> YouTubeLookup(string videoId, CancellationToken cancellationToken);
 
+/// <summary>
+/// What a lookup found of one playlist (2026-11-08, saved playlists): its title and channel, its first video when the answer names one
+/// (oEmbed's thumbnail is that video's), and how many entries it holds when known (0 otherwise).
+/// </summary>
+public sealed record YouTubePlaylistInfo(string Id, string Title, string Author, string? FirstVideo = null, int Count = 0);
+
+/// <summary>A playlist's title looked up by its id (2026-11-08): <see cref="IYouTubeSearch.LookupPlaylistAsync"/> with the key in force; null when none was found.</summary>
+public delegate Task<YouTubePlaylistInfo?> YouTubePlaylistLookup(string playlistId, CancellationToken cancellationToken);
+
 /// <summary>A public playlist (2026-10-08): its id, title, channel and how many entries YouTube counts in it.</summary>
 public sealed record YouTubePlaylist(string Id, string Title, string Channel, int Count);
 
@@ -118,6 +127,14 @@ public interface IYouTubeSearch
     /// fails and <paramref name="apiKey"/> is set — the Data API's <c>videos.list</c>. Null when neither found it; never throws.
     /// </summary>
     Task<YouTubeVideoInfo?> LookupAsync(string videoId, string? apiKey, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// One playlist's title and channel (2026-11-08, a saved playlist's name): oEmbed first, no key, then — when that fails and
+    /// <paramref name="apiKey"/> is set — the Data API's <c>playlists.list</c>. Null when neither found it; never throws. A search
+    /// without it (a test's) finds nothing.
+    /// </summary>
+    Task<YouTubePlaylistInfo?> LookupPlaylistAsync(string playlistId, string? apiKey, CancellationToken cancellationToken) =>
+        Task.FromResult<YouTubePlaylistInfo?>(null);
 }
 
 /// <summary>
@@ -257,6 +274,13 @@ public sealed partial class YouTubeDataApi : IYouTubeSearch
     public static Uri OEmbedUrl(string videoId) =>
         new("https://www.youtube.com/oembed?format=json&url=" + Uri.EscapeDataString(YouTubeIds.WatchUrl(videoId)));
 
+    /// <summary>
+    /// YouTube's oEmbed address for <paramref name="playlistId"/>'s playlist page (2026-11-08, checked live that day): no key; its answer
+    /// names the list's title and channel, and its thumbnail is the first video's. Pinned.
+    /// </summary>
+    public static Uri PlaylistOEmbedUrl(string playlistId) =>
+        new("https://www.youtube.com/oembed?format=json&url=" + Uri.EscapeDataString(YouTubeIds.PlaylistUrl(playlistId)));
+
     /// <summary>The <c>videos.list</c> address for one video's snippet and length (2026-10-07), the lookup's fallback. Pinned.</summary>
     public static Uri VideoInfoUrl(string videoId) =>
         new(Endpoint, "videos?part=snippet,contentDetails&id=" + Uri.EscapeDataString(videoId));
@@ -285,6 +309,62 @@ public sealed partial class YouTubeDataApi : IYouTubeSearch
 
         DiagnosticLog.Info(Category, $"title of {videoId}: oEmbed {why}; videos.list {(keyed is null ? "found no such video" : $"{keyed.Failure} {keyed.Detail}")}.");
         return null;
+    }
+
+    public async Task<YouTubePlaylistInfo?> LookupPlaylistAsync(string playlistId, string? apiKey, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(playlistId);
+        var (body, failure) = await GetAsync(PlaylistOEmbedUrl(playlistId), null, cancellationToken, LookupTimeout).ConfigureAwait(false);
+        if (failure is null && ParsePlaylistOEmbed(playlistId, body!) is { } found)
+        {
+            return found;
+        }
+
+        string why = failure is null ? "no title in the answer" : $"{failure.Failure} {failure.Detail}";
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            DiagnosticLog.Info(Category, $"oEmbed for playlist {playlistId}: {why}; no key to ask the Data API.");
+            return null;
+        }
+
+        (body, var keyed) = await GetAsync(PlaylistsUrl([playlistId]), apiKey, cancellationToken, LookupTimeout).ConfigureAwait(false);
+        if (keyed is null && ParsePlaylists(body!).TryGetValue(playlistId, out var listed) && listed.Title.Length > 0)
+        {
+            return new YouTubePlaylistInfo(playlistId, listed.Title, listed.Channel, null, listed.Count);
+        }
+
+        DiagnosticLog.Info(Category, $"title of playlist {playlistId}: oEmbed {why}; playlists.list {(keyed is null ? "found no such playlist" : $"{keyed.Failure} {keyed.Detail}")}.");
+        return null;
+    }
+
+    /// <summary>
+    /// A playlist's oEmbed answer (2026-11-08): its <c>title</c> and <c>author_name</c>, and the first video from its
+    /// <c>thumbnail_url</c> (<c>…/vi/&lt;id&gt;/…</c>, kept only when it is a video id); null without a title. Pure; pinned.
+    /// </summary>
+    public static YouTubePlaylistInfo? ParsePlaylistOEmbed(string playlistId, string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object || Text(doc.RootElement, "title") is not { Length: > 0 } title)
+            {
+                return null;
+            }
+
+            string? first = null;
+            if (Uri.TryCreate(Text(doc.RootElement, "thumbnail_url"), UriKind.Absolute, out var thumb))
+            {
+                string[] segments = thumb.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+                int vi = Array.IndexOf(segments, "vi");
+                first = vi >= 0 && vi + 1 < segments.Length && Viewer.VideoRequest.IsVideoId(segments[vi + 1]) ? segments[vi + 1] : null;
+            }
+
+            return new YouTubePlaylistInfo(playlistId, title, Text(doc.RootElement, "author_name"), first);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     /// <summary>An oEmbed answer's <c>title</c> and <c>author_name</c>; null without a title. Pure; pinned.</summary>

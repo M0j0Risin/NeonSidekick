@@ -32,6 +32,7 @@ public class YouTubeCommandTests
     [InlineData("save https://youtu.be/aqz-KE-bpKQ", YouTubeVerb.Save, "https://youtu.be/aqz-KE-bpKQ", "aqz-KE-bpKQ", null)]
     [InlineData("save aqz-KE-bpKQ", YouTubeVerb.Save, "aqz-KE-bpKQ", "aqz-KE-bpKQ", null)]
     [InlineData("save the whales", YouTubeVerb.Search, "save the whales", null, null)]
+    [InlineData("save playlist of the year", YouTubeVerb.Search, "save playlist of the year", null, null)]   // only the word alone saves the list playing (2026-11-08)
     [InlineData("list", YouTubeVerb.Saved, "", null, null)]                                       // saved until 2026-10-08
     [InlineData("list of songs", YouTubeVerb.Search, "list of songs", null, null)]
     [InlineData("list --clear", YouTubeVerb.ClearSaved, "", null, null)]                          // 2026-10-08
@@ -55,12 +56,18 @@ public class YouTubeCommandTests
         Assert.Equal(new YouTubeCommandLine(verb, text, id, number), line);
     }
 
-    /// <summary>A playlist plays by its link (alone too), its id, or a channel's; an entry after it is 1-based (2026-10-08).</summary>
+    /// <summary>
+    /// A playlist plays by its link (alone too), its id, or a channel's; an entry after it is 1-based (2026-10-08). A link names an entry only
+    /// with its index= (2026-11-08): alone, a saved list resumes where it was left.
+    /// </summary>
     [Fact]
     public void Parse_APlaylist_PlaysIt_FromItsPlace()
     {
         const string List = "PLabcdefghijklmnopq";
-        Assert.Equal(new YouTubeCommandLine(YouTubeVerb.Play, "https://www.youtube.com/playlist?list=" + List, PlaylistId: List, Entry: 0), YouTubeCommand.Parse("https://www.youtube.com/playlist?list=" + List));
+        Assert.Equal(new YouTubeCommandLine(YouTubeVerb.Play, "https://www.youtube.com/playlist?list=" + List, PlaylistId: List), YouTubeCommand.Parse("https://www.youtube.com/playlist?list=" + List));
+        Assert.Equal(0, YouTubeCommand.Parse("https://www.youtube.com/playlist?list=" + List + "&index=1").Entry);   // named: entry 1
+        Assert.Equal(2, YouTubeCommand.Parse("youtube.com/watch?list=" + List + "&index=3").Entry);
+        Assert.Equal(0, YouTubeCommand.Parse("play " + List + " 1").Entry);
         Assert.Equal(new YouTubeCommandLine(YouTubeVerb.Play, List + " 3", PlaylistId: List, Entry: 2), YouTubeCommand.Parse("play " + List + " 3"));
         Assert.Equal(new YouTubeCommandLine(YouTubeVerb.Play, "youtube.com/watch?v=aqz-KE-bpKQ&list=" + List + "&index=5", PlaylistId: List, Entry: 4), YouTubeCommand.Parse("play youtube.com/watch?v=aqz-KE-bpKQ&list=" + List + "&index=5"));
         Assert.Equal(new YouTubeCommandLine(YouTubeVerb.Play, "youtu.be/aqz-KE-bpKQ?list=" + List + "&t=9", "aqz-KE-bpKQ", 9, PlaylistId: List), YouTubeCommand.Parse("youtu.be/aqz-KE-bpKQ?list=" + List + "&t=9"));
@@ -130,10 +137,27 @@ public class YouTubeCommandTests
         Assert.Empty(YouTubeCommand.Complete("list --clear"));   // complete: the list closes
         Assert.Empty(YouTubeCommand.Complete("list b"));
         Assert.Empty(YouTubeCommand.Complete("saved "));
-        Assert.Empty(YouTubeCommand.Complete("save "));
+        Assert.Equal(["save playlist"], YouTubeCommand.Complete("save ").Select(c => c.Text));   // 2026-11-08: the playlist playing
+        Assert.Equal(["save playlist"], YouTubeCommand.Complete("save pl").Select(c => c.Text));
+        Assert.Empty(YouTubeCommand.Complete("save x"));
     }
 
     /// <summary>The saved videos (2026-10-27, the completion survey): <c>unsave &lt;n&gt;</c> by number and <c>play &lt;id&gt;</c>, each noted by the title, else the id.</summary>
+    /// <summary>Saved playlists (2026-11-08): <c>save &lt;playlist&gt;</c>, <c>save playlist</c> for the one playing, and <c>unsave</c> by a list's id or link.</summary>
+    [Fact]
+    public void Parse_SavesAndUnsavesAPlaylist()
+    {
+        const string List = "PLabcdefghijklmnopq";
+        Assert.Equal(new YouTubeCommandLine(YouTubeVerb.Save, "playlist", PlaylistId: Llm.Tools.YouTubeSaveTool.Current), YouTubeCommand.Parse("save playlist"));
+        Assert.Equal(new YouTubeCommandLine(YouTubeVerb.Save, "PLAYLIST", PlaylistId: Llm.Tools.YouTubeSaveTool.Current), YouTubeCommand.Parse("save PLAYLIST"));
+        Assert.Equal(new YouTubeCommandLine(YouTubeVerb.Save, List, PlaylistId: List), YouTubeCommand.Parse("save " + List));
+        Assert.Equal(new YouTubeCommandLine(YouTubeVerb.Save, "https://www.youtube.com/playlist?list=" + List, PlaylistId: List), YouTubeCommand.Parse("save https://www.youtube.com/playlist?list=" + List));
+        Assert.Equal("UUSMOQeBJ2RAnuFungnQOxLg", YouTubeCommand.Parse("save UCSMOQeBJ2RAnuFungnQOxLg").PlaylistId);   // a channel: its uploads
+        Assert.Equal(new YouTubeCommandLine(YouTubeVerb.Save, "youtu.be/aqz-KE-bpKQ?list=" + List, "aqz-KE-bpKQ"), YouTubeCommand.Parse("save youtu.be/aqz-KE-bpKQ?list=" + List));   // a watch link saves its video
+        Assert.Equal(new YouTubeCommandLine(YouTubeVerb.Unsave, List), YouTubeCommand.Parse("unsave " + List));
+        Assert.Equal(YouTubeVerb.Unsave, YouTubeCommand.Parse("unsave https://www.youtube.com/playlist?list=" + List).Verb);
+    }
+
     [Fact]
     public void Complete_OffersTheSavedVideos_ForUnsaveAndPlay()
     {
@@ -143,6 +167,10 @@ public class YouTubeCommandTests
         Assert.Equal([new UI.CompletionItem("play dQw4w9WgXcQ", "Never")], YouTubeCommand.Complete("play d", Saved));
         Assert.Equal(["list --clear"], YouTubeCommand.Complete("list ", Saved).Select(c => c.Text));   // the rest as before
         Assert.Equal(YouTubeCommand.Words.Count, YouTubeCommand.Complete("", Saved).Count);
+
+        // A saved playlist's id after play (2026-11-08): named alone, it resumes.
+        IReadOnlyList<YouTubeSaved> Lists() => [new() { Id = "PLabcdefghijklmnopq", Playlist = true, Title = "The list" }];
+        Assert.Equal([new UI.CompletionItem("play PLabcdefghijklmnopq", "The list")], YouTubeCommand.Complete("play P", Lists));
     }
 
     [Fact]

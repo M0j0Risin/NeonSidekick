@@ -278,4 +278,57 @@ public sealed partial class WebUiYouTubePageTests
         Assert.Contains("save", _backend.SavedChanges);
         await page.WaitAsync("document.querySelectorAll('.yt-row').length === 1", "the saved row");
     }
+
+    /// <summary>
+    /// A saved playlist's row (2026-11-08): ▤ before its title, its first entry's thumbnail when known, else a ▤ tile (never a
+    /// request for <c>vi/undefined</c>), and a tap plays it as a video's does.
+    /// </summary>
+    [WindowsFact]
+    public async Task ASavedPlaylistsRow_IsMarked_WithItsEntrysThumbnail_OrATile()
+    {
+        Saved(FakeWebUiBackend.SavedVideo("PLabcdefghijklmnopq", "Open Movies", "Blender") with { Playlist = true, Thumb = "jNQXAC9IVRw" },
+            FakeWebUiBackend.SavedVideo("PLzyxwvutsrqponmlkj", "Untitled list") with { Playlist = true },
+            Zoo);
+        if (await SignedInAsync("/youtube") is not { } page)
+        {
+            return;
+        }
+
+        await page.WaitAsync("document.querySelectorAll('.yt-row').length === 3", "the three rows");
+        Assert.Equal("▤ Open Movies", await page.TextAsync("document.querySelectorAll('.yt-row')[0].querySelector('.yt-title').textContent"));
+        Assert.Equal("https://i.ytimg.com/vi/jNQXAC9IVRw/mqdefault.jpg", await page.TextAsync("document.querySelectorAll('.yt-row')[0].querySelector('.yt-thumb').getAttribute('src')"));
+        Assert.Equal("SPAN", await page.TextAsync("document.querySelectorAll('.yt-row')[1].querySelector('.yt-thumb').tagName"));
+        Assert.True((await page.EvalAsync("document.querySelectorAll('.yt-row')[1].querySelector('.yt-thumb').classList.contains('yt-list-tile')")).GetBoolean());
+        Assert.False((await page.EvalAsync("[...document.querySelectorAll('img.yt-thumb')].some(i => i.src.includes('undefined'))")).GetBoolean());
+        Assert.Equal("Me at the zoo", await page.TextAsync("document.querySelectorAll('.yt-row')[2].querySelector('.yt-title').textContent"));
+    }
+
+    /// <summary>The ☆ for the playlist (2026-11-08): hidden while a lone video plays, shown while a list plays, ★ once it is saved.</summary>
+    [WindowsFact]
+    public async Task TheListsSaveButton_ShowsOnlyWhileAListPlays_AndTurnsToSaved()
+    {
+        _backend.SavedPlaying = new WebSavedPlaying("aqz-KE-bpKQ", "Big Buck Bunny", false);
+        if (await SignedInAsync("/youtube") is not { } page)
+        {
+            return;
+        }
+
+        await page.WaitAsync("!document.getElementById('saved-save').classList.contains('hidden')", "the video's ☆");
+        Assert.True((await page.EvalAsync("document.getElementById('saved-save-list').classList.contains('hidden')")).GetBoolean());
+
+        lock (_backend.ListsGate)
+        {
+            _backend.SavedPlaying = new WebSavedPlaying("aqz-KE-bpKQ", "Big Buck Bunny", false, "PLabcdefghijklmnopq");
+        }
+
+        await page.EvalAsync("document.getElementById('saved-save').click()");   // a change reads the list again, the list's ☆ with it
+        await page.WaitAsync("!document.getElementById('saved-save-list').classList.contains('hidden')", "the list's ☆");
+        Assert.Equal(WebUiText.VideoWords.Saved!.SaveList, await page.TextAsync("document.getElementById('saved-save-list').textContent"));
+
+        await page.EvalAsync("document.getElementById('saved-save-list').click()");
+        await page.WaitAsync("document.getElementById('saved-save-list').textContent === " + JsonSerializer.Serialize(WebUiText.VideoWords.Saved!.ListSaved), "the list's ★");
+        Assert.True((await page.EvalAsync("document.getElementById('saved-save-list').disabled")).GetBoolean());
+        Assert.Contains("save-list", _backend.SavedChanges);
+        await page.WaitAsync("[...document.querySelectorAll('.yt-row .yt-title')].some(t => t.textContent.startsWith('▤ '))", "the saved list's row");
+    }
 }

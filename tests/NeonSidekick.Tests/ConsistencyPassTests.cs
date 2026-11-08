@@ -40,7 +40,7 @@ public class ConsistencyPassTests
         SettingsMenu.AllowedCommandsKeys, SettingsMenu.AllowedCommandsEmptyKeys, SettingsMenu.PoliceToggleKeys, SettingsMenu.OfferedToggleKeys,
         SettingsMenu.WebToggleKeys, SettingsMenu.WebToggleOpenKeys, SettingsMenu.CameraToggleKeys, SettingsMenu.ChangedKeys, SettingsMenu.ProfileKeys,
         SettingsMenu.ThemeKeepKeys, SettingsMenu.ThemePickKeys, EmbeddedModelFilter.Keys, EmbeddedModelFilter.CatalogKeys,
-        CameraText.AllowHint, CameraMenu.AllowHintWithView, YouTubeText.SavedKeys, MenuPane.EmptyKeys,
+        CameraText.AllowHint, CameraMenu.AllowHintWithView, YouTubeText.SavedKeys, YouTubeText.PickKeys, YouTubeText.PlaylistPickKeys, MenuPane.EmptyKeys,   // the pickers' 2026-11-08
         SavedPromptText.PaneKeys, BrowserLinkText.PaneKeys, ShoppingText.PaneKeys, ShoppingText.StoresKeys, ShoppingText.LayoutKeys, ShoppingText.AislesKeys,   // 2026-10-16, the 120-column pass
         MenuFilter.HintBeforeEsc(ShoppingText.AddKeys, "", letteredButtons: true), TasksMenu.Keys, ServicesMenu.Keys, EventLogMenu.Keys, HomeBarText.BarHint,
         NeonSidekick.Audits.AuditText.DoneKeys(hasFix: true), NeonSidekick.Audits.AuditText.DoneKeys(hasFix: false), SettingsMenu.CodeAuditFocusKeys,   // the code audit's pane and focus checklist (2026-10-18)

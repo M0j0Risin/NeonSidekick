@@ -8,7 +8,7 @@ namespace NeonSidekick.App;
 /// <summary>
 /// <c>/youtube list</c> (2026-10-07, the user's ask): the profile's saved videos on a <see cref="MenuPane"/> page in the order they
 /// were saved, each row <see cref="YouTubeText.SavedPaneRow"/>'s in uniform columns (2026-10-08, the user's ask; a watched one dim) under
-/// the count (<see cref="YouTubeText.SavedCaption"/>).
+/// the count (<see cref="YouTubeText.SavedCaption(IReadOnlyList{YouTubeSaved})"/>).
 /// Enter or a double-click plays the highlighted one in the video window — where it was left (<see cref="YouTubeLibrary.ResumeAt"/>,
 /// through the play the screen hands in) — the pane kept open with the player's answer on its status line.
 /// <see cref="YouTubeText.RemoveSelectedButton"/> (a click, or <see cref="YouTubeText.RemoveKey"/>; back later on 2026-10-08, the user's
@@ -91,7 +91,7 @@ internal sealed class YouTubeSavedMenu
                 {
                     Buttons = Buttons,
                     Filter = filter,
-                    Caption = MenuFilter.CaptionOrNull(filter, shown.Count, listed.Count) ?? YouTubeText.SavedCaption(listed.Count),
+                    Caption = MenuFilter.CaptionOrNull(filter, shown.Count, listed.Count) ?? YouTubeText.SavedCaption(listed),
                     Footer = (_, row) => row < shown.Count ? YouTubeText.SavedFooter(listed[shown[row]], _zone) : null,
                     Moves = filter.Length == 0,   // the order is the whole list's: no moves while a filter shows part of it
                     Removes = shown.Count > 0,     // Delete removes a filtered row too (2026-10-16, the user's ask)
@@ -212,9 +212,12 @@ internal sealed class YouTubeSavedMenu
 
     private const string ErrorPrefix = "Error: ";
 
-    /// <summary>What the open list shows, as a key: each video's id, title and place, in order; another means it changed elsewhere.</summary>
+    /// <summary>
+    /// What the open list shows, as a key: each video's id, title and place, in order; another means it changed elsewhere. A playlist's entry
+    /// (2026-11-08) is in its place already, and in the key again so a move to another entry from the start is never missed.
+    /// </summary>
     private static string ListKey(IReadOnlyList<YouTubeSaved> videos) =>
-        string.Join("\n", videos.Select(v => v.Id + "|" + v.Title + "|" + YouTubeText.Place(v)));
+        string.Join("\n", videos.Select(v => v.Id + "|" + v.Title + "|" + YouTubeText.Place(v) + (v.Playlist ? "|" + v.Entry.ToString(System.Globalization.CultureInfo.InvariantCulture) : "")));
 
     /// <summary>
     /// Re-reads the list every <see cref="WatchEvery"/> while a pick waits, and ends it (the page's <c>stale</c> token) when its key differs from

@@ -447,11 +447,11 @@ Under *YouTube tools*. Videos play where *YouTube open links in* says:
 | `youtube_play` | `video?, start?, playlist?, entry?` | Plays a video by id or link from `start` (`90` or `1:30`), or a playlist from `entry`; cued instead with *YouTube autoplay* off. |
 | `youtube_control` | `action, value?` | `play`, `pause`, `seek`, `forward` / `back` (10 s by default), `volume` (0–100), `mute`, `unmute`, `next` / `previous` / `entry`, or `close`. |
 | `youtube_status` | — | What the player plays: video, state, position, volume and playlist entry. |
-| `youtube_saved` | — | Your saved videos, numbered, with where each was left (or `watched`). |
-| `youtube_save` | `action, video` | `add` a video (`current` for the player's), or `remove` one (also by number). |
+| `youtube_saved` | — | Your saved videos and playlists, numbered, with where each was left (or `watched`). |
+| `youtube_save` | `action, video?, playlist?` | `add` a video or a playlist (`current` for the player's), or `remove` one (also by number). |
 
 * **The key:** searches and playlists need one, and each search spends daily quota; playing needs none. Watch Later and private playlists are out of reach (the app never signs in).
-* **Saved videos** are your bookmarks, per profile, in `youtube.json`; one resumes a few seconds before where you left it, or starts over once finished. `/youtube` (or `/youtube list`), `/youtube save` and `/youtube unsave` manage them.
+* **Saved videos and playlists** are your bookmarks, per profile, in `youtube.json`; one resumes a few seconds before where you left it, or starts over once finished. A playlist (▤) resumes at its entry and place. `/youtube` (or `/youtube list`), `/youtube save` and `/youtube unsave` manage them.
 * **In a browser** the app can't see or control the video: `youtube_status` says only where it went. In the Web UI's tab, a video waits for a tab in view. A video YouTube won't embed goes to the browser through `open_url`.
 
 ### Obsidian

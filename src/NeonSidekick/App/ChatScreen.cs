@@ -155,8 +155,11 @@ public enum ProfileSection
     /// <summary><c>links [overwrite]</c> (2026-10-25, the user's ask): the Browser window's saved links, appended (an address there skipped) or replaced.</summary>
     Links,
 
-    /// <summary><c>videos [overwrite]</c> (2026-10-25, the user's ask): the saved YouTube videos, appended (an id there skipped) or replaced.</summary>
-    Videos,
+    /// <summary>
+    /// <c>youtube [overwrite]</c> (2026-10-25 as <c>videos</c>; renamed 2026-11-08, the user's ask, no alias): the saved YouTube videos and
+    /// playlists, appended (an id there skipped) or replaced.
+    /// </summary>
+    YouTube,
 
     /// <summary>
     /// <c>monitors [overwrite]</c> (2026-10-25, the user's ask): <c>Monitor input names</c>, <c>Monitor inputs hidden</c> and <c>Monitor PC
@@ -5360,7 +5363,7 @@ internal sealed partial class ChatScreen
         ProfileSection.AvatarModel => "model avatar",
         ProfileSection.Mcp => "MCP servers",
         ProfileSection.Links => "saved links",
-        ProfileSection.Videos => "saved videos",
+        ProfileSection.YouTube => "saved videos",
         ProfileSection.Monitors => "monitor input settings",
         ProfileSection.Skills => "skills",
         ProfileSection.CustomCommands => "custom commands",
@@ -9438,7 +9441,7 @@ internal sealed partial class ChatScreen
         {
             await CopyLinksSectionAsync(home, other, action.Overwrite, pull, cancellationToken).ConfigureAwait(false);
         }
-        else if (action.Section == ProfileSection.Videos)
+        else if (action.Section == ProfileSection.YouTube)
         {
             await CopyVideosSectionAsync(home, other, action.Overwrite, pull, cancellationToken).ConfigureAwait(false);
         }
@@ -11617,7 +11620,7 @@ internal sealed partial class ChatScreen
         // 2026-10-25 (the user's ask): the profile's other files and lists.
         ("mcp", ProfileSection.Mcp, "the profile's own MCP servers, added (same-named ones replaced with overwrite)"),
         ("links", ProfileSection.Links, "the Browser window's saved links, added (or replaced with overwrite)"),
-        ("videos", ProfileSection.Videos, "the saved YouTube videos, added (or replaced with overwrite)"),
+        ("youtube", ProfileSection.YouTube, "the saved YouTube videos and playlists, added (or replaced with overwrite)"),
         ("monitors", ProfileSection.Monitors, "the monitor input names, hidden inputs and PC inputs, added (or replaced with overwrite)"),
         ("skills", ProfileSection.Skills, "the profile's skills, copied (one the target has is skipped)"),
         ("commands", ProfileSection.CustomCommands, "the profile's custom commands, copied (same-named files replaced with overwrite)"),   // 2026-10-30
@@ -11655,7 +11658,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     public static bool SectionTakesOverwrite(ProfileSection section) =>
         section is ProfileSection.Commands or ProfileSection.History or ProfileSection.Memory or ProfileSection.SavedPrompts or ProfileSection.PoliceStrings
-            or ProfileSection.Mcp or ProfileSection.Links or ProfileSection.Videos or ProfileSection.Monitors or ProfileSection.CustomCommands
+            or ProfileSection.Mcp or ProfileSection.Links or ProfileSection.YouTube or ProfileSection.Monitors or ProfileSection.CustomCommands
         || IsPromptFileSection(section);
 
     /// <summary>Whether a section is one of the prompt files (2026-10-10): persona, operata, vocalia.</summary>

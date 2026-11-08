@@ -7335,7 +7335,7 @@ public partial class ChatScreenTests : IDisposable
     public void ProfileStrings_ArePinned()
     {
         Assert.StartsWith("Profile name must be 1 to 32 letters, digits, - or _, not starting with -, and not a word /profile reads (add, allowed, ", ChatScreen.ProfileNameError, StringComparison.Ordinal);
-        Assert.EndsWith(", videos, vocalia).", ChatScreen.ProfileNameError, StringComparison.Ordinal);
+        Assert.EndsWith(", vocalia, youtube).", ChatScreen.ProfileNameError, StringComparison.Ordinal);   // youtube for videos, 2026-11-08
         string listed = ChatScreen.ProfileNameError[(ChatScreen.ProfileNameError.LastIndexOf('(') + 1)..^2];
         Assert.Equal(Profiles.ReservedNames, listed.Split(", "));   // every word it refuses (R13)
         // /profile edit and /profile reload (2026-09-21).
@@ -7456,8 +7456,10 @@ public partial class ChatScreenTests : IDisposable
     [InlineData("PULL Mcp work Overwrite", ProfileActionKind.Pull, "work", ProfileSection.Mcp, true)]
     [InlineData("push links work", ProfileActionKind.Push, "work", ProfileSection.Links, false)]
     [InlineData("pull links work overwrite", ProfileActionKind.Pull, "work", ProfileSection.Links, true)]
-    [InlineData("push videos work", ProfileActionKind.Push, "work", ProfileSection.Videos, false)]
-    [InlineData("pull videos work overwrite", ProfileActionKind.Pull, "work", ProfileSection.Videos, true)]
+    [InlineData("push youtube work", ProfileActionKind.Push, "work", ProfileSection.YouTube, false)]   // videos until 2026-11-08 (the user's ask)
+    [InlineData("pull youtube work overwrite", ProfileActionKind.Pull, "work", ProfileSection.YouTube, true)]
+    [InlineData("push videos work", ProfileActionKind.Invalid, "", ProfileSection.All, false)]   // no alias: two words, the first no section
+    [InlineData("push videos", ProfileActionKind.Push, "videos", ProfileSection.All, false)]   // a profile may be called videos again
     [InlineData("push monitors work", ProfileActionKind.Push, "work", ProfileSection.Monitors, false)]
     [InlineData("pull MONITORS work overwrite", ProfileActionKind.Pull, "work", ProfileSection.Monitors, true)]
     [InlineData("push skills work", ProfileActionKind.Push, "work", ProfileSection.Skills, false)]
@@ -25598,11 +25600,11 @@ public partial class ChatScreenTests : IDisposable
         // push and pull (2026-09-28): every profile but the loaded one, default included (the user's call); nothing after the name.
         // The section words first (2026-10-09), then after a section the names, and after a list section's name overwrite.
         Assert.Equal(["pull", "push"], Texts(ChatScreen.ArgumentItems("/profile", "pu", sources)));
-        Assert.Equal(["push keys", "push servers", "push homeassistant", "push toolbar", "push perfbar", "push statusbar", "push barorder", "push allowed", "push history", "push memory", "push prompts", "push mcp", "push links", "push videos", "push monitors", "push skills", "push commands", "push policestrings", "push persona", "push operata", "push vocalia", "push avatar user", "push avatar model", "push chef", "push work"], Texts(ChatScreen.ArgumentItems("/profile", "push ", sources)));
-        Assert.Equal(["pull keys", "pull servers", "pull homeassistant", "pull toolbar", "pull perfbar", "pull statusbar", "pull barorder", "pull allowed", "pull history", "pull memory", "pull prompts", "pull mcp", "pull links", "pull videos", "pull monitors", "pull skills", "pull commands", "pull policestrings", "pull persona", "pull operata", "pull vocalia", "pull avatar user", "pull avatar model", "pull chef", "pull neon"], Texts(ChatScreen.ArgumentItems("/profile", "pull ", Sources(loaded: "work"))));
+        Assert.Equal(["push keys", "push servers", "push homeassistant", "push toolbar", "push perfbar", "push statusbar", "push barorder", "push allowed", "push history", "push memory", "push prompts", "push mcp", "push links", "push youtube", "push monitors", "push skills", "push commands", "push policestrings", "push persona", "push operata", "push vocalia", "push avatar user", "push avatar model", "push chef", "push work"], Texts(ChatScreen.ArgumentItems("/profile", "push ", sources)));
+        Assert.Equal(["pull keys", "pull servers", "pull homeassistant", "pull toolbar", "pull perfbar", "pull statusbar", "pull barorder", "pull allowed", "pull history", "pull memory", "pull prompts", "pull mcp", "pull links", "pull youtube", "pull monitors", "pull skills", "pull commands", "pull policestrings", "pull persona", "pull operata", "pull vocalia", "pull avatar user", "pull avatar model", "pull chef", "pull neon"], Texts(ChatScreen.ArgumentItems("/profile", "pull ", Sources(loaded: "work"))));
         // The sections of 2026-10-25: mcp's overwrite has its own note, the lists the list note, and skills takes none.
         Assert.Equal([new CompletionItem("push mcp work overwrite", ChatScreen.ProfileMcpOverwriteNote)], ChatScreen.ArgumentItems("/profile", "push mcp work ", sources));
-        Assert.Equal([new CompletionItem("pull videos chef overwrite", ChatScreen.ProfileSectionOverwriteNote)], ChatScreen.ArgumentItems("/profile", "pull videos chef ", sources));
+        Assert.Equal([new CompletionItem("pull youtube chef overwrite", ChatScreen.ProfileSectionOverwriteNote)], ChatScreen.ArgumentItems("/profile", "pull youtube chef ", sources));
         Assert.Equal([new CompletionItem("push skills chef", "skills: neon → chef")], ChatScreen.ArgumentItems("/profile", "push skills c", sources));
         Assert.Empty(ChatScreen.ArgumentItems("/profile", "push skills work ", sources));
         // The home and the bars (2026-10-26): the profiles, then nothing (mirrored, as keys).

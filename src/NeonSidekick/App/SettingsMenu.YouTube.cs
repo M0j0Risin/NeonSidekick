@@ -12,25 +12,28 @@ internal sealed partial class SettingsMenu
     /// <summary>
     /// <c>/youtube &lt;words&gt;</c>'s picker (2026-10-05, the YouTube plan): a search's hits as rows (<c>YouTubeText.PickRows</c>, escaped
     /// here), Enter plays the highlighted one, ESC none; the <c>YouTubeText.SaveButton</c> on the title row (a click, or
-    /// <c>YouTubeText.SaveKey</c>, 2026-10-07) saves it instead. The row and whether it was the save, or null; without the pane (the
-    /// Spectre prompt) there is no button.
+    /// <c>YouTubeText.SaveKey</c>, 2026-10-07) saves it instead. With <paramref name="saveList"/> (2026-11-08, the <c>/youtube playlist</c>
+    /// picker) a second button, <c>YouTubeText.SaveListButton</c> (<c>YouTubeText.SaveListKey</c>), saves the whole playlist. The row and the
+    /// button pressed (-1 for Enter, 0 the save, 1 the playlist's), or null; without the pane (the Spectre prompt) there is no button.
     /// </summary>
-    public async Task<(int Row, bool Save)?> PickVideoAsync(string title, IReadOnlyList<string> rows, int cursor, CancellationToken cancellationToken, IReadOnlyList<MenuFooter>? footers = null)
+    public async Task<(int Row, int Button)?> PickVideoAsync(string title, IReadOnlyList<string> rows, int cursor, CancellationToken cancellationToken, IReadOnlyList<MenuFooter>? footers = null, bool saveList = false)
     {
         ArgumentNullException.ThrowIfNull(rows);
         // Each hit whole under the list (2026-10-07): its title, channel, length, views, year and id.
-        var page = new MenuPage(title, rows.Select(Markup.Escape).ToList(), YouTube.YouTubeText.PickKeys)
+        var page = new MenuPage(title, rows.Select(Markup.Escape).ToList(), saveList ? YouTube.YouTubeText.PlaylistPickKeys : YouTube.YouTubeText.PickKeys)
         {
             Footer = footers is null ? null : (_, row) => row < footers.Count ? footers[row] : null,
         };
         if (!_pane.Enabled)
         {
-            return await PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is { } row ? (row, false) : null;
+            return await PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is { } row ? (row, -1) : null;
         }
 
-        var buttons = new[] { new MenuButton(YouTube.YouTubeText.SaveButton, YouTube.YouTubeText.SaveKey) };
+        MenuButton[] buttons = saveList
+            ? [new MenuButton(YouTube.YouTubeText.SaveButton, YouTube.YouTubeText.SaveKey), new MenuButton(YouTube.YouTubeText.SaveListButton, YouTube.YouTubeText.SaveListKey)]
+            : [new MenuButton(YouTube.YouTubeText.SaveButton, YouTube.YouTubeText.SaveKey)];
         return await _pane.PickAsync(page with { Buttons = buttons }, cursor, cancellationToken).ConfigureAwait(false) is { } picked
-            ? (picked.Row, picked.Button >= 0)
+            ? (picked.Row, picked.Button)
             : null;
     }
 

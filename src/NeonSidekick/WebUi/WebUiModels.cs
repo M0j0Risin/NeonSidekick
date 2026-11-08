@@ -684,8 +684,8 @@ public sealed record WebVideoWords(string Waiting, string PlayHere, string TapFo
 
 /// <summary>
 /// The saved list's words on the YouTube tab (later on 2026-10-16): the filter's placeholder and its no-match line (<c>{0}</c> the filter), the
-/// row's details toggle, the moves, the two-tap delete and clear all (each with its armed words), the save button's two faces, and the line
-/// while titles are looked up.
+/// row's details toggle, the moves, the two-tap delete and clear all (each with its armed words), the save button's two faces, the line
+/// while titles are looked up, and the playlist's save button's two faces (2026-11-08).
 /// </summary>
 public sealed record WebSavedWords(
     string Filter,
@@ -701,7 +701,9 @@ public sealed record WebSavedWords(
     string ClearArmed,
     string SavePlaying,
     string Saved,
-    string Looking);
+    string Looking,
+    string SaveList,
+    string ListSaved);
 
 /// <summary>
 /// The YouTube tab's saved list (later on 2026-10-16, the user's ask: <c>/youtube list</c> under the player): the videos in the user's order, the
@@ -711,12 +713,17 @@ public sealed record WebSavedVideos(IReadOnlyList<WebSavedVideo> Items, string C
 
 /// <summary>
 /// One saved video: its id (every post names it; the page builds its thumbnail from it), title and channel (null until known), where it was
-/// left, whether it was watched to its end, and the PC pane's footer as two lines (in the PC's time zone).
+/// left, whether it was watched to its end, and the PC pane's footer as two lines (in the PC's time zone). A saved playlist (2026-11-08)
+/// says so (<see cref="Playlist"/>), its thumbnail the video of the entry it was left on (<see cref="Thumb"/>; null for none known, the
+/// page then draws a ▤ tile). A video's thumbnail is still built from its id.
 /// </summary>
-public sealed record WebSavedVideo(string Id, string? Title, string? Channel, string Place, bool Watched, string Heading, string Details);
+public sealed record WebSavedVideo(string Id, string? Title, string? Channel, string Place, bool Watched, string Heading, string Details, bool Playlist = false, string? Thumb = null);
 
-/// <summary>The video the player has open, and whether it is saved (the ☆/★).</summary>
-public sealed record WebSavedPlaying(string Id, string? Title, bool Saved);
+/// <summary>
+/// The video the player has open, and whether it is saved (the ☆/★); the playlist it plays in, and whether that is saved (2026-11-08, the
+/// playlist's ☆ list).
+/// </summary>
+public sealed record WebSavedPlaying(string Id, string? Title, bool Saved, string? PlaylistId = null, bool ListSaved = false);
 
 /// <summary>A saved video played on the tapping page (later on 2026-10-16): that page's id and the video's.</summary>
 public sealed class WebSavedPlay

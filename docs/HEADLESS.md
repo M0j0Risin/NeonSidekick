@@ -106,7 +106,7 @@ They need no server unless the row says so.
 | `/commands`, `/commands new\|save <name> [--global]` | Prints your [custom commands](COMMANDS.md#custom-commands), or writes one and prints its path (no editor). `save` takes the last message you typed, never a custom command's. |
 | `/<name> [<words>]` | Sends a custom command's prompt after a `[notice]` naming its folder. The prompt is a message: a body starting `/plan` isn't run as `/plan`. |
 | `/prompts …`, `/browser save\|list\|unsave …` | Lists, prints, adds (`/browser save` needs the address) or removes saved prompts and links; `list --clear` empties a list without asking. Other `/browser` forms are errors. |
-| `/youtube …` | Searches (needs a *YouTube API key*) and lists playlists and saved videos (bare, the saved ones); `list --clear` empties the list without asking. Playing is an error. |
+| `/youtube …` | Searches (needs a *YouTube API key*) and lists playlists and saved videos (bare, the saved ones); `save <id\|link>` saves a video or playlist; `list --clear` empties the list without asking. Playing is an error. |
 | `/camera list`, `/screen list` | List the cameras, or the monitors and windows (macOS 14+ on a Mac); other forms are errors. |
 | `/avatar …` | Prints or sets the *Model avatar* (`/avatar user …` your *User avatar*); a description picks the closest emoji. |
 | `/help <your command>` | Prints the custom command's card, or why a skipped file doesn't run; no server needed. |

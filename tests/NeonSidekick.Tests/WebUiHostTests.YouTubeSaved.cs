@@ -154,11 +154,30 @@ public sealed partial class WebUiHostTests
             Assert.Equal(HttpStatusCode.UnprocessableEntity, nothingPlaying.StatusCode);
         }
 
+        using (var noList = await _client.SendAsync(Post(WebUiHost.YouTubeSavedSaveListPath, "{}")))
+        {
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, noList.StatusCode);   // 2026-11-08: no playlist playing
+        }
+
         _backend.SavedPlaying = new WebSavedPlaying("dQw4w9WgXcQ", "A song", false);
         using (var savedNow = await _client.SendAsync(Post(WebUiHost.YouTubeSavedSavePath, "{}")))
         {
             Assert.Equal(HttpStatusCode.OK, savedNow.StatusCode);
         }
+
+        _backend.SavedPlaying = new WebSavedPlaying("dQw4w9WgXcQ", "A song", true, "PLabcdefghijklmnopq");
+        using (var listSaved = await _client.SendAsync(Post(WebUiHost.YouTubeSavedSaveListPath, "{}")))
+        {
+            Assert.Equal(HttpStatusCode.OK, listSaved.StatusCode);
+        }
+
+        lock (_backend.ListsGate)
+        {
+            Assert.Contains(_backend.SavedList, v => v.Id == "PLabcdefghijklmnopq" && v.Playlist);
+            Assert.Equal(1, _backend.SavedList.Count(v => v.Id == "dQw4w9WgXcQ"));   // the video's ☆ is its own
+        }
+
+        Assert.Equal(["save", "save-list", "save", "save-list"], _backend.SavedChanges.Where(c => c.StartsWith("save", StringComparison.Ordinal)));
 
         using (var cleared = await _client.SendAsync(Post(WebUiHost.YouTubeSavedClearPath, "{}")))
         {
@@ -180,7 +199,7 @@ public sealed partial class WebUiHostTests
     {
         YouTubeOn();
         _backend.TabsOn = new WebTabs(true, true, true);
-        foreach (string path in new[] { WebUiHost.YouTubeSavedPlayPath, WebUiHost.YouTubeSavedRemovePath, WebUiHost.YouTubeSavedClearPath, WebUiHost.YouTubeSavedMovePath, WebUiHost.YouTubeSavedSavePath })
+        foreach (string path in new[] { WebUiHost.YouTubeSavedPlayPath, WebUiHost.YouTubeSavedRemovePath, WebUiHost.YouTubeSavedClearPath, WebUiHost.YouTubeSavedMovePath, WebUiHost.YouTubeSavedSavePath, WebUiHost.YouTubeSavedSaveListPath })
         {
             using var off = await _client.SendAsync(Post(path, "{}"));
             Assert.Equal(HttpStatusCode.NotFound, off.StatusCode);

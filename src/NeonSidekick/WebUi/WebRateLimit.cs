@@ -86,7 +86,7 @@ public sealed class WebRateLimit
                 or WebUiHost.MemoryEditPath or WebUiHost.MemoryTogglePath   // the 💾 tab's edit and off/on (2026-10-18)
                 or WebUiHost.LearnCancelPath or WebUiHost.QueueResumePath   // the status row's 🧠 and the held queue's Resume (2026-10-17)
                 or WebUiHost.YouTubeSavedPlayPath or WebUiHost.YouTubeSavedRemovePath or WebUiHost.YouTubeSavedClearPath or WebUiHost.YouTubeSavedMovePath
-                or WebUiHost.YouTubeSavedSavePath   // the YouTube tab's saved list (later on 2026-10-16)
+                or WebUiHost.YouTubeSavedSavePath or WebUiHost.YouTubeSavedSaveListPath   // the YouTube tab's saved list (later on 2026-10-16; the list's ☆ 2026-11-08)
                 or WebUiHost.ShopAddPath or WebUiHost.ShopReAddPath or WebUiHost.ShopForgetPath or WebUiHost.ShopQuantityPath or WebUiHost.ShopRenamePath
                 or WebUiHost.ShopRemovePath or WebUiHost.ShopCheckAllPath or WebUiHost.ShopClearPath or WebUiHost.ShopPlacePath => WebRateBucket.Act,   // the Shopping tab's list controls (2026-10-16; ⌖ place 2026-11-06)
             "/api/home/say" => WebRateBucket.Say,

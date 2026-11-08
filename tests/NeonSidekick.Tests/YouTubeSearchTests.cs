@@ -436,6 +436,41 @@ public class YouTubeSearchTests
         Assert.Null(YouTubeDataApi.ParseOEmbed("x", "not json"));
     }
 
+    /// <summary>
+    /// A saved playlist's title (2026-11-08): oEmbed of its playlist page with no key (its thumbnail the first video's), then
+    /// playlists.list with the key only when oEmbed fails.
+    /// </summary>
+    [Fact]
+    public async Task LookupPlaylist_AsksOEmbedWithoutAKey_TakingTheFirstVideo_AndFallsBackToTheDataApi_OnlyWithOne()
+    {
+        const string List = "PLabcdefghijklmnopq";
+        var keys = new List<string?>();
+        var stub = new StubHttpMessageHandler()
+            .Map("https://www.youtube.com/oembed", (request, _) => Answer(request, keys, "oembed-playlist.json"));
+        var info = await new YouTubeDataApi(new HttpClient(stub)).LookupPlaylistAsync(List, Key, CancellationToken.None);
+
+        Assert.Equal(new YouTubePlaylistInfo(List, "Open Movies & Shorts", "Blender", "aqz-KE-bpKQ"), info);
+        Assert.Equal("https://www.youtube.com/oembed?format=json&url=https%3A%2F%2Fwww.youtube.com%2Fplaylist%3Flist%3DPLabcdefghijklmnopq", Assert.Single(stub.Requests).Uri.AbsoluteUri);
+        Assert.Equal(YouTubeDataApi.PlaylistOEmbedUrl(List).AbsoluteUri, stub.Requests[0].Uri.AbsoluteUri);
+        Assert.Equal([null], keys);
+
+        keys.Clear();
+        stub = new StubHttpMessageHandler()
+            .Map("https://www.youtube.com/oembed", HttpStatusCode.NotFound, "Not Found")
+            .Map("https://www.googleapis.com/youtube/v3/playlists?", (request, _) => Answer(request, keys, "playlist.json"));
+        info = await new YouTubeDataApi(new HttpClient(stub)).LookupPlaylistAsync(List, Key, CancellationToken.None);
+        Assert.Equal(new YouTubePlaylistInfo(List, "Open Movies & Shorts", "Blender", null, 3), info);
+        Assert.Equal([Key], keys);
+        Assert.Null(await new YouTubeDataApi(new HttpClient(stub)).LookupPlaylistAsync(List, null, CancellationToken.None));   // no key: oEmbed's refusal is the end
+        Assert.Null(await new YouTubeDataApi(new HttpClient(new StubHttpMessageHandler())).LookupPlaylistAsync(List, null, CancellationToken.None));   // no connection: null, not thrown
+
+        // A thumbnail that names no video leaves the first video unknown; no title is no answer.
+        Assert.Null(YouTubeDataApi.ParsePlaylistOEmbed(List, "{ \"title\": \"T\", \"thumbnail_url\": \"https://i.ytimg.com/vi/not-a-video-id/hqdefault.jpg\" }")!.FirstVideo);
+        Assert.Null(YouTubeDataApi.ParsePlaylistOEmbed(List, "{ \"title\": \"T\", \"thumbnail_url\": \"not a url\" }")!.FirstVideo);
+        Assert.Null(YouTubeDataApi.ParsePlaylistOEmbed(List, "{ \"author_name\": \"A\" }"));
+        Assert.Null(YouTubeDataApi.ParsePlaylistOEmbed(List, "not json"));
+    }
+
     [Fact]
     public async Task Search_KeepsTheHits_WhenTheDetailsFail()
     {

@@ -329,6 +329,7 @@ resumeBtn.addEventListener('click', () => { if (offer) resume(offer); });
 const savedEl = document.getElementById('saved');
 const savedCaption = document.getElementById('saved-caption');
 const savedSave = document.getElementById('saved-save');
+const savedSaveList = document.getElementById('saved-save-list');
 const savedClear = document.getElementById('saved-clear');
 const savedFilter = document.getElementById('saved-filter');
 const savedNote = document.getElementById('saved-note');
@@ -389,14 +390,20 @@ function savedRow(v, sw, moving) {
   const play = Neon.el('button', 'yt-play');
   play.type = 'button';
   play.setAttribute('aria-label', v.title || v.id);
-  const thumb = Neon.el('img', 'yt-thumb');
-  thumb.alt = '';
-  thumb.loading = 'lazy';
-  thumb.addEventListener('error', () => { thumb.classList.add('hidden'); });
-  thumb.src = 'https://i.ytimg.com/vi/' + encodeURIComponent(v.id) + '/mqdefault.jpg';
-  play.appendChild(thumb);
+  // A saved playlist (2026-11-08): the thumbnail of the video it was left on, or a ▤ tile with none known. A null thumb arrives as a
+  // missing field, so the test is falsy, never === null.
+  if (v.playlist && !v.thumb) {
+    play.appendChild(Neon.el('span', 'yt-thumb yt-list-tile', '▤'));
+  } else {
+    const thumb = Neon.el('img', 'yt-thumb');
+    thumb.alt = '';
+    thumb.loading = 'lazy';
+    thumb.addEventListener('error', () => { thumb.classList.add('hidden'); });
+    thumb.src = 'https://i.ytimg.com/vi/' + encodeURIComponent(v.playlist ? v.thumb : v.id) + '/mqdefault.jpg';
+    play.appendChild(thumb);
+  }
   const text = Neon.el('span', 'yt-text');
-  text.appendChild(Neon.el('span', 'yt-title', v.title || v.id));
+  text.appendChild(Neon.el('span', 'yt-title', (v.playlist ? '▤ ' : '') + (v.title || v.id)));
   if (v.channel) text.appendChild(Neon.el('span', 'yt-channel', v.channel));
   text.appendChild(Neon.el('span', 'yt-place', v.place));
   play.appendChild(text);
@@ -450,6 +457,14 @@ function drawSaved() {
   savedSave.setAttribute('aria-label', savedSave.textContent);
   savedSave.title = savedSave.textContent;
 
+  // The playlist's ☆ (2026-11-08): only while a playlist plays; ★ (disabled) once it is saved.
+  const list = !!(p && p.playlistId);
+  savedSaveList.classList.toggle('hidden', !list);
+  savedSaveList.textContent = list && p.listSaved ? sw.listSaved : sw.saveList;
+  savedSaveList.disabled = !!(list && p.listSaved);
+  savedSaveList.setAttribute('aria-label', savedSaveList.textContent);
+  savedSaveList.title = savedSaveList.textContent;
+
   savedClear.classList.toggle('hidden', saved.items.length === 0);
   if (!savedClear.classList.contains('armed')) {
     savedClear.textContent = '🗑️ ' + sw.clearAll;
@@ -476,6 +491,7 @@ Neon.armTwice(savedClear, on => {
   savedClear.title = text;
 }, () => change('/api/youtube/saved/clear', {}));
 savedSave.addEventListener('click', () => change('/api/youtube/saved/save', {}));
+savedSaveList.addEventListener('click', () => change('/api/youtube/saved/save-list', {}));
 savedFilter.addEventListener('input', drawSaved);
 
 connect(null);

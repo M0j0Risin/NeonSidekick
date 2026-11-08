@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using NeonSidekick.Diagnostics;
 
 namespace NeonSidekick.YouTube;
@@ -7,7 +8,11 @@ namespace NeonSidekick.YouTube;
 /// <summary>
 /// One saved video (2026-10-07, the user's ask: a bookmark list that remembers where each video was left): its id, what the player
 /// reported of it (the title and channel, how long it runs), where it was left (seconds; 0 for the start), whether it has been seen
-/// to the end, when it was saved and when it last played (null: never yet).
+/// to the end, when it was saved and when it last played (null: never yet). Or a public playlist (2026-11-08, the user's ask: saved
+/// playlists in the same list, <see cref="Playlist"/>): its id in <see cref="Id"/>, its title and channel the list's own, and the
+/// entry it was left on (<see cref="Entry"/>, <see cref="EntryVideo"/>) with <see cref="Position"/>, <see cref="Duration"/> and
+/// <see cref="Watched"/> that entry's video's — watched once its last entry ended. The new fields are left out of the file at their
+/// defaults, so a video's row reads and writes as it did before.
 /// </summary>
 public sealed record YouTubeSaved
 {
@@ -26,15 +31,30 @@ public sealed record YouTubeSaved
     public DateTimeOffset Added { get; init; }
 
     public DateTimeOffset? LastPlayed { get; init; }
+
+    /// <summary>True when <see cref="Id"/> is a playlist's (<c>VideoRequest.IsPlaylistId</c>, a channel as its uploads <c>UU…</c>), not a video's.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Playlist { get; init; }
+
+    /// <summary>A playlist's entry it was left on, 0-based.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int Entry { get; init; }
+
+    /// <summary>A playlist's entry's video, or null when only the entry's number is known (the player then starts at <see cref="Entry"/>).</summary>
+    public string? EntryVideo { get; init; }
+
+    /// <summary>How many entries the player last counted in a playlist; 0 when not known yet.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int Count { get; init; }
 }
 
-/// <summary><c>youtube.json</c>'s shape: the saved videos in the order they were saved, the newest last.</summary>
+/// <summary><c>youtube.json</c>'s shape: the saved videos and playlists in the order they were saved, the newest last.</summary>
 public sealed class YouTubeLibraryFile
 {
     public List<YouTubeSaved> Videos { get; set; } = [];
 }
 
-/// <summary>What <see cref="YouTubeLibrary.Add"/> did.</summary>
+/// <summary>What <see cref="YouTubeLibrary.Add"/> or <see cref="YouTubeLibrary.AddPlaylist"/> did.</summary>
 public enum YouTubeSaveOutcome
 {
     Added,
@@ -68,7 +88,10 @@ public readonly record struct YouTubeImport(YouTubeImportOutcome Outcome, int Ad
 /// the file is small, the resume reads it only when it writes (at most every 15 s while a video plays), and a copy kept by its time
 /// went stale under two instances writing within the same tick of the file clock (found by the tests, 2026-10-07). One lock for every
 /// instance (later on 2026-10-16, the <c>SavedPrompts</c> shape: the Web UI's saved list changes the file from Kestrel threads while the
-/// screen and the window's resume do), so two instances on one file never interleave a read-modify-write.
+/// screen and the window's resume do), so two instances on one file never interleave a read-modify-write. Playlists share the list
+/// (2026-11-08, the user's ask: <see cref="AddPlaylist"/>, <see cref="ResumePlaylist"/>): a playlist's id is never a video's (13
+/// characters or more against 11), so <see cref="YouTubeSaved.Id"/> stays the one key for <see cref="Update"/>, <see cref="Remove"/>
+/// and <see cref="Move"/>. An older build drops playlist rows at its next write (accepted).
 /// </summary>
 public sealed class YouTubeLibrary
 {
@@ -125,8 +148,9 @@ public sealed class YouTubeLibrary
     }
 
     /// <summary>
-    /// The saved video <paramref name="text"/> names: its number in <see cref="List"/> (from 1), its id, or a link to it; null
-    /// when it names none of them.
+    /// The saved video or playlist <paramref name="text"/> names: its number in <see cref="List"/> (from 1), its id, or a link to it;
+    /// null when it names none of them. A <c>watch?v=…&amp;list=…</c> link matches its saved video first, then its saved list
+    /// (2026-11-08).
     /// </summary>
     public YouTubeSaved? Resolve(string? text)
     {
@@ -137,7 +161,12 @@ public sealed class YouTubeLibrary
             return number >= 1 && number <= videos.Count ? videos[number - 1] : null;
         }
 
-        return YouTubeIds.TryParse(trimmed, out string id, out _) ? videos.FirstOrDefault(v => v.Id == id) : null;
+        if (YouTubeIds.TryParse(trimmed, out string id, out _) && videos.FirstOrDefault(v => !v.Playlist && v.Id == id) is { } video)
+        {
+            return video;
+        }
+
+        return YouTubeIds.TryParsePlaylist(trimmed, out string list, out _, out _, out _) ? videos.FirstOrDefault(v => v.Playlist && v.Id == list) : null;
     }
 
     /// <summary>
@@ -145,7 +174,24 @@ public sealed class YouTubeLibrary
     /// 0 for one not saved, never played past <see cref="ResumeMinimum"/>, or seen to the end (its place went back to 0).
     /// </summary>
     public double ResumeAt(string id) =>
-        Find(id) is { Position: > ResumeMinimum } saved ? Math.Max(0, saved.Position - ResumeRewind) : 0;
+        Find(id) is { Playlist: false, Position: > ResumeMinimum } saved ? Math.Max(0, saved.Position - ResumeRewind) : 0;
+
+    /// <summary>
+    /// Where a play of the saved playlist <paramref name="id"/> that names no entry or time starts (2026-11-08, the user's ask: a saved
+    /// list resumes at its entry and the place in that video): the entry it was left on (held below its count when that is known),
+    /// that entry's video when known, and the place as <see cref="ResumeAt"/> gives it. Entry 0 from the start for a list not saved.
+    /// </summary>
+    public (int Entry, string? Video, double Start) ResumePlaylist(string id)
+    {
+        if (Find(id) is not { Playlist: true } saved)
+        {
+            return (0, null, 0);
+        }
+
+        int entry = saved.Count > 0 ? Math.Min(saved.Entry, saved.Count - 1) : saved.Entry;
+        double start = saved.Position > ResumeMinimum ? Math.Max(0, saved.Position - ResumeRewind) : 0;
+        return (Math.Max(0, entry), saved.EntryVideo, start);
+    }
 
     /// <summary>
     /// <paramref name="id"/> saved as the newest, with what is known of it; a video saved already keeps its place in the list and
@@ -176,6 +222,57 @@ public sealed class YouTubeLibrary
                 Id = id,
                 Title = Blank(title),
                 Author = Blank(author),
+                Duration = Math.Max(0, duration),
+                Position = Finished(position, duration) ? 0 : Math.Max(0, position),
+                Added = _time.GetUtcNow(),
+            });
+            return Save(videos) ? YouTubeSaveOutcome.Added : YouTubeSaveOutcome.Failed;
+        }
+    }
+
+    /// <summary>
+    /// The playlist <paramref name="id"/> saved as the newest (2026-11-08, the user's ask), with what is known of it: its title and channel,
+    /// how many entries it holds (0 unknown), and where it is now — the entry (0-based), that entry's video (the first video seeds the
+    /// thumbnail of a list saved from its start) and the place in it, as the player reports them. A list saved already keeps its place in
+    /// the list and where it was left, and only takes what it lacked.
+    /// </summary>
+    public YouTubeSaveOutcome AddPlaylist(string id, string? title = null, string? author = null, int count = 0, int entry = 0, string? entryVideo = null, double position = 0, double duration = 0)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(id);
+        string? video = Viewer.VideoRequest.IsVideoId(entryVideo) ? entryVideo : null;
+        entry = Math.Max(0, entry);
+        lock (s_gate)
+        {
+            var videos = Load();
+            int at = videos.FindIndex(v => v.Id == id);
+            if (at >= 0)
+            {
+                var known = videos[at];
+                var filled = known with
+                {
+                    Title = known.Title ?? Blank(title),
+                    Author = known.Author ?? Blank(author),
+                    Count = known.Count > 0 ? known.Count : Math.Max(0, count),
+                    EntryVideo = known.EntryVideo ?? (known.Entry == entry ? video : null),
+                };
+                if (filled != known)
+                {
+                    videos[at] = filled;
+                    Save(videos);
+                }
+
+                return YouTubeSaveOutcome.AlreadySaved;
+            }
+
+            videos.Add(new YouTubeSaved
+            {
+                Id = id,
+                Playlist = true,
+                Title = Blank(title),
+                Author = Blank(author),
+                Count = Math.Max(0, count),
+                Entry = entry,
+                EntryVideo = video,
                 Duration = Math.Max(0, duration),
                 Position = Finished(position, duration) ? 0 : Math.Max(0, position),
                 Added = _time.GetUtcNow(),
@@ -263,10 +360,10 @@ public sealed class YouTubeLibrary
     }
 
     /// <summary>
-    /// <c>/profile push|pull videos [overwrite]</c> (2026-10-25, the user's ask): <paramref name="videos"/> (another profile's list) appended in
-    /// their order, each record whole (where it was left, watched, added, last played); a video this list holds is skipped, taking only a
-    /// title, channel or length it lacked, as <see cref="Add"/> does. With <paramref name="overwrite"/>, in place of this list. An entry with
-    /// no video id is dropped. Unlike <see cref="Load"/>, a file that is there but cannot be read is refused, never written over: a whole
+    /// <c>/profile push|pull youtube [overwrite]</c> (2026-10-25 as <c>videos</c>, renamed 2026-11-08, the user's ask): <paramref name="videos"/>
+    /// (another profile's list, its playlists with it) appended in their order, each record whole (where it was left, watched, added, last
+    /// played); a video or playlist this list holds is skipped, taking only a title, channel, length or count it lacked, as <see cref="Add"/>
+    /// does. With <paramref name="overwrite"/>, in place of this list. An entry <see cref="Load"/> would drop is dropped. Unlike <see cref="Load"/>, a file that is there but cannot be read is refused, never written over: a whole
     /// list the user built is at stake.
     /// </summary>
     public YouTubeImport Import(IReadOnlyList<YouTubeSaved> videos, bool overwrite)
@@ -284,7 +381,7 @@ public sealed class YouTubeLibrary
             bool changed = overwrite;
             foreach (var video in videos)
             {
-                if (video is null || !Viewer.VideoRequest.IsVideoId(video.Id))
+                if (!Kept(video))
                 {
                     continue;
                 }
@@ -292,7 +389,7 @@ public sealed class YouTubeLibrary
                 int at = kept.FindIndex(v => v.Id == video.Id);
                 if (at < 0)
                 {
-                    kept.Add(video);
+                    kept.Add(Cleaned(video));
                     added++;
                     changed = true;
                     continue;
@@ -300,7 +397,7 @@ public sealed class YouTubeLibrary
 
                 skipped++;
                 var known = kept[at];
-                var filled = known with { Title = known.Title ?? Blank(video.Title), Author = known.Author ?? Blank(video.Author), Duration = known.Duration > 0 ? known.Duration : video.Duration };
+                var filled = known with { Title = known.Title ?? Blank(video.Title), Author = known.Author ?? Blank(video.Author), Duration = known.Duration > 0 ? known.Duration : video.Duration, Count = known.Count > 0 ? known.Count : Math.Max(0, video.Count) };
                 if (filled != known)
                 {
                     kept[at] = filled;
@@ -322,7 +419,29 @@ public sealed class YouTubeLibrary
 
     private static string? Blank(string? text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
 
-    /// <summary>The list as the file has it; missing or unreadable is empty, and an entry with no video id is dropped. Caller holds the lock.</summary>
+    /// <summary>
+    /// Whether a stored row is kept (2026-11-08): a video with a video id, or a playlist with a playlist id that is no mix
+    /// (<see cref="YouTubeIds.IsMix"/>: the player cannot load one).
+    /// </summary>
+    private static bool Kept(YouTubeSaved? row) =>
+        row is not null && (row.Playlist ? Viewer.VideoRequest.IsPlaylistId(row.Id) && !YouTubeIds.IsMix(row.Id) : Viewer.VideoRequest.IsVideoId(row.Id));
+
+    /// <summary>
+    /// A kept row with its playlist fields made safe (2026-11-08): an entry video of the wrong shape dropped (a play would throw on it:
+    /// <c>VideoRequest.Playlist</c>), a negative entry or count made 0. A hand-edited or pulled file can carry either.
+    /// </summary>
+    private static YouTubeSaved Cleaned(YouTubeSaved row)
+    {
+        var cleaned = row with
+        {
+            EntryVideo = row.EntryVideo is null || Viewer.VideoRequest.IsVideoId(row.EntryVideo) ? row.EntryVideo : null,
+            Entry = Math.Max(0, row.Entry),
+            Count = Math.Max(0, row.Count),
+        };
+        return cleaned == row ? row : cleaned;
+    }
+
+    /// <summary>The list as the file has it; missing or unreadable is empty, and an entry <see cref="Kept"/> refuses is dropped. Caller holds the lock.</summary>
     private List<YouTubeSaved> Load()
     {
         if (!File.Exists(_filePath))
@@ -333,7 +452,7 @@ public sealed class YouTubeLibrary
         try
         {
             var file = JsonSerializer.Deserialize(File.ReadAllText(_filePath), YouTubeJsonContext.Default.YouTubeLibraryFile);
-            return (file?.Videos ?? []).Where(v => Viewer.VideoRequest.IsVideoId(v.Id)).ToList();
+            return (file?.Videos ?? []).Where(Kept).Select(Cleaned).ToList();
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
@@ -353,7 +472,7 @@ public sealed class YouTubeLibrary
         try
         {
             var file = JsonSerializer.Deserialize(File.ReadAllText(_filePath), YouTubeJsonContext.Default.YouTubeLibraryFile);
-            return (file?.Videos ?? []).Where(v => v is not null && Viewer.VideoRequest.IsVideoId(v.Id)).ToList();
+            return (file?.Videos ?? []).Where(Kept).Select(Cleaned).ToList();
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {

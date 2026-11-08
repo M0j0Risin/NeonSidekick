@@ -9,7 +9,7 @@ namespace NeonSidekick.Tests;
 /// naming one, where a play resumes — and <see cref="YouTubeResume"/>, which keeps each saved video's place from the window's
 /// reports (<see cref="FakeVideoPlayer.Report"/>): on a pause, the end, a switch, a close, and every 15 s while playing.
 /// </summary>
-public sealed class YouTubeLibraryTests : IDisposable
+public sealed partial class YouTubeLibraryTests : IDisposable
 {
     private const string Bunny = "aqz-KE-bpKQ";
     private const string Zoo = "jNQXAC9IVRw";

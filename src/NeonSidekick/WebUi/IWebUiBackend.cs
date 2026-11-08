@@ -199,6 +199,9 @@ public interface IWebUiBackend
     /// <summary>The video playing saved (later on 2026-10-16, the ☆).</summary>
     WebReply SaveCurrent(IPAddress? remote) => new(WebOutcome.NotFound);
 
+    /// <summary>The playlist playing saved (2026-11-08, the ☆ list), at its entry and place.</summary>
+    WebReply SaveCurrentList(IPAddress? remote) => new(WebOutcome.NotFound);
+
     /// <summary>
     /// A bot check card's picture of the Browser window (2026-10-17), at most <paramref name="width"/> pixels wide: Forbidden with <i>Web UI bot
     /// check control</i> off, NotFound unless <paramref name="askId"/> is the live check's, the picture else (null when the window didn't draw).

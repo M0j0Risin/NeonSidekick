@@ -115,7 +115,7 @@ The push and pull forms copy to (`push`) or from (`pull`) another profile, after
 | `/profile push\|pull persona <name> [overwrite]`, `/profile push\|pull operata <name> [overwrite]`, `/profile push\|pull vocalia <name> [overwrite]` | Copies `persona.md`, `operata.md` (the operating rules) or `vocalia.md` (the spoken-reply directive). |
 | `/profile push\|pull avatar user\|model <name>` | Copies the *User avatar* or the *Model avatar*. |
 | `/profile push\|pull mcp <name> [overwrite]` | Copies the profile's own MCP servers as written (env, headers, args), keeping the target's comments; `overwrite` replaces same-named ones. |
-| `/profile push\|pull links <name> [overwrite]`, `/profile push\|pull videos <name> [overwrite]` | Copies the Browser window's saved links or the saved YouTube videos (with where each was left). |
+| `/profile push\|pull links <name> [overwrite]`, `/profile push\|pull youtube <name> [overwrite]` | Copies the Browser window's saved links or the saved YouTube videos and playlists (with where each was left). |
 | `/profile push\|pull monitors <name> [overwrite]` | Copies the monitor input names, hidden inputs and PC inputs, keeping the target's own; a bare push or pull replaces them. |
 | `/profile push\|pull skills <name>` | Copies the profile's own skills, skipping one the target has (by folder or name); a copy starts with no history. |
 | `/profile push\|pull commands <name> [overwrite]` | Copies the profile's [custom commands](#custom-commands), skipping (or with `overwrite`, replacing) the target's; of two names differing only by case, the one that runs goes. Ends with a count; Esc stops it. |
@@ -211,11 +211,11 @@ Each purge asks first, saying where things go: to the Recycle bin (the Trash on 
 | `/youtube play <id>\|<link> [<time>]` | Plays a video from the time given (or the link's), where *YouTube open links in* says; no key needed. |
 | `/youtube play <playlist>\|<link> [<n>]` | Plays a public playlist, or a channel's uploads, from entry *n*, the same way. |
 | `/youtube next\|previous`, `/youtube entry <n>` | Plays the playlist's next, previous or *n*th video. |
-| `/youtube playlist [<id>\|<link>]` | A playlist's videos in a pane (with a key: 1 unit, plus 1 per 50 videos); alone, the one playing. |
+| `/youtube playlist [<id>\|<link>]` | A playlist's videos in a pane (with a key: 1 unit, plus 1 per 50 videos); alone, the one playing. `l` saves the playlist. |
 | `/youtube play\|resume`, `/youtube pause`, `/youtube seek <time>`, `/youtube volume <level>`, `/youtube mute\|unmute`, `/youtube close` | Resumes, pauses, seeks, sets the volume (0–100), mutes or unmutes, or closes the player. |
-| `/youtube save [<id>\|<link>]` | Saves the video playing, or the one named, to this profile's saved videos. |
-| `/youtube list`, `/youtube list --clear` | The saved videos in a pane, in step with the Web UI's YouTube tab; `--clear` removes them all after a yes. |
-| `/youtube unsave <n>\|<id>\|<link>` | Removes one saved video. |
+| `/youtube save [<id>\|<link>\|playlist]` | Saves the video playing, or the one named, to this profile's saved videos; a playlist's id or link saves the playlist, `playlist` the one playing. |
+| `/youtube list`, `/youtube list --clear` | The saved videos and playlists in a pane, in step with the Web UI's YouTube tab; `--clear` removes them all after a yes. |
+| `/youtube unsave <n>\|<id>\|<link>` | Removes one saved video or playlist. |
 | `/webui` | Shows the [Web UI](INTERFACE.md#web-ui) (the app's page for a phone or browser), over a reply too: on or off, port, reach, buttons, and a tab per address with a QR code and sign-in link. |
 | `/webui on\|off` | Turns the Web UI on or off for this profile, at once. |
 | `/webui copy` | Copies the first sign-in link (the HTTPS one, else Tailscale's, if any). It holds the token: paste it only where you trust. |

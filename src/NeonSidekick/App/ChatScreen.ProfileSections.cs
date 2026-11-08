@@ -12,7 +12,7 @@ using NeonSidekick.YouTube;
 
 namespace NeonSidekick.App;
 
-// ── /profile push|pull mcp, links, videos, skills (2026-10-25, the user's ask) ─────────────────────────────────────
+// ── /profile push|pull mcp, links, youtube (videos until 2026-11-08), skills (2026-10-25, the user's ask) ────────────────────────────────────
 // The profile's other files and lists, each a section with the memory section's shape: the source read, nothing to copy said and
 // nothing asked, the question, then the target written. A push reads the loaded profile's and writes the other's; a pull the other way.
 // The monitors section is a profile.json one (PlanSectionCopy), as are the home and the bars (2026-10-26, below). Names read from the
@@ -211,7 +211,7 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// <c>/profile push|pull videos [overwrite]</c>: the saved YouTube videos into the target's <c>youtube.json</c>, each whole (where it was
+    /// <c>/profile push|pull youtube [overwrite]</c> (<c>videos</c> until 2026-11-08): the saved YouTube videos and playlists into the target's <c>youtube.json</c>, each whole (where it was
     /// left, watched, added, last played), appended (an id there skipped, its blanks filled) or in place of its list
     /// (<see cref="YouTubeLibrary.Import"/>). A target file that can't be read is refused, never written over.
     /// </summary>
@@ -724,7 +724,7 @@ internal sealed partial class ChatScreen
         $"Could not copy into {(pull ? "this profile" : $"\"{profile}\"")}'s saved links: "
         + (outcome == BrowserLinkOutcome.Newer ? BrowserLinkText.NewerFile : BrowserLinkText.SaveFailed);
 
-    /// <summary><c>videos</c> with nothing to copy: <c>(nothing to copy: this profile has no saved videos)</c>, or <c>"work"</c> on a pull.</summary>
+    /// <summary><c>youtube</c> with nothing to copy: <c>(nothing to copy: this profile has no saved videos)</c>, or <c>"work"</c> on a pull.</summary>
     public static string ProfileVideosNothingNotice(string profile, bool pull) => $"(nothing to copy: {SourceName(profile, pull)} has no saved videos)";
 
     /// <summary>A videos copy the target refused: its file couldn't be read (left alone) or written. Nothing changed.</summary>

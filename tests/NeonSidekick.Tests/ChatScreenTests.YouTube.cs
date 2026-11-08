@@ -258,7 +258,7 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
-    /// A playlist search (2026-10-08): its rows on the picker, s on one says only a video saves, Enter plays the list from its start;
+    /// A playlist search (2026-10-08): its rows on the picker, s on one saves the playlist (2026-11-08), Enter plays the list from its start;
     /// then next moves through it, and a channel search's Enter plays the channel's uploads.
     /// </summary>
     [Fact]
@@ -279,13 +279,14 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Matches(@"Open Movies & Shorts +Blender +3 videos", output);
-        Assert.Contains(YouTubeText.SaveVideosOnly(YouTube.YouTubeKind.Playlist), output);
+        Assert.Contains("Saved the playlist \"Open Movies & Shorts\"; it resumes at the entry and place it is left at.", output);   // s saved only videos until 2026-11-08
         Assert.Contains(_http.Requests, r => r.Uri.AbsoluteUri.Contains("type=playlist", StringComparison.Ordinal) && r.Uri.AbsoluteUri.Contains("&order=date", StringComparison.Ordinal));
         Assert.Equal([VideoRequest.Playlist("PLabcdefghijklmnopq"), VideoRequest.Playlist("UUSMOQeBJ2RAnuFungnQOxLg")], _videoPlayer!.Plays);
         Assert.Contains(" · entry 2 of 3 in playlist PLabcdefghijklmnopq", output);
         Assert.Matches(@"Blender +1\.8M subscribers +689 videos", output);
         Assert.Contains("  ✗ \"since\" must be today, week, month, year or a date like 2026-01-31, not \"someday\".", output);
-        Assert.Empty(new YouTubeLibrary(_settings.ProfileDirectory).List());
+        var list = Assert.Single(new YouTubeLibrary(_settings.ProfileDirectory).List());
+        Assert.Equal(("PLabcdefghijklmnopq", true, "Open Movies & Shorts", "Blender", 3), (list.Id, list.Playlist, list.Title, list.Author, list.Count));
     }
 
     /// <summary>
@@ -428,6 +429,62 @@ public partial class ChatScreenTests
         Assert.Matches(@"2\. +Me at the zoo & more +jawed", output);
         Assert.Matches(@"3\. +\(deleted video\)", output);
         Assert.Equal([VideoRequest.Playlist("PLabcdefghijklmnopq", 1), VideoRequest.Playlist("PLzyxwvutsrqponmlk")], _videoPlayer!.Plays);
+    }
+
+    /// <summary>
+    /// Saved playlists on the screen (2026-11-08, the user's ask): s on a channel's hit saves its uploads under the channel's name, l on a
+    /// playlist's picker saves the whole list (its first video for the thumbnail) and s still the entry's video; the 📺 pane's Enter
+    /// plays a saved list at its entry and place.
+    /// </summary>
+    [Fact]
+    public async Task YouTube_SavedPlaylists_ChannelS_PlaylistPickersL_AndThePanePlaysOneAtItsPlace()
+    {
+        YouTubeFixture();
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 120;
+        _geometry = new ScreenGeometry(() => null);
+        PushLine("/youtube --channels blender");
+        _console.Input.PushKey(Keys.Char('s'));
+        _console.Input.PushKey(Keys.Escape);
+        PushLine("/youtube playlist https://www.youtube.com/playlist?list=PLabcdefghijklmnopq");
+        _console.Input.PushKey(Keys.Down);
+        _console.Input.PushKey(Keys.Char('s'));            // the zoo, the entry's video
+        _console.Input.PushKey(Keys.Char('l'));            // the whole list
+        _console.Input.PushKey(Keys.Escape);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(YouTubeText.PlaylistPickKeys, output);
+        var library = new YouTubeLibrary(_settings.ProfileDirectory);
+        Assert.Equal(["UUSMOQeBJ2RAnuFungnQOxLg", "jNQXAC9IVRw", "PLabcdefghijklmnopq"], library.List().Select(v => v.Id));
+        var uploads = library.Find("UUSMOQeBJ2RAnuFungnQOxLg")!;
+        Assert.Equal((true, "Blender", 689), (uploads.Playlist, uploads.Title, uploads.Count));
+        var list = library.Find("PLabcdefghijklmnopq")!;
+        Assert.Equal((true, "Open Movies & Shorts", "Blender", 3, 0, (string?)"aqz-KE-bpKQ"), (list.Playlist, list.Title, list.Author, list.Count, list.Entry, list.EntryVideo));
+        Assert.Contains("Saved the playlist \"Open Movies & Shorts\"; it resumes at the entry and place it is left at.", output);
+        Assert.Empty(_videoPlayer!.Plays);
+    }
+
+    [Fact]
+    public async Task YouTube_ThePane_PlaysASavedPlaylist_AtItsEntryAndPlace()
+    {
+        YouTubeFixture(key: false);
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 120;
+        _geometry = new ScreenGeometry(() => null);
+        var library = new YouTubeLibrary(_settings.ProfileDirectory);
+        library.AddPlaylist("PLabcdefghijklmnopq", "Open Movies & Shorts", "Blender", 3);
+        library.Update("PLabcdefghijklmnopq", v => v with { Entry = 1, EntryVideo = "jNQXAC9IVRw", Position = 100, Duration = 300 });
+        PushLine("/youtube");
+        _console.Input.PushKey(Keys.Enter);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(YouTubeText.PlaylistMark + " Open Movies & Shorts", output);
+        Assert.Contains("entry 2 of 3", output);
+        Assert.Equal(VideoRequest.Playlist("PLabcdefghijklmnopq", 1, "jNQXAC9IVRw", 97), Assert.Single(_videoPlayer!.Plays));
     }
 
     /// <summary>Without the pane (or a window), a search's hits are listed instead of picked.</summary>

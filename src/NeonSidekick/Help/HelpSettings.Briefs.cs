@@ -321,7 +321,7 @@ public static partial class HelpSettings
         SettingsField.ComfyOutputFolder => "The folder under the profile's images folder where the pictures are saved. Empty uses the images folder itself.",
 
         // /tools › Apps › YouTube
-        SettingsField.YouTubeTools => "Gives the model the YouTube tools: search, play videos and playlists, and keep saved videos. Searching needs a YouTube API key.",
+        SettingsField.YouTubeTools => "Gives the model the YouTube tools: search, play videos and playlists, and keep saved videos and playlists. Searching needs a YouTube API key.",
         SettingsField.YouTubeApiKey => "Your YouTube Data API v3 key, for searching (about 100 free searches a day). Saved encrypted.",
         SettingsField.YouTubeSearchMaxResults => "The most videos, playlists or channels a search lists (1–20). The quota cost is the same whatever the count.",
         SettingsField.YouTubeSearchOrder => "The order a search lists in: relevance, date, views, rating or title.",

@@ -448,6 +448,9 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     /// <summary>The screen's save of the playing video.</summary>
     public Func<IPAddress?, WebReply>? SavedSave { get; set; }
 
+    /// <summary>The screen's save of the playing playlist (2026-11-08).</summary>
+    public Func<IPAddress?, WebReply>? SavedSaveList { get; set; }
+
     public WebSavedVideos? SavedVideos()
     {
         try
@@ -470,6 +473,8 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     public WebReply MoveSaved(WebSavedMove request, IPAddress? remote) => Saved(() => SavedMove?.Invoke(request, remote));
 
     public WebReply SaveCurrent(IPAddress? remote) => Saved(() => SavedSave?.Invoke(remote));
+
+    public WebReply SaveCurrentList(IPAddress? remote) => Saved(() => SavedSaveList?.Invoke(remote));
 
     // ── A bot check's card (2026-10-17): the screen's hooks; a null hook is a 404 ──
 

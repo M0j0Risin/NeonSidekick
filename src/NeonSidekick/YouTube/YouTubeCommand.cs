@@ -23,7 +23,10 @@ public enum YouTubeVerb
     Unmute,
     Close,
 
-    /// <summary><c>save</c> (the video in the window) or <c>save &lt;id|link&gt;</c> (2026-10-07).</summary>
+    /// <summary>
+    /// <c>save</c> (the video in the window) or <c>save &lt;id|link&gt;</c> (2026-10-07); a playlist's id, link or channel, or
+    /// <c>save playlist</c> for the list playing (2026-11-08: <see cref="YouTubeCommandLine.PlaylistId"/>, <c>current</c> for that one).
+    /// </summary>
     Save,
 
     /// <summary>
@@ -32,7 +35,7 @@ public enum YouTubeVerb
     /// </summary>
     Saved,
 
-    /// <summary><c>unsave &lt;n|id|link&gt;</c>: a saved video taken off the list (2026-10-07).</summary>
+    /// <summary><c>unsave &lt;n|id|link&gt;</c>: a saved video or playlist taken off the list (2026-10-07; playlists 2026-11-08).</summary>
     Unsave,
 
     /// <summary><c>list --clear</c>: every saved video taken off the list, after a yes (2026-10-08, the user's ask).</summary>
@@ -84,13 +87,19 @@ public static class YouTubeCommand
     public const string ClearSwitch = "--clear";
 
     /// <summary>The completion's note for <c>list --clear</c>.</summary>
-    public const string ClearNote = "take every saved video off the list, after a yes";
+    public const string ClearNote = "take every saved video and playlist off the list, after a yes";
+
+    /// <summary>The word after <c>save</c> that saves the playlist playing (2026-11-08); only the word alone, so <c>save playlist of the year</c> searches.</summary>
+    public const string SavePlaylistWord = "playlist";
+
+    /// <summary>The completion's note for <c>save playlist</c>.</summary>
+    public const string SavePlaylistNote = "save the playlist playing; it resumes at its entry and place";
 
     /// <summary>The words in the order the completion offers them, with their notes; save and list first (2026-10-08, the user's ask).</summary>
     public static readonly IReadOnlyList<(string Word, string Note)> Words =
     [
-        ("save", "save the video playing, or /youtube save <id|link>; it resumes where it is left"),
-        (ListWord, "the saved videos: Enter plays one where it was left; /youtube list --clear empties it"),
+        ("save", "save the video playing, or /youtube save <id|link> (a playlist's too); it resumes where it is left"),
+        (ListWord, "the saved videos and playlists: Enter plays one where it was left; /youtube list --clear empties it"),
         (PlayWord, "play a video: /youtube play <id|link> [<time>]; alone, carry on playing"),
         ("pause", "pause the video"),
         ("resume", "carry on playing"),
@@ -100,7 +109,7 @@ public static class YouTubeCommand
         ("unmute", "unmute the video"),
         ("close", "close the video window"),
         ("status", "what the video window plays"),
-        (UnsaveWord, "take a saved video off the list: /youtube unsave <n|id|link>"),
+        (UnsaveWord, "take a saved video or playlist off the list: /youtube unsave <n|id|link>"),
         ("next", "the playlist's next video"),
         ("previous", "the playlist's video before"),
         ("entry", "play the playlist's video n: /youtube entry <n>"),
@@ -201,15 +210,19 @@ public static class YouTubeCommand
                 return new YouTubeCommandLine(YouTubeVerb.Status);
             case "save" when rest.Length == 0:
                 return new YouTubeCommandLine(YouTubeVerb.Save);
+            case "save" when rest.Equals(SavePlaylistWord, StringComparison.OrdinalIgnoreCase):
+                return new YouTubeCommandLine(YouTubeVerb.Save, rest, PlaylistId: Llm.Tools.YouTubeSaveTool.Current);
             case "save" when YouTubeIds.TryParse(rest, out string saving, out _):
                 return new YouTubeCommandLine(YouTubeVerb.Save, rest, saving);
+            case "save" when !rest.Contains(' ', StringComparison.Ordinal) && YouTubeIds.TryParsePlaylist(rest, out string savingList, out _, out _, out _):
+                return new YouTubeCommandLine(YouTubeVerb.Save, rest, PlaylistId: savingList);
             case ListWord when rest.Length == 0:
                 return new YouTubeCommandLine(YouTubeVerb.Saved);
             case ListWord when rest.Equals(ClearSwitch, StringComparison.OrdinalIgnoreCase):
                 return new YouTubeCommandLine(YouTubeVerb.ClearSaved);
             case UnsaveWord when rest.Length == 0:
                 return Usage();
-            case UnsaveWord when rest.All(char.IsAsciiDigit) || YouTubeIds.TryParse(rest, out _, out _):
+            case UnsaveWord when rest.All(char.IsAsciiDigit) || YouTubeIds.TryParse(rest, out _, out _) || YouTubeIds.TryParsePlaylist(rest, out _, out _, out _, out _):
                 return new YouTubeCommandLine(YouTubeVerb.Unsave, rest);
         }
 
@@ -226,7 +239,8 @@ public static class YouTubeCommand
 
     /// <summary>
     /// <c>play</c>'s playlist (2026-10-08): a playlist id, link or channel, alone or with an entry number after it (1-based); null when
-    /// <paramref name="rest"/> names no playlist (a plain video link, an 11-character id).
+    /// <paramref name="rest"/> names no playlist (a plain video link, an 11-character id). The entry is null unless a number or the link's
+    /// <c>index=</c> names one (2026-11-08): a saved list played by its link alone resumes where it was left.
     /// </summary>
     private static YouTubeCommandLine? Playlist(string rest)
     {
@@ -235,9 +249,9 @@ public static class YouTubeCommand
             return null;
         }
 
-        if (YouTubeIds.TryParsePlaylist(rest, out string list, out int entry, out string? video, out double start))
+        if (YouTubeIds.TryParsePlaylist(rest, out string list, out int entry, out string? video, out double start, out bool indexed))
         {
-            return new YouTubeCommandLine(YouTubeVerb.Play, rest, video, start > 0 ? start : null, PlaylistId: list, Entry: video is null ? entry : null);
+            return new YouTubeCommandLine(YouTubeVerb.Play, rest, video, start > 0 ? start : null, PlaylistId: list, Entry: indexed ? entry : null);
         }
 
         int gap = rest.LastIndexOf(' ');
@@ -328,6 +342,11 @@ public static class YouTubeCommand
         if (argText.StartsWith(ListWord + " ", StringComparison.OrdinalIgnoreCase))
         {
             return UI.MentionCompleter.Matches([new(ListWord + " " + ClearSwitch, ClearNote)], argText);
+        }
+
+        if (argText.StartsWith("save ", StringComparison.OrdinalIgnoreCase))
+        {
+            return UI.MentionCompleter.Matches([new("save " + SavePlaylistWord, SavePlaylistNote)], argText);
         }
 
         // A search's switches (2026-10-08): while the word being typed starts one, and a value switch's words after it.

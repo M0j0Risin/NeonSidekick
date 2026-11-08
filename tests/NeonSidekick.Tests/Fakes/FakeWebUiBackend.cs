@@ -588,6 +588,33 @@ public IWebHome? Home { get; set; }
         return new WebReply(WebOutcome.Ok, "Saved it.");
     }
 
+    /// <summary>The playlist's ☆ (2026-11-08): "save-list" in <see cref="SavedChanges"/>; refused with no playlist playing, else the list saved.</summary>
+    public WebReply SaveCurrentList(IPAddress? remote)
+    {
+        SavedChanges.Enqueue("save-list");
+        if (SavedReply is { } reply)
+        {
+            return reply;
+        }
+
+        lock (ListsGate)
+        {
+            if (SavedPlaying is not { PlaylistId: { } list } playing)
+            {
+                return new WebReply(WebOutcome.Refused, NeonSidekick.YouTube.YouTubeText.NoPlaylistToSave);
+            }
+
+            if (!SavedList.Any(v => v.Id == list))
+            {
+                SavedList.Add(SavedVideo(list, list) with { Playlist = true });
+            }
+
+            SavedPlaying = playing with { ListSaved = true };
+        }
+
+        return new WebReply(WebOutcome.Ok, "Saved the list.");
+    }
+
     public Dictionary<long, WebEntry> Entries { get; } = [];
 
     public WebEntry? Entry(long seq) => Entries.GetValueOrDefault(seq);

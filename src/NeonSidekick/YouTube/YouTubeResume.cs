@@ -11,8 +11,11 @@ namespace NeonSidekick.YouTube;
 /// <see cref="YouTubeLibrary.FinishedWithin"/> of its end, or ended, goes back to the start and is marked watched. The title,
 /// channel and length the player reports fill the entry in (a video saved by its link alone has none until it plays). Raised on
 /// the window's thread: a write is a small file, done there, so the last one is down before the app's exit closes the window.
-/// A playlist's entries are left alone (2026-10-08): the player starts each at its beginning, so a saved video reached in a list
-/// and paused early would lose the place it was saved at.
+/// A playlist's entries leave the videos' own rows alone (2026-10-08): the player starts each at its beginning, so a saved video
+/// reached in a list and paused early would lose the place it was saved at. A saved playlist keeps its own place instead (2026-11-08,
+/// the user's ask): its row takes the entry playing, that entry's video and the place in it, never the title or channel (the player
+/// reports the video's, not the list's). An entry seen to the end moves the row on to the next entry, and the last one back to the
+/// first, the list then marked watched. A report that cannot say which entry plays yet writes nothing.
 /// </summary>
 public sealed class YouTubeResume
 {
@@ -64,7 +67,7 @@ public sealed class YouTubeResume
                 case VideoState.Ended:
                     Write(snapshot, stopped: true);
                     break;
-                case VideoState.Playing when snapshot.VideoId != _writtenFor || _time.GetUtcNow() - _writtenAt >= SaveEvery:
+                case VideoState.Playing when Key(snapshot) != _writtenFor || _time.GetUtcNow() - _writtenAt >= SaveEvery:
                     Write(snapshot, stopped: false);
                     break;
             }
@@ -77,7 +80,7 @@ public sealed class YouTubeResume
     /// </summary>
     private void Write(VideoSnapshot snapshot, bool stopped)
     {
-        if (snapshot.VideoId is not { } id || snapshot.Error is not null || snapshot.PlaylistId is not null
+        if (snapshot.VideoId is not { } id || snapshot.Error is not null
             || snapshot.State is VideoState.Opening or VideoState.Failed or VideoState.Cued or VideoState.Unstarted)
         {
             return;
@@ -85,7 +88,19 @@ public sealed class YouTubeResume
 
         var now = _time.GetUtcNow();
         bool finished = snapshot.State == VideoState.Ended || (stopped && YouTubeLibrary.Finished(snapshot.Position, snapshot.Duration));
-        _library().Update(id, saved => saved with
+        if (snapshot.PlaylistId is { } list)
+        {
+            if (snapshot.PlaylistEntry is { } entry)
+            {
+                _library().Update(list, saved => saved.Playlist ? Entry(saved, snapshot, id, entry, finished, now) : saved);
+                _writtenFor = Key(snapshot);
+                _writtenAt = now;
+            }
+
+            return;
+        }
+
+        _library().Update(id, saved => saved.Playlist ? saved : saved with
         {
             Title = string.IsNullOrWhiteSpace(snapshot.Title) ? saved.Title : snapshot.Title,
             Author = string.IsNullOrWhiteSpace(snapshot.Author) ? saved.Author : snapshot.Author,
@@ -94,7 +109,44 @@ public sealed class YouTubeResume
             Watched = saved.Watched || finished,
             LastPlayed = now,
         });
-        _writtenFor = id;
+        _writtenFor = Key(snapshot);
         _writtenAt = now;
+    }
+
+    /// <summary>What the throttle tells apart (2026-11-08): the video, and the list it plays in, so two entries are never one.</summary>
+    private static string? Key(VideoSnapshot snapshot) => snapshot.PlaylistId is { } list ? list + "/" + snapshot.VideoId : snapshot.VideoId;
+
+    /// <summary>
+    /// A saved playlist's row after a report of <paramref name="entry"/> playing <paramref name="video"/>: the entry and place, or — that
+    /// entry seen to the end — the next entry from its start (its video unknown yet, so a resume never finds the old one and plays it
+    /// again), the last entry going back to the first and marking the list watched. A count the player cannot give keeps the saved one.
+    /// </summary>
+    private static YouTubeSaved Entry(YouTubeSaved saved, VideoSnapshot snapshot, string video, int entry, bool finished, DateTimeOffset now)
+    {
+        int count = snapshot.PlaylistCount is { } reported && reported > 0 ? reported : saved.Count;
+        if (!finished)
+        {
+            return saved with
+            {
+                Entry = entry,
+                EntryVideo = video,
+                Count = count,
+                Position = Math.Max(0, snapshot.Position),
+                Duration = snapshot.Duration > 0 ? snapshot.Duration : saved.EntryVideo == video ? saved.Duration : 0,
+                LastPlayed = now,
+            };
+        }
+
+        bool last = count > 0 && entry >= count - 1;
+        return saved with
+        {
+            Entry = last ? 0 : entry + 1,
+            EntryVideo = null,
+            Count = count,
+            Position = 0,
+            Duration = 0,
+            Watched = saved.Watched || last,
+            LastPlayed = now,
+        };
     }
 }

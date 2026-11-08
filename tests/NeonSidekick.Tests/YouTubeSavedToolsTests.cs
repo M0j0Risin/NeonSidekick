@@ -13,7 +13,7 @@ namespace NeonSidekick.Tests;
 /// The saved videos' tools (2026-10-07, the user's ask): <c>youtube_saved</c> and <c>youtube_save</c> over the profile's list, and
 /// <c>youtube_play</c> resuming a saved video where it was left unless a time is named.
 /// </summary>
-public sealed class YouTubeSavedToolsTests : IDisposable
+public sealed partial class YouTubeSavedToolsTests : IDisposable
 {
     private const string Bunny = "aqz-KE-bpKQ";
     private const string Zoo = "jNQXAC9IVRw";
@@ -117,6 +117,14 @@ public sealed class YouTubeSavedToolsTests : IDisposable
         Assert.Equal(("video " + Zoo).PadRight(YouTubeText.SavedTitleWidth) + new string(' ', 2 + 7 + 2) + "watched", YouTubeText.SavedPaneRow(untitled, columns.Title, columns.Channel));
         Assert.Equal("Me at the zoo  not played yet", YouTubeText.SavedPaneRow(zoo with { Author = null }, 13, 0));
         Assert.Equal((0, 0), YouTubeText.SavedColumns([]));
+
+        // A playlist (2026-11-08): ▤ is one cell wide, so its row keeps the columns; untitled, it reads as a playlist.
+        Assert.Equal(1, NeonSidekick.UI.TextCells.Width(YouTubeText.PlaylistMark));
+        var list = new YouTubeSaved { Id = "PLabcdefghijklmnopq", Playlist = true, Title = "Mixes", Author = "Blender", Entry = 1, Count = 3, Position = 20, Duration = 60 };
+        columns = YouTubeText.SavedColumns([list, zoo]);
+        Assert.Equal("▤ Mixes".PadRight(columns.Title) + "  Blender  entry 2 of 3 · at 0:20 of 1:00", YouTubeText.SavedPaneRow(list, columns.Title, columns.Channel));
+        Assert.Equal(YouTubeText.SavedPaneRow(zoo, columns.Title, columns.Channel).IndexOf("not played", StringComparison.Ordinal), YouTubeText.SavedPaneRow(list, columns.Title, columns.Channel).IndexOf("entry", StringComparison.Ordinal));
+        Assert.StartsWith("▤ playlist PLabcdefghijklmnopq", YouTubeText.SavedPaneRow(list with { Title = null }, 40, 0), StringComparison.Ordinal);
     }
 
     [Fact]

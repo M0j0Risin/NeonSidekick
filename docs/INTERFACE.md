@@ -133,8 +133,9 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | `/tasks` | ←/→ states · Enter opens the task (`c` copy, `a` ask, `h` history, and as allowed `r` run, `e` end, `n` enable, `d` disable, each asking) · `r` refresh · `c` computer · `f` folder · `w` Windows' own · type to filter |
 | `/ad` card | Long columns cut to the pane · a double-click on a row (member, result, group, manager or owner) opens its card, Esc back · `c` copy the card · `a` ask · Shift+letter finds |
 | `/ad` card, on a group or a locked user | on a group, `n` nested or direct, `u` users only or all · on a locked user, **Search 4740** opens the PDC emulator's lockout events on `/eventlog` · a name several accounts share opens as a card of them |
-| `/youtube`, `/youtube list` | Enter plays |
-| `/youtube <words>`, `/youtube playlist` | Enter plays · `s` saves the video |
+| `/youtube`, `/youtube list` | Enter plays (a playlist, marked ▤, at its entry) |
+| `/youtube <words>` | Enter plays · `s` saves the hit (a video, a playlist, or a channel's uploads) |
+| `/youtube playlist` | Enter plays from that entry · `s` saves the video · `l` saves the playlist |
 | `/prompts` | Enter sends (queued during a reply) · `d` to the draft line · `a` add · `s` save the draft · `e` edit (a long one in the draft editor) · `m` save as a [custom command](COMMANDS.md#custom-commands) · `r` or Delete removes, `c` clears all (both ask) · Shift+↑/↓, Shift+Home/End move · type to filter |
 | `/browser list` | Enter opens in the [Browser window](#the-browser-window) · `a` add · `n` name · `e` address |
 | `/youtube`, `/youtube list`, `/browser list` | `d` or Delete removes (asks) · `c` clears all (asks) · Shift+↑/↓, Shift+Home/End move · type to filter |
@@ -699,7 +700,7 @@ The page is plain HTTP. Tailscale Serve puts HTTPS in front of it with a real ce
 * **Which tab plays:** the one shown most recently; a playing tab keeps playing, even hidden. The others offer *Play here*, taking the video over from about 3 seconds back.
 * **Sound:** a phone starts a video only after a tap on it. The tab tries with sound, then muted, else asks for the tap.
 * **Resume:** leaving the tab, locking the phone or a reload stops the video and keeps its place; coming back offers *Resume "title" at 3:12*.
-* **Saved videos** (`/youtube list`'s) sit under the player: a tap plays one here, whatever the setting says; ⋯ moves or removes it; ☆ saves the playing video.
+* **Saved videos** (`/youtube list`'s) sit under the player: a tap plays one here, whatever the setting says; ⋯ moves or removes it; ☆ saves the playing video, and ☆ the playlist the one playing (▤, resumed at its entry).
 * **⛶ Fill window** fills the browser's window with the video under a slim bar (YouTube's own button is still full screen). ✕ Exit, Esc or Back leave (after a tap on the video, Esc is YouTube's).
 * **Limits:** on an iPhone *YouTube while speaking* `duck` does nothing (`pause` works).
 * `/youtube` typed in Chat is refused, except bare `/youtube` and `/youtube list`, which point to this tab's saved videos; ask the model to play instead.

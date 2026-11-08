@@ -123,7 +123,7 @@ It's one app for research, IT and admin work (Active Directory, event logs, data
 * **ComfyUI:** pictures from your own workflows (text-to-image, image-to-image, face swaps), or `/imagine` with your prompt.
 * **Picture editing:** resize, crop, rotate, recolor, convert or strip metadata, by the model or a right-click in the viewer.
 * **Bot chat:** `/botchat` lets your profiles talk in their own voices, optionally illustrated by ComfyUI.
-* **YouTube:** search (with your API key) and play in the app (macOS 14+ on a Mac), a browser or the Web UI; saved videos resume where you left off.
+* **YouTube:** search (with your API key) and play in the app (macOS 14+ on a Mac), a browser or the Web UI; saved videos and playlists resume where you left off.
 
 ## Getting started
 

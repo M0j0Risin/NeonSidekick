@@ -18,7 +18,7 @@ public partial class YouTubeToolsTests
         "Plays a YouTube video, with sound, in the app's video window on the user's screen (one window: a new video replaces the one playing). " +
         "Give the id from youtube_search or a link the user pasted, or a playlist to play through. Play only what the user asked for. " +
         "Then youtube_control pauses, seeks, sets the volume or moves through a playlist, and youtube_status says where it is. " +
-        "A saved video (youtube_saved) resumes where it was left unless start is given.";
+        "A saved video (youtube_saved) resumes where it was left unless start is given, a saved playlist at its entry and place unless entry is given.";
 
     private const string StatusToday =
         "Says what the video window is playing: the video and channel, playing or paused, the position and length, the volume. " +

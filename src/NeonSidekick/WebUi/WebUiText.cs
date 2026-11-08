@@ -1026,7 +1026,9 @@ public static class WebUiText
             ClearArmed: "Tap again to clear all",
             SavePlaying: "☆ Save the playing video",
             Saved: "★ Saved",
-            Looking: YouTube.YouTubeText.LookingUpTitles),
+            Looking: YouTube.YouTubeText.LookingUpTitles,
+            SaveList: "☆ Save the playlist",
+            ListSaved: "★ Playlist saved"),
     };
 
     /// <summary>A saved list's play from a page whose stream isn't open (later on 2026-10-16): it reconnects by itself.</summary>
@@ -1052,6 +1054,9 @@ public static class WebUiText
 
     /// <summary>The PC's hint row as the YouTube tab saves the playing video.</summary>
     public const string SavedSaveFlash = Glyph + "YouTube tab: saved the playing video";
+
+    /// <summary>The PC's hint-row flash for the playlist's ☆ (2026-11-08).</summary>
+    public const string SavedSaveListFlash = Glyph + "YouTube tab: saved the playing playlist";
 
     /// <summary>A saved list's change from the page (audit, no titles): <paramref name="what"/> is <c>played</c>, <c>removed</c>, <c>cleared</c>, <c>moved</c> or <c>saved</c>.</summary>
     public static string SavedLogLine(string what, IPAddress? remote) => "Web UI: the YouTube tab " + what + " " + (what == "cleared" ? "the saved videos" : "a saved video") + " from " + Where(remote) + ".";

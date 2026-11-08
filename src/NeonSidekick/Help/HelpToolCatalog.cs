@@ -251,8 +251,8 @@ internal static class HelpToolCatalog
         T(YouTubePlayTool.ToolName, ToolsText.YouTubeTabTitle, SettingsField.YouTubeTools, "Plays a YouTube video where *YouTube open links in* says.", headless: false, setup: VideoSetup),
         T(YouTubeControlTool.ToolName, ToolsText.YouTubeTabTitle, SettingsField.YouTubeTools, "Controls the video playing: play, pause, seek, volume, mute, the playlist, or close the player.", headless: false, setup: VideoSetup),
         T(YouTubeStatusTool.ToolName, ToolsText.YouTubeTabTitle, SettingsField.YouTubeTools, "Tells what the video player is playing, where it is and its volume.", headless: false, setup: VideoSetup),
-        T(YouTubeSavedTool.ToolName, ToolsText.YouTubeTabTitle, SettingsField.YouTubeTools, "Lists the user's saved YouTube videos and where each was left."),
-        T(YouTubeSaveTool.ToolName, ToolsText.YouTubeTabTitle, SettingsField.YouTubeTools, "Adds a YouTube video to the user's saved videos, or removes one."),
+        T(YouTubeSavedTool.ToolName, ToolsText.YouTubeTabTitle, SettingsField.YouTubeTools, "Lists the user's saved YouTube videos and playlists and where each was left."),
+        T(YouTubeSaveTool.ToolName, ToolsText.YouTubeTabTitle, SettingsField.YouTubeTools, "Adds a YouTube video or playlist to the user's saved videos, or removes one."),
         // Shopping
         T(ShoppingListTool.ToolName, ToolsText.ShoppingMenuTitle, SettingsField.ShoppingTools, "Shows the user's shopping list, grouped by aisle in the order the store is walked."),
         T(ShoppingAddTool.ToolName, ToolsText.ShoppingMenuTitle, SettingsField.ShoppingTools, "Adds items to the user's shopping list."),

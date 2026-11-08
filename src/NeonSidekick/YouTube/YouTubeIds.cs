@@ -83,10 +83,19 @@ public static partial class YouTubeIds
     /// and the start its <c>t=</c>. False when it names no playlist, a plain video link among them — and a mix (<see cref="IsMix"/>,
     /// the review of 2026-10-09): a video shared from one carries <c>&amp;list=RD…&amp;start_radio=1</c>, and such a link plays its video.
     /// </summary>
-    public static bool TryParsePlaylist(string? text, out string list, out int entry, out string? videoId, out double start)
+    public static bool TryParsePlaylist(string? text, out string list, out int entry, out string? videoId, out double start) =>
+        TryParsePlaylist(text, out list, out entry, out videoId, out start, out _);
+
+    /// <summary>
+    /// <see cref="TryParsePlaylist(string?, out string, out int, out string?, out double)"/>, and whether a link named its entry with
+    /// <c>index=</c> (2026-11-08: only then does a play of a saved list start there instead of where it was left; <c>index=1</c> is
+    /// entry 0 as much as no index).
+    /// </summary>
+    public static bool TryParsePlaylist(string? text, out string list, out int entry, out string? videoId, out double start, out bool indexed)
     {
         list = "";
         entry = 0;
+        indexed = false;
         videoId = null;
         start = 0;
         text = text?.Trim();
@@ -136,6 +145,7 @@ public static partial class YouTubeIds
         if (int.TryParse(query.GetValueOrDefault("index"), NumberStyles.None, CultureInfo.InvariantCulture, out int index) && index >= 1)
         {
             entry = index - 1;
+            indexed = true;
         }
         else if (TryParse(text, out string id, out double at))
         {
@@ -265,7 +275,7 @@ public static partial class YouTubeIds
 
     /// <summary>
     /// Whether <paramref name="text"/> is something the player plays (2026-10-16, open_url's and the video window's links): a video
-    /// <see cref="TryParse"/> reads, or a link whose <c>list=</c> <see cref="TryParsePlaylist"/> reads. A channel's page is a page to look
+    /// <see cref="TryParse"/> reads, or a link whose <c>list=</c> <see cref="TryParsePlaylist(string?, out string, out int, out string?, out double)"/> reads. A channel's page is a page to look
     /// at, never a playable link here, though the parser reads <c>/channel/UC…</c> as its uploads.
     /// </summary>
     public static bool IsPlayable(string? text)

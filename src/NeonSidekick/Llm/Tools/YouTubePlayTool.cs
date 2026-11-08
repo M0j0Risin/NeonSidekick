@@ -16,8 +16,10 @@ namespace NeonSidekick.Llm.Tools;
 ///
 /// <para>A public playlist (2026-10-08, the user's ask): <c>playlist</c> (an id, a link with <c>list=</c>, or a channel for its uploads),
 /// or such a link as <c>video</c>, from <c>entry</c> (1-based) or the link's own place. YouTube's player plays it and moves through it
-/// itself (<see cref="VideoRequest.Playlist"/>); no saved place is resumed in one. The wait ends at any entry of that list playing,
-/// passing over an entry the page is skipping (<see cref="VideoSnapshot.Skipping"/>).</para>
+/// itself (<see cref="VideoRequest.Playlist"/>); a saved video's own place is not resumed in one. The wait ends at any entry of that list
+/// playing, passing over an entry the page is skipping (<see cref="VideoSnapshot.Skipping"/>). A saved playlist (2026-11-08, the user's ask)
+/// named with no entry, time, video or link <c>index=</c> resumes at its entry and the place in that video
+/// (<see cref="YouTubeLibrary.ResumePlaylist"/>, <see cref="YouTubeText.ResumedEntry"/>).</para>
 ///
 /// <para>Where a play goes (2026-10-16, <c>YouTube open links in</c>): through the route hook, to the video window or the Web UI's YouTube
 /// tab (waited for) or a browser (answered at once, out of the app's control). Stopping the wait stops only the wait: a held video stays
@@ -94,7 +96,7 @@ public sealed class YouTubePlayTool : AIFunction
 
     private const string Then = "Then " + YouTubeControlTool.ToolName + " pauses, seeks, sets the volume or moves through a playlist, and " + YouTubeStatusTool.ToolName + " says where it is. ";
 
-    private const string Saved = "A saved video (" + YouTubeSavedTool.ToolName + ") resumes where it was left unless start is given.";
+    private const string Saved = "A saved video (" + YouTubeSavedTool.ToolName + ") resumes where it was left unless start is given, a saved playlist at its entry and place unless entry is given.";
 
     public override JsonElement JsonSchema => Schema;
 
@@ -192,7 +194,7 @@ public sealed class YouTubePlayTool : AIFunction
     // entry of it plays (the named video, when there is one), or the player refuses an entry it is not moving past.
     private async Task<string> PlayPlaylistAsync(string named, string video, int? entry, double? startNamed, CancellationToken cancellationToken)
     {
-        if (!YouTubeIds.TryParsePlaylist(named, out string list, out int linkEntry, out string? linkVideo, out double linkStart))
+        if (!YouTubeIds.TryParsePlaylist(named, out string list, out int linkEntry, out string? linkVideo, out double linkStart, out bool indexed))
         {
             return YouTubeIds.NamesMix(named) ? YouTubeText.Mix(named) : YouTubeText.NotAPlaylist(named);
         }
@@ -219,12 +221,25 @@ public sealed class YouTubePlayTool : AIFunction
             startVideo = null;   // an entry named wins over a video in the link
         }
 
+        double start = startNamed ?? (startVideo is not null ? linkStart : 0);
+
+        // A saved playlist with nothing named picks up at its entry and place (2026-11-08). Its entry's video may have moved or gone
+        // upstream: the page then plays the entry by its number, so the wait takes any entry of the list.
+        string? waitVideo = startVideo;
+        string resumedLead = "";
+        if (entry is null && startNamed is null && startVideo is null && !indexed && _library?.Invoke() is { } library && library.Find(list) is { Playlist: true })
+        {
+            (startEntry, startVideo, start) = library.ResumePlaylist(list);
+            waitVideo = null;
+            resumedLead = startEntry > 0 || start > 0 ? YouTubeText.ResumedEntry(startEntry, start) : "";
+        }
+
         bool autoplay = _effective().YouTubeAutoplay;
         long before = _player.Snapshot?.Version ?? -1;
         VideoRouted routed;
         try
         {
-            routed = Route(VideoRequest.Playlist(list, startEntry, startVideo, startNamed ?? (startVideo is not null ? linkStart : 0), autoplay));
+            routed = Route(VideoRequest.Playlist(list, startEntry, startVideo, start, autoplay));
         }
         catch (InvalidOperationException e)
         {
@@ -233,16 +248,22 @@ public sealed class YouTubePlayTool : AIFunction
 
         if (!routed.Wait)
         {
-            return (routed.Note ?? "") + routed.Answer;
+            return (routed.Note ?? "") + resumedLead + routed.Answer;
         }
 
         // Paused is an answer only when the play asked for none (2026-10-09, seen on the real player): an open window switched to a
         // playlist first reports Paused on the list's entry, then buffers and plays it. A playlist the browser keeps from starting
         // is answered at the wait's cap with what the player then says.
         // A held plain list has no video id yet (2026-10-16): the held test comes first, or the wait would run to its cap.
-        var snapshot = await YouTubeWait.UntilAsync(_player, before, s => s.Held is { Nudged: false } || (s.PlaylistId == list && s.VideoId is not null && (startVideo is null || s.VideoId == startVideo)
+        var snapshot = await YouTubeWait.UntilAsync(_player, before, s => s.Held is { Nudged: false } || (s.PlaylistId == list && s.VideoId is not null && (waitVideo is null || s.VideoId == waitVideo)
             && (s.State is VideoState.Playing or VideoState.Ended || (s.State is VideoState.Cued or VideoState.Paused && !autoplay))), YouTubeWait.Play, _time, cancellationToken).ConfigureAwait(false);
-        return (routed.Note ?? "") + (snapshot is null ? YouTubeText.ClosedMeanwhileIn(_player.Place) : YouTubeText.Status(snapshot));
+        if (snapshot is null)
+        {
+            return (routed.Note ?? "") + YouTubeText.ClosedMeanwhileIn(_player.Place);
+        }
+
+        string status = YouTubeText.Status(snapshot);
+        return (routed.Note ?? "") + (status.StartsWith("Error: ", StringComparison.Ordinal) ? status : resumedLead + status);
     }
 }
 

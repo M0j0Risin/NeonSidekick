@@ -43,7 +43,8 @@ internal sealed partial class ChatScreen
         if (library is not null)
         {
             var lookup = YouTubeTitles.Lookup(search, effective);
-            tools.AddRange([new YouTubeSavedTool(library, lookup), new YouTubeSaveTool(library, player, lookup, target)]);
+            var playlistLookup = YouTubeTitles.PlaylistLookup(search, effective);
+            tools.AddRange([new YouTubeSavedTool(library, lookup, playlistLookup), new YouTubeSaveTool(library, player, lookup, target, playlistLookup)]);
         }
 
         return tools;
@@ -135,9 +136,12 @@ internal sealed partial class ChatScreen
         {
             case YouTubeVerb.Save:
             {
-                // A video named by its id or link is looked up for its title first (2026-10-07), under the spinner.
-                var save = () => YouTubeSaveTool.AddAsync(YouTubeLibraryNow(), _videoPlayer, line.VideoId ?? "", YouTubeTitles.Lookup(_youTubeSearch, _effective), cancellationToken);
-                Show(spinner && line.VideoId is not null ? await _transcript.WithSpinnerAsync(YouTubeText.LookingUp, save).ConfigureAwait(false) : await save().ConfigureAwait(false), sink);
+                // A video named by its id or link is looked up for its title first (2026-10-07), under the spinner; a playlist too (2026-11-08).
+                Func<Task<string>> save = line.PlaylistId is { } list
+                    ? () => YouTubeSaveTool.AddPlaylistAsync(YouTubeLibraryNow(), _videoPlayer, list, YouTubeTitles.PlaylistLookup(_youTubeSearch, _effective), cancellationToken)
+                    : () => YouTubeSaveTool.AddAsync(YouTubeLibraryNow(), _videoPlayer, line.VideoId ?? "", YouTubeTitles.Lookup(_youTubeSearch, _effective), cancellationToken);
+                bool named = line.VideoId is not null || line.PlaylistId is not null;
+                Show(spinner && named ? await _transcript.WithSpinnerAsync(YouTubeText.LookingUp, save).ConfigureAwait(false) : await save().ConfigureAwait(false), sink);
                 return;
             }
 
@@ -153,7 +157,7 @@ internal sealed partial class ChatScreen
                 var library = YouTubeLibraryNow();
                 if (YouTubeTitles.AnyMissing(library))
                 {
-                    var fill = () => YouTubeTitles.FillMissingAsync(library, YouTubeTitles.Lookup(_youTubeSearch, _effective), cancellationToken);
+                    var fill = () => YouTubeTitles.FillMissingAsync(library, YouTubeTitles.Lookup(_youTubeSearch, _effective), cancellationToken, YouTubeTitles.PlaylistLookup(_youTubeSearch, _effective));
                     _ = spinner ? await _transcript.WithSpinnerAsync(YouTubeText.LookingUpTitles, fill).ConfigureAwait(false) : await fill().ConfigureAwait(false);
                 }
 
@@ -232,7 +236,8 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        // Enter plays the hit; s saves it (2026-10-07), the picker kept open with the answer on its status line. The pane's pick leaves
+        // Enter plays the hit; s saves it (2026-10-07; a playlist, or a channel as its uploads, since 2026-11-08), the picker kept open
+        // with the answer on its status line. The pane's pick leaves
         // it open for the next page, so it is closed here: as Enter plays (before the wait, whose spinner takes its place) and after
         // ESC (2026-10-09, the user's report: since 2026-10-07's save button the picker stayed drawn over the input row after either,
         // the keys reaching a line no one could see).
@@ -244,7 +249,7 @@ internal sealed partial class ChatScreen
             while (await _menu.PickVideoAsync(YouTubeText.PickTitle(query), rows, cursor, cancellationToken, footers).ConfigureAwait(false) is { } picked)
             {
                 var hit = hits[picked.Row];
-                if (!picked.Save)
+                if (picked.Button < 0)
                 {
                     _menuPane.Close();
                     ShowWatched(await WatchPlayerAsync(token => hit.Kind switch
@@ -257,15 +262,21 @@ internal sealed partial class ChatScreen
                 }
 
                 cursor = picked.Row;
-                if (hit.Kind != YouTubeKind.Video)
-                {
-                    _menuPane.Notice(YouTubeText.SaveVideosOnly(hit.Kind));
-                    continue;
-                }
-
                 var library = YouTubeLibraryNow();
-                var added = library.Add(hit.Id, hit.Title, hit.Channel, hit.Duration?.TotalSeconds ?? 0);
-                Show(library.Find(hit.Id) is { } saved ? YouTubeText.Saved(saved, added) : "Error: " + YouTubeText.SaveFailed, _menuPane);
+                string id = hit.Kind switch
+                {
+                    YouTubeKind.Channel => YouTubeIds.Uploads(hit.Id) ?? hit.Id,
+                    _ => hit.Id,
+                };
+                int entries = hit.Count is { } n ? (int)Math.Clamp(n, 0, int.MaxValue) : 0;
+                var added = hit.Kind switch
+                {
+                    // A channel's uploads are named after the channel (2026-11-08): the hit's title is its name.
+                    YouTubeKind.Playlist or YouTubeKind.Channel when VideoRequest.IsPlaylistId(id) => library.AddPlaylist(id, hit.Title, hit.Channel, entries),
+                    YouTubeKind.Video => library.Add(id, hit.Title, hit.Channel, hit.Duration?.TotalSeconds ?? 0),
+                    _ => YouTubeSaveOutcome.Failed,
+                };
+                Show(library.Find(id) is { } saved ? YouTubeText.Saved(saved, added) : "Error: " + YouTubeText.SaveFailed, _menuPane);
             }
         }
         finally
@@ -276,7 +287,8 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// <c>/youtube playlist [&lt;id|link&gt;]</c> (2026-10-08): the playlist named (or the one playing) read with the key, its entries on the
-    /// picker — Enter plays the playlist from the highlighted one, <c>s</c> saves that video — or listed where there is no pane or no window.
+    /// picker — Enter plays the playlist from the highlighted one, <c>s</c> saves that video, <c>l</c> the whole playlist (2026-11-08) — or
+    /// listed where there is no pane or no window.
     /// </summary>
     private async Task ShowPlaylistAsync(string? named, INoticeSink sink, bool spinner, CancellationToken cancellationToken)
     {
@@ -319,10 +331,10 @@ internal sealed partial class ChatScreen
         // Closed as Enter plays and after ESC, the search picker's way (2026-10-09).
         try
         {
-            while (await _menu.PickVideoAsync(YouTubeText.PlaylistPickTitle(playlist), rows, cursor, cancellationToken, footers).ConfigureAwait(false) is { } picked)
+            while (await _menu.PickVideoAsync(YouTubeText.PlaylistPickTitle(playlist), rows, cursor, cancellationToken, footers, saveList: true).ConfigureAwait(false) is { } picked)
             {
                 var entry = entries[picked.Row];
-                if (!picked.Save)
+                if (picked.Button < 0)
                 {
                     _menuPane.Close();
                     ShowWatched(await WatchPlayerAsync(token => PlayPlaylistAsync(player, list, entry.Position, null, null, token), spinner, cancellationToken, play: true).ConfigureAwait(false), sink, cancellationToken);
@@ -331,6 +343,14 @@ internal sealed partial class ChatScreen
 
                 cursor = picked.Row;
                 var library = YouTubeLibraryNow();
+                if (picked.Button == 1)
+                {
+                    // The whole playlist (2026-11-08), from its start: its first video seeds the thumbnail.
+                    var listed = library.AddPlaylist(list, playlist.Title, playlist.Channel, playlist.Count, 0, entries[0].VideoId);
+                    Show(library.Find(list) is { } savedList ? YouTubeText.Saved(savedList, listed) : "Error: " + YouTubeText.SaveFailed, _menuPane);
+                    continue;
+                }
+
                 var added = library.Add(entry.VideoId, entry.Title, entry.Channel, 0);
                 Show(library.Find(entry.VideoId) is { } saved ? YouTubeText.Saved(saved, added) : "Error: " + YouTubeText.SaveFailed, _menuPane);
             }
@@ -349,7 +369,10 @@ internal sealed partial class ChatScreen
     {
         if (_pane.Enabled)
         {
-            Func<YouTubeSaved, CancellationToken, Task<string>>? play = _videoPlayer is { } player ? (video, ct) => PlayVideoAsync(player, video.Id, null, ct) : null;
+            // A saved playlist plays through youtube_play's resume (2026-11-08): named alone, it starts at its entry and place.
+            Func<YouTubeSaved, CancellationToken, Task<string>>? play = _videoPlayer is { } player
+                ? (video, ct) => video.Playlist ? PlayPlaylistAsync(player, video.Id, null, null, null, ct) : PlayVideoAsync(player, video.Id, null, ct)
+                : null;
             return new YouTubeSavedMenu(YouTubeLibraryNow, sink, _menuPane, play, _time.LocalTimeZone, _time).ShowAsync(cancellationToken);
         }
 
@@ -360,7 +383,7 @@ internal sealed partial class ChatScreen
             return Task.CompletedTask;
         }
 
-        sink.Notice(YouTubeText.SavedCaption(videos.Count));
+        sink.Notice(YouTubeText.SavedCaption(videos));
         for (int i = 0; i < videos.Count; i++)
         {
             sink.Notice($"{(i + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)}. {YouTubeText.SavedRow(videos[i])} · {videos[i].Id}");

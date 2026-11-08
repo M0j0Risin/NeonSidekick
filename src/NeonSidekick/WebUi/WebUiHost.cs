@@ -535,6 +535,7 @@ public sealed class WebUiHost : IWebUiHost
                     YouTubeSavedClearPath => _backend.ClearSaved(remote),   // the body is not read, as Stop's
                     YouTubeSavedMovePath => await ReadAsync(context, WebUiJsonContext.Default.WebSavedMove).ConfigureAwait(false) is { } move ? _backend.MoveSaved(move, remote) : null,
                     YouTubeSavedSavePath => _backend.SaveCurrent(remote),
+                    YouTubeSavedSaveListPath => _backend.SaveCurrentList(remote),   // 2026-11-08; no body either
                     BotCheckInputPath => await ReadAsync(context, WebUiJsonContext.Default.WebBotCheckInput).ConfigureAwait(false) is { } input ? await _backend.BotCheckInputAsync(input, remote, context.RequestAborted).ConfigureAwait(false) : null,
                     "/api/home/tap" or "/api/home/act" or "/api/home/scene" or "/api/home/say" or "/api/home/video" => await HomePostAsync(context, path, remote).ConfigureAwait(false),
                     _ => new WebReply(WebOutcome.NotFound),
@@ -922,6 +923,12 @@ public sealed class WebUiHost : IWebUiHost
 
     /// <summary>The playing video saved (later on 2026-10-16).</summary>
     public const string YouTubeSavedSavePath = "/api/youtube/saved/save";
+
+    /// <summary>
+    /// The playing playlist saved (2026-11-08): its own path, since <see cref="YouTubeSavedSavePath"/> never read a body and an open old
+    /// page keeps posting there.
+    /// </summary>
+    public const string YouTubeSavedSaveListPath = "/api/youtube/saved/save-list";
 
     /// <summary>Where the pictures are served: <c>/api/picture/{run}/{id}/{thumb|mid|full}</c>.</summary>
     public const string PicturePrefix = "/api/picture/";

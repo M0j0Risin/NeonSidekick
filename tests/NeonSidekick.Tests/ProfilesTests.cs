@@ -72,7 +72,8 @@ public class ProfilesTests : IDisposable
         Assert.All(new[] { "keys", "SERVERS", "allowed", "history", "memory", "prompts", "policestrings" }, word => Assert.False(Profiles.IsValidName(word)));   // push and pull's sections, 2026-10-09
         Assert.True(Profiles.IsValidName("keys2"));
         // 2026-10-25 (the user's call): the new sections' words, avatar and overwrite reserved; nothing starting with -, so no name reads as a flag.
-        Assert.All(new[] { "mcp", "Links", "videos", "monitors", "skills", "avatar", "overwrite" }, word => Assert.False(Profiles.IsValidName(word)));
+        Assert.All(new[] { "mcp", "Links", "youtube", "monitors", "skills", "avatar", "overwrite" }, word => Assert.False(Profiles.IsValidName(word)));
+        Assert.True(Profiles.IsValidName("videos"));   // the YouTube section's word until 2026-11-08 (the user's ask): free again
         Assert.All(new[] { "homeassistant", "Toolbar", "perfbar", "statusbar", "barorder" }, word => Assert.False(Profiles.IsValidName(word)));   // the home and the bars, 2026-10-26
         Assert.False(Profiles.IsValidName("Commands"));   // the custom commands' section, 2026-10-30
         Assert.All(new[] { "-x", "--all", "-" }, word => Assert.False(Profiles.IsValidName(word)));

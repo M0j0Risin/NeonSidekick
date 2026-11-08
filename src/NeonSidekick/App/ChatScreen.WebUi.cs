@@ -176,6 +176,7 @@ internal sealed partial class ChatScreen
             SavedClear = WebClearSaved,
             SavedMove = WebMoveSaved,
             SavedSave = WebSaveCurrent,
+            SavedSaveList = WebSaveCurrentList,
             // A bot check card's picture of the Browser window and its input (2026-10-17): ChatScreen.BotCheckWeb.cs.
             BotCheckFrame = WebBotCheckFrameAsync,
             BotCheckInput = WebBotCheckInputAsync,
