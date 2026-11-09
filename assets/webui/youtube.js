@@ -497,4 +497,4 @@ savedFilter.addEventListener('input', drawSaved);
 connect(null);
 
 // The tabs, the theme, the files' tag and the Chat badge, as on Shopping.
-Neon.poll(async () => { const r = await Neon.get('/api/pulse', true); if (r.ok && r.json) Neon.pulse(r.json); }, 3000);
+Neon.pollPulse();

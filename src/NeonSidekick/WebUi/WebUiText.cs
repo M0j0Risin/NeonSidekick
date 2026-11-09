@@ -107,27 +107,35 @@ public static class WebUiText
     public const string LocalCopiedNotice = "(" + Glyph + "the sign-in link is on the clipboard: it holds the token, so paste it only where you trust. "
         + "It's localhost, so only this computer opens it; a phone needs lan or Tailscale Serve)";
 
-    /// <summary>The copy notice for <paramref name="link"/> under <paramref name="audience"/>: <see cref="LocalCopiedNotice"/> for <c>localhost</c>.</summary>
-    public static string CopiedNoticeFor(WebUiLink link, WebUiAudience audience)
+    /// <summary>The copy notice for <paramref name="link"/>: <see cref="LocalCopiedNotice"/> for <c>localhost</c>'s.</summary>
+    public static string CopiedNoticeFor(WebUiLink link)
     {
         ArgumentNullException.ThrowIfNull(link);
-        return IsLocalhostTab(link, audience) ? LocalCopiedNotice : CopiedNotice;
+        return IsLocalhostTab(link) ? LocalCopiedNotice : CopiedNotice;
     }
 
     /// <summary>
-    /// Whether <paramref name="link"/> is the <c>localhost</c> one (2026-11-08): the home link under <c>local</c>. Its tab has no QR code, and its
-    /// copy says only this computer opens it.
+    /// Whether <paramref name="link"/> is the <c>localhost</c> one (2026-11-08; its own kind since review P1-1, from the running server's links).
+    /// Its tab has no QR code, and its copy says only this computer opens it.
     /// </summary>
-    public static bool IsLocalhostTab(WebUiLink link, WebUiAudience audience)
+    public static bool IsLocalhostTab(WebUiLink link)
     {
         ArgumentNullException.ThrowIfNull(link);
-        return link.Kind == WebUiLinkKind.Home && audience == WebUiAudience.Local;
+        return link.Kind == WebUiLinkKind.Localhost;
     }
 
     /// <summary>
-    /// After the reach line under <c>local</c> with no HTTPS address (2026-11-08, the default since that day): how a phone gets in. Pinned.
+    /// After the reach line under <c>local</c> with no HTTPS address and no Serve hint (2026-11-08, the default since that day): how a phone gets in.
+    /// Names the settings, not the pane's keys (it rides the no-pane notices too), and claims nothing of who reaches it, which Serve may change
+    /// unseen (review P1-4, P2-6, P3-1, P3-6). Pinned.
     /// </summary>
-    public const string LocalOnlyNote = "Only this computer can open it. For a phone, switch to lan (l in /webui) or keep local and turn on Tailscale Serve.";
+    public const string LocalOnlyNote = "A phone needs Web UI reach lan, or Tailscale Serve and Web UI HTTPS address (/settings › Client › Web UI).";
+
+    /// <summary>Above the <c>localhost</c> link, in place of the scan hint (2026-11-08, review P1-5: the tab has no QR code). Pinned.</summary>
+    public const string LocalLinkHint = "Open the link below in a browser on this computer. It signs the browser in and leaves the address bar at once.";
+
+    /// <summary>Under the <c>localhost</c> link, <see cref="TokenWarning"/> without the code its tab doesn't show (2026-11-08, review P2-1). Pinned.</summary>
+    public const string LinkTokenWarning = "The link holds the token: anyone who sees it can sign in. /webui reset makes a new one.";
 
     /// <summary>
     /// Whether the HTTPS link is a one-time one (2026-11-02, review P12-5, the user's call): a public (Funnel) address under <c>local</c>, which
@@ -249,9 +257,10 @@ public static class WebUiText
             "Reach: " + WebUiReach.Name(audience) + " — " + WebUiReach.Describe(WebUiReach.Name(audience))
                 + (audience == WebUiAudience.Local && https is not null ? LocalPlusHttps : ""),
         };
-        if (serving && audience == WebUiAudience.Local && https is null)
+        if (serving && audience == WebUiAudience.Local && https is null && string.IsNullOrEmpty(serveHint))
         {
-            lines.Add(LocalOnlyNote);   // 2026-11-08: local is the default, so a first-time user learns how a phone gets in
+            // 2026-11-08: local is the default, so a first-time user learns how a phone gets in; Serve's own hint speaks instead (review P3-1).
+            lines.Add(LocalOnlyNote);
         }
 
         if (!string.IsNullOrEmpty(serveHint))
@@ -384,8 +393,8 @@ public static class WebUiText
     /// <summary>
     /// An address tab's text above its QR code: <paramref name="status"/> (<see cref="StatusLines"/> joined), a blank line and the scan hint;
     /// Tailscale's headed by <see cref="TailscaleNote"/> and with <see cref="TailscaleScanHint"/> (later on 2026-10-14). The HTTPS tab's Funnel
-    /// note follows <paramref name="audience"/> (2026-11-01, <see cref="FunnelNoteFor"/>). The <c>localhost</c> tab under <c>local</c> has no QR
-    /// code (2026-11-08), so no scan hint either: the status alone. Pinned.
+    /// note follows <paramref name="audience"/> (2026-11-01, <see cref="FunnelNoteFor"/>). The <c>localhost</c> tab has no QR code (2026-11-08),
+    /// so <see cref="LocalLinkHint"/> takes the scan hint's place. Pinned.
     /// </summary>
     public static string LinkTabText(string status, WebUiLinkKind kind, WebUiHttps? https = null, WebUiAudience audience = WebUiAudience.LocalAreaNetwork) => kind switch
     {
@@ -394,7 +403,7 @@ public static class WebUiText
         // Beside a detected HTTPS tab, Tailscale's is the fallback (2026-10-31, the user's call: both shown); beside a typed one, whose proxy
         // may not be Tailscale, it keeps its own note (2026-11-01, the review's P4-2).
         WebUiLinkKind.Tailscale => (https is { Detected: true } ? TailscaleFallbackNote : TailscaleNote) + "\n" + status + "\n\n" + TailscaleScanHint + "\n",
-        _ when audience == WebUiAudience.Local => status + "\n",
+        WebUiLinkKind.Localhost => status + "\n\n" + LocalLinkHint + "\n",
         _ => status + "\n\n" + ScanHint + "\n",
     };
 

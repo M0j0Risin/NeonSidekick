@@ -216,7 +216,7 @@ Each purge asks first, saying where things go: to the Recycle bin (the Trash on 
 | `/youtube save [<id>\|<link>\|playlist]` | Saves the video playing, or the one named, to this profile's saved videos; a playlist's id or link saves the playlist, `playlist` the one playing. |
 | `/youtube list`, `/youtube list --clear` | The saved videos and playlists in a pane, in step with the Web UI's YouTube tab; `--clear` removes them all after a yes. |
 | `/youtube unsave <n>\|<id>\|<link>` | Removes one saved video or playlist. |
-| `/webui` | Shows the [Web UI](INTERFACE.md#web-ui) (the app's page for a phone or browser), over a reply too: on or off, port, reach, buttons, and a tab per address with its sign-in link and, where a phone reaches it, a QR code. |
+| `/webui` | Shows the [Web UI](INTERFACE.md#web-ui), over a reply too: on or off, port, reach, buttons, and a tab per address with its sign-in link and, where a phone reaches it, a QR code. |
 | `/webui on\|off` | Turns the Web UI on or off for this profile, at once. |
 | `/webui copy` | Copies the first sign-in link (the HTTPS one, else Tailscale's, if any). It holds the token: paste it only where you trust. |
 | `/webui reset` | Makes a new sign-in token after a yes, signing out every browser. |

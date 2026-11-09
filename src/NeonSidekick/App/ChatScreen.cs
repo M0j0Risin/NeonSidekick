@@ -3101,7 +3101,7 @@ internal sealed partial class ChatScreen
         rows.Add(new("Ctrl+T", "open the tools pane", "/tools"));   // 2026-10-18, the user's pick (Ctrl+Alt+T until then)
         rows.Add(new("Ctrl+U", "open the usage pane", "/usage"));
         rows.Add(new("Ctrl+W", "open the Web UI in a browser, signed in", "/webui browser"));   // 2026-10-18, the user's pick
-        rows.Add(new("Ctrl+Y", "open the sessions pane", "/sessions"));   // 2026-11-08, the user's pick (Ctrl+Alt+Y until then)
+        rows.Add(new("Ctrl+Y", "open the sessions pane", SlashCommands.SessionsWord));   // 2026-11-08, the user's pick (Ctrl+Alt+Y until then)
         rows.Add(new("Ctrl+Z", "open the theme picker", "/theme"));
         if (mac)
         {

@@ -223,7 +223,7 @@ public static class Keys
                 (ConsoleKey.T, '\0' or '\x14') => "/tools",   // 2026-10-18, the user's pick (Ctrl+Alt+T until then; /toolbar before)
                 (ConsoleKey.U, '\0' or '\x15') => "/usage",
                 (ConsoleKey.W, '\0' or '\x17') => "/webui browser",   // 2026-10-18, the user's pick (/homebar until then)
-                (ConsoleKey.Y, '\0' or '\x19') => "/sessions",   // 2026-11-08, the user's pick (Ctrl+Alt+Y until then; /sys until 2026-11-07)
+                (ConsoleKey.Y, '\0' or '\x19') => App.SlashCommands.SessionsWord,   // 2026-11-08, the user's pick (Ctrl+Alt+Y until then; /sys until 2026-11-07)
                 (ConsoleKey.Z, '\0' or '\x1a') => "/theme",
                 (ConsoleKey.Oem2, '\0' or '\x1f') => "/settings",
                 (ConsoleKey.OemPeriod, '\0') => "/terminal",

@@ -392,5 +392,11 @@ const Neon = (() => {
     lastAsks = waiting;
   }
 
-  return Object.assign(api, { el, say, post, get, picture, connected, poll, staleAssets, theme, pulse, tabs, leave, keyboardInset, watch, watchBlocked: null, armTwice, paintArmed, disarm, armed });
+  // The pulse every 3 s for a page with no stream of its own (2026-11-08, review P2-9: Shopping, YouTube and About shared one line): the
+  // menu, the Chat badge, the theme, a stale page's reload and a queued video's jump.
+  function pollPulse() {
+    return poll(async () => { const r = await get('/api/pulse', true); if (r.ok && r.json) pulse(r.json); }, 3000);
+  }
+
+  return Object.assign(api, { el, say, post, get, picture, connected, poll, pollPulse, staleAssets, theme, pulse, tabs, leave, keyboardInset, watch, watchBlocked: null, armTwice, paintArmed, disarm, armed });
 })();

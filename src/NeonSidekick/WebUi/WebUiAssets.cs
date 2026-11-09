@@ -46,11 +46,11 @@ public static class WebUiAssets
         [ChatPage, ShoppingPage, HomePage, SignInPage, NoTabsPage, YouTubePage, AboutPage, "app.css", "common.js", "chat.js", "shopping.js", "home.js", "signin.js", "notabs.js", "youtube.js", "about.js", YouTubeCore, "favicon.svg", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 
     /// <summary>
-    /// The files served without the cookie (a signed-out page loads them too): the style, the scripts, the icon. Never a page or an API.
-    /// <c>common.js</c> since 2026-10-15, the pages' shared helpers.
+    /// The files served without the cookie (a signed-out page loads them too): every one of <see cref="Names"/> but a page, so the style, the
+    /// scripts, the icons. Never a page or an API. <c>common.js</c> since 2026-10-15, the pages' shared helpers; read off <see cref="Names"/>
+    /// since 2026-11-08 (review P1-8), so a new script is listed once.
     /// </summary>
-    public static bool IsStatic(string name) =>
-        name is "app.css" or "common.js" or "chat.js" or "shopping.js" or "home.js" or "signin.js" or "notabs.js" or "youtube.js" or "about.js" or YouTubeCore or "favicon.svg" or "icon-192.png" or "icon-512.png" or "apple-touch-icon.png";
+    public static bool IsStatic(string name) => !name.EndsWith(".html", StringComparison.Ordinal) && Names.Contains(name, StringComparer.Ordinal);
 
     private static readonly Lazy<IReadOnlyDictionary<string, WebAsset>> s_assets = new(Load);
 
@@ -94,10 +94,10 @@ public static class WebUiAssets
 
     /// <summary>
     /// The About page's version and links, stamped as the file is read (2026-11-08): <c>{{version}}</c>, <c>{{source}}</c> (the version's tag)
-    /// and <c>{{source-file}}</c> (a file at that tag, for the two licenses). No other page names the version, so a signed-out visitor gets no hint
-    /// of it. The ETag is taken after the stamp.
+    /// and <c>{{source-file}}</c> (a file at that tag, for the two licenses); <c>{{copyright}}</c> and <c>{{license}}</c> from <see cref="AboutText"/>
+    /// too (review P1-7: one home). No other page names the version, so a signed-out visitor gets no hint of it. The ETag is taken after the stamp.
     /// </summary>
-    private static byte[] WithThisVersionsSource(string name, byte[] bytes)
+    private static byte[] StampAboutPage(string name, byte[] bytes)
     {
         if (name != AboutPage)
         {
@@ -108,7 +108,9 @@ public static class WebUiAssets
         return Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(bytes)
             .Replace("{{version}}", version, StringComparison.Ordinal)
             .Replace("{{source}}", AboutText.SourceUrl(version), StringComparison.Ordinal)
-            .Replace("{{source-file}}", AboutText.SourceFileUrl(version), StringComparison.Ordinal));
+            .Replace("{{source-file}}", AboutText.SourceFileUrl(version), StringComparison.Ordinal)
+            .Replace("{{copyright}}", AboutText.Copyright, StringComparison.Ordinal)
+            .Replace("{{license}}", AboutText.LicenseName, StringComparison.Ordinal));
     }
 
     private static IReadOnlyDictionary<string, WebAsset> Load()
@@ -118,7 +120,7 @@ public static class WebUiAssets
         {
             // The icons are bytes (2026-10-15, Add to Home Screen); the rest text.
             byte[] bytes = name.EndsWith(".png", StringComparison.Ordinal) ? ReadBytes("webui/" + name) : Encoding.UTF8.GetBytes(EmbeddedText.Read("webui/" + name, "The Web UI's file"));
-            bytes = WithThisVersionsSource(name, bytes);
+            bytes = StampAboutPage(name, bytes);
             string etag = "\"" + Convert.ToHexStringLower(SHA256.HashData(bytes))[..16] + "\"";
             assets[name] = new WebAsset(name, bytes, ContentTypeOf(name), etag);
         }

@@ -242,6 +242,15 @@ public partial class ChatScreenTests
         Assert.Contains(WebUiText.LocalOnlyNote, output);
         Assert.Contains(WebUiText.LinkOnlyOpenHint, output);
         Assert.DoesNotContain(WebUiText.ScanHint, output);
+        Assert.Contains(WebUiText.LocalLinkHint, output);       // review P1-5
+        Assert.Contains(WebUiText.LinkTokenWarning, output);    // review P2-1: no code to name
+        Assert.DoesNotContain(WebUiText.TokenWarning, output);
+        // One blank row between the hint and the link, as on the other tabs (review P3-2).
+        string[] rows = output.Split('\n').Select(r => r.TrimEnd()).ToArray();
+        int link = Array.FindIndex(rows, r => r.StartsWith("http://localhost:", StringComparison.Ordinal));
+        Assert.True(link >= 2, output);
+        Assert.Equal("", rows[link - 1]);
+        Assert.Equal(WebUiText.LocalLinkHint, rows[link - 2].Trim());
     }
 
     [Fact]
@@ -271,9 +280,9 @@ public partial class ChatScreenTests
     public void TheCopyNotice_SaysLocalhostsLimit_ForItsLinkAlone()
     {
         Assert.Equal("(📱 the sign-in link is on the clipboard: it holds the token, so paste it only where you trust. It's localhost, so only this computer opens it; a phone needs lan or Tailscale Serve)", WebUiText.LocalCopiedNotice);
-        Assert.Equal(WebUiText.LocalCopiedNotice, WebUiText.CopiedNoticeFor(new WebUiLink("http://localhost:8765/signin?t=x"), WebUiAudience.Local));
-        Assert.Equal(WebUiText.CopiedNotice, WebUiText.CopiedNoticeFor(new WebUiLink("http://192.168.1.217:8765/signin?t=x"), WebUiAudience.LocalAreaNetwork));
-        Assert.Equal(WebUiText.CopiedNotice, WebUiText.CopiedNoticeFor(new WebUiLink(ServeAddress + "/signin?t=x", WebUiLinkKind.Https), WebUiAudience.Local));
+        Assert.Equal(WebUiText.LocalCopiedNotice, WebUiText.CopiedNoticeFor(new WebUiLink("http://localhost:8765/signin?t=x", WebUiLinkKind.Localhost)));
+        Assert.Equal(WebUiText.CopiedNotice, WebUiText.CopiedNoticeFor(new WebUiLink("http://192.168.1.217:8765/signin?t=x")));
+        Assert.Equal(WebUiText.CopiedNotice, WebUiText.CopiedNoticeFor(new WebUiLink(ServeAddress + "/signin?t=x", WebUiLinkKind.Https)));
         Assert.Equal("Double-click the link to open it on this PC; c copies it.", WebUiText.LinkOnlyOpenHint);
     }
 }

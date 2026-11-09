@@ -23,8 +23,9 @@ public static class WebUiReach
 {
     /// <summary>
     /// This computer alone (2026-11-08, the user's pick; the home network from 2026-10-14): nothing reaches it until the user opens it up, with
-    /// <c>lan</c> or Tailscale Serve. A hand-edited unknown value falls back here too, the safer side. Only a fresh profile gets it: a saved
-    /// <c>lan</c> stays. The compiled default, pinned by <c>AppSettingsTests</c>.
+    /// <c>lan</c> or Tailscale Serve. A hand-edited unknown value falls back here too, the safer side. A profile.json that names the reach keeps
+    /// it (every save writes every property); one written before the setting (2026-10-14) and never saved since reads as <c>local</c>, the user's
+    /// call: no migration (review P2-7). The compiled default, pinned by <c>AppSettingsTests</c>.
     /// </summary>
     public const string Default = "local";
 
@@ -33,14 +34,17 @@ public static class WebUiReach
 
     private const string Category = "WebUi";
 
-    /// <summary>Trims and ignores case; false (and <see cref="WebUiAudience.LocalAreaNetwork"/>) for anything that is not one of <see cref="Names"/>.</summary>
+    /// <summary>
+    /// Trims and ignores case; false (and <see cref="WebUiAudience.Local"/>, <see cref="Default"/>'s, the safer side since 2026-11-08, review P2-4)
+    /// for anything that is not one of <see cref="Names"/>.
+    /// </summary>
     public static bool TryParse(string? text, out WebUiAudience audience)
     {
         switch (text?.Trim().ToLowerInvariant())
         {
             case "local": audience = WebUiAudience.Local; return true;
             case "lan": audience = WebUiAudience.LocalAreaNetwork; return true;
-            default: audience = WebUiAudience.LocalAreaNetwork; return false;
+            default: audience = WebUiAudience.Local; return false;
         }
     }
 
@@ -66,7 +70,6 @@ public static class WebUiReach
 
         DiagnosticLog.Warn(Category,
             $"{nameof(AppSettingsData.WebUiReach)}='{effective.WebUiReach}' is not one of {string.Join(", ", Names)}. Using {Default}.");
-        TryParse(Default, out audience);
-        return audience;
+        return audience;   // TryParse's miss, Default's audience
     }
 }

@@ -327,7 +327,7 @@ public sealed class WebUiHost : IWebUiHost
             }
 
             bool signedIn = SignedIn(context);
-            if (get && path is "/" or "/index.html" or "/shopping" or "/shopping.html" or "/home" or "/home.html" or "/youtube" or "/youtube.html" or "/about" or "/about.html")
+            if (get && path is "/" or "/index.html" or "/shopping" or "/shopping.html" or "/home" or "/home.html" or "/youtube" or "/youtube.html" || get && IsAboutPath(path))
             {
                 await PageAsync(context, path, signedIn).ConfigureAwait(false);
                 return;
@@ -591,7 +591,7 @@ public sealed class WebUiHost : IWebUiHost
             return;
         }
 
-        if (path is "/about" or "/about.html")
+        if (IsAboutPath(path))
         {
             await AssetAsync(context, WebUiAssets.AboutPage).ConfigureAwait(false);
             return;
@@ -643,6 +643,9 @@ public sealed class WebUiHost : IWebUiHost
             await AssetAsync(context, WebUiAssets.NoTabsPage).ConfigureAwait(false);
         }
     }
+
+    /// <summary>The About page's two paths (2026-11-08; one home since review P3-5): the dispatcher's page list and <see cref="PageAsync"/> both read it.</summary>
+    private static bool IsAboutPath(string path) => path is "/about" or "/about.html";
 
     private static void SeeOther(HttpResponse response, string location)
     {

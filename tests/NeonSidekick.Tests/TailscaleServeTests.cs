@@ -528,11 +528,13 @@ public sealed class TailscaleServeTests
     [Fact]
     public void TheStatusLines_UnderLocalAlone_SayHowAPhoneGetsIn()
     {
-        Assert.Equal("Only this computer can open it. For a phone, switch to lan (l in /webui) or keep local and turn on Tailscale Serve.", WebUiText.LocalOnlyNote);
+        Assert.Equal("A phone needs Web UI reach lan, or Tailscale Serve and Web UI HTTPS address (/settings › Client › Web UI).", WebUiText.LocalOnlyNote);
         Assert.Equal(WebUiText.LocalOnlyNote, WebUiText.StatusLines(true, true, 8765, WebUiAudience.Local)[3]);
         Assert.DoesNotContain(WebUiText.LocalOnlyNote, WebUiText.StatusLines(false, false, 8765, WebUiAudience.Local));
         Assert.DoesNotContain(WebUiText.LocalOnlyNote, WebUiText.StatusLines(true, true, 8765, WebUiAudience.LocalAreaNetwork));
         Assert.DoesNotContain(WebUiText.LocalOnlyNote, WebUiText.StatusLines(true, true, 8765, WebUiAudience.Local, new WebUiHttps("https://h.ts.net", true, false)));
+        // Serve's own hint speaks when its ask failed or it has no rule (review P3-1).
+        Assert.DoesNotContain(WebUiText.LocalOnlyNote, WebUiText.StatusLines(true, true, 8765, WebUiAudience.Local, null, WebUiText.ServeNoRuleHint(8765, 443)));
     }
 
     [Fact]

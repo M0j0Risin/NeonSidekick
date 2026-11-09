@@ -21,12 +21,16 @@ public sealed record WebUiAddress(string Host, bool Tailscale);
 /// </summary>
 public sealed record WebUiLink(string Url, WebUiLinkKind Kind = WebUiLinkKind.Home);
 
-/// <summary>What an address tab is (2026-10-31): the home network's, Tailscale's plain-http one, or the HTTPS one.</summary>
+/// <summary>
+/// What an address tab is (2026-10-31): the home network's, Tailscale's plain-http one, or the HTTPS one; <c>localhost</c>'s since 2026-11-08
+/// (review P1-1), marked where the running server's links are made, so its tab (no QR code) and its copy never guess it from the settings.
+/// </summary>
 public enum WebUiLinkKind
 {
     Home,
     Tailscale,
     Https,
+    Localhost,
 }
 
 /// <summary>What the Web UI should be doing: serving or not, on which port, to whom, with which token (plain, never logged).</summary>
@@ -157,7 +161,8 @@ public sealed class WebUiController : IAsyncDisposable
         }
 
         IReadOnlyList<WebUiAddress> hosts = Audience == WebUiAudience.Local ? [new WebUiAddress("localhost", false)] : PrivateAddresses();
-        var plain = hosts.Select(h => new WebUiLink(WebUiAuth.SignInLink(h.Host, Port, token), h.Tailscale ? WebUiLinkKind.Tailscale : WebUiLinkKind.Home));
+        var plain = hosts.Select(h => new WebUiLink(WebUiAuth.SignInLink(h.Host, Port, token),
+            Audience == WebUiAudience.Local ? WebUiLinkKind.Localhost : h.Tailscale ? WebUiLinkKind.Tailscale : WebUiLinkKind.Home));
         return https is null ? [.. plain] : [new WebUiLink(httpsLink ?? WebUiAuth.SignInLinkAt(https.Address, token), WebUiLinkKind.Https), .. plain];
     }
 

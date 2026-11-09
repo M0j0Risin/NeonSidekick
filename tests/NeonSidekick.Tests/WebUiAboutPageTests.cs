@@ -106,14 +106,16 @@ public class WebUiAboutPageTests
         Assert.Equal("\"" + Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(asset.Bytes))[..16] + "\"", asset.ETag);
     }
 
-    /// <summary>About is no tab, so the menu never empties: the "menu goes with its last tab" toggle went, and the button's label says Menu.</summary>
+    /// <summary>
+    /// Every file but a page is served without the cookie (review P1-8: read off <see cref="WebUiAssets.Names"/>, so a new script is listed once);
+    /// no page is, nor a name the app doesn't serve.
+    /// </summary>
     [Fact]
-    public void TheMenu_IsNeverHidden_AndItsLabelSaysMenu()
+    public void EveryFileButAPage_IsStatic()
     {
-        string js = Page("common.js");
-
-        Assert.DoesNotContain("menuItems().length === 0", js, StringComparison.Ordinal);
-        Assert.Contains("'Menu: '", js, StringComparison.Ordinal);
-        Assert.DoesNotContain("'Tabs: '", js, StringComparison.Ordinal);
+        Assert.All(WebUiAssets.Names, n => Assert.Equal(!n.EndsWith(".html", StringComparison.Ordinal), WebUiAssets.IsStatic(n)));
+        Assert.True(WebUiAssets.IsStatic("about.js"));
+        Assert.False(WebUiAssets.IsStatic(WebUiAssets.AboutPage));
+        Assert.False(WebUiAssets.IsStatic("secret.js"));
     }
 }

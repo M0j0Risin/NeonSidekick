@@ -1114,7 +1114,8 @@ public sealed partial class WebUiTests : IDisposable
         Assert.Equal("local", WebUiReach.Default);   // 2026-11-08, the user's pick (lan until then)
         Assert.True(WebUiReach.TryParse(" LOCAL ", out var local) && local == WebUiAudience.Local);
         Assert.False(WebUiReach.TryParse("internet", out var fallback));
-        Assert.Equal(WebUiAudience.LocalAreaNetwork, fallback);
+        Assert.Equal(WebUiAudience.Local, fallback);   // Default's, the safer side (2026-11-08, review P2-4)
+        Assert.True(WebUiReach.TryParse(WebUiReach.Default, out var byDefault) && byDefault == fallback);
         Assert.Equal(WebUiAudience.Local, WebUiReach.Resolve(new Settings.AppSettingsData { WebUiReach = "nope" }));   // the default, the safer side
     }
 
@@ -1357,8 +1358,10 @@ public sealed partial class WebUiTests : IDisposable
         Assert.Equal("Tailscale: works from any device on your tailnet, at home or away.", WebUiText.TailscaleNote);
         Assert.Equal(WebUiText.TailscaleNote + "\nWeb UI: on\n\n" + WebUiText.TailscaleScanHint + "\n", WebUiText.LinkTabText("Web UI: on", WebUiLinkKind.Tailscale));
         Assert.Equal("Web UI: on\n\n" + WebUiText.ScanHint + "\n", WebUiText.LinkTabText("Web UI: on", WebUiLinkKind.Home));
-        // The localhost tab under local (2026-11-08) has no QR code, so no scan hint: the status alone.
-        Assert.Equal("Web UI: on\n", WebUiText.LinkTabText("Web UI: on", WebUiLinkKind.Home, audience: WebUiAudience.Local));
+        // The localhost tab (2026-11-08) has no QR code, so its own hint in the scan hint's place (review P1-5), one blank row between (P3-2).
+        Assert.Equal("Web UI: on\n\n" + WebUiText.LocalLinkHint + "\n", WebUiText.LinkTabText("Web UI: on", WebUiLinkKind.Localhost, audience: WebUiAudience.Local));
+        Assert.Equal("Open the link below in a browser on this computer. It signs the browser in and leaves the address bar at once.", WebUiText.LocalLinkHint);
+        Assert.Equal("The link holds the token: anyone who sees it can sign in. /webui reset makes a new one.", WebUiText.LinkTokenWarning);
         Assert.Contains("(on the same network)", WebUiText.ScanHint);
         Assert.DoesNotContain("same network", WebUiText.TailscaleScanHint);
     }
@@ -1424,7 +1427,7 @@ public sealed partial class WebUiTests : IDisposable
         Assert.Equal(new WebUiBinding(WebUiAudience.Local, 8765, "t1"), made[0].Started);
         Assert.True(controller.Serving);
         Assert.Empty(_session.TakeNotices());   // a start writes nothing in the transcript (2026-10-17, the user's ask)
-        Assert.Equal([new WebUiLink("http://localhost:8765/signin?t=t1")], controller.Links("t1"));   // localhost is never Tailscale's
+        Assert.Equal([new WebUiLink("http://localhost:8765/signin?t=t1", WebUiLinkKind.Localhost)], controller.Links("t1"));   // localhost is never Tailscale's; its own kind since 2026-11-08
 
         await controller.ReconcileAsync(new WebUiWanted(true, 8766, WebUiAudience.Local, "t1"));
         Assert.True(made[0].Stopped);
@@ -1445,9 +1448,13 @@ public sealed partial class WebUiTests : IDisposable
 
         await controller.ReconcileAsync(new WebUiWanted(true, 8765, WebUiAudience.Local, "t1"));
         Assert.Equal(
-            [new WebUiLink("https://h.ts.net/signin?t=t1", WebUiLinkKind.Https), new WebUiLink("http://localhost:8765/signin?t=t1")],
+            [new WebUiLink("https://h.ts.net/signin?t=t1", WebUiLinkKind.Https), new WebUiLink("http://localhost:8765/signin?t=t1", WebUiLinkKind.Localhost)],
             controller.Links("t1", new WebUiHttps("https://h.ts.net", true, false)));
-        Assert.Equal([new WebUiLink("http://localhost:8765/signin?t=t1")], controller.Links("t1"));
+        Assert.Equal([new WebUiLink("http://localhost:8765/signin?t=t1", WebUiLinkKind.Localhost)], controller.Links("t1"));
+
+        // The kind follows the running server (2026-11-08, review P1-1): under lan no link is localhost's, whatever this machine's adapters.
+        await controller.ReconcileAsync(new WebUiWanted(true, 8765, WebUiAudience.LocalAreaNetwork, "t1"));
+        Assert.DoesNotContain(controller.Links("t1"), l => l.Kind == WebUiLinkKind.Localhost);
     }
 
     /// <summary>

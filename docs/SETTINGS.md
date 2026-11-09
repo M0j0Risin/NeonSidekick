@@ -112,7 +112,7 @@ What `/botchat` bots get. See [Bot conversations](COMMANDS.md#bot-conversations)
 
 #### Web UI
 
-A browser front end for this profile, for a phone on the home network: the chat, Home Assistant, the shopping list and YouTube. Each tab shows only while its *… controls* setting is on ([the Web UI](INTERFACE.md#web-ui)).
+A browser front end for this profile, on this computer or (with *Web UI reach* `lan` or Tailscale Serve) a phone: the chat, Home Assistant, the shopping list and YouTube. Each tab shows only while its *… controls* setting is on ([the Web UI](INTERFACE.md#web-ui)).
 
 | Setting | What it does | Default |
 |---|---|---|

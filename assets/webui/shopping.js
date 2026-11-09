@@ -628,4 +628,4 @@ pastFilter.addEventListener('input', drawPast);
 
 const poller = Neon.poll(load, 5000);
 // The Chat badge (2026-10-15): a reply running, a question waiting.
-Neon.poll(async () => { const r = await Neon.get('/api/pulse', true); if (r.ok && r.json) Neon.pulse(r.json); }, 3000);
+Neon.pollPulse();
