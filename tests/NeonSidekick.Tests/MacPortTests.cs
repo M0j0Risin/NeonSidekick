@@ -1,5 +1,6 @@
 using NeonSidekick.App;
 using NeonSidekick.Sql;
+using NeonSidekick.UI;
 
 namespace NeonSidekick.Tests;
 
@@ -50,5 +51,23 @@ public sealed class MacPortTests
         Assert.StartsWith(WindowsCredentials.KeychainPrefix, stored.Value);
         Assert.Equal("päss-🔑", WindowsCredentials.Unprotect(stored.Value!).Value);
         Assert.NotNull(WindowsCredentials.Unprotect("dpapi:AAAA").Error);
+    }
+
+    /// <summary>
+    /// Hover's end keeps clicks reported (2026-11-08, the Mac pass on c28e4de9): 1003 off turns tracking off in xterm and iTerm2, so the
+    /// sequence asks for 1002 again after it, or every click after a hover page became iTerm2's text selection.
+    /// </summary>
+    [MacFact]
+    public void HoverEnding_AsksForButtonTrackingAgain_AfterAnyEventTrackingIsOff()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            return;
+        }
+
+        Assert.Equal("\x1b[?1003h\x1b[?1004h", UnixConsoleInput.HoverSequence(on: true));
+        string off = UnixConsoleInput.HoverSequence(on: false);
+        Assert.Equal("\x1b[?1004l\x1b[?1003l\x1b[?1002h", off);
+        Assert.True(off.IndexOf("\x1b[?1003l", StringComparison.Ordinal) < off.IndexOf("\x1b[?1002h", StringComparison.Ordinal));
     }
 }

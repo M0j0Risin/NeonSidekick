@@ -45,6 +45,12 @@ public sealed class UnixConsoleInput : IAnsiConsoleInput, IInputEvents, IMouseIn
     private const string HoverOn = "\x1b[?1003h\x1b[?1004h";
     private const string HoverOff = "\x1b[?1004l\x1b[?1003l";
     private const string MouseOff = HoverOff + "\x1b[?1006l\x1b[?1002l\x1b[?1000l";
+
+    // Button-event tracking again after hover ends (2026-11-08, the Mac pass on c28e4de9): 1000, 1002 and 1003 are one tracking mode in
+    // xterm and iTerm2, not three layers, so resetting 1003 leaves no tracking at all rather than 1002's. With only HoverOff written, every
+    // click after a hover page closed became iTerm2's text selection: the toolbar's double-clicks and /usage's tabs went dead while
+    // _captured still said true, and the next hover page brought them back. Proven live by writing MouseOn to the tty by hand.
+    private const string HoverEnded = HoverOff + "\x1b[?1002h";
     private const string PasteOn = "\x1b[?2004h";
     private const string PasteOff = "\x1b[?2004l";
 
@@ -85,8 +91,14 @@ public sealed class UnixConsoleInput : IAnsiConsoleInput, IInputEvents, IMouseIn
     public Action<bool>? FocusChanged { get; set; }
 
     /// <summary>
+    /// What <see cref="Hover"/> writes while the mouse is captured (2026-11-08): any-event tracking and focus reports on, or both off and
+    /// button-event tracking asked for again, since turning 1003 off turns off tracking itself. Pure; pinned.
+    /// </summary>
+    internal static string HoverSequence(bool on) => on ? HoverOn : HoverEnded;
+
+    /// <summary>
     /// Asks the terminal for any-event tracking and focus reports while true (2026-10-20, the welcome splash's robot), and stops
-    /// them when false; while the mouse is handed back nothing is asked, and taking it again asks again.
+    /// them when false, keeping clicks reported; while the mouse is handed back nothing is asked, and taking it again asks again.
     /// </summary>
     public void Hover(bool on)
     {
@@ -95,7 +107,7 @@ public sealed class UnixConsoleInput : IAnsiConsoleInput, IInputEvents, IMouseIn
             _hover = on;
             if (_captured && !_disposed)
             {
-                Write(on ? HoverOn : HoverOff);
+                Write(HoverSequence(on));
             }
         }
     }
