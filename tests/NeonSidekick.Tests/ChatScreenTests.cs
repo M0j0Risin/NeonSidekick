@@ -1519,7 +1519,7 @@ public partial class ChatScreenTests : IDisposable
             if (i == 0)
             {
                 PushLine("/exit");
-                await Task.Delay(40, CancellationToken.None);   // let the watcher buffer it
+                await LineTakenAsync();
             }
         };
         _console.Input.PushKey(Keys.F4);
@@ -2296,7 +2296,7 @@ public partial class ChatScreenTests : IDisposable
             {
                 _console.Input.PushKey(Keys.Enter);   // sends the buffered "next"
                 PushLine("/exit");
-                await Task.Delay(40, CancellationToken.None);
+                await LineTakenAsync();
             }
         };
         _console.Input.PushKey(Keys.F4);
@@ -2323,7 +2323,7 @@ public partial class ChatScreenTests : IDisposable
                 _console.Input.PushKey(Keys.Up);      // recalls "hello"
                 _console.Input.PushKey(Keys.Enter);
                 PushLine("/exit");
-                await Task.Delay(40, CancellationToken.None);
+                await LineTakenAsync();
             }
         };
         _console.Input.PushKey(Keys.F4);
@@ -3156,6 +3156,25 @@ public partial class ChatScreenTests : IDisposable
         };
     }
 
+    /// <summary>
+    /// After a <see cref="PushLine(string)"/> under a reply: waits until the screen's watch has read every key pushed so far (at most 5 s), then
+    /// 40 ms for the line to act (2026-11-09, the v0.5.7 release run: a fixed 40 ms alone let a slow macOS runner finish the scripted reply before
+    /// <c>/tts off</c>, then <c>/new</c>, was read, in two runs out of two). Past the 5 s it goes on as the fixed wait did.
+    /// </summary>
+    private async Task LineTakenAsync()
+    {
+        var waited = System.Diagnostics.Stopwatch.StartNew();
+        while (KeysWaiting() && waited.Elapsed < TimeSpan.FromSeconds(5))
+        {
+            await Task.Delay(5, CancellationToken.None);
+        }
+
+        await Task.Delay(40, CancellationToken.None);
+    }
+
+    /// <summary>Whether a pushed key still waits to be read, from whichever input this test runs on.</summary>
+    private bool KeysWaiting() => _scripted is { } scripted ? scripted.Queued > 0 : _console.Input.IsKeyAvailable();
+
     /// <summary>Pushes a line from the model's stream on the <paramref name="turn"/>-th request (1-based), the type-ahead way.</summary>
     private void PushLineDuringTurn(int turn, string text)
     {
@@ -3164,7 +3183,7 @@ public partial class ChatScreenTests : IDisposable
             if (i == 0 && _chat.Requests.Count == turn)
             {
                 PushLine(text);
-                await Task.Delay(40, CancellationToken.None);
+                await LineTakenAsync();
             }
         };
     }
@@ -3326,7 +3345,7 @@ public partial class ChatScreenTests : IDisposable
             else if (i == 0 && _chat.Requests.Count == 2)
             {
                 PushLine("/exit");
-                await Task.Delay(40, CancellationToken.None);
+                await LineTakenAsync();
             }
         };
         FollowUpHears("go on");
@@ -14637,7 +14656,7 @@ public partial class ChatScreenTests : IDisposable
             if (_chat.Requests.Count == 1 && i == 1)
             {
                 PushLine("/tts off");
-                await Task.Delay(40, CancellationToken.None);
+                await LineTakenAsync();
                 wasOnAtTheNotice = _speech.Enabled;   // saved, not yet reconnected
             }
         };
@@ -15668,7 +15687,7 @@ public partial class ChatScreenTests : IDisposable
             if (i == 0)
             {
                 PushLine("/exit");
-                await Task.Delay(40, CancellationToken.None);   // let the watcher buffer it
+                await LineTakenAsync();
             }
         };
         _console.Input.PushKey(Keys.F4);

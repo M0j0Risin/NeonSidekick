@@ -31,9 +31,11 @@ jobs:
             rid: osx-arm64
     runs-on: ${{ matrix.os }}
     name: Build, Test, Publish, Smoke, Package (${{ matrix.rid }})
-    # A cold restore, build, coverage run and NativeAOT publish is 20-30 minutes on a hosted
-    # runner; anything past this is a hang, not a slow run, and GitHub's default is six hours.
-    timeout-minutes: 60
+    # A cold restore, build, coverage run and NativeAOT publish is 30-40 minutes on a hosted
+    # runner, and a slow Windows runner has taken 46 minutes for the tests alone (2026-11-09,
+    # the v0.5.7 release run; 13 on a PC). 90 leaves that room; a stuck test still ends at
+    # build.ps1's 10-minute --blame-hang, and GitHub's default is six hours.
+    timeout-minutes: 90
 
     steps:
       - name: Checkout
