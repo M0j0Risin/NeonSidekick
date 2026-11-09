@@ -53,7 +53,7 @@ You need an Apple Silicon Mac (M1 or later). Unpack the Mac package as the [READ
 | Docker servers | Not available | Mac containers get no GPU; the embedded model is the local server instead. |
 | UNC shares and outside folders | Works | `\\server\share`, `//server/share` or `smb://`, mounted under `/Volumes` while the app runs ([UNC shares on a Mac](TOOLS.md#unc-shares-on-a-mac)). |
 | `/keycheck` | Works | Finds macOS's shortcuts, apps' exclusive hotkeys and the Option key; most shared hotkeys don't show. |
-| Web UI (`/webui`) | Works | Token in the Keychain; macOS asks once to allow incoming connections. Pictures are scaled originals (no thumbnails); Home's *Now playing* needs macOS 14+, its PC card shows the Mac's meters. |
+| Web UI (`/webui`) | Works | Token in the Keychain; macOS asks once to allow incoming connections when it serves the network (`lan`). Pictures are scaled originals (no thumbnails); Home's *Now playing* needs macOS 14+, its PC card shows the Mac's meters. |
 | Tailscale Serve (`/webui`'s HTTPS tab) | Works, address typed | Type its address into *Web UI HTTPS address* (it isn't found). |
 
 ## What differs

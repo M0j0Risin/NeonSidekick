@@ -21,8 +21,12 @@ public enum WebUiAudience
 /// </summary>
 public static class WebUiReach
 {
-    /// <summary>The home network. The compiled default, pinned by <c>AppSettingsTests</c>.</summary>
-    public const string Default = "lan";
+    /// <summary>
+    /// This computer alone (2026-11-08, the user's pick; the home network from 2026-10-14): nothing reaches it until the user opens it up, with
+    /// <c>lan</c> or Tailscale Serve. A hand-edited unknown value falls back here too, the safer side. Only a fresh profile gets it: a saved
+    /// <c>lan</c> stays. The compiled default, pinned by <c>AppSettingsTests</c>.
+    /// </summary>
+    public const string Default = "local";
 
     /// <summary>The words in menu order.</summary>
     public static readonly string[] Names = { "local", "lan" };

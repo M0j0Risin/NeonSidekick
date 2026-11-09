@@ -1824,10 +1824,7 @@ function fitSplash() {
   const style = main ? getComputedStyle(main) : null;
   const pad = style ? (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0) : 0;
   const others = logEl.offsetHeight - splash.offsetHeight;
-  // The source link sits under the log, in main, so the log's own height doesn't count it (2026-11-06).
-  const link = main ? main.querySelector('.source-link') : null;
-  const linkRoom = link ? link.offsetHeight + (parseFloat(getComputedStyle(link).marginTop) || 0) : 0;
-  const room = Math.max(200, Math.floor(view - headerEl.offsetHeight - footerEl.offsetHeight - pad - others - linkRoom) - 1);
+  const room = Math.max(200, Math.floor(view - headerEl.offsetHeight - footerEl.offsetHeight - pad - others) - 1);
   logEl.style.setProperty('--splash-room', room + 'px');
 }
 

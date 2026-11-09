@@ -84,7 +84,7 @@ public class KeysTests
     [InlineData(ConsoleKey.D, '\x04', "/mcp")]
     [InlineData(ConsoleKey.O, '\x0f', "/tools shell police")]    // /police until 2026-10-09
     [InlineData(ConsoleKey.P, '\x10', "/prompts")]   // 2026-10-18, the user's pick (Ctrl+Alt+W until then)
-    [InlineData(ConsoleKey.Y, '\x19', "/sessions")]   // 2026-10-18, the user's pick (Ctrl+Alt+E until then)
+    // Ctrl+Alt+Y was /sessions from 2026-10-18 until 2026-11-08 (plain Ctrl+Y since): KeysTests.ShortcutLine_CtrlAltY_IsFree.
     [InlineData(ConsoleKey.Z, '\x1a', "/splash")]   // 2026-10-18, the user's pick (Ctrl+Alt+P until then)
     public void ShortcutLine_ThePaneChords_AreTheirBareCommands(ConsoleKey key, char control, string line)
     {
@@ -107,7 +107,7 @@ public class KeysTests
         Assert.Equal("/explore", Keys.ShortcutLine(Keys.CtrlE));
         Assert.Equal("/explore", Keys.ShortcutLine(Keys.Ctrl(ConsoleKey.E)));
         Assert.Contains("/explore", NeonSidekick.App.SlashCommands.Words);
-        Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.E)));   // /sessions from later on 2026-10-03 until 2026-10-18 (Ctrl+Alt+Y since)
+        Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.E)));   // /sessions from later on 2026-10-03 until 2026-10-18 (Ctrl+Alt+Y then, plain Ctrl+Y since 2026-11-08)
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\x05', ConsoleKey.E, shift: true, alt: false, control: true)));
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('E', ConsoleKey.E, shift: false, alt: false, control: true)));
         Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\0', ConsoleKey.E, shift: false, alt: true, control: false)));
@@ -131,7 +131,7 @@ public class KeysTests
     [InlineData(ConsoleKey.T, '\x14', "/tools")]     // 2026-10-18, the user's pick (Ctrl+Alt+T until then; /toolbar before)
     [InlineData(ConsoleKey.U, '\x15', "/usage")]     // from Ctrl+Alt+G
     [InlineData(ConsoleKey.W, '\x17', "/webui browser")]   // 2026-10-18, the user's pick (/homebar until then)
-    // Ctrl+Y was /sys from 2026-10-03 (Ctrl+Alt+Y before) until 2026-11-07 (the user's pick): KeysTests.ShortcutLine_CtrlY_IsFree.
+    [InlineData(ConsoleKey.Y, '\x19', "/sessions")]   // 2026-11-08, the user's pick (Ctrl+Alt+Y until then; /sys from 2026-10-03 until 2026-11-07)
     [InlineData(ConsoleKey.Z, '\x1a', "/theme")]     // 2026-10-04 (the user's ask)
     public void ShortcutLine_ThePlainCtrlChords_AreTheirBareCommands_AndATypedLetterStaysALetter(ConsoleKey key, char control, string line)
     {
@@ -148,13 +148,16 @@ public class KeysTests
         Assert.False(Keys.IsToolToggle(new ConsoleKeyInfo(control, key, shift: false, alt: false, control: true)));
     }
 
-    /// <summary>Ctrl+Y is free since 2026-11-07 (the user's pick): it went with the bare <c>/sys</c>, whose pane is <c>/usage</c>'s tabs now; its EM is no character.</summary>
+    /// <summary>
+    /// Ctrl+Alt+Y is free since 2026-11-08 (the user's pick): <c>/sessions</c> moved to plain Ctrl+Y (free since 2026-11-07, when it went with the
+    /// bare <c>/sys</c>); its EM is no character.
+    /// </summary>
     [Fact]
-    public void ShortcutLine_CtrlY_IsFree()
+    public void ShortcutLine_CtrlAltY_IsFree()
     {
-        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\x19', ConsoleKey.Y, shift: false, alt: false, control: true)));
-        Assert.Null(Keys.ShortcutLine(Keys.Ctrl(ConsoleKey.Y)));
-        Assert.Equal("/sessions", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.Y)));   // Ctrl+Alt+Y stays
+        Assert.Null(Keys.ShortcutLine(new ConsoleKeyInfo('\x19', ConsoleKey.Y, shift: false, alt: true, control: true)));
+        Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.Y)));
+        Assert.Equal("/sessions", Keys.ShortcutLine(Keys.Ctrl(ConsoleKey.Y)));   // plain Ctrl+Y has it
     }
 
     /// <summary>
@@ -233,7 +236,7 @@ public class KeysTests
         Assert.Equal(NeonSidekick.App.BotChat.KillLine, Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.K)));
         Assert.Equal(NeonSidekick.App.BotChat.ResumeLine, Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.B)));   // /toolbar on Ctrl+T, /perfbar on Ctrl+F since later still on 2026-10-01
         Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.E)));   // /sessions from later on 2026-10-03 until 2026-10-18
-        Assert.Equal("/sessions", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.Y)));   // /sys on Ctrl+Y since 2026-10-03; /sessions here since 2026-10-18
+        Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.Y)));   // /sessions here from 2026-10-18 until 2026-11-08 (plain Ctrl+Y since)
         Assert.Equal("/tools shell allowed", Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.T)));   // /tools until 2026-10-18
         Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.L)));   // /tools shell allowed until 2026-10-18
     }

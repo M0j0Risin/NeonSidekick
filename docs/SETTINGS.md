@@ -118,7 +118,7 @@ A browser front end for this profile, for a phone on the home network: the chat,
 |---|---|---|
 | Web UI | Serves this profile's pages; `/webui` shows the sign-in link. A profile switch follows the new profile's settings. Refused while a reply runs. | off |
 | Web UI port | The TCP port (1024–65535); one in use or reserved keeps it off with a notice. A change signs browsers out, and [Tailscale Serve](INTERFACE.md#https-through-tailscale-serve) needs its command again. | 8765 |
-| Web UI reach | `local` (this computer, and what a proxy on it forwards, such as Tailscale Serve) or `lan` (your home network and Tailscale tailnet). Either way, a browser signs in with `/webui`'s link. | `lan` |
+| Web UI reach | `local` (this computer, and what a proxy on it forwards, such as Tailscale Serve) or `lan` (your home network and Tailscale tailnet). Either way, a browser signs in with `/webui`'s link. | `local` |
 | Web UI HTTPS address | `auto` (or empty) offers Tailscale Serve's address (Windows only; on a Mac, type it), `off` none, or your proxy's `https://host[:port]`. Its link holds the token: type only an address that reaches this computer. | `auto` |
 | Web UI commands | Chat tab: lets the page run the slash commands that work from a phone ([Commands from the page](INTERFACE.md#commands-from-the-page)). Off, it only sends messages. | off |
 | Web UI connection details | Chat tab: the page's dropdown shows the `%` and `*` connections' server and database, not just names. The chat shows what the model says either way. | off |

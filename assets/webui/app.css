@@ -810,16 +810,17 @@ main.home { display: flex; flex-direction: column; gap: 12px; }
 .home-camera-refresh { min-height: 40px; padding: 6px 10px; font-size: 14px; }
 
 /* ── Sign in ────────────────────────────────────────────────────── */
-/* The source link (2026-11-06): the combination with the metasearch's AGPL code offers remote users its source. On every page, last in main or
-   .signin. Filling the window has no room for it, and the chat's splash counts it (fitSplash). */
-.source-link { display: block; width: fit-content; margin: 12px auto 0; font-size: 12px; color: var(--dim); text-align: center; }
-body.yt-windowed .source-link { display: none; }
-
 .signin { max-width: 420px; margin: 18vh auto 0; text-align: center; padding: 0 16px; }
 .signin h1 { font-size: 22px; }
 .signin p { color: var(--dim); }
 .signin form { display: flex; gap: 8px; margin-top: 16px; }
 .signin input { flex: 1; min-width: 0; min-height: 44px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 10px; font: inherit; }
+
+/* The About page (2026-11-08): a short card, centered as the sign-in is, nearer the header. Its source link is the AGPL offer for the metasearch. */
+.about { max-width: 420px; margin: 8vh auto 0; text-align: center; padding: 0 16px; }
+.about h1 { font-size: 22px; }
+.about p { color: var(--dim); }
+.about a { color: var(--accent-2); }
 
 /* Reduced motion (2026-10-15, E9): nothing pulses, shakes or slides; the spinner stands still (chat.js draws ⏳). */
 @media (prefers-reduced-motion: reduce) {

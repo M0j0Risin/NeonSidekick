@@ -327,7 +327,7 @@ public sealed class WebUiHost : IWebUiHost
             }
 
             bool signedIn = SignedIn(context);
-            if (get && path is "/" or "/index.html" or "/shopping" or "/shopping.html" or "/home" or "/home.html" or "/youtube" or "/youtube.html")
+            if (get && path is "/" or "/index.html" or "/shopping" or "/shopping.html" or "/home" or "/home.html" or "/youtube" or "/youtube.html" or "/about" or "/about.html")
             {
                 await PageAsync(context, path, signedIn).ConfigureAwait(false);
                 return;
@@ -580,13 +580,20 @@ public sealed class WebUiHost : IWebUiHost
 
     /// <summary>
     /// A page (later on 2026-10-15, each tab only while its controls are on): signed out, the sign-in page; a tab that is off goes to <c>/</c>; <c>/</c>
-    /// with Chat off goes to the first tab that is on, or, with none, the page that says so. A redirect is a 303 never cached.
+    /// with Chat off goes to the first tab that is on, or, with none, the page that says so. A redirect is a 303 never cached. The About page
+    /// (2026-11-08) is no tab: served to anyone signed in, whatever the tabs.
     /// </summary>
     private async Task PageAsync(HttpContext context, string path, bool signedIn)
     {
         if (!signedIn)
         {
             await AssetAsync(context, WebUiAssets.SignInPage).ConfigureAwait(false);
+            return;
+        }
+
+        if (path is "/about" or "/about.html")
+        {
+            await AssetAsync(context, WebUiAssets.AboutPage).ConfigureAwait(false);
             return;
         }
 

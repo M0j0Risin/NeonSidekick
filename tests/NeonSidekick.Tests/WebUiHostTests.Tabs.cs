@@ -375,6 +375,41 @@ public sealed partial class WebUiHostTests
         Assert.Equal(HttpStatusCode.NotFound, page.StatusCode);   // served at / alone
     }
 
+    /// <summary>
+    /// The About page (2026-11-08) is no tab: served to anyone signed in whatever the tabs, every one off too; signed out, the sign-in page, so a
+    /// visitor gets no hint of the version.
+    /// </summary>
+    [Theory]
+    [InlineData("/about")]
+    [InlineData("/about.html")]
+    public async Task TheAboutPage_IsServedSignedIn_WhateverTheTabs_AndSignedOutIsTheSignInPage(string path)
+    {
+        var on = await PageAsync(path);
+        Assert.Equal(HttpStatusCode.OK, on.Status);
+        Assert.Contains("about.js", on.Body, StringComparison.Ordinal);
+        Assert.Contains("NeonSidekick " + NeonSidekick.App.SidekickApp.Version, on.Body, StringComparison.Ordinal);
+
+        _backend.TabsOn = new WebTabs(Chat: false, Home: false, Shopping: false);
+        var none = await PageAsync(path);
+        Assert.Equal(HttpStatusCode.OK, none.Status);
+        Assert.Contains("about.js", none.Body, StringComparison.Ordinal);
+
+        using var signedOut = await _client.SendAsync(Get(path, signedIn: false));
+        Assert.Equal(HttpStatusCode.OK, signedOut.StatusCode);
+        string body = await signedOut.Content.ReadAsStringAsync();
+        Assert.Contains("signin.js", body, StringComparison.Ordinal);
+        Assert.DoesNotContain(NeonSidekick.App.SidekickApp.Version, body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheAboutPagesScript_NeedsNoCookie_AndThePageIsNotStatic()
+    {
+        using var script = await _client.SendAsync(Get("/about.js", signedIn: false));
+        Assert.Equal(HttpStatusCode.OK, script.StatusCode);
+        Assert.True(WebUiAssets.IsStatic("about.js"));
+        Assert.False(WebUiAssets.IsStatic(WebUiAssets.AboutPage));
+    }
+
     [Theory]
     [InlineData("/api/pulse", null)]
     [InlineData("/api/events", WebTab.Chat)]

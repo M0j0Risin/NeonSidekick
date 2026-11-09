@@ -1111,11 +1111,11 @@ public sealed partial class WebUiTests : IDisposable
     public void TheReach_ReadsItsTwoWords()
     {
         Assert.Equal(["local", "lan"], WebUiReach.Names);
-        Assert.Equal("lan", WebUiReach.Default);
+        Assert.Equal("local", WebUiReach.Default);   // 2026-11-08, the user's pick (lan until then)
         Assert.True(WebUiReach.TryParse(" LOCAL ", out var local) && local == WebUiAudience.Local);
         Assert.False(WebUiReach.TryParse("internet", out var fallback));
         Assert.Equal(WebUiAudience.LocalAreaNetwork, fallback);
-        Assert.Equal(WebUiAudience.LocalAreaNetwork, WebUiReach.Resolve(new Settings.AppSettingsData { WebUiReach = "nope" }));
+        Assert.Equal(WebUiAudience.Local, WebUiReach.Resolve(new Settings.AppSettingsData { WebUiReach = "nope" }));   // the default, the safer side
     }
 
     [Fact]
@@ -1212,7 +1212,7 @@ public sealed partial class WebUiTests : IDisposable
         Assert.True(new Settings.AppSettingsData().WebUiBotCheckControl);    // 2026-10-17, the user's call: on
         Assert.Equal("Web UI", App.SettingsMenu.TabTitles[(int)App.SettingsTab.WebUi]);
         var defaults = new Settings.AppSettingsData();
-        Assert.Equal((false, 8765, "lan", ""), (defaults.WebUi, defaults.WebUiPort, defaults.WebUiReach, defaults.WebUiToken));
+        Assert.Equal((false, 8765, "local", ""), (defaults.WebUi, defaults.WebUiPort, defaults.WebUiReach, defaults.WebUiToken));
         Assert.Contains(nameof(Settings.AppSettingsData.WebUiToken), Settings.SettingsDiff.Secrets);
     }
 
@@ -1357,6 +1357,8 @@ public sealed partial class WebUiTests : IDisposable
         Assert.Equal("Tailscale: works from any device on your tailnet, at home or away.", WebUiText.TailscaleNote);
         Assert.Equal(WebUiText.TailscaleNote + "\nWeb UI: on\n\n" + WebUiText.TailscaleScanHint + "\n", WebUiText.LinkTabText("Web UI: on", WebUiLinkKind.Tailscale));
         Assert.Equal("Web UI: on\n\n" + WebUiText.ScanHint + "\n", WebUiText.LinkTabText("Web UI: on", WebUiLinkKind.Home));
+        // The localhost tab under local (2026-11-08) has no QR code, so no scan hint: the status alone.
+        Assert.Equal("Web UI: on\n", WebUiText.LinkTabText("Web UI: on", WebUiLinkKind.Home, audience: WebUiAudience.Local));
         Assert.Contains("(on the same network)", WebUiText.ScanHint);
         Assert.DoesNotContain("same network", WebUiText.TailscaleScanHint);
     }

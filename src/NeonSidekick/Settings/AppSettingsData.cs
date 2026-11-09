@@ -3584,9 +3584,9 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// Who may reach the Web UI (2026-10-14, the user's pick: the home network with a token): one of <see cref="NeonSidekick.WebUi.WebUiReach.Names"/>
-    /// — <c>local</c> (localhost only) or <c>lan</c> (the default: your home network and your tailnet; every interface, a private address's
-    /// browsers only).
-    /// Anything else reads as <c>lan</c> with a warning. No variable.
+    /// — <c>local</c> (the default since 2026-11-08, the user's pick: localhost only) or <c>lan</c> (your home network and your tailnet; every
+    /// interface, a private address's browsers only).
+    /// Anything else reads as <c>local</c> with a warning. No variable.
     /// </summary>
     public string WebUiReach { get; set; } = NeonSidekick.WebUi.WebUiReach.Default;
 

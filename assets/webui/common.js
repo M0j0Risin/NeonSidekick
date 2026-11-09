@@ -173,8 +173,6 @@ const Neon = (() => {
       const tab = tabOf(a.getAttribute('href'));
       if (tab) a.classList.toggle('hidden', !on[tab]);
     }
-    // The menu goes with its last tab (2026-10-16): Chat alone is left.
-    if (tabMenu) tabMenu.classList.toggle('hidden', menuItems().length === 0);
     labelMenu();
     navReady();
     const here = document.body.dataset.tab;
@@ -186,8 +184,8 @@ const Neon = (() => {
   }
 
   // ── The tab menu (2026-10-16, the user's pick) ──
-  // Chat stays a link (it carries the busy dot and the questions' badge); Home, Shopping and YouTube sit behind one button, ☰ on Chat and the
-  // open tab's glyph and name with ▾ on the others, so a phone's header keeps the profile's name readable. Wired as this script loads, never
+  // Chat stays a link (it carries the busy dot and the questions' badge); Home, Shopping and YouTube sit behind one button, with ℹ️ About last
+  // (2026-11-08: no tab, so the menu never empties and is never hidden), ☰ on Chat and the open page's glyph and name with ▾ on the others, so a phone's header keeps the profile's name readable. Wired as this script loads, never
   // only from tabs(): a page that can't reach the PC still gets its nav after navReady's 2 s, and its menu must work then too. It closes on a
   // pick, a press outside (pointerdown: iOS fires no click on a tap over the transcript), Esc (focus back on the button) or a scroll; ↑/↓ walk
   // it while open. Its keys act only while it is open, so the draft's history walk, the dropdown and the sheet's Esc are untouched otherwise.
@@ -209,7 +207,7 @@ const Neon = (() => {
     tabMenuButton.textContent = here ? here.textContent + ' ▾' : '☰';
     tabMenuButton.classList.toggle('here', !!here);
     const names = menuItems().map(a => a.textContent.replace(/^\S+\s+/u, ''));
-    const label = 'Tabs: ' + names.join(', ');
+    const label = 'Menu: ' + names.join(', ');   // 2026-11-08: Menu, not Tabs, since About is no tab
     tabMenuButton.setAttribute('aria-label', label);
     tabMenuButton.title = label;
   }

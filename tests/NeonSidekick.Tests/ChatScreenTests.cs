@@ -12610,7 +12610,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Theory]
-    [InlineData(false, false, 56)]   // Ctrl+Y gone 2026-11-07 (with the bare /sys)   // Ctrl+Up / Down 2026-11-01 (message jumps)   // 2026-10-18 (the user's picks, the map rearranged): Ctrl+B and Ctrl+N joined, Ctrl+Shift+F and Ctrl+Alt+E, H, L and R went, Ctrl+Alt+Y and Z joined. Before: Ctrl+Alt+W (/prompts) on 2026-10-13; Ctrl+Shift+F (/find) on 2026-10-13; Ctrl+J (the emoji picker, Windows alone) later still on 2026-10-12; Ctrl+W (the home bar; Ctrl+Alt+W for a few hours) on 2026-10-12; Ctrl+Alt+B and K (the botchat chords) on 2026-10-11; Ctrl+Alt+H (/header) joined later still on 2026-10-01; Ctrl+/ before it; Ctrl+Alt+G (plain Ctrl+G since 2026-10-12), U and V on 2026-10-02; Ctrl+. and Ctrl+Alt+E on 2026-10-03; Ctrl+L and Ctrl+Z on 2026-10-04; F9 and F10 on 2026-10-05; Ctrl+Q, Ctrl+Alt+Q and Ctrl+Alt+R later that day
+    [InlineData(false, false, 56)]   // /sessions from Ctrl+Alt+Y to Ctrl+Y 2026-11-08 (a row moved)   // Ctrl+Y gone 2026-11-07 (with the bare /sys)   // Ctrl+Up / Down 2026-11-01 (message jumps)   // 2026-10-18 (the user's picks, the map rearranged): Ctrl+B and Ctrl+N joined, Ctrl+Shift+F and Ctrl+Alt+E, H, L and R went, Ctrl+Alt+Y and Z joined. Before: Ctrl+Alt+W (/prompts) on 2026-10-13; Ctrl+Shift+F (/find) on 2026-10-13; Ctrl+J (the emoji picker, Windows alone) later still on 2026-10-12; Ctrl+W (the home bar; Ctrl+Alt+W for a few hours) on 2026-10-12; Ctrl+Alt+B and K (the botchat chords) on 2026-10-11; Ctrl+Alt+H (/header) joined later still on 2026-10-01; Ctrl+/ before it; Ctrl+Alt+G (plain Ctrl+G since 2026-10-12), U and V on 2026-10-02; Ctrl+. and Ctrl+Alt+E on 2026-10-03; Ctrl+L and Ctrl+Z on 2026-10-04; F9 and F10 on 2026-10-05; Ctrl+Q, Ctrl+Alt+Q and Ctrl+Alt+R later that day
     [InlineData(true, false, 57)]
     [InlineData(true, true, 58)]   // the word moves and deletes joined (2026-10-04)
     public void KeyRows_ListWhatApplies(bool voiceOn, bool wakeReady, int count)
@@ -12679,8 +12679,9 @@ public partial class ChatScreenTests : IDisposable
             new("Ctrl+T", "open the tools pane", "/tools"),   // 2026-10-18, the user's pick (Ctrl+Alt+T until then; /toolbar before)
             new("Ctrl+U", "open the usage pane", "/usage"),   // from Ctrl+Alt+G
             new("Ctrl+W", "open the Web UI in a browser, signed in", "/webui browser"),   // 2026-10-18, the user's pick (/homebar until then)
+            new("Ctrl+Y", "open the sessions pane", "/sessions"),   // 2026-11-08, the user's pick (Ctrl+Alt+Y until then)
             new("Ctrl+Z", "open the theme picker", "/theme"),   // 2026-10-04, the user's ask
-        ], rows[^39..^17]);   // ^40 until Ctrl+Y's row went (2026-11-07)
+        ], rows[^39..^16]);   // ^40 until Ctrl+Y's row went (2026-11-07); ^17 until /sessions came to Ctrl+Y (2026-11-08)
 
         // The command chords after them (2026-09-30), one block A to Z by the letter since the pane chords joined later that day.
         Assert.Equal(
@@ -12700,9 +12701,8 @@ public partial class ChatScreenTests : IDisposable
             new("Ctrl+Alt+V", "show or hide the camera's live view", "/camera live"),   // 2026-10-02, the user's ask
             new("Ctrl+Alt+W", "open the Web UI pane", "/webui"),   // 2026-10-18, the user's pick
             new("Ctrl+Alt+X", "unload the embedded model at once (press twice)"),   // 2026-10-01, the user's place
-            new("Ctrl+Alt+Y", "open the sessions pane", "/sessions"),   // 2026-10-18, the user's pick (Ctrl+Alt+E until then)
             new("Ctrl+Alt+Z", "start a new conversation with the splash", "/splash"),   // 2026-10-18, the user's pick (Ctrl+Alt+P until then)
-        ], rows[^17..]);
+        ], rows[^16..]);   // Ctrl+Alt+Y's row went 2026-11-08 (/sessions on Ctrl+Y)
 
         // Every chord's command is the one it runs, and a row with none runs none: Ctrl+L (the learning's cancel, 2026-10-04) and
         // the kill switch (2026-10-01). The ESC ESC and wake rows name a command they do not type for you.
@@ -12727,6 +12727,7 @@ public partial class ChatScreenTests : IDisposable
             ["Ctrl+T"] = Keys.CtrlT,
             ["Ctrl+U"] = Keys.CtrlU,
             ["Ctrl+W"] = Keys.Ctrl(ConsoleKey.W),
+            ["Ctrl+Y"] = Keys.Ctrl(ConsoleKey.Y),   // 2026-11-08
             ["Ctrl+Z"] = Keys.Ctrl(ConsoleKey.Z),
         };
         foreach (var row in rows.Where(r => r.Key.StartsWith("Ctrl+Alt+", StringComparison.Ordinal)))
@@ -12740,7 +12741,7 @@ public partial class ChatScreenTests : IDisposable
         }
 
         Assert.Null(Keys.ShortcutLine(Keys.CtrlL));
-        Assert.Null(Keys.ShortcutLine(Keys.Ctrl(ConsoleKey.Y)));   // /sys until 2026-11-07 (the user's pick): freed with the bare command
+        Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.Y)));   // /sessions until 2026-11-08 (the user's pick): plain Ctrl+Y since
         Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.X)));
         Assert.All(rows.Where(r => r.Command is not null && !chords.ContainsKey(r.Key)), r => Assert.Contains(r.Key, new[] { "Esc Esc", "say \"hey neon\"" }));
         Assert.All(rows, r => Assert.DoesNotContain("(/", r.Meaning, StringComparison.Ordinal));   // the command in its own column
@@ -19601,17 +19602,17 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task CtrlAltY_OpensTheSessionsPane_AsSlashSessions_TheDraftKept()
+    public async Task CtrlY_OpensTheSessionsPane_AsSlashSessions_TheDraftKept()
     {
         // Later on 2026-10-03 (the user's ask): the bare /sessions through the dispatch, no transcript row, the draft back after ESC.
-        // Ctrl+Alt+E until 2026-10-18 (the user's pick), Ctrl+Alt+Y since.
+        // Ctrl+Alt+E until 2026-10-18 (the user's pick), Ctrl+Alt+Y until 2026-11-08, plain Ctrl+Y since, pressed as the console sends it (EM).
         _settings.Update(d => d.TtsOutput = false);
         _console.Profile.Height = 40;
         _geometry = new ScreenGeometry(() => null);
         long id = SeedSession();
         _chat.EnqueueText("one");
         StepsWhenIdle(
-            input => { input.Push("keep".Select(Keys.Char).ToArray()); input.Push(Keys.CtrlAlt(ConsoleKey.Y)); },
+            input => { input.Push("keep".Select(Keys.Char).ToArray()); input.Push(new ConsoleKeyInfo('\x19', ConsoleKey.Y, false, false, true)); },
             Key(Keys.Escape),
             Key(Keys.Enter),
             Line("/exit"));
@@ -19624,14 +19625,14 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task MidTurn_CtrlAltY_OpensTheSessionsPane_OverTheReply_WhichRunsOn()
+    public async Task MidTurn_CtrlY_OpensTheSessionsPane_OverTheReply_WhichRunsOn()
     {
         SeedSession();
         MidTurnFixture(i =>
         {
             if (i == 1)
             {
-                _scripted!.Push(Keys.CtrlAlt(ConsoleKey.Y));
+                _scripted!.Push(new ConsoleKeyInfo('\x19', ConsoleKey.Y, false, false, true));   // Ctrl+Alt+Y until 2026-11-08
             }
             else if (i == 2)
             {
@@ -19672,21 +19673,22 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>
-    /// Ctrl+Y does nothing since 2026-11-07 (the user's pick: freed with the bare /sys, whose pane was its; Ctrl+Alt+Y until 2026-10-03): no pane,
-    /// nothing typed. The key as the console sends it, EM (0x19), since 2026-11-08 (the review): typed, it would make the next line a message.
+    /// Ctrl+Alt+Y does nothing since 2026-11-08 (the user's pick: <c>/sessions</c> moved to plain Ctrl+Y, which did nothing from 2026-11-07, when
+    /// the bare /sys went): no pane, nothing typed. The key as the console sends it, EM (0x19): typed, it would make the next line a message.
     /// </summary>
     [Fact]
-    public async Task CtrlY_DoesNothing()
+    public async Task CtrlAltY_DoesNothing()
     {
         _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full"; });
         _console.Profile.Height = 112;
         _geometry = new ScreenGeometry(() => null);
-        StepsWhenIdle(Key(new ConsoleKeyInfo('\x19', ConsoleKey.Y, shift: false, alt: false, control: true)), Line("/exit"));
+        SeedSession();
+        StepsWhenIdle(Key(new ConsoleKeyInfo('\x19', ConsoleKey.Y, shift: false, alt: true, control: true)), Line("/exit"));
 
         string output = await RunAsync();
 
-        Assert.DoesNotContain(UsageText.Label + " │ ", output);
-        Assert.Null(Keys.ShortcutLine(Keys.Ctrl(ConsoleKey.Y)));
+        Assert.DoesNotContain(Titled(SessionsMenu.Title), output);
+        Assert.Null(Keys.ShortcutLine(Keys.CtrlAlt(ConsoleKey.Y)));
         Assert.Empty(_chat.Requests);
     }
 

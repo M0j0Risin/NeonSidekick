@@ -127,6 +127,19 @@ public sealed partial class WebUiYouTubePageTests : IAsyncLifetime
         await page.WaitAsync("!window.neonOldPage && document.readyState === 'complete' && document.body.dataset.tab === 'youtube'", "Shopping gone to the YouTube tab", 15);
     }
 
+    /// <summary>A queued video takes the About page to the YouTube tab too (2026-11-08, the user's call: no special case), Shopping's way.</summary>
+    [WindowsFact]
+    public async Task Watch_APulseTakesTheAboutPageThere()
+    {
+        _backend.PulseNow = Pulse(watch: WebUiText.WatchBanner);
+        if (await SignedInAsync("/about") is not { } page)
+        {
+            return;
+        }
+
+        await page.WaitAsync("document.readyState === 'complete' && document.body.dataset.tab === 'youtube'", "About gone to the YouTube tab", 15);
+    }
+
     [WindowsFact]
     public async Task Chat_WithADraft_ShowsTheBannerAndStays()
     {

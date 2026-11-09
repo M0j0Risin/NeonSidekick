@@ -191,6 +191,7 @@ public static class WebCommands
             SlashCommand.Docker => Is(first, "logs") ? WebCommandVerdict.List : WebCommandVerdict.Run,
             SlashCommand.EventLog => WebCommandVerdict.List,   // 2026-10-15: the events as a list card, /docker's way from a web line
             SlashCommand.Net or SlashCommand.Services or SlashCommand.Tasks or SlashCommand.Ad => WebCommandVerdict.List,   // 2026-10-15, the admin-tools plan: their lines as a list card
+            SlashCommand.About => Refused(WebUiText.UseAboutPage),   // 2026-11-08, the user's pick: the page has an About card of its own
             SlashCommand.Shopping => text.Length == 0 || Is(text, "add") ? Refused(settings.ShoppingTab ? WebUiText.UseShoppingPage : WebUiText.ShoppingTabOff) : WebCommandVerdict.Run,
             SlashCommand.Prompts => PromptsCommand.Parse(args).Verb switch
             {

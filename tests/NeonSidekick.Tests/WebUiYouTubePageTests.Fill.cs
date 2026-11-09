@@ -52,7 +52,6 @@ public sealed partial class WebUiYouTubePageTests
         Assert.Equal(400, (await page.EvalAsync("Math.round(window.scrollY)")).GetInt32());
         Assert.NotEqual("fixed", await page.TextAsync("getComputedStyle(document.querySelector('.yt-frame')).position"));
         Assert.NotEqual("none", await page.TextAsync("getComputedStyle(document.querySelector('header.top')).display"));
-        Assert.NotEqual("none", await page.TextAsync("getComputedStyle(document.querySelector('.source-link')).display"));
     }
 
     [WindowsFact]
@@ -70,7 +69,6 @@ public sealed partial class WebUiYouTubePageTests
         Assert.Equal("fill", await page.TextAsync("document.activeElement && document.activeElement.id"));
         Assert.Equal("none", await page.TextAsync("getComputedStyle(document.getElementById('saved')).display"));
         Assert.Equal("none", await page.TextAsync("getComputedStyle(document.querySelector('header.top')).display"));
-        Assert.Equal("none", await page.TextAsync("getComputedStyle(document.querySelector('.source-link')).display"));   // 2026-11-06: nothing but the video
         await page.WaitAsync("Math.abs(document.querySelector('.yt-frame').getBoundingClientRect().bottom - window.innerHeight) < 1"
             + " && Math.abs(document.querySelector('.yt-frame').getBoundingClientRect().top - document.querySelector('.yt-strip').getBoundingClientRect().bottom) < 1"
             + " && document.querySelector('.yt-strip').getBoundingClientRect().top === 0",

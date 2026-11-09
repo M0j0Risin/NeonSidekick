@@ -3010,6 +3010,7 @@ internal sealed partial class ChatScreen
     /// Ctrl+W (<c>/webui browser</c>), Ctrl+Alt+P (<c>/prompts</c>), Ctrl+Alt+T (<c>/tools shell allowed</c>), Ctrl+Alt+W (<c>/webui</c>),
     /// Ctrl+Alt+Y (<c>/sessions</c>) and Ctrl+Alt+Z (<c>/splash</c>, after the kill switch's X); the bar rows (<c>/perfbar</c>,
     /// <c>/toolbar</c>, <c>/homebar</c>, <c>/header</c>) and Ctrl+Alt+E, H, L and R went.
+    /// On 2026-11-08 (the user's pick) <c>/sessions</c> moved from Ctrl+Alt+Y to plain Ctrl+Y, its row's wording kept, after Ctrl+W.
     /// </summary>
     public static KeyRow[] KeyRows(bool voiceOn, ConsoleKey pushToTalk, bool wakeReady, string wakePhrase) =>
         KeyRows(voiceOn, pushToTalk, wakeReady, wakePhrase, OperatingSystem.IsMacOS());
@@ -3100,6 +3101,7 @@ internal sealed partial class ChatScreen
         rows.Add(new("Ctrl+T", "open the tools pane", "/tools"));   // 2026-10-18, the user's pick (Ctrl+Alt+T until then)
         rows.Add(new("Ctrl+U", "open the usage pane", "/usage"));
         rows.Add(new("Ctrl+W", "open the Web UI in a browser, signed in", "/webui browser"));   // 2026-10-18, the user's pick
+        rows.Add(new("Ctrl+Y", "open the sessions pane", "/sessions"));   // 2026-11-08, the user's pick (Ctrl+Alt+Y until then)
         rows.Add(new("Ctrl+Z", "open the theme picker", "/theme"));
         if (mac)
         {
@@ -3122,7 +3124,6 @@ internal sealed partial class ChatScreen
         rows.Add(new("Ctrl+Alt+V", "show or hide the camera's live view", "/camera live"));
         rows.Add(new("Ctrl+Alt+W", "open the Web UI pane", SlashCommands.WebUiWord));   // 2026-10-18, the user's pick
         rows.Add(new("Ctrl+Alt+X", "unload the embedded model at once (press twice)"));
-        rows.Add(new("Ctrl+Alt+Y", "open the sessions pane", "/sessions"));   // 2026-10-18, the user's pick (Ctrl+Alt+E until then)
         rows.Add(new("Ctrl+Alt+Z", "start a new conversation with the splash", "/splash"));   // 2026-10-18, the user's pick (Ctrl+Alt+P until then)
         return rows.ToArray();
     }

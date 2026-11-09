@@ -226,6 +226,7 @@ public sealed class WebCommandsTests
         Assert.Equal("/ha stills opens a pane or a window at the PC, so it runs there.", WebCommands.Check("/ha stills view", On).Reason);
         Assert.Equal(WebCommandKind.Run, WebCommands.Check("/ha on den", On).Kind);
         Assert.Equal(WebUiText.UseShoppingPage, WebCommands.Check("/shopping", On).Reason);
+        Assert.Equal(WebUiText.UseAboutPage, WebCommands.Check("/about", On).Reason);   // 2026-11-08: the page's own About card
         // The Shopping tab off (later on 2026-10-15): the setting that turns it on.
         Assert.Equal(WebUiText.ShoppingTabOff, WebCommands.Check("/shopping", On with { ShoppingTab = false }).Reason);
         Assert.Equal(WebUiText.ShoppingTabOff, WebCommands.Check("/shopping add", On with { ShoppingTab = false }).Reason);

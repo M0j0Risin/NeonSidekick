@@ -67,7 +67,8 @@ public sealed partial class WebUiPageTests
         await page.EvalAsync("document.querySelector('.tab-menu-button').click()");
         Assert.False(await HiddenListAsync(page));
         Assert.Equal("true", await page.TextAsync("document.querySelector('.tab-menu-button').getAttribute('aria-expanded')"));
-        Assert.Equal("[\"/home\",\"/shopping\"]", await page.TextAsync("JSON.stringify([...document.querySelectorAll('.tab-menu-list a:not(.hidden)')].map(a => a.getAttribute('href')))"));
+        Assert.Equal("[\"/home\",\"/shopping\",\"/about\"]", await page.TextAsync("JSON.stringify([...document.querySelectorAll('.tab-menu-list a:not(.hidden)')].map(a => a.getAttribute('href')))"));   // About last (2026-11-08)
+        Assert.Equal("Menu: Home, Shopping, About", await page.TextAsync("document.querySelector('.tab-menu-button').getAttribute('aria-label')"));   // Tabs: until About came
 
         await page.EvalAsync("document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))");
         Assert.True(await HiddenListAsync(page));
@@ -87,12 +88,15 @@ public sealed partial class WebUiPageTests
         await page.GoAsync(Root + "shopping");
         await page.WaitAsync("!document.querySelector('nav a[href=\"/youtube\"]').classList.contains('hidden')", "YouTube in the menu");
         Assert.Equal("🛒 Shopping ▾", await page.TextAsync("document.querySelector('.tab-menu-button').textContent"));
-        Assert.Equal(3, (await page.EvalAsync("document.querySelectorAll('.tab-menu-list a:not(.hidden)').length")).GetInt32());
+        Assert.Equal(4, (await page.EvalAsync("document.querySelectorAll('.tab-menu-list a:not(.hidden)').length")).GetInt32());   // About too
     }
 
-    /// <summary>With Home, Shopping and YouTube all off the menu goes, and Chat alone is left (2026-10-16).</summary>
+    /// <summary>
+    /// With Home, Shopping and YouTube all off the menu stays, About alone in it (2026-11-08: About is no tab; the menu went with its last tab
+    /// from 2026-10-16 until then).
+    /// </summary>
     [WindowsFact]
-    public async Task TheTabMenu_WithItsThreeTabsOff_Goes_ChatAlone()
+    public async Task TheTabMenu_WithItsThreeTabsOff_LeavesAboutAlone()
     {
         _backend.Snap = new WebSnapshot([], [], State() with { HomeTab = false, ShoppingTab = false }, WebUiText.Words);
         if (await SignedInAsync("/") is not { } page)
@@ -100,7 +104,10 @@ public sealed partial class WebUiPageTests
             return;
         }
 
-        await page.WaitAsync("document.querySelector('header.top .tab-menu').classList.contains('hidden')", "the menu gone");
+        await page.WaitAsync("document.querySelector('header.top nav').classList.contains('ready') && document.querySelector('nav a[href=\"/home\"]').classList.contains('hidden')", "the nav, Home hidden");
+        Assert.False((await page.EvalAsync("document.querySelector('header.top .tab-menu').classList.contains('hidden')")).GetBoolean());
+        Assert.Equal("[\"/about\"]", await page.TextAsync("JSON.stringify([...document.querySelectorAll('.tab-menu-list a:not(.hidden)')].map(a => a.getAttribute('href')))"));
+        Assert.Equal("Menu: About", await page.TextAsync("document.querySelector('.tab-menu-button').getAttribute('aria-label')"));
         Assert.False((await page.EvalAsync("document.querySelector('nav a[href=\"/\"]').classList.contains('hidden')")).GetBoolean());
     }
 

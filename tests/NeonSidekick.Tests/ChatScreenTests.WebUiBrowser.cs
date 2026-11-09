@@ -181,7 +181,7 @@ public partial class ChatScreenTests
         string output = await RunAsync(input);
 
         Assert.Contains("/signin?t=", link, StringComparison.Ordinal);
-        Assert.Contains(WebUiText.CopiedNotice, output);
+        Assert.Contains(WebUiText.LocalCopiedNotice, output);   // localhost under local (2026-11-08)
         Assert.StartsWith("http://localhost:", Assert.Single(_openedUrls), StringComparison.Ordinal);   // the tab's host
         Assert.Contains("/signin?once=", _openedUrls[0], StringComparison.Ordinal);
     }
@@ -189,11 +189,10 @@ public partial class ChatScreenTests
     [Fact]
     public async Task AQrCodeRow_OpensTheTabsHost_ABlankOrMixedLineNothing()
     {
-        // 2026-10-20, the user's ask: a double-click anywhere on the QR code opens the link, as one on the link does.
-        _webUiHost = _ => new RecordingHost();
-        _settings.Update(d => { d.TtsOutput = false; d.WebUi = true; d.WebUiReach = "local"; });
-        _console.Profile.Height = 40;
-        _geometry = new ScreenGeometry(() => null);
+        // 2026-10-20, the user's ask: a double-click anywhere on the QR code opens the link, as one on the link does. On the HTTPS tab since
+        // 2026-11-08, when the localhost tab lost its code (not lan: a machine with no private address has no tabs then).
+        HttpsReady();
+        ServeAnswers(_ => new TailscaleServeResult(ServeAddress, false, []));
         string link = "";
         var input = WhenIdle(
             i =>
@@ -213,6 +212,68 @@ public partial class ChatScreenTests
 
         await RunAsync(input);
 
-        Assert.StartsWith("http://localhost:", Assert.Single(_openedUrls), StringComparison.Ordinal);
+        Assert.StartsWith(ServeAddress + "/", Assert.Single(_openedUrls), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The localhost tab under <c>local</c> has no QR code (2026-11-08, the user's call: a phone that scans it opens its own localhost), but keeps its
+    /// link and the note on how a phone gets in; the HTTPS tab beside it keeps its code.
+    /// </summary>
+    [Fact]
+    public async Task TheLocalhostTab_HasNoQrCode_TheHttpsTabKeepsIts()
+    {
+        _webUiHost = _ => new RecordingHost();
+        _settings.Update(d => { d.TtsOutput = false; d.WebUi = true; d.WebUiReach = "local"; });
+        _console.Profile.Width = 160;
+        _console.Profile.Height = 60;
+        _geometry = new ScreenGeometry(() => null);
+        var input = WhenIdle(
+            i =>
+            {
+                PushLine(i, "/webui");
+                i.Push(Keys.Escape);
+            },
+            i => PushLine(i, "/exit"));
+
+        string output = await RunAsync(input);
+
+        Assert.DoesNotContain(output.Split('\n'), QrView.IsQrRow);
+        Assert.Contains("http://localhost:", output, StringComparison.Ordinal);
+        Assert.Contains(WebUiText.LocalOnlyNote, output);
+        Assert.Contains(WebUiText.LinkOnlyOpenHint, output);
+        Assert.DoesNotContain(WebUiText.ScanHint, output);
+    }
+
+    [Fact]
+    public async Task UnderLocal_TheHttpsTab_KeepsItsQrCode()
+    {
+        HttpsReady();
+        ServeAnswers(_ => new TailscaleServeResult(ServeAddress, false, []));
+        _console.Profile.Width = 160;
+        _console.Profile.Height = 90;
+        var input = WhenIdle(
+            i =>
+            {
+                PushLine(i, "/webui");   // opens on the HTTPS tab, the first
+                i.Push(Keys.Escape);
+            },
+            i => PushLine(i, "/exit"));
+
+        string output = await RunAsync(input);
+
+        Assert.Contains(output.Split('\n'), QrView.IsQrRow);
+        Assert.Contains(WebUiText.LinkOpenHint, output);
+        Assert.DoesNotContain(WebUiText.LocalOnlyNote, output);   // the reach line names the HTTPS address instead
+    }
+
+    /// <summary>The copy notice names localhost's limit for its link alone (2026-11-08): a lan address, or the HTTPS link, keeps the plain one.</summary>
+    [Fact]
+    public void TheCopyNotice_SaysLocalhostsLimit_ForItsLinkAlone()
+    {
+        Assert.Equal("(📱 the sign-in link is on the clipboard: it holds the token, so paste it only where you trust. It's localhost, so only this computer opens it; a phone needs lan or Tailscale Serve)", WebUiText.LocalCopiedNotice);
+        Assert.Equal(WebUiText.LocalCopiedNotice, WebUiText.CopiedNoticeFor(new WebUiLink("http://localhost:8765/signin?t=x"), WebUiAudience.Local));
+        Assert.Equal(WebUiText.CopiedNotice, WebUiText.CopiedNoticeFor(new WebUiLink("http://192.168.1.217:8765/signin?t=x"), WebUiAudience.LocalAreaNetwork));
+        Assert.Equal(WebUiText.CopiedNotice, WebUiText.CopiedNoticeFor(new WebUiLink(ServeAddress + "/signin?t=x", WebUiLinkKind.Https), WebUiAudience.Local));
+        Assert.Equal("Double-click the link to open it on this PC; c copies it.", WebUiText.LinkOnlyOpenHint);
     }
 }

@@ -192,7 +192,7 @@ Pick one and the app walks you through it and switches that server on; Esc skips
 | `/tools` | Chooses what the model may do: files, web, shell and more. |
 | `/cwd` | Changes the working directory, the folder the model works in. |
 | `/plan <requirement>` | Plans a change with read-only tools; nothing changes until you approve. |
-| `/webui` | Puts the chat on your phone: turn the Web UI on and scan its QR code. |
+| `/webui` | Puts the chat on your phone: turn the Web UI on, open it to your phone (`lan` or Tailscale Serve) and scan its QR code. |
 
 Type `/` to list every command; [COMMANDS.md](docs/COMMANDS.md) has them all, [COMMANDLINE.md](docs/COMMANDLINE.md) the start-up options.
 

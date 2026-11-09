@@ -110,6 +110,9 @@ public static class AboutText
     /// <summary>The source of one version: its tag.</summary>
     public static string SourceUrl(string version) => RepositoryUrl + "/tree/v" + version;
 
+    /// <summary>The folder a file of one version is linked under (2026-11-08, the Web UI's About page links both licenses): its tag's blob.</summary>
+    public static string SourceFileUrl(string version) => RepositoryUrl + "/blob/v" + version + "/";
+
     /// <summary>The About tab's row labels, in order.</summary>
     public const string RuntimeLabel = "Runtime";
     public const string OsLabel = "OS";

@@ -166,6 +166,9 @@ public class AboutTextTests
         Assert.Equal("NeonSidekick 0.2.0", AboutText.TitleLine(Facts));
         Assert.Equal("© 2026 Christopher Nelson · GNU GPL v3 (the License tab)", AboutText.CopyrightLine);
         Assert.Equal("NeonSidekick on GitHub · https://github.com/M0j0Risin/NeonSidekick", AboutText.RepositoryLine);   // 2026-10-04
+        // The Web UI's About page (2026-11-08): a version's tag, and a file at that tag for the two licenses.
+        Assert.Equal("https://github.com/M0j0Risin/NeonSidekick/tree/v1.2.3", AboutText.SourceUrl("1.2.3"));
+        Assert.Equal("https://github.com/M0j0Risin/NeonSidekick/blob/v1.2.3/", AboutText.SourceFileUrl("1.2.3"));
     }
 
     [Fact]

@@ -67,22 +67,20 @@ public sealed partial class WebUiPageTests : IAsyncLifetime
 
     // ── Chat ────────────────────────────────────────────────────────────────
 
+    /// <summary>The About page (2026-11-08): its menu button names it, its source link is this version's tag, and a phone's width never scrolls sideways.</summary>
     [WindowsFact]
-    public async Task TheSourceLink_OpensOnlyFromItsWords()
+    public async Task TheAboutPage_LinksToThisVersionsSource()
     {
         _backend.Snap = new WebSnapshot([], [], State(), WebUiText.Words, null, null);
-        if (await SignedInAsync("/") is not { } page)
+        if (await SignedInAsync("/about", width: 360) is not { } page)
         {
             return;
         }
 
-        string rows = await page.TextAsync("(() => { const a = document.querySelector('.source-link'), m = a.closest('main'), r = a.getBoundingClientRect(), p = m.getBoundingClientRect(); return JSON.stringify({ viewport: innerWidth, link: Math.round(r.width), main: Math.round(p.width), centered: Math.abs((r.left + r.right) / 2 - (p.left + p.right) / 2) <= 1, room: a.offsetHeight + parseFloat(getComputedStyle(a).marginTop), sideways: document.documentElement.scrollWidth > innerWidth, href: a.href }); })()");
-        using var parsed = System.Text.Json.JsonDocument.Parse(rows);
-        var root = parsed.RootElement;
-        Assert.True(root.GetProperty("link").GetInt32() * 2 < root.GetProperty("main").GetInt32(), rows);
-        Assert.True(root.GetProperty("centered").GetBoolean(), rows);
-        Assert.False(root.GetProperty("sideways").GetBoolean(), rows);
-        Assert.Contains("/tree/v", root.GetProperty("href").GetString(), StringComparison.Ordinal);
+        await page.WaitAsync("document.querySelector('header.top nav').classList.contains('ready')", "the nav");
+        Assert.Equal("ℹ️ About ▾", await page.TextAsync("document.querySelector('.tab-menu-button').textContent"));
+        Assert.Contains("/tree/v", await page.TextAsync("[...document.querySelectorAll('.about a')].find(a => a.textContent === 'Source code').href"), StringComparison.Ordinal);
+        Assert.False((await page.EvalAsync("document.documentElement.scrollWidth > innerWidth")).GetBoolean());
     }
 
     [WindowsFact]

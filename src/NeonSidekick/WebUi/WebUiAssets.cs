@@ -32,19 +32,25 @@ public static class WebUiAssets
     /// <summary>The player both video pages share (2026-10-16, <c>assets\youtube\player-core.js</c>, one embed read by both).</summary>
     public const string YouTubeCore = "youtube-core.js";
 
+    /// <summary>
+    /// The About page (2026-11-08, the user's ask): the version, the licenses and this version's source, behind ☰, served whatever the tabs.
+    /// The source link sat at the bottom of every page from 2026-11-06 until then.
+    /// </summary>
+    public const string AboutPage = "about.html";
+
     /// <summary>The page <c>/</c> shows with every tab off (later on 2026-10-15): it names the settings and goes to <c>/</c> once one is on.</summary>
     public const string NoTabsPage = "notabs.html";
 
     /// <summary>Every file, by the name it is served as (the path less its slash).</summary>
     public static readonly IReadOnlyList<string> Names =
-        [ChatPage, ShoppingPage, HomePage, SignInPage, NoTabsPage, YouTubePage, "app.css", "common.js", "chat.js", "shopping.js", "home.js", "signin.js", "notabs.js", "youtube.js", YouTubeCore, "favicon.svg", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
+        [ChatPage, ShoppingPage, HomePage, SignInPage, NoTabsPage, YouTubePage, AboutPage, "app.css", "common.js", "chat.js", "shopping.js", "home.js", "signin.js", "notabs.js", "youtube.js", "about.js", YouTubeCore, "favicon.svg", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 
     /// <summary>
     /// The files served without the cookie (a signed-out page loads them too): the style, the scripts, the icon. Never a page or an API.
     /// <c>common.js</c> since 2026-10-15, the pages' shared helpers.
     /// </summary>
     public static bool IsStatic(string name) =>
-        name is "app.css" or "common.js" or "chat.js" or "shopping.js" or "home.js" or "signin.js" or "notabs.js" or "youtube.js" or YouTubeCore or "favicon.svg" or "icon-192.png" or "icon-512.png" or "apple-touch-icon.png";
+        name is "app.css" or "common.js" or "chat.js" or "shopping.js" or "home.js" or "signin.js" or "notabs.js" or "youtube.js" or "about.js" or YouTubeCore or "favicon.svg" or "icon-192.png" or "icon-512.png" or "apple-touch-icon.png";
 
     private static readonly Lazy<IReadOnlyDictionary<string, WebAsset>> s_assets = new(Load);
 
@@ -86,17 +92,23 @@ public static class WebUiAssets
         return copy.ToArray();
     }
 
+    /// <summary>
+    /// The About page's version and links, stamped as the file is read (2026-11-08): <c>{{version}}</c>, <c>{{source}}</c> (the version's tag)
+    /// and <c>{{source-file}}</c> (a file at that tag, for the two licenses). No other page names the version, so a signed-out visitor gets no hint
+    /// of it. The ETag is taken after the stamp.
+    /// </summary>
     private static byte[] WithThisVersionsSource(string name, byte[] bytes)
     {
-        if (name == SignInPage || !name.EndsWith(".html", StringComparison.Ordinal))
+        if (name != AboutPage)
         {
             return bytes;
         }
 
-        return Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(bytes).Replace(
-            "class=\"source-link\" href=\"" + AboutText.RepositoryUrl + "\"",
-            "class=\"source-link\" href=\"" + AboutText.SourceUrl(SidekickApp.Version) + "\"",
-            StringComparison.Ordinal));
+        string version = SidekickApp.Version;
+        return Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(bytes)
+            .Replace("{{version}}", version, StringComparison.Ordinal)
+            .Replace("{{source}}", AboutText.SourceUrl(version), StringComparison.Ordinal)
+            .Replace("{{source-file}}", AboutText.SourceFileUrl(version), StringComparison.Ordinal));
     }
 
     private static IReadOnlyDictionary<string, WebAsset> Load()

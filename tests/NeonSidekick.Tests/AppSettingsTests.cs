@@ -189,7 +189,7 @@ public class AppSettingsTests : IDisposable
         McpServersDisabled = ["docker"],
         WebUi = true,
         WebUiPort = 9100,
-        WebUiReach = "local",
+        WebUiReach = "lan",   // off its default: local since 2026-11-08
         WebUiCommands = true,
         WebUiConnectionDetails = true,
         WebUiHomeControls = true,

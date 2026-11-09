@@ -970,7 +970,7 @@ internal sealed partial class ChatScreen
                 }
 
                 bool copied = _copy(link.Url);
-                sink.Notice(!copied ? WebUiText.CopyFailedError : copyOnce && link.Kind == WebUiLinkKind.Https ? WebUiText.OnceCopiedNotice : WebUiText.CopiedNotice);
+                sink.Notice(!copied ? WebUiText.CopyFailedError : copyOnce && link.Kind == WebUiLinkKind.Https ? WebUiText.OnceCopiedNotice : WebUiText.CopiedNoticeFor(link, copyAudience));
                 // Funnel's safety fact after the HTTPS link (2026-11-01, the review's P3-1), as its tab says it.
                 if (copied && link.Kind == WebUiLinkKind.Https && WebUiText.FunnelNoteFor(copyHttps, copyAudience) is { } funnel)
                 {
@@ -1222,12 +1222,16 @@ internal sealed partial class ChatScreen
                 // headed by its note (later that day, the user's ask).
                 string status = string.Join("\n", statusLines);
                 // A double-click on the link opens it on this PC (later on 2026-10-15, the user's ask), as /webui browser does, at that tab's host;
-                // on the QR code too since 2026-10-20 (OpenLinkLine).
-                tabs = [.. links.Select(link => new InfoTab(WebUiText.LinkTabTitle(link), () => new Spectre.Console.Rows(
-                    new Spectre.Console.Text(WebUiText.LinkTabText(status, link.Kind, https, audience)),
-                    QrOrNote(link.Url),
-                    new Spectre.Console.Text("\n" + link.Url + "\n\n" + (once && link.Kind == WebUiLinkKind.Https ? WebUiText.OnceLinkNote : WebUiText.TokenWarning)
-                        + "\n" + WebUiText.LinkOpenHint)))
+                // on the QR code too since 2026-10-20 (OpenLinkLine). The localhost tab has no QR code (2026-11-08, the user's call): a phone that
+                // scans it opens its own localhost.
+                tabs = [.. links.Select(link => new InfoTab(WebUiText.LinkTabTitle(link), () =>
+                {
+                    bool qr = !WebUiText.IsLocalhostTab(link, audience);
+                    var text = new Spectre.Console.Text(WebUiText.LinkTabText(status, link.Kind, https, audience));
+                    var rest = new Spectre.Console.Text("\n" + link.Url + "\n\n" + (once && link.Kind == WebUiLinkKind.Https ? WebUiText.OnceLinkNote : WebUiText.TokenWarning)
+                        + "\n" + (qr ? WebUiText.LinkOpenHint : WebUiText.LinkOnlyOpenHint));
+                    return qr ? new Spectre.Console.Rows(text, QrOrNote(link.Url), rest) : new Spectre.Console.Rows(text, rest);
+                })
                 {
                     LineDoubleClicked = text => OpenLinkLine(link.Url, text, sink),
                 })];
@@ -1255,7 +1259,7 @@ internal sealed partial class ChatScreen
                     {
                         bool copyOnce = once && links[shownTab].Kind == WebUiLinkKind.Https;
                         string? url = copyOnce ? WebUiHttpsLink(https, audience, fresh: true) : links[shownTab].Url;
-                        sink.Notice(url is not null && _copy(url) ? copyOnce ? WebUiText.OnceCopiedNotice : WebUiText.CopiedNotice : WebUiText.CopyFailedError);
+                        sink.Notice(url is not null && _copy(url) ? copyOnce ? WebUiText.OnceCopiedNotice : WebUiText.CopiedNoticeFor(links[shownTab], audience) : WebUiText.CopyFailedError);
                     }
 
                     continue;

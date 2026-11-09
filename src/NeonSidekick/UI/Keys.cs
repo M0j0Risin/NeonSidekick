@@ -148,7 +148,7 @@ public static class Keys
     /// the line's paste (Ctrl+V or Alt+V, one of the two). Later on 2026-10-02 (the user's ask) each closes its window when it
     /// is open (<c>ChatScreen.CloseByChord</c>); the typed command still opens it or brings it forward.
     /// On 2026-10-03 (the user's ask) <c>/sys</c> moved to plain Ctrl+Y and Ctrl+Alt+Y went: its EM counts as no character (plain Ctrl+Y freed
-    /// on 2026-11-07, below).
+    /// on 2026-11-07, and <c>/sessions</c> there since 2026-11-08, below).
     /// Later on 2026-10-03 (the user's ask) Ctrl+Alt+E is <c>/sessions</c>, free since <c>/perfbar</c> left it for Ctrl+F: its ENQ
     /// counts as no character, and an AltGr+E that types € is still €. Under a reply it opens the list over the reply, as the
     /// typed line does.
@@ -188,7 +188,9 @@ public static class Keys
     /// SO, DC4, ETB, DLE, EM and SUB count as no character, and an AltGr key that types one (ż on AltGr+Z, € on AltGr+E) is still that
     /// character. A freed chord does nothing and says nothing (the user's pick): the editor types no control character.
     /// On 2026-11-07 (the user's pick) plain Ctrl+Y went with the bare <c>/sys</c>, whose pane's tabs moved to <c>/usage</c> (Ctrl+U): its EM
-    /// counts as no character, and the chord does nothing.
+    /// counts as no character, and the chord did nothing until the next day.
+    /// On 2026-11-08 (the user's pick) <c>/sessions</c> moved to plain Ctrl+Y and Ctrl+Alt+Y went: the EM counts as no character on both, so
+    /// Ctrl+Alt+Y does nothing and says nothing, as every freed chord does. Under a reply it opens the list over the reply, as before.
     /// </summary>
     public static string? ShortcutLine(ConsoleKeyInfo key)
     {
@@ -221,7 +223,7 @@ public static class Keys
                 (ConsoleKey.T, '\0' or '\x14') => "/tools",   // 2026-10-18, the user's pick (Ctrl+Alt+T until then; /toolbar before)
                 (ConsoleKey.U, '\0' or '\x15') => "/usage",
                 (ConsoleKey.W, '\0' or '\x17') => "/webui browser",   // 2026-10-18, the user's pick (/homebar until then)
-                // Ctrl+Y was /sys until 2026-11-07 (the user's pick): freed with the bare command.
+                (ConsoleKey.Y, '\0' or '\x19') => "/sessions",   // 2026-11-08, the user's pick (Ctrl+Alt+Y until then; /sys until 2026-11-07)
                 (ConsoleKey.Z, '\0' or '\x1a') => "/theme",
                 (ConsoleKey.Oem2, '\0' or '\x1f') => "/settings",
                 (ConsoleKey.OemPeriod, '\0') => "/terminal",
@@ -252,7 +254,7 @@ public static class Keys
             (ConsoleKey.U, '\0' or '\x15') => "/comfy view",
             (ConsoleKey.V, '\0' or '\x16') => "/camera live",
             (ConsoleKey.W, '\0' or '\x17') => "/webui",   // 2026-10-18, the user's pick (/prompts until then)
-            (ConsoleKey.Y, '\0' or '\x19') => "/sessions",   // 2026-10-18, the user's pick (Ctrl+Alt+E until then)
+            // Ctrl+Alt+Y was /sessions from 2026-10-18 until 2026-11-08 (the user's pick): freed for plain Ctrl+Y.
             (ConsoleKey.Z, '\0' or '\x1a') => "/splash",   // 2026-10-18, the user's pick (Ctrl+Alt+P until then)
             (ConsoleKey.A, '\0' or '\x01') when OperatingSystem.IsMacOS() => "/memory",
             _ => null,

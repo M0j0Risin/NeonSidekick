@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>About · NeonSidekick</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/theme.css" id="theme-css">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<script src="/common.js" defer></script>
+<script src="/about.js" defer></script>
+</head>
+<body data-tab="about">
+<header class="top">
+  <div class="who"><span id="profile">About</span></div>
+  <nav><a href="/" id="chat-link">Chat</a><div class="tab-menu"><button type="button" class="tab-menu-button" aria-haspopup="menu" aria-expanded="false" aria-controls="tab-menu-list">☰</button><div class="tab-menu-list hidden" role="menu" id="tab-menu-list"><a href="/home" role="menuitem">🏠 Home</a><a href="/shopping" role="menuitem">🛒 Shopping</a><a href="/youtube" role="menuitem" class="hidden">▶️ YouTube</a><a href="/about" role="menuitem" class="here">ℹ️ About</a></div></div></nav>
+  <span class="dot" id="dot" title="connection"></span>
+</header>
+<main>
+  <div class="about">
+    <h1>NeonSidekick {{version}}</h1>
+    <p>© 2026 Christopher Nelson · GNU GPL v3</p>
+    <p><a href="{{source}}" target="_blank" rel="noopener noreferrer">Source code</a> for this version on GitHub</p>
+    <p>The built-in metasearch, SearXNG.Net, is under the AGPL-3.0-or-later.</p>
+    <p><a href="{{source-file}}LICENSE" target="_blank" rel="noopener noreferrer">GNU GPL v3</a> · <a href="{{source-file}}LICENSE-AGPL" target="_blank" rel="noopener noreferrer">GNU AGPL v3</a></p>
+  </div>
+</main>
+</body>
+</html>

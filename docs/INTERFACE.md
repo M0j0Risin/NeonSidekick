@@ -242,6 +242,7 @@ Each runs its command as if typed and keeps your draft. The last column says wha
 | Ctrl+T | `/tools` | over it |
 | Ctrl+U | `/usage` | over it |
 | Ctrl+W | `/webui browser` (the [Web UI](#web-ui) on the app's computer) | at once |
+| Ctrl+Y | `/sessions` | over it |
 | Ctrl+Z | `/theme` | waits |
 | Ctrl+Alt+B | `/botchat --resume` | ends a running botchat at once, else waits |
 | Ctrl+Alt+C | `/clear` | stops it first |
@@ -258,7 +259,6 @@ Each runs its command as if typed and keeps your draft. The last column says wha
 | Ctrl+Alt+V | `/camera live` (the [camera window](#the-camera-window)) | at once |
 | Ctrl+Alt+W | `/webui` (the Web UI pane) | over it |
 | Ctrl+Alt+X ×2 | unloads the embedded model | at once |
-| Ctrl+Alt+Y | `/sessions` | over it |
 | Ctrl+Alt+Z | `/splash` | stops it first |
 | F9 | `/camera snap`, attached to the line | waits |
 | F10 | `/screen`, attached to the line | waits |
@@ -562,13 +562,15 @@ A browser front end for the loaded profile, on your phone or another computer: t
 
 Turn it on with `/webui on` or *Web UI* (`/settings` › Client › Web UI). Not headless.
 
-Each page links to this version's source code on GitHub, and the sign-in page to the repository's home. A build between releases may link to a tag that doesn't exist yet, or to an older one without its changes.
+Out of the box only this computer reaches it. For a phone, set *Web UI reach* to `lan` (`l` in the pane), or keep `local` and turn on [HTTPS through Tailscale Serve](#https-through-tailscale-serve).
+
+☰ › ℹ️ About shows the version, its licenses and a link to this version's source code on GitHub. A build between releases may link to a tag that doesn't exist yet, or to an older one without its changes.
 
 ### Signing in
 
-* **The pane:** `/webui` (Ctrl+Alt+W, or the toolbar's 📱) shows a tab per address of the computer running NeonSidekick, each with a QR code and its sign-in link. Scan the code with the phone's camera, or open the link in a browser on the same network.
+* **The pane:** `/webui` (Ctrl+Alt+W, or the toolbar's 📱) shows a tab per address of the computer running NeonSidekick, each with its sign-in link, and a QR code wherever a phone can reach it. Scan the code with the phone's camera, or open the link in a browser on the same network.
 * **The addresses:** the HTTPS one first when there is one ([Tailscale Serve](#https-through-tailscale-serve)), then Tailscale's ([Away from home](#away-from-home)), then the home network's adapters, fastest first (`localhost` under `local`).
-* **HTTPS only:** set *Web UI reach* to `local`; the tabs are then the HTTPS one and `localhost`.
+* **HTTPS only:** keep *Web UI reach* at `local` (the default); the tabs are then the HTTPS one and `localhost`.
 * Other VPN tunnels (and WSL's virtual switch on Windows) aren't listed, but a browser through them connects with the address typed.
 * **The link** signs the browser in and leaves the address bar at once; the browser keeps a cookie for a year.
 * **The token:** each profile has its own, kept encrypted. `/webui reset`, or a new port, makes a new one and signs every browser out.
@@ -599,7 +601,7 @@ Each page links to this version's source code on GitHub, and the sign-in page to
 The page is plain HTTP. Tailscale Serve puts HTTPS in front of it with a real certificate, reachable only on your tailnet.
 
 * **Once, in Tailscale's admin console:** turn on MagicDNS and HTTPS certificates (DNS page).
-* **On the app's computer:** run `tailscale serve --bg <port>`, where `<port>` is *Web UI port*. `tailscale serve status` shows the address, `https://<computer>.<tailnet>.ts.net`. For HTTPS alone, set *Web UI reach* to `local` ([Signing in](#signing-in)).
+* **On the app's computer:** run `tailscale serve --bg <port>`, where `<port>` is *Web UI port*. `tailscale serve status` shows the address, `https://<computer>.<tailnet>.ts.net`. For HTTPS alone, keep *Web UI reach* at `local`, the default ([Signing in](#signing-in)).
 * **Signing in:** `/webui` then opens on an **HTTPS** tab with that address's QR code and link. Windows finds the address itself; on a Mac, type it into *Web UI HTTPS address*.
 * **Use `tailscale serve`, not `tailscale funnel`:** under `local`, Funnel puts the page on the internet with only the token in the way; `lan` refuses Funnel's requests. The HTTPS tab says which; a Funnel address gets only one-time links, each good once for a minute.
 * **Another port:** Serve doesn't follow a new *Web UI port*: run `tailscale serve --bg <port>` again. A second profile takes its own HTTPS port, e.g. `tailscale serve --bg --https=8443 8766`.
@@ -609,7 +611,7 @@ The page is plain HTTP. Tailscale Serve puts HTTPS in front of it with a real ce
 ### The tabs
 
 * **The tabs:** Chat, Home, Shopping and YouTube, each shown only while its setting is on: *Web UI chat controls* (on by default), *Web UI home controls*, *Web UI shopping controls* and *Web UI YouTube controls* (off).
-* **The ☰ menu:** Chat is a link in the header; the other tabs that are on sit behind ☰, which names the open one (🏠 Home ▾).
+* **The ☰ menu:** Chat is a link in the header; the other tabs that are on sit behind ☰ with ℹ️ About last, which names the open one (🏠 Home ▾).
 * **With Chat off** the page opens on Home, else Shopping, else YouTube, and the phone gets no transcript, message line or questions (the PC asks as always).
 * With none on, the page names the four settings and opens a tab once one is on. A tab turned off while open moves to one that's on.
 
@@ -724,7 +726,7 @@ With *Web UI commands* on (off by default), the page sends slash commands too. T
 
 * **A Ralph loop:** its confirm, checkpoint and by-hand check ask on both sides; the status row shows 🔁, and Stop ends the loop.
 * **`/loop`** runs as at the PC (a looped `/read` is refused).
-* **Pointers:** bare `/shopping` points at the Shopping tab; bare `/youtube` and `/youtube list` at the YouTube tab's saved videos (or its setting while the tab is off).
+* **Pointers:** bare `/shopping` points at the Shopping tab; bare `/youtube` and `/youtube list` at the YouTube tab's saved videos (or its setting while the tab is off). Bare `/about` points at ☰ › About.
 * **What differs:** `/ha` and `/docker` ask before a change (at the PC they don't), though `/ha` runs a read or a *Home Assistant safe services* call unasked. A bare `/docker` lists the containers.
 * `/msgclear` asks on both sides at once. `/rewind` puts the text on the page's draft; its pictures, PDFs and pasted blocks come back on the PC's line only.
 * **Refused when it runs:** `/model <id>` and `/reasoning`, when connecting would mean looking for a server or an embedded model not installed (those pickers and that download are the PC's); `/tts on` and `/stt on` when their voice models aren't downloaded.

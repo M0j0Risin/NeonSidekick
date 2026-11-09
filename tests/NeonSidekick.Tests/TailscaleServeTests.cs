@@ -521,6 +521,20 @@ public sealed class TailscaleServeTests
         Assert.Equal("Web UI HTTPS address isn't auto, off or an https address: detecting instead.", WebUiText.HttpsSettingBrokenHint);
     }
 
+    /// <summary>
+    /// Under <c>local</c> with no HTTPS address (2026-11-08, the default since that day) the line after the reach says how a phone gets in;
+    /// not while off, under <c>lan</c>, or with an HTTPS address (the reach line names it then).
+    /// </summary>
+    [Fact]
+    public void TheStatusLines_UnderLocalAlone_SayHowAPhoneGetsIn()
+    {
+        Assert.Equal("Only this computer can open it. For a phone, switch to lan (l in /webui) or keep local and turn on Tailscale Serve.", WebUiText.LocalOnlyNote);
+        Assert.Equal(WebUiText.LocalOnlyNote, WebUiText.StatusLines(true, true, 8765, WebUiAudience.Local)[3]);
+        Assert.DoesNotContain(WebUiText.LocalOnlyNote, WebUiText.StatusLines(false, false, 8765, WebUiAudience.Local));
+        Assert.DoesNotContain(WebUiText.LocalOnlyNote, WebUiText.StatusLines(true, true, 8765, WebUiAudience.LocalAreaNetwork));
+        Assert.DoesNotContain(WebUiText.LocalOnlyNote, WebUiText.StatusLines(true, true, 8765, WebUiAudience.Local, new WebUiHttps("https://h.ts.net", true, false)));
+    }
+
     [Fact]
     public void WithoutAPane_TheHttpsLinkIsMarked_AndTheLeadSaysWhereEachWorks()
     {

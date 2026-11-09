@@ -182,7 +182,7 @@ public partial class ChatScreenTests
 
         Assert.Equal(1, copiedDuringTheReply);   // before the reply's last part
         Assert.Contains("/signin", Assert.Single(_copied), StringComparison.Ordinal);
-        Assert.Contains(WebUiText.CopiedNotice, output);
+        Assert.Contains(WebUiText.LocalCopiedNotice, output);   // localhost under local (2026-11-08): only this computer opens it
     }
 
     [Fact]
