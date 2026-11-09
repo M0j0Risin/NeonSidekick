@@ -192,6 +192,11 @@ public sealed class HeadlessPage : IAsyncDisposable
         {
             // gone already
         }
+        catch (AggregateException e) when (e.InnerExceptions.All(inner => inner is InvalidOperationException or System.ComponentModel.Win32Exception))
+        {
+            // 2026-11-09, a CI-like slice before v0.5.7: the tree's kill was denied for one child already on its way out ("Not all processes
+            // in process tree could be terminated. (Access is denied.)"), failing a test that had passed, in its teardown.
+        }
 
         _process.Dispose();
         try

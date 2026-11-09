@@ -52,7 +52,12 @@ public sealed partial class WebUiYouTubePageTests : IAsyncLifetime
     private static WebState State(bool youTube = true, string? watch = null) =>
         new("p", "", "", "m", false, false, false, "", [], null, "1", "tag", "", YouTubeTab: youTube, Watch: watch);
 
-    private async Task<HeadlessPage?> SignedInAsync(string path)
+    /// <summary>
+    /// Signs in at a phone's width and opens <paramref name="path"/>. With <paramref name="waitThere"/> off it only starts going there, for a page
+    /// that leaves for another tab as it loads (2026-11-09, the v0.5.7 release run: <c>GoAsync</c> to /about under a watch pulse waited for an
+    /// /about it never stayed at, the YouTube tab already showing); the caller waits on where it ends up, as <c>HeadlessPage.NavigateAsync</c> says.
+    /// </summary>
+    private async Task<HeadlessPage?> SignedInAsync(string path, bool waitThere = true)
     {
         if (_page is null)
         {
@@ -61,7 +66,15 @@ public sealed partial class WebUiYouTubePageTests : IAsyncLifetime
 
         await _page.ViewportAsync(390);
         await _page.SetCookieAsync(Root, WebUiAuth.CookieName(_host.Port), _token);
-        await _page.GoAsync(Root + path.TrimStart('/'));
+        if (waitThere)
+        {
+            await _page.GoAsync(Root + path.TrimStart('/'));
+        }
+        else
+        {
+            await _page.NavigateAsync(Root + path.TrimStart('/'));
+        }
+
         return _page;
     }
 
@@ -132,7 +145,7 @@ public sealed partial class WebUiYouTubePageTests : IAsyncLifetime
     public async Task Watch_APulseTakesTheAboutPageThere()
     {
         _backend.PulseNow = Pulse(watch: WebUiText.WatchBanner);
-        if (await SignedInAsync("/about") is not { } page)
+        if (await SignedInAsync("/about", waitThere: false) is not { } page)
         {
             return;
         }
