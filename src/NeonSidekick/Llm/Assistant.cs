@@ -1032,6 +1032,19 @@ public sealed class Assistant
         public bool Tripped(long tokens) => Acts && tokens > 0 && tokens * 100L >= (long)WindowTokens * Percent;
 
         /// <summary>
+        /// The ceiling's share (2026-11-09): halfway from <see cref="Percent"/> to the whole window, <c>(Percent + 100) / 2</c>, so 95% at
+        /// the default 90. Past it a second mid-turn summary may run without waiting for a request under the share, and the newest round's
+        /// results may be cut to fit (<see cref="ConversationCompactor.CutLatestResults"/>).
+        /// </summary>
+        public int CeilingPercent => (Percent + 100) / 2;
+
+        /// <summary>
+        /// Whether <paramref name="tokens"/> are at or past <see cref="CeilingPercent"/> (2026-11-09). False when the guard doesn't act
+        /// (<see cref="Acts"/>): a share of 0 would otherwise put the ceiling at 50%.
+        /// </summary>
+        public bool PastCeiling(long tokens) => Acts && tokens > 0 && tokens * 100L >= (long)WindowTokens * CeilingPercent;
+
+        /// <summary>
         /// The least room the guard leaves for the next reply (2026-10-18, a gap chain that ran out of context mid-way through
         /// <c>present_plan</c>): the plan file's size in tokens while planning (<c>ChatScreen.PlanReplyFloor</c>), so a reopened
         /// plan's first presentation gets room before any big reply has been seen. Set only by the main chat's turns, through
@@ -1151,6 +1164,22 @@ public sealed class Assistant
     /// </summary>
     public static string TurnPrunedNotice(int percent, int pruned, int arguments = 0) =>
         "(" + PruneGlyph + "context at " + percent.ToString(CultureInfo.InvariantCulture) + "%: pruned " + PrunedWords(pruned, arguments) + " from this turn)";
+
+    /// <summary>
+    /// The transcript line after the guard cut the newest round to fit (2026-11-09): <c>(✂️ context at 97%: cut 2 tool results to fit,
+    /// 312.0k → 61.0k characters)</c>, <c>cut 1 tool result and 3 pictures to fit, …</c> when the carrier's pictures went too, and
+    /// <c>cut 2 pictures to fit</c> with no figures when only they did. One line a round, however many results; the log has each.
+    /// </summary>
+    public static string TurnCutNotice(int percent, IReadOnlyList<ConversationCompactor.CutEntry> cuts, int pictures)
+    {
+        ArgumentNullException.ThrowIfNull(cuts);
+        string resultWords = cuts.Count.ToString(CultureInfo.InvariantCulture) + (cuts.Count == 1 ? " tool result" : " tool results");
+        string pictureWords = pictures.ToString(CultureInfo.InvariantCulture) + (pictures == 1 ? " picture" : " pictures");
+        string what = pictures == 0 ? resultWords : cuts.Count == 0 ? pictureWords : resultWords + " and " + pictureWords;
+        string figures = cuts.Count == 0 ? ""
+            : ", " + App.UsageText.CompactNumber(cuts.Sum(c => (long)c.Before)) + " → " + App.UsageText.CompactNumber(cuts.Sum(c => (long)c.After)) + " characters";
+        return "(" + PruneGlyph + "context at " + percent.ToString(CultureInfo.InvariantCulture) + "%: cut " + what + " to fit" + figures + ")";
+    }
 
     /// <summary><c>23 tool results</c>, <c>3 tool results and 2 call arguments</c>, <c>2 call arguments</c> (2026-10-17): what a prune stubbed, for its notices.</summary>
     public static string PrunedWords(int results, int arguments)
@@ -1305,6 +1334,21 @@ public sealed class Assistant
     internal long SentEstimate(IReadOnlyList<ChatMessage> messages) =>
         ConversationCompactor.Estimate(messages, ConversationCompactor.ThinkingFrom(messages, EarlierThinkingSent)).Total;
 
+    /// <summary>
+    /// The mid-turn guard's estimate of the round just appended (2026-11-09): the results' characters at
+    /// <see cref="ConversationCompactor.GuardCharsPerToken"/>, plus each new picture by its size (<see cref="ConversationCompactor.PictureTokensFor"/>).
+    /// </summary>
+    internal static long RoundTokens(IReadOnlyList<FunctionResultContent> results, IReadOnlyList<ImageAttachment> pictures)
+    {
+        long tokens = ConversationCompactor.Estimate([new ChatMessage(ChatRole.Tool, [.. results])], 0).CharsTokens(ConversationCompactor.GuardCharsPerToken);
+        foreach (var picture in pictures)
+        {
+            tokens += ConversationCompactor.PictureTokensFor(picture.Width, picture.Height);
+        }
+
+        return tokens;
+    }
+
     /// <summary>The stable part of System.ClientModel's network-timeout message, the one the SDK's <c>NetworkTimeout</c> (the request timeout) throws with.</summary>
     public const string NetworkTimeoutMarker = "exceeded the configured timeout";
 
@@ -1431,6 +1475,36 @@ public sealed class Assistant
 
         return false;
     }
+
+    /// <summary>
+    /// The context overflow <paramref name="ex"/> reports (2026-11-09): a server's "the request is too long", with the figures it gave, or
+    /// null. Walks the chain as <see cref="LooksLikeOversizedRequest"/> does; the reading is <see cref="ContextOverflowMatch.From"/>'s.
+    /// </summary>
+    public static ContextOverflow? LooksLikeContextOverflow(Exception ex) => ContextOverflowMatch.From(ex);
+
+    /// <summary>Whether an error body or message reads as a context overflow (2026-11-09, <see cref="ContextOverflowMatch.IsOverflowText"/>).</summary>
+    public static bool IsContextOverflowText(string text) => ContextOverflowMatch.IsOverflowText(text);
+
+    /// <summary>
+    /// The <c>--log</c> line for a server's too-long answer the loop recovers from (2026-11-09): what matched, the figures (or "not given"),
+    /// the guard's window and share, and the history's own estimate, so a report can tell a long history from a fixed part (the system
+    /// prompt and the tools) that alone is too big.
+    /// </summary>
+    internal static string OverflowLogLine(ContextOverflow overflow, TurnContextGuard guard, long historyEstimate)
+    {
+        static string Given(long? value) => value is { } v ? v.ToString(CultureInfo.InvariantCulture) : "not given";
+        return string.Create(CultureInfo.InvariantCulture,
+            $"The server said the request was too long ({overflow.Matched}): sent {Given(overflow.Sent)}, limit {Given(overflow.Limit)}, reply {Given(overflow.Output)}; the guard's window is {guard.WindowTokens} at {guard.Percent}%, the history's estimate {historyEstimate} tokens.");
+    }
+
+    /// <summary>
+    /// The notice before a round is sent again after the server said the request was too long (2026-11-09): <c>(✂️ the server said the
+    /// request was too long (41,200 of 32,768 tokens); shrunk and sent again)</c>, the figures only when both were parsed.
+    /// </summary>
+    public static string OverflowRetryNotice(long? sent, long? limit) =>
+        "(" + PruneGlyph + "the server said the request was too long"
+        + (sent is { } s && limit is { } l ? string.Create(CultureInfo.InvariantCulture, $" ({s:N0} of {l:N0} tokens)") : "")
+        + "; shrunk and sent again)";
 
     /// <summary>
     /// The notice before the one retry of a request the server dropped as it was sent: <c>The server dropped the request
@@ -1783,10 +1857,11 @@ public sealed class Assistant
         // The last request that reported usage, for the guard and for a timeout's context share.
         TokenUsage? lastUsage = null;
 
-        // Whether the guard may summarise (ToolCompactMode.Compact, 2026-09-28): once per climb. A summary disarms
-        // it; a request that reports usage under the share arms it again, so a very long turn can compact more
-        // than once but a turn hovering over the share does not pay for a summariser request every iteration.
-        bool compactArmed = true;
+        // The mid-turn guard's state across rounds (2026-11-09, GuardState): whether it may summarise (Armed, ToolCompactMode.Compact,
+        // 2026-09-28: once per climb; a summary disarms it, a request that reports usage under the share arms it again, so a very long turn
+        // can compact more than once but a turn hovering over the share does not pay for a summariser request every iteration) and where the
+        // last summary left the context (AfterSummary, for the ceiling's second summary).
+        var guardState = new GuardState();
 
         // The tools whose arguments a reply cut off at its length limit in this turn (2026-10-18): a second cut of the same one is
         // told to stop (CutOffAgainResult), so a call too big for the window or the cap does not repeat until MaxToolIterations.
@@ -1794,6 +1869,10 @@ public sealed class Assistant
 
         // Whether a request the server dropped as it was sent has been tried again with fewer pictures (2026-10-03): once a turn.
         bool picturesRetried = false;
+
+        // Whether a request the server refused as too long has been shrunk and sent again since the last request that succeeded
+        // (2026-11-09): a long turn can recover more than once, but never loops on one round.
+        bool overflowRetried = false;
 
         for (int iteration = 1; iteration <= MaxToolIterations; iteration++)
         {
@@ -2020,6 +2099,47 @@ public sealed class Assistant
                     hinted = true;
                 }
 
+                // The server said the request was too long (2026-11-09): with no bytes back, a guard that acts and a mode that shrinks, and no
+                // retry since the last request that succeeded, the history is shrunk (ShrinkAsync, from past the window) and the round sent again.
+                if (LooksLikeContextOverflow(failure!) is { } tooLong)
+                {
+                    var known = ContextGuard;
+                    if (tooLong.Limit is { } named && (known is null || named < known.WindowTokens))
+                    {
+                        yield return new TurnEvent.ServerLimit((int)named);
+                    }
+
+                    if (clock.First is null && partial.Length == 0 && !overflowRetried && known is { Acts: true, Mode: ToolCompactMode.Compact or ToolCompactMode.Prune }
+                        && !(tooLong is { Output: { } output } && output * 2 >= (tooLong.Limit ?? known.WindowTokens)))
+                    {
+                        // The rest of this turn is judged against the server's window when it is the smaller (the hosts set the guard afresh each turn).
+                        var shrinkGuard = tooLong.Limit is { } smaller && smaller < known.WindowTokens ? known with { WindowTokens = (int)smaller } : known;
+                        ContextGuard = shrinkGuard;
+                        DiagnosticLog.Info(Category, OverflowLogLine(tooLong, known, SentEstimate(_history.Messages)));
+                        guardState.Projected = Math.Max(tooLong.Sent ?? 0, (long)shrinkGuard.WindowTokens + 1);
+                        guardState.Reserve = ConversationCompactor.ReplyReserve(Math.Max(_history.LargestReplyTokens, known.ReplyFloor), shrinkGuard.WindowTokens) + (tooLong.Output ?? 0);
+                        guardState.Overflow = tooLong;
+                        guardState.RoundPictureTokens = null;
+                        await foreach (var shrinking in ShrinkAsync(shrinkGuard, guardState, iteration, cancellationToken).ConfigureAwait(false))
+                        {
+                            yield return shrinking;
+                        }
+
+                        if (guardState.Shrunk)
+                        {
+                            cancellationToken.ThrowIfCancellationRequested();
+                            overflowRetried = true;
+                            string retry = OverflowRetryNotice(tooLong.Sent, tooLong.Limit);
+                            DiagnosticLog.Info(Category, retry);
+                            yield return new TurnEvent.Notice(retry, IsError: false);
+                            iteration--;
+                            continue;
+                        }
+
+                        DiagnosticLog.Info(Category, "The shrink after the server's too-long answer saved nothing; the turn ends.");
+                    }
+                }
+
                 if (options.Tools is not null && LooksLikeToolRoleRejection(explained))
                 {
                     explained += ToolRoleHint;
@@ -2065,6 +2185,8 @@ public sealed class Assistant
                 yield break;
             }
 
+            // A request that succeeded allows the next overflow its retry (2026-11-09).
+            overflowRetried = false;
             var response = updates.ToChatResponse();
 
             // The reply ended at its length limit (2026-10-18): a call whose arguments then fail to parse was cut off, not malformed.
@@ -2123,7 +2245,7 @@ public sealed class Assistant
                 reserve = ContextGuard is { } g ? ConversationCompactor.ReplyReserve(Math.Max(_history.LargestReplyTokens, g.ReplyFloor), g.WindowTokens) : 0;
                 if (ContextGuard is { } measured && !measured.Tripped(usage.Total + reserve))
                 {
-                    compactArmed = true;
+                    guardState.Armed = true;
                 }
 
                 yield return new TurnEvent.Usage(usage);
@@ -2200,7 +2322,9 @@ public sealed class Assistant
             // the reported usage (the reply's own tokens among it) plus the results and pictures just appended. Since 2026-10-18 every test
             // adds the reserve, room for the next reply (a plan written whole through present_plan ran a request out of context); the
             // notices keep the plain share.
-            long projected = ContextGuard is null || usage.IsEmpty ? 0 : usage.Total + ConversationCompactor.EstimateTokens([new ChatMessage(ChatRole.Tool, [.. results])]) + (long)fetched.Count * ConversationCompactor.PictureTokens;
+            // Since 2026-11-09 the round is counted at ConversationCompactor.GuardCharsPerToken (results run nearer three characters a
+            // token than four) and each new picture by its size (PictureTokensFor), so the estimate errs toward compacting.
+            long projected = ContextGuard is null || usage.IsEmpty ? 0 : usage.Total + RoundTokens(results, fetched);
             if (ContextGuard is { } guard && projected > 0 && guard.Tripped(projected + reserve))
             {
                 int percent = guard.PercentOf(projected);
@@ -2213,66 +2337,14 @@ public sealed class Assistant
                     yield break;
                 }
 
-                // The entries count the long call arguments stubbed besides the results (2026-10-17): a prune of those alone is one too.
-                // The earlier copies of a plan go first (2026-10-18, StubSupersededPlans), and the prune reads what that left, so one
-                // Replace keeps both steps' stubs; the superseded arguments sit in the entries, so they are counted there and only once.
-                var entries = new List<ConversationCompactor.PrunedEntry>();
-                var (superseded, supersededPruned, _) = ConversationCompactor.StubSupersededPlans(_history.Messages, entries);
-                var (shrunk, pruned) = ConversationCompactor.PruneRecent(superseded, guard.ProtectSkills, entries);
-                pruned += supersededPruned;
-                int arguments = entries.Count(e => e.Argument is not null);
-                if (pruned + arguments > 0)
+                // The prunes, the summaries and the cut (2026-11-09: one pipeline, ShrinkAsync, which the overflow recovery runs too).
+                guardState.Projected = projected;
+                guardState.Reserve = reserve;
+                guardState.Overflow = null;
+                guardState.RoundPictureTokens = fetched.Count == 0 ? null : fetched.Sum(p => ConversationCompactor.PictureTokensFor(p.Width, p.Height));
+                await foreach (var shrinking in ShrinkAsync(guard, guardState, iteration, cancellationToken).ConfigureAwait(false))
                 {
-                    projected -= SentEstimate(_history.Messages) - SentEstimate(shrunk);
-                    _history.Replace(shrunk);
-                    DiagnosticLog.Info(Category, $"Context at {percent}% of {guard.WindowTokens} tokens after {iteration} tool iteration(s){room}; pruned {pruned} tool result(s) and {arguments} call argument(s) from this turn.");
-                    yield return new TurnEvent.Notice(TurnPrunedNotice(percent, pruned, arguments), IsError: false);
-                }
-                else
-                {
-                    DiagnosticLog.Debug(Category, $"Context at {percent}% of {guard.WindowTokens} tokens after {iteration} tool iteration(s){room}; nothing in this turn to prune.");
-                }
-
-                // Compact: the prune was not enough — the turns before this one first, then this turn's earlier iterations.
-                if (guard.Mode == ToolCompactMode.Compact && guard.Tripped(projected + reserve))
-                {
-                    if (!compactArmed)
-                    {
-                        DiagnosticLog.Debug(Category, $"Context still near {guard.PercentOf(projected)}% after a mid-turn compact{room}; the next summary waits for a request under {guard.Percent}%.");
-                    }
-                    else
-                    {
-                        compactArmed = false;
-                        for (int stage = 1; stage <= 2 && guard.Tripped(projected + reserve); stage++)
-                        {
-                            bool thisTurn = stage == 2;
-                            var step = thisTurn ? PlanTurnCompact() : PlanOlderCompact();
-                            if (step is null)
-                            {
-                                continue;
-                            }
-
-                            int at = guard.PercentOf(projected);
-                            yield return new TurnEvent.Compacting(at);
-                            var done = await CompactMidTurnAsync(step, cancellationToken).ConfigureAwait(false);
-                            if (done.Result is not { } compacted)
-                            {
-                                DiagnosticLog.Info(Category, CompactFailedPrefix + done.Failure);
-                                yield return new TurnEvent.Notice(CompactFailedPrefix + done.Failure, IsError: true);
-                                break;
-                            }
-
-                            projected -= done.Saved;
-                            DiagnosticLog.Info(Category, string.Create(CultureInfo.InvariantCulture,
-                                $"Context at {at}% of {guard.WindowTokens} tokens after {iteration} tool iteration(s){room}; summarized {(thisTurn ? "this turn's earlier iterations" : "the turns before this one")}: {compacted.MessagesBefore} messages → {compacted.MessagesAfter}, about {guard.PercentOf(Math.Max(projected, 0))}% now."));
-                            yield return new TurnEvent.Compacted(compacted, at, thisTurn);
-                        }
-
-                        if (guard.Tripped(projected + reserve))
-                        {
-                            DiagnosticLog.Info(Category, $"Context still near {guard.PercentOf(projected)}% after the mid-turn compact{room}: nothing more to summarize; the server's limit answers.");
-                        }
-                    }
+                    yield return shrinking;
                 }
             }
         }
@@ -2280,6 +2352,201 @@ public sealed class Assistant
         DiagnosticLog.Warn(Category, $"Stopped after {MaxToolIterations} tool iterations without a final answer.");
         log.Ending = TurnStopped;
         yield return new TurnEvent.Notice($"Stopped after {MaxToolIterations} tool iterations without a final answer.", IsError: true);
+    }
+
+    /// <summary>
+    /// The mid-turn guard's state across a turn's rounds (2026-11-09): a class because an async iterator can't hold <c>ref</c> state
+    /// across a <c>yield</c>. Created once per turn; <see cref="Projected"/>, <see cref="Reserve"/>, <see cref="Overflow"/> and
+    /// <see cref="RoundPictureTokens"/> are set before each <see cref="ShrinkAsync"/> run, <see cref="Armed"/> and
+    /// <see cref="AfterSummary"/> carry over, and <see cref="Shrunk"/> is the run's answer.
+    /// </summary>
+    private sealed class GuardState
+    {
+        /// <summary>The next request's estimate, lowered by each stage by what it saved.</summary>
+        public long Projected { get; set; }
+
+        /// <summary>The room left for the next reply (<see cref="ConversationCompactor.ReplyReserve"/>).</summary>
+        public long Reserve { get; set; }
+
+        /// <summary>Whether a summary may run under the ceiling: once per climb (2026-09-28).</summary>
+        public bool Armed { get; set; } = true;
+
+        /// <summary>Where the last summary's run left the context, reserve included (2026-11-09): a ceiling summary waits for <see cref="CeilingGrowthPercent"/> more.</summary>
+        public long? AfterSummary { get; set; }
+
+        /// <summary>The server's too-long answer when the run recovers from one (step 4); null for the end of a round.</summary>
+        public ContextOverflow? Overflow { get; set; }
+
+        /// <summary>The newest round's pictures by their size (<see cref="ConversationCompactor.PictureTokensFor"/>); null for the floor each.</summary>
+        public long? RoundPictureTokens { get; set; }
+
+        /// <summary>Whether the run changed the history.</summary>
+        public bool Shrunk { get; set; }
+    }
+
+    /// <summary>
+    /// How much the context must grow, in percent of the window, since the last summary before a ceiling summary runs (2026-11-09): a turn
+    /// sitting past <see cref="TurnContextGuard.CeilingPercent"/> doesn't pay for a summary every round.
+    /// </summary>
+    internal const int CeilingGrowthPercent = 5;
+
+    /// <summary>
+    /// The mid-turn guard's pipeline (2026-11-09; the end of each round's code until then), stopping as soon as the request is no longer
+    /// tripped: the superseded plans and this turn's older results (<see cref="ConversationCompactor.PruneRecent"/>); on an overflow, the
+    /// older turns' prune <c>/compact</c> prune does; under <see cref="ToolCompactMode.Compact"/> the summary of the older turns, then of this
+    /// turn's earlier iterations (once per climb, or again past the ceiling after <see cref="CeilingGrowthPercent"/> more); then, past the
+    /// ceiling or on an overflow, the newest round's results cut to fit (<see cref="ConversationCompactor.CutLatestResults"/>). Every stage
+    /// writes the history back before it yields its event. A failed summary skips the other summary but not the cut; a cancelled one ends it.
+    /// </summary>
+    private async IAsyncEnumerable<TurnEvent> ShrinkAsync(TurnContextGuard guard, GuardState state, int iteration, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        state.Shrunk = false;
+        bool overflow = state.Overflow is not null;
+        int percent = guard.PercentOf(state.Projected);
+        string room = ReserveLogTail(state.Reserve);
+        string after = overflow ? "after the server's too-long answer" : $"after {iteration} tool iteration(s)";
+        bool Tripped() => guard.Tripped(state.Projected + state.Reserve);
+
+        // The entries count the long call arguments stubbed besides the results (2026-10-17): a prune of those alone is one too.
+        // The earlier copies of a plan go first (2026-10-18, StubSupersededPlans), and the prune reads what that left, so one
+        // Replace keeps both steps' stubs; the superseded arguments sit in the entries, so they are counted there and only once.
+        var entries = new List<ConversationCompactor.PrunedEntry>();
+        var (superseded, supersededPruned, _) = ConversationCompactor.StubSupersededPlans(_history.Messages, entries);
+        var (shrunk, pruned) = ConversationCompactor.PruneRecent(superseded, guard.ProtectSkills, entries);
+        pruned += supersededPruned;
+        int arguments = entries.Count(e => e.Argument is not null);
+        if (pruned + arguments > 0)
+        {
+            state.Projected -= SentEstimate(_history.Messages) - SentEstimate(shrunk);
+            _history.Replace(shrunk);
+            state.Shrunk = true;
+            DiagnosticLog.Info(Category, $"Context at {percent}% of {guard.WindowTokens} tokens {after}{room}; pruned {pruned} tool result(s) and {arguments} call argument(s) from this turn.");
+            yield return new TurnEvent.Notice(TurnPrunedNotice(percent, pruned, arguments), IsError: false);
+        }
+        else
+        {
+            DiagnosticLog.Debug(Category, $"Context at {percent}% of {guard.WindowTokens} tokens {after}{room}; nothing in this turn to prune.");
+        }
+
+        // An overflow: every older turn pruned as /compact prune does, whatever LLM compact keep recent says (mid-turn the context is over the
+        // share already, PlanOlderCompact's rule); only the turn in flight is kept whole. Reported as an automatic compact.
+        if (overflow && Tripped())
+        {
+            var plan = ConversationCompactor.Split(_history.Messages, 1);
+            var (older, count, olderArguments, olderEntries) = ConversationCompactor.PruneOlderTurns(plan, guard.ProtectSkills);
+            if (count + olderArguments > 0)
+            {
+                int before = _history.Messages.Count;
+                state.Projected -= SentEstimate(_history.Messages) - SentEstimate(older);
+                _history.Replace(older);
+                state.Shrunk = true;
+                DiagnosticLog.Info(Category, $"Context at {percent}% of {guard.WindowTokens} tokens {after}{room}; pruned {count} tool result(s) and {olderArguments} call argument(s) from the turns before this one.");
+                yield return new TurnEvent.Compacted(new ConversationCompactor.Result(before, older.Count, count, null)
+                {
+                    Entries = olderEntries,
+                    OpeningKept = plan.Opening.Count,
+                    RecentKept = plan.Recent.Count,
+                    ArgumentsPruned = olderArguments,
+                }, percent, ThisTurn: false);
+            }
+        }
+
+        // Compact: the prune was not enough — the turns before this one first, then this turn's earlier iterations.
+        bool summaryRan = false;
+        if (guard.Mode == ToolCompactMode.Compact && Tripped())
+        {
+            long at = state.Projected + state.Reserve;
+            long growth = (long)guard.WindowTokens * CeilingGrowthPercent / 100;
+            bool pastCeiling = guard.PastCeiling(at);
+            bool grown = overflow || state.AfterSummary is not { } last || at - last >= growth;
+            if (!state.Armed && !(pastCeiling && grown))
+            {
+                DiagnosticLog.Debug(Category, pastCeiling
+                    ? $"Context at {guard.PercentOf(state.Projected)}%, past the {guard.CeilingPercent}% ceiling, after a mid-turn compact{room}; the next summary waits for {growth} more tokens ({CeilingGrowthPercent}% of the window)."
+                    : $"Context still near {guard.PercentOf(state.Projected)}% after a mid-turn compact{room}; the next summary waits for a request under {guard.Percent}% or the context past {guard.CeilingPercent}%.");
+            }
+            else
+            {
+                for (int stage = 1; stage <= 2 && Tripped(); stage++)
+                {
+                    bool thisTurn = stage == 2;
+                    var step = thisTurn ? PlanTurnCompact() : PlanOlderCompact();
+                    if (step is null)
+                    {
+                        continue;
+                    }
+
+                    // Disarmed only when a summary actually runs (2026-11-09): a round that trips with nothing to summarize (no older
+                    // turn, one iteration) used to disarm the climb, and the next round's summary then never ran under the ceiling. A
+                    // failed summary still disarms, so a failing summarizer isn't asked every round.
+                    state.Armed = false;
+                    summaryRan = true;
+                    int at2 = guard.PercentOf(state.Projected);
+                    yield return new TurnEvent.Compacting(at2);
+                    var done = await CompactMidTurnAsync(step, cancellationToken).ConfigureAwait(false);
+                    if (done.Result is not { } compacted)
+                    {
+                        DiagnosticLog.Info(Category, CompactFailedPrefix + done.Failure);
+                        yield return new TurnEvent.Notice(CompactFailedPrefix + done.Failure, IsError: true);
+                        break;
+                    }
+
+                    state.Projected -= done.Saved;
+                    state.Shrunk = true;
+                    DiagnosticLog.Info(Category, string.Create(CultureInfo.InvariantCulture,
+                        $"Context at {at2}% of {guard.WindowTokens} tokens {after}{room}; summarized {(thisTurn ? "this turn's earlier iterations" : "the turns before this one")}: {compacted.MessagesBefore} messages → {compacted.MessagesAfter}, about {guard.PercentOf(Math.Max(state.Projected, 0))}% now."));
+                    yield return new TurnEvent.Compacted(compacted, at2, thisTurn);
+                }
+
+                if (Tripped())
+                {
+                    DiagnosticLog.Info(Category, guard.PastCeiling(state.Projected + state.Reserve) || overflow
+                        ? $"Context still near {guard.PercentOf(state.Projected)}% after the mid-turn compact{room}: nothing more to summarize; the newest results are cut next."
+                        : $"Context still near {guard.PercentOf(state.Projected)}% after the mid-turn compact{room}: nothing more to summarize; the round goes out whole, over the {guard.Percent}% share.");
+                }
+            }
+        }
+
+        // The cut (2026-11-09): only past the ceiling, or after the server said too long, the newest round's results cut to fit under the
+        // ceiling — the one lossy step, on results the model hasn't read, so a round under the ceiling goes out whole.
+        if (Tripped() && (overflow || guard.PastCeiling(state.Projected + state.Reserve)))
+        {
+            var messages = _history.Messages;
+            long round = ConversationCompactor.LatestRoundTokens(messages, state.RoundPictureTokens);
+            long ceiling = (long)guard.WindowTokens * guard.CeilingPercent / 100;
+            long budget = ceiling - state.Reserve - (state.Projected - round);
+            var (cut, cuts, pictures) = ConversationCompactor.CutLatestResults(messages, budget, guard.ProtectSkills, state.RoundPictureTokens);
+            if (cuts.Count + pictures > 0)
+            {
+                state.Projected -= round - ConversationCompactor.LatestRoundTokens(cut, state.RoundPictureTokens);
+                _history.Replace(cut);
+                state.Shrunk = true;
+                foreach (var entry in cuts)
+                {
+                    DiagnosticLog.Info(Category, string.Create(CultureInfo.InvariantCulture,
+                        $"Context at {percent}% of {guard.WindowTokens} tokens {after}{room}; cut {entry.Tool}'s result to fit: {entry.Before:N0} → {entry.After:N0} characters."));
+                }
+
+                if (pictures > 0)
+                {
+                    DiagnosticLog.Info(Category, string.Create(CultureInfo.InvariantCulture,
+                        $"Context at {percent}% of {guard.WindowTokens} tokens {after}{room}; the newest round's {pictures} picture(s) are their file names now."));
+                }
+
+                yield return new TurnEvent.Notice(TurnCutNotice(percent, cuts, pictures), IsError: false);
+            }
+
+            if (guard.PastCeiling(state.Projected + state.Reserve))
+            {
+                DiagnosticLog.Info(Category, $"Context still near {guard.PercentOf(state.Projected)}% after the cut{room}: nothing more to cut; the server's limit answers.");
+            }
+        }
+
+        // Recorded after the cut, so a ceiling summary's growth is what the turn adds since, not the cut's savings.
+        if (summaryRan)
+        {
+            state.AfterSummary = state.Projected + state.Reserve;
+        }
     }
 
     /// <summary>
@@ -2902,6 +3169,15 @@ public sealed class Assistant
         if (ConversationCompactor.StubbedArgument(call.Arguments, (tool as NeonSidekick.Llm.Tools.IRefusesPrunedStubs)?.StubArguments) is { } stubbed)
         {
             string refusal = App.CompactionText.PrunedStubSentResult(stubbed);
+            DiagnosticLog.Info(Category, ToolErrorLogLine(call.Name, refusal));
+            return (refusal, [], null, null);
+        }
+
+        // A cut result copied back (2026-11-09, ConversationCompactor.CutMarkedArgument): a write of a file the guard cut to fit would delete
+        // its middle. Every argument of every tool, lists included; no tool words this refusal its own way, so IRefusesPrunedStubs doesn't apply.
+        if (ConversationCompactor.CutMarkedArgument(call.Arguments) is { } marked)
+        {
+            string refusal = App.CompactionText.CutResultSentResult(marked);
             DiagnosticLog.Info(Category, ToolErrorLogLine(call.Name, refusal));
             return (refusal, [], null, null);
         }

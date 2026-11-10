@@ -16117,6 +16117,9 @@ internal sealed partial class ChatScreen
     /// <summary>A <c>/botchat</c> turn is running (2026-09-24): its usage events stay out of the main conversation's tally. Set and cleared on the turn task.</summary>
     private bool _botTurnRunning;
 
+    // Whether the bot turn running talks to the main link (2026-11-09): its too-long error's window is then the session's (TurnEvent.ServerLimit).
+    private bool _botOnMainLink;
+
     /// <summary>
     /// The last <c>/botchat</c> reply's calls and tokens (2026-10-10, found comparing botchat with the advisors: the chat's session rows
     /// said 0 calls and 0 tokens whatever ran), for its row; set at the end of a bot's <see cref="RunTurnAsync"/>, read by the chat's loop.
@@ -16429,6 +16432,7 @@ internal sealed partial class ChatScreen
                 bool memorySave = memory?.Tools.Any(t => t is SaveMemoryTool) == true;
                 var history = new ConversationHistory(BotChat.SystemPrompt(bot.Persona, bot.Name, others, topic, speaking, bot.VoiceDirective, markdown, pronouns, images: imageTool is not null, skills: skills, camera: cameraPicture is not null, tools: general?.Rules, memories: memory?.Store.Snapshot(), memorySave: memorySave, recent: recent));
                 history.Replace(prior);
+                _botOnMainLink = !(links.Count > 0 && links[next] is not null);
                 if ((links.Count > 0 && links[next] is { } own ? _session.CreateAssistant(history, own) : _session.CreateAssistant(history)) is not { } assistant)
                 {
                     _transcript.Error(NoAssistantError);
@@ -19324,6 +19328,15 @@ internal sealed partial class ChatScreen
             case TurnEvent.Compacted compacted when !_botTurnRunning:
                 MidTurnCompacted(compacted);
                 break;
+            case TurnEvent.ServerLimit limit when !_botTurnRunning || _botOnMainLink:
+                // The server named a smaller window (2026-11-09): the session's until the next connect, said once. A bot on its own
+                // linked endpoint is ignored: that window isn't the session's.
+                if (_session.NoteServerLimit(limit.Tokens))
+                {
+                    _transcript.Notice(CompactionText.ServerLimitNotice(limit.Tokens));
+                }
+
+                break;
         }
     }
 
@@ -19331,6 +19344,8 @@ internal sealed partial class ChatScreen
     /// The mid-turn guard summarised (2026-09-28, <c>LLM tool compact type: compact</c>): billed and shown the way the
     /// automatic compact is (<see cref="CompactAsync"/>) — the summariser's request on the tally, the notice, the detail
     /// under it with <c>LLM compact show summary</c>, the store following the rewritten history — while the turn runs on.
+    /// Since 2026-11-09 also the overflow recovery's prune of the older turns: no usage to bill (the tally's context figure is zeroed, as
+    /// after any compact), the automatic prune's line.
     /// </summary>
     private void MidTurnCompacted(TurnEvent.Compacted compacted)
     {

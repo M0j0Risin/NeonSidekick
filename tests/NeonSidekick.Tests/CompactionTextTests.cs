@@ -90,4 +90,15 @@ public class CompactionTextTests
         // A bare result still closes with the two counts: the detail is never empty.
         Assert.Equal(["(🗜️ 0 messages protected at the start)", "(🗜️ 0 messages protected at the end)"], CompactionText.DetailLines(new ConversationCompactor.Result(38, 7, 0, null, Summarised: true)));
     }
+
+    /// <summary>The server's smaller window (2026-11-09): its own line, so the LLM glyph, the figure grouped, and the setting that sets it.</summary>
+    [Fact]
+    public void ServerLimitNotice_WearsTheLlmGlyph_AndNamesTheSetting()
+    {
+        string notice = CompactionText.ServerLimitNotice(32_768);
+        Assert.StartsWith("(" + NoticeGlyphs.Llm, notice, StringComparison.Ordinal);
+        Assert.Contains("32,768 tokens", notice, StringComparison.Ordinal);
+        Assert.Contains("LLM context length", notice, StringComparison.Ordinal);
+        Assert.EndsWith(")", notice, StringComparison.Ordinal);
+    }
 }

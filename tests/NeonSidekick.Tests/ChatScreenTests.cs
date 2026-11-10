@@ -13835,12 +13835,16 @@ public partial class ChatScreenTests : IDisposable
 
     // ── The mid-turn context guard (LLM tool compact type, 2026-09-15) ──────
 
-    /// <summary>A 600-character file in the sandbox and two <c>read_file</c> round trips over it in one turn, the second's usage past the share of a 100-token window.</summary>
-    private void TwoReadsInOneTurn(long secondInput = 30)
+    /// <summary>
+    /// A <paramref name="fileSize"/>-character file in the sandbox (600 unless given) and two <c>read_file</c> round trips over it in one
+    /// turn, the second's usage past the share of a 100-token window. The guard tests pass 450 (2026-11-09): at three characters a token a
+    /// 600-character read alone takes the first round past their 20 % share.
+    /// </summary>
+    private void TwoReadsInOneTurn(long secondInput = 30, int fileSize = 600)
     {
         string files = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
         Directory.CreateDirectory(files);
-        File.WriteAllText(Path.Combine(files, "big.txt"), new string('x', 600));
+        File.WriteAllText(Path.Combine(files, "big.txt"), new string('x', fileSize));
         _chat.Enqueue(FakeChatClient.Call("c1", ReadFileTool.ToolName, new Dictionary<string, object?> { ["path"] = "big.txt" }), FakeChatClient.Usage(10, 5));
         _chat.Enqueue(FakeChatClient.Call("c2", ReadFileTool.ToolName, new Dictionary<string, object?> { ["path"] = "big.txt" }), FakeChatClient.Usage(secondInput, 5));
     }
@@ -13852,10 +13856,10 @@ public partial class ChatScreenTests : IDisposable
     public async Task ToolCompact_Prune_MidTurn_StubsTheTurnsOlderResults_AndNoticesInTheTranscript()
     {
         _settings.Update(d => { d.TtsOutput = false; d.LlmAutoCompactPercent = 20; d.LlmToolCompactType = "prune"; });
-        // A 1,000-token window since 2026-09-28: the guard judges the next request, the report plus the 618-character
-        // result just appended (154 tokens) — 169 after the first read (16 %), 454 after the second (45 %, past 20 %).
+        // A 1,000-token window since 2026-09-28: the guard judges the next request, the report plus the 468-character
+        // result just appended (156 tokens at three characters each, 2026-11-09) — 171 after the first read (17 %), 456 after the second (45 %, past 20 %).
         LmStudioWindow(1000);
-        TwoReadsInOneTurn(secondInput: 295);
+        TwoReadsInOneTurn(secondInput: 295, fileSize: 450);
         _chat.EnqueueText("read twice");
         PushLine("a");
         PushLine("/exit");
@@ -13865,8 +13869,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · (✂️ context at 45%: pruned 1 tool result from this turn)\n", output);
         Assert.Equal(3, _chat.Requests.Count);
         var third = _chat.Requests[2];
-        Assert.Equal("(a 618-character result, pruned by /compact)", ResultOf(third, "c1").Result);
-        Assert.EndsWith(new string('x', 600), (string)ResultOf(third, "c2").Result!);      // the last iteration's, unread by the model
+        Assert.Equal("(a 468-character result, pruned by /compact)", ResultOf(third, "c1").Result);
+        Assert.EndsWith(new string('x', 450), (string)ResultOf(third, "c2").Result!);      // the last iteration's, unread by the model
         Assert.DoesNotContain("pruned by /compact", (string)ResultOf(third, Assistant.OpeningCwdCallId).Result!);
         Assert.Contains("read twice", output);
         // The notice sits between the second read and the reply.
@@ -13883,7 +13887,7 @@ public partial class ChatScreenTests : IDisposable
         Directory.CreateDirectory(files);
         File.WriteAllText(Path.Combine(files, "big.txt"), new string('x', 600));
         _chat.EnqueueText("noted");                                                                          // a
-        _chat.Enqueue(FakeChatClient.Call("c1", ReadFileTool.ToolName, new Dictionary<string, object?> { ["path"] = "big.txt" }), FakeChatClient.Usage(600, 5));   // b: 605 + the result's 154: 75 %
+        _chat.Enqueue(FakeChatClient.Call("c1", ReadFileTool.ToolName, new Dictionary<string, object?> { ["path"] = "big.txt" }), FakeChatClient.Usage(520, 5));   // b: 525 + the result's 206: 73 %, under the 75 % ceiling
         _chat.Enqueue(FakeChatClient.Text("The user said a."), FakeChatClient.Usage(40, 3));                // the summariser
         _chat.EnqueueText("read it");
         PushLine("a");
@@ -13892,7 +13896,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("  · (🗜️ auto-compacted at 75%: ", output);
+        Assert.Contains("  · (🗜️ auto-compacted at 73%: ", output);
         Assert.Contains(" · 40 → 3 tokens)\n", output);
         Assert.Contains("  · The user said a.\n", output);                                                 // LLM compact show summary
         Assert.Equal(4, _chat.Requests.Count);
@@ -13901,7 +13905,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(ConversationCompactor.SummaryPreamble + "The user said a.", next[1].Text);
         Assert.EndsWith(new string('x', 600), (string)ResultOf(next, "c1").Result!);
         Assert.Contains("read it", output);
-        Assert.True(output.IndexOf("auto-compacted at 75%", StringComparison.Ordinal) < output.IndexOf("read it", StringComparison.Ordinal));
+        Assert.True(output.IndexOf("auto-compacted at 73%", StringComparison.Ordinal) < output.IndexOf("read it", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -13909,7 +13913,7 @@ public partial class ChatScreenTests : IDisposable
     {
         _settings.Update(d => { d.TtsOutput = false; d.LlmAutoCompactPercent = 20; d.LlmToolCompactType = "stop"; });
         LmStudioWindow(1000);                                                    // the prune test's window and figures: stopped at 45 %
-        TwoReadsInOneTurn(secondInput: 295);
+        TwoReadsInOneTurn(secondInput: 295, fileSize: 450);
         _chat.EnqueueText("later");                                              // b's reply; the automatic compact before it (30 % in use, the last report) stubs c1, the turn's older result
         PushLine("a");
         PushLine("b");
@@ -13922,8 +13926,40 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain("● read twice", output);
         Assert.Equal("b", _chat.Requests[2][^1].Text);
         Assert.Contains("  · (✂️ auto-compacted at 30%: 1 tool result pruned)", output);
-        Assert.Equal("(a 618-character result, pruned by /compact)", ResultOf(_chat.Requests[2], "c1").Result);
-        Assert.EndsWith(new string('x', 600), (string)ResultOf(_chat.Requests[2], "c2").Result!);
+        Assert.Equal("(a 468-character result, pruned by /compact)", ResultOf(_chat.Requests[2], "c1").Result);
+        Assert.EndsWith(new string('x', 450), (string)ResultOf(_chat.Requests[2], "c2").Result!);
+    }
+
+    /// <summary>Throws Anthropic's "prompt is too long" (5,200 of 5,000 tokens) before the first update of each request in <paramref name="requests"/>.</summary>
+    private static Func<int, int, CancellationToken, Task> TooLongAt(params int[] requests) =>
+        (request, i, _) => i == 0 && requests.Contains(request)
+            ? Task.FromException(new NeonSidekick.Llm.Anthropic.AnthropicApiException(400, "invalid_request_error", "prompt is too long: 5200 tokens > 5000 maximum"))
+            : Task.CompletedTask;
+
+    /// <summary>
+    /// A window the server names in a too-long error (2026-11-09): the session's until the next connect, said once, and with no window known
+    /// before it turns the auto compact on (the turn cap gives way to it).
+    /// </summary>
+    [Fact]
+    public async Task ServerLimit_LowersTheSessionsWindow_AndSaysSoOnce()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.LlmToolCompactType = "stop"; });
+        _chat.EnqueueText("unused").EnqueueText("unused");
+        _chat.BeforeUpdateOf = TooLongAt(0, 1);
+        PushLine("a");
+        PushLine("b");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        // The turn's first line, so it opens the reply as any first notice does.
+        string notice = CompactionText.ServerLimitNotice(5_000) + "\n";
+        Assert.Contains(notice, output);
+        Assert.Equal(output.IndexOf(notice, StringComparison.Ordinal), output.LastIndexOf(notice, StringComparison.Ordinal));
+        Assert.Contains("The request was too long for the model's context window (5,200 of 5,000 tokens).", output);
+        Assert.Equal(new ContextLength(5_000, LlmSession.ServerLimitSource), _session.ContextLength);
+        Assert.Equal(ConversationHistory.DefaultMaxTurns, ChatScreen.TurnCapFor(_settings.Current, null));
+        Assert.Null(ChatScreen.TurnCapFor(_settings.Current, _session.ContextLength));
     }
 
     [Fact]

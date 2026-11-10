@@ -2813,9 +2813,18 @@ public sealed partial class SidekickApp
                         session.Usage.Add(usage.Tokens);
                         break;
                     case TurnEvent.Compacted compacted:
-                        // The mid-turn guard summarised (2026-09-28): billed like the automatic compact, one notice line.
+                        // The mid-turn guard summarised (2026-09-28), or pruned the older turns after a too-long answer (2026-11-09): billed
+                        // like the automatic compact, one notice line.
                         session.Usage.AddCompaction(compacted.Result.Usage);
                         await HeadlessNoticeLineAsync("[notice] " + (compacted.ThisTurn ? CompactionText.TurnNotice(compacted.Result, compacted.Percent) : CompactionText.Notice(compacted.Result, compacted.Percent))).ConfigureAwait(false);
+                        break;
+                    case TurnEvent.ServerLimit limit:
+                        // A smaller window the server named (2026-11-09): used for the rest of the run (headless connects once), said once.
+                        if (session.NoteServerLimit(limit.Tokens))
+                        {
+                            await HeadlessNoticeLineAsync("[notice] " + CompactionText.ServerLimitNotice(limit.Tokens)).ConfigureAwait(false);
+                        }
+
                         break;
                 }
             }

@@ -119,6 +119,10 @@ internal sealed class LlmSession : IDisposable
     // started its own model, stopping the one before — the earlier bots left on a dead port.
     private readonly SemaphoreSlim _embeddedLinks = new(1, 1);
     private ContextLength? _detectedContextLength;
+
+    // A smaller window the server named in a too-long error (2026-11-09, NoteServerLimit), 0 for none: one int, so the status bar's and
+    // /usage's reads on another thread never see it half-written. Cleared at the next connect.
+    private int _serverLimit;
     private CancellationTokenSource? _learningCts;
     private CancellationTokenSource? _titlingCts;
 
@@ -201,10 +205,37 @@ internal sealed class LlmSession : IDisposable
     /// The loaded model's context window: the settings' figure when they name one
     /// (<see cref="AppSettingsData.LlmContextLength"/>, no request made), else what the server's model
     /// list published (<see cref="LlmEndpoint.PublishedContextLength"/>) or the last connect's
-    /// <see cref="ContextLengthProbe"/> found; null while unknown or disconnected.
+    /// <see cref="ContextLengthProbe"/> found; null while unknown or disconnected. Since 2026-11-09 a smaller window the server named in a
+    /// too-long error (<see cref="NoteServerLimit"/>) goes over any of them until the next connect, with <see cref="ServerLimitSource"/>.
     /// </summary>
-    public ContextLength? ContextLength =>
-        _configuredContextLength > 0 ? Llm.ContextLength.Configured(_configuredContextLength) : _detectedContextLength;
+    public ContextLength? ContextLength
+    {
+        get
+        {
+            var known = _configuredContextLength > 0 ? Llm.ContextLength.Configured(_configuredContextLength) : _detectedContextLength;
+            int limit = Volatile.Read(ref _serverLimit);
+            return limit > 0 && (known is not { } figure || limit < figure.Tokens) ? new Llm.ContextLength(limit, ServerLimitSource) : known;
+        }
+    }
+
+    /// <summary>The source phrase of a window the server named in a too-long error (2026-11-09, <see cref="NoteServerLimit"/>), shown by <c>/usage</c>. Pinned.</summary>
+    public const string ServerLimitSource = "the server's too-long error";
+
+    /// <summary>
+    /// Remembers a window the server named in a too-long error (2026-11-09: llama-server's per-slot <c>n_ctx</c> can be smaller than its
+    /// <c>--ctx-size</c>, and a setting can be wrong) until the next connect, when it is below <see cref="ContextLength"/> or none is known: the
+    /// server's answer is the real limit, over a configured figure too. True when the window changed, so the host says so once.
+    /// </summary>
+    public bool NoteServerLimit(int tokens)
+    {
+        if (tokens <= 0 || (ContextLength is { } known && tokens >= known.Tokens))
+        {
+            return false;
+        }
+
+        Volatile.Write(ref _serverLimit, tokens);
+        return true;
+    }
 
     /// <summary>The status line for a resolved endpoint.</summary>
     public static string ConnectedLine(LlmEndpoint endpoint)
@@ -1366,6 +1397,7 @@ internal sealed class LlmSession : IDisposable
         _client?.Dispose();
         _client = null;
         _detectedContextLength = null;
+        Volatile.Write(ref _serverLimit, 0);
         _serverSampling = null;
     }
 

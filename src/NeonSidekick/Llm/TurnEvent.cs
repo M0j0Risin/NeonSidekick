@@ -78,7 +78,16 @@ public abstract record TurnEvent
     /// <summary>
     /// The mid-turn guard summarised (2026-09-28) and the history is the new one: the turns before this one
     /// (<paramref name="ThisTurn"/> false) or this turn's earlier iterations (true). The host bills
-    /// <see cref="ConversationCompactor.Result.Usage"/> the way <c>/compact</c>'s is billed and shows the notice.
+    /// <see cref="ConversationCompactor.Result.Usage"/> the way <c>/compact</c>'s is billed and shows the notice. Since 2026-11-09 it also
+    /// reports the overflow recovery's prune of the turns before this one: a <see cref="ConversationCompactor.Result"/> with
+    /// <see cref="ConversationCompactor.Result.Summarised"/> false and no usage, not preceded by <see cref="Compacting"/>.
     /// </summary>
     public sealed record Compacted(ConversationCompactor.Result Result, int Percent, bool ThisTurn) : TurnEvent;
+
+    /// <summary>
+    /// The server named a context window smaller than the guard's, or one where none was known, in a "too long" error (2026-11-09):
+    /// llama-server's per-slot <c>n_ctx</c>, or a wrong setting. The chat session's host remembers it until the next connect
+    /// (<c>LlmSession.NoteServerLimit</c>) and says so once.
+    /// </summary>
+    public sealed record ServerLimit(int Tokens) : TurnEvent;
 }

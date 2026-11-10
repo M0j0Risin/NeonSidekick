@@ -14,10 +14,16 @@ public enum ToolCompactMode
     /// <see cref="Prune"/> first; when the next request is still estimated at or over the share, a summary
     /// (2026-09-28, the user's report: a long turn climbed past the share toward the ceiling with nothing
     /// left to prune) — the turns before this one, then, if that is not enough, this turn's earlier iterations.
+    /// Since 2026-11-09 a second summary past the ceiling (<see cref="Assistant.TurnContextGuard.CeilingPercent"/>), the newest results cut
+    /// to fit there, and a request the server refuses as too long shrunk and sent again.
     /// </summary>
     Compact,
 
-    /// <summary>This turn's older tool results and long call arguments (every iteration's but the last; the arguments since 2026-10-17) become stubs and the loop carries on.</summary>
+    /// <summary>
+    /// This turn's older tool results and long call arguments (every iteration's but the last; the arguments since 2026-10-17) become stubs
+    /// and the loop carries on. Since 2026-11-09, past the ceiling, the last iteration's results are cut to fit, and a request the server
+    /// refuses as too long is shrunk (the older turns pruned too) and sent again.
+    /// </summary>
     Prune,
 
     /// <summary>The turn ends with an error notice; the results so far stay in the history.</summary>
@@ -39,6 +45,8 @@ public static class ToolCompactType
     /// Prune, then summarise if that was not enough. The compiled default since 2026-09-28 (it was <c>prune</c>:
     /// a prune alone cannot touch the turns before this one, the model's own call arguments or the last
     /// iteration, and a long turn walked past the share toward the ceiling), pinned by <c>AppSettingsTests</c>.
+    /// Since 2026-11-09, past the ceiling, a prune does cut the last iteration's results, but only to fit, so a summary is still what keeps
+    /// a long turn under the share.
     /// </summary>
     public const string Default = "compact";
 
@@ -78,8 +86,8 @@ public static class ToolCompactType
     /// <summary>The menu hint next to a type. Pinned.</summary>
     public static string Describe(string name) => name switch
     {
-        "compact" => "prune, then summarize if the turn is still over the share",
-        "prune" => "stub this turn's older tool results and call arguments and carry on",
+        "compact" => "prune, summarize, then cut the newest results to fit",
+        "prune" => "stub older results and long arguments, cut the newest to fit",
         "stop" => "end the turn with a notice; /compact or /clear first",
         "off" => "no check; the server's own limit answers",
         _ => "",

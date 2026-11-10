@@ -635,4 +635,13 @@ public class OpenAIApiTests
         Assert.Equal("sk-openai-env", OpenAIApi.Key(effective));
         Assert.Equal($"{EnvironmentOverrides.OpenAIApiVariable}=on, {EnvironmentOverrides.OpenAIApiKeyVariable}={EnvironmentOverrides.SecretSet}", environment.Describe());
     }
+
+    /// <summary>An overflow that mentions reasoning (2026-11-09) is not the encrypted-reasoning refusal: the turn loop shrinks it instead.</summary>
+    [Fact]
+    public void IsReasoningRefusal_LeavesAContextOverflowAlone()
+    {
+        Assert.False(OpenAIApiChatClient.IsReasoningRefusal(400, "{\"error\":{\"code\":\"context_length_exceeded\",\"message\":\"Your input exceeds the context window of this model, reasoning items included.\"}}"));
+        Assert.False(OpenAIApiChatClient.IsReasoningRefusal(400, "{\"error\":{\"message\":\"This model's maximum context length is 8192 tokens; the reasoning did not fit.\"}}"));
+        Assert.True(OpenAIApiChatClient.IsReasoningRefusal(400, "{\"error\":{\"code\":\"invalid_encrypted_content\",\"message\":\"The encrypted content could not be verified.\"}}"));
+    }
 }

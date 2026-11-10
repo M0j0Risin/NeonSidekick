@@ -19,6 +19,21 @@ public static class CompactionText
         $"Error: {argument} is a pruned stub (what /compact leaves of a long text), not the text itself; write the whole text again, reading it from its source if you need to, and call the tool again";
 
     /// <summary>
+    /// The notice when the server named a smaller context window in a too-long error, or one where none was known (2026-11-09,
+    /// <see cref="LlmSession.NoteServerLimit"/>): <c>(🖥️ the server's context window is 32,768 tokens; it is used until the next connect;
+    /// LLM context length sets it)</c>. The server's own line, so the LLM glyph.
+    /// </summary>
+    public static string ServerLimitNotice(int tokens) =>
+        "(" + NoticeGlyphs.Llm + string.Create(System.Globalization.CultureInfo.InvariantCulture, $"the server's context window is {tokens:N0} tokens; it is used until the next connect; LLM context length sets it)");
+
+    /// <summary>
+    /// A tool's answer to an argument holding a cut result's marker (2026-11-09, <c>ConversationCompactor.HoldsCutMark</c>): a model that read
+    /// a result the mid-turn guard cut to fit and wrote it back whole would delete the middle. Every argument of every tool; the call never runs. Pinned.
+    /// </summary>
+    public static string CutResultSentResult(string argument) =>
+        $"Error: {argument} holds a tool result that was cut to fit the context window, not the whole text; read the full text again in smaller pieces and write it whole, then call the tool again";
+
+    /// <summary>
     /// What every line of <c>/compact</c> or the automatic compact opens with, inside its parentheses
     /// (2026-09-19, the user's pick; <c>ChatScreen.TrashGlyph</c>'s shape): the clamp U+1F5DC with
     /// its variation selector — bare it is text-presentation — and a space. A line where only tool

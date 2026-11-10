@@ -35,6 +35,14 @@ public static class ModelErrorText
     public static string? Readable(Exception ex)
     {
         ArgumentNullException.ThrowIfNull(ex);
+
+        // A context overflow first (2026-11-09), on the whole chain: LM Studio's 500 would otherwise read as the server failing on its side,
+        // and the two APIs' exceptions as nothing this knows.
+        if (Assistant.LooksLikeContextOverflow(ex) is { } overflow)
+        {
+            return TooLong(overflow);
+        }
+
         string? where = null;
         for (var current = ex; current is not null; current = current is AggregateException { InnerExceptions.Count: > 0 } aggregate ? aggregate.InnerExceptions[0] : current.InnerException)
         {
@@ -70,6 +78,24 @@ public static class ModelErrorText
         }
 
         return null;
+    }
+
+    /// <summary>What to do about a request too long for the window. Pinned.</summary>
+    public const string TooLongNextStep = "/compact shrinks the conversation; LLM tool compact mode (compact or prune) shrinks a long reply's tool results; LLM context length sets the window.";
+
+    /// <summary>
+    /// A request the server refused as too long for the window, which the turn loop could not recover from (2026-11-09):
+    /// <c>The request was too long for the model's context window (41,200 of 32,768 tokens). …</c>, the figures when both were parsed, and
+    /// the reply's reservation when it is what blocked the retry (half the limit or more, the loop's own test).
+    /// </summary>
+    public static string TooLong(ContextOverflow overflow)
+    {
+        ArgumentNullException.ThrowIfNull(overflow);
+        string figures = overflow is { Sent: { } sent, Limit: { } limit } ? string.Create(CultureInfo.InvariantCulture, $" ({sent:N0} of {limit:N0} tokens)") : "";
+        string reply = overflow is { Output: { } output, Limit: { } window } && output * 2 >= window
+            ? string.Create(CultureInfo.InvariantCulture, $"; the server keeps {output:N0} tokens for the reply")
+            : "";
+        return "The request was too long for the model's context window" + figures + reply + ". " + TooLongNextStep;
     }
 
     /// <summary>The <c>host:port</c> an <see cref="HttpRequestException"/>'s message ends with in parentheses, or null.</summary>

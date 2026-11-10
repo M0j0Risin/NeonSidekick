@@ -698,4 +698,12 @@ public class ClaudeApiTests
         Assert.Equal(((decimal)input, (decimal)output, (decimal)cacheRead), (price.Input, price.Output, price.CacheRead));
         Assert.Null(ClaudePrice.For("claude-unknown"));
     }
+
+    /// <summary>"Prompt is too long" with thinking in the body (2026-11-09) is not the signature refusal: the turn loop shrinks it instead.</summary>
+    [Fact]
+    public void IsThinkingRefusal_LeavesAContextOverflowAlone()
+    {
+        Assert.False(AnthropicChatClient.IsThinkingRefusal(400, "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"prompt is too long: 210000 tokens > 200000 maximum (thinking included)\"}}"));
+        Assert.True(AnthropicChatClient.IsThinkingRefusal(400, "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"thinking block signature does not match the conversation prefix\"}}"));
+    }
 }

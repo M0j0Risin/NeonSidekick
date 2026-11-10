@@ -2234,10 +2234,11 @@ public class AssistantTests
 
     /// <summary>
     /// Two echo round trips over a 1,000-token window, the second's usage at 90 %: what the guard sees before the third request —
-    /// 97 % since 2026-09-28, the reported 900 plus the 306-character result just appended (76 tokens at four characters each).
-    /// The replies are a token each (2026-10-18): the guard leaves room for the largest one, and 976 plus one stays under 98 %.
+    /// 100 % since 2026-11-09, the reported 900 plus the 306-character result just appended (102 tokens at three characters each,
+    /// ConversationCompactor.GuardCharsPerToken). The replies are a token each (2026-10-18): the guard leaves room for the largest one.
+    /// <paramref name="secondInput"/> (2026-11-09) lowers the second request's usage for a case that must stay under the share.
     /// </summary>
-    private static (FakeChatClient Client, ConversationHistory History, Assistant Assistant) GuardedLoop(Assistant.TurnContextGuard? guard, bool secondReportsUsage = true)
+    private static (FakeChatClient Client, ConversationHistory History, Assistant Assistant) GuardedLoop(Assistant.TurnContextGuard? guard, bool secondReportsUsage = true, long secondInput = 899)
     {
         var (client, history, assistant) = Build(new AIFunction[] { new EchoTool() });
         assistant.ContextGuard = guard;
@@ -2245,7 +2246,7 @@ public class AssistantTests
         var second = FakeChatClient.Call("c2", "echo", new Dictionary<string, object?> { ["text"] = LongText(300) });
         if (secondReportsUsage)
         {
-            client.Enqueue(second, FakeChatClient.Usage(899, 1));
+            client.Enqueue(second, FakeChatClient.Usage(secondInput, 1));
         }
         else
         {
@@ -2266,7 +2267,7 @@ public class AssistantTests
         Assert.Equal(new[] { "done" }, Deltas(events));
         var notice = Assert.Single(events.OfType<TurnEvent.Notice>());
         Assert.False(notice.IsError);
-        Assert.Equal("(✂️ context at 97%: pruned 1 tool result from this turn)", notice.Text);
+        Assert.Equal("(✂️ context at 100%: pruned 1 tool result from this turn)", notice.Text);
         // The events: the second request's usage, its call and result, then the notice, then the reply.
         Assert.Equal(
             new[] { typeof(TurnEvent.Usage), typeof(TurnEvent.ToolCall), typeof(TurnEvent.ToolResult), typeof(TurnEvent.Usage), typeof(TurnEvent.ToolCall), typeof(TurnEvent.ToolResult), typeof(TurnEvent.Notice), typeof(TurnEvent.TextDelta) },
@@ -2295,10 +2296,19 @@ public class AssistantTests
 
         var events = await Run(assistant, "go");
 
-        var notice = Assert.Single(events.OfType<TurnEvent.Notice>());
-        Assert.StartsWith("(✂️ context at ", notice.Text, StringComparison.Ordinal);
-        Assert.EndsWith("%: pruned 1 tool result and 1 call argument from this turn)", notice.Text, StringComparison.Ordinal);
+        // 2026-11-09: the first round alone passes the 90 % ceiling (550 + 3,006 characters at three a token), so its result is cut to fit
+        // before the second request; the second round's prune then stubs that cut result with the long argument.
+        var notices = events.OfType<TurnEvent.Notice>().ToList();
+        Assert.Equal(2, notices.Count);
+        Assert.StartsWith("(✂️ context at ", notices[0].Text, StringComparison.Ordinal);
+        Assert.Contains("%: cut 1 tool result to fit, ", notices[0].Text, StringComparison.Ordinal);
+        Assert.StartsWith("(✂️ context at ", notices[1].Text, StringComparison.Ordinal);
+        Assert.EndsWith("%: pruned 1 tool result and 1 call argument from this turn)", notices[1].Text, StringComparison.Ordinal);
+        string cut = (string)Assert.Single(client.Requests[1][3].Contents.OfType<FunctionResultContent>()).Result!;
+        Assert.True(ConversationCompactor.HoldsCutMark(cut));
+        Assert.StartsWith("echo: ", cut, StringComparison.Ordinal);
         var third = client.Requests[2];
+        Assert.True(ConversationCompactor.IsPrunedStub((string?)Assert.Single(third[3].Contents.OfType<FunctionResultContent>()).Result));
         var first = Assert.Single(third[2].Contents.OfType<FunctionCallContent>());
         Assert.Equal(ConversationCompactor.PrunedArgumentStub(3000), first.Arguments!["text"]?.ToString());
         var last = Assert.Single(third[4].Contents.OfType<FunctionCallContent>());
@@ -2316,7 +2326,7 @@ public class AssistantTests
         Assert.Empty(Deltas(events));
         var notice = Assert.IsType<TurnEvent.Notice>(events[^1]);
         Assert.True(notice.IsError);
-        Assert.Equal("🛑 Stopped at 97% of the context window (LLM tool compact mode is stop); /compact or /clear before continuing.", notice.Text);
+        Assert.Equal("🛑 Stopped at 100% of the context window (LLM tool compact mode is stop); /compact or /clear before continuing.", notice.Text);
         Assert.Equal(2, client.Requests.Count);
         // No call left unanswered: the history ends with the second iteration's result, verbatim.
         Assert.Equal(new[] { ChatRole.User, ChatRole.Assistant, ChatRole.Tool, ChatRole.Assistant, ChatRole.Tool }, history.Messages.Select(m => m.Role));
@@ -2331,7 +2341,8 @@ public class AssistantTests
     [InlineData(ToolCompactMode.Compact, 98)]
     public async Task Guard_NothingOrOffOrUnderTheShare_LeavesTheTurnAlone(ToolCompactMode mode, int percent)
     {
-        var (client, _, assistant) = GuardedLoop(new Assistant.TurnContextGuard(1000, percent, mode));
+        // 800 reported plus the 102-token result: under 98 % (2026-11-09: at 900 the three-character estimate passes the window).
+        var (client, _, assistant) = GuardedLoop(new Assistant.TurnContextGuard(1000, percent, mode), secondInput: 799);
 
         var events = await Run(assistant, "go");
 
@@ -2380,6 +2391,16 @@ public class AssistantTests
         Assert.False(guard.Tripped(TokenUsage.Zero));
         Assert.False(new Assistant.TurnContextGuard(151_427, 0, ToolCompactMode.Prune).Tripped(chef));
         Assert.False(new Assistant.TurnContextGuard(151_427, 80, ToolCompactMode.Nothing).Tripped(chef));
+
+        // The ceiling (2026-11-09): halfway from the share to the window, never while the guard doesn't act.
+        var ninety = new Assistant.TurnContextGuard(1000, 90, ToolCompactMode.Compact);
+        Assert.Equal(95, ninety.CeilingPercent);
+        Assert.False(ninety.PastCeiling(949));
+        Assert.True(ninety.PastCeiling(950));
+        Assert.False(ninety.PastCeiling(0));
+        Assert.Equal(90, guard.CeilingPercent);
+        Assert.False(new Assistant.TurnContextGuard(1000, 0, ToolCompactMode.Compact).PastCeiling(600));
+        Assert.False(new Assistant.TurnContextGuard(1000, 90, ToolCompactMode.Nothing).PastCeiling(990));
         Assert.Equal("(✂️ context at 85%: pruned 23 tool results from this turn)", Assistant.TurnPrunedNotice(85, 23));
         Assert.Equal("(✂️ context at 85%: pruned 1 tool result from this turn)", Assistant.TurnPrunedNotice(85, 1));
         Assert.Equal("🛑 Stopped at 85% of the context window (LLM tool compact mode is stop); /compact or /clear before continuing.", Assistant.TurnStoppedNotice(85));
@@ -2657,7 +2678,7 @@ public class AssistantTests
 
     /// <summary>
     /// Two echo round trips over a 1,000-token window at 80 %: the first reply <paramref name="firstOutput"/> tokens long, the second
-    /// request at 570 tokens, so 646 with its result: under the share alone, past it with a 200-token reserve.
+    /// request at 570 tokens, so 672 with its result (2026-11-09, three characters a token): under the share alone, past it with a 200-token reserve.
     /// </summary>
     private static (FakeChatClient Client, ConversationHistory History, Assistant Assistant) ReserveLoop(long firstOutput, long replyFloor = 0, ToolCompactMode mode = ToolCompactMode.Prune, int percent = 80)
     {
@@ -2685,8 +2706,8 @@ public class AssistantTests
             NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
         }
 
-        // The notice keeps the plain share: 646 of 1,000.
-        Assert.Equal("(✂️ context at 64%: pruned 1 tool result from this turn)", Assert.Single(events.OfType<TurnEvent.Notice>()).Text);
+        // The notice keeps the plain share: 672 of 1,000.
+        Assert.Equal("(✂️ context at 67%: pruned 1 tool result from this turn)", Assert.Single(events.OfType<TurnEvent.Notice>()).Text);
         Assert.Equal("(a 306-character result, pruned by /compact)", Assert.Single(client.Requests[2][3].Contents.OfType<FunctionResultContent>()).Result);
         Assert.Contains(lines, e => e.Message.Contains("tool iteration(s), leaving room for a 200-token reply; pruned 1 tool result(s)", StringComparison.Ordinal));
         Assert.Equal(200, history.LargestReplyTokens);
@@ -2711,10 +2732,10 @@ public class AssistantTests
 
         var events = await Run(assistant, "go");
 
-        Assert.Equal("(✂️ context at 64%: pruned 1 tool result from this turn)", Assert.Single(events.OfType<TurnEvent.Notice>()).Text);
+        Assert.Equal("(✂️ context at 67%: pruned 1 tool result from this turn)", Assert.Single(events.OfType<TurnEvent.Notice>()).Text);
     }
 
-    /// <summary>A 400-token reply over a 1,000-token window reserves a quarter (250): the first iteration (576 + 250) stays under 90 %, the second (686 + 250) stops.</summary>
+    /// <summary>A 400-token reply over a 1,000-token window reserves a quarter (250): the first iteration (602 + 250) stays under 90 %, the second (712 + 250) stops (2026-11-09, three characters a token).</summary>
     [Fact]
     public async Task Guard_Reserve_IsCappedAtAQuarterOfTheWindow()
     {
@@ -2726,7 +2747,7 @@ public class AssistantTests
 
         var events = await Run(assistant, "go");
 
-        Assert.Equal(Assistant.TurnStoppedNotice(68), Assert.IsType<TurnEvent.Notice>(events[^1]).Text);
+        Assert.Equal(Assistant.TurnStoppedNotice(71), Assert.IsType<TurnEvent.Notice>(events[^1]).Text);
         Assert.Equal(2, client.Requests.Count);
     }
 
@@ -2775,7 +2796,7 @@ public class AssistantTests
     [Fact]
     public async Task Guard_Projects_TheResultsJustAppended_TripsBeforeTheNextRequest()
     {
-        // Reported 70 % of the window, but the 2,006-character result just appended (501 tokens) takes the next request past it.
+        // Reported 70 % of the window, but the 2,006-character result just appended (668 tokens at three characters each) takes the next request past it.
         var (client, _, assistant) = Build(new AIFunction[] { new EchoTool() });
         assistant.ContextGuard = new Assistant.TurnContextGuard(1000, 80, ToolCompactMode.Stop);
         client.Enqueue(FakeChatClient.Call("c1", "echo", EchoArgs(LongText(2000))), FakeChatClient.Usage(690, 10));
@@ -2783,8 +2804,65 @@ public class AssistantTests
 
         var events = await Run(assistant, "go");
 
-        Assert.Equal("🛑 Stopped at 120% of the context window (LLM tool compact mode is stop); /compact or /clear before continuing.", Assert.IsType<TurnEvent.Notice>(events[^1]).Text);
+        Assert.Equal("🛑 Stopped at 136% of the context window (LLM tool compact mode is stop); /compact or /clear before continuing.", Assert.IsType<TurnEvent.Notice>(events[^1]).Text);
         Assert.Single(client.Requests);
+    }
+
+    /// <summary>
+    /// The three-character estimate (2026-11-09): 600 reported plus a 750-character result is 787 tokens at four characters each, under
+    /// 80 %, but 850 at three, so the guard trips before the next request.
+    /// </summary>
+    [Fact]
+    public async Task Guard_Projects_TheNewRound_AtThreeCharactersAToken()
+    {
+        var (client, _, assistant) = Build(new AIFunction[] { new EchoTool() });
+        assistant.ContextGuard = new Assistant.TurnContextGuard(1000, 80, ToolCompactMode.Stop);
+        client.Enqueue(FakeChatClient.Call("c1", "echo", EchoArgs(LongText(744))), FakeChatClient.Usage(590, 10));
+        client.EnqueueText("never asked");
+
+        var events = await Run(assistant, "go");
+
+        Assert.Equal(Assistant.TurnStoppedNotice(85), Assert.IsType<TurnEvent.Notice>(events[^1]).Text);
+        Assert.Single(client.Requests);
+    }
+
+    /// <summary>A new picture counts by its size (2026-11-09): a 2048 × 2048 picture is 5,592 tokens, not a flat 1,000.</summary>
+    [Fact]
+    public async Task Guard_Projects_ANewPicture_ByItsSize()
+    {
+        var image = new ImageAttachment("big.png", [1, 2, 3], ImageFile.Png, 2048, 2048);
+        var (client, _, assistant) = Build(new AIFunction[] { new PictureTool(image) });
+        assistant.ContextGuard = new Assistant.TurnContextGuard(10_000, 80, ToolCompactMode.Stop);
+        client.Enqueue(FakeChatClient.Call("c1", "picture", new Dictionary<string, object?>()), FakeChatClient.Usage(5_990, 10));
+        client.EnqueueText("never asked");
+
+        var events = await Run(assistant, "look");
+
+        // 6,000 + "saw big.png" (3) + 5,592: 115 %; at the flat 1,000 it would have been 70 %.
+        Assert.Equal(Assistant.TurnStoppedNotice(115), Assert.IsType<TurnEvent.Notice>(events[^1]).Text);
+        Assert.Single(client.Requests);
+    }
+
+    /// <summary>
+    /// A round that trips with nothing to summarize leaves the climb armed (2026-11-09): the first round passes 50 % with no older turn
+    /// and one iteration, and the second, still under the 75 % ceiling, summarizes this turn's earlier iteration.
+    /// </summary>
+    [Fact]
+    public async Task Guard_Compact_ATripWithNothingToSummarize_LeavesTheNextRoundArmed()
+    {
+        var (client, _, assistant) = Build(new AIFunction[] { new EchoTool() });
+        assistant.ContextGuard = new Assistant.TurnContextGuard(1000, 50, ToolCompactMode.Compact);
+        client.Enqueue(FakeChatClient.Call("c1", "echo", EchoArgs(LongText(300))), FakeChatClient.Usage(495, 5));   // 500 + 102: 60 %
+        client.Enqueue(FakeChatClient.Call("c2", "echo", EchoArgs(LongText(300))), FakeChatClient.Usage(595, 5));   // 600 + 102: 70 %
+        client.Enqueue(FakeChatClient.Text("Echoed once."), FakeChatClient.Usage(300, 4));                         // the summarizer
+        client.EnqueueText("done");
+
+        var events = await Run(assistant, "go");
+
+        var compacted = Assert.Single(events.OfType<TurnEvent.Compacted>());
+        Assert.True(compacted.ThisTurn);
+        Assert.True(compacted.Percent < 75);
+        Assert.Equal(4, client.Requests.Count);
     }
 
     [Fact]
@@ -2795,7 +2873,7 @@ public class AssistantTests
         await Run(assistant, LongText(2000));                                           // an older turn of about 500 tokens
 
         assistant.ContextGuard = new Assistant.TurnContextGuard(1000, 50, ToolCompactMode.Compact);
-        client.Enqueue(FakeChatClient.Call("c1", "echo", EchoArgs(LongText(300))), FakeChatClient.Usage(600, 50));   // 650 + the 306-character result's 76: 72 %
+        client.Enqueue(FakeChatClient.Call("c1", "echo", EchoArgs(LongText(300))), FakeChatClient.Usage(580, 50));   // 630 + the 306-character result's 102: 73 %, under the 75 % ceiling
         client.Enqueue(FakeChatClient.Text("The user sent a long line of x."), FakeChatClient.Usage(560, 8));          // the summariser
         client.EnqueueText("done");
 
@@ -2803,10 +2881,10 @@ public class AssistantTests
 
         // Nothing for the prune (one iteration, the last), so the summary: the older turn went, about 500 tokens with it.
         Assert.Empty(events.OfType<TurnEvent.Notice>());
-        Assert.Equal(72, Assert.Single(events.OfType<TurnEvent.Compacting>()).Percent);
+        Assert.Equal(73, Assert.Single(events.OfType<TurnEvent.Compacting>()).Percent);
         var compacted = Assert.Single(events.OfType<TurnEvent.Compacted>());
         Assert.False(compacted.ThisTurn);
-        Assert.Equal(72, compacted.Percent);
+        Assert.Equal(73, compacted.Percent);
         Assert.True(compacted.Result.Summarised);
         Assert.Equal("The user sent a long line of x.", compacted.Result.Summary);
         Assert.Equal((560L, 8L), (compacted.Result.Usage!.Value.Input, compacted.Result.Usage.Value.Output));
@@ -2833,7 +2911,7 @@ public class AssistantTests
     {
         var (client, history, assistant) = Build(new AIFunction[] { new EchoTool() });
         assistant.ContextGuard = new Assistant.TurnContextGuard(1000, 50, ToolCompactMode.Compact);
-        client.Enqueue(FakeChatClient.Call("c1", "echo", EchoArgs(LongText(1200))), FakeChatClient.Usage(100, 10));   // 110 + 301: 41 %
+        client.Enqueue(FakeChatClient.Call("c1", "echo", EchoArgs(LongText(1200))), FakeChatClient.Usage(100, 10));   // 110 + 402: 51 %, past the share with nothing to summarize
         client.Enqueue(FakeChatClient.Call("c2", "echo", EchoArgs("b")), FakeChatClient.Usage(900, 10));               // 911 before the prune
         return (client, history, assistant);
     }
@@ -2877,8 +2955,9 @@ public class AssistantTests
     {
         var (client, _, assistant) = HeavyArguments();
         client.Enqueue(FakeChatClient.Text("First note."), FakeChatClient.Usage(700, 6));
-        client.Enqueue(FakeChatClient.Call("c3", "echo", EchoArgs("c")), FakeChatClient.Usage(900, 10));                 // still 91 %: no second summary
-        client.Enqueue(FakeChatClient.Call("c4", "echo", EchoArgs(LongText(1200))), FakeChatClient.Usage(100, 10));      // 11 % reported (41 % with its result): armed again
+        // 66 %: over the share, under the 75 % ceiling, so no second summary (2026-11-09: past the ceiling one would run after 5 % more).
+        client.Enqueue(FakeChatClient.Call("c3", "echo", EchoArgs("c")), FakeChatClient.Usage(650, 10));
+        client.Enqueue(FakeChatClient.Call("c4", "echo", EchoArgs(LongText(900))), FakeChatClient.Usage(100, 10));       // 11 % reported (41 % with its result): armed again
         client.Enqueue(FakeChatClient.Call("c5", "echo", EchoArgs("e")), FakeChatClient.Usage(900, 10));                 // past it again: the second summary
         client.Enqueue(FakeChatClient.Text("Second note."), FakeChatClient.Usage(700, 6));
         client.EnqueueText("done");
@@ -3308,6 +3387,479 @@ public class AssistantTests
         Assert.Equal(OwnStubEchoTool.OwnWords, own);
         Assert.StartsWith("Error: text is a pruned stub", NeonSidekick.App.CompactionText.PrunedStubSentResult("text"), StringComparison.Ordinal);
     }
+    /// <summary>
+    /// A cut result copied back into a write (2026-11-09): <c>write_file</c>'s <c>content</c> and <c>patch_file</c>'s <c>new_text</c> holding
+    /// the marker are refused before the tool runs, the file untouched on disk; so is a list argument holding it nested, as JSON or encoded JSON.
+    /// </summary>
+    [Fact]
+    public async Task InvokeToolAsync_ACutResultsMarker_IsRefused_BeforeTheToolRuns()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"));
+        string root = Path.Combine(dir, "files");
+        Directory.CreateDirectory(root);
+        try
+        {
+            var files = new WorkingDirectory(() => root, new ManualTimeProvider());
+            string path = Path.Combine(root, "a.txt");
+            File.WriteAllText(path, "alpha\nbeta\n");
+            string copied = "alpha\n" + TurnText.CutMarker(140_000) + "\nbeta\n";
+            AIFunction[] tools = [new WriteFileTool(files), new PatchFileTool(files), new EchoTool()];
+
+            var (written, _) = await Assistant.InvokeToolAsync(tools, new FunctionCallContent("c1", WriteFileTool.ToolName, new Dictionary<string, object?> { ["path"] = "a.txt", ["content"] = copied }), CancellationToken.None);
+            var (patched, _) = await Assistant.InvokeToolAsync(tools, new FunctionCallContent("c2", PatchFileTool.ToolName, new Dictionary<string, object?> { ["path"] = "a.txt", ["old_text"] = "beta", ["new_text"] = copied }), CancellationToken.None);
+            var list = JsonDocument.Parse("[{\"text\":" + "\"" + JsonEncodedText.Encode(copied) + "\"" + "}]").RootElement;
+            var (nested, _) = await Assistant.InvokeToolAsync(tools, new FunctionCallContent("c3", "echo", new Dictionary<string, object?> { ["text"] = "hi", ["items"] = list }), CancellationToken.None);
+            var (encoded, _) = await Assistant.InvokeToolAsync(tools, new FunctionCallContent("c4", "echo", new Dictionary<string, object?> { ["text"] = "hi", ["items"] = list.GetRawText() }), CancellationToken.None);
+
+            Assert.Equal(NeonSidekick.App.CompactionText.CutResultSentResult("content"), written);
+            Assert.Equal(NeonSidekick.App.CompactionText.CutResultSentResult("new_text"), patched);
+            Assert.Equal(NeonSidekick.App.CompactionText.CutResultSentResult("items"), nested);
+            Assert.Equal(NeonSidekick.App.CompactionText.CutResultSentResult("items"), encoded);
+            Assert.Equal("alpha\nbeta\n", File.ReadAllText(path));
+            Assert.Empty(((EchoTool)tools[2]).Received);
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+        }
+    }
+
+    // ── The ceiling and the cut (2026-11-09) ───────────────────────────────
+
+    /// <summary>
+    /// Past the ceiling a second summary runs without a request under the share, then waits for 5 % more growth: HeavyArguments' first
+    /// summary at its second round, the ceiling's at the third (91 %), none at the fourth (93 %, 2.5 % more), the third at the fifth (99 %).
+    /// </summary>
+    [Fact]
+    public async Task Guard_Compact_PastTheCeiling_SummarizesAgain_AfterFivePercentMore()
+    {
+        var (client, _, assistant) = HeavyArguments();
+        client.Enqueue(FakeChatClient.Text("First note."), FakeChatClient.Usage(700, 6));
+        client.Enqueue(FakeChatClient.Call("c3", "echo", EchoArgs("c")), FakeChatClient.Usage(900, 10));
+        client.Enqueue(FakeChatClient.Text("Second note."), FakeChatClient.Usage(700, 6));
+        client.Enqueue(FakeChatClient.Call("c4", "echo", EchoArgs("d")), FakeChatClient.Usage(920, 10));
+        client.Enqueue(FakeChatClient.Call("c5", "echo", EchoArgs("e")), FakeChatClient.Usage(980, 10));
+        client.Enqueue(FakeChatClient.Text("Third note."), FakeChatClient.Usage(700, 6));
+        client.EnqueueText("done");
+
+        var events = await Run(assistant, "go");
+
+        Assert.Equal(3, events.OfType<TurnEvent.Compacted>().Count());
+        Assert.DoesNotContain(events.OfType<TurnEvent.Notice>(), n => n.IsError);
+        Assert.Equal(9, client.Requests.Count);
+        Assert.Equal(new[] { 2, 4, 7 }, Enumerable.Range(0, 9).Where(i => client.Requests[i][0].Text == ConversationCompactor.TurnProgressInstruction));
+        Assert.Equal(ConversationCompactor.TurnProgressPreamble + "Third note.", client.Requests[8][1].Contents.OfType<TextContent>().Last().Text);
+    }
+
+    /// <summary>Two 9,006-character results (6,004 tokens) in one round over a 10,000-token window at 50 % (the ceiling 75 %).</summary>
+    private static (FakeChatClient Client, Assistant Assistant) BigRound(ToolCompactMode mode, long input)
+    {
+        var (client, _, assistant) = Build(new AIFunction[] { new EchoTool() });
+        assistant.ContextGuard = new Assistant.TurnContextGuard(10_000, 50, mode);
+        client.Enqueue(FakeChatClient.Call("c1", "echo", EchoArgs(LongText(9_000))), FakeChatClient.Call("c2", "echo", EchoArgs(LongText(9_000))), FakeChatClient.Usage(input, 10));
+        client.EnqueueText("done");
+        return (client, assistant);
+    }
+
+    [Theory]
+    [InlineData(ToolCompactMode.Prune)]
+    [InlineData(ToolCompactMode.Compact)]
+    public async Task Guard_ARoundOverTheShare_UnderTheCeiling_GoesOutWhole(ToolCompactMode mode)
+    {
+        var (client, assistant) = BigRound(mode, 1_000);                                     // 1,010 + 6,004: 70 %
+
+        var events = await Run(assistant, "go");
+
+        Assert.Empty(events.OfType<TurnEvent.Notice>());
+        Assert.All(client.Requests[1][3].Contents.OfType<FunctionResultContent>(), r => Assert.Equal("echo: " + LongText(9_000), r.Result));
+    }
+
+    [Theory]
+    [InlineData(ToolCompactMode.Prune)]
+    [InlineData(ToolCompactMode.Compact)]
+    public async Task Guard_ARoundPastTheCeiling_IsCutToFit_OneNoticeForTheRound(ToolCompactMode mode)
+    {
+        var (client, assistant) = BigRound(mode, 4_000);                                     // 4,010 + 6,004: 100 %
+
+        var events = await Run(assistant, "go");
+
+        var notice = Assert.Single(events.OfType<TurnEvent.Notice>());
+        Assert.False(notice.IsError);
+        Assert.StartsWith("(" + Assistant.PruneGlyph + "context at 100%: cut 2 tool results to fit, 18.0k → ", notice.Text, StringComparison.Ordinal);
+        Assert.Equal(2, client.Requests.Count);
+        var round = client.Requests[1];
+        Assert.All(round[3].Contents.OfType<FunctionResultContent>(), r => Assert.True(ConversationCompactor.HoldsCutMark((string)r.Result!)));
+        // Under the ceiling now: 7,500 less the reply's room and the 4,010 reported leaves 3,480 tokens for the round.
+        Assert.InRange(ConversationCompactor.LatestRoundTokens(round), 0, 3_480);
+        Assert.Equal(LongText(9_000), round[2].Contents.OfType<FunctionCallContent>().First().Arguments!["text"]);   // the calls go back as they were
+    }
+
+    [Theory]
+    [InlineData(ToolCompactMode.Stop, true)]
+    [InlineData(ToolCompactMode.Nothing, false)]
+    public async Task Guard_StopOrOff_NeverCuts(ToolCompactMode mode, bool stops)
+    {
+        var (client, assistant) = BigRound(mode, 4_000);
+
+        var events = await Run(assistant, "go");
+
+        Assert.Equal(stops, events.OfType<TurnEvent.Notice>().Any(n => n.IsError));
+        Assert.DoesNotContain(events.OfType<TurnEvent.Notice>(), n => n.Text.Contains(": cut ", StringComparison.Ordinal));
+        if (!stops)
+        {
+            Assert.All(client.Requests[1][3].Contents.OfType<FunctionResultContent>(), r => Assert.Equal("echo: " + LongText(9_000), r.Result));
+        }
+    }
+
+    /// <summary>A summary that fails is reported, and the cut still runs and saves the round: it makes no request.</summary>
+    [Fact]
+    public async Task Guard_Compact_ASummaryFailure_StillCuts()
+    {
+        var (client, history, assistant) = Build(new AIFunction[] { new EchoTool() });
+        client.EnqueueText("noted");
+        await Run(assistant, LongText(2000));
+
+        assistant.ContextGuard = new Assistant.TurnContextGuard(10_000, 50, ToolCompactMode.Compact);
+        client.Enqueue(FakeChatClient.Call("c1", "echo", EchoArgs(LongText(24_000))), FakeChatClient.Usage(1_000, 10));   // 1,010 + 8,002: 90 %
+        client.Enqueue(FakeChatClient.Text("unused"));
+        client.EnqueueText("done");
+        client.BeforeUpdateOf = (request, _, _) => request == 2 ? Task.FromException(new HttpRequestException("summarizer down")) : Task.CompletedTask;
+
+        var events = await Run(assistant, "go");
+
+        var notices = events.OfType<TurnEvent.Notice>().ToList();
+        Assert.Equal(2, notices.Count);
+        Assert.StartsWith(Assistant.CompactFailedPrefix, notices[0].Text, StringComparison.Ordinal);
+        Assert.Contains(": cut 1 tool result to fit, ", notices[1].Text, StringComparison.Ordinal);
+        Assert.True(ConversationCompactor.HoldsCutMark((string)Assert.Single(client.Requests[3][^1].Contents.OfType<FunctionResultContent>()).Result!));
+        Assert.Equal("done", history.Messages[^1].Text);
+    }
+
+    // ── Overflow recovery (2026-11-09) ─────────────────────────────────────
+
+    /// <summary>OpenAI's overflow: the code, and words that hold no figure.</summary>
+    private static NeonSidekick.Llm.OpenAIPlatform.OpenAIApiException TooLongError() =>
+        new(400, ContextOverflowMatch.OpenAICode, "Your input exceeds the context window of this model. Please adjust your input and try again.");
+
+    /// <summary>An older turn whose read result (3,000 characters) the overflow's prune of the older turns stubs.</summary>
+    private static void OlderTurn(ConversationHistory history)
+    {
+        history.AddMessage(new ChatMessage(ChatRole.User, "read it"));
+        history.AddMessage(new ChatMessage(ChatRole.Assistant, [new FunctionCallContent("o1", ReadFileTool.ToolName, new Dictionary<string, object?> { ["path"] = "a.txt" })]));
+        history.AddMessage(new ChatMessage(ChatRole.Tool, [new FunctionResultContent("o1", LongText(3000))]));
+        history.AddMessage(new ChatMessage(ChatRole.Assistant, "read"));
+    }
+
+    /// <summary>Throws <paramref name="error"/> before the first update of each request in <paramref name="requests"/>: no bytes came back.</summary>
+    private static Func<int, int, CancellationToken, Task> ThrowAt(Exception error, params int[] requests) =>
+        (request, i, _) => i == 0 && requests.Contains(request) ? Task.FromException(error) : Task.CompletedTask;
+
+    private static string? ResultOf(IReadOnlyList<ChatMessage> request, string callId) =>
+        (string?)request.SelectMany(m => m.Contents).OfType<FunctionResultContent>().Single(r => r.CallId == callId).Result;
+
+    [Fact]
+    public async Task Guard_Overflow_OnTheFirstRequest_PrunesTheOlderTurns_AndSendsAgain()
+    {
+        var (client, history, assistant) = Build(new AIFunction[] { new EchoTool() });
+        OlderTurn(history);
+        assistant.ContextGuard = new Assistant.TurnContextGuard(10_000, 80, ToolCompactMode.Prune);
+        client.EnqueueText("unused");
+        client.EnqueueText("done");
+        client.BeforeUpdateOf = ThrowAt(TooLongError(), 0);
+
+        var events = await Run(assistant, "go");
+
+        var compacted = Assert.Single(events.OfType<TurnEvent.Compacted>());
+        Assert.False(compacted.ThisTurn);
+        Assert.False(compacted.Result.Summarised);
+        Assert.Null(compacted.Result.Usage);
+        Assert.Equal(1, compacted.Result.Pruned);
+        var notice = Assert.Single(events.OfType<TurnEvent.Notice>());
+        Assert.False(notice.IsError);
+        Assert.Equal(Assistant.OverflowRetryNotice(null, null), notice.Text);
+        Assert.StartsWith("(" + Assistant.PruneGlyph + "the server said the request was too long", notice.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("tokens", notice.Text, StringComparison.Ordinal);
+        Assert.Empty(events.OfType<TurnEvent.ServerLimit>());
+        Assert.Equal(2, client.Requests.Count);
+        Assert.Equal(ConversationCompactor.PrunedStub(3000), ResultOf(client.Requests[1], "o1"));
+        Assert.Equal("done", history.Messages[^1].Text);
+    }
+
+    [Fact]
+    public async Task Guard_Overflow_WithNothingToShrink_EndsWithTheReadableError()
+    {
+        var (client, _, assistant) = Build(new AIFunction[] { new EchoTool() });
+        assistant.ContextGuard = new Assistant.TurnContextGuard(10_000, 80, ToolCompactMode.Prune);
+        client.EnqueueText("unused");
+        client.BeforeUpdateOf = ThrowAt(TooLongError(), 0);
+
+        var events = await Run(assistant, "go");
+
+        var error = Assert.IsType<TurnEvent.Notice>(events[^1]);
+        Assert.True(error.IsError);
+        Assert.StartsWith("The request was too long for the model's context window. ", error.Text, StringComparison.Ordinal);
+        Assert.Single(client.Requests);
+    }
+
+    [Fact]
+    public async Task Guard_Overflow_TwiceInARow_EndsTheTurn()
+    {
+        var (client, history, assistant) = Build(new AIFunction[] { new EchoTool() });
+        OlderTurn(history);
+        assistant.ContextGuard = new Assistant.TurnContextGuard(10_000, 80, ToolCompactMode.Prune);
+        client.EnqueueText("unused");
+        client.EnqueueText("unused");
+        client.BeforeUpdateOf = ThrowAt(TooLongError(), 0, 1);
+
+        var events = await Run(assistant, "go");
+
+        Assert.Equal(2, client.Requests.Count);
+        Assert.True(Assert.IsType<TurnEvent.Notice>(events[^1]).IsError);
+        Assert.Single(events.OfType<TurnEvent.Notice>(), n => !n.IsError);
+    }
+
+    [Theory]
+    [InlineData(ToolCompactMode.Stop, 80)]
+    [InlineData(ToolCompactMode.Nothing, 80)]
+    [InlineData(ToolCompactMode.Prune, 0)]
+    public async Task Guard_Overflow_UnderStopOffOrAZeroShare_IsNotSentAgain(ToolCompactMode mode, int percent)
+    {
+        var (client, history, assistant) = Build(new AIFunction[] { new EchoTool() });
+        OlderTurn(history);
+        assistant.ContextGuard = new Assistant.TurnContextGuard(10_000, percent, mode);
+        client.EnqueueText("unused");
+        client.BeforeUpdateOf = ThrowAt(TooLongError(), 0);
+
+        var events = await Run(assistant, "go");
+
+        Assert.Single(client.Requests);
+        Assert.Empty(events.OfType<TurnEvent.Compacted>());
+        Assert.StartsWith("The request was too long", Assert.IsType<TurnEvent.Notice>(events[^1]).Text, StringComparison.Ordinal);
+    }
+
+    /// <summary>A long turn can recover more than once: an overflow, a recovered round, then another overflow whose round's result is cut.</summary>
+    [Fact]
+    public async Task Guard_Overflow_AfterARecoveredRound_RecoversAgain()
+    {
+        var (client, history, assistant) = Build(new AIFunction[] { new EchoTool() });
+        OlderTurn(history);
+        assistant.ContextGuard = new Assistant.TurnContextGuard(10_000, 80, ToolCompactMode.Prune);
+        client.EnqueueText("unused");
+        client.Enqueue(FakeChatClient.Call("c1", "echo", EchoArgs(LongText(3000))), FakeChatClient.Usage(500, 10));
+        client.EnqueueText("unused");
+        client.EnqueueText("done");
+        client.BeforeUpdateOf = ThrowAt(TooLongError(), 0, 2);
+
+        var events = await Run(assistant, "go");
+
+        Assert.Equal(2, events.OfType<TurnEvent.Notice>().Count(n => n.Text.Contains("the server said the request was too long", StringComparison.Ordinal)));
+        Assert.Equal(4, client.Requests.Count);
+        Assert.True(ConversationCompactor.HoldsCutMark(ResultOf(client.Requests[3], "c1")));
+        Assert.Equal("done", history.Messages[^1].Text);
+    }
+
+    /// <summary>
+    /// A smaller window the server names: raised for the host, and the rest of the turn is judged by it — the next round's 4,512 tokens
+    /// pass the 90 % ceiling of 5,000 (and would be 45 % of the guard's 10,000), so its result is cut.
+    /// </summary>
+    [Fact]
+    public async Task Guard_Overflow_ASmallerLimit_IsRaised_AndJudgesTheRestOfTheTurn()
+    {
+        var (client, history, assistant) = Build(new AIFunction[] { new EchoTool() });
+        OlderTurn(history);
+        assistant.ContextGuard = new Assistant.TurnContextGuard(10_000, 80, ToolCompactMode.Prune);
+        client.EnqueueText("unused");
+        client.Enqueue(FakeChatClient.Call("c1", "echo", EchoArgs(LongText(3000))), FakeChatClient.Usage(3_500, 10));
+        client.EnqueueText("done");
+        client.BeforeUpdateOf = ThrowAt(new NeonSidekick.Llm.Anthropic.AnthropicApiException(400, "invalid_request_error", "prompt is too long: 5200 tokens > 5000 maximum"), 0);
+
+        var events = await Run(assistant, "go");
+
+        Assert.Equal(5_000, Assert.Single(events.OfType<TurnEvent.ServerLimit>()).Tokens);
+        var notices = events.OfType<TurnEvent.Notice>().ToList();
+        Assert.Equal(2, notices.Count);
+        Assert.Equal(Assistant.OverflowRetryNotice(5_200, 5_000), notices[0].Text);
+        Assert.Contains("(5,200 of 5,000 tokens)", notices[0].Text, StringComparison.Ordinal);
+        Assert.StartsWith("(" + Assistant.PruneGlyph + "context at 90%: cut 1 tool result", notices[1].Text, StringComparison.Ordinal);
+        Assert.Equal(5_000, assistant.ContextGuard!.WindowTokens);
+        Assert.True(ConversationCompactor.HoldsCutMark(ResultOf(client.Requests[2], "c1")));
+    }
+
+    [Fact]
+    public async Task Guard_Overflow_WithNoGuard_RaisesTheLimit_AndEndsWithTheFigures()
+    {
+        var (client, _, assistant) = Build(new AIFunction[] { new EchoTool() });
+        client.EnqueueText("unused");
+        client.BeforeUpdateOf = ThrowAt(new NeonSidekick.Llm.Anthropic.AnthropicApiException(0, "invalid_request_error", "prompt is too long: 5200 tokens > 5000 maximum"), 0);
+
+        var events = await Run(assistant, "go");
+
+        Assert.Equal(5_000, Assert.Single(events.OfType<TurnEvent.ServerLimit>()).Tokens);
+        var error = Assert.IsType<TurnEvent.Notice>(events[^1]);
+        Assert.True(error.IsError);
+        Assert.Contains("(5,200 of 5,000 tokens)", error.Text, StringComparison.Ordinal);
+        Assert.Single(client.Requests);
+    }
+
+    /// <summary>vLLM's model default keeps 3,000 of a 4,096-token window for the reply: no shrink can make room, so no retry.</summary>
+    [Fact]
+    public async Task Guard_Overflow_AReplyReservationOfHalfTheLimit_IsNotSentAgain()
+    {
+        var (client, history, assistant) = Build(new AIFunction[] { new EchoTool() });
+        OlderTurn(history);
+        assistant.ContextGuard = new Assistant.TurnContextGuard(4_096, 80, ToolCompactMode.Prune);
+        client.EnqueueText("unused");
+        client.BeforeUpdateOf = ThrowAt(new NeonSidekick.Llm.OpenAIPlatform.OpenAIApiException(400, "BadRequestError",
+            "'max_tokens' or 'max_completion_tokens' is too large: 3000. This model's maximum context length is 4096 tokens and your request has 1500 input tokens (3000 > 4096 - 1500)."), 0);
+
+        var events = await Run(assistant, "go");
+
+        Assert.Single(client.Requests);
+        var error = Assert.IsType<TurnEvent.Notice>(events[^1]);
+        Assert.Contains("(1,500 of 4,096 tokens); the server keeps 3,000 tokens for the reply", error.Text, StringComparison.Ordinal);
+    }
+
+    /// <summary>The server can refuse below its own figure (a Continue report: 15,953 of a 16,384-token slot): the shrink still starts past the window.</summary>
+    [Fact]
+    public async Task Guard_Overflow_BelowTheShare_StillShrinks_AndSendsAgain()
+    {
+        var (client, history, assistant) = Build(new AIFunction[] { new EchoTool() });
+        assistant.ContextGuard = new Assistant.TurnContextGuard(10_000, 98, ToolCompactMode.Prune);
+        client.Enqueue(FakeChatClient.Call("c1", "echo", EchoArgs(LongText(9000))), FakeChatClient.Usage(500, 10));    // 3,512: no trip
+        client.EnqueueText("unused");
+        client.EnqueueText("done");
+        client.BeforeUpdateOf = ThrowAt(new NeonSidekick.Llm.OpenAIPlatform.OpenAIApiException(400, ContextOverflowMatch.LlamaCode,
+            "request (7000 tokens) exceeds the available context size (10000 tokens), try increasing it"), 1);
+
+        var events = await Run(assistant, "go");
+
+        Assert.Contains(events.OfType<TurnEvent.Notice>(), n => n.Text == Assistant.OverflowRetryNotice(7_000, 10_000));
+        Assert.Equal(3, client.Requests.Count);
+        Assert.True(ConversationCompactor.HoldsCutMark(ResultOf(client.Requests[2], "c1")));
+        Assert.Equal("done", history.Messages[^1].Text);
+    }
+
+    /// <summary>The retry is not a tool iteration: with a cap of one, the round sent again still answers.</summary>
+    [Fact]
+    public async Task Guard_Overflow_TheRetry_DoesNotUseUpAToolIteration()
+    {
+        var (client, history, assistant) = Build(new AIFunction[] { new EchoTool() });
+        OlderTurn(history);
+        assistant.MaxToolIterations = 1;
+        assistant.ContextGuard = new Assistant.TurnContextGuard(10_000, 80, ToolCompactMode.Prune);
+        client.EnqueueText("unused");
+        client.EnqueueText("done");
+        client.BeforeUpdateOf = ThrowAt(TooLongError(), 0);
+
+        var events = await Run(assistant, "go");
+
+        Assert.DoesNotContain(events.OfType<TurnEvent.Notice>(), n => n.IsError);
+        Assert.Equal("done", history.Messages[^1].Text);
+    }
+
+    [Fact]
+    public async Task Guard_Overflow_EscDuringTheSummary_EndsTheTurn_WithoutARetry()
+    {
+        var (client, history, assistant) = Build(new AIFunction[] { new EchoTool() });
+        OlderTurn(history);
+        assistant.ContextGuard = new Assistant.TurnContextGuard(10_000, 80, ToolCompactMode.Compact);
+        client.EnqueueText("unused");
+        client.EnqueueText("a summary");
+        client.EnqueueText("never");
+        using var esc = new CancellationTokenSource();
+        client.BeforeUpdateOf = (request, i, _) =>
+        {
+            if (request == 0 && i == 0)
+            {
+                return Task.FromException(TooLongError());
+            }
+
+            if (request == 1)
+            {
+                esc.Cancel();
+            }
+
+            return Task.CompletedTask;
+        };
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Run(assistant, "go", esc.Token));
+
+        Assert.Equal(2, client.Requests.Count);
+        Assert.Equal(ConversationCompactor.SummaryInstruction, client.Requests[1][0].Text);
+    }
+
+    [Fact]
+    public void LooksLikeContextOverflow_ReadsEachShape_AndNothingElse()
+    {
+        Assert.Null(Assistant.LooksLikeContextOverflow(new HttpRequestException("Only user, system and assistant roles are supported!")));
+        Assert.Null(Assistant.LooksLikeContextOverflow(new InvalidOperationException("Prompt is too long")));                 // the Claude Code client
+        Assert.Null(Assistant.LooksLikeContextOverflow(new OperationCanceledException("exceeded the configured timeout")));
+        Assert.Null(Assistant.LooksLikeContextOverflow(new NeonSidekick.Llm.OpenAIPlatform.OpenAIApiException(400, "invalid_request_error", "Unknown parameter.")));
+
+        var anthropic = Assistant.LooksLikeContextOverflow(new NeonSidekick.Llm.Anthropic.AnthropicApiException(0, "invalid_request_error", "prompt is too long: 210000 tokens > 200000 maximum"));
+        Assert.Equal(new ContextOverflow("Anthropic text", 210_000, 200_000, null), anthropic);
+        var openAI = Assistant.LooksLikeContextOverflow(new InvalidOperationException("wrapped", TooLongError()));
+        Assert.Equal(new ContextOverflow("context_length_exceeded code", null, null, null), openAI);
+    }
+
+    [Theory]
+    [InlineData("{\"error\":{\"code\":400,\"message\":\"request (518 tokens) exceeds the available context size (512 tokens), try increasing it\",\"type\":\"exceed_context_size_error\",\"n_prompt_tokens\":518,\"n_ctx\":512}}", "llama-server fields", 518L, 512L, null)]
+    [InlineData("the request exceeds the available context size, try increasing it", "llama-server text", null, null, null)]
+    [InlineData("request (518 tokens) exceeds the available context size (512 tokens), try increasing it", "llama-server text", 518L, 512L, null)]
+    [InlineData("{\"error\":{\"code\":\"unknown\",\"message\":\"Engine protocol predict request returned 400: {\\\"error\\\":{\\\"code\\\":400,\\\"message\\\":\\\"the request exceeds the available context size, try increasing it\\\",\\\"type\\\":\\\"exceed_context_size_error\\\",\\\"n_prompt_tokens\\\":518,\\\"n_ctx\\\":512}}\",\"type\":\"internal_error\"}}", "llama-server fields", 518L, 512L, null)]
+    [InlineData("This model's maximum context length is 4096 tokens. However, your request has 5000 input tokens.", "vLLM text", 5000L, 4096L, null)]
+    [InlineData("'max_tokens' or 'max_completion_tokens' is too large: 3000. This model's maximum context length is 4096 tokens and your request has 1500 input tokens (3000 > 4096 - 1500)", "vLLM text", 1500L, 4096L, 3000L)]
+    [InlineData("The decoder prompt (length 9000) is longer than the maximum model length of 8192.", "vLLM text", 9000L, 8192L, null)]
+    [InlineData("This model's maximum context length is 8192 tokens. However, your messages resulted in 9001 tokens.", "OpenAI-style text", 9001L, 8192L, null)]
+    [InlineData("This model's maximum context length is 8192 tokens. However, you requested 9100 tokens (8100 in the messages, 1000 in the completion).", "OpenAI-style text", 8100L, 8192L, 1000L)]
+    [InlineData("This model's maximum context length is 8192 tokens. Please shorten it.", "OpenAI-style text", null, 8192L, null)]
+    [InlineData("Prompt length 9000 exceeds the available context size of 8192 tokens (this model's maximum context length)", "TabbyAPI text", 9000L, 8192L, null)]
+    [InlineData("Prompt length 8000 leaves no room to generate: the job needs 9000 cache tokens (8000 + 1000), which exceeds the available context size of 8192 tokens", "TabbyAPI text", 8000L, 8192L, null)]
+    [InlineData("The input (9000 tokens) is longer than the model's context length (8192 tokens).", "SGLang text", 9000L, 8192L, null)]
+    [InlineData("input length and `max_tokens` exceed context limit: 190000 + 20000 > 200000, decrease input length or `max_tokens` and try again", "Anthropic text", 190000L, 200000L, 20000L)]
+    [InlineData("{\"error\":{\"code\":\"context_length_exceeded\",\"message\":\"Too many tokens, sorry.\"}}", "context_length_exceeded code", null, null, null)]
+    public void ContextOverflowMatch_ReadsEachServersWords(string text, string matched, long? sent, long? limit, long? output) =>
+        Assert.Equal(new ContextOverflow(matched, sent, limit, output), ContextOverflowMatch.Read(text, null));
+
+    [Theory]
+    [InlineData("{\"error\":{\"type\":\"exceed_context_size_error\",\"message\":\"x\",\"n_prompt_tokens\":518,\"n_ctx\":0}}")]
+    [InlineData("{\"error\":{\"type\":\"exceed_context_size_error\",\"message\":\"x\",\"n_prompt_tokens\":518,\"n_ctx\":-4}}")]
+    [InlineData("{\"error\":{\"type\":\"exceed_context_size_error\",\"message\":\"x\",\"n_prompt_tokens\":518,\"n_ctx\":12345678901234567890}}")]
+    public void ContextOverflowMatch_ALimitOutOfRange_IsLeftUnparsed(string body)
+    {
+        var overflow = ContextOverflowMatch.Read(body, null);
+        Assert.NotNull(overflow);
+        Assert.Null(overflow.Limit);
+    }
+
+    /// <summary>The retry's notice: the prune glyph (a shrink follows), and the figures only when both were given.</summary>
+    [Fact]
+    public void OverflowRetryNotice_GivesTheFigures_OnlyWhenBothWereParsed()
+    {
+        string both = Assistant.OverflowRetryNotice(41_200, 32_768);
+        Assert.StartsWith("(" + Assistant.PruneGlyph, both, StringComparison.Ordinal);
+        Assert.Contains("(41,200 of 32,768 tokens)", both, StringComparison.Ordinal);
+        Assert.EndsWith("sent again)", both, StringComparison.Ordinal);
+        Assert.DoesNotContain("tokens", Assistant.OverflowRetryNotice(null, 32_768), StringComparison.Ordinal);
+        Assert.DoesNotContain("tokens", Assistant.OverflowRetryNotice(41_200, null), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TurnCutNotice_ReadsItsCounts_AndItsFigures()
+    {
+        ConversationCompactor.CutEntry[] two = [new("read_file", 250_000, 41_000), new("web_fetch", 62_000, 20_000)];
+        string both = Assistant.TurnCutNotice(97, two, 0);
+        Assert.StartsWith("(" + Assistant.PruneGlyph + "context at 97%: cut 2 tool results to fit", both, StringComparison.Ordinal);
+        Assert.Contains("312.0k → 61.0k characters", both, StringComparison.Ordinal);
+
+        string one = Assistant.TurnCutNotice(96, [two[0]], 3);
+        Assert.Contains("cut 1 tool result and 3 pictures to fit, ", one, StringComparison.Ordinal);
+
+        string pictures = Assistant.TurnCutNotice(96, [], 1);
+        Assert.Contains("cut 1 picture to fit)", pictures, StringComparison.Ordinal);
+        Assert.DoesNotContain("characters", pictures, StringComparison.Ordinal);
+    }
+
     // ---- the --log lines of a turn (2026-09-19) ----
 
     private static (List<NeonSidekick.Diagnostics.DiagnosticEvent> Lines, Action<NeonSidekick.Diagnostics.DiagnosticEvent> Capture) LogCapture(params string[] categories)

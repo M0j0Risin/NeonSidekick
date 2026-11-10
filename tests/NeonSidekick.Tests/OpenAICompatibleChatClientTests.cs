@@ -524,6 +524,103 @@ public class OpenAICompatibleChatClientTests
         Assert.DoesNotContain("tool_calls", json);
     }
 
+    // ── Context overflow over the real client (2026-11-09) ─────────────────
+
+    /// <summary>llama-server's real overflow body: the numbers in the message and in the token fields.</summary>
+    private const string LlamaOverflow = "{\"error\":{\"code\":400,\"message\":\"request (518 tokens) exceeds the available context size (512 tokens), try increasing it\",\"type\":\"exceed_context_size_error\",\"n_prompt_tokens\":518,\"n_ctx\":512}}";
+
+    private const string ChunkHead = "data: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"my-model\",";
+
+    private static string DoneStream() =>
+        ChunkHead + "\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"done\"},\"finish_reason\":null}]}\n\n"
+        + ChunkHead + "\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n"
+        + "data: [DONE]\n\n";
+
+    /// <summary>A history whose older turn holds a 3,000-character read the overflow's prune can stub.</summary>
+    private static ConversationHistory WithAnOlderRead()
+    {
+        var history = new ConversationHistory("sys");
+        history.AddMessage(new ChatMessage(ChatRole.User, "read it"));
+        history.AddMessage(new ChatMessage(ChatRole.Assistant, [new FunctionCallContent("o1", "read_file", new Dictionary<string, object?> { ["path"] = "a.txt" })]));
+        history.AddMessage(new ChatMessage(ChatRole.Tool, [new FunctionResultContent("o1", new string('x', 3000))]));
+        history.AddMessage(new ChatMessage(ChatRole.Assistant, "read"));
+        return history;
+    }
+
+    private static async Task<(List<TurnEvent> Events, StubHttpMessageHandler Stub, Assistant Assistant)> OverflowTurn(
+        Func<int, HttpResponseMessage> answer, Assistant.TurnContextGuard? guard)
+    {
+        int sent = 0;
+        var stub = new StubHttpMessageHandler().Map("http://127.0.0.1:1234/v1/chat/completions", (_, _) => Task.FromResult(answer(sent++)));
+        using var http = new HttpClient(stub);
+        using var client = new OpenAICompatibleChatClient(Endpoint(), TimeSpan.FromSeconds(5), http);
+        var assistant = new Assistant(client, WithAnOlderRead(), new LlmTimeouts(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10))) { ContextGuard = guard };
+
+        var events = new List<TurnEvent>();
+        await foreach (var evt in assistant.RunTurnAsync("hi")) events.Add(evt);
+        return (events, stub, assistant);
+    }
+
+    /// <summary>
+    /// llama-server's 400 (its token fields are in the raw body, not in what <c>ServerDetail</c> keeps): the older turn is pruned, the
+    /// smaller window raised, and the request sent again and answered.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ContextOverflow_IsShrunk_AndSentAgain(bool padded)
+    {
+        string body = padded
+            ? LlamaOverflow.Replace("try increasing it", "try increasing it" + new string('.', 400), StringComparison.Ordinal)
+            : LlamaOverflow;
+        var (events, stub, assistant) = await OverflowTurn(
+            n => n == 0 ? StubHttpMessageHandler.Json(HttpStatusCode.BadRequest, body) : StubHttpMessageHandler.Json(HttpStatusCode.OK, DoneStream(), "text/event-stream"),
+            new Assistant.TurnContextGuard(1000, 80, ToolCompactMode.Prune));
+
+        Assert.DoesNotContain(events.OfType<TurnEvent.Notice>(), n => n.IsError);
+        Assert.Equal(512, Assert.Single(events.OfType<TurnEvent.ServerLimit>()).Tokens);
+        Assert.Contains(events.OfType<TurnEvent.Notice>(), n => n.Text == Assistant.OverflowRetryNotice(518, 512));
+        Assert.Single(events.OfType<TurnEvent.Compacted>());
+        Assert.Equal(2, stub.Requests.Count);
+        Assert.Contains(new string('x', 3000), stub.Requests[0].Body);
+        Assert.DoesNotContain(new string('x', 3000), stub.Requests[1].Body);
+        Assert.Equal(512, assistant.ContextGuard!.WindowTokens);
+    }
+
+    [Fact]
+    public async Task ContextOverflow_Twice_EndsWithTheContextWindowError()
+    {
+        var (events, stub, _) = await OverflowTurn(_ => StubHttpMessageHandler.Json(HttpStatusCode.BadRequest, LlamaOverflow), new Assistant.TurnContextGuard(1000, 80, ToolCompactMode.Prune));
+
+        Assert.Equal(2, stub.Requests.Count);
+        var error = Assert.IsType<TurnEvent.Notice>(events[^1]);
+        Assert.True(error.IsError);
+        Assert.Equal(ModelErrorText.TooLong(new ContextOverflow("llama-server fields", 518, 512, null)), error.Text);
+    }
+
+    /// <summary>LM Studio wraps llama-server's error in a 500, its fields escaped inside the outer message: the context-window text, not "failed on its side".</summary>
+    [Fact]
+    public async Task LmStudiosWrappedOverflow_ReadsAsTheContextWindowError()
+    {
+        const string body = "{\"error\":{\"code\":\"unknown\",\"message\":\"Engine protocol predict request returned 400: {\\\"error\\\":{\\\"code\\\":400,\\\"message\\\":\\\"the request exceeds the available context size, try increasing it\\\",\\\"type\\\":\\\"exceed_context_size_error\\\",\\\"n_prompt_tokens\\\":518,\\\"n_ctx\\\":512}}\",\"type\":\"internal_error\"}}";
+        var (events, stub, _) = await OverflowTurn(_ => StubHttpMessageHandler.Json(HttpStatusCode.InternalServerError, body), guard: null);
+
+        Assert.Single(stub.Requests);
+        Assert.Equal(512, Assert.Single(events.OfType<TurnEvent.ServerLimit>()).Tokens);
+        var error = Assert.IsType<TurnEvent.Notice>(events[^1]);
+        Assert.StartsWith("The request was too long for the model's context window (518 of 512 tokens). ", error.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task APlain500_StillReadsAsTheServerFailing()
+    {
+        var (events, _, _) = await OverflowTurn(_ => StubHttpMessageHandler.Json(HttpStatusCode.InternalServerError, "{\"error\":{\"message\":\"CUDA out of memory\"}}"), guard: null);
+
+        var error = Assert.IsType<TurnEvent.Notice>(Assert.Single(events));
+        Assert.StartsWith("The LLM server failed on its side (", error.Text, StringComparison.Ordinal);
+        Assert.Empty(events.OfType<TurnEvent.ServerLimit>());
+    }
+
     /// <summary>A refused key (2026-10-04, the UI review): one line with the way on, never the exception chain.</summary>
     [Fact]
     public async Task RefusedKey_IsOneLineWithTheWayOn()

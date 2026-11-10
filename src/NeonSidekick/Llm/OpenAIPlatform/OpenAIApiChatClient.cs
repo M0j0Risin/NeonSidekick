@@ -204,12 +204,19 @@ public sealed class OpenAIApiChatClient : IChatClient
     internal static bool IsRetryable(int status, string body) =>
         status is 500 or 502 or 503 || (status == 429 && !body.Contains("insufficient_quota", StringComparison.Ordinal));
 
-    /// <summary>A 400 whose message names the encrypted content or a reasoning item: the one the stripped retry answers.</summary>
+    /// <summary>
+    /// A 400 whose message names the encrypted content or a reasoning item: the one the stripped retry answers. Never a context overflow
+    /// (2026-11-09): an overflow that mentions reasoning would otherwise be resent without it before the turn loop could shrink the history.
+    /// </summary>
     internal static bool IsReasoningRefusal(int status, string body) =>
-        status == 400 && (body.Contains("encrypted", StringComparison.OrdinalIgnoreCase) || body.Contains("reasoning", StringComparison.OrdinalIgnoreCase));
+        status == 400 && (body.Contains("encrypted", StringComparison.OrdinalIgnoreCase) || body.Contains("reasoning", StringComparison.OrdinalIgnoreCase))
+        && ErrorCode(body) != ContextOverflowMatch.OpenAICode && !Assistant.IsContextOverflowText(body);
 
-    /// <summary>The <c>error.code</c> of an error body, else its <c>error.type</c>, else <c>error</c>.</summary>
-    private static string ErrorCode(string body)
+    /// <summary>
+    /// The <c>error.code</c> of an error body, else its <c>error.type</c>, else <c>error</c>. Internal since 2026-11-09: the context-overflow
+    /// read (<see cref="ContextOverflowMatch"/>) takes a raw body's code the same way.
+    /// </summary>
+    internal static string ErrorCode(string body)
     {
         try
         {

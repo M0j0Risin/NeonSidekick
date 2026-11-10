@@ -47,8 +47,8 @@ public class ToolCompactTypeTests
             Assert.NotEqual("", ToolCompactType.Describe(name));
         }
 
-        Assert.Equal("prune, then summarize if the turn is still over the share", ToolCompactType.Describe("compact"));
-        Assert.Equal("stub this turn's older tool results and call arguments and carry on", ToolCompactType.Describe("prune"));
+        Assert.Equal("prune, summarize, then cut the newest results to fit", ToolCompactType.Describe("compact"));
+        Assert.Equal("stub older results and long arguments, cut the newest to fit", ToolCompactType.Describe("prune"));
         Assert.Equal("end the turn with a notice; /compact or /clear first", ToolCompactType.Describe("stop"));
         Assert.Equal("no check; the server's own limit answers", ToolCompactType.Describe("off"));
         Assert.Equal("", ToolCompactType.Describe("eager"));

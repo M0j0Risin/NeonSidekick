@@ -176,9 +176,38 @@ public static partial class ConversationCompactor
 
     /// <summary>
     /// The characters one token is estimated at by <see cref="EstimateTokens"/>: the usual rule of thumb for English
-    /// text and code under the common tokenisers; JSON runs more tokens per character, which errs toward compacting.
+    /// text and code under the common tokenisers. JSON, code and logs run more tokens per character, so this figure errs toward
+    /// overflow, not toward compacting (2026-11-09: corrected); the mid-turn guard counts what a round just added at
+    /// <see cref="GuardCharsPerToken"/> instead.
     /// </summary>
     public const int CharsPerToken = 4;
+
+    /// <summary>
+    /// The characters one token is estimated at when the mid-turn guard projects the round just appended (2026-11-09, a turn that ran
+    /// the window out before the guard fired): tool results are mostly JSON, code and logs, which run nearer three characters a token than
+    /// four, and a low estimate lets a request past the window. Used only there and in <see cref="CutLatestResults"/>' budget;
+    /// <see cref="CharsPerToken"/> stays the figure for <c>/usage</c> and the compactor's other estimates.
+    /// </summary>
+    public const int GuardCharsPerToken = 3;
+
+    /// <summary>The most tokens <see cref="PictureTokensFor"/> counts for one picture (2026-11-09): a cap, so a huge picture's guess stays sane.</summary>
+    public const int MaxPictureTokens = 16_384;
+
+    /// <summary>
+    /// The tokens a new picture of <paramref name="width"/> × <paramref name="height"/> is estimated at by the mid-turn guard (2026-11-09):
+    /// about one token per 750 pixels (the common vision tokenizers' rate), at least <see cref="PictureTokens"/> and at most
+    /// <see cref="MaxPictureTokens"/>. A size of 0 or less (unknown) gives the floor. The product is taken in <c>long</c>, since a tool's
+    /// picture isn't always fitted to <see cref="Files.ImageFile.MaxSide"/>.
+    /// </summary>
+    public static long PictureTokensFor(int width, int height)
+    {
+        if (width <= 0 || height <= 0)
+        {
+            return PictureTokens;
+        }
+
+        return Math.Clamp((long)width * height / 750, PictureTokens, MaxPictureTokens);
+    }
 
     /// <summary>
     /// The tokens one picture is estimated at by <see cref="EstimateTokens"/>: what a vision model charges varies by
@@ -274,6 +303,16 @@ public static partial class ConversationCompactor
 
         /// <summary>The pictures' tokens.</summary>
         public long PictureTokenCount => PictureTokens * Pictures;
+
+        /// <summary>
+        /// The characters alone in tokens at <paramref name="charsPerToken"/> characters a token (2026-11-09, the mid-turn guard's
+        /// <see cref="GuardCharsPerToken"/>): the five counts summed, then divided once; no pictures (the guard counts them by size).
+        /// </summary>
+        public long CharsTokens(int charsPerToken)
+        {
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(charsPerToken);
+            return (TextChars + ToolCallChars + ToolResultChars + DocumentChars + ThinkingChars) / charsPerToken;
+        }
 
         /// <summary>The thinking's tokens (the part counted).</summary>
         public long ThinkingTokens => ThinkingChars / CharsPerToken;
@@ -462,11 +501,24 @@ public static partial class ConversationCompactor
     /// </summary>
     public static (List<ChatMessage> Messages, int Pruned) Prune(Plan plan, bool protectSkills = true, List<PrunedEntry>? entries = null)
     {
-        ArgumentNullException.ThrowIfNull(plan);
-        var messages = new List<ChatMessage>(plan.Older.Count + plan.Recent.Count);
-        var (pruned, _) = Stub(plan.Older, 0, plan.Older.Count, messages, protectSkills, entries, entries is null ? null : CallNames(plan.Older), dropThinking: true, userPictures: true);
-        messages.AddRange(plan.Recent);
+        var (messages, pruned, _, stubbed) = PruneOlderTurns(plan, protectSkills);
+        entries?.AddRange(stubbed);
         return (messages, pruned);
+    }
+
+    /// <summary>
+    /// <see cref="Prune"/>'s one body (2026-11-09): the older turns stubbed (their thinking and their own pictures too), the recent turns as
+    /// they are, with the results' and the arguments' counts and one <see cref="PrunedEntry"/> per stub. <c>/compact</c> prune
+    /// (<see cref="RunAsync"/>) and the mid-turn guard's overflow recovery (<c>Assistant.ShrinkAsync</c>, over <c>Split(messages, 1)</c>) both use it.
+    /// </summary>
+    public static (List<ChatMessage> Messages, int Pruned, int Arguments, List<PrunedEntry> Entries) PruneOlderTurns(Plan plan, bool protectSkills)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        var entries = new List<PrunedEntry>();
+        var messages = new List<ChatMessage>(plan.Older.Count + plan.Recent.Count);
+        var (pruned, arguments) = Stub(plan.Older, 0, plan.Older.Count, messages, protectSkills, entries, CallNames(plan.Older), dropThinking: true, userPictures: true);
+        messages.AddRange(plan.Recent);
+        return (messages, pruned, arguments, entries);
     }
 
     /// <summary>
@@ -573,13 +625,7 @@ public static partial class ConversationCompactor
                 }
 
                 string? source = ConversationHistory.CarrierSource(message);
-                var properties = new AdditionalPropertiesDictionary { [ConversationHistory.CarrierKey] = true };
-                if (source is not null)
-                {
-                    properties[ConversationHistory.SourceKey] = source;
-                }
-
-                into.Add(new ChatMessage(ChatRole.User, PrunedImageStub(pictures, source)) { AdditionalProperties = properties });
+                into.Add(StubbedCarrier(message, pictures));
                 pruned += pictures;
                 entries?.Add(new PrunedEntry(source ?? Tools.ViewImageTool.ToolName, 0, pictures));
                 continue;
@@ -648,6 +694,24 @@ public static partial class ConversationCompactor
         }
 
         return (pruned, arguments);
+    }
+
+    /// <summary>
+    /// A carrier with its <paramref name="pictures"/> pictures stubbed (one helper since 2026-11-09, for <see cref="Stub"/> and
+    /// <see cref="CutLatestResults"/>): a new user message whose text is <see cref="PrunedImageStub"/>, tagged
+    /// <see cref="ConversationHistory.CarrierKey"/> and, with a source, <see cref="ConversationHistory.SourceKey"/>, so it stays a carrier for
+    /// <see cref="ConversationHistory.IsImageCarrier"/>, the picture budget and later prunes.
+    /// </summary>
+    private static ChatMessage StubbedCarrier(ChatMessage carrier, int pictures)
+    {
+        string? source = ConversationHistory.CarrierSource(carrier);
+        var properties = new AdditionalPropertiesDictionary { [ConversationHistory.CarrierKey] = true };
+        if (source is not null)
+        {
+            properties[ConversationHistory.SourceKey] = source;
+        }
+
+        return new ChatMessage(ChatRole.User, PrunedImageStub(pictures, source)) { AdditionalProperties = properties };
     }
 
     /// <summary>
@@ -736,8 +800,7 @@ public static partial class ConversationCompactor
 
             foreach (var call in messages[i].Contents.OfType<FunctionCallContent>())
             {
-                if (call.Name == Tools.ReadFileTool.ToolName && call.Arguments is { } readArguments && !Assistant.IsOpeningCallId(call.CallId)
-                    && readArguments.TryGetValue(Tools.FileTool.PathArgument, out object? path) && ArgumentText(path) is { } text && IsPlanPath(text))
+                if (IsPlanRead(call))
                 {
                     planReads.Add(call.CallId);
                 }
@@ -792,6 +855,14 @@ public static partial class ConversationCompactor
         return (result, pruned, arguments);
     }
 
+    /// <summary>
+    /// Whether <paramref name="call"/> is a <c>read_file</c> of a plan file (2026-11-09, one test for <see cref="StubSupersededPlans"/> and
+    /// <see cref="CutLatestResults"/>): not an opening call, its <c>path</c> passing <see cref="IsPlanPath"/>.
+    /// </summary>
+    private static bool IsPlanRead(FunctionCallContent call) =>
+        call.Name == Tools.ReadFileTool.ToolName && call.Arguments is { } arguments && !Assistant.IsOpeningCallId(call.CallId)
+        && arguments.TryGetValue(Tools.FileTool.PathArgument, out object? path) && ArgumentText(path) is { } text && IsPlanPath(text);
+
     /// <summary>A <c>present_plan</c> call (not an opening one) whose <c>markdown</c> is real text, not missing and not a stub (2026-10-18).</summary>
     private static bool IsRealPresentation(AIContent content) =>
         content is FunctionCallContent { Name: Tools.PresentPlanTool.ToolName, Arguments: { } arguments } call && !Assistant.IsOpeningCallId(call.CallId)
@@ -824,6 +895,300 @@ public static partial class ConversationCompactor
         System.Text.Json.JsonElement { ValueKind: System.Text.Json.JsonValueKind.String } element => element.GetString(),
         _ => null,
     };
+
+    /// <summary>
+    /// One result <see cref="CutLatestResults"/> cut (2026-11-09): the tool that produced it (<see cref="UnknownTool"/> when no call carries its
+    /// id) and its length in characters before and after. Apart from <see cref="PrunedEntry"/>, which feeds the prune counts and has no after-size.
+    /// </summary>
+    public sealed record CutEntry(string Tool, int Before, int After);
+
+    /// <summary>The least a result is cut to by <see cref="CutLatestResults"/> (2026-11-09), in characters; one this long or shorter is never cut.</summary>
+    public const int CutFloorChars = 2_000;
+
+    /// <summary>How far from a cut point <see cref="CutLatestResults"/> looks for a line break to cut on instead (2026-11-09), in characters.</summary>
+    private const int CutReach = 200;
+
+    /// <summary>
+    /// The newest round's results cut to fit (2026-11-09, a turn whose one round of reads was bigger than the room left: the prune and the
+    /// summaries keep the newest round whole, so the request overflowed). The round is the last <see cref="ChatRole.Tool"/> message after
+    /// the turn's start (<see cref="ConversationHistory.InFlightStart"/>) and the carrier after it. When its estimate (results at
+    /// <see cref="GuardCharsPerToken"/>, plus <paramref name="pictureTokens"/>, else <see cref="PictureTokens"/> a carrier picture) is over
+    /// <paramref name="budgetTokens"/>, results are cut largest first, each to its head (about two thirds) and tail around
+    /// <see cref="TurnText.CutMarker"/>, never below <see cref="CutFloorChars"/>, until the round fits. Never cut: an opening call's result,
+    /// a loaded skill's while <paramref name="protectSkills"/>, a <c>read_file</c> of a plan file (the model rewrites the plan from it).
+    /// When every result is at its floor and the round still doesn't fit, the carrier's pictures are stubbed (<see cref="StubbedCarrier"/>).
+    /// Only the tool message and the carrier change, rebuilt (the held ones untouched, no raw representation); the calls' message, with the
+    /// Anthropic API's signed thinking, goes back as it was. Pure: a copy, with no cuts when nothing changed.
+    /// </summary>
+    public static (List<ChatMessage> Messages, IReadOnlyList<CutEntry> Cuts, int PicturesStubbed) CutLatestResults(IReadOnlyList<ChatMessage> messages, long budgetTokens, bool protectSkills, long? pictureTokens = null)
+    {
+        ArgumentNullException.ThrowIfNull(messages);
+        var result = new List<ChatMessage>(messages);
+        var (start, tool, carrier) = LatestRound(messages);
+        if (tool < 0)
+        {
+            return (result, [], 0);
+        }
+
+        int pictures = carrier < 0 ? 0 : messages[carrier].Contents.Count(c => c is DataContent);
+        long over = LatestRoundTokens(messages, pictureTokens) - Math.Max(budgetTokens, 0);
+        if (over <= 0)
+        {
+            return (result, [], 0);
+        }
+
+        var message = messages[tool];
+
+        // The calls this round answers, by id: their names for the entries, and the plan reads that are never cut.
+        var calls = new Dictionary<string, FunctionCallContent>(StringComparer.Ordinal);
+        for (int i = start; i < tool; i++)
+        {
+            if (messages[i].Role == ChatRole.Assistant)
+            {
+                foreach (var call in messages[i].Contents.OfType<FunctionCallContent>())
+                {
+                    calls.TryAdd(call.CallId, call);
+                }
+            }
+        }
+
+        var candidates = new List<int>();
+        for (int i = 0; i < message.Contents.Count; i++)
+        {
+            if (message.Contents[i] is FunctionResultContent { Result: string text } found && text.Length > CutFloorChars
+                && !Assistant.IsOpeningCallId(found.CallId) && !(protectSkills && ConversationHistory.IsSkillResult(found))
+                && !(calls.TryGetValue(found.CallId, out var call) && IsPlanRead(call)))
+            {
+                candidates.Add(i);
+            }
+        }
+
+        candidates.Sort((a, b) => ((string)((FunctionResultContent)message.Contents[b]).Result!).Length.CompareTo(((string)((FunctionResultContent)message.Contents[a]).Result!).Length));
+        long excess = over * GuardCharsPerToken;
+        var cuts = new List<CutEntry>();
+        List<AIContent>? rebuilt = null;
+        foreach (int i in candidates)
+        {
+            if (excess <= 0)
+            {
+                break;
+            }
+
+            var original = (FunctionResultContent)message.Contents[i];
+            string text = (string)original.Result!;
+            string cut = CutText(text, (int)Math.Max(CutFloorChars, text.Length - Math.Min(excess, int.MaxValue)));
+            if (cut.Length >= text.Length)
+            {
+                continue;
+            }
+
+            excess -= text.Length - cut.Length;
+            rebuilt ??= new List<AIContent>(message.Contents);
+            rebuilt[i] = new FunctionResultContent(original.CallId, cut) { AdditionalProperties = original.AdditionalProperties };
+            cuts.Add(new CutEntry(calls.TryGetValue(original.CallId, out var named) ? named.Name : UnknownTool, text.Length, cut.Length));
+        }
+
+        if (rebuilt is not null)
+        {
+            var kept = message.Clone();
+            kept.Contents = rebuilt;
+
+            // A raw SDK message would go out as it was, its results whole.
+            kept.RawRepresentation = null;
+            result[tool] = kept;
+        }
+
+        int stubbed = 0;
+        if (excess > 0 && pictures > 0)
+        {
+            result[carrier] = StubbedCarrier(messages[carrier], pictures);
+            stubbed = pictures;
+        }
+
+        return (result, cuts, stubbed);
+    }
+
+    /// <summary>
+    /// The newest round as <see cref="CutLatestResults"/> reads it (2026-11-09): the turn's start (<see cref="ConversationHistory.InFlightStart"/>),
+    /// the last <see cref="ChatRole.Tool"/> message after it (-1 for none: a first request) and the carrier right after that (-1 for none).
+    /// </summary>
+    private static (int Start, int Tool, int Carrier) LatestRound(IReadOnlyList<ChatMessage> messages)
+    {
+        int start = ConversationHistory.InFlightStart(messages);
+        for (int i = messages.Count - 1; i > start; i--)
+        {
+            if (messages[i].Role == ChatRole.Tool)
+            {
+                return (start, i, i + 1 < messages.Count && ConversationHistory.IsImageCarrier(messages[i + 1]) ? i + 1 : -1);
+            }
+        }
+
+        return (start, -1, -1);
+    }
+
+    /// <summary>
+    /// The newest round's estimate as the mid-turn guard counts it (2026-11-09): its results' characters at <see cref="GuardCharsPerToken"/>,
+    /// plus its carrier's pictures, <paramref name="pictureTokens"/> for them all when given (the guard's by-size figure), else
+    /// <see cref="PictureTokens"/> each. Zero with no round. <see cref="CutLatestResults"/> cuts against it, and the guard measures the cut by it.
+    /// </summary>
+    public static long LatestRoundTokens(IReadOnlyList<ChatMessage> messages, long? pictureTokens = null)
+    {
+        ArgumentNullException.ThrowIfNull(messages);
+        var (_, tool, carrier) = LatestRound(messages);
+        if (tool < 0)
+        {
+            return 0;
+        }
+
+        long chars = 0;
+        foreach (var content in messages[tool].Contents)
+        {
+            if (content is FunctionResultContent { Result: string text })
+            {
+                chars += text.Length;
+            }
+        }
+
+        int pictures = carrier < 0 ? 0 : messages[carrier].Contents.Count(c => c is DataContent);
+        return chars / GuardCharsPerToken + (pictures == 0 ? 0 : pictureTokens ?? (long)pictures * PictureTokens);
+    }
+
+    /// <summary>
+    /// <paramref name="text"/> cut to about <paramref name="target"/> characters (2026-11-09): its head (two thirds) and tail around
+    /// <see cref="TurnText.CutMarker"/>, each end moved to a line break within <see cref="CutReach"/> when there is one, never inside a
+    /// surrogate pair. The text itself when cutting would not make it shorter.
+    /// </summary>
+    internal static string CutText(string text, int target)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        int room = target - TurnText.CutMarker(text.Length).Length - 2;
+        if (room <= 0 || target >= text.Length)
+        {
+            return text;
+        }
+
+        int head = room * 2 / 3;
+        int tail = text.Length - (room - head);
+        int line = head > 0 ? text.LastIndexOf('\n', head - 1, Math.Min(CutReach, head)) : -1;
+        if (line >= 0)
+        {
+            head = line + 1;
+        }
+
+        if (tail < text.Length)
+        {
+            int next = text.IndexOf('\n', tail, Math.Min(CutReach, text.Length - tail));
+            if (next >= 0)
+            {
+                tail = next + 1;
+            }
+        }
+
+        if (head > 0 && char.IsHighSurrogate(text[head - 1]))
+        {
+            head--;
+        }
+
+        if (tail < text.Length && char.IsLowSurrogate(text[tail]))
+        {
+            tail++;
+        }
+
+        return text[..head] + (head > 0 && text[head - 1] != '\n' ? "\n" : "") + TurnText.CutMarker(tail - head) + "\n" + text[tail..];
+    }
+
+    /// <summary>
+    /// Whether <paramref name="text"/> holds a cut result's marker (2026-11-09, <see cref="TurnText.CutMarker"/>): a model that read a cut
+    /// file and wrote it back whole would delete the file's middle. Unanchored, since the marker sits mid-text in a long copy, and loose
+    /// about what a model may reproduce: <c>…</c> or <c>...</c>, any run of spaces, digits with or without commas, any case. Linear, so a
+    /// 200,000-character write argument can't make it run away.
+    /// </summary>
+    public static bool HoldsCutMark(string? text) => text is not null && CutMarkPattern().IsMatch(text);
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"\[\s*(?:…|\.{3})\s*[\d,]+\s+characters\s+cut\s+here\s+to\s+fit\s+the\s+context\s+window", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant)]
+    private static partial System.Text.RegularExpressions.Regex CutMarkPattern();
+
+    /// <summary>
+    /// The first top-level argument whose value holds a cut result's marker (<see cref="HoldsCutMark"/>, 2026-11-09), or null. Unlike
+    /// <see cref="StubbedArgument"/> it reaches inside lists (a <c>patch_file</c> edit): a string, a JSON string, an encoded JSON array or
+    /// object in either (read with <see cref="Tools.LooseJson.TryParse"/>, the parse a tool's list argument accepts), a JSON array or object,
+    /// or a sequence of <see cref="System.Text.Json.JsonElement"/>, every string inside walked. Any other type is skipped.
+    /// </summary>
+    public static string? CutMarkedArgument(IDictionary<string, object?>? arguments)
+    {
+        if (arguments is null)
+        {
+            return null;
+        }
+
+        foreach (var (name, value) in arguments)
+        {
+            bool marked = value switch
+            {
+                string text => TextHoldsCutMark(text),
+                System.Text.Json.JsonElement element => ElementHoldsCutMark(element),
+                IEnumerable<System.Text.Json.JsonElement> list => list.Any(ElementHoldsCutMark),
+                _ => false,
+            };
+
+            if (marked)
+            {
+                return name;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>A string argument holds the marker: as it is, or, when it reads as encoded JSON, in any string inside it.</summary>
+    private static bool TextHoldsCutMark(string text)
+    {
+        if (HoldsCutMark(text))
+        {
+            return true;
+        }
+
+        string trimmed = text.TrimStart();
+        if (trimmed.Length == 0 || (trimmed[0] != '[' && trimmed[0] != '{'))
+        {
+            return false;
+        }
+
+        using var document = Tools.LooseJson.TryParse(text);
+        return document is not null && ElementHoldsCutMark(document.RootElement);
+    }
+
+    /// <summary>Any string in <paramref name="element"/> holds the marker.</summary>
+    private static bool ElementHoldsCutMark(System.Text.Json.JsonElement element)
+    {
+        switch (element.ValueKind)
+        {
+            case System.Text.Json.JsonValueKind.String:
+                return TextHoldsCutMark(element.GetString() ?? "");
+            case System.Text.Json.JsonValueKind.Array:
+                foreach (var item in element.EnumerateArray())
+                {
+                    if (ElementHoldsCutMark(item))
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            case System.Text.Json.JsonValueKind.Object:
+                foreach (var property in element.EnumerateObject())
+                {
+                    if (ElementHoldsCutMark(property.Value))
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            default:
+                return false;
+        }
+    }
 
     /// <summary>The longest one tool result runs in <see cref="LeanTranscript"/> (2026-09-28); the rest is cut, and <see cref="LeanCut"/> says how much.</summary>
     public const int LeanResultChars = 1500;
@@ -1056,10 +1421,7 @@ public static partial class ConversationCompactor
 
         if (mode == CompactMode.Prune)
         {
-            var olderEntries = new List<PrunedEntry>();
-            var older = new List<ChatMessage>(plan.Older.Count + plan.Recent.Count);
-            var (count, arguments) = Stub(plan.Older, 0, plan.Older.Count, older, protectSkills, olderEntries, CallNames(plan.Older), dropThinking: true, userPictures: true);
-            older.AddRange(plan.Recent);
+            var (older, count, arguments, olderEntries) = PruneOlderTurns(plan, protectSkills);
             count += recentPruned;
             arguments += recentArguments;
             if (count + arguments == 0)

@@ -274,6 +274,42 @@ public class LlmSessionTests
         Assert.Equal(1, _http.Requests.Count(r => r.Uri.AbsoluteUri == "http://127.0.0.1:1234/v1/models"));
     }
 
+    /// <summary>A smaller window the server named in a too-long error (2026-11-09): used with its source until the next connect, said once.</summary>
+    [Fact]
+    public async Task NoteServerLimit_LowersTheWindow_UntilTheNextConnect()
+    {
+        _http.Map("http://127.0.0.1:1234/v1/models", HttpStatusCode.OK, ModelsWithWindow);
+        using var session = Session();
+        Assert.True(await session.ConnectAsync(Scanning, CancellationToken.None));
+
+        Assert.False(session.NoteServerLimit(32_768));      // no smaller: nothing to say
+        Assert.False(session.NoteServerLimit(0));
+        Assert.True(session.NoteServerLimit(16_384));
+        Assert.Equal(new ContextLength(16_384, LlmSession.ServerLimitSource), session.ContextLength);
+        Assert.False(session.NoteServerLimit(20_000));
+        Assert.Equal(16_384, session.ContextLength!.Value.Tokens);
+
+        Assert.True(await session.ConnectAsync(Scanning, CancellationToken.None));
+        Assert.Equal(new ContextLength(32_768, ContextLengthProbe.MaxModelLenSource), session.ContextLength);
+    }
+
+    [Fact]
+    public async Task NoteServerLimit_SetsAWindow_WhereNoneWasKnown_AndBeatsAConfiguredOne()
+    {
+        ServerOn1234("llama");
+        using var session = Session();
+        Assert.True(await session.ConnectAsync(Scanning, CancellationToken.None));
+        Assert.Null(session.ContextLength);
+
+        Assert.True(session.NoteServerLimit(4_096));
+        Assert.Equal(new ContextLength(4_096, LlmSession.ServerLimitSource), session.ContextLength);
+
+        Assert.True(await session.ConnectAsync(new AppSettingsData { LlmContextLength = 8_192, LlmScanMode = "local" }, CancellationToken.None));
+        Assert.Equal(ContextLength.Configured(8_192), session.ContextLength);
+        Assert.True(session.NoteServerLimit(4_096));
+        Assert.Equal(new ContextLength(4_096, LlmSession.ServerLimitSource), session.ContextLength);
+    }
+
     [Fact]
     public async Task Dispose_DisposesTheClient()
     {

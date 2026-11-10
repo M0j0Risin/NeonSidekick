@@ -1671,9 +1671,10 @@ public partial class SidekickAppTests : IDisposable
 
         string output = await Headless("first\nsecond\n");
 
-        // The guard judges the next request (2026-09-28): the reported 35 and 36 tokens plus the 618-character result just appended (154).
-        Assert.Contains("[notice] (✂️ context at 189%: pruned 1 tool result from this turn)", output);
-        Assert.Contains("[notice] (✂️ context at 190%: pruned 1 tool result from this turn)", output);
+        // The guard judges the next request (2026-09-28): the reported 35 and 36 tokens plus the 618-character result just appended
+        // (206 tokens at three characters each, 2026-11-09).
+        Assert.Contains("[notice] (✂️ context at 241%: pruned 1 tool result from this turn)", output);
+        Assert.Contains("[notice] (✂️ context at 242%: pruned 1 tool result from this turn)", output);
         Assert.Contains("read thrice", output);
         Assert.Equal(5, _chat.Requests.Count);
         static string ResultOf(IReadOnlyList<ChatMessage> request, string callId) =>
@@ -1685,6 +1686,42 @@ public partial class SidekickAppTests : IDisposable
         // The second message: the automatic compact (36 % in use) has nothing older (one turn, two kept) and nothing left to stub — c3 is the last iteration and stays — so it is silent.
         Assert.DoesNotContain("auto-compacted", output);
         Assert.EndsWith(new string('x', 600), ResultOf(_chat.Requests[4], "c3"));
+    }
+
+    /// <summary>
+    /// A request the server rejects as too long (2026-11-09), headless: the older turn pruned, the smaller window it names and the retry
+    /// each a <c>[notice]</c> line, and the run not counted as failed.
+    /// </summary>
+    [Fact]
+    public async Task Headless_ToolCompact_AnOverflow_IsShrunkAndSentAgain_AsNoticeLines()
+    {
+        ServerOn1234("llama");
+        _http.Map("http://127.0.0.1:1234/api/v0/models", HttpStatusCode.OK,
+            "{\"object\":\"list\",\"data\":[{\"id\":\"llama\",\"object\":\"model\",\"state\":\"loaded\",\"max_context_length\":4096,\"loaded_context_length\":1000}]}");
+        _settings.Update(d => d.LlmToolCompactType = "prune");
+        string folder = Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName);
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, "big.txt"), new string('x', 3000));
+        _chat.Enqueue(FakeChatClient.Call("c1", ReadFileTool.ToolName, new Dictionary<string, object?> { ["path"] = "big.txt" }), FakeChatClient.Usage(10, 5));
+        _chat.Enqueue(FakeChatClient.Text("read"), FakeChatClient.Usage(20, 5));
+        _chat.EnqueueText("unused");
+        _chat.EnqueueText("done");
+        _chat.BeforeUpdateOf = (request, i, _) => request == 2 && i == 0
+            ? Task.FromException(new NeonSidekick.Llm.OpenAIPlatform.OpenAIApiException(400, NeonSidekick.Llm.ContextOverflowMatch.LlamaCode,
+                "request (1200 tokens) exceeds the available context size (900 tokens), try increasing it"))
+            : Task.CompletedTask;
+
+        string output = await Headless("first\nsecond\n");
+
+        Assert.Contains("[notice] " + CompactionText.ServerLimitNotice(900), output);
+        Assert.Contains("[notice] (✂️ auto-compacted at ", output);
+        Assert.Contains("[notice] " + Assistant.OverflowRetryNotice(1_200, 900), output);
+        Assert.DoesNotContain("[error]", output);
+        Assert.Contains("done", output);
+        Assert.Equal(4, _chat.Requests.Count);
+        static string ResultOf(IReadOnlyList<ChatMessage> request) =>
+            (string)request.Where(m => m.Role == ChatRole.Tool).SelectMany(m => m.Contents.OfType<FunctionResultContent>()).Single(r => r.CallId == "c1").Result!;
+        Assert.Equal(ConversationCompactor.PrunedStub(ResultOf(_chat.Requests[2]).Length), ResultOf(_chat.Requests[3]));
     }
 
     [Fact]
@@ -1699,13 +1736,14 @@ public partial class SidekickAppTests : IDisposable
         Directory.CreateDirectory(folder);
         File.WriteAllText(Path.Combine(folder, "big.txt"), new string('x', 600));
         _chat.EnqueueText("noted");
-        _chat.Enqueue(FakeChatClient.Call("c1", ReadFileTool.ToolName, new Dictionary<string, object?> { ["path"] = "big.txt" }), FakeChatClient.Usage(600, 5));
+        // 525 + the 618-character result's 206 tokens (three characters each, 2026-11-09): 73 %, under the 75 % ceiling.
+        _chat.Enqueue(FakeChatClient.Call("c1", ReadFileTool.ToolName, new Dictionary<string, object?> { ["path"] = "big.txt" }), FakeChatClient.Usage(520, 5));
         _chat.Enqueue(FakeChatClient.Text("The user said first."), FakeChatClient.Usage(40, 3));
         _chat.EnqueueText("read it");
 
         string output = await Headless("first\nsecond\n");
 
-        Assert.Contains("[notice] (🗜️ auto-compacted at 75%: ", output);
+        Assert.Contains("[notice] (🗜️ auto-compacted at 73%: ", output);
         Assert.Contains(" · 40 → 3 tokens)", output);
         Assert.Contains("read it", output);
         Assert.Equal(4, _chat.Requests.Count);

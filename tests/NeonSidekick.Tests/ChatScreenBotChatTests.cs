@@ -827,6 +827,50 @@ public partial class ChatScreenTests
         Assert.Equal(_endpoints[0].ModelId + ", ada-only-model", Assert.Single(store.List(10)).Model);
     }
 
+    /// <summary>A bot on its own linked server (2026-11-09): the window its too-long error names is not the session's.</summary>
+    [Fact]
+    public async Task BotChat_Multi_ALinkedBotsServerLimit_LeavesTheSessionsWindowAlone()
+    {
+        BotChatFixture();
+        _settings.Update(d => d.BotChatLlmMode = "multi");
+        _http.Map("http://ada-only-server:9999/v1/models", HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("ada-only-model"));
+        _chat.EnqueueText("Hello from Neon.");
+        _chat.EnqueueText("unused");
+        _chat.EnqueueText("Neon ", "again");
+        _chat.EnqueueText("never");
+        EscDuringRequest(3);
+        _chat.BeforeUpdateOf = TooLongAt(1);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(AdaMarker, SystemText(_chat.Requests[1]));
+        Assert.DoesNotContain(CompactionText.ServerLimitNotice(5_000), output);
+        Assert.NotEqual(LlmSession.ServerLimitSource, _session.ContextLength?.Source);
+    }
+
+    /// <summary>A bot on the starter's own client (2026-11-09): its too-long error's window is the session's.</summary>
+    [Fact]
+    public async Task BotChat_AMainLinkBotsServerLimit_LowersTheSessionsWindow()
+    {
+        BotChatFixture();
+        _chat.EnqueueText("Hello from Neon.");
+        _chat.EnqueueText("unused");
+        _chat.EnqueueText("Neon ", "again");
+        _chat.EnqueueText("never");
+        EscDuringRequest(3);
+        _chat.BeforeUpdateOf = TooLongAt(1);
+        PushLine("/botchat the best pizza");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(AdaMarker, SystemText(_chat.Requests[1]));
+        Assert.Contains(CompactionText.ServerLimitNotice(5_000), output);
+        Assert.Equal(new ContextLength(5_000, LlmSession.ServerLimitSource), _session.ContextLength);
+    }
+
     /// <summary>Multi, a blank URL (the user's call): the bot borrows the starter's server with its own model, and nothing is scanned.</summary>
     [Fact]
     public async Task BotChat_Multi_ABlankUrl_BorrowsTheStartersServer_WithItsOwnModel()

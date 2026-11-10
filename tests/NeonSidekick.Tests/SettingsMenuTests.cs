@@ -1136,9 +1136,9 @@ public partial class SettingsMenuTests : IDisposable
         Assert.False(SettingsMenu.IsToggle(SettingsField.LlmToolCompactType));
         Assert.Equal("LLM tool compact mode", SettingsMenu.FieldName(SettingsField.LlmToolCompactType));
         Assert.Equal("compact", SettingsMenu.FieldValue(SettingsField.LlmToolCompactType, data, _settings.ProfileDirectory));
-        Assert.Equal("compact [#9A8BB8]prune, then summarize if the turn is still over the share[/]", SettingsMenu.ToolCompactTypeLabel("compact"));
+        Assert.Equal("compact [#9A8BB8]prune, summarize, then cut the newest results to fit[/]", SettingsMenu.ToolCompactTypeLabel("compact"));
         Assert.Equal("stop", SettingsMenu.FieldValue(SettingsField.LlmToolCompactType, new AppSettingsData { LlmToolCompactType = "stop" }, _settings.ProfileDirectory));
-        Assert.Equal("prune   [#9A8BB8]stub this turn's older tool results and call arguments and carry on[/]", SettingsMenu.ToolCompactTypeLabel("prune"));
+        Assert.Equal("prune   [#9A8BB8]stub older results and long arguments, cut the newest to fit[/]", SettingsMenu.ToolCompactTypeLabel("prune"));
         Assert.Equal("stop    [#9A8BB8]end the turn with a notice; /compact or /clear first[/]", SettingsMenu.ToolCompactTypeLabel("stop"));
         Assert.Equal("off     [#9A8BB8]no check; the server's own limit answers[/]", SettingsMenu.ToolCompactTypeLabel("off"));
         // The turn-loop rows: on the LLM tab, no reconnect — the tools a toggle whose flip clears the conversation, the cap typed.
@@ -2413,7 +2413,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Contains("  · 🖥️ LLM tool compact mode: stop", Output);
         Assert.Contains("end the turn with a notice; /compact or /clear first", Output);
         Assert.Contains("no check; the server's own limit answers", Output);
-        Assert.Contains("prune, then summarize if the turn is still over the share", Output);
+        Assert.Contains("prune, summarize, then cut the newest results to fit", Output);
     }
 
     [Fact]

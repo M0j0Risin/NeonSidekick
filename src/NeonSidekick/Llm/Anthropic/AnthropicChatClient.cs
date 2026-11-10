@@ -233,9 +233,13 @@ public sealed class AnthropicChatClient : IChatClient
     /// edited turn does not always name the signature ("thinking blocks … cannot be modified"), and a failed turn costs more
     /// than the one wasted resend a 400 about something else gets — only when there was thinking to strip, since
     /// <see cref="SendAsync"/> resends nothing that would be the same body.</para>
+    ///
+    /// <para>Never a context overflow (2026-11-09): "prompt is too long" with thinking in it would otherwise be resent without the thinking
+    /// before the turn loop could shrink the history.</para>
     /// </summary>
     internal static bool IsThinkingRefusal(int status, string body) =>
-        status == 400 && (body.Contains("thinking", StringComparison.OrdinalIgnoreCase) || body.Contains("signature", StringComparison.OrdinalIgnoreCase));
+        status == 400 && (body.Contains("thinking", StringComparison.OrdinalIgnoreCase) || body.Contains("signature", StringComparison.OrdinalIgnoreCase))
+        && !Assistant.IsContextOverflowText(body);
 
     /// <summary>429 (rate limit), 529 (overloaded) and 503: worth one more try.</summary>
     internal static bool IsRetryable(HttpStatusCode status) => (int)status is 429 or 529 or 503;

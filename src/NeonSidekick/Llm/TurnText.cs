@@ -29,6 +29,15 @@ public static class TurnText
     internal static string RunawayLogLine(string name, long chars, int ceiling) =>
         string.Create(CultureInfo.InvariantCulture, $"Arguments for tool '{name}' passed {chars:N0} characters (its ceiling is {ceiling:N0}); the request was stopped.");
 
+    /// <summary>
+    /// The line a result cut to fit the context window carries between its head and tail (2026-11-09, the mid-turn guard's cut,
+    /// <see cref="ConversationCompactor.CutLatestResults"/>): <c>[… 140,000 characters cut here to fit the context window; read the rest in
+    /// smaller pieces]</c>. In the shape of the app's other cut mark (<c>SkillLearner.CutMark</c>). It names no argument, since it lands in every
+    /// tool's results and their range arguments differ. A write holding it is refused (<see cref="ConversationCompactor.HoldsCutMark"/>). Pinned.
+    /// </summary>
+    public static string CutMarker(int cut) =>
+        string.Create(CultureInfo.InvariantCulture, $"[… {cut:N0} characters cut here to fit the context window; read the rest in smaller pieces]");
+
     /// <summary><paramref name="notice"/> as the user reads it: <see cref="AskAgain"/> after a notice that asks for it, unless a loop's pass runs (F96).</summary>
     public static string Shown(TurnEvent.Notice notice, bool loopPass)
     {
