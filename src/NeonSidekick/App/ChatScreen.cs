@@ -1359,8 +1359,6 @@ internal sealed partial class ChatScreen
         _session = session ?? throw new ArgumentNullException(nameof(session));
         // A model write to the project file asks on the pane (2026-10-22, review P1, the fix plan's D2).
         _session.ProjectFileAsk = AllowProjectFileAsync;
-        // A read_file the mid-turn guard cut is no longer seen (2026-11-10, review P1-9); _files follows the folder itself.
-        _session.ResultCut = call => ForgetCutRead(_files, call);
         _speech = speech ?? throw new ArgumentNullException(nameof(speech));
         _keys = keys ?? throw new ArgumentNullException(nameof(keys));
         _voice = voice ?? throw new ArgumentNullException(nameof(voice));
@@ -1386,6 +1384,8 @@ internal sealed partial class ChatScreen
         // The sandbox reads the live setting and profile directory on every call: a /cwd save or
         // a profile switch changes the root with nothing to rebind.
         _files = new WorkingDirectory(() => WorkingDirectory.Resolve(_effective().WorkingDirectory, _settings.ProfileDirectory), time);
+        // A read_file the mid-turn guard cut is no longer seen (2026-11-10, review P1-9); _files follows the folder itself.
+        _session.ResultCut = call => ForgetCutRead(_files, call);
         _audit = new AuditSession(_files);   // 2026-10-18: the strip reads it, so it is made with the sandbox
         // The SQLite databases no file tool changes and the shell police guards while the SQLite tools are on (2026-10-05); DuckDB's while its are (2026-10-25).
         _files.Databases = () => DatabaseGuardFor(_effective(), _settings.ProfileDirectory, _settings.StorageDirectory);
