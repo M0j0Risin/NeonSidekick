@@ -123,4 +123,36 @@ public sealed class FileSeenTests : IDisposable
         Assert.StartsWith("Error: 'Program.cs' already exists", await Invoke<WriteFileTool>(("path", "Program.cs"), ("content", "x")));
         Assert.True(_files.WasSeen("seen.cs"));   // the flow outside never had it off
     }
+
+    /// <summary>A read_file the guard cut is forgotten as seen (2026-11-10, review P1-9): a modeless write refuses it, a patch still works.</summary>
+    [Fact]
+    public async Task ACutRead_IsNoLongerSeen_SoAModelessWriteRefuses_ButAPatchWorks()
+    {
+        File.WriteAllText(Path.Combine(_root, "Program.cs"), "one\ntwo\n");
+        await Invoke<ReadFileTool>(("path", "Program.cs"));
+        Assert.True(_files.WasSeen("Program.cs"));
+
+        ChatScreen.ForgetCutRead(_files, new FunctionCallContent("c1", ReadFileTool.ToolName, new Dictionary<string, object?> { ["path"] = "Program.cs" }));
+        ChatScreen.ForgetCutRead(_files, new FunctionCallContent("c2", "web_fetch", new Dictionary<string, object?> { ["path"] = "Other.cs" }));   // not a read: ignored
+
+        Assert.False(_files.WasSeen("Program.cs"));
+        Assert.StartsWith("Error: 'Program.cs' already exists", await Invoke<WriteFileTool>(("path", "Program.cs"), ("content", "x")));
+        Assert.DoesNotContain("Error", await Invoke<PatchFileTool>(("path", "Program.cs"), ("old_text", "two"), ("new_text", "three")), StringComparison.Ordinal);
+        Assert.Equal("one\nthree\n", Text("Program.cs"));
+    }
+
+    [Fact]
+    public void ForgetSeen_UnderSeenOff_ForgetsNothing()
+    {
+        File.WriteAllText(Path.Combine(_root, "a.txt"), "x");
+        _files.MarkSeen("a.txt");
+        using (WorkingDirectory.SeenOff())
+        {
+            _files.ForgetSeen("a.txt");
+        }
+
+        Assert.True(_files.WasSeen("a.txt"));
+        _files.ForgetSeen("a.txt");
+        Assert.False(_files.WasSeen("a.txt"));
+    }
 }

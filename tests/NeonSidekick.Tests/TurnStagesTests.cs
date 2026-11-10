@@ -206,4 +206,16 @@ public sealed class TurnStagesTests
         Assert.Equal("thinking", stages.Advance(new TurnEvent.Compacted(new ConversationCompactor.Result(5, 3, 0, null, Summarised: true), 91, ThisTurn: true)));
         Assert.Equal("writing", stages.Advance(Text));
     }
+
+    /// <summary>A failed or skipped mid-turn summary yields a notice, not Compacted: the label leaves "compacting" (2026-11-10, review P19-1).</summary>
+    [Fact]
+    public void ANoticeWhileCompacting_ReturnsToThinking_OtherwiseNothing()
+    {
+        var stages = new TurnStages(funVerbs: false, new Random(7));
+        stages.Start();
+        Assert.Null(stages.Advance(new TurnEvent.Notice("(✂️ context at 85%: pruned 2 tool results from this turn)", IsError: false)));
+        Assert.Equal(NeonSidekick.App.CompactionText.CompactingLabel, stages.Advance(new TurnEvent.Compacting(91)));
+        Assert.Equal("thinking", stages.Advance(new TurnEvent.Notice("🗜️ Compact failed: down", IsError: false)));
+        Assert.Null(stages.Advance(new TurnEvent.Notice("another", IsError: false)));
+    }
 }

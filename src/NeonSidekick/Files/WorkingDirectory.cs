@@ -2173,6 +2173,24 @@ public sealed class WorkingDirectory
     }
 
     /// <summary>
+    /// Forgets that the model saw <paramref name="relative"/> (2026-11-10, review P1-9): the mid-turn guard cut a <c>read_file</c> of it to fit,
+    /// so the model holds only part of it and a <c>write_file</c> with no mode must refuse to replace it. The same lock, path rule and
+    /// <see cref="SeenOff"/> rule as <see cref="MarkSeen"/>; the audit's viewed stamp stays (a cut read was still viewed).
+    /// </summary>
+    public void ForgetSeen(string relative)
+    {
+        if (s_seenOff.Value || Resolve(relative, forWrite: false, out string full) != FileOutcome.Ok)
+        {
+            return;
+        }
+
+        lock (_seenGate)
+        {
+            _seen.Remove(full);
+        }
+    }
+
+    /// <summary>
     /// Whether the model saw <paramref name="relative"/> this session (<see cref="MarkSeen"/>) and it is unchanged since: the same size and
     /// write time. A file changed since — by the user, a build, another tool — is not, so <c>write_file</c> still refuses it.
     /// </summary>

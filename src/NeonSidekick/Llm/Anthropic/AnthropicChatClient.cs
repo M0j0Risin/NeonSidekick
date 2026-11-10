@@ -239,7 +239,7 @@ public sealed class AnthropicChatClient : IChatClient
     /// </summary>
     internal static bool IsThinkingRefusal(int status, string body) =>
         status == 400 && (body.Contains("thinking", StringComparison.OrdinalIgnoreCase) || body.Contains("signature", StringComparison.OrdinalIgnoreCase))
-        && !Assistant.IsContextOverflowText(body);
+        && !ContextOverflowMatch.IsOverflowText(body);
 
     /// <summary>429 (rate limit), 529 (overloaded) and 503: worth one more try.</summary>
     internal static bool IsRetryable(HttpStatusCode status) => (int)status is 429 or 529 or 503;
@@ -256,24 +256,8 @@ public sealed class AnthropicChatClient : IChatClient
         return DefaultRetryDelay;
     }
 
-    /// <summary>The <c>error.type</c> of an error body, or <c>error</c>.</summary>
-    private static string ErrorType(string body)
-    {
-        try
-        {
-            using var document = System.Text.Json.JsonDocument.Parse(body);
-            return document.RootElement.TryGetProperty("error"u8, out var error)
-                && error.ValueKind == System.Text.Json.JsonValueKind.Object
-                && error.TryGetProperty("type"u8, out var type)
-                && type.ValueKind == System.Text.Json.JsonValueKind.String
-                    ? type.GetString() ?? "error"
-                    : "error";
-        }
-        catch (System.Text.Json.JsonException)
-        {
-            return "error";
-        }
-    }
+    /// <summary>The <c>error.type</c> of an error body, or <c>error</c> (the shared reader, <see cref="ErrorBody"/>, 2026-11-10).</summary>
+    private static string ErrorType(string body) => ErrorBody.Parse(body)?.Type ?? "error";
 
     /// <inheritdoc/>
     public object? GetService(Type serviceType, object? serviceKey = null)

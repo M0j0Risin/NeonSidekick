@@ -79,7 +79,8 @@ internal sealed class TurnStages
     /// of a stretch is <see cref="WritingLabel"/>, a call being written <see cref="ToolWritingLabel"/> at each progress, a tool call its name, a tool result the thinking
     /// stage again (the next request's wait starts there), a mid-turn compact
     /// <see cref="CompactionText.CompactingLabel"/> and the thinking stage once it is done (2026-09-28), thinking after a call being written
-    /// the thinking stage (2026-10-30, review F77), usage and notices nothing.
+    /// the thinking stage (2026-10-30, review F77), a notice while compacting the thinking stage (2026-11-10, review P19-1: a failed or
+    /// skipped mid-turn summary yields no <c>Compacted</c>, and the turn goes on), usage and other notices nothing.
     /// </summary>
     public string? Advance(TurnEvent evt)
     {
@@ -130,6 +131,9 @@ internal sealed class TurnStages
             case TurnEvent.Compacting:
                 _stage = Stage.Tool;
                 return CompactionText.CompactingLabel;
+            case TurnEvent.Notice when string.Equals(_shown, CompactionText.CompactingLabel, StringComparison.Ordinal):
+                _stage = Stage.Thinking;
+                return Word(ChatScreen.ThinkingLabel);
             default:
                 return null;
         }

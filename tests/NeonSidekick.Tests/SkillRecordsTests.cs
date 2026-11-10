@@ -668,7 +668,7 @@ public class SkillRecordsTests : IDisposable
         string path = Path.Combine(_roots.Profile, "haiku", SkillCatalog.FileName);
         string text = File.ReadAllText(path);
         long id = _store.Find(SkillScope.Profile, "neon", "haiku")!.Id;
-        var later = _time.GetUtcNow().AddDays(60);
+        var later = DateTimeOffset.UtcNow.AddYears(1);   // past the row's time, which is the file's own (the real clock's), not the fake one
 
         Assert.Single(_records.UnusedSince(later), r => r.Folder == "haiku");
         Assert.Null(_records.SetLocked(skill, true));
@@ -701,7 +701,7 @@ public class SkillRecordsTests : IDisposable
         string path = Path.Combine(_roots.Profile, "haiku", SkillCatalog.FileName);
         string text = File.ReadAllText(path);
         long id = _store.Find(SkillScope.Profile, "neon", "haiku")!.Id;
-        var later = _time.GetUtcNow().AddDays(60);
+        var later = DateTimeOffset.UtcNow.AddYears(1);   // past the row's time, which is the file's own (the real clock's), not the fake one
 
         Assert.Null(_records.SetDisabled(skill, true));
         Assert.True(SkillDisable.IsDisabled(skill.Directory));

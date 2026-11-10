@@ -1359,6 +1359,8 @@ internal sealed partial class ChatScreen
         _session = session ?? throw new ArgumentNullException(nameof(session));
         // A model write to the project file asks on the pane (2026-10-22, review P1, the fix plan's D2).
         _session.ProjectFileAsk = AllowProjectFileAsync;
+        // A read_file the mid-turn guard cut is no longer seen (2026-11-10, review P1-9); _files follows the folder itself.
+        _session.ResultCut = call => ForgetCutRead(_files, call);
         _speech = speech ?? throw new ArgumentNullException(nameof(speech));
         _keys = keys ?? throw new ArgumentNullException(nameof(keys));
         _voice = voice ?? throw new ArgumentNullException(nameof(voice));
@@ -12824,6 +12826,7 @@ internal sealed partial class ChatScreen
         var watcher = _keys.WatchAsync(compactCts, stop.Token, null, null, LiveLineHook, spend: SpendScroll, onClick: _pane.Enabled ? HintClickLine : null, editor: LiveEditor);
         ConversationCompactor.Result? result = null;
         string? failure = null;
+        string? serverLimit = null;
         bool cancelled = false;
         try
         {
@@ -12837,11 +12840,18 @@ internal sealed partial class ChatScreen
         catch (Exception ex)
         {
             failure = assistant.ExplainFailure(ex);
+            // A summarizer request refused as too long names the server's window (2026-11-10, review P17-2).
+            serverLimit = _session.ServerLimitNoticeFor(ex);
         }
         finally
         {
             stop.Cancel();
             await watcher.ConfigureAwait(false);
+        }
+
+        if (serverLimit is not null)
+        {
+            _transcript.Notice(serverLimit);
         }
 
         if (cancelled)
@@ -16121,6 +16131,30 @@ internal sealed partial class ChatScreen
     private bool _botOnMainLink;
 
     /// <summary>
+    /// Whether a bot's <paramref name="link"/> is the main link for the server's window (2026-11-10, review P3-5/P2-9): none of its own, or
+    /// one whose endpoint URL and model id are the session's (a bot that borrows the session's server). A blank-URL bot with its own model on
+    /// the same server may have its own window (LM Studio, Ollama), so both are compared.
+    /// </summary>
+    /// <summary>
+    /// <see cref="LlmSession.ResultCut"/>'s body for both hosts (2026-11-10, review P1-9): a cut <c>read_file</c>'s path is forgotten as seen
+    /// (<see cref="WorkingDirectory.ForgetSeen"/>), so a modeless <c>write_file</c> of it refuses; every other call is left alone.
+    /// </summary>
+    internal static void ForgetCutRead(WorkingDirectory files, FunctionCallContent call)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+        ArgumentNullException.ThrowIfNull(call);
+        if (string.Equals(call.Name, ReadFileTool.ToolName, StringComparison.Ordinal)
+            && call.Arguments?.TryGetValue(FileTool.PathArgument, out object? path) == true
+            && ConversationCompactor.ArgumentText(path) is { Length: > 0 } relative)
+        {
+            files.ForgetSeen(relative);
+        }
+    }
+
+    private bool OnMainLink(BotLink? link) =>
+        link is null || (_session.Endpoint is { } main && link.Endpoint.BaseUrl == main.BaseUrl && string.Equals(link.Endpoint.ModelId, main.ModelId, StringComparison.Ordinal));
+
+    /// <summary>
     /// The last <c>/botchat</c> reply's calls and tokens (2026-10-10, found comparing botchat with the advisors: the chat's session rows
     /// said 0 calls and 0 tokens whatever ran), for its row; set at the end of a bot's <see cref="RunTurnAsync"/>, read by the chat's loop.
     /// </summary>
@@ -16432,7 +16466,7 @@ internal sealed partial class ChatScreen
                 bool memorySave = memory?.Tools.Any(t => t is SaveMemoryTool) == true;
                 var history = new ConversationHistory(BotChat.SystemPrompt(bot.Persona, bot.Name, others, topic, speaking, bot.VoiceDirective, markdown, pronouns, images: imageTool is not null, skills: skills, camera: cameraPicture is not null, tools: general?.Rules, memories: memory?.Store.Snapshot(), memorySave: memorySave, recent: recent));
                 history.Replace(prior);
-                _botOnMainLink = !(links.Count > 0 && links[next] is not null);
+                _botOnMainLink = OnMainLink(links.Count > 0 ? links[next] : null);
                 if ((links.Count > 0 && links[next] is { } own ? _session.CreateAssistant(history, own) : _session.CreateAssistant(history)) is not { } assistant)
                 {
                     _transcript.Error(NoAssistantError);
@@ -19329,11 +19363,11 @@ internal sealed partial class ChatScreen
                 MidTurnCompacted(compacted);
                 break;
             case TurnEvent.ServerLimit limit when !_botTurnRunning || _botOnMainLink:
-                // The server named a smaller window (2026-11-09): the session's until the next connect, said once. A bot on its own
-                // linked endpoint is ignored: that window isn't the session's.
-                if (_session.NoteServerLimit(limit.Tokens))
+                // The server named a smaller window (2026-11-09): the session's for this server and model (D4), said once. A bot on a
+                // linked endpoint of its own is ignored: that window isn't the session's.
+                if (_session.ServerLimitNoticeFor(limit.Tokens) is { } said)
                 {
-                    _transcript.Notice(CompactionText.ServerLimitNotice(limit.Tokens));
+                    _transcript.Notice(said);
                 }
 
                 break;
@@ -19344,12 +19378,17 @@ internal sealed partial class ChatScreen
     /// The mid-turn guard summarised (2026-09-28, <c>LLM tool compact type: compact</c>): billed and shown the way the
     /// automatic compact is (<see cref="CompactAsync"/>) — the summariser's request on the tally, the notice, the detail
     /// under it with <c>LLM compact show summary</c>, the store following the rewritten history — while the turn runs on.
-    /// Since 2026-11-09 also the overflow recovery's prune of the older turns: no usage to bill (the tally's context figure is zeroed, as
-    /// after any compact), the automatic prune's line.
+    /// Since 2026-11-09 also the guard's prune of the older turns (after a too-long answer, and past the ceiling since 2026-11-10): no usage
+    /// to bill, and the tally left alone (2026-11-10, review P8-3: a request always follows, whose usage sets the context figure afresh, and
+    /// when none does the figure from before stays, so the next message's auto compact fires), the automatic prune's line.
     /// </summary>
     private void MidTurnCompacted(TurnEvent.Compacted compacted)
     {
-        _session.Usage.AddCompaction(compacted.Result.Usage);
+        if (compacted.Result.Summarised || compacted.Result.Usage is not null)
+        {
+            _session.Usage.AddCompaction(compacted.Result.Usage);
+        }
+
         string notice = compacted.ThisTurn ? CompactionText.TurnNotice(compacted.Result, compacted.Percent) : CompactionText.Notice(compacted.Result, compacted.Percent);
         _transcript.Notice(notice);
         if (_effective().LlmCompactShowSummary)

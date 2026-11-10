@@ -20,18 +20,19 @@ public static class CompactionText
 
     /// <summary>
     /// The notice when the server named a smaller context window in a too-long error, or one where none was known (2026-11-09,
-    /// <see cref="LlmSession.NoteServerLimit"/>): <c>(🖥️ the server's context window is 32,768 tokens; it is used until the next connect;
-    /// LLM context length sets it)</c>. The server's own line, so the LLM glyph.
+    /// <see cref="LlmSession.NoteServerLimit"/>): <c>(🖥️ the server's context window is 32,768 tokens; it is used for this server and model;
+    /// LLM context length sets it)</c> (D4's lifetime since 2026-11-10). The server's own line, so the LLM glyph.
     /// </summary>
     public static string ServerLimitNotice(int tokens) =>
-        "(" + NoticeGlyphs.Llm + string.Create(System.Globalization.CultureInfo.InvariantCulture, $"the server's context window is {tokens:N0} tokens; it is used until the next connect; LLM context length sets it)");
+        "(" + NoticeGlyphs.Llm + string.Create(System.Globalization.CultureInfo.InvariantCulture, $"the server's context window is {tokens:N0} tokens; it is used for this server and model; LLM context length sets it)");
 
     /// <summary>
     /// A tool's answer to an argument holding a cut result's marker (2026-11-09, <c>ConversationCompactor.HoldsCutMark</c>): a model that read
-    /// a result the mid-turn guard cut to fit and wrote it back whole would delete the middle. Every argument of every tool; the call never runs. Pinned.
+    /// a result the mid-turn guard cut to fit and wrote it back whole would delete the middle. Every argument of a tool plan mode's read-only
+    /// list doesn't allow (2026-11-10, D3); the call never runs. Since 2026-11-10 (review P12-2) it names the partial edits that work. Pinned.
     /// </summary>
     public static string CutResultSentResult(string argument) =>
-        $"Error: {argument} holds a tool result that was cut to fit the context window, not the whole text; read the full text again in smaller pieces and write it whole, then call the tool again";
+        $"Error: {argument} holds a tool result that was cut to fit the context window, not the whole text; change just the part you need with a patch (patch_file, unc_patch, skill_editor's edit_file), or read the whole text again before writing it whole";
 
     /// <summary>
     /// What every line of <c>/compact</c> or the automatic compact opens with, inside its parentheses
@@ -78,7 +79,7 @@ public static class CompactionText
     private static string Line(ConversationCompactor.Result result, string head)
     {
         string glyph = result.Summarised ? CompactGlyph : Assistant.PruneGlyph;
-        string pruned = (result.ArgumentsPruned == 0 ? UsageText.Plural(result.Pruned, "tool result", "tool results") : Assistant.PrunedWords(result.Pruned, result.ArgumentsPruned)) + " pruned";
+        string pruned = (result.ArgumentsPruned == 0 ? UsageText.Plural(result.Pruned, "tool result", "tool results") : TurnText.PrunedWords(result.Pruned, result.ArgumentsPruned)) + " pruned";
         string body;
         if (!result.Summarised)
         {

@@ -579,12 +579,12 @@ public class OpenAICompatibleChatClientTests
 
         Assert.DoesNotContain(events.OfType<TurnEvent.Notice>(), n => n.IsError);
         Assert.Equal(512, Assert.Single(events.OfType<TurnEvent.ServerLimit>()).Tokens);
-        Assert.Contains(events.OfType<TurnEvent.Notice>(), n => n.Text == Assistant.OverflowRetryNotice(518, 512));
+        Assert.Contains(events.OfType<TurnEvent.Notice>(), n => n.Text == TurnText.OverflowNotice(new ContextOverflow("", 518, 512, null)));
         Assert.Single(events.OfType<TurnEvent.Compacted>());
         Assert.Equal(2, stub.Requests.Count);
         Assert.Contains(new string('x', 3000), stub.Requests[0].Body);
         Assert.DoesNotContain(new string('x', 3000), stub.Requests[1].Body);
-        Assert.Equal(512, assistant.ContextGuard!.WindowTokens);
+        Assert.Equal(1000, assistant.ContextGuard!.WindowTokens);   // the turn judged the rest by 512 in a local (P3-10); the host keeps the server's figure
     }
 
     [Fact]
@@ -595,7 +595,7 @@ public class OpenAICompatibleChatClientTests
         Assert.Equal(2, stub.Requests.Count);
         var error = Assert.IsType<TurnEvent.Notice>(events[^1]);
         Assert.True(error.IsError);
-        Assert.Equal(ModelErrorText.TooLong(new ContextOverflow("llama-server fields", 518, 512, null)), error.Text);
+        Assert.Equal(ModelErrorText.TooLong(new ContextOverflow("llama-server fields", 518, 512, null), ToolCompactMode.Prune), error.Text);
     }
 
     /// <summary>LM Studio wraps llama-server's error in a 500, its fields escaped inside the outer message: the context-window text, not "failed on its side".</summary>

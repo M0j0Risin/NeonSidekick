@@ -147,14 +147,14 @@ Every server reads these.
 | LLM max tool iterations | Tool round trips one message may make (1–10000). | 10000 |
 | LLM request timeout (s) | The longest one HTTP request may take (up to 3600). | 3600 |
 | LLM turn timeout (s) | The longest one whole turn may take, tool calls included (up to 21600). | 21600 |
-| LLM context length | The context window in tokens, for the usage percentage; 0 takes the server's. A smaller window the server names in an error is used until the next connect. | 0 (the server's) |
+| LLM context length | The context window in tokens, for the usage percentage; 0 takes the server's. A smaller window the server names in an error is kept for that server and model until this setting or the server's own window changes. | 0 (the server's) |
 | LLM mid-turn usage | The status bar's usage during a reply: `estimate` (live, marked `~`) or `last-known` (the last finished request's). | `last-known` |
 | LLM max turns | User turns the model sees before the oldest drop off (1–500). `auto` keeps all while auto compact can run, else 24. | `auto` |
 | LLM auto compact (%) | How full the context may get before the next message compacts it (1–100; 0 is off). It and the mid-reply check leave room for a reply as large as the largest so far (or the plan file), at most a quarter of the window. | 90 |
 | LLM compact mode | `/compact`: `summary` folds older turns into a summary the model writes; `prune` swaps bulky tool results and long arguments for stubs. Both first stub a plan's earlier revisions and reads. | `summary` |
 | LLM compact keep recent | Recent user turns a compact keeps word for word (0–24). | 2 |
 | LLM compact show summary | After a compact, shows the summary (or pruned results) and how many messages were kept. | off |
-| LLM tool compact mode | When one reply's tool calls fill the context to the auto-compact share, or the server says the request is too long: `compact` (prune, summarize, cut the newest results), `prune` (stub and cut), `stop`, or `off`. | `compact` |
+| LLM tool compact mode | When tool calls reach the auto-compact share mid-reply, or the server says too long: `compact` (prune, summarize), `prune` (stub), `stop` (end the turn) or `off`. Near the window's end, older turns (pictures too) are pruned, then the newest results cut. | `compact` |
 | LLM max images | The most pictures one request carries, a PDF counting as one (0–500; 0 is no cap). The oldest leave first (`view_image` can show one again); a PDF keeps its text. | 20 |
 | LLM max images (MB) | The most megabytes of pictures and PDFs one request carries, or one message attaches (0–1000; 0 is no cap). The oldest leave first. | 24 |
 | LLM fun verbs | The spinner shows a random verb in place of `thinking` / `writing`. | off |

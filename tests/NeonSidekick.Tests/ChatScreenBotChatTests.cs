@@ -847,7 +847,7 @@ public partial class ChatScreenTests
 
         Assert.Contains(AdaMarker, SystemText(_chat.Requests[1]));
         Assert.DoesNotContain(CompactionText.ServerLimitNotice(5_000), output);
-        Assert.NotEqual(LlmSession.ServerLimitSource, _session.ContextLength?.Source);
+        Assert.NotEqual(ContextLengthProbe.ServerLimitSource, _session.ContextLength?.Source);
     }
 
     /// <summary>A bot on the starter's own client (2026-11-09): its too-long error's window is the session's.</summary>
@@ -868,7 +868,7 @@ public partial class ChatScreenTests
 
         Assert.Contains(AdaMarker, SystemText(_chat.Requests[1]));
         Assert.Contains(CompactionText.ServerLimitNotice(5_000), output);
-        Assert.Equal(new ContextLength(5_000, LlmSession.ServerLimitSource), _session.ContextLength);
+        Assert.Equal(new ContextLength(5_000, ContextLengthProbe.ServerLimitSource), _session.ContextLength);
     }
 
     /// <summary>Multi, a blank URL (the user's call): the bot borrows the starter's server with its own model, and nothing is scanned.</summary>

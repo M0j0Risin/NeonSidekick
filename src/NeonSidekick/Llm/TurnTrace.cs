@@ -70,7 +70,8 @@ public sealed class TurnTrace
                 break;
 
             case TurnEvent.ToolResult result:
-                if (_seeded.Contains(result.CallId))
+                // The loop's own refusal of a copied stub or cut marker (2026-11-10, review P20-1/P22-2) is no lesson: nothing ran.
+                if (_seeded.Contains(result.CallId) || result.GuardRefused)
                 {
                     break;
                 }

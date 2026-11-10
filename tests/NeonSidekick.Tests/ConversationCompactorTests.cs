@@ -163,7 +163,7 @@ public class ConversationCompactorTests
         var messages = ThreeTurns();
         var plan = ConversationCompactor.Split(messages, keepRecent: 1);
 
-        var (pruned, count) = ConversationCompactor.Prune(plan);
+        var (pruned, count) = PruneOlder(plan);
 
         Assert.Equal(1, count);
         Assert.Equal(12, pruned.Count);
@@ -184,7 +184,7 @@ public class ConversationCompactorTests
         messages[9] = new ChatMessage(ChatRole.Assistant, [new TextReasoningContent("old"), new TextContent("reply two")]);
         messages[11] = new ChatMessage(ChatRole.Assistant, [new TextReasoningContent("new"), new TextContent("reply three")]);
 
-        var (pruned, count) = ConversationCompactor.Prune(ConversationCompactor.Split(messages, keepRecent: 1));
+        var (pruned, count) = PruneOlder(ConversationCompactor.Split(messages, keepRecent: 1));
 
         Assert.Equal(1, count);   // the long result alone
         Assert.Empty(pruned[9].Contents.OfType<TextReasoningContent>());
@@ -198,19 +198,19 @@ public class ConversationCompactorTests
     {
         // The entries (2026-09-21, LLM compact show summary): the tool from the call that shares the result's id, the length; a carrier's pictures as one entry.
         var entries = new List<ConversationCompactor.PrunedEntry>();
-        var (_, count) = ConversationCompactor.Prune(ConversationCompactor.Split(ThreeTurns(), keepRecent: 1), entries: entries);
+        var (_, count) = PruneOlder(ConversationCompactor.Split(ThreeTurns(), keepRecent: 1), entries: entries);
         Assert.Equal(1, count);
         Assert.Equal([new ConversationCompactor.PrunedEntry("read_file", 500)], entries);
 
         entries.Clear();
-        (_, count) = ConversationCompactor.Prune(ConversationCompactor.Split(TurnsWithACarrier(), keepRecent: 1), entries: entries);
+        (_, count) = PruneOlder(ConversationCompactor.Split(TurnsWithACarrier(), keepRecent: 1), entries: entries);
         Assert.Equal(2, count);
         Assert.Equal([new ConversationCompactor.PrunedEntry("view_image", 0, 2)], entries);
 
         // A result whose call is not in the list is named the unknown tool; nothing logged without a list.
         entries.Clear();
         var orphan = ConversationCompactor.Split([User("one"), Assistant("r"), Result("c9", Long(300)), User("two"), Assistant("r")], keepRecent: 1);
-        (_, count) = ConversationCompactor.Prune(orphan, entries: entries);
+        (_, count) = PruneOlder(orphan, entries: entries);
         Assert.Equal(1, count);
         Assert.Equal([new ConversationCompactor.PrunedEntry(ConversationCompactor.UnknownTool, 300)], entries);
         Assert.Equal(new Dictionary<string, string> { ["c1"] = "read_file", [NeonSidekick.Llm.Assistant.OpeningClockCallId] = "get_current_time", [NeonSidekick.Llm.Assistant.OpeningCwdCallId] = "get_working_directory" }, ConversationCompactor.CallNames(ThreeTurns()));
@@ -246,7 +246,7 @@ public class ConversationCompactorTests
         var messages = TurnsWithACarrier();
         var plan = ConversationCompactor.Split(messages, keepRecent: 1);
 
-        var (pruned, count) = ConversationCompactor.Prune(plan);
+        var (pruned, count) = PruneOlder(plan);
 
         Assert.Equal(2, count);
         Assert.Equal(7, pruned.Count);
@@ -259,7 +259,7 @@ public class ConversationCompactorTests
         Assert.Same(messages[2], pruned[2]);   // a short result stays
 
         // A stub is already pictureless: pruning again counts nothing and keeps it.
-        var (again, none) = ConversationCompactor.Prune(ConversationCompactor.Split(pruned, keepRecent: 1));
+        var (again, none) = PruneOlder(ConversationCompactor.Split(pruned, keepRecent: 1));
         Assert.Equal(0, none);
         Assert.Same(stub, again[3]);
     }
@@ -275,7 +275,7 @@ public class ConversationCompactorTests
         history.AddUser("two");
         var entries = new List<ConversationCompactor.PrunedEntry>();
 
-        var (pruned, count) = ConversationCompactor.Prune(ConversationCompactor.Split(history.Messages.ToList(), keepRecent: 1), entries: entries);
+        var (pruned, count) = PruneOlder(ConversationCompactor.Split(history.Messages.ToList(), keepRecent: 1), entries: entries);
 
         Assert.Equal(1, count);
         Assert.Equal(ConversationCompactor.PrunedImageStub(1, "generate_image"), pruned[1].Text);
@@ -293,7 +293,7 @@ public class ConversationCompactorTests
         history.AddUser("and this [Image #1]", [new NeonSidekick.Files.ImageAttachment("dog.png", [1, 2, 3], NeonSidekick.Files.ImageFile.Png, 4, 4)]);
         var entries = new List<ConversationCompactor.PrunedEntry>();
 
-        var (pruned, count) = ConversationCompactor.Prune(ConversationCompactor.Split(history.Messages.ToList(), keepRecent: 1), entries: entries);
+        var (pruned, count) = PruneOlder(ConversationCompactor.Split(history.Messages.ToList(), keepRecent: 1), entries: entries);
 
         Assert.Equal(1, count);
         Assert.Equal(["what is this [Image #1]", NeonSidekick.Llm.PictureBudget.LeftOut("cat.png")], pruned[0].Contents.OfType<TextContent>().Select(t => t.Text));
@@ -315,7 +315,7 @@ public class ConversationCompactorTests
             User("two"), Assistant("reply two"),
         };
 
-        var (pruned, count) = ConversationCompactor.Prune(ConversationCompactor.Split(messages, keepRecent: 1));
+        var (pruned, count) = PruneOlder(ConversationCompactor.Split(messages, keepRecent: 1));
 
         Assert.Equal(0, count);
         Assert.All(pruned.Select((m, i) => (m, i)), pair => Assert.Same(messages[pair.i], pair.m));
@@ -333,7 +333,7 @@ public class ConversationCompactorTests
             User("two"), Assistant("reply two"),
         };
 
-        var (pruned, count) = ConversationCompactor.Prune(ConversationCompactor.Split(messages, keepRecent: 1));
+        var (pruned, count) = PruneOlder(ConversationCompactor.Split(messages, keepRecent: 1));
 
         Assert.Equal(1, count);
         Assert.Equal("(a 201-character result, pruned by /compact)", ((FunctionResultContent)pruned[2].Contents[0]).Result);
@@ -372,7 +372,7 @@ public class ConversationCompactorTests
         Assert.Equal(6, plan.Opening.Count);
         Assert.Same(messages[6], plan.Opening[5]);
 
-        var (pruned, count) = ConversationCompactor.Prune(plan);
+        var (pruned, count) = PruneOlder(plan);
         Assert.Equal(0, count);
         Assert.Same(messages[6], pruned[6]);
 
@@ -665,7 +665,7 @@ public class ConversationCompactorTests
         Assert.Same(messages[5], pruned[5]);   // the last iteration's call, long content and all
         Assert.Equal([new ConversationCompactor.PrunedEntry("skill_editor", 27_610, Argument: "content")], entries);
         Assert.Equal(Long(27_610), ((FunctionCallContent)messages[1].Contents[0]).Arguments!["content"]);   // the held list untouched
-        Assert.True(ConversationCompactor.EstimateTokens(pruned) < ConversationCompactor.EstimateTokens(messages) - 6_000);
+        Assert.True(ConversationCompactor.Estimate(pruned, 0).Total < ConversationCompactor.Estimate(messages, 0).Total - 6_000);
         Assert.Equal(["present_plan"], ConversationCompactor.KeepsArguments);
     }
 
@@ -697,10 +697,10 @@ public class ConversationCompactorTests
         Assert.False(ConversationCompactor.IsPrunedStub(""));
         Assert.False(ConversationCompactor.IsPrunedStub(null));
         Assert.Equal("(a 27,610-character argument, pruned by /compact)", ConversationCompactor.PrunedArgumentStub(27_610));
-        Assert.Equal("3 tool results and 2 call arguments", NeonSidekick.Llm.Assistant.PrunedWords(3, 2));
-        Assert.Equal("1 call argument", NeonSidekick.Llm.Assistant.PrunedWords(0, 1));
-        Assert.Equal("(✂️ context at 85%: pruned 23 tool results from this turn)", NeonSidekick.Llm.Assistant.TurnPrunedNotice(85, 23));
-        Assert.Equal("(✂️ context at 94%: pruned 11 tool results and 2 call arguments from this turn)", NeonSidekick.Llm.Assistant.TurnPrunedNotice(94, 11, 2));
+        Assert.Equal("3 tool results and 2 call arguments", TurnText.PrunedWords(3, 2));
+        Assert.Equal("1 call argument", TurnText.PrunedWords(0, 1));
+        Assert.Equal("(✂️ context at 85%: pruned 23 tool results from this turn)", TurnText.TurnPrunedNotice(85, 23));
+        Assert.Equal("(✂️ context at 94%: pruned 11 tool results and 2 call arguments from this turn)", TurnText.TurnPrunedNotice(94, 11, 2));
     }
 
     [Fact]
@@ -832,14 +832,14 @@ public class ConversationCompactorTests
     {
         var plan = ConversationCompactor.Split(SkilledTurns(), keepRecent: 1);
 
-        var (pruned, count) = ConversationCompactor.Prune(plan);                 // protected is the default
+        var (pruned, count) = PruneOlder(plan);                 // protected is the default
 
         Assert.Equal(1, count);
         Assert.Equal(Long(600), ((FunctionResultContent)pruned[2].Contents[0]).Result);
         Assert.Equal("(a 500-character result, pruned by /compact)", ((FunctionResultContent)pruned[4].Contents[0]).Result);
         Assert.True(ConversationHistory.IsSkillResult((FunctionResultContent)pruned[2].Contents[0]));
 
-        var (open, both) = ConversationCompactor.Prune(plan, protectSkills: false);
+        var (open, both) = PruneOlder(plan, protectSkills: false);
         Assert.Equal(2, both);
         Assert.Equal("(a 600-character result, pruned by /compact)", ((FunctionResultContent)open[2].Contents[0]).Result);
         Assert.False(ConversationHistory.IsSkillResult((FunctionResultContent)open[2].Contents[0]));
@@ -917,16 +917,16 @@ public class ConversationCompactorTests
     // ── The mid-turn compact's helpers (2026-09-28) ───────────────────────────
 
     [Fact]
-    public void EstimateTokens_CountsText_CallsAsTheirJson_Results_AndPictures_OverFour()
+    public void EstimateTotal_CountsText_CallsAsTheirJson_Results_AndPictures_OverFour()
     {
-        Assert.Equal(0, ConversationCompactor.EstimateTokens([]));
-        Assert.Equal(2, ConversationCompactor.EstimateTokens([User(Long(8)), Assistant("x")]));            // 9 characters: 2
+        Assert.Equal(0, ConversationCompactor.Estimate([], 0).Total);
+        Assert.Equal(2, ConversationCompactor.Estimate([User(Long(8)), Assistant("x")], 0).Total);            // 9 characters: 2
         // A call: its name and its arguments as the wire's JSON — echo + {"text":"abcd"} = 4 + 15.
         var call = new ChatMessage(ChatRole.Assistant, [new FunctionCallContent("c1", "echo", new Dictionary<string, object?> { ["text"] = "abcd" })]);
-        Assert.Equal(19 / 4, ConversationCompactor.EstimateTokens([call]));
-        Assert.Equal(100, ConversationCompactor.EstimateTokens([Result("c1", Long(400))]));
+        Assert.Equal(19 / 4, ConversationCompactor.Estimate([call], 0).Total);
+        Assert.Equal(100, ConversationCompactor.Estimate([Result("c1", Long(400))], 0).Total);
         var picture = new ChatMessage(ChatRole.User, [new TextContent(Long(40)), new DataContent(new byte[] { 1, 2, 3 }, "image/png"), new DataContent(new byte[] { 4 }, "image/png")]);
-        Assert.Equal(10 + 2 * ConversationCompactor.PictureTokens, ConversationCompactor.EstimateTokens([picture]));
+        Assert.Equal(10 + 2 * ConversationCompactor.PictureTokens, ConversationCompactor.Estimate([picture], 0).Total);
         Assert.Equal((4, 1000), (ConversationCompactor.CharsPerToken, ConversationCompactor.PictureTokens));
     }
 
@@ -946,7 +946,6 @@ public class ConversationCompactorTests
 
         var all = ConversationCompactor.Estimate(messages, 0);
         Assert.Equal(new ConversationCompactor.TokenEstimate(100, 19, 400, 0, 60, 1), all);
-        Assert.Equal(ConversationCompactor.EstimateTokens(messages), all.Total);
         Assert.Equal((100L, 1000L, 15L), (all.ToolResultTokens, all.PictureTokenCount, all.ThinkingTokens));
         Assert.Equal(all.Total, all.HistoryTokens + all.PictureTokenCount + all.ThinkingTokens);
 
@@ -1303,6 +1302,17 @@ public class ConversationCompactorTests
         };
     }
 
+    /// <summary>
+    /// <c>/compact prune</c>'s older-turn prune as the tests read it (the pass-through <c>ConversationCompactor.Prune</c> went on 2026-11-10,
+    /// review P18-1): <see cref="ConversationCompactor.PruneOlderTurns"/>, its entries added to <paramref name="entries"/>.
+    /// </summary>
+    private static (List<ChatMessage> Messages, int Pruned) PruneOlder(ConversationCompactor.Plan plan, bool protectSkills = true, List<ConversationCompactor.PrunedEntry>? entries = null)
+    {
+        var (messages, pruned, _, stubbed) = ConversationCompactor.PruneOlderTurns(plan, protectSkills);
+        entries?.AddRange(stubbed);
+        return (messages, pruned);
+    }
+
     /// <summary>Numbered lines of <paramref name="width"/> characters with their line break, so a cut has line breaks to fall on.</summary>
     private static string Lines(int count, int width) =>
         string.Concat(Enumerable.Range(0, count).Select(i => i.ToString("D5", System.Globalization.CultureInfo.InvariantCulture) + new string('x', width - 6) + "\n"));
@@ -1327,9 +1337,9 @@ public class ConversationCompactorTests
     {
         var messages = RoundToCut();
         string read = ResultText(messages[6], "c1");
-        Assert.Equal(14_166, ConversationCompactor.LatestRoundTokens(messages));
+        Assert.Equal(14_166, ConversationCompactor.CutLatestResults(messages, long.MaxValue, protectSkills: true).Before);
 
-        var (cut, cuts, pictures) = ConversationCompactor.CutLatestResults(messages, 6_000, protectSkills: true);
+        var (cut, cuts, pictures, _, _) = ConversationCompactor.CutLatestResults(messages, 6_000, protectSkills: true);
 
         var entry = Assert.Single(cuts);
         Assert.Equal(("read_file", 30_000), (entry.Tool, entry.Before));
@@ -1339,11 +1349,11 @@ public class ConversationCompactorTests
         Assert.Equal(entry.After, kept.Length);
         Assert.True(ConversationCompactor.HoldsCutMark(kept));
         Assert.Contains("\n[… ", kept, StringComparison.Ordinal);
-        Assert.Contains(" characters cut here to fit the context window; read the rest in smaller pieces]\n", kept, StringComparison.Ordinal);
+        Assert.Contains(" characters cut here to fit the context window; read the rest in smaller pieces or with a narrower call; don't run a command again to see its output]\n", kept, StringComparison.Ordinal);
         Assert.StartsWith(read[..3_000], kept, StringComparison.Ordinal);                     // the head, about two thirds
         Assert.EndsWith(read[^1_500..], kept, StringComparison.Ordinal);                      // and the tail
         Assert.Equal(Lines(200, 60), ResultText(cut[6], "c2"));                              // the round fits: the next largest stays
-        Assert.InRange(ConversationCompactor.LatestRoundTokens(cut), 0, 6_000);
+        Assert.InRange(ConversationCompactor.CutLatestResults(cut, long.MaxValue, protectSkills: true).Before, 0, 6_000);
         Assert.Same(messages[2], cut[2]);                                                    // the earlier turn untouched
         Assert.Same(messages[5], cut[5]);                                                    // the calls' message too
         Assert.Equal(read, ResultText(messages[6], "c1"));                                   // and the held message
@@ -1352,10 +1362,11 @@ public class ConversationCompactorTests
     [Fact]
     public void CutLatestResults_NeverBelowTheFloor_AndAShortResultIsNeverCut()
     {
-        var (cut, cuts, _) = ConversationCompactor.CutLatestResults(RoundToCut(), 0, protectSkills: true);
+        var (cut, cuts, _, _, _) = ConversationCompactor.CutLatestResults(RoundToCut(), 0, protectSkills: true);
 
         Assert.Equal(new[] { "read_file", "web_fetch" }, cuts.Select(c => c.Tool));
-        Assert.All(cuts, c => Assert.InRange(c.After, ConversationCompactor.CutFloorChars - 200, ConversationCompactor.CutFloorChars));
+        // The floor is shared by the round's candidates (review P21-2): two of them, half the floor each.
+        Assert.All(cuts, c => Assert.InRange(c.After, ConversationCompactor.CutFloorChars / 2 - 200, ConversationCompactor.CutFloorChars / 2));
         Assert.Equal(Long(500), ResultText(cut[6], "c3"));
         Assert.Equal(2_000, ConversationCompactor.CutFloorChars);
     }
@@ -1364,7 +1375,7 @@ public class ConversationCompactorTests
     public void CutLatestResults_UnderTheBudget_IsACopy_WithNoCuts()
     {
         var messages = RoundToCut();
-        var (cut, cuts, pictures) = ConversationCompactor.CutLatestResults(messages, 20_000, protectSkills: true);
+        var (cut, cuts, pictures, _, _) = ConversationCompactor.CutLatestResults(messages, 20_000, protectSkills: true);
 
         Assert.Empty(cuts);
         Assert.Equal(0, pictures);
@@ -1377,11 +1388,11 @@ public class ConversationCompactorTests
     {
         List<ChatMessage> messages = [User("one"), Call("c0", "read_file"), Result("c0", Long(9000)), Assistant("read"), User("go")];
 
-        var (cut, cuts, _) = ConversationCompactor.CutLatestResults(messages, 0, protectSkills: true);
+        var (cut, cuts, _, _, _) = ConversationCompactor.CutLatestResults(messages, 0, protectSkills: true);
 
         Assert.Empty(cuts);
         Assert.Equal(messages, cut);
-        Assert.Equal(0, ConversationCompactor.LatestRoundTokens(messages));
+        Assert.Equal(0, ConversationCompactor.CutLatestResults(messages, long.MaxValue, protectSkills: true).Before);
     }
 
     [Fact]
@@ -1391,7 +1402,7 @@ public class ConversationCompactorTests
         var tool = new ChatMessage(ChatRole.Tool, [result]) { RawRepresentation = "raw", AdditionalProperties = new AdditionalPropertiesDictionary { ["m"] = 2 } };
         List<ChatMessage> messages = [User("go"), Calls(("c1", "read_file")), tool];
 
-        var (cut, _, _) = ConversationCompactor.CutLatestResults(messages, 1_000, protectSkills: true);
+        var (cut, _, _, _, _) = ConversationCompactor.CutLatestResults(messages, 1_000, protectSkills: true);
 
         Assert.NotSame(tool, cut[2]);
         Assert.Null(cut[2].RawRepresentation);
@@ -1442,8 +1453,8 @@ public class ConversationCompactorTests
             ]),
         ];
 
-        var (_, protectedCuts, _) = ConversationCompactor.CutLatestResults(messages, 0, protectSkills: true);
-        var (_, openCuts, _) = ConversationCompactor.CutLatestResults(messages, 0, protectSkills: false);
+        var (_, protectedCuts, _, _, _) = ConversationCompactor.CutLatestResults(messages, 0, protectSkills: true);
+        var (_, openCuts, _, _, _) = ConversationCompactor.CutLatestResults(messages, 0, protectSkills: false);
 
         Assert.Equal(new[] { "echo" }, protectedCuts.Select(c => c.Tool));                  // the plan read, though larger, stays whole
         Assert.Equal(new[] { NeonSidekick.Llm.Tools.LoadSkillTool.ToolName, "echo" }, openCuts.Select(c => c.Tool));
@@ -1453,33 +1464,40 @@ public class ConversationCompactorTests
     public void CutLatestResults_StubsTheCarriersPictures_OnlyWhenTheResultsAreAtTheirFloor()
     {
         List<ChatMessage> messages = [User("go"), Calls(("c1", "view_image")), Results(("c1", Long(2_500))), Carrier(2, "generate_image")];
-        Assert.Equal(833 + 2 * ConversationCompactor.PictureTokens, ConversationCompactor.LatestRoundTokens(messages));
+        Assert.Equal(833 + 2 * ConversationCompactor.PictureTokens, ConversationCompactor.CutLatestResults(messages, long.MaxValue, protectSkills: true).Before);
 
-        var (near, nearCuts, nearPictures) = ConversationCompactor.CutLatestResults(messages, 2_700, protectSkills: true);
+        var (near, nearCuts, nearPictures, _, _) = ConversationCompactor.CutLatestResults(messages, 2_700, protectSkills: true);
         Assert.Single(nearCuts);
         Assert.Equal(0, nearPictures);
         Assert.Same(messages[3], near[3]);
 
-        var (far, farCuts, farPictures) = ConversationCompactor.CutLatestResults(messages, 2_500, protectSkills: true);
+        // Only what the excess needs, oldest first (review P5-2), each picture its left-out line in a clone of the carrier (P6-1).
+        var (far, farCuts, farPictures, _, after) = ConversationCompactor.CutLatestResults(messages, 2_500, protectSkills: true);
         Assert.Single(farCuts);
-        Assert.Equal(2, farPictures);
+        Assert.Equal(1, farPictures);
+        Assert.InRange(after, 0, 2_500);
         Assert.True(ConversationHistory.IsImageCarrier(far[3]));
         Assert.Equal("generate_image", ConversationHistory.CarrierSource(far[3]));
-        Assert.Equal(ConversationCompactor.PrunedImageStub(2, "generate_image"), far[3].Text);
-        Assert.Empty(far[3].Contents.OfType<DataContent>());
-        Assert.Equal(2, messages[3].Contents.OfType<DataContent>().Count());                  // the held carrier as it was
+        var held = messages[3].Contents.OfType<DataContent>().ToList();
+        Assert.Equal(["the pictures", PictureBudget.LeftOutFor(held[0])], far[3].Contents.OfType<TextContent>().Select(t => t.Text));
+        Assert.Same(held[1], Assert.Single(far[3].Contents.OfType<DataContent>()));
+        Assert.Equal(2, held.Count);                                                          // the held carrier as it was
+
+        var (all, _, allPictures, _, _) = ConversationCompactor.CutLatestResults(messages, 1_500, protectSkills: true);
+        Assert.Equal(2, allPictures);
+        Assert.Empty(all[3].Contents.OfType<DataContent>());
 
         // The pictures by their size (the guard's figure): heavier, so they go at a budget the floor alone would have met.
-        var (_, _, sized) = ConversationCompactor.CutLatestResults(messages, 2_700, protectSkills: true, pictureTokens: 5_000);
+        var (_, _, sized, _, _) = ConversationCompactor.CutLatestResults(messages, 2_700, protectSkills: true, pictureTokens: [5_000, 5_000]);
         Assert.Equal(2, sized);
     }
 
     [Fact]
-    public void PruneOlderTurns_IsPrunesBody_WithTheArgumentsCount()
+    public void PruneOlderTurns_CountsTheArguments_AndItsEntries()
     {
         var plan = ConversationCompactor.Split(ThreeTurns(), 1);
         var entries = new List<ConversationCompactor.PrunedEntry>();
-        var (pruned, count) = ConversationCompactor.Prune(plan, entries: entries);
+        var (pruned, count) = PruneOlder(plan, entries: entries);
         var (helper, helperCount, arguments, helperEntries) = ConversationCompactor.PruneOlderTurns(plan, protectSkills: true);
 
         Assert.Equal(count, helperCount);
@@ -1493,9 +1511,11 @@ public class ConversationCompactorTests
     [Fact]
     public void CutMarker_AndItsRefusal_ArePinned()
     {
-        Assert.Equal("[… 140,000 characters cut here to fit the context window; read the rest in smaller pieces]", TurnText.CutMarker(140_000));
+        Assert.Equal("[… 140,000 characters cut here to fit the context window; read the rest in smaller pieces or with a narrower call; don't run a command again to see its output]", TurnText.CutMarker(140_000));
+        Assert.Equal("[… 140,000 characters cut here to fit the context window; this call was cut before, so don't call it again: use what you have, or a narrower call]", TurnText.CutAgainMarker(140_000));
+        Assert.True(ConversationCompactor.HoldsCutMark(TurnText.CutAgainMarker(3)));
         Assert.Equal(
-            "Error: content holds a tool result that was cut to fit the context window, not the whole text; read the full text again in smaller pieces and write it whole, then call the tool again",
+            "Error: content holds a tool result that was cut to fit the context window, not the whole text; change just the part you need with a patch (patch_file, unc_patch, skill_editor's edit_file), or read the whole text again before writing it whole",
             NeonSidekick.App.CompactionText.CutResultSentResult("content"));
     }
 
@@ -1536,5 +1556,137 @@ public class ConversationCompactorTests
         Assert.Equal("edits", ConversationCompactor.CutMarkedArgument(new Dictionary<string, object?> { ["edits"] = list.EnumerateArray().ToList() }));
         Assert.Equal("edits", ConversationCompactor.CutMarkedArgument(new Dictionary<string, object?> { ["edits"] = encoded }));
         Assert.Null(ConversationCompactor.CutMarkedArgument(new Dictionary<string, object?> { ["content"] = "{\"a\": [1, \"plain\"]}", ["n"] = 4 }));
+    }
+
+    // ── The cut's review fixes (2026-11-10) ───────────────────────────────
+
+    [Fact]
+    public void CutLatestResults_NeverCutsAnAskUserAnswer_AndMarksACallCutBefore()
+    {
+        List<ChatMessage> messages = [User("go"), Calls(("c1", NeonSidekick.Llm.Tools.AskUserTool.ToolName), ("c2", "web_fetch")), Results(("c1", Lines(300, 50)), ("c2", Lines(300, 50)))];
+
+        var first = ConversationCompactor.CutLatestResults(messages, 0, protectSkills: true);
+        Assert.Equal(new[] { "web_fetch" }, first.Cuts.Select(c => c.Tool));
+        Assert.Equal(Lines(300, 50), ResultText(first.Messages[2], "c1"));                   // the user's words, whole
+        Assert.Equal("c2", first.Cuts[0].Call!.CallId);
+        Assert.DoesNotContain("cut before", ResultText(first.Messages[2], "c2"), StringComparison.Ordinal);
+
+        var again = ConversationCompactor.CutLatestResults(messages, 0, protectSkills: true, cutBefore: call => call.Name == "web_fetch");
+        Assert.Contains("this call was cut before", ResultText(again.Messages[2], "c2"), StringComparison.Ordinal);
+        Assert.True(ConversationCompactor.HoldsCutMark(ResultText(again.Messages[2], "c2")));
+    }
+
+    /// <summary>A call id reused earlier in the turn names the newest round's own call (review P8-5).</summary>
+    [Fact]
+    public void CutLatestResults_MatchesCallsWithinTheNewestRound()
+    {
+        List<ChatMessage> messages = [User("go"), Calls(("c1", "read_file")), Results(("c1", "short")), Calls(("c1", "web_fetch")), Results(("c1", Lines(300, 50)))];
+
+        var cut = ConversationCompactor.CutLatestResults(messages, 0, protectSkills: true);
+
+        Assert.Equal("web_fetch", Assert.Single(cut.Cuts).Tool);
+    }
+
+    [Fact]
+    public void CutLatestResults_UnderTheBudget_KeepsTheList_AndReportsTheRound()
+    {
+        var messages = RoundToCut();
+        var cut = ConversationCompactor.CutLatestResults(messages, 20_000, protectSkills: true);
+        Assert.Equal(cut.Before, cut.After);
+        Assert.Equal(14_166, cut.Before);
+    }
+
+    /// <summary>A shell spill line in the cut middle is kept right after the marker (review P1-8): the model reads the file, not the command again.</summary>
+    [Fact]
+    public void CutText_KeepsAShellSpillLine_AfterTheMarker()
+    {
+        string spill = NeonSidekick.Shell.ShellText.CutLine(90_000, "C:\\out\\run.log");
+        string text = Lines(100, 50) + spill + "\n" + Lines(100, 50);
+
+        string cut = ConversationCompactor.CutText(text, 2_400);
+
+        int marker = cut.IndexOf("[… ", StringComparison.Ordinal);
+        Assert.True(marker >= 0);
+        Assert.True(cut.IndexOf(spill, StringComparison.Ordinal) > marker);
+    }
+
+    /// <summary>Untrusted ⟪ ⟫ fences and ``` fences stay balanced across the cut (review P2-4).</summary>
+    [Theory]
+    [InlineData("⟪", "⟫")]
+    [InlineData("```\n", "```\n")]
+    public void CutText_ClosesAndReopensAFence(string open, string close)
+    {
+        string text = open + Lines(200, 50) + close;
+
+        string cut = ConversationCompactor.CutText(text, 2_400);
+
+        Assert.True(cut.Length < text.Length);
+        if (open == close)
+        {
+            Assert.Equal(0, Occurrences(cut, "```") % 2);
+        }
+        else
+        {
+            Assert.Equal(Occurrences(cut, open), Occurrences(cut, close));
+        }
+    }
+
+    /// <summary>A result cut again carries the first cut's count into its marker (review P4-3); a cut saving too little is skipped (P21-1).</summary>
+    [Fact]
+    public void CutText_ACutAgain_CountsBothCuts_AndASmallCutIsSkipped()
+    {
+        string text = Lines(400, 50);
+        string once = ConversationCompactor.CutText(text, 8_000);
+        string twice = ConversationCompactor.CutText(once, 3_000);
+
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(twice, "characters cut here"));
+        Assert.True(MarkerCount(twice) >= text.Length - twice.Length);
+        Assert.Same(text, ConversationCompactor.CutText(text, text.Length - 50));
+    }
+
+    private static int Occurrences(string text, string part)
+    {
+        int count = 0;
+        for (int at = text.IndexOf(part, StringComparison.Ordinal); at >= 0; at = text.IndexOf(part, at + part.Length, StringComparison.Ordinal))
+        {
+            count++;
+        }
+
+        return count;
+    }
+
+    private static long MarkerCount(string text) =>
+        long.Parse(System.Text.RegularExpressions.Regex.Match(text, @"\[… ([\d,]+) characters cut here").Groups[1].Value, System.Globalization.NumberStyles.AllowThousands, System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>The summary head test lives with the compactor now (review P9-1), the user's role required; /rewind's calls it.</summary>
+    [Fact]
+    public void IsSummary_IsTheUsersSummaryHead_AndTheGuardSkipsASummaryOfOne()
+    {
+        var head = new ChatMessage(ChatRole.User, ConversationCompactor.SummaryPreamble + "notes");
+        Assert.True(ConversationCompactor.IsSummary(head));
+        Assert.True(NeonSidekick.App.ConversationRewind.IsSummary(head));
+        Assert.False(ConversationCompactor.IsSummary(new ChatMessage(ChatRole.Assistant, ConversationCompactor.SummaryPreamble + "notes")));
+
+        // A compact's history: the head, then the turns it kept (ConversationCompactor.Summarised).
+        var plan = ConversationCompactor.Split([head, User("go"), Assistant("r")], keepRecent: 1);
+        Assert.True(plan.HasOlderTurns);
+        Assert.False(plan.HasOlderBeyondSummary);
+    }
+
+    /// <summary>The turn start skips a user message that holds tool results (review P19-2), as InFlightStart does.</summary>
+    [Fact]
+    public void LightenTurn_StubsTheNewestRoundsLongArgument_AsAPrunedStub()
+    {
+        List<ChatMessage> messages = [User("go"), Calls(("c1", "write_file")), Results(("c1", "wrote"))];
+        ((FunctionCallContent)messages[1].Contents[0]).Arguments = new Dictionary<string, object?> { ["path"] = "a.txt", ["content"] = Long(27_610) };
+        var entries = new List<ConversationCompactor.PrunedEntry>();
+
+        var (lightened, arguments) = ConversationCompactor.LightenTurn(messages, entries);
+
+        Assert.Equal(1, arguments);
+        var call = Assert.Single(lightened[1].Contents.OfType<FunctionCallContent>());
+        Assert.True(ConversationCompactor.IsPrunedStub(call.Arguments!["content"] as string));
+        Assert.Null(lightened[1].RawRepresentation);
+        Assert.Equal(Long(27_610), ((FunctionCallContent)messages[1].Contents[0]).Arguments!["content"]);   // the held list untouched
     }
 }

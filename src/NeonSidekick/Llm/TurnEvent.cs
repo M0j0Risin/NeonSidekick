@@ -51,8 +51,12 @@ public abstract record TurnEvent
     /// the forbidden string the model is not told); the history keeps the text; null otherwise. <paramref name="Took"/> (2026-11-02, the
     /// review: the reply footer's tool times) is the call's wall time, null for a call never run (cut off by the length limit), and
     /// <paramref name="Asked"/> the part of it spent waiting on the user (<see cref="ToolSpan"/>), which the time shown leaves out.
+    /// <paramref name="GuardRefused"/> (2026-11-10, review P20-1/P22-2) marks the loop's own refusal of a copied stub or cut marker
+    /// (<see cref="App.CompactionText.PrunedStubSentResult"/>, <see cref="App.CompactionText.CutResultSentResult"/>): nothing ran, and
+    /// <see cref="TurnTrace"/> leaves it out of what a skill learns from. A flag, not the wording, so a reworded refusal is still
+    /// known. Hosts ignore it.
     /// </summary>
-    public sealed record ToolResult(string Name, string CallId, string Text, IReadOnlyList<ImageAttachment>? Images = null, FileDiff? Diff = null, string? Shown = null, TimeSpan? Took = null, TimeSpan Asked = default) : TurnEvent;
+    public sealed record ToolResult(string Name, string CallId, string Text, IReadOnlyList<ImageAttachment>? Images = null, FileDiff? Diff = null, string? Shown = null, TimeSpan? Took = null, TimeSpan Asked = default, bool GuardRefused = false) : TurnEvent;
 
     /// <summary>
     /// Something the user should see that is not reply text: a timeout, a server error, an iteration cap. <paramref name="AskAgain"/>: the
@@ -79,15 +83,18 @@ public abstract record TurnEvent
     /// The mid-turn guard summarised (2026-09-28) and the history is the new one: the turns before this one
     /// (<paramref name="ThisTurn"/> false) or this turn's earlier iterations (true). The host bills
     /// <see cref="ConversationCompactor.Result.Usage"/> the way <c>/compact</c>'s is billed and shows the notice. Since 2026-11-09 it also
-    /// reports the overflow recovery's prune of the turns before this one: a <see cref="ConversationCompactor.Result"/> with
-    /// <see cref="ConversationCompactor.Result.Summarised"/> false and no usage, not preceded by <see cref="Compacting"/>.
+    /// reports the guard's prune of the turns before this one — the overflow recovery's, and since 2026-11-10 (D2) the ceiling's, with no
+    /// server error — a <see cref="ConversationCompactor.Result"/> with <see cref="ConversationCompactor.Result.Summarised"/> false and no
+    /// usage, not preceded by <see cref="Compacting"/>. The hosts skip <c>TokenTally.AddCompaction</c> for that one (2026-11-10, review P8-3):
+    /// it would zero the context figure, and a request always follows it whose usage sets the figure afresh; when none does (the retry
+    /// fails, Esc), the figure from before stays, so the next message's auto compact fires.
     /// </summary>
     public sealed record Compacted(ConversationCompactor.Result Result, int Percent, bool ThisTurn) : TurnEvent;
 
     /// <summary>
     /// The server named a context window smaller than the guard's, or one where none was known, in a "too long" error (2026-11-09):
-    /// llama-server's per-slot <c>n_ctx</c>, or a wrong setting. The chat session's host remembers it until the next connect
-    /// (<c>LlmSession.NoteServerLimit</c>) and says so once.
+    /// llama-server's per-slot <c>n_ctx</c>, or a wrong setting. The chat session's host remembers it for that server and model
+    /// (<c>LlmSession.NoteServerLimit</c>, 2026-11-10, D4) and says so once.
     /// </summary>
     public sealed record ServerLimit(int Tokens) : TurnEvent;
 }

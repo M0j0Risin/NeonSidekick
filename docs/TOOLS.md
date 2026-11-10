@@ -1077,7 +1077,8 @@ Under *Agent skills*.
 | `skill_editor` | `action, scope?, name, description?, instructions?, path?, content?, old_text?, new_text?, replace_all?, summary?` | Creates or updates a skill in `profile` (default) or `global` scope (*Global skills*); `write_file` and `edit_file` change a supporting file, `edit_file` on `SKILL.md` part of its instructions. |
 
 * `skill_editor` never deletes, and never touches an external skill or one you [locked](SETTINGS.md#locking-a-skill) or disabled.
-* **Writes need their text:** `skill_editor`'s `write_file`, `write_file`, `unc_write` and `vault_write` refuse a call with no `content`; `edit_file`, `patch_file` and `unc_patch` one with no `new_text`. An empty `""` is allowed; a pruned stub copied from the history is not, nor is text holding a cut result's marker.
+* **Writes need their text:** `skill_editor`'s `write_file`, `write_file`, `unc_write` and `vault_write` refuse a call with no `content`; `edit_file`, `patch_file` and `unc_patch` one with no `new_text`. An empty `""` is allowed; a pruned stub copied from the history is not.
+* **A cut result isn't written back:** a write, command or MCP tool whose arguments hold a cut result's marker is refused; reads and searches pass it. A cut `read_file` no longer counts as read, so `write_file` without a mode won't replace that file.
 * **A skill's files by full path:** the file tools refuse a path inside a skill folder and name `load_skill` instead.
 
 ### Sessions

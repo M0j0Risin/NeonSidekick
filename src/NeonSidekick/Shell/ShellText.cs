@@ -11,7 +11,7 @@ namespace NeonSidekick.Shell;
 /// separator, and a result over the cap keeps its head and tail with the cut named between them.
 /// Every refusal starts with <c>Error:</c>, as the loop expects.
 /// </summary>
-public static class ShellText
+public static partial class ShellText
 {
     public const string NoOutput = "(no output)";
     public const string StderrSeparator = "--- stderr ---";
@@ -181,6 +181,20 @@ public static class ShellText
         spill is null
             ? $"… ({Count(chars)} characters cut) …"
             : $"… ({Count(chars)} characters cut; the {(whole ? "whole output" : "output kept")} is in {spill}) …";
+
+    /// <summary>
+    /// The first <see cref="CutLine"/> in <paramref name="text"/> that names a file (2026-11-10, review P23-2: the guard's cut keeps it beside
+    /// its marker, so the model reads the file rather than running the command again), or null. The fileless form names nothing to read.
+    /// Read by the pattern kept here beside <see cref="CutLine"/>, so the two can't drift.
+    /// </summary>
+    public static string? SpillLine(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return SpillLinePattern().Match(text) is { Success: true } line ? line.Value : null;
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"… \([\d,]{1,20} characters cut; the (?:whole output|output kept) is in [^\r\n)]{1,1024}\) …", System.Text.RegularExpressions.RegexOptions.CultureInvariant)]
+    private static partial System.Text.RegularExpressions.Regex SpillLinePattern();
 
     // ── Background processes (phase B, 2026-09-21) ───────────────────────────
 

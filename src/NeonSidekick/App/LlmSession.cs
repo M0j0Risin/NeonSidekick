@@ -120,9 +120,16 @@ internal sealed class LlmSession : IDisposable
     private readonly SemaphoreSlim _embeddedLinks = new(1, 1);
     private ContextLength? _detectedContextLength;
 
-    // A smaller window the server named in a too-long error (2026-11-09, NoteServerLimit), 0 for none: one int, so the status bar's and
-    // /usage's reads on another thread never see it half-written. Cleared at the next connect.
-    private int _serverLimit;
+    // A smaller window the server named in a too-long error (2026-11-09, NoteServerLimit), null for none: one immutable record swapped with
+    // Volatile, so the status bar's and /usage's reads on another thread never see it half-written. Never cleared at a connect (2026-11-10,
+    // D4): the getter applies it only to its own server and model, under the figures it was learned with.
+    private ServerLimitRecord? _serverLimit;
+
+    /// <summary>
+    /// A window the server named (2026-11-10, D4): the endpoint's base URL and model id it was learned on, its figure, and the configured
+    /// <c>LLM context length</c> and the detected window it was learned under, so a change of either drops it.
+    /// </summary>
+    private sealed record ServerLimitRecord(Uri Url, string Model, int Tokens, int Configured, int? Detected);
     private CancellationTokenSource? _learningCts;
     private CancellationTokenSource? _titlingCts;
 
@@ -187,6 +194,13 @@ internal sealed class LlmSession : IDisposable
     /// </summary>
     public Func<string, CancellationToken, Task<bool?>>? ProjectFileAsk { get; set; }
 
+    /// <summary>
+    /// The main chat's hook for a result the mid-turn guard cut (2026-11-10, review P1-9, <see cref="Llm.Assistant.ResultCut"/>): set once by
+    /// the host and handed to each <see cref="Assistant"/> this session makes, as <see cref="ProjectFileAsk"/> is, so a reconnect keeps it.
+    /// Linked clients (advisors, bots) never get it.
+    /// </summary>
+    public Action<FunctionCallContent>? ResultCut { get; set; }
+
     /// <summary>The embedded model's catalog, installs and server (2026-09-29); null when this session offers none.</summary>
     public IEmbeddedLlm? Embedded => _embedded;
 
@@ -206,36 +220,61 @@ internal sealed class LlmSession : IDisposable
     /// (<see cref="AppSettingsData.LlmContextLength"/>, no request made), else what the server's model
     /// list published (<see cref="LlmEndpoint.PublishedContextLength"/>) or the last connect's
     /// <see cref="ContextLengthProbe"/> found; null while unknown or disconnected. Since 2026-11-09 a smaller window the server named in a
-    /// too-long error (<see cref="NoteServerLimit"/>) goes over any of them until the next connect, with <see cref="ServerLimitSource"/>.
+    /// too-long error (<see cref="NoteServerLimit"/>) goes over any of them, with <see cref="ContextLengthProbe.ServerLimitSource"/>: since
+    /// 2026-11-10 (D4) for that server and model — while the current endpoint's URL and model id are its own, and <c>LLM context length</c> and
+    /// the detected window are what they were when it was learned. A reconnect to the same pair (<c>/reasoning</c>, a settings reconnect)
+    /// keeps it, another pair ignores it (and switching back restores it), and a changed setting or a server restarted with another window
+    /// drops it, so the fix <see cref="Llm.ModelErrorText.TooLong"/> advises takes effect.
     /// </summary>
     public ContextLength? ContextLength
     {
         get
         {
             var known = _configuredContextLength > 0 ? Llm.ContextLength.Configured(_configuredContextLength) : _detectedContextLength;
-            int limit = Volatile.Read(ref _serverLimit);
-            return limit > 0 && (known is not { } figure || limit < figure.Tokens) ? new Llm.ContextLength(limit, ServerLimitSource) : known;
+            return Volatile.Read(ref _serverLimit) is { } limit && Applies(limit) && (known is not { } figure || limit.Tokens < figure.Tokens)
+                ? new Llm.ContextLength(limit.Tokens, ContextLengthProbe.ServerLimitSource)
+                : known;
         }
     }
 
-    /// <summary>The source phrase of a window the server named in a too-long error (2026-11-09, <see cref="NoteServerLimit"/>), shown by <c>/usage</c>. Pinned.</summary>
-    public const string ServerLimitSource = "the server's too-long error";
+    /// <summary>Whether <paramref name="limit"/> is this endpoint's, learned under today's figures (D4).</summary>
+    private bool Applies(ServerLimitRecord limit) =>
+        Endpoint is { } endpoint && limit.Url == endpoint.BaseUrl && string.Equals(limit.Model, endpoint.ModelId, StringComparison.Ordinal)
+        && limit.Configured == _configuredContextLength && limit.Detected == _detectedContextLength?.Tokens;
 
     /// <summary>
     /// Remembers a window the server named in a too-long error (2026-11-09: llama-server's per-slot <c>n_ctx</c> can be smaller than its
-    /// <c>--ctx-size</c>, and a setting can be wrong) until the next connect, when it is below <see cref="ContextLength"/> or none is known: the
-    /// server's answer is the real limit, over a configured figure too. True when the window changed, so the host says so once.
+    /// <c>--ctx-size</c>, and a setting can be wrong) for this server and model (2026-11-10, D4, <see cref="ContextLength"/>), when it is below
+    /// <see cref="ContextLength"/> or none is known: the server's answer is the real limit, over a configured figure too. A later one replaces
+    /// it; it is never saved. Logged when it is adopted (review P6-5). True when the window changed, so the host says so once.
     /// </summary>
     public bool NoteServerLimit(int tokens)
     {
-        if (tokens <= 0 || (ContextLength is { } known && tokens >= known.Tokens))
+        var before = ContextLength;
+        if (tokens <= 0 || Endpoint is not { } endpoint || (before is { } known && tokens >= known.Tokens))
         {
             return false;
         }
 
-        Volatile.Write(ref _serverLimit, tokens);
+        Volatile.Write(ref _serverLimit, new ServerLimitRecord(endpoint.BaseUrl, endpoint.ModelId, tokens, _configuredContextLength, _detectedContextLength?.Tokens));
+        DiagnosticLog.Info(Category, string.Create(System.Globalization.CultureInfo.InvariantCulture,
+            $"Context window {tokens} tokens for {endpoint.ModelId} at {endpoint.BaseUrl}, from the server's too-long error (was {(before is { } was ? was.Tokens.ToString(System.Globalization.CultureInfo.InvariantCulture) + " from " + was.Source : "unknown")})."));
         return true;
     }
+
+    /// <summary>
+    /// <see cref="NoteServerLimit"/> with the notice the host shows (2026-11-10, review P24-4: one helper for the screen and headless):
+    /// <see cref="CompactionText.ServerLimitNotice"/> when the window changed, else null.
+    /// </summary>
+    public string? ServerLimitNoticeFor(int tokens) => NoteServerLimit(tokens) ? CompactionText.ServerLimitNotice(tokens) : null;
+
+    /// <summary>
+    /// The window a failed compact's summarizer request was refused under (2026-11-10, review P17-2): the auto compact's or <c>/compact</c>'s
+    /// too-long error read with <see cref="ContextOverflowMatch.From"/>, its named limit noted as a turn's is. The notice, or null. The
+    /// compact's own failure line stays an error: nothing was recovered.
+    /// </summary>
+    public string? ServerLimitNoticeFor(Exception failure) =>
+        ContextOverflowMatch.From(failure) is { Limit: { } limit } ? ServerLimitNoticeFor((int)Math.Min(limit, int.MaxValue)) : null;
 
     /// <summary>The status line for a resolved endpoint.</summary>
     public static string ConnectedLine(LlmEndpoint endpoint)
@@ -1009,7 +1048,7 @@ internal sealed class LlmSession : IDisposable
         try
         {
             _client = _factory(Endpoint, Timeouts, default);
-            Assistant = new Assistant(_client, History, Timeouts, time: _time, reasoning: ReasoningLevel.Resolve(effective)) { Meter = Meter, Sampling = LlmSampling.Resolve(effective, endpoint.ModelId), ProjectFileAsk = ProjectFileAsk, PublishSentEstimate = true };
+            Assistant = new Assistant(_client, History, Timeouts, time: _time, reasoning: ReasoningLevel.Resolve(effective)) { Meter = Meter, Sampling = LlmSampling.Resolve(effective, endpoint.ModelId), ProjectFileAsk = ProjectFileAsk, ResultCut = ResultCut, PublishSentEstimate = true };
             return true;
         }
         catch (Exception ex)
@@ -1397,7 +1436,6 @@ internal sealed class LlmSession : IDisposable
         _client?.Dispose();
         _client = null;
         _detectedContextLength = null;
-        Volatile.Write(ref _serverLimit, 0);
         _serverSampling = null;
     }
 

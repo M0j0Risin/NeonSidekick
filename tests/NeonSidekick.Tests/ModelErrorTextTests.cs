@@ -52,9 +52,22 @@ public class ModelErrorTextTests
     [Fact]
     public void TheReplyClause_NamesALargeReservationOnly()
     {
-        Assert.Contains("(1,500 of 4,096 tokens); the server keeps 3,000 tokens for the reply. ", ModelErrorText.TooLong(new ContextOverflow("vLLM text", 1500, 4096, 3000)), StringComparison.Ordinal);
-        Assert.DoesNotContain("for the reply", ModelErrorText.TooLong(new ContextOverflow("vLLM text", 4000, 4096, 1000)), StringComparison.Ordinal);
-        Assert.DoesNotContain("for the reply", ModelErrorText.TooLong(new ContextOverflow("Anthropic text", null, null, 90_000)), StringComparison.Ordinal);
+        Assert.Contains("(4,500 of 4,096 tokens); the request asks for 3,000 tokens of reply. ", ModelErrorText.TooLong(new ContextOverflow("vLLM text", 1500, 4096, 3000)), StringComparison.Ordinal);
+        Assert.DoesNotContain("of reply", ModelErrorText.TooLong(new ContextOverflow("vLLM text", 4000, 4096, 1000)), StringComparison.Ordinal);
+        Assert.DoesNotContain("of reply", ModelErrorText.TooLong(new ContextOverflow("Anthropic text", null, null, 90_000)), StringComparison.Ordinal);
         Assert.DoesNotContain(" of ", ModelErrorText.TooLong(new ContextOverflow("vLLM text", null, 4096, null)), StringComparison.Ordinal);
+    }
+
+    /// <summary>Each ending has its own next step (Stage 2.2), and the shrinking modes aren't told to turn themselves on (Stage 1.9).</summary>
+    [Fact]
+    public void TooLong_NamesTheNextStepThatFits()
+    {
+        var overflow = new ContextOverflow("x", 9_000, 8_192, null);
+        Assert.EndsWith(ModelErrorText.MessageNextStep, ModelErrorText.TooLong(overflow, ToolCompactMode.Prune, TooLongReason.Message), StringComparison.Ordinal);
+        Assert.EndsWith(ModelErrorText.FixedNextStep, ModelErrorText.TooLong(overflow, null, TooLongReason.Fixed), StringComparison.Ordinal);
+        Assert.EndsWith(ModelErrorText.TooLongShrinkingNextStep, ModelErrorText.TooLong(overflow, ToolCompactMode.Compact), StringComparison.Ordinal);
+        Assert.EndsWith(ModelErrorText.TooLongNextStep, ModelErrorText.TooLong(overflow, ToolCompactMode.Stop), StringComparison.Ordinal);
+        Assert.DoesNotContain("LLM tool compact mode", ModelErrorText.TooLongShrinkingNextStep, StringComparison.Ordinal);
+        Assert.EndsWith(ModelErrorText.WindowNextStep, ModelErrorText.TooLongNextStep, StringComparison.Ordinal);
     }
 }

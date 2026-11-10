@@ -1087,4 +1087,16 @@ public sealed class ShellTests
         Assert.False(foreground.HoldsLeftovers);
         Assert.False(NeonSidekick.EmbeddedLlm.ChildJob.HoldsProcesses(0));
     }
+
+    /// <summary>The spill line's recognizer sits beside CutLine (2026-11-10, review P1-8), so the two can't drift.</summary>
+    [Fact]
+    public void SpillLine_FindsCutLinesFileForms_NotTheFilelessOne()
+    {
+        string whole = ShellText.CutLine(412345, "C:\\logs\\x.log");
+        string kept = ShellText.CutLine(9, "x.log", whole: false);
+        Assert.Equal(whole, ShellText.SpillLine("head\n" + whole + "\ntail"));
+        Assert.Equal(kept, ShellText.SpillLine("head\n" + kept + "\ntail"));
+        Assert.Null(ShellText.SpillLine("head\n" + ShellText.CutLine(5, null) + "\ntail"));
+        Assert.Null(ShellText.SpillLine("no spill here"));
+    }
 }

@@ -1589,6 +1589,29 @@ public partial class SidekickAppTests : IDisposable
         Assert.Contains("Neon: (🗜️ compacted: 11 messages → 9 · 300 → 20 tokens)" + Environment.NewLine + "[notice] A summary." + Environment.NewLine + "[notice] Of two lines." + Environment.NewLine + "[notice] (🗜️ 6 messages protected at the start)" + Environment.NewLine + "[notice] (🗜️ 2 messages protected at the end)" + Environment.NewLine, output);
     }
 
+    /// <summary>
+    /// A /compact whose summarizer request the server refuses as too long names the server's window (2026-11-10, review P17-2): a
+    /// [notice] before the failure line, which stays a failure.
+    /// </summary>
+    [Fact]
+    public async Task Headless_Compact_ATooLongSummary_NamesTheServersWindow()
+    {
+        ServerOn1234("llama");
+        _settings.Update(d => d.LlmCompactKeepRecent = 1);
+        _chat.EnqueueText("one").EnqueueText("two");
+        _chat.Enqueue(FakeChatClient.Text("unused"));
+        _chat.BeforeUpdate = (i, _) => _chat.Requests.Count == 3 && i == 0
+            ? throw new NeonSidekick.Llm.Anthropic.AnthropicApiException(400, "invalid_request_error", "prompt is too long: 3000 tokens > 2048 maximum")
+            : Task.CompletedTask;
+
+        string output = await Headless("first\nsecond\n/compact\n");
+
+        int notice = output.IndexOf("[notice] " + CompactionText.ServerLimitNotice(2_048), StringComparison.Ordinal);
+        int failed = output.IndexOf(CompactionText.FailedPrefix, StringComparison.Ordinal);
+        Assert.True(notice >= 0, output);
+        Assert.True(failed > notice, output);
+    }
+
     [Fact]
     public async Task Headless_Compact_NothingOlder_AndAFailure_AreReplyLines()
     {
@@ -1715,7 +1738,7 @@ public partial class SidekickAppTests : IDisposable
 
         Assert.Contains("[notice] " + CompactionText.ServerLimitNotice(900), output);
         Assert.Contains("[notice] (✂️ auto-compacted at ", output);
-        Assert.Contains("[notice] " + Assistant.OverflowRetryNotice(1_200, 900), output);
+        Assert.Contains("[notice] " + TurnText.OverflowNotice(new ContextOverflow("", 1_200, 900, null)), output);
         Assert.DoesNotContain("[error]", output);
         Assert.Contains("done", output);
         Assert.Equal(4, _chat.Requests.Count);

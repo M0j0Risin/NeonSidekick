@@ -210,34 +210,13 @@ public sealed class OpenAIApiChatClient : IChatClient
     /// </summary>
     internal static bool IsReasoningRefusal(int status, string body) =>
         status == 400 && (body.Contains("encrypted", StringComparison.OrdinalIgnoreCase) || body.Contains("reasoning", StringComparison.OrdinalIgnoreCase))
-        && ErrorCode(body) != ContextOverflowMatch.OpenAICode && !Assistant.IsContextOverflowText(body);
+        && !ContextOverflowMatch.IsOverflowText(body);
 
     /// <summary>
-    /// The <c>error.code</c> of an error body, else its <c>error.type</c>, else <c>error</c>. Internal since 2026-11-09: the context-overflow
-    /// read (<see cref="ContextOverflowMatch"/>) takes a raw body's code the same way.
+    /// The <c>error.code</c> of an error body, else its <c>error.type</c>, else <c>error</c>, through the shared reader (<see cref="ErrorBody"/>,
+    /// 2026-11-10, review P10-3).
     /// </summary>
-    internal static string ErrorCode(string body)
-    {
-        try
-        {
-            using var document = System.Text.Json.JsonDocument.Parse(body);
-            if (document.RootElement.TryGetProperty("error"u8, out var error) && error.ValueKind == System.Text.Json.JsonValueKind.Object)
-            {
-                foreach (string name in new[] { "code", "type" })
-                {
-                    if (error.TryGetProperty(name, out var value) && value.ValueKind == System.Text.Json.JsonValueKind.String && value.GetString() is { Length: > 0 } word)
-                    {
-                        return word;
-                    }
-                }
-            }
-        }
-        catch (System.Text.Json.JsonException)
-        {
-        }
-
-        return "error";
-    }
+    internal static string ErrorCode(string body) => ErrorBody.Parse(body) is { } read && (read.Code ?? read.Type) is { } word ? word : "error";
 
     /// <inheritdoc/>
     public object? GetService(Type serviceType, object? serviceKey = null)

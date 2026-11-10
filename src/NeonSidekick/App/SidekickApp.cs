@@ -904,6 +904,8 @@ public sealed partial class SidekickApp
         // The setting File tools decides per turn, like Web tools; the clock alone is standing.
         var files = BuildWorkingDirectory();
         LaunchSweep = files.SweepRoot();
+        // A read_file the mid-turn guard cut is no longer seen (2026-11-10, review P1-9), as on the screen.
+        session.ResultCut = call => ChatScreen.ForgetCutRead(files, call);
         // The SQLite databases no file tool changes and the shell police guards while the SQLite tools are on (2026-10-05); DuckDB's while its are (2026-10-25).
         files.Databases = () => ChatScreen.DatabaseGuardFor(EffectiveSettings, _settings.ProfileDirectory, _settings.StorageDirectory);
         files.ServerDatabases = () => Shell.ServerDatabasePolice.For(EffectiveSettings, _settings.ProfileDirectory, _settings.StorageDirectory);
@@ -2739,6 +2741,11 @@ public sealed partial class SidekickApp
         catch (Exception ex)
         {
             outcome = CompactionText.FailedPrefix + assistant.ExplainFailure(ex);
+            // A summarizer request refused as too long names the server's window (2026-11-10, review P17-2), said before the failure.
+            if (session.ServerLimitNoticeFor(ex) is { } said)
+            {
+                await HeadlessNoticeLineAsync("[notice] " + said).ConfigureAwait(false);
+            }
         }
 
         // The same line the screen logs for its compacts (2026-09-19).
@@ -2813,16 +2820,22 @@ public sealed partial class SidekickApp
                         session.Usage.Add(usage.Tokens);
                         break;
                     case TurnEvent.Compacted compacted:
-                        // The mid-turn guard summarised (2026-09-28), or pruned the older turns after a too-long answer (2026-11-09): billed
-                        // like the automatic compact, one notice line.
-                        session.Usage.AddCompaction(compacted.Result.Usage);
+                        // The mid-turn guard summarised (2026-09-28), or pruned the older turns (after a too-long answer, 2026-11-09, or past
+                        // the ceiling, 2026-11-10): a summary billed like the automatic compact; the prune leaves the tally alone (review P8-3:
+                        // the request after it sets the context figure), one notice line.
+                        if (compacted.Result.Summarised || compacted.Result.Usage is not null)
+                        {
+                            session.Usage.AddCompaction(compacted.Result.Usage);
+                        }
+
                         await HeadlessNoticeLineAsync("[notice] " + (compacted.ThisTurn ? CompactionText.TurnNotice(compacted.Result, compacted.Percent) : CompactionText.Notice(compacted.Result, compacted.Percent))).ConfigureAwait(false);
                         break;
                     case TurnEvent.ServerLimit limit:
-                        // A smaller window the server named (2026-11-09): used for the rest of the run (headless connects once), said once.
-                        if (session.NoteServerLimit(limit.Tokens))
+                        // A smaller window the server named (2026-11-09): kept for this server and model (D4), which here is the rest of the
+                        // run, since headless connects once; said once.
+                        if (session.ServerLimitNoticeFor(limit.Tokens) is { } said)
                         {
-                            await HeadlessNoticeLineAsync("[notice] " + CompactionText.ServerLimitNotice(limit.Tokens)).ConfigureAwait(false);
+                            await HeadlessNoticeLineAsync("[notice] " + said).ConfigureAwait(false);
                         }
 
                         break;

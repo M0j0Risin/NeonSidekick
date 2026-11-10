@@ -14,15 +14,17 @@ public enum ToolCompactMode
     /// <see cref="Prune"/> first; when the next request is still estimated at or over the share, a summary
     /// (2026-09-28, the user's report: a long turn climbed past the share toward the ceiling with nothing
     /// left to prune) — the turns before this one, then, if that is not enough, this turn's earlier iterations.
-    /// Since 2026-11-09 a second summary past the ceiling (<see cref="Assistant.TurnContextGuard.CeilingPercent"/>), the newest results cut
-    /// to fit there, and a request the server refuses as too long shrunk and sent again.
+    /// Since 2026-11-09 a second summary past the ceiling (<see cref="Assistant.TurnContextGuard.CeilingTokens"/>), the newest results cut
+    /// to fit there, and a request the server refuses as too long shrunk and sent again. Since 2026-11-10 (D2) the older turns are pruned
+    /// past the ceiling, after the summaries, before any cut.
     /// </summary>
     Compact,
 
     /// <summary>
     /// This turn's older tool results and long call arguments (every iteration's but the last; the arguments since 2026-10-17) become stubs
     /// and the loop carries on. Since 2026-11-09, past the ceiling, the last iteration's results are cut to fit, and a request the server
-    /// refuses as too long is shrunk (the older turns pruned too) and sent again.
+    /// refuses as too long is shrunk (the older turns pruned too) and sent again. Since 2026-11-10 (D2) the older turns are pruned past
+    /// the ceiling too, before any cut.
     /// </summary>
     Prune,
 

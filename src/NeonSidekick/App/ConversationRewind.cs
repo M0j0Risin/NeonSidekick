@@ -52,12 +52,8 @@ public sealed record RewindReplay(string UserText, string ReplyText, int ToolCal
 /// </summary>
 public static partial class ConversationRewind
 {
-    /// <summary>Whether <paramref name="message"/> is a compact's summary turn (<see cref="ConversationCompactor.SummaryPreamble"/>).</summary>
-    public static bool IsSummary(ChatMessage message)
-    {
-        ArgumentNullException.ThrowIfNull(message);
-        return message.Text.StartsWith(ConversationCompactor.SummaryPreamble, StringComparison.Ordinal);
-    }
+    /// <summary>Whether <paramref name="message"/> is a compact's summary turn: <see cref="ConversationCompactor.IsSummary"/>, the one test since 2026-11-10 (review P9-1).</summary>
+    public static bool IsSummary(ChatMessage message) => ConversationCompactor.IsSummary(message);
 
     /// <summary>The turns <paramref name="messages"/> holds that a rewind can go back to, oldest first: every turn except a compact's summary.</summary>
     public static IReadOnlyList<RewindTurn> Turns(IReadOnlyList<ChatMessage> messages)

@@ -38,13 +38,13 @@ public static class ModelErrorText
 
         // A context overflow first (2026-11-09), on the whole chain: LM Studio's 500 would otherwise read as the server failing on its side,
         // and the two APIs' exceptions as nothing this knows.
-        if (Assistant.LooksLikeContextOverflow(ex) is { } overflow)
+        if (ContextOverflowMatch.From(ex) is { } overflow)
         {
             return TooLong(overflow);
         }
 
         string? where = null;
-        for (var current = ex; current is not null; current = current is AggregateException { InnerExceptions.Count: > 0 } aggregate ? aggregate.InnerExceptions[0] : current.InnerException)
+        foreach (var current in Assistant.ExceptionChain(ex))
         {
             if (current is HttpRequestException http)
             {
@@ -80,22 +80,47 @@ public static class ModelErrorText
         return null;
     }
 
-    /// <summary>What to do about a request too long for the window. Pinned.</summary>
-    public const string TooLongNextStep = "/compact shrinks the conversation; LLM tool compact mode (compact or prune) shrinks a long reply's tool results; LLM context length sets the window.";
+    /// <summary>
+    /// What to do about a request too long for the window (2026-11-10, review P3-8/P9-4): <c>/compact</c>, the tool compact mode, and the
+    /// window, which a lower <c>LLM context length</c> makes the guard act within while the server's own is set on the server. Pinned.
+    /// </summary>
+    public const string TooLongNextStep = "/compact shrinks the conversation; LLM tool compact mode (compact or prune) shrinks a long reply's tool results; " + WindowNextStep;
+
+    /// <summary>
+    /// <see cref="TooLongNextStep"/> under the tool compact modes that shrink (compact, prune), whose retry just failed, so turning one on
+    /// is no advice (2026-11-10, review P3-8). Pinned.
+    /// </summary>
+    public const string TooLongShrinkingNextStep = "/compact shrinks the conversation; " + WindowNextStep;
+
+    /// <summary>The window's half of the advice (2026-11-10, review P9-4). Pinned.</summary>
+    public const string WindowNextStep = "a lower LLM context length makes the guard act sooner, and the server's own window is set on the server (Embedded context size for the embedded model).";
+
+    /// <summary>The way on when the user's message alone is past the window (2026-11-10, review P11-2/P24-2). Pinned.</summary>
+    public const string MessageNextStep = "Your message and its attachments alone are past the window: send it in parts, or attach less.";
+
+    /// <summary>The way on when the fixed part (the instructions and the tool list) alone is past the window (2026-11-10, review P3-1). Pinned.</summary>
+    public const string FixedNextStep = "The instructions and tool list alone are past the window: turn off tool families in /tools, or use a larger window on the server.";
 
     /// <summary>
     /// A request the server refused as too long for the window, which the turn loop could not recover from (2026-11-09):
-    /// <c>The request was too long for the model's context window (41,200 of 32,768 tokens). …</c>, the figures when both were parsed, and
-    /// the reply's reservation when it is what blocked the retry (half the limit or more, the loop's own test).
+    /// <c>The request was too long for the model's context window (41,200 of 32,768 tokens). …</c>, the figures when both were parsed
+    /// (<see cref="ContextOverflow.Figures"/>, the reply counted in), the reply asked for when it is what blocked the retry
+    /// (<see cref="ContextOverflow.ReplyBlocks"/>), and the way on: by <paramref name="reason"/> when the turn ended without a shrink
+    /// (2026-11-10), else by <paramref name="mode"/>.
     /// </summary>
-    public static string TooLong(ContextOverflow overflow)
+    public static string TooLong(ContextOverflow overflow, ToolCompactMode? mode = null, TooLongReason reason = TooLongReason.None)
     {
         ArgumentNullException.ThrowIfNull(overflow);
-        string figures = overflow is { Sent: { } sent, Limit: { } limit } ? string.Create(CultureInfo.InvariantCulture, $" ({sent:N0} of {limit:N0} tokens)") : "";
-        string reply = overflow is { Output: { } output, Limit: { } window } && output * 2 >= window
-            ? string.Create(CultureInfo.InvariantCulture, $"; the server keeps {output:N0} tokens for the reply")
+        string reply = overflow is { Output: { } output } && overflow.ReplyBlocks(null)
+            ? string.Create(CultureInfo.InvariantCulture, $"; the request asks for {output:N0} tokens of reply")
             : "";
-        return "The request was too long for the model's context window" + figures + reply + ". " + TooLongNextStep;
+        string next = reason switch
+        {
+            TooLongReason.Message => MessageNextStep,
+            TooLongReason.Fixed => FixedNextStep,
+            _ => mode is ToolCompactMode.Compact or ToolCompactMode.Prune ? TooLongShrinkingNextStep : TooLongNextStep,
+        };
+        return "The request was too long for the model's context window" + overflow.Figures + reply + ". " + next;
     }
 
     /// <summary>The <c>host:port</c> an <see cref="HttpRequestException"/>'s message ends with in parentheses, or null.</summary>
@@ -110,4 +135,15 @@ public static class ModelErrorText
         string inside = message[(open + 1)..^1];
         return inside.Length > 0 && inside.Length <= 255 && inside.Contains(':', StringComparison.Ordinal) && !inside.Contains(' ', StringComparison.Ordinal) ? inside : null;
     }
+}
+
+/// <summary>
+/// Why a too-long turn ended without a shrink (2026-11-10, review P11-2/P24-2/P3-1), for <see cref="ModelErrorText.TooLong"/>'s way on:
+/// none (the shrink ran and didn't fit, or no shrink applies), the user's message alone past the window, or the fixed part alone past it.
+/// </summary>
+public enum TooLongReason
+{
+    None,
+    Message,
+    Fixed,
 }

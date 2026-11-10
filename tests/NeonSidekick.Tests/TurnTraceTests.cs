@@ -243,4 +243,14 @@ public class TurnTraceTests
     {
         Assert.Equal(expected, TurnTrace.LoadedName(text));
     }
+
+    /// <summary>The loop's own refusal of a copied stub or cut marker ran nothing, so it is no error and no lesson (2026-11-10, review P20-1).</summary>
+    [Fact]
+    public void AGuardRefusal_IsNotCounted()
+    {
+        var trace = new TurnTrace();
+        trace.Observe(new TurnEvent.ToolCall("write_file", "c1", "{}"));
+        trace.Observe(new TurnEvent.ToolResult("write_file", "c1", "Error: content holds a tool result that was cut", GuardRefused: true));
+        Assert.Equal((1, 0, false), (trace.ToolCalls, trace.Errors, trace.Recovered));
+    }
 }

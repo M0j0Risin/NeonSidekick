@@ -274,9 +274,12 @@ public class LlmSessionTests
         Assert.Equal(1, _http.Requests.Count(r => r.Uri.AbsoluteUri == "http://127.0.0.1:1234/v1/models"));
     }
 
-    /// <summary>A smaller window the server named in a too-long error (2026-11-09): used with its source until the next connect, said once.</summary>
+    /// <summary>
+    /// A smaller window the server named in a too-long error (2026-11-09): used with its source, said once, and since 2026-11-10 (D4) kept
+    /// for that server and model: a reconnect to the same pair keeps it.
+    /// </summary>
     [Fact]
-    public async Task NoteServerLimit_LowersTheWindow_UntilTheNextConnect()
+    public async Task NoteServerLimit_LowersTheWindow_ForThisServerAndModel()
     {
         _http.Map("http://127.0.0.1:1234/v1/models", HttpStatusCode.OK, ModelsWithWindow);
         using var session = Session();
@@ -285,12 +288,37 @@ public class LlmSessionTests
         Assert.False(session.NoteServerLimit(32_768));      // no smaller: nothing to say
         Assert.False(session.NoteServerLimit(0));
         Assert.True(session.NoteServerLimit(16_384));
-        Assert.Equal(new ContextLength(16_384, LlmSession.ServerLimitSource), session.ContextLength);
+        Assert.Equal(new ContextLength(16_384, ContextLengthProbe.ServerLimitSource), session.ContextLength);
         Assert.False(session.NoteServerLimit(20_000));
         Assert.Equal(16_384, session.ContextLength!.Value.Tokens);
 
-        Assert.True(await session.ConnectAsync(Scanning, CancellationToken.None));
+        Assert.True(await session.ConnectAsync(Scanning, CancellationToken.None));                   // /reasoning's reconnect
+        Assert.Equal(new ContextLength(16_384, ContextLengthProbe.ServerLimitSource), session.ContextLength);
+    }
+
+    private const string TwoModelsWithWindows = "{\"object\":\"list\",\"data\":[{\"id\":\"llama\",\"object\":\"model\",\"max_model_len\":32768},{\"id\":\"other\",\"object\":\"model\",\"max_model_len\":32768}]}";
+
+    /// <summary>D4 (2026-11-10): another model ignores the learned window, switching back restores it, a server restarted with another window drops it.</summary>
+    [Fact]
+    public async Task NoteServerLimit_IsIgnoredByAnotherModel_AndDroppedWhenTheServersWindowChanges()
+    {
+        string models = TwoModelsWithWindows;
+        _http.Map("http://127.0.0.1:1234/v1/models", (_, _) => Task.FromResult(StubHttpMessageHandler.Json(HttpStatusCode.OK, models)));
+        using var session = Session();
+        Assert.True(await session.ConnectAsync(new AppSettingsData { LlmModel = "llama", LlmScanMode = "local" }, CancellationToken.None));
+        Assert.True(session.NoteServerLimit(16_384));
+
+        Assert.True(await session.ConnectAsync(new AppSettingsData { LlmModel = "other", LlmScanMode = "local" }, CancellationToken.None));
+        Assert.Equal("other", session.Endpoint!.ModelId);
         Assert.Equal(new ContextLength(32_768, ContextLengthProbe.MaxModelLenSource), session.ContextLength);
+
+        Assert.True(await session.ConnectAsync(new AppSettingsData { LlmModel = "llama", LlmScanMode = "local" }, CancellationToken.None));
+        Assert.Equal(new ContextLength(16_384, ContextLengthProbe.ServerLimitSource), session.ContextLength);
+
+        models = TwoModelsWithWindows.Replace("32768}", "65536}", StringComparison.Ordinal);
+        Assert.True(await session.ConnectAsync(new AppSettingsData { LlmModel = "llama", LlmScanMode = "local" }, CancellationToken.None));
+        Assert.Equal(new ContextLength(65_536, ContextLengthProbe.MaxModelLenSource), session.ContextLength);
+        Assert.False(session.NoteServerLimit(70_000));                                               // still never a larger one
     }
 
     [Fact]
@@ -302,12 +330,12 @@ public class LlmSessionTests
         Assert.Null(session.ContextLength);
 
         Assert.True(session.NoteServerLimit(4_096));
-        Assert.Equal(new ContextLength(4_096, LlmSession.ServerLimitSource), session.ContextLength);
+        Assert.Equal(new ContextLength(4_096, ContextLengthProbe.ServerLimitSource), session.ContextLength);
 
         Assert.True(await session.ConnectAsync(new AppSettingsData { LlmContextLength = 8_192, LlmScanMode = "local" }, CancellationToken.None));
         Assert.Equal(ContextLength.Configured(8_192), session.ContextLength);
         Assert.True(session.NoteServerLimit(4_096));
-        Assert.Equal(new ContextLength(4_096, LlmSession.ServerLimitSource), session.ContextLength);
+        Assert.Equal(new ContextLength(4_096, ContextLengthProbe.ServerLimitSource), session.ContextLength);
     }
 
     [Fact]
@@ -467,5 +495,20 @@ public class LlmSessionTests
         var endpoint = new LlmEndpoint(new Uri("http://127.0.0.1:1234/v1/"), "qwen3", "", "probed");
         Assert.Equal("Connected: " + LlmSession.ConnectedLine(endpoint), LlmSession.ConnectedLogLine(endpoint));
         Assert.Equal("Disconnected from http://127.0.0.1:1234/v1/ model=qwen3", LlmSession.DisconnectedLogLine(endpoint));
+    }
+
+    /// <summary>A compact's too-long failure names the server's window too (2026-11-10, review P17-2), with the turn's notice, once.</summary>
+    [Fact]
+    public async Task ServerLimitNoticeFor_ACompactsTooLongFailure_LowersTheWindowOnce()
+    {
+        _http.Map("http://127.0.0.1:1234/v1/models", HttpStatusCode.OK, ModelsWithWindow);
+        using var session = Session();
+        Assert.True(await session.ConnectAsync(Scanning, CancellationToken.None));
+        var tooLong = new NeonSidekick.Llm.Anthropic.AnthropicApiException(400, "invalid_request_error", "prompt is too long: 20000 tokens > 16384 maximum");
+
+        Assert.Equal(CompactionText.ServerLimitNotice(16_384), session.ServerLimitNoticeFor(tooLong));
+        Assert.Null(session.ServerLimitNoticeFor(tooLong));
+        Assert.Null(session.ServerLimitNoticeFor(new HttpRequestException("down")));
+        Assert.Equal(new ContextLength(16_384, ContextLengthProbe.ServerLimitSource), session.ContextLength);
     }
 }

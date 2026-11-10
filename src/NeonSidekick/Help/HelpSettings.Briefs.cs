@@ -110,7 +110,7 @@ public static partial class HelpSettings
         SettingsField.LlmCompactType => "/compact's method: summary folds the older turns into one summary the model writes; prune replaces bulky tool results with short stubs and keeps every turn.",
         SettingsField.LlmCompactKeepRecent => "The most recent user turns a compact keeps word for word (0–24).",
         SettingsField.LlmCompactShowSummary => "After a compact, shows what it did: the summary, or a line per pruned tool result.",
-        SettingsField.LlmToolCompactType => "When one reply's tool calls fill the context to the auto compact share: compact summarizes, prune stubs old results, both cut the newest to fit, stop ends the turn, off does nothing.",
+        SettingsField.LlmToolCompactType => "When one reply's tool calls fill the context to the auto compact share: compact summarizes, prune stubs old results, both cut the newest near the window's end, stop ends the turn, off does nothing.",
         SettingsField.LlmPictureKeep => "The most pictures one request carries, a PDF counting as one (0–500; 0 = no cap). Past it the oldest leave the conversation; the newest message's always stay.",
         SettingsField.LlmPictureMegabytes => "The most megabytes of pictures and PDFs one request carries (0–1000; 0 = no cap). Past it the oldest leave. It also caps what one message may attach.",
         SettingsField.LlmUseFunVerbs => "The thinking spinner shows a random verb instead of thinking or writing.",

@@ -116,8 +116,7 @@ They need no server unless the row says so.
 
 - Case doesn't matter. `/exit`, `/new`, `/clear` and `/splash` must be alone on the line: `/new please` goes to the model as text.
 - With no server, messages and the commands that need one get `Neon: [error] No LLM server. Set NEONSIDEKICK_LLM_URL and restart.`
-- Automatic compaction (*LLM auto compact (%)*) and the mid-reply guard (*LLM tool compact mode*) run headless too, as `[notice]` lines.
-- A request the server rejects as too long is shrunk and sent again (never twice in a row), as a `[notice]` line; a smaller window it names is a `[notice]` too, used for the rest of the run.
+- Automatic compaction (*LLM auto compact (%)*) and the mid-reply guard (*LLM tool compact mode*) run headless too, as `[notice]` lines; a smaller window the server names is a `[notice]` too, held for the run ([Servers](SETTINGS.md#servers)).
 
 ### Plans, gap reviews, audits and Ralph loops
 

@@ -33,6 +33,9 @@ public sealed class ContextLengthProbe
 
     // The source phrases, pinned: they sit dim beside the /usage pane's Context heading.
     public const string MaxModelLenSource = "max_model_len on /v1/models";
+
+    /// <summary>The source phrase of a window the server named in a too-long error (2026-11-09, <c>LlmSession.NoteServerLimit</c>; here since 2026-11-10, review P3-13), shown by <c>/usage</c>. Pinned.</summary>
+    public const string ServerLimitSource = "the server's too-long error";
     public const string ContextLengthSource = "context_length on /v1/models";
     public const string MaxInputTokensSource = "max_input_tokens on /v1/models";
 

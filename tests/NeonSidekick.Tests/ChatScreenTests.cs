@@ -13957,7 +13957,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(notice, output);
         Assert.Equal(output.IndexOf(notice, StringComparison.Ordinal), output.LastIndexOf(notice, StringComparison.Ordinal));
         Assert.Contains("The request was too long for the model's context window (5,200 of 5,000 tokens).", output);
-        Assert.Equal(new ContextLength(5_000, LlmSession.ServerLimitSource), _session.ContextLength);
+        Assert.Equal(new ContextLength(5_000, ContextLengthProbe.ServerLimitSource), _session.ContextLength);
         Assert.Equal(ConversationHistory.DefaultMaxTurns, ChatScreen.TurnCapFor(_settings.Current, null));
         Assert.Null(ChatScreen.TurnCapFor(_settings.Current, _session.ContextLength));
     }

@@ -199,6 +199,6 @@ public sealed class AttachPdfTests
     public void TheEstimate_CountsAPdfsText_NotOnePicture()
     {
         var message = new ChatMessage(ChatRole.User, [ConversationHistory.ImagePart(Document(text: new string('x', 40_000)))]);
-        Assert.True(ConversationCompactor.EstimateTokens([message]) >= 10_000);
+        Assert.True(ConversationCompactor.Estimate([message], 0).Total >= 10_000);
     }
 }
