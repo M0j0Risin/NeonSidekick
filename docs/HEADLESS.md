@@ -58,7 +58,7 @@ EOF
 ## What the output looks like
 
 ```
-NeonSidekick 0.5.7
+NeonSidekick 0.5.8
 Headless mode
 LLM: http://127.0.0.1:1234/v1 model=qwen3-30b-a3b (configured)
 You: Neon: The capital of France is Paris.
