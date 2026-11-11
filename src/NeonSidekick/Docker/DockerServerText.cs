@@ -73,6 +73,23 @@ public static class DockerServerText
             + (embedded ? " to free the GPU for the embedded model." : " to free the GPU for a server on this computer.");
     }
 
+    /// <summary>
+    /// The log line when a reconnect stopped containers the settings no longer offer (2026-11-11, the review of the one-local-model change):
+    /// Docker servers switched off, or the container unticked. That stop is the switch's, not the GPU's, so neither <see cref="Left"/> nor
+    /// <see cref="LeftForThisComputer"/> says why.
+    /// </summary>
+    public static string SwitchedOffLeft(IReadOnlyList<string> stopped)
+    {
+        ArgumentNullException.ThrowIfNull(stopped);
+        return "Stopped the Docker server" + (stopped.Count == 1 ? " " : "s ") + string.Join(", ", stopped) + ": Docker servers were switched off or it was unticked.";
+    }
+
+    /// <summary>
+    /// A together stop the caller's cancel cut short (2026-11-11, the review: the exit's budget ran out mid-stop): the engine has the stop
+    /// and finishes it. No name: the report writes <c>name: </c> before it.
+    /// </summary>
+    public const string StopAsked = "asked to stop; Docker finishes it";
+
     /// <summary>The debug line when a clear found the engine not answering (2026-10-26): nothing of it holds the GPU, and it goes unasked a minute.</summary>
     public static string EngineDownLogLine(string error) => "Docker servers, clearing the GPU: " + error;
 
@@ -92,15 +109,35 @@ public static class DockerServerText
     public static string NoPublishedPort(string name) =>
         $"{name} publishes no TCP port, so its API cannot be reached; publish it (for example -p 8000:8000). It is left running.";
 
-    public static string Exited(string name, int exitCode, IReadOnlyList<string> tail)
+    /// <summary>
+    /// A container that exited before its model answered, with its last log lines. With <paramref name="sideBySide"/> (2026-11-11, the
+    /// review: either one-model setting off) <see cref="SideBySideHint"/> follows the head, before the lines: they are joined with
+    /// <c>|</c>, so a hint after them would read as one.
+    /// </summary>
+    public static string Exited(string name, int exitCode, IReadOnlyList<string> tail, bool sideBySide)
     {
         ArgumentNullException.ThrowIfNull(tail);
-        string head = $"{name} exited (code {exitCode.ToString(CultureInfo.InvariantCulture)}) before its model answered";
+        string head = $"{name} exited (code {exitCode.ToString(CultureInfo.InvariantCulture)}) before its model answered" + (sideBySide ? "; " + SideBySideHint : "");
         return tail.Count == 0 ? head + "." : head + "; its last lines: " + string.Join(" | ", tail.Select(l => DockerText.Clip(DockerText.Single(l), 200)));
     }
 
-    public static string NotReady(string name, int seconds) =>
-        $"{name} did not answer /v1/models within {seconds.ToString(CultureInfo.InvariantCulture)} s; it is left running (raise Docker server ready timeout if its model needs longer).";
+    /// <summary>A container that did not answer in time; with <paramref name="sideBySide"/> (2026-11-11) <see cref="SideBySideHint"/> as its own sentence at the end.</summary>
+    public static string NotReady(string name, int seconds, bool sideBySide) =>
+        $"{name} did not answer /v1/models within {seconds.ToString(CultureInfo.InvariantCulture)} s; it is left running (raise Docker server ready timeout if its model needs longer)."
+        + (sideBySide ? " " + char.ToUpperInvariant(SideBySideHint[0]) + SideBySideHint[1..] + "." : "");
+
+    /// <summary>
+    /// What a failed load says with <c>LLM one local model</c> or <c>Docker server one at a time</c> off (2026-11-11, the review): the models
+    /// this app keeps running beside it may be what left too little memory, and the ways to free it.
+    /// </summary>
+    public const string SideBySideHint = "other models this app keeps running may hold the GPU's memory: LLM one local model, Docker server one at a time, Ctrl+Alt+X";
+
+    /// <summary>
+    /// A side-by-side start refused before the engine's raw bind error (2026-11-11, the review: with <c>Docker server one at a time</c> off,
+    /// two containers on one host port): <paramref name="other"/> already publishes <paramref name="port"/>.
+    /// </summary>
+    public static string PortTaken(string name, int port, string other) =>
+        $"Could not start {name}: {other} already publishes host port {port.ToString(CultureInfo.InvariantCulture)}; give each container its own host port to run them side by side.";
 
     public const string SwitchedOffWarning =
         "The LLM URL names a Docker container that is not a Docker server (Docker servers is off, or the container is unticked); looking for a server instead.";
@@ -124,9 +161,16 @@ public static class DockerServerText
     /// <summary>The refusal of a Docker server on this system: <see cref="UnavailableOnMac"/> on a Mac, else <see cref="Unavailable"/>.</summary>
     public static string UnavailableHere => OperatingSystem.IsMacOS() ? UnavailableOnMac : Unavailable;
 
-    /// <summary>A <c>/botchat</c> bot whose profile names another container than the one running: one at a time, so it sits out.</summary>
-    public static string BotOtherContainer(string wanted, string running) =>
-        $"its server is the Docker container {wanted}, but {running} is the one running (one at a time)";
+    /// <summary>
+    /// A bot or an advisor whose profile names another container than the ones this session runs: neither starts or switches one, so it
+    /// sits out (2026-11-10; since 2026-11-11, the review, it names every container this session runs, since with Docker server one at a
+    /// time off several may).
+    /// </summary>
+    public static string BotOtherContainer(string wanted, IReadOnlyList<string> running)
+    {
+        ArgumentNullException.ThrowIfNull(running);
+        return $"its server is the Docker container {wanted}, but this session runs {string.Join(", ", running)}; bots and advisors never start or switch one";
+    }
 
     public const string BotNoneRunning = "its server is a Docker container, and none is running; a botchat never starts one";
 }

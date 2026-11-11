@@ -126,6 +126,56 @@ public partial class ChatScreenTests
     }
 
     [WindowsFact]
+    public async Task KillSwitch_WithAModelParkedBehindAnotherServer_LeavesItsReplyGoing_AndSaysTheServerStays()
+    {
+        // 2026-11-11 (the review of the one-local-model change): LLM one local model off kept Gemma loaded behind the external server; the
+        // kill unloads it alone, and the reply from the server in use runs to its end.
+        _settings.Update(d => { d.TtsOutput = false; d.LlmOneLocalModel = false; d.EmbeddedLlmServer = true; });
+        var embedded = UseEmbedded(new FakeEmbeddedLlm().Installed("gemma-4-e2b"));
+        await embedded.StartAsync(EmbeddedModelCatalog.Find("gemma-4-e2b")!, new Settings.AppSettingsData(), null, CancellationToken.None);
+        _chat.EnqueueText("One. ", "Two.");
+        _chat.BeforeUpdate = async (i, ct) =>
+        {
+            if (i == 1)
+            {
+                _console.Input.PushKey(Keys.CtrlAlt(ConsoleKey.X));
+                _console.Input.PushKey(Keys.CtrlAlt(ConsoleKey.X));
+                for (int waited = 0; embedded.Kills == 0 && waited < 500; waited++)
+                {
+                    await Task.Delay(10, CancellationToken.None);
+                }
+
+                PushLine("/exit");
+            }
+        };
+        PushLine("hi");
+
+        string output = await RunAsync();
+
+        Assert.Equal(1, embedded.Kills);
+        Assert.Null(embedded.Running);
+        Assert.Contains("Two.", output);   // the reply's last part: it ran to its end
+        Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
+        Assert.Contains(EmbeddedLlmText.KilledParkedNotice(["Gemma 4 E2B"]), output);
+        Assert.DoesNotContain(KilledE2b, output);
+        Assert.NotNull(_session.Assistant);
+        Assert.Equal("http://127.0.0.1:1234/v1", _session.Endpoint?.BaseUrl.AbsoluteUri);
+    }
+
+    [WindowsFact]
+    public async Task TheScreen_HandsTheSessionItsLiveSettings_ForOneLocalModel()
+    {
+        // #41: a bot's load reads the setting as it stands now, through the screen's own delegate.
+        _settings.Update(d => d.TtsOutput = false);
+        PushLine("/exit");
+        await RunAsync();
+
+        Assert.True(_session.SettingsNow!().LlmOneLocalModel);
+        _settings.Update(d => d.LlmOneLocalModel = false);
+        Assert.False(_session.SettingsNow!().LlmOneLocalModel);
+    }
+
+    [WindowsFact]
     public async Task KillSwitch_InAPane_UnloadsAndLeavesThePaneOpen()
     {
         var embedded = OnTheEmbeddedE2b();

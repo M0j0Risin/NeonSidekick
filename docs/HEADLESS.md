@@ -170,7 +170,7 @@ Special servers for `--url`:
 - **The Anthropic or OpenAI API:** `--url https://api.anthropic.com` (or `https://api.openai.com`) with `NEONSIDEKICK_ANTHROPIC_API=on` and its key (or the `OPENAI` pair); without them the URL is ignored. Requests are billed to the key's account.
 - **The embedded model:** `--url embedded`, `--model` naming an installed model (else the first). A run never downloads a model, but fetches the llama.cpp runtime the first time. On a Mac it runs on Metal.
 - **The Claude Code server:** `--url claude-code` with `NEONSIDEKICK_CLAUDE_CODE_SERVER=on` runs your logged-in Claude Code as the model ([Anthropic](SETTINGS.md#anthropic)); `--model` is `fable`, `opus`, `sonnet` (the default) or `haiku`.
-- **A Docker server (Windows only):** `--url docker:<container>` starts that container as the model's server, stopping the profile's other chosen ones, each stop a `[notice]` ([Docker servers](TOOLS.md#docker-servers)).
+- **A Docker server (Windows only):** `--url docker:<container>` starts that container as the model's server, each stop of another chosen one a `[notice]` ([Docker servers](TOOLS.md#docker-servers)).
 
 ## Running "yolo": every shell command allowed
 

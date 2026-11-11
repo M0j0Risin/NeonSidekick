@@ -97,6 +97,7 @@ public static partial class HelpSettings
         // /settings › Servers › Common
         SettingsField.LlmUrl => "The LLM server: an OpenAI-compatible base URL, embedded for the built-in model, or docker:<container>. Empty scans for a server and lets you pick one at startup.",
         SettingsField.LlmModel => "The model id. Empty takes the first model the server lists. /model picks one.",
+        SettingsField.LlmOneLocalModel => "Stops the chosen Docker containers before an embedded load or a local server's connect; another pick unloads the embedded model. Off, both keep running and the VRAM is yours.",
         SettingsField.LlmReasoning => "The model's thinking effort, sent with every request: none (thinking off), low, medium, high or xhigh.",
         SettingsField.LlmShowThinking => "Streams a reasoning model's thinking as a dim block that folds away when the answer starts. Needs Transcript markdown.",
         SettingsField.LlmOfferTools => "Gives the model its tools. Turn it off for chat templates with no tool role. Changing it starts a new conversation.",
@@ -130,19 +131,20 @@ public static partial class HelpSettings
         SettingsField.EmbeddedBackend => "Which llama.cpp build runs the model: auto picks CUDA, then Vulkan, then the CPU; or choose cuda, vulkan or cpu. The row shows what auto picked.",
         SettingsField.EmbeddedContextSize => "The server's context window in tokens (512–262,144). 0 fits the largest context that keeps every layer on the GPU.",
         SettingsField.EmbeddedGpuLayers => "The model's layers on the GPU: auto (as many as free VRAM holds), all, or a number (0 runs on the CPU).",
-        SettingsField.EmbeddedVramBudget => "The share of GPU memory the embedded server may fill: off, or 50–99 %. To fit, the context shrinks first, then layers move to the CPU, which is much slower.",
+        SettingsField.EmbeddedVramBudget => "How full the GPU may be after the embedded load (other programs count): off, or 50–99 %. To fit, the context shrinks first, then layers move to the CPU, which is much slower.",
         SettingsField.EmbeddedVramOnly => "Keeps the whole model on the GPU: every layer goes there, and the server stops, saying what to lower, if it does not all fit.",
         SettingsField.EmbeddedVision => "Loads the model's vision projector so it can read images, at the cost of more memory (about 1 GB for most models). Off, images are refused.",
         SettingsField.EmbeddedDrafter => "Speeds up replies: the model drafts tokens ahead and checks them, so the text is the same, only faster. Turn it off if a model misbehaves with it.",
 
         // /settings › Servers › Docker
-        SettingsField.DockerServers => "Offers the chosen Docker containers as LLM servers in /server. Turning it off while one is in use stops it at the reconnect.",
+        SettingsField.DockerServers => "Offers the chosen Docker containers as LLM servers in /server. Turning it off stops this run's containers at the reconnect.",
         SettingsField.DockerServerContainers => "Which containers are LLM servers, ticked from those the engine lists that match Docker server match words or carry the neonsidekick.llm=true label.",
         SettingsField.DockerServerMatchWords => "Words that mark a container as an LLM server when found in its image or command (vllm, sglang, ollama…). Empty lists every container.",
         SettingsField.DockerServerStopTimeoutSeconds => "The time a stopping container gets before the engine kills it (0–120 s).",
-        SettingsField.DockerServerPostStopDelaySeconds => "The wait between stopping the other containers and starting this one, so the GPU's memory is free (0–60 s).",
+        SettingsField.DockerServerPostStopDelaySeconds => "The wait after a stop (a container or the embedded model) before the next model loads, so the GPU's memory is free (0–60 s).",
         SettingsField.DockerServerReadyTimeoutSeconds => "The time a started container gets to answer on /v1/models (30–3600 s). Past it the switch fails and the container is left running.",
-        SettingsField.DockerServerStopOnExit => "Stops the container in use when the app exits. Off, it keeps running.",
+        SettingsField.DockerServerOneAtATime => "Starting a chosen container stops the other chosen ones first. Off, they run side by side, each on its own host port.",
+        SettingsField.DockerServerStopOnExit => "Once the app has started one, stops the running chosen containers when it exits. Off, they keep running.",
 
         // /settings › Servers › Anthropic
         SettingsField.ClaudeCodeExecutable => "The Claude Code CLI to run. Empty looks for claude on the PATH and in its usual install folders. A path you set must exist.",

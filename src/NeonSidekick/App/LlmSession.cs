@@ -76,14 +76,28 @@ internal sealed class LlmSession : IDisposable
     private readonly IDockerServers? _docker;
 
     // The chosen Docker container this session last switched to (2026-10-02): set before the switch, since a failed one may still
-    // have started it; cleared when another server is picked and the containers are stopped. Null says nothing about the engine
-    // (2026-10-26, the user's report): a chosen container left running by an earlier run, or started by hand, was never this run's;
-    // ClearGpuAsync asks the engine for every active one.
+    // have started it; cleared when a clear stops or leaves it (another server picked under LLM one local model, a switch-off, the exit).
+    // Null says nothing about the engine (2026-10-26, the user's report): a chosen container left running by an earlier run, or started by
+    // hand, was never this run's; ClearGpuAsync asks the engine for every active one. Its run is the one in _dockerRuns of that name.
     private string? _dockerInUse;
+
+    /// <summary>
+    /// One container this run switched to and believes running (2026-11-11, the review of the one-local-model change: with Docker server one
+    /// at a time off, several may): its name, the settings it was switched to under (a profile switch leaves it by the old profile's chosen
+    /// list, stop timeout and post-stop delay, 2026-10-02) and its live endpoint once its switch succeeded, null before or after a failed one.
+    /// </summary>
+    private sealed record DockerRun(string Name, AppSettingsData Settings, LlmEndpoint? Live);
+
+    // This run's containers, oldest first (2026-11-11, the review: one tracked container forgot the others kept beside it). Copy-on-write:
+    // read with Volatile, swapped under _dockerRunsLock, since a bot's or an advisor's clear (StoppedOne) runs on a turn's task while the
+    // window's close reads them on the console's thread.
+    private DockerRun[] _dockerRuns = [];
+    private readonly object _dockerRunsLock = new();
 
     // The last clear for a server on this computer that the engine answered (2026-10-26, the review of 12729c54: R11, R36, R44): the names
     // it went by and the server's URL. A /model or /reasoning reconnect to the same server asks the engine nothing again; a connect to
-    // anything else, a Docker switch or another list asks again. An embedded load always asks: a container started by hand since must go.
+    // anything else, a Docker switch or another list asks again. An embedded load's clear (with LLM one local model on) always asks: a
+    // container started by hand since must go. Dropped by any connect that isn't local or runs with the setting off.
     private (string Names, string Url)? _cleared;
 
     // Whether the connect under way stopped every chosen container, sparing none (the container in use left): a later clear in it asks
@@ -98,14 +112,6 @@ internal sealed class LlmSession : IDisposable
     // kept until TakeLeftoverStopped: a bot's or an advisor's load stops some outside a connect. Locked: an advisor links on a turn's task.
     private readonly List<DockerLeftover> _leftoverStopped = [];
 
-    // That container's live endpoint (2026-10-10): kept while it runs though this session connected elsewhere (a server that leaves the
-    // GPU alone), so a bot or an advisor naming it still shares it. Set and cleared with _dockerInUse.
-    private LlmEndpoint? _dockerLive;
-
-    // The settings that container was switched to under (2026-10-02, the user's ask): a profile switch leaves it by the old
-    // profile's chosen list, stop timeout and post-stop delay — the new profile's list may not name it at all, and a stop by
-    // that list stopped nothing while the next model loaded beside it.
-    private AppSettingsData? _dockerSettings;
     private IChatClient? _client;
     private AppSettingsData _effective = new();
     private string _apiKey = LlmEndpoint.DefaultApiKey;
@@ -200,6 +206,14 @@ internal sealed class LlmSession : IDisposable
     /// Linked clients (advisors, bots) never get it.
     /// </summary>
     public Action<FunctionCallContent>? ResultCut { get; set; }
+
+    /// <summary>
+    /// The loaded profile's settings as they stand now (2026-11-10, the user's ask; a delegate of the screen's own since 2026-11-11, the
+    /// review), for a bot's or an advisor's embedded load: its <c>LLM one local model</c> decides whether the load clears the GPU, and the bot
+    /// profile's list names what is cleared. The setting reconnects nothing, so the copy a connect remembered may be stale; null (headless,
+    /// whose settings don't change mid-run, and tests) reads that copy. Asked only when a clear could stop something.
+    /// </summary>
+    public Func<AppSettingsData>? SettingsNow { get; set; }
 
     /// <summary>The embedded model's catalog, installs and server (2026-09-29); null when this session offers none.</summary>
     public IEmbeddedLlm? Embedded => _embedded;
@@ -298,7 +312,10 @@ internal sealed class LlmSession : IDisposable
     /// missing, then the model loaded — and <paramref name="phase"/> is told each step. Any other URL stops an embedded
     /// server this session had running, so its memory is free for whatever runs next. An embedded model about to load, or a
     /// server on this computer, stops the running chosen containers first, this run's or not (2026-10-26, <see cref="ClearGpuAsync"/>;
-    /// <see cref="TakeLeftoverStopped"/> says which this run never started).
+    /// <see cref="TakeLeftoverStopped"/> says which this run never started). With <c>LLM one local model</c> off (2026-11-10, the user's
+    /// ask) neither of those stops happens: the models run side by side and the VRAM is the user's to manage. The switch-offs still stop
+    /// what they name either way: a container no longer offered (<see cref="SwitchedOffRuns"/>), and the embedded model with
+    /// <c>Embedded servers enabled</c> off.
     /// </summary>
     public async Task<bool> ConnectAsync(AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken)
     {
@@ -324,35 +341,41 @@ internal sealed class LlmSession : IDisposable
         // Since 2026-10-10 (the user's call) only a server that would compete for this machine's GPU: the Claude Code server, the hosted
         // APIs and another machine's server leave the container running (KeepsDocker), a bot or an advisor still sharing it.
         // Since 2026-10-26 (the review's R3, R33) one clear of every chosen container, the profile's and the one before's, sparing none.
+        // Since 2026-11-10 (the user's ask) only with LLM one local model on; since 2026-11-11 (the review) StopsBefore decides: else, and
+        // behind a kept server too, only this run's containers no longer offered stop, that stop the switch's (the DockerServers doc).
+        // The wait before an embedded load only when it really loads (a reconnect to the model running loads nothing). A server on this
+        // computer typed as the URL is left to ConnectCoreAsync's clears under the setting (2026-11-11, the review): the container in use
+        // first, then the rest but the one that may serve that URL, so a side-by-side container on its port is spared.
         bool docker = _docker is not null && DockerEndpoint.Chosen(effective);
         bool embedded = EmbeddedEndpoint.Chosen(effective);
-        if (!docker && !KeepsDocker(effective) && _dockerInUse is not null)
+        bool freed = false;
+        if (!docker && HasRuns && !(effective.LlmOneLocalModel && TypedOnThisComputer(effective))
+            && StopsBefore(effective, KeepsDocker(effective)) is var stops && stops is not { Count: 0 })
         {
-            _clearedAll = await ClearGpuAsync(effective, embedded, server: null, spareNames: [], settle: embedded, phase, ConnectText.Connecting, cancellationToken).ConfigureAwait(false);
+            _clearedAll = (await ClearGpuAsync(effective, embedded, server: null, spareNames: [], settle: embedded && !RunsModel(effective), phase, ConnectText.Connecting, cancellationToken, only: stops, switchedOff: stops is not null).ConfigureAwait(false)).All;
         }
-        else if (docker && _dockerInUse is { } inUse && DockerEndpoint.ContainerOf(effective.LlmUrl) is { } target
-            && !string.Equals(inUse, target, StringComparison.Ordinal) && !DockerEndpoint.ChosenNames(effective).Contains(inUse, StringComparer.Ordinal))
+        else if (docker && DockerEndpoint.ContainerOf(effective.LlmUrl) is { } target
+            && Runs.Any(run => !DockerEndpoint.ChosenNames(effective).Contains(run.Name, StringComparer.Ordinal)))
         {
             // A profile switch to another container (2026-10-02, the user's ask): the new profile's switch stops only the ones
-            // its own list names, so the old profile's container, not among them, stops here first. One both lists name is the
-            // switch's to stop, as within one profile.
-            await ClearGpuAsync(effective, embedded: false, server: null, spareNames: [target], settle: true, phase, resume: null, cancellationToken).ConfigureAwait(false);
+            // its own list names, so the old profile's containers, not among them, stop here first. One both lists name is the
+            // switch's to stop, as within one profile. Since 2026-11-11 (the review) any run off the new list counts, not only the one in
+            // use; with Docker server one at a time off the new list's containers are spared, so they keep running side by side. No
+            // settle here: the switch waits it, told the GPU was freed, only before a real start.
+            IReadOnlyCollection<string> spare = effective.DockerServerOneAtATime ? [target] : DockerEndpoint.ChosenNames(effective);
+            freed = (await ClearGpuAsync(effective, embedded: false, server: null, spare, settle: false, phase, resume: null, cancellationToken).ConfigureAwait(false)).Any;
         }
 
         if (embedded)
         {
             // Its load clears the GPU first (2026-10-26, the user's report: a container left running by an earlier run sat beside it), only
-            // when llama-server really loads: a reconnect to the model running with the same launch asks nothing.
+            // when llama-server really loads and LLM one local model is on: a reconnect to the model running with the same launch asks nothing.
             Endpoint = await ResolveEmbeddedAsync(effective, phase, cancellationToken).ConfigureAwait(false);
             return Endpoint is { LiveUrl: not null } && await ConnectCoreAsync(effective, Endpoint, phase, cancellationToken).ConfigureAwait(false);
         }
 
         EmbeddedServer = null;
-        if (_embedded?.Running is not null)
-        {
-            _embedded.Stop();
-        }
-
+        freed |= StopEmbeddedUnlessKept(effective);
         if (!effective.EmbeddedLlmServer)
         {
             _embedded?.StopExtras();   // the switch off (later on 2026-09-29): a multi-server botchat's extras go too, and an advisor's
@@ -360,8 +383,10 @@ internal sealed class LlmSession : IDisposable
 
         if (docker)
         {
-            // A chosen container (2026-10-02): the others stopped, it started, its API waited for — after the embedded server let go.
-            Endpoint = await ResolveDockerAsync(effective, phase, cancellationToken).ConfigureAwait(false);
+            // A chosen container (2026-10-02): started and its API waited for, after the embedded server let go (with LLM one local model on,
+            // 2026-11-11, the review: off, it stays loaded behind); with Docker server one
+            // at a time on the other chosen ones stop first. Whatever this connect freed is the switch's to settle (2026-11-11).
+            Endpoint = await ResolveDockerAsync(effective, freed, phase, cancellationToken).ConfigureAwait(false);
             return Endpoint is { LiveUrl: not null } && await ConnectCoreAsync(effective, Endpoint, phase, cancellationToken).ConfigureAwait(false);
         }
 
@@ -405,6 +430,28 @@ internal sealed class LlmSession : IDisposable
         !DockerEndpoint.IsDocker(baseUrl) && !EmbeddedEndpoint.IsEmbedded(baseUrl) && !DockerEndpoint.LeavesTheGpuAlone(baseUrl);
 
     /// <summary>
+    /// Whether <paramref name="effective"/>'s URL is a server on this computer typed out (2026-11-11, the review): not blank (a scan), not a
+    /// sentinel, and <see cref="OnThisComputer"/>. Its connect's clears spare the container that may be it.
+    /// </summary>
+    private static bool TypedOnThisComputer(AppSettingsData effective)
+    {
+        if (string.IsNullOrWhiteSpace(effective.LlmUrl) || DockerEndpoint.IsDocker(effective.LlmUrl) || EmbeddedEndpoint.IsEmbedded(effective.LlmUrl)
+            || ClaudeCliEndpoint.IsClaudeCli(effective.LlmUrl))
+        {
+            return false;
+        }
+
+        try
+        {
+            return OnThisComputer(LlmEndpoint.NormalizeBaseUrl(effective.LlmUrl));
+        }
+        catch (Exception ex) when (ex is ArgumentException or UriFormatException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
     /// The embedded model's endpoint (2026-09-29): the catalog model <c>LLM model</c> names, else the first installed one,
     /// started on the embedded server. The endpoint's base is the sentinel (<see cref="EmbeddedEndpoint.BaseUrl"/>, what the
     /// user sees), its <see cref="LlmEndpoint.LiveUrl"/> the loopback port it listens on and its key the start's own.
@@ -432,8 +479,9 @@ internal sealed class LlmSession : IDisposable
 
         // Another model about to load (2026-09-30, the user's ask): the old one's name leaves the hint row now, not when the new
         // one is up. The trailer reads Endpoint live, and the connect's spinner redraws it each frame. The same model, a
-        // /reasoning pick's quiet reconnect, keeps it, since that start returns at once.
-        if (_embedded.Running?.ModelId is not { } running || !string.Equals(running, model.Id, StringComparison.OrdinalIgnoreCase))
+        // /reasoning pick's quiet reconnect, keeps it, since that start returns at once. Since 2026-11-11 (the review) only when the hint
+        // row shows that model: back from another server to a model kept loaded behind it, the other server's name goes too.
+        if (!EmbeddedEndpoint.IsEmbedded(Endpoint?.BaseUrl) || !RunsModel(model))
         {
             Endpoint = null;
         }
@@ -441,9 +489,10 @@ internal sealed class LlmSession : IDisposable
         try
         {
             // The main session's load: every chosen container stops, the GPU's memory settles, then the spinner says the model again.
-            var info = await _embedded.StartAsync(model, effective, phase, cancellationToken,
-                beforeLoad: token => _clearedAll ? Task.CompletedTask
-                    : ClearGpuAsync(effective, embedded: true, server: null, spareNames: [], settle: true, phase, EmbeddedLlmText.StartingLabel(model), token)).ConfigureAwait(false);
+            // With LLM one local model off (2026-11-10) nothing is cleared: the containers run beside it.
+            Func<CancellationToken, Task>? beforeLoad = !effective.LlmOneLocalModel ? null : token => _clearedAll ? Task.CompletedTask
+                : ClearGpuAsync(effective, embedded: true, server: null, spareNames: [], settle: true, phase, EmbeddedLlmText.StartingLabel(model), token);
+            var info = await _embedded.StartAsync(model, effective, phase, cancellationToken, beforeLoad).ConfigureAwait(false);
             EmbeddedServer = info;
             return EmbeddedEndpointOf(info);
         }
@@ -456,26 +505,34 @@ internal sealed class LlmSession : IDisposable
     }
 
     /// <summary>
-    /// A chosen container's endpoint (2026-10-02): every other chosen container stopped, this one started and waited for
-    /// (<see cref="IDockerServers.SwitchToAsync"/>). The base is the sentinel, its <see cref="LlmEndpoint.LiveUrl"/> the
+    /// A chosen container's endpoint (2026-10-02): every other chosen container stopped (with <c>Docker server one at a time</c> on), this
+    /// one started and waited for (<see cref="IDockerServers.SwitchToAsync"/>, told <paramref name="freed"/>: this connect freed the GPU).
+    /// Its run is kept before the switch and its live endpoint only after one that succeeded (2026-11-11, the review); the runs the switch
+    /// stopped are dropped. The base is the sentinel, its <see cref="LlmEndpoint.LiveUrl"/> the
     /// published port that answered; the model is <c>LLM model</c> when the container lists it (or lists nothing), else the
     /// first it lists — a vLLM or SGLang container serves one — and the window is what the list published. A switch that
     /// fails is logged as an error and leaves an endpoint with no live URL, so no client is built.
     /// </summary>
-    private async Task<LlmEndpoint> ResolveDockerAsync(AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken)
+    private async Task<LlmEndpoint> ResolveDockerAsync(AppSettingsData effective, bool freed, Action<string>? phase, CancellationToken cancellationToken)
     {
         string name = DockerEndpoint.ContainerOf(effective.LlmUrl)!;
         string? saved = string.IsNullOrWhiteSpace(effective.LlmModel) ? null : effective.LlmModel.Trim();
-        if (!string.Equals(_dockerInUse, name, StringComparison.Ordinal))
+        if (!string.Equals(DockerEndpoint.ContainerOf(Endpoint?.BaseUrl), name, StringComparison.Ordinal))
         {
-            // Another container about to load: the old one's name leaves the hint row now, as the embedded model's does.
+            // Another container about to load: the old one's name leaves the hint row now, as the embedded model's does. The hint row's
+            // own container (2026-11-11, the review), not the one in use: back to one kept beside it, the other server's name goes too.
             Endpoint = null;
         }
 
         _dockerInUse = name;
-        _dockerSettings = effective;
+        KeepRun(new DockerRun(name, effective, Live: null));
         _cleared = null;   // the switch changed what runs: the next local server's clear asks again
-        var result = await _docker!.SwitchToAsync(name, effective, phase, cancellationToken).ConfigureAwait(false);
+        var result = await _docker!.SwitchToAsync(name, effective, freed, phase, cancellationToken).ConfigureAwait(false);
+        foreach (string stopped in result.Stopped)
+        {
+            ForgetRun(stopped);
+        }
+
         if (!result.Ok)
         {
             DiagnosticLog.Error(Category, result.Error!);
@@ -487,15 +544,17 @@ internal sealed class LlmSession : IDisposable
         string model = saved is not null && (listed.Count == 0 || listed.Contains(saved, StringComparer.Ordinal)) ? saved
             : listed.Count > 0 ? listed[0] : saved ?? LlmEndpoint.FallbackModelId;
         var window = result.Models.ModelsJson is { } json ? ContextLengthProbe.ParseModelsWindow(json, model) : null;
-        _dockerLive = new LlmEndpoint(DockerEndpoint.BaseUrl(name), model, _apiKey, DockerServerText.Source(name, result.Port), window) { LiveUrl = result.LiveUrl };
-        return _dockerLive;
+        var live = new LlmEndpoint(DockerEndpoint.BaseUrl(name), model, _apiKey, DockerServerText.Source(name, result.Port), window) { LiveUrl = result.LiveUrl };
+        KeepRun(new DockerRun(name, effective, live));
+        return live;
     }
 
     /// <summary>
     /// Whether a connect under <paramref name="effective"/> keeps the chosen container in use running (2026-10-10, the user's call): its
     /// URL is a server that leaves this machine's GPU alone (<see cref="DockerEndpoint.LeavesTheGpuAlone"/>) and is offered — a Claude Code,
     /// Anthropic or OpenAI URL switched off connects as a blank URL does, and a blank URL scans this machine's ports, where the
-    /// container's own would be found.
+    /// container's own would be found. It shields only the GPU's clear (2026-11-11, the review, <see cref="StopsBefore"/>): a container
+    /// switched off or unticked still stops, and a pick of another container still stops it under <c>Docker server one at a time</c>.
     /// </summary>
     private bool KeepsDocker(AppSettingsData effective)
     {
@@ -524,53 +583,171 @@ internal sealed class LlmSession : IDisposable
             : DockerEndpoint.LeavesTheGpuAlone(url);
     }
 
+    /// <summary>
+    /// Whether a connect under <paramref name="effective"/> to another server keeps the embedded model loaded (2026-11-10, the user's ask):
+    /// <c>LLM one local model</c> off and <c>Embedded servers enabled</c> on. The switch off still stops a running model (its row: "a
+    /// running one stops"): that stop is the switch's, not the GPU's.
+    /// </summary>
+    private static bool KeepsEmbedded(AppSettingsData effective) => !effective.LlmOneLocalModel && effective.EmbeddedLlmServer;
+
+    /// <summary>
+    /// Stops the embedded model for a connect elsewhere unless <see cref="KeepsEmbedded"/> keeps it (2026-11-11, the review: one rule for the
+    /// two sites). True when it stopped one, so the GPU was just freed.
+    /// </summary>
+    private bool StopEmbeddedUnlessKept(AppSettingsData effective)
+    {
+        if (_embedded?.Running is null || KeepsEmbedded(effective))
+        {
+            return false;
+        }
+
+        _embedded.Stop();
+        return true;
+    }
+
+    /// <summary>
+    /// Whether the embedded model <paramref name="model"/> is the one running (2026-11-11, the review: <see cref="ResolveEmbeddedAsync"/>'s
+    /// same-model check, shared): a start of it loads nothing unless its launch changed.
+    /// </summary>
+    private bool RunsModel(EmbeddedModel? model) =>
+        model is not null && _embedded?.Running?.ModelId is { } running && string.Equals(running, model.Id, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary><see cref="RunsModel(EmbeddedModel)"/> for the model <paramref name="effective"/>'s <c>LLM model</c> names.</summary>
+    private bool RunsModel(AppSettingsData effective) => RunsModel(EmbeddedModelFor(effective.LlmModel));
+
+    /// <summary>This run's containers as they stand (<see cref="_dockerRuns"/>).</summary>
+    private DockerRun[] Runs => Volatile.Read(ref _dockerRuns);
+
+    /// <summary>Whether this run has any container it believes running.</summary>
+    private bool HasRuns => Runs.Length > 0;
+
+    /// <summary>The run of the container in use, or null.</summary>
+    private DockerRun? InUseRun => _dockerInUse is { } inUse ? Runs.FirstOrDefault(run => string.Equals(run.Name, inUse, StringComparison.Ordinal)) : null;
+
+    /// <summary>Adds <paramref name="run"/>, or replaces the run of its name where it stands.</summary>
+    private void KeepRun(DockerRun run)
+    {
+        lock (_dockerRunsLock)
+        {
+            var runs = Runs;
+            int at = Array.FindIndex(runs, r => string.Equals(r.Name, run.Name, StringComparison.Ordinal));
+            var next = runs.ToArray();
+            if (at >= 0)
+            {
+                next[at] = run;
+            }
+            else
+            {
+                next = [.. runs, run];
+            }
+
+            Volatile.Write(ref _dockerRuns, next);
+        }
+    }
+
+    /// <summary>A container of this run is no more (stopped, or left whatever the engine says): its run goes, and the one in use with it.</summary>
+    private void ForgetRun(string name)
+    {
+        lock (_dockerRunsLock)
+        {
+            Volatile.Write(ref _dockerRuns, Runs.Where(r => !string.Equals(r.Name, name, StringComparison.Ordinal)).ToArray());
+            if (string.Equals(_dockerInUse, name, StringComparison.Ordinal))
+            {
+                _dockerInUse = null;
+            }
+        }
+    }
+
+    /// <summary>None of this run's containers runs any more (the engine answered nothing, the exit).</summary>
+    private void ForgetRuns()
+    {
+        lock (_dockerRunsLock)
+        {
+            Volatile.Write(ref _dockerRuns, []);
+            _dockerInUse = null;
+        }
+    }
+
+    /// <summary>
+    /// This run's containers <paramref name="effective"/> no longer offers (2026-11-10; every run, not only the one in use, since 2026-11-11):
+    /// Docker servers switched off (or no switcher), or the container unticked. Their stop runs whatever <c>LLM one local model</c> says (the
+    /// <c>DockerServers</c> doc: "Off while one is in use, the reconnect stops it"). On a Mac no run ever exists: nothing offers a container there.
+    /// </summary>
+    private IReadOnlyList<string> SwitchedOffRuns(AppSettingsData effective) =>
+        Runs.Where(run => _docker is null || !DockerEndpoint.Offers(effective, run.Name)).Select(run => run.Name).ToList();
+
+    /// <summary>
+    /// What a connect stops before it (2026-11-11, the review of the one-local-model change: one policy for its three sites): null for every
+    /// chosen container (<c>LLM one local model</c> on, and the server not one <paramref name="keepsDocker"/> keeps them behind), else only
+    /// <see cref="SwitchedOffRuns"/>, possibly none.
+    /// </summary>
+    private IReadOnlyList<string>? StopsBefore(AppSettingsData effective, bool keepsDocker) =>
+        effective.LlmOneLocalModel && !keepsDocker ? null : SwitchedOffRuns(effective);
+
+    /// <summary>
+    /// What a clear did (2026-11-11, the review): <see cref="All"/> when it stopped every chosen container, sparing none, with no server's,
+    /// no <c>only</c> and no failure (a connect then asks the engine nothing more, <see cref="_clearedAll"/>); <see cref="Any"/> when it
+    /// stopped at least one, so the GPU was just freed.
+    /// </summary>
+    private readonly record struct GpuClear(bool All, bool Any);
+
     /// <summary>How long an engine that answered nothing goes unasked (2026-10-26, the review's R21): one pipe wait a minute at most.</summary>
     internal static readonly TimeSpan EngineDownWait = TimeSpan.FromSeconds(60);
 
     /// <summary>
     /// The one clear of the GPU (2026-10-26, the review of 12729c54, the user's call: it replaces the owned leave, which knew only the
-    /// container this run switched to, and the leftover sweep, which listed the engine apart). Every active chosen container stops, from one
-    /// list of the engine's (<see cref="IDockerServers.ClearAsync"/>): the names of the profile now (while Docker servers are offered) and of
-    /// the settings the container in use was switched to under (a profile switch's new list may not name it, 2026-10-02), so "only chosen
-    /// containers are ever touched" still holds. Spared: <paramref name="spareNames"/>, and for <paramref name="server"/>, a server on this
+    /// container this run switched to, and the leftover sweep, which listed the engine apart). Its callers decide what it stops
+    /// (<see cref="StopsBefore"/>, the profile switch's spare, a bot's load under <c>LLM one local model</c>). Every active chosen container
+    /// stops, from one list of the engine's (<see cref="IDockerServers.ClearAsync"/>): the names of the profile now (while Docker servers are
+    /// offered) and of the settings each of this run's containers was switched to under (a profile switch's new list may not name it,
+    /// 2026-10-02), so "only chosen containers are ever touched" still holds; with <paramref name="only"/> (2026-11-11, the review) only those
+    /// names, none spared, and never "all". Spared: <paramref name="spareNames"/>, and for <paramref name="server"/>, a server on this
     /// computer, the container that may <i>be</i> it (publishing its port, or on the <c>host</c> network). <paramref name="settle"/> waits
-    /// the post-stop delay when a model loads next. The container in use, stopped, is logged as left; any other is kept for
-    /// <see cref="TakeLeftoverStopped"/> as it stops, so an Esc keeps what happened. An engine that answers nothing (Docker Desktop not running:
-    /// nothing on the GPU) is a debug line and goes unasked for <see cref="EngineDownWait"/>; a container that won't stop is a warning, and
-    /// what called goes on. After it the spinner says <paramref name="resume"/> again, if the clear said anything. True when it stopped every
-    /// chosen container, sparing none, with no server's and no failure: a connect then asks the engine nothing more (<see cref="_clearedAll"/>).
+    /// the post-stop delay when a model loads next. One of this run's containers, stopped, is logged as left (<paramref name="switchedOff"/>:
+    /// because the settings no longer offer it); any other is kept for <see cref="TakeLeftoverStopped"/> as it stops, so an
+    /// Esc keeps what happened. An engine that answers nothing (Docker Desktop not running: nothing on the GPU) is a debug line and goes unasked
+    /// for <see cref="EngineDownWait"/>; a container that won't stop is a warning, and what called goes on. After it the spinner says
+    /// <paramref name="resume"/> again, if the clear said anything.
     /// </summary>
-    private async Task<bool> ClearGpuAsync(AppSettingsData effective, bool embedded, Uri? server, IReadOnlyCollection<string> spareNames, bool settle, Action<string>? phase, string? resume, CancellationToken cancellationToken)
+    private async Task<GpuClear> ClearGpuAsync(AppSettingsData effective, bool embedded, Uri? server, IReadOnlyCollection<string> spareNames, bool settle, Action<string>? phase, string? resume, CancellationToken cancellationToken, IReadOnlyList<string>? only = null, bool switchedOff = false)
     {
         if (_docker is null)
         {
-            return false;
+            return default;
         }
 
-        var names = ClearNames(effective);
+        var names = only?.ToList() ?? ClearNames(effective);
         if (names.Count == 0)
         {
-            return false;
+            return default;
+        }
+
+        if (only is not null)
+        {
+            spareNames = [];
         }
 
         // The container in use, unspared, is left whatever the engine says (2026-10-02: the old leave's rule; an engine that answers nothing
-        // runs no container).
+        // runs no container); with only, when it is among them (2026-11-11), so a switch-off stop of a run kept beside it never forgets it.
+        // The runs as the clear starts (2026-11-11): one a main session's switch adds meanwhile is never taken for this clear's own.
+        var runs = Runs;
         string? owned = _dockerInUse;
-        bool leaves = owned is not null && server is null && !spareNames.Contains(owned, StringComparer.Ordinal);
+        bool leaves = owned is not null && server is null && !spareNames.Contains(owned, StringComparer.Ordinal)
+            && (only is null || only.Contains(owned, StringComparer.Ordinal));
         if (_engineDownAt is { } down && _time.GetUtcNow() - down < EngineDownWait)
         {
             if (leaves)
             {
-                ForgetDocker();
+                ForgetRuns();
             }
 
-            return false;
+            return default;
         }
 
         string key = ClearKey(names);
         if (server is not null && _cleared is { } cleared && cleared.Names == key && cleared.Url == server.AbsoluteUri)
         {
-            return false;
+            return default;
         }
 
         var leftovers = new List<string>();
@@ -581,20 +758,26 @@ internal sealed class LlmSession : IDisposable
             phase(text);
         };
 
-        var request = new DockerClear(names, _dockerSettings ?? _effective, settle) { SpareNames = spareNames, SparePort = server?.Port };
+        var request = new DockerClear(names, InUseRun?.Settings ?? _effective, settle) { SpareNames = spareNames, SparePort = server?.Port };
         try
         {
             var result = await _docker.ClearAsync(request, tell, StoppedOne, cancellationToken).ConfigureAwait(false);
-            if (leaves)
-            {
-                ForgetDocker();
-            }
-
             if (result.EngineError is { } error)
             {
+                // No engine, no container running: every run is gone (2026-11-11), as the one in use was before. A spared one is kept.
+                if (leaves)
+                {
+                    ForgetRuns();
+                }
+
                 _engineDownAt = _time.GetUtcNow();
                 DiagnosticLog.Debug(Category, DockerServerText.EngineDownLogLine(error));
-                return false;
+                return default;
+            }
+
+            if (leaves && owned is not null)
+            {
+                ForgetRun(owned);   // left whatever the engine says; other runs it didn't list stay, and the next clear or the exit skips them
             }
 
             _engineDownAt = null;
@@ -608,7 +791,7 @@ internal sealed class LlmSession : IDisposable
                 _cleared = (key, server.AbsoluteUri);
             }
 
-            return server is null && spareNames.Count == 0 && result.Errors.Count == 0;
+            return new GpuClear(All: only is null && server is null && spareNames.Count == 0 && result.Errors.Count == 0, Any: result.Stopped.Count > 0);
         }
         finally
         {
@@ -629,10 +812,11 @@ internal sealed class LlmSession : IDisposable
 
         void StoppedOne(string name)
         {
-            if (string.Equals(name, owned, StringComparison.Ordinal))
+            // One of this run's containers (as the clear started) is left, never a leftover (2026-11-11, the review), whichever it is.
+            if (runs.Any(run => string.Equals(run.Name, name, StringComparison.Ordinal)))
             {
-                ForgetDocker();
-                DiagnosticLog.Info(Category, DockerServerText.Left([name]));
+                ForgetRun(name);
+                DiagnosticLog.Info(Category, switchedOff ? DockerServerText.SwitchedOffLeft([name]) : DockerServerText.Left([name]));
             }
             else
             {
@@ -643,23 +827,16 @@ internal sealed class LlmSession : IDisposable
 
     /// <summary>
     /// A clear's names: those of <paramref name="effective"/> and of the loaded profile (a bot's load: its own profile's and the main one's)
-    /// while Docker servers are offered under each, then the container in use's list.
+    /// while Docker servers are offered under each, then the list each of this run's containers was switched to under (2026-11-11, the
+    /// review: every run's, so a container kept beside the one in use is reached too).
     /// </summary>
     private List<string> ClearNames(AppSettingsData effective) =>
         (DockerOffered(effective) ? DockerEndpoint.ChosenNames(effective) : [])
             .Concat(DockerOffered(_effective) ? DockerEndpoint.ChosenNames(_effective) : [])
-            .Concat(_dockerSettings is { } before ? DockerEndpoint.ChosenNames(before) : [])
+            .Concat(Runs.SelectMany(run => DockerEndpoint.ChosenNames(run.Settings)))
             .Distinct(StringComparer.Ordinal).ToList();
 
     private static string ClearKey(IEnumerable<string> names) => string.Join('\n', names);
-
-    /// <summary>The container in use is no more: left, or stopped.</summary>
-    private void ForgetDocker()
-    {
-        _dockerInUse = null;
-        _dockerSettings = null;
-        _dockerLive = null;
-    }
 
     /// <summary>
     /// The chosen containers this run stopped though it never started them (2026-10-26, the user's call), each once: the screen and
@@ -679,6 +856,18 @@ internal sealed class LlmSession : IDisposable
     public string? DockerInUse => _dockerInUse;
 
     /// <summary>
+    /// This run's containers believed running, oldest first (2026-11-11, the review: with Docker server one at a time off, several): what the
+    /// exit stops and its spinner and close line name. Empty when none.
+    /// </summary>
+    public IReadOnlyList<string> DockerRunning => Runs.Select(run => run.Name).ToList();
+
+    /// <summary>
+    /// Whether the embedded model is loaded behind another server (2026-11-11, the review: one fact for the kill switch): running, while the
+    /// session's endpoint isn't it. Only with <c>LLM one local model</c> off.
+    /// </summary>
+    public bool EmbeddedParked => EmbeddedServer is null && _embedded?.Running is not null && !EmbeddedEndpoint.IsEmbedded(Endpoint?.BaseUrl);
+
+    /// <summary>
     /// The one model the chosen container listed at the last connect (2026-10-03, the user's ask): the screen saves it as
     /// <c>LLM model</c>, so the setting names what the container serves rather than reading <c>(first listed)</c>. Null at
     /// the start of every connect, and after one to anything but a container that started and listed exactly one model (a
@@ -687,21 +876,24 @@ internal sealed class LlmSession : IDisposable
     public string? DockerServedModel { get; private set; }
 
     /// <summary>
-    /// The app's exit (2026-10-02): with <c>Docker server stop on exit</c> on and a chosen container in use, the running ones
-    /// stop. The names stopped; empty when the setting is off (the container keeps running, the default) or none was in use.
+    /// The app's exit (2026-10-02): with <c>Docker server stop on exit</c> on and this run having started a chosen container, the running
+    /// ones stop. The names stopped; empty when the setting is off (the containers keep running, the default) or this run started none.
     /// </summary>
     public async Task<IReadOnlyList<string>> StopDockerAtExitAsync(AppSettingsData effective, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(effective);
-        if (_docker is null || _dockerInUse is null || !effective.DockerServerStopOnExit)
+        var runs = Runs;
+        if (_docker is null || runs.Length == 0 || !effective.DockerServerStopOnExit)
         {
             return [];
         }
 
-        // The chosen list it was switched to under: the profile now loaded may not name it (2026-10-02).
-        var settings = _dockerSettings ?? effective;
-        var left = await _docker.ClearAsync(new DockerClear(DockerEndpoint.ChosenNames(settings), settings, Settle: false), null, null, cancellationToken).ConfigureAwait(false);
-        ForgetDocker();
+        // This run's containers, by the union of the lists each started under: the profile now loaded may not name them (2026-10-02), and a
+        // leftover on those lists stops too. Every stop asked at once (2026-11-10): with Docker server one at a time off several may run, and
+        // the exit's budget covers one stop. The stops go by the caller's settings (2026-11-11, the review), so the timeout fits its budget.
+        var names = runs.SelectMany(run => DockerEndpoint.ChosenNames(run.Settings)).Distinct(StringComparer.Ordinal).ToList();
+        var left = await _docker.ClearAsync(new DockerClear(names, effective, Settle: false) { Together = true }, null, null, cancellationToken).ConfigureAwait(false);
+        ForgetRuns();
         if (left.EngineError is { } down)
         {
             DiagnosticLog.Warn(Category, down);
@@ -729,7 +921,7 @@ internal sealed class LlmSession : IDisposable
 
     /// <summary>
     /// The scan's rows less the ones a running chosen container answers on (2026-10-02): its vLLM or SGLang port is found by the
-    /// scan too, and picking it there would leave the one-at-a-time rule. Loopback rows only. Pure.
+    /// scan too, and its own row (the container's) is the one that switches to it and tracks it. Loopback rows only. Pure.
     /// </summary>
     public static IReadOnlyList<LlmServer> WithoutDockerPorts(IReadOnlyList<LlmServer> scanned, DockerServerList list)
     {
@@ -743,15 +935,16 @@ internal sealed class LlmSession : IDisposable
     /// The kill switch (Ctrl+Alt+X, 2026-10-01, the user's ask): every embedded server killed at once
     /// (<see cref="IEmbeddedLlm.Kill"/>), from whatever task read the key — the session's own state is left for
     /// <see cref="EmbeddedUnloaded"/> on the screen's task. The ids of the models unloaded; empty when there were none (no
-    /// embedded model here, or another server in use), and the screen then does nothing.
+    /// embedded model here, or another server in use with none left loaded), and the screen then does nothing. With
+    /// <c>LLM one local model</c> off (2026-11-10) the main model left loaded behind another server is among them.
     /// </summary>
     public IReadOnlyList<string> KillEmbedded() => _embedded?.Kill() ?? [];
 
     /// <summary>
     /// After <see cref="KillEmbedded"/>, on the screen's task: with the endpoint the embedded model's, the session lets it go
     /// — no endpoint (the hint row's model name goes), no assistant — so the next message says to pick a server, and
-    /// <c>/server</c> loads a model again. The saved URL stays. Another endpoint (a botchat's extras were the ones killed) is
-    /// left as it is.
+    /// <c>/server</c> loads a model again. The saved URL stays. Another endpoint (a botchat's extras were the ones killed, or,
+    /// with <c>LLM one local model</c> off, the main model left loaded behind it, 2026-11-10) is left as it is.
     /// </summary>
     public void EmbeddedUnloaded()
     {
@@ -840,9 +1033,10 @@ internal sealed class LlmSession : IDisposable
     /// <summary>
     /// <see cref="Connect"/> over an endpoint already resolved, then — when neither the settings
     /// nor the server's model list named the window — the context probe's native tiers. What the
-    /// screen's server pick and the session's own <see cref="ConnectAsync(AppSettingsData, CancellationToken)"/> both end in. A server
-    /// on this computer stops the running chosen containers first, the one that may be that server spared (2026-10-26,
-    /// <see cref="ClearGpuAsync"/>; <see cref="TakeLeftoverStopped"/> says which this run never started).
+    /// screen's server pick and the session's own <see cref="ConnectAsync(AppSettingsData, CancellationToken)"/> both end in. With
+    /// <c>LLM one local model</c> on, a server on this computer stops the running chosen containers first, the one that may be that server
+    /// spared (2026-10-26, <see cref="ClearGpuAsync"/>; <see cref="TakeLeftoverStopped"/> says which this run never started); off
+    /// (2026-11-10), only this run's containers no longer offered stop.
     /// </summary>
     public async Task<bool> ConnectAsync(AppSettingsData effective, LlmEndpoint endpoint, CancellationToken cancellationToken, Action<string>? phase = null)
     {
@@ -864,23 +1058,28 @@ internal sealed class LlmSession : IDisposable
         bool local = OnThisComputer(endpoint.BaseUrl);
         if (local && !_clearedAll)
         {
-            if (_dockerInUse is not null)
+            // A scan row picked (2026-10-02): with LLM one local model on, the container in use stops first, the user's call, the row's own
+            // port or not; off (2026-11-10), only this run's containers no longer offered (2026-11-11, the review: the /server pick's path
+            // too). Their servers run already: no settle. Not for a server that leaves the GPU alone (2026-10-10): Claude Code, the hosted
+            // APIs, another machine's.
+            IReadOnlyList<string> first = effective.LlmOneLocalModel ? (_dockerInUse is { } inUse ? [inUse] : []) : SwitchedOffRuns(effective);
+            if (first.Count > 0)
             {
-                // A scan row picked (2026-10-02): a chosen container in use stops first, the user's call, the row's own port or not. Its server
-                // runs already: no settle. Not for a server that leaves the GPU alone (2026-10-10): Claude Code, the hosted APIs, another machine's.
-                _clearedAll = await ClearGpuAsync(effective, embedded: false, server: null, spareNames: [], settle: false, phase, ConnectText.Connecting, cancellationToken).ConfigureAwait(false);
+                await ClearGpuAsync(effective, embedded: false, server: null, spareNames: [], settle: false, phase, ConnectText.Connecting, cancellationToken, only: first, switchedOff: !effective.LlmOneLocalModel).ConfigureAwait(false);
             }
 
-            // Then any other (2026-10-26, the user's call): a leftover one stops, unless it may be that server. Once per server and list: a
-            // /model or /reasoning reconnect to it asks nothing; coming back to it after another server asks again.
-            if (!_clearedAll)
+            // Then any other (2026-10-26, the user's call), with the setting on: a leftover one, or one kept beside the one in use, stops
+            // unless it may be that server (2026-11-11: a side-by-side container serving the typed URL is spared). Once per server and list:
+            // a /model or /reasoning reconnect to it asks nothing; coming back to it after another server asks again.
+            if (effective.LlmOneLocalModel)
             {
                 await ClearGpuAsync(effective, embedded: false, endpoint.BaseUrl, spareNames: [], settle: false, phase, ConnectText.Connecting, cancellationToken).ConfigureAwait(false);
             }
         }
 
-        if (!local)
+        if (!local || !effective.LlmOneLocalModel)
         {
+            // Off (2026-11-11, the review): turning the setting back on makes the next local connect ask the engine again.
             _cleared = null;
         }
         else if (_clearedAll && ClearNames(effective) is { Count: > 0 } names)
@@ -918,9 +1117,10 @@ internal sealed class LlmSession : IDisposable
     /// The discovery half of a connect for a blank URL, for a screen that lets the user choose:
     /// drops the current client and returns every server that answered under the settings' scan
     /// mode, in list order (<see cref="LlmEndpointProbe.DiscoverAllAsync"/>). <see cref="Endpoint"/>
-    /// is null until <see cref="Connect"/> lands one. A chosen container in use stops before the scan (2026-10-02, the user's
-    /// ask): a blank URL is another server, and after a profile switch the new list would not hide the old container's port —
-    /// the scan would offer it, and the pick's own leave then stop the server just picked.
+    /// is null until <see cref="Connect"/> lands one. With <c>LLM one local model</c> on, the chosen containers stop before the scan
+    /// (2026-10-02, the user's ask): a blank URL is another server, and after a profile switch the new list would not hide the old
+    /// container's port — the scan would offer it, and the pick's own leave then stop the server just picked. Off (2026-11-10), only this
+    /// run's containers no longer offered stop (<see cref="StopsBefore"/>).
     /// </summary>
     public async Task<IReadOnlyList<LlmServer>> DiscoverAsync(AppSettingsData effective, CancellationToken cancellationToken)
     {
@@ -929,10 +1129,11 @@ internal sealed class LlmSession : IDisposable
         Endpoint = null;
         Remember(effective);
         _clearedAll = false;
-        if (_dockerInUse is not null)
+        if (HasRuns && StopsBefore(effective, keepsDocker: false) is var stops && stops is not { Count: 0 })
         {
             // Its clear spares nothing: the pick's connect then asks the engine nothing more (_clearedAll, taken by that connect).
-            _clearedAll = await ClearGpuAsync(effective, embedded: false, server: null, spareNames: [], settle: false, phase: null, resume: null, cancellationToken).ConfigureAwait(false);
+            // With LLM one local model off (2026-11-10) only this run's containers switched off or unticked stop here.
+            _clearedAll = (await ClearGpuAsync(effective, embedded: false, server: null, spareNames: [], settle: false, phase: null, resume: null, cancellationToken, only: stops, switchedOff: stops is not null).ConfigureAwait(false)).All;
         }
         return await WithExtraRowsAsync(effective, _probe.DiscoverAllAsync(LlmEndpoint.KeyOf(effective), extra: null, LlmScanMode.Resolve(effective), cancellationToken), cancellationToken).ConfigureAwait(false);
     }
@@ -1031,12 +1232,10 @@ internal sealed class LlmSession : IDisposable
                 : null);
         if (!EmbeddedEndpoint.IsEmbedded(endpoint.BaseUrl))
         {
-            // Another server picked (2026-09-29): the embedded one's memory is free again.
+            // Another server picked (2026-09-29): the embedded one's memory is free again. With LLM one local model off (2026-11-10)
+            // it stays loaded beside the new one; Ctrl+Alt+X unloads it. No switch follows here, so whether it stopped matters to no one.
             EmbeddedServer = null;
-            if (_embedded?.Running is not null)
-            {
-                _embedded.Stop();
-            }
+            StopEmbeddedUnlessKept(effective);
         }
 
         if (!ClaudeCliEndpoint.IsClaudeCli(endpoint.BaseUrl) && _claudeServer is { Running: true } claudeServer)
@@ -1129,18 +1328,19 @@ internal sealed class LlmSession : IDisposable
         }
         else if (DockerEndpoint.IsDocker(profile.LlmUrl))
         {
-            // A bot's own container (2026-10-02): only the one running is shared — a botchat never starts or stops one.
+            // A bot's own container (2026-10-02): only one this session runs is shared — bots and advisors never start or switch one.
+            // Since 2026-11-11 (the review) any of this run's containers whose switch succeeded: the session's own server, one it kept running
+            // behind a server that leaves the GPU alone (2026-10-10), or one kept beside it with Docker server one at a time off.
             string wanted = DockerEndpoint.ContainerOf(profile.LlmUrl)!;
-            // The session's own server, or (2026-10-10) the container it kept running when it connected to a server that leaves the GPU alone.
-            var live = Endpoint is { LiveUrl: not null } main && DockerEndpoint.IsDocker(main.BaseUrl) ? main : _dockerLive;
-            if (live is not { LiveUrl: not null } running || DockerEndpoint.ContainerOf(running.BaseUrl) is not { } current)
+            var live = Runs.Where(run => run.Live is { LiveUrl: not null }).ToList();
+            if (live.Count == 0)
             {
                 return (null, DockerServerText.BotNoneRunning);
             }
 
-            if (!string.Equals(wanted, current, StringComparison.Ordinal))
+            if (live.FirstOrDefault(run => string.Equals(run.Name, wanted, StringComparison.Ordinal))?.Live is not { } running)
             {
-                return (null, DockerServerText.BotOtherContainer(wanted, current));
+                return (null, DockerServerText.BotOtherContainer(wanted, live.Select(run => run.Name).ToList()));
             }
 
             endpoint = running with { PublishedContextLength = null };
@@ -1246,8 +1446,10 @@ internal sealed class LlmSession : IDisposable
             try
             {
                 // A bot's or an advisor's real load clears the GPU too (2026-10-26, the review's R14), under the loaded profile's list and the
-                // bot's own, sparing the main session's container in use: the main session still talks to it.
-                Func<CancellationToken, Task>? clear = _docker is null ? null : token =>
+                // bot's own, sparing the main session's container in use: the main session still talks to it. With LLM one local model off
+                // (2026-11-10), as the loaded profile holds it now (the setting reconnects nothing), nothing is cleared. The live settings are
+                // asked only when the clear could stop something (2026-11-11, the review): a switcher here and names to clear.
+                Func<CancellationToken, Task>? clear = _docker is null || ClearNames(profile).Count == 0 || !(SettingsNow?.Invoke() ?? _effective).LlmOneLocalModel ? null : token =>
                     ClearGpuAsync(profile, embedded: true, server: null, spareNames: _dockerInUse is { } inUse ? [inUse] : [], settle: true, phase: null, resume: null, token);
                 var info = mode == BotEmbeddedMode.MultiServer
                     ? await _embedded.StartExtraAsync(wanted, profile, owner, null, cancellationToken, clear).ConfigureAwait(false)

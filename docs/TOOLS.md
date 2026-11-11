@@ -327,17 +327,17 @@ Under *Docker tools*, over *Docker engine pipe* (a socket on a Mac, [below](#doc
 
 #### Docker servers
 
-Containers that serve an OpenAI-compatible API (vLLM, SGLang…) can be `/server` choices, one running at a time. **Windows only.**
+Containers that serve an OpenAI-compatible API (vLLM, SGLang…) can be `/server` choices, one running at a time unless *Docker server one at a time* is off. **Windows only.**
 
 Turn on *Docker servers enabled* and tick them in *Docker server containers* (`/settings` › Servers › Docker); the Docker tools needn't be on.
 
 * The list holds containers matching *Docker server match words* or labeled `neonsidekick.llm=true`. Examples: [vLLM](DOCKER_VLLM_WIN.md), [SGLang](DOCKER_SGLANG_WIN.md).
 * **Picking one:** `/server` lists a row per chosen container; `docker:<container>` picks one (also in `--url` and `NEONSIDEKICK_LLM_URL`).
-* **Switching** stops the other chosen containers, then starts this one and waits until it's ready (*Docker server stop timeout (s)*, *Docker server post-stop delay (s)*, *Docker server ready timeout (s)*). A failed stop starts nothing. Esc or Ctrl+C cancels the wait, not a stop or start already sent.
-* **Clearing the GPU:** before the embedded model loads or a server on this computer connects (`localhost`, `0.0.0.0`, a blank *LLM URL*), the running chosen containers stop, even ones the app didn't start, as the transcript says.
+* **Switching** stops the other chosen containers, then starts this one and waits until it's ready ([the Docker timeouts](SETTINGS.md#docker)). A failed stop starts nothing; Esc or Ctrl+C cancels the wait, not a stop or start already sent.
+* **Clearing the GPU:** with [LLM one local model](SETTINGS.md#common) on, the running chosen containers stop before the embedded model loads or a server on this computer connects (`localhost`, `0.0.0.0`, a blank *LLM URL*). Ones the app didn't start stop too; the transcript names each.
   * A container publishing that server's port, or on the `host` network, is that server and keeps running. One behind a proxy on another port: pick it as `docker:<name>`, or leave it unticked.
   * Bots' and advisors' embedded models clear the GPU the same way, sparing the container in use. They share a running container but never start one.
-* Other servers leave the containers running. *Docker server stop on exit* stops the one in use at exit.
+* Other servers leave the containers running. *Docker server stop on exit* stops them at exit.
 
 #### Docker on a Mac
 

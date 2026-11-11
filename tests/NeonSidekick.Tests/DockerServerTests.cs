@@ -25,6 +25,8 @@ public sealed class DockerServerTests : IDisposable
     private readonly List<string> _probed = [];
     private readonly AppSettingsData _settings = new() { DockerServers = true, DockerServerContainers = ["sglang_a", "vllm_b", "paused_c"] };
     private Func<Uri, int, ProbeResult> _answer = (_, _) => new ProbeResult(true, ["model-x"], "1 chat model");
+    private Func<HttpRequestMessage, Task>? _hold;
+    private Func<CancellationToken, Task>? _onDelay;
     private readonly DockerServerHost _host;
 
     public DockerServerTests()
@@ -33,13 +35,27 @@ public sealed class DockerServerTests : IDisposable
         _engine.Add("vllm_b", "exited", "vllm/vllm-openai:latest", 8000);
         _engine.Add("paused_c", "paused", "vllm/vllm-openai:latest", 8001);
         _engine.Add("mysql_dev", "running", "mysql:8.4", 3306);
-        _stub.Map(Host, (request, _) => Task.FromResult(_engine.Answer(request)));
-        var docker = new DockerSession(() => _settings, pipe => new DockerClient(pipe, new HttpClient(_stub), transport: DockerTransport.Pipe), _time);
-        _host = new DockerServerHost(docker, Probe, _time, (span, _) =>
+        _stub.Map(Host, async (request, _) =>
         {
-            _waits.Add(span);
-            _time.Advance(span);
-            return Task.CompletedTask;
+            // A test's hold on a request (2026-11-10): outside the engine's lock, so a held stop never blocks another's.
+            if (_hold is { } hold)
+            {
+                await hold(request);
+            }
+
+            return _engine.Answer(request);
+        });
+        var docker = new DockerSession(() => _settings, pipe => new DockerClient(pipe, new HttpClient(_stub), transport: DockerTransport.Pipe), _time);
+        _host = new DockerServerHost(docker, Probe, _time, (span, token) =>
+        {
+            // Locked (2026-11-11, the review): a together clear's stops poll at once.
+            lock (_waits)
+            {
+                _waits.Add(span);
+                _time.Advance(span);
+            }
+
+            return _onDelay?.Invoke(token) ?? Task.CompletedTask;
         });
     }
 
@@ -57,9 +73,18 @@ public sealed class DockerServerTests : IDisposable
         }
     }
 
-    private Task<DockerSwitch> Switch(string name) => _host.SwitchToAsync(name, _settings, _phases.Add, CancellationToken.None);
+    private Task<DockerSwitch> Switch(string name, bool freed = false) => _host.SwitchToAsync(name, _settings, freed, _phases.Add, CancellationToken.None);
 
     private IReadOnlyList<string> Acts() => _engine.Log.Where(l => l.StartsWith("POST", StringComparison.Ordinal)).ToList();
+
+    /// <summary>Whether the engine was asked <paramref name="line"/>, read under the log's lock: a together clear asks concurrently.</summary>
+    private bool Logged(string line)
+    {
+        lock (_engine.Log)
+        {
+            return _engine.Log.Contains(line);
+        }
+    }
 
     // ── the switch ──────────────────────────────────────────────────────────
 
@@ -90,6 +115,94 @@ public sealed class DockerServerTests : IDisposable
         Assert.Equal(["🐳 stopping sglang_a", "🐳 stopping paused_c", "🐳 letting the GPU's memory settle", "🐳 starting vllm_b", "🐳 loading the model in vllm_b"], _phases);
         Assert.Equal([TimeSpan.FromSeconds(2)], _waits);
         Assert.Equal(["http://127.0.0.1:8000/v1"], _probed);
+    }
+
+    [Fact]
+    public async Task ASwitch_WithOneAtATimeOff_StopsNoOther_NorSettles_StartsAndWaitsForTheApi()
+    {
+        // 2026-11-10 (the user's ask): the chosen containers run side by side.
+        _settings.DockerServerOneAtATime = false;
+
+        var result = await Switch("vllm_b");
+
+        Assert.True(result.Ok, result.Error);
+        Assert.Equal(new Uri("http://127.0.0.1:8000/v1"), result.LiveUrl);
+        Assert.Empty(result.Stopped);
+        Assert.Equal(["POST /v1.47/containers/id-vllm_b/start"], Acts());
+        Assert.Equal("running", _engine.State("sglang_a"));
+        Assert.Equal("paused", _engine.State("paused_c"));
+        Assert.Equal(["🐳 starting vllm_b", "🐳 loading the model in vllm_b"], _phases);
+        Assert.Empty(_waits);
+    }
+
+    [Fact]
+    public async Task ReturningToATargetRunningBesideAnother_StopsNothing_RestartsNothing_NorSettles()
+    {
+        // 2026-11-11 (the review): side by side, back to one already running, even told the GPU was freed: its model is loaded.
+        _settings.DockerServerOneAtATime = false;
+        _engine.Set("vllm_b", "running");
+
+        var result = await Switch("sglang_a", freed: true);
+
+        Assert.True(result.Ok, result.Error);
+        Assert.Empty(Acts());
+        Assert.Empty(result.Stopped);
+        Assert.Empty(_waits);
+        Assert.Equal("running", _engine.State("vllm_b"));
+    }
+
+    [Fact]
+    public async Task Freed_SettlesBeforeTheStartOfAStoppedTarget_Only()
+    {
+        // 2026-11-11 (the review): the caller freed the GPU (the embedded model stopped, a profile switch's clear), so a real load waits.
+        _settings.DockerServerOneAtATime = false;
+        var started = await Switch("vllm_b", freed: true);
+        Assert.True(started.Ok, started.Error);
+        Assert.Equal(["🐳 letting the GPU's memory settle", "🐳 starting vllm_b", "🐳 loading the model in vllm_b"], _phases);
+        Assert.Equal([TimeSpan.FromSeconds(2)], _waits);
+
+        // A paused one unpauses (loads nothing), a running one serves: neither waits.
+        _phases.Clear();
+        _waits.Clear();
+        Assert.True((await Switch("paused_c", freed: true)).Ok);
+        Assert.True((await Switch("sglang_a", freed: true)).Ok);
+        Assert.Empty(_waits);
+    }
+
+    [Fact]
+    public async Task SideBySide_ATargetOnAHostPortAnotherPublishes_IsRefused_BeforeItsStart()
+    {
+        // 2026-11-11 (the review): the engine's own bind error named neither container.
+        _settings.DockerServerOneAtATime = false;
+        _engine.Add("vllm_d", "exited", "vllm/vllm-openai:latest", 30000);
+        _settings.DockerServerContainers = ["sglang_a", "vllm_b", "paused_c", "vllm_d"];
+
+        var result = await Switch("vllm_d");
+
+        Assert.False(result.Ok);
+        Assert.Equal(DockerServerText.PortTaken("vllm_d", 30000, "sglang_a"), result.Error);
+        Assert.Empty(Acts());
+        Assert.Equal("exited", _engine.State("vllm_d"));
+
+        // One at a time on, the other stops first: no clash.
+        _settings.DockerServerOneAtATime = true;
+        Assert.True((await Switch("vllm_d")).Ok);
+    }
+
+    [Fact]
+    public async Task ALoadThatFails_WithEitherSettingOff_HintsAtTheModelsBesideIt_BeforeItsLastLines()
+    {
+        // 2026-11-11 (the review): side by side, too little memory may be the others'. Both on (the pins above), no hint.
+        _answer = (_, _) => ProbeResult.Missing("connection refused");
+        _engine.CrashAfterStart = "id-vllm_b";
+        _settings.LlmOneLocalModel = false;
+
+        var result = await Switch("vllm_b");
+
+        Assert.Equal(DockerServerText.Exited("vllm_b", 1, ["CUDA out of memory"], sideBySide: true), result.Error);
+        Assert.True(result.Error!.IndexOf(DockerServerText.SideBySideHint, StringComparison.Ordinal) < result.Error.IndexOf("its last lines", StringComparison.Ordinal));
+        Assert.EndsWith(DockerServerText.SideBySideHint[1..] + ".", DockerServerText.NotReady("vllm_b", 30, sideBySide: true));
+        Assert.DoesNotContain(DockerServerText.SideBySideHint, DockerServerText.NotReady("vllm_b", 30, sideBySide: false), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -203,6 +316,126 @@ public sealed class DockerServerTests : IDisposable
         _host.ClearAsync(new DockerClear(DockerEndpoint.ChosenNames(_settings), _settings, settle) { SpareNames = spare ?? [], SparePort = port }, _phases.Add, stoppedOne, CancellationToken.None);
 
     [Fact]
+    public async Task AClearTogether_AsksEveryStop_BeforeAnyFinishes_AndReportsEachInTheChosenOrder()
+    {
+        // The exit's clear (2026-11-10): its budget covers one stop, so every request goes out at once. Each stop is held until both
+        // were asked; one after another, the first would wait out the hold alone.
+        var bothAsked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        int asked = 0;
+        bool timedOut = false;
+        _hold = async request =>
+        {
+            if (request.Method == HttpMethod.Post && request.RequestUri!.AbsolutePath.EndsWith("/stop", StringComparison.Ordinal))
+            {
+                if (Interlocked.Increment(ref asked) == 2)
+                {
+                    bothAsked.TrySetResult();
+                }
+
+                // A hold that runs out is a failure (2026-11-11, the review): stops one after another would pass a plain wait.
+                if (await Task.WhenAny(bothAsked.Task, Task.Delay(TimeSpan.FromSeconds(10))) != bothAsked.Task)
+                {
+                    timedOut = true;
+                }
+            }
+        };
+
+        var reported = new List<string>();
+        var left = await _host.ClearAsync(new DockerClear(DockerEndpoint.ChosenNames(_settings), _settings, Settle: false) { Together = true }, _phases.Add, reported.Add, CancellationToken.None);
+
+        Assert.False(timedOut);   // the second stop was asked while the first was held
+        Assert.Equal(["sglang_a", "paused_c"], left.Stopped);
+        Assert.Equal(["sglang_a", "paused_c"], reported);
+        Assert.Empty(left.Errors);
+        Assert.Empty(_phases);   // a together clear tells no phase (2026-11-11): none is shown one at a time
+        Assert.Equal("exited", _engine.State("sglang_a"));
+        Assert.Equal("exited", _engine.State("paused_c"));
+        Assert.Equal("running", _engine.State("mysql_dev"));
+    }
+
+    [Fact]
+    public async Task AClearTogether_OneStopFailing_OneStopping_ReportsEachOutcomeUnderItsName()
+    {
+        _engine.RefuseStop = "id-sglang_a";
+        var reported = new List<string>();
+
+        var left = await _host.ClearAsync(new DockerClear(DockerEndpoint.ChosenNames(_settings), _settings, Settle: false) { Together = true }, null, reported.Add, CancellationToken.None);
+
+        Assert.Equal(["paused_c"], left.Stopped);
+        Assert.Equal(["paused_c"], reported);
+        Assert.StartsWith("sglang_a: ", Assert.Single(left.Errors), StringComparison.Ordinal);
+        Assert.Equal("running", _engine.State("sglang_a"));
+        Assert.Equal("exited", _engine.State("paused_c"));
+    }
+
+    [Fact]
+    public async Task AClearTogether_WhileASwitchHoldsTheGate_StillSendsItsStops()
+    {
+        // 2026-11-11 (the review): the window's close during a container's load. The switch's start is held; the exit's clear takes no gate.
+        _settings.DockerServerOneAtATime = false;
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _hold = request => request.Method == HttpMethod.Post && request.RequestUri!.AbsolutePath.EndsWith("/id-vllm_b/start", StringComparison.Ordinal)
+            ? release.Task : Task.CompletedTask;
+        var switching = Switch("vllm_b");
+
+        var left = await _host.ClearAsync(new DockerClear(["sglang_a", "paused_c"], _settings, Settle: false) { Together = true }, null, null, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.False(switching.IsCompleted);
+        Assert.Equal(["sglang_a", "paused_c"], left.Stopped);
+        release.SetResult();
+        Assert.True((await switching).Ok);
+    }
+
+    [Fact]
+    public async Task AClearTogether_Cancelled_ReportsTheOnesThatStopped_TheCutOneAsAsked()
+    {
+        // 2026-11-11 (the review): the exit's budget ran out while paused_c would not go. sglang_a's stop finished first; it is reported, and
+        // paused_c's stop is Docker's to finish, never a throw.
+        _engine.IgnoreStop = "id-paused_c";
+        using var cancel = new CancellationTokenSource();
+        _onDelay = async token =>
+        {
+            // Only paused_c polls (sglang_a is gone at its first look): let sglang_a's stop finish, then cut the clear.
+            while (!Logged("GET /v1.47/containers/id-sglang_a/json"))
+            {
+                await Task.Delay(10, CancellationToken.None);
+            }
+
+            await Task.Delay(200, CancellationToken.None);
+            await cancel.CancelAsync();
+            token.ThrowIfCancellationRequested();
+        };
+        var reported = new List<string>();
+
+        var left = await _host.ClearAsync(new DockerClear(DockerEndpoint.ChosenNames(_settings), _settings, Settle: false) { Together = true }, null, reported.Add, cancel.Token);
+
+        Assert.Equal(["sglang_a"], left.Stopped);
+        Assert.Equal(["sglang_a"], reported);
+        Assert.Equal("paused_c: " + DockerServerText.StopAsked, Assert.Single(left.Errors));
+    }
+
+    [Fact]
+    public async Task AClearOneAfterAnother_AnEscAfterTheFirstStop_KeepsIt()
+    {
+        // 2026-11-11 (the review): back to the loop, each stop reported as it happens, so a cancel keeps the ones before it.
+        using var cancel = new CancellationTokenSource();
+        var reported = new List<string>();
+        void StoppedOne(string name)
+        {
+            reported.Add(name);
+            cancel.Cancel();
+        }
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            _host.ClearAsync(new DockerClear(DockerEndpoint.ChosenNames(_settings), _settings, Settle: false), _phases.Add, StoppedOne, cancel.Token));
+
+        Assert.Equal(["sglang_a"], reported);
+        Assert.Equal("exited", _engine.State("sglang_a"));
+        Assert.NotEqual("exited", _engine.State("paused_c"));   // the stub's unpause ignores the cancel; the stop is never asked
+        Assert.DoesNotContain("POST /v1.47/containers/id-paused_c/stop?t=30", Acts());
+    }
+
+    [Fact]
     public async Task Clear_StopsTheRunningChosenOnes_AndNothingElse_FromOneList_ReportingEach()
     {
         var reported = new List<string>();
@@ -267,7 +500,7 @@ public sealed class DockerServerTests : IDisposable
     {
         using var cancel = new CancellationTokenSource();
         _answer = (_, _) => { cancel.Cancel(); return ProbeResult.Missing("canceled"); };
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => _host.SwitchToAsync("vllm_b", _settings, null, cancel.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => _host.SwitchToAsync("vllm_b", _settings, freed: false, null, cancel.Token));
     }
 
     [Fact]
@@ -356,7 +589,10 @@ public sealed class DockerServerTests : IDisposable
         Assert.Equal("docker vllm_b :8000", DockerServerText.Source("vllm_b", 8000));
     }
 
-    /// <summary>A stub engine with state: the container list and each inspect read it, a stop/start/unpause changes it.</summary>
+    /// <summary>
+    /// A stub engine with state: the container list and each inspect read it, a stop/start/unpause changes it. One lock over the
+    /// containers (2026-11-10): a clear together asks concurrently.
+    /// </summary>
     private sealed class Engine
     {
         private readonly Dictionary<string, (string Name, string State, string Image, int Port)> _containers = new(StringComparer.Ordinal);
@@ -389,6 +625,14 @@ public sealed class DockerServerTests : IDisposable
                 Log.Add(request.Method.Method + " " + path);
             }
 
+            lock (_containers)
+            {
+                return AnswerLocked(request, path);
+            }
+        }
+
+        private HttpResponseMessage AnswerLocked(HttpRequestMessage request, string path)
+        {
             if (path == "/version")
             {
                 return Json("""{"Version":"29.7.2","ApiVersion":"1.55","MinAPIVersion":"1.40","Os":"linux","Arch":"amd64"}""");
@@ -400,7 +644,7 @@ public sealed class DockerServerTests : IDisposable
                     "{\"Id\":\"" + c.Key + "\",\"Names\":[\"/" + c.Value.Name + "\"],\"Image\":\"" + c.Value.Image + "\",\"State\":\"" + c.Value.State + "\",\"Status\":\"x\",\"Ports\":[" + (c.Value.State == "running" ? "{\"IP\":\"0.0.0.0\",\"PrivatePort\":" + c.Value.Port + ",\"PublicPort\":" + c.Value.Port + ",\"Type\":\"tcp\"}" : "") + "],\"Labels\":{}}")) + "]");
             }
 
-            string[] parts = request.RequestUri.AbsolutePath.Split('/');   // "", "v1.47", "containers", id, verb
+            string[] parts = request.RequestUri!.AbsolutePath.Split('/');   // "", "v1.47", "containers", id, verb
             string id = parts.Length > 3 ? parts[3] : "";
             if (!_containers.TryGetValue(id, out var c))
             {

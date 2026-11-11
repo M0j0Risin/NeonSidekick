@@ -765,7 +765,7 @@ public enum SettingsField
     /// <summary>Typed: seconds a started container may take to answer (<see cref="Settings.AppSettingsData.DockerServerReadyTimeoutSeconds"/>). The Docker tab (2026-10-02).</summary>
     DockerServerReadyTimeoutSeconds,
 
-    /// <summary>A toggle: whether the exit stops the container in use (<see cref="Settings.AppSettingsData.DockerServerStopOnExit"/>). The Docker tab's last row (2026-10-02).</summary>
+    /// <summary>A toggle: whether the exit stops the running chosen containers, every one this run started (<see cref="Settings.AppSettingsData.DockerServerStopOnExit"/>). The Docker tab's last row (2026-10-02; plural since 2026-11-11, the review of the one-local-model change).</summary>
     DockerServerStopOnExit,
 
     /// <summary>A picker: where a spoken request goes — <c>chat</c> / <c>draft</c> (<see cref="Settings.AppSettingsData.SttDestination"/>). The STT tab's second row, under <see cref="SttInput"/> (later on 2026-10-02, the user's ask); no reconnect (read at each listen), so not an <see cref="SettingsMenu.IsVoiceField"/>. Last in the enum, as every newcomer.</summary>
@@ -1361,6 +1361,12 @@ public enum SettingsField
 
     /// <summary>Typed, masked: a Brave Search API key, saved DPAPI-encrypted (<see cref="Settings.AppSettingsData.WebMetasearchBraveApiKey"/>, 2026-11-07, the user's ask); empty clears it. After <see cref="WebMetasearchSafeSearch"/>; read at the next search, no reconnect.</summary>
     WebMetasearchBraveApiKey,
+
+    /// <summary>A toggle: whether a local model's load stops the others on this computer's GPU first (<see cref="Settings.AppSettingsData.LlmOneLocalModel"/>, 2026-11-10, the user's ask). On the Common tab under <see cref="LlmModel"/>, in the Connection run (it decides what a connect stops); no reconnect (read at each connect or load). Last in the enum until <see cref="DockerServerOneAtATime"/>.</summary>
+    LlmOneLocalModel,
+
+    /// <summary>A toggle: whether starting a chosen container stops the other chosen ones first (<see cref="Settings.AppSettingsData.DockerServerOneAtATime"/>, 2026-11-10, the user's ask). The Docker tab, after <see cref="DockerServerReadyTimeoutSeconds"/>, so <see cref="DockerServerStopOnExit"/> stays its last row; no reconnect (read at each switch). Last in the enum, as every newcomer.</summary>
+    DockerServerOneAtATime,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1819,7 +1825,7 @@ internal sealed partial class SettingsMenu
     /// Tool bars, under the screen's: the toolbar, the performance bar, the home bar and their order, the menus' max height staying
     /// the screen's last row. Each dependent row stays right under the one it hangs on; LLM
     /// was spelled out too, in five runs (2026-10-01, the user's call, as General's that day), and since 2026-10-10 is two tabs (the
-    /// user's call): Common keeps the runs every server reads — the connection (the URL, the model), how it answers (the reasoning
+    /// user's call): Common keeps the runs every server reads — the connection (the URL, the model, <see cref="SettingsField.LlmOneLocalModel"/> since 2026-11-10), how it answers (the reasoning
     /// level, the thinking's show), tools and limits (<see cref="SettingsField.LlmOfferTools"/>, the round-trip cap, the two timeouts),
     /// the context (its length, the mid-turn usage, the max turns, the auto-compact share ahead of the compact rows it times, then
     /// <see cref="SettingsField.LlmToolCompactType"/>, still under the offer-tools switch as the user ordered on 2026-09-15), and the
@@ -1850,7 +1856,7 @@ internal sealed partial class SettingsMenu
          SettingsField.SessionTool, SettingsField.SessionSearchMaxResults],
         [SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatLimitedComfyWorkflows, SettingsField.BotChatImageMode, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageMentionMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatLimitedTools, SettingsField.BotChatLimitedSkills, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.BotChatVision, SettingsField.BotChatCamera, SettingsField.BotChatRecentContext],
         [SettingsField.WebUi, SettingsField.WebUiPort, SettingsField.WebUiReach, SettingsField.WebUiHttpsAddress, SettingsField.WebUiCommands, SettingsField.WebUiConnectionDetails, SettingsField.WebUiBotCheckControl, SettingsField.WebUiProfileTheme, SettingsField.WebUiChatControls, SettingsField.WebUiHomeControls, SettingsField.WebUiShoppingControls, SettingsField.WebUiYouTubeControls],
-        [SettingsField.LlmUrl, SettingsField.LlmModel,
+        [SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmOneLocalModel,
          SettingsField.LlmReasoning, SettingsField.LlmShowThinking,
          SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds,
          SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmMaxTurns, SettingsField.LlmAutoCompactPercent, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmToolCompactType,
@@ -1859,7 +1865,7 @@ internal sealed partial class SettingsMenu
          SettingsField.LlmPreserveThinking, SettingsField.LlmReasoningEstimate,
          SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace],
         [SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedModels, SettingsField.EmbeddedHfDownloadType, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedVramOnly, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter],
-        [SettingsField.DockerServers, SettingsField.DockerServerContainers, SettingsField.DockerServerMatchWords, SettingsField.DockerServerStopTimeoutSeconds, SettingsField.DockerServerPostStopDelaySeconds, SettingsField.DockerServerReadyTimeoutSeconds, SettingsField.DockerServerStopOnExit],
+        [SettingsField.DockerServers, SettingsField.DockerServerContainers, SettingsField.DockerServerMatchWords, SettingsField.DockerServerStopTimeoutSeconds, SettingsField.DockerServerPostStopDelaySeconds, SettingsField.DockerServerReadyTimeoutSeconds, SettingsField.DockerServerOneAtATime, SettingsField.DockerServerStopOnExit],
         [SettingsField.ClaudeCodeExecutable, SettingsField.ClaudeCodeServer, SettingsField.ClaudeCodePermissions, SettingsField.ClaudeCodeModel, SettingsField.ClaudeCodeEffort,
          SettingsField.AnthropicApi, SettingsField.AnthropicApiKey, SettingsField.AnthropicApiMaxTokens, SettingsField.AnthropicApiPromptCaching],
         [SettingsField.OpenAIApi, SettingsField.OpenAIApiKey, SettingsField.OpenAIApiMaxTokens, SettingsField.OpenAIApiOrganization, SettingsField.OpenAIApiProject],
@@ -2356,7 +2362,7 @@ internal sealed partial class SettingsMenu
     public static bool IsToggle(SettingsField field) =>
         field is SettingsField.TtsOutput or SettingsField.SttInput or SettingsField.SttWake or SettingsField.SttInterrupt
             or SettingsField.CopyUserPrompt or SettingsField.ShowImageThumbnails
-            or SettingsField.FileTreeShowSizes or SettingsField.LlmOfferTools or SettingsField.LlmUseFunVerbs or SettingsField.LlmShowThinking or SettingsField.LlmPreserveThinking or SettingsField.LlmSamplingFromHuggingFace
+            or SettingsField.FileTreeShowSizes or SettingsField.LlmOfferTools or SettingsField.LlmOneLocalModel or SettingsField.LlmUseFunVerbs or SettingsField.LlmShowThinking or SettingsField.LlmPreserveThinking or SettingsField.LlmSamplingFromHuggingFace
             or SettingsField.WebTools or SettingsField.TtsVoicePreview or SettingsField.FileTools or SettingsField.AskUser
             or SettingsField.AgentSkills or SettingsField.GlobalSkills or SettingsField.ExternalSkills or SettingsField.ProjectFile or SettingsField.TranscriptMarkdown
             or SettingsField.SkillHashMention or SettingsField.ReflectionAutoLearn
@@ -2369,7 +2375,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.AnthropicApi or SettingsField.AnthropicApiPromptCaching or SettingsField.ClaudeCodeServer or SettingsField.OpenAIApi or SettingsField.EmbeddedVision or SettingsField.EmbeddedLlmServer or SettingsField.EmbeddedDrafter or SettingsField.EmbeddedVramOnly
             or SettingsField.HomeAssistantTools or SettingsField.PrintTools or SettingsField.OracleTools or SettingsField.OraclePercentMention or SettingsField.MySqlTools or SettingsField.MySqlPercentMention
             or SettingsField.UncTools or SettingsField.UncWrites or SettingsField.UncStarMention
-            or SettingsField.DockerTools or SettingsField.DockerWrites or SettingsField.DockerServers or SettingsField.DockerServerStopOnExit
+            or SettingsField.DockerTools or SettingsField.DockerWrites or SettingsField.DockerServers or SettingsField.DockerServerOneAtATime or SettingsField.DockerServerStopOnExit
             or SettingsField.CameraTools or SettingsField.CameraKeepInSessions or SettingsField.CameraWatchUnprompted or SettingsField.BotChatCamera or SettingsField.BotChatRecentContext
             or SettingsField.ScreenTools or SettingsField.ScreenPreview or SettingsField.ScreenKeepInSessions or SettingsField.ImageTools
             or SettingsField.SqliteTools or SettingsField.SqliteSandboxFiles or SettingsField.SqlitePercentMention
@@ -2493,6 +2499,7 @@ internal sealed partial class SettingsMenu
         SettingsField.FileTreeShowSizes => "File /tree show sizes",
         SettingsField.LlmOfferTools => "LLM offer tools",
         SettingsField.LlmUseFunVerbs => "LLM fun verbs",
+        SettingsField.LlmOneLocalModel => "LLM one local model",
         SettingsField.LlmShowThinking => "LLM show thinking",
         SettingsField.LlmPreserveThinking => "LLM preserve thinking",
         SettingsField.LlmReasoningEstimate => "LLM reasoning estimate",
@@ -2671,6 +2678,7 @@ internal sealed partial class SettingsMenu
         SettingsField.DockerServerStopTimeoutSeconds => "Docker server stop timeout (s)",
         SettingsField.DockerServerPostStopDelaySeconds => "Docker server post-stop delay (s)",
         SettingsField.DockerServerReadyTimeoutSeconds => "Docker server ready timeout (s)",
+        SettingsField.DockerServerOneAtATime => "Docker server one at a time",
         SettingsField.DockerServerStopOnExit => "Docker server stop on exit",
         SettingsField.ObsidianAllowDelete => "Obsidian allow delete (.trash)",   // "Obsidian allow delete" until 2026-09-23 (the user's call: the row says where a delete goes)
         SettingsField.WebBrowserMode => "Web browser mode",
@@ -2919,6 +2927,7 @@ internal sealed partial class SettingsMenu
             SettingsField.FileTreeShowSizes => OnOff(data.FileTreeShowSizes),
             SettingsField.LlmOfferTools => OnOff(data.LlmOfferTools),
             SettingsField.LlmUseFunVerbs => OnOff(data.LlmUseFunVerbs),
+            SettingsField.LlmOneLocalModel => OnOff(data.LlmOneLocalModel),
             SettingsField.LlmShowThinking => OnOff(data.LlmShowThinking),
             SettingsField.LlmPreserveThinking => OnOff(data.LlmPreserveThinking),
             SettingsField.LlmReasoningEstimate => data.LlmReasoningEstimate,
@@ -3118,6 +3127,7 @@ internal sealed partial class SettingsMenu
             SettingsField.DockerServerStopTimeoutSeconds => Seconds(data.DockerServerStopTimeoutSeconds),
             SettingsField.DockerServerPostStopDelaySeconds => Seconds(data.DockerServerPostStopDelaySeconds),
             SettingsField.DockerServerReadyTimeoutSeconds => Seconds(data.DockerServerReadyTimeoutSeconds),
+            SettingsField.DockerServerOneAtATime => OnOff(data.DockerServerOneAtATime),
             SettingsField.DockerServerStopOnExit => OnOff(data.DockerServerStopOnExit),
             SettingsField.ObsidianVault => string.IsNullOrWhiteSpace(data.ObsidianVault) ? NoObsidianVaultLabel : data.ObsidianVault,
             SettingsField.WebBrowserMode => data.WebBrowserMode,
@@ -8336,6 +8346,7 @@ internal sealed partial class SettingsMenu
             SettingsField.FileTreeShowSizes => data.FileTreeShowSizes,
             SettingsField.LlmOfferTools => data.LlmOfferTools,
             SettingsField.LlmUseFunVerbs => data.LlmUseFunVerbs,
+            SettingsField.LlmOneLocalModel => data.LlmOneLocalModel,
             SettingsField.LlmShowThinking => data.LlmShowThinking,
             SettingsField.LlmPreserveThinking => data.LlmPreserveThinking,
             SettingsField.LlmSamplingFromHuggingFace => data.LlmSamplingFromHuggingFace,
@@ -8372,6 +8383,7 @@ internal sealed partial class SettingsMenu
             SettingsField.BotChatCamera => data.BotChatCamera,
             SettingsField.BotChatRecentContext => data.BotChatRecentContext,
             SettingsField.DockerServers => data.DockerServers,
+            SettingsField.DockerServerOneAtATime => data.DockerServerOneAtATime,
             SettingsField.DockerServerStopOnExit => data.DockerServerStopOnExit,
             SettingsField.ComfyTools => data.ComfyTools,
             SettingsField.HomeAssistantTools => data.HomeAssistantTools,
@@ -8474,6 +8486,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.FileTreeShowSizes: data.FileTreeShowSizes = on; break;
             case SettingsField.LlmOfferTools: data.LlmOfferTools = on; break;
             case SettingsField.LlmUseFunVerbs: data.LlmUseFunVerbs = on; break;
+            case SettingsField.LlmOneLocalModel: data.LlmOneLocalModel = on; break;
             case SettingsField.LlmShowThinking: data.LlmShowThinking = on; break;
             case SettingsField.LlmPreserveThinking: data.LlmPreserveThinking = on; break;
             case SettingsField.LlmSamplingFromHuggingFace: data.LlmSamplingFromHuggingFace = on; break;
@@ -8510,6 +8523,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.BotChatRecentContext: data.BotChatRecentContext = on; break;
             case SettingsField.DockerWrites: data.DockerWrites = on; break;
             case SettingsField.DockerServers: data.DockerServers = on; break;
+            case SettingsField.DockerServerOneAtATime: data.DockerServerOneAtATime = on; break;
             case SettingsField.DockerServerStopOnExit: data.DockerServerStopOnExit = on; break;
             case SettingsField.ComfyTools: data.ComfyTools = on; break;
             case SettingsField.HomeAssistantTools: data.HomeAssistantTools = on; break;
@@ -8612,6 +8626,9 @@ internal sealed partial class SettingsMenu
         SettingsField.TranscriptMarkdown => on ? "replies are rendered as Markdown" : "replies stream as plain text",
         SettingsField.LlmOfferTools => on ? "the model gets the tools; a change starts a new conversation" : "no tools at all; a change starts a new conversation",
         SettingsField.LlmUseFunVerbs => on ? "the thinking spinner shows a random verb" : "the spinner says “thinking”",
+        SettingsField.LlmOneLocalModel => OperatingSystem.IsMacOS()   // no Docker servers on a Mac (2026-11-11, the review of the one-local-model change)
+            ? on ? "picking another server unloads the embedded model" : "the embedded model stays loaded beside another server"
+            : on ? "the embedded model and containers make way for another local model" : "local models can run side by side",
         SettingsField.LlmShowThinking => on ? "thinking shown in chat" : "thinking not shown in chat",
         SettingsField.LlmPreserveThinking => on ? "every turn's thinking goes back to the server" : "only the current turn's thinking goes back to the server",
         SettingsField.LlmSamplingFromHuggingFace => on ? "the model card's defaults when the server names none (huggingface.co)" : "only the server's own defaults, nothing fetched",
@@ -8675,8 +8692,9 @@ internal sealed partial class SettingsMenu
         SettingsField.DockerWrites => on ? "the model may start, stop, pull and prune, each change asking first" : "the model may only look at Docker",
         SettingsField.DockerServers => OperatingSystem.IsMacOS()   // a Mac says why, 2026-10-11 (Docker Desktop's VM has no GPU)
             ? on ? "needs Windows: Docker Desktop on a Mac passes no GPU to containers" : "no Docker servers; they need Windows (no GPU in Docker on a Mac)"
-            : on ? "/server offers the chosen containers, one running at a time" : "no Docker servers; one in use stops at the reconnect",
-        SettingsField.DockerServerStopOnExit => on ? "the app's exit stops the container it was using" : "the container keeps running after the app exits",
+            : on ? "/server offers the chosen containers" : "no Docker servers; this run's containers stop at the reconnect",
+        SettingsField.DockerServerOneAtATime => on ? "starting a container stops the other chosen ones" : "chosen containers can run side by side",
+        SettingsField.DockerServerStopOnExit => on ? "after a start, the exit stops the running chosen containers" : "the chosen containers keep running after the app exits",
         SettingsField.ComfyTools => on ? "ComfyUI tools enabled" : "ComfyUI tools disabled",
         SettingsField.HomeAssistantTools => on ? "ha tools enabled" : "ha tools disabled",   // the user's wording, 2026-10-03
         SettingsField.YouTubeTools => on ? "YouTube tools enabled" : "YouTube tools disabled",

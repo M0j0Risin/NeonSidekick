@@ -266,7 +266,7 @@ Each runs its command as if typed and keeps your draft. The last column says wha
 * **In a pane** a shortcut closes the pane and runs. Ctrl+., Ctrl+E, Ctrl+W, Ctrl+L, the window chords and Ctrl+Alt+X leave it open; Ctrl+F in a find closes it. A pane that asks you something ignores them all.
 * **Window chords** (Ctrl+G, Ctrl+B, Ctrl+Alt+U, Ctrl+Alt+V) close their window when pressed again (Ctrl+B a minimized Browser window too); the typed command only opens it. Ctrl+B leaves the Browser window open while a bot check waits in it.
 * **Bars** have no shortcut: `/perfbar`, `/toolbar`, `/homebar` and `/header` show or hide them.
-* **Ctrl+Alt+X**, twice within two seconds, unloads the embedded model and frees its memory, canceling any reply, load or botchat using it. No server is connected until you pick one; *LLM URL* is kept. Other servers ignore it.
+* **Ctrl+Alt+X** twice within two seconds unloads the embedded model, canceling any reply, load or botchat on it. If it was in use, pick a server again (*LLM URL* is kept); another server stays ([LLM one local model](SETTINGS.md#common)).
 * **F9 and F10** need no modifier; the picture viewer and thumbnail browser use them for their own keys.
 * **On a Mac**, Ctrl+] stands in for Ctrl+., Ctrl+D for Ctrl+M and Ctrl+Option+A for Ctrl+Alt+M (the originals work in the app's windows). Ctrl+Option chords need Option as Meta ([What differs](MAC.md#what-differs)).
 * **A chord that does nothing** may be another program's global hotkey: `/keycheck`, or `k` on `/help`'s Keys tab, lists what holds each one.

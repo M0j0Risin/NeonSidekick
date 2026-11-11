@@ -11,6 +11,7 @@ public static partial class HelpMac
     public static readonly IReadOnlyDictionary<SettingsField, string> Briefs = new Dictionary<SettingsField, string>
     {
         [SettingsField.EmbeddedBackend] = "Which llama.cpp build runs the model. A Mac has one, Metal, on the Apple Silicon GPU: auto and metal both pick it.",
+        [SettingsField.LlmOneLocalModel] = "Picking another server unloads the embedded model first. Off, it stays loaded and the memory is yours to manage.",
         [SettingsField.DockerServers] = "Not available on a Mac: Docker Desktop there passes no GPU to containers, so they cannot serve a model. The embedded model runs on Metal instead.",
         [SettingsField.ShellDefault] = "The shell run_command uses when the call names none: zsh, bash or powershell (pwsh, when installed).",
         [SettingsField.FileDeletesToRecycleBin] = "Sends what the app deletes to the Trash, where it can be restored, except on network or FAT volumes. Off, they delete directly. A shell command's own deletes never follow it.",

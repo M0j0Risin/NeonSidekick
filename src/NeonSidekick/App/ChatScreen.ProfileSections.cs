@@ -501,6 +501,7 @@ internal sealed partial class ChatScreen
     /// reasoning, its estimate, the sampling overrides (every model's, a deep copy) and the Hugging Face switch — and the Anthropic and OpenAI
     /// APIs' own rows beyond their switches; later that day (the user's pick) <c>/claude</c>'s four rows. Each name is its settings row's too
     /// (<c>SettingsField</c>), so the done line reads the pane's words. The order each joined in, pinned, as nothing reads it by position.
+    /// 2026-11-10 (the user's ask): <c>LLM one local model</c> and <c>Docker server one at a time</c>, what a connect stops.
     /// </summary>
     public static readonly IReadOnlyDictionary<ProfileSection, IReadOnlyList<(string Name, Action<AppSettingsData, AppSettingsData> Copy)>> ProfileSettingGroups =
         new Dictionary<ProfileSection, IReadOnlyList<(string Name, Action<AppSettingsData, AppSettingsData> Copy)>>
@@ -541,6 +542,8 @@ internal sealed partial class ChatScreen
                 (nameof(AppSettingsData.OpenAIApiMaxTokens), (from, to) => to.OpenAIApiMaxTokens = from.OpenAIApiMaxTokens),
                 (nameof(AppSettingsData.OpenAIApiOrganization), (from, to) => to.OpenAIApiOrganization = from.OpenAIApiOrganization),
                 (nameof(AppSettingsData.OpenAIApiProject), (from, to) => to.OpenAIApiProject = from.OpenAIApiProject),
+                (nameof(AppSettingsData.LlmOneLocalModel), (from, to) => to.LlmOneLocalModel = from.LlmOneLocalModel),
+                (nameof(AppSettingsData.DockerServerOneAtATime), (from, to) => to.DockerServerOneAtATime = from.DockerServerOneAtATime),
             ],
             [ProfileSection.HomeAssistant] =
             [

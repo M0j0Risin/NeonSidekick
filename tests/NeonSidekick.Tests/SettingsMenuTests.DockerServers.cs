@@ -5,33 +5,33 @@ using NeonSidekick.UI;
 
 namespace NeonSidekick.Tests;
 
-/// <summary>The Docker tab of <c>/settings</c> (2026-10-02): its seven rows, their values and ranges, the containers' checklist and its match words (2026-10-10).</summary>
+/// <summary>The Docker tab of <c>/settings</c> (2026-10-02): its eight rows (one at a time since 2026-11-10), their values and ranges, the containers' checklist and its match words (2026-10-10).</summary>
 public partial class SettingsMenuTests
 {
     private static DockerContainer Container(string name, string state, int port = 0, string? image = null, string command = "", IReadOnlyDictionary<string, string>? labels = null) =>
         new("id-" + name, name, image ?? name + "/image:latest", "sha", state, state, 0, port == 0 ? [] : [new DockerPort("0.0.0.0", port, port, "tcp")], labels ?? new Dictionary<string, string>(), [], [], command);
 
     [Fact]
-    public void TheDockerTab_IsAfterEmbedded_WithItsSevenRows_OnlyTheSwitchReconnecting()
+    public void TheDockerTab_IsAfterEmbedded_WithItsEightRows_OnlyTheSwitchReconnecting()
     {
         int tab = (int)SettingsTab.Docker;
         Assert.Equal("Docker", SettingsMenu.TabTitles[tab]);
         Assert.Equal("Embedded", SettingsMenu.TabTitles[tab - 1]);
-        Assert.Equal([SettingsField.DockerServers, SettingsField.DockerServerContainers, SettingsField.DockerServerMatchWords, SettingsField.DockerServerStopTimeoutSeconds, SettingsField.DockerServerPostStopDelaySeconds, SettingsField.DockerServerReadyTimeoutSeconds, SettingsField.DockerServerStopOnExit], SettingsMenu.TabFields[tab]);
-        Assert.Equal(["Docker servers enabled", "Docker server containers", "Docker server match words", "Docker server stop timeout (s)", "Docker server post-stop delay (s)", "Docker server ready timeout (s)", "Docker server stop on exit"], SettingsMenu.TabFields[tab].Select(SettingsMenu.FieldName));
+        Assert.Equal([SettingsField.DockerServers, SettingsField.DockerServerContainers, SettingsField.DockerServerMatchWords, SettingsField.DockerServerStopTimeoutSeconds, SettingsField.DockerServerPostStopDelaySeconds, SettingsField.DockerServerReadyTimeoutSeconds, SettingsField.DockerServerOneAtATime, SettingsField.DockerServerStopOnExit], SettingsMenu.TabFields[tab]);
+        Assert.Equal(["Docker servers enabled", "Docker server containers", "Docker server match words", "Docker server stop timeout (s)", "Docker server post-stop delay (s)", "Docker server ready timeout (s)", "Docker server one at a time", "Docker server stop on exit"], SettingsMenu.TabFields[tab].Select(SettingsMenu.FieldName));
         Assert.True(SettingsMenu.IsLlmField(SettingsField.DockerServers));
         Assert.All(SettingsMenu.TabFields[tab].Skip(1), f => Assert.False(SettingsMenu.IsLlmField(f), f.ToString()));   // read at the next switch
-        Assert.True(SettingsMenu.IsToggle(SettingsField.DockerServers) && SettingsMenu.IsToggle(SettingsField.DockerServerStopOnExit));
+        Assert.True(SettingsMenu.IsToggle(SettingsField.DockerServers) && SettingsMenu.IsToggle(SettingsField.DockerServerOneAtATime) && SettingsMenu.IsToggle(SettingsField.DockerServerStopOnExit));
         Assert.False(SettingsMenu.IsToggle(SettingsField.DockerServerContainers) || SettingsMenu.IsToggle(SettingsField.DockerServerMatchWords));
 
         var data = new AppSettingsData();
-        Assert.Equal(["off", "none", "12 words", "30", "2", "900", "off"], SettingsMenu.TabFields[tab].Select(f => SettingsMenu.FieldValue(f, data, "C:\\p")));
+        Assert.Equal(["off", "none", "12 words", "30", "2", "900", "on", "off"], SettingsMenu.TabFields[tab].Select(f => SettingsMenu.FieldValue(f, data, "C:\\p")));
         Assert.Equal("none (every container)", SettingsMenu.DockerServerWordsValue([]));
         Assert.Equal("1 word", SettingsMenu.DockerServerWordsValue(["vllm", " VLLM ", ""]));
         Assert.Equal("2: sglang_a, vllm_b", SettingsMenu.DockerServerContainersValue([" sglang_a", "vllm_b", "sglang_a", ""]));
         Assert.EndsWith("…", SettingsMenu.DockerServerContainersValue(Enumerable.Range(0, 20).Select(i => "container_" + i).ToList()));
-        var copy = AppSettings.Copy(new AppSettingsData { DockerServers = true, DockerServerContainers = ["a"], DockerServerMatchWords = ["tgi"], DockerServerStopTimeoutSeconds = 5, DockerServerPostStopDelaySeconds = 0, DockerServerReadyTimeoutSeconds = 60, DockerServerStopOnExit = true });
-        Assert.Equal((true, 5, 0, 60, true), (copy.DockerServers, copy.DockerServerStopTimeoutSeconds, copy.DockerServerPostStopDelaySeconds, copy.DockerServerReadyTimeoutSeconds, copy.DockerServerStopOnExit));
+        var copy = AppSettings.Copy(new AppSettingsData { DockerServers = true, DockerServerContainers = ["a"], DockerServerMatchWords = ["tgi"], DockerServerStopTimeoutSeconds = 5, DockerServerPostStopDelaySeconds = 0, DockerServerReadyTimeoutSeconds = 60, DockerServerOneAtATime = false, DockerServerStopOnExit = true });
+        Assert.Equal((true, 5, 0, 60, false, true), (copy.DockerServers, copy.DockerServerStopTimeoutSeconds, copy.DockerServerPostStopDelaySeconds, copy.DockerServerReadyTimeoutSeconds, copy.DockerServerOneAtATime, copy.DockerServerStopOnExit));
         Assert.Equal(["a"], copy.DockerServerContainers);
         Assert.Equal(["tgi"], copy.DockerServerMatchWords);
         Assert.Equal("must be 0 to 120 seconds", SettingsMenu.DockerServerStopTimeoutRangeError);
@@ -57,6 +57,8 @@ public partial class SettingsMenuTests
         _console.Input.PushText("10");
         Push(Keys.Enter);                                            // refused: under 30, back on the list
         Down(1);
+        Push(Keys.Enter, Keys.Down, Keys.Enter);                     // one at a time: off
+        Down(1);
         Push(Keys.Enter, Keys.Up, Keys.Enter);                       // stop on exit: on
         Push(Keys.Escape);
 
@@ -65,6 +67,7 @@ public partial class SettingsMenuTests
         Assert.True(_settings.Current.DockerServers);
         Assert.Equal(45, _settings.Current.DockerServerStopTimeoutSeconds);
         Assert.Equal(900, _settings.Current.DockerServerReadyTimeoutSeconds);
+        Assert.False(_settings.Current.DockerServerOneAtATime);
         Assert.True(_settings.Current.DockerServerStopOnExit);
         Assert.Contains("Docker server stop timeout (s) " + SettingsMenu.DockerServerStopTimeoutRangeError + "; keeping 30.", Output);
         Assert.Contains("Docker server ready timeout (s) " + SettingsMenu.DockerServerReadyTimeoutRangeError + "; keeping 900.", Output);

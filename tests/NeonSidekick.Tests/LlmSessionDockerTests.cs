@@ -92,7 +92,7 @@ public sealed class LlmSessionDockerTests
 
         _docker.Answer = _ => FakeDockerServers.Ready("only");
         await session.ConnectAsync(Docker("sglang_a"), NoPhase, CancellationToken.None);
-        _docker.Answer = name => DockerSwitch.Failed(DockerServerText.NotReady(name, 900), []);
+        _docker.Answer = name => DockerSwitch.Failed(DockerServerText.NotReady(name, 900, sideBySide: false), []);
         await session.ConnectAsync(Docker("vllm_b"), NoPhase, CancellationToken.None);
         Assert.Null(session.DockerServedModel);   // a failed switch clears the last one's
 
@@ -114,7 +114,7 @@ public sealed class LlmSessionDockerTests
     [WindowsFact]
     public async Task AFailedSwitch_BuildsNoClient_AndSaysWhy()
     {
-        _docker.Answer = name => DockerSwitch.Failed(DockerServerText.NotReady(name, 900), []);
+        _docker.Answer = name => DockerSwitch.Failed(DockerServerText.NotReady(name, 900, sideBySide: false), []);
         using var session = Session();
         var errors = new List<string>();
         Action<NeonSidekick.Diagnostics.DiagnosticEvent> capture = e => { if (e.Level == NeonSidekick.Diagnostics.DiagnosticLevel.Error) lock (errors) { errors.Add(e.Message); } };
@@ -130,7 +130,7 @@ public sealed class LlmSessionDockerTests
 
         Assert.Null(session.Assistant);
         Assert.Equal(DockerServerText.NotRunningSource, session.Endpoint!.Source);
-        Assert.Contains(DockerServerText.NotReady("vllm_b", 900), errors);
+        Assert.Contains(DockerServerText.NotReady("vllm_b", 900, sideBySide: false), errors);
         Assert.Empty(_endpoints);
     }
 
@@ -146,16 +146,19 @@ public sealed class LlmSessionDockerTests
         var lm = Docker("vllm_b");
         lm.LlmUrl = "http://127.0.0.1:1234/v1";
         Assert.True(await session.ConnectAsync(lm, NoPhase, CancellationToken.None));
-        Assert.Equal(["switch sglang_a", "switch vllm_b", "clear"], _docker.Calls);   // one clear: the server's own asks nothing more
+        // The container in use first, then the rest but the one that may be that server (2026-11-11, the review).
+        Assert.Equal(["switch sglang_a", "switch vllm_b", "clear", "clear port 1234"], _docker.Calls);
         Assert.Null(session.DockerInUse);
         Assert.False(_docker.IsRunning("vllm_b"));
 
         // A scan row picked (the other connect path) leaves too; a reconnect after asks nothing (the clear covered this server).
         await session.ConnectAsync(Docker("sglang_a"), NoPhase, CancellationToken.None);
+        // Since 2026-11-11 (the review): the container in use stops first, then the port-spared clear decides the rest, so a side-by-side
+        // container serving that server would be spared.
         await session.ConnectAsync(lm, LlmEndpointProbe.Endpoint(LlmServer.From(new Uri("http://127.0.0.1:1234/v1"), new ProbeResult(true, ["lm"], "1")), null, null, false), CancellationToken.None);
-        Assert.Equal("clear", _docker.Calls[^1]);
+        Assert.Equal(["clear", "clear port 1234"], _docker.Calls[^2..]);
         await session.ConnectAsync(lm, NoPhase, CancellationToken.None);
-        Assert.Equal(5, _docker.Calls.Count);
+        Assert.Equal(7, _docker.Calls.Count);
     }
 
     [WindowsFact]
@@ -168,7 +171,7 @@ public sealed class LlmSessionDockerTests
         var other = new AppSettingsData { DockerServers = true, DockerServerContainers = ["vllm_c"], LlmUrl = "docker:vllm_c", LlmScanMode = "disabled" };
         Assert.True(await session.ConnectAsync(other, NoPhase, CancellationToken.None));
 
-        Assert.Equal(["switch sglang_a", "clear except vllm_c settle", "switch vllm_c"], _docker.Calls);
+        Assert.Equal(["switch sglang_a", "clear except vllm_c", "switch vllm_c freed"], _docker.Calls);   // the switch settles, before its start
         Assert.Equal(["vllm_c", "sglang_a", "vllm_b"], _docker.ClearNames.Single());   // profile B's list, then A's
         Assert.Equal("vllm_c", session.DockerInUse);
         Assert.False(_docker.IsRunning("sglang_a"));
@@ -276,12 +279,12 @@ public sealed class LlmSessionDockerTests
         link.Dispose();
         var (other, otherProblem) = await session.LinkAsync(new AppSettingsData { LlmUrl = "docker:vllm_b" }, CancellationToken.None);
         Assert.Null(other);
-        Assert.Equal(DockerServerText.BotOtherContainer("vllm_b", "sglang_a"), otherProblem);
+        Assert.Equal(DockerServerText.BotOtherContainer("vllm_b", ["sglang_a"]), otherProblem);
 
         var local = Docker("sglang_a");
         local.LlmUrl = "http://127.0.0.1:1234/v1";
         Assert.True(await session.ConnectAsync(local, NoPhase, CancellationToken.None));
-        Assert.Equal(["switch sglang_a", "clear"], _docker.Calls);   // this machine's server: the GPU freed first
+        Assert.Equal(["switch sglang_a", "clear", "clear port 1234"], _docker.Calls);   // this machine's server: the GPU freed first
         Assert.Null(session.DockerInUse);
         var (gone, goneProblem) = await session.LinkAsync(new AppSettingsData { LlmUrl = "docker:sglang_a" }, CancellationToken.None);
         Assert.Null(gone);
@@ -336,7 +339,7 @@ public sealed class LlmSessionDockerTests
 
         var (other, otherProblem) = await session.LinkAsync(new AppSettingsData { LlmUrl = "docker:vllm_b" }, CancellationToken.None);
         Assert.Null(other);
-        Assert.Equal(DockerServerText.BotOtherContainer("vllm_b", "sglang_a"), otherProblem);
+        Assert.Equal(DockerServerText.BotOtherContainer("vllm_b", ["sglang_a"]), otherProblem);
         Assert.Equal(["switch sglang_a"], _docker.Calls);   // a botchat never starts or stops one
 
         var (borrowed, _) = await session.LinkAsync(new AppSettingsData { LlmModel = "ignored" }, CancellationToken.None);
@@ -355,7 +358,7 @@ public sealed class LlmSessionDockerTests
         var on = Docker("sglang_a");
         on.DockerServerStopOnExit = true;
         Assert.Equal(["sglang_a"], await session.StopDockerAtExitAsync(on, CancellationToken.None));
-        Assert.Equal("clear", _docker.Calls[^1]);
+        Assert.Equal("clear together", _docker.Calls[^1]);   // every stop asked at once (2026-11-10)
         Assert.Null(session.DockerInUse);
     }
 
@@ -719,7 +722,8 @@ public sealed class LlmSessionDockerTests
         Assert.Equal(new DockerLeftover(["sglang_a"], false), Assert.Single(session.TakeLeftoverStopped()), LeftoverComparer.Instance);
 
         Assert.True(await session.ConnectAsync(Local("http://127.0.0.1:1234/v1"), NoPhase, CancellationToken.None));
-        Assert.Equal(["clear port 1234", "switch sglang_a", "clear"], _docker.Calls);   // its own container left: one clear
+        // Its own container left, then the port-spared clear (2026-11-11, the review), which finds nothing more.
+        Assert.Equal(["clear port 1234", "switch sglang_a", "clear", "clear port 1234"], _docker.Calls);
         Assert.Empty(session.TakeLeftoverStopped());
     }
 
@@ -730,6 +734,523 @@ public sealed class LlmSessionDockerTests
         Assert.Equal("Stopped the Docker servers sglang_a, vllm_b to free the GPU for a server on this computer.", DockerServerText.LeftForThisComputer(["sglang_a", "vllm_b"], embedded: false));
         Assert.Equal("Stopped the Docker server vllm_b to free the GPU for a server on this computer.", DockerServerText.LeftForThisComputer(["vllm_b"], embedded: false));
         Assert.Equal("Stopped the Docker servers sglang_a, vllm_b to free the GPU for the embedded model.", DockerServerText.LeftForThisComputer(["sglang_a", "vllm_b"], embedded: true));
+    }
+
+    private static AppSettingsData OneLocalOff(AppSettingsData settings)
+    {
+        settings.LlmOneLocalModel = false;
+        return settings;
+    }
+
+    [EmbeddedHereFact]
+    public async Task TheEmbeddedLoad_WithOneLocalModelOff_ClearsNothing()
+    {
+        _docker.List = new DockerServerList([Running("sglang_a", 30000), Exited("vllm_b")], [], null);
+        using var session = Session(StartLogged(new FakeEmbeddedLlm().Installed("gemma-4-e2b")));
+
+        Assert.True(await session.ConnectAsync(OneLocalOff(Embedded()), NoPhase, CancellationToken.None));
+
+        Assert.Equal(["embedded start"], _docker.Calls);
+        Assert.True(_docker.IsRunning("sglang_a"));
+        Assert.Empty(session.TakeLeftoverStopped());
+    }
+
+    [WindowsFact]
+    public async Task ALocalServer_WithOneLocalModelOff_StopsNoContainer_BackOnItAsksAgain()
+    {
+        _http.Map("http://127.0.0.1:1234/v1/models", HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("lm"));
+        _docker.List = new DockerServerList([Running("sglang_a", 30000), Exited("vllm_b")], [], null);
+        using var session = Session();
+
+        Assert.True(await session.ConnectAsync(OneLocalOff(Local("http://127.0.0.1:1234/v1")), NoPhase, CancellationToken.None));
+        Assert.Empty(_docker.Calls);
+        Assert.True(_docker.IsRunning("sglang_a"));
+
+        // Turned back on: no memo was written while off, so the next connect to it clears.
+        Assert.True(await session.ConnectAsync(Local("http://127.0.0.1:1234/v1"), NoPhase, CancellationToken.None));
+        Assert.Equal(["clear port 1234"], _docker.Calls);
+        Assert.False(_docker.IsRunning("sglang_a"));
+    }
+
+    [WindowsFact]
+    public async Task AnotherServer_WithOneLocalModelOff_KeepsTheContainerInUse_AnotherContainerStillSwitches()
+    {
+        _http.Map("http://127.0.0.1:1234/v1/models", HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("lm"));
+        using var session = Session();
+        await session.ConnectAsync(OneLocalOff(Docker("sglang_a")), NoPhase, CancellationToken.None);
+
+        Assert.True(await session.ConnectAsync(OneLocalOff(Local("http://127.0.0.1:1234/v1")), NoPhase, CancellationToken.None));
+        Assert.Equal(["switch sglang_a"], _docker.Calls);
+        Assert.True(_docker.IsRunning("sglang_a"));
+        Assert.Equal("sglang_a", session.DockerInUse);
+
+        // Container to container is Docker server one at a time's, whatever this one says.
+        await session.ConnectAsync(OneLocalOff(Docker("vllm_b")), NoPhase, CancellationToken.None);
+        Assert.Equal(["switch sglang_a", "switch vllm_b"], _docker.Calls);
+        Assert.False(_docker.IsRunning("sglang_a"));
+        Assert.True(_docker.IsRunning("vllm_b"));
+    }
+
+    [WindowsFact]
+    public async Task ABlankUrlsScan_WithOneLocalModelOff_StopsNothingFirst()
+    {
+        using var session = Session();
+        await session.ConnectAsync(Docker("sglang_a"), NoPhase, CancellationToken.None);
+        var blank = OneLocalOff(Docker("sglang_a"));
+        blank.LlmUrl = "";
+
+        await session.DiscoverAsync(blank, CancellationToken.None);
+
+        Assert.Equal(["switch sglang_a", "list"], _docker.Calls);   // the scan's rows only: nothing stopped first
+        Assert.Equal("sglang_a", session.DockerInUse);
+    }
+
+    [WindowsFact]
+    public async Task WithOneLocalModelOff_TheContainerInUse_SwitchedOffOrUnticked_StillStops()
+    {
+        _http.Map("http://127.0.0.1:1234/v1/models", HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("lm"));
+        using var session = Session();
+        await session.ConnectAsync(Docker("sglang_a"), NoPhase, CancellationToken.None);
+        var switchedOff = OneLocalOff(Local("http://127.0.0.1:1234/v1"));
+        switchedOff.DockerServers = false;
+
+        Assert.True(await session.ConnectAsync(switchedOff, NoPhase, CancellationToken.None));
+        Assert.Equal(["switch sglang_a", "clear"], _docker.Calls);
+        Assert.False(_docker.IsRunning("sglang_a"));
+        Assert.Null(session.DockerInUse);
+
+        await session.ConnectAsync(Docker("sglang_a"), NoPhase, CancellationToken.None);
+        var unticked = OneLocalOff(Local("http://127.0.0.1:1234/v1"));
+        unticked.DockerServerContainers = ["vllm_b"];
+        Assert.True(await session.ConnectAsync(unticked, NoPhase, CancellationToken.None));
+        Assert.Equal("clear", _docker.Calls[^1]);
+        Assert.False(_docker.IsRunning("sglang_a"));
+    }
+
+    [EmbeddedHereFact]
+    public async Task ABotsEmbeddedLoad_WithOneLocalModelOffNow_ClearsNothing_WithNoFunc_TheConnectsCopyGoverns()
+    {
+        _docker.List = new DockerServerList([Running("vllm_b", 8000)], [], null);
+        var main = Docker("sglang_a");
+        main.EmbeddedLlmServer = true;
+        main.DockerServerContainers = ["sglang_a"];
+
+        // The screen's func says off, though the connect was made with it on: no reconnect needed.
+        using (var session = Session(new FakeEmbeddedLlm().Installed("gemma-4-e2b")))
+        {
+            session.SettingsNow = () => OneLocalOff(main);
+            await session.ConnectAsync(main, NoPhase, CancellationToken.None);
+            var (link, problem) = await session.LinkAsync(Embedded(), CancellationToken.None);
+            Assert.Null(problem);
+            link!.Dispose();
+            Assert.Equal(["switch sglang_a"], _docker.Calls);
+            Assert.True(_docker.IsRunning("vllm_b"));
+        }
+
+        // No func (headless): the connect's copy.
+        _docker.Calls.Clear();
+        using (var session = Session(new FakeEmbeddedLlm().Installed("gemma-4-e2b")))
+        {
+            await session.ConnectAsync(OneLocalOff(main), NoPhase, CancellationToken.None);
+            var (link, problem) = await session.LinkAsync(Embedded(), CancellationToken.None);
+            Assert.Null(problem);
+            link!.Dispose();
+            Assert.Equal(["switch sglang_a"], _docker.Calls);
+            Assert.True(_docker.IsRunning("vllm_b"));
+        }
+    }
+
+    [EmbeddedHereFact]
+    public async Task AContainerPicked_WithOneLocalModelOff_KeepsTheEmbeddedModel_CtrlAltXUnloadsIt_TheContainerStays()
+    {
+        var embedded = StartLogged(new FakeEmbeddedLlm().Installed("gemma-4-e2b"));
+        using var session = Session(embedded);
+        await session.ConnectAsync(OneLocalOff(Embedded()), NoPhase, CancellationToken.None);
+        var container = OneLocalOff(Docker("sglang_a"));
+        container.EmbeddedLlmServer = true;
+
+        Assert.True(await session.ConnectAsync(container, NoPhase, CancellationToken.None));
+        Assert.Equal(["embedded start", "switch sglang_a"], _docker.Calls);
+        Assert.NotNull(embedded.Running);
+        Assert.Equal(0, embedded.Stops);
+
+        Assert.Equal(["gemma-4-e2b"], session.KillEmbedded());
+        session.EmbeddedUnloaded();
+        Assert.Null(embedded.Running);
+        Assert.Equal(DockerEndpoint.BaseUrl("sglang_a"), session.Endpoint!.BaseUrl);
+        Assert.NotNull(session.Assistant);
+    }
+
+    [WindowsFact]
+    public async Task AnotherContainer_WithOneAtATimeOff_LeavesTheFirstRunning_TheExitStopsBothTogether()
+    {
+        using var session = Session();
+        var a = Docker("sglang_a");
+        a.DockerServerOneAtATime = false;
+        var b = Docker("vllm_b");
+        b.DockerServerOneAtATime = false;
+        await session.ConnectAsync(a, NoPhase, CancellationToken.None);
+        await session.ConnectAsync(b, NoPhase, CancellationToken.None);
+
+        Assert.Equal(["switch sglang_a", "switch vllm_b"], _docker.Calls);
+        Assert.True(_docker.IsRunning("sglang_a"));
+        Assert.True(_docker.IsRunning("vllm_b"));
+        Assert.Equal("vllm_b", session.DockerInUse);
+
+        b.DockerServerStopOnExit = true;
+        Assert.Equal(["sglang_a", "vllm_b"], await session.StopDockerAtExitAsync(b, CancellationToken.None));
+        Assert.Equal("clear together", _docker.Calls[^1]);
+        Assert.False(_docker.IsRunning("sglang_a"));
+        Assert.False(_docker.IsRunning("vllm_b"));
+    }
+
+    [WindowsFact]
+    public async Task AProfileSwitch_ToAContainerItsListAloneNames_WithOneAtATimeOff_StillStopsTheOldProfiles()
+    {
+        // Kept running, the old profile's container would be lost track of: the new list never names it.
+        using var session = Session();
+        await session.ConnectAsync(Docker("sglang_a"), NoPhase, CancellationToken.None);
+        var other = new AppSettingsData { DockerServers = true, DockerServerContainers = ["vllm_c"], LlmUrl = "docker:vllm_c", LlmScanMode = "disabled", DockerServerOneAtATime = false };
+
+        Assert.True(await session.ConnectAsync(other, NoPhase, CancellationToken.None));
+
+        Assert.Equal(["switch sglang_a", "clear except vllm_c", "switch vllm_c freed"], _docker.Calls);   // the switch settles, before its start
+        Assert.False(_docker.IsRunning("sglang_a"));
+    }
+
+    // ── this run's containers, side by side (2026-11-11, the review of the one-local-model change) ───────────────
+
+    private static AppSettingsData SideBySide(AppSettingsData settings)
+    {
+        settings.DockerServerOneAtATime = false;
+        return settings;
+    }
+
+    /// <summary>sglang_a and then vllm_b switched to with Docker server one at a time off: both run, vllm_b in use.</summary>
+    private async Task<LlmSession> TwoRunningAsync(FakeEmbeddedLlm? embedded = null, bool claudeCode = false)
+    {
+        _docker.List = new DockerServerList([Running("sglang_a", 30000), Running("vllm_b", 8000)], [], null);
+        var session = Session(embedded, claudeCode);
+        await session.ConnectAsync(SideBySide(Docker("sglang_a")), NoPhase, CancellationToken.None);
+        await session.ConnectAsync(SideBySide(Docker("vllm_b")), NoPhase, CancellationToken.None);
+        Assert.Equal(["sglang_a", "vllm_b"], session.DockerRunning);
+        _docker.Calls.Clear();
+        return session;
+    }
+
+    [EmbeddedHereFact]
+    public async Task SideBySide_AnEmbeddedLoad_StopsEveryOne_EachLoggedAsLeft_NoneALeftover()
+    {
+        // #97, #23: both are this run's, so each is "left", never "freed for the embedded model".
+        using var session = await TwoRunningAsync(StartLogged(new FakeEmbeddedLlm().Installed("gemma-4-e2b")));
+        var infos = await LoggedAsync(NeonSidekick.Diagnostics.DiagnosticLevel.Info,
+            async () => Assert.True(await session.ConnectAsync(Embedded(), NoPhase, CancellationToken.None)));
+
+        Assert.Equal(["clear settle", "embedded start"], _docker.Calls);
+        Assert.False(_docker.IsRunning("sglang_a"));
+        Assert.False(_docker.IsRunning("vllm_b"));
+        Assert.Empty(session.DockerRunning);
+        Assert.Empty(session.TakeLeftoverStopped());
+        Assert.Contains(DockerServerText.Left(["sglang_a"]), infos);
+        Assert.Contains(DockerServerText.Left(["vllm_b"]), infos);
+        Assert.DoesNotContain(infos, line => line.Contains("to free the GPU", StringComparison.Ordinal));
+    }
+
+    [WindowsFact]
+    public async Task SideBySide_ALocalUrlOnAKeptContainersPort_SparesIt_TheOneInUseStops()
+    {
+        // #69: the container that may be the typed server is spared; the one in use stops, the row's own port or not.
+        _http.Map("http://127.0.0.1:30000/v1/models", HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("sglang-model"));
+        using var session = await TwoRunningAsync();
+
+        Assert.True(await session.ConnectAsync(Local("http://127.0.0.1:30000/v1"), NoPhase, CancellationToken.None));
+
+        Assert.Equal(["clear", "clear port 30000"], _docker.Calls);
+        Assert.True(_docker.IsRunning("sglang_a"));
+        Assert.False(_docker.IsRunning("vllm_b"));
+        Assert.Null(session.DockerInUse);
+        Assert.Equal(["sglang_a"], session.DockerRunning);
+    }
+
+    [WindowsFact]
+    public async Task SideBySide_AProfileSwitch_SparesTheNewListsContainers_AndTheExitReachesTheKeptOne()
+    {
+        // #1, #89, #92: sglang_a is off profile B's list and stops; vllm_b is on it and keeps running; the exit stops both of this run's.
+        using var session = await TwoRunningAsync();
+        var other = SideBySide(new AppSettingsData { DockerServers = true, DockerServerContainers = ["vllm_b", "vllm_c"], LlmUrl = "docker:vllm_c", LlmScanMode = "disabled" });
+
+        Assert.True(await session.ConnectAsync(other, NoPhase, CancellationToken.None));
+
+        Assert.Equal(["clear except vllm_b,vllm_c", "switch vllm_c freed"], _docker.Calls);
+        Assert.False(_docker.IsRunning("sglang_a"));
+        Assert.True(_docker.IsRunning("vllm_b"));
+        Assert.Equal(["vllm_b", "vllm_c"], session.DockerRunning);
+
+        other.DockerServerStopOnExit = true;
+        Assert.Equal(["vllm_b", "vllm_c"], await session.StopDockerAtExitAsync(other, CancellationToken.None));
+        Assert.Empty(session.DockerRunning);
+    }
+
+    [WindowsFact]
+    public async Task SideBySide_TheExit_StopsEveryRun_ByTheCallersSettings()
+    {
+        // #7, #128: every run named, and the stops go by the settings the exit was given (its timeout fits the exit's budget).
+        using var session = await TwoRunningAsync();
+        var exit = SideBySide(Docker("vllm_b"));
+        exit.DockerServerStopOnExit = true;
+        exit.DockerServerStopTimeoutSeconds = 7;
+
+        Assert.Equal(["sglang_a", "vllm_b"], await session.StopDockerAtExitAsync(exit, CancellationToken.None));
+
+        Assert.Same(exit, _docker.Requests[^1].Settings);
+        Assert.True(_docker.Requests[^1].Together);
+    }
+
+    [WindowsFact]
+    public async Task SideBySide_OneOffTheList_StopsAlone_LoggedAsSwitchedOff_TheOthersStay()
+    {
+        // #2, #15, #53: with LLM one local model off, only the unticked one stops, and the log says why.
+        _http.Map("http://127.0.0.1:1234/v1/models", HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("lm"));
+        using var session = await TwoRunningAsync();
+        var lm = OneLocalOff(SideBySide(Local("http://127.0.0.1:1234/v1")));
+        lm.DockerServerContainers = ["vllm_b"];
+
+        var infos = await LoggedAsync(NeonSidekick.Diagnostics.DiagnosticLevel.Info,
+            async () => Assert.True(await session.ConnectAsync(lm, NoPhase, CancellationToken.None)));
+
+        Assert.Equal(["clear"], _docker.Calls);
+        Assert.False(_docker.IsRunning("sglang_a"));
+        Assert.True(_docker.IsRunning("vllm_b"));
+        Assert.Equal("vllm_b", session.DockerInUse);
+        Assert.Contains(DockerServerText.SwitchedOffLeft(["sglang_a"]), infos);
+        Assert.DoesNotContain(DockerServerText.Left(["sglang_a"]), infos);
+        Assert.Empty(session.TakeLeftoverStopped());
+    }
+
+    [WindowsFact]
+    public async Task SideBySide_TheOneInUseStopped_TheExitStillStopsTheOneKeptBesideIt()
+    {
+        // #14: the one in use unticked and stopped; sglang_a, kept beside it, is still this run's to stop at the exit.
+        _http.Map("http://127.0.0.1:1234/v1/models", HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("lm"));
+        using var session = await TwoRunningAsync();
+        var lm = OneLocalOff(SideBySide(Local("http://127.0.0.1:1234/v1")));
+        lm.DockerServerContainers = ["sglang_a"];
+        Assert.True(await session.ConnectAsync(lm, NoPhase, CancellationToken.None));
+        Assert.Null(session.DockerInUse);
+        Assert.Equal(["sglang_a"], session.DockerRunning);
+
+        lm.DockerServerStopOnExit = true;
+        Assert.Equal(["sglang_a"], await session.StopDockerAtExitAsync(lm, CancellationToken.None));
+    }
+
+    [WindowsFact]
+    public async Task SideBySide_ABot_SharesAKeptContainer_AndNamesEveryOneThisSessionRuns()
+    {
+        // #16, #25, #86.
+        using var session = await TwoRunningAsync();
+
+        var (link, problem) = await session.LinkAsync(new AppSettingsData { LlmUrl = "docker:sglang_a" }, CancellationToken.None);
+        Assert.Null(problem);
+        Assert.Equal(DockerEndpoint.BaseUrl("sglang_a"), link!.Endpoint.BaseUrl);
+        link.Dispose();
+
+        var (other, otherProblem) = await session.LinkAsync(new AppSettingsData { LlmUrl = "docker:vllm_c" }, CancellationToken.None);
+        Assert.Null(other);
+        Assert.Equal(DockerServerText.BotOtherContainer("vllm_c", ["sglang_a", "vllm_b"]), otherProblem);
+    }
+
+    [WindowsFact]
+    public async Task AFailedSwitch_LeavesNoLiveUrl_SoABotSharesNothing()
+    {
+        // #116: the switch stopped sglang_a, then vllm_b failed; neither is shared.
+        using var session = Session();
+        await session.ConnectAsync(Docker("sglang_a"), NoPhase, CancellationToken.None);
+        _docker.Answer = name => DockerSwitch.Failed(DockerServerText.NotReady(name, 900, sideBySide: false), []);
+        await session.ConnectAsync(Docker("vllm_b"), NoPhase, CancellationToken.None);
+
+        Assert.Equal(["vllm_b"], session.DockerRunning);   // it may have started
+        var (link, problem) = await session.LinkAsync(new AppSettingsData { LlmUrl = "docker:sglang_a" }, CancellationToken.None);
+        Assert.Null(link);
+        Assert.Equal(DockerServerText.BotNoneRunning, problem);
+        var (failed, failedProblem) = await session.LinkAsync(new AppSettingsData { LlmUrl = "docker:vllm_b" }, CancellationToken.None);
+        Assert.Null(failed);
+        Assert.Equal(DockerServerText.BotNoneRunning, failedProblem);
+    }
+
+    [WindowsFact]
+    public async Task AContainerKeptBehindAHostedServer_SwitchedOff_StopsAtTheReconnect()
+    {
+        // #5: KeepsDocker shields the GPU's clear only, never a switch-off.
+        using var session = Session(claudeCode: true);
+        await session.ConnectAsync(Docker("sglang_a"), NoPhase, CancellationToken.None);
+        var claude = Docker("sglang_a");
+        claude.LlmUrl = Claude.ClaudeCliEndpoint.BaseUrl.ToString();
+        Assert.True(await session.ConnectAsync(claude, NoPhase, CancellationToken.None));
+        Assert.Equal(["switch sglang_a"], _docker.Calls);
+
+        claude.DockerServers = false;
+        Assert.True(await session.ConnectAsync(claude, NoPhase, CancellationToken.None));
+        Assert.Equal(["switch sglang_a", "clear"], _docker.Calls);
+        Assert.False(_docker.IsRunning("sglang_a"));
+        Assert.Empty(session.DockerRunning);
+    }
+
+    [WindowsFact]
+    public async Task BackToTheContainerInUse_FromAKeptServer_TheHintRowsServerGoesWhileItSwitches()
+    {
+        // #24: the hint row's own container decides, not the one in use.
+        _http.Map("http://gpu-box:8000/v1/models", HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("remote"));
+        using var session = Session();
+        await session.ConnectAsync(Docker("sglang_a"), NoPhase, CancellationToken.None);
+        var remote = Docker("sglang_a");
+        remote.LlmUrl = "http://gpu-box:8000/v1";
+        await session.ConnectAsync(remote, NoPhase, CancellationToken.None);
+        Assert.Equal("sglang_a", session.DockerInUse);
+
+        LlmEndpoint? during = new(new Uri("http://x/v1"), "x", "x", "x");
+        _docker.Gate = _ =>
+        {
+            during = session.Endpoint;
+            return Task.CompletedTask;
+        };
+        await session.ConnectAsync(Docker("sglang_a"), NoPhase, CancellationToken.None);
+
+        Assert.Null(during);
+    }
+
+    [WindowsFact]
+    public async Task TheLocalMemo_IsDropped_WhileOneLocalModelIsOff_SoBackOnItAsksAgain()
+    {
+        // #32, #84: a memo written while on would otherwise skip the clear after the setting came back.
+        _http.Map("http://127.0.0.1:1234/v1/models", HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("lm"));
+        _docker.List = new DockerServerList([Running("sglang_a", 30000)], [], null);
+        using var session = Session();
+        Assert.True(await session.ConnectAsync(Local("http://127.0.0.1:1234/v1"), NoPhase, CancellationToken.None));
+        Assert.Equal(["clear port 1234"], _docker.Calls);
+        Assert.True(await session.ConnectAsync(Local("http://127.0.0.1:1234/v1"), NoPhase, CancellationToken.None));
+        Assert.Single(_docker.Calls);   // the memo, while on
+
+        Assert.True(await session.ConnectAsync(OneLocalOff(Local("http://127.0.0.1:1234/v1")), NoPhase, CancellationToken.None));
+        Assert.True(await session.ConnectAsync(Local("http://127.0.0.1:1234/v1"), NoPhase, CancellationToken.None));
+
+        Assert.Equal(["clear port 1234", "clear port 1234"], _docker.Calls);
+    }
+
+    [WindowsFact]
+    public async Task ABlankScan_WithOneLocalModelOff_StopsAnUntickedRun_AndHidesAKeptOnesPort()
+    {
+        // #109: DiscoverAsync's switch-off path; #139: a kept container's port is the container's row, not the scan's.
+        _http.Map("http://127.0.0.1:30000/v1/models", HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("sglang-model"));
+        using var session = await TwoRunningAsync();
+        var blank = OneLocalOff(SideBySide(Docker("sglang_a")));
+        blank.LlmUrl = "";
+        blank.LlmScanMode = "local";
+        blank.DockerServerContainers = ["sglang_a"];
+
+        var rows = await session.DiscoverAsync(blank, CancellationToken.None);
+
+        Assert.Equal(["clear", "list"], _docker.Calls);
+        Assert.False(_docker.IsRunning("vllm_b"));
+        Assert.True(_docker.IsRunning("sglang_a"));
+        Assert.DoesNotContain(rows, r => r.BaseUrl.AbsoluteUri == "http://127.0.0.1:30000/v1");
+        Assert.Contains(rows, r => r.BaseUrl == DockerEndpoint.BaseUrl("sglang_a"));
+    }
+
+    [WindowsFact]
+    public async Task AServerPick_WithOneLocalModelOff_StopsARunThatDockerServersNoLongerOffers()
+    {
+        // #48, #52: the /server pick's path (an endpoint already resolved) stops a switched-off run too.
+        using var session = Session();
+        await session.ConnectAsync(Docker("sglang_a"), NoPhase, CancellationToken.None);
+        var off = OneLocalOff(Local("http://127.0.0.1:1234/v1"));
+        off.DockerServers = false;
+        var picked = LlmEndpointProbe.Endpoint(LlmServer.From(new Uri("http://127.0.0.1:1234/v1"), new ProbeResult(true, ["lm"], "1")), null, null, false);
+
+        var infos = await LoggedAsync(NeonSidekick.Diagnostics.DiagnosticLevel.Info,
+            async () => Assert.True(await session.ConnectAsync(off, picked, CancellationToken.None)));
+
+        Assert.Equal(["switch sglang_a", "clear"], _docker.Calls);
+        Assert.False(_docker.IsRunning("sglang_a"));
+        Assert.Contains(DockerServerText.SwitchedOffLeft(["sglang_a"]), infos);
+    }
+
+    [EmbeddedHereFact]
+    public async Task AContainerPicked_OffTheEmbeddedModel_TheSwitchIsToldTheGpuWasFreed()
+    {
+        // #141, #59: the embedded model stops first, so the switch settles before its start.
+        var embedded = StartLogged(new FakeEmbeddedLlm().Installed("gemma-4-e2b"));
+        using var session = Session(embedded);
+        await session.ConnectAsync(Embedded(), NoPhase, CancellationToken.None);
+        var container = Docker("sglang_a");
+        container.EmbeddedLlmServer = true;
+
+        Assert.True(await session.ConnectAsync(container, NoPhase, CancellationToken.None));
+
+        Assert.Equal("switch sglang_a freed", _docker.Calls[^1]);
+        Assert.Equal(1, embedded.Stops);
+    }
+
+    [EmbeddedHereFact]
+    public async Task AnUntickedRun_StoppedBeforeTheModelAlreadyLoaded_DoesNotSettle()
+    {
+        // #39: with LLM one local model off the embedded model stayed loaded behind sglang_a; back to it, nothing loads.
+        var embedded = StartLogged(new FakeEmbeddedLlm().Installed("gemma-4-e2b"));
+        using var session = Session(embedded);
+        await session.ConnectAsync(OneLocalOff(Embedded()), NoPhase, CancellationToken.None);
+        var container = OneLocalOff(Docker("sglang_a"));
+        container.EmbeddedLlmServer = true;
+        await session.ConnectAsync(container, NoPhase, CancellationToken.None);
+        var back = OneLocalOff(Embedded());
+        back.DockerServerContainers = ["vllm_b"];
+
+        Assert.True(await session.ConnectAsync(back, NoPhase, CancellationToken.None));
+
+        Assert.Equal(["clear", "embedded start"], _docker.Calls[^2..]);   // no settle; the start returns the model running
+        Assert.False(_docker.IsRunning("sglang_a"));
+        Assert.Empty(session.DockerRunning);
+    }
+
+    [EmbeddedHereFact]
+    public async Task ABotsEmbeddedLoad_WithOneLocalModelOnNow_Clears_ThoughTheConnectWasOff()
+    {
+        // #104, #19: the loaded profile's live value decides, the other way round from the off-now test.
+        _docker.List = new DockerServerList([Running("vllm_b", 8000)], [], null);
+        var main = OneLocalOff(Docker("sglang_a"));
+        main.EmbeddedLlmServer = true;
+        main.DockerServerContainers = ["sglang_a"];
+        using var session = Session(new FakeEmbeddedLlm().Installed("gemma-4-e2b"));
+        var now = Docker("sglang_a");
+        now.DockerServerContainers = ["sglang_a"];
+        session.SettingsNow = () => now;
+        await session.ConnectAsync(main, NoPhase, CancellationToken.None);
+
+        var (link, problem) = await session.LinkAsync(Embedded(), CancellationToken.None);
+
+        Assert.Null(problem);
+        link!.Dispose();
+        Assert.Equal(["switch sglang_a", "clear except sglang_a settle"], _docker.Calls);
+        Assert.False(_docker.IsRunning("vllm_b"));
+    }
+
+    [EmbeddedHereFact]
+    public async Task ABotsEmbeddedLoad_WithNothingToClear_AsksNoSettingsNow()
+    {
+        // #79, #60: a Docker host, but neither the loaded profile nor the bot's offers a container.
+        using var session = Session(new FakeEmbeddedLlm().Installed("gemma-4-e2b"));
+        int asked = 0;
+        session.SettingsNow = () =>
+        {
+            asked++;
+            return new AppSettingsData();
+        };
+        await session.ConnectAsync(new AppSettingsData { EmbeddedLlmServer = true, LlmScanMode = "disabled" }, NoPhase, CancellationToken.None);
+
+        var (link, problem) = await session.LinkAsync(Embedded(docker: false), CancellationToken.None);
+
+        Assert.Null(problem);
+        link!.Dispose();
+        Assert.Equal(0, asked);
+        Assert.Empty(_docker.Calls);
     }
 
     /// <summary>A leftover's names compared by sequence: the record's own equality compares the list by reference.</summary>

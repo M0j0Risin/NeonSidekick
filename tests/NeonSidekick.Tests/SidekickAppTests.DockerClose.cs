@@ -68,8 +68,8 @@ public partial class SidekickAppTests
 
         var (docker, log) = await CloseTheWindowAsync(stopOnExit: true);
 
-        Assert.Equal(["switch sglang_a", "clear"], docker.Calls);   // the close's stop; the exit's finds none in use
-        Assert.Contains(SidekickApp.DockerServerClosingLine("sglang_a"), log);
+        Assert.Equal(["switch sglang_a", "clear together"], docker.Calls);   // the close's stop; the exit's finds none in use
+        Assert.Contains(SidekickApp.DockerServerClosingLine(["sglang_a"]), log);
         Assert.Contains(SidekickApp.DockerServerExitNotice("sglang_a"), log);
     }
 
@@ -84,7 +84,7 @@ public partial class SidekickAppTests
         var (docker, log) = await CloseTheWindowAsync(stopOnExit: false);
 
         Assert.Equal(["switch sglang_a"], docker.Calls);
-        Assert.DoesNotContain(SidekickApp.DockerServerClosingLine("sglang_a"), log);
+        Assert.DoesNotContain(SidekickApp.DockerServerClosingLine(["sglang_a"]), log);
     }
 
     [Fact]

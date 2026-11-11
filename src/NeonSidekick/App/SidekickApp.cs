@@ -3171,7 +3171,7 @@ public sealed partial class SidekickApp
 
     /// <summary>
     /// <c>Docker server stop on exit</c> at the run's end (2026-10-02), under its own deadline rather than the app's token (which
-    /// may be the one that ended the run): the names stopped; empty when off, none in use, or anything went wrong (logged).
+    /// may be the one that ended the run): the names stopped; empty when off, this run started none, or anything went wrong (logged).
     /// </summary>
     private async Task<IReadOnlyList<string>> StopDockerAtExitAsync(LlmSession session, TimeSpan deadline)
     {
@@ -3198,8 +3198,15 @@ public sealed partial class SidekickApp
     /// </summary>
     public static readonly TimeSpan CloseBudget = TimeSpan.FromSeconds(3);
 
-    /// <summary>The log line as the window's close asks the engine to stop the container in use. Pinned.</summary>
-    public static string DockerServerClosingLine(string name) => Docker.DockerText.Glyph + " the window closed: asking Docker to stop " + name;
+    /// <summary>
+    /// The log line as the window's close asks the engine to stop this run's containers (2026-11-11, the review: every one it keeps, with
+    /// Docker server one at a time off several). Pinned.
+    /// </summary>
+    public static string DockerServerClosingLine(IReadOnlyList<string> names)
+    {
+        ArgumentNullException.ThrowIfNull(names);
+        return Docker.DockerText.Glyph + " the window closed: asking Docker to stop " + string.Join(", ", names);
+    }
 
     /// <summary>
     /// The log line as the console window closes on Windows (2026-10-24, the leftover process: an X close left nothing in the log,
@@ -3226,7 +3233,7 @@ public sealed partial class SidekickApp
     /// The console window closing (2026-10-02, the user's report: its X button never stopped the container): Program's
     /// <c>SIGHUP</c> registration, which is <c>CTRL_CLOSE_EVENT</c> on Windows, calls this on the console's control thread,
     /// and the process lives until it returns — no <c>finally</c> of the run's will. With <c>Docker server stop on exit</c> on
-    /// and a container in use, the stop is asked under <see cref="CloseBudget"/>. Blocks; never throws. Nothing when no run is live.
+    /// and any container this run started, the stops are asked under <see cref="CloseBudget"/>. Blocks; never throws. Nothing when no run is live.
     /// On a Mac (2026-10-07, the embedded LLM there) it also takes <c>SIGTERM</c> and <c>SIGQUIT</c>, and kills the embedded
     /// servers first (<see cref="KillEmbeddedAtExit"/>): no job object ends them with the app there.
     /// </summary>
@@ -3237,14 +3244,14 @@ public sealed partial class SidekickApp
             KillEmbeddedAtExit();
         }
 
-        if (_liveSession is not { } session || !EffectiveSettings.DockerServerStopOnExit || session.DockerInUse is not { } name)
+        if (_liveSession is not { } session || !EffectiveSettings.DockerServerStopOnExit || session.DockerRunning is not { Count: > 0 } names)
         {
             return;
         }
 
         try
         {
-            DiagnosticLog.Info(ChatScreen.AppCategory, DockerServerClosingLine(name));
+            DiagnosticLog.Info(ChatScreen.AppCategory, DockerServerClosingLine(names));
             foreach (string stopped in Task.Run(() => StopDockerAtExitAsync(session, CloseBudget)).GetAwaiter().GetResult())
             {
                 DiagnosticLog.Info(ChatScreen.AppCategory, DockerServerExitNotice(stopped));

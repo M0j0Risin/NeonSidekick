@@ -250,7 +250,7 @@ internal sealed partial class ChatScreen
     /// Switches to the chosen container <paramref name="name"/> (2026-10-02; a <c>/server</c> row, <c>/server docker:&lt;name&gt;</c>,
     /// <c>/server docker</c>'s pick): refused while Docker servers is off or the container is not chosen; else saved as the LLM URL
     /// (the model cleared when the URL changed — the container's own is taken), the reasoning picker offered, and one connect,
-    /// which stops the others, starts it and waits for its model under the load's spinner. With a flag or variable overriding the
+    /// which stops the others (with Docker server one at a time on, 2026-11-10), starts it and waits for its model under the load's spinner. With a flag or variable overriding the
     /// URL, the save and its warning are all that happens.
     /// </summary>
     private async Task UseDockerAsync(string name, CancellationToken cancellationToken, bool reasoning = true)
@@ -325,14 +325,16 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// <c>Docker server stop on exit</c> at the screen's end (2026-10-02): off by default (the container keeps running); on, with
-    /// a chosen container in use, it stops under a spinner — its own deadline, never the app's token — and the log says so.
-    /// Nothing here may cut the rest of the teardown short.
+    /// <c>Docker server stop on exit</c> at the screen's end (2026-10-02): off by default (the containers keep running); on, once this run
+    /// has started a chosen container, the running ones stop under a spinner that names them (2026-11-11, the review: every one this run
+    /// keeps, not only the one in use) — its own deadline, never the app's token — and the log says so. Nothing here may cut the rest of the
+    /// teardown short.
     /// </summary>
     private async Task StopDockerAtExitAsync()
     {
         var effective = _effective();
-        if (!effective.DockerServerStopOnExit || _session.DockerInUse is not { } name)
+        var names = _session.DockerRunning;
+        if (!effective.DockerServerStopOnExit || names.Count == 0)
         {
             return;
         }
@@ -341,7 +343,7 @@ internal sealed partial class ChatScreen
         {
             var budget = TimeSpan.FromSeconds(Math.Clamp(effective.DockerServerStopTimeoutSeconds, 0, AppSettingsData.MaxDockerServerStopTimeoutSeconds)) + DockerServerHost.StopGrace;
             using var cts = new CancellationTokenSource(budget);
-            var stopped = await _transcript.WithSpinnerAsync(DockerServerText.Stopping(name), () => _session.StopDockerAtExitAsync(effective, cts.Token)).ConfigureAwait(false);
+            var stopped = await _transcript.WithSpinnerAsync(DockerServerText.Stopping(string.Join(", ", names)), () => _session.StopDockerAtExitAsync(effective, cts.Token)).ConfigureAwait(false);
             foreach (string container in stopped)
             {
                 DiagnosticLog.Info(DockerText.Category, SidekickApp.DockerServerExitNotice(container));

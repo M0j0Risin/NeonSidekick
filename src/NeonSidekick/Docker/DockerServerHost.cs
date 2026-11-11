@@ -32,6 +32,16 @@ public sealed record DockerClear(IReadOnlyList<string> Names, AppSettingsData Se
 
     /// <summary>A server on this computer's port: the container publishing it, or on the <c>host</c> network (which publishes none), is spared.</summary>
     public int? SparePort { get; init; }
+
+    /// <summary>
+    /// Every stop asked at once, then all awaited (2026-11-10, the app's exit): with <c>Docker server one at a time</c> off several may run,
+    /// and the exit's budget covers one stop. The engine finishes a stop it has received even if the caller gives up. Else one after another,
+    /// each reported as it stops. Since 2026-11-11 (the review of the one-local-model change) a together clear reports at the end, tells no
+    /// phase and takes no gate: a window closed while a container loads still asks every stop (the engine takes a second stop of one
+    /// container in its stride), and a cancel inside one stop is that stop's <see cref="DockerServerText.StopAsked"/>, so the ones that
+    /// stopped are still reported.
+    /// </summary>
+    public bool Together { get; init; }
 }
 
 /// <summary>
@@ -47,31 +57,41 @@ public interface IDockerServers : IDisposable
     /// <summary>The chosen containers as the engine lists them (the <c>/server</c> rows), asked nothing else.</summary>
     Task<DockerServerList> ListAsync(AppSettingsData effective, CancellationToken cancellationToken);
 
-    /// <summary>Stops every other chosen container, starts <paramref name="name"/> and waits for its API; <paramref name="phase"/> is told each step.</summary>
-    Task<DockerSwitch> SwitchToAsync(string name, AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken);
+    /// <summary>
+    /// Stops every other chosen container (with <c>Docker server one at a time</c> on, 2026-11-10; off, they keep running, and a target that
+    /// would bind a host port one of them publishes is refused), starts <paramref name="name"/> and waits for its API; <paramref name="phase"/>
+    /// is told each step. <c>Docker server post-stop delay</c> is waited when it stopped any, or (2026-11-11, the review) when
+    /// <paramref name="freed"/> says the caller just freed the GPU (the embedded model stopped, a profile switch's clear) and the target
+    /// loads a model: neither running nor paused, since an unpause loads nothing.
+    /// </summary>
+    Task<DockerSwitch> SwitchToAsync(string name, AppSettingsData effective, bool freed, Action<string>? phase, CancellationToken cancellationToken);
 
     /// <summary>
     /// Stops every active container <paramref name="request"/> names but those it spares (another server picked, an embedded model about to
     /// load, a profile switch, the app's exit), from one list of the engine's, under the switch's gate; each name told to
-    /// <paramref name="stoppedOne"/> as it stops, so a cancel keeps what happened. With <see cref="DockerClear.Settle"/> and any stopped,
-    /// <c>Docker server post-stop delay</c> is waited after, as a switch waits it.
+    /// <paramref name="stoppedOne"/> as it stops, so a cancel keeps what happened. A <see cref="DockerClear.Together"/> clear (the exit's)
+    /// takes no gate and reports at the end. With <see cref="DockerClear.Settle"/> and any stopped, <c>Docker server post-stop delay</c> is
+    /// waited after, as a switch waits it.
     /// </summary>
     Task<DockerStopAll> ClearAsync(DockerClear request, Action<string>? phase, Action<string>? stoppedOne, CancellationToken cancellationToken);
 }
 
 /// <summary>
-/// The one-at-a-time switch between the chosen Docker containers (2026-10-02, the user's ask, after their tray app
-/// DockerLlmPicker, whose algorithm this carries): one snapshot of the containers; every other chosen one that holds memory
+/// The switch between the chosen Docker containers (2026-10-02, the user's ask, after their tray app
+/// DockerLlmPicker, whose algorithm this carries): one snapshot of the containers; with <c>Docker server one at a time</c> on (the
+/// default; off since 2026-11-10, the user's ask, they run side by side, and since 2026-11-11 a target binding a host port another
+/// active chosen container publishes is refused before the engine's bind error) every other chosen one that holds memory
 /// (running, paused or restarting) stopped in the chosen order — a paused one unpaused first —, each waited for until it has
-/// exited; then, when any was stopped, <c>Docker server post-stop delay</c> for the GPU's memory to settle; then the target
-/// started (a 304 is "already running"). A stop that fails leaves the target unstarted: two models may not fit the GPU, and the
-/// user's call was one at a time. Then what DockerLlmPicker never did: the container's published TCP ports are read (inspect,
+/// exited; then, when any was stopped or the caller freed the GPU, <c>Docker server post-stop delay</c> for the GPU's memory to settle; then the target
+/// started (a 304 is "already running"). A stop that fails leaves the target unstarted: two models may not fit the GPU, and with the
+/// setting on the user's call is one at a time. A clear (<see cref="ClearAsync"/>) stops chosen containers without starting one; the
+/// exit's asks every stop together (<see cref="DockerClear.Together"/>). Then what DockerLlmPicker never did: the container's published TCP ports are read (inspect,
 /// the running ones first, the asked-for ones else; every-address binds mean loopback) and each port's <c>/v1/models</c> is asked
 /// once a second, through the endpoint probe, until one answers — a model takes minutes to load — while every
 /// <see cref="InspectEvery"/> the container is looked at: exited is a failure with its last log lines, restarting a phase of its
 /// own; past <c>Docker server ready timeout</c> it is a failure too, the container left running. Only chosen containers are ever
-/// touched. Every act is audited (<see cref="DockerServerText.By"/>) by <see cref="DockerSession.ActOneAsync"/>. One switch at a
-/// time; nothing throws but the caller's own cancellation. Starts no process: the engine's API alone.
+/// touched. Every act is audited (<see cref="DockerServerText.By"/>) by <see cref="DockerSession.ActOneAsync"/>. One switch or clear at a
+/// time (the exit's together clear excepted); nothing throws but the caller's own cancellation. Starts no process: the engine's API alone.
 /// </summary>
 public sealed class DockerServerHost : IDockerServers
 {
@@ -159,7 +179,7 @@ public sealed class DockerServerHost : IDockerServers
         return new DockerServerList(chosen, missing, null);
     }
 
-    public async Task<DockerSwitch> SwitchToAsync(string name, AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken)
+    public async Task<DockerSwitch> SwitchToAsync(string name, AppSettingsData effective, bool freed, Action<string>? phase, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(effective);
@@ -184,8 +204,9 @@ public sealed class DockerServerHost : IDockerServers
                 return DockerSwitch.Failed(DockerServerText.NotFound(name), []);
             }
 
+            // With Docker server one at a time off (2026-11-10, the user's ask) the others keep running: none stopped, so no settle either.
             var stopped = new List<string>();
-            foreach (var other in OthersToStop(all, names, except: [name]))
+            foreach (var other in effective.DockerServerOneAtATime ? OthersToStop(all, names, except: [name]) : [])
             {
                 phase?.Invoke(DockerServerText.Stopping(other.Name));
                 if (await StopOneAsync(other, effective, cancellationToken).ConfigureAwait(false) is { } failed)
@@ -196,7 +217,15 @@ public sealed class DockerServerHost : IDockerServers
                 stopped.Add(other.Name);
             }
 
-            await SettleAsync(stopped, effective, phase, cancellationToken).ConfigureAwait(false);
+            // Side by side (2026-11-11, the review): a host port another active chosen container publishes would fail the start with the
+            // engine's raw bind error; say which. A paused target holds its ports already, a running one serves.
+            bool loads = !target.Running && !target.Paused;
+            if (!effective.DockerServerOneAtATime && loads && await PortTakenAsync(target, all, names, cancellationToken).ConfigureAwait(false) is { } taken)
+            {
+                return DockerSwitch.Failed(taken, stopped);
+            }
+
+            await SettleAsync(stopped.Count > 0 || (freed && loads), effective, phase, cancellationToken).ConfigureAwait(false);
             phase?.Invoke(DockerServerText.Starting(name));
             if (!target.Running)
             {
@@ -223,6 +252,11 @@ public sealed class DockerServerHost : IDockerServers
             return new DockerStopAll([], []);
         }
 
+        if (request.Together)
+        {
+            return await ClearTogetherAsync(request, stoppedOne, cancellationToken).ConfigureAwait(false);
+        }
+
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -232,6 +266,8 @@ public sealed class DockerServerHost : IDockerServers
                 return new DockerStopAll([], [], error);
             }
 
+            // One after another (2026-11-11, the review: back to the loop it was), each spare check, phase, stop and report in turn, so an Esc
+            // keeps the stops before it.
             var stopped = new List<string>();
             var errors = new List<string>();
             foreach (var other in OthersToStop(all, request.Names, request.SpareNames))
@@ -255,7 +291,7 @@ public sealed class DockerServerHost : IDockerServers
 
             if (request.Settle)
             {
-                await SettleAsync(stopped, request.Settings, phase, cancellationToken).ConfigureAwait(false);
+                await SettleAsync(stopped.Count > 0, request.Settings, phase, cancellationToken).ConfigureAwait(false);
             }
 
             return new DockerStopAll(stopped, errors);
@@ -264,6 +300,94 @@ public sealed class DockerServerHost : IDockerServers
         {
             _gate.Release();
         }
+    }
+
+    /// <summary>
+    /// The exit's clear (2026-11-10; since 2026-11-11, the review): every stop asked at once, then all awaited and reported in the chosen
+    /// order. No gate, so a switch mid-load can't hold the window's close; no phase, since none is shown one at a time. A cancel inside one
+    /// stop is its <see cref="DockerServerText.StopAsked"/>, not a throw: the engine has the stop, and the ones that did stop are reported.
+    /// </summary>
+    private async Task<DockerStopAll> ClearTogetherAsync(DockerClear request, Action<string>? stoppedOne, CancellationToken cancellationToken)
+    {
+        var (all, error) = await _docker.ContainersAsync(cancellationToken).ConfigureAwait(false);
+        if (all is null)
+        {
+            return new DockerStopAll([], [], error);
+        }
+
+        var targets = new List<DockerContainer>();
+        foreach (var other in OthersToStop(all, request.Names, request.SpareNames))
+        {
+            if (request.SparePort is not { } port || !await MayServeAsync(other, port, cancellationToken).ConfigureAwait(false))
+            {
+                targets.Add(other);
+            }
+        }
+
+        var outcomes = await Task.WhenAll(targets.Select(StopAskedAsync)).ConfigureAwait(false);
+        var stopped = new List<string>();
+        var errors = new List<string>();
+        for (int i = 0; i < targets.Count; i++)
+        {
+            if (outcomes[i] is { } failed)
+            {
+                errors.Add(targets[i].Name + ": " + failed);
+            }
+            else
+            {
+                stopped.Add(targets[i].Name);
+                stoppedOne?.Invoke(targets[i].Name);
+            }
+        }
+
+        if (request.Settle)
+        {
+            await SettleAsync(stopped.Count > 0, request.Settings, null, cancellationToken).ConfigureAwait(false);
+        }
+
+        return new DockerStopAll(stopped, errors);
+
+        async Task<string?> StopAskedAsync(DockerContainer other)
+        {
+            try
+            {
+                return await StopOneAsync(other, request.Settings, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                return DockerServerText.StopAsked;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Why <paramref name="target"/> can't start beside the others (2026-11-11, the review): <see cref="DockerServerText.PortTaken"/> when an
+    /// active chosen container publishes a host port the target binds (its inspect's <see cref="DockerInspected.Bound"/>, there while it is
+    /// stopped); null when none does, or the inspect answered nothing (the start then says what the engine says).
+    /// </summary>
+    private async Task<string?> PortTakenAsync(DockerContainer target, IReadOnlyList<DockerContainer> all, IReadOnlyList<string> names, CancellationToken cancellationToken)
+    {
+        var others = OthersToStop(all, names, except: [target.Name]).ToList();
+        if (others.Count == 0)
+        {
+            return null;
+        }
+
+        var (inspected, _) = await _docker.InspectAsync(target.Id, cancellationToken).ConfigureAwait(false);
+        if (inspected is null)
+        {
+            return null;
+        }
+
+        foreach (int port in inspected.Bound.Select(b => b.HostPort).Distinct())
+        {
+            if (others.FirstOrDefault(o => HostPortsOf(o).Contains(port)) is { } holder)
+            {
+                return DockerServerText.PortTaken(target.Name, port, holder.Name);
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -289,10 +413,10 @@ public sealed class DockerServerHost : IDockerServers
             || inspected.Published.Concat(inspected.Bound).Any(b => b.HostPort == port));
     }
 
-    /// <summary>When any container was stopped, <c>Docker server post-stop delay</c> for the GPU's memory to settle before the next model loads.</summary>
-    private async Task SettleAsync(IReadOnlyList<string> stopped, AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken)
+    /// <summary>When the GPU was just freed (a container stopped, or the caller's own stop), <c>Docker server post-stop delay</c> for its memory to settle before the next model loads.</summary>
+    private async Task SettleAsync(bool freed, AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken)
     {
-        if (stopped.Count > 0 && effective.DockerServerPostStopDelaySeconds > 0)
+        if (freed && effective.DockerServerPostStopDelaySeconds > 0)
         {
             phase?.Invoke(DockerServerText.Settling);
             await _delay(TimeSpan.FromSeconds(Math.Min(effective.DockerServerPostStopDelaySeconds, AppSettingsData.MaxDockerServerPostStopDelaySeconds)), cancellationToken).ConfigureAwait(false);
@@ -391,7 +515,7 @@ public sealed class DockerServerHost : IDockerServers
                 if (looked is { Gone: true })
                 {
                     var logs = await _docker.Client().LogsAsync(target.Id, ExitTailLines, null, timestamps: false, DockerLogStreams.Both, DockerSession.ReadTimeout, cancellationToken).ConfigureAwait(false);
-                    return DockerSwitch.Failed(DockerServerText.Exited(target.Name, looked.ExitCode, logs.Lines), stopped);
+                    return DockerSwitch.Failed(DockerServerText.Exited(target.Name, looked.ExitCode, logs.Lines, SideBySide(effective)), stopped);
                 }
 
                 string next = looked is { Status: "restarting" } ? DockerServerText.Restarting(target.Name) : DockerServerText.Loading(target.Name);
@@ -404,12 +528,15 @@ public sealed class DockerServerHost : IDockerServers
 
             if (now - start >= TimeSpan.FromSeconds(seconds))
             {
-                return DockerSwitch.Failed(DockerServerText.NotReady(target.Name, seconds), stopped);
+                return DockerSwitch.Failed(DockerServerText.NotReady(target.Name, seconds, SideBySide(effective)), stopped);
             }
 
             await _delay(ReadyPoll, cancellationToken).ConfigureAwait(false);
         }
     }
+
+    /// <summary>Whether other models may run beside a loading container (2026-11-11, the review): either one-model setting off.</summary>
+    private static bool SideBySide(AppSettingsData effective) => !effective.LlmOneLocalModel || !effective.DockerServerOneAtATime;
 
     public void Dispose()
     {

@@ -1359,6 +1359,9 @@ internal sealed partial class ChatScreen
         _session = session ?? throw new ArgumentNullException(nameof(session));
         // A model write to the project file asks on the pane (2026-10-22, review P1, the fix plan's D2).
         _session.ProjectFileAsk = AllowProjectFileAsync;
+        // A bot's or an advisor's embedded load reads LLM one local model as it stands now (2026-11-10): the setting reconnects nothing.
+        // The screen's own delegate (2026-11-11, the review), not a lambda over the screen.
+        _session.SettingsNow = _effective;
         _speech = speech ?? throw new ArgumentNullException(nameof(speech));
         _keys = keys ?? throw new ArgumentNullException(nameof(keys));
         _voice = voice ?? throw new ArgumentNullException(nameof(voice));
@@ -9244,8 +9247,8 @@ internal sealed partial class ChatScreen
 
     /// <summary>The question before a <c>servers</c> copy (the yes/no pane's title; <see cref="TypedConfirm"/> where menus cannot open).</summary>
     public static string ProfileServersPrompt(string profile, bool pull = false) => pull
-        ? $"Copy \"{profile}\"'s server settings into this profile? This profile's LLM URL, model, scan mode, reasoning and sampling, and its Embedded, Docker, Anthropic API, OpenAI API, Claude Code server and /claude settings are replaced."
-        : $"Copy this profile's server settings into \"{profile}\"? Its LLM URL, model, scan mode, reasoning and sampling, and its Embedded, Docker, Anthropic API, OpenAI API, Claude Code server and /claude settings are replaced.";
+        ? $"Copy \"{profile}\"'s server settings into this profile? This profile's LLM URL, model, scan mode, reasoning, sampling and one local model setting, and its Embedded, Docker, Anthropic API, OpenAI API, Claude Code server and /claude settings are replaced."
+        : $"Copy this profile's server settings into \"{profile}\"? Its LLM URL, model, scan mode, reasoning, sampling and one local model setting, and its Embedded, Docker, Anthropic API, OpenAI API, Claude Code server and /claude settings are replaced.";
 
     /// <summary>
     /// A <c>servers</c> copy done: <c>(copied the server settings into "work": LLM URL http://…, LLM model qwen3)</c> — what the target now
@@ -12441,7 +12444,8 @@ internal sealed partial class ChatScreen
             _session.CancelLearning();
             // The jobs behind the line cancelled and awaited first (2026-09-29): nothing still touches MCP, voice or speech as they go.
             await _jobs.CancelAllAsync().ConfigureAwait(false);
-            // Docker server stop on exit (2026-10-02): off by default; on, the container in use stops while the screen is still up.
+            // Docker server stop on exit (2026-10-02): off by default; on, the running chosen containers stop while the screen is still up,
+            // once this run has started one (2026-11-11, the review: every one it keeps).
             await StopDockerAtExitAsync().ConfigureAwait(false);
             _timers.Dispose();
             // A Ralph loop's lock goes with the app (2026-10-18): a later run takes it over at once.
@@ -13499,7 +13503,8 @@ internal sealed partial class ChatScreen
 
         if (!scan && DockerEndpoint.Chosen(effective) && _session.DockerServers is not null)
         {
-            // A chosen Docker container (2026-10-02): the others stopped, it started and its model waited for, under the load's watch.
+            // A chosen Docker container (2026-10-02): started and its model waited for, under the load's watch; with Docker server one at a
+            // time on (2026-11-10) the other chosen ones stop first.
             await ConnectUnderLoadAsync(effective, quiet, cancellationToken).ConfigureAwait(false);
             return false;
         }

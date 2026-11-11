@@ -173,7 +173,7 @@ public partial class ChatScreenTests
 
         Assert.Contains("exited · lmsysorg/sglang:latest", output);
         Assert.Contains("exited · vllm/vllm-openai:latest", output);
-        Assert.Equal(["clear port 1234", "list", "switch sglang_a", "clear"], docker.Calls);   // the launch's clear (nothing running to stop), then /server docker's
+        Assert.Equal(["clear port 1234", "list", "switch sglang_a", "clear together"], docker.Calls);   // the launch's clear (nothing running to stop), then /server docker's, then the exit's clear (every stop together)
         Assert.Equal("http://docker.localhost/sglang_a/v1", _settings.Current.LlmUrl);
         Assert.Null(_session.DockerInUse);   // stopped at the exit
     }

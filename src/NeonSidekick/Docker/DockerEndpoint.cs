@@ -4,15 +4,16 @@ namespace NeonSidekick.Docker;
 
 /// <summary>
 /// A chosen Docker container as a <c>/server</c> choice (2026-10-02, the user's ask, after their tray app DockerLlmPicker: the
-/// vLLM and SGLang containers they keep, ticked on <c>/settings</c>' Docker tab, offered as servers, and only one of them running
-/// at a time so the GPU is never asked to hold two). As with the embedded model (<see cref="EmbeddedLlm.EmbeddedEndpoint"/>), the
+/// vLLM and SGLang containers they keep, ticked on <c>/settings</c>' Docker tab, offered as servers, one of them running at a time
+/// so the GPU is never asked to hold two — unless <c>Docker server one at a time</c> is off, 2026-11-10, when they run side by side,
+/// each on its own host port and share of the GPU's memory). As with the embedded model (<see cref="EmbeddedLlm.EmbeddedEndpoint"/>), the
 /// provider is told by the URL alone: <see cref="AppSettingsData.LlmUrl"/> saved as <c>http://docker.localhost/&lt;container&gt;/v1</c>
 /// names the container, so <c>LLM URL</c> stays the one place the choice lives — a profile switch, <c>/server</c>,
 /// <c>--url docker:&lt;name&gt;</c> and <c>NEONSIDEKICK_LLM_URL</c> all route it the same way. The URL is a sentinel, never a place:
 /// the container's published port is found at each start (<see cref="DockerServerHost"/>) and carried as
 /// <see cref="Llm.LlmEndpoint.LiveUrl"/>; <c>.localhost</c> keeps a request posted to it by mistake on this machine.
 /// <para>Only the containers <c>Docker server containers</c> names take part: a container unticked since its URL was saved stands
-/// for nothing (<see cref="SwitchedOff"/>), and the one-at-a-time rule never touches a container that is not chosen.</para>
+/// for nothing (<see cref="SwitchedOff"/>), and no switch or clear ever touches a container that is not chosen.</para>
 /// </summary>
 public static class DockerEndpoint
 {
@@ -130,9 +131,19 @@ public static class DockerEndpoint
         return effective.DockerServers && Here && ChosenNames(effective).Count > 0;
     }
 
+    /// <summary>
+    /// Whether <paramref name="effective"/> offers container <paramref name="name"/> (2026-11-11, the review of the one-local-model change: one
+    /// check for the URL's container and the ones a session runs): Docker servers offered, and the name ticked.
+    /// </summary>
+    public static bool Offers(AppSettingsData effective, string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        return Offered(effective) && ChosenNames(effective).Contains(name, StringComparer.Ordinal);
+    }
+
     /// <summary>Whether <paramref name="effective"/>'s URL names a chosen container while Docker servers are offered.</summary>
     public static bool Chosen(AppSettingsData effective) =>
-        Offered(effective) && ContainerOf(effective.LlmUrl) is { } name && ChosenNames(effective).Contains(name, StringComparer.Ordinal);
+        ContainerOf(effective.LlmUrl) is { } name && Offers(effective, name);
 
     /// <summary>
     /// Whether <paramref name="effective"/>'s URL names a container that is no longer offered (the switch off, the container

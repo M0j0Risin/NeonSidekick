@@ -185,9 +185,9 @@ public static class EmbeddedLlmText
     public static string ExitedEarly(int code, string tail) =>
         string.Create(CultureInfo.InvariantCulture, $"llama-server exited with code {code} before it was ready") + Tail(tail);
 
-    /// <summary>The server stopped on its own while in use.</summary>
+    /// <summary>The server stopped on its own while in use (2026-11-11, the review: "to it", true for a model kept behind another server too).</summary>
     public static string Exited(int code, string tail) =>
-        string.Create(CultureInfo.InvariantCulture, $"llama-server stopped unexpectedly (code {code}); the next message restarts it") + Tail(tail);
+        string.Create(CultureInfo.InvariantCulture, $"llama-server stopped unexpectedly (code {code}); the next message to it restarts it") + Tail(tail);
 
     public static string StartTimeout(TimeSpan waited) =>
         string.Create(CultureInfo.InvariantCulture, $"llama-server was not ready after {waited.TotalSeconds:0} s");
@@ -214,6 +214,16 @@ public static class EmbeddedLlmText
     {
         ArgumentNullException.ThrowIfNull(names);
         return $"Embedded model unloaded: {string.Join(", ", names)}. /server loads it again.";
+    }
+
+    /// <summary>
+    /// The notice after the kill switch unloaded a model left loaded behind another server (2026-11-11, the review: <c>LLM one local
+    /// model</c> off): the chat stays on the server in use, so there is nothing to load again.
+    /// </summary>
+    public static string KilledParkedNotice(IReadOnlyList<string> names)
+    {
+        ArgumentNullException.ThrowIfNull(names);
+        return $"Embedded model unloaded: {string.Join(", ", names)}. The server in use stays connected.";
     }
 
     /// <summary>The log line of a kill (Ctrl+Alt+X, 2026-10-01): the model ids whose llama-server it stopped.</summary>
@@ -248,7 +258,7 @@ public static class EmbeddedLlmText
     public const string VramDidNotFit = "it does not fit in VRAM with every layer on the GPU, and Embedded VRAM only is on; " + VramAdvice;
 
     /// <summary>What to lower when a VRAM-only load does not fit.</summary>
-    private const string VramAdvice = "set Embedded context length to 0 (fit) or lower it, lower Embedded VRAM budget (%), close what else uses the GPU, or pick a smaller model";
+    private const string VramAdvice = "set Embedded context length to 0 (fit) or lower it, lower Embedded VRAM budget (%), close what else uses the GPU (with LLM one local model off, the app's own models count), or pick a smaller model";
 
     /// <summary>Embedded VRAM only's refusal on the CPU backend, which has no VRAM to stay in (2026-10-01). Pinned.</summary>
     public const string VramOnlyOnCpu = "Embedded VRAM only is on, but the backend is the CPU; choose CUDA or Vulkan in Embedded backend, or turn Embedded VRAM only off";

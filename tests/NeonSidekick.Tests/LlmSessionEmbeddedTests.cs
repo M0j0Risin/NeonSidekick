@@ -186,6 +186,114 @@ public class LlmSessionEmbeddedTests
     }
 
     [Fact]
+    public async Task AnotherServer_WithOneLocalModelOff_KeepsTheEmbeddedOne_CtrlAltXUnloadsIt_TheSwitchOffStopsIt()
+    {
+        // 2026-11-10 (the user's ask): LLM one local model off keeps the embedded model loaded beside the next server.
+        _embedded.Installed("gemma-4-e2b");
+        _http.Map("http://127.0.0.1:1234/v1/models", HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("qwen"));
+        using var session = Session();
+        var gemma = Embedded("gemma-4-e2b");
+        gemma.LlmOneLocalModel = false;
+        await session.ConnectAsync(gemma, CancellationToken.None);
+        var lm = new AppSettingsData { LlmUrl = "http://127.0.0.1:1234/v1", EmbeddedLlmServer = true, LlmOneLocalModel = false };
+
+        Assert.True(await session.ConnectAsync(lm, CancellationToken.None));
+        Assert.NotNull(_embedded.Running);
+        Assert.Equal(0, _embedded.Stops);
+        Assert.Null(session.EmbeddedServer);   // the endpoint is no longer the embedded one
+
+        // A picked endpoint (the /server path) keeps it too.
+        Assert.True(session.Connect(lm, new LlmEndpoint(new Uri("http://127.0.0.1:1234/v1"), "qwen", "k", "picked")));
+        Assert.NotNull(_embedded.Running);
+
+        // Ctrl+Alt+X unloads it; the server in use stays connected.
+        Assert.Equal(["gemma-4-e2b"], session.KillEmbedded());
+        session.EmbeddedUnloaded();
+        Assert.Null(_embedded.Running);
+        Assert.Equal(new Uri("http://127.0.0.1:1234/v1"), session.Endpoint!.BaseUrl);
+        Assert.NotNull(session.Assistant);
+
+        // Embedded servers enabled switched off still stops a running model: that stop is the switch's.
+        await session.ConnectAsync(gemma, CancellationToken.None);
+        var switchedOff = new AppSettingsData { LlmUrl = "http://127.0.0.1:1234/v1", EmbeddedLlmServer = false, LlmOneLocalModel = false };
+        Assert.True(await session.ConnectAsync(switchedOff, CancellationToken.None));
+        Assert.Null(_embedded.Running);
+        Assert.Equal(1, _embedded.Stops);
+    }
+
+    [Fact]
+    public async Task BackToTheParkedModel_ReloadsNothing_AndRestoresItsServer_TheOtherServersNameGoingWhileItStarts()
+    {
+        // #98, #58 (2026-11-11, the review of the one-local-model change): the model kept behind the other server is the one picked again.
+        _embedded.Installed("gemma-4-e2b");
+        _http.Map("http://127.0.0.1:1234/v1/models", HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("qwen"));
+        using var session = Session();
+        var gemma = Embedded("gemma-4-e2b");
+        gemma.LlmOneLocalModel = false;
+        await session.ConnectAsync(gemma, CancellationToken.None);
+        await session.ConnectAsync(new AppSettingsData { LlmUrl = "http://127.0.0.1:1234/v1", EmbeddedLlmServer = true, LlmOneLocalModel = false }, CancellationToken.None);
+        Assert.True(session.EmbeddedParked);
+
+        LlmEndpoint? during = new(new Uri("http://x/v1"), "x", "x", "x");
+        _embedded.StartGate = _ =>
+        {
+            during = session.Endpoint;
+            return Task.CompletedTask;
+        };
+        Assert.True(await session.ConnectAsync(gemma, CancellationToken.None));
+
+        Assert.Null(during);   // the other server's name left the hint row as the start began
+        Assert.Equal(0, _embedded.Stops);
+        Assert.NotNull(session.EmbeddedServer);
+        Assert.Equal(EmbeddedEndpoint.BaseUrl, session.Endpoint!.BaseUrl);
+        Assert.False(session.EmbeddedParked);
+    }
+
+    [Fact]
+    public async Task TheServerPicksPath_KeepsTheParkedModel_AndConnectsSwitchOff_StillStopsIt()
+    {
+        // #99, #131: an endpoint already resolved (ConnectAsync(effective, endpoint), Connect) goes by the same rule.
+        _embedded.Installed("gemma-4-e2b");
+        using var session = Session();
+        var gemma = Embedded("gemma-4-e2b");
+        gemma.LlmOneLocalModel = false;
+        await session.ConnectAsync(gemma, CancellationToken.None);
+        var lm = new AppSettingsData { LlmUrl = "http://127.0.0.1:1234/v1", EmbeddedLlmServer = true, LlmOneLocalModel = false, LlmContextLength = 8192 };
+        var picked = new LlmEndpoint(new Uri("http://127.0.0.1:1234/v1"), "qwen", "k", "picked");
+
+        Assert.True(await session.ConnectAsync(lm, picked, CancellationToken.None));
+        Assert.NotNull(_embedded.Running);
+        Assert.Equal(0, _embedded.Stops);
+
+        var switchedOff = new AppSettingsData { LlmUrl = "http://127.0.0.1:1234/v1", EmbeddedLlmServer = false, LlmOneLocalModel = false };
+        Assert.True(session.Connect(switchedOff, picked));
+        Assert.Null(_embedded.Running);
+        Assert.Equal(1, _embedded.Stops);
+    }
+
+    [Fact]
+    public async Task ABotsEmbeddedLoad_WithNoDockerHost_AsksNoSettingsNow()
+    {
+        // The pull (2026-11-10): the setting reconnects nothing, so a bot's load asks the screen. Since 2026-11-11 (the review) only when the
+        // clear could stop something: no Docker host here, so the screen's settings are never read.
+        _embedded.Installed("gemma-4-e2b");
+        using var session = Session();
+        int asked = 0;
+        session.SettingsNow = () =>
+        {
+            asked++;
+            return new AppSettingsData { LlmOneLocalModel = false };
+        };
+        await session.ConnectAsync(new AppSettingsData { EmbeddedLlmServer = true }, CancellationToken.None);
+
+        var (link, problem) = await session.LinkAsync(Embedded("gemma-4-e2b"), CancellationToken.None);
+
+        Assert.Null(problem);
+        link!.Dispose();
+        Assert.Equal(0, asked);
+    }
+
+    [Fact]
     public async Task ListModels_OnAnEmbeddedServer_IsTheInstalledCatalog()
     {
         _embedded.Installed("gemma-4-e2b", "gemma-4-e4b-qat");

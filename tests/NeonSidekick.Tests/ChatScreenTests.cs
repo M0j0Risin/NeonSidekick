@@ -6634,7 +6634,7 @@ public partial class ChatScreenTests : IDisposable
                 case 1: PushLine(input, "/settings"); break;
                 case 2:
                     input.Push(Keys.Tab);   // the Common tab, Servers' first, past the Client group (Right until later on 2026-10-10) (the LLM tab until 2026-10-10; second since 2026-10-04, the user's order; sixth from 2026-10-03, Claude and OpenAI before it; fourth from 2026-10-02, Docker before it; third from 2026-09-19; fourth from 2026-09-18 until then)
-                    input.Push(Enumerable.Repeat(Keys.Down, 4).ToArray());   // LLM offer tools, the Common tab's fifth row (2026-10-10; the eleventh LLM row before; first of the tools-and-limits run since 2026-10-01, the user's call; the fifteenth before: LLM max turns above it since 2026-09-27, the mid-turn usage picker under the context length since 2026-09-25, the scan mode first, the show-summary toggle above it since 2026-09-21, the tool compact type just under it since 2026-09-15)
+                    input.Push(Enumerable.Repeat(Keys.Down, 5).ToArray());   // LLM offer tools, the Common tab's sixth row (LLM one local model above it since 2026-11-10; the fifth from 2026-10-10; the eleventh LLM row before; first of the tools-and-limits run since 2026-10-01, the user's call; the fifteenth before: LLM max turns above it since 2026-09-27, the mid-turn usage picker under the context length since 2026-09-25, the scan mode first, the show-summary toggle above it since 2026-09-21, the tool compact type just under it since 2026-09-15)
                     input.Push(Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape);   // the on/off page, off picked, closed
                     break;
                 case 3: PushLine(input, "hi again"); break;
@@ -9552,6 +9552,7 @@ public partial class ChatScreenTests : IDisposable
                 SettingsField.ClaudeCodeExecutable, SettingsField.ClaudeCodePermissions, SettingsField.ClaudeCodeModel, SettingsField.ClaudeCodeEffort,   // later on 2026-10-10, on the Anthropic tab
                 SettingsField.AnthropicApi, SettingsField.AnthropicApiMaxTokens, SettingsField.AnthropicApiPromptCaching,
                 SettingsField.OpenAIApi, SettingsField.OpenAIApiMaxTokens, SettingsField.OpenAIApiOrganization, SettingsField.OpenAIApiProject,
+                SettingsField.LlmOneLocalModel, SettingsField.DockerServerOneAtATime,   // 2026-11-10
             ];
         var group = ChatScreen.ProfileSettingGroups[ProfileSection.Servers];
         Assert.Equal(fields.Select(f => f.ToString()), group.Select(g => g.Name));
@@ -9572,6 +9573,7 @@ public partial class ChatScreenTests : IDisposable
             AnthropicApi = true, AnthropicApiMaxTokens = 8_000, AnthropicApiPromptCaching = false, ClaudeCodeServer = true,
             ClaudeCodeExecutable = @"D:\bin\claude.exe", ClaudeCodePermissions = "read-write", ClaudeCodeModel = "opus", ClaudeCodeEffort = "high",
             OpenAIApi = true, OpenAIApiMaxTokens = 4_096, OpenAIApiOrganization = "org-neon", OpenAIApiProject = "proj-neon",
+            LlmOneLocalModel = false, DockerServerOneAtATime = false,
         };
         var to = new AppSettingsData();
         foreach (var (_, copy) in group)
@@ -9592,8 +9594,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.NotSame(from.LlmSampling["qwen3"], to.LlmSampling!["qwen3"]);
         Assert.Equal(0.6, to.LlmSampling["*"].Temperature);
         Assert.Equal(20, to.LlmSampling["qwen3"].TopK);
-        Assert.Equal("Copy this profile's server settings into \"work\"? Its LLM URL, model, scan mode, reasoning and sampling, and its Embedded, Docker, Anthropic API, OpenAI API, Claude Code server and /claude settings are replaced.", ChatScreen.ProfileServersPrompt("work"));
-        Assert.Equal("Copy \"work\"'s server settings into this profile? This profile's LLM URL, model, scan mode, reasoning and sampling, and its Embedded, Docker, Anthropic API, OpenAI API, Claude Code server and /claude settings are replaced.", ChatScreen.ProfileServersPrompt("work", pull: true));
+        Assert.Equal("Copy this profile's server settings into \"work\"? Its LLM URL, model, scan mode, reasoning, sampling and one local model setting, and its Embedded, Docker, Anthropic API, OpenAI API, Claude Code server and /claude settings are replaced.", ChatScreen.ProfileServersPrompt("work"));
+        Assert.Equal("Copy \"work\"'s server settings into this profile? This profile's LLM URL, model, scan mode, reasoning, sampling and one local model setting, and its Embedded, Docker, Anthropic API, OpenAI API, Claude Code server and /claude settings are replaced.", ChatScreen.ProfileServersPrompt("work", pull: true));
         Assert.Equal("(copied the server settings into \"work\": LLM URL http://x/v1, LLM model qwen3)", ChatScreen.ProfileServersCopiedNotice("work", "http://x/v1", "qwen3"));
         Assert.Equal("(copied the server settings from \"work\": LLM URL http://x/v1, LLM model qwen3)", ChatScreen.ProfileServersCopiedNotice("work", "http://x/v1", "qwen3", pull: true));
     }

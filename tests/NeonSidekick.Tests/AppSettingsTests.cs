@@ -104,6 +104,8 @@ public class AppSettingsTests : IDisposable
         LlmScanMode = "both",
         LlmToolCompactType = "stop",
         LlmOfferTools = false,
+        LlmOneLocalModel = false,
+        DockerServerOneAtATime = false,
         LlmTurnTimeoutSeconds = 40,
         LlmUrl = "http://box:8000/v1",
         LlmUseFunVerbs = true,
@@ -262,6 +264,8 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(expected.LlmScanMode, actual.LlmScanMode);
         Assert.Equal(expected.LlmToolCompactType, actual.LlmToolCompactType);
         Assert.Equal(expected.LlmOfferTools, actual.LlmOfferTools);
+        Assert.Equal(expected.LlmOneLocalModel, actual.LlmOneLocalModel);   // a saved false survives (2026-11-10)
+        Assert.Equal(expected.DockerServerOneAtATime, actual.DockerServerOneAtATime);   // and its Docker twin's (2026-11-11, the review)
         Assert.Equal(expected.LlmTurnTimeoutSeconds, actual.LlmTurnTimeoutSeconds);
         Assert.Equal(expected.LlmUrl, actual.LlmUrl);
         Assert.Equal(expected.LlmUseFunVerbs, actual.LlmUseFunVerbs);
@@ -476,6 +480,8 @@ public class AppSettingsTests : IDisposable
             d.LlmScanMode = full.LlmScanMode;
             d.LlmToolCompactType = full.LlmToolCompactType;
             d.LlmOfferTools = full.LlmOfferTools;
+            d.LlmOneLocalModel = full.LlmOneLocalModel;
+            d.DockerServerOneAtATime = full.DockerServerOneAtATime;
             d.LlmTurnTimeoutSeconds = full.LlmTurnTimeoutSeconds;
             d.LlmUrl = full.LlmUrl;
             d.LlmUseFunVerbs = full.LlmUseFunVerbs; d.LlmShowThinking = full.LlmShowThinking; d.LlmPreserveThinking = full.LlmPreserveThinking; d.LlmSampling = LlmSamplingEntry.CopyAll(full.LlmSampling); d.LlmSamplingFromHuggingFace = full.LlmSamplingFromHuggingFace;
@@ -639,6 +645,8 @@ public class AppSettingsTests : IDisposable
                 d.LlmScanMode = full.LlmScanMode;
                 d.LlmToolCompactType = full.LlmToolCompactType;
                 d.LlmOfferTools = full.LlmOfferTools;
+                d.LlmOneLocalModel = full.LlmOneLocalModel;
+                d.DockerServerOneAtATime = full.DockerServerOneAtATime;
                 d.LlmTurnTimeoutSeconds = full.LlmTurnTimeoutSeconds;
                 d.LlmUrl = full.LlmUrl;
                 d.LlmUseFunVerbs = full.LlmUseFunVerbs; d.LlmShowThinking = full.LlmShowThinking; d.LlmPreserveThinking = full.LlmPreserveThinking; d.LlmSampling = LlmSamplingEntry.CopyAll(full.LlmSampling); d.LlmSamplingFromHuggingFace = full.LlmSamplingFromHuggingFace;
@@ -1761,6 +1769,8 @@ public class AppSettingsTests : IDisposable
         Assert.True(s.FileTreeShowSizes);
         Assert.Equal(10, s.FileViewImageMaxPerCall);   // 2026-09-19 (a constant 4 in the tool until then)
         Assert.True(s.LlmOfferTools);
+        Assert.True(s.LlmOneLocalModel);   // 2026-11-10: today's behavior
+        Assert.True(s.DockerServerOneAtATime);
         Assert.False(s.LlmUseFunVerbs);
         Assert.True(s.LlmShowThinking);
         Assert.False(s.LlmPreserveThinking);

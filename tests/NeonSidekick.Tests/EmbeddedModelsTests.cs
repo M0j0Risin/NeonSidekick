@@ -792,6 +792,24 @@ public class EmbeddedModelsTests : IDisposable
         Assert.Equal(LlamaBackend.Cuda, service.Backend(new AppSettingsData()).Backend);
     }
 
+    [Theory]
+    [InlineData("cudaMalloc failed: out of memory")]
+    [InlineData("ggml_backend_cuda_buffer_type_alloc_buffer: Failed to allocate CUDA0 buffer of size 4096")]
+    public async Task ACudaStartOutOfMemory_FallsBackOnce_AndTheNextStartAsksForCudaAgain(string error)
+    {
+        // 2026-11-11 (the review of the one-local-model change): with LLM one local model off another model may hold the GPU this time
+        // only; CUDA isn't broken, so it isn't latched off for the run.
+        InstallByHand();
+        var host = new FakeLlamaServerHost { Fail = l => l.Backend == LlamaBackend.Cuda ? new EmbeddedLlmException(error) : null };
+        await using var service = new EmbeddedLlmService(_files, host, Cuda, () => 8L << 30);
+
+        Assert.Equal(LlamaBackend.Vulkan, (await service.StartAsync(_model, new AppSettingsData(), null, CancellationToken.None)).Backend);
+        Assert.Equal(LlamaBackend.Cuda, service.Backend(new AppSettingsData()).Backend);
+
+        await service.StartAsync(_model, new AppSettingsData(), null, CancellationToken.None);
+        Assert.Equal([LlamaBackend.Cuda, LlamaBackend.Vulkan, LlamaBackend.Cuda, LlamaBackend.Vulkan], host.Launches.Select(l => l.Backend));
+    }
+
     /// <summary>
     /// The kill switch (Ctrl+Alt+X, 2026-10-01, the user's ask) during a load: the start's model unloaded without waiting for
     /// it, the start failing as the kill's — no Vulkan fallback, CUDA not marked failed — and nothing left to kill after.

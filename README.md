@@ -68,7 +68,7 @@ It's one app for research, IT and admin work (Active Directory, event logs, data
 * **Local servers:** finds OpenAI-compatible servers on the app's computer or your network, or takes a URL.
 * **Embedded model:** downloads a Gemma, Qwen or Muse model (all read pictures and call tools) and runs it on a built-in llama.cpp.
 * **Model sizes:** builds for 8 GB cards and up, best at 16–32 GB, and NVFP4 builds for NVIDIA's Blackwell cards (Windows only).
-* **Docker servers (Windows only):** your vLLM or SGLang containers as `/server` choices, one at a time ([vLLM](docs/DOCKER_VLLM_WIN.md), [SGLang](docs/DOCKER_SGLANG_WIN.md)).
+* **Docker servers (Windows only):** your vLLM or SGLang containers as `/server` choices ([vLLM](docs/DOCKER_VLLM_WIN.md), [SGLang](docs/DOCKER_SGLANG_WIN.md)).
 * **Cloud models:** the Anthropic and OpenAI APIs (your key) or Claude Code as the server (`/claude` sends it one message); off until you turn them on.
 * **Advisors:** any other profile, local or frontier, can be one, with read-only tools only; `/advisor` asks it yourself.
 * **Benchmarks & meters:** `/test` benchmarks the model; the performance bar shows CPU, RAM, GPU and network.

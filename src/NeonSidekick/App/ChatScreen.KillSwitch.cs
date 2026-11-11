@@ -22,7 +22,7 @@ internal enum KillScopeKind
 
 internal sealed partial class ChatScreen
 {
-    /// <summary>The log line when Ctrl+Alt+X finds no embedded model to unload: another server, or none loaded. Pinned.</summary>
+    /// <summary>The log line when Ctrl+Alt+X finds no embedded model to unload: another server with none left loaded behind it (LLM one local model off keeps one, 2026-11-10), or none loaded. Pinned.</summary>
     public const string KillSwitchIdleLog = "Ctrl+Alt+X: no embedded model is loaded; nothing to unload.";
 
     /// <summary>
@@ -58,6 +58,9 @@ internal sealed partial class ChatScreen
     /// only arms it for <see cref="KillSwitchConfirmWindow"/> and puts <see cref="EmbeddedLlmText.KillArmedHint"/> on the hint
     /// row — as an alert (<see cref="UI.ScreenPane.SetAlertHint"/>), since the standing hint is not drawn under a pane or a
     /// spinner, where the key works too; the second inside the window kills. With nothing to unload neither press arms.
+    /// A model left loaded behind another server (2026-11-11, the review: <c>LLM one local model</c> off, <see cref="LlmSession.EmbeddedParked"/>),
+    /// with no extras, no start and no botchat (a parent-server bot may be on it), is killed alone: the reply from the server in use goes on,
+    /// and the notice is <see cref="EmbeddedLlmText.KilledParkedNotice"/>.
     /// </summary>
     private void KillSwitch()
     {
@@ -78,6 +81,20 @@ internal sealed partial class ChatScreen
 
         Volatile.Write(ref _killArmedUntil, 0);
         _pane.SetAlertHint(null, TimeSpan.Zero);
+        if (_session.EmbeddedParked && embedded.Extras.Count == 0 && !embedded.Starting && Volatile.Read(ref _botLadder) is null)
+        {
+            // Nothing running uses it (2026-11-11, the review): the chat is on another server, so its work is left alone.
+            var parked = _session.KillEmbedded();
+            if (parked.Count == 0)
+            {
+                DiagnosticLog.Debug(AppCategory, KillSwitchIdleLog);
+                return;
+            }
+
+            string parkedNotice = EmbeddedLlmText.KilledParkedNotice(parked.Select(id => EmbeddedModelCatalog.Find(id, embedded.Catalog)?.Display ?? id).ToList());
+            RunOrPost(() => FinishKill(parkedNotice));
+            return;
+        }
 
         // The work first, then the servers: a load in progress ends on its token, as Ctrl+C under its spinner ends it, rather
         // than reading the kill as a crash. The scope's notice is read only once its owner has joined the watcher this runs on.

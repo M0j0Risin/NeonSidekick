@@ -135,12 +135,11 @@ The LLM connection and every kind of server it can use.
 
 #### Common
 
-Every server reads these.
-
 | Setting | What it does | Default |
 |---|---|---|
 | LLM URL | The server's OpenAI-compatible base URL (`http://127.0.0.1:1234/v1`), `embedded` or `docker:<container>`; `/server` fills it in. Empty: the app scans, then you pick a server, model and reasoning at startup. | empty |
 | LLM model | The model id; empty takes the first the server lists. `/model` picks one. | empty (first listed) |
+| LLM one local model | An embedded load or a local server's connect stops the chosen Docker containers (Windows only); picking another server unloads the embedded model. Off: both keep running; on again, the next connect stops them. | on |
 | LLM reasoning | How hard the model thinks: `none`, `low`, `medium`, `high` or `xhigh` (`/reasoning`). | `none` |
 | LLM show thinking | Streams thinking as a dim block, folded to one line when the answer starts (click it, Ctrl+O or `/expand`). Thinking is never spoken or logged. | on |
 | LLM offer tools | Whether the model gets any tools; off for chat templates with no tool role. A change starts a new conversation. | on |
@@ -242,7 +241,7 @@ The catalog, one row per model; the pane lists each build with its size.
 | Embedded backend | The llama.cpp build: `auto` (CUDA with NVIDIA driver 580+, else Vulkan, else CPU), `cuda`, `vulkan` or `cpu`. On a Mac, `auto` and `metal` both pick Metal. | `auto` |
 | Embedded context length | The context window in tokens: 0 (**fit**) is the largest that fits on the GPU within *Embedded VRAM budget (%)*, else 512–262,144. | 0 (fit) |
 | Embedded GPU layers | Layers on the GPU: `auto` (as many as free VRAM holds), `all`, or a number (0 runs on the CPU). | `auto` |
-| Embedded VRAM budget (%) | GPU memory the server may fill: `off` (llama.cpp leaves 1 GiB free) or 50–99 %. It shrinks the context first, then moves layers to the CPU (much slower). A change restarts the server. | 92 % |
+| Embedded VRAM budget (%) | How full the GPU may get (other programs count): `off` (llama.cpp leaves 1 GiB free) or 50–99 %. It shrinks the context first, then moves layers to the CPU (much slower). A change restarts the server. | 92 % |
 | Embedded VRAM only | Keeps the whole model on the GPU: if any lands in system RAM, the server stops and says what to lower. Refused on the CPU backend. | on |
 | Embedded vision | Loads the vision projector so the model reads images (about 1 GB more for most). Off, images sent to it are refused. | on |
 | Embedded drafter | Drafts tokens ahead and checks them, for faster replies with the same text. Turn it off if a model misbehaves. | on |
@@ -250,7 +249,7 @@ The catalog, one row per model; the pane lists each build with its size.
 * **NVFP4 builds** need the CUDA backend on an NVIDIA Blackwell GPU (RTX 50 series or newer); a Mac's catalog leaves them out.
 * **Downloads** are checked against Hugging Face's SHA-256; a stopped one resumes when you pick the model again.
 * **llama.cpp** downloads on first start (577 MB for CUDA, 33 MB Vulkan, 19 MB CPU, 12 MB Metal). If CUDA won't start under `auto`, the app tries Vulkan.
-* **The server** listens on `127.0.0.1` only, with a fresh key, and stops when you pick another server or quit. One runs at a time, besides a `multi-server` botchat's or advisor's extras.
+* **The server** listens on `127.0.0.1` only, with a fresh key, and stops when you pick another server ([LLM one local model](#common)) or quit. One runs at a time, besides a `multi-server` botchat's or advisor's extras.
 * **Files** (under the home folder): weights in `models\llm\<id>\`, shared projectors and drafters in `models\llm\_shared\`, llama.cpp in `llama\`. `/about` shows them.
 * **Sampling** follows each model card; `/sampling` overrides it.
 * **Memory:** a model needs roughly its download size in VRAM, plus the context. The 26B A4B and Qwen3.6 35B A3B (mixture-of-experts) run faster than their size suggests; E2B and E4B call tools less reliably.
@@ -258,17 +257,18 @@ The catalog, one row per model; the pane lists each build with its size.
 
 #### Docker
 
-Your own LLM containers (vLLM, SGLang, anything serving an OpenAI-compatible API) as `/server` choices, one running at a time ([Docker servers](TOOLS.md#docker-servers)). Windows only: on a Mac, Docker Desktop passes no GPU to containers.
+Your own LLM containers (vLLM, SGLang, anything serving an OpenAI-compatible API) as `/server` choices ([Docker servers](TOOLS.md#docker-servers)). Windows only: on a Mac, Docker Desktop passes no GPU to containers.
 
 | Setting | What it does | Default |
 |---|---|---|
-| Docker servers enabled | Offers the chosen containers in `/server`. | off |
+| Docker servers enabled | Offers the chosen containers in `/server`. Off: this run's containers stop at the reconnect. | off |
 | Docker server containers | A checklist of the engine's LLM servers: containers matching *Docker server match words* or labeled `neonsidekick.llm=true`. | empty |
 | Docker server match words | Words in an image or command that mark an LLM server. `r` restores the defaults; empty lists every container. | `aphrodite`, `koboldcpp`, `llama-server`, `llama.cpp`, `lmdeploy`, `localai`, `nvcr.io/nim`, `ollama`, `sglang`, `text-generation`, `trtllm`, `vllm` |
 | Docker server stop timeout (s) | How long a stopping container gets before the engine kills it (0–120). | 30 |
-| Docker server post-stop delay (s) | The wait between stopping the others and starting this one, so GPU memory frees (0–60). | 2 |
+| Docker server post-stop delay (s) | The wait after a stop (a container or the embedded model) before the next model loads, so GPU memory frees (0–60). | 2 |
 | Docker server ready timeout (s) | How long a started container may take to answer on its OpenAI-compatible API (30–3600). | 900 |
-| Docker server stop on exit | Stops the container in use when the app exits. | off |
+| Docker server one at a time | Starting a chosen container stops the other chosen ones first. Off: they keep running side by side; each needs its own host port and GPU share. | on |
+| Docker server stop on exit | Once the app has started one, stops the running chosen containers when it exits, the window's close button included. | off |
 
 #### Anthropic
 

@@ -1095,6 +1095,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.CheckForUpdatesAtStart,   // 2026-11-04, self-update
                 SettingsField.WebMetasearchEngines, SettingsField.WebMetasearchSafeSearch,   // 2026-11-06, the metasearch
                 SettingsField.WebMetasearchBraveApiKey,   // 2026-11-07, the metasearch's Brave API key
+                SettingsField.LlmOneLocalModel, SettingsField.DockerServerOneAtATime,   // 2026-11-10, what a load stops
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
@@ -1126,7 +1127,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("just the one compact notice", SettingsMenu.ToggleDescribe(SettingsField.LlmCompactShowSummary, false));
         // The Common tab (2026-10-10, the user's call: the LLM tab less the six rows only an OpenAI-compatible HTTP server reads) in the LLM tab's five runs (2026-10-01, the user's call):
         // the connection, how it answers, tools and limits, the context, the pictures and fun verbs; the tools toggle still ABOVE the tool-compact picker (the user's order, 2026-09-15).
-        Assert.Equal(new[] { SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmReasoning, SettingsField.LlmShowThinking, SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmMaxTurns, SettingsField.LlmAutoCompactPercent, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmToolCompactType, SettingsField.LlmPictureKeep, SettingsField.LlmPictureMegabytes, SettingsField.LlmUseFunVerbs }, SettingsMenu.TabFields[(int)SettingsTab.Common]);
+        Assert.Equal(new[] { SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmOneLocalModel, SettingsField.LlmReasoning, SettingsField.LlmShowThinking, SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmMaxTurns, SettingsField.LlmAutoCompactPercent, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmToolCompactType, SettingsField.LlmPictureKeep, SettingsField.LlmPictureMegabytes, SettingsField.LlmUseFunVerbs }, SettingsMenu.TabFields[(int)SettingsTab.Common]);
         // The Automation tab (2026-10-21, the user's ask): plan mode's gap review, the Ralph loop and code audits, the three runs as they stood on Common.
         Assert.Equal(new[] { SettingsField.PlanGapPasses, SettingsField.PlanGapCleanPasses, SettingsField.PlanGapAskUser, SettingsField.PlanGapStopTone, SettingsField.RalphLoopReviewer, SettingsField.RalphLoopCheckpoint, SettingsField.RalphLoopPasses, SettingsField.RalphLoopPassesPerStep, SettingsField.RalphLoopCheckTimeoutSeconds, SettingsField.RalphLoopTokenBudget, SettingsField.RalphLoopStopTone, SettingsField.CodeAuditPasses, SettingsField.CodeAuditCleanPasses, SettingsField.CodeAuditAskUser, SettingsField.CodeAuditFocus, SettingsField.CodeAuditWebResearch, SettingsField.CodeAuditPassToolCalls, SettingsField.CodeAuditStopTone }, SettingsMenu.TabFields[(int)SettingsTab.Automation]);
         // The Http tab: those six, in the order they had on the LLM tab (the scan mode and the key, the thinking rows, the sampling door and its switch).
@@ -2186,6 +2187,27 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.True(_settings.Current.LlmUseFunVerbs);
         Assert.Contains("  · 🖥️ LLM fun verbs: on", Output);
+    }
+
+    // ── LLM one local model (2026-11-10) ─────────────────────────────────────────
+
+    [Fact]
+    public async Task OnThePane_LlmOneLocalModel_IsCommonsThirdRow_UnderTheModel_PersistsAndNeedsNoReconnect()
+    {
+        Assert.True(_settings.Current.LlmOneLocalModel);
+        Assert.Equal(SettingsField.LlmOneLocalModel, SettingsMenu.TabFields[(int)SettingsTab.Common][2]);
+        Assert.True(SettingsMenu.IsToggle(SettingsField.LlmOneLocalModel));
+        Assert.False(SettingsMenu.IsLlmField(SettingsField.LlmOneLocalModel));   // read at each connect or load
+        Assert.Equal("LLM one local model", SettingsMenu.FieldName(SettingsField.LlmOneLocalModel));
+        var (menu, pane) = PaneMenu();
+        GoTo(SettingsTab.Common);
+        Down(2);                                // under LLM URL and LLM model
+        Push(Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape);   // the on/off picker: on under the cursor, off picked
+
+        Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
+
+        Assert.False(_settings.Current.LlmOneLocalModel);
+        pane.Dispose();
     }
 
     // ── LLM offer tools ───────────────────────────────────────────────────────────
@@ -3525,7 +3547,7 @@ public partial class SettingsMenuTests : IDisposable
         // page may do under Guardrails and which tabs it shows under Tabs ("The page" held both until then); the connection details off since then; the bot check control on under them since 2026-10-17; the reach local since 2026-11-08.
         AssertTabEnds("\n \n" + MenuLayout.Heading("Server", 120) + "\n▸ Web UI                     off\n  Web UI port                8765\n  Web UI reach               local\n  Web UI HTTPS address       auto\n" + MenuLayout.Heading("Guardrails", 120) + "\n  Web UI commands            off\n  Web UI connection details  off\n  Web UI bot check control   on\n" + MenuLayout.Heading("Tabs", 120) + "\n  Web UI profile theme       on\n  Web UI chat controls       on\n  Web UI home controls       off\n  Web UI shopping controls   off\n  Web UI YouTube controls    off\n", 120);
         // The Common tab (2026-10-10, the user's call; the LLM tab before): whole names, no row starting "Common ", in the LLM tab's five runs (2026-10-01, the user's call).
-        AssertTabEnds("\n \n" + MenuLayout.Heading("Connection", 120) + "\n▸ LLM URL                   (probe local ports)\n  LLM model                 (first listed)\n" + MenuLayout.Heading("How it answers", 120) + "\n  LLM reasoning             none\n  LLM show thinking         on\n" + MenuLayout.Heading("Tools and limits", 120) + "\n  LLM offer tools           on\n  LLM max tool iterations   10000 round trips\n  LLM request timeout (s)   3600\n  LLM turn timeout (s)      21600\n" + MenuLayout.Heading("Context", 120) + "\n  LLM context length        (from the server)\n  LLM mid-turn usage        last-known\n  LLM max turns             auto\n  LLM auto compact (%)      90 %\n  LLM compact mode          summary\n  LLM compact keep recent   2 turns\n  LLM compact show summary  off\n  LLM tool compact mode     compact\n" + MenuLayout.Heading("Pictures and verbs", 120) + "\n  LLM max images            20 pictures\n  LLM max images (MB)       24 MB\n  LLM fun verbs             off\n", 120);
+        AssertTabEnds("\n \n" + MenuLayout.Heading("Connection", 120) + "\n▸ LLM URL                   (probe local ports)\n  LLM model                 (first listed)\n  LLM one local model       on\n" + MenuLayout.Heading("How it answers", 120) + "\n  LLM reasoning             none\n  LLM show thinking         on\n" + MenuLayout.Heading("Tools and limits", 120) + "\n  LLM offer tools           on\n  LLM max tool iterations   10000 round trips\n  LLM request timeout (s)   3600\n  LLM turn timeout (s)      21600\n" + MenuLayout.Heading("Context", 120) + "\n  LLM context length        (from the server)\n  LLM mid-turn usage        last-known\n  LLM max turns             auto\n  LLM auto compact (%)      90 %\n  LLM compact mode          summary\n  LLM compact keep recent   2 turns\n  LLM compact show summary  off\n  LLM tool compact mode     compact\n" + MenuLayout.Heading("Pictures and verbs", 120) + "\n  LLM max images            20 pictures\n  LLM max images (MB)       24 MB\n  LLM fun verbs             off\n", 120);
         // The Http tab (2026-10-10): the six rows only an OpenAI-compatible HTTP server reads, whole names too, in three runs.
         AssertTabEnds("\n \n" + MenuLayout.Heading("Connection", 120) + "\n▸ LLM server scan mode            local\n  LLM API key                     em•••\n" + MenuLayout.Heading("Thinking", 120) + "\n  LLM preserve thinking           off\n  LLM reasoning estimate          chars\n" + MenuLayout.Heading("Sampling", 120) + "\n  LLM sampling                    (server defaults)\n  LLM sampling from Hugging Face  off\n", 120);
         // The Automation tab (2026-10-21, the user's ask): plan mode's gap review, the Ralph loop and code audits, off Common, padded to 28 (32 until the rows lost "LLM " later that day).

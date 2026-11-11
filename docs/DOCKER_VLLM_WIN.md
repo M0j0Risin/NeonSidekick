@@ -63,7 +63,7 @@ Once per machine; skip what you've done. Steps 1–4 are in Windows, the rest in
 2. On `/settings` › Servers › Docker, turn on *Docker servers enabled* and tick the container in *Docker server containers* (`vllm` is one of the *Docker server match words* by default).
 3. Pick the container in `/server`, or start the app with `--url docker:<container>`.
 
-Picking one stops the other ticked containers first, so the shared port is never a problem ([Docker servers](TOOLS.md#docker-servers)).
+The app runs one at a time by default, so the shared port is never a problem ([Docker servers](TOOLS.md#docker-servers)). With *Docker server one at a time* off, give each container its own host port and a smaller memory share so both fit.
 
 ## Models
 

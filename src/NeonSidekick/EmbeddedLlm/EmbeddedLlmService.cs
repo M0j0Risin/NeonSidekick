@@ -8,7 +8,8 @@ namespace NeonSidekick.EmbeddedLlm;
 /// <summary>
 /// The embedded model as the rest of the app sees it (2026-09-29): the catalog and each model's state, installing and
 /// removing, and the one server — started for a model under the settings, reused while nothing it depends on changed,
-/// stopped when another server is chosen. <see cref="EmbeddedLlmService"/> is the real one; the tests fake it. Beside it,
+/// stopped when another server is chosen (with <c>LLM one local model</c> on; off, 2026-11-10, it stays loaded behind the other
+/// server until Ctrl+Alt+X, and another embedded model still replaces it). <see cref="EmbeddedLlmService"/> is the real one; the tests fake it. Beside it,
 /// later on 2026-09-29 (the user's ask: <c>Botchat multi-embedded</c> <c>multi-server</c>), the extra servers a botchat starts
 /// for the bots' other embedded models, one per model (<see cref="StartExtraAsync"/>, <see cref="StopExtras()"/>), and since
 /// 2026-10-10 an advisor's under <c>Advisor embedded mode</c> <c>multi-server</c>; each held by the <see cref="ExtraOwner"/>s using it.
@@ -86,7 +87,8 @@ public interface IEmbeddedLlm : IAsyncDisposable
     /// The kill switch (Ctrl+Alt+X, 2026-10-01, the user's ask: "immediately unload an embedded model"): every server, the
     /// main one and the extras, killed at once without waiting for a start in progress, which then throws with
     /// <see cref="EmbeddedLlmException.Killed"/> — never a CUDA to Vulkan fallback. The ids of the models it unloaded, running
-    /// or loading; empty when there was nothing, which the screen reads as "another server: do nothing".
+    /// or loading — a model left loaded behind another server too (<c>LLM one local model</c> off, 2026-11-10); empty when there was
+    /// nothing, which the screen reads as "another server with no model behind it: do nothing".
     /// </summary>
     IReadOnlyList<string> Kill();
 }
@@ -366,7 +368,9 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
             catch (EmbeddedLlmException ex) when (auto && choice.Backend == LlamaBackend.Cuda && !ex.RuntimeMissing && !ex.VramOnlyRefused && !ex.Killed
                 && !cancellationToken.IsCancellationRequested && !KilledSince(kills))
             {
-                _cudaFailed = !ex.VisualCppMissing;
+                // Out of memory is no broken CUDA (2026-11-11, the review of the one-local-model change): with LLM one local model off the
+                // GPU may hold another model this time only, so the next start asks for CUDA again. Vulkan is still tried once now.
+                _cudaFailed = !ex.VisualCppMissing && !OutOfMemory(ex.Message);
                 DiagnosticLog.Warn(Category, EmbeddedLlmText.CudaFallback(ex.Message));
                 return await StartOnAsync(host, LlamaBackend.Vulkan, model, effective, auto, phase, beforeLoad, kills, cancellationToken).ConfigureAwait(false);
             }
@@ -419,6 +423,13 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
             }
         }
     }
+
+    /// <summary>
+    /// Whether a failed start's message is llama.cpp running out of GPU memory (2026-11-11, the review): <c>cudaMalloc failed: out of
+    /// memory</c>, <c>failed to allocate CUDA0 buffer</c>. Such a failure doesn't latch CUDA off for the run.
+    /// </summary>
+    internal static bool OutOfMemory(string message) =>
+        message.Contains("out of memory", StringComparison.OrdinalIgnoreCase) || message.Contains("failed to allocate", StringComparison.OrdinalIgnoreCase);
 
     public IReadOnlyList<string> Kill()
     {
