@@ -293,7 +293,7 @@ public class EmbeddedLlmLiveTests
 
             var complete = SmokeChecks.ProbeLlamaServer(models);
             Assert.True(complete.Passed, complete.Detail);
-            Assert.Equal("llama.cpp b11258: " + LlamaRelease.Name(backend) + " complete", complete.Detail);
+            Assert.Equal("llama.cpp b12262: " + LlamaRelease.Name(backend) + " complete", complete.Detail);
 
             File.WriteAllText(server, "not a PE");
             Assert.False(SmokeChecks.ProbeLlamaServer(models).Passed);

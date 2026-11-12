@@ -38,11 +38,11 @@ public sealed class EmbeddedLlmMacTests : IDisposable
     [Fact]
     public void ARecord_IsPinned_AndReadsBack()
     {
-        var record = new LlamaRecord(100, 638_000_000_000_000_000, 200, 638_000_000_010_000_000, "/Users/x/.neonsidekick/llama/b11258-metal/llama-server");
+        var record = new LlamaRecord(100, 638_000_000_000_000_000, 200, 638_000_000_010_000_000, "/Users/x/.neonsidekick/llama/b12262-metal/llama-server");
 
         string text = LlamaRecords.Format(record);
 
-        Assert.Equal("owner 100 638000000000000000\nserver 200 638000000010000000\nexecutable /Users/x/.neonsidekick/llama/b11258-metal/llama-server\n", text);
+        Assert.Equal("owner 100 638000000000000000\nserver 200 638000000010000000\nexecutable /Users/x/.neonsidekick/llama/b12262-metal/llama-server\n", text);
         Assert.Equal(record, LlamaRecords.Parse(text));
         Assert.Null(LlamaRecords.Parse("owner 100 1\nexecutable /x\n"));   // no server line
         Assert.Null(LlamaRecords.Parse(""));
@@ -58,7 +58,7 @@ public sealed class EmbeddedLlmMacTests : IDisposable
         return path;
     }
 
-    private string Server => Path.Combine(Path.GetFullPath(_llama), "b11258-metal", "llama-server");
+    private string Server => Path.Combine(Path.GetFullPath(_llama), "b12262-metal", "llama-server");
 
     private List<int> Sweep(Dictionary<int, long> starts, Dictionary<int, string>? executables = null)
     {
@@ -147,7 +147,7 @@ public sealed class EmbeddedLlmMacTests : IDisposable
 
         Directory.CreateDirectory(Path.GetDirectoryName(Server)!);
         File.WriteAllText(Server, "");   // realpath resolves what exists, as the runtime's executable does
-        string? path = LlamaRecords.Write(folder, self.Id, self, Path.Combine(link, "b11258-metal", "llama-server"));
+        string? path = LlamaRecords.Write(folder, self.Id, self, Path.Combine(link, "b12262-metal", "llama-server"));
 
         Assert.Equal(Server, LlamaRecords.Parse(File.ReadAllText(path!))!.Executable);
         File.Delete(path!);

@@ -167,7 +167,7 @@ public class EmbeddedModelsTests : IDisposable
         Assert.True(result.Ok, result.Detail);
         Assert.True(_files.RuntimeInstalled(LlamaBackend.Cuda));
         Assert.Equal(0, _files.RuntimeBytesToDownload(LlamaBackend.Cuda));
-        Assert.Equal(Path.Combine(LlamaDir, "b11258-cuda", "llama-server.exe"), _files.Executable(LlamaBackend.Cuda));
+        Assert.Equal(Path.Combine(LlamaDir, "b12262-cuda", "llama-server.exe"), _files.Executable(LlamaBackend.Cuda));
         Assert.Equal("present", (await _files.EnsureRuntimeAsync(LlamaBackend.Cuda, null, CancellationToken.None)).Detail);
     }
 
@@ -193,7 +193,7 @@ public class EmbeddedModelsTests : IDisposable
 
         _files.PruneOldRuntimes();
 
-        Assert.Equal(["b11258-cuda", "bx-cpu", "notes"], Directory.EnumerateDirectories(LlamaDir).Select(Path.GetFileName).Order(StringComparer.Ordinal));
+        Assert.Equal(["b12262-cuda", "bx-cpu", "notes"], Directory.EnumerateDirectories(LlamaDir).Select(Path.GetFileName).Order(StringComparer.Ordinal));
     }
 
     // ── Shared projectors and drafters (2026-10-06) ──────────────────────────

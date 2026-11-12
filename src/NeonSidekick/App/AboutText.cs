@@ -263,7 +263,7 @@ public static class AboutText
 
     /// <summary>
     /// The Embedded row (2026-09-29): the pinned llama.cpp build and where its runtimes and the models live —
-    /// <c>llama.cpp b11258 · runtimes in &lt;home&gt;\llama · models in &lt;models&gt;\llm</c>.
+    /// <c>llama.cpp b12262 · runtimes in &lt;home&gt;\llama · models in &lt;models&gt;\llm</c>.
     /// </summary>
     public static string EmbeddedLine(AboutFacts facts)
     {

@@ -98,7 +98,7 @@ public static class EmbeddedLlmText
     /// <summary>The question before a download nobody picked in <c>/server</c> (the saved model is missing at connect).</summary>
     public static string InstallQuestion(EmbeddedModel model, long runtimeBytes, long? download = null) => $"{model.Display} is not installed. Install it now ({InstallCost(model, runtimeBytes, download)})?";
 
-    /// <summary>The llama.cpp runtime's display name: <c>llama.cpp b11258 (cuda)</c>.</summary>
+    /// <summary>The llama.cpp runtime's display name: <c>llama.cpp b12262 (cuda)</c>.</summary>
     public static string RuntimeDisplay(LlamaBackend backend) => $"llama.cpp {LlamaRelease.Tag} ({LlamaRelease.Name(backend)})";
 
     public static string VerifyingLabel(string display) => $"verifying {display}…";
@@ -130,7 +130,7 @@ public static class EmbeddedLlmText
 
     private static string Detail(string state, long bytes) => state.PadRight(StateWidth) + " · " + ModelStore.SizeLabel(bytes);
 
-    /// <summary>The endpoint's source phrase once running: <c>embedded llama.cpp b11258 cuda on 127.0.0.1:53121</c>.</summary>
+    /// <summary>The endpoint's source phrase once running: <c>embedded llama.cpp b12262 cuda on 127.0.0.1:53121</c>.</summary>
     public static string Source(EmbeddedServerInfo info) =>
         string.Create(CultureInfo.InvariantCulture, $"embedded llama.cpp {LlamaRelease.Tag} {LlamaRelease.Name(info.Backend)} on 127.0.0.1:{info.Port}");
 

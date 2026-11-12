@@ -20,7 +20,7 @@ public partial class ChatScreenTests
         return embedded;
     }
 
-    private const string EmbeddedConnectedE2b = "LLM: http://embedded.localhost/v1 model=gemma-4-e2b (embedded llama.cpp b11258 cuda on 127.0.0.1:59999)";
+    private const string EmbeddedConnectedE2b = "LLM: http://embedded.localhost/v1 model=gemma-4-e2b (embedded llama.cpp b12262 cuda on 127.0.0.1:59999)";
 
     [Fact]
     public async Task Server_ListsTheInstalledEmbeddedModelsAlone_AndPickingOne_SavesItAndStartsIt()

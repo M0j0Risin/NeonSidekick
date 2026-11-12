@@ -18,7 +18,7 @@ public enum LlamaBackend
 public sealed record LlamaAsset(string Name, long Bytes, string Sha256);
 
 /// <summary>
-/// The llama.cpp build the embedded model runs on (2026-09-29), pinned by tag, asset name, size and SHA-256 and downloaded
+/// The llama.cpp build the embedded model runs on (2026-09-29; b12262 since 2026-11-12), pinned by tag, asset name, size and SHA-256 and downloaded
 /// on first use into <c>&lt;home&gt;/llama/&lt;tag&gt;-&lt;backend&gt;/</c> — never shipped beside the exe (the CUDA
 /// runtime alone is 420 MB). Pinning, not "latest", because the numbered builds are llama.cpp's pre-releases (its
 /// <c>/releases/latest</c> is a tag with no zips at all) and because flags and asset names do drift.
@@ -42,7 +42,7 @@ public sealed record LlamaAsset(string Name, long Bytes, string Sha256);
 /// to Vulkan. The Windows arm64 builds: <see cref="EmbeddedEndpoint.Offered"/> is x64 there.</para>
 ///
 /// <para>Metal (2026-10-07, the Mac port's Stage 2): the <c>macos-arm64</c> tarball is the Metal build, the only one a Mac
-/// gets (<see cref="LlamaBackendDetect"/>). Unlike the zips it is a <c>.tar.gz</c> with one top folder (<c>llama-b11258/</c>,
+/// gets (<see cref="LlamaBackendDetect"/>). Unlike the zips it is a <c>.tar.gz</c> with one top folder (<c>llama-b12262/</c>,
 /// which <see cref="ModelStore"/> unwraps), because a Mac build needs what a zip drops: the executable bits and the
 /// <c>lib*.0.dylib</c> symlinks. <c>llama-server</c> loads its libraries as <c>@rpath/lib*.0.dylib</c> with rpath
 /// <c>@loader_path</c>, and those names are links to the versioned files — so <see cref="RequiredFiles"/> names both, a
@@ -53,7 +53,7 @@ public sealed record LlamaAsset(string Name, long Bytes, string Sha256);
 public static class LlamaRelease
 {
     /// <summary>The pinned build.</summary>
-    public const string Tag = "b11258";
+    public const string Tag = "b12262";
 
     /// <summary>Where the assets are downloaded from: <c>&lt;base&gt;&lt;tag&gt;/&lt;asset&gt;</c>.</summary>
     public const string DownloadBase = "https://github.com/ggml-org/llama.cpp/releases/download/";
@@ -64,11 +64,11 @@ public static class LlamaRelease
     /// <summary>The Metal build's server executable (2026-10-07): no extension on a Mac.</summary>
     public const string MacServerExecutable = "llama-server";
 
-    private static readonly LlamaAsset CpuZip = new("llama-b11258-bin-win-cpu-x64.zip", 19_164_531, "ba9380f6d4bef30c5fd3b81ae560e32d923865f73ab0be8456f5ee75cb2a6611");
-    private static readonly LlamaAsset VulkanZip = new("llama-b11258-bin-win-vulkan-x64.zip", 33_079_326, "2a1c64ccdfad23a0d6ddfaead5a9d4a3f65cbea41eafb7c0a665e5a7b877cec6");
-    private static readonly LlamaAsset CudaZip = new("llama-b11258-bin-win-cuda-13.4-x64.zip", 153_546_576, "9b5000e468889662b4c815a5f2a58dc57c027e511371ebf7af741f5d0e9561f5");
-    private static readonly LlamaAsset CudaRuntimeZip = new("cudart-llama-bin-win-cuda-13.4-x64.zip", 423_535_356, "738f8c251ac22b70c3ae6f83a10cf222725df0395246a2cf58f32bdb85fbe668");
-    private static readonly LlamaAsset MetalTarball = new("llama-b11258-bin-macos-arm64.tar.gz", 11_767_268, "faab9dd583b06dc1e6663b8b2d5a8349e05b7b70559bcefe1190be556f12c38e");
+    private static readonly LlamaAsset CpuZip = new("llama-b12262-bin-win-cpu-x64.zip", 25_044_988, "7d28975f1acc6c142954c4a0d1dfb9c3a3a13736c41f898890748cc067487d7a");
+    private static readonly LlamaAsset VulkanZip = new("llama-b12262-bin-win-vulkan-x64.zip", 38_007_544, "07717635401eb384ef640c0ebd7d8d2abd17d73e69023930d62149d2d528344a");
+    private static readonly LlamaAsset CudaZip = new("llama-b12262-bin-win-cuda-13.5-x64.zip", 171_015_108, "86354c7c12be7c4912990e309762f51ff44f9f0a6007442fc4aa11fbe2cb936d");
+    private static readonly LlamaAsset CudaRuntimeZip = new("cudart-llama-bin-win-cuda-13.5-x64.zip", 426_314_199, "c2bf4cc202bfbaaa7a0b75f5082457c3811326947bb216059b72839d844e9cba");
+    private static readonly LlamaAsset MetalTarball = new("llama-b12262-bin-macos-arm64.tar.gz", 16_857_745, "c52efb2ff664010329d00a6b88aa253ecb50096999201a69838ae28211161f0a");
 
     /// <summary>The files every backend's folder must hold: the server (a 9 KB launcher and its implementation), llama, ggml and the multimodal library.</summary>
     private static readonly string[] CommonFiles = [ServerExecutable, "llama-server-impl.dll", "llama.dll", "ggml.dll", "ggml-base.dll", "mtmd.dll"];
@@ -81,15 +81,15 @@ public static class LlamaRelease
     private static readonly string[] MetalFiles =
     [
         MacServerExecutable, "libllama-server-impl.dylib",
-        "libllama-common.0.dylib", "libllama-common.0.5.0.dylib",
-        "libllama.0.dylib", "libllama.0.5.0.dylib",
-        "libmtmd.0.dylib", "libmtmd.0.5.0.dylib",
-        "libggml.0.dylib", "libggml.0.25.3.dylib",
-        "libggml-base.0.dylib", "libggml-base.0.25.3.dylib",
-        "libggml-cpu.0.dylib", "libggml-cpu.0.25.3.dylib",
-        "libggml-blas.0.dylib", "libggml-blas.0.25.3.dylib",
-        "libggml-metal.0.dylib", "libggml-metal.0.25.3.dylib",
-        "libggml-rpc.0.dylib", "libggml-rpc.0.25.3.dylib",
+        "libllama-common.0.dylib", "libllama-common.0.9.0.dylib",
+        "libllama.0.dylib", "libllama.0.9.0.dylib",
+        "libmtmd.0.dylib", "libmtmd.0.9.0.dylib",
+        "libggml.0.dylib", "libggml.0.29.0.dylib",
+        "libggml-base.0.dylib", "libggml-base.0.29.0.dylib",
+        "libggml-cpu.0.dylib", "libggml-cpu.0.29.0.dylib",
+        "libggml-blas.0.dylib", "libggml-blas.0.29.0.dylib",
+        "libggml-metal.0.dylib", "libggml-metal.0.29.0.dylib",
+        "libggml-rpc.0.dylib", "libggml-rpc.0.29.0.dylib",
     ];
 
     /// <summary>The archives <paramref name="backend"/> needs, in download order.</summary>

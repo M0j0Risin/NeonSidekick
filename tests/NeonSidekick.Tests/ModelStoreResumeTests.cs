@@ -369,9 +369,9 @@ public class ModelStoreResumeTests : IDisposable
     [Fact]
     public void ArchiveFormat_IsReadFromTheName()
     {
-        Assert.Equal(ModelFormat.TarGz, ModelStore.ArchiveFormat("llama-b11258-bin-macos-arm64.tar.gz"));
+        Assert.Equal(ModelFormat.TarGz, ModelStore.ArchiveFormat("llama-b12262-bin-macos-arm64.tar.gz"));
         Assert.Equal(ModelFormat.TarGz, ModelStore.ArchiveFormat("x.TGZ"));
-        Assert.Equal(ModelFormat.Zip, ModelStore.ArchiveFormat("cudart-llama-bin-win-cuda-13.4-x64.zip"));
+        Assert.Equal(ModelFormat.Zip, ModelStore.ArchiveFormat("cudart-llama-bin-win-cuda-13.5-x64.zip"));
         Assert.Equal("a gzip", ModelStore.FormatName(ModelFormat.TarGz));
     }
 

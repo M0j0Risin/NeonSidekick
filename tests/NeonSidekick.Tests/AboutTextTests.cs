@@ -132,7 +132,7 @@ public class AboutTextTests
             ["Spectre.Console", "Microsoft.Extensions.AI (+ .OpenAI)", "OpenAI (.NET SDK)", "Microsoft.ML.OnnxRuntime", "Microsoft.Data.Sqlite", "ModelContextProtocol.Core", "LibGit2Sharp", "LibGit2Sharp.NativeBinaries", "Microsoft.Data.SqlClient", "SqlServer.TransactSql.ScriptDom", "Oracle.ManagedDataAccess.Core", "MySqlConnector", "Npgsql", "DuckDB.NET.Data.Full", "KokoroSharp", "Kokoro-82M in-process", "Whisper.net", "Whisper ggml models", "Vosk", "Vosk models", "Silero VAD", "PhotoSauce.MagicScaler", "Markdig", "Microsoft.Web.WebView2", "llama.cpp (llama-server)", "ASP.NET Core (Kestrel)", "System.Security.Cryptography.Pkcs", "SearXNG.Net", "HtmlAgilityPack"],
             AboutText.Components.Select(c => c.Name));
         Assert.Equal(29, AboutText.Components.Count);   // SearXNG.Net and HtmlAgilityPack since 2026-11-06; DuckDB.NET since 2026-10-25; ASP.NET Core and the Pkcs pin since 2026-10-14; WebView2 since 2026-10-05; Npgsql since 2026-10-04; the Gemma 4 row gone 2026-10-03; ODP.NET Core and MySqlConnector since 2026-09-30; llama.cpp and the Gemma 4 models since 2026-09-29; SqlClient and ScriptDom since 2026-09-23
-        Assert.Equal("b11258", Assert.Single(AboutText.Components, c => c.Name == "llama.cpp (llama-server)").Version);
+        Assert.Equal("b12262", Assert.Single(AboutText.Components, c => c.Name == "llama.cpp (llama-server)").Version);
         Assert.All(AboutText.Components, c => Assert.False(string.IsNullOrWhiteSpace(c.License)));
     }
 
@@ -197,7 +197,7 @@ public class AboutTextTests
         Assert.Equal(["Runtime", "OS", "Executable", "Home", "Profile", "Models", "LLM servers", "Embedded", "Speech"], rows.Select(r => r.Label));
         Assert.Equal(@"D:\Apps\NeonSidekick\NeonSidekick.exe", rows[2].Value);
         Assert.Equal(@"C:\Users\chris\.neonsidekick\profiles\default", rows[4].Value);
-        Assert.Equal("llama.cpp b11258 · runtimes in " + Path.Combine(Facts.HomeDirectory, "llama") + " · models in " + Path.Combine(Facts.ModelsDirectory, "llm"), rows[7].Value);   // 2026-09-29
+        Assert.Equal("llama.cpp b12262 · runtimes in " + Path.Combine(Facts.HomeDirectory, "llama") + " · models in " + Path.Combine(Facts.ModelsDirectory, "llm"), rows[7].Value);   // 2026-09-29
         Assert.Equal(AboutText.SpeechLine, rows[8].Value);
         Assert.Equal("(unknown)", AboutText.AboutRows(Facts with { ExecutablePath = null })[2].Value);
     }

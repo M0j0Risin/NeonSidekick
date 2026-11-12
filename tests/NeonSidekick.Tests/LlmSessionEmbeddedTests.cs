@@ -47,8 +47,8 @@ public class LlmSessionEmbeddedTests
         Assert.Equal(FakeEmbeddedLlm.LiveUrl, endpoint.LiveUrl);
         Assert.Equal("gemma-4-e2b", endpoint.ModelId);
         Assert.Equal(FakeEmbeddedLlm.Key, endpoint.ApiKey);
-        Assert.Equal("embedded llama.cpp b11258 cuda on 127.0.0.1:59999", endpoint.Source);
-        Assert.Equal("LLM: http://embedded.localhost/v1 model=gemma-4-e2b (embedded llama.cpp b11258 cuda on 127.0.0.1:59999)", LlmSession.ConnectedLine(endpoint));
+        Assert.Equal("embedded llama.cpp b12262 cuda on 127.0.0.1:59999", endpoint.Source);
+        Assert.Equal("LLM: http://embedded.localhost/v1 model=gemma-4-e2b (embedded llama.cpp b12262 cuda on 127.0.0.1:59999)", LlmSession.ConnectedLine(endpoint));
         Assert.Same(endpoint, _endpoints.Single());
         Assert.NotNull(session.Assistant);
         Assert.Equal(["gemma-4-e2b"], _embedded.Starts);

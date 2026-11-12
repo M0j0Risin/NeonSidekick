@@ -258,9 +258,9 @@ public class EmbeddedLlmCoreTests
     public void TheRelease_IsPinned_PerBackend()
     {
         Assert.Matches("^b[0-9]+$", LlamaRelease.Tag);
-        Assert.Equal(["llama-b11258-bin-win-cuda-13.4-x64.zip", "cudart-llama-bin-win-cuda-13.4-x64.zip"], LlamaRelease.Assets(LlamaBackend.Cuda).Select(a => a.Name));
-        Assert.Equal(["llama-b11258-bin-win-vulkan-x64.zip"], LlamaRelease.Assets(LlamaBackend.Vulkan).Select(a => a.Name));
-        Assert.Equal(["llama-b11258-bin-win-cpu-x64.zip"], LlamaRelease.Assets(LlamaBackend.Cpu).Select(a => a.Name));
+        Assert.Equal(["llama-b12262-bin-win-cuda-13.5-x64.zip", "cudart-llama-bin-win-cuda-13.5-x64.zip"], LlamaRelease.Assets(LlamaBackend.Cuda).Select(a => a.Name));
+        Assert.Equal(["llama-b12262-bin-win-vulkan-x64.zip"], LlamaRelease.Assets(LlamaBackend.Vulkan).Select(a => a.Name));
+        Assert.Equal(["llama-b12262-bin-win-cpu-x64.zip"], LlamaRelease.Assets(LlamaBackend.Cpu).Select(a => a.Name));
         foreach (var backend in Enum.GetValues<LlamaBackend>())
         {
             Assert.All(LlamaRelease.Assets(backend), a => Assert.Matches("^[0-9a-f]{64}$", a.Sha256));
@@ -270,10 +270,10 @@ public class EmbeddedLlmCoreTests
 
         Assert.Contains("cudart64_13.dll", LlamaRelease.RequiredFiles(LlamaBackend.Cuda));
         Assert.Contains("ggml-vulkan.dll", LlamaRelease.RequiredFiles(LlamaBackend.Vulkan));
-        Assert.Equal("https://github.com/ggml-org/llama.cpp/releases/download/b11258/llama-b11258-bin-win-vulkan-x64.zip", LlamaRelease.Url(LlamaRelease.Assets(LlamaBackend.Vulkan)[0]).AbsoluteUri);
-        Assert.Equal(Path.Combine("C:", "home", "llama", "b11258-cuda"), LlamaRelease.Folder(Path.Combine("C:", "home", "llama"), LlamaBackend.Cuda));
-        Assert.Equal("577 MB", ModelStore.SizeLabel(LlamaRelease.Bytes(LlamaBackend.Cuda)));
-        Assert.Equal("llama.cpp b11258 (vulkan)", EmbeddedLlmText.RuntimeDisplay(LlamaBackend.Vulkan));
+        Assert.Equal("https://github.com/ggml-org/llama.cpp/releases/download/b12262/llama-b12262-bin-win-vulkan-x64.zip", LlamaRelease.Url(LlamaRelease.Assets(LlamaBackend.Vulkan)[0]).AbsoluteUri);
+        Assert.Equal(Path.Combine("C:", "home", "llama", "b12262-cuda"), LlamaRelease.Folder(Path.Combine("C:", "home", "llama"), LlamaBackend.Cuda));
+        Assert.Equal("597 MB", ModelStore.SizeLabel(LlamaRelease.Bytes(LlamaBackend.Cuda)));
+        Assert.Equal("llama.cpp b12262 (vulkan)", EmbeddedLlmText.RuntimeDisplay(LlamaBackend.Vulkan));
 
         var spec = LlamaRelease.Spec(Path.Combine("C:", "llama"), LlamaBackend.Cuda);
         Assert.Equal(2, spec.Parts.Count);
@@ -380,25 +380,25 @@ public class EmbeddedLlmCoreTests
     public void TheMetalBuild_IsPinned_WithItsLinksAndTheirFiles()
     {
         var tarball = Assert.Single(LlamaRelease.Assets(LlamaBackend.Metal));
-        Assert.Equal(new LlamaAsset("llama-b11258-bin-macos-arm64.tar.gz", 11_767_268, "faab9dd583b06dc1e6663b8b2d5a8349e05b7b70559bcefe1190be556f12c38e"), tarball);
+        Assert.Equal(new LlamaAsset("llama-b12262-bin-macos-arm64.tar.gz", 16_857_745, "c52efb2ff664010329d00a6b88aa253ecb50096999201a69838ae28211161f0a"), tarball);
         Assert.Equal(Speech.ModelFormat.TarGz, Speech.ModelStore.ArchiveFormat(tarball.Name));
         Assert.Equal("metal", LlamaRelease.Name(LlamaBackend.Metal));
         Assert.Equal("llama-server", LlamaRelease.ServerFile(LlamaBackend.Metal));
         Assert.Equal("llama-server.exe", LlamaRelease.ServerFile(LlamaBackend.Cuda));
-        Assert.EndsWith(Path.Combine("b11258-metal", "llama-server"), LlamaRelease.Executable("llama", LlamaBackend.Metal), StringComparison.Ordinal);
+        Assert.EndsWith(Path.Combine("b12262-metal", "llama-server"), LlamaRelease.Executable("llama", LlamaBackend.Metal), StringComparison.Ordinal);
         var files = LlamaRelease.RequiredFiles(LlamaBackend.Metal);
 
         // Every .0 link dyld loads by, and the versioned file it points at: a dangling link still passes File.Exists.
         foreach (var library in new[] { "libllama-common", "libllama", "libmtmd" })
         {
             Assert.Contains(library + ".0.dylib", files);
-            Assert.Contains(library + ".0.5.0.dylib", files);
+            Assert.Contains(library + ".0.9.0.dylib", files);
         }
 
         foreach (var library in new[] { "libggml", "libggml-base", "libggml-cpu", "libggml-blas", "libggml-metal", "libggml-rpc" })
         {
             Assert.Contains(library + ".0.dylib", files);
-            Assert.Contains(library + ".0.25.3.dylib", files);
+            Assert.Contains(library + ".0.29.0.dylib", files);
         }
 
         Assert.Contains("libllama-server-impl.dylib", files);
@@ -407,7 +407,7 @@ public class EmbeddedLlmCoreTests
     // ── The command line ────────────────────────────────────────────────────
 
     private static LlamaLaunch Launch(string? mmproj = @"C:\m\mmproj-F16.gguf", int context = 32768, string layers = "auto") =>
-        new(@"C:\llama\b11258-cuda\llama-server.exe", LlamaBackend.Cuda, @"C:\m\model.gguf", mmproj, "gemma-4-e2b", context, layers, new EmbeddedSampling(1.0, 0.95, 64));
+        new(@"C:\llama\b12262-cuda\llama-server.exe", LlamaBackend.Cuda, @"C:\m\model.gguf", mmproj, "gemma-4-e2b", context, layers, new EmbeddedSampling(1.0, 0.95, 64));
 
     [Fact]
     public void Arguments_ArePinned_WithVision()
@@ -453,7 +453,7 @@ public class EmbeddedLlmCoreTests
         Assert.Equal("all", args[args.ToList().IndexOf("-ngl") + 1]);
         Assert.False(Launch(mmproj: null).Vision);
         Assert.True(Launch().Vision);
-        Assert.Equal(@"C:\llama\b11258-cuda", Launch().WorkingDirectory);
+        Assert.Equal(@"C:\llama\b12262-cuda", Launch().WorkingDirectory);
     }
 
     [Fact]
@@ -687,8 +687,8 @@ public class EmbeddedLlmCoreTests
         Assert.Equal("download  · 4.2 GB", EmbeddedLlmText.RowDetail(EmbeddedModelState.Absent, 4_170_150_816));
         Assert.Equal("partial   · 4.2 GB · 42%", EmbeddedLlmText.RowDetail(new EmbeddedModelState(EmbeddedModelStateKind.Partial, 42), 4_170_150_816));
         Assert.Equal(9, EmbeddedLlmText.StateWidth);   // "installed", the longest word
-        Assert.Equal("embedded llama.cpp b11258 cuda on 127.0.0.1:53121", EmbeddedLlmText.Source(new EmbeddedServerInfo(new Uri("http://127.0.0.1:53121/v1"), 53121, "k", LlamaBackend.Cuda, "m", true)));
-        Assert.Equal("Gemma 4 E2B is not installed. Install it now (download 4.3 GB + llama.cpp runtime 577 MB)?", EmbeddedLlmText.InstallQuestion(e2b, LlamaRelease.Bytes(LlamaBackend.Cuda)));   // its MTP drafter counts since 2026-09-29
+        Assert.Equal("embedded llama.cpp b12262 cuda on 127.0.0.1:53121", EmbeddedLlmText.Source(new EmbeddedServerInfo(new Uri("http://127.0.0.1:53121/v1"), 53121, "k", LlamaBackend.Cuda, "m", true)));
+        Assert.Equal("Gemma 4 E2B is not installed. Install it now (download 4.3 GB + llama.cpp runtime 597 MB)?", EmbeddedLlmText.InstallQuestion(e2b, LlamaRelease.Bytes(LlamaBackend.Cuda)));   // its MTP drafter counts since 2026-09-29
         Assert.Equal("download 4.3 GB", EmbeddedLlmText.InstallCost(e2b, 0));
         Assert.Equal("Gemma 4 E2B's MTP drafter could not be downloaded, so it starts without MTP: timed out", EmbeddedLlmText.DrafterFailed(e2b, "timed out"));
         Assert.Equal("Muse Glimmer 30B's DFlash drafter could not be downloaded, so it starts without DFlash: timed out", EmbeddedLlmText.DrafterFailed(EmbeddedModelCatalog.Find("muse-glimmer-30b")!, "timed out"));

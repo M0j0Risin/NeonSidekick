@@ -108,7 +108,7 @@ public sealed record EmbeddedModel(
 /// The tiers are not whole-model quantisations: VERY-LOW to VERY-HIGH share one NVFP4 backbone (GGML type 40, every
 /// block's attention and MLP) and differ only in the output head, the token embedding and the NextN head
 /// (<see cref="EmbeddedModel.MtpHead"/>, in the weights like Unsloth's); HIGHEST keeps the MLP of layers 0–55 in NVFP4 and
-/// the rest in Q8_0/BF16. NVFP4 wants the CUDA build on a Blackwell GPU (sm_120; the pinned CUDA 13.4 build covers it,
+/// the rest in Q8_0/BF16. NVFP4 wants the CUDA build on a Blackwell GPU (sm_120; the pinned CUDA 13.5 build covers it,
 /// <see cref="LlamaRelease"/>) — nothing gates the rows by GPU; the README names the Blackwell cards they are for. Its projector is Unsloth's BF16 one,
 /// byte for byte. Sampling as Qwen's card (the repository's card repeats it).</para>
 ///
