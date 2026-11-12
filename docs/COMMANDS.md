@@ -272,7 +272,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 * **On a Mac:** `/services` and `/tasks` are Windows only; `/eventlog` reads the Mac's own logs ([MAC.md](MAC.md#what-works)).
 * **Without a pane** (the Web UI, headless), `/eventlog` and `/services` print a list. The panes' keys: [Pane keys](INTERFACE.md#pane-keys).
 * **Words:** quote a value with spaces (`folder:"\Microsoft\Windows\Windows Defender"`, `computer:"app 01"`). A term's value follows the colon at once; a single-value term is given once.
-* **`/ad`'s verbs** count only in lower case, and `domain` only alone: `/ad Domain Admins` and `/ad Group Policy Creator Owners` look those names up. `nested` counts first or last on a group line.
+* **`/ad`'s verbs** count only in lower case, and `domain` only alone: `/ad Domain Admins` and `/ad Group Policy Creator Owners` look those names up. `nested` counts first or last on a group or memberof line.
 * **`/eventlog`'s log** is the line's first word; later words are searched for.
 
 | Command | What it does |
@@ -290,6 +290,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 | `/ad <name> [domain:<name>]` | Looks a name up in Active Directory (account, display name, cn, mail, UPN or description) and opens the matches as a card with **copy** and **ask**. Read-only. See [Active Directory](TOOLS.md#active-directory). |
 | `/ad user <name>` | A user's card: enabled, locked and when (**Search 4740** when the PDC emulator is a ticked event-log computer), bad passwords, password expiry, last sign-in, groups, manager, direct reports, title, department and OU. |
 | `/ad group <name> [nested] [members:users\|computers\|groups] [to:<file-or-folder>]` | A group's card and members, direct or nested (each with the group it comes through). |
+| `/ad memberof <name> [nested] [type:user\|group\|computer\|service] [to:<file-or-folder>]` | The groups an account belongs to, direct or nested (each with the group it comes through); on the card **n** switches. |
 | `/ad computer <name>` | A computer's card, or a managed service account's. |
 | `/ad ou [<path>] [to:<file-or-folder>]` | The OU tree, or one OU (`Neon/Engineering`, a DN or a name): its owner, linked GPOs and objects. |
 | `/ad find <kind> [<days>] [<words>] [type:<type>] [field:<field>] [ou:<path>] [to:<file-or-folder>]` | The kinds of `ad_find`: `locked`, `password_expiring`, `disabled`, `stale_users`, `stale_computers`, `name`, `field`, `os`, `password_never_expires`, `account_expiring`, `created`, `privileged`, `empty_groups`. |

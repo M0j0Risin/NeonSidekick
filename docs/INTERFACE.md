@@ -132,7 +132,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | `/services` | ←/→ states · Enter opens the service (`c` copy, `a` ask, and on a readwrite computer `s` start, `x` stop, `r` restart, `t` start type, each asking) · `r` refresh · `c` computer · type to filter |
 | `/tasks` | ←/→ states · Enter opens the task (`c` copy, `a` ask, `h` history, and as allowed `r` run, `e` end, `n` enable, `d` disable, each asking) · `r` refresh · `c` computer · `f` folder · `w` Windows' own · type to filter |
 | `/ad` card | Long columns cut to the pane · a double-click on a row (member, result, group, manager or owner) opens its card, Esc back · `c` copy the card · `a` ask · Shift+letter finds |
-| `/ad` card, on a group or a locked user | on a group, `n` nested or direct, `u` users only or all · on a locked user, **Search 4740** opens the PDC emulator's lockout events on `/eventlog` · a name several accounts share opens as a card of them |
+| `/ad` card, on a group or a locked user | on a group, `n` nested or direct, `u` users only or all · on a user, group or computer, `g` all its groups, a card whose `n` switches nested and direct · on a locked user, **Search 4740** opens the PDC emulator's lockout events on `/eventlog` · a name several accounts share opens as a card of them |
 | `/youtube`, `/youtube list` | Enter plays (a playlist, marked ▤, at its entry) |
 | `/youtube <words>` | Enter plays · `s` saves the hit (a video, a playlist, or a channel's uploads) |
 | `/youtube playlist` | Enter plays from that entry · `s` saves the video · `l` saves the playlist |

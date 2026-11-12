@@ -7,7 +7,7 @@ using NeonSidekick.Files;
 namespace NeonSidekick.Llm.Tools;
 
 /// <summary>
-/// What the six directory tools share (2026-10-15, the admin-tools plan; <c>ad_ou</c> and <c>to</c> the AD gaps plan the same day): the
+/// What the seven directory tools share (2026-10-15, the admin-tools plan; <c>ad_ou</c> and <c>to</c> the AD gaps plan the same day; <c>ad_memberof</c> 2026-11-12): the
 /// <see cref="DirectoryAccess"/> door, the arguments' readers, the redacted twin and the <c>to</c> save. All read the directory, all are offered
 /// headless too, none changes it (the native layer cannot); <c>to</c> writes only a CSV in the working directory, asked of
 /// <see cref="SaveRoot"/> per call (*File tools* on, plan mode off), and a twin has no root. A refusal is an <c>Error:</c> sentence, never a throw.
@@ -206,6 +206,62 @@ public sealed class AdGroupTool(DirectoryAccess access, bool forceRedacted = fal
         string question = "group " + name + (nested ? " nested" : "") + (members is null or "all" ? "" : " " + members);
         return await AskListAsync(arguments, question, (session, source, deadline, _, canSave) =>
             DirectoryQueries.GroupAnswer(session, source, name, nested, members ?? "all", limit, Zone, deadline, canSave), cancellationToken).ConfigureAwait(false);
+    }
+}
+
+/// <summary>
+/// <c>ad_memberof(name, nested?, type?, limit?, to?, domain?)</c> (2026-11-12, the memberof plan, the user's report: "I'm unable to get a complete
+/// list of groups for a user … they have many nested groups"): every group an account is in, direct or at any depth through the groups above it,
+/// security and distribution alike, each with the group it comes through.
+/// </summary>
+public sealed class AdMemberOfTool(DirectoryAccess access, bool forceRedacted = false, Func<Files.SaveRoot>? saveRoot = null) : DirectoryTool(access, forceRedacted, saveRoot)
+{
+    public const string ToolName = "ad_memberof";
+    public const string NestedArgument = "nested";
+    public const string TypeArgument = "type";
+
+    private static readonly JsonElement Schema = ToolSchema.Parse(
+        """
+        {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string", "description": "The account: a user's account name, UPN, display name or mail; a group's or computer's name." },
+            "nested": { "type": "boolean", "description": "Every group at any depth, through the groups it is in, each with the group it comes through (default false: its direct groups and its primary group)." },
+            "type": { "type": "string", "enum": ["user", "group", "computer", "service"], "description": "Which kind of account the name is (service is a managed service account); leave out to try users, then groups, then computers." },
+            "limit": { "type": "integer", "description": "The most groups to list, 1 to 1000 (default 200); the total is always counted." },
+            "to": { "type": "string", "description": "Save every group (up to 10,000) as a CSV: a .csv path in the working directory, or a folder there. Needs File tools; never over an existing file." },
+            "domain": { "type": "string", "description": "Which domain, by its ticked name or its DNS name; leave out for this PC's (or the only one)." }
+          },
+          "required": ["name"]
+        }
+        """);
+
+    public override string Name => ToolName;
+
+    public override string Description => "Lists every group an Active Directory account (user, computer, group or service account) is in: direct, or nested at any depth with the group each comes through; security and distribution groups, with their type.";
+
+    public override JsonElement JsonSchema => Schema;
+
+    public override AIFunction AsRedacted() => ForceRedacted ? this : new AdMemberOfTool(Access, forceRedacted: true);
+
+    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    {
+        if (Optional(arguments, NameArgument) is not { } name)
+        {
+            return DirectoryText.Missing(NameArgument);
+        }
+
+        var (nested, nestedError) = Flag(arguments, NestedArgument, fallback: false);
+        var (type, typeError) = Choice(arguments, TypeArgument, DirectoryQueries.MemberOfTypes);
+        var (limit, limitError) = Number(arguments, LimitArgument, 1, DirectoryLimits.MaxEntries, 200);
+        if ((nestedError ?? typeError ?? limitError) is { } error)
+        {
+            return error;
+        }
+
+        // The whole set is read whatever the cap handed in (as ad_group's): the total is right, and limit bounds what is listed.
+        return await AskListAsync(arguments, DirectoryCommand.MemberOfQuestion(name, nested, type), (session, source, deadline, _, canSave) =>
+            DirectoryQueries.MemberOfAnswer(session, source, name, type, nested, limit, Zone, deadline, canSave), cancellationToken).ConfigureAwait(false);
     }
 }
 

@@ -335,6 +335,42 @@ public static class DirectoryText
     public static string FirstListed(int limit, bool canSave) =>
         "the first " + limit.ToString("N0", CultureInfo.InvariantCulture) + " listed (" + (canSave ? "narrow with members, or save them all with to" : "narrow with members") + ")";
 
+    // ── an account's groups (ad_memberof, /ad memberof; 2026-11-12, the memberof plan, the user's report: a nested user's groups came back short) ────────
+
+    /// <summary>
+    /// An account's groups cut to the limit, and how to get the rest. Pinned. Not <see cref="FirstListed"/>, whose "narrow with members" names an
+    /// argument <c>ad_memberof</c> has not.
+    /// </summary>
+    public static string FirstGroupsListed(int limit, bool canSave) =>
+        "the first " + limit.ToString("N0", CultureInfo.InvariantCulture) + " listed (" + (canSave ? "raise limit up to 1,000, or save them all with to" : "raise limit up to 1,000") + ")";
+
+    /// <summary>The model's line where an account's groups stopped for length. Pinned.</summary>
+    public static string MoreGroups(int left) =>
+        "… " + left.ToString(CultureInfo.InvariantCulture) + " more; raise limit or save them all with to";
+
+    /// <summary>A card whose group list is cut or partial points at the tool that reads them all. Pinned.</summary>
+    public const string MemberOfPointer = "for every group, direct or nested, ask ad_memberof (on /ad's card, g)";
+
+    /// <summary>A group card's upward walk past its group cap. Pinned.</summary>
+    public const string GroupsAboveNotWalked = "more than 200 groups above; the rest not walked";
+
+    /// <summary>
+    /// An account's groups held in another domain (2026-11-12): listed, never walked further; universal groups whose links live in another domain
+    /// show only from a global catalog. Pinned.
+    /// </summary>
+    public const string OtherDomainGroupsNote =
+        "groups in another domain are listed but not walked further; a universal group held in another domain shows only when the DC is a global catalog";
+
+    /// <summary>A name that other kinds of account carry too, when no type was given: which (by <c>type</c> word), and how to ask for them. Pinned.</summary>
+    public static string AlsoNamed(string name, IReadOnlyList<string> kinds) =>
+        Join(kinds.Select(k => "a " + (k == "service" ? AdValues.KindServiceAccount : k)).ToList()) + " is named " + Llm.Tools.UntrustedText.Fenced(Llm.Tools.UntrustedText.Cut(Llm.Tools.UntrustedText.OneLine(name), 120))
+        + " too; type: " + kinds[0] + " lists its groups";
+
+    /// <summary>The <c>/ad</c> card's button that opens an account's groups, and its word on the Hints bar.</summary>
+    public const string AllGroupsButton = "all groups";
+
+    public const string AllGroupsWord = "groups";
+
     /// <summary>A member a walk could not read, or one in another domain.</summary>
     public const string NotReadable = "not readable";
 

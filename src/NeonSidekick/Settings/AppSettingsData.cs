@@ -2725,8 +2725,8 @@ public sealed class AppSettingsData
     // and a Mac's since 2026-10-18, mac-pass2, over Kerberos).
 
     /// <summary>
-    /// Whether a turn offers the directory tools (2026-10-15): <c>ad_user</c>, <c>ad_group</c>, <c>ad_computer</c>, <c>ad_find</c>, <c>ad_ou</c> (the AD gaps
-    /// plan, the same day) and <c>ad_domain</c>. The directory is never written; a list's <c>to</c> writes a CSV in the working directory, only with
+    /// Whether a turn offers the directory tools (2026-10-15): <c>ad_user</c>, <c>ad_group</c>, <c>ad_memberof</c> (2026-11-12), <c>ad_computer</c>,
+    /// <c>ad_find</c>, <c>ad_ou</c> (the AD gaps plan, the same day) and <c>ad_domain</c>. The directory is never written; a list's <c>to</c> writes a CSV in the working directory, only with
     /// <see cref="FileTools"/> on and never in plan mode. Windows only (a Mac's too since 2026-10-18, mac-pass2: Kerberos, no <c>current</c>). Off by default. No variable.
     /// </summary>
     public bool DirectoryTools { get; set; }

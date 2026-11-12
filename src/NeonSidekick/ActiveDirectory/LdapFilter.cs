@@ -86,6 +86,12 @@ public static class LdapFilter
     /// </summary>
     public const string ServiceAccounts = "(|(objectClass=msDS-GroupManagedServiceAccount)(objectClass=msDS-ManagedServiceAccount)(objectClass=msDS-DelegatedManagedServiceAccount))";
 
+    /// <summary>
+    /// The objects <c>ad_memberof</c> reads the groups of, for a lookup by DN (2026-11-12, the memberof plan): users, groups, computers and service
+    /// accounts. <see cref="KindTerm"/> without a type leaves the service accounts out.
+    /// </summary>
+    public const string MemberOfKinds = "(|(&" + Users + ")" + Groups + Computers + ServiceAccounts + ")";
+
     public const string Contacts = "(objectClass=contact)";
 
     public const string Ous = "(objectClass=organizationalUnit)";

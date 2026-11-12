@@ -19,8 +19,8 @@ public sealed record DirectoryCommandArgs(string Verb, string Argument, string? 
 public sealed record DirectoryCommandResult(DirectoryAnswer? Answer, IReadOnlyList<string> Lines, bool Failed, string? LockedPdc = null, string? Title = null, DirectoryCommandArgs? Args = null, string? Domain = null);
 
 /// <summary>
-/// <c>/ad &lt;words&gt;</c> or <c>/ad user|group|computer|find|ou|domain …</c> [<c>domain:x</c>] (2026-10-15, the admin-tools plan; the AD gaps plan
-/// the same day): the user's own hand over the directory, read-only, the same answers the tools give. On the pane the answer is a card in columns
+/// <c>/ad &lt;words&gt;</c> or <c>/ad user|group|memberof|computer|find|ou|domain …</c> [<c>domain:x</c>] (2026-10-15, the admin-tools plan; the AD gaps plan
+/// the same day; <c>memberof</c> 2026-11-12, the memberof plan): the user's own hand over the directory, read-only, the same answers the tools give. On the pane the answer is a card in columns
 /// with copy and ask (and on a locked user the "Search 4740" button, on a group the nested and users-only switches; a double-click on a row opens
 /// its card); elsewhere its lines. <c>to:</c> saves a list as a CSV in the working directory: the user's own hand, so neither plan mode nor
 /// *File tools* applies, but the write goes through <see cref="WorkingDirectory"/> (the sandbox and the database guard hold).
@@ -29,7 +29,7 @@ public static class DirectoryCommand
 {
     public const string Word = "/ad";
 
-    public static readonly IReadOnlyList<string> Verbs = ["user", "group", "computer", "find", "ou", "domain"];
+    public static readonly IReadOnlyList<string> Verbs = ["user", "group", "memberof", "computer", "find", "ou", "domain"];
 
     /// <summary>The key words lifted from anywhere on the line (only these: a name with another colon stays a name). Pinned.</summary>
     public static readonly IReadOnlyList<string> Keys = ["domain", "type", "ou", "field", "members", "to"];
@@ -39,8 +39,9 @@ public static class DirectoryCommand
     {
         "domain" => true,
         "members" => verb == "group",
-        "type" or "field" or "ou" => verb == "find",
-        "to" => verb is "group" or "find" or "ou",
+        "type" => verb is "find" or "memberof",
+        "field" or "ou" => verb == "find",
+        "to" => verb is "group" or "memberof" or "find" or "ou",
         _ => false,
     };
 
@@ -105,10 +106,10 @@ public static class DirectoryCommand
         }
 
         var rest = words.Skip(1).ToList();
-        if (verb == "group" && rest.Count > 1 && (rest[0] == "nested" || rest[^1] == "nested"))
+        if (verb is "group" or "memberof" && rest.Count > 1 && (rest[0] == "nested" || rest[^1] == "nested"))
         {
-            // nested only for a group, lower case, first or last (2026-10-23, the admin review's P6: lifted from any line, so /ad group Nested
-            // Admins looked up "Admins").
+            // nested only for a group or an account's groups, lower case, first or last (2026-10-23, the admin review's P6: lifted from any line,
+            // so /ad group Nested Admins looked up "Admins").
             rest.RemoveAt(rest[0] == "nested" ? 0 : rest.Count - 1);
             nested = true;
         }
@@ -158,6 +159,17 @@ public static class DirectoryCommand
             return (new DirectoryCommandArgs("find:" + kind, findWords ?? "", domain, false, days, Type: type, Ou: ou, Field: field, To: to), null);
         }
 
+        if (verb == "memberof")
+        {
+            string? kind = Key("type")?.ToLowerInvariant();
+            if (kind is not null && !DirectoryQueries.MemberOfTypes.Contains(kind))
+            {
+                return (null, Bare(DirectoryText.BadChoice("type", kind, DirectoryQueries.MemberOfTypes)));
+            }
+
+            return (new DirectoryCommandArgs(verb, string.Join(' ', rest), domain, nested, 0, Type: kind, To: to), null);
+        }
+
         string? members = Key("members")?.ToLowerInvariant();
         if (members is not null && !DirectoryQueries.MemberChoices.Contains(members))
         {
@@ -172,7 +184,8 @@ public static class DirectoryCommand
 
     /// <summary>The usage line: the kinds from <see cref="DirectoryQueries.FindKinds"/>, so it can never name one the tool lacks. Pinned.</summary>
     public static string Usage =>
-        "Usage: /ad <name> · user <name> · group <name> [nested] [members:users|computers|groups] · computer <name> · ou [<path>] · find "
+        "Usage: /ad <name> · user <name> · group <name> [nested] [members:users|computers|groups] · memberof <name> [nested] [type:"
+        + string.Join('|', DirectoryQueries.MemberOfTypes) + "] · computer <name> · ou [<path>] · find "
         + string.Join('|', DirectoryQueries.FindKinds) + " [days] [words] [type:<type>] [field:<field>] [ou:<path>] · domain · domain:<name> and to:<file-or-folder> (a .csv file or a folder) may stand anywhere";
 
     private static string Bare(string error) => error.Replace("Error: ", "", StringComparison.Ordinal);
@@ -184,6 +197,7 @@ public static class DirectoryCommand
         return line.Verb switch
         {
             "group" => "group " + line.Argument + (line.Nested ? " nested" : "") + (line.Members is { } m ? " " + m : ""),
+            "memberof" => MemberOfQuestion(line.Argument, line.Nested, line.Type),
             "ou" => "ou " + (line.Argument.Length > 0 ? line.Argument : "tree"),
             _ when line.Verb.StartsWith("find:", StringComparison.Ordinal) => "find " + line.Verb[5..] + (line.Type is { } t ? " " + t : "") + (line.Argument.Length > 0 ? " " + line.Argument : ""),
             _ => line.Verb + " " + line.Argument,
@@ -232,6 +246,8 @@ public static class DirectoryCommand
         {
             "user" => DirectoryQueries.UserAnswer(session, source, line.Argument, now, zone, deadline: deadline),
             "group" => DirectoryQueries.GroupAnswer(session, source, line.Argument, line.Nested, line.Members ?? "all", DirectoryLimits.MaxEntries, zone, deadline),
+            // Explicit (the plan's pass 2): the default arm reads any other verb as find:<kind>.
+            "memberof" => DirectoryQueries.MemberOfAnswer(session, source, line.Argument, line.Type, line.Nested, DirectoryLimits.MaxEntries, zone, deadline),
             "computer" => DirectoryQueries.ComputerAnswer(session, source, line.Argument, zone, deadline: deadline),
             "domain" => DirectoryQueries.DomainAnswer(session, source, deadline, zone),
             "ou" => DirectoryQueries.OuAnswer(session, source, line.Argument.Length > 0 ? line.Argument : null, DirectoryLimits.MaxEntries, deadline, cap: cap, zone: zone),
@@ -308,6 +324,16 @@ public static class DirectoryCommand
             DescribeGroup(group.Name, nested, members), cancellationToken);
     }
 
+    /// <summary>An account's groups by its DN (2026-11-12, the memberof plan): a card's <c>g</c> (direct) and a memberof card's <c>n</c> switch.</summary>
+    public static Task<DirectoryCommandResult> MemberOfAsync(DirectoryAccess access, string? domain, DirectoryRowTarget account, bool nested, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(access);
+        ArgumentNullException.ThrowIfNull(account);
+        return RunCardAsync(access, domain, (session, source, deadline) =>
+            DirectoryQueries.MemberOfAnswer(session, source, account.Name, null, nested, DirectoryLimits.MaxEntries, access.Time.LocalTimeZone, deadline, dn: account.Dn),
+            DescribeMemberOf(account.Name, nested), cancellationToken);
+    }
+
     /// <summary>
     /// The words a line's last word may become (2026-10-15, the AD gaps plan: <c>key:value</c> words may stand anywhere, so the verb is the first
     /// word that is none): the verbs and the domains first; a find's kinds; a group's <c>nested</c> and <c>members:</c>; a key's values.
@@ -326,7 +352,8 @@ public static class DirectoryCommand
             pool = current[..current.IndexOf(':', StringComparison.Ordinal)].ToLowerInvariant() switch
             {
                 "domain" => domains.Select(d => "domain:" + d),
-                "type" => DirectoryQueries.FindTypes.Select(t => "type:" + t),
+                // memberof takes four of find's six (the plan's pass 12).
+                "type" => (before.Count > 0 && before[0].Equals("memberof", StringComparison.OrdinalIgnoreCase) ? DirectoryQueries.MemberOfTypes : DirectoryQueries.FindTypes).Select(t => "type:" + t),
                 "field" => DirectoryQueries.FieldNames.Select(f => "field:" + f),
                 "members" => DirectoryQueries.MemberChoices.Select(m => "members:" + m),
                 _ => [],
@@ -344,6 +371,7 @@ public static class DirectoryCommand
                 "find" when before.Count == 1 => DirectoryQueries.FindKinds,
                 "find" => ["type:", "field:", "ou:", "to:"],
                 "group" => ["nested", "members:", "to:"],
+                "memberof" => ["nested", "type:", "to:"],
                 "ou" => ["to:"],
                 _ => [],
             };
@@ -366,6 +394,7 @@ public static class DirectoryCommand
         {
             "user" => "the user " + line.Argument,
             "group" => DescribeGroup(line.Argument, line.Nested, line.Members ?? "all"),
+            "memberof" => DescribeMemberOf(line.Argument, line.Nested),
             "computer" => "the computer " + line.Argument,
             "domain" => "the domain",
             "ou" => line.Argument.Length > 0 ? "the OU " + line.Argument : "the OU tree",
@@ -387,6 +416,16 @@ public static class DirectoryCommand
         };
         return line.Ou is { } ou ? what + " in the OU " + ou : what;
     }
+
+    /// <summary>
+    /// An account's groups' card title and ask draft (2026-11-12, the memberof plan): "belongs to", since <see cref="AskDraft"/> writes
+    /// "Look up … in Active Directory" and "is in" read "is in in". Pinned.
+    /// </summary>
+    public static string DescribeMemberOf(string name, bool nested) => "the groups " + name + " belongs to" + (nested ? " at any depth" : "");
+
+    /// <summary>The question an account's groups' CSV is named from: nested and the type kept, so the direct and the nested saves differ. Pinned.</summary>
+    public static string MemberOfQuestion(string name, bool nested, string? type) =>
+        "memberof " + name + (nested ? " nested" : "") + (type is { } t ? " " + t : "");
 
     /// <summary>A group card's title: what its two switches show ("the users in Staff at any depth"). Pinned.</summary>
     public static string DescribeGroup(string name, bool nested, string members) => members switch

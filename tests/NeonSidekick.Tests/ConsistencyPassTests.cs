@@ -85,8 +85,8 @@ public class ConsistencyPassTests
         InfoPane.ButtonsHint([('c', "cancel update"), ('k', "keep")], tabs: false, cells: InfoPane.HintCells, find: false),   // and its offer to cancel
         InfoPane.ButtonsHint(WebUiButtons, tabs: true, cells: InfoPane.HintCells),   // /webui with two or more addresses
         InfoPane.ButtonsHint(WebUiButtons, tabs: false, cells: InfoPane.HintCells),   // and with one
-        InfoPane.ButtonsHint([('c', "copy"), ('a', "ask"), ('n', DirectoryText.NestingWord), ('u', DirectoryText.MembersWord)], tabs: false, cells: InfoPane.HintCells),   // /ad's group card
-        InfoPane.ButtonsHint([('c', "copy"), ('a', "ask"), ('s', DirectoryText.LockoutWord)], tabs: false, cells: InfoPane.HintCells),   // a locked user's
+        InfoPane.ButtonsHint([('c', "copy"), ('a', "ask"), ('n', DirectoryText.NestingWord), ('u', DirectoryText.MembersWord), ('g', DirectoryText.AllGroupsWord)], tabs: false, cells: InfoPane.HintCells),   // /ad's group card
+        InfoPane.ButtonsHint([('c', "copy"), ('a', "ask"), ('s', DirectoryText.LockoutWord), ('g', DirectoryText.AllGroupsWord)], tabs: false, cells: InfoPane.HintCells),   // a locked user's (g since 2026-11-12)
         InfoPane.ButtonsHint(Buttons(ServicesMenu.CopyAction, ServicesMenu.AskAction, ServicesMenu.StartAction, ServicesMenu.StopAction, ServicesMenu.RestartAction, ServicesMenu.StartTypeAction), tabs: false, cells: InfoPane.HintCells),
         InfoPane.ButtonsHint(Buttons(TasksMenu.CopyAction, TasksMenu.AskAction, TasksMenu.RunAction, TasksMenu.EndAction, TasksMenu.EnableAction, TasksMenu.DisableAction, TasksMenu.HistoryAction), tabs: false, cells: InfoPane.HintCells),
         InfoPane.ButtonsHint(Buttons(EventLogMenu.CopyAction, EventLogMenu.AskAction), tabs: true, cells: InfoPane.HintCells),

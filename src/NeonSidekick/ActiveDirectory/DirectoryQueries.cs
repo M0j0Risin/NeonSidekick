@@ -51,6 +51,9 @@ public static class DirectoryQueries
 
     public static readonly IReadOnlyList<string> MemberChoices = ["all", "users", "computers", "groups"];
 
+    /// <summary>The kinds of account whose groups <c>ad_memberof</c> lists (2026-11-12, the memberof plan): <c>ad_find</c>'s words for them.</summary>
+    public static readonly IReadOnlyList<string> MemberOfTypes = ["user", "group", "computer", "service"];
+
     public static readonly IReadOnlyList<string> WordsKinds = ["name", "field", "os"];
 
     public static readonly IReadOnlyList<string> DaysKinds = ["password_expiring", "account_expiring", "stale_users", "stale_computers", "created"];
@@ -568,6 +571,13 @@ public static class DirectoryQueries
             answer.Notes.Add(DirectoryText.GroupsNotAllRead);
         }
 
+        // The card's list is the first 200, tokenGroups' security groups and the direct distribution ones (2026-11-12, the memberof plan): a cut
+        // or a short read points at the tool that reads them all.
+        if (groups.Count > 200 || partial || groupsStopped)
+        {
+            answer.Notes.Add(DirectoryText.MemberOfPointer);
+        }
+
         return answer;
     }
 
@@ -606,7 +616,8 @@ public static class DirectoryQueries
             return candidates.Count > 0 ? Ambiguous(name, candidates) : DirectoryAnswer.Refused(dn is null ? DirectoryText.NotFound("group", name, source.Where) : DirectoryText.Gone(name, source.Where));
         }
 
-        var walk = Walk(session, baseDn, HeadOf(session, source.Domain), [group], nested, members, cap, deadline);
+        string head = HeadOf(session, source.Domain);
+        var walk = Walk(session, baseDn, head, [group], nested, members, cap, deadline);
         // A cycle (A holds B, B holds A) brings the group back in through a nested one: never listed or counted as its own member (2026-10-20, a review's finding).
         var listed = walk.Members.Values.Where(m => Wanted(m, members) && !string.Equals(m.Dn, group.Dn, StringComparison.OrdinalIgnoreCase))
             .OrderBy(m => SortKey(m), StringComparer.OrdinalIgnoreCase).ToList();
@@ -654,7 +665,7 @@ public static class DirectoryQueries
             Add(answer, "created", Time(created, zone));
         }
 
-        AddMemberOf(session, answer, group, nested, deadline);
+        AddMemberOf(session, answer, group, baseDn, head, nested, deadline);
         var table = new DirectoryTable([new(DirectoryText.ColName, Flexible: true), new(DirectoryText.ColKind), new(DirectoryText.ColAccount), new(DirectoryText.ColVia, Flexible: true)])
         {
             Shown = limit,
@@ -674,50 +685,23 @@ public static class DirectoryQueries
         return answer;
     }
 
-    /// <summary>The groups an object is in: its direct <c>memberOf</c>, and with <paramref name="nested"/> every group above, walked upward by base reads (cap 200).</summary>
-    private static void AddMemberOf(IDirectorySession session, DirectoryAnswer answer, DirectoryEntry entry, bool nested, DirectoryDeadline deadline)
+    /// <summary>
+    /// The groups an object is in: its direct <c>memberOf</c>, and with <paramref name="nested"/> every group above, by <see cref="WalkUp"/> under
+    /// <see cref="DirectoryLimits.MaxWalkedGroups"/> (2026-11-12, the memberof plan: one base read per group until then, and a silent stop at 200).
+    /// The names stay the DNs' own; a cut or a timeout is said, with the pointer to <c>ad_memberof</c>.
+    /// </summary>
+    private static void AddMemberOf(IDirectorySession session, DirectoryAnswer answer, DirectoryEntry entry, string baseDn, string head, bool nested, DirectoryDeadline deadline)
     {
         var (direct, partial) = entry.ValuesOrFirstRange("memberOf");
-        var found = new List<string>(direct);
-        var seen = new HashSet<string>(direct, StringComparer.OrdinalIgnoreCase);
+        IReadOnlyList<string> found = direct;
+        bool cut = false;
         bool stopped = false;
-        if (nested)
+        if (nested && direct.Count > 0)
         {
-            var queue = new Queue<string>(direct);
-            while (queue.Count > 0 && found.Count < DirectoryLimits.MaxWalkedGroups)
-            {
-                if (!deadline.CanStart)
-                {
-                    stopped = true;
-                    break;
-                }
-
-                string next = queue.Dequeue();
-                try
-                {
-                    var read = session.Search(next, DirectoryScope.Base, "(objectClass=*)", ["memberOf"], 1, paged: false, deadline.Limit);
-                    // A group's own memberOf may come back ranged too (2026-10-23, the admin review's Q8): said, never silent.
-                    IReadOnlyList<string> aboveAll = [];
-                    if (read.Entries.Count > 0)
-                    {
-                        (aboveAll, bool abovePartial) = read.Entries[0].ValuesOrFirstRange("memberOf");
-                        partial |= abovePartial;
-                    }
-
-                    foreach (string above in aboveAll)
-                    {
-                        if (seen.Add(above) && found.Count < DirectoryLimits.MaxWalkedGroups)
-                        {
-                            found.Add(above);
-                            queue.Enqueue(above);
-                        }
-                    }
-                }
-                catch (DirectoryException)
-                {
-                    // A group this account may not read: its own groups stay unknown.
-                }
-            }
+            var walk = WalkUp(session, baseDn, head, entry.Dn, direct, null, nested: true, DirectoryLimits.MaxWalkedGroups, deadline);
+            found = [.. walk.Groups.Keys];
+            cut = walk.Cut;
+            stopped = walk.TimedOut;
         }
 
         if (found.Count == 0)
@@ -733,9 +717,324 @@ public static class DirectoryQueries
             answer.Notes.Add(DirectoryText.FirstRangeNote);
         }
 
+        if (cut)
+        {
+            answer.Notes.Add(DirectoryText.GroupsAboveNotWalked);
+        }
+
         if (stopped)
         {
             answer.Notes.Add(DirectoryText.StoppedAtTimeLimit);
+        }
+
+        if (cut || stopped || partial)
+        {
+            answer.Notes.Add(DirectoryText.MemberOfPointer);
+        }
+    }
+
+    // ── An account's groups ─────────────────────────────────────────────────
+
+    public static string MemberOf(IDirectorySession session, DirectorySource source, string name, string? type, bool nested, int limit) =>
+        DirectoryRender.ForModel(MemberOfAnswer(session, source, name, type, nested, limit));
+
+    /// <summary>
+    /// The groups an account is in (2026-11-12, the memberof plan, the user's report: a heavily nested user's groups came back short — the user
+    /// card lists 200, its nesting is <c>tokenGroups</c>' security groups alone, and its <c>memberOf</c> only the first range): its whole
+    /// <c>memberOf</c> by range retrieval and its primary group, and with <paramref name="nested"/> every group above them by <see cref="WalkUp"/>,
+    /// security and distribution alike, each with the group it comes through; every one read (up to <paramref name="cap"/>), sorted by account,
+    /// the first <paramref name="limit"/> listed. A user, a group, a computer or a service account: <paramref name="type"/> one of
+    /// <see cref="MemberOfTypes"/>, or none (kind by kind, users first, other kinds of the same name said in a note); by <paramref name="dn"/> for
+    /// the card's buttons.
+    /// </summary>
+    public static DirectoryAnswer MemberOfAnswer(IDirectorySession session, DirectorySource source, string name, string? type, bool nested, int limit, TimeZoneInfo? zone = null,
+        DirectoryDeadline deadline = default, bool canSave = false, string? dn = null, int cap = DirectoryLimits.MaxCounted)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        zone ??= TimeZoneInfo.Utc;
+        string baseDn = source.Domain.BaseDn;
+        DirectoryEntry? account = null;
+        var also = new List<string>();
+        if (dn is not null)
+        {
+            (account, _) = OneOf(session, baseDn, LdapFilter.ByDn(LdapFilter.MemberOfKinds, dn), AdAttributes.MemberOfAccount, deadline.Limit);
+            if (account is null)
+            {
+                return DirectoryAnswer.Refused(DirectoryText.Gone(name, source.Where));
+            }
+        }
+        else
+        {
+            foreach (string filter in MemberOfLookups(name, type, source.Domain.DomainName))
+            {
+                var (found, candidates) = OneOf(session, baseDn, filter, AdAttributes.MemberOfAccount, deadline.Limit);
+                if (account is null)
+                {
+                    if (found is not null)
+                    {
+                        account = found;
+                    }
+                    else if (candidates.Count > 0)
+                    {
+                        return Ambiguous(name, candidates);
+                    }
+
+                    continue;
+                }
+
+                // Said, never chosen silently (the plan's pass 19: a person's own group of the same name made the common question ambiguous).
+                if ((found ?? candidates.FirstOrDefault()) is { } other && TypeWord(other) is { } word && !also.Contains(word))
+                {
+                    also.Add(word);
+                }
+            }
+
+            if (account is null)
+            {
+                return DirectoryAnswer.Refused(DirectoryText.NotFound(type is null ? "account" : type == "service" ? AdValues.KindServiceAccount : type, name, source.Where));
+            }
+        }
+
+        string head = HeadOf(session, source.Domain);
+        string accountName = account.Text("sAMAccountName") ?? Display(account);
+        var (direct, directPartial) = account.ValuesOrFirstRange("memberOf");
+        bool cutDirect = false;
+        bool stoppedDirect = false;
+        if (directPartial)
+        {
+            // Past the server's MaxValRange: read whole by range retrieval, not the first 1,500 alone.
+            var (all, truncated, timedOut, _) = MembersOf(session, account.Dn, cap, deadline, "memberOf");
+            direct = all;
+            cutDirect = truncated;
+            stoppedDirect = timedOut;
+        }
+
+        string? primaryDn = PrimaryGroupOf(session, baseDn, account, deadline)?.Dn;
+        var walk = WalkUp(session, baseDn, head, account.Dn, direct, primaryDn, nested, cap, deadline);
+        walk.Cut |= cutDirect;
+        walk.TimedOut |= stoppedDirect;
+        var listed = walk.Groups.Values.OrderBy(g => g.SortKey, StringComparer.OrdinalIgnoreCase).ToList();
+        int total = listed.Count;
+        int directCount = listed.Count(g => g.Direct);
+        int primaryCount = listed.Count(g => !g.Direct && g.Primary);
+        int through = total - directCount - primaryCount;
+        string count = total.ToString("N0", CultureInfo.InvariantCulture) + (walk.Cut ? "+" : "");
+        string paren = nested
+            ? " (" + directCount.ToString("N0", CultureInfo.InvariantCulture) + " direct" + (primaryCount > 0 ? ", " + primaryCount.ToString("N0", CultureInfo.InvariantCulture) + " by primary group" : "")
+                + ", " + through.ToString("N0", CultureInfo.InvariantCulture) + " through other groups)"
+            : primaryCount > 0 ? " (" + directCount.ToString("N0", CultureInfo.InvariantCulture) + " in its member-of list, " + primaryCount.ToString("N0", CultureInfo.InvariantCulture) + " by primary group)" : "";
+        string kind = AdValues.KindOf(account.Texts("objectClass"));
+        var answer = Start("memberof", deadline.Now, zone);
+        answer.Self = new DirectoryRowTarget(account.Dn, accountName);
+        answer.Partial = walk.Cut || walk.TimedOut;
+        answer.Head = $"Groups of {kind} {Plain(accountName)} in {source.Where}: {count} group" + (total == 1 ? "" : "s") + ", " + (nested ? "nested" : "direct") + paren
+            + (total > limit ? "; " + DirectoryText.FirstGroupsListed(limit, canSave) : "")
+            + (walk.Cut ? "; " + DirectoryText.CapNote(cap, false) : "")
+            + (walk.TimedOut ? "; " + DirectoryText.StoppedAtTimeLimit : "");
+        var table = new DirectoryTable([new(DirectoryText.ColName, Flexible: true), new(DirectoryText.ColType), new(DirectoryText.ColAccount), new(DirectoryText.ColVia, Flexible: true)])
+        {
+            Shown = limit,
+            CutReserve = 600,
+            CutNote = DirectoryText.MoreGroups,
+        };
+        foreach (var g in listed)
+        {
+            string groupKind = g.Entry is { } e ? (AdValues.Integer(e.Text("groupType")) is { } groupType ? AdValues.GroupKind(groupType) : AdValues.KindOf(e.Texts("objectClass"))) : g.State ?? DirectoryText.NotRead;
+            string? groupAccount = g.Entry?.Text("sAMAccountName");
+            string? via = g.Direct ? (nested ? DirectoryText.DirectWord : null)
+                : g.Primary ? DirectoryText.PrimaryGroupWord
+                : g.Via.Count > 0 ? g.Via[0] + (g.Via.Count > 1 ? " +" + (g.Via.Count - 1).ToString(CultureInfo.InvariantCulture) : "") : null;
+            // Compact (the plan's pass 20): the account only where it is not the name, so the default 200 rows fit the model's 16,000 characters.
+            string line = Fence(g.Name) + " (" + groupKind + (groupAccount is not null && !string.Equals(groupAccount, g.Name, StringComparison.OrdinalIgnoreCase) ? " " + Plain(groupAccount) : "")
+                + (!g.Direct && g.Primary ? ", " + DirectoryText.PrimaryGroupWord : "") + ")"
+                + (g.Direct ? (nested ? " " + DirectoryText.DirectWord : "")
+                    : g.Primary ? ""
+                    : g.Via.Count > 0 ? " via " + Fence(g.Via[0]) + (g.Via.Count > 1 ? " +" + (g.Via.Count - 1).ToString(CultureInfo.InvariantCulture) : "") : "");
+            table.Rows.Add(new DirectoryRow(line, [g.Name, groupKind, groupAccount, via], g.Dn, g.Name, Opens: g.Entry is not null));
+        }
+
+        answer.Tables.Add(table);
+        if (also.Count > 0)
+        {
+            answer.Notes.Add(DirectoryText.AlsoNamed(name, also));
+        }
+
+        if (listed.Any(g => g.State == DirectoryText.OtherDomain))
+        {
+            answer.Notes.Add(DirectoryText.OtherDomainGroupsNote);
+        }
+
+        return answer;
+    }
+
+    /// <summary>
+    /// The searches that find the account a name means: the one <paramref name="type"/> names, or (none) users, then groups, then computers and
+    /// service accounts — the first kind with a match answers, the later ones only say they share the name.
+    /// </summary>
+    private static IEnumerable<string> MemberOfLookups(string name, string? type, string? domainName) => type switch
+    {
+        "user" => [LdapFilter.UserByName(name, domainName)],
+        "group" => [LdapFilter.GroupByName(name, domainName)],
+        "computer" => ["(&" + LdapFilter.Computers + LdapFilter.ComputerByName(name) + ")"],
+        "service" => ["(&" + LdapFilter.ServiceAccounts + LdapFilter.ComputerByName(name) + ")"],
+        _ => [LdapFilter.UserByName(name, domainName), LdapFilter.GroupByName(name, domainName), LdapFilter.ComputerByName(name)],
+    };
+
+    /// <summary>An entry's kind as <see cref="MemberOfTypes"/> words it; null for another.</summary>
+    private static string? TypeWord(DirectoryEntry entry) => AdValues.KindOf(entry.Texts("objectClass")) switch
+    {
+        "user" => "user",
+        "group" => "group",
+        "computer" => "computer",
+        AdValues.KindServiceAccount => "service",
+        _ => null,
+    };
+
+    /// <summary>One group an upward walk found: its entry once resolved, how the account is in it (direct, by primary group, through which groups), or why it is unread.</summary>
+    private sealed class UpGroup(string dn)
+    {
+        public string Dn { get; } = dn;
+
+        public DirectoryEntry? Entry { get; set; }
+
+        /// <summary>Why it has no entry: not read, not readable, or in another domain.</summary>
+        public string? State { get; set; }
+
+        public bool Direct { get; set; }
+
+        public bool Primary { get; set; }
+
+        /// <summary>The groups below it in the walk whose <c>memberOf</c> holds it, in the walk's order (the first is its "via").</summary>
+        public List<string> Via { get; } = [];
+
+        public string Name => Entry is { } e ? Display(e) : AdValues.FirstName(Dn);
+
+        public string SortKey => Entry?.Text("sAMAccountName") ?? Name;
+    }
+
+    private sealed class UpWalk
+    {
+        public Dictionary<string, UpGroup> Groups { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+        public bool Cut { get; set; }
+
+        public bool TimedOut { get; set; }
+    }
+
+    /// <summary>
+    /// The groups above an object, walked up (2026-11-12, the memberof plan): breadth first from its direct groups (and its primary group), the
+    /// unread ones resolved 50 at a time by <see cref="LdapFilter.ByDns"/> as <see cref="Walk"/> resolves members (§0's spike: a batch of 50 DNs
+    /// 4 ms on Samba), each read with its own <c>memberOf</c> — the next step up, read whole by range retrieval when the server sent only its
+    /// first range. A visited set ends cycles, and <paramref name="self"/> (a group's own card) is never one of its groups. Without
+    /// <paramref name="nested"/>, the start alone, resolved for names and types. At most <paramref name="cap"/> groups (<c>Cut</c> past it); every
+    /// search checks <paramref name="deadline"/> first. A DN that did not resolve is "not read" when its batch's search was cut or ran out of time,
+    /// "in another domain" by its domain part against <paramref name="head"/>'s, else "not readable" — <see cref="Walk"/>'s rule; one in another
+    /// domain is never walked further.
+    /// </summary>
+    private static UpWalk WalkUp(IDirectorySession session, string baseDn, string head, string self, IReadOnlyList<string> direct, string? primaryDn, bool nested, int cap, DirectoryDeadline deadline)
+    {
+        var result = new UpWalk();
+        var frontier = new List<string>();
+        bool Take(string dn, out UpGroup group)
+        {
+            if (result.Groups.TryGetValue(dn, out group!))
+            {
+                return true;
+            }
+
+            if (result.Groups.Count >= cap)
+            {
+                result.Cut = true;
+                return false;
+            }
+
+            group = new UpGroup(dn);
+            result.Groups[dn] = group;
+            frontier.Add(dn);
+            return true;
+        }
+
+        foreach (string dn in direct)
+        {
+            if (!string.Equals(dn, self, StringComparison.OrdinalIgnoreCase) && Take(dn, out var group))
+            {
+                group.Direct = true;
+            }
+        }
+
+        if (primaryDn is not null && Take(primaryDn, out var primary))
+        {
+            primary.Primary = true;
+        }
+
+        while (frontier.Count > 0)
+        {
+            var round = frontier.ToList();
+            frontier.Clear();
+            foreach (var batch in round.Chunk(DirectoryLimits.SidBatch))
+            {
+                if (!deadline.CanStart)
+                {
+                    result.TimedOut = true;
+                    MarkUnread(result, batch, whole: false, head);
+                    continue;
+                }
+
+                var found = session.Search(baseDn, DirectoryScope.Subtree, LdapFilter.ByDns(batch), AdAttributes.MemberOfWalk, batch.Length + 10, paged: false, deadline.Limit);
+                result.TimedOut |= found.TimedOut;
+                foreach (var e in found.Entries)
+                {
+                    if (!result.Groups.TryGetValue(e.Dn, out var group) || group.Entry is not null)
+                    {
+                        continue;
+                    }
+
+                    group.Entry = e;
+                    if (!nested)
+                    {
+                        continue;
+                    }
+
+                    var (parents, ranged) = e.ValuesOrFirstRange("memberOf");
+                    if (ranged && deadline.CanStart)
+                    {
+                        var (all, truncated, timedOut, _) = MembersOf(session, e.Dn, cap, deadline, "memberOf");
+                        parents = all;
+                        result.Cut |= truncated;
+                        result.TimedOut |= timedOut;
+                    }
+
+                    foreach (string parent in parents)
+                    {
+                        if (string.Equals(parent, self, StringComparison.OrdinalIgnoreCase))
+                        {
+                            continue;
+                        }
+
+                        if (Take(parent, out var above))
+                        {
+                            above.Via.Add(Display(e));
+                        }
+                    }
+                }
+
+                MarkUnread(result, batch, whole: !found.TimedOut && !found.Truncated, head);
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>A batch's groups that did not resolve, each with why (<see cref="Walk"/>'s rule, 2026-10-23 D7 and Q9).</summary>
+    private static void MarkUnread(UpWalk result, IEnumerable<string> batch, bool whole, string head)
+    {
+        foreach (string dn in batch)
+        {
+            var group = result.Groups[dn];
+            if (group.Entry is null)
+            {
+                group.State = !whole ? DirectoryText.NotRead : AdValues.SameDomain(dn, head) ? DirectoryText.NotReadable : DirectoryText.OtherDomain;
+            }
         }
     }
 
@@ -760,7 +1059,12 @@ public static class DirectoryQueries
         return (dns, truncated);
     }
 
-    private static (IReadOnlyList<string> Dns, bool Truncated, bool TimedOut, int Searches) MembersOf(IDirectorySession session, string groupDn, int limit, DirectoryDeadline deadline)
+    /// <summary>
+    /// An object's values of a linked attribute by range retrieval: a group's <c>member</c>, or (2026-11-12, the memberof plan) an account's or a
+    /// group's <c>memberOf</c>, read past the server's MaxValRange. The option is written lower case: Samba's <c>ranged_results</c> parses only
+    /// that (Samba bug 11838).
+    /// </summary>
+    private static (IReadOnlyList<string> Dns, bool Truncated, bool TimedOut, int Searches) MembersOf(IDirectorySession session, string groupDn, int limit, DirectoryDeadline deadline, string attribute = "member")
     {
         var dns = new List<string>();
         int from = 0;
@@ -773,15 +1077,15 @@ public static class DirectoryQueries
             }
 
             searches++;
-            var read = session.Search(groupDn, DirectoryScope.Base, "(objectClass=*)", ["member;range=" + from.ToString(CultureInfo.InvariantCulture) + "-*"], 1, paged: false, deadline.Limit);
+            var read = session.Search(groupDn, DirectoryScope.Base, "(objectClass=*)", [attribute + ";range=" + from.ToString(CultureInfo.InvariantCulture) + "-*"], 1, paged: false, deadline.Limit);
             if (read.Entries.Count == 0)
             {
                 return (dns, false, false, searches);
             }
 
             var entry = read.Entries[0];
-            string? ranged = entry.RangedName("member");
-            var values = ranged is null ? entry.Values("member") : entry.Attributes[ranged];
+            string? ranged = entry.RangedName(attribute);
+            var values = ranged is null ? entry.Values(attribute) : entry.Attributes[ranged];
             dns.AddRange(values.Select(v => Encoding.UTF8.GetString(v)));
             bool ended = ranged is null || ranged.EndsWith("-*", StringComparison.Ordinal);
             // Truncated only when members are left (2026-10-23, the admin review's Q11: exactly the cap read "N+", a partial answer).
@@ -1089,6 +1393,7 @@ public static class DirectoryQueries
         if (memberOfPartial)
         {
             answer.Notes.Add(DirectoryText.FirstRangeNote);
+            answer.Notes.Add(DirectoryText.MemberOfPointer);
         }
 
         var groups = memberOf.Select(g => (Name: AdValues.FirstName(g), Dn: g)).ToList();

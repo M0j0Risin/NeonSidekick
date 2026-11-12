@@ -137,6 +137,51 @@ public partial class ChatScreenTests
         Assert.Contains("3 users, nested (2 direct, 1 through other groups)", output);
     }
 
+    /// <summary>
+    /// A user card's <c>g</c> opens its groups' card on the trail (2026-11-12, the memberof plan); that card's <c>n</c> reads it again nested in
+    /// place; ESC goes back to the user, then closes.
+    /// </summary>
+    [Fact]
+    public async Task Ad_AUsersCardsG_OpensItsGroups_AndTheirN_SwitchesNested()
+    {
+        AdFixture();
+        StepsWhenIdle(
+            Line("/ad user dave"),
+            Key(Keys.Char('g')),
+            Key(Keys.Char('n')),
+            Key(Keys.Escape),   // back to dave's card
+            Key(Keys.Escape),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(DirectoryText.AllGroupsButton, output);
+        Assert.Contains(DirectoryText.Glyph + " Directory · " + DirectoryCommand.DescribeMemberOf("dave", false) + " ‹ the user dave", output);
+        Assert.Contains(DirectoryText.Glyph + " Directory · " + DirectoryCommand.DescribeMemberOf("dave", true) + " ‹ the user dave", output);
+        Assert.Contains("Groups of user dave in lab.example: 1 group, direct", output);
+        Assert.Contains("Groups of user dave in lab.example: 2 groups, nested (1 direct, 1 through other groups)", output);
+        Assert.Empty(_chat.Requests);
+    }
+
+    /// <summary>A memberof card's row opens that group's card by its DN (2026-11-12, the memberof plan).</summary>
+    [Fact]
+    public async Task Ad_AMemberOfCardsRow_OpensTheGroup()
+    {
+        AdFixture();
+        int inner = AdRow(AdCard((s, src) => DirectoryQueries.MemberOfAnswer(s, src, "dave", null, false, DirectoryLimits.MaxEntries)), AdInner);
+        StepsWhenIdle(
+            Line("/ad memberof dave"),
+            AdDoubleClick(inner),
+            Key(Keys.Escape),
+            Key(Keys.Escape),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains("Group Inner in lab.example: 1 member, direct", output);
+        Assert.Contains(_directorySystem!.Filters, f => f == "(distinguishedName=" + LdapFilter.Escape(AdInner) + ")");
+    }
+
     [Fact]
     public async Task Ad_ACardTypedNestedAndUsersOnly_NamesItsButtonsDirectAndAllMembers()
     {

@@ -301,6 +301,12 @@ public sealed class FakeDirectorySystem : IDirectorySystem
     /// <summary>A search whose filter this says yes to times out at once with nothing read (2026-10-23, the redacted scan's deadline).</summary>
     public Func<string, bool>? TimesOut { get; set; }
 
+    /// <summary>
+    /// The server's MaxValRange, opt-in (2026-11-12, the memberof plan): a plain read of an attribute with more values than this comes back as
+    /// <c>attr;range=0-(N-1)</c> with the first N, as a real DC answers past 1,500; null (the default) hands every value back, as Samba does.
+    /// </summary>
+    public int? MaxValRange { get; set; }
+
     public int? FailWith { get; set; }
 
     /// <summary>The message <see cref="FailWith"/>'s exception carries (the NTLM-blocked 0x31 is told apart by it).</summary>
@@ -399,7 +405,7 @@ public sealed class FakeDirectorySystem : IDirectorySystem
                 var picked = new Dictionary<string, IReadOnlyList<byte[]>>(StringComparer.OrdinalIgnoreCase);
                 foreach (string attribute in attributes)
                 {
-                    if (attribute.StartsWith("member;range=", StringComparison.OrdinalIgnoreCase))
+                    if (attribute.Contains(";range=", StringComparison.OrdinalIgnoreCase))
                     {
                         Ranged(map, attribute, picked);
                         continue;
@@ -407,7 +413,14 @@ public sealed class FakeDirectorySystem : IDirectorySystem
 
                     if (map.TryGetValue(attribute, out var values))
                     {
-                        picked[attribute] = values;
+                        if (owner.MaxValRange is { } most && values.Count > most)
+                        {
+                            picked[attribute + ";range=0-" + (most - 1).ToString(System.Globalization.CultureInfo.InvariantCulture)] = values.Take(most).ToList();
+                        }
+                        else
+                        {
+                            picked[attribute] = values;
+                        }
                     }
                     else if (string.Equals(attribute, "canonicalName", StringComparison.OrdinalIgnoreCase) && Domain(dn) is { Length: > 0 } domain)
                     {
@@ -434,18 +447,29 @@ public sealed class FakeDirectorySystem : IDirectorySystem
             return at < 0 ? "" : dn[at..];
         }
 
-        /// <summary>Range retrieval in pages of 2, so a test of four members walks two ranges.</summary>
+        /// <summary>
+        /// Range retrieval in pages of 2, so a test of four members walks two ranges: any attribute (<c>member</c>, and <c>memberOf</c> since
+        /// 2026-11-12), the option matched lower case only, as Samba's <c>ranged_results</c> does (bug 11838).
+        /// </summary>
         private static void Ranged(Dictionary<string, List<byte[]>> map, string attribute, Dictionary<string, IReadOnlyList<byte[]>> picked)
         {
-            if (!map.TryGetValue("member", out var all))
+            int at = attribute.IndexOf(";range=", StringComparison.Ordinal);
+            if (at <= 0)
             {
                 return;
             }
 
-            int from = int.Parse(attribute["member;range=".Length..attribute.IndexOf('-', StringComparison.Ordinal)], System.Globalization.CultureInfo.InvariantCulture);
+            string name = attribute[..at];
+            if (!map.TryGetValue(name, out var all))
+            {
+                return;
+            }
+
+            string range = attribute[(at + ";range=".Length)..];
+            int from = int.Parse(range[..range.IndexOf('-', StringComparison.Ordinal)], System.Globalization.CultureInfo.InvariantCulture);
             var page = all.Skip(from).Take(2).ToList();
             bool last = from + page.Count >= all.Count;
-            picked["member;range=" + from + "-" + (last ? "*" : (from + page.Count - 1).ToString(System.Globalization.CultureInfo.InvariantCulture))] = page;
+            picked[name + ";range=" + from + "-" + (last ? "*" : (from + page.Count - 1).ToString(System.Globalization.CultureInfo.InvariantCulture))] = page;
         }
     }
 

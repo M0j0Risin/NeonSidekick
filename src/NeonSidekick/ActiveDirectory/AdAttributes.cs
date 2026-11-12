@@ -37,6 +37,21 @@ public static class AdAttributes
         "sAMAccountName", "displayName", "cn", "objectClass", "objectSid", "groupType",
     ];
 
+    /// <summary>
+    /// The account whose groups <c>ad_memberof</c> lists (2026-11-12, the memberof plan): its names and kind, its direct groups, and what finds
+    /// its primary group (the RID and its own SID's domain).
+    /// </summary>
+    public static readonly IReadOnlyList<string> MemberOfAccount =
+    [
+        "sAMAccountName", "cn", "displayName", "objectClass", "memberOf", "primaryGroupID", "objectSid",
+    ];
+
+    /// <summary>A group as the upward walk resolves it, 50 at a time: its names, type and its own groups (the next step up).</summary>
+    public static readonly IReadOnlyList<string> MemberOfWalk =
+    [
+        "sAMAccountName", "cn", "displayName", "objectClass", "groupType", "memberOf", "objectSid",
+    ];
+
     public static readonly IReadOnlyList<string> Computer =
     [
         "sAMAccountName", "cn", "dNSHostName", "operatingSystem", "operatingSystemVersion", "operatingSystemServicePack", "userAccountControl",

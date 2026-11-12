@@ -131,7 +131,7 @@ internal sealed partial class ChatScreen
         [new TaskListTool(access, effective), new TaskInfoTool(access, effective), new TaskControlTool(access, effective, confirm)];
 
     /// <summary>
-    /// The six directory tools, every one a read of the directory; <c>ad_group</c>, <c>ad_find</c> and <c>ad_ou</c> may save a list as a CSV in the
+    /// The seven directory tools, every one a read of the directory; <c>ad_group</c>, <c>ad_memberof</c> (2026-11-12), <c>ad_find</c> and <c>ad_ou</c> may save a list as a CSV in the
     /// working directory (2026-10-15, the AD gaps plan), asking <paramref name="saveRoot"/> per call; the twins never save (R16: the twins are
     /// <see cref="RedactedTwins.Of"/>'s).
     /// </summary>
@@ -139,6 +139,7 @@ internal sealed partial class ChatScreen
     [
         new AdUserTool(access),
         new AdGroupTool(access, saveRoot: saveRoot),
+        new AdMemberOfTool(access, saveRoot: saveRoot),
         new AdComputerTool(access),
         new AdFindTool(access, saveRoot: saveRoot),
         new AdOuTool(access, saveRoot: saveRoot),
@@ -204,7 +205,7 @@ internal sealed partial class ChatScreen
 
     public static readonly IReadOnlySet<string> DirectoryToolNames = new HashSet<string>(StringComparer.Ordinal)
     {
-        AdUserTool.ToolName, AdGroupTool.ToolName, AdComputerTool.ToolName, AdFindTool.ToolName, AdOuTool.ToolName, AdDomainTool.ToolName,
+        AdUserTool.ToolName, AdGroupTool.ToolName, AdMemberOfTool.ToolName, AdComputerTool.ToolName, AdFindTool.ToolName, AdOuTool.ToolName, AdDomainTool.ToolName,
     };
 
     // ── When each is offered ────────────────────────────────────────────────
@@ -682,7 +683,8 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// <c>/ad [line]</c> (2026-10-15; the AD gaps plan the same day): the answer as a card in columns on the info pane with copy, ask and — on a
     /// locked user whose PDC emulator is a ticked event-log computer — "Search 4740 on &lt;PDC&gt;"; on a group card <c>n</c> (direct ⇄ nested) and
-    /// <c>u</c> (all members ⇄ users only), read again in place; a double-click on a row opens that object's card by its DN in the same domain, and
+    /// <c>u</c> (all members ⇄ users only), read again in place; on a user's, a group's or a computer's <c>g</c>, its groups' card (2026-11-12, the
+    /// memberof plan), whose own <c>n</c> switches direct and nested; a double-click on a row opens that object's card by its DN in the same domain, and
     /// ESC goes back to the card before, drawn from the trail without asking the directory again. A name several accounts share is a card of
     /// the candidates. Without the pane, or from the Web UI's page, its lines (the card unbounded).
     /// </summary>
@@ -722,6 +724,17 @@ internal sealed partial class ChatScreen
                 actions.Add(new InfoAction(card.Members == "users" ? DirectoryText.AllMembersButton : DirectoryText.UsersOnlyButton, 'u', DirectoryText.MembersWord));
             }
 
+            if (answer is { Kind: "memberof", Failed: false, Self: not null })
+            {
+                actions.Add(new InfoAction(card.Nested ? DirectoryText.DirectButton : DirectoryText.NestedButton, 'n', DirectoryText.NestingWord));
+            }
+
+            // A service account's card is a computer's (ComputerAnswer).
+            if (answer is { Kind: "user" or "group" or "computer", Failed: false, Self: not null })
+            {
+                actions.Add(new InfoAction(DirectoryText.AllGroupsButton, 'g', DirectoryText.AllGroupsWord));
+            }
+
             string title = DirectoryText.Glyph + " Directory · " + card.Title + (stack.Count > 1 ? " ‹ " + stack[^2].Title : "");
             var tab = new InfoTab(card.Title, () => view) { LineChosen = (index, _) => (chosen = view.TargetAt(index)) is not null };
             await _info.ShowAsync(title, [tab], 0, cancellationToken, actions).ConfigureAwait(false);
@@ -759,6 +772,32 @@ internal sealed partial class ChatScreen
                 case 's':
                     await HandleEventLogAsync(DirectoryCommand.LockoutLine(lockoutOn!), sink, cancellationToken, onWatcher).ConfigureAwait(false);
                     return;
+                case 'g':
+                    var groups = await Read(() => DirectoryCommand.MemberOfAsync(_directory, card.Result.Domain, answer.Self!, false, cancellationToken)).ConfigureAwait(false);
+                    if (groups.Answer is null || groups.Failed)
+                    {
+                        sink.Notice(string.Join(' ', groups.Lines));
+                        continue;
+                    }
+
+                    if (stack.Count >= AdTrail)
+                    {
+                        stack.RemoveAt(0);
+                    }
+
+                    stack.Add(new AdCard(groups, groups.Title ?? DirectoryCommand.DescribeMemberOf(answer.Self!.Name, false), false, "all"));
+                    continue;
+                case 'n' when answer.Kind == "memberof":
+                    bool deeper = !card.Nested;
+                    var regrouped = await Read(() => DirectoryCommand.MemberOfAsync(_directory, card.Result.Domain, answer.Self!, deeper, cancellationToken)).ConfigureAwait(false);
+                    if (regrouped.Answer is null || regrouped.Failed)
+                    {
+                        sink.Notice(string.Join(' ', regrouped.Lines));
+                        continue;
+                    }
+
+                    stack[^1] = new AdCard(regrouped, regrouped.Title ?? card.Title, deeper, "all");
+                    continue;
                 case 'n':
                 case 'u':
                     bool nested = _info.Pressed.Key == 'n' ? !card.Nested : card.Nested;
