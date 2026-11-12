@@ -184,7 +184,7 @@ public class ItemOrderTests
         Assert.Equal(["a", "divider:1", "b"], added.Left);
         Assert.Equal(1, at);
 
-        Assert.Equal([ToolbarItems.Sessions, "divider:1", ToolbarItems.Usage, ToolbarItems.Memory], ToolbarItems.DefaultOrder.SkipWhile(id => id != ToolbarItems.Sessions).Take(4));   // ahead of 📊 since 2026-11-07 (the user's ask: 📊 on, right of the first divider); ahead of 💾 from later still on 2026-10-13
+        Assert.Equal([ToolbarItems.Sessions, ToolbarItems.Midi, "divider:1", ToolbarItems.Usage, ToolbarItems.Memory], ToolbarItems.DefaultOrder.SkipWhile(id => id != ToolbarItems.Sessions).Take(5));   // 🎹 after 💬 since 2026-11-12 (the user's ask); ahead of 📊 since 2026-11-07 (the user's ask: 📊 on, right of the first divider); ahead of 💾 from later still on 2026-10-13
         string[] memoryOn = [.. ToolbarItems.DefaultOrder.SkipWhile(id => id != ToolbarItems.Memory).Take(5)];
         Assert.Equal([ToolbarItems.Memory, ToolbarItems.Prompts, ToolbarItems.Queue, "divider:2", ToolbarItems.Ask], memoryOn);   // ⏳ ahead of the divider since 2026-10-13, 📣 after 💾 since 2026-10-14
         Assert.Equal([ToolbarItems.Shell, "divider:3", ToolbarItems.Files], ToolbarItems.DefaultOrder.SkipWhile(id => id != ToolbarItems.Shell).Take(3));

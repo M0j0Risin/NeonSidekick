@@ -571,8 +571,8 @@ public class EmbeddedModelsTests : IDisposable
         await service.StartAsync(_model, new AppSettingsData { EmbeddedVramBudget = 90 }, null, CancellationToken.None);
         await service.StartAsync(_model, new AppSettingsData { EmbeddedVramBudget = 95 }, null, CancellationToken.None);
         await service.StartAsync(_model, new AppSettingsData { EmbeddedVramBudget = EmbeddedVramBudget.Off }, null, CancellationToken.None);
-        await service.StartAsync(_model, new AppSettingsData(), null, CancellationToken.None);   // 92 %, the default since 2026-11-06
-        Assert.Equal(new int?[] { 819, 410, null, 655 }, host.Launches.Select(l => l.FitTargetMiB));
+        await service.StartAsync(_model, new AppSettingsData(), null, CancellationToken.None);   // 89 %, the default since 2026-11-12 (92 % from 2026-11-06, 655 MiB)
+        Assert.Equal(new int?[] { 819, 410, null, 901 }, host.Launches.Select(l => l.FitTargetMiB));
         Assert.NotEqual(host.Launches[0], host.Launches[1]);   // a budget change restarts the server
 
         // No GPU memory read: llama.cpp's own margin. The CPU backend: no fit target at all.

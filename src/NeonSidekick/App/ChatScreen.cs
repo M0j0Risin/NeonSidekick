@@ -2047,6 +2047,16 @@ internal sealed partial class ChatScreen
     public const string CommandsToolLine = CustomCommandText.Word;
 
     /// <summary>
+    /// The MIDI item (2026-11-12, the user's ask): the area's own 🎹 (<see cref="NeonSidekick.Midi.MidiText.Glyph"/>, the pane's title wears it),
+    /// right after 💬 and off by default; on the dark slab while <c>MIDI input</c> is off, as 📱 under the Web UI off. A double-click runs
+    /// <see cref="MidiToolLine"/>. Pinned.
+    /// </summary>
+    public const string MidiToolGlyph = NeonSidekick.Midi.MidiText.Glyph;
+
+    /// <summary>The line the MIDI item runs (2026-11-12): the bare <c>/midi</c>, the pane.</summary>
+    public const string MidiToolLine = NeonSidekick.Midi.MidiCommand.Word;
+
+    /// <summary>
     /// The shopping list's item (2026-10-11, the user's ask): a cart, <see cref="ShoppingToolLine"/>, the list's checklist pane — a pane like
     /// 📺's, after it; the Shopping tools switch's glyph after the printer earlier that day, whose page <c>/tools shopping</c> still opens. Pinned.
     /// </summary>
@@ -2114,7 +2124,7 @@ internal sealed partial class ChatScreen
     /// Whether item <paramref name="id"/> is drawn on the off slab under <paramref name="shown"/> (2026-10-03, the user's ask: a
     /// dark slab behind the glyph, the one look that reads on a colour emoji): a tool switch that is off, the shell under the
     /// policy <c>off</c>, the disk while Memory mode is disabled (later that day, the user's ask: the disk no longer gone while it is),
-    /// the hourglass while Queue mode is disabled (2026-10-13), the phone while the Web UI is off (2026-10-14), the mortarboard while
+    /// the hourglass while Queue mode is disabled (2026-10-13), the phone while the Web UI is off (2026-10-14), the keyboard while MIDI input is off (2026-11-12), the mortarboard while
     /// <c>Agent skills</c> is off and the tools while <paramref name="noToolsOffered"/> (2026-10-16, the user's ask: <c>/tools</c>' Offered tab
     /// offers no tool at all, <see cref="ToolsText.NoneOffered"/>, which the screen works out and hands in); never any other item. Pinned.
     /// </summary>
@@ -2138,6 +2148,12 @@ internal sealed partial class ChatScreen
         {
             // 2026-10-14, the user's ask: the phone on the slab while the Web UI is off, as a tool switch's glyph.
             return !shown.WebUi;
+        }
+
+        if (id == ToolbarItems.Midi)
+        {
+            // 2026-11-12, the user's ask: the keyboard on the slab while MIDI input is off, as the phone under the Web UI off.
+            return !shown.MidiInput;
         }
 
         if (id == ToolbarItems.Memory)
@@ -2201,7 +2217,7 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// The hint row's note for one click on toolbar glyph <paramref name="glyph"/> under <paramref name="shown"/> (2026-10-04, the UI
     /// review; <see cref="ToolbarItems.Note"/>): the shell and the lock the policy, the officer its switch, the disk Memory mode, the
-    /// hourglass Queue mode (2026-10-13), a tool switch on or off, the mortarboard <c>Agent skills</c> on or off and the tools
+    /// hourglass Queue mode (2026-10-13), the keyboard MIDI input on or off (2026-11-12), a tool switch on or off, the mortarboard <c>Agent skills</c> on or off and the tools
     /// <see cref="ToolbarItems.NoneOfferedState"/> while <paramref name="noToolsOffered"/> (2026-10-16), a pane or a window its name alone; null
     /// for a glyph that is no item's. Pure; pinned.
     /// </summary>
@@ -2222,6 +2238,7 @@ internal sealed partial class ChatScreen
             ToolbarItems.Memory => MemoryMode.Name(memory),
             ToolbarItems.Queue => QueueMode.Name(SavedQueueMode(shown)),   // 2026-10-13
             ToolbarItems.WebUi => shown.WebUi ? ToolbarItems.OnWord : ToolbarItems.OffWord,   // 2026-10-14
+            ToolbarItems.Midi => shown.MidiInput ? ToolbarItems.OnWord : ToolbarItems.OffWord,   // 2026-11-12
             ToolbarItems.Skills => shown.AgentSkills ? ToolbarItems.OnWord : ToolbarItems.OffWord,   // 2026-10-16
             ToolbarItems.Tools => noToolsOffered ? ToolbarItems.NoneOfferedState : null,   // 2026-10-16: its name alone while a tool is offered
             _ when ToolsText.SwitchField(id) is not null => ToolbarItemOff(id, shown, eventLogsHere: eventLogsHere, directoryHere: directoryHere) ? ToolbarItems.OffWord : ToolbarItems.OnWord,
@@ -2693,6 +2710,7 @@ internal sealed partial class ChatScreen
         BrowserLinksToolGlyph => BrowserLinksToolLine,
         PromptsToolGlyph => PromptsToolLine,
         CommandsToolGlyph => CommandsToolLine,
+        MidiToolGlyph => MidiToolLine,   // 2026-11-12: /midi's pane
         ShoppingToolGlyph => ShoppingToolLine,
         _ => null,
     };

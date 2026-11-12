@@ -1820,7 +1820,7 @@ public class AppSettingsTests : IDisposable
         Assert.Null(s.PerformanceBarItems);   // the performance bar (2026-09-29): off, the user's call; no meter checked since the checklist, 2026-09-30; null the four since 2026-10-02, the user's ask
         Assert.Null(s.PerformanceBarLastItems);   // what a bare /perfbar brings back: CPU, RAM, GPU and VRAM until it hides one (2026-09-30)
         Assert.Equal("led", s.PerformanceBarLook);   // the look (later on 2026-09-29); led since 2026-10-02, the user's ask (text before)
-        Assert.Equal(92, s.EmbeddedVramBudget);       // 92 since 2026-11-06 (the user's call; 91 from 2026-09-30, off from later on 2026-09-29)
+        Assert.Equal(89, s.EmbeddedVramBudget);       // 89 since 2026-11-12 (the user's call; 92 from 2026-11-06, 91 from 2026-09-30, off from later on 2026-09-29)
         Assert.Equal("parallel", s.EmbeddedHfDownloadType);   // 2026-09-30, the user's pick
         Assert.Equal(0, s.EmbeddedContextSize);       // fit (later on 2026-09-29; 32768 until then)
         Assert.True(s.ThemedBackground);   // 2026-10-03

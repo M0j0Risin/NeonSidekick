@@ -30,7 +30,8 @@ namespace NeonSidekick.App;
 /// 2026-10-13 (the user's ask) every item is pinned left or right (<see cref="Sides"/> over <see cref="Settings.AppSettingsData.ToolbarRight"/>,
 /// <see cref="RightDefaults"/> the path and the model's name, the row as it was), each side in the order's own order. 🎭 System prompt retired on
 /// 2026-11-07 (the user's ask: <c>/sys</c>' pane folded into <c>/usage</c>, 📊): a saved <c>sys</c> is an unknown word, dropped as <c>perf</c> and
-/// <c>liveview</c> are, so a profile that had 🎭 simply loses it.
+/// <c>liveview</c> are, so a profile that had 🎭 simply loses it. 🎹 MIDI after 💬 on 2026-11-12 (the user's ask, off by default): <c>/midi</c>'s
+/// pane, on the off slab while <c>MIDI input</c> is off.
 /// </summary>
 public static class ToolbarItems
 {
@@ -43,6 +44,7 @@ public static class ToolbarItems
     public const string Skills = "skills";
     public const string Commands = "commands";   // 2026-11-01, the user's ask: 🪄, /commands' pane, right after Skills (on by default since 2026-11-07, the user's ask)
     public const string Sessions = "sessions";
+    public const string Midi = "midi";         // 2026-11-12, the user's ask: 🎹, /midi's pane, right after Sessions, off by default; on the slab while MIDI input is off
     public const string Usage = "usage";
     public const string Memory = "memory";
     public const string Queue = "queue";       // 2026-10-13, the user's ask: ⏳, the /queue pane, after the disk (checked by default)
@@ -97,11 +99,11 @@ public static class ToolbarItems
     /// (the user's ask); Ask between the disk and the lock (2026-10-09, the user's ask); Image after Files (2026-10-10, the user's ask); Advisors after
     /// the Claude Code advisor (later that day, the profile advisors), after Web once that one was retired (later still); Queue after
     /// Memory (2026-10-13, the user's ask); Saved links after YouTube (later that day, the user's ask); Saved prompts after Saved links (later still), after Memory
-    /// since 2026-10-14 (the user's ask); the Web UI after Themes (later that day, the user's ask). Pinned.
+    /// since 2026-10-14 (the user's ask); the Web UI after Themes (later that day, the user's ask); MIDI after Sessions (2026-11-12, the user's ask). Pinned.
     /// </summary>
     public static readonly string[] Names =
     [
-        Settings, Profile, Themes, WebUi, Tools, Mcp, Skills, Commands, Sessions, Usage, Memory, Prompts, Queue, Ask, CmdList, Police,
+        Settings, Profile, Themes, WebUi, Tools, Mcp, Skills, Commands, Sessions, Midi, Usage, Memory, Prompts, Queue, Ask, CmdList, Police,
         Shell, Files, Image, Web, Advisors, Docker, EventLog, Network, Services, Tasks, Directory, Obsidian, Sql, Oracle, MySql, Sqlite, DuckDb, Postgres, Unc, Ha, Comfy, Camera, Print,
         Log, Process, ComfyView, ComfyThumbs, YouTube, BrowserLinks, ShoppingList, Path, Model,
     ];
@@ -133,6 +135,7 @@ public static class ToolbarItems
         Skills => ChatScreen.SkillsToolGlyph,
         Commands => ChatScreen.CommandsToolGlyph,
         Sessions => ChatScreen.SessionsToolGlyph,
+        Midi => ChatScreen.MidiToolGlyph,
         Usage => ChatScreen.UsageToolGlyph,
         Memory => ChatScreen.MemoryToolGlyph,
         Queue => ChatScreen.QueueToolGlyph,
@@ -186,6 +189,7 @@ public static class ToolbarItems
         Skills => "Skills",
         Commands => "Commands",
         Sessions => "Sessions",
+        Midi => "MIDI",
         Usage => "Usage",
         Memory => "Memory",
         Queue => "Queue",
@@ -243,6 +247,7 @@ public static class ToolbarItems
         Skills => "/skills",
         Commands => ChatScreen.CommandsToolLine,
         Sessions => "/sessions",
+        Midi => ChatScreen.MidiToolLine,
         Usage => "/usage",
         Memory => "/memory",
         Queue => SlashCommands.QueueWord,
@@ -340,7 +345,7 @@ public static class ToolbarItems
 
     /// <summary>
     /// The default order, <c>⚙️ 🛠️ 🎓 🪄 │ 📊 💾 📣 ⏳ │ 🙋 🔒 👮 🐚 │ 📁 🖼️ 🌐 📱</c>: <see cref="Names"/> with a divider ahead of Usage, one after
-    /// Queue (ahead of Ask) and one after Shell, numbered from the left; Sessions, when checked, sits left of the first. A divider whose
+    /// Queue (ahead of Ask) and one after Shell, numbered from the left; Sessions and MIDI, when checked, sit left of the first. A divider whose
     /// neighbours are hidden is not drawn (<see cref="ItemOrder.ShownDividers"/>). Pinned.
     /// </summary>
     /// <remarks>

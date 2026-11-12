@@ -44,10 +44,11 @@ internal static class HelpInterface
     public const string ClickLine = "A double-click or a right-click opens it; one click names it on the Hints bar.";
 
     /// <summary>The toolbar's dark backgrounds in one line, for the bar's answer. Pinned.</summary>
-    public const string DarkLine = "A tool switch's icon sits on a dark background while its switch is off; so do 📱 while the Web UI is off, 🎓 while Agent skills is off and 🛠️ while `/tools` offers nothing.";
+    public const string DarkLine = "A tool switch's icon sits on a dark background while its switch is off; so do 📱 while the Web UI is off, 🎹 while MIDI input is off, 🎓 while Agent skills is off and 🛠️ while `/tools` offers nothing.";
 
     // The dark backgrounds that are no tool switch's (2026-10-25, read from ChatScreen.ToolbarItemOff). Pinned.
     public const string DarkWebUi = "while the Web UI is off";
+    public const string DarkMidi = "while MIDI input is off";   // 2026-11-12
     public const string DarkSkills = "while Agent skills is off";
     public const string DarkTools = "while `/tools` offers no tool at all";
     public const string DarkMemory = "while Memory mode is disabled";
@@ -150,6 +151,7 @@ internal static class HelpInterface
     public static string? Dark(string id) => id switch
     {
         ToolbarItems.WebUi => DarkWebUi,
+        ToolbarItems.Midi => DarkMidi,
         ToolbarItems.Skills => DarkSkills,
         ToolbarItems.Tools => DarkTools,
         ToolbarItems.Memory => DarkMemory,

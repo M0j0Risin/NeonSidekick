@@ -625,8 +625,8 @@ public class EmbeddedLlmCoreTests
     [Fact]
     public void VramBudget_IsAMarginOfTheRest_InMiB()
     {
-        Assert.Equal(92, new Settings.AppSettingsData().EmbeddedVramBudget);   // 92 by default since 2026-11-06, the user's call (91 from 2026-09-30, off before that)
-        Assert.Equal(92, EmbeddedVramBudget.Default);
+        Assert.Equal(89, new Settings.AppSettingsData().EmbeddedVramBudget);   // 89 by default since 2026-11-12, the user's call (92 from 2026-11-06, 91 from 2026-09-30, off before that)
+        Assert.Equal(89, EmbeddedVramBudget.Default);
         Assert.Equal(819, EmbeddedVramBudget.FitTargetMiB(8L << 30, 90));   // 8 GiB at 90 %: 819.2 MiB left free
         Assert.Equal(1229, EmbeddedVramBudget.FitTargetMiB(24L << 30, 95));
         Assert.Equal(6144, EmbeddedVramBudget.FitTargetMiB(12L << 30, 50));

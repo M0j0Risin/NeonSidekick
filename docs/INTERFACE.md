@@ -360,6 +360,7 @@ Icons under the status bar (*Tool bar*), each shown while checked there. A click
 | 🛠️ | dark while no tool is offered (*LLM offer tools* off, or all off on `/tools`' Offered tab) | `/tools` |
 | 🎓 | dark while *Agent skills* is off | `/skills` |
 | 📱 | dark while *Web UI* is off | `/webui` |
+| 🎹 | dark while *MIDI input* is off | `/midi` |
 | 💾 | dark while *Memory mode* is `off` | `/memory` |
 | 📣 | always | `/prompts` |
 | ⏳ | dark while *Queue mode* is `off` | `/queue` |

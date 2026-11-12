@@ -12271,7 +12271,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("⚙️ 🔓", ChatScreen.ToolbarStripFor(Items("cmdlist", "settings"), CommandPolicyMode.Yolo, true));   // strip order, not the list's
         Assert.Equal("", ChatScreen.ToolbarStripFor(Items("cmdlist", "police"), CommandPolicyMode.Off, true));
         Assert.Equal("", ChatScreen.ToolbarStripFor(Items("path"), CommandPolicyMode.Ask, true));
-        Assert.Equal("⚙️ 🪪 🧮 📱 🛠️ 🔌 🎓 🪄 💬 📊 📣 ⏳ 🙋 🔒 👮 🐚 📁 🖼️ 🌐 🦉 🐳 🪵 📡 🧩 📅 🏢 💎 🛢️ 🔮 🐬 🪶 🦆 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 ⭐ 🛒", ChatScreen.ToolbarStripFor(Items([.. ToolbarItems.Names.Where(n => n != "memory")]), CommandPolicyMode.Ask, true));   // the user's order (2026-10-03); 📈 last until it was retired (2026-10-14)
+        Assert.Equal("⚙️ 🪪 🧮 📱 🛠️ 🔌 🎓 🪄 💬 🎹 📊 📣 ⏳ 🙋 🔒 👮 🐚 📁 🖼️ 🌐 🦉 🐳 🪵 📡 🧩 📅 🏢 💎 🛢️ 🔮 🐬 🪶 🦆 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 ⭐ 🛒", ChatScreen.ToolbarStripFor(Items([.. ToolbarItems.Names.Where(n => n != "memory")]), CommandPolicyMode.Ask, true));   // the user's order (2026-10-03); 📈 last until it was retired (2026-10-14)
         Assert.Equal("🐚 🌐", ChatScreen.ToolbarStripFor(Items("web", "shell"), CommandPolicyMode.Off, true));   // the switches always drawn, the shell under off too
         Assert.Equal("🪪 📄", ChatScreen.ToolbarStripFor(Items("log", "profile"), CommandPolicyMode.Ask, true));   // strip order (later on 2026-09-29; the rising chart's pair until 2026-10-14)
     }
@@ -12342,7 +12342,7 @@ public partial class ChatScreenTests : IDisposable
         // The masks since later on 2026-09-21 (the detective before); the sessions' balloon later still that day; the chart
         // 2026-09-29; the ID card and the rising chart later that day; the tool switches, the log and the viewers in the user's
         // order, the rising chart behind the log, 2026-10-03, and behind the viewers later that day.
-        const string Panes = "⚙️ 🪪 🧮 📱 🛠️ 🔌 🎓 🪄 💬 📊";   // 🧮 Themes 2026-10-04; 📱 the Web UI 2026-10-14; 🪄 the custom commands 2026-11-01; 🎭 after 🪄 until it went, 2026-11-07
+        const string Panes = "⚙️ 🪪 🧮 📱 🛠️ 🔌 🎓 🪄 💬 🎹 📊";   // 🧮 Themes 2026-10-04; 📱 the Web UI 2026-10-14; 🪄 the custom commands 2026-11-01; 🎭 after 🪄 until it went, 2026-11-07; 🎹 MIDI 2026-11-12
         const string Rest = "🐚 📁 🖼️ 🌐 🦉 🐳 🪵 📡 🧩 📅 🏢 💎 🛢️ 🔮 🐬 🪶 🦆 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 ⭐ 🛒";   // 📈 last until it was retired (2026-10-14); 🛢️ SQL (🪟 until then) and 🪟 the Comfy thumb viewer, 2026-10-04; 🛒 the shopping list after 📺, 2026-10-11
         Assert.Equal(Panes + " 💾 📣 ⏳ 🙋 " + Rest, ChatScreen.ToolbarStrip);   // the disk always drawn since later on 2026-10-03 (the user's ask); 🙋 after it, 2026-10-09; 📣 after the disk since 2026-10-14
         Assert.Equal(Panes + " 💾 📣 ⏳ 🙋 " + Rest, ChatScreen.ToolbarStripFor(CommandPolicyMode.Off, false));
@@ -12385,6 +12385,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.Null(ChatScreen.ToolbarWord("🎭"));   // 🎭's /sys until 🎭 went (2026-11-07, the user's ask)
         Assert.Equal("/sessions", ChatScreen.ToolbarWord(ChatScreen.SessionsToolGlyph));
         Assert.Equal(ChatScreen.SessionsToolGlyph + " Sessions", SessionsMenu.Title);   // the pane wears the toolbar's glyph
+        Assert.Equal("/midi", ChatScreen.ToolbarWord(ChatScreen.MidiToolGlyph));   // 2026-11-12, the user's ask: the pane
+        Assert.Equal(ChatScreen.MidiToolGlyph + " MIDI", NeonSidekick.Midi.MidiText.Title);   // the pane wears the toolbar's glyph
         // The tool switches and the windows (2026-10-03, the user's ask): each switch its /tools <group> page, each window its command.
         Assert.Equal("/tools shell", ChatScreen.ToolbarWord(ChatScreen.ShellToolGlyph));
         Assert.Equal("/tools files", ChatScreen.ToolbarWord(ChatScreen.FilesToolGlyph));
@@ -12419,7 +12421,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Null(ChatScreen.ToolbarWord(ChatScreen.TtsGlyph));
         Assert.Null(ChatScreen.ToolbarWord(""));
         string[] glyphs = ChatScreen.ToolbarStrip.Split(' ');
-        Assert.Equal(44, glyphs.Length);   // 🎭 gone 2026-11-07 (its tabs went to /usage); 🪄 2026-11-01 (the custom commands); 🦆 2026-10-25 (the DuckDB tools); 📡 🧩 📅 🏢 later still on 2026-10-15 (the admin-tools plan); 🪵 2026-10-15 (the event logs); 📱 2026-10-14 (the Web UI); 📈 gone 2026-10-14 (the performance item retired); 📣 later still on 2026-10-13 (the saved prompts); ⭐ later on 2026-10-13 (the saved links); ⏳ 2026-10-13 (the queue); 🛒 2026-10-11 (the shopping list); ✴️ gone later on 2026-10-10 (the Claude Code advisor tool retired); 🦉 2026-10-10 (the advisors); 🪶 SQLite and 🐘 PostgreSQL since 2026-10-04, 🧮 and 🪟 later that day, ⚡ 2026-10-05, 🙋 2026-10-09, 🌄 2026-10-10
+        Assert.Equal(45, glyphs.Length);   // 🎹 2026-11-12 (MIDI); 🎭 gone 2026-11-07 (its tabs went to /usage); 🪄 2026-11-01 (the custom commands); 🦆 2026-10-25 (the DuckDB tools); 📡 🧩 📅 🏢 later still on 2026-10-15 (the admin-tools plan); 🪵 2026-10-15 (the event logs); 📱 2026-10-14 (the Web UI); 📈 gone 2026-10-14 (the performance item retired); 📣 later still on 2026-10-13 (the saved prompts); ⭐ later on 2026-10-13 (the saved links); ⏳ 2026-10-13 (the queue); 🛒 2026-10-11 (the shopping list); ✴️ gone later on 2026-10-10 (the Claude Code advisor tool retired); 🦉 2026-10-10 (the advisors); 🪶 SQLite and 🐘 PostgreSQL since 2026-10-04, 🧮 and 🪟 later that day, ⚡ 2026-10-05, 🙋 2026-10-09, 🌄 2026-10-10
         for (int i = 0; i < glyphs.Length; i++)
         {
             Assert.Equal(2, TextCells.Width(glyphs[i]));
@@ -26283,6 +26285,12 @@ public partial class ChatScreenTests : IDisposable
         Assert.False(ChatScreen.ToolbarItemOff(ToolbarItems.WebUi, new AppSettingsData { WebUi = true }));
         Assert.Equal(ChatScreen.WebUiToolGlyph + " Web UI: off · " + ToolbarItems.GlyphClickNote, ChatScreen.ToolbarGlyphNote(ChatScreen.WebUiToolGlyph, shown));
         Assert.Equal(ChatScreen.WebUiToolGlyph + " Web UI: on · " + ToolbarItems.GlyphClickNote, ChatScreen.ToolbarGlyphNote(ChatScreen.WebUiToolGlyph, new AppSettingsData { WebUi = true }));
+        // 2026-11-12, the user's ask: 🎹 on the slab while MIDI input is off (the default), its note saying which.
+        Assert.True(ChatScreen.ToolbarItemOff(ToolbarItems.Midi, shown));
+        Assert.False(ChatScreen.ToolbarItemOff(ToolbarItems.Midi, new AppSettingsData { MidiInput = true }));
+        Assert.Equal("🎹 MIDI: off · " + ToolbarItems.GlyphClickNote, ChatScreen.ToolbarGlyphNote(ChatScreen.MidiToolGlyph, shown));
+        Assert.Equal("🎹 MIDI: on · " + ToolbarItems.GlyphClickNote, ChatScreen.ToolbarGlyphNote(ChatScreen.MidiToolGlyph, new AppSettingsData { MidiInput = true }));
+        Assert.Equal(NeonSidekick.Help.HelpInterface.DarkMidi, NeonSidekick.Help.HelpInterface.Dark(ToolbarItems.Midi));
         // 2026-10-16: 🎓 says Agent skills' state, 🛠️ "none offered" while nothing is (else its name alone, as before).
         Assert.Equal(ChatScreen.SkillsToolGlyph + " Skills: on · " + ToolbarItems.GlyphClickNote, ChatScreen.ToolbarGlyphNote(ChatScreen.SkillsToolGlyph, shown));
         Assert.Equal(ChatScreen.SkillsToolGlyph + " Skills: off · " + ToolbarItems.GlyphClickNote, ChatScreen.ToolbarGlyphNote(ChatScreen.SkillsToolGlyph, new AppSettingsData { AgentSkills = false }));

@@ -69,7 +69,7 @@ public partial class SettingsMenuTests
         Assert.Equal("fit", SettingsMenu.EmbeddedContextFitLabel);
         Assert.Equal(SettingsMenu.EmbeddedContextFitLabel, SettingsMenu.FieldValue(SettingsField.EmbeddedContextSize, data, "C:\\p"));
         Assert.Equal("32,768 tokens", SettingsMenu.FieldValue(SettingsField.EmbeddedContextSize, new AppSettingsData { EmbeddedContextSize = 32_768 }, "C:\\p"));
-        Assert.Equal("92 %", SettingsMenu.FieldValue(SettingsField.EmbeddedVramBudget, data, "C:\\p"));   // 92 by default since 2026-11-06 (the user's call)
+        Assert.Equal("89 %", SettingsMenu.FieldValue(SettingsField.EmbeddedVramBudget, data, "C:\\p"));   // 89 by default since 2026-11-12 (the user's call; 92 from 2026-11-06)
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.EmbeddedVramBudget, new AppSettingsData { EmbeddedVramBudget = 0 }, "C:\\p"));
         Assert.Equal("92 %", SettingsMenu.FieldValue(SettingsField.EmbeddedVramBudget, new AppSettingsData { EmbeddedVramBudget = 92 }, "C:\\p"));
         Assert.Equal("auto", SettingsMenu.FieldValue(SettingsField.EmbeddedGpuLayers, data, "C:\\p"));
@@ -490,7 +490,7 @@ public partial class SettingsMenuTests
         Assert.Equal("all", _settings.Current.EmbeddedGpuLayers);
         Assert.Equal(93, _settings.Current.EmbeddedVramBudget);
         Assert.Contains("Embedded context length " + EmbeddedContextSize.Error + "; keeping 0.", Output);   // fit, the default since later on 2026-09-29
-        Assert.Contains("Embedded VRAM budget (%) " + EmbeddedVramBudget.Error + "; keeping 92.", Output);   // the default since 2026-11-06 (91 from 2026-09-30)
+        Assert.Contains("Embedded VRAM budget (%) " + EmbeddedVramBudget.Error + "; keeping 89.", Output);   // the default since 2026-11-12 (92 from 2026-11-06, 91 from 2026-09-30)
         pane.Dispose();
     }
 
