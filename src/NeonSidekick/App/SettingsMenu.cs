@@ -1367,6 +1367,9 @@ public enum SettingsField
 
     /// <summary>A toggle: whether starting a chosen container stops the other chosen ones first (<see cref="Settings.AppSettingsData.DockerServerOneAtATime"/>, 2026-11-10, the user's ask). The Docker tab, after <see cref="DockerServerReadyTimeoutSeconds"/>, so <see cref="DockerServerStopOnExit"/> stays its last row; no reconnect (read at each switch). Last in the enum, as every newcomer.</summary>
     DockerServerOneAtATime,
+
+    /// <summary>A toggle: whether the bound MIDI devices are listened to (<see cref="Settings.AppSettingsData.MidiInput"/>, 2026-11-12, the MIDI plan). The Chat tab's input-line run, after <see cref="EmojiPicker"/>; no reconnect (the board follows the save). Last in the enum, as every newcomer.</summary>
+    MidiInput,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1846,7 +1849,7 @@ internal sealed partial class SettingsMenu
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> TabFields =
     [
         [SettingsField.Profile, SettingsField.WorkingDirectory, SettingsField.MemoryMode, SettingsField.ModelAvatar, SettingsField.UserAvatar,
-         SettingsField.CheckForUpdatesAtStart, SettingsField.QueueMode, SettingsField.QueueCancelMode, SettingsField.KeepMessageHistory, SettingsField.CommandTypoIntercept, SettingsField.HideExitAutocomplete, SettingsField.EmojiPicker,
+         SettingsField.CheckForUpdatesAtStart, SettingsField.QueueMode, SettingsField.QueueCancelMode, SettingsField.KeepMessageHistory, SettingsField.CommandTypoIntercept, SettingsField.HideExitAutocomplete, SettingsField.EmojiPicker, SettingsField.MidiInput,
          SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.CopyUserPrompt, SettingsField.UserLineStyle, SettingsField.ReplyFooter,
          SettingsField.Theme, SettingsField.ThemedBackground, SettingsField.ThemedExternalWindows, SettingsField.GradientRules, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.MenuMaxHeight,
          SettingsField.HintsBar, SettingsField.StatusBarItems, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.ShowHomeBar, SettingsField.BarOrder,
@@ -2366,7 +2369,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.WebTools or SettingsField.TtsVoicePreview or SettingsField.FileTools or SettingsField.AskUser
             or SettingsField.AgentSkills or SettingsField.GlobalSkills or SettingsField.ExternalSkills or SettingsField.ProjectFile or SettingsField.TranscriptMarkdown
             or SettingsField.SkillHashMention or SettingsField.ReflectionAutoLearn
-            or SettingsField.HideExitAutocomplete or SettingsField.EmojiPicker or SettingsField.CommandTypoIntercept or SettingsField.KeepMessageHistory or SettingsField.ShowHeader or SettingsField.ShowWorkingDirectory or SettingsField.ThemedExternalWindows or SettingsField.ThemedBackground or SettingsField.GradientRules or SettingsField.ReplyFooter or SettingsField.CheckForUpdatesAtStart
+            or SettingsField.HideExitAutocomplete or SettingsField.EmojiPicker or SettingsField.MidiInput or SettingsField.CommandTypoIntercept or SettingsField.KeepMessageHistory or SettingsField.ShowHeader or SettingsField.ShowWorkingDirectory or SettingsField.ThemedExternalWindows or SettingsField.ThemedBackground or SettingsField.GradientRules or SettingsField.ReplyFooter or SettingsField.CheckForUpdatesAtStart
             or SettingsField.SessionLogging or SettingsField.SessionTool or SettingsField.SessionSaveThinking
             or SettingsField.ToolsDollarMention or SettingsField.ShowFileDiffs or SettingsField.ReflectionIncludesSessions or SettingsField.ReflectionYieldsToTurns or SettingsField.ReflectionEditsSupportingFiles or SettingsField.McpServers or SettingsField.GitLibTools
             or SettingsField.LlmCompactShowSummary or SettingsField.ShellPolice or SettingsField.ShellPreferNative
@@ -2793,6 +2796,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ReflectionInstalledSkills => "Reflection edit downloaded skills",   // the user's name (2026-10-12; "Reflection downloaded skills" until then)
         SettingsField.HideExitAutocomplete => "Show /exit in autocomplete",
         SettingsField.EmojiPicker => "Emoji picker",
+        SettingsField.MidiInput => "MIDI input",
         SettingsField.CommandTypoIntercept => "Command typo intercept",
         SettingsField.KeepMessageHistory => "Keep message history",
         SettingsField.WelcomeSplash => "Welcome splash",
@@ -3219,6 +3223,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ReflectionEditsSupportingFiles => OnOff(data.ReflectionEditsSupportingFiles),
             SettingsField.HideExitAutocomplete => OnOff(!data.HideExitAutocomplete),   // the row asks the other way round since 2026-10-13 ("Show /exit in autocomplete"); the saved key stays
             SettingsField.EmojiPicker => OnOff(data.EmojiPicker),
+            SettingsField.MidiInput => OnOff(data.MidiInput),
             SettingsField.CommandTypoIntercept => OnOff(data.CommandTypoIntercept),
             SettingsField.KeepMessageHistory => OnOff(data.KeepMessageHistory),
             SettingsField.WelcomeSplash => data.WelcomeSplashMode,
@@ -8455,6 +8460,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ReflectionEditsSupportingFiles => data.ReflectionEditsSupportingFiles,
             SettingsField.HideExitAutocomplete => !data.HideExitAutocomplete,   // shown as "Show /exit in autocomplete" since 2026-10-13
             SettingsField.EmojiPicker => data.EmojiPicker,
+            SettingsField.MidiInput => data.MidiInput,
             SettingsField.CommandTypoIntercept => data.CommandTypoIntercept,
             SettingsField.KeepMessageHistory => data.KeepMessageHistory,
             SettingsField.ShowHeader => data.ShowHeader,
@@ -8595,6 +8601,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.ReflectionEditsSupportingFiles: data.ReflectionEditsSupportingFiles = on; break;
             case SettingsField.HideExitAutocomplete: data.HideExitAutocomplete = !on; break;   // on shows /exit (2026-10-13)
             case SettingsField.EmojiPicker: data.EmojiPicker = on; break;
+            case SettingsField.MidiInput: data.MidiInput = on; break;
             case SettingsField.CommandTypoIntercept: data.CommandTypoIntercept = on; break;
             case SettingsField.KeepMessageHistory: data.KeepMessageHistory = on; break;
             case SettingsField.ShowHeader: data.ShowHeader = on; break;
@@ -8743,6 +8750,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ReflectionEditsSupportingFiles => on ? "a reflection may write a skill's supporting files" : "a reflection writes a skill's SKILL.md alone",
         SettingsField.HideExitAutocomplete => on ? "show '/exit' in the autocomplete list" : "hide '/exit' from the autocomplete list",
         SettingsField.EmojiPicker => on ? "the draft row's ☺ opens the emoji picker" : "no emoji button on the draft row",
+        SettingsField.MidiInput => on ? "learned MIDI buttons run their commands" : "the MIDI devices are let go",
         SettingsField.CommandTypoIntercept => on ? "a command typed without its slash or with extra ones offers the command" : "a command typed without its slash or with extra ones is sent as typed",
         SettingsField.KeepMessageHistory => on ? "message history enabled" : "message history disabled",
         SettingsField.ShowHeader => on ? "show the header" : "hide the header",

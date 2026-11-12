@@ -129,6 +129,7 @@ internal static class HelpFiles
         [
             new(HelpFileScope.Profile, configs + Bench.BenchHistory.FileName, "the `/test` runs", "`/test`"),
             new(HelpFileScope.Profile, configs + YouTube.YouTubeLibrary.FileName, "the saved YouTube videos and playlists and where each was left", "`/youtube`"),
+            new(HelpFileScope.Profile, configs + Midi.MidiBindings.FileName, "the MIDI bindings: each learned button and the command it runs", "`/midi`"),
             new(HelpFileScope.Profile, configs + Prompts.SavedPrompts.FileName, "the saved prompts", "`/prompts`"),
             new(HelpFileScope.Profile, configs + Viewer.BrowserHistory.FileName, "the Browser window's visits, kept while *Web browser privacy* says `keep-history`"),
             new(HelpFileScope.Profile, configs + Viewer.BrowserLinks.FileName, "the Browser window's saved links", "`/browser`"),

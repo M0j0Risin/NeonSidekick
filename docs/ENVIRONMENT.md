@@ -133,6 +133,7 @@ Only for running the tests from source; each live test skips unless its resource
   * For the `samba_ad_dev` container: `Domain=lab.neon.test;Server=localhost;User=LAB\reader` and its password.
   * On a Mac the user is `name@REALM`: `Server=dc1.lab.neon.test;User=reader@LAB.NEON.TEST`, with a hosts entry for that name and a `krb5.conf` for the realm ([TESTCONTAINERS.md](TESTCONTAINERS.md#samba_ad_dev-on-a-mac)).
 * `NEONSIDEKICK_TEST_CAMERA`: `1` or a camera's name (the light comes on); `NEONSIDEKICK_TEST_CAMERA_OUT`: a folder to keep the test photo in.
+* `NEONSIDEKICK_TEST_MIDI_DEVICE`: a MIDI input's name (`FS-4`); the test opens and closes it, no press needed.
 * `NEONSIDEKICK_TEST_NVIDIA_MONITOR`: `1` reads a monitor off the desktop through an NVIDIA card (Windows; leave one connected but off the desktop). Reads only.
 * `NEONSIDEKICK_TEST_BROWSER_WINDOW`: `1` runs the Browser window's bot-check test against a local page (Windows, macOS 14+; the window shows briefly).
 * `NEONSIDEKICK_TEST_RECYCLE`: `1` runs the real Recycle bin test (the Trash on a Mac), which leaves a temp file in it.

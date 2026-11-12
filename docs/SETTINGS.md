@@ -43,6 +43,7 @@ Every setting on the `/settings`, `/skills`, `/tools` and `/mcp` panes, its defa
 | Command typo intercept | A command typed without its slash (`clear`), or with extra ones, asks *Did you mean /clear?* first. | on |
 | Show /exit in autocomplete | Lists `/exit` in the `/` list; typed in full it works either way. | off |
 | Emoji picker | A dim ☺ at the input row's right end; a click opens the emoji picker. Ctrl+J opens it too, shown or not (not on a Mac). | on |
+| MIDI input | Runs the commands your MIDI buttons are bound to ([the MIDI pane](INTERFACE.md#the-midi-pane)), even with the terminal in the background. Only bound devices are opened. | off |
 | Transcript markdown | Renders replies as Markdown, with code highlighted. A single line break starts a new line, here, on the Web UI and in `/print`, `/pdf` and `/docx reply`. | on |
 | Paste preview lines | Lines of a long paste shown dim under its `[Pasted text #n]` placeholder (0–200). | 25 |
 | Show image thumbnails | A thumbnail of each picture you send, a tool fetches or makes, or `/botchat` draws. | on |

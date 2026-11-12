@@ -184,6 +184,12 @@ public enum ProfileSection
 
     /// <summary><c>barorder</c>: <c>ChatScreen.ProfileSettingGroups</c>, <c>Toolbar order</c> (the bars' top-to-bottom order), mirrored (2026-10-26, the user's pick).</summary>
     BarOrder,
+
+    /// <summary>
+    /// <c>midi [overwrite]</c> (2026-11-12, the MIDI plan): the MIDI bindings (<c>configs/midi.json</c>), a button the target binds already
+    /// keeping its command unless overwrite, which replaces the list (<c>MidiBindings.Import</c>).
+    /// </summary>
+    Midi,
 }
 
 /// <summary>
@@ -1315,7 +1321,8 @@ internal sealed partial class ChatScreen
         bool monitorsQuick = false,
         Files.ICheckpointStore? checkpoints = null,
         Func<int, CancellationToken, Task<WebUi.TailscaleServeResult?>>? tailscaleServe = null,
-        Updates.IUpdater? updater = null)
+        Updates.IUpdater? updater = null,
+        Midi.IMidiSystem? midiSystem = null)
     {
         // The updater (2026-11-04, self-update): the app's over the install folder, a fake in tests, none by default, so no test can reach GitHub.
         _updater = updater;
@@ -1719,6 +1726,8 @@ internal sealed partial class ChatScreen
         _info = new InfoPane(_pane, keys, menuMouse, clipboard) { Opening = PaneOpening };
         _folderPane = new FolderPane(_pane, keys, menuMouse);
         _menuPane = new MenuPane(_pane, keys, menuMouse, clipboard) { Opening = PaneOpening };
+        // MIDI control (2026-11-12, the MIDI plan): the board made here, started with the screen (StartMidi).
+        InitMidi(midiSystem, time);
         // The question tool's pane and the tool itself: built always (the /usage Tools tab
         // lists it either way), offered only while the setting Ask user and the pane say so (RunTurnAsync).
         _questionMenu = new QuestionMenu(_menuPane, _input);
@@ -5239,7 +5248,7 @@ internal sealed partial class ChatScreen
         Func<string, IReadOnlyList<CompletionItem>>? Monitor = null, Func<string, IReadOnlyList<CompletionItem>>? HomeBar = null,
         IReadOnlyList<string>? Stopwatches = null, Func<string, IReadOnlyList<CompletionItem>>? Prompts = null,
         Func<string, IReadOnlyList<CompletionItem>>? BrowserLinks = null, Func<string, IReadOnlyList<CompletionItem>>? YouTubeSaved = null,
-        Func<string, IReadOnlyList<CompletionItem>>? Cameras = null);
+        Func<string, IReadOnlyList<CompletionItem>>? Cameras = null, Func<string, IReadOnlyList<CompletionItem>>? Midi = null);
 
     /// <summary>The note beside <c>on</c> / <c>off</c> on a switch's list: what the switch is. Pinned.</summary>
     public static string SwitchSubject(SlashCommand command) => command switch
@@ -5370,6 +5379,7 @@ internal sealed partial class ChatScreen
         ProfileSection.Mcp => "MCP servers",
         ProfileSection.Links => "saved links",
         ProfileSection.YouTube => "saved videos",
+        ProfileSection.Midi => "MIDI bindings",
         ProfileSection.Monitors => "monitor input settings",
         ProfileSection.Skills => "skills",
         ProfileSection.CustomCommands => "custom commands",
@@ -5865,6 +5875,10 @@ internal sealed partial class ChatScreen
             case SlashCommand.Monitor:
                 // The verbs, the monitors, their words and inputs (2026-10-23): the board's snapshot only.
                 return sources.Monitor?.Invoke(argText) ?? [];
+
+            case SlashCommand.Midi:
+                // The verbs, the commands after learn, the bindings' numbers after forget (2026-11-12).
+                return sources.Midi?.Invoke(argText) ?? [];
 
             case SlashCommand.Camera:
                 // The words, then off after watch (2026-10-02), and the cameras last listed after use (2026-10-27).
@@ -6412,7 +6426,8 @@ internal sealed partial class ChatScreen
             Prompts: PromptChoices,
             BrowserLinks: argText => BrowserChoices(argText, page: false),
             YouTubeSaved: YouTubeChoices,
-            Cameras: CameraChoices);
+            Cameras: CameraChoices,
+            Midi: MidiChoices);
         return ArgumentPaths(command, argText, sources) is { } paths
             ? new ArgumentList([], paths.Paths, paths.Truncated)
             : new ArgumentList(ArgumentItems(command, argText, sources));
@@ -9451,6 +9466,10 @@ internal sealed partial class ChatScreen
         {
             await CopyVideosSectionAsync(home, other, action.Overwrite, pull, cancellationToken).ConfigureAwait(false);
         }
+        else if (action.Section == ProfileSection.Midi)
+        {
+            await CopyMidiSectionAsync(home, other, action.Overwrite, pull, cancellationToken).ConfigureAwait(false);
+        }
         else if (action.Section == ProfileSection.Skills)
         {
             await CopySkillsSectionAsync(home, other, pull, cancellationToken).ConfigureAwait(false);
@@ -11627,6 +11646,7 @@ internal sealed partial class ChatScreen
         ("mcp", ProfileSection.Mcp, "the profile's own MCP servers, added (same-named ones replaced with overwrite)"),
         ("links", ProfileSection.Links, "the Browser window's saved links, added (or replaced with overwrite)"),
         ("youtube", ProfileSection.YouTube, "the saved YouTube videos and playlists, added (or replaced with overwrite)"),
+        ("midi", ProfileSection.Midi, "the MIDI bindings, added (or replaced with overwrite)"),   // 2026-11-12
         ("monitors", ProfileSection.Monitors, "the monitor input names, hidden inputs and PC inputs, added (or replaced with overwrite)"),
         ("skills", ProfileSection.Skills, "the profile's skills, copied (one the target has is skipped)"),
         ("commands", ProfileSection.CustomCommands, "the profile's custom commands, copied (same-named files replaced with overwrite)"),   // 2026-10-30
@@ -11664,7 +11684,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     public static bool SectionTakesOverwrite(ProfileSection section) =>
         section is ProfileSection.Commands or ProfileSection.History or ProfileSection.Memory or ProfileSection.SavedPrompts or ProfileSection.PoliceStrings
-            or ProfileSection.Mcp or ProfileSection.Links or ProfileSection.YouTube or ProfileSection.Monitors or ProfileSection.CustomCommands
+            or ProfileSection.Mcp or ProfileSection.Links or ProfileSection.YouTube or ProfileSection.Midi or ProfileSection.Monitors or ProfileSection.CustomCommands
         || IsPromptFileSection(section);
 
     /// <summary>Whether a section is one of the prompt files (2026-10-10): persona, operata, vocalia.</summary>
@@ -11965,6 +11985,8 @@ internal sealed partial class ChatScreen
             ApplyWindowTitle();
             // The Web UI's server, as the profile says (2026-10-14): started behind the line, its notice printed at the loop's top.
             ReconcileWebUi();
+            // The MIDI buttons (2026-11-12): the bound devices opened off this thread when MIDI input is on.
+            StartMidi();
             // The update's start (2026-11-04, self-update): what the start's step left to say, what's on disk, and the check behind the line.
             BeginUpdateAtStart();
             // The watch pictures a double-click left behind (2026-10-02): cleared as the profile loads, in case watch mode never stopped cleanly.
@@ -12381,6 +12403,11 @@ internal sealed partial class ChatScreen
                         _timers.Acknowledge();
                         DisarmExit();
                         await _speech.StopAsync().ConfigureAwait(false);
+                        if (shortcut.Midi)
+                        {
+                            _pane.Flash(NeonSidekick.Midi.MidiText.Ran(shortcut.Line));   // a MIDI button's line (2026-11-12): no transcript row, so a flash
+                        }
+
                         var (chordCommand, chordArgs) = ParseLine(shortcut.Line);
                         if (CloseByChord(chordCommand, chordArgs))
                         {
@@ -12475,6 +12502,7 @@ internal sealed partial class ChatScreen
             _cameraWatch.Dispose();
             _camera.Dispose();
             _monitors?.Dispose();   // never waits on a running monitor call (2026-10-23)
+            _midi?.Dispose();   // every input closed, a learn ended (2026-11-12)
             _sessions.Dispose();
             // The Web UI's server stops before the shopping list closes under it (2026-10-14).
             // The phone's video stops with the app, and its null saves the place (2026-10-16), before the server goes; its timers after.
@@ -14978,6 +15006,11 @@ internal sealed partial class ChatScreen
             case SlashCommand.Monitor:
                 // The monitors (2026-10-23): the pane, the list, or a change by the user's own hand.
                 await HandleMonitorAsync(args, _transcript, cancellationToken).ConfigureAwait(false);
+                return false;
+
+            case SlashCommand.Midi:
+                // MIDI control (2026-11-12): the pane, the learn, the list, the switch, a forget.
+                await HandleMidiAsync(args, _transcript, cancellationToken).ConfigureAwait(false);
                 return false;
 
             case SlashCommand.Camera:

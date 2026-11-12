@@ -340,6 +340,13 @@ public sealed class AppSettingsData
     public bool EmojiPicker { get; set; } = true;
 
     /// <summary>
+    /// Whether the MIDI devices the profile's bindings name are listened to (2026-11-12, the MIDI plan): a learned button runs its
+    /// command as a shortcut does (<c>/midi</c>, the bindings in the profile's <c>configs/midi.json</c>). Off by default; only the bound
+    /// devices are opened, so a music app keeps the rest. Read live: a flip opens or closes them at once. No variable.
+    /// </summary>
+    public bool MidiInput { get; set; }
+
+    /// <summary>
     /// How big the thumbnail under a sent picture is drawn (<see cref="ShowImageThumbnails"/>):
     /// <c>tiny</c> (32 columns × 8 rows), <c>small</c> (48 × 12), <c>medium</c> (64 × 16), <c>large</c> (80 × 20), <c>xlarge</c> (96 × 24) or <c>fullsize</c>
     /// (2026-09-24: each picture as large as the transcript window allows, more than one wrapping below). One of

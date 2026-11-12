@@ -115,7 +115,7 @@ The push and pull forms copy to (`push`) or from (`pull`) another profile, after
 | `/profile push\|pull persona <name> [overwrite]`, `/profile push\|pull operata <name> [overwrite]`, `/profile push\|pull vocalia <name> [overwrite]` | Copies `persona.md`, `operata.md` (the operating rules) or `vocalia.md` (the spoken-reply directive). |
 | `/profile push\|pull avatar user\|model <name>` | Copies the *User avatar* or the *Model avatar*. |
 | `/profile push\|pull mcp <name> [overwrite]` | Copies the profile's own MCP servers as written (env, headers, args), keeping the target's comments; `overwrite` replaces same-named ones. |
-| `/profile push\|pull links <name> [overwrite]`, `/profile push\|pull youtube <name> [overwrite]` | Copies the Browser window's saved links or the saved YouTube videos and playlists (with where each was left). |
+| `/profile push\|pull links <name> [overwrite]`, `/profile push\|pull youtube <name> [overwrite]`, `/profile push\|pull midi <name> [overwrite]` | Copies the Browser window's saved links, the saved YouTube videos and playlists (with where each was left), or the MIDI bindings. |
 | `/profile push\|pull monitors <name> [overwrite]` | Copies the monitor input names, hidden inputs and PC inputs, keeping the target's own; a bare push or pull replaces them. |
 | `/profile push\|pull skills <name>` | Copies the profile's own skills, skipping one the target has (by folder or name); a copy starts with no history. |
 | `/profile push\|pull commands <name> [overwrite]` | Copies the profile's [custom commands](#custom-commands), skipping (or with `overwrite`, replacing) the target's; of two names differing only by case, the one that runs goes. Ends with a count; Esc stops it. |
@@ -314,6 +314,11 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 | `/monitor <monitor> input <input>` | Switches the monitor's input: a name you gave it, a standard name (`hdmi-1`) or a code in hex (`0x1B`). Off the desktop it needs an NVIDIA card, and this PC's input adds the monitor back with [Extend all](TOOLS.md#monitors). |
 | `/monitor <monitor> pc <input>\|now\|auto` | Says which input is this PC's: an input, `now` (the one it shows now) or `auto` (no pick: the cable guesses). Bare, says what is set. Nothing switches. |
 | `/monitor <monitor> only\|primary`, `/monitor extend\|duplicate` | Changes the layout as Win+P does: one monitor alone, the primary, every monitor extended, or all showing the same. |
+| `/midi` | Opens the [MIDI pane](INTERFACE.md#the-midi-pane): your MIDI bindings and inputs. Without the pane, prints the bindings. |
+| `/midi learn [<command>]` | Press a pedal, pad or button, then pick the command it runs (or name it here) and add its words. Turns *MIDI input* on. |
+| `/midi list` | Prints the bindings, numbered. |
+| `/midi on\|off` | Turns [*MIDI input*](SETTINGS.md#chat) on or off. |
+| `/midi forget <n>` | Removes binding *n*. |
 | `/log` | Opens the [log window](INTERFACE.md#the-log-window). |
 | `/log file`, `/log path` | Opens the `--log` file in your editor, or copies its path (only when started with `--log`). |
 | `/window` | Shows the terminal window's size. |

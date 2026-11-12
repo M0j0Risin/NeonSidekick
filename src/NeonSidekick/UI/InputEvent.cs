@@ -68,8 +68,9 @@ public abstract record InputEvent
     /// A command line a click made (2026-10-12, the home bar: a chip's pane, its confirm, the picker), read as a command chord
     /// is — the idle line runs it, a pane does it in place or closes for it, the watch under a reply hands it to the screen —
     /// so the hook that made it never opens a pane itself. Every reader that has no use for one lets it pass as nothing.
+    /// <see cref="Midi"/> (2026-11-12, the MIDI plan): a learned MIDI button's line (<see cref="KeySource.PostCommand"/>), flashed as it runs.
     /// </summary>
-    public sealed record Command(string Line) : InputEvent;
+    public sealed record Command(string Line, bool Midi = false) : InputEvent;
 
     /// <summary>
     /// The window changed size while an overlay is open (2026-11-02, review P7-3: an open info, menu, folder or approval pane laid itself out

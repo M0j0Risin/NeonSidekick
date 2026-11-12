@@ -170,6 +170,8 @@ public static partial class SmokeChecks
         results.Add(ProbeMonitorCcd());   // 2026-10-23, the monitors plan: read and validate only
         results.Add(ProbeMonitorDdc());
         results.Add(ProbeMonitorNvapi());   // 2026-10-27, the NVIDIA plan: a monitor off the desktop
+        results.Add(ProbeMidiWinMm());   // 2026-11-12, the MIDI plan: bound and listed, never opened
+        results.Add(ProbeMidiCoreMidi());
         results.Add(ProbeHotkey());
         results.Add(ProbeCarbonHotkeys());
         results.Add(ProbeShortcut());

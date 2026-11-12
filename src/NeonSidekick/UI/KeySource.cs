@@ -57,6 +57,9 @@ public sealed class KeySource : IAnsiConsoleInput
     // Events posted from another thread (2026-11-02, review P7-3: the pane's resize), and the waiting read's wake: a post cancels it, and
     // the read takes the posted event next.
     private readonly System.Collections.Concurrent.ConcurrentQueue<InputEvent> _posted = new();
+
+    /// <summary>MIDI buttons' lines (2026-11-12, the MIDI plan): their own queue, so the watcher under a reply drains them without taking a pane's posted <see cref="InputEvent.Resize"/>.</summary>
+    private readonly System.Collections.Concurrent.ConcurrentQueue<string> _commands = new();
     private readonly object _wakeGate = new();
     private CancellationTokenSource? _wake;
 
@@ -430,6 +433,10 @@ public sealed class KeySource : IAnsiConsoleInput
             {
                 e = posted;
             }
+            else if (_commands.TryDequeue(out string? midi))
+            {
+                e = new InputEvent.Command(midi, Midi: true);
+            }
             else
             {
                 if (cancellationToken.IsCancellationRequested)
@@ -448,7 +455,7 @@ public sealed class KeySource : IAnsiConsoleInput
                 bool woken = false;
                 try
                 {
-                    if (_posted.IsEmpty)
+                    if (_posted.IsEmpty && _commands.IsEmpty)
                     {
                         e = await _events.ReadAsync(wake.Token).ConfigureAwait(false);
                     }
@@ -517,6 +524,28 @@ public sealed class KeySource : IAnsiConsoleInput
             _wake?.Cancel();
         }
     }
+
+    /// <summary>
+    /// A MIDI button's command line (2026-11-12, the MIDI plan), queued from the board's pump thread: it is read as a command chord is —
+    /// the idle read returns it as an <see cref="InputEvent.Command"/> (<c>Midi</c> set), a pane does it in place or closes for it, and the
+    /// watcher under a reply hands it to the screen's line hook (<see cref="ChordLine"/>), where the mid-reply rules decide. Where chords
+    /// aren't read it is dropped, as a chord is. Never blocks.
+    /// </summary>
+    public void PostCommand(string line)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(line);
+        _commands.Enqueue(line);
+        lock (_wakeGate)
+        {
+            _wake?.Cancel();
+        }
+    }
+
+    /// <summary>The MIDI lines queued and not yet taken (the tests wait on it).</summary>
+    internal int PendingCommands => _commands.Count;
+
+    /// <summary>A MIDI line as a pane or the watcher takes it to run (the screen flashes it); the idle line's flashes from its <c>Shortcut</c>.</summary>
+    public Action<string>? MidiTaken { get; set; }
 
     /// <summary>
     /// The next event when it is already waiting and <paramref name="match"/> takes it; else null, nothing taken, never waiting
@@ -592,6 +621,11 @@ public sealed class KeySource : IAnsiConsoleInput
             if (line is null || !pane.OverlayOpen)
             {
                 return input;
+            }
+
+            if (input is InputEvent.Command { Midi: true } && !pane.ChordsOff)
+            {
+                MidiTaken?.Invoke(line);
             }
 
             if (!pane.Chord(line))
@@ -761,6 +795,21 @@ public sealed class KeySource : IAnsiConsoleInput
                 while (TryTakeRequest(out var request))
                 {
                     if (!await ServiceAsync(RequestPhase(request), stop, request.Done).ConfigureAwait(false))
+                    {
+                        return accepted ? Interrupt.Accept : Interrupt.None;
+                    }
+                }
+
+                // A MIDI button's line (2026-11-12, the MIDI plan): a command chord's way, the mid-reply rules deciding; dropped with no hook.
+                while (_commands.TryDequeue(out string? midi))
+                {
+                    if (onLine is null)
+                    {
+                        continue;
+                    }
+
+                    MidiTaken?.Invoke(midi);
+                    if (!await ServiceAsync(LinePhase(onLine, ChordLine(midi), []), stop, null).ConfigureAwait(false))
                     {
                         return accepted ? Interrupt.Accept : Interrupt.None;
                     }

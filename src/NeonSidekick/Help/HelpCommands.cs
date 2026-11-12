@@ -263,6 +263,14 @@ public static class HelpCommands
             new("/memory read-write|read-only|off|on", "Set *Memory mode* (`on` is read-write)."),
             new("/memory forget|edit", "Forget every memory, after a yes (`forget`), or open `memory.json` in your editor (`edit`; invalid JSON is ignored with a warning)."),
         ]),
+        new("/midi",
+        [
+            new("/midi", "Open the MIDI pane: Bindings (each learned button and its command; Enter edits, `l` learns, `r` relearns, `o` turns *MIDI input* on or off, Del removes) and Devices (the inputs and the last message heard). While it is open, buttons only show what they send."),
+            new("/midi learn [<command>]", "Learn a button: press a pedal, pad or key, then pick the command it runs and add its arguments. With a command, it binds that line as typed. *MIDI input* is turned on if it was off."),
+            new("/midi list", "Print the bindings, numbered. Works while a reply runs."),
+            new("/midi on|off", "Turn *MIDI input* on or off: the bound devices are opened or let go."),
+            new("/midi forget <n>", "Remove binding number `n` (as `/midi list` numbers them)."),
+        ]),
         new("/model",
         [
             new("/model [<id>]", "Pick a model from the server's list, or set one by its id, as typed (the server is not asked). The list is A to Z with the model in use under the cursor; typing narrows it, Backspace erases, Esc clears it, a second Esc keeps the model. On the embedded LLM, it lists the installed embedded models. Ctrl+M runs it too."),
@@ -371,6 +379,7 @@ public static class HelpCommands
             new("/profile push|pull mcp <name> [overwrite]", "Copy the profile's own MCP servers (its `mcp.json`, not the home's) to another profile or from it, after a yes: servers the target lacks are added, its comments kept, and a same-named one is replaced only with `overwrite`. Their env, headers and args go as written. A copied server takes the place of a home server of that name, and a pull reconnects."),
             new("/profile push|pull links <name> [overwrite]", "Copy the Browser window's saved links to another profile or from it, after a yes: added to the target's (an address it has skipped), or replacing them with `overwrite`."),
             new("/profile push|pull youtube <name> [overwrite]", "Copy the saved YouTube videos and playlists, with where each was left, to another profile or from it, after a yes: added to the target's (one it has skipped), or replacing them with `overwrite`."),
+            new("/profile push|pull midi <name> [overwrite]", "Copy the MIDI bindings (`/midi`) to another profile or from it, after a yes: added to the target's (its own kept for a button both bind), or replacing them with `overwrite`."),
             new("/profile push|pull monitors <name> [overwrite]", "Copy *Monitor input names*, *Monitor inputs hidden* and *Monitor PC inputs* to another profile or from it, after a yes: added to the target's (its own kept), or replacing them with `overwrite`. A bare push or pull carries them too, replacing them."),
             new("/profile push|pull commands <name> [overwrite]", "Copy the profile's custom commands (its `commands` folder, subfolders kept) to another profile or from it, after a yes. A same-named file is skipped, or replaced with `overwrite`; a link is never followed. It ends with what was copied, skipped and failed, and Esc stops it."),
             new("/profile push|pull skills <name>", "Copy the profile's own skills to another profile or from it, after a yes. One whose folder or name the target's skills have is skipped, never replaced. A copy starts with no history, and takes the place of a global skill of that name."),

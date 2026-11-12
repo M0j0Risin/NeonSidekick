@@ -243,6 +243,44 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
+    /// <c>/profile push|pull midi [overwrite]</c> (2026-11-12, the MIDI plan): the MIDI bindings into the target's <c>midi.json</c>, matched by
+    /// button (device, its occurrence, the message): one the target binds already keeps its command unless overwrite, which replaces the list
+    /// (<see cref="Midi.MidiBindings.Import"/>). A target file that can't be read, or a newer version's, is refused, never written over. A pull
+    /// reloads the board.
+    /// </summary>
+    private async Task CopyMidiSectionAsync(string home, string other, bool overwrite, bool pull, CancellationToken cancellationToken)
+    {
+        var theirs = new Midi.MidiBindings(Profiles.Directory(home, other));
+        var ours = new Midi.MidiBindings(_settings.ProfileDirectory);
+        var bindings = (pull ? theirs : ours).Load().Bindings;
+        if (bindings.Count == 0)
+        {
+            _flow.Notice(ProfileMidiNothingNotice(other, pull));
+            return;
+        }
+
+        if (!await ConfirmAsync(ListSectionPrompt(MidiBindingCount(bindings.Count), "MIDI bindings", other, overwrite, pull), cancellationToken).ConfigureAwait(false))
+        {
+            _flow.Notice(KeptNotice);
+            return;
+        }
+
+        var result = (pull ? ours : theirs).Import(bindings, overwrite);
+        if (result.Outcome != Midi.MidiImportOutcome.Done)
+        {
+            _flow.Error(ProfileMidiFailedError(result.Outcome, other, pull));
+            return;
+        }
+
+        if (pull)
+        {
+            _midi?.Reload();
+        }
+
+        _flow.Notice(ListSectionNotice(MidiBindingCount(result.Added), result.Skipped, "MIDI bindings", other, overwrite, pull));
+    }
+
+    /// <summary>
     /// <c>/profile push|pull skills</c>: every profile skill's folder (<c>&lt;profile&gt;/skills</c>; the global and external ones are shared
     /// already) copied into the target's skills (<see cref="SkillEditor.CopyFolder"/>, the marker files with each). A folder whose name the
     /// target's profile skills hold, or whose skill's name they hold (a same-scope twin would be shadowed), is skipped and named, and so is a
@@ -642,6 +680,8 @@ internal sealed partial class ChatScreen
 
     private static string SavedVideoCount(int count) => Counted(count, "saved video", "saved videos");
 
+    private static string MidiBindingCount(int count) => Counted(count, "MIDI binding", "MIDI bindings");
+
     private static string SkillCount(int count) => Counted(count, "skill", "skills");
 
     /// <summary>Either profile's <c>mcp.json</c> couldn't be read: the other one named on a pull's source or a push's target, else this profile's.</summary>
@@ -734,6 +774,14 @@ internal sealed partial class ChatScreen
     public static string ProfileVideosFailedError(YouTubeImportOutcome outcome, string profile, bool pull) =>
         $"Could not copy into {(pull ? "this profile" : $"\"{profile}\"")}'s saved videos: "
         + (outcome == YouTubeImportOutcome.Unreadable ? $"its {YouTubeLibrary.FileName} could not be read, so it was left alone; the log says why." : YouTubeText.SaveFailed);
+
+    /// <summary><c>midi</c> with nothing to copy: <c>(nothing to copy: this profile has no MIDI bindings)</c>, or <c>"work"</c> on a pull.</summary>
+    public static string ProfileMidiNothingNotice(string profile, bool pull) => $"(nothing to copy: {SourceName(profile, pull)} has no MIDI bindings)";
+
+    /// <summary>A MIDI copy the target refused: its file couldn't be read or is a newer version's (left alone), or couldn't be written. Nothing changed.</summary>
+    public static string ProfileMidiFailedError(Midi.MidiImportOutcome outcome, string profile, bool pull) =>
+        $"Could not copy into {(pull ? "this profile" : $"\"{profile}\"")}'s MIDI bindings: "
+        + (outcome == Midi.MidiImportOutcome.Unreadable ? $"its {Midi.MidiBindings.FileName} could not be read, so it was left alone; the log says why." : Midi.MidiText.SaveFailed);
 
     /// <summary><c>skills</c> with nothing to copy: <c>(🧩 nothing to copy: this profile has no skills of its own)</c>, or <c>"work"</c> on a pull.</summary>
     public static string ProfileSkillsNothingNotice(string profile, bool pull) =>

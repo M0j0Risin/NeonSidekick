@@ -28,6 +28,7 @@ public static partial class HelpSettings
         SettingsField.KeepMessageHistory => "Saves your ↑/↓ input history (the newest 100 lines) so it survives restarts and profile switches. Off deletes the saved lines when the profile next loads.",
         SettingsField.CommandTypoIntercept => "Asks \"Did you mean /clear?\" when you type a command without its slash, or with extra slashes, instead of sending it to the model.",
         SettingsField.HideExitAutocomplete => "Lists /exit in the / autocomplete. Off leaves it out, so a stray pick can't close the app; typing /exit in full still works.",
+        SettingsField.MidiInput => "Listens to the MIDI devices your bindings name, so a learned pedal or pad button runs its command. /midi learns them.",
         SettingsField.EmojiPicker => "Shows a ☺ at the right end of the input line. Clicking it opens the emoji picker and puts the emoji you pick at the cursor.",
         SettingsField.TranscriptMarkdown => "Renders replies as Markdown, with syntax-highlighted code blocks. Off shows replies as plain text.",
         SettingsField.PastePreviewLines => "Lines of a long paste shown dimmed under its [Pasted text #n] placeholder (0–200; 0 = the placeholder alone).",

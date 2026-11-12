@@ -1038,6 +1038,7 @@ public sealed class AppSettings : IDisposable
         ThumbsWindowTop = source.ThumbsWindowTop,
         HideExitAutocomplete = source.HideExitAutocomplete,
         EmojiPicker = source.EmojiPicker,
+        MidiInput = source.MidiInput,
         ImageThumbnailSize = source.ImageThumbnailSize,
         MemoryMode = source.MemoryMode,
         PastePreviewLines = source.PastePreviewLines,

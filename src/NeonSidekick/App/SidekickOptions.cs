@@ -79,6 +79,13 @@ public sealed record SidekickOptions(
     public const string DockerCheckFlag = "--docker-check";
     public const string CameraCheckFlag = "--camera-check";
     public const string MonitorCheckFlag = "--monitor-check";
+    public const string MidiCheckFlag = "--midi-check";
+
+    /// <summary>
+    /// <c>--midi-check</c> (2026-11-12, the MIDI plan): run <see cref="App.MidiCheck"/> and exit 0/1 — the inputs listed and opened, every message
+    /// heard printed raw and decoded until Ctrl+C or 60 seconds, then closed. Nothing saved. Needs a device, so not in the build gate.
+    /// </summary>
+    public bool MidiCheck { get; init; }
 
     /// <summary>
     /// <c>--monitor-check</c> (2026-10-23, the monitors plan): run <see cref="App.MonitorCheck"/> on this PC's monitors and exit 0/1 — the CCD
@@ -179,7 +186,7 @@ public sealed record SidekickOptions(
     public const string AdCheckMacLine = "prove the directory tools against that domain of ad.json (reads only)";
 
     private const string UsageText =
-        "Usage: NeonSidekick [--headless] [--smoke] [--audio-check] [--voice-check] [--sql-check <connection>] [--oracle-check <connection>] [--mysql-check <connection>] [--sqlite-check <database>] [--duckdb-check <database>] [--postgres-check <connection>] [--unc-check <share>] [--eventlog-check <computer>] [--network-check <host>] [--services-check <computer>] [--tasks-check <computer>] [--ad-check <domain>] [--docker-check] [--camera-check] [--monitor-check] [--url <url>] [--model <id>] [--cwd <path>] [--profile <name>] [--yolo] [--no-police] [--log <path>] [--version] [--help]\n" +
+        "Usage: NeonSidekick [--headless] [--smoke] [--audio-check] [--voice-check] [--sql-check <connection>] [--oracle-check <connection>] [--mysql-check <connection>] [--sqlite-check <database>] [--duckdb-check <database>] [--postgres-check <connection>] [--unc-check <share>] [--eventlog-check <computer>] [--network-check <host>] [--services-check <computer>] [--tasks-check <computer>] [--ad-check <domain>] [--docker-check] [--camera-check] [--monitor-check] [--midi-check] [--url <url>] [--model <id>] [--cwd <path>] [--profile <name>] [--yolo] [--no-police] [--log <path>] [--version] [--help]\n" +
         "\n" +
         "  (no flags)     interactive TUI\n" +
         "  --headless     stdin/stdout REPL, no TUI (profile \"neon\" unless --profile or NEONSIDEKICK_PROFILE names one)\n" +
@@ -201,6 +208,7 @@ public sealed record SidekickOptions(
         "  --docker-check               prove the Docker tools against Docker Desktop's engine pipe (reads only), exit 0/1\n" +
         "  --camera-check               open the camera, read frames and encode one (nothing saved), exit 0/1\n" +
         "  --monitor-check              read the monitors, their capabilities and inputs (nothing changed; Windows), exit 0/1\n" +
+        "  --midi-check                 open the MIDI inputs and print what each button sends (60 s or Ctrl+C), exit 0/1\n" +
         "  --url <url>    LLM base URL for this launch (outranks NEONSIDEKICK_LLM_URL and the saved setting)\n" +
         "  --model <id>   model id for this launch (outranks NEONSIDEKICK_LLM_MODEL and the saved setting)\n" +
         "  --cwd <path>   working directory for this launch (outranks the saved setting)\n" +
@@ -437,6 +445,9 @@ public sealed record SidekickOptions(
                 case CameraCheckFlag:
                     result = result with { CameraCheck = true };
                     break;
+                case MidiCheckFlag:
+                    result = result with { MidiCheck = true };
+                    break;
                 case MonitorCheckFlag:
                     result = result with { MonitorCheck = true };
                     break;
@@ -533,10 +544,11 @@ public sealed record SidekickOptions(
         : DockerCheck ? "docker-check"
         : CameraCheck ? "camera-check"
         : MonitorCheck ? "monitor-check"
+        : MidiCheck ? "midi-check"
         : "interactive";
 
     /// <summary>Whether this launch runs one of the check modes (<c>--smoke</c>, <c>--audio-check</c>, <c>--voice-check</c>, <c>--sql-check</c>, <c>--oracle-check</c>, <c>--mysql-check</c>, <c>--sqlite-check</c>, <c>--postgres-check</c>, <c>--unc-check</c>, <c>--docker-check</c>, <c>--camera-check</c>): no screen, no input reader.</summary>
-    public bool IsCheck => Smoke || AudioCheck || VoiceCheck || SqlCheck is not null || OracleCheck is not null || MySqlCheck is not null || SqliteCheck is not null || DuckDbCheck is not null || PostgresCheck is not null || UncCheck is not null || EventLogCheck is not null || NetworkCheck is not null || ServicesCheck is not null || TasksCheck is not null || AdCheck is not null || DockerCheck || CameraCheck || MonitorCheck;
+    public bool IsCheck => Smoke || AudioCheck || VoiceCheck || SqlCheck is not null || OracleCheck is not null || MySqlCheck is not null || SqliteCheck is not null || DuckDbCheck is not null || PostgresCheck is not null || UncCheck is not null || EventLogCheck is not null || NetworkCheck is not null || ServicesCheck is not null || TasksCheck is not null || AdCheck is not null || DockerCheck || CameraCheck || MonitorCheck || MidiCheck;
 
     /// <summary>
     /// The value flags as typed, for the log at startup: <c>--cwd D:\x --log C:\t.log</c>; null when

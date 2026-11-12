@@ -205,6 +205,7 @@ internal sealed partial class ChatScreen
         SlashCommand.Session => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
         SlashCommand.Rename => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
         SlashCommand.Process => hasArgs ? MidTurnClass.Quick : MidTurnClass.Pane,
+        SlashCommand.Midi => hasArgs ? MidTurnClass.Quick : MidTurnClass.Pane,   // 2026-11-12: the fallback; the args overload reads the word
         SlashCommand.Update => hasArgs ? MidTurnClass.Quick : MidTurnClass.Pane,   // 2026-11-04, self-update: the offer over the reply; notes and cancel answer in lines, and rollback is the Pane above
         SlashCommand.Skills => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
         // /commands (2026-10-30): the pane over the reply; new and save wait, so "the last message" is the one the reply answers and the editor opens at the idle line.
@@ -284,6 +285,9 @@ internal sealed partial class ChatScreen
         SlashCommand.WebUi when WebUiBrowserArgs(args) is not null => MidTurnClass.Quick,   // later on 2026-10-15: /webui browser opens at once
         // /monitor (2026-10-23): the list at once; the pane and the changes on the watcher (the last screen's yes/no needs a pane).
         SlashCommand.Monitor => Monitors.MonitorCommand.Parse(args) is { Verb: Monitors.MonitorVerb.List } ? MidTurnClass.Quick : MidTurnClass.Pane,
+        // /midi (2026-11-12, the MIDI plan): the pane and the learn over the reply; list, on, off, forget and a usage error at once (on and off
+        // only flip the setting: the board opens and closes on its own thread, so a slow driver never holds the reply).
+        SlashCommand.Midi => Midi.MidiCommand.Parse(args) is { Verb: Midi.MidiVerb.Pane or Midi.MidiVerb.Learn } ? MidTurnClass.Pane : MidTurnClass.Quick,
         _ => MidTurnPolicy(command, args.Length > 0),
     };
 
@@ -755,6 +759,10 @@ internal sealed partial class ChatScreen
                 // /monitor (2026-10-23): the pane or a change on the watcher, the reply streaming on.
                 await HandleMonitorAsync(args, _flow, cancellationToken).ConfigureAwait(false);
                 break;
+            case SlashCommand.Midi:
+                // /midi and /midi learn (2026-11-12): the pane on the watcher, the reply streaming on.
+                await HandleMidiAsync(args, _flow, cancellationToken).ConfigureAwait(false);
+                break;
             case SlashCommand.WebUi:
                 // /webui (later on 2026-10-15): the pane on the watcher, its lines through the flow sink. The reply's end during Serve's ask
                 // (2026-11-01, the review's P5-1) is /youtube's: a Debug line, no error.
@@ -796,6 +804,10 @@ internal sealed partial class ChatScreen
             case SlashCommand.Monitor:
                 // /monitor list (2026-10-23): the reads on the board's worker, the lines through the flow sink.
                 await PrintMonitorListAsync(_flow, cancellationToken).ConfigureAwait(false);
+                break;
+            case SlashCommand.Midi:
+                // /midi list|on|off|forget (2026-11-12): a file read or a setting flipped, the lines through the flow sink.
+                await HandleMidiAsync(args, _flow, cancellationToken).ConfigureAwait(false);
                 break;
             case SlashCommand.Perf:
                 HandlePerf(args);

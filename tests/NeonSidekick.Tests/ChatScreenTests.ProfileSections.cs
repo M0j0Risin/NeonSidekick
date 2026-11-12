@@ -11,7 +11,7 @@ using NeonSidekick.YouTube;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// <c>/profile push|pull mcp|links|youtube|monitors|skills</c> (2026-10-25, the user's ask; youtube was videos until 2026-11-08): each section's yes, its overwrite, its nothing to
+/// <c>/profile push|pull mcp|links|youtube|midi|monitors|skills</c> (2026-10-25, the user's ask; youtube was videos until 2026-11-08): each section's yes, its overwrite, its nothing to
 /// copy (nothing asked) and its no, over the files of two profiles in the fixture's home.
 /// </summary>
 public sealed partial class ChatScreenTests
@@ -248,6 +248,61 @@ public sealed partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Contains(ChatScreen.ProfileVideosFailedError(YouTubeImportOutcome.Unreadable, "work", pull: false), output);
+        Assert.Equal("{ not json", File.ReadAllText(path));
+    }
+
+    // ── MIDI bindings (2026-11-12, the MIDI plan) ───────────────────────────────
+
+    /// <summary>A push adds the buttons the target lacks and keeps its own for a button both bind; overwrite replaces its list.</summary>
+    [Fact]
+    public async Task ProfilePushMidi_Yes_AddsTheNewButtons_AndOverwriteReplaces()
+    {
+        WorkProfile();
+        var pedal = new Midi.MidiTrigger("FS-4", 0, Midi.MidiKind.ControlChange, 1, 80);
+        var pad = new Midi.MidiTrigger("Pad", 0, Midi.MidiKind.Note, 10, 36);
+        var here = new Midi.MidiBindings(_settings.ProfileDirectory);
+        here.Bind(pedal, "/voice");
+        here.Bind(pad, "/camera snap");
+        var theirs = new Midi.MidiBindings(ProfileDir("work"));
+        theirs.Bind(pedal, "/tts toggle");
+        PushLine("/profile push midi work");
+        PickYes();
+        PushLine("/profile push midi work overwrite");
+        PickYes();
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("(1 MIDI binding copied into \"work\", 1 already there)", output);
+        Assert.Equal(["/voice", "/camera snap"], theirs.Load().Bindings.Select(b => b.Command));
+    }
+
+    [Fact]
+    public async Task ProfilePullMidi_FromAProfileWithNone_SaysSo_AsksNothing()
+    {
+        WorkProfile();
+        PushLine("/profile pull midi work");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(ChatScreen.ProfileMidiNothingNotice("work", pull: true), output);
+    }
+
+    [Fact]
+    public async Task ProfilePullMidi_IntoABrokenFile_IsRefused_AndItIsLeftAlone()
+    {
+        WorkProfile();
+        string path = Profiles.ConfigPath(_settings.ProfileDirectory, Midi.MidiBindings.FileName);
+        WriteFile(path, "{ not json");
+        new Midi.MidiBindings(ProfileDir("work")).Bind(new Midi.MidiTrigger("FS-4", 0, Midi.MidiKind.ControlChange, 1, 80), "/tts");
+        PushLine("/profile pull midi work");
+        PickYes();
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(ChatScreen.ProfileMidiFailedError(Midi.MidiImportOutcome.Unreadable, "work", pull: true), output);
         Assert.Equal("{ not json", File.ReadAllText(path));
     }
 

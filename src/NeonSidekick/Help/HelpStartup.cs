@@ -55,6 +55,7 @@ internal static partial class HelpStartup
         new("--docker-check", [], null),
         new("--camera-check", [], null),
         new(MonitorCheck, [], null),
+        new(SidekickOptions.MidiCheckFlag, [], null),
         new(SidekickOptions.UrlFlag, [], SettingsField.LlmUrl),
         new(SidekickOptions.ModelFlag, [], SettingsField.LlmModel),
         new(SidekickOptions.CwdFlag, [], SettingsField.WorkingDirectory),

@@ -35,6 +35,7 @@ Everything `NeonSidekick.exe` (`./NeonSidekick` on a Mac) takes on its command l
 | `--docker-check` | The same for the Docker engine: Docker Desktop's pipe on Windows, the engine's socket on a Mac. |
 | `--camera-check` | Opens the camera, reports brightness and noise, and encodes a test photo (nothing saved; the light comes on briefly), then exits. On a Mac: macOS 14+ and the terminal's Camera permission. |
 | `--monitor-check` | Lists the monitors and reads each one's capabilities and current input over DDC/CI, then exits. Changes nothing. Windows only. |
+| `--midi-check` | Lists the MIDI inputs, opens them and prints what each button sends for a minute (Ctrl+C ends it). Nothing is saved. |
 | `--version` | Prints the version and exits. |
 | `--help` (`-h`, `-?`, `/?`) | Prints the help text and exits. |
 

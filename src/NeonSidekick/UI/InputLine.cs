@@ -90,9 +90,10 @@ public abstract record InputResult
 
     /// <summary>
     /// A command chord on the chat line (2026-09-30, the user's ask: <see cref="Keys.ShortcutLine"/>): <see cref="Line"/> is
-    /// the command it stands for, run as the typed one; <see cref="Draft"/> as <see cref="HintRow"/>'s.
+    /// the command it stands for, run as the typed one; <see cref="Draft"/> as <see cref="HintRow"/>'s. <see cref="Midi"/> (2026-11-12):
+    /// a MIDI button's line, flashed as it runs.
     /// </summary>
-    public sealed record Shortcut(string Draft, string Line) : InputResult;
+    public sealed record Shortcut(string Draft, string Line, bool Midi = false) : InputResult;
 }
 
 /// <summary>

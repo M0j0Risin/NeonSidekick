@@ -72,6 +72,7 @@ public static class WebCommands
         SlashCommand.Server,
         SlashCommand.Usage,
         SlashCommand.Commands,   // 2026-10-30: new opens an editor on the PC, and a phone shouldn't write files under the home
+        SlashCommand.Midi,   // 2026-11-12: the device is the PC's
     };
 
     /// <summary>The commands some form of which may run from the page: the dropdown offers these alone.</summary>

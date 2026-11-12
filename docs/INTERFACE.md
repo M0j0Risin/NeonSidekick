@@ -175,6 +175,9 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | The monitors pane (`/monitor`, the 🖥️ chip) | ←/→ a monitor's tab · Enter switches an input or applies a layout row · Esc closes |
 | A monitor's *Input names…* | Enter renames · `h` hides or shows · Delete clears the name · Esc back to the monitor's tab |
 | A monitor's *This PC's input…* | Enter picks · Esc back to the monitor's tab |
+| **MIDI** | |
+| The MIDI pane (`/midi`) | Enter edits a binding's command · `l` learns · `r` relearns the button · `o` turns *MIDI input* on or off · Del removes (asks) · Esc closes |
+| The learn's command list | Type to filter · Enter picks · Esc back |
 
 ### The event log pane
 
@@ -206,6 +209,18 @@ Windows only. `/monitor` or a right-click on the home bar's 🖥️.
 * **Off the desktop:** on an NVIDIA card, a monitor still lists and switches its inputs, and this PC's input adds it back with [Extend all](TOOLS.md#monitors). Otherwise it's dim, with only the rows that bring it back.
 * **Asks first** when a switch would leave no monitor showing this PC, or a layout row affects one on another input (judged by your pick, else the cable, else the app's own switch).
 * **No inputs?** Many monitors ship with DDC/CI off in their own on-screen menu (look for "DDC/CI"); a duplicated monitor's inputs can't be told apart until Extend.
+
+### The MIDI pane
+
+`/midi` binds a MIDI pedal, pad or button to any slash command, your own too.
+
+* **Bindings tab:** each button and its command, then *Learn a button…*. With *MIDI input* off, its first line says `o` turns it on.
+* **Devices tab:** the MIDI inputs, which are open, and the last message heard, to see what a pedal sends (`--midi-check` too).
+* **Learning:** press the button, pick the command (type to filter), add its words. A note, a program change or a controller rising past halfway is a press; a release never is.
+* **While this pane is open,** buttons only show what they send; nothing runs.
+* **A press** runs its command as a [keyboard shortcut](#keyboard-shortcuts) does, with a 🎹 flash. A pane that asks you something ignores it, so a pedal never answers a question.
+* **Only bound devices open,** so other apps keep the rest. One another app holds shows *in use*; a second copy of this app may find the pedal in use, or both hear it.
+* **The model can't change your bindings:** they live in the profile's `configs/midi.json`.
 
 ### Folder picker
 
@@ -265,6 +280,7 @@ Each runs its command as if typed and keeps your draft. The last column says wha
 
 * **In a pane** a shortcut closes the pane and runs. Ctrl+., Ctrl+E, Ctrl+W, Ctrl+L, the window chords and Ctrl+Alt+X leave it open; Ctrl+F in a find closes it. A pane that asks you something ignores them all.
 * **Window chords** (Ctrl+G, Ctrl+B, Ctrl+Alt+U, Ctrl+Alt+V) close their window when pressed again (Ctrl+B a minimized Browser window too); the typed command only opens it. Ctrl+B leaves the Browser window open while a bot check waits in it.
+* **A MIDI button** you bound runs its command as a shortcut does, here and during a reply, even with the terminal in the background ([The MIDI pane](#the-midi-pane)).
 * **Bars** have no shortcut: `/perfbar`, `/toolbar`, `/homebar` and `/header` show or hide them.
 * **Ctrl+Alt+X** twice within two seconds unloads the embedded model, canceling any reply, load or botchat on it. If it was in use, pick a server again (*LLM URL* is kept); another server stays ([LLM one local model](SETTINGS.md#common)).
 * **F9 and F10** need no modifier; the picture viewer and thumbnail browser use them for their own keys.
@@ -277,13 +293,13 @@ Each runs its command as if typed and keeps your draft. The last column says wha
   * Info: `/help`, `/sys persona`, `/sys operata`, `/sys vocalia`, `/about`, `/usage`, `/keycheck`, `/tree`, `/vault`, `/browse`
   * Settings: `/settings`, `/tools`, `/mcp`, `/skills`, `/commands`, `/comfy`, `/reasoning`, `/sampling`, `/webui`, `/toolbar edit`, `/perfbar edit`, `/homebar edit`, a home bar chip's pane
   * Conversation: `/memory`, `/queue`, `/sessions`, `/sessions title`, `/rename`, `/msgclear`, `/prompts`
-  * Lists: `/docker`, `/eventlog`, `/net`, `/services`, `/tasks`, `/monitor`, `/ad`, `/youtube`, `/shopping`, `/browser list`, `/camera list`, `/ha states`, `/process`, `/update`, `/update rollback`
+  * Lists: `/docker`, `/eventlog`, `/net`, `/services`, `/tasks`, `/monitor`, `/midi` (and `learn`), `/ad`, `/youtube`, `/shopping`, `/browser list`, `/camera list`, `/ha states`, `/process`, `/update`, `/update rollback`
 * **Run at once:**
   * Display: `/mark`, `/header`, `/toolbar`, `/perfbar`, `/homebar` (and `on`, `off`), `/expand`, `/collapse`, `/window`, `/log`, `/terminal`, `/shortcut`, `/explore`, `/open`, `/cwd`
   * Voice and camera: `/tts`, `/stt` (and `wake`, `interrupt`), `/camera live`, `watch`, `off`, `use`, `view` and `thumbs`, `/screen view` and `thumbs`
   * Pictures: `/view <path>` (and `--thumbs`), and `view` or `thumbs` after `/comfy`, `/splash`, `/pasted` or `/ha stills`
   * The reply's settings: `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/queue send`, `/queue mode <word>`, `/queue cancel <word>`
-  * Others: `/update notes` and `cancel`, `/copy`, `/remember`, `/timer`, `/ha`, `/webui copy`, `/webui browser`, `/browser <url>`, `/prompts <n>`, `/process <id>`, `/docker logs <container>`, `/monitor list`, `/commands save <name>` (saves the message the reply answers)
+  * Others: `/update notes` and `cancel`, `/copy`, `/remember`, `/timer`, `/ha`, `/webui copy`, `/webui browser`, `/browser <url>`, `/prompts <n>`, `/process <id>`, `/docker logs <container>`, `/monitor list`, `/midi list`, `on`, `off` and `forget`, `/commands save <name>` (saves the message the reply answers)
 * **Stop the reply first:** `/clear`, `/new`, `/splash`, `/rewind`, `/undo` (`/undo purge` waits instead), `/exit`
 * **Everything else** waits for the reply, queued behind earlier messages (*Queue cancel mode* applies).
 

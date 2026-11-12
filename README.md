@@ -61,6 +61,7 @@ It's one app for research, IT and admin work (Active Directory, event logs, data
 * **Auto-complete** for commands, files, folders, skills and tools, and **find** in the transcript (`/find`).
 * **Message queue:** keep typing while the model works; messages go out in order, and `/loop` repeats one.
 * **Saved prompts:** messages you send often, picked from a list (`/prompts`) or your phone.
+* **MIDI control:** a foot pedal, pad or button runs any slash command, your own too (`/midi learn`).
 * **Custom commands:** your own slash commands, one Markdown file each in Claude Code's format, your words filled in (`/commands`).
 * **Headless mode:** `--headless` runs over stdin/stdout for scripts and scheduled jobs ([HEADLESS.md](docs/HEADLESS.md)).
 

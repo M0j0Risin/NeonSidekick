@@ -112,6 +112,7 @@ They need no server unless the row says so.
 | `/help <your command>` | Prints the custom command's card, or why a skipped file doesn't run; no server needed. |
 | `/help <words>` | Asks the model to look it up in the manual (`neon_help`); with no server, or *Help tools* or `neon_help` off, prints the manual's answer (after a `[notice]` if a server is there). A tool's answer says if headless offers it, and why not. |
 | `/webui …` | An error: the [Web UI](INTERFACE.md#web-ui) runs only with the full-screen app. |
+| `/midi …` | An error: MIDI buttons are heard only by the full-screen app. |
 | `/update …` | An error: [updates](COMMANDS.md#updating) run only in the full-screen app. |
 
 - Case doesn't matter. `/exit`, `/new`, `/clear` and `/splash` must be alone on the line: `/new please` goes to the model as text.
@@ -288,6 +289,6 @@ Flags beat variables, and variables beat the profile's saved values. [ENVIRONMEN
 
 ## Flags that don't combine with `--headless`
 
-`--smoke`, `--audio-check`, `--voice-check`, `--sql-check`, `--oracle-check`, `--mysql-check`, `--sqlite-check`, `--duckdb-check`, `--postgres-check`, `--unc-check`, `--eventlog-check`, `--network-check`, `--services-check`, `--tasks-check`, `--ad-check`, `--docker-check`, `--camera-check` and `--monitor-check` are separate modes; with `--headless`, headless wins and they're ignored. `--help` and `--version` print and exit first.
+`--smoke`, `--audio-check`, `--voice-check`, `--sql-check`, `--oracle-check`, `--mysql-check`, `--sqlite-check`, `--duckdb-check`, `--postgres-check`, `--unc-check`, `--eventlog-check`, `--network-check`, `--services-check`, `--tasks-check`, `--ad-check`, `--docker-check`, `--camera-check`, `--monitor-check` and `--midi-check` are separate modes; with `--headless`, headless wins and they're ignored. `--help` and `--version` print and exit first.
 
 `--mcp-relay`, `--llama-guard`, `--shell-guard` and `--update-probe` are the app's internal modes, not for you to run.

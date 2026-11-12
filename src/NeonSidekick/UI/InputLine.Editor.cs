@@ -481,7 +481,7 @@ public sealed partial class InputLine
                 if (_o.Shortcuts && !_o.Live)
                 {
                     EndRow();
-                    return new EditOutcome.End(new InputResult.Shortcut(_text.ToString(), command.Line));
+                    return new EditOutcome.End(new InputResult.Shortcut(_text.ToString(), command.Line, command.Midi));
                 }
 
                 return EditOutcome.Handled;
