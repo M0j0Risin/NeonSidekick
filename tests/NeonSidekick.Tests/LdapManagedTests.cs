@@ -1005,6 +1005,11 @@ public sealed class LdapManagedTests
         private TcpClient? _client;
         private NetworkStream? _stream;
 
+        // Set before the client is disposed (2026-11-12, the flake of 2026-10-22, seen again 2026-11-11): DisposeAsync on the test's thread
+        // could dispose the client between the pool's accept and GetStream, which then threw ArgumentNullException. Only that window is
+        // forgiven; a GetStream failure while not disposing still fails the test.
+        private int _disposing;
+
         private FakeLdapServer()
         {
             _listener = new TcpListener(IPAddress.Loopback, 0);
@@ -1021,7 +1026,14 @@ public sealed class LdapManagedTests
             server.Finished = Task.Run(async () =>
             {
                 server._client = await server._listener.AcceptTcpClientAsync();
-                server._stream = server._client.GetStream();
+                try
+                {
+                    server._stream = server._client.GetStream();
+                }
+                catch (Exception) when (Volatile.Read(ref server._disposing) == 1)
+                {
+                    return;   // disposed between the accept and GetStream: the client's socket is already gone
+                }
                 try
                 {
                     await script(server);
@@ -1119,6 +1131,7 @@ public sealed class LdapManagedTests
 
         public async ValueTask DisposeAsync()
         {
+            Volatile.Write(ref _disposing, 1);
             _client?.Dispose();
             _listener.Stop();
             try
