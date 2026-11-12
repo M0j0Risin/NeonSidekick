@@ -301,6 +301,9 @@ public sealed class FakeDirectorySystem : IDirectorySystem
     /// <summary>A search whose filter this says yes to times out at once with nothing read (2026-10-23, the redacted scan's deadline).</summary>
     public Func<string, bool>? TimesOut { get; set; }
 
+    /// <summary>A search whose filter this says yes to throws a <see cref="DirectoryException"/> (2026-11-12, the code review's 3 and 44: one failing search).</summary>
+    public Func<string, bool>? Throws { get; set; }
+
     /// <summary>
     /// The server's MaxValRange, opt-in (2026-11-12, the memberof plan): a plain read of an attribute with more values than this comes back as
     /// <c>attr;range=0-(N-1)</c> with the first N, as a real DC answers past 1,500; null (the default) hands every value back, as Samba does.
@@ -388,6 +391,11 @@ public sealed class FakeDirectorySystem : IDirectorySystem
                 return new DirectoryResults([], false, true);
             }
 
+            if (owner.Throws?.Invoke(filter) == true)
+            {
+                throw new DirectoryException(0x35, "unwilling to perform");
+            }
+
             var found = new List<DirectoryEntry>();
             foreach (var (dn, map) in owner.Entries)
             {
@@ -405,7 +413,8 @@ public sealed class FakeDirectorySystem : IDirectorySystem
                 var picked = new Dictionary<string, IReadOnlyList<byte[]>>(StringComparer.OrdinalIgnoreCase);
                 foreach (string attribute in attributes)
                 {
-                    if (attribute.Contains(";range=", StringComparison.OrdinalIgnoreCase))
+                    // Lower case only, as the comment on Ranged says (the code review's 15): "Range=" falls through and reads nothing, as on Samba.
+                    if (attribute.Contains(";range=", StringComparison.Ordinal))
                     {
                         Ranged(map, attribute, picked);
                         continue;
@@ -469,7 +478,7 @@ public sealed class FakeDirectorySystem : IDirectorySystem
             int from = int.Parse(range[..range.IndexOf('-', StringComparison.Ordinal)], System.Globalization.CultureInfo.InvariantCulture);
             var page = all.Skip(from).Take(2).ToList();
             bool last = from + page.Count >= all.Count;
-            picked[name + ";range=" + from + "-" + (last ? "*" : (from + page.Count - 1).ToString(System.Globalization.CultureInfo.InvariantCulture))] = page;
+            picked[name + ";range=" + from.ToString(System.Globalization.CultureInfo.InvariantCulture) + "-" + (last ? "*" : (from + page.Count - 1).ToString(System.Globalization.CultureInfo.InvariantCulture))] = page;
         }
     }
 

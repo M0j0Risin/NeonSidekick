@@ -675,7 +675,11 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>One card on <c>/ad</c>'s back-trail: what it read (its answer, domain, PDC), its title, and a group card's two switches.</summary>
-    private sealed record AdCard(DirectoryCommandResult Result, string Title, bool Nested, string Members);
+    /// <remarks>
+    /// <paramref name="Other"/>: a memberof card's read for the other nesting, kept when <c>n</c> switches (the code review's 25: each press read
+    /// the whole account again), so switching back costs nothing.
+    /// </remarks>
+    private sealed record AdCard(DirectoryCommandResult Result, string Title, bool Nested, string Members, AdCard? Other = null);
 
     /// <summary>The most cards <c>/ad</c>'s back-trail keeps.</summary>
     private const int AdTrail = 20;
@@ -683,8 +687,8 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// <c>/ad [line]</c> (2026-10-15; the AD gaps plan the same day): the answer as a card in columns on the info pane with copy, ask and — on a
     /// locked user whose PDC emulator is a ticked event-log computer — "Search 4740 on &lt;PDC&gt;"; on a group card <c>n</c> (direct ⇄ nested) and
-    /// <c>u</c> (all members ⇄ users only), read again in place; on a user's, a group's or a computer's <c>g</c>, its groups' card (2026-11-12, the
-    /// memberof plan), whose own <c>n</c> switches direct and nested; a double-click on a row opens that object's card by its DN in the same domain, and
+    /// <c>u</c> (all members ⇄ users only), read again in place; on a user's, a group's or a computer's <c>g</c>, every group it is in at any
+    /// depth (2026-11-12, the memberof plan), a card whose own <c>n</c> switches to the direct ones and back (each read kept); a double-click on a row opens that object's card by its DN in the same domain, and
     /// ESC goes back to the card before, drawn from the trail without asking the directory again. A name several accounts share is a card of
     /// the candidates. Without the pane, or from the Web UI's page, its lines (the card unbounded).
     /// </summary>
@@ -738,21 +742,31 @@ internal sealed partial class ChatScreen
             string title = DirectoryText.Glyph + " Directory · " + card.Title + (stack.Count > 1 ? " ‹ " + stack[^2].Title : "");
             var tab = new InfoTab(card.Title, () => view) { LineChosen = (index, _) => (chosen = view.TargetAt(index)) is not null };
             await _info.ShowAsync(title, [tab], 0, cancellationToken, actions).ConfigureAwait(false);
+            // One card onto the trail, the oldest dropped past AdTrail (the code review's 24: a row's card and g's).
+            void Push(DirectoryCommandResult result, string title, bool nested)
+            {
+                if (stack.Count >= AdTrail)
+                {
+                    stack.RemoveAt(0);
+                }
+
+                stack.Add(new AdCard(result, title, nested, "all"));
+            }
+
             if (chosen is { } target)
             {
-                var opened = await Read(() => DirectoryCommand.OpenAsync(_directory, card.Result.Domain, target, cancellationToken)).ConfigureAwait(false);
+                // A candidate of an ambiguous /ad memberof opens its groups, nested as the line asked (the code review's 7), not its card.
+                bool pickedGroups = card.Result.Args?.Verb == "memberof" && answer.Candidates is not null;
+                var opened = await Read(() => pickedGroups
+                    ? DirectoryCommand.MemberOfAsync(_directory, card.Result.Domain, target, card.Nested, cancellationToken)
+                    : DirectoryCommand.OpenAsync(_directory, card.Result.Domain, target, cancellationToken)).ConfigureAwait(false);
                 if (opened.Answer is null || (opened.Failed && opened.Answer.Candidates is null))
                 {
                     sink.Notice(string.Join(' ', opened.Lines));
                     continue;
                 }
 
-                if (stack.Count >= AdTrail)
-                {
-                    stack.RemoveAt(0);
-                }
-
-                stack.Add(new AdCard(opened, opened.Title ?? target.Name, false, "all"));
+                Push(opened, opened.Title ?? target.Name, pickedGroups && card.Nested);
                 continue;
             }
 
@@ -773,21 +787,23 @@ internal sealed partial class ChatScreen
                     await HandleEventLogAsync(DirectoryCommand.LockoutLine(lockoutOn!), sink, cancellationToken, onWatcher).ConfigureAwait(false);
                     return;
                 case 'g':
-                    var groups = await Read(() => DirectoryCommand.MemberOfAsync(_directory, card.Result.Domain, answer.Self!, false, cancellationToken)).ConfigureAwait(false);
+                    // "All groups" means every one, at any depth (the code review's 18: g read the direct ones alone); n switches to the direct.
+                    var groups = await Read(() => DirectoryCommand.MemberOfAsync(_directory, card.Result.Domain, answer.Self!, true, cancellationToken)).ConfigureAwait(false);
                     if (groups.Answer is null || groups.Failed)
                     {
                         sink.Notice(string.Join(' ', groups.Lines));
                         continue;
                     }
 
-                    if (stack.Count >= AdTrail)
-                    {
-                        stack.RemoveAt(0);
-                    }
-
-                    stack.Add(new AdCard(groups, groups.Title ?? DirectoryCommand.DescribeMemberOf(answer.Self!.Name, false), false, "all"));
+                    Push(groups, groups.Title ?? DirectoryCommand.DescribeMemberOf(answer.Self!.Name, true), true);
                     continue;
                 case 'n' when answer.Kind == "memberof":
+                    if (card.Other is { } kept)
+                    {
+                        stack[^1] = kept with { Other = card with { Other = null } };
+                        continue;
+                    }
+
                     bool deeper = !card.Nested;
                     var regrouped = await Read(() => DirectoryCommand.MemberOfAsync(_directory, card.Result.Domain, answer.Self!, deeper, cancellationToken)).ConfigureAwait(false);
                     if (regrouped.Answer is null || regrouped.Failed)
@@ -796,7 +812,7 @@ internal sealed partial class ChatScreen
                         continue;
                     }
 
-                    stack[^1] = new AdCard(regrouped, regrouped.Title ?? card.Title, deeper, "all");
+                    stack[^1] = new AdCard(regrouped, regrouped.Title ?? card.Title, deeper, "all", card with { Other = null });
                     continue;
                 case 'n':
                 case 'u':

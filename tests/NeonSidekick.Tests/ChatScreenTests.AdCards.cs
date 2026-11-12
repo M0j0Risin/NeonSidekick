@@ -138,8 +138,8 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
-    /// A user card's <c>g</c> opens its groups' card on the trail (2026-11-12, the memberof plan); that card's <c>n</c> reads it again nested in
-    /// place; ESC goes back to the user, then closes.
+    /// A user card's <c>g</c> opens every group it is in on the trail (2026-11-12, the memberof plan; nested since the code review's 18); that
+    /// card's <c>n</c> reads the direct ones in place; ESC goes back to the user, then closes.
     /// </summary>
     [Fact]
     public async Task Ad_AUsersCardsG_OpensItsGroups_AndTheirN_SwitchesNested()
@@ -156,10 +156,11 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Contains(DirectoryText.AllGroupsButton, output);
-        Assert.Contains(DirectoryText.Glyph + " Directory · " + DirectoryCommand.DescribeMemberOf("dave", false) + " ‹ the user dave", output);
-        Assert.Contains(DirectoryText.Glyph + " Directory · " + DirectoryCommand.DescribeMemberOf("dave", true) + " ‹ the user dave", output);
-        Assert.Contains("Groups of user dave in lab.example: 1 group, direct", output);
+        // g reads every group (the code review's 18); n switches to the direct ones.
+        Assert.Contains(DirectoryText.Glyph + " Directory · " + DirectoryCommand.DescribeMemberOf("dave", true, "user") + " ‹ the user dave", output);
+        Assert.Contains(DirectoryText.Glyph + " Directory · " + DirectoryCommand.DescribeMemberOf("dave", false, "user") + " ‹ the user dave", output);
         Assert.Contains("Groups of user dave in lab.example: 2 groups, nested (1 direct, 1 through other groups)", output);
+        Assert.Contains("Groups of user dave in lab.example: 1 group, direct", output);
         Assert.Empty(_chat.Requests);
     }
 
@@ -180,6 +181,20 @@ public partial class ChatScreenTests
 
         Assert.Contains("Group Inner in lab.example: 1 member, direct", output);
         Assert.Contains(_directorySystem!.Filters, f => f == "(distinguishedName=" + LdapFilter.Escape(AdInner) + ")");
+    }
+
+    /// <summary>A picked candidate of an ambiguous <c>/ad memberof</c> opens its groups, not its card (2026-11-12, the code review's 7).</summary>
+    [Fact]
+    public async Task Ad_AnAmbiguousMemberOf_APickedCandidate_OpensItsGroups()
+    {
+        AdFixture();
+        int second = AdRow(AdCard((s, src) => DirectoryQueries.UserAnswer(s, src, "John Smith", _time.GetUtcNow(), _time.LocalTimeZone)), AdJohn2);
+        StepsWhenIdle(Line("/ad memberof John Smith nested"), AdDoubleClick(second), Key(Keys.Escape), Key(Keys.Escape), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains("Groups of user jsmith2 in lab.example: 0 groups, nested", output);
+        Assert.DoesNotContain("User jsmith2 in lab.example", output);
     }
 
     [Fact]

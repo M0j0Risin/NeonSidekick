@@ -227,7 +227,7 @@ public sealed class AdMemberOfTool(DirectoryAccess access, bool forceRedacted = 
           "properties": {
             "name": { "type": "string", "description": "The account: a user's account name, UPN, display name or mail; a group's or computer's name." },
             "nested": { "type": "boolean", "description": "Every group at any depth, through the groups it is in, each with the group it comes through (default false: its direct groups and its primary group)." },
-            "type": { "type": "string", "enum": ["user", "group", "computer", "service"], "description": "Which kind of account the name is (service is a managed service account); leave out to try users, then groups, then computers." },
+            "type": { "type": "string", "enum": ["user", "group", "computer", "service"], "description": "Which kind of account the name is (service is a managed service account); leave out to try users, then groups, then computers and service accounts by their exact names." },
             "limit": { "type": "integer", "description": "The most groups to list, 1 to 1000 (default 200); the total is always counted." },
             "to": { "type": "string", "description": "Save every group (up to 10,000) as a CSV: a .csv path in the working directory, or a folder there. Needs File tools; never over an existing file." },
             "domain": { "type": "string", "description": "Which domain, by its ticked name or its DNS name; leave out for this PC's (or the only one)." }

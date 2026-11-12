@@ -118,14 +118,16 @@ public sealed partial class ActiveDirectoryTests
     {
         Gaps();
         var cut = MemberOfOf("grace", nested: true, cap: 2);
-        Assert.Contains(": 2+ groups, nested", Model(cut));
-        Assert.Contains("; " + DirectoryText.CapNote(2, false), Model(cut));
+        Assert.Contains(": 5+ groups, nested", Model(cut));   // the three it starts from always held; two above them (the code review's 2)
+        Assert.Contains("; " + DirectoryText.GroupsCapNote(2), Model(cut));
+        Assert.Equal("the 2-group cap stopped the walk; the list is partial", DirectoryText.GroupsCapNote(2));
         Assert.True(cut.Partial);
         _system.TimesOut = f => f.Contains("(distinguishedName=", StringComparison.Ordinal);
         var stopped = MemberOfOf("grace", nested: true);
         string text = Model(stopped);
         Assert.Contains("; " + DirectoryText.StoppedAtTimeLimit, text);
         Assert.Contains("(" + DirectoryText.NotRead + ")", text);
+        Assert.Contains("\n" + DirectoryText.GroupsUnreadNote(2) + "\n", text);   // Tier0 and Loop B: nothing above them listed (the code review's 19)
         Assert.True(stopped.Partial);
     }
 
@@ -134,11 +136,14 @@ public sealed partial class ActiveDirectoryTests
     {
         Gaps();
         string text = Model(MemberOfOf("grace", nested: true, limit: 2));
-        Assert.Contains("; " + DirectoryText.FirstGroupsListed(2, false), text);
-        Assert.Equal("the first 2 listed (raise limit up to 1,000)", DirectoryText.FirstGroupsListed(2, false));
-        Assert.Equal("the first 2 listed (raise limit up to 1,000, or save them all with to)", DirectoryText.FirstGroupsListed(2, true));
-        Assert.DoesNotContain("members", DirectoryText.FirstGroupsListed(2, true), StringComparison.Ordinal);
-        Assert.Equal("… 4 more; raise limit or save them all with to", DirectoryText.MoreGroups(4));
+        Assert.Contains("; " + DirectoryText.FirstGroupsListed(2, true, false), text);
+        Assert.Equal("the first 2 listed (raise limit up to 1,000)", DirectoryText.FirstGroupsListed(2, true, false));
+        Assert.Equal("the first 2 listed (raise limit up to 1,000, or save them all with to)", DirectoryText.FirstGroupsListed(2, true, true));
+        Assert.Equal("the first 1,000 listed (save them all with to)", DirectoryText.FirstGroupsListed(1000, false, true));   // /ad: no limit to raise (the code review's 6)
+        Assert.Equal("the first 1,000 listed", DirectoryText.FirstGroupsListed(1000, false, false));
+        Assert.DoesNotContain("members", DirectoryText.FirstGroupsListed(2, true, true), StringComparison.Ordinal);
+        Assert.Equal("… 4 more; lower limit to fit, or save them all with to", DirectoryText.MoreGroups(4, true));   // the code review's 27
+        Assert.Equal("… 4 more; lower limit to fit", DirectoryText.MoreGroups(4, false));
     }
 
     [Fact]
@@ -151,11 +156,11 @@ public sealed partial class ActiveDirectoryTests
         var user = MemberOfOf("grace");
         Assert.StartsWith("Groups of user ⟪grace⟫", Model(user));
         Assert.Contains("\n" + DirectoryText.AlsoNamed("grace", ["group"]) + "\n", Model(user));
-        Assert.Equal("a group is named ⟪grace⟫ too; type: group lists its groups", DirectoryText.AlsoNamed("grace", ["group"]));
+        Assert.Equal("a group is named ⟪grace⟫ too; give type group for its groups", DirectoryText.AlsoNamed("grace", ["group"]));
         var group = MemberOfOf("grace", type: "group");
         Assert.StartsWith("Groups of group ⟪grace⟫", Model(group));
         Assert.Equal(["All-Hands"], Accounts(group));
-        Assert.Equal("a group or a service account is named ⟪x⟫ too; type: group lists its groups", DirectoryText.AlsoNamed("x", ["group", "service"]));
+        Assert.Equal("a group or a service account is named ⟪x⟫ too; give type group for its groups", DirectoryText.AlsoNamed("x", ["group", "service"]));
     }
 
     [Fact]
@@ -169,6 +174,111 @@ public sealed partial class ActiveDirectoryTests
         Assert.Equal(DirectoryText.NotFound("computer", "svc_web", "lab.example"), Model(MemberOfOf("svc_web", type: "computer")));
         Assert.Equal(DirectoryText.Gone("x", "lab.example"), Run(s => DirectoryQueries.MemberOfAnswer(s, Source(), "x", null, false, 200, dn: "CN=Nobody," + Base)).Error);
         Assert.Equal(DirectoryText.NotFound("account", "nobody", "lab.example"), Model(MemberOfOf("nobody")));
+    }
+
+    // ── The code review's fixes (2026-11-12) ───────────────────────────────
+
+    [Fact]
+    public void Review1_GroupsOutsideAnOuBase_AreReadUnderTheDomainsHead()
+    {
+        Gaps();
+        _config = new() { Domain = "lab.example", Server = "localhost", BaseDn = Neon };   // grace and Tier0 inside; Domain Admins and Domain Users in CN=Users
+        string text = Model(MemberOfOf("grace", nested: true));
+        Assert.Contains("\n  ⟪Domain Admins⟫ (security global) via ⟪Tier0⟫\n", text);
+        Assert.Contains("\n  ⟪Domain Users⟫ (security global, primary group)\n", text);
+        Assert.DoesNotContain(DirectoryText.NotReadable, text);
+    }
+
+    [Fact]
+    public void Review3_AFailingBatch_IsNotRead_NeverTheWholeAnswerFailed()
+    {
+        Gaps();
+        _system.Throws = f => f.Contains("(distinguishedName=", StringComparison.Ordinal) && !f.Contains("Domain Users", StringComparison.Ordinal);
+        var answer = MemberOfOf("grace", nested: true);
+        Assert.False(answer.Failed);
+        Assert.Contains("(" + DirectoryText.NotRead + ")", Model(answer));
+        Assert.True(answer.Partial);
+        // The group card's upward walk too (the members walk below it is another matter): its batch naming Ops fails, the card still answers.
+        _system.Throws = f => f.StartsWith("(|(distinguishedName=", StringComparison.Ordinal) && f.Contains(LdapFilter.Escape(Ops), StringComparison.Ordinal);
+        var group = GroupOf("Inner", nested: true);
+        Assert.False(group.Failed);
+        Assert.Contains("\n  member of (1, nested): ⟪Ops⟫", Model(group));
+        Assert.Contains("\n" + DirectoryText.GroupsUnreadNote(1) + "\n", Model(group));
+    }
+
+    [Fact]
+    public void Review4_ADottedName_NeverMeansAComputersFirstLabel()
+    {
+        Gaps();
+        _system.Add("CN=JANE,OU=Workstations," + Base, ("objectClass", "computer"), ("sAMAccountName", "JANE$"), ("cn", "JANE"), ("memberOf", Ops));
+        Assert.Equal(DirectoryText.NotFound("account", "jane.doe", "lab.example"), Model(MemberOfOf("jane.doe")));
+        Assert.StartsWith("Groups of computer ⟪JANE$⟫", Model(MemberOfOf("JANE")));
+    }
+
+    [Fact]
+    public void Review16And37_ARangeReadThatStops_KeepsTheFirstRange_AndIsPartial()
+    {
+        Gaps();
+        for (int i = 1; i <= 5; i++)
+        {
+            string dn = "CN=Team" + i + "," + Neon;
+            _system.Add(dn, ("sAMAccountName", "Team" + i), ("cn", "Team" + i), ("groupType", "-2147483646"));
+            Classes(dn, "top", "group");
+            _system.AddMember(dn, Frank);
+        }
+
+        _system.MaxValRange = 3;
+        _system.TimesOut = f => f == "(objectClass=*)";   // every range read runs out of time
+        var answer = MemberOfOf("frank");
+        Assert.Equal(3, Accounts(answer).Count(a => a.StartsWith("Team", StringComparison.Ordinal)));   // the first range in hand, never dropped
+        Assert.Contains("; " + DirectoryText.StoppedAtTimeLimit, Model(answer));
+        Assert.True(answer.Partial);
+    }
+
+    [Fact]
+    public void Review38_ALookupThatTimedOut_IsSaid_NeverAnotherKind()
+    {
+        Gaps();
+        _system.Add("CN=grace,OU=Groups," + Base, ("sAMAccountName", "grace"), ("cn", "grace"));
+        Classes("CN=grace,OU=Groups," + Base, "top", "group");
+        _system.TimesOut = f => f.StartsWith("(&(objectCategory=person)", StringComparison.Ordinal);
+        Assert.Equal(DirectoryText.LookupTimedOut("grace", "lab.example"), Model(MemberOfOf("grace")));
+    }
+
+    [Fact]
+    public void Review44_AFailingProbeForTheNote_NeverFailsTheAnswer()
+    {
+        Gaps();
+        _system.Throws = f => f.StartsWith("(&(objectCategory=group)", StringComparison.Ordinal);
+        var answer = MemberOfOf("grace");
+        Assert.False(answer.Failed);
+        Assert.StartsWith("Groups of user ⟪grace⟫", Model(answer));
+    }
+
+    [Fact]
+    public void Review33_TheGroupCard_ReadsItsOwnMemberOfWhole()
+    {
+        Gaps();
+        for (int i = 1; i <= 5; i++)
+        {
+            string dn = "CN=Ring" + i + "," + Neon;
+            _system.Add(dn, ("sAMAccountName", "Ring" + i), ("cn", "Ring" + i));
+            Classes(dn, "top", "group");
+            _system.AddMember(dn, Inner);
+        }
+
+        _system.MaxValRange = 3;
+        Assert.Contains("\n  member of (6, nested): ", Model(GroupOf("Inner", nested: true)));   // Ops and the five rings, past the first range
+    }
+
+    [Fact]
+    public void Review34And48_TheCards_PointAtMemberOf_WhenTheirListsAreNotTheWholeStory()
+    {
+        Gaps();
+        Assert.Contains(DirectoryText.MemberOfPointer, Run(s => DirectoryQueries.User(s, Source(), "erin", _time.GetUtcNow(), TimeZoneInfo.Utc)));   // a tokenGroups list
+        _system.Entries["CN=WS01,OU=Workstations," + Base]["memberOf"] = [FakeDirectorySystem.B(Ops)];
+        Assert.Contains(DirectoryText.MemberOfPointer, Run(s => DirectoryQueries.Computer(s, Source(), "ws01", TimeZoneInfo.Utc)));
+        Assert.DoesNotContain(DirectoryText.MemberOfPointer, Run(s => DirectoryQueries.Computer(s, Source(), "ws99", TimeZoneInfo.Utc)));   // no groups at all
     }
 
     // ── The tool ───────────────────────────────────────────────────────────
@@ -228,7 +338,7 @@ public sealed partial class ActiveDirectoryTests
         Assert.EndsWith("\n" + DirectoryText.MemberOfPointer + "\n" + UntrustedText.QuoteNote,
             Run(s => DirectoryQueries.User(s, Source(), "wide", _time.GetUtcNow(), TimeZoneInfo.Utc)));
         Assert.DoesNotContain(DirectoryText.MemberOfPointer, Run(s => DirectoryQueries.User(s, Source(), "alice", _time.GetUtcNow(), TimeZoneInfo.Utc)));
-        Assert.Equal("for every group, direct or nested, ask ad_memberof (on /ad's card, g)", DirectoryText.MemberOfPointer);
+        Assert.Equal("for every group, direct or nested: ad_memberof, or /ad memberof <name> nested", DirectoryText.MemberOfPointer);
     }
 
     [Fact]
@@ -245,10 +355,10 @@ public sealed partial class ActiveDirectoryTests
         }
 
         string text = Model(GroupOf("Inner", nested: true));
-        Assert.Contains("\n  member of (200, nested): ", text);
-        Assert.Contains("\n" + DirectoryText.GroupsAboveNotWalked + "\n", text);
+        Assert.Contains("\n  member of (202+, nested): ", text);   // Ops and Up0, its own, always; 200 above them (the code review's 2 and 21)
+        Assert.Contains("\n" + DirectoryText.GroupsAboveNotWalked(DirectoryLimits.MaxWalkedGroups) + "\n", text);
         Assert.Contains("\n" + DirectoryText.MemberOfPointer + "\n", text);
-        Assert.Equal("more than 200 groups above; the rest not walked", DirectoryText.GroupsAboveNotWalked);
+        Assert.Equal("more than 200 groups above; the rest not walked", DirectoryText.GroupsAboveNotWalked(200));
     }
 
     // ── /ad memberof ───────────────────────────────────────────────────────
@@ -292,8 +402,9 @@ public sealed partial class ActiveDirectoryTests
         Assert.False(result.Failed);
         Assert.Equal("memberof", result.Answer!.Kind);
         Assert.Contains(result.Lines, l => l.Contains("Domain Admins", StringComparison.Ordinal));
+        Assert.Equal("the groups the user grace belongs to at any depth", result.Title);   // the kind read (the code review's 47)
         var again = await DirectoryCommand.MemberOfAsync(Access(), null, new DirectoryRowTarget(Grace, "grace"), false, CancellationToken.None);
-        Assert.Equal("the groups grace belongs to", again.Title);
+        Assert.Equal("the groups the user grace belongs to", again.Title);
         Assert.Equal(3, again.Answer!.Tables[0].Rows.Count);
     }
 

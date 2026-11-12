@@ -34,12 +34,23 @@ public static class DirectoryCommand
     /// <summary>The key words lifted from anywhere on the line (only these: a name with another colon stays a name). Pinned.</summary>
     public static readonly IReadOnlyList<string> Keys = ["domain", "type", "ou", "field", "members", "to"];
 
+    /// <summary>
+    /// The <c>type:</c> values a verb takes, null for a verb that takes none (2026-11-12, the code review's 36: one list per verb for the parse,
+    /// the keys and the completion).
+    /// </summary>
+    public static IReadOnlyList<string>? TypesFor(string verb) => verb switch
+    {
+        "find" => DirectoryQueries.FindTypes,
+        "memberof" => DirectoryQueries.MemberOfTypes,
+        _ => null,
+    };
+
     /// <summary>Which verbs take which key (domain: every one).</summary>
     private static bool Takes(string verb, string key) => key switch
     {
         "domain" => true,
         "members" => verb == "group",
-        "type" => verb is "find" or "memberof",
+        "type" => TypesFor(verb) is not null,
         "field" or "ou" => verb == "find",
         "to" => verb is "group" or "memberof" or "find" or "ou",
         _ => false,
@@ -162,9 +173,9 @@ public static class DirectoryCommand
         if (verb == "memberof")
         {
             string? kind = Key("type")?.ToLowerInvariant();
-            if (kind is not null && !DirectoryQueries.MemberOfTypes.Contains(kind))
+            if (kind is not null && TypesFor(verb) is { } types && !types.Contains(kind))
             {
-                return (null, Bare(DirectoryText.BadChoice("type", kind, DirectoryQueries.MemberOfTypes)));
+                return (null, Bare(DirectoryText.BadChoice("type", kind, types)));
             }
 
             return (new DirectoryCommandArgs(verb, string.Join(' ', rest), domain, nested, 0, Type: kind, To: to), null);
@@ -247,13 +258,14 @@ public static class DirectoryCommand
             "user" => DirectoryQueries.UserAnswer(session, source, line.Argument, now, zone, deadline: deadline),
             "group" => DirectoryQueries.GroupAnswer(session, source, line.Argument, line.Nested, line.Members ?? "all", DirectoryLimits.MaxEntries, zone, deadline),
             // Explicit (the plan's pass 2): the default arm reads any other verb as find:<kind>.
-            "memberof" => DirectoryQueries.MemberOfAnswer(session, source, line.Argument, line.Type, line.Nested, DirectoryLimits.MaxEntries, zone, deadline),
+            "memberof" => DirectoryQueries.MemberOfAnswer(session, source, line.Argument, line.Type, line.Nested, DirectoryLimits.MaxEntries, zone, deadline,
+                canSave: target is null && files?.Invoke() is not null),
             "computer" => DirectoryQueries.ComputerAnswer(session, source, line.Argument, zone, deadline: deadline),
             "domain" => DirectoryQueries.DomainAnswer(session, source, deadline, zone),
             "ou" => DirectoryQueries.OuAnswer(session, source, line.Argument.Length > 0 ? line.Argument : null, DirectoryLimits.MaxEntries, deadline, cap: cap, zone: zone),
             "name" => DirectoryQueries.FindAnswer(session, source, new FindOptions("name", 0, line.Argument, DirectoryLimits.MaxEntries, Cap: cap), now, zone, deadline),
             _ => DirectoryQueries.FindAnswer(session, source, new FindOptions(line.Verb[5..], line.Days, line.Argument.Length > 0 ? line.Argument : null, DirectoryLimits.MaxEntries, line.Type, line.Ou, line.Field, cap), now, zone, deadline),
-        }, Describe(line), cancellationToken).ConfigureAwait(false);
+        }, Describe(line), cancellationToken, line.Verb == "memberof" ? a => DescribeMemberOf(line.Argument, line.Nested, a.AccountType) : null).ConfigureAwait(false);
         if (target is not null && result.Answer is { Failed: false } answer)
         {
             answer.Saved = DirectoryCsv.Save(target, answer, answer.Partial);
@@ -324,14 +336,17 @@ public static class DirectoryCommand
             DescribeGroup(group.Name, nested, members), cancellationToken);
     }
 
-    /// <summary>An account's groups by its DN (2026-11-12, the memberof plan): a card's <c>g</c> (direct) and a memberof card's <c>n</c> switch.</summary>
+    /// <summary>
+    /// An account's groups by its DN (2026-11-12, the memberof plan): a card's <c>g</c>, a memberof card's <c>n</c> switch and a picked candidate
+    /// of an ambiguous <c>/ad memberof</c>; titled with the kind read (the code review's 47) and the name the card showed (49).
+    /// </summary>
     public static Task<DirectoryCommandResult> MemberOfAsync(DirectoryAccess access, string? domain, DirectoryRowTarget account, bool nested, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(access);
         ArgumentNullException.ThrowIfNull(account);
         return RunCardAsync(access, domain, (session, source, deadline) =>
             DirectoryQueries.MemberOfAnswer(session, source, account.Name, null, nested, DirectoryLimits.MaxEntries, access.Time.LocalTimeZone, deadline, dn: account.Dn),
-            DescribeMemberOf(account.Name, nested), cancellationToken);
+            DescribeMemberOf(account.Name, nested), cancellationToken, a => DescribeMemberOf(account.Name, nested, a.AccountType));
     }
 
     /// <summary>
@@ -352,8 +367,8 @@ public static class DirectoryCommand
             pool = current[..current.IndexOf(':', StringComparison.Ordinal)].ToLowerInvariant() switch
             {
                 "domain" => domains.Select(d => "domain:" + d),
-                // memberof takes four of find's six (the plan's pass 12).
-                "type" => (before.Count > 0 && before[0].Equals("memberof", StringComparison.OrdinalIgnoreCase) ? DirectoryQueries.MemberOfTypes : DirectoryQueries.FindTypes).Select(t => "type:" + t),
+                // The verb's own values (the plan's pass 12), the verb read as Parse reads it, lower case only (the code review's 14).
+                "type" => (before.Count > 0 && TypesFor(before[0]) is { } types ? types : DirectoryQueries.FindTypes).Select(t => "type:" + t),
                 "field" => DirectoryQueries.FieldNames.Select(f => "field:" + f),
                 "members" => DirectoryQueries.MemberChoices.Select(m => "members:" + m),
                 _ => [],
@@ -394,7 +409,7 @@ public static class DirectoryCommand
         {
             "user" => "the user " + line.Argument,
             "group" => DescribeGroup(line.Argument, line.Nested, line.Members ?? "all"),
-            "memberof" => DescribeMemberOf(line.Argument, line.Nested),
+            "memberof" => DescribeMemberOf(line.Argument, line.Nested, line.Type),
             "computer" => "the computer " + line.Argument,
             "domain" => "the domain",
             "ou" => line.Argument.Length > 0 ? "the OU " + line.Argument : "the OU tree",
@@ -419,9 +434,11 @@ public static class DirectoryCommand
 
     /// <summary>
     /// An account's groups' card title and ask draft (2026-11-12, the memberof plan): "belongs to", since <see cref="AskDraft"/> writes
-    /// "Look up … in Active Directory" and "is in" read "is in in". Pinned.
+    /// "Look up … in Active Directory" and "is in" read "is in in"; the account's kind when known (the code review's 47: a draft without it
+    /// asked about the user when the card showed the group of the same name). Pinned.
     /// </summary>
-    public static string DescribeMemberOf(string name, bool nested) => "the groups " + name + " belongs to" + (nested ? " at any depth" : "");
+    public static string DescribeMemberOf(string name, bool nested, string? type = null) =>
+        "the groups " + (type is null ? "" : "the " + DirectoryText.KindWord(type) + " ") + name + " belongs to" + (nested ? " at any depth" : "");
 
     /// <summary>The question an account's groups' CSV is named from: nested and the type kept, so the direct and the nested saves differ. Pinned.</summary>
     public static string MemberOfQuestion(string name, bool nested, string? type) =>
