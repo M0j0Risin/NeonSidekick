@@ -15,7 +15,7 @@ public static class CheckpointTools
         "write_file", "patch_file", "create_directory", "move", "copy", "delete", "zip", "unzip",
         "convert_to_pdf", "convert_to_docx", "convert_to_xlsx", "pdf_edit", "image_edit", "download_file", "generate_image", "unc_fetch",
         // stills and exports saved into the images folder or the working folder
-        "camera_capture", "screen_capture", "ha_camera", "ad_user", "ad_group", "ad_computer", "ad_find", "ad_ou",
+        "camera_capture", "screen_capture", "ha_camera", "ad_user", "ad_group", "ad_memberof", "ad_computer", "ad_find", "ad_ou",
         "sql_query", "oracle_query", "mysql_query", "postgres_query", "sqlite_query", "duckdb_query",
     };
 

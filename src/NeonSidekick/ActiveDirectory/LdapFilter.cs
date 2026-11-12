@@ -86,6 +86,24 @@ public static class LdapFilter
     /// </summary>
     public const string ServiceAccounts = "(|(objectClass=msDS-GroupManagedServiceAccount)(objectClass=msDS-ManagedServiceAccount)(objectClass=msDS-DelegatedManagedServiceAccount))";
 
+    /// <summary>
+    /// The objects <c>ad_memberof</c> reads the groups of, for a lookup by DN (2026-11-12, the memberof plan): users, groups, computers and service
+    /// accounts. <see cref="KindTerm"/> without a type leaves the service accounts out.
+    /// </summary>
+    public static readonly string MemberOfKinds = "(|" + KindTerm(null) + ServiceAccounts + ")";
+
+    /// <summary>
+    /// A computer or service account by exactly its name (2026-11-12, the code review's 4): the account with or without its <c>$</c>, the cn, or
+    /// the whole DNS name — never a dotted name's first label, which <see cref="ComputerByName"/> tries (J14), so a type-less <c>ad_memberof
+    /// jane.doe</c> never finds the computer <c>JANE</c>.
+    /// </summary>
+    public static string ComputerOrServiceExact(string name)
+    {
+        string host = name.Trim().TrimEnd('.');
+        string bare = host.TrimEnd('$');
+        return "(&(|" + Computers + ServiceAccounts + ")(|(sAMAccountName=" + Escape(bare + "$") + ")(cn=" + Escape(bare) + ")(dNSHostName=" + Escape(host) + ")))";
+    }
+
     public const string Contacts = "(objectClass=contact)";
 
     public const string Ous = "(objectClass=organizationalUnit)";

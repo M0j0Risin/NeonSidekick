@@ -37,6 +37,33 @@ public static class AdAttributes
         "sAMAccountName", "displayName", "cn", "objectClass", "objectSid", "groupType",
     ];
 
+    /// <summary>
+    /// The account whose groups <c>ad_memberof</c> lists (2026-11-12, the memberof plan): its names and kind, its direct groups, and what finds
+    /// its primary group (the RID and its own SID's domain).
+    /// </summary>
+    public static readonly IReadOnlyList<string> MemberOfAccount =
+    [
+        "sAMAccountName", "cn", "displayName", "objectClass", "memberOf", "primaryGroupID", "objectSid",
+    ];
+
+    /// <summary>
+    /// A group as a direct list resolves it, 50 at a time: its names and type. No <c>memberOf</c> (the code review's 8: nothing climbs) and no
+    /// <c>objectSid</c> (40: nothing reads it).
+    /// </summary>
+    public static readonly IReadOnlyList<string> MemberOfWalk =
+    [
+        "sAMAccountName", "cn", "displayName", "objectClass", "groupType",
+    ];
+
+    /// <summary>A group as the nested walk resolves it: <see cref="MemberOfWalk"/>'s, and its own groups (the next step up).</summary>
+    public static readonly IReadOnlyList<string> MemberOfWalkUp = [.. MemberOfWalk, "memberOf"];
+
+    /// <summary>A group as the group card's "member of" climbs it (the code review's 22): the name it shows and the next step up, nothing else.</summary>
+    public static readonly IReadOnlyList<string> MemberOfAbove =
+    [
+        "cn", "displayName", "memberOf",
+    ];
+
     public static readonly IReadOnlyList<string> Computer =
     [
         "sAMAccountName", "cn", "dNSHostName", "operatingSystem", "operatingSystemVersion", "operatingSystemServicePack", "userAccountControl",

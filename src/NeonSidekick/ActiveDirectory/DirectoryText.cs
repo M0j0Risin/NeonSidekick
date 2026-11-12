@@ -335,6 +335,103 @@ public static class DirectoryText
     public static string FirstListed(int limit, bool canSave) =>
         "the first " + limit.ToString("N0", CultureInfo.InvariantCulture) + " listed (" + (canSave ? "narrow with members, or save them all with to" : "narrow with members") + ")";
 
+    // ── an account's groups (ad_memberof, /ad memberof; 2026-11-12, the memberof plan, the user's report: a nested user's groups came back short) ────────
+
+    /// <summary>
+    /// An account's groups cut to the limit, and how to get the rest: raise <c>limit</c> only where it can go higher (the tool below 1,000; never
+    /// <c>/ad</c>, which lists 1,000), save with <c>to</c> only where a save is possible (the code review's 6). Pinned. Not
+    /// <see cref="FirstListed"/>, whose "narrow with members" names an argument <c>ad_memberof</c> has not.
+    /// </summary>
+    public static string FirstGroupsListed(int limit, bool canRaise, bool canSave)
+    {
+        string first = "the first " + limit.ToString("N0", CultureInfo.InvariantCulture) + " listed";
+        var ways = new List<string>();
+        if (canRaise)
+        {
+            ways.Add("raise limit up to " + DirectoryLimits.MaxEntries.ToString("N0", CultureInfo.InvariantCulture));
+        }
+
+        if (canSave)
+        {
+            ways.Add("save them all with to");
+        }
+
+        return ways.Count == 0 ? first : first + " (" + string.Join(", or ", ways) + ")";
+    }
+
+    /// <summary>
+    /// The model's line where an account's groups stopped for the text's length (the code review's 27): a lower limit fits, a higher one never
+    /// does; the save named only where it is possible. Pinned.
+    /// </summary>
+    public static string MoreGroups(int left, bool canSave) =>
+        "… " + left.ToString(CultureInfo.InvariantCulture) + " more; lower limit to fit" + (canSave ? ", or save them all with to" : "");
+
+    /// <summary>
+    /// A card whose group list is cut, short or a nested list without nested distribution groups points at what reads them all: the tool and the
+    /// command, neither a key nor a card (the code review's 50 and 53: the model's text and headless have no card, and the tool may be off). Pinned.
+    /// </summary>
+    public const string MemberOfPointer = "for every group, direct or nested: ad_memberof, or /ad memberof <name> nested";
+
+    /// <summary>A group card's upward walk past its group cap (the code review's 31: the cap's own number). Pinned.</summary>
+    public static string GroupsAboveNotWalked(int cap) =>
+        "more than " + cap.ToString(CultureInfo.InvariantCulture) + " groups above; the rest not walked";
+
+    /// <summary>An account's groups past the walk's cap (the code review's 28: no "narrow it", the tool has nothing to narrow with). Pinned.</summary>
+    public static string GroupsCapNote(int cap) =>
+        "the " + cap.ToString("N0", CultureInfo.InvariantCulture) + "-group cap stopped the walk; the list is partial";
+
+    /// <summary>Groups that could not be read in a nested walk: nothing above them is listed (the code review's 19). Pinned.</summary>
+    public static string GroupsUnreadNote(int count) =>
+        count.ToString(CultureInfo.InvariantCulture) + (count == 1 ? " group" : " groups") + " could not be read, so nothing above " + (count == 1 ? "it" : "them") + " is listed";
+
+    /// <summary>A group's own groups not read whole (a failed or stopped range read): the nested list is short (the code review's 5 and 17). Pinned.</summary>
+    public const string ParentsNotWhole = "some groups' own groups were not read whole; the nested list is short";
+
+    /// <summary>
+    /// An account's groups held in another domain (2026-11-12): listed, never walked further; universal groups whose links live in another domain
+    /// show only from a global catalog. Pinned.
+    /// </summary>
+    public const string OtherDomainGroupsNote =
+        "groups in another domain are listed but not walked further; a universal group held in another domain shows only when the DC is a global catalog";
+
+    /// <summary>
+    /// A name that other kinds of account carry too, when no type was given: which (by <c>type</c> word), and how to ask for them in words both the
+    /// tool and <c>/ad</c> read (the code review's 45: <c>type: group</c> is refused on <c>/ad</c>). Pinned.
+    /// </summary>
+    public static string AlsoNamed(string name, IReadOnlyList<string> kinds) =>
+        Join(kinds.Select(k => "a " + KindWord(k)).ToList()) + " is named " + Plain(name) + " too; give type " + kinds[0] + " for its groups";
+
+    /// <summary>A <c>type</c> word as the account kind it names (<c>service</c> is a service account).</summary>
+    public static string KindWord(string type) => type == "service" ? AdValues.KindServiceAccount : type;
+
+    /// <summary>An untrusted account name on one line, cut to 120 characters and fenced: the heads' and notes' one form (the code review's 32).</summary>
+    public static string Plain(string text) => Llm.Tools.UntrustedText.Fenced(Llm.Tools.UntrustedText.Cut(Llm.Tools.UntrustedText.OneLine(text), 120));
+
+    /// <summary>A name lookup whose search ran out of time before it found anything (the code review's 38: read as "no user", it fell to another kind). Pinned.</summary>
+    public static string LookupTimedOut(string name, string domain) => $"Error: looking up '{name}' in {domain} ran out of time; nothing was read.";
+
+    /// <summary>
+    /// An account's groups' head (the code review's 11: the wording here, not inline): its kind, the account as its own card writes it, the count
+    /// (a "+" when cut), and how they are in.
+    /// </summary>
+    public static string MemberOfHead(string kind, string account, string where, int total, bool cut, bool nested, int direct, int primary, int through)
+    {
+        static string N(int n) => n.ToString("N0", CultureInfo.InvariantCulture);
+        string paren = nested
+            ? " (" + N(direct) + " direct" + (primary > 0 ? ", " + N(primary) + " by primary group" : "") + ", " + N(through) + " through other groups)"
+            : primary > 0 ? " (" + N(direct) + " in its member-of list, " + N(primary) + " by primary group)" : "";
+        return "Groups of " + kind + " " + account + " in " + where + ": " + N(total) + (cut ? "+" : "") + " group" + (total == 1 ? "" : "s") + ", " + (nested ? "nested" : "direct") + paren;
+    }
+
+    /// <summary>A group card's "member of" label, a "+" when its walk was cut (the code review's 21). Pinned.</summary>
+    public static string MemberOfLabel(int count, bool cut, bool nested) =>
+        "member of (" + count.ToString(CultureInfo.InvariantCulture) + (cut ? "+" : "") + (nested ? ", nested" : "") + ")";
+
+    /// <summary>The <c>/ad</c> card's button that opens an account's groups, and its word on the Hints bar.</summary>
+    public const string AllGroupsButton = "all groups";
+
+    public const string AllGroupsWord = "groups";
+
     /// <summary>A member a walk could not read, or one in another domain.</summary>
     public const string NotReadable = "not readable";
 

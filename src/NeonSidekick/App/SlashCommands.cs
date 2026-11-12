@@ -314,7 +314,7 @@ public enum SlashCommand
     /// <summary><c>/tasks [computer:x] [folder:\x] [state:…] [words]</c> (2026-10-15): a computer's scheduled tasks on a pane, run/end/enable/disable under <c>readwrite</c>. Windows only.</summary>
     Tasks,
 
-    /// <summary><c>/ad &lt;words&gt;</c> or <c>/ad user|group|computer|find|domain …</c> (2026-10-15): the directory, read-only. Windows only (a Mac's too since 2026-10-18, mac-pass2, over Kerberos).</summary>
+    /// <summary><c>/ad &lt;words&gt;</c> or <c>/ad user|group|memberof|computer|find|ou|domain …</c> (2026-10-15; <c>memberof</c> 2026-11-12): the directory, read-only. Windows only (a Mac's too since 2026-10-18, mac-pass2, over Kerberos).</summary>
     Ad,
 
     /// <summary>

@@ -80,7 +80,7 @@ public static class PlanTools
         // the admin families' reads (2026-10-15, the admin-tools plan): the network checks, services, tasks, the directory
         "net_dns", "net_ping", "net_trace", "net_port", "net_tls", "net_certs",
         "service_list", "service_info", "task_list", "task_info",
-        "ad_user", "ad_group", "ad_computer", "ad_find", "ad_ou", "ad_domain",
+        "ad_user", "ad_group", "ad_memberof", "ad_computer", "ad_find", "ad_ou", "ad_domain",
         // the monitors (2026-10-23): the topology and each monitor's input read, nothing changed
         "monitor_list",
     };

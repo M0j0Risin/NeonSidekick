@@ -98,7 +98,7 @@ They need no server unless the row says so.
 | `/net …` | Prints a [network](TOOLS.md#network) check; ignores *Network tools reach*, the host lists and the per-turn budget, with a line when the model's own call would be refused. |
 | `/services …`, `/tasks …` | Print a ticked computer's [services](TOOLS.md#services) or [scheduled tasks](TOOLS.md#scheduled-tasks); no changes (they need an on-screen yes). Windows only. |
 | `/monitor list`, `/monitor <monitor> input\|pc\|only\|primary …`, `/monitor extend\|duplicate` | Prints the [monitors](TOOLS.md#monitors), sets this PC's input, or changes an input or the layout without asking. Bare `/monitor` needs the screen. Windows only. |
-| `/ad …` | Prints a card, an OU, a find or the domain from [Active Directory](TOOLS.md#active-directory), in columns; ticked domains only. `to:<file.csv or folder>` saves a list as a CSV in the working directory. |
+| `/ad …` | Prints a card, an OU, a find, an account's groups or the domain from [Active Directory](TOOLS.md#active-directory), in columns; ticked domains only. `to:<file.csv or folder>` saves a list as a CSV in the working directory. |
 | `/shopping …` | The [shopping list](TOOLS.md#shopping-list); bare, it prints it. `clear all` and `store remove` act without asking. |
 | `/print …`, `/pdf …` | [Print](TOOLS.md#printing) or [make a PDF](TOOLS.md#making-pdfs) of a file, a web page (`/pdf`) or the last reply; `/pdf merge\|extract\|delete\|rotate` [edit PDFs](TOOLS.md#editing-pdfs). *Print action policy* doesn't apply. On a Mac, `/pdf` has only the `browser` engine. |
 | `/docx …` | [Makes a Word document](TOOLS.md#writing-office-files) of a Markdown or `.txt` file, or (with a server) of the last reply. |

@@ -104,8 +104,14 @@ public sealed class DirectoryAnswer
     /// <summary>What the card shows (a user, a group, an OU…), by DN: the back-trail's entry and a group card's buttons read it again by it.</summary>
     public DirectoryRowTarget? Self { get; set; }
 
-    /// <summary>What kind of card: <c>user</c>, <c>group</c>, <c>computer</c>, <c>ou</c>, <c>domain</c>, <c>find</c>.</summary>
+    /// <summary>What kind of card: <c>user</c>, <c>group</c>, <c>computer</c>, <c>ou</c>, <c>domain</c>, <c>find</c>, <c>memberof</c>.</summary>
     public string Kind { get; set; } = "find";
+
+    /// <summary>
+    /// A memberof card's account as a <c>type</c> word (<c>user</c>, <c>group</c>, <c>computer</c>, <c>service</c>; 2026-11-12, the code review's 47):
+    /// its title and ask draft name it, so a name a user and a group share is asked about as the one shown.
+    /// </summary>
+    public string? AccountType { get; set; }
 
     /// <summary>The line naming a <c>to</c> save, after everything (the transcript's note finds it by <see cref="DirectoryText.SavedPrefix"/>).</summary>
     public string? Saved { get; set; }

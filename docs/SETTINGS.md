@@ -772,7 +772,7 @@ See [Active Directory](TOOLS.md#active-directory). Always read-only. On a Mac: K
 
 | Setting | What it does | Default |
 |---|---|---|
-| Directory tools | Offers `ad_user`, `ad_group`, `ad_computer`, `ad_find`, `ad_ou` and `ad_domain` over the ticked domains; the directory is never written. A list's `to` writes a CSV, only with *File tools* on and not in plan mode. `/ad` works either way. | off |
+| Directory tools | Offers `ad_user`, `ad_group`, `ad_memberof`, `ad_computer`, `ad_find`, `ad_ou` and `ad_domain` over the ticked domains; the directory is never written. A list's `to` writes a CSV, only with *File tools* on and not in plan mode. `/ad` works either way. | off |
 | Directory domains offered | A checklist: `current` (the domain this computer is joined to, if any), then the domains of both `ad.json` files. | `current` when joined, else none |
 | Directory set password | As *Event log set password*, for runas domains. | — |
 | Directory add/edit domain | A wizard: name, server, base, LDAPS, sign-in and detail. Its test binds, reads the domain's root object and finds a user. | — |

@@ -640,6 +640,7 @@ Under *Directory tools*. **Read-only:** the app's directory client holds no call
 |---|---|---|
 | `ad_user` | `name, domain?` | A user's card: enabled, locked and when (and from which machine: lockout event 4740), bad passwords, password and account expiry, last sign-in, title, department, manager, reports, OU, flags, groups. |
 | `ad_group` | `name, nested?, members?, limit?, to?, domain?` | A group's card (type, owner, mail, created, its own groups) and its members, direct or `nested`; `members` is `all`, `users`, `computers` or `groups`. |
+| `ad_memberof` | `name, nested?, type?, limit?, to?, domain?` | Every group an account (user, group, computer or service account) is in: direct, or `nested` at any depth, security and distribution alike, each with its type and the group it comes through. |
 | `ad_computer` | `name, domain?` | A computer's or managed service account's card: OS, enabled, domain controller or not, last sign-in, machine password, OU, owner, groups. |
 | `ad_find` | `kind, days?, words?, type?, field?, ou?, limit?, scan_from?, to?, domain?` | A structured search; the kinds are below. |
 | `ad_ou` | `ou?, limit?, to?, domain?` | The OU tree with descriptions, or one OU: owner, linked GPOs, and the objects directly in it, counted by kind. |
@@ -661,12 +662,13 @@ Under *Directory tools*. **Read-only:** the app's directory client holds no call
 | `empty_groups` | groups with no members that are nobody's primary group and aren't system groups | `ou` |
 
 * **Arguments:**
-  * **`type`**: `user`, `group`, `computer`, `ou`, `contact` or `service` (a managed service account); a bare `name` search leaves the last three out, and all but users have only the `description` field.
+  * **`type`**: `user`, `group`, `computer`, `ou`, `contact` or `service` (a managed service account); a bare `name` search leaves the last three out, and all but users have only the `description` field. `ad_memberof` takes `user`, `group`, `computer` or `service`; without it, users are tried first, then groups, then computers and service accounts (by their exact names), and a note names any other kind that shares the name.
   * **`ou`**: a path (`Neon/Engineering`; a `/` in a name as `\/`, a `\` as `\\`), a DN or a name; one several OUs share is refused with their paths.
+  * **Groups (`ad_memberof`):** direct is the account's `memberOf`, read whole past the server's 1,500-value range, plus its primary group. `nested` walks up through every group's own `memberOf`, distribution groups too, each with the group it comes through (`via`). A group in another domain is listed but not walked further, and a universal group held in another domain shows only when the DC is a global catalog. The user card's `groups` line stays the first 200 (nested security groups and direct distribution groups) and points here when it is cut or nested; a computer card with groups points here too. Groups are read under the domain itself, even when `baseDn` is an OU.
   * **Members:** `nested` lists members at any depth with the group they come through (`via`), primary-group members too, but not nested groups' members in another domain. Contacts, service accounts, foreign principals and unreadable ones show only under `members: all`.
   * **`to`** saves the whole list as a UTF-8 CSV at a new `.csv` path or folder in the working directory (named from the question, `ad-group-staff.csv`), formula-like cells guarded. Needs *File tools*, never in plan mode.
 * **`privileged`**: Domain, Schema, Enterprise, Key and Enterprise Key Admins, Administrators, and the Account, Server, Print and Backup Operators and Replicator groups. Listed apart: objects marked `adminCount=1` that no protected group reaches now.
-* **Caps:** a search stops at 1,000 entries (10,000 for a group's members and for `to`), a call at 40 seconds, and says which cut it. Last sign-in can be about 14 days stale.
+* **Caps:** a search stops at 1,000 entries (10,000 for a group's members, an account's groups and `to`), a call at 40 seconds, and says which cut it. Last sign-in can be about 14 days stale.
 * **Never read:** passwords and their hashes, LAPS and BitLocker recovery values, managed and key credentials, certificates and photos.
 * **`redacted`** (the default) also leaves out phones, addresses, employee numbers and home folders, and refuses `office`; `full` is the main chat's alone.
   * Its free-text fields are redacted and matched here, never on the server: a search reads up to 5,000 objects and says how many, with a `next:` (`scan_from`) to go on.

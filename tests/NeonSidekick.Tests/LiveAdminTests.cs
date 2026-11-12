@@ -282,4 +282,28 @@ public sealed class LiveAdminTests : IDisposable
         Assert.Contains(DirectoryText.SavedPrefix, saved);
         Assert.StartsWith("name,kind,account,via,dn", File.ReadAllLines(Path.Combine(_root, "staff.csv"))[0]);
     }
+
+    /// <summary>
+    /// An account's groups against Samba (2026-11-12, the memberof plan): bob's direct groups and his primary group, then Staff through Engineers;
+    /// grace's Tier0 and Domain Admins through it. Only what the seed is known to hold is asserted: the builtin Administrators above Domain
+    /// Admins is looked at by eye (<c>/ad memberof grace nested</c>), since no test here has shown the container nests it.
+    /// </summary>
+    [LiveDirectoryFact]
+    public async Task Directory_AnAccountsGroups_WalkUp()
+    {
+        var access = DirectoryFromScratchHome();
+        var tool = new AdMemberOfTool(access);
+        string direct = await Call(tool, ("name", "bob"));
+        Assert.StartsWith("Groups of user ⟪bob⟫ in ", direct);
+        Assert.Contains("⟪Engineers⟫ (", direct);
+        Assert.Contains(", primary group)", direct);
+        Assert.DoesNotContain("⟪Staff⟫", direct);
+        string nested = await Call(tool, ("name", "bob"), ("nested", true));
+        Assert.Contains("⟪Engineers⟫ (", nested);
+        Assert.Contains("⟪Staff⟫ (", nested);
+        Assert.Contains("via ⟪Engineers⟫", nested);
+        string grace = await Call(tool, ("name", "grace"), ("nested", true));
+        Assert.Contains(") direct", grace);
+        Assert.Contains("via ⟪Tier0⟫", grace);
+    }
 }
