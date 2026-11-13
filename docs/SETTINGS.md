@@ -100,7 +100,7 @@ What `/botchat` bots get. See [Bot conversations](COMMANDS.md#bot-conversations)
 | Botchat memory enabled | Gives every bot `save_memory` and `recall_memory`, overriding every profile's *Memory mode* inside `/botchat`. | on |
 | Botchat memory mode | Whose memories: `shared-parent` (the starting profile's) or `independent` (each bot's own profile's). | `shared-parent` |
 | Botchat vision enabled | Shows each bot the newest 4 pictures since it last spoke. Needs models that read images. | off |
-| Botchat camera | Each bot turn gets a fresh camera picture of you, kept in memory only. Needs models that read images. | off |
+| Botchat camera | Each bot turn gets a fresh camera picture of you, kept in memory only. Needs models that read images; never for a chat started from the Web UI. | off |
 | Botchat recent context | Tells every bot the last 10 messages from before `/botchat`, so the topic can point at them. | off |
 
 ##### Botchat pictures

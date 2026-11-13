@@ -70,6 +70,17 @@ public sealed class KeySource : IAnsiConsoleInput
     private TaskCompletionSource _requestSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private bool _watching;
 
+    // The Web UI's ⏭️ (2026-11-12, plan what-would-it-take-tingly-ullman, PressCancel), under _requestGate: whether the running watch takes ESC
+    // as a cancel, the one-shot press, the signal the no-keyboard wait wakes on, and how many watcher phases run now (a Kestrel thread can't
+    // read the AsyncLocal s_inPhase).
+    private bool _watchEscCancels;
+    private bool _pressed;
+    private TaskCompletionSource _pressSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private int _phases;
+
+    /// <summary>ESC as the watch's cancel predicate sees it, for <see cref="PressCancel"/>.</summary>
+    private static readonly ConsoleKeyInfo s_escape = new('\u001b', ConsoleKey.Escape, shift: false, alt: false, control: false);
+
     /// <summary>Set while a watcher's phase runs (a pane request, a line's hook), on the phase's own flow (later on 2026-10-14).</summary>
     private static readonly AsyncLocal<bool> s_inPhase = new();
 
@@ -541,6 +552,69 @@ public sealed class KeySource : IAnsiConsoleInput
         }
     }
 
+    /// <summary>
+    /// ESC pressed from another thread (2026-11-12, plan what-would-it-take-tingly-ullman: the Web UI's ⏭️ during a botchat). The running watch takes
+    /// it within one poll and runs its cancel key's own path, <c>softCancel</c> then the turn's cancel, so it means what ESC means at that moment
+    /// (the botchat's ladder: the voice, the bot, the chat). Never the live row's copy or list close, and never type-ahead. Refused with
+    /// <see cref="CancelPress.NoWatch"/> when no watch runs or its cancel keys leave ESC out (a connect's spinner), and with
+    /// <see cref="CancelPress.InPhase"/> while a phase holds the keys (a pane). The press is one-shot: cleared as a watch or a phase starts and
+    /// ends, so it never lands on a later wait, behind a pane or on the idle line; presses made before the watch takes one are one press, so a
+    /// double tap never skips two rungs. A press made as a pane opens may be dropped. Never blocks.
+    /// </summary>
+    public CancelPress PressCancel()
+    {
+        lock (_requestGate)
+        {
+            if (!_watching || !_watchEscCancels)
+            {
+                return CancelPress.NoWatch;
+            }
+
+            if (_phases > 0)
+            {
+                return CancelPress.InPhase;
+            }
+
+            _pressed = true;
+            _pressSignal.TrySetResult();
+            return CancelPress.Taken;
+        }
+    }
+
+    /// <summary>The press, taken (cleared) by the watch; the signal re-armed for the next one.</summary>
+    private bool TakePress()
+    {
+        lock (_requestGate)
+        {
+            if (_pressSignal.Task.IsCompleted)
+            {
+                _pressSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            }
+
+            bool pressed = _pressed;
+            _pressed = false;
+            return pressed;
+        }
+    }
+
+    private Task PressSignal()
+    {
+        lock (_requestGate)
+        {
+            return _pressSignal.Task;
+        }
+    }
+
+    /// <summary>A phase begins (<paramref name="delta"/> 1) or ends (-1): a press left now is dropped, never read behind or after the pane.</summary>
+    private void PhaseStep(int delta)
+    {
+        lock (_requestGate)
+        {
+            _phases += delta;
+            _pressed = false;
+        }
+    }
+
     /// <summary>The MIDI lines queued and not yet taken (the tests wait on it).</summary>
     internal int PendingCommands => _commands.Count;
 
@@ -780,6 +854,8 @@ public sealed class KeySource : IAnsiConsoleInput
         lock (_requestGate)
         {
             _watching = true;
+            _watchEscCancels = cancel(s_escape);
+            _pressed = false;
         }
 
         var previous = _editor;
@@ -815,6 +891,18 @@ public sealed class KeySource : IAnsiConsoleInput
                     }
                 }
 
+                // The Web UI's ⏭️ (2026-11-12, PressCancel): ESC's own cancel path.
+                if (TakePress())
+                {
+                    if (softCancel is not null && softCancel())
+                    {
+                        continue;
+                    }
+
+                    Cancel(turnCts);
+                    return Interrupt.Cancel;
+                }
+
                 bool available;
                 try
                 {
@@ -834,7 +922,19 @@ public sealed class KeySource : IAnsiConsoleInput
                             }
                         }
 
-                        await Task.WhenAny(WaitForStopAsync(stop), RequestSignal()).ConfigureAwait(false);
+                        // The Web UI's ⏭️ (2026-11-12) still reaches a turn with no keyboard: it wakes this wait.
+                        if (TakePress())
+                        {
+                            if (softCancel is not null && softCancel())
+                            {
+                                continue;
+                            }
+
+                            Cancel(turnCts);
+                            return Interrupt.Cancel;
+                        }
+
+                        await Task.WhenAny(WaitForStopAsync(stop), RequestSignal(), PressSignal()).ConfigureAwait(false);
                     }
 
                     return accepted ? Interrupt.Accept : Interrupt.None;
@@ -1022,8 +1122,9 @@ public sealed class KeySource : IAnsiConsoleInput
             _editor = previous;
             lock (_requestGate)
             {
-                // A request the watcher never reached is cancelled, never left for the next turn.
+                // A request the watcher never reached is cancelled, never left for the next turn; so is a press (2026-11-12).
                 _watching = false;
+                _pressed = false;
                 while (_requests.TryDequeue(out var request))
                 {
                     request.Done.TrySetCanceled();
@@ -1169,7 +1270,17 @@ public sealed class KeySource : IAnsiConsoleInput
         var editor = _editor;
         editor?.Suspend();
         s_inPhase.Value = true;
-        var back = await phase().ConfigureAwait(false);
+        IReadOnlyList<InputEvent> back;
+        PhaseStep(1);
+        try
+        {
+            back = await phase().ConfigureAwait(false);
+        }
+        finally
+        {
+            // Lowered by the phase's own end (2026-11-12), so a phase that outlives its watch keeps PressCancel refused while its pane is up.
+            PhaseStep(-1);
+        }
 
         // What the phase's reader left (nothing, normally: a pane reads until ESC) comes after
         // what was set aside, in the order it was typed.
@@ -1307,4 +1418,17 @@ public sealed class KeySource : IAnsiConsoleInput
             // Stopped.
         }
     }
+}
+
+/// <summary>What <see cref="KeySource.PressCancel"/> came to (2026-11-12).</summary>
+public enum CancelPress
+{
+    /// <summary>The running watch takes it as ESC.</summary>
+    Taken,
+
+    /// <summary>No watch runs, or its cancel keys leave ESC out: nothing was pressed.</summary>
+    NoWatch,
+
+    /// <summary>A phase holds the keys (a pane): nothing was pressed.</summary>
+    InPhase,
 }

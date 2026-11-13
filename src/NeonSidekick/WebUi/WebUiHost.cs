@@ -527,6 +527,7 @@ public sealed class WebUiHost : IWebUiHost
                     MemoryTogglePath => await ReadAsync(context, WebUiJsonContext.Default.WebMemoryToggle).ConfigureAwait(false) is { } toggle ? _backend.ToggleMemory(toggle, remote) : null,
                     HistoryClearPath => _backend.ClearHistory(remote),   // the body is not read, as Stop's
                     LearnCancelPath => _backend.CancelLearning(remote),   // the status row's 🧠 (2026-10-17); no body either
+                    BotSkipPath => _backend.SkipBot(remote),   // the status row's ⏭️ (2026-11-12); no body either
                     QueueResumePath => _backend.ResumeQueue(remote),   // the held queue's banner (2026-10-17); no body either
                     YouTubeReportPath => await YouTubeReportAsync(context, remote).ConfigureAwait(false),
                     YouTubeSeenPath => await YouTubeSeenAsync(context, remote).ConfigureAwait(false),
@@ -679,7 +680,7 @@ public sealed class WebUiHost : IWebUiHost
 
         return path is "/api/events" or "/api/send" or "/api/stop" or "/api/answer" or "/api/complete" or "/api/usage" or "/api/strip/select" or "/api/prompts"
                 or PromptSavePath or PromptDeletePath or MemoryPath or MemorySavePath or MemoryDeletePath or MemoryEditPath or MemoryTogglePath or HistoryPath or HistoryClearPath
-                or LearnCancelPath or QueueResumePath
+                or LearnCancelPath or QueueResumePath or BotSkipPath
                 or BotCheckFramePath or BotCheckInputPath
             || path.StartsWith(EntryPrefix, StringComparison.Ordinal) || path.StartsWith(PicturePrefix, StringComparison.Ordinal)
             ? WebTab.Chat
@@ -870,6 +871,9 @@ public sealed class WebUiHost : IWebUiHost
 
     /// <summary>The status row's 🧠, tapped twice (2026-10-17): the running reflection canceled.</summary>
     public const string LearnCancelPath = "/api/learn/cancel";
+
+    /// <summary>The status row's ⏭️ during a botchat (2026-11-12): ESC's step at the PC.</summary>
+    public const string BotSkipPath = "/api/botchat/skip";
 
     /// <summary>The held queue's Resume (2026-10-17): the lines held after a cancel sent.</summary>
     public const string QueueResumePath = "/api/queue/resume";

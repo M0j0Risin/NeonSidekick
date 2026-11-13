@@ -796,6 +796,23 @@ public static class WebUiText
     /// <summary>The audit line.</summary>
     public static string LearnCancelledLogLine(IPAddress? remote) => "Web UI canceled the reflection from " + Where(remote) + ".";
 
+    // ── The status row's ⏭️ during a botchat (2026-11-12, plan what-would-it-take-tingly-ullman): ESC's step at the PC ──
+
+    /// <summary>The ⏭️'s label.</summary>
+    public const string Skip = "Skip: the voice, then the bot, then the chat, as Esc does at the PC";
+
+    /// <summary>The page's ⏭️ with no botchat, or between its waits (nothing for ESC to stop).</summary>
+    public const string NothingToSkip = "Nothing to skip right now.";
+
+    /// <summary>The page's ⏭️ while a question or a pane is open: it has the keys.</summary>
+    public const string AnswerFirst = "Answer the open question first.";
+
+    /// <summary>The PC's hint row after the page's ⏭️.</summary>
+    public const string BotSkippedFlash = "📱 skipped in the botchat";
+
+    /// <summary>The audit line.</summary>
+    public static string BotSkipLogLine(IPAddress? remote) => "Web UI skipped in the botchat from " + Where(remote) + ".";
+
     // ── The page's 🗑️ (later on 2026-10-15) ──
 
     /// <summary>The overlay's 🗑️, and its label once armed.</summary>
@@ -843,7 +860,8 @@ public static class WebUiText
         MemoryModeOff,
         BotCheckHint, BotCheckPicture, BotCheckZoom, BotCheckScrollUp, BotCheckScrollDown, BotCheckTypeHere, BotCheckSend, BotCheckEnter, BotCheckBackspace, BotCheckTab,
         BotCheckStalled, LearnCancel, LearnCancelArmed, Resume,
-        MemoryEdit, MemoryEditSave, MemoryEditCancel, MemoryTurnOff, MemoryTurnOn);
+        MemoryEdit, MemoryEditSave, MemoryEditCancel, MemoryTurnOff, MemoryTurnOn,
+        Skip);
 
     // ── A bot check's card (2026-10-17): the Browser window on the page while a check runs in it ──
 

@@ -50,7 +50,8 @@ public readonly record struct WebCommandSettings(bool Commands, bool FileTools, 
 /// Which slash commands the Web UI's page may run (later on 2026-10-14, the user's calls): a phone has no PC pane to answer and no PC window to
 /// look at, so a command runs from the page only where everything it shows reaches the page — its notices, a yes/no raced on the page and the
 /// PC, a pick card (bare <c>/model</c>, <c>/reasoning</c>, <c>/rewind</c>), a list card (<c>/ha states</c>, <c>/docker logs</c>, the trees…).
-/// Some are never the page's (<see cref="Never"/>: they end the app, change the server, run a shell line or switch the profile); every other
+/// Some are never the page's (<see cref="Never"/>: they end the app, change the server, run a shell line, switch the profile or use the PC's own
+/// devices); every other
 /// form that opens a pane or a window is refused with a hint at the form that works. Classed by the commands' own parsers, never by whether
 /// the PC would open a pane. Pure. Read twice: when the page sends (<see cref="WebUiSession.Send"/>) and as the screen dispatches the line.
 /// </summary>
@@ -67,7 +68,6 @@ public static class WebCommands
         SlashCommand.Skills,
         SlashCommand.YouTube,
         SlashCommand.Queue,
-        SlashCommand.BotChat,
         SlashCommand.Sampling,
         SlashCommand.Server,
         SlashCommand.Usage,
@@ -87,6 +87,7 @@ public static class WebCommands
         SlashCommand.MsgClear, SlashCommand.Mark,   // /mark (2026-10-18): the PC's rules, set from the page too
         SlashCommand.Custom,   // 2026-10-30: the user's own commands, a message once expanded
         SlashCommand.Update,   // 2026-11-04, self-update: /update notes alone
+        SlashCommand.BotChat,   // 2026-11-12, the user's ask: every form, the chat shown on the page (no webcam from the page)
     };
 
     /// <summary>Whether any form of <paramref name="command"/> may run from the page (the dropdown's commands).</summary>
@@ -214,6 +215,9 @@ public static class WebCommands
             // 2026-10-18: the bare word is /tools comfy (a page on the PC); the status it showed is /comfy status, a list as before.
             SlashCommand.Comfy => Is(text, ChatScreen.ComfyStatusWord) || Is(text, ChatScreen.ComfyOfferedWord) ? WebCommandVerdict.List : Pane(word, "/comfy status or /comfy offered"),
             SlashCommand.Loop => LoopVerdict(args, settings),
+            // 2026-11-12 (plan what-would-it-take-tingly-ullman): every form runs; the chat mirrors to the page, its voices stay at the PC, and a
+            // chat the page starts never turns on the PC's webcam (HandleBotChatAsync). Usage errors land on the page as notices.
+            SlashCommand.BotChat => WebCommandVerdict.Run,
             _ => Pane(word, null),
         };
     }

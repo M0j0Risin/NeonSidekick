@@ -193,7 +193,13 @@ public sealed class WebCommandsTests
     [InlineData("/skills", WebCommandKind.Refused)]
     [InlineData("/youtube", WebCommandKind.Refused)]
     [InlineData("/queue clear", WebCommandKind.Refused)]
-    [InlineData("/botchat", WebCommandKind.Refused)]
+    [InlineData("/botchat", WebCommandKind.Run)]   // 2026-11-12, the user's ask: every form, the chat shown on the page
+    [InlineData("/botchat ada max -- pizza", WebCommandKind.Run)]
+    [InlineData("/botchat --resume", WebCommandKind.Run)]
+    [InlineData("/botchat --resume and now dessert", WebCommandKind.Run)]
+    [InlineData("/botchat --kill", WebCommandKind.Run)]
+    [InlineData("/loop 5m /botchat", WebCommandKind.Run)]   // the PC's "can't be looped"
+    [InlineData("/midi", WebCommandKind.Refused)]   // the device is the PC's
     [InlineData("/loop 5m hi", WebCommandKind.Run)]   // later on 2026-10-15: the page's too
     [InlineData("/loop 3 hi", WebCommandKind.Run)]
     [InlineData("/loop infinite 5m check the queue", WebCommandKind.Run)]

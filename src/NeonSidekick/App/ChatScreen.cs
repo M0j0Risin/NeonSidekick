@@ -16435,7 +16435,20 @@ internal sealed partial class ChatScreen
         _botPictureLog = [];
         var picturesSeen = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         // The bots see the user (2026-10-02, Botchat camera): the camera held for the chat, a fresh picture per turn.
-        CameraLease? botCamera = effective.BotChatCamera ? AcquireBotCamera() : null;
+        // Never from the Web UI (2026-11-12, the user's call): the person may be away from the PC, so a page-started chat (FromWebNow holds
+        // for the whole dispatch) leaves the webcam off; the bots' instructions follow the lease, so they are never told of a picture.
+        CameraLease? botCamera = null;
+        if (effective.BotChatCamera)
+        {
+            if (FromWebNow)
+            {
+                _transcript.Notice(CameraText.BotChatNotFromWeb);
+            }
+            else
+            {
+                botCamera = AcquireBotCamera();
+            }
+        }
         // The bots whose own server failed them (2026-10-10, the advisors' lesson: a failed advisor drops its link and the panel goes on),
         // by cast index: never picked again, nor named to the others; their links go with the rest at the chat's end.
         var away = new HashSet<int>();
@@ -18317,7 +18330,7 @@ internal sealed partial class ChatScreen
         }
         else
         {
-            _transcript.Speaker(bot.Name, SpeakerColor(bot.ColorIndex), bot.Avatar);
+            _transcript.Speaker(bot.Name, SpeakerColor(bot.ColorIndex), bot.Avatar, slot: bot.ColorIndex % 6);   // the page colors it from its own palette (2026-11-12)
             // A held /botchat reply's picture (Botchat image async off, later on 2026-09-25): under the name, above the words.
             if (picture is not null)
             {

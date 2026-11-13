@@ -45,6 +45,14 @@ public static class WebTheme
         bool readable = Readable(palette);
         Token("--accent", palette.Primary);
         Token("--accent-2", palette.Secondary);
+        // A botchat's speakers (2026-11-12, plan what-would-it-take-tingly-ullman): the six hues the terminal names them in, in its order
+        // (ChatScreen.SpeakerColor). Accents, so lent whether or not the theme reads; slot 2 is the palette's Tertiary, not --accent-3.
+        Token("--speaker-0", palette.Primary);
+        Token("--speaker-1", palette.Secondary);
+        Token("--speaker-2", palette.Tertiary);
+        Token("--speaker-3", palette.Highlight);
+        Token("--speaker-4", palette.Warm);
+        Token("--speaker-5", palette.Tint);
         StyleTokens(css, "--accent-3", styles(ThemeStyleSlot.AccentTertiary), readable);
         StyleTokens(css, "--user", styles(ThemeStyleSlot.User), readable);
         Token("--ok", palette.Good);

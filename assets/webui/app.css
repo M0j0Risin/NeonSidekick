@@ -8,6 +8,13 @@
   --dim: #9a8bb8;
   --accent: #ff4fd8;
   --accent-2: #4fe3ff;
+  /* A botchat's speakers (2026-11-12): the terminal's six hues in its order, each ≥4.5:1 on --bg; /theme.css sends the theme's. */
+  --speaker-0: #ff4fd8;
+  --speaker-1: #4fe3ff;
+  --speaker-2: #b15bff;
+  --speaker-3: #ffc832;
+  --speaker-4: #ff8a3d;
+  --speaker-5: #f45b9b;
   /* The tertiary accent's style (2026-10-21): synthwave's, a review's pass lines as the terminal draws them; /theme.css sends the theme's. */
   --accent-3: #b15bff;
   --accent-3-weight: 700;
@@ -142,6 +149,12 @@ body[data-user-line="quiet"] .entry.user .glyph { color: var(--user); }
 /* slab: the terminal's MenuHighlight, the body ink on the panel ground (--panel-2, a lighter fill, until 2026-10-22, a review). */
 body[data-user-line="slab"] .entry.user { color: var(--text); background: var(--panel); border-radius: 6px; padding: 2px 8px; }
 .entry.speaker { font-weight: 700; color: var(--accent-2); }
+.entry.speaker.c0 { color: var(--speaker-0); }
+.entry.speaker.c1 { color: var(--speaker-1); }
+.entry.speaker.c2 { color: var(--speaker-2); }
+.entry.speaker.c3 { color: var(--speaker-3); }
+.entry.speaker.c4 { color: var(--speaker-4); }
+.entry.speaker.c5 { color: var(--speaker-5); }
 .entry.assistant { display: flex; gap: 6px; }
 .entry.assistant .body { flex: 1; min-width: 0; }
 .entry.assistant .body.streaming { white-space: pre-wrap; }
@@ -476,6 +489,9 @@ footer.bottom .inner { max-width: 900px; margin: 0 auto; display: flex; flex-dir
 .learn-button { flex: none; position: relative; min-height: 0; padding: 0 4px; background: none; border: 0; border-radius: 6px; font-size: 15px; line-height: 20px; animation: pulse 1.6s ease-in-out infinite; }
 .learn-button::after { content: ""; position: absolute; inset: -12px -6px; }
 .learn-button.armed { animation: none; background: var(--error, #c0392b); }
+/* A botchat's ⏭️ (2026-11-12): 🧠's shape and tap area, no pulse (a plain control). */
+.skip-button { flex: none; position: relative; min-height: 0; padding: 0 4px; background: none; border: 0; border-radius: 6px; font-size: 15px; line-height: 20px; }
+.skip-button::after { content: ""; position: absolute; inset: -12px -6px; }
 /* The usage card (2026-10-16, the user's ask): a meter for the context, then the pane's sections as tiles, three across when wide. */
 .usage-card { max-height: 70vh; overflow-y: auto; }
 .usage-context { margin-bottom: 10px; }

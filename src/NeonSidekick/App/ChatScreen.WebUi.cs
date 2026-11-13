@@ -166,6 +166,8 @@ internal sealed partial class ChatScreen
             HistoryClear = WebClearHistory,
             // The status row's 🧠 (2026-10-17): the reflection canceled from the page, as Ctrl+L does.
             LearnCancel = WebCancelLearn,
+            // The status row's ⏭️ (2026-11-12): ESC's step in a botchat, pressed through the watcher.
+            BotSkip = WebSkip,
             // The queue held after a cancel (2026-10-17): the page's lines from before it wait for the hold to lift, its Resume lifts it.
             CancelHoldNow = () => _queue.Held,
             QueueResume = WebResumeQueue,
@@ -735,7 +737,9 @@ internal sealed partial class ChatScreen
             // The held queue's banner (2026-10-17): while the hold stands and something waits behind it, the PC's queue or the page's held lines.
             QueueHeld: _queue.Held && (_queue.Count > 0 || _webUi.CancelHeldCount > 0) ? WebUiText.QueueHeld : null,
             // User line style (2026-10-21): the page draws the user's lines as the transcript does.
-            UserLine: UserLineStyle.Resolve(effective.UserLineStyle));
+            UserLine: UserLineStyle.Resolve(effective.UserLineStyle),
+            // A botchat's ladder stands (2026-11-12): the status row offers ⏭️. Volatile, as the kill switch reads it off the screen's task.
+            BotChat: Volatile.Read(ref _botLadder) is not null);
     }
 
     /// <summary>
@@ -859,6 +863,37 @@ internal sealed partial class ChatScreen
 
         DiagnosticLog.Info(WebUiCategory, WebUiText.LearnCancelledLogLine(remote));
         _webUi.FlashPc(WebUiText.LearnCancelledFlash);
+        return WebReply.Ok;
+    }
+
+    /// <summary>
+    /// The status row's ⏭️ during a botchat (2026-11-12, plan what-would-it-take-tingly-ullman; a Kestrel thread): ESC pressed through the
+    /// watcher (<see cref="KeySource.PressCancel"/>), so it means what ESC means at that moment — the voice, then the bot, then the chat; over a
+    /// picture's spinner, the picture alone. The audit line and the PC's hint row; the ladder's own notices reach the page through the
+    /// transcript. Conflict with no botchat or between its waits, and while a question or a pane has the keys.
+    /// </summary>
+    private WebReply WebSkip(IPAddress? remote)
+    {
+        if (Volatile.Read(ref _botLadder) is null)
+        {
+            return new WebReply(WebOutcome.Conflict, WebUiText.NothingToSkip);
+        }
+
+        if (_webUi.Asks.OpenAsks().Count > 0)
+        {
+            return new WebReply(WebOutcome.Conflict, WebUiText.AnswerFirst);
+        }
+
+        switch (_keys.PressCancel())
+        {
+            case CancelPress.InPhase:
+                return new WebReply(WebOutcome.Conflict, WebUiText.AnswerFirst);
+            case CancelPress.NoWatch:
+                return new WebReply(WebOutcome.Conflict, WebUiText.NothingToSkip);
+        }
+
+        DiagnosticLog.Info(WebUiCategory, WebUiText.BotSkipLogLine(remote));
+        _webUi.FlashPc(WebUiText.BotSkippedFlash);
         return WebReply.Ok;
     }
 

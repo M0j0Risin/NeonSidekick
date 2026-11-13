@@ -179,6 +179,12 @@ public sealed record WebEntry(long Seq, string Kind, string Text, string? Glyph,
 
     /// <summary>A notice's role (2026-10-21, <see cref="TranscriptFeed.ToneWord"/>): <c>bad</c>, <c>warn</c>, <c>dim</c> or <c>progress</c>; null when plain.</summary>
     public string? Tone { get; init; }
+
+    /// <summary>
+    /// A botchat speaker's palette slot (2026-11-12, plan what-would-it-take-tingly-ullman): 0–5 for Primary, Secondary, Tertiary, Highlight,
+    /// Warm and Tint, the page's <c>c0</c>…<c>c5</c> classes on <c>--speaker-0</c>…<c>-5</c>; null for any other entry.
+    /// </summary>
+    public int? Speaker { get; init; }
 }
 
 /// <summary>
@@ -402,6 +408,7 @@ public sealed record WebAskView(
 /// (<see cref="WebUiAssets.Tag"/>: a page whose tag differs reloads itself). The tabs on; and (2026-10-16) the banner's words while a video
 /// waits for a YouTube tab (<see cref="Watch"/>: the flag and the text in one, null for none). <see cref="UserLine"/> (2026-10-21, the
 /// user's call: the page draws the user's lines as the terminal does) is <i>User line style</i>, resolved; empty reads as <c>bold</c>.
+/// <see cref="BotChat"/> (2026-11-12): a botchat's ladder stands, so the status row offers ⏭️.
 /// </summary>
 public sealed record WebState(
     string Profile,
@@ -423,7 +430,8 @@ public sealed record WebState(
     bool YouTubeTab = false,
     string? Watch = null,
     string? QueueHeld = null,
-    string UserLine = "");
+    string UserLine = "",
+    bool BotChat = false);
 
 /// <summary>
 /// What a page gets on (re)connecting: the transcript, the open asks, the state, the app's words the page shows of its own, the drafts held for
@@ -483,7 +491,8 @@ public sealed record WebWords(string PictureGone, string PictureTooLarge, string
     string BotCheckTypeHere = "", string BotCheckSend = "", string BotCheckEnter = "", string BotCheckBackspace = "", string BotCheckTab = "",
     string BotCheckStalled = "",
     string LearnCancel = "", string LearnCancelArmed = "", string Resume = "",
-    string MemoryEdit = "", string MemoryEditSave = "", string MemoryEditCancel = "", string MemoryTurnOff = "", string MemoryTurnOn = "");
+    string MemoryEdit = "", string MemoryEditSave = "", string MemoryEditCancel = "", string MemoryTurnOff = "", string MemoryTurnOn = "",
+    string Skip = "");
 
 /// <summary>
 /// The page's saved prompts, the sheet's 📣 tab (later on 2026-10-15): the profile's prompts, numbered as at the PC. The title went on

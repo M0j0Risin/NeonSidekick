@@ -78,7 +78,7 @@ public static partial class HelpSettings
         SettingsField.BotChatMemory => "Gives every bot long-term memory, whatever each profile's Memory mode says. Botchat memory mode says whose memories they use.",
         SettingsField.BotChatMemoryMode => "Whose memories the bots use: shared-parent, the starting profile's for every bot; independent, each bot its own profile's.",
         SettingsField.BotChatVision => "Shows each bot the chat's newest pictures on its turn. Only for models that read images: a text-only server fails the turn.",
-        SettingsField.BotChatCamera => "Lets the bots see you: the camera stays on for the chat and each bot's turn gets a fresh photo, kept in memory and never saved. Needs a model that reads images.",
+        SettingsField.BotChatCamera => "Lets the bots see you: the camera stays on for the chat and each bot's turn gets a fresh photo. Needs a model that reads images. Never for a chat started from the Web UI.",
         SettingsField.BotChatRecentContext => "Gives every bot the last 10 messages of this chat from when /botchat began, so the topic can build on them. Off, the bots know the topic alone.",
 
         // /settings › Client › Web UI

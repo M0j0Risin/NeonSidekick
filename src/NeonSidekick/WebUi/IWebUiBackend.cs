@@ -169,6 +169,9 @@ public interface IWebUiBackend
     /// <summary>The running reflection canceled from the status row's 🧠 (2026-10-17), the two taps having been the yes; NotFound without a screen.</summary>
     WebReply CancelLearning(IPAddress? remote) => new(WebOutcome.NotFound);
 
+    /// <summary>The status row's ⏭️ during a botchat (2026-11-12): ESC's step at the PC (the voice, the bot, the chat); NotFound without a screen.</summary>
+    WebReply SkipBot(IPAddress? remote) => new(WebOutcome.NotFound);
+
     /// <summary>The queue held after a cancel released from the page's banner (2026-10-17); NotFound without a screen.</summary>
     WebReply ResumeQueue(IPAddress? remote) => new(WebOutcome.NotFound);
 

@@ -368,6 +368,17 @@ internal sealed class FakeWebUiBackend : IWebUiBackend
         return LearnReply ?? WebReply.Ok;
     }
 
+    /// <summary>The status row's ⏭️ (2026-11-12): how many skips arrived; <see cref="SkipReply"/> answers them (Ok by default).</summary>
+    public int Skips;
+
+    public WebReply? SkipReply { get; set; }
+
+    public WebReply SkipBot(IPAddress? remote)
+    {
+        Interlocked.Increment(ref Skips);
+        return SkipReply ?? WebReply.Ok;
+    }
+
     /// <summary>The held queue's Resume (2026-10-17): how many arrived; <see cref="ResumeReply"/> answers them (Ok by default).</summary>
     public int Resumes;
 

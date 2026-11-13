@@ -76,6 +76,12 @@ function newId() {
 // What the terminal shows besides (2026-10-15): the thinking (streamed, then folded under its summary), an edit's diff, the tool runs folded
 // under their summary past Tool collapse count, a /cmd run's output, and "(no reply)". A fold the page makes on its own keeps the reading place.
 
+// A botchat speaker's color class (2026-11-12): ' c0' to ' c5' for a whole slot 0–5 (TranscriptFeed's speaker), else nothing.
+function speakerClass(entry) {
+  const slot = entry.speaker;
+  return entry.kind === 'speaker' && Number.isInteger(slot) && slot >= 0 && slot <= 5 ? ' c' + slot : '';
+}
+
 function renderEntry(entry) {
   let node;
   const record = { kind: entry.kind, text: entry.text, body: null, el: null };
@@ -149,7 +155,8 @@ function renderEntry(entry) {
       break;
     default:
       // A notice's tone (2026-10-21): one of the server's fixed words (TranscriptFeed.ToneWord), its tone- class in app.css.
-      node = el('div', 'entry ' + entry.kind + (entry.failed ? ' failed' : '') + (entry.tone ? ' tone-' + entry.tone : ''), entry.text);
+      // A botchat speaker's palette slot (2026-11-12): its c0–c5 class in app.css, any other value none.
+      node = el('div', 'entry ' + entry.kind + (entry.failed ? ' failed' : '') + (entry.tone ? ' tone-' + entry.tone : '') + speakerClass(entry), entry.text);
       if (entry.diff) {
         const block = diffBlock(entry.diff);
         node.appendChild(block);
@@ -731,6 +738,7 @@ const labelEl = spinEl.querySelector('.label');
 const clockEl = spinEl.querySelector('.clock');
 const usageBtn = document.getElementById('usage');
 const learnBtn = document.getElementById('learn');
+const skipBtn = document.getElementById('skip');
 const loopEl = document.getElementById('loop');
 const usageCard = document.getElementById('usage-card');
 const Frames = ['⠋', '⠙', '⠸', '⠴', '⠧', '⠇', '⠏'];   // the PC's (Theme.SpinnerFrames)
@@ -790,6 +798,15 @@ Neon.armTwice(learnBtn, on => { learnArmed = on; paintLearn(on); }, async () => 
   if (!r.ok) say(r.message || '');
 });
 
+// A botchat's ⏭️ (2026-11-12): ESC's step at the PC (the voice, then the bot, then the chat; over a picture's spinner, the picture
+// alone), shown while the chat runs. Kept apart from 🧠 in the row, so a tap meant for one never lands on the other's wider tap area.
+skipBtn.addEventListener('click', async () => {
+  skipBtn.disabled = true;
+  const r = await post('/api/botchat/skip', {});
+  skipBtn.disabled = false;
+  if (!r.ok) say(r.message || '');
+});
+
 function drawStatus() {
   const label = status && status.label;
   const spinning = !!label || !!(state && state.busy);
@@ -800,6 +817,12 @@ function drawStatus() {
   loopEl.classList.toggle('hidden', !loop);
   if (!learning && learnArmed) Neon.disarm();
   learnBtn.classList.toggle('hidden', !learning);
+  const skipLabel = words.skip || 'Skip: the voice, then the bot, then the chat';
+  if (skipBtn.title !== skipLabel) {
+    skipBtn.title = skipLabel;
+    skipBtn.setAttribute('aria-label', skipLabel);
+  }
+  skipBtn.classList.toggle('hidden', !(state && state.busy && state.botChat));
   spinEl.classList.toggle('hidden', !spinning);
   if (spinning) {
     frameEl.textContent = still.matches ? '⏳' : Frames[frame % Frames.length];

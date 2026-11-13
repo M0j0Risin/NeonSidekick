@@ -455,6 +455,7 @@ Settings: `/settings` › [Automation](SETTINGS.md#automation).
 * **Servers:** this profile's, or each bot's own under *Botchat LLM mode* `multi`. `/botchat --kill` stops the extra embedded servers (*Botchat embedded mode*).
 * **Tools:** pictures ([Botchat pictures](SETTINGS.md#botchat-pictures)), tools, skills and memory, per the Botchat settings. Never advisors; bots on the Claude Code server get no tools.
 * **Joining in:** a typed line joins before the next reply; with *STT input* on, push-to-talk cuts in. Esc stops the voice, then the bot, then the chat; `/botchat --resume` carries on.
+* **From the Web UI:** the chat shows on the page and its voices play at the PC. [⏭️](INTERFACE.md#what-the-page-shows) does what Esc does and Stop ends it; the camera stays off ([Botchat camera](SETTINGS.md#botchat)).
 * **Saved** as its own session under *Session logging*.
 
 ### Claude Code from the chat

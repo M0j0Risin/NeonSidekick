@@ -217,6 +217,12 @@ public static class CameraText
     /// <summary>The notice when the camera failed during a botchat (once): the chat goes on without it.</summary>
     public static string BotChatFailed(string message) => message + " The bots go on without the camera.";
 
+    /// <summary>
+    /// The notice at a botchat's start with <c>Botchat camera</c> on when the Web UI's page started it (2026-11-12, the user's call): the
+    /// person may be away from the PC, so its webcam stays off and the bots are never told of a picture.
+    /// </summary>
+    public const string BotChatNotFromWeb = "📷 Botchat camera stays off for a chat started from the Web UI.";
+
     // ── Watch mode ──────────────────────────────────────────────────────────
 
     public static string WatchOn(int seconds, int threshold, bool unprompted) =>

@@ -282,12 +282,13 @@ public sealed class TranscriptRenderer : INoticeSink
 
     /// <summary>
     /// Who speaks next in a <c>/botchat</c> (2026-09-24): the name on a line of its own above the reply, which
-    /// opens with its glyph as any reply does — the reply's own rendering is untouched.
+    /// opens with its glyph as any reply does — the reply's own rendering is untouched. <paramref name="slot"/> (2026-11-12) is the speaker's
+    /// palette slot, 0–5, sent to the Web UI's page so it colors the name from its own palette.
     /// </summary>
-    public void Speaker(string name, Color color, string? avatar = null)
+    public void Speaker(string name, Color color, string? avatar = null, int? slot = null)
     {
         ArgumentNullException.ThrowIfNull(name);
-        Feed?.Add(WebUi.FeedKind.Speaker, string.IsNullOrEmpty(avatar) ? name : avatar + " " + name);
+        Feed?.Add(WebUi.FeedKind.Speaker, string.IsNullOrEmpty(avatar) ? name : avatar + " " + name, speaker: slot);
         EndRun();
         BreakIfMidText();
         // The speaker's line starts the bot's reply (2026-11-01, message jumps): the reply's own first row is no second start.

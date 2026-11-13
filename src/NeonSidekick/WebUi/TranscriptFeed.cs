@@ -134,9 +134,10 @@ public sealed class TranscriptFeed
     /// <see cref="FeedKind.ToolResult"/>) joins the open run, opening one while <see cref="ToolKeep"/> is above 0; any other kind ends the run.
     /// <paramref name="joins"/> marks a tool line that completes the call before it (one unit); <paramref name="diff"/> is an edit's rows;
     /// <paramref name="splash"/> (2026-10-18) marks the welcome splash's pictures, which the page draws first, centered and filling it;
-    /// <paramref name="tone"/> (2026-10-21) is a notice's role, the page's <c>tone-</c> class (<see cref="ToneWord"/>).
+    /// <paramref name="tone"/> (2026-10-21) is a notice's role, the page's <c>tone-</c> class (<see cref="ToneWord"/>); <paramref name="speaker"/>
+    /// (2026-11-12) a botchat speaker's palette slot, 0–5 (<see cref="WebEntry.Speaker"/>).
     /// </summary>
-    public long Add(FeedKind kind, string text, string? glyph = null, bool failed = false, IReadOnlyList<WebPicture>? pictures = null, bool joins = false, WebDiff? diff = null, bool splash = false, UI.NoticeTone tone = UI.NoticeTone.Plain)
+    public long Add(FeedKind kind, string text, string? glyph = null, bool failed = false, IReadOnlyList<WebPicture>? pictures = null, bool joins = false, WebDiff? diff = null, bool splash = false, UI.NoticeTone tone = UI.NoticeTone.Plain, int? speaker = null)
     {
         ArgumentNullException.ThrowIfNull(text);
         if (kind == FeedKind.ToolResult && text.Length > MaxResultChars)
@@ -171,6 +172,7 @@ public sealed class TranscriptFeed
             entry.Diff = diff;
             entry.Splash = splash;
             entry.Tone = tone;
+            entry.Speaker = speaker;
             _replyWrote |= _replyOpen;
             added = entry.ToWeb(null);
         }
@@ -800,6 +802,9 @@ public sealed class TranscriptFeed
         /// <summary>A notice's role (2026-10-21).</summary>
         public UI.NoticeTone Tone { get; set; }
 
+        /// <summary>A botchat speaker's palette slot (2026-11-12).</summary>
+        public int? Speaker { get; set; }
+
         /// <summary>A finished reply's Markdown as HTML, rendered once and cached (re-rendered only if its text changed); null for anything else.</summary>
         public string? Html(Func<string, string, string> html)
         {
@@ -854,6 +859,7 @@ public sealed class TranscriptFeed
                 Deferred = deferText || deferDiff ? true : null,
                 Splash = Splash ? true : null,
                 Tone = ToneWord(Tone),
+                Speaker = Speaker,
             };
         }
     }

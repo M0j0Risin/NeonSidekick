@@ -296,6 +296,29 @@ public sealed partial class WebUiHostTests
         Assert.Equal(WebTab.Chat, WebUiHost.TabOf(WebUiHost.LearnCancelPath));
     }
 
+    /// <summary>The status row's ⏭️ during a botchat (2026-11-12): the 🧠's shape — signed in with the header, an act, its Conflict a 409.</summary>
+    [Fact]
+    public async Task TheBotSkip_NeedsTheCookieAndTheHeader_IsAnAct_AndAnswersTheBackend()
+    {
+        using var unsigned = await _client.SendAsync(Post(WebUiHost.BotSkipPath, "{}", signedIn: false));
+        using var crossSite = await _client.SendAsync(Post(WebUiHost.BotSkipPath, "{}", csrf: false));
+        Assert.Equal((HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden), (unsigned.StatusCode, crossSite.StatusCode));
+        Assert.Equal(0, _backend.Skips);
+
+        using var done = await _client.SendAsync(Post(WebUiHost.BotSkipPath, "{}"));
+        Assert.Equal(HttpStatusCode.OK, done.StatusCode);
+        Assert.Equal(1, _backend.Skips);
+
+        _backend.SkipReply = new WebReply(WebOutcome.Conflict, WebUiText.NothingToSkip);
+        using var none = await _client.SendAsync(Post(WebUiHost.BotSkipPath, "{}"));
+        Assert.Equal(HttpStatusCode.Conflict, none.StatusCode);
+        var body = JsonSerializer.Deserialize(await none.Content.ReadAsStringAsync(), WebUiJsonContext.Default.WebResult)!;
+        Assert.Equal(WebUiText.NothingToSkip, body.Message);
+
+        Assert.Equal(WebRateBucket.Act, WebRateLimit.BucketOf(WebUiHost.BotSkipPath, post: true));
+        Assert.Equal(WebTab.Chat, WebUiHost.TabOf(WebUiHost.BotSkipPath));
+    }
+
     /// <summary>The held queue's Resume (2026-10-17): the same shape as the 🧠's cancel.</summary>
     [Fact]
     public async Task TheQueuesResume_NeedsTheCookieAndTheHeader_IsAnAct_AndAnswersTheBackend()

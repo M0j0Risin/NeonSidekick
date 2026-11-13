@@ -397,6 +397,11 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
 
     public WebReply CancelLearning(IPAddress? remote) => LearnCancel is { } cancel ? cancel(remote) : new WebReply(WebOutcome.NotFound);
 
+    /// <summary>The screen's ESC step in a botchat (2026-11-12, the status row's ⏭️); null: none.</summary>
+    public Func<IPAddress?, WebReply>? BotSkip { get; set; }
+
+    public WebReply SkipBot(IPAddress? remote) => BotSkip is { } skip ? skip(remote) : new WebReply(WebOutcome.NotFound);
+
     /// <summary>The screen's release of its queue held after a cancel (2026-10-17, the banner's Resume); null: none.</summary>
     public Func<IPAddress?, WebReply>? QueueResume { get; set; }
 

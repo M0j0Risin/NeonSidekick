@@ -5,7 +5,7 @@ using Spectre.Console.Testing;
 
 namespace NeonSidekick.Tests;
 
-public class KeySourceTests
+public partial class KeySourceTests
 {
     private static readonly TimeSpan FastPoll = TimeSpan.FromMilliseconds(1);
 

@@ -105,6 +105,20 @@ public sealed class WebCompletionTests
         Assert.Empty(snapshot.Complete("/settings ", 10, 1).Items);   // a command the page may not run lists no words
     }
 
+    /// <summary><c>/botchat</c> from the page (2026-11-12): offered, its profiles and switches too; <c>/midi</c>, the PC's device, is not.</summary>
+    [Fact]
+    public void BotChat_IsOffered_WithItsProfiles_AndMidiIsNot()
+    {
+        var snapshot = Snapshot(arguments: (command, _) => command == "/botchat"
+            ? new ArgumentList([new("ada", "a profile"), new("--resume", "carry on"), new("--kill", "stop the extra servers")])
+            : ArgumentList.None);
+
+        var commands = snapshot.Complete("/", 1, 1).Items.Select(i => i.Text).ToList();
+        Assert.Contains("/botchat", commands);
+        Assert.DoesNotContain("/midi", commands);
+        Assert.Equal(["ada", "--resume", "--kill"], snapshot.Complete("/botchat ", 9, 1).Items.Select(i => i.Text));   // every form runs from the page
+    }
+
     [Fact]
     public void TheConnectionsNotes_FollowTheSetting()
     {
