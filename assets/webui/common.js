@@ -317,7 +317,7 @@ const Neon = (() => {
   }
 
   // ── A video waiting for the Video tab (2026-10-16) ──
-  // Every page jumps to /youtube while the PC holds a video for it, unless the page says not now (watchBlocked: by default a text field with
+  // Every page jumps to /video while the PC holds a video for it, unless the page says not now (watchBlocked: by default a text field with
   // focus; Chat sets its own: a draft, an ask card, the sheet), when it shows a banner instead, a link to the tab. A page that showed the banner
   // for a waiting video never jumps for that one by itself; a new one (the flag cleared and set again) gets the usual check. A hidden page waits
   // until it shows. The YouTube page itself does nothing.

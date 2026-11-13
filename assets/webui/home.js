@@ -499,6 +499,8 @@ function renderVideo() {
   const row = el('div', 'remote');
   for (const [action, glyph, label] of Remote) {
     if ((action === 'previous' || action === 'next') && !(v.count > 1)) continue;
+    // A file on a page that can't set its volume (2026-11-13, an iPhone): the phone's buttons own it; mute still works.
+    if ((action === 'quieter' || action === 'louder') && v.fixedVolume) continue;
     const b = el('button', null, glyph);
     b.type = 'button';
     b.setAttribute('aria-label', label);

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Extensions.AI;
+using NeonSidekick.Diagnostics;
 using NeonSidekick.Files;
 using NeonSidekick.Viewer;
 using NeonSidekick.YouTube;
@@ -16,6 +17,11 @@ namespace NeonSidekick.Llm.Tools;
 /// resolves inside the sandbox, and a folder named <c>x.mp4</c> is refused as a missing file is. <c>autoplay</c> is its own (true unless
 /// given): <i>YouTube autoplay</i> names YouTube. With no player at all (a screen with no video window) the route hands every play to the
 /// default app. Never headless.
+///
+/// <para>2026-11-13 (the review's fixes): a fallback note never hides an error (<see cref="VideoText.Lead"/> keeps <c>Error: </c> first); a
+/// video window that fails after it opened (its page never came, its browser stopped) sends the file to its default app through the
+/// <c>fallback</c> hook, the router's hand-off closing the failed window; a play cancelled while its checks ran (a share that doesn't
+/// answer) never starts; and the screen's own instance (<c>forUser</c>) words its answers for <c>/video</c> and <c>/view</c>.</para>
 /// </summary>
 public sealed class PlayVideoTool : FileTool
 {
@@ -38,20 +44,27 @@ public sealed class PlayVideoTool : FileTool
 
     private readonly IVideoPlayer? _player;
     private readonly TimeProvider _time;
-    private readonly Func<VideoRequest, VideoRouted>? _route;
+    private readonly Func<VideoRequest, VideoRouted> _route;
     private readonly Func<VideoFilesPlayInKind>? _target;
+    private readonly Func<VideoRequest, string, VideoRouted>? _fallback;
+    private readonly bool _forUser;
 
     /// <param name="player">The player whose reports the wait reads (the router); null with no video window, every play then the route's hand-off.</param>
     /// <param name="files">The sandbox the path resolves in.</param>
-    /// <param name="route">Where a play goes (<c>ChatScreen.RouteFile</c>); null plays on <paramref name="player"/>.</param>
+    /// <param name="route">Where a play goes (<c>ChatScreen.RouteFile</c>; a test's lambda plays on its fake).</param>
     /// <param name="target">Where a play would go now, for the description; null is the video window.</param>
-    public PlayVideoTool(IVideoPlayer? player, WorkingDirectory files, TimeProvider? time = null, Func<VideoRequest, VideoRouted>? route = null, Func<VideoFilesPlayInKind>? target = null)
+    /// <param name="fallback">The default app for a file whose video window failed after it opened, with the note to lead its answer; null keeps the failure.</param>
+    /// <param name="forUser"><c>/video</c>'s and <c>/view</c>'s instance: its answers name <c>/video</c>'s forms, not the tools'.</param>
+    public PlayVideoTool(IVideoPlayer? player, WorkingDirectory files, TimeProvider? time, Func<VideoRequest, VideoRouted> route, Func<VideoFilesPlayInKind>? target = null,
+        Func<VideoRequest, string, VideoRouted>? fallback = null, bool forUser = false)
         : base(files)
     {
         _player = player;
         _time = time ?? TimeProvider.System;
-        _route = route;
+        _route = route ?? throw new ArgumentNullException(nameof(route));
         _target = target;
+        _fallback = fallback;
+        _forUser = forUser;
     }
 
     public override string Name => ToolName;
@@ -125,21 +138,23 @@ public sealed class PlayVideoTool : FileTool
 
         if (!VideoFile.IsVideoPath(full))
         {
-            return VideoText.NotAVideoFile(FileText.Shown(path));
+            return VideoText.NotAVideoFile(FileText.Shown(path), _forUser);
         }
 
         if (!File.Exists(full))
         {
-            return Directory.Exists(full) ? VideoText.NotAVideoFile(FileText.Shown(path)) : FileText.Error(FileOutcome.Missing, FileText.Shown(path), "play");
+            return Directory.Exists(full) ? VideoText.NotAVideoFile(FileText.Shown(path), _forUser) : FileText.Error(FileOutcome.Missing, FileText.Shown(path), "play");
         }
 
+        // The checks above can block on a share that doesn't answer, and can't be interrupted: a play given up meanwhile never starts.
+        cancellationToken.ThrowIfCancellationRequested();
         var request = VideoRequest.File(full, start, autoplay);
         string token = request.FileToken!;
         long before = _player?.Snapshot?.Version ?? -1;
         VideoRouted routed;
         try
         {
-            routed = Route(request);
+            routed = _route(request);
         }
         catch (InvalidOperationException e)
         {
@@ -148,35 +163,28 @@ public sealed class PlayVideoTool : FileTool
 
         if (!routed.Wait)
         {
-            return (routed.Note ?? "") + routed.Answer;
+            return VideoText.Lead(routed.Answer ?? "", routed.Note);
         }
 
         if (_player is null)
         {
-            return (routed.Note ?? "") + VideoText.NoFile;
+            return VideoText.Lead(VideoText.NoFileFor(_forUser), routed.Note);
         }
 
         // Started, ready (autoplay off), ended at once or refused, by this play's own token; a file held for a Video tab with no page to
         // see the ask is an answer at once, as youtube_play's is.
         var snapshot = await YouTubeWait.UntilAsync(_player, before, s => s.FileToken == token && (s.Held is { Nudged: false }
             || s.State is VideoState.Playing or VideoState.Paused or VideoState.Ended || (s.State == VideoState.Cued && !autoplay)), YouTubeWait.Play, _time, cancellationToken, video: token).ConfigureAwait(false);
-        return (routed.Note ?? "") + (snapshot is null ? YouTubeText.ClosedMeanwhileIn(_player.Place) : YouTubeText.Status(snapshot));
-    }
 
-    // The play through the route, or on the player as a test builds it.
-    private VideoRouted Route(VideoRequest request)
-    {
-        if (_route is not null)
+        // The video window failed after it opened on this file (its page never came, its browser stopped; not the file's own error): the
+        // default app has it instead, whose hand-off closes the failed window, so status says where it went.
+        if (snapshot is { State: VideoState.Failed, Place: VideoPlace.Window } failed && failed.FileToken == token && _fallback is not null)
         {
-            return _route(request);
+            DiagnosticLog.Info("Video", VideoText.FileWindowFailedLogLine(request.FileName, failed.Failure));
+            var fell = _fallback(request, VideoText.DefaultAppFellBack(VideoText.CouldNotPlayIn(VideoFilesPlayInKind.VideoWindow)));
+            return VideoText.Lead(fell.Answer ?? "", routed.Note, fell.Note);
         }
 
-        if (_player is null)
-        {
-            throw new InvalidOperationException(VideoText.NoFilePlayer);
-        }
-
-        _player.Play(request);
-        return VideoRouted.Waited;
+        return VideoText.Lead(snapshot is null ? YouTubeText.ClosedMeanwhileIn(_player.Place) : YouTubeText.Status(snapshot, _forUser), routed.Note);
     }
 }

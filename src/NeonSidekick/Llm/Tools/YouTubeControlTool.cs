@@ -96,9 +96,9 @@ public sealed class YouTubeControlTool : AIFunction
         }
 
         // A video file open (2026-11-12): video_control's, not this tool's.
-        if (current.IsFile)
+        if (current.AsFile() is { } file)
         {
-            return VideoText.FileIsOpen(current.FileName, _videoPointer?.Invoke());
+            return VideoText.FileIsOpen(file.FileName, _videoPointer?.Invoke());
         }
 
         if (action == "close")
@@ -117,52 +117,6 @@ public sealed class YouTubeControlTool : AIFunction
         Func<VideoSnapshot, bool> shows;
         switch (action)
         {
-            case "play":
-                command = VideoCommand.Play;
-                shows = s => s.State is VideoState.Playing or VideoState.Ended;
-                break;
-            case "pause":
-                command = VideoCommand.Pause;
-                shows = s => s.State is VideoState.Paused or VideoState.Ended or VideoState.Cued;
-                break;
-            case "seek":
-            case "forward":
-            case "back":
-                double? seconds = value.Length == 0 ? (action == "seek" ? null : DefaultSkip) : YouTubeIds.ParseTime(value);
-                if (seconds is not { } by)
-                {
-                    return YouTubeText.NotATime(ValueArgument, value);
-                }
-
-                double to = action switch
-                {
-                    "forward" => current.Position + by,
-                    "back" => current.Position - by,
-                    _ => by,
-                };
-                if (current.Duration > 0)
-                {
-                    to = Math.Min(to, current.Duration);
-                }
-
-                command = VideoCommand.Seek(to);
-                double target = command.Value;
-                shows = s => Math.Abs(s.Position - target) < 3;
-                break;
-            case "volume":
-                if (!double.TryParse(value.TrimEnd('%'), NumberStyles.Float, CultureInfo.InvariantCulture, out double level) || level is < 0 or > 100)
-                {
-                    return YouTubeText.NotAVolume(value);
-                }
-
-                command = VideoCommand.Volume(level);
-                int volume = (int)command.Value;
-                shows = s => s.Volume == volume;
-                break;
-            case "mute":
-                command = VideoCommand.Mute;
-                shows = s => s.Muted;
-                break;
             case "next":
             case "previous":
             case "entry":
@@ -189,8 +143,11 @@ public sealed class YouTubeControlTool : AIFunction
                 shows = s => (s.PlaylistEntry != was || s.VideoId != from) && Moved(s);
                 break;
             default:
-                command = VideoCommand.Unmute;
-                shows = s => !s.Muted;
+                if (TryCommand(action, value, current, ValueArgument, out command, out shows) is { } error)
+                {
+                    return error;
+                }
+
                 break;
         }
 
@@ -204,6 +161,76 @@ public sealed class YouTubeControlTool : AIFunction
         var timeout = action is "next" or "previous" or "entry" ? YouTubeWait.Play : YouTubeWait.Command;
         var snapshot = await YouTubeWait.UntilAsync(_player, before, shows, timeout, _time, cancellationToken).ConfigureAwait(false);
         return snapshot is null ? YouTubeText.ClosedMeanwhileIn(current.Place) : YouTubeText.Status(snapshot);
+    }
+
+    /// <summary>
+    /// The commands both control tools share (2026-11-13, the review's fix: one parser, one set of refusals): play, pause, seek, forward,
+    /// back, volume, mute and unmute against <paramref name="current"/>, each with what the player's report shows once it took effect.
+    /// Null when <paramref name="command"/> is made, else the refusal: a time or a volume that doesn't read, is out of range, or isn't a
+    /// finite number ("NaN" parses as a double). <paramref name="valueArgument"/> names the tool's argument; <paramref name="userCommand"/>
+    /// (<c>/video</c>) names the command instead, for the user's own line. Each tool keeps its kind guard and its other actions.
+    /// </summary>
+    public static string? TryCommand(string action, string value, VideoSnapshot current, string valueArgument, out VideoCommand command,
+        out Func<VideoSnapshot, bool> shows, string? userCommand = null)
+    {
+        ArgumentNullException.ThrowIfNull(current);
+        ArgumentNullException.ThrowIfNull(value);
+        command = VideoCommand.Play;
+        shows = static _ => false;
+        switch (action)
+        {
+            case "play":
+                shows = static s => s.State is VideoState.Playing or VideoState.Ended;
+                return null;
+            case "pause":
+                command = VideoCommand.Pause;
+                shows = static s => s.State is VideoState.Paused or VideoState.Ended or VideoState.Cued;
+                return null;
+            case "seek":
+            case "forward":
+            case "back":
+                double? seconds = value.Length == 0 ? (action == "seek" ? null : DefaultSkip) : YouTubeIds.ParseTime(value);
+                if (seconds is not { } by || !double.IsFinite(by))
+                {
+                    return userCommand is null ? YouTubeText.NotATime(valueArgument, value) : YouTubeText.NotATimeForUser(userCommand + " " + action, value);
+                }
+
+                double to = action switch
+                {
+                    "forward" => current.Position + by,
+                    "back" => current.Position - by,
+                    _ => by,
+                };
+                if (current.Duration > 0)
+                {
+                    to = Math.Min(to, current.Duration);
+                }
+
+                command = VideoCommand.Seek(to);
+                double target = command.Value;
+                shows = s => Math.Abs(s.Position - target) < 3;
+                return null;
+            case "volume":
+                if (!double.TryParse(value.TrimEnd('%'), NumberStyles.Float, CultureInfo.InvariantCulture, out double level) || !double.IsFinite(level) || level is < 0 or > 100)
+                {
+                    return userCommand is null ? YouTubeText.NotAVolume(value) : YouTubeText.NotAVolumeForUser(userCommand + " volume", value);
+                }
+
+                command = VideoCommand.Volume(level);
+                int volume = (int)command.Value;
+                shows = s => s.Volume == volume;
+                return null;
+            case "mute":
+                command = VideoCommand.Mute;
+                shows = static s => s.Muted;
+                return null;
+            case "unmute":
+                command = VideoCommand.Unmute;
+                shows = static s => !s.Muted;
+                return null;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(action), action, "not a shared control action");
+        }
     }
 
     // An entry moved to shows once it plays, waits cued or has ended (a short one may be over before the report). Not paused

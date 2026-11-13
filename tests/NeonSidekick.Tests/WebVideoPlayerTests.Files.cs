@@ -54,7 +54,7 @@ public partial class WebVideoPlayerTests : IDisposable
         Assert.Equal(new WebVideoFile(clip, "my clip #1%.mp4"), player.FileOf(token));
         Assert.Null(player.FileOf(VideoFile.NewToken()));
         Assert.Null(player.FileOf("../" + token));
-        Assert.Equal("/api/youtube/file/" + token + "/a%3Fb.mp4", WebVideoPlayer.FileSrc(token, "a?b.mp4"));   // a name no Windows file has, kept whole
+        Assert.Equal("/api/youtube/file/" + token + "/a%3Fb.mp4", WebVideoPlayer.FileAddress(token, "a?b.mp4"));   // a name no Windows file has, kept whole
 
         Assert.Equal(WebOutcome.Ok, player.Report(Id('a'), FileState(token, 1, 13), null));
         Assert.Equal(VideoState.Playing, player.Snapshot?.State);
@@ -104,7 +104,7 @@ public partial class WebVideoPlayerTests : IDisposable
         Assert.True(b.Attachment.Hello.Play);
         var offer = b.Attachment.Hello.Resume!;
         Assert.Equal(token, offer.File);
-        Assert.Equal(WebVideoPlayer.FileSrc(token, "my clip #1%.mp4"), offer.Src);
+        Assert.Equal(WebVideoPlayer.FileAddress(token, "my clip #1%.mp4"), offer.Src);
         Assert.Equal("my clip #1%.mp4", offer.Name);
         Assert.Null(offer.VideoId);
         Assert.StartsWith("Resume \"my clip #1%.mp4\" at ", offer.Label, StringComparison.Ordinal);
@@ -179,6 +179,107 @@ public partial class WebVideoPlayerTests : IDisposable
 
         Assert.Equal(VideoFile.GoneCode, player.Snapshot?.Error);
         Assert.Equal(VideoFile.GoneCode, _seen[^1]?.Error);
+    }
+
+    /// <summary>
+    /// A file's Resume offer lasts <see cref="YouTubeText.HoldFor"/> from when it was made (2026-11-13): the tick then drops it, its token
+    /// stops being served, and the owner page is told (a <c>resume</c> with null) so its button goes too; a kept offer keeps its age.
+    /// </summary>
+    [Fact]
+    public void AFilesOffer_ExpiresOnTheTick_AndTheOwnerIsTold()
+    {
+        var player = Player();
+        Attach(player, Id('a'), Id('1'));
+        var request = VideoRequest.File(FileClip());
+        player.Play(request);
+        player.Report(Id('a'), FileState(request.FileToken!, 1, 60), null);
+        var b = Attach(player, Id('b'), Id('2'), claimId: Id('c'));
+        Assert.NotNull(b.Attachment.Hello.Resume);
+        b.Drain();
+
+        _time.Advance(YouTubeText.HoldFor - TimeSpan.FromSeconds(1));
+        player.Tick();
+        Assert.NotNull(player.Offer);
+        Assert.NotNull(player.FileOf(request.FileToken!));
+
+        _time.Advance(TimeSpan.FromSeconds(1));
+        player.Tick();
+        Assert.Null(player.Offer);
+        Assert.Null(player.FileOf(request.FileToken!));
+        Assert.Contains(b.Drain(), e => e.Name == "resume" && e.Json == "null");
+    }
+
+    /// <summary>A profile switch drops the offer and tells the owner page, as the expiry does (2026-11-13).</summary>
+    [Fact]
+    public void AProfileSwitch_DropsTheOffer_AndTellsTheOwner()
+    {
+        var player = Player();
+        Attach(player, Id('a'), Id('1'));
+        var request = VideoRequest.File(FileClip());
+        player.Play(request);
+        player.Report(Id('a'), FileState(request.FileToken!, 1, 60), null);
+        var b = Attach(player, Id('b'), Id('2'), claimId: Id('c'));
+        b.Drain();
+
+        player.ForgetProfile();
+
+        Assert.Null(player.Offer);
+        Assert.Contains(b.Drain(), e => e.Name == "resume" && e.Json == "null");
+    }
+
+    /// <summary>The level of the video a file replaces goes with its load and into the opening snapshot; a Resume offer carries the file's own (2026-11-13).</summary>
+    [Fact]
+    public void AFile_CarriesTheVolume_OfTheVideoItReplaces()
+    {
+        var player = Player();
+        var a = Attach(player, Id('a'), Id('1'));
+        var first = VideoRequest.File(FileClip());
+        player.Play(first);
+        player.Report(Id('a'), "{\"ev\":\"state\",\"file\":\"" + first.FileToken + "\",\"state\":1,\"position\":60,\"duration\":600,\"volume\":30,\"muted\":true}", null);
+        a.Drain();
+
+        var second = VideoRequest.File(FileClip("b.mp4"));
+        player.Play(second);
+
+        var load = JsonDocument.Parse(a.Drain().Single(e => e.Name == "load").Json).RootElement;
+        Assert.Equal(30, load.GetProperty("volume").GetInt32());
+        Assert.True(load.GetProperty("muted").GetBoolean());
+        Assert.Equal((30, true), (player.Snapshot!.Volume, player.Snapshot.Muted));
+
+        player.Report(Id('a'), "{\"ev\":\"state\",\"file\":\"" + second.FileToken + "\",\"state\":1,\"position\":60,\"duration\":600,\"volume\":30,\"muted\":true}", null);
+        var b = Attach(player, Id('b'), Id('2'), claimId: Id('c'));
+        Assert.Equal(30, b.Attachment.Hello.Resume?.Volume);
+        Assert.True(b.Attachment.Hello.Resume?.Muted);
+    }
+
+    /// <summary>A file with no picture is flagged, not failed (2026-11-13): it plays on, the log says so once per load.</summary>
+    [Fact]
+    public void AFileWithNoPicture_IsFlagged_AndLoggedOnce()
+    {
+        var player = Player();
+        Attach(player, Id('a'), Id('1'));
+        var request = VideoRequest.File(FileClip());
+        string token = request.FileToken!;
+        player.Play(request);
+        player.Report(Id('a'), FileState(token, 1, 1), null);
+        var lines = new List<string>();
+        Action<Diagnostics.DiagnosticEvent> capture = e => { if (e.Message == VideoText.NoPictureLogLine("my clip #1%.mp4")) { lock (lines) { lines.Add(e.Message); } } };
+        Diagnostics.DiagnosticLog.Emitted += capture;
+        try
+        {
+            string noPicture = "{\"ev\":\"error\",\"file\":\"" + token + "\",\"code\":1000}";
+            Assert.Equal(WebOutcome.Ok, player.Report(Id('a'), noPicture, null));
+            Assert.Equal(WebOutcome.Ok, player.Report(Id('a'), noPicture, null));
+            player.Report(Id('a'), FileState(token, 1, 2), null);
+        }
+        finally
+        {
+            Diagnostics.DiagnosticLog.Emitted -= capture;
+        }
+
+        Assert.Single(lines);
+        Assert.Equal((VideoState.Playing, true, (int?)null), (player.Snapshot!.State, player.Snapshot.NoPicture, player.Snapshot.Error));
+        Assert.NotNull(WebVideoPlayer.OfferFrom(player.Snapshot with { Position = 60, Duration = 600 }));   // Resume isn't poisoned either
     }
 
     [Fact]

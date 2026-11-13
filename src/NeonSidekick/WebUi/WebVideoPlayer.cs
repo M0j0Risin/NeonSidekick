@@ -138,6 +138,10 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
     private DateTimeOffset _heldSince;
     private string? _owner;
     private WebVideoResume? _offer;
+
+    // When the standing offer was made (2026-11-13, the review's fix): a video file's offer keeps its token served, so it goes after
+    // YouTubeText.HoldFor. Stamped only by a new offer, so a kept one keeps its age.
+    private DateTimeOffset _offerSince;
     private ITimer? _grace;
     private long _joined;
     private bool _disposed;
@@ -173,7 +177,7 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
     public bool PlaysFiles => true;
 
     /// <summary>The address a file's load fetches: the token, then the name escaped (a <c>?</c>, <c>#</c>, <c>%</c> or space kept whole), for the browser's display only.</summary>
-    public static string FileSrc(string token, string? name) =>
+    public static string FileAddress(string token, string? name) =>
         WebUiHost.YouTubeFilePrefix + token + "/" + Uri.EscapeDataString(string.IsNullOrEmpty(name) ? "video" : name);
 
     public WebVideoFile? FileOf(string token)
@@ -297,7 +301,7 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
         DateTimeOffset since;
         lock (_gate)
         {
-            _offer = null;
+            ClearOffer();
             since = _time.GetUtcNow();
             if (MostRecentVisible() is { } target)
             {
@@ -322,7 +326,7 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
                 _closed = true;
                 _held = request;
                 _heldSince = since;
-                snapshot = _snapshot = VideoSnapshot.Opening(request) with
+                snapshot = _snapshot = VideoSnapshot.Opening(request, VideoSnapshot.SoundOf(_snapshot)) with
                 {
                     Version = ++_version,
                     Place = VideoPlace.WebTab,
@@ -380,7 +384,7 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
         bool raise;
         lock (_gate)
         {
-            _offer = null;
+            ClearOffer();
             raise = _held is not null;
             if (raise)
             {
@@ -395,23 +399,39 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
         }
     }
 
-    /// <summary>The screen's tick: a request held past <see cref="YouTubeText.HoldFor"/> is dropped.</summary>
+    /// <summary>
+    /// The screen's tick: a request held past <see cref="YouTubeText.HoldFor"/> is dropped, and so (2026-11-13) is a video file's Resume
+    /// offer that old, so its token stops being served with the owner page's Resume button. A YouTube offer names no token and stays.
+    /// </summary>
     public void Tick()
     {
         bool raise = false;
+        string? expired = null;
         lock (_gate)
         {
-            if (_held is not null && _time.GetUtcNow() - _heldSince >= YouTubeText.HoldFor)
+            var now = _time.GetUtcNow();
+            if (_held is not null && now - _heldSince >= YouTubeText.HoldFor)
             {
                 _held = null;
                 _snapshot = null;
                 raise = true;
             }
+
+            if (_offer is { File: not null } offer && now - _offerSince >= YouTubeText.HoldFor)
+            {
+                expired = offer.Name ?? "";
+                ClearOffer();
+            }
+        }
+
+        if (expired is not null)
+        {
+            DiagnosticLog.Info(Category, WebUiText.VideoFileOfferExpiredLogLine(expired));
         }
 
         if (raise)
         {
-            DiagnosticLog.Info(Category, "Web UI: a video waited for a Video tab too long and was dropped.");
+            DiagnosticLog.Info(Category, WebUiText.VideoHeldTooLongLogLine);
             Raise(null);
         }
     }
@@ -499,7 +519,7 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
                 // Play here takes the video with it (Fix 2): where it was, less the rewind, offered to the claimer, whose hello says play.
                 if (_snapshot is { } playing && _held is null && !_closed)
                 {
-                    _offer = OfferFrom(playing);
+                    MakeOffer(OfferFrom(playing));
                     _snapshot = null;
                     _closed = true;
                     outbox.RaiseNull = true;
@@ -646,7 +666,7 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
                     _closed = true;
                     if (_snapshot is { } playing && _held is null)
                     {
-                        _offer = OfferFrom(playing);
+                        MakeOffer(OfferFrom(playing));
                         _snapshot = null;
                         outbox.RaiseAny = true;
                         if (_offer is { } offer && OwnerStream() is { } owner)
@@ -662,7 +682,8 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
                     // and its reports, which carry the token, match.
                     if (_offer is { File: { } resumedToken } resumed && _file is { } resumedFile && resumedFile.FileToken == resumedToken)
                     {
-                        outbox.Raise = _snapshot = VideoSnapshot.Opening(resumedFile) with { Version = ++_version, Place = VideoPlace.WebTab, Position = resumed.Start };
+                        var sound = resumed.Volume is { } level ? new VideoSound(level, resumed.Muted ?? false) : (VideoSound?)null;
+                        outbox.Raise = _snapshot = VideoSnapshot.Opening(resumedFile, sound) with { Version = ++_version, Place = VideoPlace.WebTab, Position = resumed.Start };
                         outbox.RaiseAny = true;
                     }
 
@@ -676,6 +697,7 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
                 case VideoPageEvent.Failed:
                 case VideoPageEvent.State:
                 case VideoPageEvent.Error:
+                case VideoPageEvent.NoPicture:
                     if (_closed || !_settle.Accept(kind, next))
                     {
                         break;   // the "paused, no duration" a load leaves behind
@@ -684,12 +706,16 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
                     _version = next.Version;
                     outbox.Raise = _snapshot = next with { Place = VideoPlace.WebTab, Held = null };
                     outbox.RaiseAny = true;
-                    if (kind == VideoPageEvent.Error && next.Error is { } code)
+                    if (kind == VideoPageEvent.NoPicture)
+                    {
+                        refused = VideoText.NoPictureLogLine(next.FileName);
+                    }
+                    else if (kind == VideoPageEvent.Error && next.Error is { } code)
                     {
                         if (next.IsFile)
                         {
                             errored = _snapshot;
-                            erroredPath = code is 2 or 4 && _file is { } loaded && loaded.FileToken == next.FileToken ? loaded.FilePath : null;
+                            erroredPath = _file is { } loaded && loaded.FileToken == next.FileToken ? loaded.FilePath : null;
                         }
                         else
                         {
@@ -703,16 +729,20 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
 
         if (errored is { Error: { } fileCode })
         {
-            // A file no longer there reads as a network or not-supported error, so the disk is asked, outside the lock, as the window does.
-            if (erroredPath is not null && !File.Exists(erroredPath))
+            // A file no longer there, or a share that doesn't answer, reads as a network or not-supported error, so the disk is asked: here,
+            // outside the lock, on this report's own request thread (a dead share blocks only it). The answer counts only while that report
+            // is still the snapshot: a newer report raised meanwhile is never followed by this stale one (2026-11-13, the review's fix).
+            int asked = VideoFile.GoneIfMissing(fileCode, erroredPath);
+            lock (_gate)
             {
-                lock (_gate)
+                if (!ReferenceEquals(_snapshot, errored))
                 {
-                    if (ReferenceEquals(_snapshot, errored))
-                    {
-                        outbox.Raise = _snapshot = errored = errored with { Error = VideoFile.GoneCode };
-                        fileCode = VideoFile.GoneCode;
-                    }
+                    outbox.RaiseAny = false;
+                }
+                else if (asked != fileCode)
+                {
+                    outbox.Raise = _snapshot = errored = errored with { Error = asked };
+                    fileCode = asked;
                 }
             }
 
@@ -785,23 +815,53 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
     }
 
     // A load to a page's stream: the settle armed, the snapshot opening on the tab, the stream's script remembered (Fix 3).
+    // A file takes the level of the snapshot it replaces (2026-11-13), so a status before its first report already says it; a held
+    // request's snapshot was seeded with it as it was held.
     private VideoSnapshot Load(PageStream owner, VideoRequest request)
     {
         _settle.Loaded();
         _closed = false;
         _loadedInto = owner.Load;
+        var sound = VideoSnapshot.SoundOf(_snapshot);
         if (request.IsFile)
         {
             _file = request;
-            string src = FileSrc(request.FileToken!, request.FileName);
-            Enqueue(owner, new WebEvent("load", () => VideoMessages.LoadFile(request, src)));
+            string src = FileAddress(request.FileToken!, request.FileName);
+            Enqueue(owner, new WebEvent("load", () => VideoMessages.LoadFile(request, src, sound)));
         }
         else
         {
             Enqueue(owner, new WebEvent("load", () => VideoMessages.Load(request)));
         }
 
-        return _snapshot = VideoSnapshot.Opening(request) with { Version = ++_version, Place = VideoPlace.WebTab };
+        return _snapshot = VideoSnapshot.Opening(request, sound) with { Version = ++_version, Place = VideoPlace.WebTab };
+    }
+
+    // A new Resume offer (or none), stamped for its expiry.
+    private void MakeOffer(WebVideoResume? offer)
+    {
+        _offer = offer;
+        if (offer is not null)
+        {
+            _offerSince = _time.GetUtcNow();
+        }
+    }
+
+    // The offer dropped (2026-11-13, the review's fix): the owner page, the only one showing Resume, is told (a "resume" with null), so it
+    // never taps a token no longer served. Another page learned the offer in its hello and drops it when it becomes owner ("owner" carries
+    // the offer in force).
+    private void ClearOffer()
+    {
+        if (_offer is null)
+        {
+            return;
+        }
+
+        _offer = null;
+        if (OwnerStream() is { } owner)
+        {
+            Enqueue(owner, new WebEvent("resume", () => "null"));
+        }
     }
 
     // An event for one page; a page whose queue is full is dropped (its reconnect comes back as the same page).
@@ -853,7 +913,7 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
             _held = null;
             if (clearOffer)
             {
-                _offer = null;
+                ClearOffer();
             }
 
             if (_snapshot is not null && OwnerStream() is { } owner)
@@ -927,7 +987,11 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
             _grace = null;
             if (_snapshot is { } last && _held is null)
             {
-                _offer = OfferFrom(last) ?? _offer;
+                if (OfferFrom(last) is { } fresh)
+                {
+                    MakeOffer(fresh);   // else the standing offer stays, with its own age
+                }
+
                 _snapshot = null;
                 _closed = true;
                 outbox.RaiseAny = true;
@@ -973,8 +1037,10 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
             return new WebVideoResume(null, null, null, start, WebUiText.ResumeLabel(name, null, null, null, start))
             {
                 File = last.FileToken,
-                Src = FileSrc(last.FileToken!, name),
+                Src = FileAddress(last.FileToken!, name),
                 Name = name,
+                Volume = last.Volume,
+                Muted = last.Muted,
             };
         }
 

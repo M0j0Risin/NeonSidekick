@@ -226,15 +226,22 @@ public static class YouTubeText
     /// <summary>A volume out of 0–100.</summary>
     public static string NotAVolume(string? text) => $"Error: \"value\" must be a volume from 0 to 100, not \"{text}\".";
 
+    /// <summary>A command's unreadable time for the user (2026-11-13: <c>/video seek</c> hands its raw text to the tool, which names the command).</summary>
+    public static string NotATimeForUser(string command, string? text) => $"Error: {command} <time> takes seconds or a time like 1:30, not \"{text}\".";
+
+    /// <summary>A command's volume out of 0–100, for the user (<c>/video volume</c>).</summary>
+    public static string NotAVolumeForUser(string command, string? text) => $"Error: {command} <0-100> takes a volume from 0 to 100, not \"{text}\".";
+
     /// <summary>An action youtube_control does not know.</summary>
     public static string NotAnAction(string? text, IEnumerable<string> actions) => $"Error: \"action\" must be one of {string.Join(", ", actions)}, not \"{text}\".";
 
     /// <summary>
     /// YouTube's <c>onError</c> for a video as a sentence: 2 a bad id, 100 not found, and 101/150 — which YouTube also gives a
     /// private, age-restricted, region-blocked or missing video (the Phase 0 spike: a made-up id gave 150) — not playable embedded.
-    /// Each points at open_url for the watch page.
+    /// Each points at open_url for the watch page; without <paramref name="wayOut"/> (2026-11-13: the Web UI's Home card, read on the phone)
+    /// it is the cause alone, as a plain sentence.
     /// </summary>
-    public static string Refused(string? id, int code)
+    public static string Refused(string? id, int code, bool wayOut = true)
     {
         string watch = id is { Length: > 0 } ? YouTubeIds.WatchUrl(id) : "the video's page";
         string what = code switch
@@ -246,24 +253,24 @@ public static class YouTubeText
             152 or 153 => $"YouTube will not play video {id} on the Web UI's page (error {code.ToString(CultureInfo.InvariantCulture)}: it got no usable referrer from the page's address)",
             _ => $"YouTube will not play video {id} in an embedded player: its uploader may have turned embedding off, or it is private, age-restricted or unavailable",
         };
-        return $"Error: {what}. open_url can open {watch} in the browser instead.";
+        return wayOut ? $"Error: {what}. open_url can open {watch} in the browser instead." : Capitalized(what) + ".";
     }
 
     /// <summary>
     /// What the window reports, as one line: <c>Playing "Big Buck Bunny" (Blender) at 0:31 of 10:35, volume 25%, muted · video aqz-KE-bpKQ</c>;
     /// a refusal (<see cref="Refused"/>) or the window's failure as its sentence; <see cref="NoVideo"/> with none open.
     /// </summary>
-    public static string Status(VideoSnapshot? snapshot)
+    public static string Status(VideoSnapshot? snapshot, bool forUser = false)
     {
         if (snapshot is null)
         {
             return NoVideo;
         }
 
-        // A video file's report (2026-11-12): its own words, so a file's error is never read as YouTube's code.
+        // A video file's report (2026-11-12): its own words, so a file's error is never read as YouTube's code; /video's form for the user.
         if (snapshot.IsFile)
         {
-            return VideoText.FileStatus(snapshot);
+            return VideoText.FileStatus(snapshot, forUser);
         }
 
         if (snapshot.State == VideoState.Failed)
@@ -289,24 +296,39 @@ public static class YouTubeText
                 : $"Opening video {snapshot.VideoId} in {PlaceName(snapshot.Place)}; youtube_status says when it plays.";
         }
 
-        string state = snapshot.State switch
-        {
-            VideoState.Playing => "Playing",
-            VideoState.Paused => "Paused",
-            VideoState.Buffering => "Buffering",
-            VideoState.Ended => "Ended",
-            VideoState.Cued => "Cued (press play to start)",
-            _ => "Loaded, not started",
-        };
         string title = string.IsNullOrWhiteSpace(snapshot.Title) ? "video " + snapshot.VideoId : $"\"{snapshot.Title}\"";
         string author = string.IsNullOrWhiteSpace(snapshot.Author) ? "" : $" ({snapshot.Author})";
+        string id = string.IsNullOrWhiteSpace(snapshot.Title) ? "" : $" · video {snapshot.VideoId}";
+        return StateWord(snapshot.State, "Cued (press play to start)") + " " + title + author + WhereAndSound(snapshot) + id + InPlaylist(snapshot) + OnTheTab(snapshot);
+    }
+
+    /// <summary>
+    /// A status line's first word (2026-11-13, shared with <c>VideoText.FileStatus</c>): <paramref name="cued"/> says the cued state, which
+    /// YouTube calls cued and a file ready.
+    /// </summary>
+    internal static string StateWord(VideoState state, string cued) => state switch
+    {
+        VideoState.Playing => "Playing",
+        VideoState.Paused => "Paused",
+        VideoState.Buffering => "Buffering",
+        VideoState.Ended => "Ended",
+        VideoState.Cued => cued,
+        _ => "Loaded, not started",
+    };
+
+    /// <summary>A status line's place and sound (2026-11-13, shared): <c> at 0:31 of 10:35, volume 25%, muted</c>.</summary>
+    internal static string WhereAndSound(VideoSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
         string where = snapshot.Duration > 0
             ? $" at {YouTubeIds.FormatTime(snapshot.Position)} of {YouTubeIds.FormatTime(snapshot.Duration)}"
             : snapshot.Position > 0 ? $" at {YouTubeIds.FormatTime(snapshot.Position)}" : "";
-        string sound = $", volume {snapshot.Volume.ToString(CultureInfo.InvariantCulture)}%{(snapshot.Muted ? ", muted" : "")}";
-        string id = string.IsNullOrWhiteSpace(snapshot.Title) ? "" : $" · video {snapshot.VideoId}";
-        return state + " " + title + author + where + sound + id + InPlaylist(snapshot) + OnTheTab(snapshot);
+        return where + $", volume {snapshot.Volume.ToString(CultureInfo.InvariantCulture)}%{(snapshot.Muted ? ", muted" : "")}";
     }
+
+    /// <summary><paramref name="text"/> with its first letter in capitals (a clause made a sentence's start).</summary>
+    public static string Capitalized(string text) =>
+        string.IsNullOrEmpty(text) ? text : char.ToUpperInvariant(text[0]) + text[1..];
 
     /// <summary>
     /// The Web UI's tab after a state line (2026-10-16): where it plays, and the tap a phone wants — to start a video its autoplay blocked
@@ -380,11 +402,20 @@ public static class YouTubeText
         return $"Error: {What(handoff)} is in {BrowserName(handoff.To)}, which the app can't control; the user can pause or close it there.";
     }
 
+    /// <summary>Why the Web UI can't take a play: it isn't serving (2026-11-13, a whole clause both families' notes share).</summary>
+    public const string WebUiNotServing = "the Web UI isn't serving";
+
+    /// <summary>Why the Web UI can't take a play: <i>Web UI video controls</i> is off, so there is no tab.</summary>
+    public const string WebUiControlsOff = "Web UI video controls is off";
+
+    /// <summary>A play's note when <c>webui-window</c> fell back to the window (2026-11-13: one sentence for both families, its noun theirs).</summary>
+    public static string FellBackToWindow(string reason, string noun) => $"{Capitalized(reason)}, so the {noun} plays in the video window instead. ";
+
     /// <summary>The note before a play's answer when <c>webui-window</c> fell back to the window (2026-10-16): the Web UI isn't serving.</summary>
-    public const string WebUiOffFellBack = "The Web UI isn't serving, so the video plays in the video window instead. ";
+    public static readonly string WebUiOffFellBack = FellBackToWindow(WebUiNotServing, "video");
 
     /// <summary>The note when <c>webui-window</c> fell back to the window because <i>Web UI video controls</i> is off (2026-10-16): there is no tab.</summary>
-    public const string WebUiControlsOffFellBack = "Web UI video controls is off, so the video plays in the video window instead. ";
+    public static readonly string WebUiControlsOffFellBack = FellBackToWindow(WebUiControlsOff, "video");
 
     /// <summary>The note when <c>browser-window</c> went to the default browser (2026-10-16): the Browser window's reason.</summary>
     public static string BrowserFellBack(string reason) => $"The Browser window can't take it now ({reason}), so it went to the default browser. ";
@@ -415,11 +446,17 @@ public static class YouTubeText
     };
 
     /// <summary><see cref="StoppedWaiting"/> worded for what the player shows now (2026-10-16): a held video still waits; the tab plays on.</summary>
-    public static string StoppedWaitingFor(VideoSnapshot? snapshot) => snapshot switch
+    public static string StoppedWaitingFor(VideoSnapshot? snapshot) => StoppedWaitingFor(snapshot, "video", "/youtube");
+
+    /// <summary>
+    /// <see cref="StoppedWaitingFor(VideoSnapshot?)"/> for either family (2026-11-13): its <paramref name="noun"/> and status
+    /// <paramref name="command"/>; with <c>video</c> and <c>/youtube</c>, YouTube's words exactly.
+    /// </summary>
+    public static string StoppedWaitingFor(VideoSnapshot? snapshot, string noun, string command) => snapshot switch
     {
-        { Held: not null } => "(stopped waiting; the video still waits for a Video tab: /youtube status says so)",
-        { Place: VideoPlace.WebTab } => "(stopped waiting; the video is still in " + WebTabName + ": /youtube status says where it is)",
-        _ => StoppedWaiting,
+        { Held: not null } => $"(stopped waiting; the {noun} still waits for a Video tab: {command} status says so)",
+        { Place: VideoPlace.WebTab } => $"(stopped waiting; the {noun} is still in {WebTabName}: {command} status says where it is)",
+        _ => $"(stopped waiting; the video window is still open: {command} status says where it is)",
     };
 
     /// <summary>open_url's note before a YouTube link it passed on to the browser because YouTube refused it in the player (2026-10-16).</summary>

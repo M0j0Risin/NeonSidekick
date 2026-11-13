@@ -223,6 +223,15 @@ internal sealed unsafe class VideoWindowThread
     private const uint PlayMessage = WmApp + 1;
     private const uint CommandMessage = WmApp + 2;
 
+    // The page's timer (2026-11-13, the review's fix): armed at each navigation, killed by the page's own "page" message.
+    private const nint PageTimer = 1;
+
+    /// <summary>
+    /// How long a navigated page may take to say it is ready before the window gives it up: inside <c>play_video</c>'s 12 s wait even
+    /// after a cold WebView2 start, so that wait sees the failure and sends the file to its default app.
+    /// </summary>
+    public static readonly TimeSpan PageWait = TimeSpan.FromSeconds(8);
+
     /// <summary>The window's size at 96 DPI before the user changes it: 16:9, the camera window's.</summary>
     public const int DefaultWidth = 960;
     public const int DefaultHeight = 540;
@@ -239,13 +248,15 @@ internal sealed unsafe class VideoWindowThread
     private readonly string _siteFolder;
     private VideoRequest? _pending;
     private string? _pendingSrc;
+
+    // The level the waiting file play carries over from the play it replaced (2026-11-13).
+    private VideoSound? _pendingSound;
     private string? _filePath;
     private VideoSnapshot _snapshot;
     private WebViewHost? _host;
-    private bool _pageReady;
 
-    // Which page the view was last navigated to (2026-11-12): the file page or the YouTube player. Window thread only.
-    private bool _showingFile;
+    // Which page the view was last navigated to, whether it said it was ready, whether its wait ran out (2026-11-13). Under _gate.
+    private readonly VideoPageWatch _watch;
     private bool _pageFullScreen;
     private string? _shownTitle;
     private Thread? _thread;
@@ -260,7 +271,7 @@ internal sealed unsafe class VideoWindowThread
         _pending = first;
         _pendingSrc = src;
         _filePath = first.FilePath;
-        _showingFile = first.IsFile;   // a window opened by a file play starts on the file page
+        _watch = new VideoPageWatch(first.IsFile);   // a window opened by a file play starts on the file page
         _snapshot = VideoSnapshot.Opening(first) with { Version = VideoWindow.NextVersion() };
         _userDataFolder = userDataFolder;
         _siteFolder = siteFolder;
@@ -299,10 +310,12 @@ internal sealed unsafe class VideoWindowThread
     {
         lock (_gate)
         {
+            // The level of the play this replaces, any kind (2026-11-13): the file's load applies it, and its opening snapshot says it.
+            _pendingSound = VideoSnapshot.SoundOf(_snapshot);
             _pending = request;
             _pendingSrc = src;
             _filePath = request.FilePath;
-            _snapshot = VideoSnapshot.Opening(request) with { Version = VideoWindow.NextVersion() };
+            _snapshot = VideoSnapshot.Opening(request, _pendingSound) with { Version = VideoWindow.NextVersion() };
         }
 
         return Post(PlayMessage);
@@ -441,10 +454,11 @@ internal sealed unsafe class VideoWindowThread
             lock (_gate)
             {
                 first = _pending!;
+                _watch.Navigated(first.IsFile);
             }
 
-            _showingFile = first.IsFile;
             _host.Start(_userDataFolder, _siteFolder, VideoPage.UrlFor(first, _siteFolder), WebViewProfile.VideoFor(_siteFolder));
+            ArmPageTimer();
             DiagnosticLog.Info("Video", "Video window opened.");
 
             _started = true;
@@ -519,6 +533,10 @@ internal sealed unsafe class VideoWindowThread
                 }
 
                 break;
+            case WmTimer when wParam == PageTimer:
+                KillTimer(hwnd, PageTimer);
+                OnPageTimeout();
+                return IntPtr.Zero;
             case WmClose:
                 TerminalHandoff.ReturnFocus(hwnd);   // the terminal in front again when this window had it (2026-10-13, the user's ask)
                 _chrome.RememberPosition(VideoWindow.Placed);
@@ -526,6 +544,7 @@ internal sealed unsafe class VideoWindowThread
                 DestroyWindow(hwnd);
                 return IntPtr.Zero;
             case WmDestroy:
+                KillTimer(hwnd, PageTimer);
                 PostQuitMessage(0);
                 return IntPtr.Zero;
         }
@@ -535,39 +554,54 @@ internal sealed unsafe class VideoWindowThread
 
     // What waits for the page, sent once it can hear it: the newest video first, then the commands in their order. A command
     // the page gets before its player is ready is dropped there; the snapshot says what state it is in. A request of the other
-    // kind than the page shown (2026-11-12: a file on the YouTube player, YouTube on the file page) navigates first, the request
-    // and the commands left waiting; the new page's own "page" flushes them (VideoPage.NeedsSwitch decides, covered there).
+    // kind than the page shown (2026-11-12: a file on the YouTube player, YouTube on the file page), or one after a page that never
+    // came (2026-11-13), navigates first, the request and the commands left waiting; the new page's own "page" flushes them
+    // (VideoPageWatch decides, covered there). The decision is made under _gate, the navigation after it.
     private void Flush()
     {
-        if (!_pageReady || _host is null)
+        if (_host is null)
         {
             return;
         }
 
-        VideoRequest? request;
-        string? src;
-        string[] commands;
+        VideoRequest? request = null;
+        string? src = null;
+        VideoSound? sound = null;
+        string[] commands = [];
+        string? navigate = null;
         lock (_gate)
         {
-            if (_pending is { } next && VideoPage.NeedsSwitch(_showingFile, next))
+            switch (_watch.Next(_pending))
             {
-                _showingFile = next.IsFile;
-                _pageReady = false;
-                _host.Navigate(VideoPage.UrlFor(next, _siteFolder));
-                return;
+                case VideoPageStep.Wait:
+                    return;
+                case VideoPageStep.Navigate:
+                    _watch.Navigated(_pending!.IsFile);
+                    navigate = VideoPage.UrlFor(_pending, _siteFolder);
+                    break;
+                default:
+                    request = _pending;
+                    src = _pendingSrc;
+                    sound = _pendingSound;
+                    _pending = null;
+                    _pendingSrc = null;
+                    _pendingSound = null;
+                    commands = [.. _outbox];
+                    _outbox.Clear();
+                    break;
             }
+        }
 
-            request = _pending;
-            src = _pendingSrc;
-            _pending = null;
-            _pendingSrc = null;
-            commands = [.. _outbox];
-            _outbox.Clear();
+        if (navigate is not null)
+        {
+            _host.Navigate(navigate);
+            ArmPageTimer();
+            return;
         }
 
         if (request is not null)
         {
-            _host.Post(request.IsFile ? VideoMessages.LoadFile(request, src!) : VideoMessages.Load(request));
+            _host.Post(request.IsFile ? VideoMessages.LoadFile(request, src!, sound) : VideoMessages.Load(request));
             ShowTitle(request.FileName);
         }
 
@@ -577,43 +611,75 @@ internal sealed unsafe class VideoWindowThread
         }
     }
 
+    // The page's wait starts (each navigation's): a page that never says it is ready is given up at PageWait.
+    private void ArmPageTimer() => SetTimer(_hwnd, PageTimer, (uint)PageWait.TotalMilliseconds, IntPtr.Zero);
+
+    // The page's wait ran out with no "page" from it (2026-11-13, the review's fix): what waited is dropped — the play may have gone to
+    // the default app by now, and a page that loads late must not start a second copy — and the snapshot fails with the reason, so the
+    // play's wait answers. The next play navigates again.
+    private void OnPageTimeout()
+    {
+        VideoSnapshot snapshot;
+        bool filePage;
+        lock (_gate)
+        {
+            if (!_watch.TimedOut())
+            {
+                return;
+            }
+
+            filePage = _watch.ShowingFile;
+            _pending = null;
+            _pendingSrc = null;
+            _pendingSound = null;
+            _outbox.Clear();
+            _snapshot = snapshot = _snapshot with { State = VideoState.Failed, Failure = VideoText.PageDidNotLoad, Version = VideoWindow.NextVersion() };
+        }
+
+        DiagnosticLog.Warn("Video", VideoText.PageDidNotLoadLogLine(filePage));
+        VideoWindow.Report(this, snapshot);
+    }
+
     private void OnPageMessage(string text)
     {
         VideoPageEvent kind;
         VideoSnapshot snapshot;
+        VideoSnapshot before;
         string? filePath;
+        bool asks = false;
         lock (_gate)
         {
+            before = _snapshot;
             (kind, snapshot) = VideoMessages.Apply(_snapshot, text);
-            if (kind is VideoPageEvent.State or VideoPageEvent.Error)
+            if (kind is VideoPageEvent.State or VideoPageEvent.Error or VideoPageEvent.NoPicture)
             {
                 snapshot = snapshot with { Version = VideoWindow.NextVersion() };
             }
 
-            _snapshot = snapshot;
             filePath = _filePath;
-        }
 
-        // A file no longer there reads as the not-supported code (the spike, 2026-11-12), so the disk is asked, outside the lock, and
-        // the error worded as gone while that snapshot is still the current one.
-        if (kind == VideoPageEvent.Error && snapshot is { IsFile: true, Error: 2 or 4 } && filePath is not null && !File.Exists(filePath))
-        {
-            lock (_gate)
+            // A file's error 2 or 4 waits for the disk's word (below) before it is the snapshot: a missing file and a dead share both read so.
+            asks = kind == VideoPageEvent.Error && snapshot is { IsFile: true, Error: 2 or 4 } && filePath is not null;
+            if (!asks)
             {
-                if (ReferenceEquals(_snapshot, snapshot))
-                {
-                    _snapshot = snapshot = snapshot with { Error = VideoFile.GoneCode };
-                }
+                _snapshot = snapshot;
             }
         }
 
         switch (kind)
         {
             case VideoPageEvent.Page:
+            case VideoPageEvent.FilePage:
                 // Only the page the view was navigated to: a late "page" from the one just left would flush the load into it.
-                if ((VideoMessages.PageKind(text) == VideoMessages.FileKind) == _showingFile)
+                bool arrived;
+                lock (_gate)
                 {
-                    _pageReady = true;
+                    arrived = _watch.Arrived(kind == VideoPageEvent.FilePage);
+                }
+
+                if (arrived)
+                {
+                    KillTimer(_hwnd, PageTimer);
                     Flush();
                 }
 
@@ -622,6 +688,14 @@ internal sealed unsafe class VideoWindowThread
                 ShowTitle(snapshot.Title);
                 VideoWindow.Report(this, snapshot);
                 break;
+            case VideoPageEvent.NoPicture:
+                ShowTitle(snapshot.Title);
+                DiagnosticLog.Info("Video", VideoText.NoPictureLogLine(snapshot.FileName));
+                VideoWindow.Report(this, snapshot);
+                break;
+            case VideoPageEvent.Error when asks:
+                AskDisk(before, snapshot, filePath!);
+                break;
             case VideoPageEvent.Error:
                 DiagnosticLog.Info("Video", snapshot.IsFile
                     ? VideoText.FileRefusedLogLine(snapshot.FileName, snapshot.Error)
@@ -629,6 +703,31 @@ internal sealed unsafe class VideoWindowThread
                 VideoWindow.Report(this, snapshot);
                 break;
         }
+    }
+
+    // A file's error 2 or 4 worded by the disk (2026-11-13, the review's fix): gone, unreadable, or as the page said (VideoFile.GoneIfMissing).
+    // The stat runs off the window's thread, which a dead share would hang, and its answer counts only while nothing newer replaced the
+    // snapshot the error came on; VideoWindow.Report is safe from any thread.
+    private void AskDisk(VideoSnapshot before, VideoSnapshot errored, string filePath)
+    {
+        _ = Task.Run(() =>
+        {
+            int code = VideoFile.GoneIfMissing(errored.Error ?? 4, filePath);
+            VideoSnapshot? current = null;
+            lock (_gate)
+            {
+                if (ReferenceEquals(_snapshot, before))
+                {
+                    _snapshot = current = errored with { Error = code };
+                }
+            }
+
+            DiagnosticLog.Info("Video", VideoText.FileRefusedLogLine(errored.FileName, code));
+            if (current is not null)
+            {
+                VideoWindow.Report(this, current);
+            }
+        });
     }
 
     private void OnPopup(string url)

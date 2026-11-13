@@ -46,7 +46,9 @@ public sealed class VideoFilesTests : IDisposable
     private static async Task<string> Call(AIFunction tool, params (string Name, object? Value)[] pairs) =>
         (string)(await tool.InvokeAsync(new AIFunctionArguments(pairs.ToDictionary(p => p.Name, p => p.Value))))!;
 
-    private PlayVideoTool Play(Func<VideoRequest, VideoRouted>? route = null) => new(_player, _files, _time, route);
+    // The route a test gives, or a play on the fake (ChatScreen.RouteFile's window arm), its refusal thrown as the router's is.
+    private PlayVideoTool Play(Func<VideoRequest, VideoRouted>? route = null) =>
+        new(_player, _files, _time, route ?? (r => { _player.Play(r); return VideoRouted.Waited; }));
 
     private VideoControlTool Control(Func<string?>? handoff = null, Func<string?>? youTube = null, IVideoPlayer? player = null) =>
         new(player ?? _player, _time, handoff, youTubePointer: youTube);
@@ -104,7 +106,6 @@ public sealed class VideoFilesTests : IDisposable
     {
         _player.PlayFailure = VideoText.NoRuntime;
         Assert.Equal("Error: " + VideoText.NoRuntime, await Call(Play(), ("path", "clip.mp4")));
-        Assert.Equal("Error: " + VideoText.NoFilePlayer, await Call(new PlayVideoTool(null, _files, _time), ("path", "clip.mp4")));
     }
 
     /// <summary>The default app answers at once: the route's line, its note first, nothing played or waited for.</summary>
@@ -156,7 +157,112 @@ public sealed class VideoFilesTests : IDisposable
         Assert.All(Enum.GetValues<VideoFilesPlayInKind>(), kind => Assert.EndsWith("Play only what the user asked for.", PlayVideoTool.DescriptionFor(kind), StringComparison.Ordinal));
     }
 
+    /// <summary>A play given up while its checks ran (a share that doesn't answer) never starts (2026-11-13).</summary>
+    [Fact]
+    public async Task Play_CancelledBeforeItsRoute_NeverRoutes()
+    {
+        int routes = 0;
+        var tool = Play(r => { routes++; return VideoRouted.Waited; });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => tool.PlayAsync("clip.mp4", 0, autoplay: true, new CancellationToken(canceled: true)));
+
+        Assert.Equal(0, routes);
+        Assert.Empty(_player.Plays);
+    }
+
+    /// <summary>
+    /// A video window that fails after it opened (its page never came, 2026-11-13) sends the file to its default app through the fallback,
+    /// whose hand-off closes the failed window, so <c>video_control status</c> then says where the file went. A file's own error never does.
+    /// </summary>
+    [Fact]
+    public async Task Play_AWindowThatFailsLater_FallsBackToTheDefaultApp_AndStatusSaysWhere()
+    {
+        var web = new FakeVideoPlayer { Place = VideoPlace.WebTab };
+        var router = new RoutedVideoPlayer(_player, web);
+        _player.Behave = false;
+        VideoRequest? fell = null;
+        string? fellNote = null;
+        var tool = new PlayVideoTool(router, _files, _time, r => { router.Play(r, VideoSink.Window); return new VideoRouted(true, null, "A note. "); }, fallback: (r, note) =>
+        {
+            fell = r;
+            fellNote = note;
+            router.Handoff(new VideoHandoff(r.FilePath!, YouTubeOpenLinksInKind.DefaultBrowser, null, null) { FileName = r.FileName });
+            return new VideoRouted(false, "Opened clip.mp4 in the user's video app.", note);
+        });
+
+        var play = tool.PlayAsync("clip.mp4", 0, autoplay: true, CancellationToken.None);
+        _player.Report(_player.Snapshot! with { State = VideoState.Failed, Failure = VideoText.PageDidNotLoad, Version = _player.Snapshot.Version + 1 });
+        string answer = await play;
+
+        string reason = VideoText.DefaultAppFellBack(VideoText.CouldNotPlayIn(VideoFilesPlayInKind.VideoWindow));
+        Assert.Equal(Full("clip.mp4"), fell?.FilePath);
+        Assert.Equal(reason, fellNote);
+        Assert.Equal("A note. " + reason + "Opened clip.mp4 in the user's video app.", answer);
+        Assert.Null(router.Snapshot);
+        var control = new VideoControlTool(router, _time, () => router.LastHandoff is { IsFile: true } h ? h.FileName : null);
+        Assert.Equal(VideoText.HandedOffStatus("clip.mp4"), await Call(control, ("action", "status")));
+
+        // A file's own error is the answer, never a fallback.
+        fell = null;
+        var again = tool.PlayAsync("clip.mp4", 0, autoplay: true, CancellationToken.None);
+        _player.Report(_player.Snapshot! with { Error = 4, Version = _player.Snapshot.Version + 1 });
+        Assert.Equal("Error: A note. " + VideoText.FileError(4, "clip.mp4"), await again);
+        Assert.Null(fell);
+    }
+
+    /// <summary>The screen's instance words its answers for <c>/video</c> (2026-11-13): no tool names.</summary>
+    [Fact]
+    public async Task Play_ForTheUser_NamesVideoNotTheTools()
+    {
+        var tool = new PlayVideoTool(_player, _files, _time, r => { _player.Play(r); return VideoRouted.Waited; }, forUser: true);
+        Assert.Equal(VideoText.NotAVideoFile("notes.txt", forUser: true), await tool.PlayAsync("notes.txt", 0, true, CancellationToken.None));
+        Assert.Contains("/video plays", VideoText.NotAVideoFile("notes.txt", forUser: true), StringComparison.Ordinal);
+        Assert.Equal(VideoText.NoFileCommand, await new VideoControlTool(_player, _time, forUser: true).ControlAsync("pause", "", CancellationToken.None));
+    }
+
     // ── video_control ────────────────────────────────────────────────────────
+
+    /// <summary>A page that can't set its volume (an iPhone, 2026-11-13) answers a volume at once, sending nothing; mute still goes.</summary>
+    [Fact]
+    public async Task Control_AFixedVolume_AnswersAtOnce()
+    {
+        await Call(Play(), ("path", "clip.mp4"));
+        _player.Report(_player.Snapshot! with { FixedVolume = true });
+
+        Assert.Equal(VideoText.FixedVolume, await Call(Control(), ("action", "volume"), ("value", "30")));
+        Assert.Empty(_player.Commands);
+        Assert.EndsWith(", muted", await Call(Control(), ("action", "mute")), StringComparison.Ordinal);
+    }
+
+    /// <summary>"NaN" and "Infinity" read as numbers; both control tools refuse them as a time or a volume (2026-11-13), sending nothing.</summary>
+    [Theory]
+    [InlineData("NaN")]
+    [InlineData("Infinity")]
+    [InlineData("-Infinity")]
+    public async Task Control_NonFiniteValues_AreRefused_ByBothTools(string value)
+    {
+        await Call(Play(), ("path", "clip.mp4"));
+        Assert.StartsWith("Error: ", await Call(Control(), ("action", "volume"), ("value", value)), StringComparison.Ordinal);
+        Assert.StartsWith("Error: ", await Call(Control(), ("action", "seek"), ("value", value)), StringComparison.Ordinal);
+        Assert.Empty(_player.Commands);
+
+        _player.Play(new VideoRequest(Bunny));
+        var youTube = new YouTubeControlTool(_player, _time);
+        Assert.Equal(YouTubeText.NotAVolume(value), await Call(youTube, ("action", "volume"), ("value", value)));
+        Assert.StartsWith("Error: ", await Call(youTube, ("action", "seek"), ("value", value)), StringComparison.Ordinal);
+        Assert.Empty(_player.Commands);
+    }
+
+    /// <summary>youtube_save keeps YouTube videos: a file open is refused in the model's words (2026-11-13).</summary>
+    [Fact]
+    public async Task YouTubeSave_AFileOpen_IsRefused()
+    {
+        await Call(Play(), ("path", "clip.mp4"));
+        var library = new YouTubeLibrary(_root, _time);
+        var save = new YouTubeSaveTool(() => library, _player);
+
+        Assert.Equal(VideoText.NoSaveForFiles("clip.mp4", forUser: false), await Call(save, ("action", "add"), ("video", "current")));
+    }
 
     [Fact]
     public async Task Control_WithNothingOpen_SaysSo_OrWhereTheLastFileWent()
@@ -244,10 +350,16 @@ public sealed class VideoFilesTests : IDisposable
     [Fact]
     public void FileErrors_OfferTheDefaultApp_ButAGoneFile()
     {
-        foreach (int code in (int[])[1, 2, 3, 4, VideoFile.NoPictureCode, 99])
+        foreach (int code in (int[])[1, 2, 3, 4, 99])
         {
             Assert.EndsWith(" Open it in its own app instead (the open tool, or /open).", VideoText.FileError(code, "clip.mp4"), StringComparison.Ordinal);
+            Assert.EndsWith(" Open it in its own app instead (/open).", VideoText.FileError(code, "clip.mp4", forUser: true), StringComparison.Ordinal);
+            Assert.DoesNotContain("own app", VideoText.FileError(code, "clip.mp4", wayOut: false), StringComparison.Ordinal);   // the Home card on the phone
         }
+
+        // No picture is a note after the state line, not an error (2026-11-13); it names both causes, which the page can't tell apart.
+        Assert.Equal("clip.mp4 plays sound but no picture: it has no video, or its video codec (HEVC, say) isn't one the player can show. Open it in its own app instead (the open tool, or /open).",
+            VideoText.NoPictureNote("clip.mp4"));
 
         Assert.Equal("clip.mp4 is no longer there: it was moved or deleted.", VideoText.FileError(VideoFile.GoneCode, "clip.mp4"));
         Assert.StartsWith("The video file could not", VideoText.FileError(99, null), StringComparison.Ordinal);
@@ -258,8 +370,24 @@ public sealed class VideoFilesTests : IDisposable
     {
         Assert.Equal("Opened clip.mp4 in the user's video app; it plays there, where video_control can't see or control it.",
             VideoText.HandedOff("opened clip.mp4" + VideoText.InVideoApp));
-        Assert.Equal("The video window can't play it (there is no video window here), so it opens in its default app instead. ", VideoText.DefaultAppFellBack(VideoText.NoWindowHere));
-        Assert.Equal("Error: clip.mp4 is a video file, not a YouTube video; /youtube save keeps YouTube videos.", VideoText.NoSaveForFiles("clip.mp4"));
+        Assert.Equal("Opened clip.mp4 in the user's video app; it plays there, where /video can't control it.",
+            VideoText.HandedOff("opened clip.mp4" + VideoText.InVideoApp, forUser: true));
+        Assert.Equal("There is no video window here, so it opens in its default app instead. ", VideoText.DefaultAppFellBack(VideoText.NoWindowHere));
+
+        // A webui-window → window → default app chain keeps both reasons, each naming its place (2026-11-13).
+        Assert.Equal("The Web UI isn't serving; the video window couldn't open, so it opens in its default app instead. ",
+            VideoText.DefaultAppFellBack(YouTubeText.WebUiNotServing, VideoText.CouldNotPlayIn(VideoFilesPlayInKind.VideoWindow)));
+        Assert.Equal("Error: clip.mp4 is a video file, not a YouTube video; /youtube save keeps YouTube videos.", VideoText.NoSaveForFiles("clip.mp4", forUser: true));
+        Assert.Equal("Error: clip.mp4 is a video file, not a YouTube video; youtube_save keeps YouTube videos.", VideoText.NoSaveForFiles("clip.mp4", forUser: false));
+    }
+
+    /// <summary>A note never hides an error: <c>Error: </c> stays first, the parts after it (2026-11-13).</summary>
+    [Fact]
+    public void Lead_KeepsAnErrorFirst()
+    {
+        Assert.Equal("A note. Playing", VideoText.Lead("Playing", "A note. ", null, ""));
+        Assert.Equal("Error: A note. Resumed. it broke", VideoText.Lead("Error: it broke", "A note. ", "Resumed. "));
+        Assert.Equal("Error: it broke", VideoText.Lead("Error: it broke"));
     }
 
     // ── /video's words ───────────────────────────────────────────────────────
@@ -274,26 +402,32 @@ public sealed class VideoFilesTests : IDisposable
     [InlineData("play", VideoFileVerb.Resume, null, null)]
     [InlineData("resume", VideoFileVerb.Resume, null, null)]
     [InlineData("PAUSE", VideoFileVerb.Pause, null, null)]
-    [InlineData("seek 1:30", VideoFileVerb.Seek, null, 90d)]
-    [InlineData("volume 50%", VideoFileVerb.Volume, null, 50d)]
+    [InlineData("seek 1:30", VideoFileVerb.Seek, null, "1:30")]
+    [InlineData("seek soon", VideoFileVerb.Seek, null, "soon")]   // the tool's parser judges it (2026-11-13)
+    [InlineData("volume 50%", VideoFileVerb.Volume, null, "50%")]
+    [InlineData("volume 150", VideoFileVerb.Volume, null, "150")]
     [InlineData("mute", VideoFileVerb.Mute, null, null)]
     [InlineData("unmute", VideoFileVerb.Unmute, null, null)]
     [InlineData("close", VideoFileVerb.Close, null, null)]
-    public void Command_ReadsAPath_OrAVerb(string args, VideoFileVerb verb, string? path, double? number)
+    [InlineData("\"pause\"", VideoFileVerb.Play, "pause", null)]   // quoted: always a path
+    [InlineData("'my clip.mp4'", VideoFileVerb.Play, "my clip.mp4", null)]
+    [InlineData("clip.avi", VideoFileVerb.Play, "clip.avi", null)]   // looks like a file: the tool says it is no video file
+    [InlineData("Videos/holiday", VideoFileVerb.Play, "Videos/holiday", null)]
+    public void Command_ReadsAPath_OrAVerb(string args, VideoFileVerb verb, string? path, string? value)
     {
-        Assert.Equal(new VideoFileLine(verb, path, number), VideoFileCommand.Parse(args));
+        Assert.Equal(new VideoFileLine(verb, path, value), VideoFileCommand.Parse(args));
     }
 
     [Theory]
     [InlineData("seek")]
-    [InlineData("seek soon")]
-    [InlineData("volume 150")]
+    [InlineData("volume")]
     [InlineData("pause now")]
     [InlineData("stop")]
-    [InlineData("clip.avi")]
+    [InlineData("paus")]
+    [InlineData("\"\"")]
     public void Command_WordsItDoesNotKnow_AreTheUsage(string args)
     {
-        Assert.Equal(new VideoFileLine(VideoFileVerb.Unknown, Error: VideoFileCommand.Usage), VideoFileCommand.Parse(args));
+        Assert.Equal(new VideoFileLine(VideoFileVerb.Unknown, Error: VideoText.CommandUsage), VideoFileCommand.Parse(args));
     }
 
     [Fact]
@@ -306,6 +440,9 @@ public sealed class VideoFilesTests : IDisposable
         Assert.False(VideoFileCommand.TypingVerb("holiday"));
         Assert.False(VideoFileCommand.TypingVerb("pause clip"));
         Assert.Equal(["pause", "play"], VideoFileCommand.Complete("p").Select(i => i.Text).Order(StringComparer.Ordinal));
+        Assert.Equal(["resume"], VideoFileCommand.Complete("re").Select(i => i.Text));
+        Assert.Equal(["close"], VideoFileCommand.VerbsStarting("c"));
+        Assert.Contains("resume", VideoText.CommandUsage, StringComparison.Ordinal);
         Assert.Empty(VideoFileCommand.Complete("seek "));
         Assert.All(Enum.GetValues<VideoFileVerb>().Where(v => v is not (VideoFileVerb.Unknown or VideoFileVerb.Play)), v => Assert.Contains(VideoFileCommand.ActionOf(v)!, VideoControlTool.Actions));
     }
@@ -365,8 +502,31 @@ public sealed class VideoFilesTests : IDisposable
         // Another file's report, or YouTube's, changes nothing.
         Assert.Same(playing, VideoMessages.Apply(playing, "{\"ev\":\"state\",\"file\":\"" + VideoFile.NewToken() + "\",\"state\":2}").Snapshot);
         Assert.Same(playing, VideoMessages.Apply(playing, "{\"ev\":\"state\",\"id\":\"" + Bunny + "\",\"state\":2}").Snapshot);
-        Assert.Equal(VideoFile.NoPictureCode, VideoMessages.Apply(playing, "{\"ev\":\"error\",\"file\":\"" + request.FileToken + "\",\"code\":1000}").Snapshot.Error);
-        Assert.Equal(VideoMessages.FileKind, VideoMessages.PageKind("{\"ev\":\"page\",\"kind\":\"file\"}"));
+        // No picture is a flag, never an error (2026-11-13): waits, status and Resume read the state; a later report keeps it, and once is enough.
+        var (noPictureEvent, noPicture) = VideoMessages.Apply(playing, "{\"ev\":\"error\",\"file\":\"" + request.FileToken + "\",\"code\":1000}");
+        Assert.Equal(VideoPageEvent.NoPicture, noPictureEvent);
+        Assert.True(noPicture.NoPicture);
+        Assert.Null(noPicture.Error);
+        Assert.Equal(VideoState.Playing, noPicture.State);
+        Assert.NotEqual(VideoPageEvent.NoPicture, VideoMessages.Apply(noPicture, "{\"ev\":\"error\",\"file\":\"" + request.FileToken + "\",\"code\":1000}").Event);
+        var later = VideoMessages.Apply(noPicture, "{\"ev\":\"state\",\"file\":\"" + request.FileToken + "\",\"state\":2,\"position\":5}").Snapshot;
+        Assert.True(later.NoPicture);
+        Assert.Contains(VideoText.NoPictureNote("clip.mp4"), VideoText.FileStatus(later), StringComparison.Ordinal);
+
+        // A late code 1000 from the file before never flags the new one; a failed while a file is current is dropped.
+        Assert.Same(playing, VideoMessages.Apply(playing, "{\"ev\":\"error\",\"file\":\"" + VideoFile.NewToken() + "\",\"code\":1000}").Snapshot);
+        Assert.False(VideoMessages.Apply(playing, "{\"ev\":\"failed\",\"reason\":\"x\"}").Snapshot.State == VideoState.Failed);
+
+        // The page says its kind: the file page's own event (2026-11-13: PageKind went).
+        Assert.Equal(VideoPageEvent.FilePage, VideoMessages.Apply(playing, "{\"ev\":\"page\",\"kind\":\"file\"}").Event);
+        Assert.Equal(VideoPageEvent.Page, VideoMessages.Apply(playing, "{\"ev\":\"page\"}").Event);
+
+        // A volume carried from the video before (2026-11-13): the load says it.
+        using (var carried = JsonDocument.Parse(VideoMessages.LoadFile(request, "file:///x/clip.mp4", new VideoSound(25, true))))
+        {
+            Assert.Equal(25, carried.RootElement.GetProperty("volume").GetInt32());
+            Assert.True(carried.RootElement.GetProperty("muted").GetBoolean());
+        }
     }
 
     /// <summary>A sink that plays no files refuses one before anything switches, so the route can send it to the default app.</summary>

@@ -147,6 +147,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | *Shell police forbidden strings* | top row adds · Enter or Delete removes (asks) · `r` restore defaults (asks) |
 | `/tools web` | `m` *Web browser mode* · `o` opens the Browser window (Windows, macOS 14+) |
 | `/tools files` · `image` · `obsidian` · `advisors` · `print` | `b` *File browser/tree mode* · `e` *Image edit mode* · `v` *Obsidian vault* · `a` *Advisor list* · `p` *Print default printer* |
+| `/tools` › Files › Video | `p` *Video files play in* |
 | `/tools camera` | `w` watch · `l` live · `s` snap · `c` screen |
 | The camera pane | Space takes · `r` retake · Enter attaches · Esc drops |
 | The shell approval | `d` deny · `o` once · `s` session · `a` always · `v` the whole command · Esc denies |
@@ -631,7 +632,7 @@ The page is plain HTTP. Tailscale Serve puts HTTPS in front of it with a real ce
 
 * **The tabs:** Chat, Home, Shopping and Video, each shown only while its setting is on: *Web UI chat controls* (on by default), *Web UI home controls*, *Web UI shopping controls* and *Web UI video controls* (off).
 * **The ☰ menu:** Chat is a link in the header; the other tabs that are on sit behind ☰, which names the open one (🏠 Home ▾); ℹ️ About is last.
-* **With Chat off** the page opens on Home, else Shopping, else YouTube, and the phone gets no transcript, message line or questions (the PC asks as always).
+* **With Chat off** the page opens on Home, else Shopping, else Video, and the phone gets no transcript, message line or questions (the PC asks as always).
 * With none on, the page names the four settings and opens a tab once one is on. A tab turned off while open moves to one that's on.
 
 ### The Chat tab
@@ -722,7 +723,9 @@ The page is plain HTTP. Tailscale Serve puts HTTPS in front of it with a real ce
 * **Which tab plays:** the one shown most recently; a playing tab keeps playing, even hidden. The others offer *Play here*, taking the video over from about 3 seconds back.
 * **Sound:** a phone starts a video only after a tap on it. The tab tries with sound, then muted, else asks for the tap.
 * **Resume:** leaving the tab, locking the phone or a reload stops the video and keeps its place; coming back offers *Resume "title" at 3:12*.
-* **Video files** from the PC play here under *Video files play in* `webui-window`, tagged *file on the PC*. Only that file is served; over Funnel only with *Web UI video files over Funnel* on.
+* **Video files** from the PC play here under *Video files play in* `webui-window`, tagged *file on the PC*. Only that file is served; over Funnel see [*Web UI video files over Funnel*](SETTINGS.md#web-ui).
+* **A file's keys:** Space or K pause and play, ← → go 5 s, M mutes, F full screen; a focused button keeps its own keys.
+* **On an iPhone** a file's volume is the phone's buttons: Home hides quieter and louder for it; mute works.
 * **Saved videos** (`/youtube list`'s) sit under the player: a tap plays one here, whatever the setting says; ⋯ moves or removes it; ☆ saves the playing video; while a playlist plays, ☆ Save the playlist saves it (▤, resumed at its entry).
 * **⛶ Fill window** fills the browser's window with the video under a slim bar (YouTube's own button is still full screen). ✕ Exit, Esc or Back leave (after a tap on the video, Esc is YouTube's).
 * **Limits:** on an iPhone *YouTube while speaking* `duck` does nothing (`pause` works).
@@ -741,7 +744,7 @@ With *Web UI commands* on (off by default), the page sends slash commands too. T
 | Run | Your [custom commands](COMMANDS.md#custom-commands), `/update notes`, `/new`, `/clear`, `/splash`, `/compact`, `/plan …` (`/plan ralph` too), `/mark <color>`, `/code-audit …`, `/claude`, `/advisor`, `/help <words>`, `/imagine`, `/loop …`, `/botchat …`, `/learn [<note>]`, `/test …`, `/pdf …`, `/docx …`, `/print <file\|reply>`, `/avatar <emoji>\|clear`, `/remember`, `/timer …`, `/rename <name>`, `/tts on\|off`, `/stt on\|off`, `/memory <mode>`, `/cwd`, `/model <id>`, `/reasoning <level>`, `/ha …` (not `stills`), `/docker …`, `/shopping …`, `/prompts list\|save\|remove\|<n>`, `/browser save\|unsave`, `/msgclear`, `/undo [<n>]` | Their lines; the status row shows its spinner while it runs |
 | Pick | `/model`, `/reasoning`, `/rewind [<n>]`, `/plan open [--chat]` | A card with the choices, the one in use marked, a filter for a long list |
 | List | `/ha states`, `/docker logs`, `/eventlog …`, `/net …`, `/services …`, `/tasks …`, `/ad …`, `/code-audit open`, `/print`, `/print printers`, `/camera list`, `/screen list`, `/tree` (needs *File tools*), `/vault` (needs *Obsidian tools*), `/process`, `/comfy status`, `/comfy offered` | A card with the lines; Close |
-| Never | `/exit`, `/webui`, `/cmd`, `/profile`, `/plan edit`, `/cwd <path>`, `/sessions`, `/skills`, `/commands`, `/youtube` (bare and `list` point at the tab), `/queue`, `/sampling`, `/server`, `/usage`, `/midi` | Refused: they run at the PC only |
+| Never | `/exit`, `/webui`, `/cmd`, `/profile`, `/plan edit`, `/cwd <path>`, `/sessions`, `/skills`, `/commands`, `/youtube` (bare and `list` point at the tab), `/video`, `/queue`, `/sampling`, `/server`, `/usage`, `/midi` | Refused: they run at the PC only |
 | Page | bare `/prompts` | Opens the 📣 sheet on its Prompts tab (📣 does too, even with *Web UI commands* off) |
 | Other | Every form that opens a pane or a window at the PC, and `/update`'s others, since installing happens at the PC (`/settings`, `/theme`, `/view`, `/prompts list --clear`, `/camera`, `/screen`, `/ha stills`, `/undo purge`…) | Refused, naming the form that works here when there is one |
 

@@ -276,7 +276,11 @@ public sealed record WebHomeDevice(string Entity, string Glyph, string Name, str
 /// The video playing, as the tab shows it: its state, the video, the clock, the sound, a playlist's place, a failure's sentence, and (2026-10-16)
 /// where it plays, the PC's window or the Video tab.
 /// </summary>
-public sealed record WebHomeVideo(string State, string? Title, string? Author, double Position, double Duration, int Volume, bool Muted, int? Entry, int? Count, string? Failure, string? Where = null);
+public sealed record WebHomeVideo(string State, string? Title, string? Author, double Position, double Duration, int Volume, bool Muted, int? Entry, int? Count, string? Failure, string? Where = null)
+{
+    /// <summary>A video file whose page can't set its volume (2026-11-13: an iPhone), so the card hides its quieter and louder.</summary>
+    public bool FixedVolume { get; init; }
+}
 
 /// <summary>The PC's meters in whole percents, and the network's rates as the perf bar words them; each missing when the machine cannot read it.</summary>
 public sealed record WebHomePc(int? Cpu, int? Ram, int? Gpu, int? Vram, string? Down, string? Up);
@@ -805,6 +809,12 @@ public sealed record WebVideoResume(string? VideoId, string? PlaylistId, int? En
 
     /// <summary>The file's name, the header's title.</summary>
     public string? Name { get; init; }
+
+    /// <summary>A file's volume when it was left (2026-11-13), which the page's own load applies; null for YouTube, whose player keeps its own.</summary>
+    public int? Volume { get; init; }
+
+    /// <summary>A file's mute when it was left; null for YouTube.</summary>
+    public bool? Muted { get; init; }
 }
 
 /// <summary>

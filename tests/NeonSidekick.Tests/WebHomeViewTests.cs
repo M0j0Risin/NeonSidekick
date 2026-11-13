@@ -5,6 +5,7 @@ using NeonSidekick.Perf;
 using NeonSidekick.Settings;
 using NeonSidekick.Viewer;
 using NeonSidekick.WebUi;
+using NeonSidekick.YouTube;
 
 namespace NeonSidekick.Tests;
 
@@ -398,6 +399,28 @@ public sealed class WebHomeViewTests
 
         var opening = WebHomeView.Video(VideoSnapshot.Opening(VideoRequest.Playlist("PLabcdefghijklmnopqrstu")))!;
         Assert.Equal(("opening", "playlist PLabcdefghijklmnopqrstu"), (opening.State, opening.Title));
+    }
+
+    /// <summary>
+    /// A file or a video that wouldn't play shows its error's cause on the card (2026-11-13), without the way out the PC's answer gives (the
+    /// default app, open_url), which means nothing on the phone; a file with a fixed volume (an iPhone) says so for the card's buttons.
+    /// </summary>
+    [Fact]
+    public void TheVideoCard_ShowsAnErrorsCause_WithNoWayOut()
+    {
+        var file = VideoSnapshot.Opening(VideoRequest.File(Path.Combine(Path.GetTempPath(), "clip.mkv"))) with { Place = VideoPlace.WebTab };
+        var gone = WebHomeView.Video(file with { State = VideoState.Failed, Error = VideoFile.GoneCode })!;
+        Assert.Equal("clip.mkv is no longer there: it was moved or deleted.", gone.Failure);
+        var format = WebHomeView.Video(file with { Error = 4 })!;
+        Assert.Equal(VideoText.FileError(4, "clip.mkv", wayOut: false), format.Failure);
+        Assert.DoesNotContain("own app", format.Failure, StringComparison.Ordinal);
+
+        var refused = WebHomeView.Video(new VideoSnapshot(VideoState.Failed, "aqz-KE-bpKQ", "Song") { Error = 150 })!;
+        Assert.Equal(YouTubeText.Refused("aqz-KE-bpKQ", 150, wayOut: false), refused.Failure);
+        Assert.NotEqual(YouTubeText.Refused("aqz-KE-bpKQ", 150), refused.Failure);
+
+        Assert.Equal("it broke", WebHomeView.Video(file with { State = VideoState.Failed, Failure = "it broke", Error = 4 })!.Failure);   // the window's own failure first
+        Assert.True(WebHomeView.Video(file with { FixedVolume = true })!.FixedVolume);
     }
 
     [Fact]

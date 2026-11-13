@@ -289,6 +289,10 @@ public static partial class HelpSettings
         SettingsField.ImageEditOutputFolder => "Where image_edit writes when the model names no file: a folder under the profile's images folder. Empty writes beside the source.",
         SettingsField.PastedImagesFolder => "The folder under the profile's images folder where pictures pasted from the clipboard are saved. Empty uses the images folder itself.",
 
+        // /tools › Files › Video
+        SettingsField.VideoTools => "Gives the model two tools that play a video file from the working folder for you, and pause, seek or close it. Never YouTube.",
+        SettingsField.VideoFilesPlayIn => "Where video files play: the app's video window, the Web UI's Video tab, or the file's default app.",
+
         // /tools › Files › UNC
         SettingsField.UncTools => "Gives the model the share tools (list, search, read, fetch) over the shares in unc.json.",
         SettingsField.UncWrites => "The master switch for changes on shares. On, a readwrite share also gets the write, move, copy and delete tools. Changes there are permanent.",
@@ -325,8 +329,6 @@ public static partial class HelpSettings
         SettingsField.ComfyOutputFolder => "The folder under the profile's images folder where the pictures are saved. Empty uses the images folder itself.",
 
         // /tools › Apps › YouTube
-        SettingsField.VideoTools => "Gives the model two tools that play a video file from the working folder for you, and pause, seek or close it. Never YouTube.",
-        SettingsField.VideoFilesPlayIn => "Where video files play: the app's video window, the Web UI's Video tab, or the file's default app.",
         SettingsField.YouTubeTools => "Gives the model the YouTube tools: search, play videos and playlists, and keep saved videos and playlists. Searching needs a YouTube API key.",
         SettingsField.YouTubeApiKey => "Your YouTube Data API v3 key, for searching (about 100 free searches a day). Saved encrypted.",
         SettingsField.YouTubeSearchMaxResults => "The most videos, playlists or channels a search lists (1–20). The quota cost is the same whatever the count.",
@@ -336,7 +338,7 @@ public static partial class HelpSettings
         SettingsField.YouTubeLanguage => "A language code (en, es, zh-Hans) a search favors; other results still show. Empty for any language.",
         SettingsField.YouTubeOpenLinksIn => "Where YouTube videos play: the app's video window, its Browser window, your default browser, or the Web UI's Video tab.",
         SettingsField.YouTubeAutoplay => "A played video starts at once, sound included. Off, it waits until you or the model press play.",
-        SettingsField.YouTubeVoice => "A playing video while the app speaks or listens: pause stops it until after, duck turns it down to 15 %, none lets it play on.",
+        SettingsField.YouTubeVoice => "A playing video (a video file too) while the app speaks or listens: pause stops it until after, duck turns it down to 15 %, none lets it play on.",
 
         // /tools › Apps › Obsidian
         SettingsField.ObsidianTools => "Gives the model the vault tools (search, read, links, daily notes, write, move) over the vault in Obsidian vault.",

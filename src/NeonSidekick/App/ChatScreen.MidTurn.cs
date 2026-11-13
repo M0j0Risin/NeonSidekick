@@ -262,9 +262,9 @@ internal sealed partial class ChatScreen
         SlashCommand.Comfy when args.Trim().Length == 0 => MidTurnClass.Pane,   // 2026-10-18: the bare word is /tools comfy, a page over the reply as that is
         SlashCommand.Comfy when string.Equals(args.Trim(), Viewer.ViewerText.ViewWord, StringComparison.OrdinalIgnoreCase) => MidTurnClass.Quick,
         SlashCommand.Comfy when string.Equals(args.Trim(), Viewer.ThumbsText.ThumbsWord, StringComparison.OrdinalIgnoreCase) => MidTurnClass.Quick,
-        // A video path (2026-11-12): a play can wait on a sink's earlier close, so it runs on the watcher as /video does; a flag with it is the
-        // usage error after the reply, so the quick arm below never opens thumbnails of a video.
-        SlashCommand.View when ViewsVideo(args) => ParseViewArgs(args) is { Chat: false, Thumbs: false } ? MidTurnClass.Pane : MidTurnClass.Deferred,
+        // A video path (2026-11-12): a play can wait on a sink's earlier close, so it runs on the watcher as /video does, and so does one with a
+        // flag (2026-11-13): its usage error goes through the flow sink at once, and a folder so named opens the viewer's window as the quick arm does.
+        SlashCommand.View when ViewsVideo(args) => MidTurnClass.Pane,
         SlashCommand.View when ParseViewArgs(args) is { Chat: false, Path.Length: > 0 } => MidTurnClass.Quick,
         SlashCommand.Screen when NeonSidekick.Screen.ScreenText.IsFolderWord(args) => MidTurnClass.Quick,   // /screen view | thumbs (2026-10-09): a window of its own
         SlashCommand.Session when ParseSessionArgs(args).Kind == SessionActionKind.TitlePane => MidTurnClass.Pane,
@@ -723,7 +723,7 @@ internal sealed partial class ChatScreen
                 // /video and /view <video> (2026-11-12): /youtube's way, the wait on the watcher and the lines through the flow sink.
                 try
                 {
-                    await (command == SlashCommand.Video ? HandleVideoAsync(args, _flow, spinner: false, cancellationToken) : HandleViewVideoAsync(args, _flow, spinner: false, cancellationToken)).ConfigureAwait(false);
+                    await (command == SlashCommand.Video ? HandleVideoAsync(args, _flow, spinner: false, cancellationToken) : HandleViewVideoAsync(args, _flow, spinner: false, ViewInWindow, cancellationToken)).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
@@ -792,6 +792,23 @@ internal sealed partial class ChatScreen
                 }
 
                 break;
+        }
+    }
+
+    /// <summary>
+    /// <c>/view &lt;path&gt;</c> under a reply: the viewer's window, or with <c>--thumbs</c> the thumbnail browser's, never the transcript
+    /// the turn owns (the quick arm's act; also a folder named like a video, 2026-11-13).
+    /// </summary>
+    private void ViewInWindow(string args)
+    {
+        var (path, _, thumbs) = ParseViewArgs(args);
+        if (thumbs)
+        {
+            OpenThumbsAt(path);
+        }
+        else
+        {
+            OpenInViewer(path);
         }
     }
 
@@ -922,16 +939,7 @@ internal sealed partial class ChatScreen
             {
                 // /view <path> alone reaches here (later on 2026-09-27): the window, never the transcript the turn owns; with
                 // --thumbs (2026-10-04) the thumbnail browser's.
-                var (path, _, thumbs) = ParseViewArgs(args);
-                if (thumbs)
-                {
-                    OpenThumbsAt(path);
-                }
-                else
-                {
-                    OpenInViewer(path);
-                }
-
+                ViewInWindow(args);
                 break;
             }
             case SlashCommand.Camera:

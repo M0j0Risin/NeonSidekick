@@ -112,7 +112,7 @@ internal static class MediaFileServer
 
     /// <summary>
     /// <paramref name="path"/> served as <paramref name="name"/> (the name only for the browser's display): the range asked, or the whole
-    /// file, or the 304, 404 or 416. <paramref name="stopping"/> is the host's stop.
+    /// file, or the 304, 410 (not found), 503 (unreadable: locked, denied, a dead share) or 416. <paramref name="stopping"/> is the host's stop.
     /// </summary>
     public static async Task ServeAsync(HttpContext context, string path, string name, CancellationToken stopping)
     {
@@ -131,11 +131,12 @@ internal static class MediaFileServer
         string tag;
         try
         {
-            stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, BufferSize, useAsync: true);
+            // No FileStream buffer (2026-11-13): CopyAsync reads whole BufferSize chunks of its own, which a second buffer only copies.
+            stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, bufferSize: 0, useAsync: true);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            WebFileResponse.Gone(response, WebUiText.VideoFileGoneDebug(name, e.Message));
+            WebFileResponse.Gone(response, WebUiText.VideoFileGoneDebug(name, e.Message), WebFileResponse.StatusFor(e));
             return;
         }
 
@@ -144,11 +145,11 @@ internal static class MediaFileServer
             try
             {
                 length = stream.Length;
-                tag = WebFileResponse.Tag(WebFileResponse.Stamp(length, path), "v");
+                tag = WebFileResponse.Tag(WebFileResponse.Stamp(length, stream.SafeFileHandle), "v");
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
-                WebFileResponse.Gone(response, WebUiText.VideoFileGoneDebug(name, e.Message));
+                WebFileResponse.Gone(response, WebUiText.VideoFileGoneDebug(name, e.Message), WebFileResponse.StatusFor(e));
                 return;
             }
 
@@ -235,7 +236,7 @@ internal static class MediaFileServer
                 if (read == 0)
                 {
                     // The file shrank under the copy: never a short answer the browser would take as the file.
-                    DiagnosticLog.Debug("WebUi", WebUiText.VideoFileReadDebug(name, "it got shorter while it was sent"));
+                    DiagnosticLog.Debug("WebUi", WebUiText.VideoFileReadDebug(name, WebUiText.VideoFileShrank));
                     context.Abort();
                     return;
                 }

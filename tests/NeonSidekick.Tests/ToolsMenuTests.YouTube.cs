@@ -5,7 +5,7 @@ using NeonSidekick.UI;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// The Video tab of <c>/tools</c> (2026-10-05, the YouTube plan): after ComfyUI, before GitLib, the switch, the API key typed masked and saved
+/// The YouTube tab of <c>/tools</c> (2026-10-05, the YouTube plan): after ComfyUI, before GitLib, the switch, the API key typed masked and saved
 /// encrypted, the typed max results, autoplay; the key's other homes (the log's mask, the encryption at rest, the variable).
 /// </summary>
 public partial class ToolsMenuTests

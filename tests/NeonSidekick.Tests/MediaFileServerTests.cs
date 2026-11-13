@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http;
+using NeonSidekick.Viewer;
 using NeonSidekick.WebUi;
 
 namespace NeonSidekick.Tests;
@@ -160,17 +161,49 @@ public sealed class MediaFileServerTests : IDisposable
         Assert.Empty(Body(head));
     }
 
+    /// <summary>A file not found is 410 Gone (2026-11-13), which the page reads as "no longer there"; a stale token stays the host's 404.</summary>
     [Fact]
-    public async Task AFileGone_IsA404_WithNoTagOrName()
+    public async Task AFileGone_IsA410_WithNoTagOrName()
     {
         var context = Context(range: "bytes=0-1");
 
         await MediaFileServer.ServeAsync(context, Path.Combine(_dir, "gone.mp4"), "gone.mp4", CancellationToken.None);
 
-        Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
+        Assert.Equal(StatusCodes.Status410Gone, context.Response.StatusCode);
         Assert.Empty(context.Response.Headers.ETag.ToString());
         Assert.Empty(context.Response.Headers.ContentDisposition.ToString());
         Assert.Empty(Body(context));
+
+        var folder = Context(range: "bytes=0-1");
+        await MediaFileServer.ServeAsync(folder, Path.Combine(_dir, "no-such-folder", "gone.mp4"), "gone.mp4", CancellationToken.None);
+        Assert.Equal(StatusCodes.Status410Gone, folder.Response.StatusCode);
+    }
+
+    /// <summary>A file there but unreadable (held with no sharing) is 503 (2026-11-13): "couldn't be read", never "gone".</summary>
+    [WindowsFact]
+    public async Task AFileHeldWithNoSharing_IsA503()
+    {
+        string clip = Clip();
+        using var holder = new FileStream(clip, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        var context = Context(range: "bytes=0-1");
+
+        await MediaFileServer.ServeAsync(context, clip, "clip.mp4", CancellationToken.None);
+
+        Assert.Equal(StatusCodes.Status503ServiceUnavailable, context.Response.StatusCode);
+        Assert.Empty(Body(context));
+    }
+
+    /// <summary>The gone check reads the disk: a missing file is gone, one there keeps its code, an unreadable path is "couldn't be read".</summary>
+    [Fact]
+    public void GoneIfMissing_SplitsMissingFromUnreadable()
+    {
+        string clip = Clip();
+        Assert.Equal(VideoFile.GoneCode, VideoFile.GoneIfMissing(4, Path.Combine(_dir, "gone.mp4")));
+        Assert.Equal(VideoFile.GoneCode, VideoFile.GoneIfMissing(2, Path.Combine(_dir, "no-such-folder", "gone.mp4")));
+        Assert.Equal(4, VideoFile.GoneIfMissing(4, clip));
+        Assert.Equal(3, VideoFile.GoneIfMissing(3, Path.Combine(_dir, "gone.mp4")));   // a decode error is never read as gone
+        Assert.Equal(4, VideoFile.GoneIfMissing(4, null));
+        Assert.Equal(2, VideoFile.GoneIfMissing(4, "bad\0path"));
     }
 
     [Fact]

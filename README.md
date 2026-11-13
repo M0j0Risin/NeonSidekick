@@ -53,7 +53,7 @@ It's one app for research, IT and admin work (Active Directory, event logs, data
 
 ### The app
 * **A rich terminal UI:** Markdown, code highlighting, pictures in the transcript, the mouse, and sixty color themes or your own.
-* **Its own windows:** pictures (`/view`), the camera (`/camera live`), the log (`/log`), background output (`/process`), a container's log (`/docker logs`), YouTube (`/youtube play`) and video files (`/video`); camera and YouTube need macOS 14+ on a Mac, where video files open in their own app.
+* **Its own windows:** pictures (`/view`), the camera (`/camera live`), the log (`/log`), background output (`/process`), a container's log (`/docker logs`), YouTube (`/youtube play`) and video files (`/video`); camera and YouTube need macOS 14+ on a Mac.
 * **Voice in and out:** Whisper speech-to-text (push-to-talk or "hey neon") and Kokoro speech with mixable voices, in-process or through a Kokoro server.
 * **Web UI:** the chat, the model's questions, the shopping list, a Home tab (lights, scenes, cameras, PC meters), YouTube and your PC's videos on your phone, over your network or Tailscale (`/webui`, [the Web UI](docs/INTERFACE.md#web-ui)).
 * **Pictures as input:** paste or drop one, or take one with the webcam (`/camera`) or of the screen (`/screen`) (macOS 14+ on a Mac).

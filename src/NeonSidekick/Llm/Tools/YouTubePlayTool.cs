@@ -168,7 +168,9 @@ public sealed class YouTubePlayTool : AIFunction
         if (!routed.Wait)
         {
             // Sent to a browser (2026-10-16): nothing to wait for; the saved place went with the link's t=.
-            return (routed.Note ?? "") + (resumed > 0 ? YouTubeText.Resumed(resumed) : "") + routed.Answer;
+            // A note never hides an error (2026-11-13): Error: stays first, and an error drops the Resumed line, as the status does below.
+            string answer = routed.Answer ?? "";
+            return VideoText.Lead(answer, routed.Note, resumed > 0 && !answer.StartsWith("Error: ", StringComparison.Ordinal) ? YouTubeText.Resumed(resumed) : null);
         }
 
         // Started, cued, ended at once or refused: anything but the window's own opening, and on the video asked for (its error
@@ -182,11 +184,11 @@ public sealed class YouTubePlayTool : AIFunction
         var snapshot = await YouTubeWait.UntilAsync(_player, before, s => s.Held is { Nudged: false } || (s.VideoId == id && (s.State is VideoState.Playing or VideoState.Paused or VideoState.Ended || (s.State == VideoState.Cued && !autoplay))), YouTubeWait.Play, _time, cancellationToken, video: id).ConfigureAwait(false);
         if (snapshot is null)
         {
-            return (routed.Note ?? "") + YouTubeText.ClosedMeanwhileIn(_player.Place);
+            return VideoText.Lead(YouTubeText.ClosedMeanwhileIn(_player.Place), routed.Note);
         }
 
         string status = YouTubeText.Status(snapshot);
-        return (routed.Note ?? "") + (resumed > 0 && !status.StartsWith("Error: ", StringComparison.Ordinal) ? YouTubeText.Resumed(resumed) + status : status);
+        return VideoText.Lead(status, routed.Note, resumed > 0 && !status.StartsWith("Error: ", StringComparison.Ordinal) ? YouTubeText.Resumed(resumed) : null);
     }
 
     // The play through the route, or on the player as before the setting.
@@ -262,7 +264,7 @@ public sealed class YouTubePlayTool : AIFunction
         {
             // A browser opens what the link names (2026-11-08, the review): with no entry video the link has no time, so only the entry is claimed.
             string handoffLead = !resumed || startVideo is not null ? resumedLead : startEntry > 0 ? YouTubeText.ResumedEntry(startEntry, 0) : "";
-            return (routed.Note ?? "") + handoffLead + routed.Answer;
+            return VideoText.Lead(routed.Answer ?? "", routed.Note, handoffLead);
         }
 
         // Paused is an answer only when the play asked for none (2026-10-09, seen on the real player): an open window switched to a
@@ -273,11 +275,11 @@ public sealed class YouTubePlayTool : AIFunction
             && (s.State is VideoState.Playing or VideoState.Ended || (s.State is VideoState.Cued or VideoState.Paused && !autoplay))), YouTubeWait.Play, _time, cancellationToken).ConfigureAwait(false);
         if (snapshot is null)
         {
-            return (routed.Note ?? "") + YouTubeText.ClosedMeanwhileIn(_player.Place);
+            return VideoText.Lead(YouTubeText.ClosedMeanwhileIn(_player.Place), routed.Note);
         }
 
         string status = YouTubeText.Status(snapshot);
-        return (routed.Note ?? "") + (status.StartsWith("Error: ", StringComparison.Ordinal) ? status : resumedLead + status);
+        return VideoText.Lead(status, routed.Note, status.StartsWith("Error: ", StringComparison.Ordinal) ? null : resumedLead);
     }
 }
 

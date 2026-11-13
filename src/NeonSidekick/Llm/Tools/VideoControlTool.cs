@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using NeonSidekick.Viewer;
@@ -13,7 +12,10 @@ namespace NeonSidekick.Llm.Tools;
 /// the playlist actions: it waits for the player to show the change (<see cref="YouTubeWait.Command"/>) and answers with what it then
 /// reports (<see cref="VideoText.FileStatus"/>). A file only: with a YouTube video open it points at <c>youtube_control</c> when that is
 /// offered; after a file went to its default app it says so (<see cref="VideoText.HandedOffControl"/>); a file waiting for a Video tab
-/// answers its held words to everything but <c>close</c> and <c>status</c>. Never headless.
+/// answers its held words to everything but <c>close</c> and <c>status</c>. The commands and their refusals are youtube_control's own
+/// (<see cref="YouTubeControlTool.TryCommand"/>, 2026-11-13); a file on a page with a fixed volume (an iPhone) answers a volume at once.
+/// The screen's instance for <c>/video</c> words its answers for the user (<c>forUser</c>: <c>/video status</c>, <c>/video &lt;path&gt;</c>).
+/// Never headless.
 /// </summary>
 public sealed class VideoControlTool : AIFunction
 {
@@ -41,18 +43,22 @@ public sealed class VideoControlTool : AIFunction
     private readonly Func<string?>? _handoffName;
     private readonly Func<VideoFilesPlayInKind>? _target;
     private readonly Func<string?>? _youTubePointer;
+    private readonly bool _forUser;
 
     /// <param name="player">The player (the router); null with no video window, every file then in its default app.</param>
     /// <param name="handoffName">The video file last sent to its default app; null for none.</param>
     /// <param name="target">Where a play goes now, for the description; null is the video window.</param>
     /// <param name="youTubePointer"><c>youtube_control</c>'s name when it is offered this turn, for the YouTube-open refusal; null names none.</param>
-    public VideoControlTool(IVideoPlayer? player, TimeProvider? time = null, Func<string?>? handoffName = null, Func<VideoFilesPlayInKind>? target = null, Func<string?>? youTubePointer = null)
+    /// <param name="forUser"><c>/video</c>'s instance: its answers name <c>/video</c>'s forms, not the tools'.</param>
+    public VideoControlTool(IVideoPlayer? player, TimeProvider? time = null, Func<string?>? handoffName = null, Func<VideoFilesPlayInKind>? target = null,
+        Func<string?>? youTubePointer = null, bool forUser = false)
     {
         _player = player;
         _time = time ?? TimeProvider.System;
         _handoffName = handoffName;
         _target = target;
         _youTubePointer = youTubePointer;
+        _forUser = forUser;
     }
 
     public override string Name => ToolName;
@@ -93,26 +99,26 @@ public sealed class VideoControlTool : AIFunction
             return YouTubeText.NotAnAction(action, Actions);
         }
 
-        var current = _player?.Snapshot;
-        if (current is { State: not VideoState.Failed, IsFile: false })
+        var now = _player?.Snapshot;
+        if (now.AsYouTube() is not null)
         {
             return VideoText.YouTubeIsOpen(_youTubePointer?.Invoke());
         }
 
-        if (current is not { State: not VideoState.Failed } || _player is null)
+        if (now.AsFile() is not { } current || _player is null)
         {
             string? handoff = _handoffName?.Invoke();
             if (action == "status")
             {
-                return handoff is not null && current is null ? VideoText.HandedOffStatus(handoff) : VideoText.FileStatus(current);
+                return handoff is not null && now is null ? VideoText.HandedOffStatus(handoff) : VideoText.FileStatus(now, _forUser);
             }
 
-            return handoff is not null ? VideoText.HandedOffControl(handoff) : VideoText.NoFile;
+            return handoff is not null ? VideoText.HandedOffControl(handoff) : VideoText.NoFileFor(_forUser);
         }
 
         if (action == "status")
         {
-            return VideoText.FileStatus(current);
+            return VideoText.FileStatus(current, _forUser);
         }
 
         if (action == "close")
@@ -127,70 +133,25 @@ public sealed class VideoControlTool : AIFunction
             return YouTubeText.Held(current, held);
         }
 
-        string? token = current.FileToken;
-        VideoCommand command;
-        Func<VideoSnapshot, bool> shows;
-        switch (action)
+        // A page that can't set the volume (an iPhone) would never show the change: said at once, not after the command's wait.
+        if (action == "volume" && current.FixedVolume)
         {
-            case "play":
-                command = VideoCommand.Play;
-                shows = s => s.State is VideoState.Playing or VideoState.Ended;
-                break;
-            case "pause":
-                command = VideoCommand.Pause;
-                shows = s => s.State is VideoState.Paused or VideoState.Ended or VideoState.Cued;
-                break;
-            case "seek":
-            case "forward":
-            case "back":
-                double? seconds = value.Length == 0 ? (action == "seek" ? null : YouTubeControlTool.DefaultSkip) : YouTubeIds.ParseTime(value);
-                if (seconds is not { } by)
-                {
-                    return YouTubeText.NotATime(ValueArgument, value);
-                }
+            return VideoText.FixedVolume;
+        }
 
-                double to = action switch
-                {
-                    "forward" => current.Position + by,
-                    "back" => current.Position - by,
-                    _ => by,
-                };
-                if (current.Duration > 0)
-                {
-                    to = Math.Min(to, current.Duration);
-                }
-
-                command = VideoCommand.Seek(to);
-                double target = command.Value;
-                shows = s => Math.Abs(s.Position - target) < 3;
-                break;
-            case "volume":
-                if (!double.TryParse(value.TrimEnd('%'), NumberStyles.Float, CultureInfo.InvariantCulture, out double level) || level is < 0 or > 100)
-                {
-                    return YouTubeText.NotAVolume(value);
-                }
-
-                command = VideoCommand.Volume(level);
-                int volume = (int)command.Value;
-                shows = s => s.Volume == volume;
-                break;
-            case "mute":
-                command = VideoCommand.Mute;
-                shows = s => s.Muted;
-                break;
-            default:
-                command = VideoCommand.Unmute;
-                shows = s => !s.Muted;
-                break;
+        string? token = current.FileToken;
+        if (YouTubeControlTool.TryCommand(action, value, current, ValueArgument, out var command, out var shows, _forUser ? "/video" : null) is { } error)
+        {
+            return error;
         }
 
         long before = current.Version;
         if (!_player.Send(command))
         {
-            return VideoText.NoFile;
+            return VideoText.NoFileFor(_forUser);
         }
 
         var snapshot = await YouTubeWait.UntilAsync(_player, before, s => s.FileToken == token && shows(s), YouTubeWait.Command, _time, cancellationToken, video: token).ConfigureAwait(false);
-        return snapshot is null ? YouTubeText.ClosedMeanwhileIn(current.Place) : YouTubeText.Status(snapshot);
+        return snapshot is null ? YouTubeText.ClosedMeanwhileIn(current.Place) : YouTubeText.Status(snapshot, _forUser);
     }
 }

@@ -20,7 +20,9 @@ public static class VideoFile
 
     /// <summary>
     /// The page's own code beside <c>MediaError</c>'s 1-4 (and outside YouTube's 2-150): the file's metadata loaded with no
-    /// picture (<c>videoWidth</c> 0), an HEVC file on a PC without the decoder playing sound over black.
+    /// picture (<c>videoWidth</c> 0), an audio-only file or an HEVC file on a PC without the decoder playing sound over black. The page
+    /// still sends it as an <c>error</c>, but <see cref="VideoMessages.Apply"/> reads it as <see cref="VideoSnapshot.NoPicture"/>
+    /// (2026-11-13): the file plays, so no wait, status or Resume treats it as failed.
     /// </summary>
     public const int NoPictureCode = 1000;
 
@@ -35,6 +37,35 @@ public static class VideoFile
     /// the refusal's status when its <c>&lt;video&gt;</c> fails, which a <c>MediaError</c> can't say.
     /// </summary>
     public const int FunnelCode = 1002;
+
+    /// <summary>
+    /// A file error's code asked of the disk (2026-11-13, the review's fix): a missing <c>file:</c> video and a dead share both report
+    /// <c>MediaError</c> 2 or 4, so for those two the player that knows the path stats it. <see cref="GoneCode"/> only when the file or its
+    /// folder is not found; 2, "couldn't be read", when the stat fails otherwise (a share that doesn't answer, access denied); the code
+    /// as it was when the file is there, for another code, or with no path. A stat on a dead share can block, so callers run it off any
+    /// UI thread. On a Mac an unmounted <c>/Volumes</c> share reads as not found, so gone: the two can't be told apart there.
+    /// </summary>
+    public static int GoneIfMissing(int code, string? path)
+    {
+        if (code is not (2 or 4) || string.IsNullOrEmpty(path))
+        {
+            return code;
+        }
+
+        try
+        {
+            File.GetAttributes(path);
+            return code;
+        }
+        catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return GoneCode;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return 2;
+        }
+    }
 
     /// <summary>Whether <paramref name="path"/>'s name ends in one of <see cref="Extensions"/> (any case). The name only: a caller also asks <see cref="File.Exists(string)"/>.</summary>
     public static bool IsVideoPath(string? path)

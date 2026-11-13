@@ -11,7 +11,8 @@
 // A video file from the PC (2026-11-12, the video-files plan): a load with file plays in the frame's own <video> (file-core.js, served as
 // /youtube-file.js) while YouTube's player is hidden, not destroyed; every command after a load goes to that load's kind, and the hidden
 // YouTube player's reports are dropped. A file needs no internet, so YouTube's script failing counts for YouTube loads only. A file that
-// won't play asks its address once (HEAD) for why: refused over Funnel (403) or gone (404).
+// won't play asks its address once (HEAD) for why: refused over Funnel (403), gone (410), unreadable on the PC (503), or signed out (401,
+// which reloads the page to sign in). Which player the last load went to is one `active` object (2026-11-13), never a scattered kind test.
 'use strict';
 
 const hintEl = document.getElementById('hint');
@@ -46,8 +47,10 @@ let hello = false;
 let source = null;
 let tapHint = '';
 
-// The load's kind (2026-11-12): 'file', 'youtube', or null with nothing loaded yet.
-let kind = null;
+// The player the last load went to (2026-11-13, the review's fix): its kind, the player, and whether it needs YouTube's script; `idle`
+// before any load and after a file stops. Set only by showKind.
+const idle = { kind: null, isFile: false, player: null, needsApi: false };
+let active = idle;
 let fileSrc = null;
 const fileEl = document.getElementById('file');
 const fileHead = document.getElementById('file-head');
@@ -124,16 +127,18 @@ function send(message) {
   if (owner) report(message);
 }
 
-const core = NeonPlayer(m => { if (kind !== 'file') send(m); }, {
+const core = NeonPlayer(m => { if (!active.isFile) send(m); }, {
   autoplayFallback: true,
-  onPlaying: () => { if (kind !== 'file') { draw(); savedPoller.now(); } },
-  onBlocked: () => { if (kind !== 'file') { tapHint = (words && words.tapToStart) || ''; draw(); } },
+  onPlaying: () => { if (!active.isFile) { draw(); savedPoller.now(); } },
+  onBlocked: () => { if (!active.isFile) { tapHint = (words && words.tapToStart) || ''; draw(); } },
 });
 
-// A file's MediaError says nothing of a refusal: its address answers why (403 over Funnel, 404 gone), and the sentence goes with the code.
+// A file's MediaError says nothing of a refusal: its address answers why (403 over Funnel, 410 gone, 503 unreadable on the PC, 401 signed
+// out), and the sentence goes with the code. Any other answer (a 404: the play is no longer current) keeps the browser's own code.
 const FunnelCode = 1002;
 const GoneCode = 1001;
 const NoPictureCode = 1000;
+const ReadCode = 2;
 
 async function fileError(message) {
   const fw = words && words.files;
@@ -141,10 +146,11 @@ async function fileError(message) {
   if (code !== NoPictureCode && fileSrc) {
     try {
       const r = await fetch(fileSrc, { method: 'HEAD', credentials: 'same-origin', cache: 'no-store' });
-      if (r.status === 403) code = FunnelCode; else if (r.status === 404) code = GoneCode;
+      if (r.status === 401) { location.reload(); return; }   // signed out: the reload signs in again
+      if (r.status === 403) code = FunnelCode; else if (r.status === 410) code = GoneCode; else if (r.status === 503) code = ReadCode;
     } catch { /* offline: the browser's own code stands */ }
   }
-  if (kind !== 'file' || message.file !== currentToken) return;   // another load meanwhile
+  if (!active.isFile || message.file !== currentToken) return;   // another load meanwhile
   if (fw) {
     fileSaid = code === FunnelCode ? fw.funnelOff : code === GoneCode ? fw.gone : code === NoPictureCode ? fw.noPicture : fw.failed;
     Neon.say(fileSaid);
@@ -161,24 +167,29 @@ function unsayFile() {
   fileSaid = '';
 }
 
-const filePlayer = NeonFile(m => { if (kind !== 'file') return; if (m.ev === 'error') { fileError(m); return; } send(m); }, {
+const filePlayer = NeonFile(m => { if (!active.isFile) return; if (m.ev === 'error') { fileError(m); return; } send(m); }, {
   video: fileEl,
   autoplayFallback: true,
-  onPlaying: () => { if (kind === 'file') { draw(); savedPoller.now(); } },
-  onBlocked: () => { if (kind === 'file') { tapHint = (words && words.tapToStart) || ''; draw(); } },
-  keys: () => kind === 'file' && owner,
+  onPlaying: () => { if (active.isFile) { draw(); savedPoller.now(); } },
+  onBlocked: () => { if (active.isFile) { tapHint = (words && words.tapToStart) || ''; draw(); } },
+  keys: () => active.isFile && owner,
 });
+
+const players = {
+  file: { kind: 'file', isFile: true, player: filePlayer, needsApi: false },
+  youtube: { kind: 'youtube', isFile: false, player: core, needsApi: true },
+};
 
 function ytPlayerEl() { return document.getElementById('player'); }
 
-// Which of the two shows: the file's <video> or YouTube's player (the other hidden, never destroyed).
+// Which shows: the file's <video>, YouTube's player, or neither (a stopped file; 2026-11-13: never the earlier YouTube video's last frame).
+// The other is hidden, never destroyed.
 function showKind(k) {
-  kind = k;
-  const file = k === 'file';
-  fileEl.classList.toggle('hidden', !file);
+  active = players[k] || idle;
+  fileEl.classList.toggle('hidden', active.kind !== 'file');
   const yt = ytPlayerEl();
-  if (yt) yt.classList.toggle('hidden', file);
-  fileHead.classList.toggle('hidden', !file);
+  if (yt) yt.classList.toggle('hidden', active.kind !== 'youtube');
+  fileHead.classList.toggle('hidden', active.kind !== 'file');
 }
 
 // A load to the page's player of its kind: a file's YouTube load forgotten first, a YouTube load's file emptied first (its stream closed).
@@ -193,7 +204,7 @@ function dispatchLoad(m) {
     filePlayer.onMessage(m);
     return;
   }
-  if (kind === 'file') filePlayer.empty();
+  if (active.isFile) filePlayer.empty();
   currentToken = null;
   fileSrc = null;
   showKind('youtube');
@@ -202,7 +213,7 @@ function dispatchLoad(m) {
 
 // The player of the load's kind stopped: a file emptied, so its stream ends and a dropped token is never asked again.
 function stopPlayer() {
-  if (kind === 'file') { filePlayer.empty(); currentToken = null; fileSrc = null; showKind(null); }
+  if (active.isFile) { filePlayer.empty(); currentToken = null; fileSrc = null; showKind(null); }
   else core.onMessage({ cmd: 'stop' });
 }
 
@@ -215,7 +226,7 @@ function apiCheck() {
   if (core.apiReady()) return;
   apiFailed = true;
   draw();
-  if (owner && loaded && kind !== 'file') report({ ev: 'failed', reason: 'api' });
+  if (owner && loaded && active.needsApi) report({ ev: 'failed', reason: 'api' });
 }
 
 function draw() {
@@ -227,7 +238,7 @@ function draw() {
   resumeBtn.textContent = offer ? offer.label : '';
   resumeBtn.classList.toggle('hidden', !canResume);
   hintEl.textContent = waiting ? words.waiting
-    : apiFailed && kind !== 'file' ? words.failed
+    : apiFailed && active.needsApi ? words.failed
     : tapHint ? tapHint
     : !loaded && !canResume ? (hello ? words.idle : words.loading)
     : '';
@@ -250,7 +261,7 @@ let windowed = false;
 let windowedScroll = 0;
 let backPending = false;
 
-function canFill() { return owner && loaded && (kind === 'file' || !apiFailed); }
+function canFill() { return owner && loaded && !(active.needsApi && apiFailed); }
 
 function filledEntry() { return !!(history.state && history.state.filled); }
 
@@ -328,7 +339,11 @@ async function resume(o) {
   Neon.say('');
   draw();
   await report({ ev: 'resumed' });
-  if (o.file) { dispatchLoad({ cmd: 'load', file: o.file, src: o.src, name: o.name, start: o.start || 0, autoplay: true }); return; }
+  if (o.file) {
+    // The level it was left at (2026-11-13): the page builds this load itself, the app's snapshot gone with the reload.
+    dispatchLoad({ cmd: 'load', file: o.file, src: o.src, name: o.name, start: o.start || 0, autoplay: true, volume: o.volume, muted: o.muted });
+    return;
+  }
   dispatchLoad({ cmd: 'load', id: o.videoId || undefined, list: o.playlistId || undefined, index: o.entry || 0, start: o.start || 0, autoplay: true });
 }
 
@@ -381,14 +396,20 @@ function connect(claim) {
     draw();
     if (apiFailed && !m.file) report({ ev: 'failed', reason: 'api' });
   });
-  source.addEventListener('cmd', ev => { const m = JSON.parse(ev.data); if (kind === 'file') filePlayer.onMessage(m); else core.onMessage(m); });
+  source.addEventListener('cmd', ev => { const m = JSON.parse(ev.data); (active.player || core).onMessage(m); });
   source.addEventListener('owner', ev => {
     const o = JSON.parse(ev.data);
     owner = !!o.owner;
-    offer = o.resume || offer;
+    offer = o.resume || null;   // the offer in force now; one learned in an earlier hello may have gone since
     draw();
   });
-  source.addEventListener('resume', ev => { offer = JSON.parse(ev.data); loaded = false; draw(); });
+  // An offer, or (2026-11-13) null when the app dropped it: a closed video, a profile switch, its age. A null only clears the button.
+  source.addEventListener('resume', ev => {
+    const o = JSON.parse(ev.data);
+    offer = o || null;
+    if (o) loaded = false;
+    draw();
+  });
   // Another page took the player (later on 2026-10-16: stopped, not paused, so no paused player here looks live).
   source.addEventListener('taken', () => {
     owner = false;

@@ -245,7 +245,7 @@ public static class ToolsText
     /// <summary>The screen capture's tab and group (2026-10-04): <c>screen_capture</c> and <c>screen_list</c>, after Camera, before Obsidian; before Print since 2026-10-16 (the user's order).</summary>
     public const string ScreenTabTitle = "Screen";
 
-    /// <summary>The Video tab (2026-10-05, the YouTube plan): the search key and the video window's tools; after ComfyUI, before GitLib (the user's place, later that day; after Screen until then).</summary>
+    /// <summary>The YouTube tab (2026-10-05, the YouTube plan): the search key and the video window's tools; after ComfyUI, before GitLib (the user's place, later that day; after Screen until then).</summary>
     public const string YouTubeTabTitle = "YouTube";
 
     /// <summary>The Docker tools' tab and group (2026-10-02), Apps' (Integrations' until 2026-10-11) first menu since 2026-10-10 (the ClaudeCode tab before it went); after Claude, before HA, since 2026-10-03 (the user's order; after UNC, before GitLib, until then).</summary>

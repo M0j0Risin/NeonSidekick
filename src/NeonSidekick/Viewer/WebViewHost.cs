@@ -150,14 +150,11 @@ internal sealed unsafe partial class WebViewHost
     public bool IsCreated => _webView != 0;
 
     /// <summary>
-    /// Starts the chain: the environment over <paramref name="userDataFolder"/>, then everything else as WebView2 answers,
-    /// ending on <see cref="Created"/> or <see cref="Failed"/>. Returns false when it failed at once (no loader, no runtime).
-    /// </summary>
-    public bool Start(string userDataFolder, string siteFolder, string url) => Start(userDataFolder, siteFolder, url, WebViewProfile.Video);
-
-    /// <summary>
-    /// <see cref="Start(string, string, string)"/> for <paramref name="profile"/> (2026-10-13): its arguments, its virtual host over
-    /// <paramref name="siteFolder"/> when it has one, its navigation rule and settings.
+    /// Starts the chain for <paramref name="profile"/>: the environment over <paramref name="userDataFolder"/>, then everything else as
+    /// WebView2 answers, ending on <see cref="Created"/> or <see cref="Failed"/>; the profile's arguments, its virtual host over
+    /// <paramref name="siteFolder"/> when it has one, its navigation rule and settings (2026-10-13). Returns false when it failed at once
+    /// (no loader, no runtime). Every caller names its profile (2026-11-13: the video window's is <see cref="WebViewProfile.VideoFor"/>,
+    /// which lets its file page through).
     /// </summary>
     public bool Start(string userDataFolder, string? siteFolder, string url, WebViewProfile profile)
     {
@@ -947,6 +944,7 @@ internal sealed unsafe partial class WebViewHost
         private bool _scripted;
 
         // The file page's run (2026-11-12): moved to once the YouTube page passed, its own first message, echo and script.
+        private bool _toFile;
         private bool _onFile;
         private long _filePageAt = -1;
         private long _fileStartedAt;
@@ -1003,9 +1001,8 @@ internal sealed unsafe partial class WebViewHost
         {
             if (!_onFile && _scripted && uri.StartsWith("https://example.com", StringComparison.Ordinal))
             {
-                _onFile = true;
-                _fileStartedAt = _clock.ElapsedMilliseconds;
-                Host!.Navigate(VideoPage.FileUrl(site));
+                // Noted here, navigated from Tick (2026-11-13, the review's fix): a navigation from inside the refusal's own callback re-enters WebView2.
+                _toFile = true;
             }
             else if (_fileScripted && uri.StartsWith("file:", StringComparison.OrdinalIgnoreCase))
             {
@@ -1061,6 +1058,13 @@ internal sealed unsafe partial class WebViewHost
 
         public void Tick()
         {
+            if (_toFile && !_onFile && !Done)
+            {
+                _onFile = true;
+                _fileStartedAt = _clock.ElapsedMilliseconds;
+                Host!.Navigate(VideoPage.FileUrl(site));
+            }
+
             if (!Done && _clock.Elapsed > timeout)
             {
                 Finish(false, _pageAt < 0 ? $"the page did not speak within {timeout.TotalSeconds.ToString(CultureInfo.InvariantCulture)} s"

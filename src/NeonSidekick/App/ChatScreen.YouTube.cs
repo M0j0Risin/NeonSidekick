@@ -137,9 +137,9 @@ internal sealed partial class ChatScreen
             case YouTubeVerb.Save:
             {
                 // The video file playing is no YouTube video to save (2026-11-12): saves keep YouTube's alone.
-                if (line.VideoId is null && line.PlaylistId is null && _videoPlayer?.Snapshot is { IsFile: true, State: not VideoState.Failed } playingFile)
+                if (line.VideoId is null && line.PlaylistId is null && _videoPlayer.FileSnapshot() is { } playingFile)
                 {
-                    sink.Error(VideoText.NoSaveForFiles(playingFile.FileName));
+                    sink.Error(VideoText.NoSaveForFiles(playingFile.FileName, forUser: true));
                     return;
                 }
 
@@ -184,7 +184,7 @@ internal sealed partial class ChatScreen
         if (line.Verb == YouTubeVerb.Status)
         {
             // A video file open (2026-11-12): /video's, so its status points there, as the control verbs' answers do.
-            Show(player.Snapshot is { IsFile: true, State: not VideoState.Failed } file ? VideoText.FileIsOpen(file.FileName, "/video") : YouTubeText.StatusOrHandoff(player.Snapshot, YouTubeHandoff()), sink);
+            Show(player.FileSnapshot() is { } file ? VideoText.FileIsOpen(file.FileName, "/video") : YouTubeText.StatusOrHandoff(player.Snapshot, YouTubeHandoff()), sink);
             return;
         }
 

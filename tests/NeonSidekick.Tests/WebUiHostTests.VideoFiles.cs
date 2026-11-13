@@ -38,7 +38,7 @@ public sealed partial class WebUiHostTests
         {
             var request = VideoRequest.File(clip);
             _backend.VideoPlayer!.Play(request);   // no page yet: held, and served for the page that comes
-            string src = WebVideoPlayer.FileSrc(request.FileToken!, request.FileName);
+            string src = WebVideoPlayer.FileAddress(request.FileToken!, request.FileName);
 
             using (var slice = await _client.SendAsync(FileGet(src)))
             {
@@ -123,7 +123,7 @@ public sealed partial class WebUiHostTests
         {
             var request = VideoRequest.File(clip);
             _backend.VideoPlayer!.Play(request);
-            string src = WebVideoPlayer.FileSrc(request.FileToken!, request.FileName);
+            string src = WebVideoPlayer.FileAddress(request.FileToken!, request.FileName);
 
             using (var refused = await _client.SendAsync(ThroughServe(FileGet(src), "203.0.113.9", funnel: true)))
             {

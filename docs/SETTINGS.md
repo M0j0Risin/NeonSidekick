@@ -124,12 +124,12 @@ A browser front end for this profile, on this computer or (with *Web UI reach* `
 | Web UI commands | Chat tab: lets the page run the slash commands that work from a phone ([Commands from the page](INTERFACE.md#commands-from-the-page)). Off, it only sends messages. | off |
 | Web UI connection details | Chat tab: the page's dropdown shows the `%` and `*` connections' server and database, not just names. The chat shows what the model says either way. | off |
 | Web UI bot check control | Chat tab: the page shows a running bot check live and your taps and typing go into it ([A bot check from the page](INTERFACE.md#a-bot-check-from-the-page)). Off: only the allow question and *Give up*. | on |
+| Web UI video files over Funnel | Lets a PC video file play on the Video tab when the page is reached over Tailscale Funnel (only under *Web UI reach* `local`). Only the file playing is served, to a signed-in page. | off |
 | Web UI profile theme | Dresses the pages in the profile's theme, following a `/theme` at once; your lines and review lines take the terminal's colors. Off, they keep their own look. | on |
 | Web UI chat controls | Shows the Chat tab: transcript, message line and the app's questions. Off, the page opens on another [tab](INTERFACE.md#web-ui); the PC is unchanged. | on |
 | Web UI home controls | Shows the [Home tab](INTERFACE.md#the-home-tab) and lets it act. Unlocking, opening a garage, gate or door, and disarming still ask; `/ha` in the chat follows *Web UI commands*. | off |
 | Web UI shopping controls | Shows the Shopping tab: add, tick, change, place and remove lines, and change the store. `/shopping` at the PC is unchanged. | off |
-| Web UI video controls | Shows the [Video tab](INTERFACE.md#the-video-tab) (macOS 14+ on a Mac): it plays videos started there and keeps the saved list. Off, *YouTube open links in* `webui-window` plays in the PC's video window. | off |
-| Web UI video files over Funnel | Lets a PC video file play on the Video tab when the page is reached over Tailscale Funnel. Only the file playing is served, to a signed-in page. Matters only under *Web UI reach* `local`. | off |
+| Web UI video controls | Shows the [Video tab](INTERFACE.md#the-video-tab) (macOS 14+ on a Mac): it plays videos started there and keeps the saved list. Off, `webui-window` (either setting) plays in the PC's video window. | off |
 
 ### Servers
 

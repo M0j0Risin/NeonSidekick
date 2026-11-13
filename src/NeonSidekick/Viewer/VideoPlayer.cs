@@ -42,6 +42,25 @@ public interface IVideoPlayer
     bool PlaysFiles => false;
 }
 
+/// <summary>
+/// Which family a player's snapshot belongs to (2026-11-13, the review's fix): one rule for every reader that asks "is a video file (or a
+/// YouTube video) open?" — the snapshot of that kind and not failed, else null.
+/// </summary>
+public static class VideoSnapshotKinds
+{
+    /// <summary><paramref name="snapshot"/> when it is a video file's and not failed; null else.</summary>
+    public static VideoSnapshot? AsFile(this VideoSnapshot? snapshot) => snapshot is { IsFile: true, State: not VideoState.Failed } ? snapshot : null;
+
+    /// <summary><paramref name="snapshot"/> when it is YouTube's and not failed; null else.</summary>
+    public static VideoSnapshot? AsYouTube(this VideoSnapshot? snapshot) => snapshot is { IsFile: false, State: not VideoState.Failed } ? snapshot : null;
+
+    /// <summary>The video file open on <paramref name="player"/> (<see cref="AsFile"/> of its snapshot); null with none or no player.</summary>
+    public static VideoSnapshot? FileSnapshot(this IVideoPlayer? player) => player?.Snapshot.AsFile();
+
+    /// <summary>The YouTube video open on <paramref name="player"/> (<see cref="AsYouTube"/> of its snapshot); null with none or no player.</summary>
+    public static VideoSnapshot? YouTubeSnapshot(this IVideoPlayer? player) => player?.Snapshot.AsYouTube();
+}
+
 /// <summary>Where the app's own players play (2026-10-16): the video window, or the Web UI's Video tab.</summary>
 public enum VideoPlace
 {
@@ -285,6 +304,18 @@ public sealed record VideoSnapshot(
     /// <summary>Whether this is a video file's snapshot rather than YouTube's.</summary>
     public bool IsFile => FileToken is not null;
 
+    /// <summary>
+    /// A video file that plays sound with no picture (2026-11-13: no video track, or a codec the player can't show): a note on the
+    /// state line, never an error, so waits, status and Resume read it as playing. Set by the page's code 1000; a new load clears it.
+    /// </summary>
+    public bool NoPicture { get; init; }
+
+    /// <summary>
+    /// A video file on a page whose volume can't be set (2026-11-13: an iPhone, where the phone's buttons own it; mute still works).
+    /// Read from each state report's <c>fixedVolume</c>.
+    /// </summary>
+    public bool FixedVolume { get; init; }
+
     /// <summary>The window up, nothing heard from the player yet, <paramref name="videoId"/> asked for.</summary>
     public static VideoSnapshot Opening(string? videoId) => new(VideoState.Opening, videoId);
 
@@ -299,4 +330,22 @@ public sealed record VideoSnapshot(
             ? new(VideoState.Opening, null, Title: request.FileName) { FileName = request.FileName, FileToken = request.FileToken }
             : new(VideoState.Opening, request.VideoId, PlaylistId: request.PlaylistId);
     }
+
+    /// <summary>
+    /// <see cref="Opening(VideoRequest)"/> with the level of the play it replaces (2026-11-13, the review's fix): a file's page takes
+    /// that level with its load, so a status before its first report says it. YouTube's player keeps its own stored level, so a
+    /// YouTube request opens at the default.
+    /// </summary>
+    public static VideoSnapshot Opening(VideoRequest request, VideoSound? sound) =>
+        request.IsFile && sound is { } level ? Opening(request) with { Volume = level.Volume, Muted = level.Muted } : Opening(request);
+
+    /// <summary>The level a new file play carries over from <paramref name="replaced"/> (any kind); null with none.</summary>
+    public static VideoSound? SoundOf(VideoSnapshot? replaced) =>
+        replaced is null || replaced.State is VideoState.Failed ? null : new VideoSound(replaced.Volume, replaced.Muted);
 }
+
+/// <summary>
+/// A volume (0-100) and mute carried from one play into the next video file (2026-11-13), so a level the user set holds across files
+/// in one player.
+/// </summary>
+public readonly record struct VideoSound(int Volume, bool Muted);

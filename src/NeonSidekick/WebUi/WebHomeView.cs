@@ -4,6 +4,7 @@ using NeonSidekick.HomeAssistant;
 using NeonSidekick.Perf;
 using NeonSidekick.Settings;
 using NeonSidekick.Viewer;
+using NeonSidekick.YouTube;
 using Spectre.Console;
 
 namespace NeonSidekick.WebUi;
@@ -434,7 +435,8 @@ public static class WebHomeView
     /// <summary>
     /// The video playing for the card, in the PC's window or (2026-10-16) the Video tab, or null with none open. A video waiting for a YouTube
     /// tab reads <c>waiting</c>, not <c>opening</c>; one with no title yet sends its id (or its playlist) as the title, never an empty line; and
-    /// <see cref="WebHomeVideo.Where"/> names the place.
+    /// <see cref="WebHomeVideo.Where"/> names the place. A file or a video that wouldn't play (2026-11-13, the review's fix) shows its error's
+    /// sentence on the failure line, the cause alone: the way out it gives the PC (the default app, open_url) means nothing on the phone.
     /// </summary>
     public static WebHomeVideo? Video(VideoSnapshot? snapshot)
     {
@@ -448,8 +450,14 @@ public static class WebHomeView
             : video.VideoId is { } id ? id
             : video.PlaylistId is { } list ? "playlist " + list
             : null;
+        string? failure = video.Failure ?? (video.Error is not { } code ? null
+            : video.IsFile ? VideoText.FileError(code, video.FileName, wayOut: false)
+            : YouTubeText.Refused(video.VideoId, code, wayOut: false));
         return new WebHomeVideo(state, title, video.Author, Math.Round(video.Position, 1), Math.Round(video.Duration, 1), video.Volume, video.Muted,
-            video.PlaylistEntry is { } entry ? entry + 1 : null, video.PlaylistCount, video.Failure, WebUiText.VideoWhere(video.Place));
+            video.PlaylistEntry is { } entry ? entry + 1 : null, video.PlaylistCount, failure, WebUiText.VideoWhere(video.Place))
+        {
+            FixedVolume = video.FixedVolume,
+        };
     }
 
     /// <summary>The model's server as the card names it: the embedded model, a Docker container, the Claude Code server, or the host alone (never a key). Pure.</summary>

@@ -272,6 +272,12 @@ public sealed class YouTubeSaveTool : AIFunction
         string id;
         if (video.Length == 0 || video.Equals(Current, StringComparison.OrdinalIgnoreCase))
         {
+            // A video file playing is no YouTube video to keep (2026-11-13, the review's fix): said as such, not "nothing to save".
+            if (player.FileSnapshot() is { } file)
+            {
+                return VideoText.NoSaveForFiles(file.FileName, forUser: false);
+            }
+
             if (player?.Snapshot is not { VideoId: { } playing } snapshot || snapshot.State is VideoState.Failed)
             {
                 return "Error: " + YouTubeText.NothingToSave;

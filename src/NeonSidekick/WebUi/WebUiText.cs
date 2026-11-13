@@ -1084,7 +1084,7 @@ public static class WebUiText
         Files = new WebFileWords(
             Tag: "file on the PC",
             Failed: "This video file won't play in this browser: its format or codec isn't one it plays, or it couldn't be read.",
-            NoPicture: "This video file plays sound but no picture here: its video codec isn't one this browser shows.",
+            NoPicture: "This video file plays sound but no picture here: it has no video, or its video codec isn't one this browser shows.",
             Gone: "This video file is no longer on the PC: it was moved or deleted.",
             FunnelOff: VideoFileFunnelOff),
         // The saved list under the player (later on 2026-10-16).
@@ -1212,6 +1212,19 @@ public static class WebUiText
     /// <summary><see cref="YouTubeRefusedLogLine"/>'s file form: the file and its media error (or the app's own code).</summary>
     public static string VideoFileRefusedLogLine(string? name, int code) =>
         "The video file " + name + " didn't play on the Web UI's Video tab (media error " + code.ToString(CultureInfo.InvariantCulture) + ").";
+
+    /// <summary>The Video tab's held video dropped after <c>YouTubeText.HoldFor</c> with no tab to take it (moved here 2026-11-13).</summary>
+    public const string VideoHeldTooLongLogLine = "Web UI: a video waited for a Video tab too long and was dropped.";
+
+    /// <summary>
+    /// A video file's Resume offer dropped after <c>YouTubeText.HoldFor</c> (2026-11-13, the review's fix): its token stops being served
+    /// and the owner page's Resume goes.
+    /// </summary>
+    public static string VideoFileOfferExpiredLogLine(string? name) =>
+        "Web UI: the Resume offer for the video file " + name + " expired; its address is no longer served.";
+
+    /// <summary><see cref="VideoFileReadDebug"/>'s reason for a file that shrank under the copy (moved here from <c>MediaFileServer</c>, 2026-11-13).</summary>
+    public const string VideoFileShrank = "it got shorter while it was sent";
 
     /// <summary>
     /// A video file asked for over Tailscale Funnel with <i>Web UI video files over Funnel</i> off: the 403's words, and the tab's. Pinned.

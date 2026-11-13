@@ -40,12 +40,12 @@ internal sealed partial class ChatScreen
         switch (setting)
         {
             case YouTubeOpenLinksInKind.WebUiWindow:
-                if (_routedVideo is not { HasWeb: true } || !effective.WebUi || !_webUiController.Serving)
+                return WebSinkReady(effective) switch
                 {
-                    return (YouTubeOpenLinksInKind.YouTubeWindow, YouTubeText.WebUiOffFellBack);
-                }
-
-                return effective.WebUiYouTubeControls ? (setting, null) : (YouTubeOpenLinksInKind.YouTubeWindow, YouTubeText.WebUiControlsOffFellBack);
+                    WebSinkState.Ready => (setting, null),
+                    WebSinkState.WebUiOff => (YouTubeOpenLinksInKind.YouTubeWindow, YouTubeText.WebUiOffFellBack),
+                    _ => (YouTubeOpenLinksInKind.YouTubeWindow, YouTubeText.WebUiControlsOffFellBack),
+                };
             case YouTubeOpenLinksInKind.BrowserWindow:
                 // No window at all is tested first: on a Mac _browserWindow?.Unavailable() reads null, which would look like "available".
                 if (_browserWindow is null)

@@ -99,6 +99,12 @@ public sealed partial class WebUiYouTubePageTests
         await page.EvalAsync("(() => { const f = document.getElementById('saved-filter'); f.classList.remove('hidden'); f.focus(); f.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', bubbles: true })); })()");
         Assert.False((await page.EvalAsync("document.getElementById('file').paused")).GetBoolean());
 
+        // A focused button keeps its own keys (2026-11-13): Space on ⛶ Fill window is the button's, never the player's pause.
+        await page.WaitAsync("!document.getElementById('fill').classList.contains('hidden')", "the fill button");
+        await page.EvalAsync("(() => { const b = document.getElementById('fill'); b.focus(); b.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true })); })()");
+        Assert.False((await page.EvalAsync("document.getElementById('file').paused")).GetBoolean());
+        await page.EvalAsync("document.getElementById('fill').blur()");
+
         // ⛶ Fill window takes the file's video, offline too.
         await page.WaitAsync("!document.getElementById('fill').classList.contains('hidden')", "the fill button");
         await page.EvalAsync("document.getElementById('fill').click()");
@@ -122,6 +128,70 @@ public sealed partial class WebUiYouTubePageTests
         }
     }
 
+    /// <summary>
+    /// The page script's own rules (2026-11-13, the review's fixes): a seek in a file of unknown length (its duration Infinity, stubbed so
+    /// the fixture's own length never races it) goes at once; a slider's stream of volume changes is one report; autoplay off reports ready
+    /// (state 5) for play_video's wait; a refused autoplay reports not started and shows the tap hint.
+    /// </summary>
+    [WindowsFact]
+    public async Task TheFilePage_SeeksAnUnknownLength_CoalescesVolume_ReportsReady_AndABlockedAutoplay()
+    {
+        if (await OwnerPageAsync() is not { } page)
+        {
+            return;
+        }
+
+        var request = VideoRequest.File(FixtureCopy("clip.webm"));
+        Player.Play(request);
+        Assert.True(SpinWait.SpinUntil(() => Player.Snapshot is { State: VideoState.Playing } s && s.FileToken == request.FileToken, TimeSpan.FromSeconds(20)),
+            "the file never played: " + Player.Snapshot);
+
+        // An unknown length: the seek goes at once, never parked for a durationchange that may not come.
+        await page.EvalAsync("(() => { const v = document.getElementById('file'); v.pause(); Object.defineProperty(v, 'duration', { get: () => Infinity, configurable: true }); })()");
+        Assert.True(Player.Send(new VideoCommand(VideoCommandKind.Seek, 1.5)));
+        await page.WaitAsync("Math.abs(document.getElementById('file').currentTime - 1.5) < 0.3", "the seek in a file of unknown length");
+        Assert.True(SpinWait.SpinUntil(() => Player.Snapshot is { } s && Math.Abs(s.Position - 1.5) < 0.5 && s.Duration == 0, TimeSpan.FromSeconds(10)),
+            "the seek's report: " + Player.Snapshot);
+
+        // Three volume changes in a row: one report, at the end.
+        var volumes = new List<int>();
+        void Seen(VideoSnapshot? s)
+        {
+            if (s is not null)
+            {
+                lock (volumes)
+                {
+                    volumes.Add(s.Volume);
+                }
+            }
+        }
+
+        Player.Changed += Seen;
+        await page.EvalAsync("(() => { const v = document.getElementById('file'); v.volume = 0.1; v.volume = 0.2; v.volume = 0.3; })()");
+        Assert.True(SpinWait.SpinUntil(() => Player.Snapshot?.Volume == 30, TimeSpan.FromSeconds(10)), "the volume's report: " + Player.Snapshot);
+        await Task.Delay(500);
+        Player.Changed -= Seen;
+        lock (volumes)
+        {
+            Assert.DoesNotContain(10, volumes);
+            Assert.DoesNotContain(20, volumes);
+        }
+
+        // Autoplay off: ready, state 5, so play_video's wait ends at once.
+        var paused = VideoRequest.File(FixtureCopy("clip.mp4"), autoplay: false);
+        Player.Play(paused);
+        Assert.True(SpinWait.SpinUntil(() => Player.Snapshot is { State: VideoState.Cued } s && s.FileToken == paused.FileToken, TimeSpan.FromSeconds(10)),
+            "no ready report: " + Player.Snapshot);
+
+        // A refused autoplay (the page's play() rejected, as a phone's is): not started, and the tap hint.
+        await page.EvalAsync("HTMLMediaElement.prototype.play = function () { return Promise.reject(new DOMException('no', 'NotAllowedError')); }");
+        var blocked = VideoRequest.File(FixtureCopy("clip.webm"));
+        Player.Play(blocked);
+        await page.WaitAsync("document.getElementById('hint').textContent === " + JsonSerializer.Serialize(WebUiText.VideoWords.TapToStart), "the tap hint");
+        Assert.True(SpinWait.SpinUntil(() => Player.Snapshot is { State: VideoState.Unstarted } s && s.FileToken == blocked.FileToken, TimeSpan.FromSeconds(10)),
+            "no blocked report: " + Player.Snapshot);
+    }
+
     [WindowsFact]
     public async Task AFileGone_AndOneWithSoundAlone_SaySo_OnThePageAndAtThePc()
     {
@@ -139,8 +209,10 @@ public sealed partial class WebUiYouTubePageTests
 
         var sound = VideoRequest.File(FixtureCopy("sound.mp4"));
         Player.Play(sound);
-        Assert.True(SpinWait.SpinUntil(() => Player.Snapshot is { Error: VideoFile.NoPictureCode } s && s.FileToken == sound.FileToken, TimeSpan.FromSeconds(20)),
-            "no no-picture error: " + Player.Snapshot);
+        // No picture is a flag on the snapshot (2026-11-13), never an error: the file plays on, and status says so after its state line.
+        Assert.True(SpinWait.SpinUntil(() => Player.Snapshot is { NoPicture: true, Error: null } s && s.FileToken == sound.FileToken, TimeSpan.FromSeconds(20)),
+            "no no-picture flag: " + Player.Snapshot);
+        Assert.Contains(VideoText.NoPictureNote("sound.mp4"), VideoText.FileStatus(Player.Snapshot), StringComparison.Ordinal);
         await page.WaitAsync("document.getElementById('message').textContent === " + JsonSerializer.Serialize(WebUiText.VideoWords.Files!.NoPicture), "the sound-only file's words");
     }
 

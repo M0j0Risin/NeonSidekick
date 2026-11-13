@@ -156,9 +156,9 @@ internal sealed class PictureServer
     private async Task FromFileAsync(HttpContext context, WebPictureSource source, string file, PictureSize size, bool head)
     {
         var response = context.Response;
-        await using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 64 * 1024, useAsync: true);
+        await using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, bufferSize: 0, useAsync: true);
         long length = stream.Length;
-        string stamp = Stamp(length, file);
+        string stamp = Stamp(length, stream.SafeFileHandle);   // the open handle's time, never the path's again (2026-11-13)
         var headBytes = new byte[32];
         int read = await stream.ReadAtLeastAsync(headBytes, headBytes.Length, throwOnEndOfStream: false, context.RequestAborted).ConfigureAwait(false);
         string? sniffed = Sniff(headBytes.AsSpan(0, read));

@@ -245,7 +245,7 @@ Under *Video tools* (`/tools` › Files › Video); off in a new profile. They p
 | `video_control` | `action, value?` | `play`, `pause`, `seek`, `forward` / `back` (10 s by default), `volume` (0–100), `mute`, `unmute`, `close` or `status`. |
 
 * **The default app:** a file goes there when no window can play it; the app can't see or control it there.
-* **The Web UI** serves only the file playing, to a signed-in page; over Tailscale Funnel only with *Web UI video files over Funnel* on.
+* **The Web UI** serves only the file playing, to a signed-in page; over Tailscale Funnel see [*Web UI video files over Funnel*](SETTINGS.md#web-ui).
 * `/view clip.mp4` and `/video` play a file whatever *Video tools* says ([COMMANDS.md](COMMANDS.md#pictures-camera-and-screen)).
 
 #### Video files on a Mac

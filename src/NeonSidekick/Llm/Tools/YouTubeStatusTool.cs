@@ -54,7 +54,7 @@ public sealed class YouTubeStatusTool : AIFunction
 
     /// <summary>The status, or (2026-11-12) with a video file open, video_control's pointer: a file is not this tool's.</summary>
     protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) =>
-        ValueTask.FromResult<object?>(_player.Snapshot is { IsFile: true, State: not VideoState.Failed } file
+        ValueTask.FromResult<object?>(_player.FileSnapshot() is { } file
             ? VideoText.FileIsOpen(file.FileName, _videoPointer?.Invoke())
             : YouTubeText.StatusOrHandoff(_player.Snapshot, _handoff?.Invoke()));
 }

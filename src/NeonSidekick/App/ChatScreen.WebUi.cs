@@ -746,7 +746,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The Web UI's tabs on now (later on 2026-10-15, the user's call: a tab exists only while its controls are on): <i>Web UI chat controls</i>,
-    /// <i>home controls</i>, <i>shopping controls</i>, and (2026-10-16) <i>YouTube controls</i> where there is a web player, whatever
+    /// <i>home controls</i>, <i>shopping controls</i>, and (2026-10-16) <i>Web UI video controls</i> where there is a web player, whatever
     /// <i>YouTube open links in</i> says. Any thread.
     /// </summary>
     private WebTabs WebTabsNow()
