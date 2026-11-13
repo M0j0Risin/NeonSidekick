@@ -123,9 +123,13 @@ public partial class SidekickAppTests : IDisposable
             // The embedded model (2026-10-21, the --url embedded test): none unless a test hands in the fake.
             embeddedLlm: embeddedLlm,
             // The file checkpoints (2026-10-28): none unless a test sets the fake, so no other test journals.
-            checkpoints: _checkpoints);
+            checkpoints: _checkpoints,
+            // Home Assistant (2026-11-13, headless /ha camera): the real client unless a test hands in one over a stub.
+            haClient: _haClient);
 
     private readonly Fakes.FakeRalphVerifier _ralphVerifier = new();
+
+    private Func<Uri, string, NeonSidekick.HomeAssistant.HaClient>? _haClient;
 
     private Fakes.FakeCheckpointStore? _checkpoints;
 

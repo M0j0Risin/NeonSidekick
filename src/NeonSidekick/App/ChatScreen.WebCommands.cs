@@ -61,7 +61,8 @@ internal sealed partial class ChatScreen
     {
         var effective = _effective();
         return new WebCommandSettings(effective.WebUiCommands, effective.FileTools, effective.ObsidianTools, effective.WebUiShoppingControls, WebTabsNow().YouTube,
-            _customCommands.Recent().Names);   // 2026-10-30: read on a Kestrel thread too, behind the catalog's lock
+            _customCommands.Recent().Names,   // 2026-10-30: read on a Kestrel thread too, behind the catalog's lock
+            HomeTab: effective.WebUiHomeControls);   // 2026-11-13: /ha camera points at the Home tab's cameras, or at this setting
     }
 
     /// <summary>
@@ -443,7 +444,7 @@ internal sealed partial class ChatScreen
             Workflows: () => workflowList,
             Planning: _plan.Active,
             Plans: () => plans,
-            Home: argText => HomeAssistant.HaCommand.Complete(ha, argText, stills: false),
+            Home: argText => HomeAssistant.HaCommand.Complete(ha, argText, pcOnly: false),
             AnyFiles: prefix => files ? wd.Complete(prefix) : empty,
             Print: argText => Printing.PrintCommand.Complete(argText, printers),
             Docker: argText => Docker.DockerCommand.Complete(docker, argText),

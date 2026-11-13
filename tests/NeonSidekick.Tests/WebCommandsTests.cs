@@ -178,6 +178,8 @@ public sealed class WebCommandsTests
     [InlineData("/ha stills purge", WebCommandKind.Refused)]   // 2026-10-27: the PC's yes before a delete
     [InlineData("/ha stills view", WebCommandKind.Refused)]
     [InlineData("/ha STILLS", WebCommandKind.Refused)]
+    [InlineData("/ha camera", WebCommandKind.Refused)]   // 2026-11-13: a window at the PC; the page points at its own cameras
+    [InlineData("/ha Camera Porch", WebCommandKind.Refused)]
     [InlineData("/camera purge", WebCommandKind.Refused)]
     [InlineData("/screen purge", WebCommandKind.Refused)]
     [InlineData("/settings", WebCommandKind.Refused)]
@@ -235,6 +237,10 @@ public sealed class WebCommandsTests
         Assert.Equal(WebUiText.UseAboutPage, WebCommands.Check("/about", On).Reason);   // 2026-11-08: the page's own About card
         // The Shopping tab off (later on 2026-10-15): the setting that turns it on.
         Assert.Equal(WebUiText.ShoppingTabOff, WebCommands.Check("/shopping", On with { ShoppingTab = false }).Reason);
+        // /ha camera (2026-11-13): the Home tab's cameras, or the setting that turns the tab on.
+        Assert.Equal(WebUiText.UseHomeCamerasPage, WebCommands.Check("/ha camera", On with { HomeTab = true }).Reason);
+        Assert.Equal(WebUiText.UseHomeCamerasPage, WebCommands.Check("/ha camera Porch", On with { HomeTab = true }).Reason);
+        Assert.Equal(WebUiText.HomeTabOff, WebCommands.Check("/ha camera Porch", On).Reason);
         Assert.Equal(WebUiText.ShoppingTabOff, WebCommands.Check("/shopping add", On with { ShoppingTab = false }).Reason);
         Assert.Equal(WebCommandKind.Run, WebCommands.Check("/shopping add milk", On with { ShoppingTab = false }).Kind);   // adds from the chat whatever the tab
         Assert.Equal(WebUiText.PcOnly("/cwd <path>"), WebCommands.Check("/cwd D:\\work", On).Reason);

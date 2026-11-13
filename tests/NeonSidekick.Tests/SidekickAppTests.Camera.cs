@@ -45,6 +45,41 @@ public partial class SidekickAppTests
         Assert.True(File.Exists(still));
     }
 
+    /// <summary>
+    /// <c>/ha camera</c> headless (2026-11-13, the user's pick: save it and print the path): by name, and by a chip's alias; a name nothing
+    /// matches is the error, and nothing is fetched for it.
+    /// </summary>
+    [Fact]
+    public async Task Headless_HaCamera_SavesTheStill_AndPrintsItsPath_ByNameOrAlias()
+    {
+        const string server = "http://ha.test:8123";
+        _http.Map(server + "/api/states", System.Net.HttpStatusCode.OK, """
+            [{"entity_id":"camera.porch","state":"idle","attributes":{"friendly_name":"Porch Camera"}},
+             {"entity_id":"camera.yard","state":"idle","attributes":{"friendly_name":"Yard"}}]
+            """);
+        _http.Map(server + "/api/template", System.Net.HttpStatusCode.OK, "[]", "text/plain");
+        _http.Map(server + "/api/camera_proxy/", (_, _) => Task.FromResult(StubHttpMessageHandler.Bytes(System.Net.HttpStatusCode.OK, StripFixtures.Jpeg(), "image/jpeg")));
+        _haClient = (url, token) => new NeonSidekick.HomeAssistant.HaClient(url, token, new HttpClient(_http));
+        _settings.Update(d =>
+        {
+            d.HomeAssistantUrl = server;
+            d.HomeAssistantToken = "secret";
+            d.HomeBarAliases = new Dictionary<string, string> { ["entity:camera.porch"] = "Door" };
+        });
+
+        string output = await Headless("/ha camera Porch Camera\n/ha camera Door\n/ha camera Shed\n");
+
+        string folder = Path.Combine(_settings.ProfileImagesDirectory, NeonSidekick.HomeAssistant.HaCamera.FolderName);
+        string[] saved = Directory.GetFiles(folder);
+        Assert.Equal(2, saved.Length);   // the second, a second later or not, is a -2 copy: headless shares no fetch
+        Assert.All(saved, f => Assert.StartsWith("porch-", Path.GetFileName(f), StringComparison.Ordinal));
+        Assert.Equal(2, output.Split("Porch Camera: a still, saved as ").Length - 1);
+        Assert.All(saved, f => Assert.Contains(Path.GetFileName(f), output, StringComparison.Ordinal));
+        Assert.Contains("[error] Error: ", output);
+        Assert.Contains("Shed", output);
+        Assert.Equal(2, _http.Requests.Count(r => r.Uri.AbsolutePath.StartsWith("/api/camera_proxy/", StringComparison.Ordinal)));
+    }
+
     [Fact]
     public async Task Headless_Camera_WithoutALayer_SaysSo()
     {

@@ -1505,7 +1505,9 @@ public sealed partial class SidekickApp
                         continue;
                     }
 
-                    var haResult = await HomeAssistant.HaCommand.RunAsync(ha, haArgs, cancellationToken).ConfigureAwait(false);
+                    // /ha camera (2026-11-13, the user's pick): the still saved in home-cameras and its path printed; a chip's alias names it too.
+                    var haCamera = new HomeAssistant.HaCameraOptions(images, target => HomeBarItems.AliasedCamera(target, EffectiveSettings.HomeBarAliases));
+                    var haResult = await HomeAssistant.HaCommand.RunAsync(ha, haArgs, cancellationToken, camera: haCamera).ConfigureAwait(false);
                     foreach (string haLine in haResult.Lines)
                     {
                         await HeadlessLineAsync((haResult.Failed ? "[error] " : "") + haLine).ConfigureAwait(false);

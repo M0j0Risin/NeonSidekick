@@ -43,8 +43,9 @@ public sealed record WebCommandVerdict(WebCommandKind Kind, string? Reason = nul
 /// tab (later on 2026-10-15: bare <c>/shopping</c> points at the tab, or at the setting while the tab is off) and (later on 2026-10-16) its
 /// Video tab, for <c>/youtube list</c> (and the bare <c>/youtube</c> since 2026-10-18). <see cref="CustomNames"/> (2026-10-30, the custom
 /// commands plan): the names of the custom commands that run, any case, without their <c>/</c>; null is none (no settings wired).
+/// <see cref="HomeTab"/> (2026-11-13): whether the page has its Home tab, for <c>/ha camera</c>'s pointer (the tab's cameras, or the setting).
 /// </summary>
-public readonly record struct WebCommandSettings(bool Commands, bool FileTools, bool ObsidianTools, bool ShoppingTab = true, bool YouTubeTab = false, IReadOnlySet<string>? CustomNames = null);
+public readonly record struct WebCommandSettings(bool Commands, bool FileTools, bool ObsidianTools, bool ShoppingTab = true, bool YouTubeTab = false, IReadOnlySet<string>? CustomNames = null, bool HomeTab = false);
 
 /// <summary>
 /// Which slash commands the Web UI's page may run (later on 2026-10-14, the user's calls): a phone has no PC pane to answer and no PC window to
@@ -190,7 +191,10 @@ public static class WebCommands
             SlashCommand.Cwd => text.Length == 0 ? WebCommandVerdict.Run : Refused(WebUiText.PcOnly(word + " <path>")),
             // 2026-10-27: /ha stills is the PC's (its windows, and a purge from the phone must not delete files without the PC's yes).
             SlashCommand.HomeAssistant => Is(first, "states") ? WebCommandVerdict.List
-                : Is(first, HomeAssistant.HaStillsCommand.Word) ? Pane(word + " " + HomeAssistant.HaStillsCommand.Word, null) : WebCommandVerdict.Run,
+                : Is(first, HomeAssistant.HaStillsCommand.Word) ? Pane(word + " " + HomeAssistant.HaStillsCommand.Word, null)
+                // /ha camera (2026-11-13, the user's pick): a window at the PC, so the page points at its own Home tab cameras, or the setting.
+                : Is(first, HomeAssistant.HaCameraCommand.Word) ? Refused(settings.HomeTab ? WebUiText.UseHomeCamerasPage : WebUiText.HomeTabOff)
+                : WebCommandVerdict.Run,
             SlashCommand.Docker => Is(first, "logs") ? WebCommandVerdict.List : WebCommandVerdict.Run,
             SlashCommand.EventLog => WebCommandVerdict.List,   // 2026-10-15: the events as a list card, /docker's way from a web line
             SlashCommand.Net or SlashCommand.Services or SlashCommand.Tasks or SlashCommand.Ad => WebCommandVerdict.List,   // 2026-10-15, the admin-tools plan: their lines as a list card

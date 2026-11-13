@@ -53,6 +53,19 @@ public static class HomeBar
     public static HomeRow? Render(IReadOnlyList<HomeChip> chips, int cells, int page = 0) => Render([], chips, [], cells, page);
 
     /// <summary>
+    /// Whether <paramref name="row"/> draws the chip of <paramref name="reference"/> (2026-11-13, <c>/ha camera</c>'s wait): a chip span of the
+    /// page shown whose <see cref="HomeSpan.Index"/> into <paramref name="chips"/> (the left, center and right chips in that order, as
+    /// <see cref="Render(IReadOnlyList{HomeChip}, IReadOnlyList{HomeChip}, IReadOnlyList{HomeChip}, int, int)"/> indexes them) is that chip.
+    /// A chip paged behind the arrows, or dropped for room, is not drawn; a divider never matches. Pure.
+    /// </summary>
+    public static bool Shows(HomeRow? row, IReadOnlyList<HomeChip> chips, string reference)
+    {
+        ArgumentNullException.ThrowIfNull(chips);
+        return row is not null && row.Spans.Any(s => s.Target == HomeTarget.Chip && s.Index >= 0 && s.Index < chips.Count
+            && !chips[s.Index].Divider && string.Equals(chips[s.Index].Reference, reference, StringComparison.Ordinal));
+    }
+
+    /// <summary>
     /// The row for chips pinned <paramref name="left"/>, <paramref name="center"/> and <paramref name="right"/> (later on 2026-10-13, the
     /// user's ask) in <paramref name="cells"/> cells: the left group from the row's start, the right group ending on its last cell, the
     /// center centred on the row and pushed aside by them, <see cref="GroupGap"/> at least between two groups. Too narrow a row (the

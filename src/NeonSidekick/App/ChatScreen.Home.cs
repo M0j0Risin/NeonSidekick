@@ -108,7 +108,8 @@ internal sealed partial class ChatScreen
             _ = RefreshHomeQuietlyAsync();
         }
 
-        return HaCommand.Complete(last, argText);
+        // The camera chips' names too (2026-11-13, /ha camera Door), parsed here so HaCommand reads no reference format.
+        return HaCommand.Complete(last, argText, cameraAliases: HomeBarItems.CameraAliases(_effective().HomeBarAliases));
     }
 
     private async Task RefreshHomeQuietlyAsync()
@@ -136,6 +137,12 @@ internal sealed partial class ChatScreen
             return;
         }
 
+        if (HaCameraCommand.TryParse(args, out string? camera))
+        {
+            await HandleHomeCameraAsync(camera, _transcript, spinner: true, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
         // A change from the Web UI's page asks first on the page and here (later on 2026-10-14); the PC's own hand never does.
         var ask = WebConfirmHook is { } confirm ? new HaAsk(confirm, _effective().HomeAssistantSafeServices) : null;
         var result = await _transcript.WithSpinnerAsync(HaText.Working, () => HaCommand.RunAsync(_ha, args, cancellationToken, ask)).ConfigureAwait(false);
@@ -151,6 +158,12 @@ internal sealed partial class ChatScreen
         HaCommandResult result;
         try
         {
+            if (HaCameraCommand.TryParse(args, out string? camera))
+            {
+                await HandleHomeCameraAsync(camera, _flow, spinner: false, cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
             result = await HaCommand.RunAsync(_ha, args, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -161,6 +174,39 @@ internal sealed partial class ChatScreen
         }
 
         await ShowHomeResultAsync(result, args, _flow, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// <c>/ha camera [&lt;name&gt;]</c> on the screen (2026-11-13, the user's ask: what a 📹 chip's double-click does, for any camera): the camera
+    /// resolved (a chip's alias first, then Home Assistant's names, rooms and ids; an unavailable one refused after a fresh read), then its still
+    /// through the chips' own fetch (<see cref="StartHomeCamera"/>), so a chip, the page and the command share one fetch and one file. Only the
+    /// resolve runs under the spinner (<paramref name="spinner"/>, the idle line's; a reply has its busy row). A camera whose chip is drawn
+    /// shows the wait there; any other gets the "fetching" line, and a failure's line. Every refusal is an error line.
+    /// </summary>
+    private async Task HandleHomeCameraAsync(string? target, INoticeSink sink, bool spinner, CancellationToken cancellationToken)
+    {
+        if (_ha.Client() is null)
+        {
+            sink.Error(HaText.NotConfigured);
+            return;
+        }
+
+        string? aliasedId = HomeBarItems.AliasedCamera(target, _effective().HomeBarAliases);
+        var (camera, error) = spinner
+            ? await _transcript.WithSpinnerAsync(HaText.Working, () => HaCameraTool.ResolveAsync(_ha, target, HaText.NotACameraCommand, cancellationToken, aliasedId)).ConfigureAwait(false)
+            : await HaCameraTool.ResolveAsync(_ha, target, HaText.NotACameraCommand, cancellationToken, aliasedId).ConfigureAwait(false);
+        if (camera is null)
+        {
+            sink.Error(error ?? HaText.Usage);
+            return;
+        }
+
+        string reference = HomeBarItems.Entity(camera.Id);
+        bool chipShows = _pane.Enabled && HomeChipDrawn(reference);
+        if (!StartHomeCamera(reference, camera.Name, camera.Id, lineOnFailure: !chipShows))
+        {
+            sink.Notice(HomeBarText.CameraFetching(camera.Name));
+        }
     }
 
     /// <summary>

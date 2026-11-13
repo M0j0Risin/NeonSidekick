@@ -14889,6 +14889,85 @@ public partial class ChatScreenTests : IDisposable
         Assert.Single(_chat.Requests);
     }
 
+    /// <summary>
+    /// <c>/ha camera</c> over a reply's REST stub (2026-11-13): one camera, <c>camera.yard</c>, not on any bar, its still a JPEG.
+    /// </summary>
+    private StubHttpMessageHandler MidTurnCameraServer()
+    {
+        const string server = "http://ha.lan:8123";
+        var stub = new StubHttpMessageHandler()
+            .Map(server + "/api/states", System.Net.HttpStatusCode.OK, """[{"entity_id":"camera.yard","state":"idle","attributes":{"friendly_name":"Yard"}}]""")
+            .Map(server + "/api/template", System.Net.HttpStatusCode.OK, "[]", "text/plain")
+            .Map(server + "/api/camera_proxy/", (_, _) => Task.FromResult(StubHttpMessageHandler.Bytes(System.Net.HttpStatusCode.OK, StripFixtures.Jpeg(), "image/jpeg")));
+        _haClient = (url, token) => new NeonSidekick.HomeAssistant.HaClient(url, token, new HttpClient(stub));
+        _settings.Update(d =>
+        {
+            d.HomeAssistantUrl = server;
+            d.HomeAssistantToken = "test-token";
+        });
+        return stub;
+    }
+
+    /// <summary>
+    /// <c>/ha camera</c> under a reply (2026-11-13): on the watcher, as every <c>/ha</c> is; its "fetching" line and its still's notice land in
+    /// the reply, the still opens in the picture window at once, and the reply runs on. The reply is held until the window opened, so the
+    /// open is proven to come during it.
+    /// </summary>
+    [Fact]
+    public async Task MidTurn_HaCamera_OpensTheStillDuringTheReply()
+    {
+        MidTurnCameraServer();
+        var viewed = new List<string>();
+        _viewPicture = path => { lock (viewed) { viewed.Add(path); } };
+        int Viewed() { lock (viewed) { return viewed.Count; } }
+        MidTurnHeldFixture(async ct =>
+        {
+            PushLine("/ha camera Yard");
+            await UntilAsync(() => Viewed() == 1, ct);
+        });
+
+        string output = await RunAsync();
+
+        Assert.Equal(1, Viewed());
+        int saved = output.IndexOf("Yard: a still, saved as ", StringComparison.Ordinal);
+        Assert.True(output.IndexOf(NeonSidekick.HomeAssistant.HomeBarText.CameraComing("Yard"), StringComparison.Ordinal) is >= 0 and var coming && coming < saved);
+        Assert.True(saved < output.IndexOf("three.", StringComparison.Ordinal));   // during the reply: before its last words
+        Assert.DoesNotContain(ChatScreen.MidTurnDeferredNotice("/ha"), output);
+        Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
+        Assert.Single(_chat.Requests);
+    }
+
+    /// <summary>
+    /// With no picture window (2026-11-13): the notices print during the reply, the still is drawn in the transcript only after it, at the idle
+    /// line, so a full-height picture never wedges into the streaming reply; a repeat within 2 s says "fetching" before its "saved".
+    /// </summary>
+    [Fact]
+    public async Task MidTurn_HaCamera_WithNoPictureWindow_DrawsTheStillAfterTheReply_AndARepeatKeepsItsOrder()
+    {
+        var stub = MidTurnCameraServer();
+        int Saved() => (Output.Length - Output.Replace("Yard: a still, saved as ", "", StringComparison.Ordinal).Length) / "Yard: a still, saved as ".Length;
+        MidTurnHeldFixture(async ct =>
+        {
+            PushLine("/ha camera Yard");
+            await UntilAsync(() => Saved() == 1, ct);
+            PushLine("/ha camera Yard");
+            await UntilAsync(() => Saved() == 2, ct);
+        });
+
+        string output = await RunAsync();
+
+        int last = output.IndexOf("three.", StringComparison.Ordinal);
+        string coming = NeonSidekick.HomeAssistant.HomeBarText.CameraComing("Yard");
+        int secondComing = output.IndexOf(coming, output.IndexOf(coming, StringComparison.Ordinal) + 1, StringComparison.Ordinal);
+        int firstSaved = output.IndexOf("Yard: a still, saved as ", StringComparison.Ordinal);
+        int secondSaved = output.IndexOf("Yard: a still, saved as ", firstSaved + 1, StringComparison.Ordinal);
+        Assert.True(secondComing > firstSaved && secondComing < secondSaved);   // the repeat's "fetching" before its "saved"
+        Assert.True(secondSaved < last);
+        Assert.True(output.IndexOf("▀▀▀▀", StringComparison.Ordinal) > last);   // drawn after the reply's last words
+        Assert.Equal(1, stub.Requests.Count(r => r.Uri.AbsolutePath.StartsWith("/api/camera_proxy/", StringComparison.Ordinal)));
+        Assert.Single(_chat.Requests);
+    }
+
     [Fact]
     public async Task MidTurn_HomeAssistant_NotConfigured_IsItsErrorLine_InTheReply()
     {

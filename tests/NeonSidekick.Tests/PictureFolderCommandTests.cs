@@ -125,9 +125,11 @@ public sealed class PictureFolderCommandTests
         Assert.Equal(["STILLS purge"], HaCommand.Complete(null, "STILLS p").Select(i => i.Text));
         Assert.Empty(HaCommand.Complete(snapshot, "stills view x"));
 
-        // The Web UI's page refuses /ha stills, so its list leaves it out.
-        Assert.DoesNotContain("stills", HaCommand.Complete(snapshot, "", stills: false).Select(i => i.Text));
-        Assert.Empty(HaCommand.Complete(snapshot, "stills ", stills: false));
+        // The Web UI's page refuses /ha stills and /ha camera (2026-11-13), so its list leaves both out.
+        Assert.DoesNotContain("stills", HaCommand.Complete(snapshot, "", pcOnly: false).Select(i => i.Text));
+        Assert.DoesNotContain("camera", HaCommand.Complete(snapshot, "", pcOnly: false).Select(i => i.Text));
+        Assert.Empty(HaCommand.Complete(snapshot, "stills ", pcOnly: false));
+        Assert.Empty(HaCommand.Complete(snapshot, "camera ", pcOnly: false));
     }
 
     [Fact]

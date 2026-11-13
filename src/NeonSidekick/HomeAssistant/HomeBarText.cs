@@ -274,6 +274,12 @@ public static class HomeBarText
     /// </summary>
     public static string CameraFetching(string name) => name + ": a still is already on its way";
 
+    /// <summary>
+    /// <c>/ha camera</c>'s still on its way (2026-11-13, the user's pick: a line, not a flash, which lasts 2 s where a Ring still often takes
+    /// longer): written when no chip drawn on the bar shows the wait, then answered by the saved notice or the failure's line.
+    /// </summary>
+    public static string CameraComing(string name) => name + ": fetching a still…";
+
     // ─── confirm and outcomes ───────────────────────────────────────────────────
 
     /// <summary>The Yes/No question before an unlock, a guarded opening or a disarm. Pinned.</summary>

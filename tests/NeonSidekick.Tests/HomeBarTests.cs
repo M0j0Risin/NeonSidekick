@@ -522,6 +522,34 @@ public sealed class HomeBarTests
         Assert.Equal(0, HomeBar.Render([tv], [], [], 12)!.Spans.Single().Index);   // no center: the left pages in its place, cut to the page
     }
 
+    /// <summary>
+    /// Whether a chip is drawn (2026-11-13, /ha camera's wait): on the page shown only — not paged behind the arrows, not dropped for room —
+    /// and never a divider; no row draws none.
+    /// </summary>
+    [Fact]
+    public void Shows_IsTheChipOnThePageShown_NotOnePagedOrDropped()
+    {
+        HomeChip[] left = [Chip("Left Lamp", "", "LL")];
+        HomeChip[] center = [Chip("Center", "", "C")];
+        HomeChip[] right = [Chip("Right Lamp", "", "RL")];
+        HomeChip[] all = [.. left, .. center, .. right];
+        var roomy = HomeBar.Render(left, center, right, 44);
+        Assert.True(HomeBar.Shows(roomy, all, "entity:light.right lamp"));
+        var tight = HomeBar.Render(left, center, right, 13);   // the right group gone for room
+        Assert.False(HomeBar.Shows(tight, all, "entity:light.right lamp"));
+        Assert.True(HomeBar.Shows(tight, all, "entity:light.left lamp"));
+
+        HomeChip[] paging = [Chip("L"), Chip("C1"), Chip("C2"), Chip("C3"), Chip("R")];
+        var first = HomeBar.Render([paging[0]], paging[1..4], [paging[4]], 7);
+        Assert.True(HomeBar.Shows(first, paging, "entity:light.c1"));
+        Assert.False(HomeBar.Shows(first, paging, "entity:light.c3"));   // behind the arrows
+        Assert.True(HomeBar.Shows(HomeBar.Render([paging[0]], paging[1..4], [paging[4]], 7, page: 2), paging, "entity:light.c3"));
+
+        Assert.False(HomeBar.Shows(null, all, "entity:light.center"));
+        HomeChip[] divided = [Chip("Desk"), Divider(1), Chip("Hall")];
+        Assert.False(HomeBar.Shows(HomeBar.Render(divided, 80), divided, "divider:1"));
+    }
+
     [Fact]
     public void AChipWiderThanAPage_IsCut_AndTheRowNeverOverflows()
     {

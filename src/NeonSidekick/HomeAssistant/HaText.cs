@@ -63,6 +63,7 @@ public static partial class HaText
         "tv" => "the TV: on, off, mute, volume, source",
         "states" => "list entities, by domain or name",
         "say" => "hand a sentence to Assist",
+        "camera" => "show a camera's still",
         "stills" => "open or empty the camera stills' folder",
         _ => "",
     };
@@ -160,6 +161,12 @@ public static partial class HaText
 
     /// <summary><c>ha_camera</c>'s target an entity id of another domain (a light, a sensor).</summary>
     public static string NotACamera(HaEntity entity) => $"Error: {Label(entity)} is not a camera; ha_camera takes a camera entity";
+
+    /// <summary>A camera's note after <c>/ha camera </c> (2026-11-13): its room, and "unavailable" where Home Assistant says so.</summary>
+    public static string CameraItemNote(HaEntity camera) => (camera.Area ?? "camera") + (camera.Unavailable ? " · unavailable" : "");
+
+    /// <summary><c>/ha camera</c>'s name an entity id of another domain (2026-11-13): <see cref="NotACamera"/> in the command's words.</summary>
+    public static string NotACameraCommand(HaEntity entity) => $"Error: {Label(entity)} is not a camera; /ha camera takes a camera's name, entity id, room or chip name";
 
     /// <summary>A camera Home Assistant reports <c>unavailable</c> or <c>unknown</c>, refused before any fetch: the state as Home Assistant gives it.</summary>
     public static string CameraUnavailable(string name, string state) =>
@@ -746,10 +753,10 @@ public static partial class HaText
 
     /// <summary><c>/ha</c>'s usage line. Pinned.</summary>
     public const string Usage =
-        "Usage: /ha · /ha on|off|toggle <name> [brightness%] · /ha scene <name> · /ha tv on|off|mute|unmute|up|down|vol <0-100>|source <name> · /ha states [filter] · /ha say <sentence> · /ha stills view|thumbs|purge";
+        "Usage: /ha · /ha on|off|toggle <name> [brightness%] · /ha scene <name> · /ha tv on|off|mute|unmute|up|down|vol <0-100>|source <name> · /ha states [filter] · /ha say <sentence> · /ha camera [<name>] · /ha stills view|thumbs|purge";
 
     /// <summary>The <c>/ha</c> verbs, in the completion's order.</summary>
-    public static readonly string[] Verbs = ["on", "off", "toggle", "scene", "tv", "states", "say", "stills"];
+    public static readonly string[] Verbs = ["on", "off", "toggle", "scene", "tv", "states", "say", "camera", "stills"];
 
     /// <summary>The <c>/ha tv</c> actions, in the completion's order.</summary>
     public static readonly string[] TvActions = ["on", "off", "mute", "unmute", "up", "down", "vol", "volume", "source"];

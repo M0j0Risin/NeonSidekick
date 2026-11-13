@@ -543,6 +543,19 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
+    /// Whether <paramref name="reference"/>'s chip is drawn on the bar now (2026-11-13, <c>/ha camera</c>: its <c>…</c> shows the wait, else
+    /// the command writes a line): on the page shown, not paged behind the arrows or dropped for room, as <see cref="FindHomeChip"/>'s every
+    /// chip built may be (<see cref="UI.HomeBar.Shows"/>).
+    /// </summary>
+    private bool HomeChipDrawn(string reference)
+    {
+        lock (_homeGate)
+        {
+            return _homeCache is { } cache && UI.HomeBar.Shows(cache.Row, cache.Chips, reference);
+        }
+    }
+
+    /// <summary>
     /// The item on the bar <paramref name="item"/> names for <c>name</c> and <c>emoji</c> (<see cref="HomeBarItems.Find"/>), else the
     /// drawn chip it names (<see cref="FindHomeChip"/>, later on 2026-10-12: the live feed reads the registries without the states,
     /// so an entity's friendly name, "Desk", is only on its chip), and the item's name as its chip has it; null when none is.
@@ -683,7 +696,7 @@ internal sealed partial class ChatScreen
         // reports unavailable takes every unavailable chip's way below, unfetched.
         if (kind == HomeItemKind.Entity && HaCatalog.DomainOf(id) == Llm.Tools.HaCameraTool.Domain && _homeLive.Snapshot.Entities.GetValueOrDefault(id) is not { Unavailable: true })
         {
-            if (!StartHomeCamera(chip, id) && !_pane.Enabled)
+            if (!StartHomeCamera(chip.Reference, chip.Name, id) && !_pane.Enabled)
             {
                 sink.Notice(HomeBarText.CameraFetching(chip.Name));
             }

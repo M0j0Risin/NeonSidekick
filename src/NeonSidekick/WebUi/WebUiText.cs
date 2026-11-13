@@ -513,6 +513,9 @@ public static class WebUiText
     /// <summary>Bare <c>/about</c> (2026-11-08, the user's pick): the page has an About card behind ☰.</summary>
     public const string UseAboutPage = "The version, licenses and source code are on this page's ☰ › About.";
 
+    /// <summary><c>/ha camera</c> (2026-11-13, the user's pick: refused with a pointer, nothing opened at the PC): the page's Home tab has cameras of its own.</summary>
+    public const string UseHomeCamerasPage = "The cameras are on this page's Home tab: tap one for its still. /ha camera shows them at the PC.";
+
     /// <summary>The audit line of a command from the page: its word, the address and the verdict, never its words.</summary>
     public static string CommandLogLine(string word, IPAddress? remote, string verdict) =>
         "Web UI command " + word + " from " + Where(remote) + ": " + verdict + ".";

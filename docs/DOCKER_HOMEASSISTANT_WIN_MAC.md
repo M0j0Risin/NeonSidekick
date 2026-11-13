@@ -123,7 +123,7 @@ Each camera arrives in Home Assistant with a snapshot camera, `camera.<name>_sna
 1. In Home Assistant, open your profile › **Security** and create a long-lived access token.
 2. On `/tools` › Home › HomeAssistant, set *Home Assistant URL* to `http://localhost:8123`, paste the token into *Home Assistant API key*, and turn on *Home Assistant tools*.
 
-For a Ring camera, use its `_snapshot` camera with `ha_camera` or the home bar's 📹: it gives a recent still, where Ring's own integration gives the latest recording's ([Home Assistant tools](TOOLS.md#home-assistant), [the home bar](INTERFACE.md#the-home-bar)).
+For a Ring camera, use its `_snapshot` camera with `ha_camera`, `/ha camera` or the home bar's 📹: it gives a recent still, where Ring's own integration gives the latest recording's ([Home Assistant tools](TOOLS.md#home-assistant), [the home bar](INTERFACE.md#the-home-bar)).
 
 ## Check the snapshots
 

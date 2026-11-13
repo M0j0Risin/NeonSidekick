@@ -93,7 +93,7 @@ They need no server unless the row says so.
 | `/claude <message>` | Asks [Claude Code](COMMANDS.md#claude-code-from-the-chat): `Claude: ` and the reply, then the cost. Nothing is asked; what *Claude Code command permissions* doesn't allow is denied. |
 | `/advisor [<name> <question>]` | Lists the advisors, or prints one advisor's answer and adds it to the conversation. |
 | `/skills add <source> [--global\|--profile] [--yes]` | [Installs a skill](SETTINGS.md#installing-skills); without `--yes` it only previews, listing several matches as ids to type back. |
-| `/ha …`, `/docker …` | Drive Home Assistant and Docker directly; *Home Assistant action policy* and *Docker writes* don't apply. |
+| `/ha …`, `/docker …` | Drive Home Assistant and Docker directly; *Home Assistant action policy* and *Docker writes* don't apply. `/ha camera [<name>]` saves the still in `home-cameras` and prints its path. |
 | `/eventlog …` | Prints a log's events, newest first, in full text, with the [event-log tools](TOOLS.md#event-logs)' filter words; ticked computers only. A Mac's logs: [`/eventlog`](COMMANDS.md#admin). |
 | `/net …` | Prints a [network](TOOLS.md#network) check; ignores *Network tools reach*, the host lists and the per-turn budget, with a line when the model's own call would be refused. |
 | `/services …`, `/tasks …` | Print a ticked computer's [services](TOOLS.md#services) or [scheduled tasks](TOOLS.md#scheduled-tasks); no changes (they need an on-screen yes). Windows only. |

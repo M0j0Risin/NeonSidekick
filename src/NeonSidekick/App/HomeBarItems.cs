@@ -337,6 +337,48 @@ public static class HomeBarItems
         aliases is not null && !IsNameless(reference) && Normalize(reference) is { } r && aliases.TryGetValue(r, out string? alias) && alias is not null ? alias.Trim() : null;
 
     /// <summary>
+    /// The camera chips' aliases (2026-11-13, <c>/ha camera</c>: a chip's name is a name the command takes): each camera entity's alias with its
+    /// entity id, in the setting's order. An empty alias (the emoji alone) names nothing and is left out. Pure.
+    /// </summary>
+    public static IReadOnlyList<(string Alias, string EntityId)> CameraAliases(IReadOnlyDictionary<string, string>? aliases)
+    {
+        if (aliases is null)
+        {
+            return [];
+        }
+
+        var found = new List<(string, string)>();
+        foreach (var (reference, alias) in aliases)
+        {
+            if (alias?.Trim() is { Length: > 0 } text && TryParse(reference, out var kind, out string id) && kind == HomeItemKind.Entity
+                && string.Equals(HaCatalog.DomainOf(id), Llm.Tools.HaCameraTool.Domain, StringComparison.Ordinal))
+            {
+                found.Add((text, id));
+            }
+        }
+
+        return found;
+    }
+
+    /// <summary>
+    /// The camera entity id one chip alias names (2026-11-13, <c>/ha camera Door</c>): <paramref name="target"/> trimmed, any case, against
+    /// <see cref="CameraAliases"/>. Null when no alias matches, when several cameras share it (Home Assistant's names decide then), and
+    /// always for a null or blank target. Pure.
+    /// </summary>
+    public static string? AliasedCamera(string? target, IReadOnlyDictionary<string, string>? aliases)
+    {
+        string text = target?.Trim() ?? "";
+        if (text.Length == 0)
+        {
+            return null;
+        }
+
+        var ids = CameraAliases(aliases).Where(a => string.Equals(a.Alias, text, StringComparison.OrdinalIgnoreCase)).Select(a => a.EntityId)
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        return ids.Count == 1 ? ids[0] : null;
+    }
+
+    /// <summary>
     /// <paramref name="aliases"/> with <paramref name="reference"/>'s alias set to <paramref name="alias"/> (blank: the emoji alone,
     /// later on 2026-10-12; until then blank took it off), or taken out when it is null or the item's own <paramref name="name"/>
     /// (any case); null when none is left, as the setting's default. A malformed reference, or a nameless one

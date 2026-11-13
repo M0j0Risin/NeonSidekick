@@ -25,7 +25,9 @@ public sealed record HaCommandResult(IReadOnlyList<string> Lines, bool Failed, b
 /// <item><c>/ha scene &lt;name&gt;</c>;</item>
 /// <item><c>/ha tv on|off|mute|unmute|up|down|vol &lt;0-100&gt;|source &lt;name&gt;</c> — the only media player;</item>
 /// <item><c>/ha states [filter]</c> — a domain (<c>scene</c>) or words of the name, or an id for its attributes;</item>
-/// <item><c>/ha say &lt;sentence&gt;</c> — Assist.</item>
+/// <item><c>/ha say &lt;sentence&gt;</c> — Assist;</item>
+/// <item><c>/ha camera [&lt;name&gt;]</c> (2026-11-13, the user's ask: a still from any camera, not only the bar's chips) — the screen takes
+/// it before <see cref="RunAsync"/> (<see cref="HaCameraCommand"/>); only headless reaches the <c>camera</c> case, which saves the still.</item>
 /// </list>
 /// </summary>
 /// <summary>
@@ -57,7 +59,8 @@ public static class HaCommand
     /// hand at the keyboard): a service call that only reads (<see cref="HaPolicy.ReadServices"/>) or that <see cref="HaAsk.Safe"/> names runs,
     /// anything else waits for a yes. Null, nothing is asked.
     /// </param>
-    public static async Task<HaCommandResult> RunAsync(HaSession ha, string args, CancellationToken cancellationToken, HaAsk? ask = null)
+    /// <param name="camera">Headless's <c>/ha camera</c> (2026-11-13): where the still is kept and the chips' aliases; null, the verb is the usage error.</param>
+    public static async Task<HaCommandResult> RunAsync(HaSession ha, string args, CancellationToken cancellationToken, HaAsk? ask = null, HaCameraOptions? camera = null)
     {
         ArgumentNullException.ThrowIfNull(ha);
         ArgumentNullException.ThrowIfNull(args);
@@ -92,6 +95,9 @@ public static class HaCommand
             case "off":
             case "toggle":
                 return await SwitchAsync(ha, ask, verb, rest, cancellationToken).ConfigureAwait(false);
+
+            case HaCameraCommand.Word:
+                return camera is null ? HaCommandResult.Error(HaText.Usage) : await CameraAsync(ha, rest.Length == 0 ? null : rest, camera, cancellationToken).ConfigureAwait(false);
 
             case "scene":
             {
@@ -153,6 +159,33 @@ public static class HaCommand
             default:
                 return HaCommandResult.Error(HaText.Usage);
         }
+    }
+
+    /// <summary>
+    /// Headless's <c>/ha camera [&lt;name&gt;]</c> (2026-11-13, the user's pick: save it and print the path): the camera resolved as the
+    /// screen resolves it (a chip's alias first, <see cref="HaCameraOptions.AliasedId"/>), its still fetched, stripped and kept in
+    /// <c>home-cameras</c> as <c>ha_camera</c> keeps it, and the screen's own notice printed. A still that didn't come, or one the folder
+    /// refused, is the error.
+    /// </summary>
+    private static async Task<HaCommandResult> CameraAsync(HaSession ha, string? target, HaCameraOptions options, CancellationToken cancellationToken)
+    {
+        var (camera, refused) = await HaCameraTool.ResolveAsync(ha, target, HaText.NotACameraCommand, cancellationToken, options.AliasedId?.Invoke(target)).ConfigureAwait(false);
+        if (camera is null)
+        {
+            return HaCommandResult.Error(refused!);
+        }
+
+        var reply = await ha.CameraAsync(camera.Id, cancellationToken).ConfigureAwait(false);
+        var (image, failed) = HaCamera.ToAttachment(reply, camera.Id);
+        if (image is null)
+        {
+            return HaCommandResult.Error(failed!);
+        }
+
+        var save = HaCamera.Save(options.Images, image, camera.Id, TimeZoneInfo.ConvertTime(ha.Time.GetUtcNow(), ha.Time.LocalTimeZone));
+        return save.Saved is { } saved
+            ? HaCommandResult.Of(HomeBarText.CameraShown(camera.Name, saved, null))
+            : HaCommandResult.Error(HomeBarText.CameraShown(camera.Name, null, save.Error));
     }
 
     /// <summary>
@@ -289,16 +322,18 @@ public static class HaCommand
     /// <c>/ha</c>'s argument list over <paramref name="snapshot"/> (the last one read; null = the verbs alone): the verbs; after
     /// <c>on</c>/<c>off</c>/<c>toggle</c> the rooms and the switchable names; after <c>scene</c> the scenes; after <c>tv</c> its
     /// actions and after <c>tv source</c> the player's sources. Each item is the whole argument, as <c>/comfy edit</c>'s are. Pure.
-    /// Since 2026-10-27: <c>stills</c> and, after it, its three words with or without a snapshot (<paramref name="stills"/> false for the
-    /// Web UI's page, which refuses <c>/ha stills</c>); after <c>states</c> the snapshot's domains, then its entity ids.
+    /// Since 2026-10-27: <c>stills</c> and, after it, its three words with or without a snapshot; after <c>states</c> the snapshot's domains,
+    /// then its entity ids. Since 2026-11-13: <c>camera</c> and, after it, the camera chips' aliases (<paramref name="cameraAliases"/>, those
+    /// whose camera the snapshot has, first: Enter resolves an alias first, and <c>DistinctBy</c> keeps the first of equal texts), then the
+    /// cameras. <paramref name="pcOnly"/> false (the Web UI's page, which refuses <c>/ha stills</c> and <c>/ha camera</c>) offers neither.
     /// </summary>
-    public static IReadOnlyList<CompletionItem> Complete(HaSnapshot? snapshot, string argText, bool stills = true)
+    public static IReadOnlyList<CompletionItem> Complete(HaSnapshot? snapshot, string argText, bool pcOnly = true, IReadOnlyList<(string Alias, string EntityId)>? cameraAliases = null)
     {
         ArgumentNullException.ThrowIfNull(argText);
         int space = argText.IndexOf(' ', StringComparison.Ordinal);
         if (space < 0)
         {
-            var verbs = stills ? HaText.Verbs : HaText.Verbs.Where(v => v != HaStillsCommand.Word);
+            var verbs = pcOnly ? HaText.Verbs : HaText.Verbs.Where(v => v is not (HaStillsCommand.Word or HaCameraCommand.Word));
             return MentionCompleter.Matches(verbs.Select(v => new CompletionItem(v, HaText.VerbNote(v))).ToList(), argText);
         }
 
@@ -306,9 +341,14 @@ public static class HaCommand
         string head = argText[..(space + 1)];
         if (verb == HaStillsCommand.Word)
         {
-            return stills && argText.IndexOf(' ', space + 1) < 0
+            return pcOnly && argText.IndexOf(' ', space + 1) < 0
                 ? MentionCompleter.Matches(HaStillsCommand.Words.Select(w => new CompletionItem(head + w.Text, w.Note)).ToList(), argText)
                 : [];
+        }
+
+        if (verb == HaCameraCommand.Word && !pcOnly)
+        {
+            return [];
         }
 
         if (snapshot is null)
@@ -323,6 +363,7 @@ public static class HaCommand
             "scene" => snapshot.Of("scene").Select(e => new CompletionItem(head + e.Name, e.Area ?? "scene")),
             "tv" => TvItems(snapshot, argText, head),
             "states" => StatesItems(snapshot).Select(i => i with { Text = head + i.Text }),
+            HaCameraCommand.Word => CameraItems(snapshot, head, cameraAliases),
             _ => [],
         };
         return MentionCompleter.Matches(items.DistinctBy(i => i.Text, StringComparer.OrdinalIgnoreCase).ToList(), argText);
@@ -338,6 +379,15 @@ public static class HaCommand
             .Concat(s.Entities.Select(e => new CompletionItem(e.Id, e.Name))).ToList());
 
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<HaSnapshot, IReadOnlyList<CompletionItem>> StatesCache = new();
+
+    /// <summary><c>/ha camera</c>'s items (2026-11-13): each chip alias whose camera the snapshot still has, noted with the camera's name; then the cameras, noted with their room and "unavailable" where they are.</summary>
+    private static IEnumerable<CompletionItem> CameraItems(HaSnapshot snapshot, string head, IReadOnlyList<(string Alias, string EntityId)>? aliases)
+    {
+        var cameras = snapshot.Of(HaCameraTool.Domain);
+        var aliased = (aliases ?? []).Select(a => (a.Alias, Camera: snapshot.Find(a.EntityId))).Where(a => a.Camera is { Domain: HaCameraTool.Domain })
+            .Select(a => new CompletionItem(head + a.Alias, a.Camera!.Name));
+        return aliased.Concat(cameras.Select(c => new CompletionItem(head + c.Name, HaText.CameraItemNote(c))));
+    }
 
     private static IEnumerable<CompletionItem> TvItems(HaSnapshot snapshot, string argText, string head)
     {

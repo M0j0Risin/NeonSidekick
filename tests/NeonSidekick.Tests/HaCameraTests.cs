@@ -607,6 +607,70 @@ public sealed class HaCameraTests : IDisposable
         Assert.Equal(0, ProxyRequests());
     }
 
+    /// <summary>
+    /// The shared resolve (2026-11-13, /ha camera): a chip alias's id wins on the read that still has it; one gone from Home Assistant is ignored
+    /// and the typed words resolved, so the error names them; the command's own sentence for another domain.
+    /// </summary>
+    [Fact]
+    public async Task ResolveAsync_AnAliasedIdWins_AStaleOneFallsBackToTheTypedWords()
+    {
+        var (_, ha, _, guard) = Tool(StripFixtures.Jpeg(), TimeAnswer, States());
+        using var _ = guard;
+        using var __ = ha;
+
+        var (aliased, error) = await HaCameraTool.ResolveAsync(ha, "Door", HaText.NotACameraCommand, CancellationToken.None, aliasedId: "camera.backyard_live_view");
+        Assert.Null(error);
+        Assert.Equal("camera.backyard_live_view", aliased!.Id);
+
+        var (stale, missed) = await HaCameraTool.ResolveAsync(ha, "Shed", HaText.NotACameraCommand, CancellationToken.None, aliasedId: "camera.gone");
+        Assert.Null(stale);
+        Assert.StartsWith("Error: ", missed);
+        Assert.Contains("Shed", missed, StringComparison.Ordinal);
+        Assert.DoesNotContain("camera.gone", missed, StringComparison.Ordinal);
+
+        var (stillFound, _) = await HaCameraTool.ResolveAsync(ha, "backyard", HaText.NotACameraCommand, CancellationToken.None, aliasedId: "camera.gone");
+        Assert.Equal("camera.backyard_live_view", stillFound!.Id);
+
+        var snapshot = Snapshot(States());
+        Assert.Equal(HaText.NotACameraCommand(snapshot.Find("light.porch")!),
+            (await HaCameraTool.ResolveAsync(ha, "light.porch", HaText.NotACameraCommand, CancellationToken.None)).Error);
+        Assert.StartsWith("Error: ", (await HaCameraTool.ResolveAsync(ha, null, HaText.NotACameraCommand, CancellationToken.None)).Error);   // two cameras: ambiguous
+        Assert.Equal(0, ProxyRequests());
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("camera.front_door_live_view")]
+    public async Task ResolveAsync_AnUnavailableCamera_IsReadAgain_ResolvedWhenBack_RefusedWhenNot(string? aliasedId)
+    {
+        var (_, ha, _, guard) = Tool(StripFixtures.Jpeg(), TimeAnswer, States("unavailable"), States());
+        using var _ = guard;
+        using var __ = ha;
+        string target = aliasedId is null ? "Front Door Live view" : "Door";
+
+        var (back, error) = await HaCameraTool.ResolveAsync(ha, target, HaText.NotACameraCommand, CancellationToken.None, aliasedId);
+
+        Assert.Null(error);
+        Assert.Equal("camera.front_door_live_view", back!.Id);
+        Assert.Equal(2, _stub.Requests.Count(r => r.Uri.AbsolutePath == "/api/states"));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("camera.front_door_live_view")]
+    public async Task ResolveAsync_ACameraStillUnavailable_IsRefused(string? aliasedId)
+    {
+        var (_, ha, _, guard) = Tool(StripFixtures.Jpeg(), TimeAnswer, States("unavailable"));
+        using var _ = guard;
+        using var __ = ha;
+
+        var (camera, error) = await HaCameraTool.ResolveAsync(ha, aliasedId is null ? "Front Door Live view" : "Door", HaText.NotACameraCommand, CancellationToken.None, aliasedId);
+
+        Assert.Null(camera);
+        Assert.Equal(HaText.CameraUnavailable("Front Door Live view", "unavailable"), error);
+        Assert.Equal(0, ProxyRequests());
+    }
+
     [Fact]
     public void TheTimeTemplate_TakesOnlyACameraId_AndTheNewestTimeWins()
     {

@@ -243,6 +243,7 @@ Which commands the Web UI's page may send, and how each shows there: [Commands f
 | `/ha tv on\|off\|mute\|unmute\|up\|down`, `/ha tv vol\|volume <level>`, `/ha tv source <name>` | Controls the only media player, sets its volume (0–100) or its source. |
 | `/ha states [<filter>]` | Lists entities and their states; an entity id shows all its attributes. |
 | `/ha say <sentence>` | Hands a sentence to *Home Assistant Assist agent*. |
+| `/ha camera [<name>]` | Shows a camera's still as a 📹 chip's double-click does, for any camera. `<name>` is its name, entity id, room or chip name; bare, the only camera. |
 | `/imagine [<workflow>] <prompt> [-- <negative>\|--no-negative]` | Makes a picture on ComfyUI from your prompt as typed. See [Imagine options](#imagine-options). |
 | `/imagine <prompt> [--seed <n>] [--size <w>x<h>] [--steps <n>] [--count <n>]`, `/imagine <prompt> [--cfg <x>] [--denoise <x>] [--image <path>] [--image2 <path>] [--image3 <path>]` | Sets the seed, size, steps, count, guidance, denoise strength and up to three input pictures. |
 | `/comfy` | Opens the ComfyUI tools' page, as `/tools comfy` does. |
@@ -311,7 +312,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 | `/toolbar [on\|off]`, `/toolbar edit` | Hides or shows the [toolbar](INTERFACE.md#the-toolbar), or opens its checklist (*Tool bar*). |
 | `/perfbar [off\|text\|gauge\|led]`, `/perfbar edit` | Hides or shows the [performance bar](INTERFACE.md#the-performance-bar) in a look, or opens its checklist (*Performance bar*). |
 | `/homebar [on\|off]`, `/homebar edit` | Hides or shows the [home bar](INTERFACE.md#the-home-bar), or opens its picker. |
-| `/homebar tap <item>`, `/homebar show <item>` | Does what a double-click or a right-click on a chip does; unlocking and opening ask first. |
+| `/homebar tap <item>`, `/homebar show <item>` | Does what a double-click or a right-click on a chip does; unlocking and opening ask first. Any camera's still: [`/ha camera`](#integrations). |
 | `/homebar name <item> = <alias>`, `/homebar emoji <item> = <emoji>` | Gives a chip your own name or emoji (nothing after `=` shows the emoji alone); `default` puts its own back. |
 | `/monitor`, `/monitor <monitor>` | Opens the [monitors pane](INTERFACE.md#the-monitors-pane), on its Layout tab or that monitor's. Without the pane, prints the list. Windows only ([MAC.md](MAC.md#what-works)). |
 | `/monitor list` | Prints the monitors: number, name, connector, mode, primary, the current input and the inputs; the first line names any monitor showing another input. |

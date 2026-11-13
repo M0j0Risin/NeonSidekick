@@ -62,9 +62,12 @@ public partial class ChatScreenTests
 
     /// <summary>
     /// The read's waits as stages: each runs when <c>ready</c> holds at a wait, else the wait passes (a camera's still wakes the idle read when
-    /// it lands). The first waits for the chips drawn, ticking the clock; after it the clock stands, so the 2 s reuse holds.
+    /// it lands). The first waits for the chips drawn (<paramref name="drawn"/>, the Porch chip's text, an alias's since 2026-11-13), ticking the
+    /// clock; after it the clock stands, so the 2 s reuse holds.
     /// </summary>
-    private void CameraStages(params (Func<bool> Ready, Action<ScriptedInput> Act)[] stages)
+    private void CameraStages(params (Func<bool> Ready, Action<ScriptedInput> Act)[] stages) => CameraStages("📹 Porch Camera", stages);
+
+    private void CameraStages(string drawn, params (Func<bool> Ready, Action<ScriptedInput> Act)[] stages)
     {
         var input = Scripted();
         int next = 0;
@@ -72,7 +75,7 @@ public partial class ChatScreenTests
         {
             if (next == 0)
             {
-                TickUntil(() => Output.Contains("📹 Porch Camera", StringComparison.Ordinal));
+                TickUntil(() => Output.Contains(drawn, StringComparison.Ordinal));
             }
 
             if (next < stages.Length && stages[next].Ready())
@@ -244,6 +247,149 @@ public partial class ChatScreenTests
 
         Assert.True(flashed);
         Assert.Equal(1, Stills(stub));
+        Assert.False(Directory.Exists(HomeCameraFolder));
+    }
+
+    // ─── /ha camera (2026-11-13, the user's ask: what a chip's double-click does, for any camera) ─────────────────────
+
+    /// <summary>
+    /// <see cref="CameraServer"/> with the REST reads <c>/ha camera</c> resolves over: Porch and the unavailable Garage (both on the bar) and
+    /// <c>camera.yard</c> ("Yard", not on it); no areas.
+    /// </summary>
+    private StubHttpMessageHandler CameraCommandServer(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>>? still = null) =>
+        CameraServer(still)
+            .Map("http://ha.test:8123/api/states", System.Net.HttpStatusCode.OK, """
+                [{"entity_id":"camera.porch","state":"idle","attributes":{"friendly_name":"Porch Camera"}},
+                 {"entity_id":"camera.garage","state":"unavailable","attributes":{"friendly_name":"Garage Camera"}},
+                 {"entity_id":"camera.yard","state":"idle","attributes":{"friendly_name":"Yard"}},
+                 {"entity_id":"light.den","state":"on","attributes":{"friendly_name":"Den"}}]
+                """)
+            .Map("http://ha.test:8123/api/template", System.Net.HttpStatusCode.OK, "[]", "text/plain");
+
+    [Fact]
+    public async Task HaCamera_ACameraOffTheBar_SaysItsComing_ThenSavesAndOpensTheStill_AndARepeatOpensTheSameFile()
+    {
+        var stub = CameraCommandServer();
+        var viewed = new List<string>();
+        _viewPicture = path => { lock (viewed) { viewed.Add(path); } };
+        int Viewed() { lock (viewed) { return viewed.Count; } }
+        CameraStages(
+            (() => true, input => PushLine(input, "/ha camera Yard")),
+            (() => Viewed() == 1, input => PushLine(input, "/ha camera yard")),   // within 2 s: the same still, the same file
+            (() => Viewed() == 2, input => PushLine(input, "/exit")));
+
+        string output = await RunAsync();
+
+        string saved = Assert.Single(Directory.GetFiles(HomeCameraFolder));
+        Assert.StartsWith(Path.Combine(HomeCameraFolder, "yard-"), saved);
+        Assert.Equal([saved, saved], viewed);
+        Assert.Equal(1, Stills(stub));
+        Assert.Contains(HomeBarText.CameraComing("Yard"), output);
+        Assert.True(output.IndexOf(HomeBarText.CameraComing("Yard"), StringComparison.Ordinal) < output.IndexOf("Yard: a still, saved as ", StringComparison.Ordinal));
+        Assert.Empty(_chat.Requests);   // nothing goes to the conversation
+    }
+
+    [Fact]
+    public async Task HaCamera_AChipsAlias_OpensItsCamera_AndItsDrawnChipShowsTheWait_NoLine()
+    {
+        var stub = CameraCommandServer();
+        _settings.Update(d => d.HomeBarAliases = new Dictionary<string, string> { ["entity:camera.porch"] = "Door" });
+        var viewed = new List<string>();
+        _viewPicture = path => { lock (viewed) { viewed.Add(path); } };
+        int Viewed() { lock (viewed) { return viewed.Count; } }
+        CameraStages("📹 Door",
+            (() => true, input => PushLine(input, "/ha camera door")),
+            (() => Viewed() == 1, input => PushLine(input, "/exit")));
+
+        string output = await RunAsync();
+
+        Assert.StartsWith(Path.Combine(HomeCameraFolder, "porch-"), Assert.Single(viewed));
+        Assert.Contains("Porch Camera: a still, saved as ", output);   // Home Assistant's name, as the chip's notice has it
+        Assert.DoesNotContain(HomeBarText.CameraComing("Porch Camera"), output);
+        Assert.Equal(1, Stills(stub));
+    }
+
+    [Fact]
+    public async Task HaCamera_Refusals_AreErrorLines_AndFetchNothing()
+    {
+        var stub = CameraCommandServer();
+        CameraStages(
+            (() => true, input =>
+            {
+                PushLine(input, "/ha camera Garage Camera");
+                PushLine(input, "/ha camera Shed");
+                PushLine(input, "/ha camera");
+                PushLine(input, "/ha camera light.den");
+                PushLine(input, "/exit");
+            }));
+
+        string output = await RunAsync();
+
+        Assert.Contains("  ✗ " + HaText.CameraUnavailable("Garage Camera", "unavailable"), output);
+        Assert.Contains("  ✗ Error: nothing named 'Shed'", output);
+        Assert.Contains("  ✗ Error: 'camera' could be 3 things", output);   // bare, with three cameras
+        Assert.Contains("  ✗ Error: Den (light.den) is not a camera; /ha camera takes", output);
+        Assert.Equal(0, Stills(stub));
+        Assert.False(Directory.Exists(HomeCameraFolder));
+    }
+
+    [Fact]
+    public async Task HaCamera_NotConfigured_IsItsErrorLine()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.HomeAssistantUrl = ""; });
+        PushLine("/ha camera Yard");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  ✗ " + HaText.NotConfigured[..60], output);
+    }
+
+    [Fact]
+    public async Task HaCamera_WithThePaneOff_SaysItsComing_ThenTheSavedNotice()
+    {
+        var stub = CameraCommandServer();
+        _geometry = null;   // CameraServer turns the pane on; off, the bar never draws, so CameraStages' first wait would never pass
+        var input = Scripted();
+        int step = 0;
+        input.OnWait = () =>
+        {
+            if (step == 0)
+            {
+                step++;
+                PushLine(input, "/ha camera Yard");
+            }
+            else if (step == 1 && Output.Contains("Yard: a still, saved as ", StringComparison.Ordinal))
+            {
+                step++;
+                PushLine(input, "/exit");
+            }
+        };
+
+        string output = await RunAsync();
+
+        Assert.Contains(HomeBarText.CameraComing("Yard"), output);
+        Assert.True(output.IndexOf(HomeBarText.CameraComing("Yard"), StringComparison.Ordinal) < output.IndexOf("Yard: a still, saved as ", StringComparison.Ordinal));
+        Assert.Equal(1, Stills(stub));
+    }
+
+    [Fact]
+    public async Task HaCamera_AStillThatFails_IsAnErrorLineAfterItsComingLine_AndAnotherTryFetchesAfresh()
+    {
+        var stub = CameraCommandServer((_, _) => Task.FromResult(StubHttpMessageHandler.Json(System.Net.HttpStatusCode.InternalServerError, "500: Internal Server Error", "text/plain")));
+        string failed = HomeBarText.Failed("Yard", HaText.CameraNoPicture)[..50];
+        int Failures() => (Output.Length - Output.Replace(failed, "", StringComparison.Ordinal).Length) / failed.Length;
+        CameraStages(
+            (() => true, input => PushLine(input, "/ha camera Yard")),
+            (() => Failures() >= 1, input => PushLine(input, "/ha camera Yard")),   // the failed mark doesn't block it
+            (() => Failures() >= 2, input => PushLine(input, "/exit")));
+
+        string output = await RunAsync();
+
+        Assert.Equal(2, Stills(stub));
+        Assert.Contains("  ✗ " + failed, output);   // a line, the pane on: no chip shows this camera's wait
+        Assert.True(output.IndexOf(HomeBarText.CameraComing("Yard"), StringComparison.Ordinal) < output.IndexOf("  ✗ " + failed, StringComparison.Ordinal));
+        Assert.DoesNotContain(HomeBarText.CameraFetching("Yard"), output);
         Assert.False(Directory.Exists(HomeCameraFolder));
     }
 
