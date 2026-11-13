@@ -35,7 +35,7 @@ Get-Content job.txt | NeonSidekick.exe --headless > run_output.txt        # one 
   - SQLite and DuckDB files, and DuckDB's data files, in the working directory need no ticking.
 - **In `profile.json`** the lists are `SqlConnectionsOffered`, `OracleConnectionsOffered`, `MySqlConnectionsOffered`, `PostgresConnectionsOffered`, `SqliteDatabasesOffered`, `DuckDbDatabasesOffered`, `UncSharesOffered` and `ComfyWorkflowsOffered`.
 - **`delete` follows *File deletes to Recycle bin*** (on by default), moving files to the Recycle bin (the Trash on a Mac) as in the TUI.
-- **Tools that need the screen are never offered:** the database write tools (`sqlite_execute`, `duckdb_execute`, `sql_execute`, `oracle_execute`, `mysql_execute`, `postgres_execute`), `camera_capture`, `screen_capture`, `screen_list`, `ask_user`, the timer tools, the YouTube playing tools and the monitor tools.
+- **Tools that need the screen are never offered:** the database write tools (`sqlite_execute`, `duckdb_execute`, `sql_execute`, `oracle_execute`, `mysql_execute`, `postgres_execute`), `camera_capture`, `screen_capture`, `screen_list`, `ask_user`, the timer tools, the YouTube playing tools, the video tools and the monitor tools.
 - **Calls that would ask you first are refused** (service and task changes aren't offered):
   - the model's Docker changes, `print_file` under *Print action policy* `ask`, `neon_advisor` under *Advisor confirm*, `shopping_clear` with `all`;
   - Home Assistant calls outside the safe services under *Home Assistant action policy* `ask`.
@@ -107,6 +107,7 @@ They need no server unless the row says so.
 | `/<name> [<words>]` | Sends a custom command's prompt after a `[notice]` naming its folder. The prompt is a message: a body starting `/plan` isn't run as `/plan`. |
 | `/prompts …`, `/browser save\|list\|unsave …` | Lists, prints, adds (`/browser save` needs the address) or removes saved prompts and links; `list --clear` empties a list without asking. Other `/browser` forms are errors. |
 | `/youtube …` | Searches (needs a *YouTube API key*) and lists playlists and saved videos (bare, the saved ones); `save <id\|link>` saves a video or playlist; `list --clear` empties the list without asking. Playing is an error. |
+| `/video …` | An error: video files play only on the screen. |
 | `/camera list`, `/screen list` | List the cameras, or the monitors and windows (macOS 14+ on a Mac); other forms are errors. |
 | `/avatar …` | Prints or sets the *Model avatar* (`/avatar user …` your *User avatar*); a description picks the closest emoji. |
 | `/help <your command>` | Prints the custom command's card, or why a skipped file doesn't run; no server needed. |

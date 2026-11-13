@@ -14,6 +14,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <script src="/common.js" defer></script>
 <script src="/youtube-core.js" defer></script>
+<script src="/youtube-file.js" defer></script>
 <script src="/youtube.js" defer></script>
 </head>
 <body data-tab="youtube">
@@ -31,7 +32,9 @@
     <!-- The video filling the browser's window (2026-10-20, the user's ask): shown while this page plays a loaded player. -->
     <button type="button" class="hidden" id="fill"></button>
   </div>
-  <div class="yt-frame"><div id="player"></div></div>
+  <!-- A video file from the PC (2026-11-12, the video-files plan): its name and a tag above the player, and its own <video> beside YouTube's. -->
+  <p class="yt-file-head hidden" id="file-head"><span class="yt-title yt-file-name" id="file-name"></span><span class="yt-file-tag" id="file-tag"></span></p>
+  <div class="yt-frame"><div id="player"></div><video id="file" class="hidden" playsinline preload="metadata" controls></video></div>
   <div class="banner message hidden" id="message"></div>
   <!-- The saved videos (later on 2026-10-16, the user's ask: /youtube list under the player). -->
   <section class="yt-saved hidden" id="saved" aria-labelledby="saved-caption">

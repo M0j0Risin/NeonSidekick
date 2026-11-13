@@ -293,6 +293,10 @@
     <EmbeddedResource Include="..\..\assets\youtube\player.html" LogicalName="youtube/player.html" Visible="false" />
     <!-- The player both pages share (2026-10-16): embedded once, under the Web UI's name; VideoPage.Text() reads the same resource to inline it. -->
     <EmbeddedResource Include="..\..\assets\youtube\player-core.js" LogicalName="webui/youtube-core.js" Visible="false" />
+    <!-- The video window's file page (2026-11-12, the video-files plan): written beside player.html and loaded as a file: URL. -->
+    <EmbeddedResource Include="..\..\assets\youtube\file.html" LogicalName="youtube/file.html" Visible="false" />
+    <!-- The file player both pages share: embedded once, under the Web UI's name; VideoPage.FileText() inlines the same resource. -->
+    <EmbeddedResource Include="..\..\assets\youtube\file-core.js" LogicalName="webui/youtube-file.js" Visible="false" />
     <!-- The Web UI's pages (2026-10-14): plain HTML, CSS and JavaScript, no library, served by WebUi/WebUiAssets from memory
          (no web root on disk). -->
     <EmbeddedResource Include="..\..\assets\webui\*.*" LogicalName="webui/%(Filename)%(Extension)" Visible="false" />

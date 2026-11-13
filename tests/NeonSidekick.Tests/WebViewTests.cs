@@ -270,7 +270,7 @@ public unsafe class WebViewTests : IDisposable
         Assert.True(check.Passed, check.Detail);
         if (!check.Detail.StartsWith("skipped: ", StringComparison.Ordinal))
         {
-            Assert.Matches("^runtime \\d+\\.\\d+\\.\\d+\\.\\d+; the page on player\\.neonsidekick\\.example in \\d+ ms; web messages both ways, a script's answer, a navigation off the host refused$", check.Detail);
+            Assert.Matches("^runtime \\d+\\.\\d+\\.\\d+\\.\\d+; the page on player\\.neonsidekick\\.example in \\d+ ms; web messages both ways, a script's answer, a navigation off the host refused; the file page in \\d+ ms, its echo, a move to another file refused$", check.Detail);
         }
 
         Assert.Contains("WebView2Loader.dll", SmokeChecks.RequiredNativeLibraries);

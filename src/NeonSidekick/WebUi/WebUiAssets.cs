@@ -32,6 +32,9 @@ public static class WebUiAssets
     /// <summary>The player both video pages share (2026-10-16, <c>assets\youtube\player-core.js</c>, one embed read by both).</summary>
     public const string YouTubeCore = "youtube-core.js";
 
+    /// <summary>The video-file player both video pages share (2026-11-12, <c>assets\youtube\file-core.js</c>, one embed read by both).</summary>
+    public const string YouTubeFile = "youtube-file.js";
+
     /// <summary>
     /// The About page (2026-11-08, the user's ask): the version, the licenses and this version's source, behind ☰, served whatever the tabs.
     /// The source link sat at the bottom of every page from 2026-11-06 until then.
@@ -43,7 +46,7 @@ public static class WebUiAssets
 
     /// <summary>Every file, by the name it is served as (the path less its slash).</summary>
     public static readonly IReadOnlyList<string> Names =
-        [ChatPage, ShoppingPage, HomePage, SignInPage, NoTabsPage, YouTubePage, AboutPage, "app.css", "common.js", "chat.js", "shopping.js", "home.js", "signin.js", "notabs.js", "youtube.js", "about.js", YouTubeCore, "favicon.svg", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
+        [ChatPage, ShoppingPage, HomePage, SignInPage, NoTabsPage, YouTubePage, AboutPage, "app.css", "common.js", "chat.js", "shopping.js", "home.js", "signin.js", "notabs.js", "youtube.js", "about.js", YouTubeCore, YouTubeFile, "favicon.svg", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 
     /// <summary>
     /// The files served without the cookie (a signed-out page loads them too): every one of <see cref="Names"/> but a page, so the style, the

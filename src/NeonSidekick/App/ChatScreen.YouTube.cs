@@ -32,12 +32,12 @@ internal sealed partial class ChatScreen
     /// goes, the video last sent to a browser, and where a play would go now for the descriptions. Headless passes none: the window's wording.
     /// </remarks>
     public static IReadOnlyList<AIFunction> YouTubeTools(IYouTubeSearch search, IVideoPlayer? player, Func<AppSettingsData> effective, TimeProvider? time = null, Func<YouTubeLibrary>? library = null,
-        Func<VideoRequest, VideoRouted>? route = null, Func<VideoHandoff?>? handoff = null, Func<YouTubeOpenLinksInKind>? target = null)
+        Func<VideoRequest, VideoRouted>? route = null, Func<VideoHandoff?>? handoff = null, Func<YouTubeOpenLinksInKind>? target = null, Func<string?>? videoPointer = null)
     {
         var tools = new List<AIFunction> { new YouTubeSearchTool(search, effective, time), new YouTubePlaylistTool(search, effective, player) };
         if (player is not null)
         {
-            tools.AddRange([new YouTubePlayTool(player, effective, time, library, route, target), new YouTubeControlTool(player, time, handoff, target), new YouTubeStatusTool(player, handoff, target)]);
+            tools.AddRange([new YouTubePlayTool(player, effective, time, library, route, target), new YouTubeControlTool(player, time, handoff, target, videoPointer), new YouTubeStatusTool(player, handoff, target, videoPointer)]);
         }
 
         if (library is not null)
@@ -136,6 +136,13 @@ internal sealed partial class ChatScreen
         {
             case YouTubeVerb.Save:
             {
+                // The video file playing is no YouTube video to save (2026-11-12): saves keep YouTube's alone.
+                if (line.VideoId is null && line.PlaylistId is null && _videoPlayer?.Snapshot is { IsFile: true, State: not VideoState.Failed } playingFile)
+                {
+                    sink.Error(VideoText.NoSaveForFiles(playingFile.FileName));
+                    return;
+                }
+
                 // A video named by its id or link is looked up for its title first (2026-10-07), under the spinner; a playlist too (2026-11-08),
                 // by the text typed rather than its bare id, so a link's index=, v= and t= are where it is saved at (the review).
                 Func<Task<string>> save = line.PlaylistId is { } list
@@ -176,7 +183,8 @@ internal sealed partial class ChatScreen
 
         if (line.Verb == YouTubeVerb.Status)
         {
-            Show(YouTubeText.StatusOrHandoff(player.Snapshot, _routedVideo?.LastHandoff), sink);
+            // A video file open (2026-11-12): /video's, so its status points there, as the control verbs' answers do.
+            Show(player.Snapshot is { IsFile: true, State: not VideoState.Failed } file ? VideoText.FileIsOpen(file.FileName, "/video") : YouTubeText.StatusOrHandoff(player.Snapshot, YouTubeHandoff()), sink);
             return;
         }
 
@@ -483,9 +491,10 @@ internal sealed partial class ChatScreen
     /// A play, or a move through the window's video, waited for under a spinner that ESC or Ctrl+C cancels (2026-10-09, the user's
     /// report: a channel picked from a search opened a window the page never started, and the screen sat on the picker, keys dead,
     /// for the whole <see cref="YouTubeWait.Play"/>). Only the wait stops; the window carries on. Under a reply's own watch, or with
-    /// no spinner (a line run mid-turn), the plain wait. Null when a key stopped it.
+    /// no spinner (a line run mid-turn), the plain wait. Null when a key stopped it. <paramref name="label"/> (2026-11-12, a video file's
+    /// play) is the spinner's words from the caller, in place of YouTube's.
     /// </summary>
-    private async Task<string?> WatchPlayerAsync(Func<CancellationToken, Task<string>> wait, bool spinner, CancellationToken cancellationToken, bool play = false)
+    private async Task<string?> WatchPlayerAsync(Func<CancellationToken, Task<string>> wait, bool spinner, CancellationToken cancellationToken, bool play = false, string? label = null)
     {
         if (!spinner || _turnRunning)
         {
@@ -493,15 +502,16 @@ internal sealed partial class ChatScreen
         }
 
         // The spinner names where a play is going (2026-10-16), worked out by PlayTarget as the play itself does; a command the player in use.
-        string label = play ? YouTubeText.WaitingFor(PlayTarget().Kind)
+        label ??= play ? YouTubeText.WaitingFor(PlayTarget().Kind)
             : _videoPlayer?.Place == VideoPlace.WebTab ? YouTubeText.WaitingFor(YouTubeOpenLinksInKind.WebUiWindow) : YouTubeText.WaitingForPlayer;
         string? answer = null;
         await UnderWatchAsync(label, async token => answer = await wait(token).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
         return answer;
     }
 
-    // WatchPlayerAsync's answer: the player's, or the wait stopped by a key (nothing when the app itself is stopping), worded for what plays now.
-    private void ShowWatched(string? result, INoticeSink sink, CancellationToken cancellationToken)
+    // WatchPlayerAsync's answer: the player's, or the wait stopped by a key (nothing when the app itself is stopping), worded for what plays now
+    // (a video file's words for /video's and /view's, 2026-11-12).
+    private void ShowWatched(string? result, INoticeSink sink, CancellationToken cancellationToken, bool file = false)
     {
         if (result is not null)
         {
@@ -509,7 +519,7 @@ internal sealed partial class ChatScreen
         }
         else if (!cancellationToken.IsCancellationRequested)
         {
-            sink.Notice(YouTubeText.StoppedWaitingFor(_videoPlayer?.Snapshot));
+            sink.Notice(file ? VideoText.StoppedWaitingFor(_videoPlayer?.Snapshot) : YouTubeText.StoppedWaitingFor(_videoPlayer?.Snapshot));
         }
     }
 

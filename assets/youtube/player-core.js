@@ -4,6 +4,8 @@
 // Each page keeps its own transport and calls NeonPlayer(send, options) once; it never touches WebView2's bridge. It sets
 // window.onYouTubeIframeAPIReady, so the page loads https://www.youtube.com/iframe_api after it.
 //   NeonPlayer(send, { autoplayFallback, onPlaying, onBlocked }) -> { onMessage(m), apiReady() }
+// {cmd: 'forget'} (2026-11-12, the video-files plan: the tab's video file loading in its place): a load waiting for the API dropped, the
+// muted retry's timer cleared, and a video playing hidden stopped.
 // The protocol is player.html's header. autoplayFallback (the Web UI's tab, where a phone starts a scripted play only after a
 // gesture on the video itself): a play that isn't playing within 1.5 s is tried again muted, its reports then carrying
 // gesture: true until the sound is back on; one still blocked calls onBlocked, and onPlaying fires as a video plays.
@@ -159,6 +161,13 @@ function NeonPlayer(send, hooks) {
   function onMessage(m) {
     m = m || {};
     if (m.cmd === 'load') { load(m); return; }
+    if (m.cmd === 'forget') {
+      pending = null;
+      clearTimeout(tryTimer);
+      tryTimer = null;
+      if (ready) { try { player.stopVideo(); } catch { /* not ready after all */ } }
+      return;
+    }
     if (!ready) return;
     switch (m.cmd) {
       case 'play': player.playVideo(); tryPlaying(); break;

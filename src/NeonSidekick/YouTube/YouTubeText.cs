@@ -260,6 +260,12 @@ public static class YouTubeText
             return NoVideo;
         }
 
+        // A video file's report (2026-11-12): its own words, so a file's error is never read as YouTube's code.
+        if (snapshot.IsFile)
+        {
+            return VideoText.FileStatus(snapshot);
+        }
+
         if (snapshot.State == VideoState.Failed)
         {
             return "Error: " + (snapshot.Failure ?? "the video window's browser could not start.");
@@ -306,7 +312,7 @@ public static class YouTubeText
     /// The Web UI's tab after a state line (2026-10-16): where it plays, and the tap a phone wants — to start a video its autoplay blocked
     /// (<see cref="VideoState.Unstarted"/>), or for sound when it could only start muted (<see cref="VideoSnapshot.NeedsTap"/>). Empty for the window.
     /// </summary>
-    private static string OnTheTab(VideoSnapshot snapshot) => snapshot.Place != VideoPlace.WebTab ? "" : snapshot switch
+    internal static string OnTheTab(VideoSnapshot snapshot) => snapshot.Place != VideoPlace.WebTab ? "" : snapshot switch
     {
         { State: VideoState.Unstarted } => " · in " + WebTabName + "; tap the video on the phone to start",
         { State: VideoState.Playing or VideoState.Buffering, NeedsTap: true } => " · in " + WebTabName + "; playing muted until the video is tapped",
@@ -330,7 +336,8 @@ public static class YouTubeText
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentNullException.ThrowIfNull(held);
-        string what = snapshot.VideoId is null && snapshot.PlaylistId is { } list ? "playlist " + list : "video " + snapshot.VideoId;
+        // A video file's own name (2026-11-12): its VideoId is null, and the wait is for the tab either way.
+        string what = snapshot.FileName is { } file ? file : snapshot.VideoId is null && snapshot.PlaylistId is { } list ? "playlist " + list : "video " + snapshot.VideoId;
         return held.TabsHidden
             ? $"Waiting for a YouTube tab in view: {what} plays in {WebTabName} as soon as one comes into view (a YouTube tab is open but hidden, or the phone is locked); the open Web UI pages were asked to switch to it."
             : held.Nudged

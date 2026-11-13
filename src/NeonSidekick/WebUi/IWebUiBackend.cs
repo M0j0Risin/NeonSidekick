@@ -184,6 +184,12 @@ public interface IWebUiBackend
     /// </summary>
     IWebVideo? Video => null;
 
+    /// <summary>
+    /// Whether a video file may play on the YouTube tab over Tailscale Funnel (2026-11-12, <i>Web UI video files over Funnel</i>, read per
+    /// request); off by default, and off where nothing says.
+    /// </summary>
+    bool VideoFilesOverFunnel => false;
+
     /// <summary>The YouTube tab's saved list (later on 2026-10-16), or null where there is none; reads only (a missing title's lookup may start).</summary>
     WebSavedVideos? SavedVideos() => null;
 

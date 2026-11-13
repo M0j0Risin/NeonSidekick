@@ -543,10 +543,11 @@ A right-click in the viewer or the thumbnail browser.
 
 ### The video window
 
-Where YouTube videos play under *YouTube open links in* `youtube-window`, the default ([TOOLS.md](TOOLS.md#youtube)).
+Where YouTube videos play under *YouTube open links in* `youtube-window`, the default ([TOOLS.md](TOOLS.md#youtube)), and video files under *Video files play in* `video-window` ([TOOLS.md](TOOLS.md#video)).
 
 * A video or playlist link clicked in it (the YouTube logo, an end screen) plays where the setting says; anything else opens in your default browser.
 * It doesn't take the keyboard. F11 is full screen; Esc leaves it, then closes the window. YouTube's own keys (Space or K, ←/→, F, M) work once you click into the video.
+* **A video file** plays in the window's own player, with the same keys at once. One it can't decode says so.
 * **On a Mac** (macOS 14+, WebKit) the player's own full-screen button fills a Space of its own; Esc brings it back.
 
 ### The Browser window
@@ -721,6 +722,7 @@ The page is plain HTTP. Tailscale Serve puts HTTPS in front of it with a real ce
 * **Which tab plays:** the one shown most recently; a playing tab keeps playing, even hidden. The others offer *Play here*, taking the video over from about 3 seconds back.
 * **Sound:** a phone starts a video only after a tap on it. The tab tries with sound, then muted, else asks for the tap.
 * **Resume:** leaving the tab, locking the phone or a reload stops the video and keeps its place; coming back offers *Resume "title" at 3:12*.
+* **Video files** from the PC play here under *Video files play in* `webui-window`, tagged *file on the PC*. Only that file is served; over Funnel only with *Web UI video files over Funnel* on.
 * **Saved videos** (`/youtube list`'s) sit under the player: a tap plays one here, whatever the setting says; ⋯ moves or removes it; ☆ saves the playing video; while a playlist plays, ☆ Save the playlist saves it (▤, resumed at its entry).
 * **⛶ Fill window** fills the browser's window with the video under a slim bar (YouTube's own button is still full screen). ✕ Exit, Esc or Back leave (after a tap on the video, Esc is YouTube's).
 * **Limits:** on an iPhone *YouTube while speaking* `duck` does nothing (`pause` works).

@@ -1368,8 +1368,23 @@ public enum SettingsField
     /// <summary>A toggle: whether starting a chosen container stops the other chosen ones first (<see cref="Settings.AppSettingsData.DockerServerOneAtATime"/>, 2026-11-10, the user's ask). The Docker tab, after <see cref="DockerServerReadyTimeoutSeconds"/>, so <see cref="DockerServerStopOnExit"/> stays its last row; no reconnect (read at each switch). Last in the enum, as every newcomer.</summary>
     DockerServerOneAtATime,
 
-    /// <summary>A toggle: whether the bound MIDI devices are listened to (<see cref="Settings.AppSettingsData.MidiInput"/>, 2026-11-12, the MIDI plan). The Chat tab's input-line run, after <see cref="EmojiPicker"/>; no reconnect (the board follows the save). Last in the enum, as every newcomer.</summary>
+    /// <summary>A toggle: whether the bound MIDI devices are listened to (<see cref="Settings.AppSettingsData.MidiInput"/>, 2026-11-12, the MIDI plan). The Chat tab's input-line run, after <see cref="EmojiPicker"/>; no reconnect (the board follows the save). Last in the enum until <see cref="VideoTools"/>.</summary>
     MidiInput,
+
+    /// <summary>
+    /// A toggle: whether a turn offers <c>play_video</c> and <c>video_control</c> (<see cref="Settings.AppSettingsData.VideoTools"/>, 2026-11-12, the
+    /// video-files plan). The first row of <c>/tools</c> › Files › Video; its page carries the <c>plays in</c> button. No reconnect.
+    /// </summary>
+    VideoTools,
+
+    /// <summary>A picker over <see cref="Viewer.VideoFilesPlayIn.Names"/> (<see cref="Settings.AppSettingsData.VideoFilesPlayIn"/>, 2026-11-12). After <see cref="VideoTools"/>; read at each play.</summary>
+    VideoFilesPlayIn,
+
+    /// <summary>
+    /// A toggle: whether a video file plays on the YouTube tab over Tailscale Funnel (<see cref="Settings.AppSettingsData.WebUiVideoFilesOverFunnel"/>,
+    /// 2026-11-12). <c>/settings</c> › Client › Web UI, right after <see cref="WebUiYouTubeControls"/>; read at each request. Last in the enum, as every newcomer.
+    /// </summary>
+    WebUiVideoFilesOverFunnel,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1858,7 +1873,7 @@ internal sealed partial class SettingsMenu
          SettingsField.SessionNamingMode, SettingsField.SessionShowName,
          SettingsField.SessionTool, SettingsField.SessionSearchMaxResults],
         [SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatLimitedComfyWorkflows, SettingsField.BotChatImageMode, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageMentionMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatLimitedTools, SettingsField.BotChatLimitedSkills, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.BotChatVision, SettingsField.BotChatCamera, SettingsField.BotChatRecentContext],
-        [SettingsField.WebUi, SettingsField.WebUiPort, SettingsField.WebUiReach, SettingsField.WebUiHttpsAddress, SettingsField.WebUiCommands, SettingsField.WebUiConnectionDetails, SettingsField.WebUiBotCheckControl, SettingsField.WebUiProfileTheme, SettingsField.WebUiChatControls, SettingsField.WebUiHomeControls, SettingsField.WebUiShoppingControls, SettingsField.WebUiYouTubeControls],
+        [SettingsField.WebUi, SettingsField.WebUiPort, SettingsField.WebUiReach, SettingsField.WebUiHttpsAddress, SettingsField.WebUiCommands, SettingsField.WebUiConnectionDetails, SettingsField.WebUiBotCheckControl, SettingsField.WebUiProfileTheme, SettingsField.WebUiChatControls, SettingsField.WebUiHomeControls, SettingsField.WebUiShoppingControls, SettingsField.WebUiYouTubeControls, SettingsField.WebUiVideoFilesOverFunnel],
         [SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmOneLocalModel,
          SettingsField.LlmReasoning, SettingsField.LlmShowThinking,
          SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds,
@@ -1967,6 +1982,8 @@ internal sealed partial class SettingsMenu
         [SettingsField.MonitorTools],
         // DuckDB (2026-10-25, the DuckDB plan): on Databases after SQLite, SQLite's rows over duckdb.json.
         [SettingsField.DuckDbTools, SettingsField.DuckDbMode, SettingsField.DuckDbStatementsAllowed, SettingsField.DuckDbDatabasesOffered, SettingsField.DuckDbSandboxFiles, SettingsField.DuckDbAddDatabase, SettingsField.DuckDbPercentMention, SettingsField.DuckDbQueryMaxRows, SettingsField.DuckDbQueryTimeoutSeconds, SettingsField.DuckDbDatabasesProfile, SettingsField.DuckDbDatabasesGlobal],
+        // Video (2026-11-12, the video-files plan): on Files after Image, the video tools' switch and where a file plays.
+        [SettingsField.VideoTools, SettingsField.VideoFilesPlayIn],
     ];
 
     /// <summary>
@@ -2384,11 +2401,12 @@ internal sealed partial class SettingsMenu
             or SettingsField.SqliteTools or SettingsField.SqliteSandboxFiles or SettingsField.SqlitePercentMention
             or SettingsField.DuckDbTools or SettingsField.DuckDbSandboxFiles or SettingsField.DuckDbPercentMention
             or SettingsField.PostgresTools or SettingsField.PostgresPercentMention
-            or SettingsField.YouTubeTools or SettingsField.YouTubeAutoplay
+            or SettingsField.YouTubeTools or SettingsField.YouTubeAutoplay or SettingsField.VideoTools
             or SettingsField.Advisors or SettingsField.AdvisorConfirm
             or SettingsField.ShoppingTools or SettingsField.EventLogTools or SettingsField.MonitorTools
             or SettingsField.WebUi or SettingsField.WebUiCommands or SettingsField.WebUiConnectionDetails or SettingsField.WebUiHomeControls or SettingsField.WebUiProfileTheme
             or SettingsField.WebUiChatControls or SettingsField.WebUiShoppingControls or SettingsField.WebUiYouTubeControls or SettingsField.WebUiBotCheckControl
+            or SettingsField.WebUiVideoFilesOverFunnel
             or SettingsField.TimerTools or SettingsField.FileDeletesToRecycleBin or SettingsField.FileCheckpoints or SettingsField.ClockTools or SettingsField.HelpTools
             or SettingsField.NetworkTools or SettingsField.NetworkCertificateStores or SettingsField.ServiceTools or SettingsField.ServiceWrites
             or SettingsField.TaskTools or SettingsField.TaskWrites or SettingsField.DirectoryTools
@@ -2453,6 +2471,8 @@ internal sealed partial class SettingsMenu
         SettingsField.ImageEditQuality => "Image edit quality",
         SettingsField.ImageEditMetadata => "Image edit metadata",
         SettingsField.ImageEditMode => "Image edit mode",
+        SettingsField.VideoTools => "Video tools",
+        SettingsField.VideoFilesPlayIn => "Video files play in",
         SettingsField.ImageEditOutputFolder => "Image edit output folder",
         SettingsField.PastedImagesFolder => "Pasted images folder",
         SettingsField.McpServers => "MCP servers enabled",
@@ -2496,6 +2516,7 @@ internal sealed partial class SettingsMenu
         SettingsField.WebUiChatControls => "Web UI chat controls",
         SettingsField.WebUiShoppingControls => "Web UI shopping controls",
         SettingsField.WebUiYouTubeControls => "Web UI YouTube controls",
+        SettingsField.WebUiVideoFilesOverFunnel => "Web UI video files over Funnel",
         SettingsField.WebUiProfileTheme => "Web UI profile theme",
         SettingsField.ImageThumbnailSize => "Image thumbnail size",
         SettingsField.FileTreeMaxLength => "File /tree max entries",
@@ -3002,6 +3023,8 @@ internal sealed partial class SettingsMenu
             SettingsField.YouTubeAutoplay => OnOff(data.YouTubeAutoplay),
             SettingsField.YouTubeVoice => YouTube.YouTubeVoiceMode.Resolve(data.YouTubeVoice),
             SettingsField.YouTubeOpenLinksIn => YouTube.YouTubeOpenLinksIn.TryParse(data.YouTubeOpenLinksIn, out var youTubeTarget) ? YouTube.YouTubeOpenLinksIn.Name(youTubeTarget) : YouTube.YouTubeOpenLinksIn.Default,
+            SettingsField.VideoTools => OnOff(data.VideoTools),
+            SettingsField.VideoFilesPlayIn => Viewer.VideoFilesPlayIn.TryParse(data.VideoFilesPlayIn, out var videoTarget) ? Viewer.VideoFilesPlayIn.Name(videoTarget) : Viewer.VideoFilesPlayIn.Default,
             SettingsField.YouTubeSearchOrder => YouTube.YouTubeSearchFilters.Defaults(data).Order,
             SettingsField.YouTubeSafeSearch => YouTube.YouTubeSearchFilters.Defaults(data).SafeSearch,
             SettingsField.YouTubeRegion => YouTube.YouTubeSearchFilters.Defaults(data).Region is { Length: > 0 } region ? region : NoYouTubeRegionLabel,
@@ -3192,6 +3215,7 @@ internal sealed partial class SettingsMenu
             SettingsField.WebUiChatControls => OnOff(data.WebUiChatControls),
             SettingsField.WebUiShoppingControls => OnOff(data.WebUiShoppingControls),
             SettingsField.WebUiYouTubeControls => OnOff(data.WebUiYouTubeControls),
+            SettingsField.WebUiVideoFilesOverFunnel => OnOff(data.WebUiVideoFilesOverFunnel),
             SettingsField.WebUiProfileTheme => OnOff(data.WebUiProfileTheme),
             SettingsField.WebUiPort => data.WebUiPort.ToString(CultureInfo.InvariantCulture),
             SettingsField.WebUiReach => data.WebUiReach,
@@ -5683,6 +5707,11 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.YouTubeOpenLinksIn)
         {
             return await PickYouTubeOpenLinksInAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.VideoFilesPlayIn)
+        {
+            return await PickVideoFilesPlayInAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
         if (field is SettingsField.YouTubeSearchOrder or SettingsField.YouTubeSafeSearch)
@@ -8393,6 +8422,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ComfyTools => data.ComfyTools,
             SettingsField.HomeAssistantTools => data.HomeAssistantTools,
             SettingsField.YouTubeTools => data.YouTubeTools,
+            SettingsField.VideoTools => data.VideoTools,
             SettingsField.YouTubeAutoplay => data.YouTubeAutoplay,
             SettingsField.PrintTools => data.PrintTools,
             SettingsField.ComfyReinforceNegatives => data.ComfyReinforceNegatives,
@@ -8446,6 +8476,7 @@ internal sealed partial class SettingsMenu
             SettingsField.WebUiChatControls => data.WebUiChatControls,
             SettingsField.WebUiShoppingControls => data.WebUiShoppingControls,
             SettingsField.WebUiYouTubeControls => data.WebUiYouTubeControls,
+            SettingsField.WebUiVideoFilesOverFunnel => data.WebUiVideoFilesOverFunnel,
             SettingsField.WebUiProfileTheme => data.WebUiProfileTheme,
             SettingsField.ExternalSkills => data.ExternalSkills,
             SettingsField.ProjectFile => data.ProjectFile,
@@ -8534,6 +8565,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.ComfyTools: data.ComfyTools = on; break;
             case SettingsField.HomeAssistantTools: data.HomeAssistantTools = on; break;
             case SettingsField.YouTubeTools: data.YouTubeTools = on; break;
+            case SettingsField.VideoTools: data.VideoTools = on; break;
             case SettingsField.YouTubeAutoplay: data.YouTubeAutoplay = on; break;
             case SettingsField.PrintTools: data.PrintTools = on; break;
             case SettingsField.ComfyReinforceNegatives: data.ComfyReinforceNegatives = on; break;
@@ -8587,6 +8619,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.WebUiChatControls: data.WebUiChatControls = on; break;
             case SettingsField.WebUiShoppingControls: data.WebUiShoppingControls = on; break;
             case SettingsField.WebUiYouTubeControls: data.WebUiYouTubeControls = on; break;
+            case SettingsField.WebUiVideoFilesOverFunnel: data.WebUiVideoFilesOverFunnel = on; break;
             case SettingsField.WebUiProfileTheme: data.WebUiProfileTheme = on; break;
             case SettingsField.ExternalSkills: data.ExternalSkills = on; break;
             case SettingsField.ProjectFile: data.ProjectFile = on; break;
@@ -8705,6 +8738,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ComfyTools => on ? "ComfyUI tools enabled" : "ComfyUI tools disabled",
         SettingsField.HomeAssistantTools => on ? "ha tools enabled" : "ha tools disabled",   // the user's wording, 2026-10-03
         SettingsField.YouTubeTools => on ? "YouTube tools enabled" : "YouTube tools disabled",
+        SettingsField.VideoTools => on ? "video tools enabled" : "video tools disabled",
         SettingsField.YouTubeAutoplay => on ? "a played video starts at once" : "a played video waits until you or the model press play",
         SettingsField.PrintTools => on ? "print tool enabled" : "print tool disabled",   // the user's wording, 2026-10-03
         SettingsField.ComfyReinforceNegatives => on ? "the model adds a few opposite tags to a workflow's negative prompt" : "the workflow's negative prompt is left as it is",
@@ -8737,6 +8771,7 @@ internal sealed partial class SettingsMenu
         SettingsField.WebUiChatControls => on ? "the page has its Chat tab" : "there is no Chat tab; / goes to the first tab that is on",
         SettingsField.WebUiShoppingControls => on ? "the Shopping tab adds, ticks, changes and removes lines, picks the store" : "there is no Shopping tab",
         SettingsField.WebUiYouTubeControls => on ? "the YouTube tab plays videos and keeps the saved list" : "there is no YouTube tab; webui-window plays in the video window",
+        SettingsField.WebUiVideoFilesOverFunnel => on ? "a video file plays on the YouTube tab over Tailscale Funnel too" : "over Tailscale Funnel the YouTube tab plays no video file",
         SettingsField.WebUiProfileTheme => on ? "the pages wear the profile's theme" : "the pages keep their own look",
         SettingsField.ExternalSkills => on ? (OperatingSystem.IsMacOS() ? "~/.agents/skills is read too" : "%USERPROFILE%\\.agents\\skills is read too") : "no external skills",   // the Mac's home, 2026-10-06
         SettingsField.ProjectFile => on ? "use the working directory's NEON.md, AGENTS.md or CLAUDE.md" : "project files in the working directory are ignored",   // the user's wording, 2026-10-01; CLAUDE.md 2026-10-18 (reworded to fit the row's 72)

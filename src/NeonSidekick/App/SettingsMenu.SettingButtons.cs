@@ -10,7 +10,7 @@ namespace NeonSidekick.App;
 internal readonly record struct SettingButton(SettingsField Target, string Word, char Key);
 
 /// <summary>
-/// The setting buttons on the File, Image, Print, Screen capture, Obsidian and YouTube pages (2026-10-09, the
+/// The setting buttons on the File, Image, Video, Print, Screen capture, Obsidian and YouTube pages (2026-10-09, the
 /// user's ask: actions at the top of each page to reach the group's own settings, the offered button's shape). Each opens its setting
 /// as the tab's row does (its picker, its on/off page, the vault's folder picker or a typed value under a one-row page of its own),
 /// and ESC there comes back to the on/off page, the buttons read again. The Claude Code advisor tool page's model and effort went with the
@@ -30,6 +30,7 @@ internal sealed partial class SettingsMenu
     {
         SettingsField.FileTools => [new(SettingsField.FileBrowserMode, "browser", 'b')],
         SettingsField.ImageTools => [new(SettingsField.ImageEditMode, "edit mode", 'e')],   // File tools' until 2026-10-10, with the picture tools
+        SettingsField.VideoTools => [new(SettingsField.VideoFilesPlayIn, "plays in", 'p')],   // 2026-11-12, the video-files plan
         SettingsField.PrintTools => [new(SettingsField.PrintDefaultPrinter, "printer", 'p')],
         SettingsField.ScreenTools => [new(SettingsField.ScreenAsk, "ask", 'a'), new(SettingsField.ScreenPreview, "preview", 'p')],
         SettingsField.ObsidianTools => [new(SettingsField.ObsidianVault, "vault", 'v')],

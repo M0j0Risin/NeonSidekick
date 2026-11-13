@@ -34,6 +34,12 @@ public interface IVideoPlayer
     /// active one's, so a sentence with no snapshot to read can still name the place.
     /// </summary>
     VideoPlace Place => VideoPlace.Window;
+
+    /// <summary>
+    /// Whether this player plays a video file on this computer (2026-11-12, the video-files plan): the Windows window and the Web UI's
+    /// tab do; the Mac's window, for now, doesn't, so a file goes to the default app there. A router says its active one's.
+    /// </summary>
+    bool PlaysFiles => false;
 }
 
 /// <summary>Where the app's own players play (2026-10-16): the video window, or the Web UI's YouTube tab.</summary>
@@ -99,12 +105,49 @@ public sealed record VideoRequest
         Autoplay = autoplay;
     }
 
+    private VideoRequest(string fullPath, string token, double start, bool autoplay)
+    {
+        FilePath = fullPath;
+        FileName = Path.GetFileName(fullPath);
+        FileToken = token;
+        Start = double.IsFinite(start) && start > 0 ? start : 0;
+        Autoplay = autoplay;
+    }
+
     /// <summary>
     /// The playlist <paramref name="playlistId"/> from its entry <paramref name="entry"/> (0-based), or from <paramref name="videoId"/>
     /// when that is named and in the list. Throws <see cref="ArgumentException"/> on an id of the wrong shape.
     /// </summary>
     public static VideoRequest Playlist(string playlistId, int entry = 0, string? videoId = null, double start = 0, bool autoplay = true) =>
         new(playlistId, entry, videoId, start, autoplay);
+
+    /// <summary>
+    /// A video file on this computer (2026-11-12, the video-files plan): <paramref name="fullPath"/>, already resolved inside the
+    /// working folder by the caller, with a new token of its own (<see cref="VideoFile.NewToken"/>) that the page's reports carry and
+    /// the Web UI's address names. <paramref name="autoplay"/> false loads it paused at <paramref name="start"/>, reported cued, as a
+    /// cued YouTube video is. Throws <see cref="ArgumentException"/> on a path that isn't fully qualified.
+    /// </summary>
+    public static VideoRequest File(string fullPath, double start = 0, bool autoplay = true)
+    {
+        if (string.IsNullOrWhiteSpace(fullPath) || !Path.IsPathFullyQualified(fullPath))
+        {
+            throw new ArgumentException(VideoText.NotAFullPath(fullPath), nameof(fullPath));
+        }
+
+        return new(fullPath, VideoFile.NewToken(), start, autoplay);
+    }
+
+    /// <summary>A file's full path; null for YouTube.</summary>
+    public string? FilePath { get; }
+
+    /// <summary>A file's name, what the page, the title and the sentences show; null for YouTube.</summary>
+    public string? FileName { get; }
+
+    /// <summary>A file's token, 32 hex digits, new for each request; null for YouTube.</summary>
+    public string? FileToken { get; }
+
+    /// <summary>Whether this is a video file rather than YouTube.</summary>
+    public bool IsFile => FileToken is not null;
 
     /// <summary>The video's id; null for a playlist started at an entry (the player says which video that is).</summary>
     public string? VideoId { get; }
@@ -233,13 +276,27 @@ public sealed record VideoSnapshot(
     /// </summary>
     public bool NeedsTap { get; init; }
 
+    /// <summary>A video file's name (2026-11-12, the video-files plan); null for YouTube.</summary>
+    public string? FileName { get; init; }
+
+    /// <summary>A video file's play token (<see cref="VideoRequest.FileToken"/>); null for YouTube. Set is how a reader knows the kind.</summary>
+    public string? FileToken { get; init; }
+
+    /// <summary>Whether this is a video file's snapshot rather than YouTube's.</summary>
+    public bool IsFile => FileToken is not null;
+
     /// <summary>The window up, nothing heard from the player yet, <paramref name="videoId"/> asked for.</summary>
     public static VideoSnapshot Opening(string? videoId) => new(VideoState.Opening, videoId);
 
-    /// <summary>The window up, nothing heard from the player yet, <paramref name="request"/> asked for: its video, or its playlist.</summary>
+    /// <summary>
+    /// The window up, nothing heard from the player yet, <paramref name="request"/> asked for: its video, or its playlist, or a file,
+    /// whose title is its name from the start (a held file's Home card and the window's title then have one before any report).
+    /// </summary>
     public static VideoSnapshot Opening(VideoRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        return new(VideoState.Opening, request.VideoId, PlaylistId: request.PlaylistId);
+        return request.IsFile
+            ? new(VideoState.Opening, null, Title: request.FileName) { FileName = request.FileName, FileToken = request.FileToken }
+            : new(VideoState.Opening, request.VideoId, PlaylistId: request.PlaylistId);
     }
 }

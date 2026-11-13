@@ -43,11 +43,14 @@ public sealed class YouTubeControlTool : AIFunction
     private readonly TimeProvider _time;
     private readonly Func<VideoHandoff?>? _handoff;
     private readonly Func<YouTubeOpenLinksInKind>? _target;
+    private readonly Func<string?>? _videoPointer;
 
     /// <param name="handoff">The video last sent to a browser (the router's <see cref="RoutedVideoPlayer.LastHandoff"/>); null for none.</param>
     /// <param name="target">Where a play goes now, for the description; null is the video window.</param>
-    public YouTubeControlTool(IVideoPlayer player, TimeProvider? time = null, Func<VideoHandoff?>? handoff = null, Func<YouTubeOpenLinksInKind>? target = null)
+    /// <param name="videoPointer"><c>video_control</c>'s name when it is offered this turn (2026-11-12), for the file-open refusal; null names none.</param>
+    public YouTubeControlTool(IVideoPlayer player, TimeProvider? time = null, Func<VideoHandoff?>? handoff = null, Func<YouTubeOpenLinksInKind>? target = null, Func<string?>? videoPointer = null)
     {
+        _videoPointer = videoPointer;
         _player = player ?? throw new ArgumentNullException(nameof(player));
         _time = time ?? TimeProvider.System;
         _handoff = handoff;
@@ -90,6 +93,12 @@ public sealed class YouTubeControlTool : AIFunction
         if (_player.Snapshot is not { State: not VideoState.Failed } current)
         {
             return _handoff?.Invoke() is { } handoff ? YouTubeText.HandedOffControl(handoff) : YouTubeText.NoVideo;
+        }
+
+        // A video file open (2026-11-12): video_control's, not this tool's.
+        if (current.IsFile)
+        {
+            return VideoText.FileIsOpen(current.FileName, _videoPointer?.Invoke());
         }
 
         if (action == "close")

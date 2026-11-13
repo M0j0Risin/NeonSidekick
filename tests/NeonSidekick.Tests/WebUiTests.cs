@@ -1187,7 +1187,8 @@ public sealed partial class WebUiTests : IDisposable
         Assert.Equal("must be a port from 1024 to 65535", App.SettingsMenu.WebUiPortRangeError);
         // Server, Guardrails, Tabs (2026-10-16, the user's ask).
         Assert.Equal([App.SettingsField.WebUi, App.SettingsField.WebUiPort, App.SettingsField.WebUiReach, App.SettingsField.WebUiHttpsAddress, App.SettingsField.WebUiCommands, App.SettingsField.WebUiConnectionDetails,
-            App.SettingsField.WebUiBotCheckControl, App.SettingsField.WebUiProfileTheme, App.SettingsField.WebUiChatControls, App.SettingsField.WebUiHomeControls, App.SettingsField.WebUiShoppingControls, App.SettingsField.WebUiYouTubeControls],
+            App.SettingsField.WebUiBotCheckControl, App.SettingsField.WebUiProfileTheme, App.SettingsField.WebUiChatControls, App.SettingsField.WebUiHomeControls, App.SettingsField.WebUiShoppingControls, App.SettingsField.WebUiYouTubeControls,
+            App.SettingsField.WebUiVideoFilesOverFunnel],
             App.SettingsMenu.TabFields[(int)App.SettingsTab.WebUi]);
         // Web UI HTTPS address (2026-10-31): read when /webui opens, so neither a restart nor refused under a reply; typed, not a toggle.
         Assert.False(App.SettingsMenu.IsWebUiField(App.SettingsField.WebUiHttpsAddress));

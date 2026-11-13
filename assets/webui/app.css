@@ -850,13 +850,19 @@ main.youtube { display: flex; flex-direction: column; gap: 12px; }
 .yt-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 40px; }
 .yt-hint { margin: 0; flex: 1; min-width: 12em; color: var(--dim); font-size: 14px; }
 .yt-frame { width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: 8px; overflow: hidden; }
-.yt-frame iframe, .yt-frame #player { width: 100%; height: 100%; border: 0; display: block; }
+.yt-frame iframe, .yt-frame #player, .yt-frame video { width: 100%; height: 100%; border: 0; display: block; }
+/* A video file from the PC (2026-11-12, the video-files plan): its own <video> in the frame, letterboxed when it isn't 16:9; its name (the
+   saved list's two-line title rule) and a "file on the PC" tag above the player. */
+.yt-frame video { object-fit: contain; background: #000; }
+.yt-file-head { display: flex; align-items: baseline; gap: 8px; margin: 0; font-size: 15px; }
+.yt-file-name { flex: 1; min-width: 0; }
+.yt-file-tag { flex: none; color: var(--dim); font-size: 12px; border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; }
 /* Fill the window (2026-10-20, the user's ask): body.yt-windowed restyles in place (the iframe never moves, which would reload it). The strip is
    a black bar fixed at the top, the message line fixed under it, the video fixed from the bar (--yt-strip, --yt-bar, measured by youtube.js) to
    the bottom, black around it; fixed, so main's cap and padding stay behind. The header and the saved list go, so nothing is left to scroll
    (iOS ignores overflow: hidden on the body). Every rule scoped to the mode: no second bare .yt-strip, .yt-frame or .message (WebUiStylesTests). */
 body.yt-windowed { background: #000; }
-body.yt-windowed header.top, body.yt-windowed #saved { display: none; }
+body.yt-windowed header.top, body.yt-windowed #saved, body.yt-windowed #file-head { display: none; }
 body.yt-windowed .yt-strip {
   position: fixed;
   top: 0;

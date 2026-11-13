@@ -50,6 +50,11 @@ public static class VideoMessages
     public static string Load(VideoRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
+        if (request.IsFile)
+        {
+            throw new ArgumentException("A video file loads through LoadFile, with its sink's src.", nameof(request));
+        }
+
         return Write(w =>
         {
             w.WriteString("cmd", "load");
@@ -65,6 +70,31 @@ public static class VideoMessages
                 w.WriteString("list", list);
                 w.WriteNumber("index", request.Entry);
             }
+        });
+    }
+
+    /// <summary>
+    /// A video file's load (2026-11-12, the video-files plan, <c>assets\youtube\file.html</c>'s header):
+    /// <c>{"cmd":"load","file":token,"src":…,"name":…,"start":…,"autoplay":…}</c>. The sink supplies <paramref name="src"/>: the
+    /// window the file's own URI (<see cref="VideoPage.FileSrc"/>), the Web UI its endpoint's address.
+    /// </summary>
+    public static string LoadFile(VideoRequest request, string src)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentException.ThrowIfNullOrEmpty(src);
+        if (!request.IsFile)
+        {
+            throw new ArgumentException("A YouTube video loads through Load.", nameof(request));
+        }
+
+        return Write(w =>
+        {
+            w.WriteString("cmd", "load");
+            w.WriteString("file", request.FileToken);
+            w.WriteString("src", src);
+            w.WriteString("name", request.FileName);
+            w.WriteNumber("start", request.Start);
+            w.WriteBoolean("autoplay", request.Autoplay);
         });
     }
 
@@ -111,6 +141,14 @@ public static class VideoMessages
     /// it is. Each change counts up <see cref="VideoSnapshot.Version"/>. Never throws on what the page sends. A playlist's
     /// report (2026-10-08) carries <c>list</c>, <c>index</c> and <c>count</c>, and an error the page moves past <c>skip</c>. The Web UI's page (2026-10-16)
     /// adds <c>failed</c>, <c>resumed</c> and a state report's <c>gesture</c> (<see cref="VideoSnapshot.NeedsTap"/>); the PC's page sends none of them.
+    ///
+    /// <para>A video file (2026-11-12): its <c>state</c> and <c>error</c> carry <c>file</c>, the play's token, matched instead of the
+    /// id; the file's name and token are carried from <paramref name="current"/> into the rebuilt snapshot, and its error kept while
+    /// the token is the same. A report of the other kind is dropped (<see cref="VideoPageEvent.Other"/>, the snapshot unchanged): while
+    /// a file is current, a <c>state</c> or <c>error</c> without its token; while YouTube is, one carrying a <c>file</c>. So a late
+    /// message from the page the window just left, or from the tab's hidden YouTube player, never overwrites the other kind's snapshot.
+    /// A file's <c>code</c> is <c>MediaError</c>'s 1-4, which overlap YouTube's, so a reader words it by the snapshot's kind; the
+    /// no-picture check sends <see cref="VideoFile.NoPictureCode"/>. A <c>src</c> in a report is never read.</para>
     /// </summary>
     public static (VideoPageEvent Event, VideoSnapshot Snapshot) Apply(VideoSnapshot current, string? message)
     {
@@ -147,14 +185,46 @@ public static class VideoMessages
                         Version = current.Version + 1,
                     });
                 case "error":
+                    if (!SameKind(current, root))
+                    {
+                        return (VideoPageEvent.Other, current);
+                    }
+
                     return (VideoPageEvent.Error, current with
                     {
-                        VideoId = Text(root, "id") ?? current.VideoId,
+                        VideoId = current.IsFile ? null : Text(root, "id") ?? current.VideoId,
                         Error = Number(root, "code") is { } code ? (int)code : -1,
                         Version = current.Version + 1,
-                        Skipping = root.TryGetProperty("skip", out var skip) && skip.ValueKind == JsonValueKind.True,
+                        Skipping = !current.IsFile && root.TryGetProperty("skip", out var skip) && skip.ValueKind == JsonValueKind.True,
+                    });
+                case "state" when current.IsFile:
+                    if (!SameKind(current, root))
+                    {
+                        return (VideoPageEvent.Other, current);
+                    }
+
+                    // The token matched, so it is the same file: its name, token and error carry over.
+                    return (VideoPageEvent.State, new VideoSnapshot(
+                        StateOf(Number(root, "state")),
+                        null,
+                        Text(root, "title") ?? current.FileName,
+                        Position: Seconds(Number(root, "position")),
+                        Duration: Seconds(Number(root, "duration")),
+                        Volume: Number(root, "volume") is { } fileVolume ? (int)Math.Clamp(Math.Round(fileVolume), 0, 100) : current.Volume,
+                        Muted: root.TryGetProperty("muted", out var fileMuted) && fileMuted.ValueKind == JsonValueKind.True,
+                        Error: current.Error,
+                        Version: current.Version + 1)
+                    {
+                        FileName = current.FileName,
+                        FileToken = current.FileToken,
+                        NeedsTap = root.TryGetProperty("gesture", out var fileGesture) && fileGesture.ValueKind == JsonValueKind.True,
                     });
                 case "state":
+                    if (!SameKind(current, root))
+                    {
+                        return (VideoPageEvent.Other, current);
+                    }
+
                     string? id = Text(root, "id") ?? current.VideoId;
                     return (VideoPageEvent.State, new VideoSnapshot(
                         StateOf(Number(root, "state")),
@@ -216,6 +286,39 @@ public static class VideoMessages
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// A <c>page</c> message's <c>kind</c> (2026-11-12): <c>file</c> from the window's file page, null from the YouTube page (which names
+    /// none), another message, or one that doesn't parse. The window takes a <c>page</c> only from the kind it navigated to. Never throws.
+    /// </summary>
+    public static string? PageKind(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(message);
+            var root = doc.RootElement;
+            return root.ValueKind == JsonValueKind.Object && Text(root, "ev") == "page" ? Text(root, "kind") : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The file page's <c>kind</c> (<see cref="PageKind"/>).</summary>
+    public const string FileKind = "file";
+
+    // A report of the snapshot's own kind: a file's carrying its token, YouTube's carrying no file.
+    private static bool SameKind(VideoSnapshot current, JsonElement root)
+    {
+        string? file = Text(root, "file");
+        return current.FileToken is { } token ? string.Equals(file, token, StringComparison.Ordinal) : file is null;
     }
 
     private static string? Text(JsonElement root, string name) =>

@@ -400,6 +400,9 @@ public IWebHome? Home { get; set; }
 
     public IWebVideo? Video => VideoPlayer;
 
+    /// <summary>Whether a video file plays over Tailscale Funnel (2026-11-12, <i>Web UI video files over Funnel</i>); off as the default.</summary>
+    public bool VideoFilesOverFunnel { get; set; }
+
     // ── A bot check's card (2026-10-17) ──────────────────────────────────────
 
     /// <summary>The live check's ask id: the only one the card's picture and input reach; null with none.</summary>

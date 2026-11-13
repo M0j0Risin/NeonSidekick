@@ -60,7 +60,7 @@ public static class CheckpointTools
         "ha_lights", "ha_scene", "ha_media", "ha_todo", "ha_call_service", "ha_assist",
         "docker_lifecycle", "docker_pull", "docker_remove", "docker_prune",
         "service_control", "service_start_type", "task_control",
-        "youtube_play", "youtube_control", "youtube_save",
+        "youtube_play", "youtube_control", "youtube_save", "play_video", "video_control",
         "shopping_add", "shopping_check", "shopping_remove", "shopping_clear", "shopping_place", "shopping_layout",
         "monitor_input", "monitor_layout",
     };

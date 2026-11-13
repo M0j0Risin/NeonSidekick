@@ -115,6 +115,9 @@ public static class PlanTools
         "mysql_execute",
         // YouTube (2026-10-05): a video opened and played on the user's screen, or its playback changed; a video saved or taken off the list (2026-10-07)
         "youtube_play", "youtube_control", "youtube_save",
+        // video files (2026-11-12): a file played on the user's screen or phone, or its playback changed; so video_control's status isn't
+        // offered while planning either, the cost of one tool holding a read among its changes
+        "play_video", "video_control",
         // the shopping list (2026-10-11): a line or a store's layout changed
         "shopping_add", "shopping_check", "shopping_remove", "shopping_clear", "shopping_place", "shopping_layout",
         // the monitors (2026-10-23): an input switched, the layout changed

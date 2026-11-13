@@ -200,7 +200,7 @@ internal sealed partial class ChatScreen
         SlashCommand.Settings or SlashCommand.Sys or SlashCommand.Memory
             or SlashCommand.Usage or SlashCommand.About or SlashCommand.MsgClear or SlashCommand.Mcp or SlashCommand.Tools
             or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Browse
-            or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.EventLog or SlashCommand.Net or SlashCommand.Services or SlashCommand.Tasks or SlashCommand.Ad or SlashCommand.KeyCheck or SlashCommand.YouTube or SlashCommand.Shopping => MidTurnClass.Pane,
+            or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.EventLog or SlashCommand.Net or SlashCommand.Services or SlashCommand.Tasks or SlashCommand.Ad or SlashCommand.KeyCheck or SlashCommand.YouTube or SlashCommand.Video or SlashCommand.Shopping => MidTurnClass.Pane,
         SlashCommand.Reasoning or SlashCommand.Queue or SlashCommand.Sampling => hasArgs ? MidTurnClass.Quick : MidTurnClass.Pane,
         SlashCommand.Session => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
         SlashCommand.Rename => hasArgs ? MidTurnClass.Deferred : MidTurnClass.Pane,
@@ -262,6 +262,9 @@ internal sealed partial class ChatScreen
         SlashCommand.Comfy when args.Trim().Length == 0 => MidTurnClass.Pane,   // 2026-10-18: the bare word is /tools comfy, a page over the reply as that is
         SlashCommand.Comfy when string.Equals(args.Trim(), Viewer.ViewerText.ViewWord, StringComparison.OrdinalIgnoreCase) => MidTurnClass.Quick,
         SlashCommand.Comfy when string.Equals(args.Trim(), Viewer.ThumbsText.ThumbsWord, StringComparison.OrdinalIgnoreCase) => MidTurnClass.Quick,
+        // A video path (2026-11-12): a play can wait on a sink's earlier close, so it runs on the watcher as /video does; a flag with it is the
+        // usage error after the reply, so the quick arm below never opens thumbnails of a video.
+        SlashCommand.View when ViewsVideo(args) => ParseViewArgs(args) is { Chat: false, Thumbs: false } ? MidTurnClass.Pane : MidTurnClass.Deferred,
         SlashCommand.View when ParseViewArgs(args) is { Chat: false, Path.Length: > 0 } => MidTurnClass.Quick,
         SlashCommand.Screen when NeonSidekick.Screen.ScreenText.IsFolderWord(args) => MidTurnClass.Quick,   // /screen view | thumbs (2026-10-09): a window of its own
         SlashCommand.Session when ParseSessionArgs(args).Kind == SessionActionKind.TitlePane => MidTurnClass.Pane,
@@ -712,6 +715,19 @@ internal sealed partial class ChatScreen
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
                     DiagnosticLog.Debug("YouTube", "/youtube under the reply was canceled as the reply ended.");
+                }
+
+                break;
+            case SlashCommand.Video:
+            case SlashCommand.View when ViewsVideo(args):
+                // /video and /view <video> (2026-11-12): /youtube's way, the wait on the watcher and the lines through the flow sink.
+                try
+                {
+                    await (command == SlashCommand.Video ? HandleVideoAsync(args, _flow, spinner: false, cancellationToken) : HandleViewVideoAsync(args, _flow, spinner: false, cancellationToken)).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    DiagnosticLog.Debug("Video", "/video under the reply was canceled as the reply ended.");
                 }
 
                 break;

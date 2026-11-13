@@ -30,7 +30,16 @@ public interface IWebVideo
     /// from one with no open stream.
     /// </summary>
     WebOutcome Seen(string page, bool visible, IPAddress? remote);
+
+    /// <summary>
+    /// The video file a token names (2026-11-12, the video-files plan): its full path and name while that file's play is current (playing, held
+    /// or offered for Resume), else null. The token alone decides; the page never names a path.
+    /// </summary>
+    WebVideoFile? FileOf(string token);
 }
+
+/// <summary>A video file the YouTube tab may fetch now (2026-11-12): its full path and its name.</summary>
+public sealed record WebVideoFile(string Path, string Name);
 
 /// <summary>One page's stream as the player holds it: the hello to write first, the page's own events, and the detach.</summary>
 public sealed class WebVideoAttachment : IDisposable
@@ -140,6 +149,10 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
     // never brings a closed video back.
     private bool _closed = true;
 
+    // The video file last loaded (2026-11-12, the video-files plan): the snapshot carries only its token and name, so its path is kept here.
+    // Its token is served only while the snapshot, the held request or the Resume offer still names it (FileOf), so it drops wherever they do.
+    private VideoRequest? _file;
+
     /// <param name="time">The screen's clock: the grace's timer, the hold's age, when a page came into view.</param>
     /// <param name="nudge">Asks the open pages to jump to the YouTube tab; true when one will see it soon (<c>WebUiSession.WatchNudge</c>).</param>
     /// <param name="flash">The PC's hint row (<c>WebUiSession.FlashPc</c>), for a Play here or a Resume tap; null for none.</param>
@@ -155,6 +168,36 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
     public int ApiWaitMs { get; }
 
     public VideoPlace Place => VideoPlace.WebTab;
+
+    /// <summary>The tab plays video files (2026-11-12): its <c>&lt;video&gt;</c> fetches the one playing from <see cref="WebUiHost.YouTubeFilePrefix"/>.</summary>
+    public bool PlaysFiles => true;
+
+    /// <summary>The address a file's load fetches: the token, then the name escaped (a <c>?</c>, <c>#</c>, <c>%</c> or space kept whole), for the browser's display only.</summary>
+    public static string FileSrc(string token, string? name) =>
+        WebUiHost.YouTubeFilePrefix + token + "/" + Uri.EscapeDataString(string.IsNullOrEmpty(name) ? "video" : name);
+
+    public WebVideoFile? FileOf(string token)
+    {
+        if (!VideoFile.IsToken(token))
+        {
+            return null;
+        }
+
+        lock (_gate)
+        {
+            if (_held is { FileToken: { } heldToken, FilePath: { } heldPath } held && heldToken == token)
+            {
+                return new WebVideoFile(heldPath, held.FileName ?? Path.GetFileName(heldPath));
+            }
+
+            if (_file is not { FileToken: { } fileToken, FilePath: { } path } file || fileToken != token)
+            {
+                return null;
+            }
+
+            return _snapshot?.FileToken == token || _offer?.File == token ? new WebVideoFile(path, file.FileName ?? Path.GetFileName(path)) : null;
+        }
+    }
 
     public event Action<VideoSnapshot?>? Changed;
 
@@ -578,6 +621,8 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
         ArgumentNullException.ThrowIfNull(page);
         var outbox = new Outbox();
         string? refused = null;
+        VideoSnapshot? errored = null;
+        string? erroredPath = null;
         lock (_gate)
         {
             if (_owner != page)
@@ -613,6 +658,14 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
                     outbox.Debug.Add(WebUiText.YouTubePageReportDebug(page, remote, acted: true));
                     break;
                 case VideoPageEvent.Resumed:
+                    // A file's Resume (2026-11-12): its play current again at once, so its token is served to the load the page makes itself
+                    // and its reports, which carry the token, match.
+                    if (_offer is { File: { } resumedToken } resumed && _file is { } resumedFile && resumedFile.FileToken == resumedToken)
+                    {
+                        outbox.Raise = _snapshot = VideoSnapshot.Opening(resumedFile) with { Version = ++_version, Place = VideoPlace.WebTab, Position = resumed.Start };
+                        outbox.RaiseAny = true;
+                    }
+
                     _offer = null;
                     _held = null;
                     _closed = false;
@@ -633,11 +686,37 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
                     outbox.RaiseAny = true;
                     if (kind == VideoPageEvent.Error && next.Error is { } code)
                     {
-                        refused = WebUiText.YouTubeRefusedLogLine(next.VideoId, code);
+                        if (next.IsFile)
+                        {
+                            errored = _snapshot;
+                            erroredPath = code is 2 or 4 && _file is { } loaded && loaded.FileToken == next.FileToken ? loaded.FilePath : null;
+                        }
+                        else
+                        {
+                            refused = WebUiText.YouTubeRefusedLogLine(next.VideoId, code);
+                        }
                     }
 
                     break;
             }
+        }
+
+        if (errored is { Error: { } fileCode })
+        {
+            // A file no longer there reads as a network or not-supported error, so the disk is asked, outside the lock, as the window does.
+            if (erroredPath is not null && !File.Exists(erroredPath))
+            {
+                lock (_gate)
+                {
+                    if (ReferenceEquals(_snapshot, errored))
+                    {
+                        outbox.Raise = _snapshot = errored = errored with { Error = VideoFile.GoneCode };
+                        fileCode = VideoFile.GoneCode;
+                    }
+                }
+            }
+
+            refused = WebUiText.VideoFileRefusedLogLine(errored.FileName, fileCode);
         }
 
         if (refused is not null)
@@ -711,7 +790,17 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
         _settle.Loaded();
         _closed = false;
         _loadedInto = owner.Load;
-        Enqueue(owner, new WebEvent("load", () => VideoMessages.Load(request)));
+        if (request.IsFile)
+        {
+            _file = request;
+            string src = FileSrc(request.FileToken!, request.FileName);
+            Enqueue(owner, new WebEvent("load", () => VideoMessages.LoadFile(request, src)));
+        }
+        else
+        {
+            Enqueue(owner, new WebEvent("load", () => VideoMessages.Load(request)));
+        }
+
         return _snapshot = VideoSnapshot.Opening(request) with { Version = ++_version, Place = VideoPlace.WebTab };
     }
 
@@ -865,18 +954,30 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
     /// <summary>
     /// The Resume offer for <paramref name="last"/> (pure): its video or playlist where it was left, by the saved videos' own rules — the
     /// place less <see cref="YouTubeLibrary.ResumeRewind"/>, from the start under <see cref="YouTubeLibrary.ResumeMinimum"/> — or none for a
-    /// video seen to its end, refused, failed or held.
+    /// video seen to its end, refused, failed or held. A video file (2026-11-12) is offered by the same rules, with its token, address and
+    /// name, so the page builds its load; its token stays served while the offer stands.
     /// </summary>
     public static WebVideoResume? OfferFrom(VideoSnapshot last)
     {
         ArgumentNullException.ThrowIfNull(last);
         if (last.Held is not null || last.Error is not null || last.State is VideoState.Failed or VideoState.Ended
-            || (last.VideoId is null && last.PlaylistId is null) || YouTubeLibrary.Finished(last.Position, last.Duration))
+            || (last.VideoId is null && last.PlaylistId is null && !last.IsFile) || YouTubeLibrary.Finished(last.Position, last.Duration))
         {
             return null;
         }
 
         double start = last.Position < YouTubeLibrary.ResumeMinimum ? 0 : last.Position - YouTubeLibrary.ResumeRewind;
+        if (last.IsFile)
+        {
+            string name = last.FileName ?? last.Title ?? "video";
+            return new WebVideoResume(null, null, null, start, WebUiText.ResumeLabel(name, null, null, null, start))
+            {
+                File = last.FileToken,
+                Src = FileSrc(last.FileToken!, name),
+                Name = name,
+            };
+        }
+
         return new WebVideoResume(last.VideoId, last.PlaylistId, last.PlaylistEntry, start,
             WebUiText.ResumeLabel(last.Title, last.VideoId, last.PlaylistId, last.PlaylistEntry, start));
     }

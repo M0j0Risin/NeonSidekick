@@ -1080,6 +1080,13 @@ public static class WebUiText
         // The video filling the browser's window, the page's chrome out of the way, without the screen's full screen (2026-10-20).
         Windowed = "⛶ Fill window",
         ExitWindowed = "✕ Exit",
+        // A video file from the PC (2026-11-12, the video-files plan).
+        Files = new WebFileWords(
+            Tag: "file on the PC",
+            Failed: "This video file won't play in this browser: its format or codec isn't one it plays, or it couldn't be read.",
+            NoPicture: "This video file plays sound but no picture here: its video codec isn't one this browser shows.",
+            Gone: "This video file is no longer on the PC: it was moved or deleted.",
+            FunnelOff: VideoFileFunnelOff),
         // The saved list under the player (later on 2026-10-16).
         Saved = new WebSavedWords(
             Filter: "Filter the saved videos",
@@ -1199,6 +1206,31 @@ public static class WebUiText
     /// <summary>YouTube's refusal on the tab, as the window logs its own.</summary>
     public static string YouTubeRefusedLogLine(string? id, int code) =>
         "YouTube refused video " + id + " in the player on the Web UI's YouTube tab (error " + code.ToString(CultureInfo.InvariantCulture) + ").";
+
+    // ── Video files on the YouTube tab (2026-11-12, the video-files plan) ─────────────────────────────────────────────────────────
+
+    /// <summary><see cref="YouTubeRefusedLogLine"/>'s file form: the file and its media error (or the app's own code).</summary>
+    public static string VideoFileRefusedLogLine(string? name, int code) =>
+        "The video file " + name + " didn't play on the Web UI's YouTube tab (media error " + code.ToString(CultureInfo.InvariantCulture) + ").";
+
+    /// <summary>
+    /// A video file asked for over Tailscale Funnel with <i>Web UI video files over Funnel</i> off: the 403's words, and the tab's. Pinned.
+    /// </summary>
+    public const string VideoFileFunnelOff =
+        "Video files from the PC don't play over Tailscale Funnel. Use the home network or the tailnet, or turn on Web UI video files over Funnel at the PC.";
+
+    /// <summary>A video file refused over Funnel (audit, at most once a while per address).</summary>
+    public static string VideoFileFunnelLogLine(WebUiOrigin origin)
+    {
+        ArgumentNullException.ThrowIfNull(origin);
+        return "Web UI: a video file was refused over Tailscale Funnel to " + Where(origin) + " (Web UI video files over Funnel is off).";
+    }
+
+    /// <summary>A video file not served: gone, or unreadable (Debug).</summary>
+    public static string VideoFileGoneDebug(string name, string why) => "Web UI: the video file " + name + " was not served: " + why;
+
+    /// <summary>A video file's copy stopped on the file's side (Debug).</summary>
+    public static string VideoFileReadDebug(string name, string why) => "Web UI: reading the video file " + name + " stopped: " + why;
 
     /// <summary>The model card's server for the embedded model.</summary>
     public const string EmbeddedServer = "embedded";

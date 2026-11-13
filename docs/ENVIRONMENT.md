@@ -136,6 +136,7 @@ Only for running the tests from source; each live test skips unless its resource
 * `NEONSIDEKICK_TEST_MIDI_DEVICE`: a MIDI input's name (`FS-4`); the test opens and closes it, no press needed.
 * `NEONSIDEKICK_TEST_NVIDIA_MONITOR`: `1` reads a monitor off the desktop through an NVIDIA card (Windows; leave one connected but off the desktop). Reads only.
 * `NEONSIDEKICK_TEST_BROWSER_WINDOW`: `1` runs the Browser window's bot-check test against a local page (Windows, macOS 14+; the window shows briefly).
+* `NEONSIDEKICK_TEST_VIDEO_WINDOW`: `1` runs the video window's video-file test on a short clip (Windows; the window shows briefly, with sound).
 * `NEONSIDEKICK_TEST_RECYCLE`: `1` runs the real Recycle bin test (the Trash on a Mac), which leaves a temp file in it.
 * `NEONSIDEKICK_TEST_PRINTER`: a printer's CUPS queue name on a Mac (`Brother_HL_L2340D_series`). Jobs are held and canceled, so nothing prints.
 * `NEONSIDEKICK_TEST_HA_URL` with `NEONSIDEKICK_TEST_HA_TOKEN`: a Home Assistant to read from.

@@ -105,6 +105,9 @@ internal static class HelpToolCatalog
         T(ImageInfoTool.ToolName, ToolsText.ImageMenuTitle, SettingsField.ImageTools, "Reads facts about pictures without loading them: format, size, frames, orientation and the metadata they carry."),
         T(ImageEditTool.ToolName, ToolsText.ImageMenuTitle, SettingsField.ImageTools, "Edits a picture and writes a new file: resize, crop, rotate, flip, color, blur, sharpen, a border, another format."),
         T(SetSplashImageTool.ToolName, ToolsText.ImageMenuTitle, SettingsField.ImageTools, "Adds a picture to the profile's splash pictures, shown at start and by `/splash`."),
+        // Video (2026-11-12): no setup line; a file with no player opens in its default app.
+        T(PlayVideoTool.ToolName, ToolsText.VideoMenuTitle, SettingsField.VideoTools, "Plays a video file from the working directory where *Video files play in* says.", headless: false),
+        T(VideoControlTool.ToolName, ToolsText.VideoMenuTitle, SettingsField.VideoTools, "Controls the video file playing: play, pause, seek, volume, mute, its status, or close the player.", headless: false),
         // Shell
         T(RunCommandTool.ToolName, ShellGroup, SettingsField.ShellCommandPolicy, "Runs a command line in a shell on the user's computer and gives back its exit code and output.",
             setup: "each line passes *Shell command policy* (ask, allowed list or yolo) and the shell police (*Shell police*)"),

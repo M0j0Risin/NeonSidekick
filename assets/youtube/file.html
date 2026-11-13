@@ -1,0 +1,48 @@
+<!doctype html>
+<!--
+  The video window's file page (Viewer/VideoPage, 2026-11-12, the video-files plan): a video file on this PC in an HTML5 <video>.
+  WebView2 loads it as a file: URL (<home>\webview2\site\file.html), not from https://player.neonsidekick.example/ as player.html is:
+  a file: page reads a file: video inside WebView2's own processes and seeks natively, where a virtual host mapping applies only to
+  pages loaded after it is made (the Phase 0 spike: a 2 GB MP4's first frame in 33-251 ms, a seek to its end in about 80 ms). Only
+  the app moves the window between the two pages (the host's Navigate; Chromium refuses an https page's own move to file:), and a
+  video's src comes from the path the app resolved inside the working folder, never from a page message. The app talks to it in
+  JSON over WebView2's web messages:
+    app to page: {cmd: "load", file, src, name, start, autoplay} (file: the play's token, 32 hex digits), "play", "pause", "stop",
+                 "seek" {t}, "volume" {v} (0-100), "mute", "unmute", "echo" {value} (the smoke's round trip);
+                 "next", "previous" and "at" are ignored (a file has no list)
+    page to app: {ev: "page", kind: "file"} once the script runs (the kind tells it from player.html's, which names none),
+                 {ev: "state", file, title, state, position, duration, volume, muted} on every change, after every command and
+                 every second while playing (state as YouTube's: -1 unstarted, 0 ended, 1 playing, 2 paused, 3 buffering, 5 cued),
+                 {ev: "error", file, code} (MediaError's 1 aborted, 2 network, 3 decode, 4 not supported; 1000 no picture),
+                 {ev: "echo", value}
+  From a load until the new file's loadstart nothing is sent, so no report carries the new token with the old file's state.
+  The player lives in file-core.js, shared with the Web UI's YouTube tab: Viewer/VideoPage puts it in at the marker below.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<title>NeonSidekick video</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  video { display: block; width: 100%; height: 100%; object-fit: contain; background: #000; }
+</style>
+</head>
+<body>
+<video id="video" controls controlslist="nodownload" disablepictureinpicture playsinline preload="metadata"></video>
+<script>
+'use strict';
+/*@neon-file-core@*/
+// The PC's transport: WebView2's web messages both ways, and the smoke's echo.
+const send = message => chrome.webview.postMessage(JSON.stringify(message));
+const core = NeonFile(send, { video: document.getElementById('video') });
+
+chrome.webview.addEventListener('message', e => {
+  const m = e.data || {};
+  if (m.cmd === 'echo') { send({ ev: 'echo', value: m.value }); return; }
+  core.onMessage(m);
+});
+
+send({ ev: 'page', kind: 'file' });
+</script>
+</body>
+</html>

@@ -20,11 +20,14 @@ public sealed class YouTubeStatusTool : AIFunction
     private readonly IVideoPlayer _player;
     private readonly Func<VideoHandoff?>? _handoff;
     private readonly Func<YouTubeOpenLinksInKind>? _target;
+    private readonly Func<string?>? _videoPointer;
 
     /// <param name="handoff">The video last sent to a browser (the router's <see cref="RoutedVideoPlayer.LastHandoff"/>); null for none.</param>
     /// <param name="target">Where a play goes now, for the description; null is the video window.</param>
-    public YouTubeStatusTool(IVideoPlayer player, Func<VideoHandoff?>? handoff = null, Func<YouTubeOpenLinksInKind>? target = null)
+    /// <param name="videoPointer"><c>video_control</c>'s name when it is offered this turn (2026-11-12), for the file-open answer; null names none.</param>
+    public YouTubeStatusTool(IVideoPlayer player, Func<VideoHandoff?>? handoff = null, Func<YouTubeOpenLinksInKind>? target = null, Func<string?>? videoPointer = null)
     {
+        _videoPointer = videoPointer;
         _player = player ?? throw new ArgumentNullException(nameof(player));
         _handoff = handoff;
         _target = target;
@@ -49,6 +52,9 @@ public sealed class YouTubeStatusTool : AIFunction
 
     public override JsonElement JsonSchema => Schema;
 
+    /// <summary>The status, or (2026-11-12) with a video file open, video_control's pointer: a file is not this tool's.</summary>
     protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) =>
-        ValueTask.FromResult<object?>(YouTubeText.StatusOrHandoff(_player.Snapshot, _handoff?.Invoke()));
+        ValueTask.FromResult<object?>(_player.Snapshot is { IsFile: true, State: not VideoState.Failed } file
+            ? VideoText.FileIsOpen(file.FileName, _videoPointer?.Invoke())
+            : YouTubeText.StatusOrHandoff(_player.Snapshot, _handoff?.Invoke()));
 }

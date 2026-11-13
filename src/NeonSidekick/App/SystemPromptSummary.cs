@@ -476,6 +476,12 @@ public static class SystemPromptSummary
     /// <summary>After the YouTube heading while its tools are not offered (2026-10-05). Pinned.</summary>
     public const string YouTubeOffSuffix = "YouTube tools is off, or there is neither a YouTube API key nor a video window";
 
+    /// <summary>
+    /// After the Video heading while the video file tools are not offered (2026-11-12): the switch alone, since every play has a place (the
+    /// window, the phone or the default app). Pinned.
+    /// </summary>
+    public const string VideoOffSuffix = "Video tools is off";
+
     /// <summary>The note on <c>youtube_search</c> while no key is set (2026-10-05): playing still works. Pinned.</summary>
     public const string NoYouTubeKeySuffix = "no YouTube API key is set";
 
@@ -905,6 +911,8 @@ public static class SystemPromptSummary
         bool youTubeKey = true,
         IReadOnlyList<AIFunction>? images = null,
         bool imagesEnabled = true,
+        IReadOnlyList<AIFunction>? video = null,
+        bool videoEnabled = true,
         IReadOnlyList<AIFunction>? advisors = null,
         bool advisorsEnabled = true,
         IReadOnlyList<AIFunction>? shopping = null,
@@ -956,6 +964,14 @@ public static class SystemPromptSummary
             // The picture tools (2026-10-10, the user's ask: view_image, image_info and image_edit off the Files group): offered while Image tools is on; none without codecs.
             string imagesNote = !imagesEnabled ? NotOffered(ImagesOffSuffix) : standing;
             groups.Add(Group(ToolsText.ImageMenuTitle, images, imagesNote, imagesEnabled && toolsEnabled, SettingsField.ImageTools, disabled));
+        }
+
+        if (video is { Count: > 0 })
+        {
+            // The video file tools (2026-11-12, the video-files plan): right after the picture tools, the Files tab's order; offered while Video tools is on.
+            // Null for the bots (BotChatToolGroups) and headless: a bot reaching into the PC's files to play one is a step the user hasn't asked for.
+            string videoNote = !videoEnabled ? NotOffered(VideoOffSuffix) : standing;
+            groups.Add(Group(ToolsText.VideoMenuTitle, video, videoNote, videoEnabled && toolsEnabled, SettingsField.VideoTools, disabled));
         }
 
         if (shell is not null)

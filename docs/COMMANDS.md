@@ -166,6 +166,9 @@ Each purge asks first, saying where things go: to the Recycle bin (the Trash on 
 | `/view <image>\|<folder>` | Opens an image, or a folder's newest picture, in the [picture viewer](INTERFACE.md#the-picture-viewer). A PDF opens in the [Browser window](INTERFACE.md#the-browser-window), or in Preview with no Browser window ([MAC.md](MAC.md#what-works)). |
 | `/view <image> --chat` | Draws it in the transcript instead. |
 | `/view <image>\|<folder> --thumbs` | Opens the folder in the [thumbnail browser](INTERFACE.md#the-thumbnail-browser), in step with the viewer. |
+| `/view <video>`, `/video <path>` | Plays a video file where *Video files play in* says ([Video](TOOLS.md#video)), whatever *Video tools* says. `--chat` and `--thumbs` are for pictures. |
+| `/video`, `/video status` | Says what the video file plays, and where. |
+| `/video play\|resume`, `/video pause`, `/video seek <time>`, `/video volume <0-100>`, `/video mute\|unmute`, `/video close` | Resumes, pauses, seeks, sets the volume, mutes or unmutes, or closes the player. |
 | `/camera`, `/camera snap` | Opens the camera pane to take a photo, or takes one at once, onto the input line. See [Camera](#camera). |
 | `/camera list`, `/camera use <n>\|<name>` | Lists the cameras, or picks one by number or name (*Camera device*). |
 | `/camera live` | Shows the camera in the [camera window](INTERFACE.md#the-camera-window) until you close it. |

@@ -10,7 +10,7 @@ Settings in *italics* are in [SETTINGS.md](SETTINGS.md), with their values and d
 
 - [Where tools are offered](#where-tools-are-offered)
 - [Core](#core): [Web](#web), [Shell](#shell), [Clock](#clock), [Timers](#timers), [Ask](#ask), [Help](#help)
-- [Files](#files): [File](#file), [Image](#image), [UNC shares and outside folders](#unc-shares-and-outside-folders), [GitLib](#gitlib)
+- [Files](#files): [File](#file), [Image](#image), [Video](#video), [UNC shares and outside folders](#unc-shares-and-outside-folders), [GitLib](#gitlib)
 - [Apps](#apps): [Docker](#docker), [ComfyUI](#comfyui), [YouTube](#youtube), [Obsidian](#obsidian)
 - [Admin](#admin): [Network](#network), [Event logs](#event-logs), [Services](#services), [Scheduled tasks](#scheduled-tasks), [Active Directory](#active-directory)
 - [Databases](#databases): [How the database tools work](#how-the-database-tools-work), [SQL Server](#sql-server), [MySQL and MariaDB](#mysql-and-mariadb), [PostgreSQL](#postgresql), [Oracle](#oracle), [SQLite](#sqlite), [DuckDB](#duckdb)
@@ -234,6 +234,23 @@ Under *Image tools* (`/tools image`, or the toolbar's 🖼️), apart from *File
 * **`max_kb`** (1 KB = 1,000 bytes) lowers quality, then size, until it fits. **Metadata** is dropped unless kept (*Image edit metadata*, `metadata`); `metadata: none` alone strips EXIF, GPS, XMP and a JPEG's thumbnail without re-encoding, keeping the orientation.
 * **Output:** `photo-edited.png` beside the source (or in *Image edit output folder*) under a free name, or `to`, which replaces a file only with `overwrite`. Under *Image edit mode* the source itself, the old one to the Recycle bin when that setting is on.
 * **Limits:** 200 MB and 100 megapixels in; 32,768 pixels a side and 100 megapixels out.
+
+### Video
+
+Under *Video tools* (`/tools` › Files › Video); off in a new profile. They play a video file from the working directory (MP4, M4V, MOV, WebM; MKV may play) where *Video files play in* says. Never YouTube, and the model sees none of the video.
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `play_video` | `path, start?, autoplay?` | Plays a video file from `start` (`90` or `1:30`) in the [video window](INTERFACE.md#the-video-window), the Web UI's [YouTube tab](INTERFACE.md#the-youtube-tab) or its default app. |
+| `video_control` | `action, value?` | `play`, `pause`, `seek`, `forward` / `back` (10 s by default), `volume` (0–100), `mute`, `unmute`, `close` or `status`. |
+
+* **The default app:** a file goes there when no window can play it; the app can't see or control it there.
+* **The Web UI** serves only the file playing, to a signed-in page; over Tailscale Funnel only with *Web UI video files over Funnel* on.
+* `/view clip.mp4` and `/video` play a file whatever *Video tools* says ([COMMANDS.md](COMMANDS.md#pictures-camera-and-screen)).
+
+#### Video files on a Mac
+
+A file opens in its default app (QuickTime Player), or on the Web UI's YouTube tab under `webui-window` ([MAC.md](MAC.md#what-works)).
 
 ### UNC shares and outside folders
 

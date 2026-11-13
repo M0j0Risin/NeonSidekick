@@ -334,7 +334,7 @@ public class NeonHelpTests
     {
         Assert.StartsWith("Tab /tools › Files › File:", Invoke("/tools file"), StringComparison.Ordinal);
         string group = Invoke("/tools files");
-        Assert.StartsWith("Tab /tools › Files: " + HelpText.MenusTab(["File", "Image", "UNC", "GitLib"]), group, StringComparison.Ordinal);   // Obsidian on Apps since 2026-10-17
+        Assert.StartsWith("Tab /tools › Files: " + HelpText.MenusTab(["File", "Image", "Video", "UNC", "GitLib"]), group, StringComparison.Ordinal);   // Video 2026-11-12; Obsidian on Apps since 2026-10-17
         Assert.EndsWith("\nAsk for one menu (/tools file) for its rows' defaults and what each does.", group, StringComparison.Ordinal);
         Assert.StartsWith("Tab /tools › Files › File:", Invoke("file tab"), StringComparison.Ordinal);
         Assert.DoesNotContain("Tab /tools › Files:", Invoke("file tab"));

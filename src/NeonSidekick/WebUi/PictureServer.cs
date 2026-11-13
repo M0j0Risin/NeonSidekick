@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using Microsoft.AspNetCore.Http;
 using NeonSidekick.Diagnostics;
 using PhotoSauce.MagicScaler;
+using static NeonSidekick.WebUi.WebFileResponse;
 
 namespace NeonSidekick.WebUi;
 
@@ -157,7 +158,7 @@ internal sealed class PictureServer
         var response = context.Response;
         await using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 64 * 1024, useAsync: true);
         long length = stream.Length;
-        string stamp = "f" + length.ToString("x", CultureInfo.InvariantCulture) + "-" + File.GetLastWriteTimeUtc(file).Ticks.ToString("x", CultureInfo.InvariantCulture);
+        string stamp = Stamp(length, file);
         var headBytes = new byte[32];
         int read = await stream.ReadAtLeastAsync(headBytes, headBytes.Length, throwOnEndOfStream: false, context.RequestAborted).ConfigureAwait(false);
         string? sniffed = Sniff(headBytes.AsSpan(0, read));
@@ -256,29 +257,9 @@ internal sealed class PictureServer
         _ => "r",
     };
 
-    private static string Tag(string stamp, string what) => "\"" + stamp + "-" + what + "\"";
-
-    private static bool NotModified(HttpContext context, string tag)
-    {
-        context.Response.Headers.ETag = tag;
-        if (context.Request.Headers.IfNoneMatch == tag)
-        {
-            context.Response.StatusCode = StatusCodes.Status304NotModified;
-            return true;
-        }
-
-        return false;
-    }
-
-    private static void Inline(HttpResponse response, string name) =>
-        response.Headers.ContentDisposition = "inline; filename*=UTF-8''" + Uri.EscapeDataString(name);
-
-    private static void Gone(HttpResponse response, WebPictureSource source, string why)
-    {
-        DiagnosticLog.Debug(Category, "Web UI: no picture for " + source.Name + ": " + why + ".");
-        response.Headers.Remove("ETag");
-        response.StatusCode = StatusCodes.Status404NotFound;
-    }
+    // The stamp, the ETag, the 304 and the inline name are WebFileResponse's (2026-11-12), shared with the video files' server.
+    private static void Gone(HttpResponse response, WebPictureSource source, string why) =>
+        WebFileResponse.Gone(response, "Web UI: no picture for " + source.Name + ": " + why + ".");
 
     private static void Unsupported(HttpResponse response, WebPictureSource source, string why)
     {

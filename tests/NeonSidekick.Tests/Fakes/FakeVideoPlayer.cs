@@ -122,8 +122,18 @@ public sealed class FakeVideoPlayer : IVideoPlayer, IVideoTakeover
             return;
         }
 
+        if (request.IsFile)
+        {
+            // A video file (2026-11-12): titled by its name, no channel, its token on every report as the file page's are.
+            Report(new VideoSnapshot(state, null, request.FileName, null, request.Start, Duration, Snapshot?.Volume ?? 100, Snapshot?.Muted ?? false) { FileName = request.FileName, FileToken = request.FileToken });
+            return;
+        }
+
         Report(new VideoSnapshot(state, request.VideoId, Title, Author, request.Start, Duration, Snapshot?.Volume ?? 100, Snapshot?.Muted ?? false));
     }
+
+    /// <summary>Whether it plays video files (2026-11-12): on by default, as the Windows window; off is a Mac's window.</summary>
+    public bool PlaysFiles { get; set; } = true;
 
     // The playlist's entry <paramref name="entry"/>, playing from its start.
     private VideoSnapshot Entry(VideoSnapshot current, int entry) => current with

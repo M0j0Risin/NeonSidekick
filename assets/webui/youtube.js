@@ -8,6 +8,10 @@
 // Play here, which takes the video with it (the hello says play, and this page resumes it). Leaving the tab stops the video (its place kept by
 // the app), and coming back offers Resume. Under the player, the saved videos: play (a tap from a waiting page claims first), filter, move,
 // remove, clear all, save the one playing. Every word is the app's.
+// A video file from the PC (2026-11-12, the video-files plan): a load with file plays in the frame's own <video> (file-core.js, served as
+// /youtube-file.js) while YouTube's player is hidden, not destroyed; every command after a load goes to that load's kind, and the hidden
+// YouTube player's reports are dropped. A file needs no internet, so YouTube's script failing counts for YouTube loads only. A file that
+// won't play asks its address once (HEAD) for why: refused over Funnel (403) or gone (404).
 'use strict';
 
 const hintEl = document.getElementById('hint');
@@ -41,6 +45,12 @@ let apiTimer = null;
 let hello = false;
 let source = null;
 let tapHint = '';
+
+// The load's kind (2026-11-12): 'file', 'youtube', or null with nothing loaded yet.
+let kind = null;
+let fileSrc = null;
+const fileEl = document.getElementById('file');
+const fileHead = document.getElementById('file-head');
 
 // Playing or not (2026-10-20, the user's asks): this page's player as its state reports say, on for playing (1) and buffering (3, so a
 // mid-play buffer doesn't flash the caption), off for any other state, an error, a taken player or a closed video. While it is on, the saved
@@ -114,11 +124,87 @@ function send(message) {
   if (owner) report(message);
 }
 
-const core = NeonPlayer(send, {
+const core = NeonPlayer(m => { if (kind !== 'file') send(m); }, {
   autoplayFallback: true,
-  onPlaying: () => { draw(); savedPoller.now(); },
-  onBlocked: () => { tapHint = (words && words.tapToStart) || ''; draw(); },
+  onPlaying: () => { if (kind !== 'file') { draw(); savedPoller.now(); } },
+  onBlocked: () => { if (kind !== 'file') { tapHint = (words && words.tapToStart) || ''; draw(); } },
 });
+
+// A file's MediaError says nothing of a refusal: its address answers why (403 over Funnel, 404 gone), and the sentence goes with the code.
+const FunnelCode = 1002;
+const GoneCode = 1001;
+const NoPictureCode = 1000;
+
+async function fileError(message) {
+  const fw = words && words.files;
+  let code = message.code;
+  if (code !== NoPictureCode && fileSrc) {
+    try {
+      const r = await fetch(fileSrc, { method: 'HEAD', credentials: 'same-origin', cache: 'no-store' });
+      if (r.status === 403) code = FunnelCode; else if (r.status === 404) code = GoneCode;
+    } catch { /* offline: the browser's own code stands */ }
+  }
+  if (kind !== 'file' || message.file !== currentToken) return;   // another load meanwhile
+  if (fw) {
+    fileSaid = code === FunnelCode ? fw.funnelOff : code === GoneCode ? fw.gone : code === NoPictureCode ? fw.noPicture : fw.failed;
+    Neon.say(fileSaid);
+  }
+  send(Object.assign({}, message, { code }));
+}
+
+let currentToken = null;
+let fileSaid = '';
+
+// A file's error sentence still showing goes with the next load (a saved play's note is left alone).
+function unsayFile() {
+  if (fileSaid && messageEl.textContent === fileSaid) Neon.say('');
+  fileSaid = '';
+}
+
+const filePlayer = NeonFile(m => { if (kind !== 'file') return; if (m.ev === 'error') { fileError(m); return; } send(m); }, {
+  video: fileEl,
+  autoplayFallback: true,
+  onPlaying: () => { if (kind === 'file') { draw(); savedPoller.now(); } },
+  onBlocked: () => { if (kind === 'file') { tapHint = (words && words.tapToStart) || ''; draw(); } },
+  keys: () => kind === 'file' && owner,
+});
+
+function ytPlayerEl() { return document.getElementById('player'); }
+
+// Which of the two shows: the file's <video> or YouTube's player (the other hidden, never destroyed).
+function showKind(k) {
+  kind = k;
+  const file = k === 'file';
+  fileEl.classList.toggle('hidden', !file);
+  const yt = ytPlayerEl();
+  if (yt) yt.classList.toggle('hidden', file);
+  fileHead.classList.toggle('hidden', !file);
+}
+
+// A load to the page's player of its kind: a file's YouTube load forgotten first, a YouTube load's file emptied first (its stream closed).
+function dispatchLoad(m) {
+  if (m.file) {
+    core.onMessage({ cmd: 'forget' });
+    currentToken = m.file;
+    fileSrc = m.src || null;
+    document.getElementById('file-name').textContent = m.name || '';
+    document.getElementById('file-tag').textContent = (words && words.files && words.files.tag) || '';
+    showKind('file');
+    filePlayer.onMessage(m);
+    return;
+  }
+  if (kind === 'file') filePlayer.empty();
+  currentToken = null;
+  fileSrc = null;
+  showKind('youtube');
+  core.onMessage(m);
+}
+
+// The player of the load's kind stopped: a file emptied, so its stream ends and a dropped token is never asked again.
+function stopPlayer() {
+  if (kind === 'file') { filePlayer.empty(); currentToken = null; fileSrc = null; showKind(null); }
+  else core.onMessage({ cmd: 'stop' });
+}
 
 // YouTube's loader, after the player's ready hook is set; a player that never loads is a failure with a sentence, not a silence.
 const api = document.createElement('script');
@@ -129,7 +215,7 @@ function apiCheck() {
   if (core.apiReady()) return;
   apiFailed = true;
   draw();
-  if (owner && loaded) report({ ev: 'failed', reason: 'api' });
+  if (owner && loaded && kind !== 'file') report({ ev: 'failed', reason: 'api' });
 }
 
 function draw() {
@@ -141,7 +227,7 @@ function draw() {
   resumeBtn.textContent = offer ? offer.label : '';
   resumeBtn.classList.toggle('hidden', !canResume);
   hintEl.textContent = waiting ? words.waiting
-    : apiFailed ? words.failed
+    : apiFailed && kind !== 'file' ? words.failed
     : tapHint ? tapHint
     : !loaded && !canResume ? (hello ? words.idle : words.loading)
     : '';
@@ -164,7 +250,7 @@ let windowed = false;
 let windowedScroll = 0;
 let backPending = false;
 
-function canFill() { return owner && loaded && !apiFailed; }
+function canFill() { return owner && loaded && (kind === 'file' || !apiFailed); }
 
 function filledEntry() { return !!(history.state && history.state.filled); }
 
@@ -242,7 +328,8 @@ async function resume(o) {
   Neon.say('');
   draw();
   await report({ ev: 'resumed' });
-  core.onMessage({ cmd: 'load', id: o.videoId || undefined, list: o.playlistId || undefined, index: o.entry || 0, start: o.start || 0, autoplay: true });
+  if (o.file) { dispatchLoad({ cmd: 'load', file: o.file, src: o.src, name: o.name, start: o.start || 0, autoplay: true }); return; }
+  dispatchLoad({ cmd: 'load', id: o.videoId || undefined, list: o.playlistId || undefined, index: o.entry || 0, start: o.start || 0, autoplay: true });
 }
 
 // claim: a fresh id per Play here tap (later on 2026-10-16), so the browser's own reconnect to the same URL never claims again.
@@ -288,11 +375,13 @@ function connect(claim) {
     loaded = true;
     offer = null;
     tapHint = '';
-    core.onMessage(JSON.parse(ev.data));
+    const m = JSON.parse(ev.data);
+    unsayFile();
+    dispatchLoad(m);
     draw();
-    if (apiFailed) report({ ev: 'failed', reason: 'api' });
+    if (apiFailed && !m.file) report({ ev: 'failed', reason: 'api' });
   });
-  source.addEventListener('cmd', ev => core.onMessage(JSON.parse(ev.data)));
+  source.addEventListener('cmd', ev => { const m = JSON.parse(ev.data); if (kind === 'file') filePlayer.onMessage(m); else core.onMessage(m); });
   source.addEventListener('owner', ev => {
     const o = JSON.parse(ev.data);
     owner = !!o.owner;
@@ -305,14 +394,14 @@ function connect(claim) {
     owner = false;
     loaded = false;
     tapHint = '';
-    core.onMessage({ cmd: 'stop' });
+    stopPlayer();
     setPlaying(false);
     draw();
   });
   source.addEventListener('close', () => {
     loaded = false;
     tapHint = '';
-    core.onMessage({ cmd: 'stop' });
+    stopPlayer();
     dropPlayNote();
     setPlaying(false);
     Neon.say(words ? words.closed : '');

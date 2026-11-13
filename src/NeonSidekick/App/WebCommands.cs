@@ -67,6 +67,7 @@ public static class WebCommands
         SlashCommand.Session,
         SlashCommand.Skills,
         SlashCommand.YouTube,
+        SlashCommand.Video,   // 2026-11-12: as /youtube; the phone has the YouTube tab and the Home remote
         SlashCommand.Queue,
         SlashCommand.Sampling,
         SlashCommand.Server,

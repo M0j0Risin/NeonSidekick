@@ -38,6 +38,7 @@ You need an Apple Silicon Mac (M1 or later). Unpack the Mac package as the [READ
 | Camera | Works (macOS 14+) | The built-in camera, a USB webcam, or an iPhone (Continuity Camera). |
 | Screen capture | Works (macOS 14+) | A window minimized or on another Space is listed once brought up; without Screen Recording, `screen_list` lists only monitors. |
 | YouTube playback | Works (macOS 14+) | Safari's WebKit; before macOS 14, no video window and so no Web UI YouTube tab. |
+| Video files (`/view`, `/video`, `play_video`) | Default app | Open in QuickTime Player (or the file's app), which the model can't control; under `webui-window`, they play on the Web UI's YouTube tab (macOS 14+). |
 | The Browser window (`/browser`) and bot checks in a window | Works (macOS 14+) | WebKit ([below](#the-browser-window-on-a-mac)); without it (before 14, over SSH), saved links open in your default browser, bot checks are refused and `/view report.pdf` opens in Preview. |
 | Performance bar | Works | VRAM shows as **GMEM** ([The performance bar](INTERFACE.md#the-performance-bar)). |
 | `/terminal` | Works | A new Terminal window, or an iTerm2 tab. |

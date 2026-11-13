@@ -43,6 +43,85 @@ internal static class VideoPage
     /// <summary>The page's address on the virtual host.</summary>
     public static string Url => "https://" + HostName + "/" + FileName;
 
+    /// <summary>
+    /// The file page (2026-11-12, the video-files plan): <c>assets\youtube\file.html</c>, a video file in an HTML5 <c>&lt;video&gt;</c>,
+    /// written beside <see cref="FileName"/> and loaded as a <c>file:</c> URL (<see cref="FileUrl"/>), not from the virtual host. The
+    /// Phase 0 spike (a 2 GB, 58 Mbps H.264 MP4 in WebView2): from a <c>file:</c> page, the video's metadata in 7-21 ms, its first
+    /// frame in 251 ms cold and 33-50 ms warm, a seek to its end in 74-80 ms and back in 38-53 ms; an H.264 MKV, a MOV and a UNC path
+    /// played. A virtual host mapping played as fast, but applies only to pages navigated after it is made (one made under a loaded
+    /// page gave MediaError 4), so mapping per play would mean a reload anyway, and it maps the video's whole folder. Only the host's
+    /// own <c>Navigate</c> moves the view between the two pages (Chromium refuses an https page's own move to <c>file:</c>).
+    /// </summary>
+    public const string FilePageName = "file.html";
+
+    public const string FileResourceName = "youtube/file.html";
+
+    /// <summary>
+    /// The file player both pages share (<c>assets\youtube\file-core.js</c>), embedded once under the Web UI's name, as the YouTube core is;
+    /// <see cref="FileText"/> puts it into the file page at <see cref="FileCoreMarker"/>.
+    /// </summary>
+    public const string FileCoreResourceName = "webui/youtube-file.js";
+
+    /// <summary>Where <see cref="FileText"/> puts the file player in the page.</summary>
+    public const string FileCoreMarker = "/*@neon-file-core@*/";
+
+    /// <summary>The file page's own address in <paramref name="siteFolder"/>: a <c>file:</c> URL (<see cref="FileSrc"/>).</summary>
+    public static string FileUrl(string siteFolder) => FileSrc(Path.Combine(siteFolder, FilePageName));
+
+    /// <summary>The page a request needs: the file page for a file, the YouTube player for a video or a playlist.</summary>
+    public static string UrlFor(VideoRequest request, string siteFolder)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return request.IsFile ? FileUrl(siteFolder) : Url;
+    }
+
+    /// <summary>Whether the window, showing the file page or not (<paramref name="showingFile"/>), must navigate before it loads <paramref name="request"/>.</summary>
+    public static bool NeedsSwitch(bool showingFile, VideoRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return showingFile != request.IsFile;
+    }
+
+    /// <summary>
+    /// A local or UNC path as a <c>file:</c> URL, each segment escaped by hand: <c>new Uri(path).AbsoluteUri</c> leaves a literal
+    /// <c>%20</c> in a name as it is (the spike, 2026-11-12: <c>clip %20.mp4</c> then named another file), so every segment goes through
+    /// <see cref="Uri.EscapeDataString(string)"/>. A drive (<c>C:</c>) is kept; <c>\\server\share\…</c> becomes <c>file://server/share/…</c>;
+    /// a <c>\\?\</c> prefix is dropped; a Unix path becomes <c>file:///…</c>. Throws <see cref="ArgumentException"/> on a path that isn't
+    /// fully qualified.
+    /// </summary>
+    public static string FileSrc(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !Path.IsPathFullyQualified(path))
+        {
+            throw new ArgumentException(VideoText.NotAFullPath(path), nameof(path));
+        }
+
+        string full = path;
+        if (full.StartsWith(@"\\?\UNC\", StringComparison.OrdinalIgnoreCase))
+        {
+            full = @"\\" + full[8..];
+        }
+        else if (full.StartsWith(@"\\?\", StringComparison.Ordinal))
+        {
+            full = full[4..];
+        }
+
+        static string Escaped(IEnumerable<string> segments) => string.Join('/', segments.Select(Uri.EscapeDataString));
+        if (full.StartsWith(@"\\", StringComparison.Ordinal))
+        {
+            string[] unc = full[2..].Split('\\');
+            return "file://" + unc[0] + "/" + Escaped(unc.Skip(1));
+        }
+
+        if (full.Length >= 2 && char.IsAsciiLetter(full[0]) && full[1] == ':')
+        {
+            string[] parts = full.Split('\\', '/');
+            return "file:///" + parts[0] + "/" + Escaped(parts.Skip(1));
+        }
+
+        return "file:///" + Escaped(full.TrimStart('/').Split('/'));
+    }
+
     public static string UserDataFolder(string home) => Path.Combine(home, FolderName);
 
     public static string SiteFolder(string home) => Path.Combine(home, FolderName, SiteFolderName);
@@ -56,6 +135,33 @@ internal static class VideoPage
         Uri.TryCreate(uri, UriKind.Absolute, out var parsed)
         && parsed.Scheme == Uri.UriSchemeHttps
         && string.Equals(parsed.Host, HostName, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// <see cref="IsOurs(string?)"/> for the Windows window (2026-11-12, the video-files plan), which also shows its file page: the player
+    /// host, or exactly <paramref name="siteFolder"/>'s <see cref="FilePageName"/>. The <c>file:</c> address is compared parsed — its
+    /// local path unescaped, case ignored (Windows' file names), no query or fragment — so another spelling of the same page is admitted
+    /// and nothing else is: no other file in the site folder, no video, no share. The page gets no file-access flag, so its script can't
+    /// read a file's bytes, and a video's <c>src</c> comes only from the app.
+    /// </summary>
+    public static bool IsOurs(string? uri, string siteFolder)
+    {
+        if (IsOurs(uri))
+        {
+            return true;
+        }
+
+        if (!Uri.TryCreate(uri, UriKind.Absolute, out var parsed) || !parsed.IsFile || parsed.Query.Length > 0 || parsed.Fragment.Length > 0)
+        {
+            return false;
+        }
+
+        if (!Uri.TryCreate(FileUrl(siteFolder), UriKind.Absolute, out var page))
+        {
+            return false;
+        }
+
+        return string.Equals(parsed.LocalPath, page.LocalPath, StringComparison.OrdinalIgnoreCase);
+    }
 
     /// <summary>
     /// Whether a new window the page asks for may go to the default browser: an absolute http or https address with a host,
@@ -80,6 +186,18 @@ internal static class VideoPage
         return page.Replace(CoreMarker, Resource(CoreResourceName), StringComparison.Ordinal);
     }
 
+    /// <summary>The embedded file page's text, the file player put in at its marker (2026-11-12): the page as written.</summary>
+    public static string FileText()
+    {
+        string page = Resource(FileResourceName);
+        if (!page.Contains(FileCoreMarker, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The video page " + FileResourceName + " has no " + FileCoreMarker + " for the player.");
+        }
+
+        return page.Replace(FileCoreMarker, Resource(FileCoreResourceName), StringComparison.Ordinal);
+    }
+
     private static string Resource(string name)
     {
         using var stream = typeof(VideoPage).Assembly.GetManifestResourceStream(name)
@@ -90,14 +208,19 @@ internal static class VideoPage
 
     /// <summary>
     /// Writes the page into <paramref name="siteFolder"/> (made if missing) unless the file there already says the same, so a
-    /// second window, or a second copy of the app, does not rewrite a file the first one's browser may be reading. Returns the
-    /// page's path.
+    /// second window, or a second copy of the app, does not rewrite a file the first one's browser may be reading. The file page
+    /// beside it the same way (2026-11-12). Returns the YouTube page's path.
     /// </summary>
     public static string Write(string siteFolder)
     {
         Directory.CreateDirectory(siteFolder);
-        string path = Path.Combine(siteFolder, FileName);
-        string text = Text();
+        string path = WriteIfChanged(Path.Combine(siteFolder, FileName), Text());
+        WriteIfChanged(Path.Combine(siteFolder, FilePageName), FileText());
+        return path;
+    }
+
+    private static string WriteIfChanged(string path, string text)
+    {
         if (!File.Exists(path) || File.ReadAllText(path) != text)
         {
             File.WriteAllText(path, text);

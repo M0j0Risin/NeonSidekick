@@ -2142,6 +2142,22 @@ public sealed class AppSettingsData
     public const string DefaultImageEditMode = "beside-original";
 
     /// <summary>
+    /// Whether a turn offers the model the video tools, <c>play_video</c> and <c>video_control</c> (2026-11-12, the video-files plan and the
+    /// user's calls: a switch of its own, the first row of <c>/tools</c> › Files › Video, off by default like every tool group, since two more
+    /// schemas on every turn cost a local model's context). They play a video file from the working folder for the user, never YouTube.
+    /// The user's <c>/view</c> and <c>/video</c> work whatever it says. Read at each turn. No variable.
+    /// </summary>
+    public bool VideoTools { get; set; }
+
+    /// <summary>
+    /// Where a video file plays (2026-11-12, the video-files plan): one of <see cref="Viewer.VideoFilesPlayIn.Names"/> — <c>video-window</c>
+    /// (the default: the app's video window, else the default app where the window can't play files), <c>webui-window</c> (the Web UI's
+    /// YouTube tab while it serves and has the tab, else the video window) or <c>default-app</c>. Moves <c>/view</c> and <c>/video</c> of a
+    /// video and <c>play_video</c>. An unknown value reads as the default, with a warning once. Read at each play. No variable.
+    /// </summary>
+    public string VideoFilesPlayIn { get; set; } = Viewer.VideoFilesPlayIn.Default;
+
+    /// <summary>
     /// The folder <c>image_edit</c> writes into when the call gives no <c>to</c> (2026-10-04, the Camera and Screen output folders' shape):
     /// under the profile's images folder since 2026-10-10 (the user's ask; the working directory's until then, and still where a tool
     /// has no images folder); empty (the default) = beside the source picture. Made on first write. Read at each call. No variable.
@@ -3685,6 +3701,14 @@ public sealed class AppSettingsData
     /// variable.
     /// </summary>
     public bool WebUiYouTubeControls { get; set; }
+
+    /// <summary>
+    /// Whether a video file plays on the YouTube tab when the Web UI is reached over Tailscale Funnel (2026-11-12, the video-files plan and
+    /// the user's call: off by default). Off, a Funnel request for the playing file's stream is refused and the tab says why; over the LAN, a
+    /// tailnet or the PC itself it plays either way. It matters under reach <c>local</c>, where Funnel arrives through the local proxy (reach
+    /// <c>lan</c> refuses every Funnel request already). Read at each request. No variable.
+    /// </summary>
+    public bool WebUiVideoFilesOverFunnel { get; set; }
 
     /// <summary>
     /// Whether the Web UI's pages wear the profile's theme (2026-10-15, the user's call: on by default): on, their accents, tones and grounds are

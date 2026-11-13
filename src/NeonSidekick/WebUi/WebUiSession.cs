@@ -433,6 +433,11 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     /// <summary>The YouTube tab's player (2026-10-16, the screen's), or null with none.</summary>
     public IWebVideo? Video { get; set; }
 
+    /// <summary>Whether a video file plays over Tailscale Funnel (2026-11-12, the screen's setting, read per request); null: never.</summary>
+    public Func<bool>? VideoFilesOverFunnelNow { get; set; }
+
+    public bool VideoFilesOverFunnel => VideoFilesOverFunnelNow?.Invoke() ?? false;
+
     // ── The YouTube tab's saved list (later on 2026-10-16): the screen's hooks, the prompts sheet's shape; a null hook is a 404 ──────────
 
     /// <summary>The saved list now (the screen's, on a Kestrel thread); null: none.</summary>

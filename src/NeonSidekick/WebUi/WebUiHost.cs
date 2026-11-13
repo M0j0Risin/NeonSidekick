@@ -365,6 +365,12 @@ public sealed class WebUiHost : IWebUiHost
                 return;
             }
 
+            if (get && path.StartsWith(YouTubeFilePrefix, StringComparison.Ordinal))
+            {
+                await YouTubeFileAsync(context, path[YouTubeFilePrefix.Length..], origin).ConfigureAwait(false);
+                return;
+            }
+
             if (get && path.StartsWith(EntryPrefix, StringComparison.Ordinal))
             {
                 // A deferred entry opened on the page (2026-10-15): whole while the transcript holds it.
@@ -946,6 +952,43 @@ public sealed class WebUiHost : IWebUiHost
 
     /// <summary>Where the pictures are served: <c>/api/picture/{run}/{id}/{thumb|mid|full}</c>.</summary>
     public const string PicturePrefix = "/api/picture/";
+
+    /// <summary>
+    /// Where the YouTube tab's <c>&lt;video&gt;</c> fetches a video file from the PC (2026-11-12, the video-files plan):
+    /// <c>/api/youtube/file/{token}/{name}</c>, the name only for the browser's display.
+    /// </summary>
+    public const string YouTubeFilePrefix = "/api/youtube/file/";
+
+    /// <summary>
+    /// A video file for the YouTube tab (2026-11-12, the video-files plan), past the sign-in, the cross-site and the tab's gates: the first
+    /// segment the token (exactly 32 hex digits; the rest, the name, ignored, and a name's <c>%2F</c> only adds segments), which must be the
+    /// current file's (<see cref="IWebVideo.FileOf"/>), else a 404. No <c>X-Neon</c> header (a <c>&lt;video src&gt;</c> can send none):
+    /// <c>Sec-Fetch-Site</c>, CORP and the token keep it to the page. Over Tailscale Funnel a 403 unless <i>Web UI video files over Funnel</i>
+    /// is on (the page reads the status when its video fails). Unbucketed, as every GET: a video's range requests are many.
+    /// </summary>
+    private async Task YouTubeFileAsync(HttpContext context, string rest, WebUiOrigin origin)
+    {
+        if (origin.Funnel && !_backend.VideoFilesOverFunnel)
+        {
+            if (_limits.LogDue(origin.Remote, nameof(WebUiText.VideoFileFunnelLogLine)))
+            {
+                DiagnosticLog.Info(Category, WebUiText.VideoFileFunnelLogLine(origin));
+            }
+
+            await ResultAsync(context, StatusCodes.Status403Forbidden, new WebResult(false, WebUiText.VideoFileFunnelOff)).ConfigureAwait(false);
+            return;
+        }
+
+        int slash = rest.IndexOf('/', StringComparison.Ordinal);
+        string token = slash < 0 ? rest : rest[..slash];
+        if (_backend.Video is not { } video || video.FileOf(token) is not { } file)
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+
+        await MediaFileServer.ServeAsync(context, file.Path, file.Name, _stopping.Token).ConfigureAwait(false);
+    }
 
     /// <summary>
     /// A picture (2026-10-14): the run's tag first (another run's address names nothing), then the id the transcript holds now, then the size;

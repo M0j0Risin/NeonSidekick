@@ -160,6 +160,7 @@ internal sealed partial class SettingsMenu
         [(SettingsField.HelpTools, "Help")],
         [(SettingsField.MonitorTools, "Monitors")],
         [(SettingsField.DuckDbTools, "Access"), (SettingsField.DuckDbDatabasesOffered, "Databases"), (SettingsField.DuckDbQueryMaxRows, "Queries"), (SettingsField.DuckDbDatabasesProfile, "Files")],
+        [(SettingsField.VideoTools, "Playing")],
     ];
 
     /// <summary>

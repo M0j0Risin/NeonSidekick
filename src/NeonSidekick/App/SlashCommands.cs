@@ -270,7 +270,7 @@ public enum SlashCommand
     /// <summary><c>/read &lt;file&gt; [n]</c>: a text file from the working directory printed as a reply and read aloud when speech is on, from sentence <em>n</em> when given — the model never sees it; <c>/read</c> alone resumes a stopped reading, <c>/read &lt;n&gt;</c> starts the last file at sentence <em>n</em> (2026-09-17). <c>/speak</c> until 2026-10-09 (the user's call: it reads a file, which <c>/read</c> says better); the old word is unknown now, as <c>/quit</c> is.</summary>
     Read,
 
-    /// <summary><c>/view &lt;image or folder&gt; [--chat | --thumbs]</c>: a picture from the working directory in the picture viewer (2026-09-27), drawn in the transcript with <c>--chat</c> (the 2026-09-17 form), or its folder in the thumbnail browser with <c>--thumbs</c> (2026-10-04, <c>/thumbs</c> folded in) — the model never sees it.</summary>
+    /// <summary><c>/view &lt;image or folder&gt; [--chat | --thumbs]</c>: a picture from the working directory in the picture viewer (2026-09-27), drawn in the transcript with <c>--chat</c> (the 2026-09-17 form), or its folder in the thumbnail browser with <c>--thumbs</c> (2026-10-04, <c>/thumbs</c> folded in) — the model never sees it. A video file (2026-11-12) plays as <c>/video &lt;path&gt;</c> does.</summary>
     View,
 
 
@@ -438,6 +438,14 @@ public enum SlashCommand
     /// </summary>
     Pasted,
 
+    /// <summary>
+    /// <c>/video &lt;path&gt;</c> (2026-11-12, the video-files plan): a video file from the working directory played where <c>Video files play in</c>
+    /// says, through <c>play_video</c>'s own tool; <c>play | resume | pause | seek &lt;time&gt; | volume &lt;n&gt; | mute | unmute | status | close</c>
+    /// drive it, through <c>video_control</c>'s (<see cref="Viewer.VideoFileCommand"/>). The user's own hand: never judged by <c>Video tools</c>.
+    /// Not headless: there is no window.
+    /// </summary>
+    Video,
+
     /// <summary><c>/exit</c>: leave the app (<c>/quit</c> until 2026-09-17, the user's call; the old word is unknown now, as the aliases are).</summary>
     Exit,
     /// <summary>A command we know, given an argument it does not take (<c>/about me</c>): <c>Args</c> carries it. Since 2026-09-17 its own case, so the error names the command rather than calling it unknown.</summary>
@@ -566,7 +574,8 @@ public static class SlashCommands
             new(Updates.UpdateText.Word, "update the app from its GitHub releases"),
             new("/usage", "usage, context, prompt, tools, skills"),   // "token usage and what fills the context" until 2026-11-07 (/sys' tabs folded in)
             new("/vault", "show the Obsidian vault's tree"),
-            new("/view", "view images, a folder of them, or a PDF"),
+            new("/view", "view images, folders, PDFs or videos"),
+            new(Viewer.VideoFileCommand.Word, "play a video file, or control it"),
             new("/webui", "serve the chat to a browser"),
             new("/window", "show the terminal window's size"),
             new(YouTube.YouTubeCommand.Word, YouTube.YouTubeText.HelpSummary),
@@ -666,7 +675,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/undo", "/theme", "/mark", "/avatar", "/queue", "/sessions", "/rename", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/read", "/remember", "/memory", "/keycheck", "/cmd", "/msgclear", "/sys", "/usage", "/perfbar", "/homebar", "/toolbar", "/header", "/profile", "/prompts", "/commands", "/timer", "/cwd", "/tree", "/vault", "/explore", "/browse", "/browser", "/open", "/terminal", "/shortcut", "/log", "/process", "/view", "/imagine", "/comfy", "/pasted", "/ha", "/docker", "/eventlog", "/net", "/services", "/tasks", "/ad", "/monitor", "/midi", "/camera", "/screen", "/youtube", "/shopping", "/print", "/pdf", "/docx", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/code-audit", "/botchat", "/claude", "/advisor", "/test", "/expand", "/collapse", "/find", "/window", "/skills", "/learn", "/about", "/webui", "/update", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/undo", "/theme", "/mark", "/avatar", "/queue", "/sessions", "/rename", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/read", "/remember", "/memory", "/keycheck", "/cmd", "/msgclear", "/sys", "/usage", "/perfbar", "/homebar", "/toolbar", "/header", "/profile", "/prompts", "/commands", "/timer", "/cwd", "/tree", "/vault", "/explore", "/browse", "/browser", "/open", "/terminal", "/shortcut", "/log", "/process", "/view", "/video", "/imagine", "/comfy", "/pasted", "/ha", "/docker", "/eventlog", "/net", "/services", "/tasks", "/ad", "/monitor", "/midi", "/camera", "/screen", "/youtube", "/shopping", "/print", "/pdf", "/docx", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/code-audit", "/botchat", "/claude", "/advisor", "/test", "/expand", "/collapse", "/find", "/window", "/skills", "/learn", "/about", "/webui", "/update", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -769,6 +778,7 @@ public static class SlashCommands
             "/camera" => SlashCommand.Camera,
             "/screen" => SlashCommand.Screen,
             "/youtube" => SlashCommand.YouTube,
+            "/video" => SlashCommand.Video,
             "/webui" => SlashCommand.WebUi,
             "/shopping" => SlashCommand.Shopping,
             "/print" => SlashCommand.Print,
@@ -866,7 +876,7 @@ public static class SlashCommands
         or SlashCommand.Remember or SlashCommand.Memory or SlashCommand.Profile or SlashCommand.Prompts or SlashCommand.Commands or SlashCommand.Custom or SlashCommand.Timer
         or SlashCommand.Cwd or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Explore or SlashCommand.Open or SlashCommand.Browse or SlashCommand.Browser or SlashCommand.Terminal or SlashCommand.Shortcut or SlashCommand.Copy or SlashCommand.Session or SlashCommand.Rename or SlashCommand.GitUser
         or SlashCommand.Loop or SlashCommand.Plan or SlashCommand.CodeAudit or SlashCommand.BotChat or SlashCommand.Claude or SlashCommand.Advisor or SlashCommand.Cmd or SlashCommand.Queue or SlashCommand.Skills or SlashCommand.Test
-        or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.EventLog or SlashCommand.Net or SlashCommand.Services or SlashCommand.Tasks or SlashCommand.Ad or SlashCommand.Monitor or SlashCommand.Midi or SlashCommand.Camera or SlashCommand.Screen or SlashCommand.YouTube or SlashCommand.Shopping or SlashCommand.Print or SlashCommand.Pdf or SlashCommand.Docx or SlashCommand.Perf or SlashCommand.HomeBar or SlashCommand.Toolbar or SlashCommand.Header or SlashCommand.Rewind or SlashCommand.Undo
+        or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.EventLog or SlashCommand.Net or SlashCommand.Services or SlashCommand.Tasks or SlashCommand.Ad or SlashCommand.Monitor or SlashCommand.Midi or SlashCommand.Camera or SlashCommand.Screen or SlashCommand.YouTube or SlashCommand.Video or SlashCommand.Shopping or SlashCommand.Print or SlashCommand.Pdf or SlashCommand.Docx or SlashCommand.Perf or SlashCommand.HomeBar or SlashCommand.Toolbar or SlashCommand.Header or SlashCommand.Rewind or SlashCommand.Undo
         or SlashCommand.Log or SlashCommand.Process or SlashCommand.Tools or SlashCommand.Settings or SlashCommand.Find or SlashCommand.WebUi
         or SlashCommand.Splash or SlashCommand.Pasted   // 2026-10-18: view|thumbs|purge
         or SlashCommand.Usage   // 2026-11-01: /usage context opens the pane on its Context tab

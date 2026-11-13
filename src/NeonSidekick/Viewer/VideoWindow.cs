@@ -59,6 +59,18 @@ public static class VideoWindow
     public static void Play(VideoRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
+
+        // A file's src made here, on the caller's thread (2026-11-12): a path no URI can take fails with a sentence, never on the window's.
+        string? src;
+        try
+        {
+            src = request.IsFile ? VideoPage.FileSrc(request.FilePath!) : null;
+        }
+        catch (ArgumentException e)
+        {
+            throw new InvalidOperationException(e.Message, e);
+        }
+
         lock (s_playGate)
         {
             VideoWindowThread? open;
@@ -67,14 +79,14 @@ public static class VideoWindow
                 open = s_open;
             }
 
-            if (open is { Alive: true } && open.Play(request))
+            if (open is { Alive: true } && open.Play(request, src))
             {
                 return;
             }
 
             CheckRuntime();
             string home = Home ?? Path.Combine(Path.GetTempPath(), "NeonSidekick");
-            var window = new VideoWindowThread(request, VideoPage.UserDataFolder(home), VideoPage.SiteFolder(home));
+            var window = new VideoWindowThread(request, src, VideoPage.UserDataFolder(home), VideoPage.SiteFolder(home));
             lock (s_gate)
             {
                 s_open = window;
@@ -198,6 +210,9 @@ public static class VideoWindow
         public bool Send(VideoCommand command) => VideoWindow.Send(command);
 
         public bool Close() => VideoWindow.Close();
+
+        /// <summary>The Windows window plays video files on its file page (2026-11-12).</summary>
+        public bool PlaysFiles => true;
     }
 }
 
@@ -223,9 +238,14 @@ internal sealed unsafe class VideoWindowThread
     private readonly string _userDataFolder;
     private readonly string _siteFolder;
     private VideoRequest? _pending;
+    private string? _pendingSrc;
+    private string? _filePath;
     private VideoSnapshot _snapshot;
     private WebViewHost? _host;
     private bool _pageReady;
+
+    // Which page the view was last navigated to (2026-11-12): the file page or the YouTube player. Window thread only.
+    private bool _showingFile;
     private bool _pageFullScreen;
     private string? _shownTitle;
     private Thread? _thread;
@@ -235,9 +255,12 @@ internal sealed unsafe class VideoWindowThread
     private bool _ole;
     private volatile bool _alive = true;
 
-    public VideoWindowThread(VideoRequest first, string userDataFolder, string siteFolder)
+    public VideoWindowThread(VideoRequest first, string? src, string userDataFolder, string siteFolder)
     {
         _pending = first;
+        _pendingSrc = src;
+        _filePath = first.FilePath;
+        _showingFile = first.IsFile;   // a window opened by a file play starts on the file page
         _snapshot = VideoSnapshot.Opening(first) with { Version = VideoWindow.NextVersion() };
         _userDataFolder = userDataFolder;
         _siteFolder = siteFolder;
@@ -272,11 +295,13 @@ internal sealed unsafe class VideoWindowThread
     /// Switches the open window to <paramref name="request"/> (the newest wins); false when the window is gone. While the window
     /// is still starting (no handle yet) the request only waits: the page's first flush takes the newest.
     /// </summary>
-    public bool Play(VideoRequest request)
+    public bool Play(VideoRequest request, string? src)
     {
         lock (_gate)
         {
             _pending = request;
+            _pendingSrc = src;
+            _filePath = request.FilePath;
             _snapshot = VideoSnapshot.Opening(request) with { Version = VideoWindow.NextVersion() };
         }
 
@@ -412,7 +437,14 @@ internal sealed unsafe class VideoWindowThread
                 Key = OnKey,
                 FullScreen = OnPageFullScreen,
             };
-            _host.Start(_userDataFolder, _siteFolder, VideoPage.Url);
+            VideoRequest first;
+            lock (_gate)
+            {
+                first = _pending!;
+            }
+
+            _showingFile = first.IsFile;
+            _host.Start(_userDataFolder, _siteFolder, VideoPage.UrlFor(first, _siteFolder), WebViewProfile.VideoFor(_siteFolder));
             DiagnosticLog.Info("Video", "Video window opened.");
 
             _started = true;
@@ -502,7 +534,9 @@ internal sealed unsafe class VideoWindowThread
     }
 
     // What waits for the page, sent once it can hear it: the newest video first, then the commands in their order. A command
-    // the page gets before its player is ready is dropped there; the snapshot says what state it is in.
+    // the page gets before its player is ready is dropped there; the snapshot says what state it is in. A request of the other
+    // kind than the page shown (2026-11-12: a file on the YouTube player, YouTube on the file page) navigates first, the request
+    // and the commands left waiting; the new page's own "page" flushes them (VideoPage.NeedsSwitch decides, covered there).
     private void Flush()
     {
         if (!_pageReady || _host is null)
@@ -511,19 +545,30 @@ internal sealed unsafe class VideoWindowThread
         }
 
         VideoRequest? request;
+        string? src;
         string[] commands;
         lock (_gate)
         {
+            if (_pending is { } next && VideoPage.NeedsSwitch(_showingFile, next))
+            {
+                _showingFile = next.IsFile;
+                _pageReady = false;
+                _host.Navigate(VideoPage.UrlFor(next, _siteFolder));
+                return;
+            }
+
             request = _pending;
+            src = _pendingSrc;
             _pending = null;
+            _pendingSrc = null;
             commands = [.. _outbox];
             _outbox.Clear();
         }
 
         if (request is not null)
         {
-            _host.Post(VideoMessages.Load(request));
-            ShowTitle(null);
+            _host.Post(request.IsFile ? VideoMessages.LoadFile(request, src!) : VideoMessages.Load(request));
+            ShowTitle(request.FileName);
         }
 
         foreach (string command in commands)
@@ -536,6 +581,7 @@ internal sealed unsafe class VideoWindowThread
     {
         VideoPageEvent kind;
         VideoSnapshot snapshot;
+        string? filePath;
         lock (_gate)
         {
             (kind, snapshot) = VideoMessages.Apply(_snapshot, text);
@@ -545,20 +591,41 @@ internal sealed unsafe class VideoWindowThread
             }
 
             _snapshot = snapshot;
+            filePath = _filePath;
+        }
+
+        // A file no longer there reads as the not-supported code (the spike, 2026-11-12), so the disk is asked, outside the lock, and
+        // the error worded as gone while that snapshot is still the current one.
+        if (kind == VideoPageEvent.Error && snapshot is { IsFile: true, Error: 2 or 4 } && filePath is not null && !File.Exists(filePath))
+        {
+            lock (_gate)
+            {
+                if (ReferenceEquals(_snapshot, snapshot))
+                {
+                    _snapshot = snapshot = snapshot with { Error = VideoFile.GoneCode };
+                }
+            }
         }
 
         switch (kind)
         {
             case VideoPageEvent.Page:
-                _pageReady = true;
-                Flush();
+                // Only the page the view was navigated to: a late "page" from the one just left would flush the load into it.
+                if ((VideoMessages.PageKind(text) == VideoMessages.FileKind) == _showingFile)
+                {
+                    _pageReady = true;
+                    Flush();
+                }
+
                 break;
             case VideoPageEvent.State:
                 ShowTitle(snapshot.Title);
                 VideoWindow.Report(this, snapshot);
                 break;
             case VideoPageEvent.Error:
-                DiagnosticLog.Info("Video", $"YouTube refused video {snapshot.VideoId} in the player (error {snapshot.Error}).");
+                DiagnosticLog.Info("Video", snapshot.IsFile
+                    ? VideoText.FileRefusedLogLine(snapshot.FileName, snapshot.Error)
+                    : VideoText.YouTubeRefusedLogLine(snapshot.VideoId, snapshot.Error));
                 VideoWindow.Report(this, snapshot);
                 break;
         }

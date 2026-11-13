@@ -129,6 +129,7 @@ A browser front end for this profile, on this computer or (with *Web UI reach* `
 | Web UI home controls | Shows the [Home tab](INTERFACE.md#the-home-tab) and lets it act. Unlocking, opening a garage, gate or door, and disarming still ask; `/ha` in the chat follows *Web UI commands*. | off |
 | Web UI shopping controls | Shows the Shopping tab: add, tick, change, place and remove lines, and change the store. `/shopping` at the PC is unchanged. | off |
 | Web UI YouTube controls | Shows the [YouTube tab](INTERFACE.md#the-youtube-tab) (macOS 14+ on a Mac): it plays videos started there and keeps the saved list. Off, *YouTube open links in* `webui-window` plays in the PC's video window. | off |
+| Web UI video files over Funnel | Lets a PC video file play on the YouTube tab when the page is reached over Tailscale Funnel. Only the file playing is served, to a signed-in page. Matters only under *Web UI reach* `local`. | off |
 
 ### Servers
 
@@ -629,6 +630,13 @@ The file tools and the places beyond the working directory they reach.
 | Image edit output folder | Where `image_edit` writes when the model names no `to`: a folder under the profile's `images`. Empty writes beside the source. | empty (beside the source) |
 | Pasted images folder | Where a pasted picture is saved, under the profile's `images`, for the picture tools. `/pasted view`, `thumbs` and `purge` open or empty it. | `pasted` |
 
+#### Video
+
+| Setting | What it does | Default |
+|---|---|---|
+| Video tools | Offers `play_video` and `video_control`, which play a video file from the working directory and pause, seek or close it ([Video](TOOLS.md#video)). Never YouTube. | off |
+| Video files play in | Where `/view`, `/video` and `play_video` play a file: `video-window`, `webui-window` (the [YouTube tab](INTERFACE.md#the-youtube-tab), else the window) or `default-app`. With no window that can play it, the default app. | `video-window` |
+
 #### UNC
 
 Network shares and folders outside the working directory ([UNC shares](TOOLS.md#unc-shares-and-outside-folders); on a Mac, [UNC shares on a Mac](TOOLS.md#unc-shares-on-a-mac)). The rows work like the [SQL](#sql) tab's, over `unc.json`.
@@ -695,7 +703,7 @@ The apps and services the tools reach. `/claude`'s settings are on `/settings` â
 | YouTube language | A language code (`en`, `es`) whose results rank higher; empty for any. | empty (any language) |
 | YouTube open links in | Where videos play: `youtube-window`, `browser-window` (else the default browser), `default-browser` or `webui-window` (the [YouTube tab](INTERFACE.md#the-youtube-tab)). Covers `youtube_play`, `/youtube play` and its lists, the video window's links, and `open_url` on a video link under *YouTube tools*. The model can't see or steer a video in a browser. | `youtube-window` |
 | YouTube autoplay | Whether a played video starts at once or waits for play. | on |
-| YouTube while speaking | What a playing video does while the app speaks or listens: `pause`, `duck` (to 15 %) or `none`. | `pause` |
+| YouTube while speaking | What a playing video (a video file too) does while the app speaks or listens: `pause`, `duck` (to 15 %) or `none`. | `pause` |
 
 #### Obsidian
 

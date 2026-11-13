@@ -1588,6 +1588,13 @@ public sealed partial class SidekickApp
                     continue;
                 }
 
+                // /video (2026-11-12): every form wants the video window, which headless has none of.
+                if (SlashCommands.Parse(text) is (SlashCommand.Video, _))
+                {
+                    await HeadlessLineAsync("[error] " + Viewer.VideoText.NeedsScreen).ConfigureAwait(false);
+                    continue;
+                }
+
                 // /youtube (2026-10-05): a search lists what it finds, ahead of the server check (the API needs no LLM); the saved
                 // videos (2026-10-07) are listed, saved by id or link and taken off; a named playlist's entries are listed (2026-10-08);
                 // every other verb wants the video window, which headless has none of.

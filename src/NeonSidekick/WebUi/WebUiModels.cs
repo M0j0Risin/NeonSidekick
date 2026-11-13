@@ -689,7 +689,16 @@ public sealed record WebVideoWords(string Waiting, string PlayHere, string TapFo
     public string Windowed { get; init; } = "";
 
     public string ExitWindowed { get; init; } = "";
+
+    /// <summary>A video file's words (2026-11-12, the video-files plan): the tag beside its name, and why one doesn't play.</summary>
+    public WebFileWords? Files { get; init; }
 }
+
+/// <summary>
+/// The YouTube tab's words for a video file from the PC (2026-11-12): the header's tag, a file the browser can't play (its format, a read
+/// that failed), one with sound but no picture, one moved or deleted, and one refused over Tailscale Funnel.
+/// </summary>
+public sealed record WebFileWords(string Tag, string Failed, string NoPicture, string Gone, string FunnelOff);
 
 /// <summary>
 /// The saved list's words on the YouTube tab (later on 2026-10-16): the filter's placeholder and its no-match line (<c>{0}</c> the filter), the
@@ -786,7 +795,17 @@ public sealed class WebSavedMove
 /// The Resume offer (2026-10-16): the last video or playlist, the entry, where to start (the saved videos' rewind applied) and the button's
 /// ready words.
 /// </summary>
-public sealed record WebVideoResume(string? VideoId, string? PlaylistId, int? Entry, double Start, string Label);
+public sealed record WebVideoResume(string? VideoId, string? PlaylistId, int? Entry, double Start, string Label)
+{
+    /// <summary>A video file's token (2026-11-12, the video-files plan), with <see cref="Src"/> and <see cref="Name"/>: the page builds the file's load from them.</summary>
+    public string? File { get; init; }
+
+    /// <summary>The file's address on the Web UI (<c>/api/youtube/file/{token}/{name}</c>).</summary>
+    public string? Src { get; init; }
+
+    /// <summary>The file's name, the header's title.</summary>
+    public string? Name { get; init; }
+}
 
 /// <summary>
 /// A YouTube stream's first event: the page id to use from now on (a duplicated tab gets a fresh one), the tab's words, whether this page plays

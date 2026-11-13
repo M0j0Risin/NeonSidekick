@@ -179,5 +179,5 @@ internal sealed partial class ChatScreen
 
     /// <summary>A control tool for <c>/youtube</c>'s own use, with the hand-off the model's reads.</summary>
     private YouTubeControlTool ControlToolFor(IVideoPlayer player) =>
-        new(player, _time, () => _routedVideo?.LastHandoff, () => PlayTarget().Kind);
+        new(player, _time, YouTubeHandoff, () => PlayTarget().Kind, () => "/video");
 }

@@ -30,6 +30,10 @@ internal sealed record TurnToolInputs
     /// <summary>The picture tools (2026-10-10, their own group): offered while <see cref="ImagesEnabled"/> (<c>Image tools</c>), whatever <see cref="FilesEnabled"/> says.</summary>
     public IReadOnlyList<AIFunction>? Images { get; init; }
     public bool ImagesEnabled { get; init; }
+
+    /// <summary>The video file tools (2026-11-12, their own group): offered while <see cref="VideoEnabled"/> (<c>Video tools</c>), whatever <see cref="FilesEnabled"/> says.</summary>
+    public IReadOnlyList<AIFunction>? Video { get; init; }
+    public bool VideoEnabled { get; init; }
     public IReadOnlyList<AIFunction>? Ask { get; init; }
     public IReadOnlyList<AIFunction>? Sessions { get; init; }
     public bool SessionsEnabled { get; init; }
@@ -160,6 +164,7 @@ internal sealed partial class ChatScreen
         var standingTools = inputs.Standing;
         var fileTools = inputs.Files;
         var imageTools = inputs.Images;
+        var videoTools = inputs.Video;
         var webTools = inputs.Web;
         var gitTools = inputs.Git;
         var shellTools = inputs.Shell;
@@ -199,13 +204,13 @@ internal sealed partial class ChatScreen
         {
             // Plan mode (2026-09-26): every tool it does not allow joins the /tools list for this turn, so a group
             // loses them as it loses a tool switched off, and a group left empty takes its rule with it.
-            disabledTools = PlanTools.Widen(disabledTools, standingTools, fileTools, imageTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, sqliteTools, duckDbTools, postgresTools, uncTools, dockerTools, eventLogTools, networkTools, serviceTools, taskTools, directoryTools, monitorTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, mcpTools, homeTools, printTools, youTubeTools, shoppingTools, neonAdvisorTools);
+            disabledTools = PlanTools.Widen(disabledTools, standingTools, fileTools, imageTools, videoTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, sqliteTools, duckDbTools, postgresTools, uncTools, dockerTools, eventLogTools, networkTools, serviceTools, taskTools, directoryTools, monitorTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, mcpTools, homeTools, printTools, youTubeTools, shoppingTools, neonAdvisorTools);
         }
 
         if (inputs.OnlyTools is { } only)
         {
             // Botchat limited tools (2026-10-04): every name not on the list joins the disabled set, the same way.
-            disabledTools = DisableAllBut(disabledTools, only.Contains, standingTools, fileTools, imageTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, sqliteTools, duckDbTools, postgresTools, uncTools, dockerTools, eventLogTools, networkTools, serviceTools, taskTools, directoryTools, monitorTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, cameraTools, screenTools, mcpTools, homeTools, printTools, youTubeTools, shoppingTools, neonAdvisorTools);
+            disabledTools = DisableAllBut(disabledTools, only.Contains, standingTools, fileTools, imageTools, videoTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, sqliteTools, duckDbTools, postgresTools, uncTools, dockerTools, eventLogTools, networkTools, serviceTools, taskTools, directoryTools, monitorTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, cameraTools, screenTools, mcpTools, homeTools, printTools, youTubeTools, shoppingTools, neonAdvisorTools);
         }
 
         if (disabledTools is { Count: > 0 })
@@ -214,6 +219,7 @@ internal sealed partial class ChatScreen
             standingTools = Without(standingTools, disabledTools);
             fileTools = fileTools is null ? null : Without(fileTools, disabledTools);
             imageTools = imageTools is null ? null : Without(imageTools, disabledTools);
+            videoTools = videoTools is null ? null : Without(videoTools, disabledTools);
             webTools = webTools is null ? null : Without(webTools, disabledTools);
             gitTools = gitTools is null ? null : Without(gitTools, disabledTools);
             shellTools = shellTools is null ? null : Without(shellTools, disabledTools);
@@ -272,6 +278,9 @@ internal sealed partial class ChatScreen
         // The picture tools right after the file tools (2026-10-10, their own group): Image tools is the switch, File tools or not; the picture sentence rides with them.
         bool images = inputs.ImagesEnabled && imageTools is { Count: > 0 };
         tools = images ? [.. tools, .. imageTools!] : tools;
+        // The video file tools right after the picture tools (2026-11-12, their own group): Video tools is the switch; no rule — the descriptions carry it, as YouTube's do.
+        bool video = inputs.VideoEnabled && videoTools is { Count: > 0 };
+        tools = video ? [.. tools, .. videoTools!] : tools;
         // The git tools right after the file tools (2026-09-20): the sandbox's tools together, the setting GitLib tools a per-group offer.
         bool git = inputs.GitEnabled && gitTools is { Count: > 0 };
         tools = git ? [.. tools, .. gitTools!] : tools;

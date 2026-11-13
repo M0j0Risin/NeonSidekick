@@ -187,6 +187,12 @@ public static class ToolsText
     /// </summary>
     public const string ImageMenuTitle = "Image";
 
+    /// <summary>
+    /// The video files' menu on the Files tab, after Image, before UNC (2026-11-12, the video-files plan): the video tools' switch and where a
+    /// file plays. Not Windows-only: on a Mac a file plays in its default app. Appended last to <see cref="MenuTitles"/>, as DuckDB was. Pinned.
+    /// </summary>
+    public const string VideoMenuTitle = "Video";
+
     /// <summary>The shopping list's menu and group (2026-10-11, the user's ask): on Home after HomeAssistant since later that day (the user's ask; on Core, after Shell, before Options, until then). Pinned.</summary>
     public const string ShoppingMenuTitle = "Shopping";
 
@@ -299,7 +305,7 @@ public static class ToolsText
     /// The settings menus in <see cref="SettingsMenu.ToolsTabFields"/>' order, each list's title (2026-10-09): every one was a tab of its own
     /// until then, and the constants above stay its name — the Offered tab's group heading and <c>/usage</c>' group too. Pinned.
     /// </summary>
-    public static readonly IReadOnlyList<string> MenuTitles = [AskTabTitle, WebTabTitle, ShellTabTitle, FileMenuTitle, ImageMenuTitle, UncTabTitle, PrintTabTitle, CameraTabTitle, ScreenTabTitle, ObsidianTabTitle, SqlTabTitle, MySqlTabTitle, SqliteTabTitle, PostgresTabTitle, OracleTabTitle, DockerTabTitle, HomeAssistantTabTitle, ComfyTabTitle, YouTubeTabTitle, GitTabTitle, OptionsTabTitle, ShoppingMenuTitle, EventLogTabTitle, TimersMenuTitle, NetworkMenuTitle, ServicesMenuTitle, TasksMenuTitle, DirectoryMenuTitle, ClockMenuTitle, HelpMenuTitle, MonitorsMenuTitle, DuckDbTabTitle];
+    public static readonly IReadOnlyList<string> MenuTitles = [AskTabTitle, WebTabTitle, ShellTabTitle, FileMenuTitle, ImageMenuTitle, UncTabTitle, PrintTabTitle, CameraTabTitle, ScreenTabTitle, ObsidianTabTitle, SqlTabTitle, MySqlTabTitle, SqliteTabTitle, PostgresTabTitle, OracleTabTitle, DockerTabTitle, HomeAssistantTabTitle, ComfyTabTitle, YouTubeTabTitle, GitTabTitle, OptionsTabTitle, ShoppingMenuTitle, EventLogTabTitle, TimersMenuTitle, NetworkMenuTitle, ServicesMenuTitle, TasksMenuTitle, DirectoryMenuTitle, ClockMenuTitle, HelpMenuTitle, MonitorsMenuTitle, DuckDbTabTitle, VideoMenuTitle];
 
     /// <summary>The tabs in strip order — Offered, Ask, Web, Shell, Files, UNC, Print, Camera, Screen (2026-10-04), Obsidian, SQL, MySQL, Oracle, ClaudeCLI, Docker, HA, ComfyUI, GitLib, Options, the user's order since 2026-10-03 (ClaudeCLI "Claude" until 2026-10-04); before it (Camera after Ask since 2026-10-02; Docker after UNC since 2026-10-02; Home Assistant second to last, before Options, since later on 2026-10-01, the user's ask, and Print after Claude with it; Home Assistant after Claude from 2026-09-28 and Print after it later that day; Oracle after SQL, MySQL after Oracle and UNC after MySQL since 2026-09-30): Offered, Web, Files, Shell, Ask, Claude, Obsidian, ComfyUI, SQL, Oracle, Git (native), Options — the user's order since 2026-09-27 (Ask, Git (native), Obsidian, SQL, ComfyUI, Claude before); Options last since later on 2026-09-22 (the user's ask; second, after Offered, before); alphabetical before 2026-09-21; the last ten index <see cref="SettingsMenu.ToolsTabFields"/> one down until 2026-10-09.
     /// Since then (the user's call) the five database tabs are menus on one Database tab, where SQL stood, and Print, Camera, Screen,
@@ -325,7 +331,7 @@ public static class ToolsText
     /// one for a plain tab, its rows the tab's; more for a group tab — <see cref="CoreTabTitle"/> (later on 2026-10-10), <see cref="FilesTabTitle"/>, <see cref="AppsTabTitle"/> (2026-10-10),
     /// <see cref="DatabaseTabTitle"/>, <see cref="DevicesTabTitle"/> and <see cref="HomeTabTitle"/> (2026-10-11) — whose menus are sub-tabs on a second strip (<see cref="ToolsMenu"/>). Pinned.
     /// </summary>
-    public static readonly IReadOnlyList<IReadOnlyList<int>> TabMenus = [[1, 2, 28, 23, 0, 29, 20], [3, 4, 5, 19], [15, 17, 18, 9], [24, 22, 25, 26, 27], [10, 11, 13, 14, 12, 31], [7, 8, 30, 6], [16, 21]];
+    public static readonly IReadOnlyList<IReadOnlyList<int>> TabMenus = [[1, 2, 28, 23, 0, 29, 20], [3, 4, 32, 5, 19], [15, 17, 18, 9], [24, 22, 25, 26, 27], [10, 11, 13, 14, 12, 31], [7, 8, 30, 6], [16, 21]];
 
     /// <summary>
     /// The menus whose family only Windows has (2026-10-22, the user's ask): Services and Tasks — a Mac has no Service Control Manager or

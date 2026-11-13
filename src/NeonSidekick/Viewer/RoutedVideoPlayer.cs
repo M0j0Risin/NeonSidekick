@@ -19,7 +19,17 @@ public enum VideoSink
 /// <see cref="YouTubeOpenLinksInKind.DefaultBrowser"/>), what it was, and the router's version when it went. Status and control name it,
 /// since neither can see or drive a browser.
 /// </summary>
-public sealed record VideoHandoff(string Url, YouTubeOpenLinksInKind To, string? VideoId, string? PlaylistId, long Version = 0);
+public sealed record VideoHandoff(string Url, YouTubeOpenLinksInKind To, string? VideoId, string? PlaylistId, long Version = 0)
+{
+    /// <summary>
+    /// A video file sent to its default app (2026-11-12, the video-files plan): its name, with <see cref="Url"/> its file URI and
+    /// <see cref="To"/> unused. Null for YouTube's hand-offs; each control tool reads only its own kind.
+    /// </summary>
+    public string? FileName { get; init; }
+
+    /// <summary>Whether this hand-off was a video file's.</summary>
+    public bool IsFile => FileName is not null;
+}
 
 /// <summary>
 /// The one <see cref="IVideoPlayer"/> the chat holds (2026-10-16, <c>YouTube open links in</c>): the video window and, when there is one,
@@ -94,6 +104,15 @@ public sealed class RoutedVideoPlayer : IVideoPlayer
 
     public VideoPlace Place => Active == VideoSink.Web ? VideoPlace.WebTab : VideoPlace.Window;
 
+    /// <summary>Whether the active player plays video files (2026-11-12).</summary>
+    public bool PlaysFiles => PlaysFilesOn(Active);
+
+    /// <summary>
+    /// Whether <paramref name="sink"/>'s player plays video files, whatever sink is active now (2026-11-12): the file route asks the window's
+    /// before choosing it. With no web player, the web sink is the window, as a play there is.
+    /// </summary>
+    public bool PlaysFilesOn(VideoSink sink) => _players[(int)sink].PlaysFiles;
+
     /// <summary>The video last sent to a browser, until the next play; null otherwise.</summary>
     public VideoHandoff? LastHandoff
     {
@@ -130,11 +149,18 @@ public sealed class RoutedVideoPlayer : IVideoPlayer
 
     /// <summary>
     /// <paramref name="request"/> played on <paramref name="sink"/>, switching to it first when it is not the active one. Throws as that
-    /// player's <see cref="IVideoPlayer.Play"/> does (no window to have).
+    /// player's <see cref="IVideoPlayer.Play"/> does (no window to have). A video file for a player that doesn't play files (the Mac's
+    /// window, 2026-11-12) is refused before the switch, on the caller's thread, so a refused play never closes what the other sink is
+    /// playing (<see cref="InvalidOperationException"/> with <see cref="VideoText.NoFilePlayer"/>; the file route answers it with the default app).
     /// </summary>
     public void Play(VideoRequest request, VideoSink sink)
     {
         ArgumentNullException.ThrowIfNull(request);
+        if (request.IsFile && !PlaysFilesOn(sink))
+        {
+            throw new InvalidOperationException(VideoText.NoFilePlayer);
+        }
+
         Switch(sink, clearHandoff: true);
         _players[(int)sink].Play(request);
     }

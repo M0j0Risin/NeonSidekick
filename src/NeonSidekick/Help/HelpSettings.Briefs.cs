@@ -93,6 +93,7 @@ public static partial class HelpSettings
         SettingsField.WebUiChatControls => "Shows the Web UI's Chat tab: the transcript, the message box, and answers to the PC's questions.",
         SettingsField.WebUiHomeControls => "Shows the Web UI's Home tab, which controls Home Assistant devices, rooms and scenes. Unlocking and opening doors still ask first.",
         SettingsField.WebUiShoppingControls => "Shows the Web UI's Shopping tab, to see and change the shopping list from your phone.",
+        SettingsField.WebUiVideoFilesOverFunnel => "Lets a PC video file play on the YouTube tab over Tailscale Funnel too, not only on the LAN or a tailnet.",
         SettingsField.WebUiYouTubeControls => "Shows the Web UI's YouTube tab, which plays videos and keeps the saved list. A video started there plays there.",
 
         // /settings › Servers › Common
@@ -324,6 +325,8 @@ public static partial class HelpSettings
         SettingsField.ComfyOutputFolder => "The folder under the profile's images folder where the pictures are saved. Empty uses the images folder itself.",
 
         // /tools › Apps › YouTube
+        SettingsField.VideoTools => "Gives the model two tools that play a video file from the working folder for you, and pause, seek or close it. Never YouTube.",
+        SettingsField.VideoFilesPlayIn => "Where video files play: the app's video window, the Web UI's YouTube tab, or the file's default app.",
         SettingsField.YouTubeTools => "Gives the model the YouTube tools: search, play videos and playlists, and keep saved videos and playlists. Searching needs a YouTube API key.",
         SettingsField.YouTubeApiKey => "Your YouTube Data API v3 key, for searching (about 100 free searches a day). Saved encrypted.",
         SettingsField.YouTubeSearchMaxResults => "The most videos, playlists or channels a search lists (1–20). The quota cost is the same whatever the count.",

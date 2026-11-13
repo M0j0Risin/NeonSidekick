@@ -36,6 +36,14 @@ internal sealed record WebViewProfile(string BrowserArguments, string? HostName,
     public static WebViewProfile Video { get; } = new(WebViewOptions.BrowserArguments, VideoPage.HostName, VideoPage.IsOurs, LockedDown: true, Browsing: false, "Video");
 
     /// <summary>
+    /// The Windows video window's since 2026-11-12 (the video-files plan): <see cref="Video"/>'s, and also <paramref name="siteFolder"/>'s file page,
+    /// whose <c>file:</c> address depends on the home, so it is made per window start with the folder bound (<see cref="VideoPage.IsOurs(string?, string)"/>).
+    /// The same browser arguments, so the shared user data folder's options stay equal.
+    /// </summary>
+    public static WebViewProfile VideoFor(string siteFolder) =>
+        Video with { Allows = uri => VideoPage.IsOurs(uri, siteFolder) };
+
+    /// <summary>
     /// The Browser window's: any web page (<see cref="BrowserPage.Allows"/>), a browser's settings, and since 2026-10-14 (the PDF plan's phase
     /// 4a) the staged PDFs' host (<see cref="PdfView.HostName"/>), mapped when the window gives its folder.
     /// </summary>
@@ -748,8 +756,10 @@ internal sealed unsafe partial class WebViewHost
     /// browser, so a probe beside a running app would fail or join its browser), the page written and served from the virtual
     /// host, its first message received, an echo posted and answered (web messages both ways), a script's answer read (the
     /// third handler shape), and a script's <c>location.href</c> off the host refused. No network: the page speaks before it
-    /// loads YouTube's script. Skipped (and passed) where no WebView2 Runtime is installed, which the app says in a sentence;
-    /// a missing loader fails.
+    /// loads YouTube's script. Then (2026-11-12, the video-files plan) the host moves to the video file page (<c>file.html</c>, a
+    /// <c>file:</c> page, <c>file-core.js</c> put in at its marker): its first message as the file kind, an echo both ways, the page's
+    /// protocol read, and a script's move to another <c>file:</c> address refused. No video plays: none ships. Skipped (and passed)
+    /// where no WebView2 Runtime is installed, which the app says in a sentence; a missing loader fails.
     /// </summary>
     public static (bool Ok, string Detail) Probe(TimeSpan timeout)
     {
@@ -786,7 +796,8 @@ internal sealed unsafe partial class WebViewHost
         SetThreadDpiAwarenessContext(PerMonitorAwareV2);
         int ole = OleInitialize(IntPtr.Zero);
         IntPtr hwnd = IntPtr.Zero;
-        var run = new ProbeRun(version, timeout);
+        string site = Path.Combine(root, VideoPage.SiteFolderName);
+        var run = new ProbeRun(version, timeout, site);
         t_probe = run;
         try
         {
@@ -802,14 +813,13 @@ internal sealed unsafe partial class WebViewHost
                 return (false, $"CreateWindowExW failed ({Marshal.GetLastPInvokeError()})");
             }
 
-            string site = Path.Combine(root, VideoPage.SiteFolderName);
             VideoPage.Write(site);
             run.Host = new WebViewHost(hwnd);
             run.Host.Message = run.OnMessage;
             run.Host.Refused = run.OnRefused;
             run.Host.Failed = (step, hr) => run.Finish(false, $"failed at {step} (0x{hr.ToString("X8", CultureInfo.InvariantCulture)})");
             SetTimer(hwnd, 1, 100, IntPtr.Zero);
-            if (run.Host.Start(Path.Combine(root, VideoPage.FolderName), site, VideoPage.Url))
+            if (run.Host.Start(Path.Combine(root, VideoPage.FolderName), site, VideoPage.Url, WebViewProfile.VideoFor(site)))
             {
                 Pump(() => run.Done);
             }
@@ -928,13 +938,20 @@ internal sealed unsafe partial class WebViewHost
     }
 
     /// <summary>The probe's steps, run on its thread as the page answers.</summary>
-    private sealed class ProbeRun(string version, TimeSpan timeout)
+    private sealed class ProbeRun(string version, TimeSpan timeout, string site)
     {
         private readonly Stopwatch _clock = Stopwatch.StartNew();
         private Stopwatch? _exitClock;
         private long _pageAt = -1;
         private bool _echoed;
         private bool _scripted;
+
+        // The file page's run (2026-11-12): moved to once the YouTube page passed, its own first message, echo and script.
+        private bool _onFile;
+        private long _filePageAt = -1;
+        private long _fileStartedAt;
+        private bool _fileEchoed;
+        private bool _fileScripted;
 
         public WebViewHost? Host { get; set; }
 
@@ -948,6 +965,12 @@ internal sealed unsafe partial class WebViewHost
         {
             using var doc = JsonDocument.Parse(text);
             string? ev = doc.RootElement.TryGetProperty("ev", out var e) ? e.GetString() : null;
+            if (_onFile)
+            {
+                OnFileMessage(doc.RootElement, ev, text);
+                return;
+            }
+
             if (ev == "page" && _pageAt < 0)
             {
                 _pageAt = _clock.ElapsedMilliseconds;
@@ -978,9 +1001,54 @@ internal sealed unsafe partial class WebViewHost
 
         public void OnRefused(string uri)
         {
-            if (_scripted && uri.StartsWith("https://example.com", StringComparison.Ordinal))
+            if (!_onFile && _scripted && uri.StartsWith("https://example.com", StringComparison.Ordinal))
             {
-                Finish(true, $"runtime {version}; the page on {VideoPage.HostName} in {_pageAt.ToString(CultureInfo.InvariantCulture)} ms; web messages both ways, a script's answer, a navigation off the host refused");
+                _onFile = true;
+                _fileStartedAt = _clock.ElapsedMilliseconds;
+                Host!.Navigate(VideoPage.FileUrl(site));
+            }
+            else if (_fileScripted && uri.StartsWith("file:", StringComparison.OrdinalIgnoreCase))
+            {
+                Finish(true, $"runtime {version}; the page on {VideoPage.HostName} in {_pageAt.ToString(CultureInfo.InvariantCulture)} ms; web messages both ways, a script's answer, a navigation off the host refused; "
+                    + $"the file page in {(_filePageAt - _fileStartedAt).ToString(CultureInfo.InvariantCulture)} ms, its echo, a move to another file refused");
+            }
+        }
+
+        // The file page: its first message names the file kind, its echo comes back, its protocol is file:, and its move to another file is refused.
+        private void OnFileMessage(JsonElement root, string? ev, string text)
+        {
+            if (ev == "page" && _filePageAt < 0)
+            {
+                if (!root.TryGetProperty("kind", out var kind) || kind.GetString() != VideoMessages.FileKind)
+                {
+                    Finish(false, "the file page's first message named no file kind: " + text);
+                    return;
+                }
+
+                _filePageAt = _clock.ElapsedMilliseconds;
+                Host!.Post("{\"cmd\":\"echo\",\"value\":\"" + ProbeEcho + "\"}");
+            }
+            else if (ev == "echo" && !_fileEchoed)
+            {
+                _fileEchoed = root.TryGetProperty("value", out var v) && v.GetString() == ProbeEcho;
+                if (!_fileEchoed)
+                {
+                    Finish(false, "the file page's echo came back wrong: " + text);
+                    return;
+                }
+
+                Host!.RunScript("location.protocol", (hr, json) =>
+                {
+                    if (hr < 0 || json != "\"file:\"")
+                    {
+                        Finish(false, $"the file page's script answered {json} (0x{hr.ToString("X8", CultureInfo.InvariantCulture)})");
+                        return;
+                    }
+
+                    _fileScripted = true;
+                    string other = VideoPage.FileSrc(Path.Combine(site, "other.html"));
+                    Host!.RunScript("location.href = '" + other + "'; 'sent'", (_, _) => { });
+                });
             }
         }
 
@@ -996,7 +1064,11 @@ internal sealed unsafe partial class WebViewHost
             if (!Done && _clock.Elapsed > timeout)
             {
                 Finish(false, _pageAt < 0 ? $"the page did not speak within {timeout.TotalSeconds.ToString(CultureInfo.InvariantCulture)} s"
-                    : _echoed ? "the navigation off the host was not refused" : "the echo did not come back");
+                    : !_echoed ? "the echo did not come back"
+                    : !_onFile ? "the navigation off the host was not refused"
+                    : _filePageAt < 0 ? "the file page did not speak"
+                    : !_fileEchoed ? "the file page's echo did not come back"
+                    : "the file page's move to another file was not refused");
             }
 
             if (_exitClock is { Elapsed.TotalSeconds: > 10 } && !Exited)

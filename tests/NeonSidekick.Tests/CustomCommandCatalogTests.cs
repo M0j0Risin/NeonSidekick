@@ -108,6 +108,18 @@ public sealed class CustomCommandCatalogTests : IDisposable
         Assert.Equal("/clear", Assert.Single(catalog.TakeNewlyShadowedByBuiltIn()).BuiltIn);
     }
 
+    /// <summary>The newest built-in (2026-11-12, the video-files plan): a <c>video.md</c> written before <c>/video</c> existed is shadowed now.</summary>
+    [Fact]
+    public void ANewBuiltIn_ShadowsAnOlderCustomCommand_OfItsName()
+    {
+        Write(_profile, "video.md", "Play my video.");
+
+        var scan = Catalog().Scan();
+
+        Assert.Empty(scan.Commands);
+        Assert.Equal("/video", Assert.Single(scan.Shadowed).BuiltIn);
+    }
+
     [Fact]
     public void ABadStem_IsSkipped_WithTheNameItCouldBe()
     {

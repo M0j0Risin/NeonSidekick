@@ -139,6 +139,8 @@ internal sealed partial class ChatScreen
             // The YouTube tab's player (2026-10-16), and its chores on the same tick: a hold's expiry, a video stopped once the tab is off.
             Video = _webVideo,
             Tick = () => { HomeWebTick(); WebVideoTick(); },
+            // A video file over Tailscale Funnel (2026-11-12, the video-files plan), per request.
+            VideoFilesOverFunnelNow = () => _effective().WebUiVideoFilesOverFunnel,
             // The pages wear the profile's theme (2026-10-15), per request.
             ProfileTheme = () => _effective().WebUiProfileTheme,
             // Each tab only while its controls are on (later on 2026-10-15), per request.

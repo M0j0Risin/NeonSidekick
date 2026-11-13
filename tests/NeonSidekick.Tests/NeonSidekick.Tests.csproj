@@ -64,6 +64,9 @@
          video, a live broadcast, HTML-escaped titles and a channel hit to skip; the videos.list details (a length, P0D for the
          broadcast, a hidden view count); quotaExceeded, an invalid key, the API not enabled, a referrer-restricted key. -->
     <None Include="Fixtures\youtube\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Video files (2026-11-12, the video-files plan), made by ffmpeg's lavfi test sources: 3 s at 160x90, VP9 + Opus in WebM, H.264 + AAC
+         in MP4, and an MP4 of sound alone (the no-picture code). -->
+    <None Include="Fixtures\video\*.*" CopyToOutputDirectory="PreserveNewest" />
     <!-- Scheduled tasks' definitions (2026-10-15, the admin-tools plan): IRegisteredTask::get_Xml's shape, one per principal the privileged
          guard reads — SYSTEM by its SID, a user with highest privileges, a group, a plain user — with the triggers TaskWords puts in words. -->
     <None Include="Fixtures\tasks\*.xml" CopyToOutputDirectory="PreserveNewest" />

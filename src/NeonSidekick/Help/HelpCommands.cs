@@ -577,11 +577,24 @@ public static class HelpCommands
         [
             new("/vault [<path>]", "Show a tree of the *Obsidian vault*, or a folder in it, in a pane, like `/tree`: dot-folders left out, at most *File /tree max entries* long, sizes per *File /tree show sizes*. It fails if *Obsidian tools* is off, no vault is set, or the folder cannot be reached or has no `.obsidian`."),
         ]),
+        new("/video",
+        [
+            new("/video", "Show what the video file playing is doing, as `/video status` does."),
+            new("/video <path>", "Play a video file from the working directory (MP4, M4V, MOV, WebM or MKV) where *Video files play in* says: the video window, the Web UI's YouTube tab, or its own app. An argument ending in a video extension is always a path, blanks and all. F11 is full screen and Esc leaves it."),
+            new("/video play|resume", "Carry on playing."),
+            new("/video pause", "Pause the video file."),
+            new("/video seek <time>", "Go to a time in it (`90` or `1:30`)."),
+            new("/video volume <level>", "Set the volume (0–100)."),
+            new("/video mute|unmute", "Mute or unmute it."),
+            new("/video status", "Show what is playing: the file, playing or paused, where it is and the volume."),
+            new("/video close", "Close the video file's player."),
+        ]),
         new("/view",
         [
             new("/view <image>|<folder>", "Open an image from the working directory in the picture viewer, or a folder there on its newest picture. The arrows or the mouse wheel step through the pictures, and a right-click opens the picture menu (rotate, flip, color, resize, convert, shrink, copy the path, show in the file browser, attach, print, delete; edits go where *Image edit mode* says). Works while a reply runs. A PDF (`/view report.pdf`) opens in the Browser window's own PDF viewer instead, a copy of it that goes when the window closes; where the window can't take it, in its own program."),
             new("/view <image> --chat", "Draw the image in the transcript instead; `--chat` may be the first or last word."),
             new("/view <image>|<folder> --thumbs", "Open the folder (an image's folder, with the image selected) as thumbnails in a window of their own, in step with the picture viewer and the picture strip. A click shows the picture in the viewer, a double-click or Enter opens it there, and the viewer's own moves select it here; new pictures go on the end, so nothing moves. + and − or Ctrl+wheel resize the tiles, F5 lists and fits again, and a right-click opens the picture menu. `--thumbs` may be the first or last word. Works while a reply runs."),
+            new("/view <video>", "Play a video file (MP4, M4V, MOV, WebM or MKV) as `/video <path>` does."),
         ]),
         new("/webui",
         [
