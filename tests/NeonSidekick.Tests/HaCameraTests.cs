@@ -512,7 +512,7 @@ public sealed class HaCameraTests : IDisposable
     [InlineData("backyard", "camera.backyard_live_view")]
     public void ACamera_IsFoundByName_ById_OrByItsWords_TheAvailableOnePreferred(string target, string id)
     {
-        var (camera, error) = HaCameraTool.Camera(Snapshot(States()), target);
+        var (camera, error) = HaCameraTool.Pick(Snapshot(States()), target, HaText.NotACamera);
 
         Assert.Null(error);
         Assert.Equal(id, camera!.Id);
@@ -523,15 +523,15 @@ public sealed class HaCameraTests : IDisposable
     {
         var snapshot = Snapshot(States());
 
-        Assert.Equal(HaText.NotACamera(snapshot.Find("light.porch")!), HaCameraTool.Camera(snapshot, "light.porch").Error);
-        Assert.StartsWith("Error: ", HaCameraTool.Camera(snapshot, null).Error);
-        Assert.Contains("Backyard Live view", HaCameraTool.Camera(snapshot, null).Error);
-        Assert.StartsWith("Error: ", HaCameraTool.Camera(snapshot, "garage").Error);
+        Assert.Equal(HaText.NotACamera(snapshot.Find("light.porch")!), HaCameraTool.Pick(snapshot, "light.porch", HaText.NotACamera).Error);
+        Assert.StartsWith("Error: ", HaCameraTool.Pick(snapshot, null, HaText.NotACamera).Error);
+        Assert.Contains("Backyard Live view", HaCameraTool.Pick(snapshot, null, HaText.NotACamera).Error);
+        Assert.StartsWith("Error: ", HaCameraTool.Pick(snapshot, "garage", HaText.NotACamera).Error);
 
         var one = Snapshot("""[{"entity_id":"camera.porch","state":"idle","attributes":{"friendly_name":"Porch"}},{"entity_id":"light.den","state":"on","attributes":{}}]""");
-        Assert.Equal("camera.porch", HaCameraTool.Camera(one, null).Camera!.Id);
+        Assert.Equal("camera.porch", HaCameraTool.Pick(one, null, HaText.NotACamera).Camera!.Id);
         var none = Snapshot("""[{"entity_id":"light.den","state":"on","attributes":{}}]""");
-        Assert.Equal(HaText.NoneOf(HaCameraTool.Domain), HaCameraTool.Camera(none, null).Error);
+        Assert.Equal(HaText.NoneOf(HaCameraTool.Domain), HaCameraTool.Pick(none, null, HaText.NotACamera).Error);
     }
 
     [Fact]
@@ -669,6 +669,42 @@ public sealed class HaCameraTests : IDisposable
         Assert.Null(camera);
         Assert.Equal(HaText.CameraUnavailable("Front Door Live view", "unavailable"), error);
         Assert.Equal(0, ProxyRequests());
+    }
+
+    /// <summary>
+    /// The review of 2026-11-13: an offline camera beside the only one that can give a picture doesn't make the pick ambiguous, bare or by
+    /// words both match; two available ones still are.
+    /// </summary>
+    [Fact]
+    public void Pick_PrefersTheOneAvailableCamera_WhenSeveralMatch()
+    {
+        var snapshot = Snapshot("""
+            [{"entity_id":"camera.porch_camera","state":"idle","attributes":{"friendly_name":"Porch Camera"}},
+             {"entity_id":"camera.porch_doorbell","state":"unavailable","attributes":{"friendly_name":"Porch Doorbell"}}]
+            """);
+
+        Assert.Equal("camera.porch_camera", HaCameraTool.Pick(snapshot, null, HaText.NotACameraCommand).Camera!.Id);
+        Assert.Equal("camera.porch_camera", HaCameraTool.Pick(snapshot, "porch", HaText.NotACameraCommand).Camera!.Id);
+        Assert.Equal("camera.porch_doorbell", HaCameraTool.Pick(snapshot, "Porch Doorbell", HaText.NotACameraCommand).Camera!.Id);   // named: refused later as unavailable
+        Assert.StartsWith("Error: ", HaCameraTool.Pick(Snapshot(States()), null, HaText.NotACameraCommand).Error);   // two available: ambiguous
+    }
+
+    /// <summary>The review of 2026-11-13: a chip's camera the kept read hasn't got yet (just added) is read afresh, not missed.</summary>
+    [Fact]
+    public async Task ResolveAsync_AnAliasedCameraMissingFromTheKeptRead_IsReadAgain()
+    {
+        const string added = """[{"entity_id":"camera.door","state":"idle","attributes":{"friendly_name":"Front Door"}}]""";
+        var (_, ha, _, guard) = Tool(StripFixtures.Jpeg(), TimeAnswer, States(), added);
+        using var _ = guard;
+        using var __ = ha;
+        var (kept, _) = await ha.SnapshotAsync(CancellationToken.None);   // the kept read, without the camera
+        Assert.Null(kept!.Find("camera.door"));
+
+        var (camera, error) = await HaCameraTool.ResolveAsync(ha, "Door", HaText.NotACameraCommand, CancellationToken.None, aliasedId: "camera.door");
+
+        Assert.Null(error);
+        Assert.Equal("camera.door", camera!.Id);
+        Assert.Equal(2, _stub.Requests.Count(r => r.Uri.AbsolutePath == "/api/states"));
     }
 
     [Fact]

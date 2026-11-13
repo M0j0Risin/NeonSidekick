@@ -62,7 +62,7 @@ internal sealed partial class ChatScreen
         var effective = _effective();
         return new WebCommandSettings(effective.WebUiCommands, effective.FileTools, effective.ObsidianTools, effective.WebUiShoppingControls, WebTabsNow().YouTube,
             _customCommands.Recent().Names,   // 2026-10-30: read on a Kestrel thread too, behind the catalog's lock
-            HomeTab: effective.WebUiHomeControls);   // 2026-11-13: /ha camera points at the Home tab's cameras, or at this setting
+            HomeTab: WebTabsNow().Home);   // 2026-11-13: /ha camera points at the Home tab's cameras, or at its setting
     }
 
     /// <summary>

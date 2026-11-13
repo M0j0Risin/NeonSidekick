@@ -74,7 +74,7 @@ public partial class SidekickAppTests
         Assert.Equal(2, saved.Length);   // the second, a second later or not, is a -2 copy: headless shares no fetch
         Assert.All(saved, f => Assert.StartsWith("porch-", Path.GetFileName(f), StringComparison.Ordinal));
         Assert.Equal(2, output.Split("Porch Camera: a still, saved as ").Length - 1);
-        Assert.All(saved, f => Assert.Contains(Path.GetFileName(f), output, StringComparison.Ordinal));
+        Assert.All(saved, f => Assert.Contains("Porch Camera: a still, saved as " + f, output, StringComparison.Ordinal));   // the full path (2026-11-13, the review)
         Assert.Contains("[error] Error: ", output);
         Assert.Contains("Shed", output);
         Assert.Equal(2, _http.Requests.Count(r => r.Uri.AbsolutePath.StartsWith("/api/camera_proxy/", StringComparison.Ordinal)));

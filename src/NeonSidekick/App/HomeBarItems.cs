@@ -337,8 +337,16 @@ public static class HomeBarItems
         aliases is not null && !IsNameless(reference) && Normalize(reference) is { } r && aliases.TryGetValue(r, out string? alias) && alias is not null ? alias.Trim() : null;
 
     /// <summary>
+    /// The camera entity id <paramref name="reference"/> names (<c>entity:camera.porch</c> → <c>camera.porch</c>), else null: the one test
+    /// of "this item is a camera" (2026-11-13, the review: the chip, the page's tiles and sheet, and the aliases each spelled it out). Pure.
+    /// </summary>
+    public static string? CameraId(string? reference) =>
+        reference is not null && TryParse(reference, out var kind, out string id) && kind == HomeItemKind.Entity
+        && string.Equals(HaCatalog.DomainOf(id), Llm.Tools.HaCameraTool.Domain, StringComparison.Ordinal) ? id : null;
+
+    /// <summary>
     /// The camera chips' aliases (2026-11-13, <c>/ha camera</c>: a chip's name is a name the command takes): each camera entity's alias with its
-    /// entity id, in the setting's order. An empty alias (the emoji alone) names nothing and is left out. Pure.
+    /// entity id, in the dictionary's order. An empty alias (the emoji alone) names nothing and is left out. Pure.
     /// </summary>
     public static IReadOnlyList<(string Alias, string EntityId)> CameraAliases(IReadOnlyDictionary<string, string>? aliases)
     {
@@ -350,8 +358,7 @@ public static class HomeBarItems
         var found = new List<(string, string)>();
         foreach (var (reference, alias) in aliases)
         {
-            if (alias?.Trim() is { Length: > 0 } text && TryParse(reference, out var kind, out string id) && kind == HomeItemKind.Entity
-                && string.Equals(HaCatalog.DomainOf(id), Llm.Tools.HaCameraTool.Domain, StringComparison.Ordinal))
+            if (alias?.Trim() is { Length: > 0 } text && CameraId(reference) is { } id)
             {
                 found.Add((text, id));
             }

@@ -543,12 +543,20 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// Whether <paramref name="reference"/>'s chip is drawn on the bar now (2026-11-13, <c>/ha camera</c>: its <c>…</c> shows the wait, else
-    /// the command writes a line): on the page shown, not paged behind the arrows or dropped for room, as <see cref="FindHomeChip"/>'s every
-    /// chip built may be (<see cref="UI.HomeBar.Shows"/>).
+    /// Whether <paramref name="reference"/>'s chip shows a camera's wait now (2026-11-13, <c>/ha camera</c>: its <c>…</c> or <c>!</c> is the
+    /// answer, else a line is written): the pane on and drawing the home row — a short window builds the row but drops it (the review of
+    /// 2026-11-13) — and the chip on the page shown, whole, not paged behind the arrows, dropped for room or cut, as
+    /// <see cref="FindHomeChip"/>'s every chip built may be (<see cref="UI.HomeBar.Shows"/>). Asked when a fetch starts and again when it
+    /// fails, from any thread. The pane is read before <see cref="_homeGate"/> is taken: its draw holds its own lock while it builds the
+    /// row under ours.
     /// </summary>
-    private bool HomeChipDrawn(string reference)
+    private bool HomeChipShowsWait(string reference)
     {
+        if (!_pane.Enabled || _pane.HomeRows == 0)
+        {
+            return false;
+        }
+
         lock (_homeGate)
         {
             return _homeCache is { } cache && UI.HomeBar.Shows(cache.Row, cache.Chips, reference);
@@ -694,9 +702,10 @@ internal sealed partial class ChatScreen
 
         // A camera (2026-10-27, the ring-integration plan): its still, fetched behind the line whether or not the pane is on; one the feed
         // reports unavailable takes every unavailable chip's way below, unfetched.
-        if (kind == HomeItemKind.Entity && HaCatalog.DomainOf(id) == Llm.Tools.HaCameraTool.Domain && _homeLive.Snapshot.Entities.GetValueOrDefault(id) is not { Unavailable: true })
+        // A camera already on its way is said only where no chip shows the wait (2026-11-13, the review: one rule with /ha camera's).
+        if (HomeBarItems.CameraId(chip.Reference) is { } camera && _homeLive.Snapshot.Entities.GetValueOrDefault(camera) is not { Unavailable: true })
         {
-            if (!StartHomeCamera(chip.Reference, chip.Name, id) && !_pane.Enabled)
+            if (!StartHomeCamera(chip.Reference, chip.Name, camera, comingLine: false) && !HomeChipShowsWait(chip.Reference))
             {
                 sink.Notice(HomeBarText.CameraFetching(chip.Name));
             }

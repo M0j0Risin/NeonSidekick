@@ -141,4 +141,19 @@ public static partial class HaCamera
         _ = images.Resolve(written.Relative, forWrite: false, out string full);
         return new HaCameraSave(image with { Path = full }, written.Relative, null);
     }
+
+    /// <summary>
+    /// <paramref name="entityId"/>'s still fetched (<see cref="HaSession.CameraAsync"/>), made a picture (<see cref="ToAttachment"/>) and kept
+    /// (<see cref="Save"/>) at the session clock's time in <paramref name="zone"/>, read once the still has come: the one sequence
+    /// <c>ha_camera</c> and headless's <c>/ha camera</c> share (2026-11-13, the review: each spelled it out). A still that didn't come is the
+    /// error, with no save; a refused write is a save with its sentence, as <see cref="Save"/> gives it.
+    /// </summary>
+    public static async Task<(HaCameraSave? Save, string? Error)> FetchAndSaveAsync(HaSession ha, WorkingDirectory images, string entityId, TimeZoneInfo zone, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(ha);
+        ArgumentNullException.ThrowIfNull(zone);
+        var reply = await ha.CameraAsync(entityId, cancellationToken).ConfigureAwait(false);
+        var (image, failed) = ToAttachment(reply, entityId);
+        return image is null ? (null, failed) : (Save(images, image, entityId, TimeZoneInfo.ConvertTime(ha.Time.GetUtcNow(), zone)), null);
+    }
 }

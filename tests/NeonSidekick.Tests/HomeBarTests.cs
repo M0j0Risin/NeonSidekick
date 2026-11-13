@@ -548,6 +548,11 @@ public sealed class HomeBarTests
         Assert.False(HomeBar.Shows(null, all, "entity:light.center"));
         HomeChip[] divided = [Chip("Desk"), Divider(1), Chip("Hall")];
         Assert.False(HomeBar.Shows(HomeBar.Render(divided, 80), divided, "divider:1"));
+
+        // A chip cut to the page (2026-11-13, the review): its "…" would hide the wait's mark, so it doesn't count as drawn.
+        HomeChip[] wide = [Chip("Tv", "▸ A very long title indeed") with { Short = "Tv" }, Chip("Desk")];
+        Assert.False(HomeBar.Shows(HomeBar.Render(wide, 12), wide, "entity:light.tv"));
+        Assert.True(HomeBar.Shows(HomeBar.Render(wide, 80), wide, "entity:light.tv"));
     }
 
     [Fact]

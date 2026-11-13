@@ -185,11 +185,12 @@ internal sealed partial class ChatScreen
     /// profile loaded at the tap (2026-10-27, the review): a profile switch moves the settings before it forgets the fetches, and a save in
     /// between would otherwise land in the new profile.
     /// <para>Since 2026-11-13 <c>/ha camera</c> starts it too, for any camera (<paramref name="reference"/> its <c>entity:</c> reference, on the
-    /// bar or not). <paramref name="lineOnFailure"/> is the command's when no drawn chip shows the wait: the <see cref="HomeBarText.CameraComing"/>
-    /// notice is queued first, through the same queue as the still's, so "fetching" always prints before "saved", and a failure is an error
-    /// line whether the pane is on or not, so that notice never goes unanswered.</para>
+    /// bar or not). <paramref name="comingLine"/> is the command's when no chip shows the wait: the <see cref="HomeBarText.CameraComing"/>
+    /// notice is queued first, through the same queue as the still's, so "fetching" always prints before "saved" — unless the still is one
+    /// reused from the last <see cref="HomeCameraFetches.Reuse"/> (the review of 2026-11-13: nothing is fetched then). Whether a failure is
+    /// a line is decided when it fails (<see cref="HomeCameraFailed"/>), so a notice of either kind never goes unanswered.</para>
     /// </summary>
-    private bool StartHomeCamera(string reference, string name, string id, bool lineOnFailure = false)
+    private bool StartHomeCamera(string reference, string name, string id, bool comingLine)
     {
         lock (_homeGate)
         {
@@ -203,25 +204,26 @@ internal sealed partial class ChatScreen
         }
 
         int generation = Volatile.Read(ref _homeCameraGeneration);
-        if (lineOnFailure)
+        var fetch = _homeCameras.Get(id);
+        if (comingLine && !(fetch.IsCompletedSuccessfully && fetch.Result.Image is not null))
         {
             QueueHomeCamera(new HomeCameraShow(generation, HomeBarText.CameraComing(name), null, null, null));
         }
 
         string root = _settings.ProfileImagesDirectory;
         var images = new WorkingDirectory(() => root, _time, WorkingDirectoryOptions.Images);
-        _ = RunHomeCameraAsync(reference, name, id, images, generation, lineOnFailure, _homeCameras.Token);
+        _ = RunHomeCameraAsync(reference, name, id, fetch, images, generation, _homeCameras.Token);
         return true;
     }
 
-    private async Task RunHomeCameraAsync(string reference, string name, string id, WorkingDirectory images, int generation, bool lineOnFailure, CancellationToken token)
+    private async Task RunHomeCameraAsync(string reference, string name, string id, Task<HomeCameraStill> fetch, WorkingDirectory images, int generation, CancellationToken token)
     {
         try
         {
-            var still = await _homeCameras.Get(id).WaitAsync(token).ConfigureAwait(false);
+            var still = await fetch.WaitAsync(token).ConfigureAwait(false);
             if (still.Image is not { } image)
             {
-                HomeCameraFailed(reference, name, still.Error ?? "", generation, lineOnFailure);
+                HomeCameraFailed(reference, name, still.Error ?? "", generation);
                 return;
             }
 
@@ -235,9 +237,11 @@ internal sealed partial class ChatScreen
 
                 var save = HaCamera.Save(images, image, id, _time.GetLocalNow());
                 error = save.Error;
-                if (save.Saved is { } path)
+                if (save.Saved is not null)
                 {
-                    _cameraPaths[path] = 0;   // a camera photo, should it reach the model through a mention
+                    // A camera photo, should it reach the model through a mention: by the picture's own path, as ha_camera's still is kept
+                    // (2026-11-13, the review; the images folder names it in full either way).
+                    _cameraPaths[save.Image.Path] = 0;
                 }
 
                 return save.Saved;
@@ -257,15 +261,17 @@ internal sealed partial class ChatScreen
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            HomeCameraFailed(reference, name, ex.Message, generation, lineOnFailure);
+            HomeCameraFailed(reference, name, ex.Message, generation);
         }
     }
 
     /// <summary>
-    /// A still that didn't come: the chip marked failed (it clears after <see cref="HomeFailedShows"/>), the words flashed and logged; with the
-    /// pane off, or for <c>/ha camera</c> with no drawn chip (<paramref name="lineOnFailure"/>, 2026-11-13), an error line.
+    /// A still that didn't come, logged. Where a chip shows the wait now (<see cref="HomeChipShowsWait"/>), the chip marked failed (it clears
+    /// after <see cref="HomeFailedShows"/>) and the words flashed; anywhere else an error line, no flash, and the mark taken off, since no
+    /// chip would show it. Decided when it fails (2026-11-13, the review), not when it started: the pane off, a short window, a chip paged
+    /// away meanwhile, a camera off the bar (<c>/ha camera</c>), or a command that joined a chip's fetch all get the line.
     /// </summary>
-    private void HomeCameraFailed(string reference, string name, string error, int generation, bool lineOnFailure)
+    private void HomeCameraFailed(string reference, string name, string error, int generation)
     {
         if (Volatile.Read(ref _homeCameraGeneration) != generation)
         {
@@ -273,20 +279,31 @@ internal sealed partial class ChatScreen
         }
 
         DiagnosticLog.Info(HaText.Category, "The still of " + name + " failed: " + error);
+        bool shown = HomeChipShowsWait(reference);
         lock (_homeGate)
         {
             if (_homePending.ContainsKey(reference))
             {
-                _homePending[reference] = new HomePending(_time.GetUtcNow(), [], [], Failed: true, Fetch: true);
+                if (shown)
+                {
+                    _homePending[reference] = new HomePending(_time.GetUtcNow(), [], [], Failed: true, Fetch: true);
+                }
+                else
+                {
+                    _homePending.Remove(reference);
+                }
+
                 _homeModel++;
             }
         }
 
         string words = HomeBarText.Failed(name, error);
-        _pane.Flash(words);
-        if (!_pane.Enabled || lineOnFailure)
+        if (shown)
         {
-            // The flash shows nothing with the pane off: a typed /homebar tap would fail without a word.
+            _pane.Flash(words);
+        }
+        else
+        {
             QueueHomeCamera(new HomeCameraShow(generation, null, words, null, null));
         }
     }

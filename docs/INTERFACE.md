@@ -402,7 +402,7 @@ Chips for Home Assistant rooms and devices, the shopping list and this PC's moni
 * **Alerts:** an open door, a leak, a jammed lock or a low battery turns amber or red. Every chip goes dim while Home Assistant is unreachable.
 * **🛒 n** counts the shopping lines still to get and opens `/shopping`; it needs no Home Assistant.
 * **🖥️** (Windows only, the glyph alone) is this PC's monitors: a double-click or right-click opens [the monitors pane](#the-monitors-pane).
-* **📹** is a camera: a double-click or right-click (or [`/ha camera <name>`](COMMANDS.md#integrations)) shows its still in [the picture viewer](#the-picture-viewer) (else the transcript), kept in `home-cameras` in the profile's `images` folder. `…` while it comes, `!` if none came.
+* **📹** is a camera: a double-click or right-click shows its still in [the picture viewer](#the-picture-viewer) (else the transcript), kept in `home-cameras` in the profile's `images` folder. `…` while it comes, `!` if none came.
 * **A click** shows a chip's state. **A double-click** toggles a light, switch or fan, turns a room's lights off (or on), runs a scene, plays or pauses, or moves a cover.
 * **A right-click** opens the chip's actions (a room's: its devices). A chip shows `…` until a change is reported, `!` after six seconds without.
 * **Asks first:** unlocking, opening a garage, gate or door, and disarming an alarm. An alarm that wants a code is disarmed in Home Assistant itself.
@@ -464,7 +464,7 @@ What every window shares:
 
 ### The picture viewer
 
-* **Opened by** a double-click on a picture in the transcript (*Image viewer* can name another program), `/view <image or folder>` (following new pictures), and `/comfy view`, `/camera view`, `/screen view`, `/splash view`, `/pasted view`, `/ha stills view` or `/ha camera <name>`.
+* **Opened by** a double-click on a picture in the transcript (*Image viewer* can name another program), `/view <image or folder>` (following new pictures), and `/comfy view`, `/camera view`, `/screen view`, `/splash view`, `/pasted view`, `/ha stills view` or [`/ha camera`](COMMANDS.md#integrations).
 * With no window, `/view` draws in the transcript; a PDF goes to [the Browser window](#the-browser-window).
 
 | Key | Action |
@@ -750,7 +750,8 @@ With *Web UI commands* on (off by default), the page sends slash commands too. T
 
 * **A Ralph loop:** its confirm, checkpoint and by-hand check ask on both sides; the status row shows 🔁, and Stop ends the loop.
 * **`/loop`** runs as at the PC (a looped `/read` is refused).
-* **Pointers:** bare `/shopping` points at the Shopping tab; bare `/youtube` and `/youtube list` at the Video tab's saved videos (or its setting while the tab is off). Bare `/about` points at ☰ › About. `/ha camera` points at the Home tab's cameras (or its setting while the tab is off).
+* **Pointers:** bare `/shopping` points at the Shopping tab; bare `/youtube` and `/youtube list` at the Video tab's saved videos (or its setting while the tab is off). Bare `/about` points at ☰ › About.
+* **`/ha camera`** points at the Home tab's camera tiles, for the cameras on the home bar (or at its setting while the tab is off).
 * **What differs:** `/ha` and `/docker` ask before a change (at the PC they don't), though `/ha` runs a read or a *Home Assistant safe services* call unasked. A bare `/docker` lists the containers.
 * `/msgclear` asks on both sides at once. `/rewind` puts the text on the page's draft; its pictures, PDFs and pasted blocks come back on the PC's line only.
 * **Refused when it runs:** `/model <id>` and `/reasoning`, when connecting would mean looking for a server or an embedded model not installed (those pickers and that download are the PC's); `/tts on` and `/stt on` when their voice models aren't downloaded.

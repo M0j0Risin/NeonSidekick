@@ -55,14 +55,16 @@ public static class HomeBar
     /// <summary>
     /// Whether <paramref name="row"/> draws the chip of <paramref name="reference"/> (2026-11-13, <c>/ha camera</c>'s wait): a chip span of the
     /// page shown whose <see cref="HomeSpan.Index"/> into <paramref name="chips"/> (the left, center and right chips in that order, as
-    /// <see cref="Render(IReadOnlyList{HomeChip}, IReadOnlyList{HomeChip}, IReadOnlyList{HomeChip}, int, int)"/> indexes them) is that chip.
-    /// A chip paged behind the arrows, or dropped for room, is not drawn; a divider never matches. Pure.
+    /// <see cref="Render(IReadOnlyList{HomeChip}, IReadOnlyList{HomeChip}, IReadOnlyList{HomeChip}, int, int)"/> indexes them) is that chip,
+    /// drawn whole. A chip paged behind the arrows, or dropped for room, is not drawn; nor is one cut to the page (<see cref="HomeChips.Clip"/>,
+    /// the review of 2026-11-13: its "…" hides the mark that would show the wait), whose span is narrower than its tightest text. Pure.
     /// </summary>
     public static bool Shows(HomeRow? row, IReadOnlyList<HomeChip> chips, string reference)
     {
         ArgumentNullException.ThrowIfNull(chips);
         return row is not null && row.Spans.Any(s => s.Target == HomeTarget.Chip && s.Index >= 0 && s.Index < chips.Count
-            && !chips[s.Index].Divider && string.Equals(chips[s.Index].Reference, reference, StringComparison.Ordinal));
+            && string.Equals(chips[s.Index].Reference, reference, StringComparison.Ordinal)
+            && s.Cells >= TextCells.Width(ChipText(chips[s.Index], Fit.Tight)));
     }
 
     /// <summary>

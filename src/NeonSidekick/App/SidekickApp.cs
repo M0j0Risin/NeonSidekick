@@ -932,6 +932,9 @@ public sealed partial class SidekickApp
         // The profile's images folder (2026-10-09): ComfyUI's pictures go there, and the picture tools reach it by full path.
         var images = BuildImagesDirectory();
         files.ImagesFolder = () => images.Root;
+        // /ha camera (2026-11-13, the user's pick): the still saved in home-cameras and its path printed; a chip's alias names it too, read
+        // from the settings at each call. Built once for the loop (the review: not on every /ha line).
+        var haCamera = new HomeAssistant.HaCameraOptions(images, target => HomeBarItems.AliasedCamera(target, EffectiveSettings.HomeBarAliases));
         // A refused path in a skill folder names load_skill (2026-10-17), while the skills are offered.
         files.SkillFolders = () => { var e = EffectiveSettings; return SkillRoots.For(_settings, _externalSkills).ReadFolders(e.AgentSkills, e.ExternalSkills); };
         // read_pdf (2026-10-14, the PDF plan): headless too, through the web tools' browser.
@@ -1505,8 +1508,6 @@ public sealed partial class SidekickApp
                         continue;
                     }
 
-                    // /ha camera (2026-11-13, the user's pick): the still saved in home-cameras and its path printed; a chip's alias names it too.
-                    var haCamera = new HomeAssistant.HaCameraOptions(images, target => HomeBarItems.AliasedCamera(target, EffectiveSettings.HomeBarAliases));
                     var haResult = await HomeAssistant.HaCommand.RunAsync(ha, haArgs, cancellationToken, camera: haCamera).ConfigureAwait(false);
                     foreach (string haLine in haResult.Lines)
                     {

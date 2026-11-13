@@ -28,17 +28,14 @@ public static class HaStillsCommand
     /// </summary>
     public static bool TryParse(string haArgs, out PictureFolderVerb verb)
     {
-        ArgumentNullException.ThrowIfNull(haArgs);
-        string trimmed = haArgs.Trim();
-        int space = trimmed.IndexOf(' ', StringComparison.Ordinal);
-        string first = space < 0 ? trimmed : trimmed[..space];
-        if (!string.Equals(first, Word, StringComparison.OrdinalIgnoreCase))
+        var (first, rest) = HaCommand.SplitVerb(haArgs);
+        if (first != Word)
         {
             verb = PictureFolderVerb.Unknown;
             return false;
         }
 
-        verb = PictureFolderCommand.Parse(space < 0 ? "" : trimmed[(space + 1)..]);
+        verb = PictureFolderCommand.Parse(rest);
         return true;
     }
 }

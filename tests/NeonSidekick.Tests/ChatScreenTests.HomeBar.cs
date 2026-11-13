@@ -378,19 +378,85 @@ public partial class ChatScreenTests
     {
         var stub = CameraCommandServer((_, _) => Task.FromResult(StubHttpMessageHandler.Json(System.Net.HttpStatusCode.InternalServerError, "500: Internal Server Error", "text/plain")));
         string failed = HomeBarText.Failed("Yard", HaText.CameraNoPicture)[..50];
-        int Failures() => (Output.Length - Output.Replace(failed, "", StringComparison.Ordinal).Length) / failed.Length;
+        int Count(string text) => (Output.Length - Output.Replace(text, "", StringComparison.Ordinal).Length) / text.Length;
+        // Counted as error lines, and the second stage waits for the second fetch too (2026-11-13, the review: a flash redrawn each tick
+        // could pass a bare count after one failure, and /exit then cancelled the second fetch).
         CameraStages(
             (() => true, input => PushLine(input, "/ha camera Yard")),
-            (() => Failures() >= 1, input => PushLine(input, "/ha camera Yard")),   // the failed mark doesn't block it
-            (() => Failures() >= 2, input => PushLine(input, "/exit")));
+            (() => Count("  ✗ " + failed) >= 1, input => PushLine(input, "/ha camera Yard")),   // the failure leaves no mark to block it
+            (() => Stills(stub) == 2 && Count("  ✗ " + failed) >= 2, input => PushLine(input, "/exit")));
 
         string output = await RunAsync();
 
         Assert.Equal(2, Stills(stub));
         Assert.Contains("  ✗ " + failed, output);   // a line, the pane on: no chip shows this camera's wait
+        Assert.Equal(Count("  ✗ " + failed), Count(failed));   // and no flash beside it (2026-11-13, the review)
         Assert.True(output.IndexOf(HomeBarText.CameraComing("Yard"), StringComparison.Ordinal) < output.IndexOf("  ✗ " + failed, StringComparison.Ordinal));
         Assert.DoesNotContain(HomeBarText.CameraFetching("Yard"), output);
         Assert.False(Directory.Exists(HomeCameraFolder));
+    }
+
+    /// <summary>
+    /// A window too short for the home row (the review of 2026-11-13): the bar's row is still built, but not drawn, so no chip shows the wait —
+    /// a camera on the bar gets the "fetching" line, then its saved notice.
+    /// </summary>
+    [Fact]
+    public async Task HaCamera_AShortWindowWithNoHomeRow_SaysItsComing_ForACameraOnTheBar()
+    {
+        var stub = CameraCommandServer();
+        _console.Profile.Height = 5;   // under the pane's 4 rows and 2 for the transcript: no row left for the home bar
+        var input = Scripted();
+        int step = 0;
+        input.OnWait = () =>
+        {
+            if (step == 0)
+            {
+                step++;
+                int ticks = 0;
+                TickUntil(() => ++ticks > 30);   // the pane's draws first, so the bar's row is built (and dropped)
+                PushLine(input, "/ha camera Porch Camera");
+            }
+            else if (step == 1 && Output.Contains("Porch Camera: a still, saved as ", StringComparison.Ordinal))
+            {
+                step++;
+                PushLine(input, "/exit");
+            }
+        };
+
+        string output = await RunAsync();
+
+        Assert.Contains(HomeBarText.CameraComing("Porch Camera"), output);
+        Assert.Equal(1, Stills(stub));
+    }
+
+    /// <summary>
+    /// <c>/ha camera</c> joining a chip's fetch while the chip shows the wait (the review of 2026-11-13): no "already on its way" line, as the
+    /// chip's own second tap writes none with the pane on; one fetch, one still.
+    /// </summary>
+    [Fact]
+    public async Task HaCamera_JoiningAChipsFetch_WhileItsChipShowsTheWait_WritesNoLine()
+    {
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stub = CameraCommandServer(async (_, ct) =>
+        {
+            await release.Task.WaitAsync(ct);
+            return StubHttpMessageHandler.Bytes(System.Net.HttpStatusCode.OK, StripFixtures.Jpeg(), "image/jpeg");
+        });
+        var viewed = new List<string>();
+        _viewPicture = path => { lock (viewed) { viewed.Add(path); } };
+        int Viewed() { lock (viewed) { return viewed.Count; } }
+        CameraStages(
+            (() => true, input => PushLine(input, "/homebar tap Porch Camera")),
+            (() => Stills(stub) == 1, input => PushLine(input, "/ha camera Porch Camera")),
+            (() => true, _ => release.TrySetResult()),   // the command has run: the read waits again only after it
+            (() => Viewed() == 1, input => PushLine(input, "/exit")));
+
+        string output = await RunAsync();
+
+        Assert.DoesNotContain(HomeBarText.CameraFetching("Porch Camera"), output);
+        Assert.DoesNotContain(HomeBarText.CameraComing("Porch Camera"), output);
+        Assert.Equal(1, Stills(stub));
+        Assert.Single(viewed);
     }
 
     [Fact]

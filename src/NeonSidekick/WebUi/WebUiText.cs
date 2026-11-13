@@ -513,8 +513,11 @@ public static class WebUiText
     /// <summary>Bare <c>/about</c> (2026-11-08, the user's pick): the page has an About card behind ☰.</summary>
     public const string UseAboutPage = "The version, licenses and source code are on this page's ☰ › About.";
 
-    /// <summary><c>/ha camera</c> (2026-11-13, the user's pick: refused with a pointer, nothing opened at the PC): the page's Home tab has cameras of its own.</summary>
-    public const string UseHomeCamerasPage = "The cameras are on this page's Home tab: tap one for its still. /ha camera shows them at the PC.";
+    /// <summary>
+    /// <c>/ha camera</c> (2026-11-13, the user's pick: refused with a pointer, nothing opened at the PC): the page's Home tab has a still for each
+    /// camera on the home bar — only those (the review of 2026-11-13: its rooms list no cameras), so it promises no more.
+    /// </summary>
+    public const string UseHomeCamerasPage = "A camera on the home bar has a still on this page's Home tab: tap its tile. /ha camera shows any camera at the PC.";
 
     /// <summary>The audit line of a command from the page: its word, the address and the verdict, never its words.</summary>
     public static string CommandLogLine(string word, IPAddress? remote, string verdict) =>

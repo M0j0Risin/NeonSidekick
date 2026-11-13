@@ -63,8 +63,8 @@ public static partial class HaText
         "tv" => "the TV: on, off, mute, volume, source",
         "states" => "list entities, by domain or name",
         "say" => "hand a sentence to Assist",
-        "camera" => "show a camera's still",
-        "stills" => "open or empty the camera stills' folder",
+        HaCameraCommand.Word => "show a camera's still",
+        HaStillsCommand.Word => "open or empty the camera stills' folder",
         _ => "",
     };
 
@@ -164,6 +164,9 @@ public static partial class HaText
 
     /// <summary>A camera's note after <c>/ha camera </c> (2026-11-13): its room, and "unavailable" where Home Assistant says so.</summary>
     public static string CameraItemNote(HaEntity camera) => (camera.Area ?? "camera") + (camera.Unavailable ? " · unavailable" : "");
+
+    /// <summary>A chip alias's note after <c>/ha camera </c> (2026-11-13, the review): the camera it opens, and "unavailable" where Home Assistant says so.</summary>
+    public static string CameraAliasNote(HaEntity camera) => camera.Name + (camera.Unavailable ? " · unavailable" : "");
 
     /// <summary><c>/ha camera</c>'s name an entity id of another domain (2026-11-13): <see cref="NotACamera"/> in the command's words.</summary>
     public static string NotACameraCommand(HaEntity entity) => $"Error: {Label(entity)} is not a camera; /ha camera takes a camera's name, entity id, room or chip name";
@@ -755,8 +758,15 @@ public static partial class HaText
     public const string Usage =
         "Usage: /ha · /ha on|off|toggle <name> [brightness%] · /ha scene <name> · /ha tv on|off|mute|unmute|up|down|vol <0-100>|source <name> · /ha states [filter] · /ha say <sentence> · /ha camera [<name>] · /ha stills view|thumbs|purge";
 
+    /// <summary>
+    /// <c>/ha</c>'s usage line on the Web UI's page (2026-11-13, the review): <see cref="Usage"/> without <c>/ha camera</c> and
+    /// <c>/ha stills</c>, which the page refuses, as its argument list leaves them out.
+    /// </summary>
+    public const string PageUsage =
+        "Usage: /ha · /ha on|off|toggle <name> [brightness%] · /ha scene <name> · /ha tv on|off|mute|unmute|up|down|vol <0-100>|source <name> · /ha states [filter] · /ha say <sentence>";
+
     /// <summary>The <c>/ha</c> verbs, in the completion's order.</summary>
-    public static readonly string[] Verbs = ["on", "off", "toggle", "scene", "tv", "states", "say", "camera", "stills"];
+    public static readonly string[] Verbs = ["on", "off", "toggle", "scene", "tv", "states", "say", HaCameraCommand.Word, HaStillsCommand.Word];
 
     /// <summary>The <c>/ha tv</c> actions, in the completion's order.</summary>
     public static readonly string[] TvActions = ["on", "off", "mute", "unmute", "up", "down", "vol", "volume", "source"];

@@ -65,32 +65,24 @@ public sealed class HaCameraTool : HaTool
         // The recording's time is asked beside the still, not after it (2026-10-27, the review): a slow still no longer waits twice.
         // It never throws but the caller's cancel, so a still that fails leaves it to finish unread.
         var recording = Ha.CameraTimeAsync(camera.Id, cancellationToken);
-        var reply = await Ha.CameraAsync(camera.Id, cancellationToken).ConfigureAwait(false);
-        var (image, failed) = HaCamera.ToAttachment(reply, camera.Id);
-        if (image is null)
+        var (save, failed) = await HaCamera.FetchAndSaveAsync(Ha, _images, camera.Id, _zone, cancellationToken).ConfigureAwait(false);
+        if (save is null)
         {
             return failed;
         }
 
-        var save = HaCamera.Save(_images, image, camera.Id, TimeZoneInfo.ConvertTime(Ha.Time.GetUtcNow(), _zone));
         var recorded = await recording.ConfigureAwait(false);
         return new ToolImageResult(HaText.CameraTaken(camera, save, recorded is { } when ? HaText.CameraRecorded(when, _zone) : null), [save.Image]);
     }
 
     /// <summary>
-    /// The camera a call means (<see cref="HaTool.OneOf"/>): the one named, else the only one; an entity id of another domain is
-    /// <see cref="HaText.NotACamera"/>. The failure as an <c>Error:</c> sentence. Pure.
-    /// </summary>
-    public static (HaEntity? Camera, string? Error) Camera(HaSnapshot snapshot, string? target) => OneOf(snapshot, Domain, Domain, target, HaText.NotACamera);
-
-    /// <summary>
     /// The camera a call or a command means, fit to fetch (2026-11-13, moved out of the tool for <c>/ha camera</c>, which the tool, the
-    /// screen and headless now share): read the kept snapshot and pick; a camera reported unavailable gets one fresh read (the kept one may
-    /// be up to 30 s old, and a camera that has just come back is fetched), then is refused (<see cref="HaText.CameraUnavailable"/>).
-    /// <paramref name="aliasedId"/> (a chip's alias, already looked up) is the camera on each read that still has it; one gone from Home
-    /// Assistant is ignored and <paramref name="target"/> picked, so an error names what was typed. <paramref name="otherDomain"/> words
-    /// an entity id of another domain (the tool's sentence names <c>ha_camera</c>, the command's <c>/ha camera</c>). The failure as an
-    /// <c>Error:</c> sentence.
+    /// screen and headless now share): read the kept snapshot and pick (<see cref="Pick"/>); a camera reported unavailable gets one fresh read
+    /// (the kept one may be up to 30 s old, and a camera that has just come back is fetched), then is refused (<see cref="HaText.CameraUnavailable"/>).
+    /// <paramref name="aliasedId"/> (a chip's alias, already looked up) is the camera on each read that has it; one the kept read lacks gets
+    /// the fresh read too (the review of 2026-11-13: a camera just added and put on the bar), and one gone from Home Assistant is ignored and
+    /// <paramref name="target"/> picked, so an error names what was typed. <paramref name="otherDomain"/> words an entity id of another domain
+    /// (the tool's sentence names <c>ha_camera</c>, the command's <c>/ha camera</c>). The failure as an <c>Error:</c> sentence.
     /// </summary>
     public static async Task<(HaEntity? Camera, string? Error)> ResolveAsync(HaSession ha, string? target, Func<HaEntity, string> otherDomain, CancellationToken cancellationToken, string? aliasedId = null)
     {
@@ -102,8 +94,8 @@ public sealed class HaCameraTool : HaTool
             return (null, error);
         }
 
-        var (camera, refused) = Pick(snapshot);
-        if (camera is { Unavailable: true })
+        var (camera, refused) = Pick(snapshot, target, otherDomain, aliasedId);
+        if (camera is { Unavailable: true } || (aliasedId is not null && snapshot.Find(aliasedId) is null))
         {
             (snapshot, error) = await ha.SnapshotAsync(cancellationToken, fresh: true).ConfigureAwait(false);
             if (snapshot is null)
@@ -111,7 +103,7 @@ public sealed class HaCameraTool : HaTool
                 return (null, error);
             }
 
-            (camera, refused) = Pick(snapshot);
+            (camera, refused) = Pick(snapshot, target, otherDomain, aliasedId);
         }
 
         if (camera is null)
@@ -120,8 +112,30 @@ public sealed class HaCameraTool : HaTool
         }
 
         return camera.Unavailable ? (null, HaText.CameraUnavailable(camera.Name, camera.State)) : (camera, null);
+    }
 
-        (HaEntity? Camera, string? Error) Pick(HaSnapshot read) =>
-            aliasedId is not null && read.Find(aliasedId) is { Domain: HaCameraTool.Domain } aliased ? (aliased, null) : OneOf(read, Domain, Domain, target, otherDomain);
+    /// <summary>
+    /// The camera <paramref name="read"/> gives for a call or a command: <paramref name="aliasedId"/>'s where the read has it; else the one
+    /// <paramref name="target"/> names (a name, a room, an id), or the only one when it is null (<see cref="HaTool.OneOf"/>). Where several
+    /// match and exactly one of them is available, that one (2026-11-13, the review: a bare <c>/ha camera</c>, or a room, was ambiguous
+    /// whenever an offline camera stood beside the one that could give a picture). The failure as an <c>Error:</c> sentence. Pure.
+    /// </summary>
+    public static (HaEntity? Camera, string? Error) Pick(HaSnapshot read, string? target, Func<HaEntity, string> otherDomain, string? aliasedId = null)
+    {
+        ArgumentNullException.ThrowIfNull(read);
+        if (aliasedId is not null && read.Find(aliasedId) is { Domain: Domain } aliased)
+        {
+            return (aliased, null);
+        }
+
+        var (camera, error) = OneOf(read, Domain, Domain, target, otherDomain);
+        if (camera is not null)
+        {
+            return (camera, null);
+        }
+
+        IReadOnlyList<HaEntity> candidates = target is null ? read.Of(Domain) : read.Resolve(target, [Domain]).Entities;
+        var available = candidates.Where(c => !c.Unavailable).Take(2).ToList();
+        return candidates.Count > 1 && available.Count == 1 ? (available[0], null) : (null, error);
     }
 }

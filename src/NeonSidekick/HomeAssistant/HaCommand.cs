@@ -69,9 +69,7 @@ public static class HaCommand
             return HaCommandResult.Error(HaText.NotConfigured);
         }
 
-        string text = args.Trim();
-        string verb = text.Split(' ', 2)[0].ToLowerInvariant();
-        string rest = text.Length > verb.Length ? text[verb.Length..].Trim() : "";
+        var (verb, rest) = SplitVerb(args);
         switch (verb)
         {
             case "":
@@ -96,6 +94,7 @@ public static class HaCommand
             case "toggle":
                 return await SwitchAsync(ha, ask, verb, rest, cancellationToken).ConfigureAwait(false);
 
+            // Headless's only (the screen takes /ha camera first); with no options, as no caller passes today, the usage.
             case HaCameraCommand.Word:
                 return camera is null ? HaCommandResult.Error(HaText.Usage) : await CameraAsync(ha, rest.Length == 0 ? null : rest, camera, cancellationToken).ConfigureAwait(false);
 
@@ -164,28 +163,40 @@ public static class HaCommand
     /// <summary>
     /// Headless's <c>/ha camera [&lt;name&gt;]</c> (2026-11-13, the user's pick: save it and print the path): the camera resolved as the
     /// screen resolves it (a chip's alias first, <see cref="HaCameraOptions.AliasedId"/>), its still fetched, stripped and kept in
-    /// <c>home-cameras</c> as <c>ha_camera</c> keeps it, and the screen's own notice printed. A still that didn't come, or one the folder
-    /// refused, is the error.
+    /// <c>home-cameras</c> as <c>ha_camera</c> keeps it (<see cref="HaCamera.FetchAndSaveAsync"/>), and the screen's notice printed with the
+    /// picture's full path, so a script opens it from anywhere. A still that didn't come, or one the folder refused (said as a failure, the
+    /// review of 2026-11-13: headless shows no picture), is the error.
     /// </summary>
     private static async Task<HaCommandResult> CameraAsync(HaSession ha, string? target, HaCameraOptions options, CancellationToken cancellationToken)
     {
         var (camera, refused) = await HaCameraTool.ResolveAsync(ha, target, HaText.NotACameraCommand, cancellationToken, options.AliasedId?.Invoke(target)).ConfigureAwait(false);
         if (camera is null)
         {
-            return HaCommandResult.Error(refused!);
+            return HaCommandResult.Error(refused ?? HaText.Usage);
         }
 
-        var reply = await ha.CameraAsync(camera.Id, cancellationToken).ConfigureAwait(false);
-        var (image, failed) = HaCamera.ToAttachment(reply, camera.Id);
-        if (image is null)
+        var (save, failed) = await HaCamera.FetchAndSaveAsync(ha, options.Images, camera.Id, ha.Time.LocalTimeZone, cancellationToken).ConfigureAwait(false);
+        if (save is null)
         {
-            return HaCommandResult.Error(failed!);
+            return HaCommandResult.Error(failed ?? HaText.Usage);
         }
 
-        var save = HaCamera.Save(options.Images, image, camera.Id, TimeZoneInfo.ConvertTime(ha.Time.GetUtcNow(), ha.Time.LocalTimeZone));
-        return save.Saved is { } saved
-            ? HaCommandResult.Of(HomeBarText.CameraShown(camera.Name, saved, null))
-            : HaCommandResult.Error(HomeBarText.CameraShown(camera.Name, null, save.Error));
+        return save.Saved is not null
+            ? HaCommandResult.Of(HomeBarText.CameraShown(camera.Name, save.Image.Path, null))
+            : HaCommandResult.Error(HomeBarText.Failed(camera.Name, save.Error ?? ""));
+    }
+
+    /// <summary>
+    /// <c>/ha</c>'s text split into its verb, lowercased, and the trimmed words after it (2026-11-13, the review: <see cref="RunAsync"/>,
+    /// <see cref="HaStillsCommand.TryParse"/> and <see cref="HaCameraCommand.TryParse"/> each split it their own way). The words part at the
+    /// first space, as they always have. Pure.
+    /// </summary>
+    public static (string Verb, string Words) SplitVerb(string args)
+    {
+        ArgumentNullException.ThrowIfNull(args);
+        string text = args.Trim();
+        int space = text.IndexOf(' ', StringComparison.Ordinal);
+        return space < 0 ? (text.ToLowerInvariant(), "") : (text[..space].ToLowerInvariant(), text[(space + 1)..].Trim());
     }
 
     /// <summary>
@@ -325,7 +336,8 @@ public static class HaCommand
     /// Since 2026-10-27: <c>stills</c> and, after it, its three words with or without a snapshot; after <c>states</c> the snapshot's domains,
     /// then its entity ids. Since 2026-11-13: <c>camera</c> and, after it, the camera chips' aliases (<paramref name="cameraAliases"/>, those
     /// whose camera the snapshot has, first: Enter resolves an alias first, and <c>DistinctBy</c> keeps the first of equal texts), then the
-    /// cameras. <paramref name="pcOnly"/> false (the Web UI's page, which refuses <c>/ha stills</c> and <c>/ha camera</c>) offers neither.
+    /// cameras, then their rooms. <paramref name="pcOnly"/> false (the Web UI's page, which refuses <c>/ha stills</c> and <c>/ha camera</c>)
+    /// offers neither.
     /// </summary>
     public static IReadOnlyList<CompletionItem> Complete(HaSnapshot? snapshot, string argText, bool pcOnly = true, IReadOnlyList<(string Alias, string EntityId)>? cameraAliases = null)
     {
@@ -380,13 +392,27 @@ public static class HaCommand
 
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<HaSnapshot, IReadOnlyList<CompletionItem>> StatesCache = new();
 
-    /// <summary><c>/ha camera</c>'s items (2026-11-13): each chip alias whose camera the snapshot still has, noted with the camera's name; then the cameras, noted with their room and "unavailable" where they are.</summary>
+    /// <summary>
+    /// <c>/ha camera</c>'s items (2026-11-13): each chip alias whose camera the snapshot has, noted with the camera's name; then the cameras,
+    /// noted with their room and "unavailable" where they are; then the rooms that hold a camera. Since the review of 2026-11-13: an alias
+    /// shared by several cameras isn't offered (<c>HomeBarItems.AliasedCamera</c> takes none of them), an alias's note says "unavailable"
+    /// too, and a camera whose name the resolve would split as two (a comma, " and ", <see cref="HaSnapshot.SplitTargets"/>) is offered by
+    /// its entity id.
+    /// </summary>
     private static IEnumerable<CompletionItem> CameraItems(HaSnapshot snapshot, string head, IReadOnlyList<(string Alias, string EntityId)>? aliases)
     {
         var cameras = snapshot.Of(HaCameraTool.Domain);
-        var aliased = (aliases ?? []).Select(a => (a.Alias, Camera: snapshot.Find(a.EntityId))).Where(a => a.Camera is { Domain: HaCameraTool.Domain })
-            .Select(a => new CompletionItem(head + a.Alias, a.Camera!.Name));
-        return aliased.Concat(cameras.Select(c => new CompletionItem(head + c.Name, HaText.CameraItemNote(c))));
+        var byId = cameras.DistinctBy(c => c.Id, StringComparer.OrdinalIgnoreCase).ToDictionary(c => c.Id, StringComparer.OrdinalIgnoreCase);
+        var aliased = (aliases ?? []).GroupBy(a => a.Alias, StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Select(a => a.EntityId).Distinct(StringComparer.OrdinalIgnoreCase).Count() == 1)
+            .Select(g => (Alias: g.Key, Camera: byId.GetValueOrDefault(g.First().EntityId)))
+            .Where(a => a.Camera is not null)
+            .Select(a => new CompletionItem(head + a.Alias, HaText.CameraAliasNote(a.Camera!)));
+        var named = cameras.Select(c => HaSnapshot.SplitTargets(c.Name) is [var whole] && string.Equals(whole, c.Name.Trim(), StringComparison.Ordinal)
+            ? new CompletionItem(head + c.Name, HaText.CameraItemNote(c))
+            : new CompletionItem(head + c.Id, c.Name + " · " + HaText.CameraItemNote(c)));
+        var rooms = cameras.Select(c => c.Area).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).Select(a => new CompletionItem(head + a, "room"));
+        return aliased.Concat(named).Concat(rooms);
     }
 
     private static IEnumerable<CompletionItem> TvItems(HaSnapshot snapshot, string argText, string head)

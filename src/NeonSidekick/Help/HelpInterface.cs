@@ -35,7 +35,7 @@ internal static class HelpInterface
     public const string HomeBarLine = "Its chips are picked with `/homebar edit`: a room's lights, a Home Assistant device, the shopping list's 🛒 (the lines still to get) and dividers; a click shows a chip's state, a double-click acts, a right-click opens its pane.";
 
     /// <summary>The Home bar's camera chip (2026-10-27, the ring-integration plan). Pinned.</summary>
-    public const string HomeCameraLine = "A camera's 📹 chip fetches its still on a double-click, opens it in the picture window and keeps it in home-cameras under the profile's images folder.";
+    public const string HomeCameraLine = "A camera's 📹 chip fetches its still on a double-click, opens it in the picture window and keeps it in home-cameras under the profile's images folder; /ha camera <name> does the same for any camera.";
 
     /// <summary>The Home bar's monitors chip, Windows only. Pinned.</summary>
     public const string HomeMonitorsLine = "The 🖥️ chip stands for this PC's monitors; a right-click opens the monitors pane (`/monitor`).";

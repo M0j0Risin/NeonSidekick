@@ -200,7 +200,7 @@ public static class HelpCommands
             new("/ha tv source <name>", "Switch the media player's source (`/ha tv source hdmi 2`)."),
             new("/ha states [<filter>]", "List entities with their ids and states in a pane: a domain, words of their names, or an entity id (which shows all of its attributes)."),
             new("/ha say <sentence>", "Hand a sentence to Home Assistant's Assist agent (*Home Assistant Assist agent*)."),
-            new("/ha camera [<name>]", "Show a camera's still in the picture viewer, as a 📹 chip's double-click does, for any camera: its name, entity id, room or chip name; bare, the only camera. Kept in `home-cameras`."),
+            new("/ha camera [<name>]", "Show a camera's still in the picture viewer (else the transcript), as a 📹 chip's double-click does, for any camera: its name, entity id, room or chip name; bare, the only camera. Kept in `home-cameras`."),
             new("/ha stills view", "Open the picture viewer on the camera stills the 📹 chip, `/ha camera` and `ha_camera` save (`home-cameras` under the profile's `images` folder). Works while a reply runs, and with no Home Assistant URL or key."),
             new("/ha stills thumbs", "Open the thumbnail browser on the camera stills' folder. Works while a reply runs, and with no Home Assistant URL or key."),
             new("/ha stills purge", "Delete every still in `home-cameras`, to the Recycle bin while *File deletes to Recycle bin* is on (a drive with no bin deletes for good), else for good, after a yes. Waits for a running reply. Works with no Home Assistant URL or key."),

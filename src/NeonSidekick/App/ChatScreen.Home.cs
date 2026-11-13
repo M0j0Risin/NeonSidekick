@@ -108,8 +108,11 @@ internal sealed partial class ChatScreen
             _ = RefreshHomeQuietlyAsync();
         }
 
-        // The camera chips' names too (2026-11-13, /ha camera Door), parsed here so HaCommand reads no reference format.
-        return HaCommand.Complete(last, argText, cameraAliases: HomeBarItems.CameraAliases(_effective().HomeBarAliases));
+        // The camera chips' names too (2026-11-13, /ha camera Door), parsed here so HaCommand reads no reference format; only after
+        // "camera ", where they are offered (the review: not on every keystroke of every verb).
+        var aliases = HaCommand.SplitVerb(argText).Verb == HaCameraCommand.Word && argText.Contains(' ', StringComparison.Ordinal)
+            ? HomeBarItems.CameraAliases(_effective().HomeBarAliases) : null;
+        return HaCommand.Complete(last, argText, cameraAliases: aliases);
     }
 
     private async Task RefreshHomeQuietlyAsync()
@@ -185,25 +188,22 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task HandleHomeCameraAsync(string? target, INoticeSink sink, bool spinner, CancellationToken cancellationToken)
     {
-        if (_ha.Client() is null)
-        {
-            sink.Error(HaText.NotConfigured);
-            return;
-        }
-
+        // No URL or key is the resolve's own refusal (HaSession.SnapshotAsync's NotConfigured), an error line like the others.
         string? aliasedId = HomeBarItems.AliasedCamera(target, _effective().HomeBarAliases);
+        Task<(HaEntity? Camera, string? Error)> Resolve() => HaCameraTool.ResolveAsync(_ha, target, HaText.NotACameraCommand, cancellationToken, aliasedId);
         var (camera, error) = spinner
-            ? await _transcript.WithSpinnerAsync(HaText.Working, () => HaCameraTool.ResolveAsync(_ha, target, HaText.NotACameraCommand, cancellationToken, aliasedId)).ConfigureAwait(false)
-            : await HaCameraTool.ResolveAsync(_ha, target, HaText.NotACameraCommand, cancellationToken, aliasedId).ConfigureAwait(false);
+            ? await _transcript.WithSpinnerAsync(HaText.Working, Resolve).ConfigureAwait(false)
+            : await Resolve().ConfigureAwait(false);
         if (camera is null)
         {
             sink.Error(error ?? HaText.Usage);
             return;
         }
 
+        // The "fetching" line, and "already on its way", only where no chip shows the wait (2026-11-13, the review: the chip's own rule).
         string reference = HomeBarItems.Entity(camera.Id);
-        bool chipShows = _pane.Enabled && HomeChipDrawn(reference);
-        if (!StartHomeCamera(reference, camera.Name, camera.Id, lineOnFailure: !chipShows))
+        bool shows = HomeChipShowsWait(reference);
+        if (!StartHomeCamera(reference, camera.Name, camera.Id, comingLine: !shows) && !shows)
         {
             sink.Notice(HomeBarText.CameraFetching(camera.Name));
         }
@@ -224,14 +224,17 @@ internal sealed partial class ChatScreen
         return Task.CompletedTask;
     }
 
-    /// <summary>A <c>/ha</c> result's lines as notices, or a failure's as errors.</summary>
+    /// <summary>
+    /// A <c>/ha</c> result's lines as notices, or a failure's as errors. From the Web UI's page the usage is the page's
+    /// (<see cref="HaText.PageUsage"/>, 2026-11-13, the review: it named <c>/ha camera</c> and <c>/ha stills</c>, which the page refuses).
+    /// </summary>
     private static void WriteHomeResult(HaCommandResult result, INoticeSink sink)
     {
         foreach (string line in result.Lines)
         {
             if (result.Failed)
             {
-                sink.Error(line);
+                sink.Error(FromWebNow && line == HaText.Usage ? HaText.PageUsage : line);
             }
             else
             {

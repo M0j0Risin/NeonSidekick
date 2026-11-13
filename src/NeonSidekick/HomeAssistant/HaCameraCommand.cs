@@ -21,17 +21,13 @@ public static class HaCameraCommand
     /// </summary>
     public static bool TryParse(string haArgs, out string? target)
     {
-        ArgumentNullException.ThrowIfNull(haArgs);
-        string trimmed = haArgs.Trim();
-        int space = trimmed.IndexOf(' ', StringComparison.Ordinal);
-        string first = space < 0 ? trimmed : trimmed[..space];
-        if (!string.Equals(first, Word, StringComparison.OrdinalIgnoreCase))
+        var (first, rest) = HaCommand.SplitVerb(haArgs);
+        if (first != Word)
         {
             target = null;
             return false;
         }
 
-        string rest = space < 0 ? "" : trimmed[(space + 1)..].Trim();
         target = rest.Length == 0 ? null : rest;
         return true;
     }

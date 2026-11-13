@@ -14939,10 +14939,11 @@ public partial class ChatScreenTests : IDisposable
 
     /// <summary>
     /// With no picture window (2026-11-13): the notices print during the reply, the still is drawn in the transcript only after it, at the idle
-    /// line, so a full-height picture never wedges into the streaming reply; a repeat within 2 s says "fetching" before its "saved".
+    /// line, so a full-height picture never wedges into the streaming reply. "Fetching" comes before "saved"; a repeat within 2 s reuses the
+    /// still and says no "fetching" (the review of 2026-11-13: nothing is fetched then).
     /// </summary>
     [Fact]
-    public async Task MidTurn_HaCamera_WithNoPictureWindow_DrawsTheStillAfterTheReply_AndARepeatKeepsItsOrder()
+    public async Task MidTurn_HaCamera_WithNoPictureWindow_DrawsTheStillAfterTheReply_AndARepeatSaysNoFetching()
     {
         var stub = MidTurnCameraServer();
         int Saved() => (Output.Length - Output.Replace("Yard: a still, saved as ", "", StringComparison.Ordinal).Length) / "Yard: a still, saved as ".Length;
@@ -14958,11 +14959,15 @@ public partial class ChatScreenTests : IDisposable
 
         int last = output.IndexOf("three.", StringComparison.Ordinal);
         string coming = NeonSidekick.HomeAssistant.HomeBarText.CameraComing("Yard");
-        int secondComing = output.IndexOf(coming, output.IndexOf(coming, StringComparison.Ordinal) + 1, StringComparison.Ordinal);
         int firstSaved = output.IndexOf("Yard: a still, saved as ", StringComparison.Ordinal);
         int secondSaved = output.IndexOf("Yard: a still, saved as ", firstSaved + 1, StringComparison.Ordinal);
-        Assert.True(secondComing > firstSaved && secondComing < secondSaved);   // the repeat's "fetching" before its "saved"
-        Assert.True(secondSaved < last);
+        Assert.True(output.IndexOf(coming, StringComparison.Ordinal) is >= 0 and var firstComing && firstComing < firstSaved);   // "fetching" before its "saved"
+        Assert.True(secondSaved > firstSaved && secondSaved < last);
+        // The transcript as it ends (the screen drew the reply live first): after its last "fetching", both stills' "saved", so the reused
+        // still's repeat said no "fetching" of its own.
+        int lastComing = output.LastIndexOf(coming, StringComparison.Ordinal);
+        int savedAfter = output.IndexOf("Yard: a still, saved as ", lastComing, StringComparison.Ordinal);
+        Assert.True(savedAfter > lastComing && output.IndexOf("Yard: a still, saved as ", savedAfter + 1, StringComparison.Ordinal) > savedAfter);
         Assert.True(output.IndexOf("▀▀▀▀", StringComparison.Ordinal) > last);   // drawn after the reply's last words
         Assert.Equal(1, stub.Requests.Count(r => r.Uri.AbsolutePath.StartsWith("/api/camera_proxy/", StringComparison.Ordinal)));
         Assert.Single(_chat.Requests);
