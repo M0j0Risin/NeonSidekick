@@ -243,7 +243,7 @@ public sealed class AppSettingsData
     /// Whether a turn offers the YouTube tools (2026-10-05, the YouTube plan): <c>youtube_search</c> over the Data API with
     /// <see cref="YouTubeApiKey"/>, and <c>youtube_play</c>, <c>youtube_control</c> and <c>youtube_status</c> over the video window
     /// (a Windows window with WebView2; headless offers the search alone). Off by default, as every tool group that reaches
-    /// outside the machine on the model's word. The YouTube tab of <c>/tools</c>; read at each turn, no reconnect. No variable.
+    /// outside the machine on the model's word. The Video tab of <c>/tools</c>; read at each turn, no reconnect. No variable.
     /// </summary>
     public bool YouTubeTools { get; set; }
 
@@ -259,7 +259,7 @@ public sealed class AppSettingsData
     /// <summary>
     /// How many videos a <c>youtube_search</c> without <c>max</c>, and <c>/youtube</c>'s picker, list (2026-10-05):
     /// <see cref="MinYouTubeSearchMaxResults"/> to <see cref="MaxYouTubeSearchMaxResults"/>. A search costs the same quota whatever
-    /// the count. The YouTube tab; no reconnect.
+    /// the count. The Video tab; no reconnect.
     /// </summary>
     public int YouTubeSearchMaxResults { get; set; } = DefaultYouTubeSearchMaxResults;
 
@@ -269,7 +269,7 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// Whether a video played starts at once (2026-10-05, on by default) or waits cued for a play; <c>youtube_play</c>'s
-    /// <c>autoplay</c> and <c>/youtube play</c> as typed. The YouTube tab; no reconnect.
+    /// <c>autoplay</c> and <c>/youtube play</c> as typed. The Video tab; no reconnect.
     /// </summary>
     public bool YouTubeAutoplay { get; set; } = true;
 
@@ -277,43 +277,43 @@ public sealed class AppSettingsData
     /// What a playing video does while the app speaks a reply or listens to a request (2026-10-05, the YouTube plan's Phase 6):
     /// one of <see cref="YouTube.YouTubeVoiceMode.Names"/> — <c>pause</c> (the default, the user's call: easier to manage, and speech
     /// input still hears a ducked video), <c>duck</c> (turned down to <see cref="YouTube.VideoVoicePause.DuckVolume"/>%) or
-    /// <c>none</c>; anything else reads as the default. Only what the app did is set back after. The YouTube tab; no reconnect.
+    /// <c>none</c>; anything else reads as the default. Only what the app did is set back after. The Video tab; no reconnect.
     /// </summary>
     public string YouTubeVoice { get; set; } = YouTube.YouTubeVoiceMode.Default;
 
     /// <summary>
     /// Where a YouTube video goes (2026-10-16, the user's ask and words): one of <see cref="YouTube.YouTubeOpenLinksIn.Names"/> —
     /// <c>youtube-window</c> (the default, the app's video window as before), <c>browser-window</c> (the app's Browser window),
-    /// <c>default-browser</c>, or <c>webui-window</c> (the Web UI's YouTube tab, which shows only under this value). It moves every play,
+    /// <c>default-browser</c>, or <c>webui-window</c> (the Web UI's Video tab, which shows only under this value). It moves every play,
     /// <c>open_url</c> on a YouTube video or playlist link while <see cref="YouTubeTools"/> is on, and the links the video window opens.
     /// <c>webui-window</c> plays in the video window while the Web UI isn't serving; <c>browser-window</c> uses the default browser where
-    /// there is no Browser window; anything else reads as the default. The YouTube tab; read at each play, no reconnect. No variable.
+    /// there is no Browser window; anything else reads as the default. The Video tab; read at each play, no reconnect. No variable.
     /// </summary>
     public string YouTubeOpenLinksIn { get; set; } = YouTube.YouTubeOpenLinksIn.Default;
 
     /// <summary>
     /// The order a search lists in unless it names one (2026-10-08, the user's ask: the filters' saved defaults): one of
     /// <see cref="YouTube.YouTubeSearchFilters.Orders"/> — <c>relevance</c> (the default, YouTube's own), <c>date</c>, <c>views</c>,
-    /// <c>rating</c>, <c>title</c>; anything else reads as relevance. The YouTube tab; no reconnect.
+    /// <c>rating</c>, <c>title</c>; anything else reads as relevance. The Video tab; no reconnect.
     /// </summary>
     public string YouTubeSearchOrder { get; set; } = "relevance";
 
     /// <summary>
     /// Safe search unless a search names it (2026-10-08): one of <see cref="YouTube.YouTubeSearchFilters.SafeSearches"/> — <c>none</c>,
-    /// <c>moderate</c> (the default, YouTube's own), <c>strict</c>; anything else reads as moderate. The YouTube tab; no reconnect.
+    /// <c>moderate</c> (the default, YouTube's own), <c>strict</c>; anything else reads as moderate. The Video tab; no reconnect.
     /// </summary>
     public string YouTubeSafeSearch { get; set; } = "moderate";
 
     /// <summary>
     /// The region a search asks for (2026-10-08): two letters (<c>US</c>, <c>GB</c>), YouTube's <c>regionCode</c>: what can be watched
-    /// and is popular there; empty (the default) for none. The YouTube tab; no reconnect.
+    /// and is popular there; empty (the default) for none. The Video tab; no reconnect.
     /// </summary>
     public string YouTubeRegion { get; set; } = "";
 
     /// <summary>
     /// The language a search favours (2026-10-08): a language code (<c>en</c>, <c>es</c>, <c>zh-Hans</c>), YouTube's
     /// <c>relevanceLanguage</c>, which ranks results in it higher without leaving the rest out; empty (the default) for none. The
-    /// YouTube tab; no reconnect.
+    /// Video tab; no reconnect.
     /// </summary>
     public string YouTubeLanguage { get; set; } = "";
 
@@ -2152,7 +2152,7 @@ public sealed class AppSettingsData
     /// <summary>
     /// Where a video file plays (2026-11-12, the video-files plan): one of <see cref="Viewer.VideoFilesPlayIn.Names"/> — <c>video-window</c>
     /// (the default: the app's video window, else the default app where the window can't play files), <c>webui-window</c> (the Web UI's
-    /// YouTube tab while it serves and has the tab, else the video window) or <c>default-app</c>. Moves <c>/view</c> and <c>/video</c> of a
+    /// Video tab while it serves and has the tab, else the video window) or <c>default-app</c>. Moves <c>/view</c> and <c>/video</c> of a
     /// video and <c>play_video</c>. An unknown value reads as the default, with a warning once. Read at each play. No variable.
     /// </summary>
     public string VideoFilesPlayIn { get; set; } = Viewer.VideoFilesPlayIn.Default;
@@ -3694,16 +3694,16 @@ public sealed class AppSettingsData
     public bool WebUiShoppingControls { get; set; }
 
     /// <summary>
-    /// Whether the Web UI has its YouTube tab (2026-10-16, the user's ask and calls: off by default, like Home and Shopping): on, the tab shows
+    /// Whether the Web UI has its Video tab (2026-10-16, the user's ask and calls: off by default, like Home and Shopping): on, the tab shows
     /// (where the app has a video window to build the web player beside) and plays videos and keeps the saved list, whatever
-    /// <see cref="YouTubeOpenLinksIn"/> says, since a play started on the tab plays on the tab; off, there is no YouTube tab (its link is hidden,
+    /// <see cref="YouTubeOpenLinksIn"/> says, since a play started on the tab plays on the tab; off, there is no Video tab (its link is hidden,
     /// its page goes to <c>/</c> and its APIs answer 404) and <c>webui-window</c> plays in the video window instead. Read at each request. No
     /// variable.
     /// </summary>
     public bool WebUiYouTubeControls { get; set; }
 
     /// <summary>
-    /// Whether a video file plays on the YouTube tab when the Web UI is reached over Tailscale Funnel (2026-11-12, the video-files plan and
+    /// Whether a video file plays on the Video tab when the Web UI is reached over Tailscale Funnel (2026-11-12, the video-files plan and
     /// the user's call: off by default). Off, a Funnel request for the playing file's stream is refused and the tab says why; over the LAN, a
     /// tailnet or the PC itself it plays either way. It matters under reach <c>local</c>, where Funnel arrives through the local proxy (reach
     /// <c>lan</c> refuses every Funnel request already). Read at each request. No variable.

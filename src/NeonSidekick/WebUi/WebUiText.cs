@@ -465,10 +465,10 @@ public static class WebUiText
     public const string ShoppingTabOff = "The Shopping tab is off: Web UI shopping controls in /settings › Client › Web UI turns it on.";
 
     /// <summary>
-    /// An API of the YouTube tab while the tab is off (2026-10-16; <i>Web UI YouTube controls</i> since later that day, <i>YouTube open links
+    /// An API of the Video tab while the tab is off (2026-10-16; <i>Web UI video controls</i> since later that day, <i>YouTube open links
     /// in</i> <c>webui-window</c> until then), and <c>/youtube list</c> typed in Chat then.
     /// </summary>
-    public const string YouTubeTabOff = "The YouTube tab is off: Web UI YouTube controls in /settings › Client › Web UI turns it on.";
+    public const string YouTubeTabOff = "The Video tab is off: Web UI video controls in /settings › Client › Web UI turns it on.";
 
     /// <summary>The sentence for a tab that is off; each tab named (2026-10-16: a newcomer never reads another tab's).</summary>
     public static string TabOff(WebTab tab) => tab switch
@@ -1045,13 +1045,13 @@ public static class WebUiText
     /// <summary>The video remote with no window open.</summary>
     public const string NoVideo = "No video is open at the PC.";
 
-    /// <summary><see cref="NoVideo"/> for where the router plays now (2026-10-16): the PC's words, or the YouTube tab's.</summary>
-    public static string NoVideoIn(Viewer.VideoPlace place) => place == Viewer.VideoPlace.WebTab ? "No video is open in the YouTube tab." : NoVideo;
+    /// <summary><see cref="NoVideo"/> for where the router plays now (2026-10-16): the PC's words, or the Video tab's.</summary>
+    public static string NoVideoIn(Viewer.VideoPlace place) => place == Viewer.VideoPlace.WebTab ? "No video is open in the Video tab." : NoVideo;
 
     /// <summary>Home's video card: where the video plays (2026-10-16), from its snapshot's place.</summary>
-    public static string VideoWhere(Viewer.VideoPlace place) => place == Viewer.VideoPlace.WebTab ? "in the YouTube tab" : "on the PC";
+    public static string VideoWhere(Viewer.VideoPlace place) => place == Viewer.VideoPlace.WebTab ? "in the Video tab" : "on the PC";
 
-    // ── The YouTube tab (2026-10-16) ─────────────────────────────────────────
+    // ── The Video tab (2026-10-16) ─────────────────────────────────────────
 
     /// <summary>
     /// A player the page could not make, as the model and the status read it: YouTube's script never came (no internet, a blocker), or
@@ -1059,14 +1059,14 @@ public static class WebUiText
     /// </summary>
     public static string PlayerFailed(string? reason) => reason switch
     {
-        "api" => "the Web UI's YouTube tab could not load YouTube's player (no internet on the phone, or a blocker stopped it).",
-        _ => "the Web UI's YouTube tab could not start YouTube's player.",
+        "api" => "the Web UI's Video tab could not load YouTube's player (no internet on the phone, or a blocker stopped it).",
+        _ => "the Web UI's Video tab could not start YouTube's player.",
     };
 
     /// <summary>The banner a page shows instead of leaving for a waiting video: a link to the tab.</summary>
     public const string WatchBanner = "▶ A video is waiting — Watch";
 
-    /// <summary>The YouTube tab's words, made here as every word the pages show (<see cref="WebVideoWords"/>).</summary>
+    /// <summary>The Video tab's words, made here as every word the pages show (<see cref="WebVideoWords"/>).</summary>
     public static WebVideoWords VideoWords { get; } = new(
         Waiting: "Playing on another page",
         PlayHere: "Play here",
@@ -1117,30 +1117,30 @@ public static class WebUiText
     /// <summary>A move that is none of up, down, top, bottom (later on 2026-10-16).</summary>
     public const string SavedMoveUnknown = "A move is up, down, top or bottom.";
 
-    /// <summary>The PC's hint row as the YouTube tab plays a saved video (later on 2026-10-16).</summary>
-    public const string SavedPlayFlash = Glyph + "YouTube tab: playing a saved video";
+    /// <summary>The PC's hint row as the Video tab plays a saved video (later on 2026-10-16).</summary>
+    public const string SavedPlayFlash = Glyph + "Video tab: playing a saved video";
 
-    /// <summary>The PC's hint row as the YouTube tab removes a saved video.</summary>
-    public const string SavedRemoveFlash = Glyph + "YouTube tab: removed a saved video";
+    /// <summary>The PC's hint row as the Video tab removes a saved video.</summary>
+    public const string SavedRemoveFlash = Glyph + "Video tab: removed a saved video";
 
-    /// <summary>The PC's hint row as the YouTube tab clears the saved videos.</summary>
-    public const string SavedClearFlash = Glyph + "YouTube tab: cleared the saved videos";
+    /// <summary>The PC's hint row as the Video tab clears the saved videos.</summary>
+    public const string SavedClearFlash = Glyph + "Video tab: cleared the saved videos";
 
-    /// <summary>The PC's hint row as the YouTube tab moves a saved video.</summary>
-    public const string SavedMoveFlash = Glyph + "YouTube tab: moved a saved video";
+    /// <summary>The PC's hint row as the Video tab moves a saved video.</summary>
+    public const string SavedMoveFlash = Glyph + "Video tab: moved a saved video";
 
-    /// <summary>The PC's hint row as the YouTube tab saves the playing video.</summary>
-    public const string SavedSaveFlash = Glyph + "YouTube tab: saved the playing video";
+    /// <summary>The PC's hint row as the Video tab saves the playing video.</summary>
+    public const string SavedSaveFlash = Glyph + "Video tab: saved the playing video";
 
     /// <summary>The PC's hint-row flash for the playlist's ☆ (2026-11-08).</summary>
-    public const string SavedSaveListFlash = Glyph + "YouTube tab: saved the playing playlist";
+    public const string SavedSaveListFlash = Glyph + "Video tab: saved the playing playlist";
 
     /// <summary>A saved list's change from the page (audit, no titles): <paramref name="what"/> is <c>played</c>, <c>removed</c>, <c>cleared</c>, <c>moved</c> or <c>saved</c>.</summary>
     public static string SavedLogLine(string what, IPAddress? remote, bool playlist = false) =>
-        "Web UI: the YouTube tab " + what + " " + (what == "cleared" ? "the saved videos" : playlist ? "a saved playlist" : "a saved video") + " from " + Where(remote) + ".";
+        "Web UI: the Video tab " + what + " " + (what == "cleared" ? "the saved videos" : playlist ? "a saved playlist" : "a saved video") + " from " + Where(remote) + ".";
 
-    /// <summary><c>/youtube list</c> typed in the page's Chat (later on 2026-10-16), or the bare <c>/youtube</c> (2026-10-18): the YouTube tab's saved list does it.</summary>
-    public const string UseYouTubePage = "The saved videos (/youtube, /youtube list) are on the YouTube tab here: its saved list plays, moves and removes them.";
+    /// <summary><c>/youtube list</c> typed in the page's Chat (later on 2026-10-16), or the bare <c>/youtube</c> (2026-10-18): the Video tab's saved list does it.</summary>
+    public const string UseYouTubePage = "The saved videos (/youtube, /youtube list) are on the Video tab here: its saved list plays, moves and removes them.";
 
     /// <summary>
     /// The Resume button's words (2026-10-16): <c>Resume "Big Buck Bunny" at 3:12</c>; the id for a video with no title yet; a playlist's entry.
@@ -1157,61 +1157,61 @@ public static class WebUiText
     }
 
     /// <summary>The PC's hint row as a page takes playback with Play here.</summary>
-    public const string YouTubeClaimFlash = Glyph + "YouTube tab: playing here now";
+    public const string YouTubeClaimFlash = Glyph + "Video tab: playing here now";
 
     /// <summary>The PC's hint row as a page's Resume tap starts the last video.</summary>
-    public const string YouTubeResumeFlash = Glyph + "YouTube tab: resumed";
+    public const string YouTubeResumeFlash = Glyph + "Video tab: resumed";
 
     /// <summary>A page took playback with Play here (audit).</summary>
-    public static string YouTubeClaimLogLine(IPAddress? remote) => "Web UI: a YouTube tab took playback from " + Where(remote) + ".";
+    public static string YouTubeClaimLogLine(IPAddress? remote) => "Web UI: a Video tab took playback from " + Where(remote) + ".";
 
     /// <summary>A page's Resume tap (audit).</summary>
-    public static string YouTubeResumeLogLine(IPAddress? remote) => "Web UI: a YouTube tab resumed the last video from " + Where(remote) + ".";
+    public static string YouTubeResumeLogLine(IPAddress? remote) => "Web UI: a Video tab resumed the last video from " + Where(remote) + ".";
 
-    /// <summary>A page became the YouTube tab's owner, first come or promoted (audit).</summary>
-    public static string YouTubeOwnerLogLine(IPAddress? remote) => "Web UI: a YouTube tab became the player from " + Where(remote) + ".";
+    /// <summary>A page became the Video tab's owner, first come or promoted (audit).</summary>
+    public static string YouTubeOwnerLogLine(IPAddress? remote) => "Web UI: a Video tab became the player from " + Where(remote) + ".";
 
     /// <summary>The player moved to the tab in view, for its coming into view or a play (audit; later on 2026-10-16).</summary>
-    public static string YouTubeMovedLogLine(IPAddress? remote) => "Web UI: the player moved to the YouTube tab in view from " + Where(remote) + ".";
+    public static string YouTubeMovedLogLine(IPAddress? remote) => "Web UI: the player moved to the Video tab in view from " + Where(remote) + ".";
 
-    // ── The YouTube tab's Debug lines (later on 2026-10-16: the user's log held two lines for the whole muddle) ──────────────────────
+    // ── The Video tab's Debug lines (later on 2026-10-16: the user's log held two lines for the whole muddle) ──────────────────────
     // A page by its first four characters and its address, never its whole id.
 
     private static string PageName(string page, IPAddress? remote) => "page " + (page.Length > 4 ? page[..4] : page) + " (" + Where(remote) + ")";
 
     /// <summary>A page's stream attached: in view or not, owner or waiting.</summary>
     public static string YouTubeAttachDebug(string page, IPAddress? remote, bool visible, bool owner) =>
-        "YouTube tab: " + PageName(page, remote) + " attached " + (visible ? "in view" : "hidden") + ", " + (owner ? "the player" : "waiting") + ".";
+        "Video tab: " + PageName(page, remote) + " attached " + (visible ? "in view" : "hidden") + ", " + (owner ? "the player" : "waiting") + ".";
 
     /// <summary>A page's stream detached.</summary>
     public static string YouTubeDetachDebug(string page, IPAddress? remote, bool owner) =>
-        "YouTube tab: " + PageName(page, remote) + " detached" + (owner ? " (the player: its grace starts)" : "") + ".";
+        "Video tab: " + PageName(page, remote) + " detached" + (owner ? " (the player: its grace starts)" : "") + ".";
 
     /// <summary>A page came into view or left it.</summary>
     public static string YouTubeSeenDebug(string page, IPAddress? remote, bool visible, bool was) =>
-        "YouTube tab: " + PageName(page, remote) + (visible ? " in view" : " hidden") + (visible == was ? " (unchanged)" : "") + ".";
+        "Video tab: " + PageName(page, remote) + (visible ? " in view" : " hidden") + (visible == was ? " (unchanged)" : "") + ".";
 
     /// <summary>A play's fate: loaded, held, or loaded once a page showed (with the page), or held (none).</summary>
     public static string YouTubePlayDebug(string what, string? page, IPAddress? remote) =>
-        "YouTube tab: a play " + what + (page is null ? "" : " " + PageName(page, remote)) + ".";
+        "Video tab: a play " + what + (page is null ? "" : " " + PageName(page, remote)) + ".";
 
     /// <summary>The owner's <c>page</c> report: read as a reload, or ignored as the script the video was just given to.</summary>
     public static string YouTubePageReportDebug(string page, IPAddress? remote, bool acted) =>
-        "YouTube tab: " + PageName(page, remote) + (acted ? " reloaded: its video closed" : " reported its script, the one just given the video: ignored") + ".";
+        "Video tab: " + PageName(page, remote) + (acted ? " reloaded: its video closed" : " reported its script, the one just given the video: ignored") + ".";
 
     /// <summary>A claim honored, or ignored as the browser's reconnect repeating one.</summary>
     public static string YouTubeClaimDebug(string page, IPAddress? remote, bool honored) =>
-        "YouTube tab: " + PageName(page, remote) + (honored ? " claimed the player" : " repeated a claim (a reconnect): ignored") + ".";
+        "Video tab: " + PageName(page, remote) + (honored ? " claimed the player" : " repeated a claim (a reconnect): ignored") + ".";
 
     /// <summary>YouTube's refusal on the tab, as the window logs its own.</summary>
     public static string YouTubeRefusedLogLine(string? id, int code) =>
-        "YouTube refused video " + id + " in the player on the Web UI's YouTube tab (error " + code.ToString(CultureInfo.InvariantCulture) + ").";
+        "YouTube refused video " + id + " in the player on the Web UI's Video tab (error " + code.ToString(CultureInfo.InvariantCulture) + ").";
 
-    // ── Video files on the YouTube tab (2026-11-12, the video-files plan) ─────────────────────────────────────────────────────────
+    // ── Video files on the Video tab (2026-11-12, the video-files plan) ─────────────────────────────────────────────────────────
 
     /// <summary><see cref="YouTubeRefusedLogLine"/>'s file form: the file and its media error (or the app's own code).</summary>
     public static string VideoFileRefusedLogLine(string? name, int code) =>
-        "The video file " + name + " didn't play on the Web UI's YouTube tab (media error " + code.ToString(CultureInfo.InvariantCulture) + ").";
+        "The video file " + name + " didn't play on the Web UI's Video tab (media error " + code.ToString(CultureInfo.InvariantCulture) + ").";
 
     /// <summary>
     /// A video file asked for over Tailscale Funnel with <i>Web UI video files over Funnel</i> off: the 403's words, and the tab's. Pinned.

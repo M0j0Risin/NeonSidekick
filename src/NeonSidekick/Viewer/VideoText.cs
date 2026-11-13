@@ -98,8 +98,8 @@ public static class VideoText
     /// <summary>The note before a file play's answer when <c>webui-window</c> fell back to the window: the Web UI isn't serving. Pinned.</summary>
     public const string WebUiOffFellBack = "The Web UI isn't serving, so the video file plays in the video window instead. ";
 
-    /// <summary>The note when <c>webui-window</c> fell back to the window because <i>Web UI YouTube controls</i> is off (no tab). Pinned.</summary>
-    public const string WebUiControlsOffFellBack = "Web UI YouTube controls is off, so the video file plays in the video window instead. ";
+    /// <summary>The note when <c>webui-window</c> fell back to the window because <i>Web UI video controls</i> is off (no tab). Pinned.</summary>
+    public const string WebUiControlsOffFellBack = "Web UI video controls is off, so the video file plays in the video window instead. ";
 
     /// <summary>The note when the video window couldn't take a file and the default app did: <paramref name="reason"/> leads.</summary>
     public static string DefaultAppFellBack(string reason) =>
@@ -154,7 +154,7 @@ public static class VideoText
     /// <summary>The spinner's words under <c>/video</c> and <c>/view</c> while a file opens where <paramref name="target"/> says.</summary>
     public static string WaitingFor(VideoFilesPlayInKind target) => target switch
     {
-        VideoFilesPlayInKind.WebUiWindow => "Waiting for the Web UI's YouTube tab…",
+        VideoFilesPlayInKind.WebUiWindow => "Waiting for the Web UI's Video tab…",
         VideoFilesPlayInKind.DefaultApp => "Opening the video file in its default app…",
         _ => YouTube.YouTubeText.WaitingForPlayer,
     };
@@ -162,14 +162,14 @@ public static class VideoText
     /// <summary>The line after a stopped wait for a file: a held file still waits; the tab plays on; the window keeps loading.</summary>
     public static string StoppedWaitingFor(VideoSnapshot? snapshot) => snapshot switch
     {
-        { Held: not null } => "(stopped waiting; the video file still waits for a YouTube tab: /video status says so)",
+        { Held: not null } => "(stopped waiting; the video file still waits for a Video tab: /video status says so)",
         { Place: VideoPlace.WebTab } => "(stopped waiting; the video file is still in " + YouTube.YouTubeText.WebTabName + ": /video status says where it is)",
         _ => "(stopped waiting; the video window is still open: /video status says where it is)",
     };
 
     /// <summary>
     /// What the player reports of a video file, as one line, in <c>YouTubeText.Status</c>' order of cases: the window's failure, the
-    /// file's error (<see cref="FileError"/>), a wait for a YouTube tab, the opening, then the state line —
+    /// file's error (<see cref="FileError"/>), a wait for a Video tab, the opening, then the state line —
     /// <c>Playing "clip.mp4" at 0:31 of 10:35, volume 25%, muted</c> and the tab's tap hint. <see cref="NoFile"/> with none.
     /// </summary>
     public static string FileStatus(VideoSnapshot? snapshot)

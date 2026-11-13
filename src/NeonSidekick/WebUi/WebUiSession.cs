@@ -430,7 +430,7 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     /// <summary>The screen's chores on the session's 1-second tick whether or not a page streams (2026-10-15: the Home tab's lease running out).</summary>
     public Action? Tick { get; set; }
 
-    /// <summary>The YouTube tab's player (2026-10-16, the screen's), or null with none.</summary>
+    /// <summary>The Video tab's player (2026-10-16, the screen's), or null with none.</summary>
     public IWebVideo? Video { get; set; }
 
     /// <summary>Whether a video file plays over Tailscale Funnel (2026-11-12, the screen's setting, read per request); null: never.</summary>
@@ -438,7 +438,7 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
 
     public bool VideoFilesOverFunnel => VideoFilesOverFunnelNow?.Invoke() ?? false;
 
-    // ── The YouTube tab's saved list (later on 2026-10-16): the screen's hooks, the prompts sheet's shape; a null hook is a 404 ──────────
+    // ── The Video tab's saved list (later on 2026-10-16): the screen's hooks, the prompts sheet's shape; a null hook is a 404 ──────────
 
     /// <summary>The saved list now (the screen's, on a Kestrel thread); null: none.</summary>
     public Func<WebSavedVideos?>? SavedVideosNow { get; set; }
@@ -516,7 +516,7 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
 
     /// <summary>
     /// What the Chat badge reads (2026-10-15): the state's busy and waiting, the asks open, the theme, the files' tag, and the tabs on; the
-    /// YouTube tab and the banner's words while a video waits for it (2026-10-16), copied from the screen's state. Every pulse marks the read
+    /// Video tab and the banner's words while a video waits for it (2026-10-16), copied from the screen's state. Every pulse marks the read
     /// (<see cref="WatchNudge"/>): <c>/api/pulse</c> and Home's read both build theirs here, a 304 included.
     /// </summary>
     public WebPulse Pulse()
@@ -533,7 +533,7 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     public static readonly TimeSpan PulseFresh = TimeSpan.FromSeconds(5);
 
     /// <summary>
-    /// A video waits for a YouTube tab (2026-10-16): the state goes out now with its <c>watch</c> words, and a <c>watch</c> event on the Chat
+    /// A video waits for a Video tab (2026-10-16): the state goes out now with its <c>watch</c> words, and a <c>watch</c> event on the Chat
     /// stream, so an open Chat page jumps at once (Home and Shopping at their next poll). True when a page will see it soon: a Chat stream is
     /// connected, or a pulse or Home read came within <see cref="PulseFresh"/>.
     /// </summary>

@@ -19,7 +19,7 @@ namespace NeonSidekick.App;
 /// the screen prints the rows instead (<c>ChatScreen.ShowSavedVideosAsync</c>). The order is the user's since 2026-10-13 (the user's
 /// ask, with the Browser window's saved links): <see cref="MenuPage.Moves"/> while nothing is typed — Shift/Alt+↑↓ a place,
 /// Shift/Alt+Home/End to the top or bottom, silently (<see cref="YouTubeLibrary.Move"/>) — and Delete is the remove's key too. A change made
-/// elsewhere while it is open (later on 2026-10-16: the Web UI's YouTube tab plays, moves, removes, saves) redraws it within a second, the
+/// elsewhere while it is open (later on 2026-10-16: the Web UI's Video tab plays, moves, removes, saves) redraws it within a second, the
 /// <see cref="ShoppingMenu"/>'s watch, the cursor following its video.
 /// </summary>
 internal sealed class YouTubeSavedMenu

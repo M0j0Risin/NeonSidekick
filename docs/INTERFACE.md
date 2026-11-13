@@ -13,7 +13,7 @@ The screen, the input line, panes, keys, the bars and the app's own windows. Bac
   - [process](#the-process-window) · [Docker log](#the-docker-log-window) · [camera](#the-camera-window) · [video](#the-video-window) · [Browser](#the-browser-window)
 - [Web UI](#web-ui)
   - [signing in](#signing-in) · [tabs](#the-tabs) · [Chat](#the-chat-tab) · [Shopping](#the-shopping-tab) · [Home](#the-home-tab)
-  - [YouTube](#the-youtube-tab) · [commands](#commands-from-the-page) · [bot checks](#a-bot-check-from-the-page) · [safety](#safety-and-the-network)
+  - [Video](#the-video-tab) · [commands](#commands-from-the-page) · [bot checks](#a-bot-check-from-the-page) · [safety](#safety-and-the-network)
 
 ## Words used here
 
@@ -629,7 +629,7 @@ The page is plain HTTP. Tailscale Serve puts HTTPS in front of it with a real ce
 
 ### The tabs
 
-* **The tabs:** Chat, Home, Shopping and YouTube, each shown only while its setting is on: *Web UI chat controls* (on by default), *Web UI home controls*, *Web UI shopping controls* and *Web UI YouTube controls* (off).
+* **The tabs:** Chat, Home, Shopping and Video, each shown only while its setting is on: *Web UI chat controls* (on by default), *Web UI home controls*, *Web UI shopping controls* and *Web UI video controls* (off).
 * **The ☰ menu:** Chat is a link in the header; the other tabs that are on sit behind ☰, which names the open one (🏠 Home ▾); ℹ️ About is last.
 * **With Chat off** the page opens on Home, else Shopping, else YouTube, and the phone gets no transcript, message line or questions (the PC asks as always).
 * With none on, the page names the four settings and opens a tab once one is on. A tab turned off while open moves to one that's on.
@@ -707,18 +707,18 @@ The page is plain HTTP. Tailscale Serve puts HTTPS in front of it with a real ce
 * **A box:** its lights on (`3 of 5 on`) and its switch (off if any light is on, else on), then *All lights*, a row per device with its switch or first action, and its scenes.
 * **Reach:** only the home bar's and the rooms' devices can be read or acted on. Unlocking, opening a garage, gate or door, and disarming ask on the page first.
 * **Ask the house:** a line for Home Assistant's Assist (as `/ha say`), its answer under it.
-* **Now playing** (while a video is open, in the PC's window or on the YouTube tab): its title and a remote.
+* **Now playing** (while a video is open, in the PC's window or on the Video tab): its title and a remote.
 * **The PC:** CPU, RAM, GPU, VRAM, the network's rates, and the model's name, server, context window and usage.
 * **The log:** each action and camera still viewed is logged with the phone's address; what was asked of the house is not. `/ha` typed in Chat follows *Web UI commands*, not this tab's setting.
 
-### The YouTube tab
+### The Video tab
 
 **YouTube** plays videos on the phone (or a browser) in the app's own player, so `youtube_control`, `youtube_status`, `/youtube pause` and Home's Now playing reach it.
 
 * **Where plays go:** the model's plays go to the tab while *YouTube open links in* is `webui-window`.
-* **The fallback:** with *Web UI YouTube controls* off (the default), or the Web UI not serving, `webui-window` plays in the PC's video window. Without a video window (a Mac before macOS 14) there is no tab.
+* **The fallback:** with *Web UI video controls* off (the default), or the Web UI not serving, `webui-window` plays in the PC's video window. Without a video window (a Mac before macOS 14) there is no tab.
 * **With it on**, the tab shows whatever *YouTube open links in* says: a video you start there plays there; `youtube_play`, `/youtube` and `open_url` follow the setting.
-* **The jump:** a play with no YouTube tab in view waits for one, and the open pages go there; while you're typing or answering, a *▶ A video is waiting — Watch* banner shows instead. Unopened, it goes after 10 minutes.
+* **The jump:** a play with no Video tab in view waits for one, and the open pages go there; while you're typing or answering, a *▶ A video is waiting — Watch* banner shows instead. Unopened, it goes after 10 minutes.
 * **Which tab plays:** the one shown most recently; a playing tab keeps playing, even hidden. The others offer *Play here*, taking the video over from about 3 seconds back.
 * **Sound:** a phone starts a video only after a tap on it. The tab tries with sound, then muted, else asks for the tap.
 * **Resume:** leaving the tab, locking the phone or a reload stops the video and keeps its place; coming back offers *Resume "title" at 3:12*.
@@ -747,7 +747,7 @@ With *Web UI commands* on (off by default), the page sends slash commands too. T
 
 * **A Ralph loop:** its confirm, checkpoint and by-hand check ask on both sides; the status row shows 🔁, and Stop ends the loop.
 * **`/loop`** runs as at the PC (a looped `/read` is refused).
-* **Pointers:** bare `/shopping` points at the Shopping tab; bare `/youtube` and `/youtube list` at the YouTube tab's saved videos (or its setting while the tab is off). Bare `/about` points at ☰ › About.
+* **Pointers:** bare `/shopping` points at the Shopping tab; bare `/youtube` and `/youtube list` at the Video tab's saved videos (or its setting while the tab is off). Bare `/about` points at ☰ › About.
 * **What differs:** `/ha` and `/docker` ask before a change (at the PC they don't), though `/ha` runs a read or a *Home Assistant safe services* call unasked. A bare `/docker` lists the containers.
 * `/msgclear` asks on both sides at once. `/rewind` puts the text on the page's draft; its pictures, PDFs and pasted blocks come back on the PC's line only.
 * **Refused when it runs:** `/model <id>` and `/reasoning`, when connecting would mean looking for a server or an embedded model not installed (those pickers and that download are the PC's); `/tts on` and `/stt on` when their voice models aren't downloaded.

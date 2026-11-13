@@ -83,10 +83,10 @@ public sealed partial class WebUiPageTests
         await page.WaitAsync("location.pathname === '/home' && document.querySelector('.tab-menu-button').textContent === '🏠 Home ▾'", "Home, the button naming it");
         Assert.True((await page.EvalAsync("document.querySelector('.tab-menu-button').classList.contains('here')")).GetBoolean());
 
-        // The YouTube tab joins the menu once the PC says it is on (the Shopping tab's pulse).
+        // The Video tab joins the menu once the PC says it is on (the Shopping tab's pulse).
         _backend.PulseNow = new WebPulse(false, 0, null, "", "tag", YouTubeTab: true);
         await page.GoAsync(Root + "shopping");
-        await page.WaitAsync("!document.querySelector('nav a[href=\"/youtube\"]').classList.contains('hidden')", "YouTube in the menu");
+        await page.WaitAsync("!document.querySelector('nav a[href=\"/video\"]').classList.contains('hidden')", "YouTube in the menu");
         Assert.Equal("🛒 Shopping ▾", await page.TextAsync("document.querySelector('.tab-menu-button').textContent"));
         Assert.Equal(4, (await page.EvalAsync("document.querySelectorAll('.tab-menu-list a:not(.hidden)').length")).GetInt32());   // About too
     }

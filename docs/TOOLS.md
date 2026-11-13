@@ -241,7 +241,7 @@ Under *Video tools* (`/tools` › Files › Video); off in a new profile. They p
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `play_video` | `path, start?, autoplay?` | Plays a video file from `start` (`90` or `1:30`) in the [video window](INTERFACE.md#the-video-window), the Web UI's [YouTube tab](INTERFACE.md#the-youtube-tab) or its default app. |
+| `play_video` | `path, start?, autoplay?` | Plays a video file from `start` (`90` or `1:30`) in the [video window](INTERFACE.md#the-video-window), the Web UI's [Video tab](INTERFACE.md#the-video-tab) or its default app. |
 | `video_control` | `action, value?` | `play`, `pause`, `seek`, `forward` / `back` (10 s by default), `volume` (0–100), `mute`, `unmute`, `close` or `status`. |
 
 * **The default app:** a file goes there when no window can play it; the app can't see or control it there.
@@ -250,7 +250,7 @@ Under *Video tools* (`/tools` › Files › Video); off in a new profile. They p
 
 #### Video files on a Mac
 
-A file opens in its default app (QuickTime Player), or on the Web UI's YouTube tab under `webui-window` ([MAC.md](MAC.md#what-works)).
+A file opens in its default app (QuickTime Player), or on the Web UI's Video tab under `webui-window` ([MAC.md](MAC.md#what-works)).
 
 ### UNC shares and outside folders
 
@@ -454,7 +454,7 @@ A workflow can take up to three pictures.
 Under *YouTube tools*. Videos play where *YouTube open links in* says:
 
 * The app's [video window](INTERFACE.md#the-video-window): it needs the WebView2 Runtime on Windows, macOS 14+ on a Mac.
-* The Browser window, the default browser, or the Web UI's [YouTube tab](INTERFACE.md#the-youtube-tab) (with *Web UI YouTube controls* on).
+* The Browser window, the default browser, or the Web UI's [Video tab](INTERFACE.md#the-video-tab) (with *Web UI video controls* on).
 * The app's players refuse a video YouTube won't let be embedded.
 
 | Tool | Arguments | What it does |

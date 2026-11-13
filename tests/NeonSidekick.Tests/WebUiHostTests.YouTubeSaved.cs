@@ -6,7 +6,7 @@ using NeonSidekick.WebUi;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// The YouTube tab at the host, later on 2026-10-16: a page saying it is in view (<c>/api/youtube/seen</c>, the stream's <c>visible=</c>, a tap's
+/// The Video tab at the host, later on 2026-10-16: a page saying it is in view (<c>/api/youtube/seen</c>, the stream's <c>visible=</c>, a tap's
 /// own claim id), and the saved list (the tagged read, the five posts, their buckets, the tab's rules).
 /// </summary>
 public sealed partial class WebUiHostTests

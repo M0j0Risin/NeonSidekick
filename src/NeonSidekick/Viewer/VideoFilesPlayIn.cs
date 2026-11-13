@@ -9,7 +9,7 @@ public enum VideoFilesPlayInKind
     /// <summary>The app's video window: the default.</summary>
     VideoWindow,
 
-    /// <summary>The Web UI's YouTube tab, on the user's phone or browser.</summary>
+    /// <summary>The Web UI's Video tab, on the user's phone or browser.</summary>
     WebUiWindow,
 
     /// <summary>The file's default app, through the shell.</summary>
@@ -21,7 +21,7 @@ public enum VideoFilesPlayInKind
 /// <c>webui-window</c> or <c>default-app</c>. It moves every file play: <c>/view</c> and <c>/video</c> of a video, and <c>play_video</c>.
 /// <c>video-window</c> is the window YouTube's setting calls <c>youtube-window</c>; a file isn't YouTube, and the docs already name it the video
 /// window. <c>webui-window</c> is YouTube's own word for the tab. <c>webui-window</c> falls back to the video window while the Web UI isn't
-/// serving or its YouTube tab is off; <c>video-window</c> to the default app where the window can't play files (a Mac) or there is none. So every
+/// serving or its Video tab is off; <c>video-window</c> to the default app where the window can't play files (a Mac) or there is none. So every
 /// fallback ends at the default app, and a file always has a place to play. <see cref="Resolve"/> is the one place the saved string becomes
 /// the enum: a hand-edited value that is none of them reads as <see cref="Default"/>, with a warning once. Pure; pinned.
 /// </summary>
@@ -66,7 +66,7 @@ public static class VideoFilesPlayIn
     public static string Describe(string name) => name switch
     {
         VideoWindow => "video files play in the app's video window, else in their default app",
-        WebUiWindow => "video files play in the Web UI's YouTube tab while it is on, else in the video window",
+        WebUiWindow => "video files play in the Web UI's Video tab while it is on, else in the video window",
         DefaultApp => "video files open in their default app, out of the model's control",
         _ => "",
     };

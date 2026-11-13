@@ -9,7 +9,7 @@ namespace NeonSidekick.Llm.Tools;
 /// <summary>
 /// <c>play_video(path, start?, autoplay?)</c> (2026-11-12, the video-files plan): a video file on this computer (MP4, M4V, MOV, WebM, MKV;
 /// <see cref="VideoFile"/>) under the working directory, played for the user where <c>Video files play in</c> says: the video window, the
-/// Web UI's YouTube tab, or its default app. A Files-family tool beside <c>view_image</c>, under its own switch (<i>Video tools</i>, off by
+/// Web UI's Video tab, or its default app. A Files-family tool beside <c>view_image</c>, under its own switch (<i>Video tools</i>, off by
 /// default). Shaped as <see cref="YouTubePlayTool"/>: the play goes through the route hook (<c>ChatScreen.RouteFile</c>), which answers at
 /// once for the default app; a play on one of the app's own players waits (<see cref="YouTubeWait.Play"/>) for the file's own report —
 /// its token, so a late report for the video before is never the answer — and answers with <see cref="VideoText.FileStatus"/>. The path
@@ -63,7 +63,7 @@ public sealed class PlayVideoTool : FileTool
     public static string DescriptionFor(VideoFilesPlayInKind target) => target switch
     {
         VideoFilesPlayInKind.WebUiWindow =>
-            What + "for the user, with sound, in the Web UI's YouTube tab on their phone or browser (one player: a new video replaces the one playing; with no tab in view it waits for one). " +
+            What + "for the user, with sound, in the Web UI's Video tab on their phone or browser (one player: a new video replaces the one playing; with no tab in view it waits for one). " +
             Unseen + Then + Only,
         VideoFilesPlayInKind.DefaultApp =>
             "Opens a video file on this computer (not YouTube) in the user's own video app. Once it opens it is out of your control: " + VideoControlTool.ToolName + " can't see or drive it. " + Only,
@@ -156,7 +156,7 @@ public sealed class PlayVideoTool : FileTool
             return (routed.Note ?? "") + VideoText.NoFile;
         }
 
-        // Started, ready (autoplay off), ended at once or refused, by this play's own token; a file held for a YouTube tab with no page to
+        // Started, ready (autoplay off), ended at once or refused, by this play's own token; a file held for a Video tab with no page to
         // see the ask is an answer at once, as youtube_play's is.
         var snapshot = await YouTubeWait.UntilAsync(_player, before, s => s.FileToken == token && (s.Held is { Nudged: false }
             || s.State is VideoState.Playing or VideoState.Paused or VideoState.Ended || (s.State == VideoState.Cued && !autoplay)), YouTubeWait.Play, _time, cancellationToken, video: token).ConfigureAwait(false);

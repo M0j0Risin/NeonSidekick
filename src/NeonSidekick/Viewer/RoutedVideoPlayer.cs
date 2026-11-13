@@ -9,7 +9,7 @@ public enum VideoSink
     /// <summary>The video window on the PC (or the Mac).</summary>
     Window,
 
-    /// <summary>The Web UI's YouTube tab (<c>WebUi.WebVideoPlayer</c>).</summary>
+    /// <summary>The Web UI's Video tab (<c>WebUi.WebVideoPlayer</c>).</summary>
     Web,
 }
 

@@ -9,7 +9,7 @@ using NeonSidekick.YouTube;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// The YouTube tab's saved list on the screen (later on 2026-10-16, the user's ask): the hooks over a real <c>youtube.json</c> — a play claims
+/// The Video tab's saved list on the screen (later on 2026-10-16, the user's ask): the hooks over a real <c>youtube.json</c> — a play claims
 /// the tapping page and resumes 3 s back on the tab whatever <i>YouTube open links in</i> says, remove, clear, move and save change the file and
 /// flash the PC with an audit line, a missing title starts a lookup — and the PC's open <c>/youtube list</c> pane drawn again after a removal
 /// made from the page.
@@ -98,7 +98,7 @@ public partial class ChatScreenTests
         {
             Assert.Contains(WebUiText.SavedLogLine("played", IPAddress.Loopback), lines);
             Assert.Contains(WebUiText.SavedLogLine("cleared", IPAddress.Loopback), lines);
-            Assert.DoesNotContain(lines, l => l.StartsWith("Web UI: the YouTube tab", StringComparison.Ordinal) && l.Contains("Bunny", StringComparison.Ordinal));   // no titles
+            Assert.DoesNotContain(lines, l => l.StartsWith("Web UI: the Video tab", StringComparison.Ordinal) && l.Contains("Bunny", StringComparison.Ordinal));   // no titles
         }
     }
 

@@ -7,7 +7,7 @@ using NeonSidekick.YouTube;
 
 namespace NeonSidekick.App;
 
-// ── The Web UI's YouTube tab: its saved list (later on 2026-10-16, the user's ask: /youtube list under the player) ──
+// ── The Web UI's Video tab: its saved list (later on 2026-10-16, the user's ask: /youtube list under the player) ──
 // Play or resume, remove, clear all, move, filter (on the page) and each video's details, plus the two extras the user chose: save the playing
 // video, and thumbnails. Every hook runs on a Kestrel thread against state that is safe there — the library's one static lock over the profile's
 // youtube.json, the router's own lock — and never waits on the screen or writes the transcript: the PC hears of a change on its hint row

@@ -4,7 +4,7 @@ using NeonSidekick.WebUi;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// A video waiting for the YouTube tab (2026-10-16): the state and the pulse carry the banner's words only while one is held, null once a page
+/// A video waiting for the Video tab (2026-10-16): the state and the pulse carry the banner's words only while one is held, null once a page
 /// attaches; <see cref="WebUiSession.WatchNudge"/> says a page will see it when a Chat stream is open or a pulse was read in the last 5 seconds.
 /// </summary>
 public sealed partial class WebUiTests
@@ -45,7 +45,7 @@ public sealed partial class WebUiTests
 
     /// <summary>
     /// Only a held play makes the other pages jump (later on 2026-10-16, Fix 5: every play nudged, so Chat jumped to the tab while one played
-    /// the video): a play to a YouTube tab in view publishes no <c>watch</c> on the Chat stream; a held one does, the state already saying it.
+    /// the video): a play to a Video tab in view publishes no <c>watch</c> on the Chat stream; a held one does, the state already saying it.
     /// </summary>
     [Fact]
     public void APlayToAConnectedOwner_PublishesNoWatch_AHeldOneDoes_WithTheStatesWatchSet()

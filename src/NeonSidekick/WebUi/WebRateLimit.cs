@@ -15,7 +15,7 @@ public enum WebRateBucket
     /// <summary>A sign-in, pasted or by the link's GET (2026-10-19, the review: the GET went unlimited): 5 a minute.</summary>
     SignIn,
 
-    /// <summary>The YouTube tab's player reports (2026-10-16): a tick a second and a command's answers, 10 a second, bursts of 30.</summary>
+    /// <summary>The Video tab's player reports (2026-10-16): a tick a second and a command's answers, 10 a second, bursts of 30.</summary>
     Report,
 
     /// <summary>A bot check card's taps, holds, scrolls and typing (2026-10-17): 10 a second, bursts of 30, more than any finger.</summary>
@@ -87,12 +87,12 @@ public sealed class WebRateLimit
                 or WebUiHost.LearnCancelPath or WebUiHost.QueueResumePath   // the status row's 🧠 and the held queue's Resume (2026-10-17)
                 or WebUiHost.BotSkipPath   // the status row's ⏭️ (2026-11-12), tapped again and again as 🧠 is
                 or WebUiHost.YouTubeSavedPlayPath or WebUiHost.YouTubeSavedRemovePath or WebUiHost.YouTubeSavedClearPath or WebUiHost.YouTubeSavedMovePath
-                or WebUiHost.YouTubeSavedSavePath or WebUiHost.YouTubeSavedSaveListPath   // the YouTube tab's saved list (later on 2026-10-16; the list's ☆ 2026-11-08)
+                or WebUiHost.YouTubeSavedSavePath or WebUiHost.YouTubeSavedSaveListPath   // the Video tab's saved list (later on 2026-10-16; the list's ☆ 2026-11-08)
                 or WebUiHost.ShopAddPath or WebUiHost.ShopReAddPath or WebUiHost.ShopForgetPath or WebUiHost.ShopQuantityPath or WebUiHost.ShopRenamePath
                 or WebUiHost.ShopRemovePath or WebUiHost.ShopCheckAllPath or WebUiHost.ShopClearPath or WebUiHost.ShopPlacePath => WebRateBucket.Act,   // the Shopping tab's list controls (2026-10-16; ⌖ place 2026-11-06)
             "/api/home/say" => WebRateBucket.Say,
             WebUiAuth.SignInPath => WebRateBucket.SignIn,
-            WebUiHost.YouTubeReportPath or WebUiHost.YouTubeSeenPath => WebRateBucket.Report,   // the YouTube tab's (2026-10-16; seen later that day); its stream's GET is unlimited, as Chat's
+            WebUiHost.YouTubeReportPath or WebUiHost.YouTubeSeenPath => WebRateBucket.Report,   // the Video tab's (2026-10-16; seen later that day); its stream's GET is unlimited, as Chat's
             WebUiHost.BotCheckInputPath => WebRateBucket.BotCheck,   // a bot check card's input (2026-10-17); its pictures' GET is bounded by the screen's one capture at a time
             _ => null,
         };

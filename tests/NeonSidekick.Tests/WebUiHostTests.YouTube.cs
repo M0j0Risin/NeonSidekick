@@ -7,7 +7,7 @@ using NeonSidekick.WebUi;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// The YouTube tab at the host (2026-10-16): its page alone with YouTube's player let in (the path-limited policy pinned), its stream (hello
+/// The Video tab at the host (2026-10-16): its page alone with YouTube's player let in (the path-limited policy pinned), its stream (hello
 /// first, per page, never among the Chat streams, ended when the tab goes off or the player ends it), its reports (the owner's, checked and
 /// limited), the tab's rules, and the audit lines. Over a real <see cref="WebVideoPlayer"/> in the fake backend.
 /// </summary>
@@ -69,7 +69,7 @@ public sealed partial class WebUiHostTests
     {
         YouTubeOn();
 
-        using var page = await _client.SendAsync(Get("/youtube"));
+        using var page = await _client.SendAsync(Get("/video"));
         Assert.Equal(HttpStatusCode.OK, page.StatusCode);
         Assert.Contains("youtube.js", await page.Content.ReadAsStringAsync(), StringComparison.Ordinal);
         Assert.Equal(
@@ -77,7 +77,7 @@ public sealed partial class WebUiHostTests
             Assert.Single(page.Headers.GetValues("Content-Security-Policy")));
         Assert.Equal("strict-origin-when-cross-origin", Assert.Single(page.Headers.GetValues("Referrer-Policy")));
 
-        // Every other response keeps the pinned headers, the YouTube tab's own script and API included.
+        // Every other response keeps the pinned headers, the Video tab's own script and API included.
         foreach (string path in new[] { "/", "/youtube.js", "/youtube-core.js", "/api/pulse" })
         {
             using var other = await _client.SendAsync(Get(path));
@@ -86,7 +86,7 @@ public sealed partial class WebUiHostTests
         }
 
         _backend.TabsOn = new WebTabs(true, true, true);
-        using var off = await _client.SendAsync(Get("/youtube.html"));
+        using var off = await _client.SendAsync(Get("/video.html"));
         Assert.Equal(HttpStatusCode.SeeOther, off.StatusCode);
         Assert.Equal("/", off.Headers.Location?.OriginalString);
     }
@@ -229,7 +229,7 @@ public sealed partial class WebUiHostTests
 
         using var stream = await _client.SendAsync(Get(Events(PageId('a'), PageId('1'))));
         using var report = await _client.SendAsync(Post(WebUiHost.YouTubeReportPath, Report(PageId('a'), "{\"ev\":\"page\"}")));
-        using var page = await _client.SendAsync(Get("/youtube"));
+        using var page = await _client.SendAsync(Get("/video"));
 
         Assert.Equal((HttpStatusCode.NotFound, HttpStatusCode.NotFound), (stream.StatusCode, report.StatusCode));
         Assert.Contains("\"tabOff\":true", await stream.Content.ReadAsStringAsync(), StringComparison.Ordinal);
@@ -277,9 +277,9 @@ public sealed partial class WebUiHostTests
         Assert.False(WebTabs.All.YouTube);
         Assert.False(new WebTabs(true, true, true, true).Has((WebTab)99));
         Assert.Equal(WebUiText.YouTubeTabOff, WebUiText.TabOff(WebTab.YouTube));
-        Assert.Contains("Web UI YouTube controls", WebUiText.YouTubeTabOff, StringComparison.Ordinal);
+        Assert.Contains("Web UI video controls", WebUiText.YouTubeTabOff, StringComparison.Ordinal);
         Assert.Equal("", WebUiText.TabOff((WebTab)99));
-        Assert.Equal("/youtube", new WebTabs(false, false, false, YouTube: true).FirstOtherPage);
+        Assert.Equal("/video", new WebTabs(false, false, false, YouTube: true).FirstOtherPage);
         Assert.Equal("/shopping", new WebTabs(false, false, true, YouTube: true).FirstOtherPage);
         Assert.Equal(WebTab.YouTube, WebUiHost.TabOf(WebUiHost.YouTubeEventsPath));
         Assert.Equal(WebTab.YouTube, WebUiHost.TabOf(WebUiHost.YouTubeReportPath));
@@ -294,7 +294,7 @@ public sealed partial class WebUiHostTests
 
         var slash = await PageAsync("/");
 
-        Assert.Equal((HttpStatusCode.SeeOther, "/youtube"), (slash.Status, slash.Location));
+        Assert.Equal((HttpStatusCode.SeeOther, "/video"), (slash.Status, slash.Location));
     }
 
     [Fact]

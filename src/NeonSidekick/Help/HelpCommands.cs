@@ -580,7 +580,7 @@ public static class HelpCommands
         new("/video",
         [
             new("/video", "Show what the video file playing is doing, as `/video status` does."),
-            new("/video <path>", "Play a video file from the working directory (MP4, M4V, MOV, WebM or MKV) where *Video files play in* says: the video window, the Web UI's YouTube tab, or its own app. An argument ending in a video extension is always a path, blanks and all. F11 is full screen and Esc leaves it."),
+            new("/video <path>", "Play a video file from the working directory (MP4, M4V, MOV, WebM or MKV) where *Video files play in* says: the video window, the Web UI's Video tab, or its own app. An argument ending in a video extension is always a path, blanks and all. F11 is full screen and Esc leaves it."),
             new("/video play|resume", "Carry on playing."),
             new("/video pause", "Pause the video file."),
             new("/video seek <time>", "Go to a time in it (`90` or `1:30`)."),

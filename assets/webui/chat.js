@@ -1485,7 +1485,7 @@ function showPrompts(on) {
   floatSoon();
 }
 
-// A 🗑️ or clear all: two taps (Neon.armTwice, common.js since later on 2026-10-16, shared with the YouTube tab's saved list).
+// A 🗑️ or clear all: two taps (Neon.armTwice, common.js since later on 2026-10-16, shared with the Video tab's saved list).
 function rowDelete(onConfirm) {
   const del = el('button', 'row-delete', '🗑️');
   del.type = 'button';
@@ -2180,7 +2180,7 @@ function connect() {
     if (lastPointSeq === null) lastPointSeq = s.point ? s.point.seq : 0; else applyPoint(s.point);
     window.scrollTo(0, document.body.scrollHeight);
     floatSoon();
-    // A video waiting for the YouTube tab (2026-10-16): last, once the asks are drawn, so a question is never left behind.
+    // A video waiting for the Video tab (2026-10-16): last, once the asks are drawn, so a question is never left behind.
     Neon.watch(s.state.youTubeTab === true ? (s.state.watch || null) : null);
   });
   source.addEventListener('watch', ev => Neon.watch(JSON.parse(ev.data).text || null));
@@ -2213,7 +2213,7 @@ function reconnect() {
 try { draft.value = sessionStorage.getItem('neon.draft') || ''; } catch { /* private mode */ }
 grow();
 
-// Never jump to the YouTube tab mid-typing or over a question (2026-10-16): a draft with text, an ask card open, the 📣 sheet open (its filter
+// Never jump to the Video tab mid-typing or over a question (2026-10-16): a draft with text, an ask card open, the 📣 sheet open (its filter
 // or a two-tap delete half done); the banner instead.
 Neon.watchBlocked = () => !!draft.value.trim() || asks.length > 0 || !promptsEl.classList.contains('hidden')
   || (document.activeElement && document.activeElement.tagName === 'INPUT');

@@ -30,7 +30,7 @@ public interface IVideoPlayer
     bool Close();
 
     /// <summary>
-    /// Where this player plays (2026-10-16, <c>YouTube open links in</c>): the video window, or the Web UI's YouTube tab. A router says its
+    /// Where this player plays (2026-10-16, <c>YouTube open links in</c>): the video window, or the Web UI's Video tab. A router says its
     /// active one's, so a sentence with no snapshot to read can still name the place.
     /// </summary>
     VideoPlace Place => VideoPlace.Window;
@@ -42,24 +42,24 @@ public interface IVideoPlayer
     bool PlaysFiles => false;
 }
 
-/// <summary>Where the app's own players play (2026-10-16): the video window, or the Web UI's YouTube tab.</summary>
+/// <summary>Where the app's own players play (2026-10-16): the video window, or the Web UI's Video tab.</summary>
 public enum VideoPlace
 {
     /// <summary>The app's video window: the zero value, so the PC's snapshots need no change.</summary>
     Window,
 
-    /// <summary>The Web UI's YouTube tab, on the user's phone or browser.</summary>
+    /// <summary>The Web UI's Video tab, on the user's phone or browser.</summary>
     WebTab,
 }
 
 /// <summary>
-/// A video waiting for a YouTube tab to open (2026-10-16): whether an open Web UI page was asked to switch to it and will see the ask soon
-/// (<see cref="Nudged"/>), since when it waits, and (later that day) whether YouTube tabs are open but none is in view
+/// A video waiting for a Video tab to open (2026-10-16): whether an open Web UI page was asked to switch to it and will see the ask soon
+/// (<see cref="Nudged"/>), since when it waits, and (later that day) whether Video tabs are open but none is in view
 /// (<see cref="TabsHidden"/>: a locked phone, a tab in the background), so it plays as soon as one comes into view.
 /// </summary>
 public sealed record VideoHold(bool Nudged, DateTimeOffset Since, bool TabsHidden = false);
 
-/// <summary>A player that another side can take playback from by itself (2026-10-16: the Web UI's YouTube tab, its Resume tap).</summary>
+/// <summary>A player that another side can take playback from by itself (2026-10-16: the Web UI's Video tab, its Resume tap).</summary>
 public interface IVideoTakeover
 {
     /// <summary>The player started a video on its own; raised outside its lock.</summary>
@@ -264,10 +264,10 @@ public sealed record VideoSnapshot(
     int? PlaylistCount = null,
     bool Skipping = false)
 {
-    /// <summary>Where it plays (2026-10-16): the video window, or the Web UI's YouTube tab, stamped by the web player after each report.</summary>
+    /// <summary>Where it plays (2026-10-16): the video window, or the Web UI's Video tab, stamped by the web player after each report.</summary>
     public VideoPlace Place { get; init; }
 
-    /// <summary>A video waiting for a YouTube tab (2026-10-16); its state then reads <see cref="VideoState.Opening"/>.</summary>
+    /// <summary>A video waiting for a Video tab (2026-10-16); its state then reads <see cref="VideoState.Opening"/>.</summary>
     public VideoHold? Held { get; init; }
 
     /// <summary>

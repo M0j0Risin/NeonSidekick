@@ -12,7 +12,7 @@ internal sealed partial class ChatScreen
     /// <summary>The router over the video window and the Web UI's player (<see cref="RoutedVideoPlayer"/>); null with no video window.</summary>
     private readonly RoutedVideoPlayer? _routedVideo;
 
-    /// <summary>The Web UI's YouTube tab as a player (2026-10-16); null with no video window to route beside.</summary>
+    /// <summary>The Web UI's Video tab as a player (2026-10-16); null with no video window to route beside.</summary>
     private readonly WebUi.WebVideoPlayer? _webVideo;
 
     /// <summary>The router (tests).</summary>
@@ -29,7 +29,7 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// Where a play goes now, worked out once for the play, the spinner's words and the tools' descriptions, so they never disagree: the
     /// setting, with <c>webui-window</c> falling back to the video window while the Web UI isn't serving (or there is no web player) or, since
-    /// 2026-10-16, while <i>Web UI YouTube controls</i> is off (there is no tab), and
+    /// 2026-10-16, while <i>Web UI video controls</i> is off (there is no tab), and
     /// <c>browser-window</c> to the default browser where the Browser window can't take it (none here, as on a Mac; no runtime; a bot check
     /// waiting in it). The note leads a play's answer when a fallback was taken.
     /// </summary>

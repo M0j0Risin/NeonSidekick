@@ -499,7 +499,7 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// The video remote: the video told at once, in the PC's window or (2026-10-16) the YouTube tab (no wait: the tab reads it back). A video
+    /// The video remote: the video told at once, in the PC's window or (2026-10-16) the Video tab (no wait: the tab reads it back). A video
     /// still waiting for its tab answers its held words; nothing is open, the place the router plays in now.
     /// </summary>
     private WebReply WebHomeVideo(WebHomeVideoRequest request, IPAddress? remote)

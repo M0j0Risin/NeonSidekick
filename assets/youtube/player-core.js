@@ -1,5 +1,5 @@
 // The YouTube player both pages share (2026-10-16, YouTube open links in): the video window's page (player.html, inlined by
-// Viewer/VideoPage at its marker, so the written file and the Mac's LoadHTMLString stay one page) and the Web UI's YouTube tab
+// Viewer/VideoPage at its marker, so the written file and the Mac's LoadHTMLString stay one page) and the Web UI's Video tab
 // (youtube.js, served as webui/youtube-core.js). The player alone: made at the first load, loads, commands, reports and the tick.
 // Each page keeps its own transport and calls NeonPlayer(send, options) once; it never touches WebView2's bridge. It sets
 // window.onYouTubeIframeAPIReady, so the page loads https://www.youtube.com/iframe_api after it.

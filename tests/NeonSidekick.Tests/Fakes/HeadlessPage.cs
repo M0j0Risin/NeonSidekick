@@ -28,7 +28,7 @@ public sealed class HeadlessPage : IAsyncDisposable
     }
 
     /// <summary>
-    /// The browser started on a blank page, or null when none is installed. <paramref name="offline"/> (2026-10-16, the YouTube tab's tests) cuts
+    /// The browser started on a blank page, or null when none is installed. <paramref name="offline"/> (2026-10-16, the Video tab's tests) cuts
     /// it off from everything but loopback: every name resolves to nothing and anything else goes to a dead proxy, so a page asking for YouTube's
     /// script never reaches the internet; the Web UI's 127.0.0.1 is excluded from the resolver's rule (which catches an address too), and loopback bypasses the proxy by Chromium's own
     /// rule (the PDF reader's <c>&lt;-loopback&gt;</c> is left out: it would send the page's own server to the dead proxy too).

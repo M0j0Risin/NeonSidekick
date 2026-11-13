@@ -56,6 +56,8 @@ neon-*.log
 .notes/
 # local design notes (mac_build_notes.md and the like)
 .docs/
+# local test videos for the by-hand video checks (2 GB; how they're made is in its README.txt)
+TestVideos/
 
 # agents
 AGENTS.md

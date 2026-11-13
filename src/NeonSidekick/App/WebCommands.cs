@@ -41,7 +41,7 @@ public sealed record WebCommandVerdict(WebCommandKind Kind, string? Reason = nul
 /// <summary>
 /// The settings a verdict reads: <i>Web UI commands</i>, the switches <c>/tree</c> and <c>/vault</c> need, and whether the page has its Shopping
 /// tab (later on 2026-10-15: bare <c>/shopping</c> points at the tab, or at the setting while the tab is off) and (later on 2026-10-16) its
-/// YouTube tab, for <c>/youtube list</c> (and the bare <c>/youtube</c> since 2026-10-18). <see cref="CustomNames"/> (2026-10-30, the custom
+/// Video tab, for <c>/youtube list</c> (and the bare <c>/youtube</c> since 2026-10-18). <see cref="CustomNames"/> (2026-10-30, the custom
 /// commands plan): the names of the custom commands that run, any case, without their <c>/</c>; null is none (no settings wired).
 /// </summary>
 public readonly record struct WebCommandSettings(bool Commands, bool FileTools, bool ObsidianTools, bool ShoppingTab = true, bool YouTubeTab = false, IReadOnlySet<string>? CustomNames = null);
@@ -67,7 +67,7 @@ public static class WebCommands
         SlashCommand.Session,
         SlashCommand.Skills,
         SlashCommand.YouTube,
-        SlashCommand.Video,   // 2026-11-12: as /youtube; the phone has the YouTube tab and the Home remote
+        SlashCommand.Video,   // 2026-11-12: as /youtube; the phone has the Video tab and the Home remote
         SlashCommand.Queue,
         SlashCommand.Sampling,
         SlashCommand.Server,
@@ -144,7 +144,7 @@ public static class WebCommands
         string text = args.Trim();
         string first = FirstWord(text);
 
-        // /youtube list (and list --clear) point at the YouTube tab's saved list (later on 2026-10-16), the Shopping tab's way, and so does
+        // /youtube list (and list --clear) point at the Video tab's saved list (later on 2026-10-16), the Shopping tab's way, and so does
         // the bare /youtube since 2026-10-18 (the user's ask: the bare word is the saved list now); every other /youtube form stays the PC's.
         if (command == SlashCommand.YouTube && (text.Length == 0 || Is(first, "list")))
         {

@@ -15,7 +15,7 @@ public enum YouTubeOpenLinksInKind
     /// <summary>The user's default browser, through the shell.</summary>
     DefaultBrowser,
 
-    /// <summary>The Web UI's YouTube tab, on the user's phone or browser.</summary>
+    /// <summary>The Web UI's Video tab, on the user's phone or browser.</summary>
     WebUiWindow,
 }
 
@@ -24,7 +24,7 @@ public enum YouTubeOpenLinksInKind
 /// <c>default-browser</c> or <c>webui-window</c>, the <see cref="Web.OpenLinksIn"/> shape. It moves every play (youtube_play,
 /// <c>/youtube play</c> and its pickers), <c>open_url</c> on a YouTube video or playlist link while YouTube tools are on and a player
 /// exists, and the video or playlist links the video window opens. <c>webui-window</c> falls back to the video window while the Web UI
-/// isn't serving or (2026-10-16) <i>Web UI YouTube controls</i> is off, <c>browser-window</c> to the default browser where there is no Browser
+/// isn't serving or (2026-10-16) <i>Web UI video controls</i> is off, <c>browser-window</c> to the default browser where there is no Browser
 /// window. <see cref="Resolve"/> is the one place
 /// the saved string becomes the enum: a hand-edited value that is none of them reads as <see cref="Default"/>, with a warning once. Pure; pinned.
 /// </summary>
@@ -74,7 +74,7 @@ public static class YouTubeOpenLinksIn
         YouTubeWindow => "videos play in the app's video window",
         BrowserWindow => "videos open in the app's Browser window, out of the model's control",
         DefaultBrowser => "videos open in your default browser, out of the model's control",
-        WebUiWindow => "videos play in the Web UI's YouTube tab while Web UI YouTube controls is on, else in the video window",
+        WebUiWindow => "videos play in the Web UI's Video tab while Web UI video controls is on, else in the video window",
         _ => "",
     };
 

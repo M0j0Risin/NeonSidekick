@@ -393,7 +393,7 @@ internal sealed class FakeWebUiBackend : IWebUiBackend
 public IWebHome? Home { get; set; }
 
     /// <summary>
-    /// The YouTube tab's player (2026-10-16): a real <see cref="WebVideoPlayer"/> (portable, on the test's clock when one is given), so the host's
+    /// The Video tab's player (2026-10-16): a real <see cref="WebVideoPlayer"/> (portable, on the test's clock when one is given), so the host's
     /// tests run the same owner rules the player's own pin; null for a backend with no player.
     /// </summary>
     public WebVideoPlayer? VideoPlayer { get; set; }
@@ -450,7 +450,7 @@ public IWebHome? Home { get; set; }
         return Task.FromResult(WebReply.Ok);
     }
 
-    // ── The YouTube tab's saved list (later on 2026-10-16), over an in-memory list ─────────────────────────────
+    // ── The Video tab's saved list (later on 2026-10-16), over an in-memory list ─────────────────────────────
 
     /// <summary>The saved list, the user's order; guarded by <see cref="ListsGate"/>.</summary>
     public List<WebSavedVideo> SavedList { get; } = [];

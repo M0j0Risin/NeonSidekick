@@ -1,4 +1,4 @@
-// NeonSidekick's Web UI, the YouTube tab (2026-10-16): the app's video player on the phone or a browser, and (later that day) its saved list.
+// NeonSidekick's Web UI, the Video tab (2026-10-16): the app's video player on the phone or a browser, and (later that day) its saved list.
 // The player is the PC window's own (player-core.js, served as /youtube-core.js); this page is its transport — its own event stream from the
 // app (hello, load, cmd, owner, resume, taken, close) and its reports posted back, the same JSON the PC's page posts. A page is this browser
 // tab: its id lives in sessionStorage (a reload keeps it, a new tab gets its own), and each script load makes a nonce kept in memory, so the

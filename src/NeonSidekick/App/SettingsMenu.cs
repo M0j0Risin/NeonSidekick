@@ -956,31 +956,31 @@ public enum SettingsField
     /// <summary>How the transcript draws the user's sent line (<see cref="Settings.AppSettingsData.UserLineStyle"/>, 2026-10-04): a picker, no reconnect. Last, so the flat list's rows above keep their places.</summary>
     UserLineStyle,
 
-    /// <summary>A toggle: whether a turn offers the YouTube tools (<see cref="Settings.AppSettingsData.YouTubeTools"/>). The YouTube tab of <c>/tools</c>' first row (2026-10-05, the YouTube plan); no reconnect (read at each turn).</summary>
+    /// <summary>A toggle: whether a turn offers the YouTube tools (<see cref="Settings.AppSettingsData.YouTubeTools"/>). The Video tab of <c>/tools</c>' first row (2026-10-05, the YouTube plan); no reconnect (read at each turn).</summary>
     YouTubeTools,
 
-    /// <summary>Typed, masked: the YouTube Data API key, saved DPAPI-encrypted (<see cref="Settings.AppSettingsData.YouTubeApiKey"/>); empty clears it. The YouTube tab's second row (2026-10-05); no reconnect (read at each search).</summary>
+    /// <summary>Typed, masked: the YouTube Data API key, saved DPAPI-encrypted (<see cref="Settings.AppSettingsData.YouTubeApiKey"/>); empty clears it. The Video tab's second row (2026-10-05); no reconnect (read at each search).</summary>
     YouTubeApiKey,
 
-    /// <summary>Typed: how many videos a search lists, 1 to 20 (<see cref="Settings.AppSettingsData.YouTubeSearchMaxResults"/>). The YouTube tab (2026-10-05); no reconnect.</summary>
+    /// <summary>Typed: how many videos a search lists, 1 to 20 (<see cref="Settings.AppSettingsData.YouTubeSearchMaxResults"/>). The Video tab (2026-10-05); no reconnect.</summary>
     YouTubeSearchMaxResults,
 
-    /// <summary>A toggle: whether a played video starts at once or waits cued (<see cref="Settings.AppSettingsData.YouTubeAutoplay"/>). The YouTube tab (2026-10-05); no reconnect.</summary>
+    /// <summary>A toggle: whether a played video starts at once or waits cued (<see cref="Settings.AppSettingsData.YouTubeAutoplay"/>). The Video tab (2026-10-05); no reconnect.</summary>
     YouTubeAutoplay,
 
-    /// <summary>A picker over pause, duck and none: what a playing video does while the app speaks or listens (<see cref="Settings.AppSettingsData.YouTubeVoice"/>). The YouTube tab (2026-10-05); no reconnect.</summary>
+    /// <summary>A picker over pause, duck and none: what a playing video does while the app speaks or listens (<see cref="Settings.AppSettingsData.YouTubeVoice"/>). The Video tab (2026-10-05); no reconnect.</summary>
     YouTubeVoice,
 
-    /// <summary>A picker over relevance, date, views, rating and title: a search's order unless it names one (<see cref="Settings.AppSettingsData.YouTubeSearchOrder"/>). The YouTube tab (2026-10-08); no reconnect.</summary>
+    /// <summary>A picker over relevance, date, views, rating and title: a search's order unless it names one (<see cref="Settings.AppSettingsData.YouTubeSearchOrder"/>). The Video tab (2026-10-08); no reconnect.</summary>
     YouTubeSearchOrder,
 
-    /// <summary>A picker over none, moderate and strict: a search's safe search unless it names one (<see cref="Settings.AppSettingsData.YouTubeSafeSearch"/>). The YouTube tab (2026-10-08); no reconnect.</summary>
+    /// <summary>A picker over none, moderate and strict: a search's safe search unless it names one (<see cref="Settings.AppSettingsData.YouTubeSafeSearch"/>). The Video tab (2026-10-08); no reconnect.</summary>
     YouTubeSafeSearch,
 
-    /// <summary>Typed: a search's region, two letters, empty for none (<see cref="Settings.AppSettingsData.YouTubeRegion"/>). The YouTube tab (2026-10-08); no reconnect.</summary>
+    /// <summary>Typed: a search's region, two letters, empty for none (<see cref="Settings.AppSettingsData.YouTubeRegion"/>). The Video tab (2026-10-08); no reconnect.</summary>
     YouTubeRegion,
 
-    /// <summary>Typed: the language a search favours, empty for none (<see cref="Settings.AppSettingsData.YouTubeLanguage"/>). The YouTube tab's last row (2026-10-08); no reconnect.</summary>
+    /// <summary>Typed: the language a search favours, empty for none (<see cref="Settings.AppSettingsData.YouTubeLanguage"/>). The Video tab's last row (2026-10-08); no reconnect.</summary>
     YouTubeLanguage,
 
     /// <summary>Typed: the folder under the profile's images folder a clipboard picture is saved in when its message is sent (<see cref="Settings.AppSettingsData.PastedImagesFolder"/>). The Files tab's last row (2026-10-09), the Image menu's since 2026-10-10; the Camera output folder's rule; no reconnect. Last in the enum, as every newcomer.</summary>
@@ -1204,10 +1204,10 @@ public enum SettingsField
     /// <summary>An edit row: the home's <c>ad.json</c> in the editor.</summary>
     DirectoryDomainsGlobal,
 
-    /// <summary>A picker over <see cref="YouTube.YouTubeOpenLinksIn.Names"/>: where a YouTube video goes, the video window, the Browser window, the default browser or the Web UI's YouTube tab (<see cref="Settings.AppSettingsData.YouTubeOpenLinksIn"/>). The YouTube tab, first under Playing (2026-10-16, the user's ask and words); no reconnect (read at each play). Last in the enum, as every newcomer.</summary>
+    /// <summary>A picker over <see cref="YouTube.YouTubeOpenLinksIn.Names"/>: where a YouTube video goes, the video window, the Browser window, the default browser or the Web UI's Video tab (<see cref="Settings.AppSettingsData.YouTubeOpenLinksIn"/>). The Video tab, first under Playing (2026-10-16, the user's ask and words); no reconnect (read at each play). Last in the enum, as every newcomer.</summary>
     YouTubeOpenLinksIn,
 
-    /// <summary>A toggle: whether the Web UI has its YouTube tab (<see cref="Settings.AppSettingsData.WebUiYouTubeControls"/>). The Web UI tab under <see cref="WebUiShoppingControls"/> (2026-10-16, the user's ask); read at each request. Last in the enum, as every newcomer.</summary>
+    /// <summary>A toggle: whether the Web UI has its Video tab (<see cref="Settings.AppSettingsData.WebUiYouTubeControls"/>). The Web UI tab under <see cref="WebUiShoppingControls"/> (2026-10-16, the user's ask); read at each request. Last in the enum, as every newcomer.</summary>
     WebUiYouTubeControls,
 
     /// <summary>A picker over <see cref="Skills.ReflectionMode.Names"/>: whether a reflection may write a new skill or only improve one that exists (<see cref="Settings.AppSettingsData.ReflectionMode"/>). The Reflection tab of <c>/skills</c>, the first row of What it may change, above <see cref="ReflectionConfirmMode"/> (2026-10-16, the user's ask and words); no reconnect (read when a reflection is decided). Last in the enum, as every newcomer.</summary>
@@ -1381,7 +1381,7 @@ public enum SettingsField
     VideoFilesPlayIn,
 
     /// <summary>
-    /// A toggle: whether a video file plays on the YouTube tab over Tailscale Funnel (<see cref="Settings.AppSettingsData.WebUiVideoFilesOverFunnel"/>,
+    /// A toggle: whether a video file plays on the Video tab over Tailscale Funnel (<see cref="Settings.AppSettingsData.WebUiVideoFilesOverFunnel"/>,
     /// 2026-11-12). <c>/settings</c> › Client › Web UI, right after <see cref="WebUiYouTubeControls"/>; read at each request. Last in the enum, as every newcomer.
     /// </summary>
     WebUiVideoFilesOverFunnel,
@@ -2515,7 +2515,7 @@ internal sealed partial class SettingsMenu
         SettingsField.WebUiHomeControls => "Web UI home controls",
         SettingsField.WebUiChatControls => "Web UI chat controls",
         SettingsField.WebUiShoppingControls => "Web UI shopping controls",
-        SettingsField.WebUiYouTubeControls => "Web UI YouTube controls",
+        SettingsField.WebUiYouTubeControls => "Web UI video controls",
         SettingsField.WebUiVideoFilesOverFunnel => "Web UI video files over Funnel",
         SettingsField.WebUiProfileTheme => "Web UI profile theme",
         SettingsField.ImageThumbnailSize => "Image thumbnail size",
@@ -8770,8 +8770,8 @@ internal sealed partial class SettingsMenu
         SettingsField.WebUiHomeControls => on ? "the Home tab toggles, runs scenes, asks Assist and plays the video" : "there is no Home tab",
         SettingsField.WebUiChatControls => on ? "the page has its Chat tab" : "there is no Chat tab; / goes to the first tab that is on",
         SettingsField.WebUiShoppingControls => on ? "the Shopping tab adds, ticks, changes and removes lines, picks the store" : "there is no Shopping tab",
-        SettingsField.WebUiYouTubeControls => on ? "the YouTube tab plays videos and keeps the saved list" : "there is no YouTube tab; webui-window plays in the video window",
-        SettingsField.WebUiVideoFilesOverFunnel => on ? "a video file plays on the YouTube tab over Tailscale Funnel too" : "over Tailscale Funnel the YouTube tab plays no video file",
+        SettingsField.WebUiYouTubeControls => on ? "the Video tab plays videos and keeps the saved list" : "there is no Video tab; webui-window plays in the video window",
+        SettingsField.WebUiVideoFilesOverFunnel => on ? "a video file plays on the Video tab over Tailscale Funnel too" : "over Tailscale Funnel the Video tab plays no video file",
         SettingsField.WebUiProfileTheme => on ? "the pages wear the profile's theme" : "the pages keep their own look",
         SettingsField.ExternalSkills => on ? (OperatingSystem.IsMacOS() ? "~/.agents/skills is read too" : "%USERPROFILE%\\.agents\\skills is read too") : "no external skills",   // the Mac's home, 2026-10-06
         SettingsField.ProjectFile => on ? "use the working directory's NEON.md, AGENTS.md or CLAUDE.md" : "project files in the working directory are ignored",   // the user's wording, 2026-10-01; CLAUDE.md 2026-10-18 (reworded to fit the row's 72)

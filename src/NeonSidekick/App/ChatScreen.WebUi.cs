@@ -136,7 +136,7 @@ internal sealed partial class ChatScreen
             UsageNow = () => WebUsageView.Of(_session.Usage, _session.ContextLength),
             // The Home tab (2026-10-15): its side, and its lease's end checked on the session's 1-second tick.
             Home = new HomeSide(this),
-            // The YouTube tab's player (2026-10-16), and its chores on the same tick: a hold's expiry, a video stopped once the tab is off.
+            // The Video tab's player (2026-10-16), and its chores on the same tick: a hold's expiry, a video stopped once the tab is off.
             Video = _webVideo,
             Tick = () => { HomeWebTick(); WebVideoTick(); },
             // A video file over Tailscale Funnel (2026-11-12, the video-files plan), per request.
@@ -173,7 +173,7 @@ internal sealed partial class ChatScreen
             // The queue held after a cancel (2026-10-17): the page's lines from before it wait for the hold to lift, its Resume lifts it.
             CancelHoldNow = () => _queue.Held,
             QueueResume = WebResumeQueue,
-            // The YouTube tab's saved list (later on 2026-10-16): ChatScreen.WebSaved.cs; none without a web player.
+            // The Video tab's saved list (later on 2026-10-16): ChatScreen.WebSaved.cs; none without a web player.
             SavedVideosNow = () => _webVideo is null ? null : WebSavedNow(),
             SavedPlay = WebPlaySaved,
             SavedRemove = WebRemoveSaved,
@@ -733,7 +733,7 @@ internal sealed partial class ChatScreen
             effective.WebUiChatControls,
             effective.WebUiHomeControls,
             effective.WebUiShoppingControls,
-            // The YouTube tab (2026-10-16), and the banner's words while a video waits for it.
+            // The Video tab (2026-10-16), and the banner's words while a video waits for it.
             YouTubeTab: WebTabsNow().YouTube,
             Watch: _webVideo?.Waiting == true ? WebUiText.WatchBanner : null,
             // The held queue's banner (2026-10-17): while the hold stands and something waits behind it, the PC's queue or the page's held lines.
@@ -757,8 +757,8 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// The YouTube tab's chores on the session's 1-second tick (2026-10-16): a request held too long dropped, and the tab's video stopped
-    /// (its place saved) once the tab is off (<i>Web UI YouTube controls</i> off, or the Web UI not serving). Not on <i>YouTube open links in</i>
+    /// The Video tab's chores on the session's 1-second tick (2026-10-16): a request held too long dropped, and the tab's video stopped
+    /// (its place saved) once the tab is off (<i>Web UI video controls</i> off, or the Web UI not serving). Not on <i>YouTube open links in</i>
     /// alone: the tab plays its saved list under <c>youtube-window</c> too, and a play in the video window closes the tab's through the router's
     /// switch. A playing PC window is left alone the other way round, until the next play.
     /// </summary>

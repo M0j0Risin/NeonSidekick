@@ -12,7 +12,7 @@ namespace NeonSidekick.Llm.Tools;
 /// or unmuted, the player closed, or its status said (files get no status tool of their own). <see cref="YouTubeControlTool"/>'s body less
 /// the playlist actions: it waits for the player to show the change (<see cref="YouTubeWait.Command"/>) and answers with what it then
 /// reports (<see cref="VideoText.FileStatus"/>). A file only: with a YouTube video open it points at <c>youtube_control</c> when that is
-/// offered; after a file went to its default app it says so (<see cref="VideoText.HandedOffControl"/>); a file waiting for a YouTube tab
+/// offered; after a file went to its default app it says so (<see cref="VideoText.HandedOffControl"/>); a file waiting for a Video tab
 /// answers its held words to everything but <c>close</c> and <c>status</c>. Never headless.
 /// </summary>
 public sealed class VideoControlTool : AIFunction
@@ -64,7 +64,7 @@ public sealed class VideoControlTool : AIFunction
     public static string DescriptionFor(VideoFilesPlayInKind target) => target switch
     {
         VideoFilesPlayInKind.WebUiWindow =>
-            "Controls the video file " + PlayVideoTool.ToolName + " started in the Web UI's YouTube tab (not YouTube videos): " + Verbs + " or close the player. " + Use,
+            "Controls the video file " + PlayVideoTool.ToolName + " started in the Web UI's Video tab (not YouTube videos): " + Verbs + " or close the player. " + Use,
         VideoFilesPlayInKind.DefaultApp =>
             "Controls a video file in the app's own players (not YouTube videos): " + Verbs + " or close the player. A file opened in its own app can't be controlled from here. " + Use,
         _ =>
@@ -121,7 +121,7 @@ public sealed class VideoControlTool : AIFunction
             return YouTubeText.ClosedIn(current.Place);
         }
 
-        // A file waiting for a YouTube tab: nothing to drive yet, so its held words, and nothing sent.
+        // A file waiting for a Video tab: nothing to drive yet, so its held words, and nothing sent.
         if (current.Held is { } held)
         {
             return YouTubeText.Held(current, held);

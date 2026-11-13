@@ -6,7 +6,7 @@ using NeonSidekick.WebUi;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// A video file on the YouTube tab in Edge (2026-11-12, the video-files plan), offline: the clip plays in the frame's own <c>&lt;video&gt;</c>
+/// A video file on the Video tab in Edge (2026-11-12, the video-files plan), offline: the clip plays in the frame's own <c>&lt;video&gt;</c>
 /// (YouTube's player hidden, its missing script never a failure for a file), its reports carry the token, the PC's pause reaches it, a close
 /// empties it; a file gone and one with sound alone say so on the page and at the PC; a reload offers Resume, whose tap plays the file again.
 /// </summary>
@@ -24,7 +24,7 @@ public sealed partial class WebUiYouTubePageTests
 
     private async Task<HeadlessPage?> OwnerPageAsync()
     {
-        if (await SignedInAsync("/youtube") is not { } page)
+        if (await SignedInAsync("/video") is not { } page)
         {
             return null;
         }
@@ -168,7 +168,7 @@ public sealed partial class WebUiYouTubePageTests
 
         await page.EvalAsync("source.close()");
         SpinWait.SpinUntil(() => Player.Streams == 0, TimeSpan.FromSeconds(10));
-        await page.GoAsync(Root + "youtube");
+        await page.GoAsync(Root + "video");
         await page.WaitAsync("!document.getElementById('resume').classList.contains('hidden')", "the Resume button", 20);
         Assert.Equal("Resume \"clip.mp4\" at 3:17", await page.TextAsync("document.getElementById('resume').textContent"));
         Assert.NotNull(Player.FileOf(request.FileToken!));

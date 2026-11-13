@@ -40,7 +40,7 @@ public partial class YouTubeToolsTests
         Assert.Equal(ControlToday, Control().Description);
         Assert.Equal(SaveVideoToday, SaveVideoText(YouTubeOpenLinksInKind.YouTubeWindow));
 
-        Assert.Contains("Web UI's YouTube tab", YouTubePlayTool.DescriptionFor(YouTubeOpenLinksInKind.WebUiWindow));
+        Assert.Contains("Web UI's Video tab", YouTubePlayTool.DescriptionFor(YouTubeOpenLinksInKind.WebUiWindow));
         Assert.Contains("waits for one", YouTubePlayTool.DescriptionFor(YouTubeOpenLinksInKind.WebUiWindow));
         Assert.Contains("with no tab in view it waits for one", YouTubePlayTool.DescriptionFor(YouTubeOpenLinksInKind.WebUiWindow));   // later on 2026-10-16: in view, not open
         Assert.Contains("Browser window", YouTubePlayTool.DescriptionFor(YouTubeOpenLinksInKind.BrowserWindow));
@@ -53,9 +53,9 @@ public partial class YouTubeToolsTests
             Assert.Contains("can't be controlled", YouTubeControlTool.DescriptionFor(k));
             Assert.Contains("never one opened in a browser", SaveVideoText(k));
         });
-        Assert.Contains("Web UI's YouTube tab", YouTubeStatusTool.DescriptionFor(YouTubeOpenLinksInKind.WebUiWindow));
+        Assert.Contains("Web UI's Video tab", YouTubeStatusTool.DescriptionFor(YouTubeOpenLinksInKind.WebUiWindow));
         Assert.Contains("close the player", YouTubeControlTool.DescriptionFor(YouTubeOpenLinksInKind.WebUiWindow));
-        Assert.Contains("Web UI's YouTube tab", SaveVideoText(YouTubeOpenLinksInKind.WebUiWindow));
+        Assert.Contains("Web UI's Video tab", SaveVideoText(YouTubeOpenLinksInKind.WebUiWindow));
 
         // Read at each turn through the target hook.
         var target = YouTubeOpenLinksInKind.YouTubeWindow;
@@ -133,20 +133,20 @@ public partial class YouTubeToolsTests
         string video = await Call(play, ("video", Bunny)).WaitAsync(TimeSpan.FromSeconds(5));
         string list = await Call(play, ("playlist", "PLabcdefghijklmnopqrstu")).WaitAsync(TimeSpan.FromSeconds(5));
 
-        Assert.StartsWith("Waiting for a YouTube tab: no Web UI page is open now, so video " + Bunny, video, StringComparison.Ordinal);
-        Assert.StartsWith("Waiting for a YouTube tab: no Web UI page is open now, so playlist PLabcdefghijklmnopqrstu", list, StringComparison.Ordinal);
+        Assert.StartsWith("Waiting for a Video tab: no Web UI page is open now, so video " + Bunny, video, StringComparison.Ordinal);
+        Assert.StartsWith("Waiting for a Video tab: no Web UI page is open now, so playlist PLabcdefghijklmnopqrstu", list, StringComparison.Ordinal);
         Assert.DoesNotContain("in the video window", video);
     }
 
-    /// <summary>A video held while YouTube tabs are open but none is in view (later on 2026-10-16): its own sentence, whatever the nudge.</summary>
+    /// <summary>A video held while Video tabs are open but none is in view (later on 2026-10-16): its own sentence, whatever the nudge.</summary>
     [Fact]
     public void Held_WithTabsHidden_SaysItPlaysWhenOneComesIntoView()
     {
         var snapshot = VideoSnapshot.Opening(new VideoRequest(Bunny)) with { Place = VideoPlace.WebTab };
         string hidden = YouTubeText.Held(snapshot, new VideoHold(false, _time.GetUtcNow(), TabsHidden: true));
-        Assert.StartsWith("Waiting for a YouTube tab in view: video " + Bunny + " plays in the Web UI's YouTube tab as soon as one comes into view", hidden, StringComparison.Ordinal);
+        Assert.StartsWith("Waiting for a Video tab in view: video " + Bunny + " plays in the Web UI's Video tab as soon as one comes into view", hidden, StringComparison.Ordinal);
         Assert.Equal(hidden, YouTubeText.Held(snapshot, new VideoHold(true, _time.GetUtcNow(), TabsHidden: true)));
-        Assert.StartsWith("Waiting for a YouTube tab: no Web UI page", YouTubeText.Held(snapshot, new VideoHold(false, _time.GetUtcNow())), StringComparison.Ordinal);
+        Assert.StartsWith("Waiting for a Video tab: no Web UI page", YouTubeText.Held(snapshot, new VideoHold(false, _time.GetUtcNow())), StringComparison.Ordinal);
     }
     [Fact]
     public async Task AHeldVideo_WithAPageNudged_KeepsWaiting_AndAStoppedWaitLeavesItHeld()
@@ -167,7 +167,7 @@ public partial class YouTubeToolsTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => call);
         Assert.NotNull(_player.Snapshot?.Held);
         Assert.Contains("the open Web UI page was asked to switch to it", YouTubeText.Status(_player.Snapshot));
-        Assert.Contains("still waits for a YouTube tab", YouTubeText.StoppedWaitingFor(_player.Snapshot));
+        Assert.Contains("still waits for a Video tab", YouTubeText.StoppedWaitingFor(_player.Snapshot));
     }
 
     [Fact]
@@ -176,12 +176,12 @@ public partial class YouTubeToolsTests
         _player.Report(VideoSnapshot.Opening(new VideoRequest(Bunny)) with { Held = new VideoHold(false, _time.GetUtcNow()), Place = VideoPlace.WebTab });
 
         string paused = await Call(Control(), ("action", "pause"));
-        Assert.StartsWith("Waiting for a YouTube tab", paused, StringComparison.Ordinal);
+        Assert.StartsWith("Waiting for a Video tab", paused, StringComparison.Ordinal);
         Assert.Empty(_player.Commands);
 
         Assert.Equal(YouTubeText.ClosedIn(VideoPlace.WebTab), await Call(Control(), ("action", "close")));
         Assert.Equal(1, _player.Closes);
-        Assert.Contains("Web UI's YouTube tab", YouTubeText.ClosedIn(VideoPlace.WebTab));
+        Assert.Contains("Web UI's Video tab", YouTubeText.ClosedIn(VideoPlace.WebTab));
     }
 
     [Fact]
@@ -221,17 +221,17 @@ public partial class YouTubeToolsTests
     {
         var opening = VideoSnapshot.Opening(Bunny);
         Assert.Equal("Opening video aqz-KE-bpKQ in the video window; youtube_status says when it plays.", YouTubeText.Status(opening));
-        Assert.Contains("in the Web UI's YouTube tab;", YouTubeText.Status(opening with { Place = VideoPlace.WebTab }));
+        Assert.Contains("in the Web UI's Video tab;", YouTubeText.Status(opening with { Place = VideoPlace.WebTab }));
         Assert.Equal(YouTubeText.NoPlaylist, YouTubeText.NoPlaylistIn(VideoPlace.Window));
-        Assert.Contains("Web UI's YouTube tab", YouTubeText.NoPlaylistIn(VideoPlace.WebTab));
+        Assert.Contains("Web UI's Video tab", YouTubeText.NoPlaylistIn(VideoPlace.WebTab));
         Assert.Equal(YouTubeText.Closed, YouTubeText.ClosedIn(VideoPlace.Window));
         Assert.Equal(YouTubeText.ClosedMeanwhile, YouTubeText.ClosedMeanwhileIn(VideoPlace.Window));
-        Assert.Contains("Web UI's YouTube tab", YouTubeText.ClosedMeanwhileIn(VideoPlace.WebTab));
+        Assert.Contains("Web UI's Video tab", YouTubeText.ClosedMeanwhileIn(VideoPlace.WebTab));
         Assert.Equal(YouTubeText.WaitingForPlayer, YouTubeText.WaitingFor(YouTubeOpenLinksInKind.YouTubeWindow));
         Assert.Contains("Web UI", YouTubeText.WaitingFor(YouTubeOpenLinksInKind.WebUiWindow));
         Assert.Equal(YouTubeText.StoppedWaiting, YouTubeText.StoppedWaitingFor(null));
         Assert.Equal(YouTubeText.StoppedWaiting, YouTubeText.StoppedWaitingFor(new VideoSnapshot(VideoState.Playing, Bunny)));
-        Assert.Contains("Web UI's YouTube tab", YouTubeText.StoppedWaitingFor(new VideoSnapshot(VideoState.Playing, Bunny) { Place = VideoPlace.WebTab }));
+        Assert.Contains("Web UI's Video tab", YouTubeText.StoppedWaitingFor(new VideoSnapshot(VideoState.Playing, Bunny) { Place = VideoPlace.WebTab }));
     }
 
     [Fact]

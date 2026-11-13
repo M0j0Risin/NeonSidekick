@@ -3,9 +3,9 @@
 // hidden, the self-reload after an upgrade (once per tag), the Chat badge on the other tabs and the theme's re-link. Loaded first, before the
 // page's own script; nothing here runs on its own but the theme's and the badge's wiring the page asks for. Later on 2026-10-15: the tabs on
 // (a tab exists only while its controls are on at the PC), so the nav hides the others and a page whose tab went off goes to /. 2026-10-16: the
-// YouTube tab (on only while the PC says so: Web UI YouTube controls since later that day), and the jump to it while a video waits (watch).
+// Video tab (on only while the PC says so: Web UI video controls since later that day), and the jump to it while a video waits (watch).
 // Later on 2026-10-16: post's keepalive (a page leaving still says so) and the two-tap buttons (armTwice), shared by Chat's sheet and the
-// YouTube tab's saved list. 2026-10-27: the picture read (picture), for the Home tab's camera stills.
+// Video tab's saved list. 2026-10-27: the picture read (picture), for the Home tab's camera stills.
 'use strict';
 
 const Neon = (() => {
@@ -34,7 +34,7 @@ const Neon = (() => {
   }
 
   // A JSON post the app takes from its own page only. The answer: ok, the status, the app's sentence, and the body for what else it carries.
-  // options.keepalive (later on 2026-10-16): the post outlives the page (a YouTube tab saying it is hidden as it goes).
+  // options.keepalive (later on 2026-10-16): the post outlives the page (a Video tab saying it is hidden as it goes).
   async function post(path, body, options) {
     try {
       const r = await fetch(path, {
@@ -162,7 +162,7 @@ const Neon = (() => {
   setTimeout(navReady, 2000);
 
   function tabOf(href) {
-    return href === '/' ? 'chat' : href === '/home' ? 'home' : href === '/shopping' ? 'shopping' : href === '/youtube' ? 'youtube' : null;
+    return href === '/' ? 'chat' : href === '/home' ? 'home' : href === '/shopping' ? 'shopping' : href === '/video' ? 'youtube' : null;
   }
 
   // True when the page leaves (its own tab is off), so the caller draws nothing more. YouTube is on only when the PC says it is (=== true), so a
@@ -316,7 +316,7 @@ const Neon = (() => {
     if (link) link.href = '/theme.css?v=' + encodeURIComponent(name || 'default');
   }
 
-  // ── A video waiting for the YouTube tab (2026-10-16) ──
+  // ── A video waiting for the Video tab (2026-10-16) ──
   // Every page jumps to /youtube while the PC holds a video for it, unless the page says not now (watchBlocked: by default a text field with
   // focus; Chat sets its own: a draft, an ask card, the sheet), when it shows a banner instead, a link to the tab. A page that showed the banner
   // for a waiting video never jumps for that one by itself; a new one (the flag cleared and set again) gets the usual check. A hidden page waits
@@ -336,7 +336,7 @@ const Neon = (() => {
     if (!b) {
       b = el('a', 'watch-banner');
       b.id = 'watch-banner';
-      b.href = '/youtube';
+      b.href = '/video';
       const top = document.querySelector('header.top');
       if (top && top.parentNode) top.parentNode.insertBefore(b, top.nextSibling); else document.body.prepend(b);
     }
@@ -363,7 +363,7 @@ const Neon = (() => {
     }
     const blocked = api.watchBlocked ? api.watchBlocked() : blockedByDefault();
     if (blocked) { bannerShown = true; banner(watchWords); return; }
-    location.assign('/youtube');
+    location.assign('/video');
   }
 
   // The Chat badge on the other tabs (2026-10-15, E2): a dot while a reply runs, a count while the PC waits on an answer; (n) in the title; one

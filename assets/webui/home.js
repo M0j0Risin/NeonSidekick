@@ -489,12 +489,12 @@ function renderVideo() {
   videoEl.replaceChildren();
   videoEl.appendChild(el('h2', null, words.nowPlaying));
   videoEl.appendChild(el('div', 'video-title', v.title || ''));
-  // Where it plays (2026-10-16): the PC's window or the YouTube tab, the server's words.
+  // Where it plays (2026-10-16): the PC's window or the Video tab, the server's words.
   const meta = [v.author, v.state, v.where, v.count ? v.entry + ' / ' + v.count : null, v.muted ? '🔇' : '🔊 ' + v.volume].filter(x => x).join(' · ');
   videoEl.appendChild(el('div', 'video-meta', meta));
   videoEl.appendChild(el('div', 'video-clock', clock(v.position) + (v.duration ? ' / ' + clock(v.duration) : '')));
   if (v.failure) videoEl.appendChild(el('div', 'failed', v.failure));
-  // A video waiting for its YouTube tab has nothing to drive yet (2026-10-16): no remote.
+  // A video waiting for its Video tab has nothing to drive yet (2026-10-16): no remote.
   if (!home.controls || v.state === 'waiting') return;
   const row = el('div', 'remote');
   for (const [action, glyph, label] of Remote) {

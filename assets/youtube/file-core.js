@@ -1,5 +1,5 @@
 // The video-file player both pages share (2026-11-12, the video-files plan): the video window's file page (file.html, inlined by
-// Viewer/VideoPage at its marker) and the Web UI's YouTube tab (youtube.js, served as webui/youtube-file.js). One HTML5 <video>
+// Viewer/VideoPage at its marker) and the Web UI's Video tab (youtube.js, served as webui/youtube-file.js). One HTML5 <video>
 // playing a video file on the PC, with player-core.js's shape so each page keeps its transport:
 //   NeonFile(send, { video, autoplayFallback, onPlaying, onBlocked, keys }) -> { onMessage(m), empty(), active() }
 // The protocol is file.html's header: load {file, src, name, start, autoplay}, play, pause, stop, seek {t}, volume {v} (0-100),

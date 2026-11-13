@@ -19,7 +19,7 @@ public partial class ChatScreenTests
 
     private static string PageOf(char c) => new(c, 22);
 
-    // youTubeTab: Web UI YouTube controls (2026-10-16), on with the Web UI unless a test says otherwise.
+    // youTubeTab: Web UI video controls (2026-10-16), on with the Web UI unless a test says otherwise.
     private void YouTubeRouteFixture(string target, bool webUi = false, bool? youTubeTab = null)
     {
         YouTubeFixture(key: false);
@@ -62,7 +62,7 @@ public partial class ChatScreenTests
 
         string output = await RunAsync(input);
 
-        Assert.Contains("Waiting for a YouTube tab: no Web UI page is open now, so video " + BunnyId, output);
+        Assert.Contains("Waiting for a Video tab: no Web UI page is open now, so video " + BunnyId, output);
         Assert.Empty(_videoPlayer!.Plays);
         Assert.Equal(WebUiText.WatchBanner, watch);
         Assert.True(tab);
@@ -136,7 +136,7 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
-    /// <i>Web UI YouTube controls</i> off (2026-10-16, the user's ask): there is no tab, and <c>webui-window</c> plays in the video window,
+    /// <i>Web UI video controls</i> off (2026-10-16, the user's ask): there is no tab, and <c>webui-window</c> plays in the video window,
     /// saying why; the model's description names the window.
     /// </summary>
     [Fact]
@@ -304,7 +304,7 @@ public partial class ChatScreenTests
         string output = await RunAsync(input);
 
         Assert.Contains(YouTubeText.WaitingFor(YouTubeOpenLinksInKind.WebUiWindow), output);
-        Assert.Contains("(stopped waiting; the video still waits for a YouTube tab", output);
+        Assert.Contains("(stopped waiting; the video still waits for a Video tab", output);
     }
 
     [Fact]
@@ -438,7 +438,7 @@ public partial class ChatScreenTests
 
         Assert.Equal(("waiting", WebUiText.VideoWhere(VideoPlace.WebTab)), (held!.State, held.Where));
         Assert.Equal(WebOutcome.Conflict, heldTap.Outcome);
-        Assert.StartsWith("Waiting for a YouTube tab", heldTap.Message, StringComparison.Ordinal);
+        Assert.StartsWith("Waiting for a Video tab", heldTap.Message, StringComparison.Ordinal);
         Assert.Contains("cmd", events);
         Assert.Equal(WebUiText.NoVideoIn(VideoPlace.WebTab), none.Message);
     }

@@ -432,7 +432,7 @@ public static class WebHomeView
     }
 
     /// <summary>
-    /// The video playing for the card, in the PC's window or (2026-10-16) the YouTube tab, or null with none open. A video waiting for a YouTube
+    /// The video playing for the card, in the PC's window or (2026-10-16) the Video tab, or null with none open. A video waiting for a YouTube
     /// tab reads <c>waiting</c>, not <c>opening</c>; one with no title yet sends its id (or its playlist) as the title, never an empty line; and
     /// <see cref="WebHomeVideo.Where"/> names the place.
     /// </summary>

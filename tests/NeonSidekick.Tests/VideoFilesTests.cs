@@ -151,7 +151,7 @@ public sealed class VideoFilesTests : IDisposable
     {
         Assert.StartsWith("Plays a video file on this computer (not YouTube", PlayVideoTool.DescriptionFor(VideoFilesPlayInKind.VideoWindow), StringComparison.Ordinal);
         Assert.Contains("video window", PlayVideoTool.DescriptionFor(VideoFilesPlayInKind.VideoWindow), StringComparison.Ordinal);
-        Assert.Contains("YouTube tab", PlayVideoTool.DescriptionFor(VideoFilesPlayInKind.WebUiWindow), StringComparison.Ordinal);
+        Assert.Contains("Video tab", PlayVideoTool.DescriptionFor(VideoFilesPlayInKind.WebUiWindow), StringComparison.Ordinal);
         Assert.Contains("can't see or drive it", PlayVideoTool.DescriptionFor(VideoFilesPlayInKind.DefaultApp), StringComparison.Ordinal);
         Assert.All(Enum.GetValues<VideoFilesPlayInKind>(), kind => Assert.EndsWith("Play only what the user asked for.", PlayVideoTool.DescriptionFor(kind), StringComparison.Ordinal));
     }
@@ -208,7 +208,7 @@ public sealed class VideoFilesTests : IDisposable
         Assert.Equal(1, _player.Closes);
     }
 
-    /// <summary>A file waiting for a YouTube tab: its held words, naming the file, and nothing sent.</summary>
+    /// <summary>A file waiting for a Video tab: its held words, naming the file, and nothing sent.</summary>
     [Fact]
     public async Task Control_AHeldFile_AnswersItsWait()
     {
@@ -216,7 +216,7 @@ public sealed class VideoFilesTests : IDisposable
         _player.Report(VideoSnapshot.Opening(request) with { Held = new VideoHold(Nudged: true, _time.GetUtcNow()), Place = VideoPlace.WebTab });
 
         string held = await Call(Control(), ("action", "pause"));
-        Assert.Equal("Waiting for a YouTube tab: clip.mp4 plays in the Web UI's YouTube tab as soon as it opens; the open Web UI page was asked to switch to it.", held);
+        Assert.Equal("Waiting for a Video tab: clip.mp4 plays in the Web UI's Video tab as soon as it opens; the open Web UI page was asked to switch to it.", held);
         Assert.Equal(held, await Call(Control(), ("action", "status")));
         Assert.Empty(_player.Commands);
     }
@@ -232,8 +232,8 @@ public sealed class VideoFilesTests : IDisposable
         Assert.Equal("Error: it broke", VideoText.FileStatus(opening with { State = VideoState.Failed, Failure = "it broke" }));
         Assert.Equal("Error: " + VideoText.FileError(3, "clip.mp4"), VideoText.FileStatus(opening with { Error = 3 }));
         Assert.Equal("Opening clip.mp4 in the video window; video_control status says when it plays.", VideoText.FileStatus(opening));
-        Assert.Equal("Opening clip.mp4 in the Web UI's YouTube tab; video_control status says when it plays.", VideoText.FileStatus(opening with { Place = VideoPlace.WebTab }));
-        Assert.Equal("Loaded, not started \"clip.mp4\", volume 100% · in the Web UI's YouTube tab; tap the video on the phone to start",
+        Assert.Equal("Opening clip.mp4 in the Web UI's Video tab; video_control status says when it plays.", VideoText.FileStatus(opening with { Place = VideoPlace.WebTab }));
+        Assert.Equal("Loaded, not started \"clip.mp4\", volume 100% · in the Web UI's Video tab; tap the video on the phone to start",
             VideoText.FileStatus(opening with { State = VideoState.Unstarted, Place = VideoPlace.WebTab }));
         Assert.Equal("Playing \"Holiday\" at 0:05, volume 100% · file clip.mp4", VideoText.FileStatus(opening with { State = VideoState.Playing, Title = "Holiday", Position = 5 }));
 

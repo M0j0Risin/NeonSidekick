@@ -217,7 +217,7 @@ Each purge asks first, saying where things go: to the Recycle bin (the Trash on 
 | `/youtube playlist [<id>\|<link>]` | A playlist's videos in a pane (with a key: 1 unit, plus 1 per 50 videos); alone, the one playing. `l` saves the playlist. |
 | `/youtube play\|resume`, `/youtube pause`, `/youtube seek <time>`, `/youtube volume <level>`, `/youtube mute\|unmute`, `/youtube close` | Resumes, pauses, seeks, sets the volume (0–100), mutes or unmutes, or closes the player. |
 | `/youtube save [<id>\|<link>\|playlist]` | Saves the video playing, or the one named, to this profile's saved videos; a playlist's id or link saves the playlist, `playlist` the one playing. |
-| `/youtube list`, `/youtube list --clear` | The saved videos and playlists in a pane, in step with the Web UI's YouTube tab; `--clear` removes them all after a yes. |
+| `/youtube list`, `/youtube list --clear` | The saved videos and playlists in a pane, in step with the Web UI's Video tab; `--clear` removes them all after a yes. |
 | `/youtube unsave <n>\|<id>\|<link>` | Removes one saved video or playlist. |
 | `/webui` | Shows the [Web UI](INTERFACE.md#web-ui), over a reply too: on or off, port, reach, buttons, and a tab per address with its sign-in link and, where a phone reaches it, a QR code. |
 | `/webui on\|off` | Turns the Web UI on or off for this profile, at once. |

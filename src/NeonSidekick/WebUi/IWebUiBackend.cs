@@ -179,18 +179,18 @@ public interface IWebUiBackend
     IWebHome? Home { get; }
 
     /// <summary>
-    /// The YouTube tab's player (2026-10-16), or null where there is none (no video window to route beside, headless, a test's backend): the
+    /// The Video tab's player (2026-10-16), or null where there is none (no video window to route beside, headless, a test's backend): the
     /// host then answers <c>/api/youtube/*</c> with the tab-off 404 whatever the tabs say.
     /// </summary>
     IWebVideo? Video => null;
 
     /// <summary>
-    /// Whether a video file may play on the YouTube tab over Tailscale Funnel (2026-11-12, <i>Web UI video files over Funnel</i>, read per
+    /// Whether a video file may play on the Video tab over Tailscale Funnel (2026-11-12, <i>Web UI video files over Funnel</i>, read per
     /// request); off by default, and off where nothing says.
     /// </summary>
     bool VideoFilesOverFunnel => false;
 
-    /// <summary>The YouTube tab's saved list (later on 2026-10-16), or null where there is none; reads only (a missing title's lookup may start).</summary>
+    /// <summary>The Video tab's saved list (later on 2026-10-16), or null where there is none; reads only (a missing title's lookup may start).</summary>
     WebSavedVideos? SavedVideos() => null;
 
     /// <summary>A saved video played on the tapping page (later on 2026-10-16): that page takes the player, the video resumes where it was left.</summary>

@@ -451,7 +451,7 @@ public sealed partial class WebUiPageTests : IAsyncLifetime
         Assert.True((await page.EvalAsync("document.getElementById('chat-link').classList.contains('busy')")).GetBoolean());
     }
 
-    /// <summary>Neon.post's keepalive (later on 2026-10-16: a YouTube tab saying it is hidden as it goes) reaches fetch; without it, none.</summary>
+    /// <summary>Neon.post's keepalive (later on 2026-10-16: a Video tab saying it is hidden as it goes) reaches fetch; without it, none.</summary>
     [WindowsFact]
     public async Task Post_PassesKeepaliveToFetch()
     {

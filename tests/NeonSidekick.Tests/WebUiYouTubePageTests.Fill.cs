@@ -5,7 +5,7 @@ using NeonSidekick.WebUi;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// The YouTube tab's ⛶ Fill window (2026-10-20, the user's ask), in headless Edge and offline: the button only while this page owns a loaded
+/// The Video tab's ⛶ Fill window (2026-10-20, the user's ask), in headless Edge and offline: the button only while this page owns a loaded
 /// player, the video from the bar to the window's bottom with the header and the saved list gone, a message said while filled shown in the bar,
 /// the player's node never moved or made anew, the label and the focus; and each way out (the button, Esc, Back, a closed video, a taken
 /// player) putting the layout and the scroll offset back with our history entry gone, never piling up.
@@ -21,7 +21,7 @@ public sealed partial class WebUiYouTubePageTests
     {
         Player.Dispose();
         _backend.VideoPlayer = new WebVideoPlayer(apiWaitMs: 60_000);
-        if (await SignedInAsync("/youtube") is not { } page)
+        if (await SignedInAsync("/video") is not { } page)
         {
             return null;
         }

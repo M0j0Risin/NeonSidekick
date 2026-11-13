@@ -6,7 +6,7 @@ using NeonSidekick.WebUi;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// The YouTube tab in headless Edge, later on 2026-10-16: the page saying whether it is in view (and again on a reconnect), <c>taken</c>
+/// The Video tab in headless Edge, later on 2026-10-16: the page saying whether it is in view (and again on a reconnect), <c>taken</c>
 /// stopping the player, a held video surviving the page's first report, a fresh claim id per Play here tap; and the saved list under the
 /// player (the filter, the moves, a two-tap remove, a row's play reaching the player, ☆ to ★).
 /// </summary>
@@ -19,7 +19,7 @@ public sealed partial class WebUiYouTubePageTests
     [WindowsFact]
     public async Task ThePage_SaysWhenItHides_AndSaysAgainOnAReconnectsOpen()
     {
-        if (await SignedInAsync("/youtube") is not { } page)
+        if (await SignedInAsync("/video") is not { } page)
         {
             return;
         }
@@ -41,7 +41,7 @@ public sealed partial class WebUiYouTubePageTests
     [WindowsFact]
     public async Task Taken_StopsThePlayer()
     {
-        if (await SignedInAsync("/youtube") is not { } page)
+        if (await SignedInAsync("/video") is not { } page)
         {
             return;
         }
@@ -60,7 +60,7 @@ public sealed partial class WebUiYouTubePageTests
     {
         Player.Play(new VideoRequest("aqz-KE-bpKQ"));   // no page attached: held
         Assert.NotNull(Player.Snapshot?.Held);
-        if (await SignedInAsync("/youtube") is not { } page)
+        if (await SignedInAsync("/video") is not { } page)
         {
             return;
         }
@@ -80,7 +80,7 @@ public sealed partial class WebUiYouTubePageTests
         using var other = Player.Attach(otherPage, new string('9', 22), false, null, () => { });
         Player.Play(new VideoRequest("aqz-KE-bpKQ"));
         Player.Report(otherPage, "{\"ev\":\"state\",\"id\":\"aqz-KE-bpKQ\",\"state\":1,\"position\":3,\"duration\":635}", null);
-        if (await SignedInAsync("/youtube") is not { } page)
+        if (await SignedInAsync("/video") is not { } page)
         {
             return;
         }
@@ -121,7 +121,7 @@ public sealed partial class WebUiYouTubePageTests
     public async Task TheSavedList_DrawsUnderThePlayer_AndTheFilterHidesRowsAndTheMoves()
     {
         Saved(Bunny, Zoo, Song);
-        if (await SignedInAsync("/youtube") is not { } page)
+        if (await SignedInAsync("/video") is not { } page)
         {
             return;
         }
@@ -160,7 +160,7 @@ public sealed partial class WebUiYouTubePageTests
     public async Task ATwoTapRemove_PostsOnce_AndAMovePosts()
     {
         Saved(Bunny, Zoo);
-        if (await SignedInAsync("/youtube") is not { } page)
+        if (await SignedInAsync("/video") is not { } page)
         {
             return;
         }
@@ -186,7 +186,7 @@ public sealed partial class WebUiYouTubePageTests
     public async Task ARowsTap_PostsAPlay_AndTheLoadThatFollowsReachesThePlayer_WithItsStart()
     {
         Saved(Bunny);
-        if (await SignedInAsync("/youtube") is not { } page)
+        if (await SignedInAsync("/video") is not { } page)
         {
             return;
         }
@@ -207,7 +207,7 @@ public sealed partial class WebUiYouTubePageTests
         // 2026-10-20, the user's ask: "Resumed the saved video at …" goes shortly after the video starts. The player's state reports are
         // fed to the page's own send (offline, YouTube's script never loads); the wait is shortened.
         Saved(Bunny);
-        if (await SignedInAsync("/youtube") is not { } page)
+        if (await SignedInAsync("/video") is not { } page)
         {
             return;
         }
@@ -235,7 +235,7 @@ public sealed partial class WebUiYouTubePageTests
     {
         // 2026-10-20, the user's ask: "N saved videos; …" hidden while playing (its room kept), shown paused, stopped or with nothing loaded.
         Saved(Bunny, Zoo);
-        if (await SignedInAsync("/youtube") is not { } page)
+        if (await SignedInAsync("/video") is not { } page)
         {
             return;
         }
@@ -264,7 +264,7 @@ public sealed partial class WebUiYouTubePageTests
     public async Task TheSaveButton_TurnsFromStarToSaved()
     {
         _backend.SavedPlaying = new WebSavedPlaying("aqz-KE-bpKQ", "Big Buck Bunny", false);
-        if (await SignedInAsync("/youtube") is not { } page)
+        if (await SignedInAsync("/video") is not { } page)
         {
             return;
         }
@@ -289,7 +289,7 @@ public sealed partial class WebUiYouTubePageTests
         Saved(FakeWebUiBackend.SavedVideo("PLabcdefghijklmnopq", "Open Movies", "Blender") with { Playlist = true, Thumb = "jNQXAC9IVRw" },
             FakeWebUiBackend.SavedVideo("PLzyxwvutsrqponmlkj", "Untitled list") with { Playlist = true },
             Zoo);
-        if (await SignedInAsync("/youtube") is not { } page)
+        if (await SignedInAsync("/video") is not { } page)
         {
             return;
         }
@@ -311,7 +311,7 @@ public sealed partial class WebUiYouTubePageTests
     public async Task TheListsSaveButton_ShowsOnlyWhileAListPlays_AndTurnsToSaved()
     {
         _backend.SavedPlaying = new WebSavedPlaying("aqz-KE-bpKQ", "Big Buck Bunny", false);
-        if (await SignedInAsync("/youtube") is not { } page)
+        if (await SignedInAsync("/video") is not { } page)
         {
             return;
         }

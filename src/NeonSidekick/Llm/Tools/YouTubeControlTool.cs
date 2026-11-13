@@ -12,7 +12,7 @@ namespace NeonSidekick.Llm.Tools;
 /// player to show the change (<see cref="YouTubeWait.Command"/>) and answers with what the window then reports. Nothing without
 /// a window: <see cref="YouTubeText.NoVideo"/>. Never headless. While a playlist plays (2026-10-08), <c>next</c>, <c>previous</c>
 /// and <c>entry</c> (its value the entry, 1-based) move through it, waiting for the player to show another entry. Since 2026-10-16
-/// (<c>YouTube open links in</c>) the player may be the Web UI's YouTube tab: a video waiting for the tab answers its held words to every
+/// (<c>YouTube open links in</c>) the player may be the Web UI's Video tab: a video waiting for the tab answers its held words to every
 /// action but <c>close</c>, which drops it; a video sent to a browser answers that it can't be controlled.
 /// </summary>
 public sealed class YouTubeControlTool : AIFunction
@@ -66,7 +66,7 @@ public sealed class YouTubeControlTool : AIFunction
     public static string DescriptionFor(YouTubeOpenLinksInKind target) => target switch
     {
         YouTubeOpenLinksInKind.WebUiWindow =>
-            "Controls the video playing in the Web UI's YouTube tab: play, pause, seek to a time, forward or back some seconds, volume 0–100, mute, unmute, " +
+            "Controls the video playing in the Web UI's Video tab: play, pause, seek to a time, forward or back some seconds, volume 0–100, mute, unmute, " +
             "next, previous or entry in a playlist, or close the player. " + Use,
         YouTubeOpenLinksInKind.BrowserWindow or YouTubeOpenLinksInKind.DefaultBrowser =>
             "Controls a video in the app's own video players: play, pause, seek to a time, forward or back some seconds, volume 0–100, mute, unmute, " +
@@ -107,7 +107,7 @@ public sealed class YouTubeControlTool : AIFunction
             return YouTubeText.ClosedIn(current.Place);
         }
 
-        // A video waiting for a YouTube tab (2026-10-16): nothing to drive yet, so its held words, and nothing sent.
+        // A video waiting for a Video tab (2026-10-16): nothing to drive yet, so its held words, and nothing sent.
         if (current.Held is { } held)
         {
             return YouTubeText.Held(current, held);

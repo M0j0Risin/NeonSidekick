@@ -93,8 +93,8 @@ public static partial class HelpSettings
         SettingsField.WebUiChatControls => "Shows the Web UI's Chat tab: the transcript, the message box, and answers to the PC's questions.",
         SettingsField.WebUiHomeControls => "Shows the Web UI's Home tab, which controls Home Assistant devices, rooms and scenes. Unlocking and opening doors still ask first.",
         SettingsField.WebUiShoppingControls => "Shows the Web UI's Shopping tab, to see and change the shopping list from your phone.",
-        SettingsField.WebUiVideoFilesOverFunnel => "Lets a PC video file play on the YouTube tab over Tailscale Funnel too, not only on the LAN or a tailnet.",
-        SettingsField.WebUiYouTubeControls => "Shows the Web UI's YouTube tab, which plays videos and keeps the saved list. A video started there plays there.",
+        SettingsField.WebUiVideoFilesOverFunnel => "Lets a PC video file play on the Video tab over Tailscale Funnel too, not only on the LAN or a tailnet.",
+        SettingsField.WebUiYouTubeControls => "Shows the Web UI's Video tab, which plays videos and keeps the saved list. A video started there plays there.",
 
         // /settings › Servers › Common
         SettingsField.LlmUrl => "The LLM server: an OpenAI-compatible base URL, embedded for the built-in model, or docker:<container>. Empty scans for a server and lets you pick one at startup.",
@@ -326,7 +326,7 @@ public static partial class HelpSettings
 
         // /tools › Apps › YouTube
         SettingsField.VideoTools => "Gives the model two tools that play a video file from the working folder for you, and pause, seek or close it. Never YouTube.",
-        SettingsField.VideoFilesPlayIn => "Where video files play: the app's video window, the Web UI's YouTube tab, or the file's default app.",
+        SettingsField.VideoFilesPlayIn => "Where video files play: the app's video window, the Web UI's Video tab, or the file's default app.",
         SettingsField.YouTubeTools => "Gives the model the YouTube tools: search, play videos and playlists, and keep saved videos and playlists. Searching needs a YouTube API key.",
         SettingsField.YouTubeApiKey => "Your YouTube Data API v3 key, for searching (about 100 free searches a day). Saved encrypted.",
         SettingsField.YouTubeSearchMaxResults => "The most videos, playlists or channels a search lists (1–20). The quota cost is the same whatever the count.",
@@ -334,7 +334,7 @@ public static partial class HelpSettings
         SettingsField.YouTubeSafeSearch => "The restricted content a search leaves out: none, moderate (YouTube's own default) or strict.",
         SettingsField.YouTubeRegion => "A two-letter country code (US, GB, DE) a search favors. Empty for any region.",
         SettingsField.YouTubeLanguage => "A language code (en, es, zh-Hans) a search favors; other results still show. Empty for any language.",
-        SettingsField.YouTubeOpenLinksIn => "Where YouTube videos play: the app's video window, its Browser window, your default browser, or the Web UI's YouTube tab.",
+        SettingsField.YouTubeOpenLinksIn => "Where YouTube videos play: the app's video window, its Browser window, your default browser, or the Web UI's Video tab.",
         SettingsField.YouTubeAutoplay => "A played video starts at once, sound included. Off, it waits until you or the model press play.",
         SettingsField.YouTubeVoice => "A playing video while the app speaks or listens: pause stops it until after, duck turns it down to 15 %, none lets it play on.",
 

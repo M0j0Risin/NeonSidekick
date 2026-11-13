@@ -32,7 +32,7 @@ public sealed class YouTubeSaveTool : AIFunction
     private static readonly JsonElement Schema = Build("the one in the video window", "the list in the video window");
 
     // The schema per YouTube open links in (2026-10-16): only current's words change, the window's byte for byte.
-    private static readonly JsonElement WebSchema = Build("the one in the Web UI's YouTube tab", "the list in the Web UI's YouTube tab");
+    private static readonly JsonElement WebSchema = Build("the one in the Web UI's Video tab", "the list in the Web UI's Video tab");
 
     private static readonly JsonElement BrowserSchema = Build(
         "the one in the app's own video players (never one opened in a browser)", "the list in the app's own video players (never one opened in a browser)");

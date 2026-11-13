@@ -114,7 +114,7 @@ public sealed record WebResult(bool Ok, string? Message = null, bool AsText = fa
 
 /// <summary>
 /// The Web UI's tabs and whether each is on (later on 2026-10-15): <i>Web UI chat controls</i>, <i>home controls</i>, <i>shopping controls</i>, and
-/// (2026-10-16) the YouTube tab while <i>Web UI YouTube controls</i> is on and there is a web player.
+/// (2026-10-16) the Video tab while <i>Web UI video controls</i> is on and there is a web player.
 /// </summary>
 public readonly record struct WebTabs(bool Chat, bool Home, bool Shopping, bool YouTube = false)
 {
@@ -132,7 +132,7 @@ public readonly record struct WebTabs(bool Chat, bool Home, bool Shopping, bool 
     };
 
     /// <summary>The page <c>/</c> sends a browser to with Chat off: the first tab on in the nav's order (Home, then Shopping, then YouTube), or null for none.</summary>
-    public string? FirstOtherPage => Home ? "/home" : Shopping ? "/shopping" : YouTube ? "/youtube" : null;
+    public string? FirstOtherPage => Home ? "/home" : Shopping ? "/shopping" : YouTube ? "/video" : null;
 }
 
 /// <summary>A tab of the Web UI's pages.</summary>
@@ -142,7 +142,7 @@ public enum WebTab
     Home,
     Shopping,
 
-    /// <summary>The YouTube tab (2026-10-16).</summary>
+    /// <summary>The Video tab (2026-10-16).</summary>
     YouTube,
 }
 
@@ -274,7 +274,7 @@ public sealed record WebHomeDevice(string Entity, string Glyph, string Name, str
 
 /// <summary>
 /// The video playing, as the tab shows it: its state, the video, the clock, the sound, a playlist's place, a failure's sentence, and (2026-10-16)
-/// where it plays, the PC's window or the YouTube tab.
+/// where it plays, the PC's window or the Video tab.
 /// </summary>
 public sealed record WebHomeVideo(string State, string? Title, string? Author, double Position, double Duration, int Volume, bool Muted, int? Entry, int? Count, string? Failure, string? Where = null);
 
@@ -286,7 +286,7 @@ public sealed record WebHomeModel(string Model, string Server, int? Context, boo
 
 /// <summary>
 /// What the Chat badge on the other tabs reads (2026-10-15): a reply running, the asks open, what the PC waits on, the theme's name, the files' tag;
-/// the tabs on; and (2026-10-16) whether the YouTube tab is, and the banner's words while a video waits for it (<see cref="Watch"/>, null for none).
+/// the tabs on; and (2026-10-16) whether the Video tab is, and the banner's words while a video waits for it (<see cref="Watch"/>, null for none).
 /// </summary>
 public sealed record WebPulse(bool Busy, int Asks, string? WaitingAtPc, string Theme, string Assets, bool ChatTab = true, bool HomeTab = true, bool ShoppingTab = true, bool YouTubeTab = false, string? Watch = null);
 
@@ -406,7 +406,7 @@ public sealed record WebAskView(
 /// What the page's header and composer show: the profile and its two avatars, the model, whether a reply runs (Stop) or a model loads,
 /// plan mode, the session's title, the phone's lines waiting, what the PC is waiting on, the app's version, and the page's own files' tag
 /// (<see cref="WebUiAssets.Tag"/>: a page whose tag differs reloads itself). The tabs on; and (2026-10-16) the banner's words while a video
-/// waits for a YouTube tab (<see cref="Watch"/>: the flag and the text in one, null for none). <see cref="UserLine"/> (2026-10-21, the
+/// waits for a Video tab (<see cref="Watch"/>: the flag and the text in one, null for none). <see cref="UserLine"/> (2026-10-21, the
 /// user's call: the page draws the user's lines as the terminal does) is <i>User line style</i>, resolved; empty reads as <c>bold</c>.
 /// <see cref="BotChat"/> (2026-11-12): a botchat's ladder stands, so the status row offers ⏭️.
 /// </summary>
@@ -674,10 +674,10 @@ public sealed class WebStoreRequest
     public long Id { get; set; }
 }
 
-// ── The YouTube tab (2026-10-16) ─────────────────────────────────────────
+// ── The Video tab (2026-10-16) ─────────────────────────────────────────
 
 /// <summary>
-/// The YouTube tab's words, made on the server (<see cref="WebUiText.VideoWords"/>), with (later on 2026-10-16) the saved list's
+/// The Video tab's words, made on the server (<see cref="WebUiText.VideoWords"/>), with (later on 2026-10-16) the saved list's
 /// (<see cref="Saved"/>), and (2026-10-20, the user's ask) the fill-the-window button's two labels: <see cref="Windowed"/> in the normal
 /// layout, <see cref="ExitWindowed"/> while the video fills the browser's window. The label says the state, so the page sets no
 /// <c>aria-pressed</c> on top (a toggle whose name also flips reads twice).
@@ -695,13 +695,13 @@ public sealed record WebVideoWords(string Waiting, string PlayHere, string TapFo
 }
 
 /// <summary>
-/// The YouTube tab's words for a video file from the PC (2026-11-12): the header's tag, a file the browser can't play (its format, a read
+/// The Video tab's words for a video file from the PC (2026-11-12): the header's tag, a file the browser can't play (its format, a read
 /// that failed), one with sound but no picture, one moved or deleted, and one refused over Tailscale Funnel.
 /// </summary>
 public sealed record WebFileWords(string Tag, string Failed, string NoPicture, string Gone, string FunnelOff);
 
 /// <summary>
-/// The saved list's words on the YouTube tab (later on 2026-10-16): the filter's placeholder and its no-match line (<c>{0}</c> the filter), the
+/// The saved list's words on the Video tab (later on 2026-10-16): the filter's placeholder and its no-match line (<c>{0}</c> the filter), the
 /// row's details toggle, the moves, the two-tap delete and clear all (each with its armed words), the save button's two faces, the line
 /// while titles are looked up, the playlist's save button's two faces (2026-11-08), and the mark before a saved playlist's title (the PC's
 /// <c>YouTubeText.PlaylistMark</c>, one home for it; 2026-11-08, the review).
@@ -726,7 +726,7 @@ public sealed record WebSavedWords(
     string PlaylistMark);
 
 /// <summary>
-/// The YouTube tab's saved list (later on 2026-10-16, the user's ask: <c>/youtube list</c> under the player): the videos in the user's order, the
+/// The Video tab's saved list (later on 2026-10-16, the user's ask: <c>/youtube list</c> under the player): the videos in the user's order, the
 /// count's caption, the empty list's sentence, whether titles are being looked up, and the video the player has open (null for none).
 /// </summary>
 public sealed record WebSavedVideos(IReadOnlyList<WebSavedVideo> Items, string Caption, string Empty, bool Looking, WebSavedPlaying? Playing);
@@ -825,7 +825,7 @@ public sealed class WebVideoSeen
 /// <summary>An <c>owner</c> event: this page plays now (or waits), with the Resume offer a promoted page draws.</summary>
 public sealed record WebVideoOwner(bool Owner, WebVideoResume? Resume);
 
-/// <summary>A report from the YouTube tab's player: the page's id and its message, the PC page's own JSON as a string inside this one.</summary>
+/// <summary>A report from the Video tab's player: the page's id and its message, the PC page's own JSON as a string inside this one.</summary>
 public sealed class WebVideoReport
 {
     public string? Page { get; set; }

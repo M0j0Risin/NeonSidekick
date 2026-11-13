@@ -320,17 +320,17 @@ public static class YouTubeText
     };
 
     /// <summary>The Web UI's tab as a sentence names it.</summary>
-    public const string WebTabName = "the Web UI's YouTube tab";
+    public const string WebTabName = "the Web UI's Video tab";
 
     /// <summary>Where a place plays, in a sentence: <c>the video window</c>, or <see cref="WebTabName"/>.</summary>
     public static string PlaceName(VideoPlace place) => place == VideoPlace.WebTab ? WebTabName : "the video window";
 
-    /// <summary>How long a video waits for a YouTube tab before it is dropped (2026-10-16).</summary>
+    /// <summary>How long a video waits for a Video tab before it is dropped (2026-10-16).</summary>
     public static readonly TimeSpan HoldFor = TimeSpan.FromMinutes(10);
 
     /// <summary>
-    /// A video waiting for a YouTube tab (2026-10-16): with an open page asked to switch to it, or with none that will see the ask, when it
-    /// plays as one opens; or (later that day) with YouTube tabs open but none in view, when one comes into view.
+    /// A video waiting for a Video tab (2026-10-16): with an open page asked to switch to it, or with none that will see the ask, when it
+    /// plays as one opens; or (later that day) with Video tabs open but none in view, when one comes into view.
     /// </summary>
     public static string Held(VideoSnapshot snapshot, VideoHold held)
     {
@@ -339,10 +339,10 @@ public static class YouTubeText
         // A video file's own name (2026-11-12): its VideoId is null, and the wait is for the tab either way.
         string what = snapshot.FileName is { } file ? file : snapshot.VideoId is null && snapshot.PlaylistId is { } list ? "playlist " + list : "video " + snapshot.VideoId;
         return held.TabsHidden
-            ? $"Waiting for a YouTube tab in view: {what} plays in {WebTabName} as soon as one comes into view (a YouTube tab is open but hidden, or the phone is locked); the open Web UI pages were asked to switch to it."
+            ? $"Waiting for a Video tab in view: {what} plays in {WebTabName} as soon as one comes into view (a Video tab is open but hidden, or the phone is locked); the open Web UI pages were asked to switch to it."
             : held.Nudged
-            ? $"Waiting for a YouTube tab: {what} plays in {WebTabName} as soon as it opens; the open Web UI page was asked to switch to it."
-            : $"Waiting for a YouTube tab: no Web UI page is open now, so {what} plays when the user opens {WebTabName} on their phone or browser (it waits up to {((int)HoldFor.TotalMinutes).ToString(CultureInfo.InvariantCulture)} minutes).";
+            ? $"Waiting for a Video tab: {what} plays in {WebTabName} as soon as it opens; the open Web UI page was asked to switch to it."
+            : $"Waiting for a Video tab: no Web UI page is open now, so {what} plays when the user opens {WebTabName} on their phone or browser (it waits up to {((int)HoldFor.TotalMinutes).ToString(CultureInfo.InvariantCulture)} minutes).";
     }
 
     /// <summary>
@@ -383,8 +383,8 @@ public static class YouTubeText
     /// <summary>The note before a play's answer when <c>webui-window</c> fell back to the window (2026-10-16): the Web UI isn't serving.</summary>
     public const string WebUiOffFellBack = "The Web UI isn't serving, so the video plays in the video window instead. ";
 
-    /// <summary>The note when <c>webui-window</c> fell back to the window because <i>Web UI YouTube controls</i> is off (2026-10-16): there is no tab.</summary>
-    public const string WebUiControlsOffFellBack = "Web UI YouTube controls is off, so the video plays in the video window instead. ";
+    /// <summary>The note when <c>webui-window</c> fell back to the window because <i>Web UI video controls</i> is off (2026-10-16): there is no tab.</summary>
+    public const string WebUiControlsOffFellBack = "Web UI video controls is off, so the video plays in the video window instead. ";
 
     /// <summary>The note when <c>browser-window</c> went to the default browser (2026-10-16): the Browser window's reason.</summary>
     public static string BrowserFellBack(string reason) => $"The Browser window can't take it now ({reason}), so it went to the default browser. ";
@@ -408,7 +408,7 @@ public static class YouTubeText
     /// </summary>
     public static string WaitingFor(YouTubeOpenLinksInKind target) => target switch
     {
-        YouTubeOpenLinksInKind.WebUiWindow => "Waiting for the Web UI's YouTube tab…",
+        YouTubeOpenLinksInKind.WebUiWindow => "Waiting for the Web UI's Video tab…",
         YouTubeOpenLinksInKind.BrowserWindow => "Opening the video in the Browser window…",
         YouTubeOpenLinksInKind.DefaultBrowser => "Opening the video in the default browser…",
         _ => WaitingForPlayer,
@@ -417,7 +417,7 @@ public static class YouTubeText
     /// <summary><see cref="StoppedWaiting"/> worded for what the player shows now (2026-10-16): a held video still waits; the tab plays on.</summary>
     public static string StoppedWaitingFor(VideoSnapshot? snapshot) => snapshot switch
     {
-        { Held: not null } => "(stopped waiting; the video still waits for a YouTube tab: /youtube status says so)",
+        { Held: not null } => "(stopped waiting; the video still waits for a Video tab: /youtube status says so)",
         { Place: VideoPlace.WebTab } => "(stopped waiting; the video is still in " + WebTabName + ": /youtube status says where it is)",
         _ => StoppedWaiting,
     };

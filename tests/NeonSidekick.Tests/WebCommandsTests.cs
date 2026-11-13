@@ -239,7 +239,7 @@ public sealed class WebCommandsTests
         Assert.Equal(WebCommandKind.Run, WebCommands.Check("/shopping add milk", On with { ShoppingTab = false }).Kind);   // adds from the chat whatever the tab
         Assert.Equal(WebUiText.PcOnly("/cwd <path>"), WebCommands.Check("/cwd D:\\work", On).Reason);
 
-        // /youtube list (later on 2026-10-16): the YouTube tab's saved list, or the setting while the tab is off; every other form the PC's.
+        // /youtube list (later on 2026-10-16): the Video tab's saved list, or the setting while the tab is off; every other form the PC's.
         Assert.Equal(WebUiText.UseYouTubePage, WebCommands.Check("/youtube list", On with { YouTubeTab = true }).Reason);
         Assert.Equal(WebUiText.UseYouTubePage, WebCommands.Check("/youtube list --clear", On with { YouTubeTab = true }).Reason);
         Assert.Equal(WebUiText.YouTubeTabOff, WebCommands.Check("/youtube list", On).Reason);

@@ -7,7 +7,7 @@ using NeonSidekick.WebUi;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// The YouTube tab in the machine's own browser (2026-10-16, YouTube open links in webui-window), Edge headless and offline (never YouTube):
+/// The Video tab in the machine's own browser (2026-10-16, YouTube open links in webui-window), Edge headless and offline (never YouTube):
 /// the nav's link only with the tab on (the pulse serialized as the host writes it), the page with no tab on leaving for YouTube's, the jump
 /// from Chat and Shopping, the banner instead over a draft or a question, the page's own report, a player that never loads, Play here, a
 /// reload's Resume, and the Chat badge. Over a real <see cref="WebVideoPlayer"/>. No browser installed: each test returns.
@@ -55,7 +55,7 @@ public sealed partial class WebUiYouTubePageTests : IAsyncLifetime
     /// <summary>
     /// Signs in at a phone's width and opens <paramref name="path"/>. With <paramref name="waitThere"/> off it only starts going there, for a page
     /// that leaves for another tab as it loads (2026-11-09, the v0.5.7 release run: <c>GoAsync</c> to /about under a watch pulse waited for an
-    /// /about it never stayed at, the YouTube tab already showing); the caller waits on where it ends up, as <c>HeadlessPage.NavigateAsync</c> says.
+    /// /about it never stayed at, the Video tab already showing); the caller waits on where it ends up, as <c>HeadlessPage.NavigateAsync</c> says.
     /// </summary>
     private async Task<HeadlessPage?> SignedInAsync(string path, bool waitThere = true)
     {
@@ -98,10 +98,10 @@ public sealed partial class WebUiYouTubePageTests : IAsyncLifetime
         }
 
         await page.WaitAsync("document.querySelector('header.top nav').classList.contains('ready')", "the nav shown");
-        Assert.True(await HiddenAsync(page, "nav a[href=\"/youtube\"]"));
+        Assert.True(await HiddenAsync(page, "nav a[href=\"/video\"]"));
 
         _backend.PulseNow = Pulse(youTube: true);
-        await page.WaitAsync("!document.querySelector('nav a[href=\"/youtube\"]').classList.contains('hidden')", "the YouTube link shown once the pulse says so", 15);
+        await page.WaitAsync("!document.querySelector('nav a[href=\"/video\"]').classList.contains('hidden')", "the YouTube link shown once the pulse says so", 15);
     }
 
     [WindowsFact]
@@ -115,11 +115,11 @@ public sealed partial class WebUiYouTubePageTests : IAsyncLifetime
         }
 
         await page.WaitAsync("document.getElementById('notabs') !== null", "the page that says none is on");
-        Assert.Contains("Web UI YouTube controls", await page.TextAsync("document.getElementById('notabs').textContent"), StringComparison.Ordinal);
+        Assert.Contains("Web UI video controls", await page.TextAsync("document.getElementById('notabs').textContent"), StringComparison.Ordinal);
 
         _backend.TabsOn = new WebTabs(false, false, false, YouTube: true);
         _backend.PulseNow = new WebPulse(false, 0, null, "", "tag", false, false, false, YouTubeTab: true);
-        await page.WaitAsync("document.body.dataset.tab === 'youtube'", "the YouTube tab once it is on", 15);
+        await page.WaitAsync("document.body.dataset.tab === 'youtube'", "the Video tab once it is on", 15);
     }
 
     [WindowsFact]
@@ -131,16 +131,16 @@ public sealed partial class WebUiYouTubePageTests : IAsyncLifetime
             return;
         }
 
-        await page.WaitAsync("document.body.dataset.tab === 'youtube'", "Chat gone to the YouTube tab");
+        await page.WaitAsync("document.body.dataset.tab === 'youtube'", "Chat gone to the Video tab");
 
         // Shopping leaves for YouTube as it loads, so no wait at /shopping; the old page is marked, as it shows YouTube already.
         _backend.PulseNow = Pulse(watch: WebUiText.WatchBanner);
         await page.EvalAsync("window.neonOldPage = true");
         await page.NavigateAsync(Root + "shopping");
-        await page.WaitAsync("!window.neonOldPage && document.readyState === 'complete' && document.body.dataset.tab === 'youtube'", "Shopping gone to the YouTube tab", 15);
+        await page.WaitAsync("!window.neonOldPage && document.readyState === 'complete' && document.body.dataset.tab === 'youtube'", "Shopping gone to the Video tab", 15);
     }
 
-    /// <summary>A queued video takes the About page to the YouTube tab too (2026-11-08, the user's call: no special case), Shopping's way.</summary>
+    /// <summary>A queued video takes the About page to the Video tab too (2026-11-08, the user's call: no special case), Shopping's way.</summary>
     [WindowsFact]
     public async Task Watch_APulseTakesTheAboutPageThere()
     {
@@ -150,7 +150,7 @@ public sealed partial class WebUiYouTubePageTests : IAsyncLifetime
             return;
         }
 
-        await page.WaitAsync("document.readyState === 'complete' && document.body.dataset.tab === 'youtube'", "About gone to the YouTube tab", 15);
+        await page.WaitAsync("document.readyState === 'complete' && document.body.dataset.tab === 'youtube'", "About gone to the Video tab", 15);
     }
 
     [WindowsFact]
@@ -167,7 +167,7 @@ public sealed partial class WebUiYouTubePageTests : IAsyncLifetime
         PublishWhenStreaming(new WebEvent("watch", () => JsonSerializer.Serialize(new WebTextBack(WebUiText.WatchBanner), WebUiJsonContext.Default.WebTextBack)));
         await page.WaitAsync("document.getElementById('watch-banner') !== null", "the banner");
         Assert.Equal(WebUiText.WatchBanner, await page.TextAsync("document.getElementById('watch-banner').textContent"));
-        Assert.Equal("/youtube", await page.TextAsync("new URL(document.getElementById('watch-banner').href).pathname"));
+        Assert.Equal("/video", await page.TextAsync("new URL(document.getElementById('watch-banner').href).pathname"));
         Assert.Equal("chat", await page.TextAsync("document.body.dataset.tab"));
     }
 
@@ -193,7 +193,7 @@ public sealed partial class WebUiYouTubePageTests : IAsyncLifetime
     [WindowsFact]
     public async Task TheYouTubePage_IsThePlayer_AndWithNoNetworkItsLoadFails()
     {
-        if (await SignedInAsync("/youtube") is not { } page)
+        if (await SignedInAsync("/video") is not { } page)
         {
             return;
         }
@@ -219,7 +219,7 @@ public sealed partial class WebUiYouTubePageTests : IAsyncLifetime
         Player.Report(otherPage, "{\"ev\":\"state\",\"id\":\"aqz-KE-bpKQ\",\"title\":\"Big Buck Bunny\",\"state\":1,\"position\":100,\"duration\":635}", null);
         int took = 0;
         Player.TookOver += () => Interlocked.Increment(ref took);
-        if (await SignedInAsync("/youtube") is not { } page)
+        if (await SignedInAsync("/video") is not { } page)
         {
             return;
         }
@@ -252,7 +252,7 @@ public sealed partial class WebUiYouTubePageTests : IAsyncLifetime
         // the page's "failed" report came before the reload and turned the video Failed, which leaves no Resume offer, as it should.
         Player.Dispose();
         _backend.VideoPlayer = new WebVideoPlayer(apiWaitMs: 60_000);
-        if (await SignedInAsync("/youtube") is not { } page)
+        if (await SignedInAsync("/video") is not { } page)
         {
             return;
         }
@@ -265,7 +265,7 @@ public sealed partial class WebUiYouTubePageTests : IAsyncLifetime
         // The old page's stream closed first, so the server reads the new one as the reload it is (a duplicate otherwise, promoted 5 s later).
         await page.EvalAsync("source.close()");
         SpinWait.SpinUntil(() => Player.Streams == 0, TimeSpan.FromSeconds(10));
-        await page.GoAsync(Root + "youtube");
+        await page.GoAsync(Root + "video");
         await page.WaitAsync("!document.getElementById('resume').classList.contains('hidden')", "the Resume button", 20);
         Assert.Equal("Resume \"Big Buck Bunny\" at 3:12", await page.TextAsync("document.getElementById('resume').textContent"));
         Assert.True(await HiddenAsync(page, "#play-here"));
@@ -276,7 +276,7 @@ public sealed partial class WebUiYouTubePageTests : IAsyncLifetime
     public async Task TheNavsChatBadge_ShowsAWaitingQuestion()
     {
         _backend.PulseNow = Pulse(asks: 1);
-        if (await SignedInAsync("/youtube") is not { } page)
+        if (await SignedInAsync("/video") is not { } page)
         {
             return;
         }

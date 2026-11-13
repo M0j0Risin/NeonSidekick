@@ -8,7 +8,7 @@ namespace NeonSidekick.Llm.Tools;
 /// <summary>
 /// <c>youtube_status()</c> (2026-10-05, the YouTube plan): what the video window last reported — the video, its state, where it is
 /// and how long it runs, the volume — or that none is open. It reads the window's snapshot and never waits on the window. Since
-/// 2026-10-16 (<c>YouTube open links in</c>) the player may be the Web UI's YouTube tab, and a video sent to a browser is named as such
+/// 2026-10-16 (<c>YouTube open links in</c>) the player may be the Web UI's Video tab, and a video sent to a browser is named as such
 /// (<see cref="YouTubeText.StatusOrHandoff"/>), since nothing can be read from one.
 /// </summary>
 public sealed class YouTubeStatusTool : AIFunction
@@ -42,7 +42,7 @@ public sealed class YouTubeStatusTool : AIFunction
     public static string DescriptionFor(YouTubeOpenLinksInKind target) => target switch
     {
         YouTubeOpenLinksInKind.WebUiWindow =>
-            "Says what the Web UI's YouTube tab is playing: the video and channel, playing or paused, the position and length, the volume, or that it waits for the tab to open. " + Use,
+            "Says what the Web UI's Video tab is playing: the video and channel, playing or paused, the position and length, the volume, or that it waits for the tab to open. " + Use,
         YouTubeOpenLinksInKind.BrowserWindow or YouTubeOpenLinksInKind.DefaultBrowser =>
             "Says what the app's own video players are playing; a video opened in a browser can't be seen, so it only says where that one went. " + Use,
         _ => "Says what the video window is playing: the video and channel, playing or paused, the position and length, the volume. " + Use,

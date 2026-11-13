@@ -7,7 +7,7 @@ using NeonSidekick.WebUi;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// The Web UI's YouTube tab as a player (2026-10-16): who plays (the first page; Play here; a reconnect, a reload and a duplicate told apart;
+/// The Web UI's Video tab as a player (2026-10-16): who plays (the first page; Play here; a reconnect, a reload and a duplicate told apart;
 /// the owner leaving after the grace and the longest-waiting page promoted), a held play going out as a page attaches, the Resume offer by the
 /// saved videos' rules, the owner's reports alone, the load's settle, the cap of streams, a full queue, and the forgets. On the manual clock.
 /// </summary>

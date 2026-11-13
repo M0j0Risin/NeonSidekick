@@ -137,7 +137,7 @@ public partial class ChatScreenTests
         Assert.Contains(VideoText.WebUiOffFellBack + "Playing \"clip.mp4\"", output);
     }
 
-    /// <summary><c>webui-window</c> with the Web UI serving: the file waits for a YouTube tab, and the page that attaches gets its load, served by its token.</summary>
+    /// <summary><c>webui-window</c> with the Web UI serving: the file waits for a Video tab, and the page that attaches gets its load, served by its token.</summary>
     [Fact]
     public async Task Video_UnderWebUiWindow_WaitsForATab_AndThePageGetsTheFilesLoad()
     {

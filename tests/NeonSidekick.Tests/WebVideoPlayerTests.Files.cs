@@ -6,7 +6,7 @@ using NeonSidekick.YouTube;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// A video file on the YouTube tab (2026-11-12, the video-files plan): its load's address (the token, the name escaped), and its token served
+/// A video file on the Video tab (2026-11-12, the video-files plan): its load's address (the token, the name escaped), and its token served
 /// exactly while its play is current — playing, held, or carried as the Resume offer — and dropped by a new play, a close, a forget, a hold
 /// running out, or a profile switch's drop of a held one; a Resume making it current again; a file gone reading as gone.
 /// </summary>

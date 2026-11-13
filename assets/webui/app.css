@@ -844,7 +844,7 @@ main.home { display: flex; flex-direction: column; gap: 12px; }
   .room-switch i { transition: none; }
 }
 
-/* The YouTube tab (2026-10-16): the player full width at 16:9, its hints and buttons in a strip above it (never over the iframe: a phone's
+/* The Video tab (2026-10-16): the player full width at 16:9, its hints and buttons in a strip above it (never over the iframe: a phone's
    autoplay wants the tap on the video itself). */
 main.youtube { display: flex; flex-direction: column; gap: 12px; }
 .yt-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 40px; }
@@ -922,5 +922,5 @@ body.yt-windowed .yt-frame {
 .yt-moves { display: flex; flex-wrap: wrap; gap: 6px; }
 .yt-move, .yt-delete { min-width: 44px; min-height: 44px; padding: 0 10px; }
 
-/* The banner a page shows instead of jumping to a waiting video (2026-10-16): a link to the YouTube tab under the header. */
+/* The banner a page shows instead of jumping to a waiting video (2026-10-16): a link to the Video tab under the header. */
 .watch-banner { display: block; padding: 10px 16px; background: var(--panel-2); color: var(--accent); font-weight: 600; text-decoration: none; text-align: center; }

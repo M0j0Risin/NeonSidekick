@@ -79,7 +79,7 @@ public sealed class YouTubePlayTool : AIFunction
     public static string DescriptionFor(YouTubeOpenLinksInKind target) => target switch
     {
         YouTubeOpenLinksInKind.WebUiWindow =>
-            "Plays a YouTube video, with sound, in the Web UI's YouTube tab on the user's phone or browser (one player: a new video replaces the one playing, on the tab shown most recently; with no tab in view it waits for one). " +
+            "Plays a YouTube video, with sound, in the Web UI's Video tab on the user's phone or browser (one player: a new video replaces the one playing, on the tab shown most recently; with no tab in view it waits for one). " +
             Give + Then + Saved,
         YouTubeOpenLinksInKind.BrowserWindow =>
             "Opens a YouTube video in the app's Browser window on the user's screen. Once it opens it is out of your control: " + YouTubeControlTool.ToolName + " and " + YouTubeStatusTool.ToolName + " can't see or drive it. " +
@@ -178,7 +178,7 @@ public sealed class YouTubePlayTool : AIFunction
         // first report comes from the player's ready event, just before its playVideo shows, and read "Cued (press play to start)"
         // to the model and the saved session while the video started a second later. A play the browser keeps from starting stays
         // cued and is answered so at the wait's cap.
-        // A video held for a YouTube tab with no page to see the ask (2026-10-16) is an answer at once: none will open within the wait.
+        // A video held for a Video tab with no page to see the ask (2026-10-16) is an answer at once: none will open within the wait.
         var snapshot = await YouTubeWait.UntilAsync(_player, before, s => s.Held is { Nudged: false } || (s.VideoId == id && (s.State is VideoState.Playing or VideoState.Paused or VideoState.Ended || (s.State == VideoState.Cued && !autoplay))), YouTubeWait.Play, _time, cancellationToken, video: id).ConfigureAwait(false);
         if (snapshot is null)
         {

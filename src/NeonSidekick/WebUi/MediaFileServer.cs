@@ -21,7 +21,7 @@ public readonly record struct ByteRange(ByteRangeKind Kind, long Start = 0, long
 }
 
 /// <summary>
-/// A video file to the Web UI's YouTube tab (2026-11-12, the video-files plan): <see cref="PictureServer"/>'s original-file answer plus
+/// A video file to the Web UI's Video tab (2026-11-12, the video-files plan): <see cref="PictureServer"/>'s original-file answer plus
 /// ranges, which every <c>&lt;video&gt;</c> asks for. One range (<c>bytes=a-b</c>, <c>a-</c>, <c>-n</c>, Safari's <c>bytes=0-1</c>
 /// probe) is a <c>206</c>; past the end a <c>416</c> with <c>bytes */len</c>; several at once, a malformed one or an <c>If-Range</c> that
 /// isn't the ETag the whole file (<c>200</c>). The ETag is the file's length and write time (<see cref="WebFileResponse.Stamp"/>), so a

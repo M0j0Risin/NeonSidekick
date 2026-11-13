@@ -1510,7 +1510,7 @@ internal sealed partial class ChatScreen
         // The YouTube tools (2026-10-05): the Data API over the web tools' client, the video window when there is one. Since 2026-10-16
         // (YouTube open links in) every path reads the router over the window and the Web UI's player, never the window itself; the tools
         // route each play where the setting says, and /youtube's own tool instances do too (PlayToolFor, ControlToolFor).
-        // The Web UI's YouTube tab as a player (2026-10-16), only beside a video window: its nudge and flash read the session, made later.
+        // The Web UI's Video tab as a player (2026-10-16), only beside a video window: its nudge and flash read the session, made later.
         _webVideo = videoPlayer is null ? null : new WebUi.WebVideoPlayer(_time, () => _webUi?.WatchNudge() ?? false, text => _webUi?.FlashPc(text));
         _routedVideo = videoPlayer is null ? null : new Viewer.RoutedVideoPlayer(videoPlayer, _webVideo);
         _videoPlayer = _routedVideo;
@@ -6692,7 +6692,7 @@ internal sealed partial class ChatScreen
         HomeShoppingForget();   // the 🛒 count is the profile's (2026-10-13)
         HomeWebForget();   // the Web UI's Home tab: its sheet and lease are the last profile's (2026-10-15)
         HomeCameraForget();   // the camera chips' fetches and stills waiting to show were the last profile's (2026-10-27)
-        _webVideo?.ForgetProfile();   // the YouTube tab: its held video and Resume offer were the last profile's; one playing plays on (2026-10-16)
+        _webVideo?.ForgetProfile();   // the Video tab: its held video and Resume offer were the last profile's; one playing plays on (2026-10-16)
         _memory = new MemoryStore(_settings.ProfileDirectory);
         _persona = new PersonaFile(_settings.ProfileDirectory);
         _operata = new OperataFile(_settings.ProfileDirectory);

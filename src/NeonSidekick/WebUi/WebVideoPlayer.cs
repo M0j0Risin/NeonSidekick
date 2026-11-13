@@ -8,7 +8,7 @@ using NeonSidekick.YouTube;
 
 namespace NeonSidekick.WebUi;
 
-/// <summary>The YouTube tab's side the host talks to (2026-10-16, <see cref="WebVideoPlayer"/>): a page's stream attached, a page's report.</summary>
+/// <summary>The Video tab's side the host talks to (2026-10-16, <see cref="WebVideoPlayer"/>): a page's stream attached, a page's report.</summary>
 public interface IWebVideo
 {
     /// <summary>How long a page waits for YouTube's player script before it reports a failure (a test's backend shortens it).</summary>
@@ -38,7 +38,7 @@ public interface IWebVideo
     WebVideoFile? FileOf(string token);
 }
 
-/// <summary>A video file the YouTube tab may fetch now (2026-11-12): its full path and its name.</summary>
+/// <summary>A video file the Video tab may fetch now (2026-11-12): its full path and its name.</summary>
 public sealed record WebVideoFile(string Path, string Name);
 
 /// <summary>One page's stream as the player holds it: the hello to write first, the page's own events, and the detach.</summary>
@@ -68,9 +68,9 @@ public sealed class WebVideoAttachment : IDisposable
 }
 
 /// <summary>
-/// The Web UI's YouTube tab as a player (2026-10-16, <c>YouTube open links in</c> <c>webui-window</c>, and the tab's own saved list): an
+/// The Web UI's Video tab as a player (2026-10-16, <c>YouTube open links in</c> <c>webui-window</c>, and the tab's own saved list): an
 /// <see cref="IVideoPlayer"/> the router (<see cref="RoutedVideoPlayer"/>) plays on, whose video runs in YouTube's player on a phone's or a
-/// browser's YouTube tab. Portable; one lock, <see cref="Changed"/> and <see cref="TookOver"/> raised outside it; its time is the screen's
+/// browser's Video tab. Portable; one lock, <see cref="Changed"/> and <see cref="TookOver"/> raised outside it; its time is the screen's
 /// <see cref="TimeProvider"/>.
 ///
 /// <para><b>Pages, not streams.</b> A page is a browser tab, its id kept in <c>sessionStorage</c> and sent with its stream and its reports. A
@@ -93,7 +93,7 @@ public sealed class WebVideoAttachment : IDisposable
 /// back, unless its <c>load</c> nonce is the script a video was just given to (a held request loaded as it attached).</para>
 ///
 /// <para><b>A held request</b> loads only into a visible owner. Its snapshot reads <see cref="VideoSnapshot.Held"/> (whether a page will see
-/// the nudge; whether YouTube tabs are open but none in view) and expires after <see cref="YouTubeText.HoldFor"/> on the screen's tick. Only a
+/// the nudge; whether Video tabs are open but none in view) and expires after <see cref="YouTubeText.HoldFor"/> on the screen's tick. Only a
 /// hold nudges the other pages to the tab. Reports from the owner alone, applied as the windows apply theirs, <see cref="VideoLoadSettle"/> on
 /// each. Every decision writes a Debug line (a page by its first four characters and its address).</para>
 /// </summary>
@@ -154,7 +154,7 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
     private VideoRequest? _file;
 
     /// <param name="time">The screen's clock: the grace's timer, the hold's age, when a page came into view.</param>
-    /// <param name="nudge">Asks the open pages to jump to the YouTube tab; true when one will see it soon (<c>WebUiSession.WatchNudge</c>).</param>
+    /// <param name="nudge">Asks the open pages to jump to the Video tab; true when one will see it soon (<c>WebUiSession.WatchNudge</c>).</param>
     /// <param name="flash">The PC's hint row (<c>WebUiSession.FlashPc</c>), for a Play here or a Resume tap; null for none.</param>
     /// <param name="apiWaitMs">How long a page waits for YouTube's script.</param>
     public WebVideoPlayer(TimeProvider? time = null, Func<bool>? nudge = null, Action<string>? flash = null, int apiWaitMs = DefaultApiWaitMs)
@@ -215,7 +215,7 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
     }
 
     /// <summary>
-    /// Whether a video waits for a YouTube tab with none in view (none attached, or every one hidden): the pages' banner and jump
+    /// Whether a video waits for a Video tab with none in view (none attached, or every one hidden): the pages' banner and jump
     /// (<c>WebState.Watch</c>, <c>WebPulse.Watch</c>).
     /// </summary>
     public bool Waiting
@@ -328,7 +328,7 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
                     Place = VideoPlace.WebTab,
                     Held = new VideoHold(false, since, TabsHidden: _streams.Count > 0),
                 };
-                outbox.Debug.Add(WebUiText.YouTubePlayDebug(_streams.Count > 0 ? "held (no YouTube tab in view)" : "held (no YouTube tab open)", null, null));
+                outbox.Debug.Add(WebUiText.YouTubePlayDebug(_streams.Count > 0 ? "held (no Video tab in view)" : "held (no Video tab open)", null, null));
             }
         }
 
@@ -411,7 +411,7 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
 
         if (raise)
         {
-            DiagnosticLog.Info(Category, "Web UI: a video waited for a YouTube tab too long and was dropped.");
+            DiagnosticLog.Info(Category, "Web UI: a video waited for a Video tab too long and was dropped.");
             Raise(null);
         }
     }
@@ -588,7 +588,7 @@ public sealed class WebVideoPlayer : IVideoPlayer, IVideoTakeover, IWebVideo, ID
     }
 
     /// <summary>
-    /// A tap on the YouTube tab's saved list from a page (later on 2026-10-16): the page takes the player, as Play here does but never carrying
+    /// A tap on the Video tab's saved list from a page (later on 2026-10-16): the page takes the player, as Play here does but never carrying
     /// the old video (the play that follows at once replaces it), and is marked in view now, since a tap means it is, so the play goes to it.
     /// <see cref="WebOutcome.Conflict"/> for a page with no open stream; the owner's own tap changes nothing else.
     /// </summary>

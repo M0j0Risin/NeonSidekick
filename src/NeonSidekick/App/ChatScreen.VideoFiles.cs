@@ -23,7 +23,7 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// Where a video file plays now (<c>Video files play in</c>), worked out once for the play, the spinner's words and the tools'
     /// descriptions, so they never disagree. <c>webui-window</c> copies <see cref="PlayTarget"/>'s web test (a router with a web sink,
-    /// <i>Web UI</i> on and serving, <i>Web UI YouTube controls</i> on) and falls back to the video window; the video window falls back to the
+    /// <i>Web UI</i> on and serving, <i>Web UI video controls</i> on) and falls back to the video window; the video window falls back to the
     /// default app where there is none or it plays no files (a Mac's). So every fallback ends at the default app, and the note leading
     /// the answer names where the play went.
     /// </summary>

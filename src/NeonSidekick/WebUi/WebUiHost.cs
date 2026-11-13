@@ -83,7 +83,7 @@ public sealed class WebUiHost : IWebUiHost
         "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
 
     /// <summary>
-    /// The YouTube tab's page alone (2026-10-16, <c>YouTube open links in</c> <c>webui-window</c>): <see cref="ContentSecurityPolicy"/> with
+    /// The Video tab's page alone (2026-10-16, <c>YouTube open links in</c> <c>webui-window</c>): <see cref="ContentSecurityPolicy"/> with
     /// YouTube's player let in, and <see cref="YouTubeReferrerPolicy"/>. <b>The trust, the user's call on 2026-10-15:</b> YouTube's player
     /// script runs in the Web UI's own page on this tab (not isolated on a second port, nor driven by raw undocumented messages), so while
     /// the tab is open that script can do what the signed-in page can — send a chat line the model acts on, for one — though never read the
@@ -97,7 +97,7 @@ public sealed class WebUiHost : IWebUiHost
     public const string YouTubeContentSecurityPolicy =
         "default-src 'self'; script-src 'self' https://www.youtube.com/iframe_api https://www.youtube.com/s/player/; style-src 'self'; img-src 'self' data: https://i.ytimg.com; frame-src https://www.youtube.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
 
-    /// <summary>The YouTube tab's referrer policy (2026-10-16): YouTube's embed needs the page's origin as the referrer, else error 153.</summary>
+    /// <summary>The Video tab's referrer policy (2026-10-16): YouTube's embed needs the page's origin as the referrer, else error 153.</summary>
     public const string YouTubeReferrerPolicy = "strict-origin-when-cross-origin";
 
     /// <summary>How long a stop waits for open requests before it lets them go.</summary>
@@ -327,7 +327,7 @@ public sealed class WebUiHost : IWebUiHost
             }
 
             bool signedIn = SignedIn(context);
-            if (get && path is "/" or "/index.html" or "/shopping" or "/shopping.html" or "/home" or "/home.html" or "/youtube" or "/youtube.html" || get && IsAboutPath(path))
+            if (get && path is "/" or "/index.html" or "/shopping" or "/shopping.html" or "/home" or "/home.html" or "/video" or "/video.html" || get && IsAboutPath(path))
             {
                 await PageAsync(context, path, signedIn).ConfigureAwait(false);
                 return;
@@ -394,7 +394,7 @@ public sealed class WebUiHost : IWebUiHost
                         await EventsAsync(context).ConfigureAwait(false);
                         return;
                     case YouTubeEventsPath when _backend.Video is { } video:
-                        // The YouTube tab's own stream (2026-10-16): per page, apart from Chat's.
+                        // The Video tab's own stream (2026-10-16): per page, apart from Chat's.
                         await YouTubeEventsAsync(context, video, remote).ConfigureAwait(false);
                         return;
                     case "/api/shopping":
@@ -439,7 +439,7 @@ public sealed class WebUiHost : IWebUiHost
                         await JsonAsync(context, StatusCodes.Status200OK, _backend.Memories(), WebUiJsonContext.Default.WebMemories).ConfigureAwait(false);
                         return;
                     case YouTubeSavedPath:
-                        // The YouTube tab's saved list (later on 2026-10-16): read every few seconds while open, so an unchanged one is a 304.
+                        // The Video tab's saved list (later on 2026-10-16): read every few seconds while open, so an unchanged one is a 304.
                         if (_backend.SavedVideos() is { } saved)
                         {
                             await TaggedJsonAsync(context, saved, WebUiJsonContext.Default.WebSavedVideos).ConfigureAwait(false);
@@ -605,9 +605,9 @@ public sealed class WebUiHost : IWebUiHost
         }
 
         var tabs = _backend.Tabs();
-        if (path.StartsWith("/youtube", StringComparison.Ordinal))
+        if (path.StartsWith("/video", StringComparison.Ordinal))
         {
-            // The YouTube tab (2026-10-16): its page alone lets YouTube's player in (YouTubeContentSecurityPolicy's trust).
+            // The Video tab (2026-10-16): its page alone lets YouTube's player in (YouTubeContentSecurityPolicy's trust).
             if (tabs.YouTube && _backend.Video is not null)
             {
                 context.Response.Headers.ContentSecurityPolicy = YouTubeContentSecurityPolicy;
@@ -917,16 +917,16 @@ public sealed class WebUiHost : IWebUiHost
     /// <summary>⌖ place (2026-11-06): a location, a section or forget for a line, as the PC's picker does.</summary>
     public const string ShopPlacePath = "/api/shopping/place";
 
-    /// <summary>The YouTube tab's event stream (2026-10-16): <c>?page=&amp;load=[&amp;claim=1]</c>, per page, apart from Chat's.</summary>
+    /// <summary>The Video tab's event stream (2026-10-16): <c>?page=&amp;load=[&amp;claim=1]</c>, per page, apart from Chat's.</summary>
     public const string YouTubeEventsPath = "/api/youtube/events";
 
-    /// <summary>The YouTube tab's player reports (2026-10-16), in the <see cref="WebRateBucket.Report"/> bucket.</summary>
+    /// <summary>The Video tab's player reports (2026-10-16), in the <see cref="WebRateBucket.Report"/> bucket.</summary>
     public const string YouTubeReportPath = "/api/youtube/report";
 
     /// <summary>A YouTube page in view or not (later on 2026-10-16), in the <see cref="WebRateBucket.Report"/> bucket.</summary>
     public const string YouTubeSeenPath = "/api/youtube/seen";
 
-    /// <summary>The YouTube tab's saved list (later on 2026-10-16), tagged.</summary>
+    /// <summary>The Video tab's saved list (later on 2026-10-16), tagged.</summary>
     public const string YouTubeSavedPath = "/api/youtube/saved";
 
     /// <summary>A saved video played on the tapping page (later on 2026-10-16), in the <see cref="WebRateBucket.Act"/> bucket as the four below.</summary>
@@ -954,13 +954,13 @@ public sealed class WebUiHost : IWebUiHost
     public const string PicturePrefix = "/api/picture/";
 
     /// <summary>
-    /// Where the YouTube tab's <c>&lt;video&gt;</c> fetches a video file from the PC (2026-11-12, the video-files plan):
+    /// Where the Video tab's <c>&lt;video&gt;</c> fetches a video file from the PC (2026-11-12, the video-files plan):
     /// <c>/api/youtube/file/{token}/{name}</c>, the name only for the browser's display.
     /// </summary>
     public const string YouTubeFilePrefix = "/api/youtube/file/";
 
     /// <summary>
-    /// A video file for the YouTube tab (2026-11-12, the video-files plan), past the sign-in, the cross-site and the tab's gates: the first
+    /// A video file for the Video tab (2026-11-12, the video-files plan), past the sign-in, the cross-site and the tab's gates: the first
     /// segment the token (exactly 32 hex digits; the rest, the name, ignored, and a name's <c>%2F</c> only adds segments), which must be the
     /// current file's (<see cref="IWebVideo.FileOf"/>), else a 404. No <c>X-Neon</c> header (a <c>&lt;video src&gt;</c> can send none):
     /// <c>Sec-Fetch-Site</c>, CORP and the token keep it to the page. Over Tailscale Funnel a 403 unless <i>Web UI video files over Funnel</i>
@@ -1318,7 +1318,7 @@ public sealed class WebUiHost : IWebUiHost
     }
 
     /// <summary>
-    /// The YouTube tab's stream (2026-10-16): <c>?page=&amp;load=[&amp;claim=&lt;id&gt;][&amp;visible=1|0]</c>, each id 16 to 64 base64url
+    /// The Video tab's stream (2026-10-16): <c>?page=&amp;load=[&amp;claim=&lt;id&gt;][&amp;visible=1|0]</c>, each id 16 to 64 base64url
     /// characters or a 400 (a claim of <c>1</c>, the first script's, is still a claim; no <c>visible</c>, the first script's, is in view). The Chat
     /// stream's shape — no-cache, no buffering, linked to the request and the stop, the heartbeat, the tab read before each batch and at each
     /// heartbeat — over the page's own queue from the player, which decides which stream ends (an evicted waiting page, a reconnect replacing a
@@ -1405,7 +1405,7 @@ public sealed class WebUiHost : IWebUiHost
     }
 
     /// <summary>
-    /// A YouTube tab's report (2026-10-16): <see cref="WebVideoReport"/> read as every body is, its page id checked and its message held to
+    /// A Video tab's report (2026-10-16): <see cref="WebVideoReport"/> read as every body is, its page id checked and its message held to
     /// <see cref="WebVideoPlayer.MaxReportChars"/> (a 400 otherwise, null here); the player's answer, a 409 from a page that is not the player.
     /// </summary>
     private async Task<WebReply?> YouTubeReportAsync(HttpContext context, IPAddress? remote)
