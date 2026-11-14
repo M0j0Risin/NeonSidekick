@@ -123,7 +123,11 @@ public static unsafe partial class WindowsCredentials
 
         if (!value.StartsWith(ProtectedPrefix, StringComparison.Ordinal))
         {
-            return CredentialResult.Failed(SqlText.NotProtected);
+            // 2026-11-13 (settings transfer): a Mac's keychain: value read here says where it came from, as MacKeychain says of a dpapi: one,
+            // not that it was never encrypted.
+            return CredentialResult.Failed(value.StartsWith(KeychainPrefix, StringComparison.Ordinal)
+                ? SqlText.CannotDecrypt("it was encrypted on a Mac")
+                : SqlText.NotProtected);
         }
 
         byte[] blob;

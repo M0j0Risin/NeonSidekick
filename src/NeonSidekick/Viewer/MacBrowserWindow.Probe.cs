@@ -25,8 +25,8 @@ internal sealed partial class MacBrowserWindow
     private bool _probe;
     private int _downloadsEnded;
 
-    /// <summary>Where downloads go: the user's Downloads, or the probe's own folder.</summary>
-    private string DownloadsFolder => _downloadsFolder ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+    /// <summary>Where downloads go: the user's Downloads (the one resolver, 2026-11-13, the settings-transfer review's #15), or the probe's own folder.</summary>
+    private string DownloadsFolder => _downloadsFolder ?? Files.DownloadsFolder.Resolve();
 
     private static MacBrowserWindow MakeProbe(string folder)
     {

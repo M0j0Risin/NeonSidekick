@@ -75,7 +75,7 @@ It's one app for research, IT and admin work (Active Directory, event logs, data
 * **Benchmarks & meters:** `/test` benchmarks the model; the performance bar shows CPU, RAM, GPU and network.
 
 ### Conversations, memory & skills
-* **Profiles:** each has its own settings, persona, emoji avatar (`/avatar`), memory, sessions and working directory.
+* **Profiles:** each has its own settings, persona, emoji avatar (`/avatar`), memory, sessions and working directory; `/settings export` carries them to another computer.
 * **Sessions:** resume, search and learn from past conversations, or export one to Markdown or HTML.
 * **Memory:** facts you can edit, added to every conversation.
 * **Project notes:** reads the working directory's `NEON.md`, else `AGENTS.md`, else `CLAUDE.md`.

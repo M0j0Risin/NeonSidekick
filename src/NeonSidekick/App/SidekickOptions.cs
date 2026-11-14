@@ -62,6 +62,7 @@ public sealed record SidekickOptions(
     public const string CwdFlag = "--cwd";
     public const string LogFlag = "--log";
     public const string ProfileFlag = "--profile";
+    public const string ImportSettingsFlag = "--import-settings";
     public const string YoloFlag = "--yolo";
     public const string NoPoliceFlag = "--no-police";
     public const string SqlCheckFlag = "--sql-check";
@@ -120,6 +121,12 @@ public sealed record SidekickOptions(
 
     /// <summary><c>--tasks-check &lt;computer&gt;</c> (2026-10-15): the Task Scheduler connected on that computer of <c>tasks.json</c> (or <c>local</c>), the tasks listed and one read; exit 0/1.</summary>
     public string? TasksCheck { get; init; }
+
+    /// <summary>
+    /// <c>--import-settings &lt;zip&gt;</c> (2026-11-13, settings transfer): a <c>/settings export</c> zip imported at the start, before the
+    /// profile is resolved, so <c>--profile</c> may name one of its profiles; runs in every mode (the user's explicit act). A refused zip exits 2.
+    /// </summary>
+    public string? ImportSettings { get; init; }
 
     /// <summary><c>--ad-check &lt;domain&gt;</c> (2026-10-15): RootDSE, the bind, the domain's policy and one user read on that domain of <c>ad.json</c> (or <c>current</c>); exit 0/1.</summary>
     public string? AdCheck { get; init; }
@@ -186,7 +193,7 @@ public sealed record SidekickOptions(
     public const string AdCheckMacLine = "prove the directory tools against that domain of ad.json (reads only)";
 
     private const string UsageText =
-        "Usage: NeonSidekick [--headless] [--smoke] [--audio-check] [--voice-check] [--sql-check <connection>] [--oracle-check <connection>] [--mysql-check <connection>] [--sqlite-check <database>] [--duckdb-check <database>] [--postgres-check <connection>] [--unc-check <share>] [--eventlog-check <computer>] [--network-check <host>] [--services-check <computer>] [--tasks-check <computer>] [--ad-check <domain>] [--docker-check] [--camera-check] [--monitor-check] [--midi-check] [--url <url>] [--model <id>] [--cwd <path>] [--profile <name>] [--yolo] [--no-police] [--log <path>] [--version] [--help]\n" +
+        "Usage: NeonSidekick [--headless] [--smoke] [--audio-check] [--voice-check] [--sql-check <connection>] [--oracle-check <connection>] [--mysql-check <connection>] [--sqlite-check <database>] [--duckdb-check <database>] [--postgres-check <connection>] [--unc-check <share>] [--eventlog-check <computer>] [--network-check <host>] [--services-check <computer>] [--tasks-check <computer>] [--ad-check <domain>] [--docker-check] [--camera-check] [--monitor-check] [--midi-check] [--url <url>] [--model <id>] [--cwd <path>] [--profile <name>] [--import-settings <zip>] [--yolo] [--no-police] [--log <path>] [--version] [--help]\n" +
         "\n" +
         "  (no flags)     interactive TUI\n" +
         "  --headless     stdin/stdout REPL, no TUI (profile \"neon\" unless --profile or NEONSIDEKICK_PROFILE names one)\n" +
@@ -213,6 +220,7 @@ public sealed record SidekickOptions(
         "  --model <id>   model id for this launch (outranks NEONSIDEKICK_LLM_MODEL and the saved setting)\n" +
         "  --cwd <path>   working directory for this launch (outranks the saved setting)\n" +
         "  --profile <name>  profile for this launch (outranks NEONSIDEKICK_PROFILE; default neon)\n" +
+        "  --import-settings <zip>  add a /settings export zip's profiles and files before the start; a refused zip exits 2, one already imported is skipped\n" +
         "  --yolo         run every shell command without asking, this launch only (outranks NEONSIDEKICK_COMMAND_POLICY; the path police still applies unless --no-police)\n" +
         "  --no-police    let shell commands name paths outside the working directory, this launch only (outranks NEONSIDEKICK_SHELL_POLICE)\n" +
         "  --log <path>   append every diagnostic line (Trace and up) to a file; {ts} in the path becomes the start time (yyyyMMdd-HHmmss)\n" +
@@ -289,6 +297,17 @@ public sealed record SidekickOptions(
                 }
 
                 result = result with { Profile = profile };
+                continue;
+            }
+
+            if (TryValueFlag(ImportSettingsFlag, args, ref i, arg, lower, out var importSettings, out error))
+            {
+                if (error is not null)
+                {
+                    return result with { Error = error };
+                }
+
+                result = result with { ImportSettings = importSettings };
                 continue;
             }
 
@@ -500,6 +519,11 @@ public sealed record SidekickOptions(
             flags.Add(ProfileFlag);
         }
 
+        if (ImportSettings is not null)
+        {
+            flags.Add(ImportSettingsFlag);
+        }
+
         if (Yolo)
         {
             flags.Add(YoloFlag);
@@ -575,6 +599,11 @@ public sealed record SidekickOptions(
         if (Profile is not null)
         {
             parts.Add(ProfileFlag + " " + Profile);
+        }
+
+        if (ImportSettings is not null)
+        {
+            parts.Add(ImportSettingsFlag + " " + ImportSettings);
         }
 
         if (Yolo)

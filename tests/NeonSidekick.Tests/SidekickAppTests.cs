@@ -447,6 +447,34 @@ public partial class SidekickAppTests : IDisposable
         Assert.DoesNotContain(SidekickApp.HeadlessNoAssistantReply, output);
     }
 
+    /// <summary>
+    /// Headless <c>/settings export|import</c> (2026-11-13, settings transfer): run by the app, never sent to the model; each line tagged as
+    /// HEADLESS.md has it (the review's #48 and #95): the export's report <c>[notice]</c>, a second export to the same path an <c>[error]</c>, and a
+    /// bare import's list of the zips in the app's Downloads folder <c>[notice]</c>.
+    /// </summary>
+    [Fact]
+    public async Task Headless_SettingsTransfer_RunsInTheApp()
+    {
+        string zip = Path.Combine(_dir + "-out", "x.zip");
+        try
+        {
+            string output = await Headless("/settings export " + zip + Environment.NewLine + "/settings export " + zip + Environment.NewLine);
+
+            Assert.Contains("[notice] Settings exported to " + zip, output);
+            Assert.Contains("[error] " + SettingsTransferText.AlreadyThere(zip), output);
+            Assert.DoesNotContain(SidekickApp.HeadlessNoAssistantReply, output);
+            Assert.True(File.Exists(zip));
+        }
+        finally
+        {
+            try { Directory.Delete(_dir + "-out", recursive: true); } catch (IOException) { /* best effort */ }
+        }
+
+        var app = App();
+        app.DownloadsFolder = _dir + "-downloads";
+        Assert.Equal(["[notice] " + SettingsTransferText.NoZips(_dir + "-downloads")], await app.RunSettingsTransferAsync(SettingsTransferText.ImportWord, "", CancellationToken.None));
+    }
+
     [Fact]
     public void LastReplyText_IsTheNewestAssistantText()
     {

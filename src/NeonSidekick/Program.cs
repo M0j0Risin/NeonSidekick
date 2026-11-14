@@ -236,12 +236,70 @@ else if (updateInstall is not null)
 
 string home = AppSettings.ResolveStorageDirectory(environment.Home);
 
+// --import-settings <zip> (2026-11-13, plan parsed-yawning-papert): before the profile is resolved, so --profile may name a profile it adds.
+// A refused zip ends the launch like a bad argument (exit 2), nothing written; one this home took at an earlier start is skipped with a line.
+// The report is carried to the screen and shown after its first draw (the screen's clear would wipe a line printed now); headless and in a
+// check it goes to stderr at once, keeping stdout for the caller. The review's fixes: the update step's interactive test reused (#61), the
+// console echo off so the archive's log lines never reach stdout (#63, as the Mac's ImageIO step above), and a waiting line first (#108).
+IReadOnlyList<NeonSidekick.Settings.SettingsReportLine> importNotices = [];
+if (options.ImportSettings is { } importZip)
+{
+    if (updateInteractive)
+    {
+        console.WriteLine(NeonSidekick.App.SettingsTransferText.ImportingWait);
+    }
+
+    bool importEcho = DiagnosticLog.EchoToConsole;
+    DiagnosticLog.EchoToConsole = false;
+    NeonSidekick.Settings.SettingsTransferOutcome imported;
+    try
+    {
+        imported = NeonSidekick.Settings.SettingsArchive.RunAtStart(home, importZip, NeonSidekick.Settings.ImportEnvironment.Live);
+    }
+    finally
+    {
+        DiagnosticLog.EchoToConsole = importEcho;
+    }
+
+    if (imported.Error is { } importError)
+    {
+        if (updateInteractive)
+        {
+            console.WriteLine(importError);
+        }
+        else
+        {
+            Console.Error.WriteLine(importError);
+        }
+
+        return 2;
+    }
+
+    if (updateInteractive)
+    {
+        importNotices = imported.Lines;
+    }
+    else
+    {
+        foreach (var importLine in imported.Lines)
+        {
+            Console.Error.WriteLine(importLine.Text);
+        }
+    }
+}
+
 // The profile for this launch (2026-09-26): --profile over NEONSIDEKICK_PROFILE over "neon" (SidekickOptions.LaunchProfile;
 // every launch's default since 2026-10-16, the home's settings.json retired). A name that is not a profile ends the launch
-// like a bad argument does, before anything is created under the home.
+// like a bad argument does, before anything is created under the home. What a start import added is said first (the review's #86: the
+// queued report was lost, and a run again with the right name would add the zip twice).
 string profile = options.LaunchProfile(environment.Profile);
 if (!Profiles.Exists(home, profile))
 {
+    foreach (var importLine in importNotices)
+    {
+        console.WriteLine(importLine.Text);
+    }
+
     console.WriteLine(AppSettings.UnknownProfileMessage(profile, Profiles.List(home)));
     return 2;
 }
@@ -364,6 +422,7 @@ if (OperatingSystem.IsWindows())
 }
 
 var app = new SidekickApp(console, settings, environment, geometry: geometry, input: consoleInput, clipboard: readClipboard, copyToClipboard: copyToClipboard, clipboardImage: readClipboardImage, setTitle: title => ConsoleTitle.TrySet(title), openViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.Open : null, viewPicture: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.OpenAt : null, followViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.Follow : null, printSpooler: OperatingSystem.IsWindows() ? new NeonSidekick.Printing.WindowsPrintSpooler() : OperatingSystem.IsMacOS() ? new NeonSidekick.Printing.MacPrintSpooler() : null, embeddedLlm: NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.Offered ? () => NeonSidekick.EmbeddedLlm.EmbeddedLlmService.Create(settings.EmbeddedModelsDirectory, settings.LlamaDirectory) : null, perfSource: NeonSidekick.Perf.PerfSources.CreateDefault, frames: frames, camera: OperatingSystem.IsWindows() ? new NeonSidekick.Camera.MediaFoundationCameraSystem() : OperatingSystem.IsMacOSVersionAtLeast(14) ? new NeonSidekick.Camera.MacCameraSystem() : null, liveView: OperatingSystem.IsWindows() || NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.ShowLive : null, showShot: NeonSidekick.Viewer.PictureWindow.IsAvailable ? picture => NeonSidekick.Viewer.PictureWindow.OpenAt(picture, activate: false) : null, openLogWindow: NeonSidekick.Viewer.LogWindow.IsAvailable && logBuffer is not null ? () => NeonSidekick.Viewer.LogWindow.Show(logBuffer) : null, openLogWindowBehind: NeonSidekick.Viewer.LogWindow.IsAvailable && logBuffer is not null ? () => NeonSidekick.Viewer.LogWindow.Show(logBuffer, activate: false) : null, openViewerBehind: NeonSidekick.Viewer.PictureWindow.IsAvailable ? folder => NeonSidekick.Viewer.PictureWindow.Open(folder, activate: false) : null, openProcessWindow: NeonSidekick.Viewer.ProcessWindow.IsAvailable ? NeonSidekick.Viewer.ProcessWindow.Show : null, openDockerLogWindow: NeonSidekick.Viewer.DockerLogWindow.IsAvailable ? NeonSidekick.Viewer.DockerLogWindow.Show : null, closeDockerLogWindow: NeonSidekick.Viewer.DockerLogWindow.IsAvailable ? NeonSidekick.Viewer.DockerLogWindow.Close : null,closeLogWindow: NeonSidekick.Viewer.LogWindow.IsAvailable && logBuffer is not null ? NeonSidekick.Viewer.LogWindow.Close : null, closeViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.CloseViewer : null, screenSystem: OperatingSystem.IsWindows() ? new NeonSidekick.Screen.WindowsScreenSystem() : OperatingSystem.IsMacOSVersionAtLeast(14) ? new NeonSidekick.Screen.MacScreenSystem() : null, hotkeyProbe: OperatingSystem.IsWindows() ? new NeonSidekick.Hotkeys.WindowsHotkeyProbe() : OperatingSystem.IsMacOS() ? new NeonSidekick.Hotkeys.MacHotkeyProbe(environment.TerminalProgram, environment.ItermProfile) : null, shortcutWriter: OperatingSystem.IsWindows() ? new NeonSidekick.Shortcuts.WindowsShortcutWriter() : OperatingSystem.IsMacOS() ? new NeonSidekick.Shortcuts.MacShortcutWriter() : null, openThumbs: NeonSidekick.Viewer.ThumbsWindow.IsAvailable ? NeonSidekick.Viewer.ThumbsWindow.Open : null, followThumbs: NeonSidekick.Viewer.ThumbsWindow.IsAvailable ? NeonSidekick.Viewer.ThumbsWindow.Follow : null, closeThumbs: NeonSidekick.Viewer.ThumbsWindow.IsAvailable ? NeonSidekick.Viewer.ThumbsWindow.Close : null, showInViewer: NeonSidekick.Viewer.PictureWindow.IsAvailable ? NeonSidekick.Viewer.PictureWindow.ShowQuietly : null, videoPlayer: OperatingSystem.IsWindows() ? NeonSidekick.Viewer.VideoWindow.Player : OperatingSystem.IsMacOSVersionAtLeast(14) && NeonSidekick.Viewer.MacVideoWindows.IsAvailable ? NeonSidekick.Viewer.MacVideoWindows.Player : null, browserWindow: OperatingSystem.IsWindows() ? NeonSidekick.Viewer.BrowserWindow.Window : OperatingSystem.IsMacOSVersionAtLeast(14) && NeonSidekick.Viewer.MacBrowserWindows.IsAvailable ? NeonSidekick.Viewer.MacBrowserWindows.Window : null, webUiHost: backend => new NeonSidekick.WebUi.WebUiHost(backend, settings.StorageDirectory), tailscaleServe: tailscaleServe, eventLogSystem: OperatingSystem.IsWindows() ? new NeonSidekick.EventLog.WindowsEventLogSystem() : null, unifiedLog: OperatingSystem.IsMacOS() ? new NeonSidekick.EventLog.MacUnifiedLog() : null, recycleBin: recycleBin, checkpoints: checkpoints, pinger: OperatingSystem.IsWindows() ? new NeonSidekick.Network.WindowsPinger() : new NeonSidekick.Network.IcmpSocketPinger(), serviceSystem: OperatingSystem.IsWindows() ? new NeonSidekick.Services.WindowsServiceSystem() : null, taskSystem: OperatingSystem.IsWindows() ? new NeonSidekick.Tasks.WindowsTaskSystem() : null, directorySystem: OperatingSystem.IsWindows() ? new NeonSidekick.ActiveDirectory.WindowsDirectorySystem() : OperatingSystem.IsMacOS() ? new NeonSidekick.ActiveDirectory.Ldap.ManagedDirectorySystem() : null, monitorSystem: OperatingSystem.IsWindows() ? new NeonSidekick.Monitors.WindowsMonitorSystem() : null, midiSystem: OperatingSystem.IsWindows() ? new NeonSidekick.Midi.WindowsMidiSystem() : OperatingSystem.IsMacOS() ? new NeonSidekick.Midi.MacMidiSystem() : null, headlessNarrow: NeonSidekick.UI.TextCells.NarrowOnMainScreen(environment.TerminalProgram) && !Console.IsOutputRedirected, installFolder: updateGuarded, updater: updateKept is { } keptContext ? () => new NeonSidekick.Updates.AppUpdater(keptContext, updateKeptStart, source: updateSource) : null);
+app.StartNotices = importNotices;   // --import-settings' report, shown after the screen's first draw (2026-11-13)
 
 System.Diagnostics.Stopwatch? closeStarted = null;   // when the window's close began, for what's left of its deadline (2026-11-04, review P1-3)
 

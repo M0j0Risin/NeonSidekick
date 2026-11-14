@@ -19,7 +19,7 @@ Elsewhere:
 - [Command details](#command-details)
   - [Plan mode](#plan-mode) · [Ralph loop](#ralph-loop) · [Code audit](#code-audit) · [Bot conversations](#bot-conversations) · [Claude Code from the chat](#claude-code-from-the-chat)
   - [Advisor](#advisor) · [Your own shell line](#your-own-shell-line) · [Loops](#loops) · [Custom commands](#custom-commands) · [Benchmark tests](#benchmark-tests) · [Imagine options](#imagine-options) · [Camera](#camera)
-  - [Screen capture](#screen-capture) · [Profiles](#profiles) · [Desktop shortcuts](#desktop-shortcuts) · [Custom themes](#custom-themes) · [Voice presets](#voice-presets) · [Updating](#updating)
+  - [Screen capture](#screen-capture) · [Profiles](#profiles) · [Moving settings](#moving-settings-to-another-computer) · [Desktop shortcuts](#desktop-shortcuts) · [Custom themes](#custom-themes) · [Voice presets](#voice-presets) · [Updating](#updating)
 - The app's windows, pasting a picture, the folder picker and the file browser: [Using the app](INTERFACE.md).
 
 ## All commands
@@ -123,6 +123,8 @@ The push and pull forms copy to (`push`) or from (`pull`) another profile, after
 | `/settings`, `//` | Opens the settings; a letter typed on a tab searches them all. |
 | `/settings <words>` | Searches every setting (`/settings`, `/tools`, `/skills`, `/mcp`) by name, tab or description. |
 | `/settings changed` | Lists the settings that differ from their defaults, to edit one or put it back. |
+| `/settings export [<path>]` | Writes your settings to a zip in Downloads (or at the path) to carry to another computer. See [Moving settings](#moving-settings-to-another-computer). |
+| `/settings import [<zip>]` | Adds a settings zip's profiles and files, never overwriting; a path counts from Downloads. Bare, it lists the zips there. |
 | `/tools` | Switches the model's tools on or off, each group's settings on its own tab. See [TOOLS.md](TOOLS.md). |
 | `/tools <group>` | Opens one group's page: `ask`, `shell`, `files`, `image`, `web`, `advisors`, `docker`, `eventlog`, `network`, `services`, `tasks` and `monitors` (Windows only), `directory`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `duckdb`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`, `shopping`, `timers`, `clock` or `help`. |
 | `/tools shell allowed`, `/tools shell police` | Opens *Shell allowed commands* (which also steps *Shell command policy*), or *Shell police* and its forbidden strings. |
@@ -586,6 +588,19 @@ A monitor, every monitor or one window, nothing to install (macOS 14 or later on
 * **Reset** keeps the URLs, model, API keys, paths, *Web search method*, *Claude Code executable* and avatars unless `--all`; `neon` resets only while loaded. **Push and pull** ask first; the bare forms copy only `profile.json`.
 * **Changes made elsewhere** to the loaded `profile.json` (a push from another copy of the app, a hand edit) are taken within seconds, with a notice; a setting changed on both sides keeps this window's.
 * **API keys** in `profile.json` are encrypted for your Windows account, or with a Keychain key on a Mac, one typed in by hand at the next load. Only you, on the computer running NeonSidekick, can read them.
+
+### Moving settings to another computer
+
+`/settings export` writes `neonsidekick-settings-<date>-<time>.zip` to your Downloads folder, and `/settings import <zip>` on the other computer adds what it holds. A computer where the app hasn't run yet can take it at the first start with `--import-settings <zip>` ([COMMANDLINE.md](COMMANDLINE.md)), so `neon` keeps its name. A later start with the same zip skips it; `/settings import` takes it again.
+
+* **Carried:** each profile's settings, prompt files, `configs` files (not the browser history), skills, commands and workflows, and the home's themes, voices, skills, commands, workflows and connection files.
+* **Left out:** sessions, models, pictures, working-folder files, checkpoints, browser data, databases, and a skill's `.venv` and `__pycache__`. The export names any loose file it left out.
+* **Never overwrites:** a profile whose name is taken arrives as `<name>-imported`; a home file, theme, skill or workflow already here is skipped. Both are listed.
+* **Reset on import:** profile keys this computer can't read (type them again), the Web UI token and a typed HTTPS address, and a working folder, Obsidian vault or program path that isn't here.
+* **Between Windows and a Mac:** the default shell when this system lacks it, Docker's pipe and the editors are reset, and each system's own forbidden shell commands are swapped in.
+* **Connection files:** their passwords travel as written; the import names the files whose passwords sit in the other computer's store.
+* **Keep the zip private:** it holds your persona, memory and MCP `env` and headers as written. It lands outside the model's working folder unless that folder holds Downloads; delete it once imported.
+* **Import only your own zips:** an imported profile's settings and MCP servers run as you once you switch to it, and a home `configs` file applies to every profile.
 
 ### Desktop shortcuts
 

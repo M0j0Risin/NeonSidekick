@@ -767,6 +767,35 @@ public sealed partial class SidekickApp
     /// <summary>The folder the banner's path shows as <c>~</c> (2026-10-04, <see cref="ScreenPane.HomeTilde"/>): the user's profile; tests set their own.</summary>
     public string UserProfileFolder { get; set; } = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
+    /// <summary>The user's Downloads folder for <c>/settings export|import</c> (2026-11-13), headless and on the screen; tests set a temp folder.</summary>
+    public string DownloadsFolder
+    {
+        get => _downloadsFolder ??= Files.DownloadsFolder.Resolve();   // looked up at first use (the review's #12), not at every construction
+        set => _downloadsFolder = value;
+    }
+
+    private string? _downloadsFolder;
+
+    /// <summary>
+    /// What <c>--import-settings</c> left to say at the start (2026-11-13), carried to the screen and shown after its first draw (a line printed
+    /// before would be wiped by the screen's clear), as the update step's leftovers are carried. Empty in every other launch.
+    /// </summary>
+    public IReadOnlyList<Settings.SettingsReportLine> StartNotices { get; set; } = [];
+
+    /// <summary>
+    /// Headless <c>/settings export|import</c> (2026-11-13): <see cref="SettingsTransferCommand"/>'s flow, as the screen's, with no spinner and the
+    /// app's clock (the review's #58, #10 and #4). Each line tagged as HEADLESS.md has it (#48): <c>[notice]</c>, <c>[warning]</c> for a warning,
+    /// <c>[error]</c> for a refusal; the full lists, since a headless caller reads them all. A canceled export says nothing.
+    /// </summary>
+    internal async Task<IReadOnlyList<string>> RunSettingsTransferAsync(string verb, string rest, CancellationToken cancellationToken)
+    {
+        var outcome = await SettingsTransferCommand.RunAsync(_settings, verb, rest, DownloadsFolder, _time, Settings.ImportEnvironment.Live,
+            (_, work) => work(), cancellationToken).ConfigureAwait(false);
+        return outcome is null ? []
+            : outcome.Error is { } error ? ["[error] " + error]
+            : [.. outcome.Lines.Select(line => (line.Warn ? "[warning] " : "[notice] ") + line.Text)];
+    }
+
     public void RenderBanner(IAnsiConsole console)
     {
         ArgumentNullException.ThrowIfNull(console);
@@ -1756,6 +1785,17 @@ public sealed partial class SidekickApp
                 {
                     string pdfResult = await Pdf.PdfCommand.RunAsync(pdf, pdfArgs, () => LastReplyText(assistant?.History.Messages), cancellationToken, pdfEditing).ConfigureAwait(false);
                     await HeadlessLineAsync((pdfResult.StartsWith("Error:", StringComparison.Ordinal) ? "[error] " : "") + pdfResult).ConfigureAwait(false);
+                    continue;
+                }
+
+                // /settings export|import (2026-11-13, settings transfer): ahead of the server check, as /pdf; every other /settings still goes to the model.
+                if (SlashCommands.Parse(text) is (SlashCommand.Settings, var settingsArgs) && SettingsTransferCommand.Parse(settingsArgs) is { } transfer)
+                {
+                    foreach (var transferLine in await RunSettingsTransferAsync(transfer.Verb, transfer.Path, cancellationToken).ConfigureAwait(false))
+                    {
+                        await HeadlessNoticeLineAsync(transferLine).ConfigureAwait(false);
+                    }
+
                     continue;
                 }
 
@@ -3531,6 +3571,8 @@ public sealed partial class SidekickApp
             screen.GuardStaleClicks();
         }
 
+        screen.DownloadsFolder = DownloadsFolder;
+        screen.StartNotices = StartNotices;   // --import-settings' report, shown after the first draw (2026-11-13)
         _screen = screen;
         _liveSession = session;
         try

@@ -109,7 +109,7 @@ public static class VoicePresets
     /// first-level subfolder's (not a dot-folder), the folders and their files in name order (2026-10-02). None for a missing folder;
     /// an unreadable folder or subfolder is warned about and left out.
     /// </summary>
-    private static IReadOnlyList<FileInfo> Files(string folder)
+    internal static IReadOnlyList<FileInfo> Files(string folder)
     {
         try
         {

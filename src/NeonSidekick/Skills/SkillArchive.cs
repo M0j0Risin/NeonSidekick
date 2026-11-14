@@ -483,7 +483,8 @@ public sealed class SkillArchive : IDisposable
         return ok;
     }
 
-    private static bool CopyCapped(Stream input, Stream output, long limit)
+    /// <summary>Copies at most <paramref name="limit"/> bytes; false (the output partial) when the input holds more. Shared with the settings import (2026-11-13).</summary>
+    internal static bool CopyCapped(Stream input, Stream output, long limit)
     {
         byte[] buffer = new byte[81920];
         long total = 0;

@@ -101,6 +101,7 @@ They need no server unless the row says so.
 | `/ad …` | Prints a card, an OU, a find, an account's groups or the domain from [Active Directory](TOOLS.md#active-directory), in columns; ticked domains only. `to:<file.csv or folder>` saves a list as a CSV in the working directory. |
 | `/shopping …` | The [shopping list](TOOLS.md#shopping-list); bare, it prints it. `clear all` and `store remove` act without asking. |
 | `/print …`, `/pdf …` | [Print](TOOLS.md#printing) or [make a PDF](TOOLS.md#making-pdfs) of a file, a web page (`/pdf`) or the last reply; `/pdf merge\|extract\|delete\|rotate` [edit PDFs](TOOLS.md#editing-pdfs). *Print action policy* doesn't apply. On a Mac, `/pdf` has only the `browser` engine. |
+| `/settings export [<path>]`, `/settings import [<zip>]` | [Moves settings](COMMANDS.md#moving-settings-to-another-computer) through a zip in Downloads; bare `import` lists the zips there. |
 | `/docx …` | [Makes a Word document](TOOLS.md#writing-office-files) of a Markdown or `.txt` file, or (with a server) of the last reply. |
 | `/test …` | Runs the [benchmark tests](COMMANDS.md#benchmark-tests), a `[notice]` per test. A run needs a server; the listing and `history` don't. |
 | `/commands`, `/commands new\|save <name> [--global]` | Prints your [custom commands](COMMANDS.md#custom-commands), or writes one and prints its path (no editor). `save` takes the last message you typed, never a custom command's. |
@@ -145,7 +146,7 @@ Any other `/…` line is sent to the model as a message, so `/model gemma` switc
 |---|---|
 | `/server`, `/model`, `/cwd`, `/profile` | `--url`, `--model`, `--cwd`, `--profile` (or their variables). |
 | `/reasoning`, `/sampling` | `NEONSIDEKICK_LLM_REASONING`, `NEONSIDEKICK_LLM_SAMPLING`. |
-| `/settings`, `//`, `/tools`, `/skills`, `/mcp`, `/profile push\|pull`, `/cmd`, `/msgclear` | Set things up in the TUI, or edit `profile.json` and `mcp.json` (an API key typed there in plain text is encrypted at the next load). |
+| `/settings` (other forms), `//`, `/tools`, `/skills`, `/mcp`, `/profile push\|pull`, `/cmd`, `/msgclear` | Set things up in the TUI, or edit `profile.json` and `mcp.json` (an API key typed there in plain text is encrypted at the next load). |
 | `/remember`, `/memory`, `/sessions`, `/imagine`, `/process`, `/tree`, `/vault` | Ask the model: it has the memory, session, ComfyUI, `process`, file and Obsidian tools when they're on. `/sessions export` is an `[error]`: it works on the screen only. |
 | `/loop` | Repeat the line, or loop in the script. |
 | `/usage` | `--log` records the run. |
@@ -161,6 +162,7 @@ Each flag lasts one run and outranks its variable and the saved setting. Each ex
 | `--model <id>` | The model; with `--url`, pins both for a reproducible run. | `--url http://127.0.0.1:1234/v1 --model gemma-3-27b-it` |
 | `--cwd <path>` | The working directory, for the file, GitLib, shell and download tools. | `--cwd D:\Repo\MyApp` |
 | `--profile <name>` | The profile (else `NEONSIDEKICK_PROFILE`, else `neon`). An unknown name exits with code 2. | `--profile automation` |
+| `--import-settings <zip>` | Adds a [settings zip](COMMANDS.md#moving-settings-to-another-computer) before the run; its report goes to stderr. A refused zip exits with code 2; a zip already imported is skipped. | `--import-settings settings.zip` |
 | `--log <path>` | Every diagnostic line to a file, first the flags, profile and variables in force; `{ts}` becomes the start time. | `--log C:\Logs\neon_{ts}.log` |
 | `--yolo` | Every shell command runs without asking ([below](#running-yolo-every-shell-command-allowed)). | `--yolo --cwd D:\Repo\MyApp` |
 | `--no-police` | The path police off ([below](#turning-off-the-path-police)). | `--no-police --cwd D:\Repo\MyApp` |
@@ -233,7 +235,7 @@ The run carries on. At the end, if anything was refused, it prints a summary and
 [notice] 2 commands were not run: "npm install", "python script"
 ```
 
-Shell police refusals count too, under `--yolo` as well. **Exit codes:** **0** nothing was refused, **2** a bad argument, an unknown profile, or an old copy started during or just after an [update](COMMANDS.md#updating) (nothing ran), **3** at least one command was refused.
+Shell police refusals count too, under `--yolo` as well. **Exit codes:** **0** nothing was refused, **2** a bad argument, an unknown profile, a settings zip `--import-settings` refused (nothing imported), or an old copy started during or just after an [update](COMMANDS.md#updating) (nothing ran), **3** at least one command was refused.
 
 ```powershell
 Get-Content job.txt | NeonSidekick.exe --headless --cwd D:\Repo\MyApp | Tee-Object run.txt

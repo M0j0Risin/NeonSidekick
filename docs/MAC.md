@@ -96,6 +96,7 @@ You need an Apple Silicon Mac (M1 or later). Unpack the Mac package as the [READ
 * **Ralph loops and code audits on exFAT** (or a share with neither hard links nor exclusive renames): `/plan ralph` refuses, and `/code-audit` warns that a second Neon Sidekick could write the same report.
 * **Printing** goes through CUPS onto the printer's default paper, in Helvetica Neue and Menlo (lines may wrap a little differently). A PDF goes as it is (no landscape).
 * **Office files don't print:** Word, Excel and the like are refused; print them from their own program.
+* **Settings zips** ([`/settings export`](COMMANDS.md#moving-settings-to-another-computer)) land in `~/Downloads`; macOS may ask once to let the terminal reach it.
 
 ### Voice
 
@@ -181,6 +182,7 @@ Not yet tried on a Mac:
 * **Screen capture on macOS 14.0–15.1, and on a 1× screen beside a Retina one.**
 * **The robot splash following the mouse.** Terminal.app reports the mouse only with View › Allow Mouse Reporting on.
 * **The menus marking the row under the pointer.** The same setting in Terminal.app.
+* **Moving settings between a PC and a Mac** (`/settings export` and `import`): keys left blank, the shell and forbidden commands made the Mac's, and a script's execute bit kept.
 
 Known limits:
 * **YouTube may ask for consent each run:** WebKit blocks the player's third-party cookies, so a consent isn't kept.

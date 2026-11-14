@@ -19,6 +19,21 @@ public static class SettingsSecrets
     private const string Category = "Settings";
 
     /// <summary>
+    /// The secrets a person types in, with the value each goes back to when it can't be read (2026-11-13, the settings-transfer review's #13: the
+    /// import's resets hand-copied this list; a test ties it to <see cref="ProtectAtRest"/>, which encrypts these and <see cref="AppSettingsData.WebUiToken"/>,
+    /// the one the app mints).
+    /// </summary>
+    public static readonly IReadOnlyList<(string Key, string Default)> Keys =
+    [
+        (nameof(AppSettingsData.LlmApiKey), Llm.LlmEndpoint.DefaultApiKey),
+        (nameof(AppSettingsData.AnthropicApiKey), ""),
+        (nameof(AppSettingsData.OpenAIApiKey), ""),
+        (nameof(AppSettingsData.HomeAssistantToken), ""),
+        (nameof(AppSettingsData.YouTubeApiKey), ""),
+        (nameof(AppSettingsData.WebMetasearchBraveApiKey), ""),
+    ];
+
+    /// <summary>
     /// The secret, readable: null for none, a plain value as it is, a <c>dpapi:</c> one decrypted. Null too when the stored
     /// value cannot be read — another Windows user's or machine's profile — which the callers read as "not set".
     /// </summary>

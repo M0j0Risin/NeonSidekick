@@ -468,6 +468,8 @@ public static class HelpCommands
             new("/settings", "Open the settings pane (`//` too); a letter typed on a tab searches every setting. Ctrl+/ runs it too."),
             new("/settings <words>", "Search every setting (`/settings`, `/tools`, `/skills`, `/mcp`) by its name, tab or description; Enter edits the row found."),
             new("/settings changed", "List the settings that differ from their defaults, each with its default; Enter edits a row, `r` puts it back to its default."),
+            new("/settings export [<path>]", "Write the settings to a zip to carry to another computer: each profile's settings, prompt files, configs (not the browser's history), skills, commands and workflows, and the home's themes, voices, skills, commands, workflows and connection files. It lands in Downloads, or at the path, and never overwrites. Keys stay encrypted for this computer."),
+            new("/settings import [<zip>]", "Add a settings zip's profiles as new ones (`<name>-imported` when the name is taken) and its home files where none exists, never overwriting. Settings that describe the old computer, and profile keys this one can't read, are reset. Without a zip, list the zips in Downloads."),
         ]),
         new("/shopping",
         [

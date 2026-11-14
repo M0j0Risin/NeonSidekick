@@ -27,6 +27,9 @@ public sealed record ShellRecord(int OwnerPid, long OwnerStartTicks, int LeaderP
 /// </summary>
 public static class ShellRecords
 {
+    /// <summary>The records' folder under the home, <c>/</c>-separated, as <c>/help files</c> names it (2026-11-13, the settings-transfer review's #50).</summary>
+    public const string RelativeFolder = "shell/running";
+
     /// <summary>The records' folder under <paramref name="home"/>. Pinned.</summary>
     public static string FolderIn(string home) => Path.Combine(home, "shell", "running");
 

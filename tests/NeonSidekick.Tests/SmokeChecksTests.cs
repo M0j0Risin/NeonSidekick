@@ -6,6 +6,16 @@ namespace NeonSidekick.Tests;
 
 public class SmokeChecksTests
 {
+    /// <summary><c>settings:roundtrip</c> (2026-11-13, settings transfer): a scratch home exported and imported, the resets made; touches neither the real home nor Downloads.</summary>
+    [Fact]
+    public void ProbeSettingsRoundtrip_Passes()
+    {
+        var check = SmokeChecks.ProbeSettingsRoundtrip();
+
+        Assert.Equal("settings:roundtrip", check.Name);
+        Assert.True(check.Passed, check.Detail);
+    }
+
     [WindowsFact]
     public void ProbeWinMm_Passes_WithOrWithoutADevice()
     {

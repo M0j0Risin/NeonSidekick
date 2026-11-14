@@ -291,6 +291,10 @@ internal sealed partial class ChatScreen
         // /midi (2026-11-12, the MIDI plan): the pane and the learn over the reply; list, on, off, forget and a usage error at once (on and off
         // only flip the setting: the board opens and closes on its own thread, so a slow driver never holds the reply).
         SlashCommand.Midi => Midi.MidiCommand.Parse(args) is { Verb: Midi.MidiVerb.Pane or Midi.MidiVerb.Learn } ? MidTurnClass.Pane : MidTurnClass.Quick,
+        // /settings export|import (2026-11-13): wait for the idle line (a spinner and a write); a bare import only lists, so it prints at once (the
+        // review's #94). Every other /settings is the pane, as before.
+        SlashCommand.Settings when SettingsTransferCommand.Parse(args) is { } transfer
+            => transfer.Verb == SettingsTransferText.ImportWord && transfer.Path.Length == 0 ? MidTurnClass.Quick : MidTurnClass.Deferred,
         _ => MidTurnPolicy(command, args.Length > 0),
     };
 
@@ -837,6 +841,10 @@ internal sealed partial class ChatScreen
             case SlashCommand.Monitor:
                 // /monitor list (2026-10-23): the reads on the board's worker, the lines through the flow sink.
                 await PrintMonitorListAsync(_flow, cancellationToken).ConfigureAwait(false);
+                break;
+            case SlashCommand.Settings:
+                // A bare /settings import (2026-11-13, the review's #94): Downloads read on the pool, the list through the flow sink.
+                await ListSettingsZipsAsync(_flow).ConfigureAwait(false);
                 break;
             case SlashCommand.Midi:
                 // /midi list|on|off|forget (2026-11-12): a file read or a setting flipped, the lines through the flow sink.

@@ -60,6 +60,7 @@ internal static partial class HelpStartup
         new(SidekickOptions.ModelFlag, [], SettingsField.LlmModel),
         new(SidekickOptions.CwdFlag, [], SettingsField.WorkingDirectory),
         new("--profile", [], null),
+        new(SidekickOptions.ImportSettingsFlag, [], null),
         new(SidekickOptions.YoloFlag, [], SettingsField.ShellCommandPolicy),
         new(SidekickOptions.NoPoliceFlag, [], SettingsField.ShellPolice),
         new("--log", [], null),

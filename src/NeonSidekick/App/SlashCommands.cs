@@ -557,7 +557,7 @@ public static class SlashCommands
             new("/sampling", "tune the model's sampling"),
             new("/server", "pick or set the LLM server"),
             new("/sessions", "restore, rename, export, purge sessions"),
-            new("/settings", "edit, search and save settings", "//"),
+            new("/settings", "edit, search, export and import settings", "//"),
             new("/shortcut", "put a launch shortcut on the desktop"),
             new("/skills", "manage and install skills"),
             new("/read", "read text, PDF, Word or slides aloud"),

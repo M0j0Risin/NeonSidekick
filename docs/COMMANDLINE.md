@@ -13,6 +13,7 @@ Everything `NeonSidekick.exe` (`./NeonSidekick` on a Mac) takes on its command l
 | `--model <id>` | Uses this model. |
 | `--cwd <path>` | Uses this working directory; a relative path starts from where you launch. |
 | `--profile <name>` | Opens this profile for this launch (without it, `neon`). An unknown name lists the profiles and exits with code 2. |
+| `--import-settings <zip>` | Adds a [settings zip](COMMANDS.md#moving-settings-to-another-computer)'s profiles and files before the start; a relative path starts from where you launch. A refused zip exits with code 2; a zip already imported is skipped. |
 | `--yolo` | Runs every shell command and script without asking; the shell police still applies unless you add `--no-police`. |
 | `--no-police` | Turns off the shell police: commands may name paths outside the working directory, and the forbidden-string and database checks stop. |
 | `--log <path>` | Appends every diagnostic line to a file (making its folder); `/log file` opens it. `{ts}` becomes the start time (`logs/neon_{ts}.log` → `logs/neon_20261003-142530.log`). |

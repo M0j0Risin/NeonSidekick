@@ -148,6 +148,7 @@ public static partial class SmokeChecks
         results.Add(OperatingSystem.IsMacOS() ? ProbeTermios() : new SmokeCheck("console:termios", true, "skipped: not macOS"));
         results.Add(ProbePosixSpawn());
         results.Add(ProbeShellRecords());
+        results.Add(ProbeSettingsRoundtrip());   // 2026-11-13, settings transfer: the zip and the JsonNode edit under AOT
         results.Add(PicturesHere ? ProbeImageResize() : NotWindows("image:resize"));
         results.Add(PicturesHere ? ProbeImageEdit() : NotWindows("image:edit"));
         results.Add(OperatingSystem.IsMacOS() ? ProbeImageIO() : new SmokeCheck("image:imageio", true, "skipped: not macOS"));

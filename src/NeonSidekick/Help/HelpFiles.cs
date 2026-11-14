@@ -115,6 +115,7 @@ internal static class HelpFiles
             new(HelpFileScope.Home, CustomCommands.CustomCommandRoots.DirectoryName + "/", "the global custom commands, a Markdown file each (`review.md` is `/review`)", "`/commands`"),
             new(HelpFileScope.Home, Diagnostics.CrashReport.FileName, "what the app writes when it crashes"),
             new(HelpFileScope.Home, Files.OwnerLock.MachineIdFileName, "this computer's id, made once, which the plan and audit locks name to tell this computer from another"),
+            new(HelpFileScope.Home, Settings.SettingsArchive.StartMarkerName, "the settings zips `--import-settings` has taken, so a repeat start skips them"),
             new(HelpFileScope.Home, Viewer.VideoPage.FolderName + "/", "the video window's browser data (YouTube's cookies) and the page it plays from"),
             new(HelpFileScope.Home, Viewer.BrowserPage.FolderName + "/", "no longer used (each profile has its own); you may delete it"),
             new(HelpFileScope.Profile, Profiles.FileName, "the profile's settings", "`/settings`"),
@@ -124,6 +125,14 @@ internal static class HelpFiles
             new(HelpFileScope.Profile, configs, "the profile's own JSON files"),
             new(HelpFileScope.Profile, configs + Memory.MemoryStore.FileName, "the memories", "`/memory`, `/remember`"),
         ]);
+        if (!windows)
+        {
+            // A Mac's background commands' records (2026-11-13, the settings-transfer review's #50: without a row, every Mac export named shell/ as
+            // left out). Windows writes none: its kill-on-close job does this job.
+            int at = rows.FindIndex(r => r.Path == Files.OwnerLock.MachineIdFileName) + 1;
+            rows.Insert(at, new(HelpFileScope.Home, Shell.ShellRecords.RelativeFolder + "/", "the background commands' records, so the next start can stop the ones a crash left running"));
+        }
+
         rows.AddRange(families.Select(f => new HelpFile(HelpFileScope.Profile, configs + f.File, "this profile's own " + f.Holds, Edit(f.Word))));
         rows.AddRange(
         [

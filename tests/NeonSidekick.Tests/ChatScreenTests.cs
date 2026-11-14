@@ -214,6 +214,7 @@ public partial class ChatScreenTests : IDisposable
         _settings.Dispose();
         _console.Dispose();
         try { Directory.Delete(_dir, recursive: true); } catch { /* best effort */ }
+        try { Directory.Delete(DownloadsForTests, recursive: true); } catch { /* best effort; most tests never make it */ }
 
         // A command from the Web UI's page never leaves the page waiting on a PC-only pane (later on 2026-10-14): any test that drove one fails.
         Assert.Empty(_pcOnlyPanes);
@@ -330,6 +331,9 @@ public partial class ChatScreenTests : IDisposable
         screen.UserProfileFolder = _userProfile;
         screen.ToolbarItemHere = _toolbarHere;
         screen.SessionLoadForTests = _sessionLoad;
+        screen.DownloadsFolder = DownloadsForTests;   // never the real Downloads (2026-11-13, settings transfer)
+        screen.StartNotices = _startNotices;
+        screen.ImportEnvironmentForTests = _importEnvironment;
         _running = screen;
         int code = await screen.RunAsync(cancellationToken);
         Assert.Equal(0, code);

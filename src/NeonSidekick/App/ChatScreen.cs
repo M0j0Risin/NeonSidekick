@@ -630,6 +630,11 @@ internal sealed partial class ChatScreen
     /// <summary>The completion note of <c>/settings changed</c> (2026-10-04). Pinned.</summary>
     public const string SettingsChangedNote = "the settings that are not their defaults";
 
+    /// <summary>The completion notes of <c>/settings export</c>, <c>import</c> and a zip after it (2026-11-13).</summary>
+    public const string SettingsExportNote = "a zip of the settings, in Downloads";
+    public const string SettingsImportNote = "add a settings zip's profiles and files";
+    public const string SettingsZipNote = "a settings zip in Downloads";
+
     public const string MemoryForgetWord = "forget";
     public const string MemoryForgetNote = "forget every memory";
     public const string MemoryEditWord = "edit";   // 2026-09-23, the user's ask: memory.json in the editor, as /profile edit opens profile.json
@@ -5272,7 +5277,7 @@ internal sealed partial class ChatScreen
         IReadOnlyList<string>? Stopwatches = null, Func<string, IReadOnlyList<CompletionItem>>? Prompts = null,
         Func<string, IReadOnlyList<CompletionItem>>? BrowserLinks = null, Func<string, IReadOnlyList<CompletionItem>>? YouTubeSaved = null,
         Func<string, IReadOnlyList<CompletionItem>>? Cameras = null, Func<string, IReadOnlyList<CompletionItem>>? Midi = null,
-        Func<string, MentionResult>? VideoFiles = null);
+        Func<string, MentionResult>? VideoFiles = null, Func<IReadOnlyList<string>>? SettingsZips = null);
 
     /// <summary>The note beside <c>on</c> / <c>off</c> on a switch's list: what the switch is. Pinned.</summary>
     public static string SwitchSubject(SlashCommand command) => command switch
@@ -5577,8 +5582,18 @@ internal sealed partial class ChatScreen
             }
 
             case SlashCommand.Settings:
-                // The changed settings (2026-10-04); any other words are a search, nothing to complete.
-                return MentionCompleter.Matches([new(SettingsMenu.ChangedWord, SettingsChangedNote)], argText);
+            {
+                // The changed settings (2026-10-04), export and import (2026-11-13); after "import " the settings zips in Downloads, newest first.
+                string importHead = SettingsTransferText.ImportWord + " ";
+                if (argText.StartsWith(importHead, StringComparison.OrdinalIgnoreCase))
+                {
+                    var zips = sources.SettingsZips?.Invoke() ?? [];
+                    return MentionCompleter.Matches(zips.Select(name => new CompletionItem(importHead + name, SettingsZipNote)).ToList(), argText);
+                }
+
+                return MentionCompleter.Matches(
+                    [new(SettingsMenu.ChangedWord, SettingsChangedNote), new(SettingsTransferText.ExportWord, SettingsExportNote), new(SettingsTransferText.ImportWord, SettingsImportNote)], argText);
+            }
 
             case SlashCommand.Theme:
             {
@@ -6488,7 +6503,8 @@ internal sealed partial class ChatScreen
             YouTubeSaved: YouTubeChoices,
             Cameras: CameraChoices,
             Midi: MidiChoices,
-            VideoFiles: prefix => _files.Complete(prefix, VideoFile.IsVideoPath));   // /video's paths (2026-11-12), folders kept
+            VideoFiles: prefix => _files.Complete(prefix, VideoFile.IsVideoPath),   // /video's paths (2026-11-12), folders kept
+            SettingsZips: SettingsZipChoices);   // /settings import's zips in Downloads (2026-11-13)
         return ArgumentPaths(command, argText, sources) is { } paths
             ? new ArgumentList([], paths.Paths, paths.Truncated)
             : new ArgumentList(ArgumentItems(command, argText, sources));
@@ -12054,6 +12070,7 @@ internal sealed partial class ChatScreen
             StartMidi();
             // The update's start (2026-11-04, self-update): what the start's step left to say, what's on disk, and the check behind the line.
             BeginUpdateAtStart();
+            ShowStartNotices();   // --import-settings' report (2026-11-13), after the first screen so its clear can't wipe it
             // The watch pictures a double-click left behind (2026-10-02): cleared as the profile loads, in case watch mode never stopped cleanly.
             ClearWatchFolder();
             // A crash's temps in the working folder's top level (2026-10-30, review F88), off the screen's thread.
@@ -14879,7 +14896,12 @@ internal sealed partial class ChatScreen
                 return false;
 
             case SlashCommand.Settings:
-                await OpenSettingsAsync(cancellationToken, words: args).ConfigureAwait(false);
+                // export and import (2026-11-13) are verbs, routed before the pane (and its no-terminal check); any other word still searches.
+                if (!await TrySettingsTransferAsync(args, cancellationToken).ConfigureAwait(false))
+                {
+                    await OpenSettingsAsync(cancellationToken, words: args).ConfigureAwait(false);
+                }
+
                 return false;
 
             case SlashCommand.Tts or SlashCommand.Voice:
