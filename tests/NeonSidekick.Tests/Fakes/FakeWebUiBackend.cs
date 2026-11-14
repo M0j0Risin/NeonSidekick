@@ -34,8 +34,18 @@ internal sealed class FakeWebUiBackend : IWebUiBackend
     public WebSnapshot Snapshot(string? page = null)
     {
         SnapshotPages.Enqueue(page);
+        if (page is not null && Interlocked.Exchange(ref _freshOnce, null) is { } fresh)
+        {
+            return Snap with { Page = fresh };
+        }
+
         return page is null ? Snap : Snap with { Page = page };
     }
+
+    private string? _freshOnce;
+
+    /// <summary>The next named snapshot hands back <paramref name="fresh"/> in place of the page's own id (a duplicated tab's, 2026-11-13); once.</summary>
+    public void HandOutFreshPage(string fresh) => _freshOnce = fresh;
 
     /// <summary>The Chat tab's voice (2026-11-13): a test sets a <see cref="FakeWebVoice"/>; null answers <c>/api/voice/*</c> with the tab-off 404.</summary>
     public IWebVoice? Voice { get; set; }

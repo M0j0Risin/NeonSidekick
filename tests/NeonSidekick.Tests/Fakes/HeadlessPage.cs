@@ -95,6 +95,13 @@ public sealed class HeadlessPage : IAsyncDisposable
         return await _client.SendAsync(method, writeParams, _session, wait.Token);
     }
 
+    /// <summary>
+    /// Runs <paramref name="source"/> in every document this page loads from now on, before its own scripts (2026-11-13: the voice tests' fake
+    /// <c>AudioContext</c>, whose clock the test moves).
+    /// </summary>
+    public Task OnNewDocumentAsync(string source) =>
+        SendAsync("Page.addScriptToEvaluateOnNewDocument", w => w.WriteString("source", source));
+
     /// <summary>A cookie for <paramref name="url"/>'s host, as the sign-in link leaves one.</summary>
     public Task SetCookieAsync(string url, string name, string value) =>
         SendAsync("Network.setCookie", w => { w.WriteString("name", name); w.WriteString("value", value); w.WriteString("url", url); });
