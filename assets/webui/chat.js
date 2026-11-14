@@ -53,6 +53,16 @@ let source = null;
 let pendingId = null;
 let pendingText = null;
 let lastAskCount = 0;
+// The page's id (2026-11-13, the webui-voice plan): kept for the tab under its own key, on the stream's URL with this run's id, so the app's
+// voice events reach this page alone. A duplicated tab is handed a fresh one in its first snapshot.
+const ChatPageKey = 'neon.chat.page';
+let chatPage = null;
+try { chatPage = sessionStorage.getItem(ChatPageKey); } catch { /* private mode: a fresh id for this page's life */ }
+if (!chatPage || !Neon.idShape.test(chatPage)) {
+  chatPage = Neon.id();
+  try { sessionStorage.setItem(ChatPageKey, chatPage); } catch { /* private mode */ }
+}
+let chatLoad = Neon.id();
 
 // The shared helpers (common.js, 2026-10-15): the element maker, the post, the sentence under the composer with its buttons.
 const { el, post } = Neon;
@@ -712,7 +722,10 @@ function applyState(s) {
   document.body.dataset.userLine = s.userLine || 'bold';
   profileEl.textContent = (s.modelAvatar ? s.modelAvatar + ' ' : '') + s.profile + (s.planMode ? ' · plan' : '');
   modelEl.textContent = s.model + (s.title ? ' · ' + s.title : '');
-  stopBtn.classList.toggle('hidden', !s.busy);
+  drawStop();   // ■ while busy or this page owes audio (2026-11-13)
+  if (sentSpoken && !s.busy && Date.now() - sentSpoken > 3000) sentSpoken = 0;
+  holdWake();
+  releaseWake();
   drawStatus();   // a busy PC with no label to show still spins
   waitingEl.textContent = s.waitingAtPc ? '⏸ Waiting for an answer at the PC: ' + s.waitingAtPc : '';
   waitingEl.classList.toggle('hidden', !s.waitingAtPc);
@@ -723,6 +736,7 @@ function applyState(s) {
   queuedEl.replaceChildren();
   for (const line of s.queued || []) queuedEl.appendChild(el('div', null, '⏳ ' + line.replace(/\s+/g, ' ')));
   queuedEl.classList.toggle('hidden', !(s.queued || []).length);
+  paintVoice();   // 🎤 as the PC's voice stands (2026-11-13)
   updateTitle();
 }
 
@@ -1395,6 +1409,7 @@ function putBack(text) {
 }
 
 function send(asText) {
+  if (listen && listen.phase === 'listening') return Promise.resolve();   // Cancel holds ➤'s place while listening (2026-11-13)
   return sendText(draft.value, { fromDraft: true, asText: asText });
 }
 
@@ -1405,10 +1420,13 @@ async function sendText(text, opts) {
   const asText = !!(opts && opts.asText);
   if (!text.trim()) return;
   if (pendingText !== text) { pendingId = newId(); pendingText = text; }
+  if (speakOn()) unlockPlayback();   // before any await: the reply plays from this gesture's unlock (2026-11-13)
   sendBtn.disabled = true;
-  const r = await post('/api/send', { id: pendingId, text: text, asText: asText });
+  // The page and its 🔊 (2026-11-13): a reply speaks where its message came from.
+  const r = await post('/api/send', { id: pendingId, text: text, asText: asText, page: chatPage, speak: speakOn() });
   sendBtn.disabled = false;
   if (r.ok) {
+    if (speakOn()) { sentSpoken = Date.now(); holdWake(); }
     if (fromDraft && draft.value === text) draft.value = '';
     remembered(text);   // the app has it in the history now; the page's copy at once
     pendingId = null;
@@ -1774,6 +1792,7 @@ function takeDraft(text) {
 }
 
 async function stop() {
+  if (!(state && state.busy) && speechOwed()) { stopTail(); return; }   // a spoken tail: that voice alone (2026-11-13)
   const r = await post('/api/stop', {});
   if (!r.ok) say(r.message);
 }
@@ -2140,15 +2159,627 @@ function applyWords() {
   overlayLive.setAttribute('aria-label', words.liveLabel || 'following new pictures');
   overlayLive.title = words.liveLabel || 'following new pictures';
   paintExpand();
+  paintVoice();
 }
 
 // A reload keeps the history's entries but not what they held: the current one is the page's own again.
 if (history.state && (history.state.overlay || history.state.drawer || history.state.prompts)) history.replaceState(null, '');
 
+// ── Voice (2026-11-13, the webui-voice plan) ──────────────────────────
+// 🎤 works like the PC's key: one tap listens until the PC's Silero hears you stop, or a second tap sends what was said; Cancel (or Esc on a
+// desktop, once nothing else takes it) drops it. The microphone is asked for only on a tap and held only while listening, in a context of
+// its own made in the tap. Its 16 kHz frames go up in order, one post in flight, a failed one sent again with the same seq; the app says
+// when it stops listening (a `voice` event, or the chunk's answer). What was heard goes where STT destination says: sent as a message
+// (never a command), or put on this page's box. Hidden while the state's voiceListen is null, dimmed with its sentence while it is
+// non-empty, live at "". A hidden page's microphone is cut by the phone, so hiding ends a listen.
+
+const micBtn = document.getElementById('mic');
+const listenCancelBtn = document.getElementById('listen-cancel');
+const voiceLiveEl = document.getElementById('voice-live');
+const ChunkRetryMs = 250;
+const ChunkGiveUpMs = 3000;   // the app's stall rule: past it, it transcribes what came
+let listen = null;   // { id, ctx, stream, nodes, frames, seq, posting, phase, started, done, captureStopped, finishWanted, failingSince, flush }
+let wakeLock = null;
+let wakeAsking = false;
+
+// 🔊 (the speaking half): read where the page keeps it, off when nothing is stored; this run's own choice when storage throws. Never
+// turned on by 🎤 or ➤.
+let speakMemory = false;
+function speakOn() {
+  try {
+    const v = localStorage.getItem('neon.chat.speak');
+    return v === null ? speakMemory : v === '1';
+  } catch { return speakMemory; }
+}
+
+function voiceListenState() { return state ? state.voiceListen : null; }
+
+function paintVoice() {
+  const why = voiceListenState();
+  micBtn.classList.toggle('hidden', (why === null || why === undefined) && !listen);
+  const dim = !listen && (!window.isSecureContext || !!why);
+  if (dim) micBtn.setAttribute('aria-disabled', 'true'); else micBtn.removeAttribute('aria-disabled');
+  micBtn.classList.toggle('mic-dim', dim);
+  const phase = listen ? listen.phase : null;
+  micBtn.classList.toggle('listening', phase === 'listening');
+  micBtn.classList.toggle('transcribing', phase === 'transcribing');
+  micBtn.setAttribute('aria-pressed', phase ? 'true' : 'false');
+  const label = phase === 'listening' ? words.voiceListening || 'Listening… tap to send'
+    : phase === 'transcribing' ? words.voiceTranscribing || 'Transcribing…'
+    : words.voiceMic || 'Speak a message';
+  micBtn.title = label;
+  micBtn.setAttribute('aria-label', label);
+  listenCancelBtn.title = words.voiceCancel || 'Cancel the listen';
+  listenCancelBtn.setAttribute('aria-label', listenCancelBtn.title);
+  // Cancel takes ➤'s place while listening, so the row never holds more than four buttons.
+  listenCancelBtn.classList.toggle('hidden', phase !== 'listening');
+  sendBtn.classList.toggle('hidden', phase === 'listening');
+  voiceLiveEl.textContent = phase ? label : '';
+  paintSpeak();
+}
+
+function setAudioSession(type) {
+  try { if (navigator.audioSession) navigator.audioSession.type = type; } catch { /* not this browser */ }
+}
+
+// The screen stays on while a listen runs (an iPhone locks after 30 s), while a line sent with 🔊 on waits for its reply, while audio is
+// owed, and through a botchat with 🔊 on (no clip is owed between bots); asked again when the page shows if still wanted.
+function wakeWanted() {
+  if (listen || speechOwed()) return true;
+  if (!state || !speakOn() || typeof state.voiceSpeak !== 'string') return false;
+  return (!!sentSpoken && !!state.busy) || !!state.botChat;
+}
+
+async function holdWake() {
+  if (wakeLock || wakeAsking || !wakeWanted() || !window.isSecureContext || !('wakeLock' in navigator)) return;
+  wakeAsking = true;
+  try {
+    const lock = await navigator.wakeLock.request('screen');
+    if (!wakeWanted()) { lock.release().catch(() => {}); return; }
+    wakeLock = lock;
+    lock.addEventListener('release', () => { if (wakeLock === lock) wakeLock = null; });
+  } catch { /* refused, or the page hid */ } finally { wakeAsking = false; }
+}
+
+function releaseWake() {
+  if (wakeWanted()) return;
+  const lock = wakeLock;
+  wakeLock = null;
+  if (lock) lock.release().catch(() => {});
+}
+
+function base64(buffer) {
+  const u = new Uint8Array(buffer);
+  let s = '';
+  for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+
+micBtn.addEventListener('click', () => {
+  if (listen) {
+    if (listen.phase === 'listening') finishListen(listen);
+    return;
+  }
+  if (!window.isSecureContext) { say(words.voiceNeedsHttps || 'The microphone needs the HTTPS address.'); return; }
+  const why = voiceListenState();
+  if (why) { say(why); return; }
+  startListen();
+});
+listenCancelBtn.addEventListener('click', () => cancelListen());
+
+// A tap: the context made in the gesture, before any await, then the microphone, then the app's listen. The graph runs from the moment the
+// microphone opens, so the first words aren't lost while the start is in flight; its frames wait here until the app answers.
+async function startListen() {
+  let ctx;
+  try {
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+  } catch {
+    say(words.voiceFailed || 'The listen did not work.');
+    return;
+  }
+  const l = { id: Neon.id(), ctx, stream: null, nodes: [], frames: [], seq: 0, posting: false, phase: 'listening', started: false, done: false,
+    captureStopped: false, finishWanted: false, failingSince: 0, flush: null };
+  endSpeech();   // tapping 🎤 while speaking stops the playback first (the app stops that voice at the start)
+  if (speakOn()) unlockPlayback();   // in the gesture: a reply to what's heard plays from here
+  listen = l;
+  say('');
+  paintVoice();
+  try { ctx.resume(); } catch { /* resumed by the graph */ }
+  setAudioSession('play-and-record');
+  holdWake();
+  try {
+    l.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 } });
+    if (l.done) { stopCapture(l); return; }
+    await wireGraph(l);
+  } catch {
+    if (!l.done) { endLocal(l); say(words.voiceMicRefused || 'The browser did not allow the microphone.'); }
+    return;
+  }
+  if (l.done) return;
+  const r = await post('/api/voice/start', { page: chatPage, listen: l.id, speak: speakOn() });
+  if (l.done) {
+    if (r.ok) post('/api/voice/end', { page: chatPage, listen: l.id, how: 'cancel' });   // cancelled while the start was in flight
+    return;
+  }
+  if (!r.ok) {
+    endLocal(l);
+    say(r.message || words.voiceFailed || 'The listen did not work.');
+    return;
+  }
+  l.started = true;
+  if (r.json && r.json.listen) applyListenState(l, r.json.listen);
+  if (l.finishWanted) { finishListen(l); return; }
+  pumpChunks(l);
+}
+
+// source → two ~7 kHz low-passes (above 16 kHz only) → the worklet (or the ScriptProcessor fallback) → a silent gain, which keeps the graph
+// pulled on every engine. The node mixes down to one channel itself.
+async function wireGraph(l) {
+  const ctx = l.ctx;
+  const src = ctx.createMediaStreamSource(l.stream);
+  l.nodes.push(src);
+  let head = src;
+  if (ctx.sampleRate > 16000) {
+    for (let i = 0; i < 2; i++) {
+      const f = ctx.createBiquadFilter();
+      f.type = 'lowpass';
+      f.frequency.value = 7000;
+      f.Q.value = 0.707;
+      head.connect(f);
+      head = f;
+      l.nodes.push(f);
+    }
+  }
+  const take = buffer => {
+    if (l.done || l.captureStopped) return;
+    l.frames.push(buffer);
+    pumpChunks(l);
+  };
+  let node = null;
+  if (ctx.audioWorklet && window.AudioWorkletNode) {
+    try {
+      await ctx.audioWorklet.addModule('/voice-worklet.js');
+      node = new AudioWorkletNode(ctx, 'neon-voice', { numberOfInputs: 1, numberOfOutputs: 1, channelCount: 1, channelCountMode: 'explicit', channelInterpretation: 'speakers' });
+      node.port.onmessage = ev => take(ev.data);
+      l.flush = () => node.port.postMessage('flush');
+    } catch {
+      node = null;
+    }
+  }
+  if (!node) {
+    const resampler = new NeonResampler(ctx.sampleRate, take);
+    node = ctx.createScriptProcessor(4096, 1, 1);
+    node.onaudioprocess = ev => resampler.push(ev.inputBuffer.getChannelData(0));
+    l.flush = () => resampler.flush();
+  }
+  const mute = ctx.createGain();
+  mute.gain.value = 0;
+  head.connect(node);
+  node.connect(mute);
+  mute.connect(ctx.destination);
+  l.nodes.push(node, mute);
+}
+
+// The frames up, in order, one post in flight. An earlier seq the app already has answers ok; a failure is sent again with the same seq after
+// the 429's Retry-After or 250 ms. Past 3 s of failures the capture stops and the app's stall rule transcribes what came.
+async function pumpChunks(l) {
+  if (!l.started || l.posting || l.done) return;
+  l.posting = true;
+  try {
+    while (l.frames.length && !l.done) {
+      const r = await post('/api/voice/chunk', { page: chatPage, listen: l.id, seq: l.seq, pcm: base64(l.frames[0]) });
+      if (l.done) return;
+      if (r.ok) {
+        l.frames.shift();
+        l.seq++;
+        l.failingSince = 0;
+        if (r.json && r.json.listen) applyListenState(l, r.json.listen);
+        continue;
+      }
+      if (r.status === 409 || r.status === 422) {
+        // The listen is gone at the app (ended, or this page's run replaced), or the chunk was refused: the event says how it ended.
+        if (r.json && r.json.listen) applyListenState(l, r.json.listen); else endLocal(l);
+        return;
+      }
+      const now = Date.now();
+      if (!l.failingSince) l.failingSince = now;
+      if (now - l.failingSince > ChunkGiveUpMs) {
+        l.phase = 'transcribing';
+        stopCapture(l);
+        l.frames.length = 0;
+        paintVoice();
+        return;
+      }
+      await new Promise(resolve => setTimeout(resolve, r.retryAfter ? r.retryAfter * 1000 : ChunkRetryMs));
+    }
+  } finally {
+    l.posting = false;
+  }
+}
+
+// The app's word on the listen (a chunk's or the end's answer): transcribing stops the capture; an end that isn't a phase of its own ends it here.
+function applyListenState(l, phase) {
+  if (l.done || !phase || phase === 'listening') return;
+  if (phase === 'transcribing') {
+    if (l.phase !== 'transcribing') {
+      l.phase = 'transcribing';
+      stopCapture(l, true);
+      paintVoice();
+    }
+    return;
+  }
+  if (phase === 'ended') endLocal(l);
+  // nothing, failed, heard, sent, canceled: the `voice` event says it and ends it
+}
+
+// The second tap: what's left of the capture goes up, then the app is told to transcribe it.
+async function finishListen(l) {
+  if (l.done || l.phase !== 'listening') return;
+  if (!l.started) { l.finishWanted = true; return; }
+  l.phase = 'transcribing';
+  paintVoice();
+  await stopCapture(l, true);
+  const until = Date.now() + 2000;
+  while (!l.done && (l.frames.length || l.posting) && Date.now() < until) {
+    pumpChunks(l);
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+  if (l.done) return;
+  const r = await post('/api/voice/end', { page: chatPage, listen: l.id, how: 'finish', speak: speakOn() });
+  if (r.json && r.json.listen) applyListenState(l, r.json.listen);
+}
+
+function cancelListen(keepalive) {
+  const l = listen;
+  if (!l) return;
+  const started = l.started;
+  endLocal(l);
+  if (started) post('/api/voice/end', { page: chatPage, listen: l.id, how: 'cancel' }, { keepalive: !!keepalive });
+}
+
+// The microphone off: flushed first when what's left still goes up, then the tracks stopped (the phone's indicator goes out) and the
+// listen's context closed.
+async function stopCapture(l, flush) {
+  if (l.captureStopped) return;
+  if (flush && l.flush) {
+    try { l.flush(); } catch { /* gone */ }
+    await new Promise(resolve => setTimeout(resolve, 60));   // the worklet's last frame comes back over its port
+  }
+  l.captureStopped = true;
+  for (const n of l.nodes) { try { n.disconnect(); } catch { /* not connected */ } }
+  l.nodes.length = 0;
+  if (l.stream) for (const t of l.stream.getTracks()) { try { t.stop(); } catch { /* stopped */ } }
+  try { l.ctx.close(); } catch { /* closed */ }
+  setAudioSession('playback');
+}
+
+function endLocal(l) {
+  if (l.done) return;
+  l.done = true;
+  l.frames.length = 0;
+  stopCapture(l);
+  if (listen === l) listen = null;
+  scheduleSpeech();   // a reply that began mid-listen plays now, from its first clip
+  releaseWake();
+  paintVoice();
+}
+
+// A listen's phases and its end, for this page alone.
+function onVoice(v) {
+  const l = listen;
+  const mine = l && v.listen === l.id;
+  if (mine) {
+    if (v.phase === 'listening') return;
+    if (v.phase === 'transcribing') { applyListenState(l, 'transcribing'); return; }
+    endLocal(l);
+  }
+  switch (v.phase) {
+    case 'nothing': say(words.voiceHeardNothing || 'Heard nothing.'); break;
+    case 'failed': say(v.detail || words.voiceFailed || 'The listen did not work.'); break;
+    case 'heard': heardText(v.text, v.detail); break;
+    case 'sent': say(''); break;
+    default: break;
+  }
+}
+
+// Heard text for the box (STT destination draft, or a send the app refused): ahead of what's there, with the refusal's word when there is one.
+function heardText(text, detail) {
+  if (!text) return;
+  takeDraft(text);
+  if (detail) say(detail);
+}
+
+// Esc on a desktop cancels a listen once none of Esc's other uses applies (the overlay, the sheet, the drawer, the usage card, the list).
+document.addEventListener('keydown', ev => {
+  if (ev.key !== 'Escape' || ev.defaultPrevented || !listen || listen.phase !== 'listening') return;
+  if (shown || promptsOpen || drawerOpen || !usageCard.classList.contains('hidden') || completion) return;
+  ev.preventDefault();
+  cancelListen();
+});
+
+// Hidden, the phone cuts the microphone: the listen ends. Shown again, the wake lock is asked for again if still wanted.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) cancelListen(true);
+  else {
+    holdWake();
+    if (playCtx && playCtx.state !== 'running' && playCtx.state !== 'closed') playCtx.resume().catch(() => {});
+  }
+});
+// Going: a listen ends, and audio still owed is told gone, so the app stops synthesizing into nothing.
+window.addEventListener('pagehide', () => {
+  cancelListen(true);
+  if (speechOwed()) speechGone(true); else endSpeech();
+});
+// Back from the back-forward cache: a new run, so the app's reload rule applies, and a fresh stream.
+window.addEventListener('pageshow', ev => {
+  if (!ev.persisted) return;
+  chatLoad = Neon.id();
+  reconnect();
+});
+
+// ── Spoken replies (2026-11-13, the webui-voice plan) ─────────────────
+// 🔊 asks for replies to this page's messages spoken here: off until a tap, kept in localStorage, told to the app. The app cuts a reply's
+// voice into clips and announces each (`voice-clip`); the page fetches them one at a time, plays them back to back through a playback
+// context of its own (never the listen's, so a listen can't move it to the earpiece) and reports how far it got about 4 times a second.
+// It stops for `voice-stop`, 🔊 off, ■, a 🎤 tap, a newer turn's first clip and the page going; a reply that begins mid-listen waits for
+// the listen's end and plays from its start.
+
+const speakBtn = document.getElementById('speak');
+const SpeakKey = 'neon.chat.speak';
+const ClipRate = 24000;
+const ClipRetryMs = 250;
+const ProgressMs = 250;
+let playCtx = null;
+let speech = null;   // { turn, made, next, fetching, abort, queue, sources, nextStart, timer, reporting, waiting, failedTimer }
+let sentSpoken = 0;  // when a line went with 🔊 on: the screen stays on while its reply comes
+
+function voiceSpeakState() { return state ? state.voiceSpeak : null; }
+
+function paintSpeak() {
+  const why = voiceSpeakState();
+  const offered = typeof why === 'string';
+  speakBtn.classList.toggle('hidden', !offered);
+  const on = speakOn();
+  const dim = offered && !!why && !on;
+  if (dim) speakBtn.setAttribute('aria-disabled', 'true'); else speakBtn.removeAttribute('aria-disabled');
+  speakBtn.classList.toggle('speak-dim', dim);
+  speakBtn.classList.toggle('on', on);
+  speakBtn.textContent = on ? '🔊' : '🔈';
+  speakBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  const label = on ? words.voiceSpeakOn || 'Replies spoken here: tap to stop' : words.voiceSpeakOff || 'Speak replies here';
+  speakBtn.title = dim ? why : label;
+  speakBtn.setAttribute('aria-label', label);
+}
+
+function setSpeak(on) {
+  try { localStorage.setItem(SpeakKey, on ? '1' : '0'); } catch { /* private mode: this run alone */ }
+  speakMemory = on;
+  post('/api/voice/speak', { page: chatPage, on: on });
+  if (!on) endSpeech();
+  paintSpeak();
+  holdWake();
+  releaseWake();
+}
+
+speakBtn.addEventListener('click', () => {
+  if (speakOn()) { setSpeak(false); return; }
+  const why = voiceSpeakState();
+  if (why) { say(why); return; }
+  unlockPlayback();   // in the gesture, before any await
+  setSpeak(true);
+});
+
+// The playback context: made or resumed inside a gesture (a 🔊 tap, a send with 🔊 on), the Video tab's lesson; a silent buffer played
+// once wakes iOS's. Its stopping while audio is owed (iOS interrupts a hidden page's) tells the app this page can play no more.
+function unlockPlayback() {
+  try {
+    if (!playCtx || playCtx.state === 'closed') {
+      playCtx = new (window.AudioContext || window.webkitAudioContext)();
+      playCtx.addEventListener('statechange', onPlayState);
+      const silent = playCtx.createBuffer(1, 1, ClipRate);
+      const src = playCtx.createBufferSource();
+      src.buffer = silent;
+      src.connect(playCtx.destination);
+      src.start(0);
+    }
+    if (playCtx.state !== 'running') playCtx.resume().catch(() => {});
+  } catch { /* no Web Audio: replies stay silent here */ }
+  setAudioSession('playback');
+}
+
+let playStateTimer = 0;
+function onPlayState() {
+  clearTimeout(playStateTimer);
+  if (!playCtx || playCtx.state === 'running') { scheduleSpeech(); return; }
+  // A moment's grace: a resume after a blip, or the page showing again.
+  playStateTimer = setTimeout(() => {
+    if (playCtx && playCtx.state !== 'running' && speechOwed()) speechGone(false);
+  }, 1500);
+}
+
+// Whether this page still owes audio: clips announced and not yet played out.
+function speechOwed() {
+  if (!speech) return false;
+  if (speech.next < speech.made || speech.queue.length) return true;
+  return !!playCtx && speech.sources.some(s => s.start + s.dur > playCtx.currentTime);
+}
+
+function newSpeech(turn) {
+  endSpeech();
+  speech = { turn, made: 0, next: 0, fetching: false, abort: null, queue: [], sources: [], nextStart: 0, timer: 0, reporting: false,
+    waiting: null, lastSent: null };
+  return speech;
+}
+
+// The voice stopped here: its sources silenced, its fetch dropped, its reports ended. Nothing is told to the app (the callers do that).
+function endSpeech() {
+  const s = speech;
+  if (!s) return;
+  speech = null;
+  if (s.abort) { try { s.abort.abort(); } catch { /* done */ } }
+  for (const src of s.sources) { try { src.node.stop(); } catch { /* ended */ } }
+  s.sources.length = 0;
+  s.queue.length = 0;
+  clearInterval(s.timer);
+  drawStop();
+  releaseWake();
+}
+
+// A clip announced for this page: a newer turn stops the older one's sources first (the app's one-speaker rule).
+function onClip(c) {
+  if (!c || !Neon.idShape.test(c.turn || '')) return;
+  if (!speakOn()) return;
+  let s = speech;
+  if (!s || s.turn !== c.turn) s = newSpeech(c.turn);
+  s.made = Math.max(s.made, c.n + 1);
+  pumpClips(s);
+  startReports(s);
+  drawStop();
+  holdWake();
+}
+
+function onSpeechStop(v) {
+  if (speech && v && v.turn === speech.turn) endSpeech();
+}
+
+// One clip fetch at a time; a failed one tried again for the same clip (after Retry-After, or 250 ms), a 404 skipped (a stop dropped it).
+async function pumpClips(s) {
+  if (s.fetching || speech !== s) return;
+  s.fetching = true;
+  try {
+    while (speech === s && s.next < s.made) {
+      const n = s.next;
+      s.abort = new AbortController();
+      const path = '/api/voice/clip?page=' + encodeURIComponent(chatPage) + '&turn=' + encodeURIComponent(s.turn) + '&n=' + n;
+      const r = await Neon.bytes(path, s.abort.signal);
+      if (speech !== s) return;
+      if (r.ok) {
+        s.queue.push({ n, buffer: toBuffer(r.buffer) });
+        s.next = n + 1;
+        scheduleSpeech();
+        continue;
+      }
+      if (r.aborted) return;
+      if (r.status === 404) { s.next = n + 1; continue; }
+      await new Promise(resolve => setTimeout(resolve, r.retryAfter ? r.retryAfter * 1000 : ClipRetryMs));
+    }
+  } finally {
+    s.fetching = false;
+    s.abort = null;
+  }
+}
+
+// Kokoro's 24 kHz 16-bit mono as samples for a buffer of that rate (no decodeAudioData: the format is known).
+function toBuffer(bytes) {
+  const pcm = new Int16Array(bytes, 0, bytes.byteLength >> 1);
+  const f = new Float32Array(pcm.length);
+  for (let i = 0; i < pcm.length; i++) f[i] = pcm[i] / 32768;
+  return f;
+}
+
+// The fetched clips scheduled back to back, unless a listen runs (they wait for its end) or the context isn't running yet.
+function scheduleSpeech() {
+  const s = speech;
+  if (!s || listen || !s.queue.length) return;
+  if (!playCtx || playCtx.state === 'closed') unlockPlayback();
+  if (!playCtx) return;
+  if (playCtx.state !== 'running') { playCtx.resume().catch(() => {}); return; }
+  while (s.queue.length) {
+    const { n, buffer } = s.queue.shift();
+    const audio = playCtx.createBuffer(1, Math.max(1, buffer.length), ClipRate);
+    audio.copyToChannel(buffer, 0);
+    const node = playCtx.createBufferSource();
+    node.buffer = audio;
+    node.connect(playCtx.destination);
+    const start = Math.max(playCtx.currentTime + 0.05, s.nextStart);
+    node.start(start);
+    const entry = { n, start, dur: audio.duration, samples: buffer.length, node };
+    node.onended = () => { report(s); drawStop(); releaseWake(); };
+    s.sources.push(entry);
+    s.nextStart = start + audio.duration;
+  }
+  startReports(s);
+}
+
+function startReports(s) {
+  if (s.timer) return;
+  s.timer = setInterval(() => report(s), ProgressMs);
+}
+
+// How far it got: the clip playing now and its place in samples; past the last scheduled clip, that clip's end. One post in flight, a
+// newer report replacing a waiting one; the reports stop once nothing more is owed.
+function report(s) {
+  if (speech !== s || !playCtx || !s.sources.length) return;
+  const now = playCtx.currentTime;
+  let at = null;
+  for (const src of s.sources) {
+    if (now < src.start) break;
+    at = { clip: src.n, offset: Math.min(src.samples, Math.floor((now - src.start) * ClipRate)) };
+  }
+  if (!at) return;
+  const key = at.clip + ':' + at.offset;
+  if (key === s.lastSent) {
+    if (!speechOwed()) { clearInterval(s.timer); s.timer = 0; }
+    return;
+  }
+  // Played clips are let go (the app drops them too once a report passes them).
+  while (s.sources.length > 1 && s.sources[1].start <= now) s.sources.shift();
+  s.waiting = at;
+  sendReport(s);
+}
+
+async function sendReport(s) {
+  if (s.reporting || !s.waiting) return;
+  s.reporting = true;
+  try {
+    while (s.waiting && speech === s) {
+      const at = s.waiting;
+      s.waiting = null;
+      const r = await post('/api/voice/played', { page: chatPage, turn: s.turn, clip: at.clip, offset: at.offset });
+      if (r.ok) s.lastSent = at.clip + ':' + at.offset;
+    }
+  } finally {
+    s.reporting = false;
+  }
+}
+
+// ■ on a tail (the reply done, audio still owed): the app stops that voice alone and 🔊 stays on.
+function stopTail() {
+  const s = speech;
+  if (!s) return;
+  post('/api/voice/played', { page: chatPage, turn: s.turn, clip: 0, offset: 0, stop: true });
+  endSpeech();
+}
+
+// This page can play no more (it's going, or its context stopped): the app counts the voice heard and stops it.
+function speechGone(keepalive) {
+  const s = speech;
+  if (!s) return;
+  post('/api/voice/played', { page: chatPage, turn: s.turn, clip: 0, offset: 0, gone: true }, { keepalive: !!keepalive });
+  endSpeech();
+}
+
+// ■ shows while the PC is busy or this page still owes audio.
+function drawStop() {
+  stopBtn.classList.toggle('hidden', !(state && state.busy) && !speechOwed());
+}
+
+// A snapshot (a reconnect): the voice it names is fetched from where this page got to; none named, any left here ended at the app.
+function adoptSpeaking(sp) {
+  if (!sp || !speakOn()) { if (speech && !speechOwed()) endSpeech(); return; }
+  let s = speech;
+  if (!s || s.turn !== sp.turn) s = newSpeech(sp.turn);
+  s.made = Math.max(s.made, sp.clips || 0);
+  pumpClips(s);
+  startReports(s);
+  drawStop();
+  holdWake();
+}
+
 // ── The stream ────────────────────────────────────────────────────────
 
 function connect() {
-  source = new EventSource('/api/events');
+  source = new EventSource('/api/events?page=' + encodeURIComponent(chatPage) + '&load=' + encodeURIComponent(chatLoad));
   source.onopen = () => Neon.connected(true);
   source.onerror = () => {
     Neon.connected(false);
@@ -2165,6 +2796,14 @@ function connect() {
   source.addEventListener('snapshot', ev => {
     const s = JSON.parse(ev.data);
     if (staleAssets(s.state.assets)) return;   // before drawing it
+    // A duplicated tab's fresh id (2026-11-13): kept from now on, this stream already under it.
+    // The stream is reopened on it, so the browser's own reconnect never brings the old id back as a duplicate again.
+    if (s.page && Neon.idShape.test(s.page) && s.page !== chatPage) {
+      chatPage = s.page;
+      try { sessionStorage.setItem(ChatPageKey, chatPage); } catch { /* private mode */ }
+      reconnect();
+      return;
+    }
     if (s.words) words = s.words;
     applyWords();
     applyState(s.state);
@@ -2175,6 +2814,9 @@ function connect() {
     fitSplash();
     renderAsks(s.asks);
     for (const text of s.drafts || []) takeDraft(text);
+    if (s.heard) heardText(s.heard.text, s.heard.message);   // heard while the stream was down (2026-11-13)
+    if (typeof s.state.voiceSpeak === 'string' && speakOn()) post('/api/voice/speak', { page: chatPage, on: true });   // this page's 🔊
+    adoptSpeaking(s.speaking);   // the clips made while the stream was down
     applyStrip(s.strip);
     // The PC's point: a fresh page takes its sequence without moving; a reconnect follows one newer than it had (the strip's view survives it).
     if (lastPointSeq === null) lastPointSeq = s.point ? s.point.seq : 0; else applyPoint(s.point);
@@ -2203,6 +2845,9 @@ function connect() {
   source.addEventListener('draft', ev => takeDraft(JSON.parse(ev.data).text));
   source.addEventListener('withdrawn', ev => putBack(JSON.parse(ev.data).text));
   source.addEventListener('dropped', ev => putBack(JSON.parse(ev.data).text));
+  source.addEventListener('voice', ev => onVoice(JSON.parse(ev.data)));   // this page's listen (2026-11-13)
+  source.addEventListener('voice-clip', ev => onClip(JSON.parse(ev.data)));   // this page's spoken reply
+  source.addEventListener('voice-stop', ev => onSpeechStop(JSON.parse(ev.data)));
 }
 
 function reconnect() {
@@ -2216,11 +2861,13 @@ grow();
 // Never jump to the Video tab mid-typing or over a question (2026-10-16): a draft with text, an ask card open, the 📣 sheet open (its filter
 // or a two-tap delete half done); the banner instead.
 Neon.watchBlocked = () => !!draft.value.trim() || asks.length > 0 || !promptsEl.classList.contains('hidden')
-  || (document.activeElement && document.activeElement.tagName === 'INPUT');
+  || (document.activeElement && document.activeElement.tagName === 'INPUT')
+  || !!listen || speechOwed();   // listening, or audio still owed (2026-11-13)
 draft.addEventListener('input', () => { saveDraft(); grow(); });
 draft.addEventListener('keydown', ev => {
   if (ev.key === 'Enter' && desktop && !ev.shiftKey && !ev.isComposing && !completion) {
     ev.preventDefault();
+    if (listen && listen.phase === 'listening') return;   // a listen is sent by the second 🎤 tap; the box keeps its text
     send(false);
   }
 });

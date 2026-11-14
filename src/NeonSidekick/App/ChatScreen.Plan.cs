@@ -1257,6 +1257,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task<bool> StartGapsAsync(PlanReviewer reviewer, int? passes, CancellationToken cancellationToken)
     {
+        _sentFromWebPage = null;   // its passes are PC turns for speech, whoever started it (2026-11-13, the webui-voice plan)
         if (_plan.Path is not { } path)
         {
             _transcript.Error(PlanText.NothingPresentedError);

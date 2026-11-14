@@ -16,7 +16,89 @@ public sealed class WebSendRequest
     public string? Text { get; set; }
 
     public bool AsText { get; set; }
+
+    /// <summary>The sending page's id (2026-11-13, the webui-voice plan): its reply speaks there while <see cref="Speak"/> is on. Null from an old page.</summary>
+    public string? Page { get; set; }
+
+    /// <summary>The page's 🔊 as it has it (2026-11-13). Missing counts as off.</summary>
+    public bool? Speak { get; set; }
 }
+
+/// <summary>A page's 🎤 tapped (2026-11-13): its page id, the listen's own id and its 🔊.</summary>
+public sealed class WebVoiceStart
+{
+    public string? Page { get; set; }
+
+    public string? Listen { get; set; }
+
+    public bool? Speak { get; set; }
+}
+
+/// <summary>A quarter second of a listen's audio (2026-11-13): 16 kHz mono 16-bit PCM in base64, numbered from 0.</summary>
+public sealed class WebVoiceChunk
+{
+    public string? Page { get; set; }
+
+    public string? Listen { get; set; }
+
+    public long Seq { get; set; }
+
+    public string? Pcm { get; set; }
+}
+
+/// <summary>A listen ended by the page (2026-11-13): <c>finish</c> transcribes what came, <c>cancel</c> discards it.</summary>
+public sealed class WebVoiceEnd
+{
+    public string? Page { get; set; }
+
+    public string? Listen { get; set; }
+
+    public string? How { get; set; }
+
+    public bool? Speak { get; set; }
+}
+
+/// <summary>A page's 🔊 tapped (2026-11-13).</summary>
+public sealed class WebVoiceSpeak
+{
+    public string? Page { get; set; }
+
+    public bool On { get; set; }
+}
+
+/// <summary>
+/// A page's playback progress (2026-11-13): <see cref="Offset"/> samples of clip <see cref="Clip"/> of speaker <see cref="Turn"/> played;
+/// <see cref="Stop"/> asks the voice stopped (■ on a tail), <see cref="Gone"/> says the page can play no more.
+/// </summary>
+public sealed class WebVoicePlayed
+{
+    public string? Page { get; set; }
+
+    public string? Turn { get; set; }
+
+    public long Clip { get; set; }
+
+    public long Offset { get; set; }
+
+    public bool? Stop { get; set; }
+
+    public bool? Gone { get; set; }
+}
+
+/// <summary>A listen's phase for its page (2026-11-13, the <c>voice</c> event): listening, transcribing, nothing, failed (with why), heard (with the text, for the box).</summary>
+public sealed record WebVoicePhase(string Listen, string Phase, string? Text = null, string? Detail = null);
+
+/// <summary>A clip made for a page's speaker (2026-11-13, the <c>voice-clip</c> event): the speaker's turn id, the clip's number, its length.</summary>
+public sealed record WebVoiceClip(string Turn, long N, long Bytes);
+
+/// <summary>A page's speaker stopped (2026-11-13, the <c>voice-stop</c> event): that turn's sources stop, a newer turn's play on.</summary>
+public sealed record WebVoiceStopped(string Turn);
+
+/// <summary>Heard text for the box that found no stream (2026-11-13): delivered in the page's next snapshot, with the refusal's word when a queue refused it.</summary>
+public sealed record WebHeard(string Text, string? Message = null);
+
+/// <summary>A page's speaker as its snapshot carries it (2026-11-13): its turn and the clips made, so a page back from a blip fetches what it missed.</summary>
+public sealed record WebSpeaking(string Turn, long Clips);
 
 /// <summary>An answer to an open ask: the choice's id, the typed text of a text choice, or one answer per question (<c>ask_user</c>).</summary>
 public sealed class WebAnswerRequest
@@ -96,6 +178,9 @@ public sealed class WebCheckRequest
 /// </summary>
 public sealed record WebResult(bool Ok, string? Message = null, bool AsText = false, string? Use = null)
 {
+    /// <summary>A voice chunk's answer (2026-11-13): the listen's state, <c>listening</c> or the phase it ended in, so a page whose stream blipped still learns it.</summary>
+    public string? Listen { get; init; }
+
     /// <summary>A Home tap that asks first (2026-10-15): the page asks <see cref="Prompt"/>, then posts again confirmed.</summary>
     public bool? NeedsConfirm { get; init; }
 
@@ -412,7 +497,9 @@ public sealed record WebAskView(
 /// (<see cref="WebUiAssets.Tag"/>: a page whose tag differs reloads itself). The tabs on; and (2026-10-16) the banner's words while a video
 /// waits for a Video tab (<see cref="Watch"/>: the flag and the text in one, null for none). <see cref="UserLine"/> (2026-10-21, the
 /// user's call: the page draws the user's lines as the terminal does) is <i>User line style</i>, resolved; empty reads as <c>bold</c>.
-/// <see cref="BotChat"/> (2026-11-12): a botchat's ladder stands, so the status row offers ⏭️.
+/// <see cref="BotChat"/> (2026-11-12): a botchat's ladder stands, so the status row offers ⏭️. <see cref="VoiceListen"/> and <see cref="VoiceSpeak"/>
+/// (2026-11-13, the webui-voice plan): 🎤's and 🔊's flag and words in one, as <see cref="Watch"/> is: null hides the button, <c>""</c> is ready, a
+/// sentence dims it and says why.
 /// </summary>
 public sealed record WebState(
     string Profile,
@@ -435,13 +522,17 @@ public sealed record WebState(
     string? Watch = null,
     string? QueueHeld = null,
     string UserLine = "",
-    bool BotChat = false);
+    bool BotChat = false,
+    string? VoiceListen = null,
+    string? VoiceSpeak = null);
 
 /// <summary>
 /// What a page gets on (re)connecting: the transcript, the open asks, the state, the app's words the page shows of its own, the drafts held for
-/// it, and the status row (2026-10-15).
+/// it, and the status row (2026-10-15). For one page's stream (2026-11-13, the webui-voice plan): <see cref="Page"/>, the id it is to use from now on
+/// (a duplicated tab's fresh one), heard text held for its box, and its speaker's clips so far.
 /// </summary>
-public sealed record WebSnapshot(IReadOnlyList<WebEntry> Entries, IReadOnlyList<WebAskView> Asks, WebState State, WebWords? Words = null, IReadOnlyList<string>? Drafts = null, WebStatus? Status = null, WebStrip? Strip = null, WebPoint? Point = null);
+public sealed record WebSnapshot(IReadOnlyList<WebEntry> Entries, IReadOnlyList<WebAskView> Asks, WebState State, WebWords? Words = null, IReadOnlyList<string>? Drafts = null, WebStatus? Status = null, WebStrip? Strip = null, WebPoint? Point = null,
+    string? Page = null, WebHeard? Heard = null, WebSpeaking? Speaking = null);
 
 /// <summary>
 /// The PC's picture strip as the page's drawer shows it (later on 2026-10-15): its ComfyUI pictures newest first and the one the PC has
@@ -496,7 +587,9 @@ public sealed record WebWords(string PictureGone, string PictureTooLarge, string
     string BotCheckStalled = "",
     string LearnCancel = "", string LearnCancelArmed = "", string Resume = "",
     string MemoryEdit = "", string MemoryEditSave = "", string MemoryEditCancel = "", string MemoryTurnOff = "", string MemoryTurnOn = "",
-    string Skip = "");
+    string Skip = "",
+    string VoiceMic = "", string VoiceListening = "", string VoiceTranscribing = "", string VoiceCancel = "", string VoiceSpeakOn = "", string VoiceSpeakOff = "",
+    string VoiceHeardNothing = "", string VoiceNeedsHttps = "", string VoiceMicRefused = "", string VoiceFailed = "");
 
 /// <summary>
 /// The page's saved prompts, the sheet's 📣 tab (later on 2026-10-15): the profile's prompts, numbered as at the PC. The title went on
@@ -914,4 +1007,14 @@ public sealed class WebVideoReport
 [JsonSerializable(typeof(WebVideoResume))]
 [JsonSerializable(typeof(WebVideoOwner))]
 [JsonSerializable(typeof(WebVideoReport))]
+[JsonSerializable(typeof(WebVoiceStart))]
+[JsonSerializable(typeof(WebVoiceChunk))]
+[JsonSerializable(typeof(WebVoiceEnd))]
+[JsonSerializable(typeof(WebVoiceSpeak))]
+[JsonSerializable(typeof(WebVoicePlayed))]
+[JsonSerializable(typeof(WebVoicePhase))]
+[JsonSerializable(typeof(WebVoiceClip))]
+[JsonSerializable(typeof(WebVoiceStopped))]
+[JsonSerializable(typeof(WebHeard))]
+[JsonSerializable(typeof(WebSpeaking))]
 public sealed partial class WebUiJsonContext : JsonSerializerContext;

@@ -107,6 +107,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task<bool> StartAuditAsync(AuditArguments parsed, IReadOnlyList<ImageAttachment> images, CancellationToken cancellationToken)
     {
+        _sentFromWebPage = null;   // its passes are PC turns for speech, whoever started it (2026-11-13, the webui-voice plan)
         var effective = _effective();
         if (AuditRefusal(effective) is { } refused)
         {
@@ -223,6 +224,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task<bool> ResumeAuditAsync(string? name, PlanReviewer? reviewer, int? passes, IReadOnlyList<ImageAttachment> images, CancellationToken cancellationToken, bool said = true)
     {
+        _sentFromWebPage = null;   // its passes are PC turns for speech, whoever started it (2026-11-13, the webui-voice plan)
         var effective = _effective();
         if (AuditRefusal(effective) is { } refused)
         {
@@ -340,6 +342,7 @@ internal sealed partial class ChatScreen
     /// <summary><c>/code-audit fix [name]</c>: plan mode on the report's open findings, its status fixing.</summary>
     private async Task<bool> FixAuditAsync(string? name, CancellationToken cancellationToken)
     {
+        _sentFromWebPage = null;   // its passes are PC turns for speech, whoever started it (2026-11-13, the webui-voice plan)
         if (_plan.Active)
         {
             _transcript.Error(AuditText.PlanningError);

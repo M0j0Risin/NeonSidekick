@@ -1187,7 +1187,7 @@ public sealed partial class WebUiTests : IDisposable
         Assert.Equal("must be a port from 1024 to 65535", App.SettingsMenu.WebUiPortRangeError);
         // Server, Guardrails, Tabs (2026-10-16, the user's ask); the Funnel row under Guardrails since 2026-11-13.
         Assert.Equal([App.SettingsField.WebUi, App.SettingsField.WebUiPort, App.SettingsField.WebUiReach, App.SettingsField.WebUiHttpsAddress, App.SettingsField.WebUiCommands, App.SettingsField.WebUiConnectionDetails,
-            App.SettingsField.WebUiBotCheckControl, App.SettingsField.WebUiVideoFilesOverFunnel, App.SettingsField.WebUiProfileTheme, App.SettingsField.WebUiChatControls, App.SettingsField.WebUiHomeControls, App.SettingsField.WebUiShoppingControls, App.SettingsField.WebUiYouTubeControls],
+            App.SettingsField.WebUiBotCheckControl, App.SettingsField.WebUiVideoFilesOverFunnel, App.SettingsField.WebUiProfileTheme, App.SettingsField.WebUiChatControls, App.SettingsField.WebUiVoice, App.SettingsField.WebUiHomeControls, App.SettingsField.WebUiShoppingControls, App.SettingsField.WebUiYouTubeControls],
             App.SettingsMenu.TabFields[(int)App.SettingsTab.WebUi]);
         // Web UI HTTPS address (2026-10-31): read when /webui opens, so neither a restart nor refused under a reply; typed, not a toggle.
         Assert.False(App.SettingsMenu.IsWebUiField(App.SettingsField.WebUiHttpsAddress));
@@ -1210,6 +1210,11 @@ public sealed partial class WebUiTests : IDisposable
         // Later on 2026-10-15, the user's calls: Chat on, Home and Shopping off.
         Assert.Equal((true, false, false), (new Settings.AppSettingsData().WebUiChatControls, new Settings.AppSettingsData().WebUiHomeControls, new Settings.AppSettingsData().WebUiShoppingControls));
         Assert.False(new Settings.AppSettingsData().WebUiYouTubeControls);   // 2026-10-16, the user's call: off, like Home and Shopping
+        // Web UI voice (2026-11-13, the webui-voice plan): off; a toggle refused under a reply (it loads or drops the voice models), never a server restart.
+        Assert.False(new Settings.AppSettingsData().WebUiVoice);
+        Assert.True(App.SettingsMenu.IsToggle(App.SettingsField.WebUiVoice));
+        Assert.True(App.SettingsMenu.RefusedMidTurn(App.SettingsField.WebUiVoice));
+        Assert.False(App.SettingsMenu.IsWebUiField(App.SettingsField.WebUiVoice));
         Assert.True(new Settings.AppSettingsData().WebUiBotCheckControl);    // 2026-10-17, the user's call: on
         Assert.Equal("Web UI", App.SettingsMenu.TabTitles[(int)App.SettingsTab.WebUi]);
         var defaults = new Settings.AppSettingsData();

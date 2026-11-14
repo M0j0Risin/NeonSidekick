@@ -3,6 +3,7 @@ using NeonSidekick.Diagnostics;
 using NeonSidekick.Llm;
 using NeonSidekick.Settings;
 using NeonSidekick.Speech;
+using NeonSidekick.WebUi;
 
 namespace NeonSidekick.App;
 
@@ -24,6 +25,13 @@ namespace NeonSidekick.App;
 /// <see cref="ArmWake"/> opens the microphone through a <see cref="WakeListener"/> while the input
 /// line waits, cancelling the given source (from the thread pool, never the capture thread) when
 /// the phrase is heard; <see cref="DisarmWake"/> closes it and hands back what was heard.</para>
+///
+/// <para><b>Two users of one pair of models (2026-11-13, the webui-voice plan).</b> Whisper and Silero load when <c>SttInput</c> is on or the
+/// Web UI wants voice (<see cref="WebVoiceMode.Wanted"/>); <see cref="Available"/> means only "the models are loaded", the PC's side is
+/// <see cref="MicrophoneFound"/>, and <see cref="IsReady"/> stays "the PC can push-to-talk". A Web UI page listens through
+/// <see cref="ListenOnAsync"/> over its own capture. The VAD and the recognizer are single instances, so every listen, the PC's or a
+/// page's, takes one lock without waiting (<see cref="Listening"/>), and a second is refused. A PC failure marks only the PC's side;
+/// a page's marks nothing.</para>
 /// </summary>
 internal sealed class VoiceSession : IDisposable
 {
@@ -38,9 +46,21 @@ internal sealed class VoiceSession : IDisposable
     /// <summary>The detail after a connect cancelled by the caller (Ctrl+C under the spinner, 2026-09-17): unavailable with this reason until the next connect, never "off" while enabled.</summary>
     public const string ConnectCancelledDetail = "canceled";
 
+    /// <summary>A listen refused because another runs, the PC's or a page's (2026-11-13): the detail <see cref="ListenAsync"/> and <see cref="ListenOnAsync"/> return. Pinned.</summary>
+    public const string BusyDetail = "another listen is running";
+
+    /// <summary>A page's listen whose models aren't loaded (2026-11-13). Pinned.</summary>
+    public const string NotReadyDetail = "voice input is not ready";
+
+    /// <summary>A page that sent no audio within the watchdog (2026-11-13): the pipeline's own detail names the PC's microphone settings. Pinned.</summary>
+    public const string PhoneNoAudioDetail = "the phone sent no audio";
+
     private enum State
     {
         Off,
+
+        /// <summary>The models are loaded for the Web UI alone, the PC's switch off (2026-11-13): the status line says off, with no warning.</summary>
+        PageOnly,
         Ready,
         NoMicrophone,
         ModelMissing,
@@ -64,6 +84,8 @@ internal sealed class VoiceSession : IDisposable
     private WakeListener? _wakeListener;
     private State _state = State.Off;
     private string _missingModel = "";
+    private readonly SemaphoreSlim _listen = new(1, 1);
+    private volatile bool _available;
 
     /// <param name="captureFactory">Builds the microphone for a format; <see cref="WinMmAudioCapture"/> in the app, a fake in tests.</param>
     /// <param name="recognizerFactory">Builds the recognizer for a model path.</param>
@@ -93,13 +115,32 @@ internal sealed class VoiceSession : IDisposable
     /// <summary>The saved switch, as of the last connect.</summary>
     public bool Enabled { get; private set; }
 
-    /// <summary>Whether a microphone was found, both models loaded, and nothing has failed since.</summary>
-    public bool Available { get; private set; }
+    /// <summary>
+    /// Whether both models are loaded (2026-11-13: only that; until then also "a microphone was found"). Only a connect sets it; the Web UI reads
+    /// it from Kestrel threads, so it is volatile.
+    /// </summary>
+    public bool Available { get => _available; private set => _available = value; }
 
-    public bool IsReady => Enabled && Available;
+    /// <summary>The same as <see cref="Available"/>, as the Web UI asks it: the models a page's listen needs are loaded.</summary>
+    public bool ModelsReady => Available;
 
-    /// <summary>Whether <see cref="StatusLine"/> is bad news (enabled but not available).</summary>
-    public bool StatusIsWarning => Enabled && !Available;
+    /// <summary>
+    /// Whether the PC's side works (2026-11-13): a microphone was found and allowed at the last connect, and no PC listen has failed since
+    /// (<see cref="MarkUnavailable"/>). False while the PC's switch is off.
+    /// </summary>
+    public bool MicrophoneFound { get; private set; }
+
+    /// <summary>Whether the PC can push-to-talk: the switch on, the models loaded and the PC's side working.</summary>
+    public bool IsReady => Enabled && Available && MicrophoneFound;
+
+    /// <summary>Whether the Web UI wanted the models at the last connect (<see cref="WebVoiceMode.Wanted"/>), kept as <see cref="Enabled"/> is.</summary>
+    public bool WebVoiceWanted { get; private set; }
+
+    /// <summary>Whether a listen runs right now, the PC's or a page's (the shared lock is held).</summary>
+    public bool Listening => _listen.CurrentCount == 0;
+
+    /// <summary>Whether <see cref="StatusLine"/> is bad news: the PC's side enabled but not ready (no microphone included), or the models the Web UI wants not loaded.</summary>
+    public bool StatusIsWarning => (Enabled && !IsReady) || (WebVoiceWanted && !Available);
 
     /// <summary>The <c>SttWhisperModel</c> setting in force.</summary>
     public string Model { get; private set; } = "";
@@ -188,6 +229,12 @@ internal sealed class VoiceSession : IDisposable
 
     public static string UnavailableLine(string detail) => $"{ChatScreen.SttGlyph} STT: unavailable ({detail}); voice off until /stt";
 
+    /// <summary>The models failed with only the Web UI wanting them (2026-11-13): <c>/stt</c> would switch the PC's microphone on too, so the fix named is the Web UI's. Pinned.</summary>
+    public static string WebModelMissingLine(string model, string detail) => $"{ChatScreen.SttGlyph} STT for the Web UI: model {model} missing ({detail}); {WebUiText.VoiceRetryFix}";
+
+    /// <summary><see cref="WebModelMissingLine"/>'s twin for a load failure. Pinned.</summary>
+    public static string WebUnavailableLine(string detail) => $"{ChatScreen.SttGlyph} STT for the Web UI: unavailable ({detail}); {WebUiText.VoiceRetryFix}";
+
     /// <summary>The wake word's own line when voice is ready but the wake word is not.</summary>
     public static string WakeUnavailableLine(string detail) => $"{ChatScreen.WakeGlyph} Wake word: unavailable ({detail}); push-to-talk still works, /stt retries";
 
@@ -212,11 +259,11 @@ internal sealed class VoiceSession : IDisposable
     /// <summary>The one-line status the screen prints after every connect.</summary>
     public string StatusLine() => _state switch
     {
-        State.Off => OffLine,
+        State.Off or State.PageOnly => OffLine,
         State.Ready => ReadyLine(PushToTalkName, WakeReady ? WakePhrase : null, WakeReady && InterruptReady),
         State.NoMicrophone => NoMicrophoneLine(Detail),
-        State.ModelMissing => ModelMissingLine(_missingModel, Detail),
-        _ => UnavailableLine(Detail),
+        State.ModelMissing => Enabled ? ModelMissingLine(_missingModel, Detail) : WebModelMissingLine(_missingModel, Detail),
+        _ => Enabled ? UnavailableLine(Detail) : WebUnavailableLine(Detail),
     };
 
     /// <summary>The wake word's line, when it has one to print (<see cref="WakeStatusIsWarning"/>); otherwise null.</summary>
@@ -258,12 +305,52 @@ internal sealed class VoiceSession : IDisposable
     public async Task ConnectAsync(AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(effective);
-        Unload();
+        string model = ModelOf(effective);
+        bool webWanted = WebVoiceMode.Wanted(effective);
+        if (KeepsModels(effective))
+        {
+            // A PC switch flip (2026-11-13, the webui-voice plan): the models stay wanted and the same, so a page's listen goes on over
+            // them and only the PC's side (the microphone, the wake word, the interrupt) is redone.
+            UnloadPcSide();
+            await ConnectPcSideAsync(effective, phase, cancellationToken).ConfigureAwait(false);
+            return;
+        }
 
+        // The models go: a page's listen running over them is waited out (the screen cancels it first).
+        await _listen.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            Unload();
+            await ConnectCoreAsync(effective, model, webWanted, phase, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _listen.Release();
+        }
+    }
+
+    /// <summary>
+    /// Whether a connect under <paramref name="effective"/> keeps the loaded models (2026-11-13, the webui-voice plan): the page still wants
+    /// them and the Whisper model is the same, so only the PC's side is redone and a page's listen goes on. Else the screen cancels the
+    /// page listens first, as the connect waits them out.
+    /// </summary>
+    public bool KeepsModels(AppSettingsData effective)
+    {
+        ArgumentNullException.ThrowIfNull(effective);
+        return Available && WebVoiceMode.Wanted(effective) && WebVoiceWanted && ModelOf(effective) == Model && _recognizer is not null && _vad is not null;
+    }
+
+    private static string ModelOf(AppSettingsData effective) =>
+        string.IsNullOrWhiteSpace(effective.SttWhisperModel) ? new AppSettingsData().SttWhisperModel : effective.SttWhisperModel.Trim();
+
+    private async Task ConnectCoreAsync(AppSettingsData effective, string model, bool webWanted, Action<string>? phase, CancellationToken cancellationToken)
+    {
         Enabled = effective.SttInput;
-        Model = string.IsNullOrWhiteSpace(effective.SttWhisperModel) ? new AppSettingsData().SttWhisperModel : effective.SttWhisperModel.Trim();
+        WebVoiceWanted = webWanted;
+        Model = model;
         PushToTalk = ParsePushToTalk(effective.SttPushToTalkKey);
         Available = false;
+        MicrophoneFound = false;
         Detail = "";
         ModelPath = "";
         _missingModel = "";
@@ -284,27 +371,16 @@ internal sealed class VoiceSession : IDisposable
         InterruptAvailable = false;
         InterruptDetail = "";
 
-        if (!Enabled)
+        if (!Enabled && !WebVoiceWanted)
         {
             return;
         }
 
         try
         {
-            int microphones = _inputDeviceCount();
-            if (microphones <= 0)
+            if (Enabled && !CheckMicrophone() && !WebVoiceWanted)
             {
-                _state = State.NoMicrophone;
-                Detail = AudioSupport.NoMicrophoneDetail;
-                return;
-            }
-
-            if (_microphoneRefusal() is { } refusal)
-            {
-                // macOS: the terminal's microphone permission is off. Said now, not after a session of hearing zeros.
-                _state = State.NoMicrophone;
-                Detail = refusal;
-                return;
+                return;   // no microphone, and nobody else wants the models
             }
 
             var whisperSpec = _models.Whisper(Model);
@@ -357,7 +433,10 @@ internal sealed class VoiceSession : IDisposable
 
             ModelPath = whisper.Path;
             Available = true;
-            _state = State.Ready;
+            if (_state != State.NoMicrophone)
+            {
+                _state = Enabled ? State.Ready : State.PageOnly;
+            }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -374,10 +453,75 @@ internal sealed class VoiceSession : IDisposable
             return;
         }
 
+        if (IsReady && (WakeEnabled || InterruptEnabled))
+        {
+            await PrepareWakeAsync(phase, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// The PC's side alone, over models already loaded (a PC switch flip, 2026-11-13): the switch, the key, the microphone check and the
+    /// wake word and interrupt. The models, and a page's listen over them, are left as they are.
+    /// </summary>
+    private async Task ConnectPcSideAsync(AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken)
+    {
+        Enabled = effective.SttInput;
+        PushToTalk = ParsePushToTalk(effective.SttPushToTalkKey);
+        MicrophoneFound = false;
+        Detail = "";
+        WakeEnabled = effective.SttWake;
+        WakePhrase = WakeWordMatch.NormalizePhrase(effective.SttWakePhrase);
+        if (WakePhrase.Length == 0)
+        {
+            WakePhrase = WakeWordMatch.NormalizePhrase(new AppSettingsData().SttWakePhrase);
+        }
+
+        WakeModel = string.IsNullOrWhiteSpace(effective.SttVoskModel) ? new AppSettingsData().SttVoskModel : effective.SttVoskModel.Trim();
+        WakeAvailable = false;
+        WakeDetail = "";
+        WakeModelPath = "";
+        InterruptEnabled = effective.SttInterrupt;
+        InterruptAvailable = false;
+        InterruptDetail = "";
+        _state = State.PageOnly;
+        if (!Enabled)
+        {
+            return;
+        }
+
+        if (!CheckMicrophone())
+        {
+            return;
+        }
+
+        _state = State.Ready;
         if (WakeEnabled || InterruptEnabled)
         {
             await PrepareWakeAsync(phase, cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>The PC's microphone check: a device there and allowed (macOS's permission). False, with the state and the detail said, when not.</summary>
+    private bool CheckMicrophone()
+    {
+        int microphones = _inputDeviceCount();
+        if (microphones <= 0)
+        {
+            _state = State.NoMicrophone;
+            Detail = AudioSupport.NoMicrophoneDetail;
+            return false;
+        }
+
+        if (_microphoneRefusal() is { } refusal)
+        {
+            // macOS: the terminal's microphone permission is off. Said now, not after a session of hearing zeros.
+            _state = State.NoMicrophone;
+            Detail = refusal;
+            return false;
+        }
+
+        MicrophoneFound = true;
+        return true;
     }
 
     /// <summary>Stages the Vosk model and loads the detector (the wake word's and the interrupt's shared recogniser); a failure is theirs alone.</summary>
@@ -448,35 +592,82 @@ internal sealed class VoiceSession : IDisposable
     {
         if (!IsReady || _recognizer is null || _vad is null)
         {
-            return ListenResult.Failed(ListenEnd.NoAudio, TimeSpan.Zero, TimeSpan.Zero, "voice input is not ready");
+            return ListenResult.Failed(ListenEnd.NoAudio, TimeSpan.Zero, TimeSpan.Zero, NotReadyDetail);
         }
 
-        var wanted = options ?? PipelineOptions;
-        if (_pipeline is null || _pipeline.Options != wanted)
+        if (!_listen.Wait(0))
         {
-            IAudioCapture capture;
-            try
-            {
-                capture = EnsureCapture();
-            }
-            catch (Exception ex)
-            {
-                string detail = "microphone unavailable: " + Assistant.Explain(ex);
-                MarkUnavailable(detail);
-                return ListenResult.Failed(ListenEnd.NoAudio, TimeSpan.Zero, TimeSpan.Zero, detail);
-            }
-
-            _pipeline = new VoicePipeline(capture, _vad, _recognizer, wanted);
+            // A page is listening (2026-11-13): refused, and the PC's side isn't marked.
+            return ListenResult.Failed(ListenEnd.NoAudio, TimeSpan.Zero, TimeSpan.Zero, BusyDetail);
         }
 
-        var result = await _pipeline.ListenAsync(finishEarly, phase, cancellationToken, seed).ConfigureAwait(false);
-        if (!result.Ok)
+        try
         {
-            MarkUnavailable(result.Detail);
-        }
+            var wanted = options ?? PipelineOptions;
+            if (_pipeline is null || _pipeline.Options != wanted)
+            {
+                IAudioCapture capture;
+                try
+                {
+                    capture = EnsureCapture();
+                }
+                catch (Exception ex)
+                {
+                    string detail = "microphone unavailable: " + Assistant.Explain(ex);
+                    MarkUnavailable(detail);
+                    return ListenResult.Failed(ListenEnd.NoAudio, TimeSpan.Zero, TimeSpan.Zero, detail);
+                }
 
-        return result;
+                _pipeline = new VoicePipeline(capture, _vad!, _recognizer!, wanted);
+            }
+
+            var result = await _pipeline.ListenAsync(finishEarly, phase, cancellationToken, seed).ConfigureAwait(false);
+            if (!result.Ok)
+            {
+                MarkUnavailable(result.Detail);
+            }
+
+            return result;
+        }
+        finally
+        {
+            _listen.Release();
+        }
     }
+
+    /// <summary>
+    /// One utterance from <paramref name="source"/>, a Web UI page's capture (2026-11-13, the webui-voice plan): a fresh pipeline over the
+    /// loaded models, the PC's own pipeline and microphone left alone, and nothing marked on a failure (a page's failure is the page's).
+    /// Takes the shared lock without waiting, so with another listen running it ends at once with <see cref="BusyDetail"/>; without the
+    /// models, <see cref="NotReadyDetail"/>. Cancellation propagates.
+    /// </summary>
+    public async Task<ListenResult> ListenOnAsync(IAudioCapture source, CancellationToken finishEarly, Action<string>? phase, CancellationToken cancellationToken, VoicePipelineOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(options);
+        if (!_listen.Wait(0))
+        {
+            return ListenResult.Failed(ListenEnd.NoAudio, TimeSpan.Zero, TimeSpan.Zero, BusyDetail);
+        }
+
+        try
+        {
+            if (!Available || _recognizer is not { } recognizer || _vad is not { } vad)
+            {
+                return ListenResult.Failed(ListenEnd.NoAudio, TimeSpan.Zero, TimeSpan.Zero, NotReadyDetail);
+            }
+
+            var result = await new VoicePipeline(source, vad, recognizer, options).ListenAsync(finishEarly, phase, cancellationToken).ConfigureAwait(false);
+            return result is { Ok: false, EndedBy: ListenEnd.NoAudio, Detail: VoicePipeline.NoAudioDetail } ? result with { Detail = PhoneNoAudioDetail } : result;
+        }
+        finally
+        {
+            _listen.Release();
+        }
+    }
+
+    /// <summary>A page's listen options (2026-11-13): a longer first-audio watchdog for the network, the rest as the PC's.</summary>
+    public static VoicePipelineOptions PageOptions { get; } = VoicePipelineOptions.Default with { DeliveryWatchdog = TimeSpan.FromSeconds(5) };
 
     /// <summary>
     /// Opens the microphone and listens for the phrase; when it is heard, <paramref name="wake"/>
@@ -557,10 +748,13 @@ internal sealed class VoiceSession : IDisposable
     /// <summary>Whether the phrase listener is armed right now (the microphone is its, not a listen's). A fact for tests; the screen tracks its own arms.</summary>
     public bool WakeArmed => _wakeListener?.IsArmed == true;
 
-    /// <summary>Voice input is off for the rest of the session (until the next probe).</summary>
+    /// <summary>
+    /// The PC's voice input is off for the rest of the session (until the next probe). Since 2026-11-13 it marks the PC's side alone
+    /// (<see cref="MicrophoneFound"/>): the models stay loaded, so a Web UI page goes on listening.
+    /// </summary>
     public void MarkUnavailable(string reason)
     {
-        Available = false;
+        MicrophoneFound = false;
         Detail = reason;
         _state = State.Unavailable;
     }
@@ -579,7 +773,11 @@ internal sealed class VoiceSession : IDisposable
         InterruptDetail = reason;
     }
 
-    public void Dispose() => Unload();
+    public void Dispose()
+    {
+        Unload();
+        _listen.Dispose();
+    }
 
     private IAudioCapture EnsureCapture() => _capture ??= _captureFactory(PcmFormat.Whisper);
 
@@ -635,6 +833,16 @@ internal sealed class VoiceSession : IDisposable
 
     private void Unload()
     {
+        UnloadPcSide();
+        _recognizer?.Dispose();
+        _recognizer = null;
+        _vad?.Dispose();
+        _vad = null;
+    }
+
+    /// <summary>The PC's side: the wake listener, the detectors, the PC's pipeline and microphone. The models stay.</summary>
+    private void UnloadPcSide()
+    {
         _wakeListener?.Dispose();
         _wakeListener = null;
         // The fork before its parent: it holds a recogniser over the parent's model.
@@ -645,9 +853,5 @@ internal sealed class VoiceSession : IDisposable
         _pipeline = null;
         _capture?.Dispose();
         _capture = null;
-        _recognizer?.Dispose();
-        _recognizer = null;
-        _vad?.Dispose();
-        _vad = null;
     }
 }

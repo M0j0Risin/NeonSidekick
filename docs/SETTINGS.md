@@ -94,7 +94,7 @@ What `/botchat` bots get. See [Bot conversations](COMMANDS.md#bot-conversations)
 | Botchat rework source | What a rework may start from: the `latest` picture, or any of the last 8 (`chat-history`). Needs an image → image workflow. | `latest` |
 | Botchat image mention mode | Shown as *Image mention mode*. Under `autonomous`: `generate` draws a picture a bot mentions but never drew; `off` ignores it. | `off` |
 | Botchat image async | On: the next bot speaks while a picture renders. Off: each reply waits for its picture. | on |
-| Botchat reading pause (s) | A pause to read each reply while *TTS output* is off (0–30); a line you send ends it. | 5 |
+| Botchat reading pause (s) | A pause to read each reply while no voice plays (*TTS output* off, or a page-started chat's 🔊 off; 0–30); a line you send ends it. | 5 |
 | Botchat limited tools | The bots' tools, from the Camera, Clock, Image, Questions, Screen, Timers, Web and YouTube groups (a checklist). None ticked: no tools. | none |
 | Botchat limited skills | The skills the bots may load (a checklist); needs *Agent skills*. None ticked: no skill tool. | none |
 | Botchat memory enabled | Gives every bot `save_memory` and `recall_memory`, overriding every profile's *Memory mode* inside `/botchat`. | on |
@@ -113,7 +113,7 @@ What `/botchat` bots get. See [Bot conversations](COMMANDS.md#bot-conversations)
 
 #### Web UI
 
-A browser front end for this profile, on this computer or (with *Web UI reach* `lan` or Tailscale Serve) a phone: the chat, Home Assistant, the shopping list and YouTube. Each tab shows only while its *… controls* setting is on ([the Web UI](INTERFACE.md#web-ui)).
+A browser front end for this profile, on this computer or (with *Web UI reach* `lan` or Tailscale Serve) a phone: the chat (with voice), Home Assistant, the shopping list and Video. Each tab shows only while its *… controls* setting is on ([the Web UI](INTERFACE.md#web-ui)).
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -127,6 +127,7 @@ A browser front end for this profile, on this computer or (with *Web UI reach* `
 | Web UI video files over Funnel | Lets a PC video file play on the Video tab when the page is reached over Tailscale Funnel (only under *Web UI reach* `local`). Only the file playing is served, to a signed-in page. | off |
 | Web UI profile theme | Dresses the pages in the profile's theme, following a `/theme` at once; your lines and review lines take the terminal's colors. Off, they keep their own look. | on |
 | Web UI chat controls | Shows the Chat tab: transcript, message line and the app's questions. Off, the page opens on another [tab](INTERFACE.md#web-ui); the PC is unchanged. | on |
+| Web UI voice | Chat tab: 🎤 to speak a message and 🔊 to hear replies on the page ([Voice](INTERFACE.md#voice)). The PC downloads and loads the voice models for it, even with its own voice off. | off |
 | Web UI home controls | Shows the [Home tab](INTERFACE.md#the-home-tab) and lets it act. Unlocking, opening a garage, gate or door, and disarming still ask; `/ha` in the chat follows *Web UI commands*. | off |
 | Web UI shopping controls | Shows the Shopping tab: add, tick, change, place and remove lines, and change the store. `/shopping` at the PC is unchanged. | off |
 | Web UI video controls | Shows the [Video tab](INTERFACE.md#the-video-tab) (macOS 14+ on a Mac): it plays videos started there and keeps the saved list. Off, `webui-window` (either setting) plays in the PC's video window. | off |

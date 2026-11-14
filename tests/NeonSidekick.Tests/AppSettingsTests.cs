@@ -196,6 +196,7 @@ public class AppSettingsTests : IDisposable
         WebUiConnectionDetails = true,
         WebUiHomeControls = true,
         WebUiChatControls = false,
+        WebUiVoice = true,
         WebUiShoppingControls = true,
         WebUiYouTubeControls = true,
         WebUiProfileTheme = false,

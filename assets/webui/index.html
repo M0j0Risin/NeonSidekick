@@ -12,12 +12,14 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <script src="/common.js" defer></script>
+<script src="/voice-worklet.js" defer></script>
 <script src="/chat.js" defer></script>
 </head>
 <body data-tab="chat">
 <header class="top">
   <div class="who"><span id="profile">NeonSidekick</span><span class="model" id="model"></span></div>
   <nav><a href="/" class="here">Chat</a><div class="tab-menu"><button type="button" class="tab-menu-button" aria-haspopup="menu" aria-expanded="false" aria-controls="tab-menu-list">☰</button><div class="tab-menu-list hidden" role="menu" id="tab-menu-list"><a href="/home" role="menuitem">🏠 Home</a><a href="/shopping" role="menuitem">🛒 Shopping</a><a href="/video" role="menuitem" class="hidden">▶️ Video</a><a href="/about" role="menuitem">ℹ️ About</a></div></div></nav>
+  <button type="button" class="speak hidden" id="speak" aria-pressed="false">🔈</button>
   <span class="dot" id="dot" title="connection"></span>
 </header>
 <main>
@@ -77,6 +79,9 @@
         <textarea id="draft" rows="1" placeholder="Message…" enterkeyhint="send"></textarea>
         <button type="button" class="clear-draft hidden" id="clear-draft">✕</button>
       </div>
+      <button type="button" class="mic hidden" id="mic" aria-pressed="false">🎤</button>
+      <button type="button" class="listen-cancel hidden" id="listen-cancel">✕</button>
+      <span class="voice-live" id="voice-live" role="status" aria-live="polite"></span>
       <button class="primary" id="send" title="Send">➤</button>
       <button class="stop hidden" id="stop" title="Stop">■</button>
     </div>

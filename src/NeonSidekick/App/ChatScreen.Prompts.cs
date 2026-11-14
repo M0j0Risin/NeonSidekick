@@ -255,7 +255,7 @@ internal sealed partial class ChatScreen
     private void SendPrompt(string text, bool onWatcher)
     {
         bool web = FromWebNow;
-        var line = web ? WebLine(text, asText: false, remote: null) : _input.Line(_input.Pastes.Literals(text));
+        var line = web ? WebLine(text, asText: false, remote: null, s_originPage.Value) : _input.Line(_input.Pastes.Literals(text));
         _input.Remember(web ? text : line.Draft);
         if (onWatcher)
         {

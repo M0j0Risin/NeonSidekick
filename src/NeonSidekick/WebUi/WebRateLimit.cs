@@ -23,6 +23,12 @@ public enum WebRateBucket
 
     /// <summary>A camera's still on the Home tab (2026-10-27): one a second, bursts of 3, each a request to Home Assistant and the camera.</summary>
     Camera,
+
+    /// <summary>
+    /// The Chat tab's voice (2026-11-13, the webui-voice plan): a listen's 4 chunks a second, the playback's progress reports and its clip
+    /// fetches, 16 a second, bursts of 60, so voice never eats the <see cref="Act"/> bucket. The clip GET spends it past its own checks.
+    /// </summary>
+    Voice,
 }
 
 /// <summary>
@@ -60,6 +66,7 @@ public sealed class WebRateLimit
         WebRateBucket.Report => (30, 10),
         WebRateBucket.BotCheck => (30, 10),
         WebRateBucket.Camera => (3, 1),
+        WebRateBucket.Voice => (60, 16),
         _ => throw new ArgumentOutOfRangeException(nameof(bucket), bucket, null),
     };
 
@@ -93,6 +100,8 @@ public sealed class WebRateLimit
             "/api/home/say" => WebRateBucket.Say,
             WebUiAuth.SignInPath => WebRateBucket.SignIn,
             WebUiHost.YouTubeReportPath or WebUiHost.YouTubeSeenPath => WebRateBucket.Report,   // the Video tab's (2026-10-16; seen later that day); its stream's GET is unlimited, as Chat's
+            WebUiHost.VoiceStartPath or WebUiHost.VoiceChunkPath or WebUiHost.VoiceEndPath or WebUiHost.VoiceSpeakPath or WebUiHost.VoicePlayedPath
+                => WebRateBucket.Voice,   // the Chat tab's voice (2026-11-13); its clip GET spends the bucket itself
             WebUiHost.BotCheckInputPath => WebRateBucket.BotCheck,   // a bot check card's input (2026-10-17); its pictures' GET is bounded by the screen's one capture at a time
             _ => null,
         };

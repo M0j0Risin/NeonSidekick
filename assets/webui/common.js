@@ -105,6 +105,34 @@ const Neon = (() => {
     }
   }
 
+  // ── Ids and bytes (2026-11-13, the webui-voice plan) ──
+  // A page, run or listen id the app takes (WebVideoPlayer.IsId): 16 random bytes, base64url. Chat's send ids stay its own newId.
+  const idShape = /^[A-Za-z0-9_-]{16,64}$/;
+
+  function id() {
+    const b = new Uint8Array(16);
+    crypto.getRandomValues(b);
+    return btoa(String.fromCharCode(...b)).replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
+  }
+
+  // A binary read (a reply's audio clip): picture()'s rules, the bytes as an ArrayBuffer.
+  async function bytes(path, signal) {
+    try {
+      const r = await fetch(path, { credentials: 'same-origin', cache: 'no-store', headers: { 'X-Neon': '1' }, signal });
+      if (r.status === 401) { location.reload(); return { ok: false, status: 401 }; }
+      connected(true);
+      if (r.ok) return { ok: true, status: r.status, buffer: await r.arrayBuffer() };
+      let j = null;
+      try { j = await r.json(); } catch { /* none */ }
+      if (r.status === 404 && j && j.tabOff) leave();
+      return { ok: false, status: r.status, message: j && j.message, retryAfter: Number(r.headers.get('Retry-After')) || null };
+    } catch (e) {
+      if (signal && signal.aborted) return { ok: false, status: 0, aborted: true };
+      connected(false);
+      return { ok: false, status: 0, message: 'The app could not be reached.' };
+    }
+  }
+
   // ── Two-tap buttons (later on 2026-10-16, moved here from Chat's sheet) ──
   // A 🗑️ or clear all: the first tap arms it (red, its label says so) for 3 s, the second acts. One armed at a time on the page.
   let armedNow = null;   // { button, timer, paint }
@@ -398,5 +426,5 @@ const Neon = (() => {
     return poll(async () => { const r = await get('/api/pulse', true); if (r.ok && r.json) pulse(r.json); }, 3000);
   }
 
-  return Object.assign(api, { el, say, post, get, picture, connected, poll, pollPulse, staleAssets, theme, pulse, tabs, leave, keyboardInset, watch, watchBlocked: null, armTwice, paintArmed, disarm, armed });
+  return Object.assign(api, { el, say, post, get, picture, bytes, id, idShape, connected, poll, pollPulse, staleAssets, theme, pulse, tabs, leave, keyboardInset, watch, watchBlocked: null, armTwice, paintArmed, disarm, armed });
 })();

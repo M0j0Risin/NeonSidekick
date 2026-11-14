@@ -353,7 +353,8 @@ public sealed class WebUiHost : IWebUiHost
             }
 
             // A tab that is off (later on 2026-10-15) has no APIs: a 404 the page reads as "go to /", which sends it to a tab that is on.
-            if (TabOf(path) is { } tab && (!_backend.Tabs().Has(tab) || (tab == WebTab.YouTube && _backend.Video is null)))
+            if (TabOf(path) is { } tab && (!_backend.Tabs().Has(tab) || (tab == WebTab.YouTube && _backend.Video is null)
+                || (_backend.Voice is null && path.StartsWith(VoicePrefix, StringComparison.Ordinal))))
             {
                 await ResultAsync(context, StatusCodes.Status404NotFound, new WebResult(false, WebUiText.TabOff(tab)) { TabOff = true }).ConfigureAwait(false);
                 return;
@@ -484,6 +485,9 @@ public sealed class WebUiHost : IWebUiHost
                     case CameraPath when _backend.Home is { } home && HttpMethods.IsGet(context.Request.Method):
                         await CameraAsync(context, home, remote).ConfigureAwait(false);
                         return;
+                    case VoiceClipPath when _backend.Voice is { } voice && HttpMethods.IsGet(context.Request.Method):
+                        await VoiceClipAsync(context, voice, remote).ConfigureAwait(false);
+                        return;
                 }
             }
             else if (post)
@@ -534,6 +538,11 @@ public sealed class WebUiHost : IWebUiHost
                     HistoryClearPath => _backend.ClearHistory(remote),   // the body is not read, as Stop's
                     LearnCancelPath => _backend.CancelLearning(remote),   // the status row's 🧠 (2026-10-17); no body either
                     BotSkipPath => _backend.SkipBot(remote),   // the status row's ⏭️ (2026-11-12); no body either
+                    VoiceStartPath when _backend.Voice is { } voice => await ReadAsync(context, WebUiJsonContext.Default.WebVoiceStart).ConfigureAwait(false) is { } start ? voice.Start(start, remote) : null,
+                    VoiceChunkPath when _backend.Voice is { } voice => await ReadAsync(context, WebUiJsonContext.Default.WebVoiceChunk).ConfigureAwait(false) is { } chunk ? voice.Chunk(chunk, remote) : null,
+                    VoiceEndPath when _backend.Voice is { } voice => await ReadAsync(context, WebUiJsonContext.Default.WebVoiceEnd).ConfigureAwait(false) is { } end ? voice.End(end, remote) : null,
+                    VoiceSpeakPath when _backend.Voice is { } voice => await ReadAsync(context, WebUiJsonContext.Default.WebVoiceSpeak).ConfigureAwait(false) is { } speak ? voice.Speak(speak, remote) : null,
+                    VoicePlayedPath when _backend.Voice is { } voice => await ReadAsync(context, WebUiJsonContext.Default.WebVoicePlayed).ConfigureAwait(false) is { } played ? voice.Played(played, remote) : null,
                     QueueResumePath => _backend.ResumeQueue(remote),   // the held queue's banner (2026-10-17); no body either
                     YouTubeReportPath => await YouTubeReportAsync(context, remote).ConfigureAwait(false),
                     YouTubeSeenPath => await YouTubeSeenAsync(context, remote).ConfigureAwait(false),
@@ -558,6 +567,7 @@ public sealed class WebUiHost : IWebUiHost
                     NeedsConfirm = done.Prompt is not null ? true : null,
                     Prompt = done.Prompt,
                     Open = done.Open,
+                    Listen = done.Listen,
                 }).ConfigureAwait(false);
                 return;
             }
@@ -689,8 +699,48 @@ public sealed class WebUiHost : IWebUiHost
                 or LearnCancelPath or QueueResumePath or BotSkipPath
                 or BotCheckFramePath or BotCheckInputPath
             || path.StartsWith(EntryPrefix, StringComparison.Ordinal) || path.StartsWith(PicturePrefix, StringComparison.Ordinal)
+            || path.StartsWith(VoicePrefix, StringComparison.Ordinal)   // the voice (2026-11-13)
             ? WebTab.Chat
             : null;
+    }
+
+    /// <summary>
+    /// A clip of a page's speaker (2026-11-13, the webui-voice plan): <c>?page=&amp;turn=&amp;n=</c>, the page and turn of the id shape and <c>n</c> a plain
+    /// number (parsed as <c>?w=</c> is), asked with <c>X-Neon: 1</c> (else a 403), else a 404, as is a clip the page's speaker doesn't hold (another page's, dropped, never made). The
+    /// <see cref="WebRateBucket.Voice"/> bucket is spent past those checks, as the camera's still spends its own. Raw 24 kHz 16-bit mono PCM,
+    /// never cached, same-origin only. Fetching it drops nothing: a failed fetch's retry finds it again.
+    /// </summary>
+    private async Task VoiceClipAsync(HttpContext context, IWebVoice voice, System.Net.IPAddress? remote)
+    {
+        // Asked with X-Neon like a post, the camera's rule: only the page's own script gets a clip.
+        if (context.Request.Headers[CsrfHeader] != "1")
+        {
+            await ResultAsync(context, StatusCodes.Status403Forbidden, new WebResult(false, WebUiText.PostRefused)).ConfigureAwait(false);
+            return;
+        }
+
+        var query = context.Request.Query;
+        string page = query["page"].ToString();
+        string turn = query["turn"].ToString();
+        if (!WebVideoPlayer.IsId(page) || !WebVideoPlayer.IsId(turn)
+            || !long.TryParse(query["n"].ToString(), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out long n)
+            || voice.Clip(page, turn, n) is not { } clip)
+        {
+            await ResultAsync(context, StatusCodes.Status404NotFound, new WebResult(false, WebUiText.VoiceClipGone)).ConfigureAwait(false);
+            return;
+        }
+
+        if (!await TakeAsync(context, remote, WebRateBucket.Voice).ConfigureAwait(false))
+        {
+            return;
+        }
+
+        var response = context.Response;
+        response.ContentType = "application/octet-stream";
+        response.Headers.CacheControl = "no-store";
+        response.Headers["Cross-Origin-Resource-Policy"] = "same-origin";
+        response.ContentLength = clip.Length;
+        await response.Body.WriteAsync(clip, context.RequestAborted).ConfigureAwait(false);
     }
 
     /// <summary>A Home tab post (2026-10-15): its body read, the tab's side asked; null for a body that does not read, a 404 with no tab.</summary>
@@ -880,6 +930,27 @@ public sealed class WebUiHost : IWebUiHost
 
     /// <summary>The status row's ⏭️ during a botchat (2026-11-12): ESC's step at the PC.</summary>
     public const string BotSkipPath = "/api/botchat/skip";
+
+    /// <summary>The Chat tab's 🎤 (2026-11-13, the webui-voice plan): a listen started.</summary>
+    public const string VoiceStartPath = "/api/voice/start";
+
+    /// <summary>Every voice path's start: the Chat tab's, and a 404 where the backend has no voice.</summary>
+    public const string VoicePrefix = "/api/voice/";
+
+    /// <summary>A quarter second of a listen's audio.</summary>
+    public const string VoiceChunkPath = "/api/voice/chunk";
+
+    /// <summary>A listen finished or cancelled by the page.</summary>
+    public const string VoiceEndPath = "/api/voice/end";
+
+    /// <summary>The page's 🔊 tapped.</summary>
+    public const string VoiceSpeakPath = "/api/voice/speak";
+
+    /// <summary>The page's playback progress.</summary>
+    public const string VoicePlayedPath = "/api/voice/played";
+
+    /// <summary>A clip of the page's speaker (GET).</summary>
+    public const string VoiceClipPath = "/api/voice/clip";
 
     /// <summary>The held queue's Resume (2026-10-17): the lines held after a cancel sent.</summary>
     public const string QueueResumePath = "/api/queue/resume";
@@ -1257,11 +1328,12 @@ public sealed class WebUiHost : IWebUiHost
         var stream = new OpenStream(context.Request.Cookies[WebUiAuth.CookieName(Port)] ?? "", mine);
         Admit(stream);
         // Subscribed before the snapshot: an event between the two is sent twice at worst, and the page skips what it has.
-        using var subscription = _backend.Events.Subscribe();
+        // The page and its run (2026-11-13, the webui-voice plan): voice events reach this page alone, and a duplicated tab gets a fresh id back.
+        using var subscription = _backend.Events.Subscribe(context.Request.Query["page"].ToString(), context.Request.Query["load"].ToString());
         try
         {
             var token = mine.Token;
-            await WriteEventAsync(response, "snapshot", JsonSerializer.Serialize(_backend.Snapshot(), WebUiJsonContext.Default.WebSnapshot), token).ConfigureAwait(false);
+            await WriteEventAsync(response, "snapshot", JsonSerializer.Serialize(_backend.Snapshot(subscription.Page), WebUiJsonContext.Default.WebSnapshot), token).ConfigureAwait(false);
             await response.Body.FlushAsync(token).ConfigureAwait(false);
             var reader = subscription.Reader;
             // One heartbeat at a time (2026-10-19, the review: a new 15 s delay for each wake, left running when an event won, piled up timers

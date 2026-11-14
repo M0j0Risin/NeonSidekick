@@ -31,6 +31,12 @@ public sealed record SubmittedLine(string Draft, string Text, IReadOnlyList<Imag
 
     /// <summary>Where a page's line came from (the dispatch guard's log).</summary>
     public System.Net.IPAddress? Remote { get; init; }
+
+    /// <summary>The page id a page's line came from (2026-11-13, the webui-voice plan): its reply may speak there; null from the PC or an old page.</summary>
+    public string? WebPage { get; init; }
+
+    /// <summary>The page's 🔊 as the line carried it (2026-11-13); the page's latest, read as the turn begins, wins when it has one.</summary>
+    public bool Speak { get; init; }
 }
 
 /// <summary>What one event did to an <see cref="InputLine.Editor"/> (2026-09-25).</summary>

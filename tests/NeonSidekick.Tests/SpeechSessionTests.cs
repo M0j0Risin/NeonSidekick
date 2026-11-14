@@ -449,4 +449,92 @@ public class SpeechSessionTests : IDisposable
         Assert.Equal("Speech done: 96,000 bytes", SpeechSession.DoneLogLine(96000));
         Assert.Equal("Speech", SpeechSession.Category);
     }
+
+    /// <summary>A Web UI page's playback (2026-11-13): the device's fake under a page id.</summary>
+    private sealed class PagePlayback(string page) : IAudioPlayback, IPageAudio
+    {
+        public FakeAudioPlayback Inner { get; } = new();
+
+        public string Page { get; } = page;
+
+        public PcmFormat Format => Inner.Format;
+
+        public bool IsPlaying => Inner.IsPlaying;
+
+        public long BufferedBytes => Inner.BufferedBytes;
+
+        public void Start() => Inner.Start();
+
+        public void Write(byte[] pcm, int count) => Inner.Write(pcm, count);
+
+        public void ClearBuffer() => Inner.ClearBuffer();
+
+        public void Stop() => Inner.Stop();
+
+        public void Dispose() => Inner.Dispose();
+    }
+
+    [Fact]
+    public async Task BeginTurn_WithAPagesPlayback_SpeaksThere_NamesThePage_AndDisposesItWhenDone()
+    {
+        await ConnectAsync();
+        var page = new PagePlayback("page-0123456789abcdef");
+
+        var speaker = _speech.BeginTurn(CancellationToken.None, page)!;
+        Assert.Equal("page-0123456789abcdef", _speech.PlayingPage);
+        speaker.Feed("One.");
+        speaker.CompleteAdding();
+        await speaker.Completion.WaitAsync(Timeout);
+
+        Assert.NotEmpty(page.Inner.Writes);
+        Assert.Empty(_playback.Writes);   // never the PC's device
+        await WaitUntilAsync(() => page.Inner.Disposed);
+        Assert.Null(_speech.PlayingPage);
+    }
+
+    [Fact]
+    public async Task BeginTurn_WithABotsVoice_AndAPagesPlayback_SpeaksInThatVoiceOnThePage()
+    {
+        await ConnectAsync();
+        var page = new PagePlayback("page-0123456789abcdef");
+
+        var speaker = _speech.BeginTurn(CancellationToken.None, "bm_george", 1.5, page)!;
+        speaker.Feed("One.");
+        speaker.CompleteAdding();
+        await speaker.Completion.WaitAsync(Timeout);
+
+        Assert.Equal(("bm_george", 1.5), (_synth.Spoken[0].Voice, _synth.Spoken[0].Speed));
+        Assert.NotEmpty(page.Inner.Writes);
+    }
+
+    [Fact]
+    public void BeginTurn_WithAPagesPlayback_BeforeAConnect_IsNull_AndThePlaybackIsDisposed()
+    {
+        var page = new PagePlayback("page-0123456789abcdef");
+
+        Assert.Null(_speech.BeginTurn(CancellationToken.None, page));
+
+        Assert.True(page.Inner.Disposed);
+    }
+
+    [Fact]
+    public async Task StopWhich_ForASpeakerANewerOneReplaced_LeavesTheNewerOneSpeaking()
+    {
+        await ConnectAsync();
+        var older = _speech.BeginTurn(CancellationToken.None)!;
+        older.CompleteAdding();
+        await older.Completion.WaitAsync(Timeout);
+        _playback.HoldBytes = true;
+        var newer = _speech.BeginTurn(CancellationToken.None)!;
+        newer.Feed("One. Two.");
+        await WaitUntilAsync(() => _playback.Writes.Count >= 1);
+
+        _speech.Stop(older);
+
+        Assert.Same(newer, _speech.Playing);
+        Assert.False(newer.Completion.IsCompleted);
+        _speech.Stop(newer);
+        await newer.Completion.WaitAsync(Timeout);
+        Assert.True(newer.StoppedEarly);
+    }
 }

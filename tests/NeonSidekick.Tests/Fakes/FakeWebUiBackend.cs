@@ -28,7 +28,17 @@ internal sealed class FakeWebUiBackend : IWebUiBackend
 
     public WebSnapshot Snap { get; set; } = new([new WebEntry(1, "user", "hello", null, null, false)], [], new WebState("p", "", "", "m", false, false, false, "", [], null, "1"));
 
-    public WebSnapshot Snapshot() => Snap;
+    /// <summary>The page each snapshot was asked for (2026-11-13: a voice stream names its page).</summary>
+    public ConcurrentQueue<string?> SnapshotPages { get; } = new();
+
+    public WebSnapshot Snapshot(string? page = null)
+    {
+        SnapshotPages.Enqueue(page);
+        return page is null ? Snap : Snap with { Page = page };
+    }
+
+    /// <summary>The Chat tab's voice (2026-11-13): a test sets a <see cref="FakeWebVoice"/>; null answers <c>/api/voice/*</c> with the tab-off 404.</summary>
+    public IWebVoice? Voice { get; set; }
 
     public void SignedIn(WebUiOrigin origin)
     {

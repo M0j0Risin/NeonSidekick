@@ -4,6 +4,7 @@ using NeonSidekick.Diagnostics;
 using NeonSidekick.Llm;
 using NeonSidekick.Settings;
 using NeonSidekick.Speech;
+using NeonSidekick.WebUi;
 
 namespace NeonSidekick.App;
 
@@ -27,6 +28,12 @@ namespace NeonSidekick.App;
 /// <para>Availability is a session fact, not a per-sentence retry: a server that fails mid-turn
 /// costs one warning and is marked unavailable until the next probe (<c>/tts</c>, or a TTS field
 /// edited in <c>/settings</c>), so a dead server never produces a warning per sentence.</para>
+///
+/// <para><b>A Web UI page speaks too (2026-11-13, the webui-voice plan).</b> Kokoro loads when <c>TtsOutput</c> is on or the Web UI wants
+/// voice (<see cref="WebVoiceWanted"/>); <see cref="Enabled"/> stays the PC's switch, so <see cref="IsReady"/> is false at the PC while
+/// <see cref="Available"/> serves the page. A page's reply begins with its own playback (<see cref="BeginTurn(CancellationToken, IAudioPlayback?)"/>),
+/// which the session owns until that speaker's consumer is done. One speaker at a time, as ever; <see cref="Stop(SpeechOutput)"/> stops a
+/// named one only, so a stop decided for an older speaker never reaches a newer one.</para>
 /// </summary>
 internal sealed class SpeechSession : IDisposable
 {
@@ -51,8 +58,11 @@ internal sealed class SpeechSession : IDisposable
     private ISpeechSynthesizer? _synth;
     private SynthesizerRequest? _request;
     private IAudioPlayback? _playback;
-    private SpeechOutput? _current;
-    private CancellationTokenSource? _currentCts;
+    private Speaker? _cur;
+    private volatile bool _available;
+
+    /// <summary>The current speaker with its own token source and, for a page's, its page (2026-11-13): swapped as one reference.</summary>
+    private sealed record Speaker(SpeechOutput Output, CancellationTokenSource Cts, string? Page);
 
     public SpeechSession(Func<SynthesizerRequest, ISpeechSynthesizer> synthesizerFactory, Func<PcmFormat, IAudioPlayback> playbackFactory, ModelStore models)
     {
@@ -64,10 +74,13 @@ internal sealed class SpeechSession : IDisposable
     /// <summary>The saved switch, as of the last connect.</summary>
     public bool Enabled { get; private set; }
 
-    /// <summary>Whether the server answered the last probe and has not failed since.</summary>
-    public bool Available { get; private set; }
+    /// <summary>Whether the server answered the last probe and has not failed since. Read from Kestrel threads (the Web UI), so volatile.</summary>
+    public bool Available { get => _available; private set => _available = value; }
 
     public bool IsReady => Enabled && Available;
+
+    /// <summary>Whether the Web UI wanted speech at the last connect (<see cref="WebVoiceMode.Wanted"/>), kept as <see cref="Enabled"/> is.</summary>
+    public bool WebVoiceWanted { get; private set; }
 
     /// <summary>The engine, as of the last connect.</summary>
     public TtsEngine Engine { get; private set; }
@@ -95,8 +108,8 @@ internal sealed class SpeechSession : IDisposable
     /// <summary>Why speech is unavailable, when it is.</summary>
     public string Detail { get; private set; } = "";
 
-    /// <summary>Whether <see cref="StatusLine"/> is bad news (enabled but no server).</summary>
-    public bool StatusIsWarning => Enabled && !Available;
+    /// <summary>Whether <see cref="StatusLine"/> is bad news: wanted, by the PC or the Web UI, but not available.</summary>
+    public bool StatusIsWarning => (Enabled || WebVoiceWanted) && !Available;
 
     public static string ReadyLine(string url, string voice, double speed) =>
         $"{ChatScreen.TtsGlyph} TTS: {url} voice={voice} speed={SettingsMenu.Speed(speed)}";
@@ -120,11 +133,23 @@ internal sealed class SpeechSession : IDisposable
 
     /// <summary>The one-line status the screen prints after every connect.</summary>
     public string StatusLine() =>
-        !Enabled ? OffLine
+        !Enabled ? (WebVoiceWanted && !Available ? WebFailureLine(FailureDetail()) : OffLine)
         : Available ? ReadyLine(Source, VoiceSpec, Speed)
         : Engine == TtsEngine.InProcess ? NotReadyLine(Detail)
         : string.IsNullOrWhiteSpace(Source) ? NoUrlLine
         : NoServerLine(Source, Detail);
+
+    /// <summary>
+    /// Speech failed with only the Web UI wanting it (2026-11-13): the PC's lines end "speech off until /tts", the wrong fix, since
+    /// <c>/tts on</c> turns the PC's speech on too. Pinned.
+    /// </summary>
+    public static string WebFailureLine(string detail) => $"{ChatScreen.TtsGlyph} TTS for the Web UI: not ready ({detail}); {WebUiText.VoiceRetryFix}";
+
+    /// <summary>What failed, as the PC's lines would say it: the source with its detail.</summary>
+    public string FailureDetail() =>
+        Engine == TtsEngine.InProcess ? TtsSource.InProcessSource + ": " + Detail
+        : string.IsNullOrWhiteSpace(Source) ? NoUrlDetail
+        : "no server at " + Source + (Detail.Length > 0 ? ": " + Detail : "");
 
     /// <summary>
     /// Whether turning speech on under <paramref name="effective"/> would download Kokoro first (2026-10-19, the Web UI review: the page's
@@ -185,6 +210,15 @@ internal sealed class SpeechSession : IDisposable
 
     private async Task ConnectCoreAsync(AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken)
     {
+        bool webWanted = WebVoiceMode.Wanted(effective);
+        if (_synth is not null && Available && webWanted && WebVoiceWanted && SameVoice(effective))
+        {
+            // A PC switch flip (2026-11-13, the webui-voice plan): the synthesizer stays wanted and the same, so it stays, with a page's
+            // speaker on it; only the PC's switch changes.
+            Enabled = effective.TtsOutput;
+            return;
+        }
+
         // Not ready before the first await (2026-09-29): the connect runs behind the input line now, and a reply or an alert
         // must not begin a speaker on the synthesizer disposed below while the stop is awaited.
         Available = false;
@@ -196,6 +230,7 @@ internal sealed class SpeechSession : IDisposable
         _request = null;
 
         Enabled = effective.TtsOutput;
+        WebVoiceWanted = webWanted;
         Engine = TtsSource.Resolve(effective);
         Voice = string.IsNullOrWhiteSpace(effective.TtsVoice) ? new AppSettingsData().TtsVoice : effective.TtsVoice.Trim();
         Voice2 = (effective.TtsVoice2 ?? "").Trim();
@@ -206,7 +241,7 @@ internal sealed class SpeechSession : IDisposable
         Voices = Array.Empty<string>();
         Detail = "";
 
-        if (!Enabled)
+        if (!Enabled && !WebVoiceWanted)
         {
             return;
         }
@@ -285,6 +320,17 @@ internal sealed class SpeechSession : IDisposable
         }
     }
 
+    /// <summary>Whether <paramref name="effective"/> asks for the engine, source, voice and speed this session connected with (a switch flip changes none).</summary>
+    private bool SameVoice(AppSettingsData effective)
+    {
+        var engine = TtsSource.Resolve(effective);
+        string voice = string.IsNullOrWhiteSpace(effective.TtsVoice) ? new AppSettingsData().TtsVoice : effective.TtsVoice.Trim();
+        string source = engine == TtsEngine.InProcess ? TtsSource.InProcessSource : effective.TtsHttpUrl ?? "";
+        bool sameSource = engine == TtsEngine.InProcess || RequestFor(effective) == _request;
+        return engine == Engine && sameSource && voice == Voice && (effective.TtsVoice2 ?? "").Trim() == Voice2 && effective.TtsVoiceMix == Mix
+            && effective.TtsSpeed.Equals(Speed) && (engine == TtsEngine.InProcess || source.Length > 0);
+    }
+
     /// <summary>
     /// The voices for <paramref name="request"/> (<see cref="RequestFor"/>), for the picker.
     /// Reuses the connected synthesizer when the request is the one it connected with, else a
@@ -322,8 +368,15 @@ internal sealed class SpeechSession : IDisposable
     /// (the screen awaits <see cref="StopAsync"/> first; a speaker still owing audio here is
     /// silenced as a safety net, the device being one, and a drained one is only forgotten).
     /// </summary>
-    public SpeechOutput? BeginTurn(CancellationToken appToken) =>
-        _synth is { } synth && IsReady ? Begin(synth, VoiceSpec, Speed, appToken) : null;
+    public SpeechOutput? BeginTurn(CancellationToken appToken) => BeginTurn(appToken, playback: null);
+
+    /// <summary>
+    /// <see cref="BeginTurn(CancellationToken)"/>, speaking through <paramref name="playback"/> when given (2026-11-13: a Web UI page's
+    /// <c>WebAudioPlayback</c>, an <see cref="IPageAudio"/>), which the session then owns: it is disposed once its speaker's consumer is done, or at once when
+    /// no speaker is made. With a playback the gate is <see cref="Available"/> (the page's own 🔊 was the switch); without, <see cref="IsReady"/>.
+    /// </summary>
+    public SpeechOutput? BeginTurn(CancellationToken appToken, IAudioPlayback? playback) =>
+        BeginTurn(appToken, voice: "", Speed, playback);
 
     /// <summary>
     /// <see cref="BeginTurn(CancellationToken)"/> in another voice: <c>/botchat</c>'s (2026-09-24), each bot
@@ -331,8 +384,20 @@ internal sealed class SpeechSession : IDisposable
     /// <paramref name="speed"/> through the one synthesizer this session connected — a profile's own
     /// <c>TTS source</c> is never read. A blank voice is the session's own.
     /// </summary>
-    public SpeechOutput? BeginTurn(CancellationToken appToken, string voice, double speed) =>
-        _synth is { } synth && IsReady ? Begin(synth, string.IsNullOrWhiteSpace(voice) ? VoiceSpec : voice, speed, appToken) : null;
+    public SpeechOutput? BeginTurn(CancellationToken appToken, string voice, double speed) => BeginTurn(appToken, voice, speed, playback: null);
+
+    /// <summary><see cref="BeginTurn(CancellationToken, string, double)"/> through a page's <paramref name="playback"/> (a bot of a chat started from the page, 2026-11-13).</summary>
+    public SpeechOutput? BeginTurn(CancellationToken appToken, string voice, double speed, IAudioPlayback? playback)
+    {
+        if (_synth is { } synth && (playback is null ? IsReady : Available)
+            && Begin(synth, string.IsNullOrWhiteSpace(voice) ? VoiceSpec : voice, speed, appToken, playback) is { } speaker)
+        {
+            return speaker;
+        }
+
+        playback?.Dispose();
+        return null;
+    }
 
     /// <summary>
     /// A speaker for the settings menu's preview: <paramref name="voice"/> as given (a name alone
@@ -354,7 +419,7 @@ internal sealed class SpeechSession : IDisposable
         return Begin(_synth, voice, speed, appToken);
     }
 
-    private SpeechOutput? Begin(ISpeechSynthesizer synth, string voice, double speed, CancellationToken appToken)
+    private SpeechOutput? Begin(ISpeechSynthesizer synth, string voice, double speed, CancellationToken appToken, IAudioPlayback? owned = null)
     {
         if (Playing is not null)
         {
@@ -365,21 +430,38 @@ internal sealed class SpeechSession : IDisposable
         Forget();
         DiagnosticLog.Debug(Category, SpeakingLogLine(voice, speed));
 
-        try
+        IAudioPlayback playback;
+        if (owned is not null)
         {
-            _playback ??= _playbackFactory(synth.Format);
+            playback = owned;
         }
-        catch (Exception ex)
+        else
         {
-            MarkUnavailable("audio output unavailable: " + ex.Message);
-            DiagnosticLog.Warn(Category, "Audio output unavailable: " + Assistant.Explain(ex));
-            return null;
+            try
+            {
+                playback = _playback ??= _playbackFactory(synth.Format);
+            }
+            catch (Exception ex)
+            {
+                MarkUnavailable("audio output unavailable: " + ex.Message);
+                DiagnosticLog.Warn(Category, "Audio output unavailable: " + Assistant.Explain(ex));
+                return null;
+            }
         }
 
-        _currentCts = CancellationTokenSource.CreateLinkedTokenSource(appToken);
-        _current = new SpeechOutput(synth, _playback, voice, speed, _currentCts.Token, MarkUnavailable);
-        Began?.Invoke(_current);
-        return _current;
+        var cts = CancellationTokenSource.CreateLinkedTokenSource(appToken);
+        var output = new SpeechOutput(synth, playback, voice, speed, cts.Token, MarkUnavailable);
+        _cur = new Speaker(output, cts, (owned as IPageAudio)?.Page);
+        if (owned is not null)
+        {
+            // Disposed once this speaker's consumer is done with it, never in Forget: a newer Begin forgets an older tail at once, while
+            // its consumer may still be about to clear the playback (and a page's clear sends its voice-stop).
+            _ = output.Completion.ContinueWith(static (_, state) => ((IAudioPlayback)state!).Dispose(), owned, CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        }
+
+        Began?.Invoke(output);
+        return output;
     }
 
     /// <summary>
@@ -389,7 +471,10 @@ internal sealed class SpeechSession : IDisposable
     public Action<SpeechOutput>? Began { get; set; }
 
     /// <summary>The speaker still owed audio — under its turn or as the tail under the input line — else null.</summary>
-    public SpeechOutput? Playing => _current is { Completion.IsCompleted: false } ? _current : null;
+    public SpeechOutput? Playing => _cur is { Output.Completion.IsCompleted: false } cur ? cur.Output : null;
+
+    /// <summary>The Web UI page the speaker <see cref="Playing"/> speaks on (2026-11-13), or null for the PC's own or none.</summary>
+    public string? PlayingPage => _cur is { Output.Completion.IsCompleted: false } cur ? cur.Page : null;
 
     /// <summary>
     /// Silences the current speaker now: its token is cancelled, and the queue's cancellation
@@ -400,9 +485,22 @@ internal sealed class SpeechSession : IDisposable
     /// </summary>
     public void Stop()
     {
-        if (_currentCts is { } cts)
+        if (_cur is { } cur)
         {
-            VoiceSession.SafeCancel(cts);
+            VoiceSession.SafeCancel(cur.Cts);
+        }
+    }
+
+    /// <summary>
+    /// Silences <paramref name="which"/> only (2026-11-13, the webui-voice plan): a stop decided on another thread for a speaker a newer
+    /// <see cref="Begin"/> has since replaced cancels that older speaker's own source and never the newer one's. Idempotent, never throws.
+    /// </summary>
+    public void Stop(SpeechOutput which)
+    {
+        ArgumentNullException.ThrowIfNull(which);
+        if (_cur is { } cur && ReferenceEquals(cur.Output, which))
+        {
+            VoiceSession.SafeCancel(cur.Cts);
         }
     }
 
@@ -417,7 +515,7 @@ internal sealed class SpeechSession : IDisposable
     /// </summary>
     public async Task<bool> StopAsync()
     {
-        if (_current is not { } speaker)
+        if (_cur?.Output is not { } speaker)
         {
             return false;
         }
@@ -465,10 +563,11 @@ internal sealed class SpeechSession : IDisposable
 
     private void Forget()
     {
-        _current?.Probe?.Dispose();
-        _current = null;
-        _currentCts?.Dispose();
-        _currentCts = null;
+        if (Interlocked.Exchange(ref _cur, null) is { } cur)
+        {
+            cur.Output.Probe?.Dispose();
+            cur.Cts.Dispose();
+        }
     }
 
     public void Dispose()

@@ -57,6 +57,8 @@ public sealed partial class WebUiPageTests
         await UntilAsync(() => _backend.Skips == 1, "the skip's post");
 
         _backend.SkipReply = new WebReply(WebOutcome.Conflict, WebUiText.NothingToSkip);
+        // The button stays disabled until its post's answer is back, which can trail the server counting it.
+        await page.WaitAsync("!" + Skip + ".disabled", "the first skip's answer back");
         await page.EvalAsync(Skip + ".click()");
         await page.WaitAsync("document.getElementById('message').textContent === " + JsonSerializer.Serialize(WebUiText.NothingToSkip), "the refusal said");
 

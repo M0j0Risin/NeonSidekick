@@ -46,7 +46,7 @@ public static class WebUiAssets
 
     /// <summary>Every file, by the name it is served as (the path less its slash).</summary>
     public static readonly IReadOnlyList<string> Names =
-        [ChatPage, ShoppingPage, HomePage, SignInPage, NoTabsPage, YouTubePage, AboutPage, "app.css", "common.js", "chat.js", "shopping.js", "home.js", "signin.js", "notabs.js", "youtube.js", "about.js", YouTubeCore, YouTubeFile, "favicon.svg", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
+        [ChatPage, ShoppingPage, HomePage, SignInPage, NoTabsPage, YouTubePage, AboutPage, "app.css", "common.js", "chat.js", "shopping.js", "home.js", "signin.js", "notabs.js", "youtube.js", "about.js", "voice-worklet.js", YouTubeCore, YouTubeFile, "favicon.svg", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 
     /// <summary>
     /// The files served without the cookie (a signed-out page loads them too): every one of <see cref="Names"/> but a page, so the style, the

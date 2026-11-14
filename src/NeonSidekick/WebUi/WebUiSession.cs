@@ -11,9 +11,10 @@ namespace NeonSidekick.WebUi;
 
 /// <summary>
 /// A message the page sent, waiting for the idle line: its text and the page's id for it; where it came from, and whether a line that reads as a
-/// command goes as a message (later on 2026-10-14).
+/// command goes as a message (later on 2026-10-14). <see cref="Page"/> and <see cref="Speak"/> (2026-11-13, the webui-voice plan): the sending page and its
+/// 🔊 as the line carried it, for the turn's voice (the page's latest 🔊 wins when it has one).
 /// </summary>
-public sealed record WebLine(string Text, string? Id, IPAddress? Remote = null, bool AsText = false);
+public sealed record WebLine(string Text, string? Id, IPAddress? Remote = null, bool AsText = false, string? Page = null, bool Speak = false);
 
 /// <summary>
 /// The app's side of the Web UI (2026-10-14), one per screen and outliving the server's restarts: the transcript as the pages see it
@@ -754,12 +755,20 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
 
     // ── The pages' calls (Kestrel threads) ────────────────────────────────────
 
-    public WebSnapshot Snapshot()
+    public WebSnapshot Snapshot(string? page = null)
     {
-        // The connecting page's own copy: the other pages' last state stays what the sampler compares with.
+        // The connecting page's own copy: the other pages' last state stays what the sampler compares with. A named page (2026-11-13) also gets
+        // its id back (a duplicated tab's fresh one), heard text held for its box and its speaker's clips so far.
+        var voice = page is not null && VoiceSnapshot is { } pieces ? pieces(page) : default;
         return new WebSnapshot(Feed.Snapshot((Func<string, string, string>)WebUiMarkdown.ToHtml, defer: true), Asks.OpenAsks().Select(View).ToList(), _state(), WebUiText.Words, TakeDrafts(), StatusNow?.Invoke().Status,
-            StripView?.Invoke(), PointNow?.Invoke());
+            StripView?.Invoke(), PointNow?.Invoke(), page, voice.Heard, voice.Speaking);
     }
+
+    /// <summary>The Chat tab's voice (2026-11-13, the webui-voice plan), filled by the screen, as <see cref="Video"/> is; null without one.</summary>
+    public IWebVoice? Voice { get; set; }
+
+    /// <summary>A page's voice part of its snapshot (2026-11-13): its held heard text, taken, and its speaker. The screen fills it.</summary>
+    public Func<string, (WebHeard? Heard, WebSpeaking? Speaking)>? VoiceSnapshot { get; set; }
 
     public void SignedIn(WebUiOrigin origin)
     {
@@ -771,6 +780,8 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     public WebReply Send(WebSendRequest request, IPAddress? remote)
     {
         ArgumentNullException.ThrowIfNull(request);
+        string? page = WebVideoPlayer.IsId(request.Page) ? request.Page : null;
+        Voice?.Saw(page, request.Speak);   // the page's latest 🔊, before the line queues (2026-11-13)
         string text = Clean(request.Text ?? "");
         if (text.Trim().Length == 0)
         {
@@ -812,7 +823,7 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
             return new WebReply(WebOutcome.TooMany, WebUiText.QueueFull(MaxWaiting));
         }
 
-        _lines.Enqueue(new WebLine(text, request.Id, remote, request.AsText));
+        _lines.Enqueue(new WebLine(text, request.Id, remote, request.AsText, page, page is not null && request.Speak == true));
         Interlocked.Increment(ref _linesAdded);
         Accepted?.Invoke(text);
         PublishState();

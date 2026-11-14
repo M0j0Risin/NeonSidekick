@@ -1373,6 +1373,7 @@ public sealed class AppSettings : IDisposable
         WebUiBotCheckControl = source.WebUiBotCheckControl,
         WebUiHomeControls = source.WebUiHomeControls,
         WebUiChatControls = source.WebUiChatControls,
+        WebUiVoice = source.WebUiVoice,
         WebUiShoppingControls = source.WebUiShoppingControls,
         WebUiYouTubeControls = source.WebUiYouTubeControls,
         WebUiVideoFilesOverFunnel = source.WebUiVideoFilesOverFunnel,

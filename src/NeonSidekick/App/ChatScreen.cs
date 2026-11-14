@@ -11821,6 +11821,11 @@ internal sealed partial class ChatScreen
                 result |= SettingsChanges.Voice;
             }
 
+            if (SettingsMenu.IsWebVoiceField(field))
+            {
+                result |= SettingsChanges.Tts | SettingsChanges.Voice;   // what the sessions load for the Web UI (2026-11-13)
+            }
+
             if (SettingsMenu.IsMcpField(field))
             {
                 result |= SettingsChanges.Mcp;
@@ -12132,7 +12137,7 @@ internal sealed partial class ChatScreen
                     // run now, as the dispatch would have, the Shortcut arm's way.
                     _timers.Acknowledge();
                     DisarmExit();
-                    await _speech.StopAsync().ConfigureAwait(false);
+                    await StopTailFromAsync(null).ConfigureAwait(false);   // a PC tail only (2026-11-13)
                     if (offPaneHit.Chord && CloseByChord(offPane))
                     {
                         continue;
@@ -12222,6 +12227,7 @@ internal sealed partial class ChatScreen
                     result = _input.Send(send, DismissSplash, Math.Clamp(_effective().PastePreviewLines, 0, PasteBlocks.MaxPreviewLines));
                     _sentDraft = send.Draft;
                     _sentFromWeb = send.FromWeb;
+                    _sentFromWebPage = send.WebPage is { } linePage ? new WebPageRef(linePage, send.Speak) : null;
                 }
                 else
                 {
@@ -12231,6 +12237,7 @@ internal sealed partial class ChatScreen
                     {
                         _sentDraft = typed;
                         _sentFromWeb = false;
+                        _sentFromWebPage = null;
                     }
 
                     if (_input.Chat.Text.Length == 0)
@@ -12279,7 +12286,7 @@ internal sealed partial class ChatScreen
                         break;
                     case InputResult.PushToTalk:
                         _timers.Acknowledge();
-                        await _speech.StopAsync().ConfigureAwait(false);
+                        await StopTailFromAsync(null).ConfigureAwait(false);   // a PC tail only (2026-11-13)
                         if (await HandlePushToTalkAsync(cancellationToken).ConfigureAwait(false))
                         {
                             return 0;
@@ -12303,7 +12310,7 @@ internal sealed partial class ChatScreen
                         }
 
                         _timers.Acknowledge();
-                        await _speech.StopAsync().ConfigureAwait(false);
+                        await StopTailFromAsync(null).ConfigureAwait(false);   // a PC tail only (2026-11-13)
                         if (await HandleWakeAsync(hit, cancellationToken).ConfigureAwait(false))
                         {
                             return 0;
@@ -12326,7 +12333,7 @@ internal sealed partial class ChatScreen
                         // 2026-09-21), so a double-click off the pane it opens can switch panes.
                         _timers.Acknowledge();
                         DisarmExit();
-                        await _speech.StopAsync().ConfigureAwait(false);
+                        await StopTailFromAsync(null).ConfigureAwait(false);   // a PC tail only (2026-11-13)
                         if (hint.Hit.Zone == ScreenPane.HintZone.Strip && hint.Hit.Glyph == LearnStripGlyph)
                         {
                             // The brain is drawn only while a reflection runs, so the click is its
@@ -12401,7 +12408,7 @@ internal sealed partial class ChatScreen
                         // A glyph the strip does not name is nothing (the officer was, until /police later on 2026-09-22).
                         _timers.Acknowledge();
                         DisarmExit();
-                        await _speech.StopAsync().ConfigureAwait(false);
+                        await StopTailFromAsync(null).ConfigureAwait(false);   // a PC tail only (2026-11-13)
                         string? toolbarLine = tool.Hit.Zone switch
                         {
                             ScreenPane.ToolbarZone.Path => CwdBrowseLine,
@@ -12438,7 +12445,7 @@ internal sealed partial class ChatScreen
                         // /sessions title through the dispatch, the rename box — no transcript row, the draft back after.
                         _timers.Acknowledge();
                         DisarmExit();
-                        await _speech.StopAsync().ConfigureAwait(false);
+                        await StopTailFromAsync(null).ConfigureAwait(false);   // a PC tail only (2026-11-13)
                         if (await HandleAsync(SessionTitleLine, [], cancellationToken).ConfigureAwait(false))
                         {
                             return 0;
@@ -12460,7 +12467,7 @@ internal sealed partial class ChatScreen
                         // A double-click on the update's marker (2026-11-04, self-update): /update through the dispatch, no transcript row, the draft back after.
                         _timers.Acknowledge();
                         DisarmExit();
-                        await _speech.StopAsync().ConfigureAwait(false);
+                        await StopTailFromAsync(null).ConfigureAwait(false);   // a PC tail only (2026-11-13)
                         if (await HandleAsync(Updates.UpdateText.Word, [], cancellationToken).ConfigureAwait(false))
                         {
                             return 0;
@@ -12472,7 +12479,7 @@ internal sealed partial class ChatScreen
                         // through the dispatch, its list — no transcript row, the draft back after, as the session's name.
                         _timers.Acknowledge();
                         DisarmExit();
-                        await _speech.StopAsync().ConfigureAwait(false);
+                        await StopTailFromAsync(null).ConfigureAwait(false);   // a PC tail only (2026-11-13)
                         if (await HandleAsync(ProcessWindowText.Word, [], cancellationToken).ConfigureAwait(false))
                         {
                             return 0;
@@ -12484,7 +12491,7 @@ internal sealed partial class ChatScreen
                         // Keys.ShortcutLine): its bare command through the dispatch as the typed line — without the transcript row or the history, the draft back after.
                         _timers.Acknowledge();
                         DisarmExit();
-                        await _speech.StopAsync().ConfigureAwait(false);
+                        await StopTailFromAsync(null).ConfigureAwait(false);   // a PC tail only (2026-11-13)
                         if (shortcut.Midi)
                         {
                             _pane.Flash(NeonSidekick.Midi.MidiText.Ran(shortcut.Line));   // a MIDI button's line (2026-11-12): no transcript row, so a flash
@@ -12506,7 +12513,7 @@ internal sealed partial class ChatScreen
                     case InputResult.Submitted submitted:
                         _timers.Acknowledge();
                         DisarmExit();
-                        await _speech.StopAsync().ConfigureAwait(false);
+                        await StopTailFromAsync(send?.WebPage).ConfigureAwait(false);   // the sender's tail only (2026-11-13)
                         if (submitted.Text.Length == 0)
                         {
                             // Enter on the empty line, allowed only while a timer rings: the silence itself.
@@ -12523,7 +12530,8 @@ internal sealed partial class ChatScreen
                         {
                             if (await WithOrigin(web ? CommandOrigin.Web : CommandOrigin.Pc, () => asMessage
                                 ? RunMessageAsync(submitted.Text, submitted.Images, cancellationToken)
-                                : HandleAsync(submitted.Text, submitted.Images, cancellationToken)).ConfigureAwait(false))
+                                : HandleAsync(submitted.Text, submitted.Images, cancellationToken),
+                                send?.WebPage is { } sentPage ? new WebPageRef(sentPage, send.Speak) : null).ConfigureAwait(false))
                             {
                                 return 0;
                             }
@@ -12532,6 +12540,7 @@ internal sealed partial class ChatScreen
                         {
                             _webDispatching = false;
                             _sentFromWeb = false;
+                            _sentFromWebPage = null;
                         }
 
                         break;
@@ -14331,7 +14340,7 @@ internal sealed partial class ChatScreen
     private async Task ConnectSpeechAsync(CancellationToken cancellationToken, bool quiet = false)
     {
         var effective = _effective();
-        if (effective.TtsOutput)
+        if (effective.TtsOutput || WebVoiceMode.Wanted(effective))   // Kokoro for the Web UI's voice too (2026-11-13)
         {
             await _jobs.StartAsync(
                 BackgroundJobKind.Speech,
@@ -14397,7 +14406,13 @@ internal sealed partial class ChatScreen
     private async Task ConnectVoiceAsync(CancellationToken cancellationToken, bool quiet = false)
     {
         var effective = _effective();
-        if (effective.SttInput)
+        if (!_voice.KeepsModels(effective))
+        {
+            // The models go (2026-11-13, the webui-voice plan): a page's listen over them is cancelled, not waited out.
+            CancelPageListens();
+        }
+
+        if (effective.SttInput || WebVoiceMode.Wanted(effective))   // Whisper and Silero for the Web UI's voice too (2026-11-13)
         {
             await _jobs.StartAsync(
                 BackgroundJobKind.Voice,
@@ -15343,7 +15358,7 @@ internal sealed partial class ChatScreen
                 _settings.Update(d => d.TtsOutput = ttsWanted);
                 if (midTurn)
                 {
-                    if (!ttsWanted && _speech.Playing is not null)
+                    if (!ttsWanted && _speech.Playing is not null && _speech.PlayingPage is null)   // a page's voice is its 🔊's (2026-11-13)
                     {
                         _speech.Stop();
                         _transcript.Notice(SpeechStoppedNotice);
@@ -15847,6 +15862,8 @@ internal sealed partial class ChatScreen
         _toolsOfferedDirty = true;   // 2026-10-16: the new profile's catalogs and switches
         // The Web UI's copy is the old profile's conversation's (2026-10-14): cleared; the server is reconciled below for the new profile.
         _webUi.Feed.Clear();
+        // The pages' listens, speech and held text are the old profile's too (2026-11-13, the webui-voice plan).
+        StopWebVoice();
         // An embedded download is the old profile's (2026-09-29): paused, so its end never saves into the new one.
         _jobs.Cancel(BackgroundJobKind.EmbeddedDownload);
         ForgetSession();
@@ -16143,6 +16160,7 @@ internal sealed partial class ChatScreen
     // HandleLoopAsync's passes of one message: each echoed as the user row, sent (with its mark), the delay between.
     private async Task<bool> LoopPassesAsync(string message, string sent, Llm.TurnMark? mark, int? count, TimeSpan? delay, IReadOnlyList<ImageAttachment> images, CancellationToken cancellationToken)
     {
+        _sentFromWebPage = null;   // its passes are PC turns for speech, whoever started it (2026-11-13, the webui-voice plan)
         // One network budget for the whole loop (2026-10-23, the admin review's L6, decision DA8).
         using var budgetRun = BudgetRun();
         for (int n = 1; count is null || n <= count; n++)
@@ -16508,6 +16526,9 @@ internal sealed partial class ChatScreen
         Volatile.Write(ref _botLadder, ladder);   // Ctrl+Alt+X ends the chat through it (2026-10-01)
         _botNoWorkflowTold = false;
         _botChatRunning = true;
+        // Where the chat speaks (2026-11-13, Design 2b): the page that started it, fixed for the chat; a PC, MIDI or Ctrl+Alt+B start is the PC's.
+        _botChatPage = FromWebNow ? s_originPage.Value : null;
+        Volatile.Write(ref _botPhoneHold, null);
         _botChatCast = castNames;
         // Vision (2026-09-27): the pictures shown in this chat, and the last one each bot was shown, by name.
         _botPictureLog = [];
@@ -16548,6 +16569,13 @@ internal sealed partial class ChatScreen
                     return true;
                 }
 
+                // A phone's 🎤 (2026-11-13, Design 2b): the chat waits, under the reply watch, until that listen ends and its line is queued.
+                if (Volatile.Read(ref _botPhoneHold) is { } phoneHold
+                    && await WaitForBotSpeechAsync(null, lines, pictures, ladder, 0, cancellationToken, hold: phoneHold.Task).ConfigureAwait(false))
+                {
+                    break;
+                }
+
                 if (ladder.EndRequested)
                 {
                     break;
@@ -16561,7 +16589,9 @@ internal sealed partial class ChatScreen
                 var others = castNames.Where((name, i) => !away.Contains(i) && !Profiles.NameEquals(name, bot.Name)).ToList();
                 // Read per turn: a /tts or Transcript markdown switch mid-chat holds from the next reply.
                 effective = _effective();
-                bool speaking = effective.TtsOutput && _speech.IsReady;
+                // Where this bot speaks (2026-11-13, Design 2b): a page-started chat on its page while that page's 🔊 is on, else the PC's rule.
+                var botVoice = BotVoiceTarget(effective);
+                bool speaking = botVoice.Where != VoiceWhere.Silent;
                 bool markdown = MarkdownTurn(effective.TranscriptMarkdown, _pane.Enabled, speaking);
                 var (prior, turnText) = BotChat.BuildView(bot.Name, lines, others, topic);
                 // The others' pronouns from their first voices (2026-09-25); never the speaker's own.
@@ -16702,7 +16732,7 @@ internal sealed partial class ChatScreen
                     }
                 }
 
-                var outcome = await RunTurnAsync(assistant, sentText, seenImages, cancellationToken, bot, replay, picture, ladder, turnId).ConfigureAwait(false);
+                var outcome = await RunTurnAsync(assistant, sentText, seenImages, cancellationToken, bot, replay, picture, ladder, turnId, botVoice).ConfigureAwait(false);
                 await EndTurnAsync(closePane: outcome is not (TurnOutcome.Continue or TurnOutcome.Withdrawn), cancellationToken).ConfigureAwait(false);
                 if (outcome == TurnOutcome.Exit)
                 {
@@ -16819,6 +16849,8 @@ internal sealed partial class ChatScreen
             DisarmBotWake();
             _botTalk = false;
             _botChatRunning = false;
+            _botChatPage = null;
+            Interlocked.Exchange(ref _botPhoneHold, null)?.TrySetResult();
             _botChatCast = null;
             _botPictureLog = null;
             botCamera?.Dispose();
@@ -17132,7 +17164,8 @@ internal sealed partial class ChatScreen
     {
         if (await WriteBotPictureAsync(assistant, bot, reply, topic, effective, botSkills, pictureToken, promised).ConfigureAwait(false) is { } job)
         {
-            bool paced = BotPicturePacer.Applies(_effective(), _speech.IsReady);
+            var paceSettings = _effective();
+            bool paced = BotPicturePacer.Applies(paceSettings, BotsSpeak(paceSettings));
             // Counted on the strip from the send to its end (2026-09-27): the chat goes on meanwhile, with no spinner of its own.
             // Linked to the studio's drain from the send (2026-09-28): the hint row's double-click takes it while it still
             // waits its turn in the pacer, not only once it runs.
@@ -17535,11 +17568,12 @@ internal sealed partial class ChatScreen
     /// pause out, since the reply's drain had used up its wake), so the queue is read before the first wait.
     /// The pause's own token is cancelled then, never <c>waitCts</c>, whose cancellation means the chat's end.</para>
     /// </summary>
-    private async Task<bool> WaitForBotSpeechAsync(SpeechOutput? playing, List<BotChatLine> lines, List<(BotParticipant Bot, Task<ComfyGeneration?> Job)> pictures, BotEscLadder ladder, int turnId, CancellationToken cancellationToken, TimeSpan pause = default)
+    private async Task<bool> WaitForBotSpeechAsync(SpeechOutput? playing, List<BotChatLine> lines, List<(BotParticipant Bot, Task<ComfyGeneration?> Job)> pictures, BotEscLadder ladder, int turnId, CancellationToken cancellationToken, TimeSpan pause = default, Task? hold = null)
     {
         using var waitCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var pauseCts = CancellationTokenSource.CreateLinkedTokenSource(waitCts.Token);
-        Task done = playing?.Completion ?? Task.Delay(pause, _time, pauseCts.Token);
+        // A phone listen's hold (2026-11-13, Design 2b) is waited for as a voice is; a hold asked for meanwhile ends any other wait.
+        Task done = hold ?? playing?.Completion ?? Task.Delay(pause, _time, pauseCts.Token);
         using var stop = new CancellationTokenSource();
         // Written on the watcher task, read once it is joined (the finally).
         bool skipped = false;
@@ -17561,7 +17595,8 @@ internal sealed partial class ChatScreen
         try
         {
             // A talk asked for (2026-10-02, ChatScreen.BotVoice) ends the wait too: the chat listens before the next bot.
-            while (!done.IsCompleted && !waitCts.IsCancellationRequested && !_botTalk && !ladder.EndRequested)
+            while (!done.IsCompleted && !waitCts.IsCancellationRequested && !_botTalk && !ladder.EndRequested
+                && (hold is not null || Volatile.Read(ref _botPhoneHold) is null))
             {
                 // The queue is read before the first wait (2026-10-04): a line queued under the reply woke a signal the
                 // reply's own drain has since replaced, so it would otherwise wait out the pause. The drain re-arms the
@@ -17569,7 +17604,7 @@ internal sealed partial class ChatScreen
                 await DrainActsAsync().ConfigureAwait(false);
                 bool joined = TakeInterjections(lines);
                 ShowReadyBotPictures(pictures);
-                if (joined && playing is null)
+                if (joined && playing is null && hold is null)
                 {
                     // The pause gives way to the user's line (2026-10-04); a voice still plays to its end.
                     break;
@@ -18118,6 +18153,14 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task<ListenOutcome> ListenForRequestAsync(string label, byte[]? seed, bool requestSpoken, bool stripWakeWord, VoicePipelineOptions? options, SttTarget target, CancellationToken cancellationToken)
     {
+        if (_voice.Listening)
+        {
+            // A Web UI page is listening (2026-11-13, the webui-voice plan): one listen at a time across the PC and the phones. Push-to-talk, the
+            // idle wake, the interrupt's follow-up and botchat's listen all meet here, so the refusal lives once.
+            _transcript.Notice(WebUi.WebUiText.PhoneListeningNotice);
+            return new ListenOutcome(null, Exit: false, Discarded: false);
+        }
+
         using var discard = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var finish = new CancellationTokenSource();
         using var stop = new CancellationTokenSource();
@@ -18161,6 +18204,12 @@ internal sealed partial class ChatScreen
             return new ListenOutcome(null, Exit: false, Discarded: true);
         }
 
+        if (result is { Ok: false, Detail: VoiceSession.BusyDetail })
+        {
+            _transcript.Notice(WebUi.WebUiText.PhoneListeningNotice);   // a page's listen won the lock after the check above
+            return new ListenOutcome(null, Exit: false, Discarded: false);
+        }
+
         if (!result.Ok)
         {
             _transcript.Error(result.Detail);
@@ -18181,6 +18230,7 @@ internal sealed partial class ChatScreen
             _input.Remember(text);
             _sentDraft = text;
             _sentFromWeb = false;
+            _sentFromWebPage = null;
         }
 
         return new ListenOutcome(text, Exit: false, Discarded: false);
@@ -18238,7 +18288,7 @@ internal sealed partial class ChatScreen
     /// a hit, or a speech ESC stopped — the device is silenced and waited for, and only then is the
     /// reason decided and printed (<see cref="TurnEndNotice"/>): keys win over the microphone.</para>
     /// </summary>
-    private async Task<TurnOutcome> RunTurnAsync(Assistant assistant, string text, IReadOnlyList<ImageAttachment> images, CancellationToken cancellationToken, BotParticipant? bot = null, IReadOnlyList<TurnEvent>? replay = null, ComfyGeneration? picture = null, BotEscLadder? ladder = null, int ladderTurn = 0)
+    private async Task<TurnOutcome> RunTurnAsync(Assistant assistant, string text, IReadOnlyList<ImageAttachment> images, CancellationToken cancellationToken, BotParticipant? bot = null, IReadOnlyList<TurnEvent>? replay = null, ComfyGeneration? picture = null, BotEscLadder? ladder = null, int ladderTurn = 0, VoiceTarget? botVoice = null)
     {
         using var turnCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var stop = new CancellationTokenSource();
@@ -18266,9 +18316,10 @@ internal sealed partial class ChatScreen
         var effective = _effective();
         // The server is the reply's (2026-09-24): a running reflection pauses and runs again after it.
         YieldLearn(effective);
-        // A /botchat turn (2026-09-24) speaks in its bot's own voice through the one synthesizer.
-        var speaker = !(effective.TtsOutput && _speech.IsReady) ? null
-            : bot is null ? _speech.BeginTurn(cancellationToken) : _speech.BeginTurn(cancellationToken, bot.Voice, bot.Speed);
+        // A /botchat turn (2026-09-24) speaks in its bot's own voice through the one synthesizer. Where (2026-11-13, the webui-voice plan): a
+        // page's line on that page, a page-started chat's bots by the chat's target, everything else at the PC under TTS output.
+        var voiceTarget = bot is null ? TurnVoiceTarget(effective, _sentFromWebPage, needsStream: false) : botVoice ?? (effective.TtsOutput && _speech.IsReady ? VoiceTarget.Pc : VoiceTarget.Silent);
+        var speaker = BeginTurnSpeaker(voiceTarget, bot, cancellationToken);
         // The cancel (the second ESC, the wake phrase, the app token) silences the reply exactly as
         // before the tail outlived the turn; the registration goes with the turn, the speaker may not.
         using var stopSpeech = speaker is null ? default : turnCts.Token.Register(_speech.Stop);
@@ -18353,7 +18404,8 @@ internal sealed partial class ChatScreen
 
         bool armed = false;
         EchoProbe? probe = null;
-        if (speaker is not null && _voice.InterruptReady)
+        // A page's voice arms no PC interrupt or echo probe (2026-11-13): they model the PC's microphone hearing the PC's speaker.
+        if (speaker is not null && voiceTarget.Where == VoiceWhere.Pc && _voice.InterruptReady)
         {
             var phrase = _voice.WakePhrase;
             int echoMatch = effective.SttInterruptEchoGuard;

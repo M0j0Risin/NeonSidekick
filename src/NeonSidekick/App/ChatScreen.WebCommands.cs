@@ -30,6 +30,12 @@ internal sealed partial class ChatScreen
     private static readonly AsyncLocal<CommandOrigin> s_origin = new();
 
     /// <summary>
+    /// The page a page's dispatch came from, with its 🔊 (2026-11-13, the webui-voice plan): beside <see cref="s_origin"/>, so a command that sends
+    /// one message (a saved prompt, a custom command) answers that page, and a <c>/botchat</c> from the page speaks there. Null from the PC.
+    /// </summary>
+    private static readonly AsyncLocal<WebPageRef?> s_originPage = new();
+
+    /// <summary>
     /// A command from the page is being dispatched (later on 2026-10-14): <see cref="WaitingAtPc"/> then names a pane the PC opened with no ask on
     /// the page, so the page says what it waits for rather than nothing. The safety net under <see cref="WebCommands"/>' refusals.
     /// </summary>
@@ -42,10 +48,12 @@ internal sealed partial class ChatScreen
     private static bool FromWebNow => s_origin.Value == CommandOrigin.Web;
 
     /// <summary>Runs <paramref name="run"/> under <paramref name="origin"/>: an async run takes it into its awaits; the caller's own is put back as it returns.</summary>
-    private static T WithOrigin<T>(CommandOrigin origin, Func<T> run)
+    private static T WithOrigin<T>(CommandOrigin origin, Func<T> run, WebPageRef? page = null)
     {
         var was = s_origin.Value;
+        var wasPage = s_originPage.Value;
         s_origin.Value = origin;
+        s_originPage.Value = origin == CommandOrigin.Web ? page : null;
         try
         {
             return run();
@@ -53,6 +61,7 @@ internal sealed partial class ChatScreen
         finally
         {
             s_origin.Value = was;
+            s_originPage.Value = wasPage;
         }
     }
 

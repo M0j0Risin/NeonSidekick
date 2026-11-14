@@ -220,7 +220,7 @@ public static class WebCommands
             // 2026-10-18: the bare word is /tools comfy (a page on the PC); the status it showed is /comfy status, a list as before.
             SlashCommand.Comfy => Is(text, ChatScreen.ComfyStatusWord) || Is(text, ChatScreen.ComfyOfferedWord) ? WebCommandVerdict.List : Pane(word, "/comfy status or /comfy offered"),
             SlashCommand.Loop => LoopVerdict(args, settings),
-            // 2026-11-12 (plan what-would-it-take-tingly-ullman): every form runs; the chat mirrors to the page, its voices stay at the PC, and a
+            // 2026-11-12 (plan what-would-it-take-tingly-ullman): every form runs; the chat mirrors to the page (its voices on that page under Web UI voice, 2026-11-13), and a
             // chat the page starts never turns on the PC's webcam (HandleBotChatAsync). Usage errors land on the page as notices.
             SlashCommand.BotChat => WebCommandVerdict.Run,
             // 2026-11-13 (settings transfer): the zip is written to and read from the PC's Downloads; never from the page.

@@ -20,7 +20,7 @@ public class BotPicturePacerTests
         // Pictures are a ComfyUI workflow chosen since later on 2026-10-04 (BotChat.ComfyChosen): the limited list (alone since
         // 2026-10-27, when the Botchat ComfyUI enabled switch went).
         var limited = new AppSettingsData { BotChatLimitedComfyWorkflows = images ? ["pony"] : null, BotChatImageAsync = async, TtsOutput = tts };
-        Assert.Equal(expected, BotPicturePacer.Applies(limited, speechReady));
+        Assert.Equal(expected, BotPicturePacer.Applies(limited, tts && speechReady));
     }
 
     [Fact]

@@ -17,7 +17,7 @@ public enum WebOutcome
 /// A post's outcome and its sentence for the page; for a refused command, its offers (<see cref="WebResult"/>); for a Home tap that asks first
 /// (2026-10-15), the question.
 /// </summary>
-public readonly record struct WebReply(WebOutcome Outcome, string? Message = null, bool AsText = false, string? Use = null, string? Prompt = null, string? Open = null)
+public readonly record struct WebReply(WebOutcome Outcome, string? Message = null, bool AsText = false, string? Use = null, string? Prompt = null, string? Open = null, string? Listen = null)
 {
     public static WebReply Ok => new(WebOutcome.Ok);
 }
@@ -53,6 +53,34 @@ public interface IWebHome
 }
 
 /// <summary>
+/// The Chat tab's voice (2026-11-13, the webui-voice plan): a page's listens and its speaker's clips. Called on Kestrel threads, never waiting
+/// on the screen; the screen implements it (<c>ChatScreen.WebVoice</c>).
+/// </summary>
+public interface IWebVoice
+{
+    /// <summary>A page's latest 🔊, seen on a post that carries it (a send, before its line queues).</summary>
+    void Saw(string? page, bool? speak);
+
+    /// <summary>🎤: a listen started, or refused with why.</summary>
+    WebReply Start(WebVoiceStart request, IPAddress? remote);
+
+    /// <summary>A chunk of a listen's audio; the answer carries the listen's state (<see cref="WebReply.Listen"/>).</summary>
+    WebReply Chunk(WebVoiceChunk request, IPAddress? remote);
+
+    /// <summary>A listen ended by the page: finished (transcribed) or cancelled (discarded).</summary>
+    WebReply End(WebVoiceEnd request, IPAddress? remote);
+
+    /// <summary>🔊 tapped: off stops that page's voice.</summary>
+    WebReply Speak(WebVoiceSpeak request, IPAddress? remote);
+
+    /// <summary>A page's playback progress, its ■ on a tail, or its going.</summary>
+    WebReply Played(WebVoicePlayed request, IPAddress? remote);
+
+    /// <summary>Clip <paramref name="n"/> of <paramref name="page"/>'s speaker <paramref name="turn"/>, or null when there is none (another page's, dropped, never made).</summary>
+    byte[]? Clip(string page, string turn, long n);
+}
+
+/// <summary>
 /// What the Web UI's server asks of the app (2026-10-14): the host (<see cref="WebUiHost"/>) only turns HTTP into these calls and their
 /// answers back into HTTP. The screen's <see cref="WebUiSession"/> implements it; the host tests use a fake. Every member is called on
 /// a Kestrel thread and must neither block on the screen nor write to the transcript (the turn task is its only writer).
@@ -62,8 +90,8 @@ public interface IWebUiBackend
     /// <summary>The fan-out every page's event stream reads.</summary>
     WebEventHub Events { get; }
 
-    /// <summary>What a page gets as it (re)connects: the transcript, the open asks, the state.</summary>
-    WebSnapshot Snapshot();
+    /// <summary>What a page gets as it (re)connects: the transcript, the open asks, the state; for a named <paramref name="page"/> (2026-11-13), its voice's own part.</summary>
+    WebSnapshot Snapshot(string? page = null);
 
     /// <summary>A browser signed in from <paramref name="origin"/> (a notice at the PC and an audit line; 2026-10-31: the proxy it came through named).</summary>
     void SignedIn(WebUiOrigin origin);
@@ -183,6 +211,12 @@ public interface IWebUiBackend
     /// host then answers <c>/api/youtube/*</c> with the tab-off 404 whatever the tabs say.
     /// </summary>
     IWebVideo? Video => null;
+
+    /// <summary>
+    /// The Chat tab's voice (2026-11-13, the webui-voice plan), or null where there is none (headless, a test's backend): the host then answers
+    /// <c>/api/voice/*</c> with the tab-off 404.
+    /// </summary>
+    IWebVoice? Voice => null;
 
     /// <summary>
     /// Whether a video file may play on the Video tab over Tailscale Funnel (2026-11-12, <i>Web UI video files over Funnel</i>, read per

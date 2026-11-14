@@ -74,6 +74,57 @@ internal sealed partial class ChatScreen
     public const string BotTalkLogLine = "Botchat: the user asked to talk.";
 
     /// <summary>
+    /// The page that started the running chat (2026-11-13, Design 2b), with the 🔊 its line carried; null for a chat the PC started.
+    /// </summary>
+    private WebPageRef? _botChatPage;
+
+    /// <summary>A phone listen's hold on the running chat (2026-11-13): set while it listens, completed once its line is queued.</summary>
+    private TaskCompletionSource? _botPhoneHold;
+
+    /// <summary>Where the running chat's next bot speaks: by its page's latest 🔊 (and stream) for a page-started chat, else the PC's rule.</summary>
+    private VoiceTarget BotVoiceTarget(AppSettingsData effective) => TurnVoiceTarget(effective, _botChatPage, needsStream: true);
+
+    /// <summary>Whether the chat's bots speak anywhere (the picture pacer's and the bot wake's "is there a voice").</summary>
+    private bool BotsSpeak(AppSettingsData effective) => BotVoiceTarget(effective).Where != VoiceWhere.Silent;
+
+    /// <summary>
+    /// A phone's 🎤 under a running chat (2026-11-13, Design 2b; push-to-talk's way, <see cref="RequestBotTalk"/>): the speaking voice
+    /// stops, the bot still replying is cut short as a skip leaves it, and the chat holds before its next bot until the listen lifts the
+    /// hold (<see cref="LiftBotPhoneHold"/>). Null when no chat runs. Any thread.
+    /// </summary>
+    private TaskCompletionSource? RequestBotPhoneTalk()
+    {
+        if (!_botChatRunning)
+        {
+            return null;
+        }
+
+        var hold = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Interlocked.Exchange(ref _botPhoneHold, hold)?.TrySetResult();
+        _speech.Stop();
+        if (Volatile.Read(ref _botTurn) is { } turn)
+        {
+            turn.Ladder.Skip(turn.Id);
+            VoiceSession.SafeCancel(turn.Cts);
+        }
+
+        Post(static () => { });
+        DiagnosticLog.Debug(VoiceSession.Category, BotPhoneTalkLogLine);
+        return hold;
+    }
+
+    /// <summary>The listen ended and its line (if any) is queued: the chat goes on. Any thread.</summary>
+    private void LiftBotPhoneHold(TaskCompletionSource hold)
+    {
+        Interlocked.CompareExchange(ref _botPhoneHold, null, hold);
+        hold.TrySetResult();
+        Post(static () => { });
+    }
+
+    /// <summary>The log's line for a phone listen under a botchat.</summary>
+    public const string BotPhoneTalkLogLine = "Botchat: a page started a listen.";
+
+    /// <summary>
     /// Ctrl+Alt+B under a running <c>/botchat</c> (2026-10-11, the user's pick: end it in one press, not three up the ESC ladder): the
     /// ladder told the chat ends (<see cref="BotEscLadder.End"/>, the kill switch's way), the speaking voice stopped, the bot still
     /// replying cancelled — not a skip, so the chat's loop reads it as the end — and a voice or pause being waited for woken. A picture
@@ -124,7 +175,8 @@ internal sealed partial class ChatScreen
     /// <summary>Arms the wake phrase for the chat when <see cref="BotWakeAllowed"/> says so and it is not armed yet; a hit is a <see cref="RequestBotTalk"/>.</summary>
     private void ArmBotWake(AppSettingsData effective)
     {
-        if (_botWake is not null || !BotWakeAllowed(effective.TtsOutput && _speech.IsReady, _voice.WakeReady))
+        // The bots speaking anywhere keep it off (2026-11-13): a page open on the PC would wake it through the speakers.
+        if (_botWake is not null || !BotWakeAllowed(BotsSpeak(effective), _voice.WakeReady))
         {
             return;
         }

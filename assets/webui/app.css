@@ -91,6 +91,11 @@ header.top .tab-menu-button {
   white-space: nowrap;
 }
 header.top .tab-menu-button.here { color: var(--text); background: var(--panel-2); }
+/* 🔊 (2026-11-13, the webui-voice plan): replies spoken on this page, left of the dot; on shows by the glyph and the panel, not color
+   alone. Dimmed with aria-disabled while the PC can't speak here, so the tap still says why. */
+header.top .speak { flex: none; min-height: 36px; min-width: 36px; padding: 4px 8px; border: none; border-radius: 999px; background: none; }
+header.top .speak.on { background: var(--panel-2); }
+header.top .speak.speak-dim { opacity: 0.45; cursor: default; }
 header.top .tab-menu-list {
   position: absolute;
   right: 0;
@@ -399,6 +404,13 @@ footer.bottom .inner { max-width: 900px; margin: 0 auto; display: flex; flex-dir
 /* The saved prompts (later on 2026-10-15): 📣 at the box's left, its sheet a footer panel; a saved prompt's text sends it and its ✎ fills the
    draft (2026-10-16), a history line's text fills the draft and its ➤ sends it. */
 .prompts-button { flex: none; width: 44px; min-height: 44px; padding: 0; }
+/* 🎤 and the listen's Cancel (2026-11-13, the webui-voice plan): 44 px like 📣, Cancel in ➤'s place while listening. Dimmed with
+   aria-disabled, never the disabled property, so the tap still says why. Listening pulses (and says so in its label); transcribing dims. */
+.compose .mic, .compose .listen-cancel { flex: none; width: 44px; min-height: 44px; padding: 0; }
+.compose .mic.mic-dim { opacity: 0.45; cursor: default; }
+.compose .mic.listening { background: var(--accent); border-color: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
+.compose .mic.transcribing { border-color: var(--accent); opacity: 0.7; }
+.compose .voice-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .prompts { display: flex; flex-direction: column; gap: 6px; }
 .prompts-list { display: flex; flex-direction: column; gap: 4px; max-height: 40vh; overflow-y: auto; }
 .prompt-row { display: flex; gap: 6px; align-items: stretch; }
@@ -840,7 +852,7 @@ main.home { display: flex; flex-direction: column; gap: 12px; }
 
 /* Reduced motion (2026-10-15, E9): nothing pulses, shakes or slides; the spinner stands still (chat.js draws ⏳). */
 @media (prefers-reduced-motion: reduce) {
-  .tile.pending, .tile.failed, .sheet, .room-row.pending .room-row-text, .room-switch.pending i, .learn-button { animation: none; }
+  .tile.pending, .tile.failed, .sheet, .room-row.pending .room-row-text, .room-switch.pending i, .learn-button, .compose .mic.listening { animation: none; }
   .room-switch i { transition: none; }
 }
 

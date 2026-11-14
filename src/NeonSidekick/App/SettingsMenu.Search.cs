@@ -96,6 +96,11 @@ internal sealed partial class SettingsMenu
             changes |= SettingsChanges.Voice;
         }
 
+        if (IsWebVoiceField(field))
+        {
+            changes |= SettingsChanges.Tts | SettingsChanges.Voice;   // what the sessions load for the Web UI (2026-11-13)
+        }
+
         if (field == SettingsField.LlmOfferTools)
         {
             changes |= SettingsChanges.Conversation;

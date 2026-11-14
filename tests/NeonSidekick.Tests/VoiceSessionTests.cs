@@ -889,4 +889,111 @@ public class VoiceSessionTests : IDisposable
         Assert.Equal("Wake listener disarmed (no hit)", VoiceSession.DisarmedLogLine(false));
         Assert.Equal("Voice", VoiceSession.Category);
     }
+
+    // ── The Web UI's voice (2026-11-13, the webui-voice plan) ──────────────────────────
+
+    private static AppSettingsData WebOnly(bool pc = false) =>
+        new() { SttInput = pc, WebUi = true, WebUiVoice = true, SttWhisperModel = "ggml-base.en.bin" };
+
+    [Fact]
+    public async Task WebVoiceAlone_LoadsTheModels_WithoutTheMicrophone_AndThePcStaysOff()
+    {
+        FakeModelFiles.WriteBoth(_models);
+
+        await ConnectAsync(WebOnly());
+
+        Assert.True(_voice.ModelsReady);
+        Assert.False(_voice.Enabled);
+        Assert.False(_voice.IsReady);
+        Assert.False(_voice.StatusIsWarning);
+        Assert.Equal(VoiceSession.OffLine, _voice.StatusLine());
+        Assert.Equal(0, _deviceProbes);
+    }
+
+    [Fact]
+    public async Task WebVoiceAlone_AMissingModel_SaysTheWebUisFix_NotTheStts()
+    {
+        _http.Map(ModelStore.WhisperRepository + "ggml-base.en.bin", (_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound)));
+
+        await ConnectAsync(WebOnly());
+
+        Assert.True(_voice.StatusIsWarning);
+        Assert.Contains("STT for the Web UI", _voice.StatusLine(), StringComparison.Ordinal);
+        Assert.EndsWith(WebUi.WebUiText.VoiceRetryFix, _voice.StatusLine(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task APageListen_HearsItsOwnSource_AndLeavesThePcMicrophoneAlone()
+    {
+        FakeModelFiles.WriteBoth(_models);
+        await ConnectAsync(WebOnly());
+        _vad.EndAfterBuffers = 1;
+        var page = new FakeAudioCapture { OnStart = (c, _) => { c.Deliver(c.Silence(50), 1600); return Task.CompletedTask; } };
+
+        var result = await _voice.ListenOnAsync(page, CancellationToken.None, null, CancellationToken.None, VoiceSession.PageOptions);
+
+        Assert.True(result.Ok, result.Detail);
+        Assert.Equal("hello", result.Text);
+        Assert.Equal(1, page.Started);
+        Assert.Equal(0, _capture.Started);
+        Assert.False(_voice.Listening);
+    }
+
+    [Fact]
+    public async Task WhileAPageListens_ThePcAndAnotherPage_AreRefusedAsBusy()
+    {
+        FakeModelFiles.WriteBoth(_models);
+        await ConnectAsync(WebOnly(pc: true));
+        var started = new TaskCompletionSource();
+        var page = new FakeAudioCapture { OnStart = async (_, ct) => { started.TrySetResult(); await Task.Delay(Timeout.Infinite, ct).ConfigureAwait(false); } };
+        using var cancel = new CancellationTokenSource();
+        var patient = VoiceSession.PageOptions with { DeliveryWatchdog = TimeSpan.FromMinutes(1) };
+
+        var listening = _voice.ListenOnAsync(page, CancellationToken.None, null, cancel.Token, patient);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.True(_voice.Listening);
+        var pc = await _voice.ListenAsync(CancellationToken.None, null, CancellationToken.None);
+        var other = await _voice.ListenOnAsync(new FakeAudioCapture(), CancellationToken.None, null, CancellationToken.None, VoiceSession.PageOptions);
+        Assert.Equal(VoiceSession.BusyDetail, pc.Detail);
+        Assert.Equal(VoiceSession.BusyDetail, other.Detail);
+        Assert.True(_voice.IsReady);   // a refusal marks nothing
+
+        cancel.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => listening);
+        Assert.False(_voice.Listening);
+    }
+
+    [Fact]
+    public async Task APageListen_WithoutTheModels_IsNotReady()
+    {
+        await ConnectAsync(new AppSettingsData());
+
+        var result = await _voice.ListenOnAsync(new FakeAudioCapture(), CancellationToken.None, null, CancellationToken.None, VoiceSession.PageOptions);
+
+        Assert.Equal(VoiceSession.NotReadyDetail, result.Detail);
+    }
+
+    [Fact]
+    public async Task APcSwitchFlip_KeepsTheModels_AndAModelChangeOrTheWebUiOff_DoesNot()
+    {
+        FakeModelFiles.WriteBoth(_models);
+        await ConnectAsync(WebOnly());
+        Assert.Single(_recognizerPaths);
+
+        Assert.True(_voice.KeepsModels(WebOnly(pc: true)));
+        await ConnectAsync(WebOnly(pc: true));
+        Assert.Single(_recognizerPaths);   // not loaded again
+        Assert.True(_voice.IsReady);
+
+        var otherModel = WebOnly(pc: true);
+        otherModel.SttWhisperModel = "ggml-small.en.bin";
+        var voiceOff = WebOnly(pc: true);
+        voiceOff.WebUiVoice = false;
+        var serverOff = WebOnly(pc: true);
+        serverOff.WebUi = false;
+        Assert.False(_voice.KeepsModels(otherModel));
+        Assert.False(_voice.KeepsModels(voiceOff));
+        Assert.False(_voice.KeepsModels(serverOff));
+    }
 }

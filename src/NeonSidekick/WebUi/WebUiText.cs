@@ -867,7 +867,9 @@ public static class WebUiText
         BotCheckHint, BotCheckPicture, BotCheckZoom, BotCheckScrollUp, BotCheckScrollDown, BotCheckTypeHere, BotCheckSend, BotCheckEnter, BotCheckBackspace, BotCheckTab,
         BotCheckStalled, LearnCancel, LearnCancelArmed, Resume,
         MemoryEdit, MemoryEditSave, MemoryEditCancel, MemoryTurnOff, MemoryTurnOn,
-        Skip);
+        Skip,
+        VoiceMic, VoiceListening, VoiceTranscribing, VoiceCancel, VoiceSpeakOn, VoiceSpeakOff,
+        VoiceHeardNothing, VoiceNeedsHttps, VoiceMicRefused, VoiceFailed);
 
     // ── A bot check's card (2026-10-17): the Browser window on the page while a check runs in it ──
 
@@ -1359,6 +1361,93 @@ public static class WebUiText
     /// <summary>The ticked lines cleared from the phone (audit, 2026-10-16), only when some went.</summary>
     public static string ClearedLogLine(int count, IPAddress? remote) => "Web UI cleared the ticked lines (" + Lines(count) + ") from " + Where(remote) + ".";
 
+    // ── Voice (2026-11-13, the webui-voice plan) ──────────────────────────────
+
+    /// <summary>The fix a voice failure names when only the Web UI wants voice: <c>/tts on</c> and <c>/stt on</c> would switch the PC's on too. Pinned.</summary>
+    public const string VoiceRetryFix = "turn Web UI voice off and on at the PC to try again";
+
+    /// <summary>A page started listening, flashed on the PC's hint row like any page action.</summary>
+    public const string ListeningFlash = Glyph + "listening on the Web UI";
+
+    /// <summary>A page stopped its own voice (■ on a tail, 🔊 off), flashed on the PC's hint row.</summary>
+    public const string VoiceStoppedFlash = Glyph + "stopped the Web UI's voice";
+
+    /// <summary>PC push-to-talk, a wake or the botchat key while a page listens: refused. Pinned.</summary>
+    public const string PhoneListeningNotice = "(" + Glyph + "a Web UI page is listening; try again when it's done)";
+
+    /// <summary>A page's 🎤 while the PC or another page listens. Pinned.</summary>
+    public const string VoiceBusy = "The PC or another page is listening; try again when it's done.";
+
+    /// <summary>A voice post with <i>Web UI voice</i> off, or the Chat tab off. Pinned.</summary>
+    public const string VoiceOff = "Voice is off at the PC (/settings › Client › Web UI › Web UI voice).";
+
+    /// <summary>The voice models load at the PC (a connect running). Pinned.</summary>
+    public const string VoiceGettingReady = "The PC is getting voice ready; try again in a moment.";
+
+    /// <summary>A side that failed at the PC: <paramref name="detail"/> says what, then the fix that leaves the PC's own voice alone. Pinned.</summary>
+    public static string VoiceNotReady(string detail) => "Voice isn't ready at the PC (" + detail.TrimEnd('.') + "); " + VoiceRetryFix + ".";
+
+    /// <summary>🎤's name at rest.</summary>
+    public const string VoiceMic = "Speak a message";
+
+    /// <summary>🎤's name while it listens (a second tap sends what was said).</summary>
+    public const string VoiceListening = "Listening… tap to send";
+
+    /// <summary>🎤's name while Whisper runs.</summary>
+    public const string VoiceTranscribing = "Transcribing…";
+
+    /// <summary>The listen's Cancel button.</summary>
+    public const string VoiceCancel = "Cancel the listen";
+
+    /// <summary>🔊's name while on (a tap turns it off).</summary>
+    public const string VoiceSpeakOn = "Replies spoken here: tap to stop";
+
+    /// <summary>🔊's name while off.</summary>
+    public const string VoiceSpeakOff = "Speak replies here";
+
+    /// <summary>A listen that heard no speech.</summary>
+    public const string VoiceHeardNothing = "Heard nothing.";
+
+    /// <summary>🎤 on a page that isn't secure: the browser keeps the microphone from it.</summary>
+    public const string VoiceNeedsHttps = "The microphone needs the HTTPS address (/webui shows it).";
+
+    /// <summary>The browser refused the microphone, or has none.</summary>
+    public const string VoiceMicRefused = "The browser did not allow the microphone.";
+
+    /// <summary>A listen that failed on the page's side.</summary>
+    public const string VoiceFailed = "The listen did not work.";
+
+    /// <summary>A clip that isn't there (another page's, dropped by a stop, never made). Pinned.</summary>
+    public const string VoiceClipGone = "That audio is gone.";
+
+    /// <summary>🎤 from a page whose event stream isn't up (a reconnect under way). Pinned.</summary>
+    public const string VoiceNoStream = "The page is reconnecting; try again in a moment.";
+
+    /// <summary>A page's listen began: who.</summary>
+    public static string ListenStartLogLine(string page, IPAddress? remote) => "Web UI listen on page " + Short(page) + " from " + Where(remote) + " began.";
+
+    /// <summary>A page's listen stalled: its chunks stopped, so what came is transcribed.</summary>
+    public static string ListenStalledLogLine(string page) => "Web UI listen on page " + Short(page) + ": the chunks stopped for 3 s; transcribing what came.";
+
+    /// <summary>A listen the page named that isn't running (ended, or another page's). Pinned.</summary>
+    public const string VoiceListenGone = "That listen has ended.";
+
+    /// <summary>A listen whose chunks stopped coming (the 3 s stall): what came was sent. The <c>failed</c> detail. Pinned.</summary>
+    public const string PhoneStoppedSending = "The phone stopped sending audio.";
+
+    /// <summary>A listen that failed at the PC (the recognizer, a busy lock, anything unexpected): the <c>failed</c> detail, with why. Pinned.</summary>
+    public static string ListenFailed(string detail) => "Listening failed (" + detail.TrimEnd('.') + ").";
+
+    /// <summary>The log line each page listen leaves: who, how it ended, how much audio. Never the audio or the text.</summary>
+    public static string ListenLogLine(string page, string how, TimeSpan audio) =>
+        string.Create(CultureInfo.InvariantCulture, $"Web UI listen on page {Short(page)} ended: {how}, {audio.TotalSeconds:F1} s of audio.");
+
+    /// <summary>A page's speech stopped by the app (5 s silent, the page gone, the clip cap): a log line only.</summary>
+    public static string VoiceStoppedLogLine(string page, string why) => "Web UI voice on page " + Short(page) + " stopped: " + why + ".";
+
+    /// <summary>A page id as the log names it: its first 8 characters, enough to tell pages apart.</summary>
+    private static string Short(string page) => page.Length <= 8 ? page : page[..8];
+
     /// <summary>An address past a rate limit, once a minute at most (2026-10-15).</summary>
     public static string RateLimitedLogLine(IPAddress? remote, WebRateBucket bucket) => RateLimitedLogLine(Where(remote), bucket);
 
@@ -1374,6 +1463,7 @@ public static class WebUiText
             WebRateBucket.SignIn => "sign-in attempts",
             WebRateBucket.Report => "player reports",
             WebRateBucket.Camera => "camera pictures",
+            WebRateBucket.Voice => "voice requests",
             _ => "requests",
         } + " from " + where + "; refused for now.";
 

@@ -533,6 +533,7 @@ internal sealed partial class ChatScreen
     /// <summary>The flat driver: pass after pass until a stop; true when the shell should exit.</summary>
     private async Task<bool> RunRalphAsync(CancellationToken cancellationToken)
     {
+        _sentFromWebPage = null;   // its passes are PC turns for speech, whoever started it (2026-11-13, the webui-voice plan)
         var loop = _ralph!;
 
         // One network budget for the whole run (2026-10-23, the admin review's L6, decision DA8).

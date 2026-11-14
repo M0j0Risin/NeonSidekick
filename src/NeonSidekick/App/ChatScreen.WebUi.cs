@@ -138,7 +138,10 @@ internal sealed partial class ChatScreen
             Home = new HomeSide(this),
             // The Video tab's player (2026-10-16), and its chores on the same tick: a hold's expiry, a video stopped once the tab is off.
             Video = _webVideo,
-            Tick = () => { HomeWebTick(); WebVideoTick(); },
+            Tick = () => { HomeWebTick(); WebVideoTick(); WebVoiceTick(); },
+            // The Chat tab's voice (2026-11-13, the webui-voice plan): ChatScreen.WebVoice.cs.
+            Voice = this,
+            VoiceSnapshot = WebVoiceSnapshot,
             // A video file over Tailscale Funnel (2026-11-12, the video-files plan), per request.
             VideoFilesOverFunnelNow = () => _effective().WebUiVideoFilesOverFunnel,
             // The pages wear the profile's theme (2026-10-15), per request.
@@ -187,6 +190,8 @@ internal sealed partial class ChatScreen
             // A line the page sent joins the message history as the page sends it, as Enter does a typed one (the history's lock allows it).
             Accepted = text => _input.Remember(text),
         };
+        session.Events.PageJoined = OnVoicePageJoined;
+        session.Events.PageLeft = OnVoicePageLeft;
         return (session, new WebUiController(webUiHost, session));
     }
 
@@ -618,6 +623,11 @@ internal sealed partial class ChatScreen
         }
 
         _webUiAsked = wanted;
+        if (!wanted.On)
+        {
+            StopWebVoice();   // the server going takes the pages' voice with it (2026-11-13, the webui-voice plan)
+        }
+
         _webUiReconciling = ReconcileWebUiQuietlyAsync(wanted);
     }
 
@@ -741,7 +751,10 @@ internal sealed partial class ChatScreen
             // User line style (2026-10-21): the page draws the user's lines as the transcript does.
             UserLine: UserLineStyle.Resolve(effective.UserLineStyle),
             // A botchat's ladder stands (2026-11-12): the status row offers ⏭️. Volatile, as the kill switch reads it off the screen's task.
-            BotChat: Volatile.Read(ref _botLadder) is not null);
+            BotChat: Volatile.Read(ref _botLadder) is not null,
+            // The Chat tab's 🎤 and 🔊 (2026-11-13, the webui-voice plan): null when not offered, "" when ready, else why not.
+            VoiceListen: WebVoiceListenState(effective),
+            VoiceSpeak: WebVoiceSpeakState(effective));
     }
 
     /// <summary>
@@ -931,17 +944,17 @@ internal sealed partial class ChatScreen
             return null;
         }
 
-        return WebLine(line.Text, line.AsText, line.Remote);
+        return WebLine(line.Text, line.AsText, line.Remote, line.Page is { } page ? new WebPageRef(page, line.Speak) : null);
     }
 
     /// <summary>
     /// A page's line from its text alone (2026-10-16, out of <see cref="TakeWebLine"/> for a saved prompt the page's <c>/prompts &lt;n&gt;</c>
     /// sends): never through the PC's paste store, its label one row, routed back to the page when withdrawn.
     /// </summary>
-    private static SubmittedLine WebLine(string text, bool asText, System.Net.IPAddress? remote)
+    private static SubmittedLine WebLine(string text, bool asText, System.Net.IPAddress? remote, WebPageRef? page)
     {
         string label = text.Replace("\r\n", " ", StringComparison.Ordinal).Replace('\n', ' ').Replace('\r', ' ');
-        return new SubmittedLine(text, text.TrimEnd(), [], label) { FromWeb = true, AsText = asText, Remote = remote };
+        return new SubmittedLine(text, text.TrimEnd(), [], label) { FromWeb = true, AsText = asText, Remote = remote, WebPage = page?.Page, Speak = page?.Speak == true };
     }
 
     /// <summary>A message from the page, withdrawn before the model answered: back to the page's draft.</summary>
@@ -990,9 +1003,11 @@ internal sealed partial class ChatScreen
             case "on":
             case "off":
                 bool on = args.Trim().Equals("on", StringComparison.OrdinalIgnoreCase);
+                bool voiceBefore = WebVoiceMode.Wanted(_effective());
                 _settings.Update(d => d.WebUi = on);
                 _transcript.Notice(SettingsMenu.SavedNotice(SettingsField.WebUi, _settings.Current, _settings.ProfileDirectory));
                 ReconcileWebUi();
+                await WebVoiceWantedChangedAsync(voiceBefore, cancellationToken).ConfigureAwait(false);
                 return;
             case "copy":
                 // The first link: the HTTPS one when there is one (2026-10-31), else Tailscale's, else the home network's.
@@ -1303,8 +1318,10 @@ internal sealed partial class ChatScreen
                     continue;
                 case WebUiText.EnabledKey:
                     bool on = !effective.WebUi;
+                    bool voiceBefore = WebVoiceMode.Wanted(_effective());
                     _settings.Update(d => d.WebUi = on);
                     sink.Notice(SettingsMenu.SavedNotice(SettingsField.WebUi, _settings.Current, _settings.ProfileDirectory));
+                    await WebVoiceWantedChangedAsync(voiceBefore, cancellationToken).ConfigureAwait(false);
                     break;
                 case WebUiText.ReachKey:
                     string next = WebUiReach.Name(audience == WebUiAudience.Local ? WebUiAudience.LocalAreaNetwork : WebUiAudience.Local);

@@ -3652,6 +3652,14 @@ public sealed class AppSettingsData
     public bool WebUiChatControls { get; set; } = true;
 
     /// <summary>
+    /// Whether the Web UI's Chat tab offers voice (2026-11-13, the webui-voice plan; off by default): on, the page shows 🎤 (tap to talk into the
+    /// app's Whisper, on the HTTPS address) and 🔊 (replies to that page's messages spoken there, from Kokoro). It loads Kokoro, Whisper and Silero
+    /// for the page even with <see cref="TtsOutput"/> and <see cref="SttInput"/> off, which stay the PC's switches alone; the page never starts a
+    /// download. Needs <see cref="WebUi"/> and the Chat tab (<see cref="WebUiChatControls"/>). A change reconnects both voice sessions. No variable.
+    /// </summary>
+    public bool WebUiVoice { get; set; }
+
+    /// <summary>
     /// Whether the Web UI's page may run slash commands (later on 2026-10-14, the user's call: off by default): on, the page sends the commands
     /// <c>App/WebCommands</c> allows — the ones that run, the pickers it shows as cards, the lists — and its dropdown completes them; off, a
     /// command from the page is refused naming this setting, and the dropdown offers the mentions alone. The Chat tab's alone

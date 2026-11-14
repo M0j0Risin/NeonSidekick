@@ -1037,7 +1037,8 @@ internal sealed partial class ChatScreen
     private void Post(Func<Task> act)
     {
         var origin = s_origin.Value;
-        _acts.Enqueue(() => WithOrigin(origin, act));
+        var page = s_originPage.Value;
+        _acts.Enqueue(() => WithOrigin(origin, act, page));
         Volatile.Read(ref _actSignal).TrySetResult();
     }
 

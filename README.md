@@ -18,7 +18,7 @@ It's one app for research, IT and admin work (Active Directory, event logs, data
 * **Built in, not scripted:** databases, Active Directory, event logs, services, Docker, Office files and Home Assistant are native code that talks to each system directly, so a small model makes one call.
 * **Guardrails in code, not in the prompt:** databases are read-only by default, Active Directory always, and the shell police blocks harmful commands and paths outside the working folder, even under `yolo`.
 * **Set up without editing files:** it finds a server on your network, downloads a model or takes a key; wizards add databases, shares and remote computers, warning when an account could change data.
-* **Talk to it, or use your phone:** voice in and out, and the Web UI puts your phone in the same live session.
+* **Talk to it, or use your phone:** voice in and out, and the Web UI puts your phone in the same live session; you can talk from the phone too.
 * **More than a terminal:** its own windows show pictures, the camera, a web browser, YouTube, your video files, the log and background output when text isn't enough.
 * **No black box:** `/usage` shows the prompt, every tool and every skill the model is sent, and the persona and operating rules are files you can edit.
 
@@ -55,7 +55,7 @@ It's one app for research, IT and admin work (Active Directory, event logs, data
 * **A rich terminal UI:** Markdown, code highlighting, pictures in the transcript, the mouse, and sixty color themes or your own.
 * **Its own windows:** pictures (`/view`), the camera (`/camera live`), the log (`/log`), background output (`/process`), a container's log (`/docker logs`), YouTube (`/youtube play`) and video files (`/video`); camera and YouTube need macOS 14+ on a Mac.
 * **Voice in and out:** Whisper speech-to-text (push-to-talk or "hey neon") and Kokoro speech with mixable voices, in-process or through a Kokoro server.
-* **Web UI:** the chat, the model's questions, the shopping list, a Home tab (lights, scenes, cameras, PC meters), YouTube and your PC's videos on your phone, over your network or Tailscale (`/webui`, [the Web UI](docs/INTERFACE.md#web-ui)).
+* **Web UI:** the chat (with voice), the model's questions, the shopping list, a Home tab (lights, scenes, cameras, PC meters), YouTube and your PC's videos on your phone, over your network or Tailscale (`/webui`, [the Web UI](docs/INTERFACE.md#web-ui)).
 * **Pictures as input:** paste or drop one, or take one with the webcam (`/camera`) or of the screen (`/screen`) (macOS 14+ on a Mac).
 * **No installer:** unzip and run. Native code, so it starts fast and needs no .NET runtime. It updates itself when you say so (`/update`).
 * **Auto-complete** for commands, files, folders, skills and tools, and **find** in the transcript (`/find`).

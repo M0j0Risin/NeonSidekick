@@ -640,12 +640,12 @@ The page is plain HTTP. Tailscale Serve puts HTTPS in front of it with a real ce
 #### Messages
 
 * **Drafts:** the page and the PC never see each other's drafts (one set aside with Esc at the PC included). Sent lines share the profile's message history, so ↑/↓ on either side bring them back.
-* **Sending:** Enter sends on a desktop; on a phone it adds a line (tap ➤). ✕ clears the box and *Undo* puts it back. Stop (■) shows while a reply runs.
+* **Sending:** Enter sends on a desktop; on a phone it adds a line (tap ➤). ✕ clears the box and *Undo* puts it back. Stop (■) shows while a reply runs or this page's voice plays on.
 * **The dropdown** completes the `@ # $ % ^ *` mentions and, with *Web UI commands* on, the commands the page may run. `@` lists files only while *File tools* is on. *Web UI connection details* adds a `%` or `*` connection's server and database.
 * **Queued:** a message goes after anything queued at the PC. During a reply it waits (counted in Queued, not in `/queue`) and goes when the reply ends, even under *Queue mode* `manual`. At most 20 wait, up to 48 KB each.
 * **After a cancel** under *Queue cancel mode* `hold`, waiting messages are held under a **Resume** banner; a new message runs first.
 * **Dropped** by `/clear`, `/new`, a resume, a rewind, a profile switch or *Queue cancel mode* `empty`, their text sent back to the page; `/queue clear` leaves them.
-* **Stop** ends a reply, a compact, a botchat, an advisor, `/imagine`, `/test` or a `/loop`, and stops speech; before the reply's first word it takes the message back. It never stops a model loading (Esc or Ctrl+C at the PC) or your editor under `/draft`.
+* **Stop** ends a reply, a compact, a botchat, an advisor, `/imagine`, `/test` or a `/loop`, and stops speech (after the reply, only this page's voice); before the reply's first word it takes the message back. It never stops a model loading (Esc or Ctrl+C at the PC) or your editor under `/draft`.
 
 #### What the page shows
 
@@ -684,9 +684,22 @@ The page is plain HTTP. Tailscale Serve puts HTTPS in front of it with a real ce
 * **A bot check:** the allow question, then a card ([A bot check from the page](#a-bot-check-from-the-page)).
 * **The Chat badge:** on the other tabs, a dot while a reply runs and a count while a question waits, in the tab's title too (`(n)`). An Android phone also vibrates once on a new question.
 
+#### Voice
+
+With *Web UI voice* on, the Chat tab talks both ways. The PC readies its voice models for the page, whatever *TTS output* and *STT input* say.
+
+* **🎤** listens until you stop talking; a second tap sends at once, and Cancel (or Esc on a desktop) drops it. It needs the HTTPS address ([HTTPS through Tailscale Serve](#https-through-tailscale-serve)).
+* **What you said** goes where *STT destination* says: sent as a message (never a command), or put in this page's box.
+* **🔊** speaks the replies to this page's messages here. It starts off, and each browser and address keeps its own (a home-screen app too).
+* **Where a reply speaks:** where its message came from. A PC line speaks at the PC under *TTS output*; a page's line with 🔊 off stays silent.
+* **While you talk,** a reply's voice waits until you finish. 🎤 over a reply stops it first.
+* **A botchat started from the page** speaks there, each bot in its own voice. 🎤 mid-chat stops the bot and listens, as push-to-talk does.
+* **One listen at a time** across the PC and every page. Only the Chat tab speaks, and the screen stays on while voice runs.
+
 #### The PC sees the phone
 
 * Each change made on the page (a shopping line, a tile, a scene, the video remote, a saved video, a prompt…) flashes on the PC's hint row (📱 Kitchen light: toggle). None of it goes in the PC's transcript.
+* **A page's listen** flashes on the hint row too; the PC's push-to-talk is refused until it ends.
 
 ### The Shopping tab
 
@@ -779,7 +792,8 @@ A bot check (a Cloudflare click, a captcha) runs in the PC's Browser window, sin
 * **Plain HTTP:** the page itself is plain HTTP; for HTTPS, see [HTTPS through Tailscale Serve](#https-through-tailscale-serve).
 * **The firewall:** Windows asks to let the app through the first time it serves the network; allow it on private networks (on one Windows calls Public, the phone can't connect). A Mac asks too.
 * **A port that won't open:** another program uses it, or Windows reserves it (`netsh int ipv4 show excludedportrange protocol=tcp` lists the reserved ranges). Pick another in *Web UI port*.
-* **Too fast:** taps, a bot check card's input, Ask the house and pasted sign-ins are limited per address; past that the page says to slow down.
+* **Too fast:** taps, a bot check card's input, Ask the house, voice and pasted sign-ins are limited per address; past that the page says to slow down.
+* **Voice:** a page's audio goes only to and from a signed-in page, and is never saved.
 
 ### The page's look
 
