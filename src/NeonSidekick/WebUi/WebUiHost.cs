@@ -538,6 +538,7 @@ public sealed class WebUiHost : IWebUiHost
                     HistoryClearPath => _backend.ClearHistory(remote),   // the body is not read, as Stop's
                     LearnCancelPath => _backend.CancelLearning(remote),   // the status row's 🧠 (2026-10-17); no body either
                     BotSkipPath => _backend.SkipBot(remote),   // the status row's ⏭️ (2026-11-12); no body either
+                    BotResumePath => await ReadAsync(context, WebUiJsonContext.Default.WebBotResume).ConfigureAwait(false) is { } resume ? _backend.ResumeBot(resume, remote) : null,   // its 👥 (2026-11-14)
                     VoiceStartPath when _backend.Voice is { } voice => await ReadAsync(context, WebUiJsonContext.Default.WebVoiceStart).ConfigureAwait(false) is { } start ? voice.Start(start, remote) : null,
                     VoiceChunkPath when _backend.Voice is { } voice => await ReadAsync(context, WebUiJsonContext.Default.WebVoiceChunk).ConfigureAwait(false) is { } chunk ? voice.Chunk(chunk, remote) : null,
                     VoiceEndPath when _backend.Voice is { } voice => await ReadAsync(context, WebUiJsonContext.Default.WebVoiceEnd).ConfigureAwait(false) is { } end ? voice.End(end, remote) : null,
@@ -696,7 +697,7 @@ public sealed class WebUiHost : IWebUiHost
 
         return path is "/api/events" or "/api/send" or "/api/stop" or "/api/answer" or "/api/complete" or "/api/usage" or "/api/strip/select" or "/api/prompts"
                 or PromptSavePath or PromptDeletePath or MemoryPath or MemorySavePath or MemoryDeletePath or MemoryEditPath or MemoryTogglePath or HistoryPath or HistoryClearPath
-                or LearnCancelPath or QueueResumePath or BotSkipPath
+                or LearnCancelPath or QueueResumePath or BotSkipPath or BotResumePath
                 or BotCheckFramePath or BotCheckInputPath
             || path.StartsWith(EntryPrefix, StringComparison.Ordinal) || path.StartsWith(PicturePrefix, StringComparison.Ordinal)
             || path.StartsWith(VoicePrefix, StringComparison.Ordinal)   // the voice (2026-11-13)
@@ -930,6 +931,9 @@ public sealed class WebUiHost : IWebUiHost
 
     /// <summary>The status row's ⏭️ during a botchat (2026-11-12): ESC's step at the PC.</summary>
     public const string BotSkipPath = "/api/botchat/skip";
+
+    /// <summary>The status row's 👥 after a botchat stopped (2026-11-14): the chat carried on, as the PC's Ctrl+Alt+B does.</summary>
+    public const string BotResumePath = "/api/botchat/resume";
 
     /// <summary>The Chat tab's 🎤 (2026-11-13, the webui-voice plan): a listen started.</summary>
     public const string VoiceStartPath = "/api/voice/start";

@@ -399,6 +399,17 @@ internal sealed class FakeWebUiBackend : IWebUiBackend
         return SkipReply ?? WebReply.Ok;
     }
 
+    /// <summary>The status row's 👥 (2026-11-14): each resume's body as it arrived; <see cref="BotResumeReply"/> answers them (Ok by default).</summary>
+    public ConcurrentQueue<WebBotResume> BotResumes { get; } = new();
+
+    public WebReply? BotResumeReply { get; set; }
+
+    public WebReply ResumeBot(WebBotResume request, IPAddress? remote)
+    {
+        BotResumes.Enqueue(request);
+        return BotResumeReply ?? WebReply.Ok;
+    }
+
     /// <summary>The held queue's Resume (2026-10-17): how many arrived; <see cref="ResumeReply"/> answers them (Ok by default).</summary>
     public int Resumes;
 

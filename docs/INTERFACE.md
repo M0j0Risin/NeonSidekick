@@ -655,6 +655,7 @@ The page is plain HTTP. Tailscale Serve puts HTTPS in front of it with a real ce
 * **The status row** over the message box shows the PC's spinner and clock while it works, and the usage at the right (`~` while estimated under *LLM mid-turn usage*). A tap on the usage opens the `/usage` figures in a card (typed `/usage` stays refused).
 * **🧠** leads the row while a reflection runs; two taps cancel it, as Ctrl+L does.
 * **⏭️** shows during a botchat and does what Esc does at the PC: stops the voice, then the bot, then the chat. Over a picture's spinner it skips the picture.
+* **👥** shows after a botchat stops, as at the PC; a tap carries it on as Ctrl+Alt+B does, its voices on this page under 🔊.
 
 #### Prompts, history and memory
 
@@ -693,7 +694,7 @@ With *Web UI voice* on, the Chat tab talks both ways. The PC readies its voice m
 * **🔊** speaks the replies to this page's messages here. It starts off, and each browser and address keeps its own (a home-screen app too).
 * **Where a reply speaks:** where its message came from. A PC line speaks at the PC under *TTS output*; a page's line with 🔊 off stays silent.
 * **While you talk,** a reply's voice waits until you finish. 🎤 over a reply stops it first.
-* **A botchat started from the page** speaks there, each bot in its own voice. 🎤 mid-chat stops the bot and listens, as push-to-talk does.
+* **A botchat started or resumed from the page** speaks there, each bot in its own voice. 🎤 mid-chat stops the bot and listens, as push-to-talk does.
 * **One listen at a time** across the PC and every page. Only the Chat tab speaks, and the screen stays on while voice runs.
 
 #### The PC sees the phone

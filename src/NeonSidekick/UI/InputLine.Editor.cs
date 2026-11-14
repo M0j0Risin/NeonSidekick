@@ -37,6 +37,12 @@ public sealed record SubmittedLine(string Draft, string Text, IReadOnlyList<Imag
 
     /// <summary>The page's 🔊 as the line carried it (2026-11-13); the page's latest, read as the turn begins, wins when it has one.</summary>
     public bool Speak { get; init; }
+
+    /// <summary>
+    /// A page's button standing for a command (2026-11-14, the status row's 👥): the app's own line, run at the idle line as the PC's chord runs
+    /// its line — under the page's origin, but with no › row (the history never had it), and never handed back to the page's draft.
+    /// </summary>
+    public bool Chord { get; init; }
 }
 
 /// <summary>What one event did to an <see cref="InputLine.Editor"/> (2026-09-25).</summary>

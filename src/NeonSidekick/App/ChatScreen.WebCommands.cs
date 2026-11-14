@@ -393,9 +393,9 @@ internal sealed partial class ChatScreen
             }
         }
 
-        foreach (var line in dropped)
+        foreach (var line in dropped.Where(l => !l.Chord))
         {
-            _webUi.Dropped(line.Draft);
+            _webUi.Dropped(line.Draft);   // a 👥's line was never the page's draft (2026-11-14)
         }
 
         return dropped.Count;

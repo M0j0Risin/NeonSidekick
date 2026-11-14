@@ -3802,6 +3802,11 @@ internal sealed partial class ChatScreen
         {
             _transcript.Notice(QueueDroppedNotice(dropped));
         }
+
+        if (web)
+        {
+            Interlocked.Exchange(ref _webResumeInFlight, 0);   // a page's 👥 waiting went with the rest (2026-11-14)
+        }
     }
 
     /// <summary>The <c>/queue</c> grammar's action alone (<see cref="ParseQueueCommand"/>).</summary>
@@ -12224,7 +12229,17 @@ internal sealed partial class ChatScreen
                 {
                     // Nothing to listen for, no microphone armed: the line was typed already. The
                     // draft on the row, if any, stays for the next read.
-                    result = _input.Send(send, DismissSplash, Math.Clamp(_effective().PastePreviewLines, 0, PasteBlocks.MaxPreviewLines));
+                    if (send.Chord)
+                    {
+                        // A page's 👥 (2026-11-14): the app's line run as the PC's chord runs it, with no › row.
+                        DismissSplash();
+                        result = new InputResult.Submitted(send.Text, send.Images);
+                    }
+                    else
+                    {
+                        result = _input.Send(send, DismissSplash, Math.Clamp(_effective().PastePreviewLines, 0, PasteBlocks.MaxPreviewLines));
+                    }
+
                     _sentDraft = send.Draft;
                     _sentFromWeb = send.FromWeb;
                     _sentFromWebPage = send.WebPage is { } linePage ? new WebPageRef(linePage, send.Speak) : null;
@@ -12541,6 +12556,10 @@ internal sealed partial class ChatScreen
                             _webDispatching = false;
                             _sentFromWeb = false;
                             _sentFromWebPage = null;
+                            if (send?.Chord == true)
+                            {
+                                Interlocked.Exchange(ref _webResumeInFlight, 0);   // the page's 👥 has run (2026-11-14)
+                            }
                         }
 
                         break;

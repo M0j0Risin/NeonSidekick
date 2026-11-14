@@ -753,6 +753,7 @@ const clockEl = spinEl.querySelector('.clock');
 const usageBtn = document.getElementById('usage');
 const learnBtn = document.getElementById('learn');
 const skipBtn = document.getElementById('skip');
+const botResumeBtn = document.getElementById('bot-resume');
 const loopEl = document.getElementById('loop');
 const usageCard = document.getElementById('usage-card');
 const Frames = ['⠋', '⠙', '⠸', '⠴', '⠧', '⠇', '⠏'];   // the PC's (Theme.SpinnerFrames)
@@ -821,6 +822,16 @@ skipBtn.addEventListener('click', async () => {
   if (!r.ok) say(r.message || '');
 });
 
+// A stopped botchat's 👥 (2026-11-14, the user's ask): the PC's 👥 and Ctrl+Alt+B on the page, in ⏭️'s spot (never both). One tap carries the
+// chat on; the app runs its own line as the PC's chord does (no row, not in the history), its voices on this page under 🔊.
+botResumeBtn.addEventListener('click', async () => {
+  if (speakOn()) unlockPlayback();   // before any await: the chat plays from this gesture's unlock, as a sent line's reply does
+  botResumeBtn.disabled = true;
+  const r = await post('/api/botchat/resume', { page: chatPage, speak: speakOn() });
+  botResumeBtn.disabled = false;
+  if (!r.ok) say(r.message || '');
+});
+
 function drawStatus() {
   const label = status && status.label;
   const spinning = !!label || !!(state && state.busy);
@@ -837,6 +848,13 @@ function drawStatus() {
     skipBtn.setAttribute('aria-label', skipLabel);
   }
   skipBtn.classList.toggle('hidden', !(state && state.busy && state.botChat));
+  const resumeLabel = words.botResume || 'Resume the last botchat';
+  if (botResumeBtn.title !== resumeLabel) {
+    botResumeBtn.title = resumeLabel;
+    botResumeBtn.setAttribute('aria-label', resumeLabel);
+  }
+  const resumable = !!(state && state.botResume);
+  botResumeBtn.classList.toggle('hidden', !resumable);
   spinEl.classList.toggle('hidden', !spinning);
   if (spinning) {
     frameEl.textContent = still.matches ? '⏳' : Frames[frame % Frames.length];
@@ -852,7 +870,7 @@ function drawStatus() {
   const usage = usageText(status && status.usage);
   usageBtn.textContent = usage;
   usageBtn.classList.toggle('hidden', !usage);
-  statusEl.classList.toggle('hidden', !spinning && !usage && !learning && !loop);
+  statusEl.classList.toggle('hidden', !spinning && !usage && !learning && !loop && !resumable);
   if (spinning && !spinTimer) {
     spinTimer = setInterval(() => { frame++; drawStatus(); }, 100);
   } else if (!spinning && spinTimer) {

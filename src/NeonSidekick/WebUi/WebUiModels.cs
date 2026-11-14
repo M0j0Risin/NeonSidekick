@@ -34,6 +34,17 @@ public sealed class WebVoiceStart
     public bool? Speak { get; set; }
 }
 
+/// <summary>
+/// The status row's 👥 tapped (2026-11-14, the user's ask: a way on the page to carry a stopped botchat on, as the PC's 👥 and Ctrl+Alt+B do):
+/// the page's id and its 🔊, so the chat's voices play there. The line itself is the app's, never the page's.
+/// </summary>
+public sealed class WebBotResume
+{
+    public string? Page { get; set; }
+
+    public bool? Speak { get; set; }
+}
+
 /// <summary>A quarter second of a listen's audio (2026-11-13): 16 kHz mono 16-bit PCM in base64, numbered from 0.</summary>
 public sealed class WebVoiceChunk
 {
@@ -497,7 +508,8 @@ public sealed record WebAskView(
 /// (<see cref="WebUiAssets.Tag"/>: a page whose tag differs reloads itself). The tabs on; and (2026-10-16) the banner's words while a video
 /// waits for a Video tab (<see cref="Watch"/>: the flag and the text in one, null for none). <see cref="UserLine"/> (2026-10-21, the
 /// user's call: the page draws the user's lines as the terminal does) is <i>User line style</i>, resolved; empty reads as <c>bold</c>.
-/// <see cref="BotChat"/> (2026-11-12): a botchat's ladder stands, so the status row offers ⏭️. <see cref="VoiceListen"/> and <see cref="VoiceSpeak"/>
+/// <see cref="BotChat"/> (2026-11-12): a botchat's ladder stands, so the status row offers ⏭️; <see cref="BotResume"/> (2026-11-14): a stopped one can
+/// be carried on from the page, so it offers 👥 in that spot (the PC's 👥, the page's own resume not yet on its way). <see cref="VoiceListen"/> and <see cref="VoiceSpeak"/>
 /// (2026-11-13, the webui-voice plan): 🎤's and 🔊's flag and words in one, as <see cref="Watch"/> is: null hides the button, <c>""</c> is ready, a
 /// sentence dims it and says why.
 /// </summary>
@@ -523,6 +535,7 @@ public sealed record WebState(
     string? QueueHeld = null,
     string UserLine = "",
     bool BotChat = false,
+    bool BotResume = false,
     string? VoiceListen = null,
     string? VoiceSpeak = null);
 
@@ -588,6 +601,7 @@ public sealed record WebWords(string PictureGone, string PictureTooLarge, string
     string LearnCancel = "", string LearnCancelArmed = "", string Resume = "",
     string MemoryEdit = "", string MemoryEditSave = "", string MemoryEditCancel = "", string MemoryTurnOff = "", string MemoryTurnOn = "",
     string Skip = "",
+    string BotResume = "",
     string VoiceMic = "", string VoiceListening = "", string VoiceTranscribing = "", string VoiceCancel = "", string VoiceSpeakOn = "", string VoiceSpeakOff = "",
     string VoiceHeardNothing = "", string VoiceNeedsHttps = "", string VoiceMicRefused = "", string VoiceFailed = "");
 
@@ -1008,6 +1022,7 @@ public sealed class WebVideoReport
 [JsonSerializable(typeof(WebVideoOwner))]
 [JsonSerializable(typeof(WebVideoReport))]
 [JsonSerializable(typeof(WebVoiceStart))]
+[JsonSerializable(typeof(WebBotResume))]
 [JsonSerializable(typeof(WebVoiceChunk))]
 [JsonSerializable(typeof(WebVoiceEnd))]
 [JsonSerializable(typeof(WebVoiceSpeak))]

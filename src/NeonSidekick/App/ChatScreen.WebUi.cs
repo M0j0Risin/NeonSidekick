@@ -173,6 +173,8 @@ internal sealed partial class ChatScreen
             LearnCancel = WebCancelLearn,
             // The status row's ⏭️ (2026-11-12): ESC's step in a botchat, pressed through the watcher.
             BotSkip = WebSkip,
+            // Its 👥 (2026-11-14): the last botchat carried on, as Ctrl+Alt+B does, its line run as a chord.
+            BotResume = WebResumeBot,
             // The queue held after a cancel (2026-10-17): the page's lines from before it wait for the hold to lift, its Resume lifts it.
             CancelHoldNow = () => _queue.Held,
             QueueResume = WebResumeQueue,
@@ -752,6 +754,8 @@ internal sealed partial class ChatScreen
             UserLine: UserLineStyle.Resolve(effective.UserLineStyle),
             // A botchat's ladder stands (2026-11-12): the status row offers ⏭️. Volatile, as the kill switch reads it off the screen's task.
             BotChat: Volatile.Read(ref _botLadder) is not null,
+            // A stopped one the page can carry on (2026-11-14): the status row offers 👥 where ⏭️ stood.
+            BotResume: WebBotResumeOffered,
             // The Chat tab's 🎤 and 🔊 (2026-11-13, the webui-voice plan): null when not offered, "" when ready, else why not.
             VoiceListen: WebVoiceListenState(effective),
             VoiceSpeak: WebVoiceSpeakState(effective));
@@ -913,6 +917,68 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
+    /// A page's 👥 on its way (2026-11-14): set as its line is queued, cleared once that line has run (or was dropped with the page's lines,
+    /// or failed to queue). A second tap meanwhile — or one in the moment before the chat's flag flips — would queue a resume that waited for
+    /// the chat's end and carried it on again. Interlocked: the taps come on Kestrel's threads.
+    /// </summary>
+    private int _webResumeInFlight;
+
+    /// <summary>
+    /// Whether the page's status row offers 👥 (2026-11-14, the user's ask: the PC's 👥 on the page): the PC's own (<see cref="BotChatResumable"/>),
+    /// no 👥 of the page's already on its way, and <c>/botchat --resume</c> allowed from the page (not under <i>Web UI commands</i> off). Any thread.
+    /// </summary>
+    private bool WebBotResumeOffered =>
+        BotChatResumable && Volatile.Read(ref _webResumeInFlight) == 0
+        && WebCommands.Check(SlashCommand.BotChat, BotChat.ResumeSwitch, BotChat.ResumeLine, WebCommandSettingsNow()).Allowed;
+
+    /// <summary>
+    /// The status row's 👥 (2026-11-14, the user's ask; a Kestrel thread): <see cref="BotChat.ResumeLine"/> queued as a chord from the page, so
+    /// it runs under the page's origin — its voices on that page under its 🔊, no webcam — with no › row and nothing in the history, as the
+    /// PC's 👥 and Ctrl+Alt+B run it. The audit line and the PC's hint row stand in for the row. Ok and nothing queued while one is on its way
+    /// or a chat runs (a stale tap); the typed line's refusals with nothing to resume or a chat from another profile; the page's command rule.
+    /// </summary>
+    private WebReply WebResumeBot(WebBotResume request, IPAddress? remote)
+    {
+        if (_botChatRunning || Volatile.Read(ref _webResumeInFlight) != 0)
+        {
+            return WebReply.Ok;
+        }
+
+        if (Volatile.Read(ref _lastBotChat) is not { } saved)
+        {
+            return new WebReply(WebOutcome.Conflict, BotChat.NothingToResumeError);
+        }
+
+        if (!Profiles.NameEquals(saved.Starter, _settings.ProfileName))
+        {
+            return new WebReply(WebOutcome.Conflict, BotChat.ResumeOtherProfileError(saved.Starter));
+        }
+
+        var verdict = WebCommands.Check(SlashCommand.BotChat, BotChat.ResumeSwitch, BotChat.ResumeLine, WebCommandSettingsNow());
+        if (!verdict.Allowed)
+        {
+            return new WebReply(WebOutcome.Refused, verdict.Reason);
+        }
+
+        if (Interlocked.CompareExchange(ref _webResumeInFlight, 1, 0) != 0)
+        {
+            return WebReply.Ok;   // a tap on another thread got there first
+        }
+
+        var queued = _webUi.QueueChord(BotChat.ResumeLine, remote, request.Page, request.Speak == true);
+        if (queued.Outcome != WebOutcome.Ok)
+        {
+            Interlocked.Exchange(ref _webResumeInFlight, 0);
+            return queued;
+        }
+
+        DiagnosticLog.Info(WebUiCategory, WebUiText.BotResumeLogLine(remote));
+        _webUi.FlashPc(WebUiText.BotResumedFlash);
+        _webUi.PublishState();
+        return WebReply.Ok;
+    }
+
+    /// <summary>
     /// The held queue's Resume (2026-10-17, the user's question: under Queue cancel mode hold the page could never release it): the hold lifted
     /// as a reply ending on its own lifts it, the idle line woken to send the next, the audit line, the PC's hint row; nothing in the transcript.
     /// Conflict when nothing is held. <c>MessageQueue.Held</c> is lock-guarded, so a Kestrel thread may clear it.
@@ -944,17 +1010,17 @@ internal sealed partial class ChatScreen
             return null;
         }
 
-        return WebLine(line.Text, line.AsText, line.Remote, line.Page is { } page ? new WebPageRef(page, line.Speak) : null);
+        return WebLine(line.Text, line.AsText, line.Remote, line.Page is { } page ? new WebPageRef(page, line.Speak) : null, line.Chord);
     }
 
     /// <summary>
     /// A page's line from its text alone (2026-10-16, out of <see cref="TakeWebLine"/> for a saved prompt the page's <c>/prompts &lt;n&gt;</c>
     /// sends): never through the PC's paste store, its label one row, routed back to the page when withdrawn.
     /// </summary>
-    private static SubmittedLine WebLine(string text, bool asText, System.Net.IPAddress? remote, WebPageRef? page)
+    private static SubmittedLine WebLine(string text, bool asText, System.Net.IPAddress? remote, WebPageRef? page, bool chord = false)
     {
         string label = text.Replace("\r\n", " ", StringComparison.Ordinal).Replace('\n', ' ').Replace('\r', ' ');
-        return new SubmittedLine(text, text.TrimEnd(), [], label) { FromWeb = true, AsText = asText, Remote = remote, WebPage = page?.Page, Speak = page?.Speak == true };
+        return new SubmittedLine(text, text.TrimEnd(), [], label) { FromWeb = true, AsText = asText, Remote = remote, WebPage = page?.Page, Speak = page?.Speak == true, Chord = chord };
     }
 
     /// <summary>A message from the page, withdrawn before the model answered: back to the page's draft.</summary>

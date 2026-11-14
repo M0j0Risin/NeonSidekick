@@ -319,6 +319,31 @@ public sealed partial class WebUiHostTests
         Assert.Equal(WebTab.Chat, WebUiHost.TabOf(WebUiHost.BotSkipPath));
     }
 
+    /// <summary>The status row's 👥 after a botchat (2026-11-14): ⏭️'s shape, with its page and 🔊 read from the body.</summary>
+    [Fact]
+    public async Task TheBotResume_NeedsTheCookieAndTheHeader_IsAnAct_AndAnswersTheBackend()
+    {
+        const string Body = "{\"page\":\"page-0123456789abcdef\",\"speak\":true}";
+        using var unsigned = await _client.SendAsync(Post(WebUiHost.BotResumePath, Body, signedIn: false));
+        using var crossSite = await _client.SendAsync(Post(WebUiHost.BotResumePath, Body, csrf: false));
+        Assert.Equal((HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden), (unsigned.StatusCode, crossSite.StatusCode));
+        Assert.Empty(_backend.BotResumes);
+
+        using var done = await _client.SendAsync(Post(WebUiHost.BotResumePath, Body));
+        Assert.Equal(HttpStatusCode.OK, done.StatusCode);
+        var seen = Assert.Single(_backend.BotResumes);
+        Assert.Equal(("page-0123456789abcdef", (bool?)true), (seen.Page, seen.Speak));
+
+        _backend.BotResumeReply = new WebReply(WebOutcome.Conflict, App.BotChat.NothingToResumeError);
+        using var none = await _client.SendAsync(Post(WebUiHost.BotResumePath, "{}"));
+        Assert.Equal(HttpStatusCode.Conflict, none.StatusCode);
+        var body = JsonSerializer.Deserialize(await none.Content.ReadAsStringAsync(), WebUiJsonContext.Default.WebResult)!;
+        Assert.Equal(App.BotChat.NothingToResumeError, body.Message);
+
+        Assert.Equal(WebRateBucket.Act, WebRateLimit.BucketOf(WebUiHost.BotResumePath, post: true));
+        Assert.Equal(WebTab.Chat, WebUiHost.TabOf(WebUiHost.BotResumePath));
+    }
+
     /// <summary>The held queue's Resume (2026-10-17): the same shape as the 🧠's cancel.</summary>
     [Fact]
     public async Task TheQueuesResume_NeedsTheCookieAndTheHeader_IsAnAct_AndAnswersTheBackend()

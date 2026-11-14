@@ -200,6 +200,9 @@ public interface IWebUiBackend
     /// <summary>The status row's ⏭️ during a botchat (2026-11-12): ESC's step at the PC (the voice, the bot, the chat); NotFound without a screen.</summary>
     WebReply SkipBot(IPAddress? remote) => new(WebOutcome.NotFound);
 
+    /// <summary>The status row's 👥 (2026-11-14): the last botchat carried on, as the PC's Ctrl+Alt+B does; NotFound without a screen.</summary>
+    WebReply ResumeBot(WebBotResume request, IPAddress? remote) => new(WebOutcome.NotFound);
+
     /// <summary>The queue held after a cancel released from the page's banner (2026-10-17); NotFound without a screen.</summary>
     WebReply ResumeQueue(IPAddress? remote) => new(WebOutcome.NotFound);
 

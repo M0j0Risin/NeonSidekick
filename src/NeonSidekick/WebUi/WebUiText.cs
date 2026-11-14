@@ -819,6 +819,18 @@ public static class WebUiText
     /// <summary>The audit line.</summary>
     public static string BotSkipLogLine(IPAddress? remote) => "Web UI skipped in the botchat from " + Where(remote) + ".";
 
+    // ── The status row's 👥 after a botchat (2026-11-14, the user's ask): the PC's 👥 and Ctrl+Alt+B on the page ──
+    // Its refusals are the typed /botchat --resume's own (BotChat.NothingToResumeError, BotChat.ResumeOtherProfileError).
+
+    /// <summary>The 👥's label.</summary>
+    public const string BotResume = "Resume the last botchat, as Ctrl+Alt+B does at the PC";
+
+    /// <summary>The PC's hint row after the page's 👥: the line runs as a chord, with no row of its own.</summary>
+    public const string BotResumedFlash = "📱 resumed the botchat";
+
+    /// <summary>The audit line.</summary>
+    public static string BotResumeLogLine(IPAddress? remote) => "Web UI resumed the botchat from " + Where(remote) + ".";
+
     // ── The page's 🗑️ (later on 2026-10-15) ──
 
     /// <summary>The overlay's 🗑️, and its label once armed.</summary>
@@ -867,7 +879,7 @@ public static class WebUiText
         BotCheckHint, BotCheckPicture, BotCheckZoom, BotCheckScrollUp, BotCheckScrollDown, BotCheckTypeHere, BotCheckSend, BotCheckEnter, BotCheckBackspace, BotCheckTab,
         BotCheckStalled, LearnCancel, LearnCancelArmed, Resume,
         MemoryEdit, MemoryEditSave, MemoryEditCancel, MemoryTurnOff, MemoryTurnOn,
-        Skip,
+        Skip, BotResume,
         VoiceMic, VoiceListening, VoiceTranscribing, VoiceCancel, VoiceSpeakOn, VoiceSpeakOff,
         VoiceHeardNothing, VoiceNeedsHttps, VoiceMicRefused, VoiceFailed);
 

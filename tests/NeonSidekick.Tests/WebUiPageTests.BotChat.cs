@@ -6,11 +6,14 @@ namespace NeonSidekick.Tests;
 /// <summary>
 /// A botchat on the page in the browser (2026-11-12, plan what-would-it-take-tingly-ullman): a speaker line wears its bot's color class, and
 /// any other value none; the status row's ⏭️ shows only while a botchat keeps the PC busy, posts the skip, says a refusal, fits a phone's
-/// row, and a tap on it never arms the 🧠 shown in the same row.
+/// row, and a tap on it never arms the 🧠 shown in the same row. The 👥 after a botchat (2026-11-14) shows only while the state offers it, keeps
+/// the row up on its own, posts its page and 🔊 to its own path (never a sent line), and says a refusal.
 /// </summary>
 public sealed partial class WebUiPageTests
 {
     private const string Skip = "document.getElementById('skip')";
+
+    private const string BotResumeButton = "document.getElementById('bot-resume')";
 
     [WindowsFact]
     public async Task Chat_ASpeakerLine_WearsItsSlotsClass_AndABadSlotNone()
@@ -64,6 +67,41 @@ public sealed partial class WebUiPageTests
 
         Publish("state", Json(State(busy: false) with { BotChat = true }));
         await page.WaitAsync(Skip + ".classList.contains('hidden')", "hidden once the PC is idle");
+    }
+
+    [WindowsFact]
+    public async Task Chat_TheResume_ShowsWhileOffered_PostsItsPage_NotALine_AndSaysARefusal()
+    {
+        _backend.Snap = new WebSnapshot([], [], State(), WebUiText.Words);
+        if (await SignedInAsync("/", width: 360) is not { } page)
+        {
+            return;
+        }
+
+        string id = await page.TextAsync("chatPage");
+        Assert.True((await page.EvalAsync(BotResumeButton + ".classList.contains('hidden')")).GetBoolean());
+
+        Publish("state", Json(State() with { BotResume = true }));
+        await page.WaitAsync("!" + BotResumeButton + ".classList.contains('hidden')", "the 👥 offered");
+        Assert.False((await page.EvalAsync("document.getElementById('status').classList.contains('hidden')")).GetBoolean());   // the row up with no usage
+        Assert.True((await page.EvalAsync(Skip + ".classList.contains('hidden')")).GetBoolean());
+        Assert.Equal(WebUiText.BotResume, await page.TextAsync(BotResumeButton + ".getAttribute('aria-label')"));
+        Assert.Equal("👥", await page.TextAsync(BotResumeButton + ".textContent"));
+        await page.WaitAsync("document.documentElement.scrollWidth <= window.innerWidth", "no sideways scroll at 360 px");
+
+        await page.EvalAsync(BotResumeButton + ".click()");
+        await UntilAsync(() => _backend.BotResumes.Count == 1, "the resume's post");
+        var sent = Assert.Single(_backend.BotResumes);
+        Assert.Equal((id, (bool?)false), (sent.Page, sent.Speak));   // 🔊 off on this page
+        Assert.Empty(_backend.Sent);   // its own path, never a line typed
+
+        _backend.BotResumeReply = new WebReply(WebOutcome.Conflict, App.BotChat.NothingToResumeError);
+        await page.WaitAsync("!" + BotResumeButton + ".disabled", "the first resume's answer back");
+        await page.EvalAsync(BotResumeButton + ".click()");
+        await page.WaitAsync("document.getElementById('message').textContent === " + JsonSerializer.Serialize(App.BotChat.NothingToResumeError), "the refusal said");
+
+        Publish("state", Json(State() with { BotResume = false }));
+        await page.WaitAsync(BotResumeButton + ".classList.contains('hidden') && document.getElementById('status').classList.contains('hidden')", "hidden once nothing to resume");
     }
 
     [WindowsFact]

@@ -12,9 +12,10 @@ namespace NeonSidekick.WebUi;
 /// <summary>
 /// A message the page sent, waiting for the idle line: its text and the page's id for it; where it came from, and whether a line that reads as a
 /// command goes as a message (later on 2026-10-14). <see cref="Page"/> and <see cref="Speak"/> (2026-11-13, the webui-voice plan): the sending page and its
-/// 🔊 as the line carried it, for the turn's voice (the page's latest 🔊 wins when it has one).
+/// 🔊 as the line carried it, for the turn's voice (the page's latest 🔊 wins when it has one). <see cref="Chord"/> (2026-11-14): the app's own line for a
+/// page's button (the status row's 👥), run as the PC's chord runs its line — no › row, never in the history, never handed back to a draft.
 /// </summary>
-public sealed record WebLine(string Text, string? Id, IPAddress? Remote = null, bool AsText = false, string? Page = null, bool Speak = false);
+public sealed record WebLine(string Text, string? Id, IPAddress? Remote = null, bool AsText = false, string? Page = null, bool Speak = false, bool Chord = false);
 
 /// <summary>
 /// The app's side of the Web UI (2026-10-14), one per screen and outliving the server's restarts: the transcript as the pages see it
@@ -403,6 +404,15 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
 
     public WebReply SkipBot(IPAddress? remote) => BotSkip is { } skip ? skip(remote) : new WebReply(WebOutcome.NotFound);
 
+    /// <summary>The screen's resume of the last botchat (2026-11-14, the status row's 👥); null: none.</summary>
+    public Func<WebBotResume, IPAddress?, WebReply>? BotResume { get; set; }
+
+    public WebReply ResumeBot(WebBotResume request, IPAddress? remote)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return BotResume is { } resume ? resume(request, remote) : new WebReply(WebOutcome.NotFound);
+    }
+
     /// <summary>The screen's release of its queue held after a cancel (2026-10-17, the banner's Resume); null: none.</summary>
     public Func<IPAddress?, WebReply>? QueueResume { get; set; }
 
@@ -626,7 +636,10 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
         while (_cancelHeld.TryDequeue(out var line) || _lines.TryDequeue(out line))
         {
             dropped++;
-            HandBack("dropped", line.Text);
+            if (!line.Chord)
+            {
+                HandBack("dropped", line.Text);   // a 👥's line was never the page's draft (2026-11-14)
+            }
         }
 
         if (dropped > 0)
@@ -826,6 +839,28 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
         _lines.Enqueue(new WebLine(text, request.Id, remote, request.AsText, page, page is not null && request.Speak == true));
         Interlocked.Increment(ref _linesAdded);
         Accepted?.Invoke(text);
+        PublishState();
+        Nudge?.Invoke();
+        return WebReply.Ok;
+    }
+
+    /// <summary>
+    /// The app's own line for a page's button, queued as a chord (2026-11-14, the status row's 👥): as <see cref="Send"/> queues a message — the
+    /// page's 🔊 seen first, the waiting cap, the idle line woken — but never <see cref="Accepted"/> (the history), and never checked here: the
+    /// screen checks it before calling this, and again as it runs it.
+    /// </summary>
+    public WebReply QueueChord(string text, IPAddress? remote, string? page, bool speak)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(text);
+        page = WebVideoPlayer.IsId(page) ? page : null;
+        Voice?.Saw(page, speak);
+        if (WaitingCount >= MaxWaiting)
+        {
+            return new WebReply(WebOutcome.TooMany, WebUiText.QueueFull(MaxWaiting));
+        }
+
+        _lines.Enqueue(new WebLine(text, null, remote, false, page, page is not null && speak, Chord: true));
+        Interlocked.Increment(ref _linesAdded);
         PublishState();
         Nudge?.Invoke();
         return WebReply.Ok;
