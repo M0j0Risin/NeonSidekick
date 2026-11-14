@@ -1,0 +1,51 @@
+{
+  "query_block": {
+    "select_id": 1,
+    "cost_info": {
+      "query_cost": "2520038.41"
+    },
+    "nested_loop": [
+      {
+        "table": {
+          "table_name": "c",
+          "access_type": "ALL",
+          "rows_examined_per_scan": 500,
+          "rows_produced_per_join": 500,
+          "filtered": "100.00",
+          "cost_info": {
+            "read_cost": "1.00",
+            "eval_cost": "50.00",
+            "prefix_cost": "51.00",
+            "data_read_per_join": "42K"
+          },
+          "used_columns": [
+            "id",
+            "name"
+          ]
+        }
+      },
+      {
+        "table": {
+          "table_name": "o",
+          "access_type": "ALL",
+          "rows_examined_per_scan": 50396,
+          "rows_produced_per_join": 2519800,
+          "filtered": "10.00",
+          "using_join_buffer": "hash join",
+          "cost_info": {
+            "read_cost": "187.41",
+            "eval_cost": "251980.00",
+            "prefix_cost": "2520038.41",
+            "data_read_per_join": "38M"
+          },
+          "used_columns": [
+            "id",
+            "customer_id",
+            "total"
+          ],
+          "attached_condition": "(cast(`neon`.`o`.`customer_id` as double) = cast(`neon`.`c`.`name` as double))"
+        }
+      }
+    ]
+  }
+}

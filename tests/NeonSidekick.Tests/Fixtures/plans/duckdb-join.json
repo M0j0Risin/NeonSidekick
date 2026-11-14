@@ -1,0 +1,117 @@
+[
+    {
+        "name": "PROJECTION",
+        "children": [
+            {
+                "name": "ORDER_BY",
+                "children": [
+                    {
+                        "name": "PROJECTION",
+                        "children": [
+                            {
+                                "name": "PROJECTION",
+                                "children": [
+                                    {
+                                        "name": "HASH_GROUP_BY",
+                                        "children": [
+                                            {
+                                                "name": "PROJECTION",
+                                                "children": [
+                                                    {
+                                                        "name": "PROJECTION",
+                                                        "children": [
+                                                            {
+                                                                "name": "HASH_JOIN",
+                                                                "children": [
+                                                                    {
+                                                                        "name": "SEQ_SCAN",
+                                                                        "children": [],
+                                                                        "extra_info": {
+                                                                            "Table": "memory.main.orders",
+                                                                            "Type": "Sequential Scan",
+                                                                            "Projections": [
+                                                                                "customer_id",
+                                                                                "total"
+                                                                            ],
+                                                                            "Filters": "total>5.0",
+                                                                            "Estimated Cardinality": "40000"
+                                                                        }
+                                                                    },
+                                                                    {
+                                                                        "name": "SEQ_SCAN",
+                                                                        "children": [],
+                                                                        "extra_info": {
+                                                                            "Table": "memory.main.customers",
+                                                                            "Type": "Sequential Scan",
+                                                                            "Projections": [
+                                                                                "id",
+                                                                                "name"
+                                                                            ],
+                                                                            "Estimated Cardinality": "5000"
+                                                                        }
+                                                                    }
+                                                                ],
+                                                                "extra_info": {
+                                                                    "Join Type": "INNER",
+                                                                    "Conditions": "customer_id = id",
+                                                                    "Estimated Cardinality": "34620"
+                                                                }
+                                                            }
+                                                        ],
+                                                        "extra_info": {
+                                                            "Projections": [
+                                                                "#0",
+                                                                "__internal_compress_string_ubigint(#1)"
+                                                            ],
+                                                            "Estimated Cardinality": "34620"
+                                                        }
+                                                    }
+                                                ],
+                                                "extra_info": {
+                                                    "Projections": [
+                                                        "name",
+                                                        "total"
+                                                    ],
+                                                    "Estimated Cardinality": "34620"
+                                                }
+                                            }
+                                        ],
+                                        "extra_info": {
+                                            "Groups": "#0",
+                                            "Aggregates": "sum(#1)",
+                                            "Estimated Cardinality": "30461"
+                                        }
+                                    }
+                                ],
+                                "extra_info": {
+                                    "Projections": [
+                                        "__internal_decompress_string(#0)",
+                                        "#1"
+                                    ],
+                                    "Estimated Cardinality": "30461"
+                                }
+                            }
+                        ],
+                        "extra_info": {
+                            "Projections": [
+                                "__internal_compress_string_ubigint(#0)",
+                                "#1"
+                            ],
+                            "Estimated Cardinality": "30461"
+                        }
+                    }
+                ],
+                "extra_info": {
+                    "Order By": "sum(o.total) DESC"
+                }
+            }
+        ],
+        "extra_info": {
+            "Projections": [
+                "__internal_decompress_string(#0)",
+                "#1"
+            ],
+            "Estimated Cardinality": "0"
+        }
+    }
+]

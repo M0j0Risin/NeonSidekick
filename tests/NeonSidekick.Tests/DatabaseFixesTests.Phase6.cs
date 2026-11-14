@@ -42,7 +42,14 @@ public sealed class DatabaseSessionTests
         Assert.Null(PostgresText.SessionProblem("off", "on", "30s", "public", readOnly: false, null));
         Assert.Equal(PostgresText.SessionNotSet("standard_conforming_strings"), PostgresText.SessionProblem("on", "off", "30s", "public", readOnly: true, null));
         Assert.Equal(PostgresText.SessionNotSet("statement_timeout"), PostgresText.SessionProblem("on", "on", "0", "public", readOnly: true, null));
-        Assert.Equal(PostgresText.SessionNotSet("the search path"), PostgresText.SessionProblem("on", "on", "30s", "\"$user\",public", readOnly: true, "sales"));
+        Assert.Equal(PostgresText.SchemasMissing(["sales"]), PostgresText.SessionProblem("on", "on", "30s", "\"$user\",public", readOnly: true, "sales"));
+
+        // A list (2026-11-14, #18): the read-back must be the list in its order; one the server lacks is named; one out of order is the setting lost.
+        Assert.Null(PostgresText.SessionProblemUnder("on", "on", "30s", "public,ns_other", readOnly: true, ["public", "ns_other"]));
+        Assert.Equal(PostgresText.SchemasMissing(["ns_other"]), PostgresText.SessionProblemUnder("on", "on", "30s", "public", readOnly: true, ["public", "ns_other"]));
+        Assert.Equal(PostgresText.SchemasMissing(["a", "b"]), PostgresText.SessionProblemUnder("on", "on", "30s", "public", readOnly: true, ["a", "b"]));
+        Assert.Equal(PostgresText.SessionNotSet("the search path"), PostgresText.SessionProblemUnder("on", "on", "30s", "ns_other,public", readOnly: true, ["public", "ns_other"]));
+        Assert.Null(PostgresText.SessionProblemUnder("on", "on", "30s", "anything", readOnly: true, []));
     }
 
     /// <summary>E2: the session's schema is quoted from its normalized spelling as it stands, never folded again.</summary>

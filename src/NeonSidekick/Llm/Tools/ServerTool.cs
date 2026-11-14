@@ -29,19 +29,19 @@ public abstract class ServerTool<TAccess> : AIFunction where TAccess : class
     public const string ConnectionArgument = "connection";
     public const string TableArgument = "table";
 
-    /// <summary>The query tools' export (2026-10-29, the Office writing plan): the workbook to write every row to, its sheet, and a replace.</summary>
+    /// <summary>The query tools' export (2026-10-29, the Office writing plan; CSV and JSON since 2026-11-14): the file to write every row to, a workbook's sheet, and a replace.</summary>
     public const string ToArgument = "to";
     public const string SheetArgument = "sheet";
     public const string OverwriteArgument = "overwrite";
 
     /// <summary>The three export properties every query tool's schema carries.</summary>
     public const string ExportProperties =
-        "\"to\": { \"type\": \"string\", \"description\": \"An .xlsx path or folder (relative to the working directory) to write every row to instead of returning them; the answer then shows the first rows.\" }, " +
-        "\"sheet\": { \"type\": \"string\", \"description\": \"With to: the sheet's name; naming a new one adds it to an existing workbook. Default Query.\" }, " +
+        "\"to\": { \"type\": \"string\", \"description\": \"An .xlsx, .csv, .json or .jsonl path, or a folder for a workbook (relative to the working directory), to write every row to instead of returning them; the answer then shows the first rows.\" }, " +
+        "\"sheet\": { \"type\": \"string\", \"description\": \"With an .xlsx to only: the sheet's name; naming a new one adds it to an existing workbook. Default Query.\" }, " +
         "\"overwrite\": { \"type\": \"boolean\", \"description\": \"With to: replace the sheet named, or with no sheet the whole file. Default false.\" }";
 
     /// <summary>The sentence a query tool's description adds for <c>to</c>.</summary>
-    public const string ExportSentence = " Give to (an .xlsx path or folder) to write every row to a spreadsheet instead of returning them.";
+    public const string ExportSentence = " Give to (an .xlsx, .csv, .json or .jsonl path, or a folder) to write every row to a file instead of returning them.";
 
     /// <summary>A query's row cap in a schema's words: <see cref="AppSettingsData.MaxSqlQueryMaxRows"/>, never a literal of its own (review F55).</summary>
     protected static string MaxRowsWords => AppSettingsData.MaxSqlQueryMaxRows.ToString(CultureInfo.InvariantCulture);
@@ -195,12 +195,27 @@ public abstract class ServerTool<TAccess> : AIFunction where TAccess : class
         }
 
         string folder = files.Root;
-        var request = new XlsxRequest(export.To, export.Sheet, export.Overwrite, null, SqlExport.FileStem(name), SqlExportText.DefaultSheet);
-        XlsxTarget? planned;
+        if (OutputNames.QueryRefusal(export.To, files.IsExistingDirectory) is { } wrongKind)
+        {
+            return wrongKind;
+        }
+
+        // A CSV or JSON name is a text file (2026-11-14, the database-tools plan's #13); a folder or any other name, a workbook as before.
+        var format = OutputNames.IntoFolder(export.To, files.IsExistingDirectory) ? null : TextTableTarget.FormatOf(export.To);
+        ITableFileTarget? planned;
         string? refusal;
+        TextTableTarget? text = null;
         try
         {
-            planned = XlsxTarget.Plan(files, request, Clock, out refusal);
+            if (format is { } kind)
+            {
+                planned = text = TextTableTarget.Plan(files, export.To, kind, export.Sheet, export.Overwrite, out refusal);
+            }
+            else
+            {
+                var request = new XlsxRequest(export.To, export.Sheet, export.Overwrite, null, SqlExport.FileStem(name), SqlExportText.DefaultSheet);
+                planned = XlsxTarget.Plan(files, request, Clock, out refusal);
+            }
         }
         catch (Exception ex) when (XlsxTarget.Failure(ex))
         {
@@ -224,7 +239,7 @@ public abstract class ServerTool<TAccess> : AIFunction where TAccess : class
             {
                 return (null, XlsxTarget.FailureText(ex, target.Relative));
             }
-        }, cell, header, ex => XlsxTarget.FailureText(ex, target.Relative));
+        }, cell, text is null ? header : TextHeader(header, text.UtcColumns), ex => XlsxTarget.FailureText(ex, target.Relative));
         var result = await run(job, SqlExport.TimeoutFor(timeoutSetting), cancellationToken).ConfigureAwait(false);
         if (job.Refusal is { } refusedRows)
         {
@@ -252,7 +267,36 @@ public abstract class ServerTool<TAccess> : AIFunction where TAccess : class
             return XlsxTarget.FailureText(ex, target.Relative) + SqlExportText.NotWritten(job.Rows, timedOut: false);
         }
 
-        return SqlExportText.Answer(answer, grid, given);
+        return SqlExportText.Answer(answer, grid, given, format);
+    }
+
+    /// <summary>
+    /// A CSV or JSON file's header hook (2026-11-14, the database-tools plan's #13): the family's own, with the <see cref="SqlExport.UtcColumn"/>
+    /// it adds taken back off and the column marked in <paramref name="utc"/>, so a key reads <c>created_at</c> (code reads these files) and
+    /// each value carries a <c>Z</c>. Only a suffix the hook added comes off: the reader's own name (or, for a blank one, its made-up
+    /// <see cref="SqlText.UnnamedColumn"/>) with the suffix after it. A column the user named <c>x (UTC)</c> is left as it is.
+    /// </summary>
+    internal static Func<DbDataReader, int, string>? TextHeader(Func<DbDataReader, int, string>? header, HashSet<int> utc)
+    {
+        ArgumentNullException.ThrowIfNull(utc);
+        if (header is null)
+        {
+            return null;
+        }
+
+        return (reader, ordinal) =>
+        {
+            string named = header(reader, ordinal);
+            string raw = reader.GetName(ordinal);
+            string own = string.IsNullOrEmpty(raw) ? SqlText.UnnamedColumn(ordinal) : raw;
+            if (string.Equals(named, own + SqlExport.UtcColumn, StringComparison.Ordinal))
+            {
+                utc.Add(ordinal);
+                return own;
+            }
+
+            return named;
+        };
     }
 
     /// <summary>

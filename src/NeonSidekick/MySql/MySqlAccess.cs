@@ -114,7 +114,9 @@ public sealed class MySqlAccess
     /// cancelled token throws. The run's <see cref="SqlRun.Database"/> is the database it worked in.
     /// </summary>
     /// <remarks><paramref name="export"/> (2026-10-29, the Office writing plan): the rows go to a workbook's sheet in place of the grid (<see cref="ExportAsync"/>).</remarks>
-    public async Task<SqlRun> RunAsync(string? name, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken, SqlExportJob? export = null)
+    /// <remarks><paramref name="readCell"/> (2026-11-14, the database-tools plan's #12, <c>mysql_explain</c>): the cells read whole (<see cref="QueryPlan.WholeCell"/>) in place of the clipped grid's.</remarks>
+    public async Task<SqlRun> RunAsync(string? name, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken, SqlExportJob? export = null,
+        Func<DbDataReader, int, string>? readCell = null)
     {
         ArgumentNullException.ThrowIfNull(statements);
         ArgumentNullException.ThrowIfNull(parameters);
@@ -182,7 +184,7 @@ public sealed class MySqlAccess
                         return new SqlRun(SqlOutcome.Timeout, timeoutSeconds.ToString(CultureInfo.InvariantCulture), target.Name, workIn, grids, watch.Elapsed);
                     }
 
-                    grids.Add(await ReadAsync(connection, transaction, sql, parameters, maxRows, left, cancellationToken, export).ConfigureAwait(false));
+                    grids.Add(await ReadAsync(connection, transaction, sql, parameters, maxRows, left, cancellationToken, export, readCell).ConfigureAwait(false));
                 }
             }
             finally
@@ -371,7 +373,8 @@ public sealed class MySqlAccess
     }
 
     /// <summary>One statement's rows: the parameters it names bound, read to the cap, the query killed on the server when more are left (its interrupt answer then expected, not an error).</summary>
-    private static async Task<SqlGrid> ReadAsync(MySqlConnection connection, MySqlTransaction transaction, string sql, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken, SqlExportJob? export = null)
+    private static async Task<SqlGrid> ReadAsync(MySqlConnection connection, MySqlTransaction transaction, string sql, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken, SqlExportJob? export = null,
+        Func<DbDataReader, int, string>? readCell = null)
     {
         await using var command = new MySqlCommand(sql, connection, transaction) { CommandTimeout = timeoutSeconds };
         foreach (var parameter in Bound(sql, parameters))
@@ -384,7 +387,7 @@ public sealed class MySqlAccess
         try
         {
             grid = export is null
-                ? await SqlGrid.ReadAsync(reader, maxRows, cancellationToken, ReadCell).ConfigureAwait(false)
+                ? await SqlGrid.ReadAsync(reader, maxRows, cancellationToken, readCell ?? ReadCell).ConfigureAwait(false)
                 : await export.ReadAsync(reader, maxRows, cancellationToken).ConfigureAwait(false);
             if (grid.More)
             {

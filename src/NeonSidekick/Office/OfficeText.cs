@@ -498,7 +498,34 @@ public static class OfficeText
         $"Error: '{path}' is over {(max / (1024 * 1024)).ToString(CultureInfo.InvariantCulture)} MB, too large a JSON file; save it as CSV first";
 
     /// <summary><c>sheet</c> or <c>overwrite</c> given with no <c>to</c> where <c>to</c> is what writes. Pinned.</summary>
-    public static string NeedsTo(string argument) => $"Error: {argument} goes with to (the .xlsx file or folder to write); give to as well";
+    public static string NeedsTo(string argument) => $"Error: {argument} goes with to (the file or folder to write); give to as well";
+
+    /// <summary><c>sheet</c> given with a CSV or JSON <c>to</c> (2026-11-14, the database-tools plan's #13): only a workbook has sheets. Pinned.</summary>
+    public static string SheetNeedsXlsx(string extension) =>
+        $"Error: sheet is for .xlsx; a {extension} file holds one table, so leave sheet out or end to in .xlsx";
+
+    /// <summary>A CSV or JSON <c>to</c> naming a file that is there, with no <c>overwrite</c> (such a file is written whole, never added to). Pinned.</summary>
+    public static string TextFileExists(string path) => $"Error: '{path}' already exists; give overwrite: true to replace it";
+
+    /// <summary>
+    /// A CSV or JSON file of a query's rows written (2026-11-14, the database-tools plan's #13): <c>Made orders.csv (12 KB): 1,204 rows × 3
+    /// columns</c>, or <c>Replaced …</c>, then the notes (<see cref="TextNotes"/>).
+    /// </summary>
+    public static string TextFile(WriteResult result, SheetResult sheet)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        ArgumentNullException.ThrowIfNull(sheet);
+        return (result.Replaced ? "Replaced " : "Made ") + result.Relative + " (" + FileText.Size(result.Bytes) + "): "
+            + Count(sheet.Rows, "row") + " × " + Count(sheet.Columns, "column") + TextNotes(sheet);
+    }
+
+    /// <summary>The notes after a CSV or JSON file's sentence: cells cut at a cell's cap, rows past the last row a workbook holds.</summary>
+    public static string TextNotes(SheetResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        return (result.CutCells > 0 ? $"; {Count(result.CutCells, "cell")} cut at {N(XlsxValue.MaxChars)} characters" : "")
+            + (result.RowsCut ? $"; stopped at {N(SheetWriter.MaxDataRows)} rows, so later rows are left out" : "");
+    }
 
     /// <summary>A <c>to</c> ending in another document type than the tool writes. Pinned.</summary>
     public static string WrongTarget(string to, string extension) =>

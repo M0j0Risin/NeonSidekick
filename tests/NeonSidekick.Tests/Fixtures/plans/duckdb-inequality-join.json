@@ -1,0 +1,54 @@
+[
+    {
+        "name": "PROJECTION",
+        "children": [
+            {
+                "name": "PIECEWISE_MERGE_JOIN",
+                "children": [
+                    {
+                        "name": "SEQ_SCAN",
+                        "children": [],
+                        "extra_info": {
+                            "Table": "memory.main.orders",
+                            "Type": "Sequential Scan",
+                            "Projections": [
+                                "total",
+                                "id",
+                                "customer_id"
+                            ],
+                            "Estimated Cardinality": "200000"
+                        }
+                    },
+                    {
+                        "name": "SEQ_SCAN",
+                        "children": [],
+                        "extra_info": {
+                            "Table": "memory.main.customers",
+                            "Type": "Sequential Scan",
+                            "Projections": [
+                                "id",
+                                "name"
+                            ],
+                            "Estimated Cardinality": "5000"
+                        }
+                    }
+                ],
+                "extra_info": {
+                    "Join Type": "INNER",
+                    "Conditions": "total < CAST(id AS DECIMAL(21,1))",
+                    "Estimated Cardinality": "385075"
+                }
+            }
+        ],
+        "extra_info": {
+            "Projections": [
+                "id",
+                "customer_id",
+                "total",
+                "id",
+                "name"
+            ],
+            "Estimated Cardinality": "385075"
+        }
+    }
+]

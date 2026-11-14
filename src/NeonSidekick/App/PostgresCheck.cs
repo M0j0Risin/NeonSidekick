@@ -33,9 +33,10 @@ internal static class PostgresCheck
 
     /// <summary>
     /// The lock's line: the cluster's own catalogs refused; under a schema lock, another schema the database holds (when there is one),
-    /// <c>information_schema</c> and <c>pg_tables</c> refused, the schema's own and <c>pg_catalog</c> passed.
+    /// <c>information_schema</c> and <c>pg_tables</c> refused, each listed schema's own (2026-11-14, #18: a probe inside each) and
+    /// <c>pg_catalog</c> passed.
     /// </summary>
-    private static SmokeCheck BoundaryCheck(string? schema, SqlRun names)
+    private static SmokeCheck BoundaryCheck(IReadOnlyList<string> locks, SqlRun names)
     {
         if (names.Outcome != SqlOutcome.Ok)
         {
@@ -45,24 +46,25 @@ internal static class PostgresCheck
         var visible = Column(names, 0);
         var outside = new List<string> { "SELECT datname FROM pg_database", "SELECT * FROM pg_stat_activity", "SELECT rolname FROM pg_catalog.pg_roles" };
         var inside = new List<string> { "SELECT now()", "SELECT t.a FROM t" };
-        if (schema is not null)
+        if (locks.Count > 0)
         {
             outside.Add("SELECT * FROM information_schema.tables");
             outside.Add("SELECT schemaname, tablename FROM pg_tables");   // a catalog listing every schema (2026-10-11)
-            if (visible.FirstOrDefault(v => !v.Equals(schema, StringComparison.OrdinalIgnoreCase) && !PostgresBoundary.AlwaysSchemas.Contains(v) && v != "information_schema") is { } other)
+            if (visible.FirstOrDefault(v => !locks.Any(l => v.Equals(l, StringComparison.OrdinalIgnoreCase)) && !PostgresBoundary.AlwaysSchemas.Contains(v) && v != "information_schema") is { } other)
             {
                 outside.Add($"SELECT 1 FROM \"{other}\".t");
             }
 
-            inside.Add($"SELECT * FROM \"{schema}\".t");
+            inside.AddRange(locks.Select(l => $"SELECT * FROM \"{l}\".t"));
             inside.Add("SELECT pg_catalog.now()");
         }
 
-        var passed = outside.Where(s => PostgresBoundary.Check(s, schema, visible) is null).ToList();
-        var refused = inside.Where(s => PostgresBoundary.Check(s, schema, visible) is not null).ToList();
+        var passed = outside.Where(s => PostgresBoundary.CheckUnder(s, locks, visible) is null).ToList();
+        var refused = inside.Where(s => PostgresBoundary.CheckUnder(s, locks, visible) is not null).ToList();
         bool ok = passed.Count == 0 && refused.Count == 0;
+        string held = locks.Count switch { 0 => "", 1 => " and schema " + locks[0], _ => " and schemas " + string.Join(", ", locks) };
         return new SmokeCheck("postgres:boundary", ok, ok
-            ? $"held to its database{(schema is null ? "" : " and schema " + schema)}: refused all {outside.Count.ToString(CultureInfo.InvariantCulture)} reaches outside it"
+            ? $"held to its database{held}: refused all {outside.Count.ToString(CultureInfo.InvariantCulture)} reaches outside it"
             : (passed.Count > 0 ? "let through: " + string.Join(" | ", passed) : "") + (refused.Count > 0 ? " refused: " + string.Join(" | ", refused) : ""));
     }
 
@@ -115,12 +117,11 @@ internal static class PostgresCheck
         var passed = bypasses.Where(b => PostgresReadOnlyGate.Check(b) is null).ToList();
         checks.Add(new SmokeCheck("postgres:gate", passed.Count == 0, passed.Count == 0 ? $"refused all {bypasses.Length.ToString(CultureInfo.InvariantCulture)} bypasses" : "let through: " + string.Join(" | ", passed)));
 
-        string? schema = string.IsNullOrWhiteSpace(target.Config.Schema) ? null : target.Config.Schema.Trim();
         var names = await access.RunAsync(name, [PostgresBoundary.Names], [], PostgresBoundary.MaxNames, timeoutSeconds, cancellationToken).ConfigureAwait(false);
-        checks.Add(BoundaryCheck(schema, names));
+        checks.Add(BoundaryCheck(target.Config.Locks, names));
         var reach = await access.RunAsync(name, PostgresCatalogQueries.Reach, [], 100, timeoutSeconds, cancellationToken).ConfigureAwait(false);
         checks.Add(new SmokeCheck("postgres:reach", reach.Outcome == SqlOutcome.Ok, reach.Outcome == SqlOutcome.Ok
-            ? PostgresText.Reach(target.Config.Database?.Trim() ?? "", schema, Column(reach, 0), Column(reach, 1), Column(reach, 2))
+            ? PostgresText.Reach(target.Config.Database?.Trim() ?? "", target.Config.LockText, Column(reach, 0), Column(reach, 1), Column(reach, 2))
             : PostgresText.Error(reach)));
 
         var write = await Run(["CREATE TEMP TABLE neonsidekick_check (a int)"], timeoutSeconds).ConfigureAwait(false);

@@ -467,7 +467,7 @@ public sealed class SqliteExecuteTests : IDisposable
         Assert.DoesNotContain(SqliteExecuteTool.ToolName, ChatScreen.SqliteToolsFor(all, _settings, pane: true).Select(t => t.Name));   // no kind ticked
         _settings.SqliteStatementsAllowed = ["data"];
         _settings.SqliteMode = "read-only";
-        Assert.Equal([SqliteDatabasesTool.ToolName, SqliteTablesTool.ToolName, SqliteDescribeTool.ToolName, SqliteQueryTool.ToolName], ChatScreen.SqliteToolsFor(all, _settings, pane: true).Select(t => t.Name));
+        Assert.Equal([SqliteDatabasesTool.ToolName, SqliteTablesTool.ToolName, SqliteDescribeTool.ToolName, SqliteQueryTool.ToolName, SqliteExplainTool.ToolName, SqliteProfileTool.ToolName], ChatScreen.SqliteToolsFor(all, _settings, pane: true).Select(t => t.Name));
     }
 
     [Fact]

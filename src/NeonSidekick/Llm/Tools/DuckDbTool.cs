@@ -317,6 +317,216 @@ public sealed class DuckDbQueryTool : DuckDbTool
 }
 
 /// <summary>
+/// <c>duckdb_explain(sql, database?, params?)</c> (2026-11-14, the database-tools plan's #12): how DuckDB would run one read, from
+/// <c>EXPLAIN (FORMAT json)</c>. The statement goes through <c>duckdb_query</c>'s own path (the gate and its file references, the database,
+/// <see cref="DuckDbFilePaths.Rewrite"/>), so it explains a query over a CSV or Parquet file and the file rules hold; then the prefix is added
+/// and it runs on the read path (the lockdown, the rollback, the timeout). A statement that leads with EXPLAIN, SUMMARIZE, DESCRIBE or SHOW
+/// is refused (the gate passes them as reads, and <c>EXPLAIN ANALYZE</c> would run the query). The plan is made, never run; the answer is
+/// <see cref="QueryPlanText.Answer"/>'s summary.
+/// </summary>
+public sealed class DuckDbExplainTool : DuckDbTool
+{
+    public const string ToolName = "duckdb_explain";
+
+    private static readonly JsonElement Schema = ToolSchema.Parse(
+        $$"""
+        {
+          "type": "object",
+          "properties": {
+            "sql": { "type": "string", "description": "The DuckDB read to explain, as duckdb_query takes it: SELECT, WITH, FROM-first, VALUES or PIVOT. Give the query alone: the tool adds the EXPLAIN." },
+            {{DatabaseProperty}},
+            {{DuckDbQueryTool.ParamsProperty}}
+          },
+          "required": ["sql"]
+        }
+        """);
+
+    /// <summary>The leads the gate passes that have no plan to show, or are one already.</summary>
+    private static readonly HashSet<string> NoPlan = new(StringComparer.Ordinal) { "EXPLAIN", "SUMMARIZE", "DESCRIBE", "SHOW" };
+
+    public DuckDbExplainTool(DuckDbAccess duckDb, Func<AppSettingsData> effective) : base(duckDb, effective)
+    {
+    }
+
+    public override string Name => ToolName;
+
+    public override string Description =>
+        "Shows how DuckDB would run one read: its query plan's steps (scans, joins, sorts, with estimated rows) and what is worth a look. " +
+        "The query is planned, never run; use it when a query is slow, before rewriting it.";
+
+    public override JsonElement JsonSchema => Schema;
+
+    public async Task<string> ExplainAsync(string sql, string? database, IReadOnlyList<SqlParameterValue> parameters, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(sql);
+        ArgumentNullException.ThrowIfNull(parameters);
+        string body = DuckDbReadOnlyGate.Body(sql);
+        if (DuckDbReadOnlyGate.Inspect(body, out var files) is { } refused)
+        {
+            return refused;
+        }
+
+        if (DuckDbReadOnlyGate.LeadWord(body) is { } lead && NoPlan.Contains(lead))
+        {
+            return QueryPlanText.NotPlannable(lead);
+        }
+
+        if (Files.Resolve(database, out var unresolved) is not { } target)
+        {
+            return DuckDbText.Error(unresolved!);
+        }
+
+        var sandbox = Files.Sandbox();
+        if (DuckDbFilePaths.Rewrite(body, files, sandbox, cancellationToken, out var prepared) is { } pathRefused)
+        {
+            return pathRefused;
+        }
+
+        var effective = Effective;
+        var explain = prepared with { Sql = DuckDbPlan.Prefix + prepared.Sql };
+        var run = await Task.Run(() => DuckDbAccess.Run(target, [explain], parameters, DuckDbAccess.MaxCatalogRows, TimeoutSeconds(effective), sandbox?.Root, cancellationToken, QueryPlan.WholeCell), cancellationToken).ConfigureAwait(false);
+        if (run.Outcome != SqlOutcome.Ok)
+        {
+            return DuckDbText.Error(run);
+        }
+
+        // The plan is the last column (explain_key, explain_value).
+        string text = QueryPlan.TextOf(run, -1);
+        int cap = Math.Min(QueryPlan.MaxAnswerChars, SqlTool.ResultChars(effective));
+        return DuckDbPlan.Parse(text) is { } plan
+            ? QueryPlanText.Answer(plan, run.Connection, run.Database, run.Elapsed, cap)
+            : QueryPlanText.Unreadable(run.Connection, run.Database, run.Elapsed, text);
+    }
+
+    protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+        if (DuckDbQueryTool.ReadParams(arguments, out var error) is not { } parameters)
+        {
+            return error;
+        }
+
+        return await ExplainAsync(ToolArguments.ReadString(arguments, DuckDbQueryTool.SqlArgument), Optional(arguments, DatabaseArgument), parameters, cancellationToken).ConfigureAwait(false);
+    }
+}
+
+/// <summary>
+/// <c>duckdb_profile(table, database?, columns?, top?)</c> (2026-11-14, the database-tools plan's #14), <see cref="SqlProfileTool"/>'s DuckDB
+/// twin, and its strongest use: <c>table</c> is a table or view (found as <c>duckdb_describe</c> finds it) or a CSV, Parquet or JSON file in the
+/// working directory, read through the query tool's own file path (the gate, then <see cref="DuckDbFilePaths.Rewrite"/>, so the file rules hold).
+/// Pass 1 is <c>SUMMARIZE</c> (<see cref="DuckDbProfile"/>); a source past <see cref="TableProfile.SampleAbove"/> rows is a seeded sample.
+/// </summary>
+public sealed class DuckDbProfileTool : DuckDbTool
+{
+    public const string ToolName = "duckdb_profile";
+
+    private static readonly JsonElement Schema = ToolSchema.Parse(
+        $$"""
+        {
+          "type": "object",
+          "properties": {
+            "table": { "type": "string", "description": "The table or view (name or schema.name, case-insensitive), or a data file in the working directory by its path (data/sales.csv)." },
+            {{DatabaseProperty}},
+            {{ProfileArguments.ColumnsProperty}},
+            {{ProfileArguments.TopProperty}}
+          },
+          "required": ["table"]
+        }
+        """);
+
+    public DuckDbProfileTool(DuckDbAccess duckDb, Func<AppSettingsData> effective) : base(duckDb, effective)
+    {
+    }
+
+    public override string Name => ToolName;
+
+    public override string Description =>
+        "Profiles one DuckDB table, view or data file (CSV, Parquet, JSON): its rows and, per column, the nulls, distinct values, min, max and most " +
+        "common values (a big one is sampled, and the answer says so). Read-only; use it before reading pages of sample rows.";
+
+    public override JsonElement JsonSchema => Schema;
+
+    public async Task<string> ProfileAsync(string table, string? database, IReadOnlyList<string>? columns, int top, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(table))
+        {
+            return DuckDbText.NoTable;
+        }
+
+        string name = table.Trim();
+        var effective = Effective;
+        int timeout = TimeoutSeconds(effective);
+        string shown, source, kind;
+        TableProfile.Runner run;
+        if (DuckDbReadOnlyGate.LooksLikeFile(name))
+        {
+            // A data file: the query tool's path, so the gate, the sandbox and the lockdown's folder hold as for duckdb_query.
+            string body = "SELECT * FROM " + DuckDbFilePaths.Literal(name);
+            if (DuckDbReadOnlyGate.Inspect(body, out var files) is { } refused)
+            {
+                return refused;
+            }
+
+            if (Files.Resolve(database, out var unresolved) is not { } target)
+            {
+                return DuckDbText.Error(unresolved!);
+            }
+
+            var sandbox = Files.Sandbox();
+            if (DuckDbFilePaths.Rewrite(body, files, sandbox, cancellationToken, out var prepared) is { } pathRefused)
+            {
+                return pathRefused;
+            }
+
+            (shown, source, kind) = (name, "(" + prepared.Sql + ")", "file");
+            string? root = sandbox?.Root;
+            run = (statements, seconds, token) => Task.Run(() => DuckDbAccess.Run(target, [.. statements.Select(s => prepared with { Sql = s })], [], DuckDbAccess.MaxCatalogRows, seconds, root, token), token);
+        }
+        else
+        {
+            var found = await CatalogAsync(database, [DuckDbCatalogQueries.Resolve], [new SqlParameterValue("name", name)], cancellationToken).ConfigureAwait(false);
+            if (found.Outcome != SqlOutcome.Ok)
+            {
+                return DuckDbText.Error(found);
+            }
+
+            if (found.Grids is not [{ Rows: [var row, ..] }, ..])
+            {
+                return DuckDbText.TableNotFound(name, found.Connection);
+            }
+
+            // schema, name, kind
+            var dialectQuote = DuckDbProfile.Instance;
+            (shown, source, kind) = (row[0] == "main" ? row[1] : row[0] + "." + row[1], dialectQuote.Quote(row[0]) + "." + dialectQuote.Quote(row[1]), row[2]);
+            run = (statements, seconds, token) => Files.RunAsync(database, statements, [], DuckDbAccess.MaxCatalogRows, seconds, token);
+        }
+
+        // The columns: the header of no rows, as DuckDB names them.
+        var header = await run([DuckDbProfile.Columns(source)], timeout, cancellationToken).ConfigureAwait(false);
+        if (header.Outcome != SqlOutcome.Ok)
+        {
+            return DuckDbText.Error(header);
+        }
+
+        var all = header.Grids.Count > 0 ? header.Grids[0].Columns.Select(c => new ProfileColumn(c, "", ProfileMeasure.Full)).ToList() : [];
+        var request = new TableProfile.Request(shown, source, kind, all, columns, top, null, timeout,
+            Math.Min(QueryPlan.MaxAnswerChars, SqlTool.ResultChars(effective)), DuckDbDescribeTool.ToolName, StringComparison.OrdinalIgnoreCase);
+        return await TableProfile.RunAsync(request, DuckDbProfile.Instance, run, DuckDbText.Error, cancellationToken).ConfigureAwait(false);
+    }
+
+    protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+        if (ProfileArguments.Read(arguments, out var columns, out int top) is { } refused)
+        {
+            return refused;
+        }
+
+        return await ProfileAsync(ToolArguments.ReadString(arguments, TableArgument), Optional(arguments, DatabaseArgument), columns, top, cancellationToken).ConfigureAwait(false);
+    }
+}
+
+/// <summary>
 /// <c>duckdb_execute(sql, database?, params?, max_rows?, create?)</c>: one statement that may change the database, offered only while
 /// <c>DuckDB mode</c> is <c>read-write</c>, a pane can ask and <c>DuckDB statements allowed</c> ticks a kind (all checked again at every call).
 /// A read (reading ticked) asks nothing and runs on the read path. <see cref="DuckDbWriteGate"/> first, then the database (with <c>create</c>,

@@ -87,17 +87,14 @@ public static class DirectoryCsv
         return zone == TimeZoneInfo.Utc || zone.Id is "UTC" or "Etc/UTC" ? "UTC" : zone.Id;
     }
 
-    /// <summary>One cell as RFC 4180 writes it, scrubbed and guarded against a spreadsheet reading it as a formula.</summary>
+    /// <summary>
+    /// One cell as RFC 4180 writes it, scrubbed and guarded against a spreadsheet reading it as a formula (<see cref="CsvCell"/>, shared with the
+    /// query tools' CSV since 2026-11-14; directory text is a stranger's, so a number-like <c>-1…</c> is guarded too).
+    /// </summary>
     public static string Cell(string value)
     {
         ArgumentNullException.ThrowIfNull(value);
-        string text = UntrustedText.Scrub(value);
-        if (text.Length > 0 && text[0] is '=' or '+' or '-' or '@' or '\t' or '\r')
-        {
-            text = "'" + text;
-        }
-
-        return text.IndexOfAny([',', '"', '\r', '\n']) >= 0 ? "\"" + text.Replace("\"", "\"\"", StringComparison.Ordinal) + "\"" : text;
+        return CsvCell.Text(UntrustedText.Scrub(value), exemptNumbers: false);
     }
 
     /// <summary>

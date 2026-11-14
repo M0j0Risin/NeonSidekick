@@ -273,7 +273,7 @@ public sealed class Assistant
     /// </summary>
     public const string OracleRule =
         "The Oracle tools read Oracle databases (Oracle SQL: FETCH FIRST n ROWS ONLY, not TOP or LIMIT; no trailing semicolon; unquoted names are upper case) on the user's named connections and never change data: " +
-        NeonSidekick.Llm.Tools.OracleConnectionsTool.ToolName + " lists the connections, each one held to its own schema (another schema needs its own connection, which the user adds); " +
+        NeonSidekick.Llm.Tools.OracleConnectionsTool.ToolName + " lists the connections, each one held to its own schema or the schemas the user listed (the first is current; name another's tables OE.ORDERS; another schema needs the user to add it); " +
         NeonSidekick.Llm.Tools.OracleTablesTool.ToolName + " finds a table and " + NeonSidekick.Llm.Tools.OracleColumnsTool.ToolName + " a column, " +
         NeonSidekick.Llm.Tools.OracleDescribeTool.ToolName + " shows a table's columns, keys and constraints, " + NeonSidekick.Llm.Tools.OracleRelationshipsTool.ToolName + " the joins and " +
         NeonSidekick.Llm.Tools.OracleIndexesTool.ToolName + " the indexes — look before you query, never guess a column; " +
@@ -382,7 +382,7 @@ public sealed class Assistant
     /// </summary>
     public const string PostgresRule =
         "The PostgreSQL tools read PostgreSQL databases (PostgreSQL SQL: LIMIT n; \"double quotes\" for mixed-case names; schema.table) on the user's named connections and never change data: " +
-        NeonSidekick.Llm.Tools.PostgresConnectionsTool.ToolName + " lists the connections, each one held to its own database (and to one schema when the user set one; another needs its own connection, which the user adds), and " +
+        NeonSidekick.Llm.Tools.PostgresConnectionsTool.ToolName + " lists the connections, each one held to its own database (and to the schemas the user listed, when there are any; another needs the user to add it), and " +
         NeonSidekick.Llm.Tools.PostgresSchemasTool.ToolName + " a database's schemas; " + NeonSidekick.Llm.Tools.PostgresTablesTool.ToolName + " finds a table and " +
         NeonSidekick.Llm.Tools.PostgresColumnsTool.ToolName + " a column, " + NeonSidekick.Llm.Tools.PostgresDescribeTool.ToolName + " shows a table's columns, keys and constraints, " +
         NeonSidekick.Llm.Tools.PostgresRelationshipsTool.ToolName + " the joins and " + NeonSidekick.Llm.Tools.PostgresIndexesTool.ToolName + " the indexes — look before you query, never guess a column; " +

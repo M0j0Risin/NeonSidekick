@@ -1,0 +1,39 @@
+{
+  "query_block": {
+    "select_id": 1,
+    "cost": 50.98804232,
+    "filesort": {
+      "sort_key": "sum(o.total) desc",
+      "temporary_table": {
+        "nested_loop": [
+          {
+            "table": {
+              "table_name": "o",
+              "access_type": "ALL",
+              "loops": 1,
+              "rows": 48078,
+              "cost": 7.9843368,
+              "filtered": 100,
+              "attached_condition": "o.total > 5 and o.customer_id is not null"
+            }
+          },
+          {
+            "table": {
+              "table_name": "c",
+              "access_type": "eq_ref",
+              "possible_keys": ["PRIMARY"],
+              "key": "PRIMARY",
+              "key_length": "4",
+              "used_key_parts": ["id"],
+              "ref": ["neon.o.customer_id"],
+              "loops": 48078,
+              "rows": 1,
+              "cost": 43.00370552,
+              "filtered": 100
+            }
+          }
+        ]
+      }
+    }
+  }
+}

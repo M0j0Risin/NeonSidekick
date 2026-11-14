@@ -328,8 +328,10 @@ public sealed class DuckDbAccess
     }
 
     /// <summary>A read on the calling thread with every layer: <paramref name="root"/> is the folder data files may be read from (null: none).</summary>
-    public static SqlRun Run(DuckDbTarget target, IReadOnlyList<DuckDbPrepared> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, string? root, CancellationToken cancellationToken) =>
-        Run(target, statements, parameters, maxRows, timeoutSeconds, write: false, create: false, root, DuckDbReadLayers.All, cancellationToken);
+    /// <remarks><paramref name="readCell"/> (2026-11-14, the database-tools plan's #12, <c>duckdb_explain</c>): the cells read whole (<see cref="QueryPlan.WholeCell"/>) in place of the clipped grid's.</remarks>
+    public static SqlRun Run(DuckDbTarget target, IReadOnlyList<DuckDbPrepared> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, string? root, CancellationToken cancellationToken,
+        Func<DbDataReader, int, string>? readCell = null) =>
+        Run(target, statements, parameters, maxRows, timeoutSeconds, write: false, create: false, root, DuckDbReadLayers.All, cancellationToken, readCell: readCell);
 
     /// <summary>
     /// A query's rows written to a workbook (2026-10-29, the Office writing plan), on the calling thread: <see cref="Run"/>'s locked,
@@ -547,7 +549,8 @@ public sealed class DuckDbAccess
     /// <summary>How often the run's timer looks at the deadline and the token, and interrupts again once either is past (SQLite's).</summary>
     private static readonly TimeSpan InterruptRepeat = TimeSpan.FromMilliseconds(100);
 
-    private static SqlRun Run(DuckDbTarget target, IReadOnlyList<DuckDbPrepared> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, bool write, bool create, string? root, DuckDbReadLayers layers, CancellationToken cancellationToken, SqlExportJob? export = null)
+    private static SqlRun Run(DuckDbTarget target, IReadOnlyList<DuckDbPrepared> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, bool write, bool create, string? root, DuckDbReadLayers layers, CancellationToken cancellationToken, SqlExportJob? export = null,
+        Func<DbDataReader, int, string>? readCell = null)
     {
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(statements);
@@ -576,7 +579,7 @@ public sealed class DuckDbAccess
 
         try
         {
-            return RunOpen(target, statements, parameters, maxRows, timeoutSeconds, write, root, layers, watch, deadline, cancellationToken, export);
+            return RunOpen(target, statements, parameters, maxRows, timeoutSeconds, write, root, layers, watch, deadline, cancellationToken, export, readCell);
         }
         finally
         {
@@ -584,7 +587,8 @@ public sealed class DuckDbAccess
         }
     }
 
-    private static SqlRun RunOpen(DuckDbTarget target, IReadOnlyList<DuckDbPrepared> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, bool write, string? root, DuckDbReadLayers layers, Stopwatch watch, TimeSpan deadline, CancellationToken cancellationToken, SqlExportJob? export = null)
+    private static SqlRun RunOpen(DuckDbTarget target, IReadOnlyList<DuckDbPrepared> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, bool write, string? root, DuckDbReadLayers layers, Stopwatch watch, TimeSpan deadline, CancellationToken cancellationToken, SqlExportJob? export = null,
+        Func<DbDataReader, int, string>? readCell = null)
     {
         using var connection = new DuckDBConnection(ConnectionString(target, layers));
         try
@@ -677,7 +681,7 @@ public sealed class DuckDbAccess
                     using var reader = command.ExecuteReader();
                     var grid = export is not null && !write
                         ? export.ReadAsync(reader, maxRows, CancellationToken.None).GetAwaiter().GetResult()
-                        : SqlGrid.ReadAsync(reader, maxRows, CancellationToken.None, write ? ReadAnyCell : ReadCell).GetAwaiter().GetResult();
+                        : SqlGrid.ReadAsync(reader, maxRows, CancellationToken.None, readCell ?? (write ? ReadAnyCell : ReadCell)).GetAwaiter().GetResult();
                     grids.Add(grid);
                     if (returns)
                     {

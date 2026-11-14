@@ -18,13 +18,19 @@ internal sealed partial class SettingsMenu
 {
     /// <summary>The wizard's rows, one per <see cref="PostgresWizardStep"/> before the summary, in its order. Pinned.</summary>
     public static readonly IReadOnlyList<string> PostgresWizardLabels =
-        ["File", "Name", "Host", "Port", "Database", "Schema", "User", "Password store", "Password", "TLS mode", "Connect timeout (s)", "Access", "Description"];
+        ["File", "Name", "Host", "Port", "Database", "User", "Password store", "Password", "TLS mode", "Connect timeout (s)", "Schemas", "Access", "Description"];
 
     public const string PostgresWizardFileQuestion = "Which postgres.json: this profile's or the global one?";
     public const string PostgresWizardHostQuestion = "The server's host name or address (localhost, db01.example.com).";
     public const string PostgresWizardPortQuestion = "The TCP port; empty for 5432.";
     public const string PostgresWizardDatabaseQuestion = "The database: the one this connection reaches (the tools never leave it; another database is another connection).";
-    public const string PostgresWizardSchemaQuestion = "A schema to hold the connection to, or empty to leave every schema of the database open.";
+    public const string PostgresWizardSchemaQuestion = "The schemas to hold the connection to; none ticked leaves every schema of the database open.";
+
+    /// <summary>The typed fallback's question, when the schemas could not be listed (#18).</summary>
+    public const string PostgresWizardSchemaTypedQuestion = "The schemas to hold the connection to, comma-separated in search-path order, or empty for every schema.";
+
+    /// <summary>The order page's question, with two or more ticked (#18).</summary>
+    public const string PostgresWizardFirstQuestion = "Which comes first on the search path (a name in two schemas resolves there)?";
     public const string PostgresWizardDatabaseRequired = "A database is required: the connection reaches that one alone.";
     public const string PostgresWizardEverySchema = "(every schema)";
     public const string PostgresWizardUserQuestion = "The database user (the real guard is an account with only SELECT grants).";
@@ -59,12 +65,12 @@ internal sealed partial class SettingsMenu
         Host,
         Port,
         Database,
-        Schema,
         User,
         Store,
         Password,
         Tls,
         Timeout,
+        Schema,
         Access,
         Description,
         Summary,
@@ -118,7 +124,7 @@ internal sealed partial class SettingsMenu
             PostgresWizardStep.Host => OrUnset(c.Host),
             PostgresWizardStep.Port => Invariant(c.Port ?? PostgresConnectionConfig.DefaultPort),
             PostgresWizardStep.Database => OrUnset(c.Database),
-            PostgresWizardStep.Schema => string.IsNullOrWhiteSpace(c.Schema) ? PostgresWizardEverySchema : c.Schema.Trim(),
+            PostgresWizardStep.Schema => c.LockText ?? PostgresWizardEverySchema,
             PostgresWizardStep.User => OrUnset(c.User),
             PostgresWizardStep.Store => c.InCredentialManager ? PostgresConnectionConfig.CredmanStore + " (" + c.CredentialTarget(draft.Name.Length > 0 ? draft.Name : "<name>") + ")" : PostgresConnectionConfig.FileStore,
             PostgresWizardStep.Password => draft.Password.Length > 0 ? (draft.PasswordKept ? SqlWizardMaskedKept : SqlWizardMasked) : SqlWizardUnset,
@@ -340,16 +346,7 @@ internal sealed partial class SettingsMenu
                 }, cancellationToken).ConfigureAwait(false);
 
             case PostgresWizardStep.Schema:
-                return await PostgresWizardTypeAsync(step, draft, PostgresWizardSchemaQuestion, c.Schema ?? "", allowEmpty: true, mask: false, text =>
-                {
-                    if (PostgresConnectionConfig.SchemaProblem(text) is { } problem)
-                    {
-                        return problem;
-                    }
-
-                    c.Schema = string.IsNullOrWhiteSpace(text) ? null : text.Trim();
-                    return null;
-                }, cancellationToken).ConfigureAwait(false);
+                return await PostgresWizardSchemasAsync(step, draft, cancellationToken).ConfigureAwait(false);
 
             case PostgresWizardStep.User:
                 return await PostgresWizardTypeAsync(step, draft, PostgresWizardUserQuestion, c.User ?? "", allowEmpty: false, mask: false, text =>
@@ -438,6 +435,97 @@ internal sealed partial class SettingsMenu
                 }, cancellationToken).ConfigureAwait(false);
         }
     }
+
+    /// <summary>
+    /// The Schemas step (2026-11-14, feature idea #18): the schemas the draft's role may use, listed with the draft's lock cleared (a saved
+    /// schema since dropped would otherwise fail the session and hide the fix), as a checklist and an order page; typed, comma-separated,
+    /// when they cannot be listed. True once answered, false for ESC.
+    /// </summary>
+    private async Task<bool> PostgresWizardSchemasAsync(PostgresWizardStep step, PostgresDraft draft, CancellationToken cancellationToken)
+    {
+        var c = draft.Config;
+        var saved = c.Locks;
+        var copy = PostgresWizardCopy(draft, keepLock: false);
+        string? unlisted = copy.Problem;
+        var available = new List<string>();
+        if (unlisted is null)
+        {
+            var run = await (ListPostgresSchemas ?? ListPostgresSchemasAsync)(new PostgresNamedConnection(draft.Name, copy, PostgresWizardPath(draft.Global)), cancellationToken).ConfigureAwait(false);
+            if (run.Outcome == Sql.SqlOutcome.Ok && run.Grids.Count > 0)
+            {
+                // A name the session's options cannot carry is left off: the connection could not be held to it.
+                available = run.Grids[0].Rows.Select(r => r[0]).Where(n => PostgresConnectionConfig.SchemaProblem(n) is null).ToList();
+            }
+            else
+            {
+                unlisted = PostgresText.Error(run);
+            }
+        }
+
+        if (unlisted is not null)
+        {
+            Sink.Notice(WizardSchemasUnlisted(unlisted));
+            return await PostgresWizardTypeAsync(step, draft, PostgresWizardSchemaTypedQuestion, string.Join(", ", saved), allowEmpty: true, mask: false, text =>
+            {
+                var names = WizardSchemaNames(text);
+                if ((names.Count == 1 ? PostgresConnectionConfig.LockProblem(names[0], null) : PostgresConnectionConfig.LockProblem(null, names.Count == 0 ? null : names)) is { } problem)
+                {
+                    return problem;
+                }
+
+                c.HoldTo(names);
+                return null;
+            }, cancellationToken).ConfigureAwait(false);
+        }
+
+        while (true)
+        {
+            if (await WizardSchemasAsync(PostgresWizardTitle, PostgresWizardSchemaQuestion, PostgresWizardFirstQuestion, available, saved, null, StringComparer.Ordinal, cancellationToken).ConfigureAwait(false) is not { } chosen)
+            {
+                return false;
+            }
+
+            if (chosen.Count > PostgresConnectionConfig.MaxSchemas)
+            {
+                Sink.Error(PostgresText.TooManySchemas(PostgresConnectionConfig.MaxSchemas));
+                saved = chosen;
+                continue;
+            }
+
+            c.HoldTo(chosen);
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// The draft as a connection to try, nothing written (the Test's and the Schemas listing's): its typed or kept password under the file
+    /// store; <paramref name="keepLock"/> false clears the schema lock, so the listing sees every schema the role may use.
+    /// </summary>
+    private static PostgresConnectionConfig PostgresWizardCopy(PostgresDraft draft, bool keepLock)
+    {
+        var c = draft.Config;
+        return new PostgresConnectionConfig
+        {
+            Host = c.Host,
+            Port = c.Port,
+            Database = c.Database,
+            Schema = keepLock ? c.Schema : null,
+            Schemas = keepLock ? c.Schemas : null,
+            User = c.User,
+            Password = draft.Password,
+            PasswordStore = PostgresConnectionConfig.FileStore,
+            SslMode = c.SslMode,
+            ConnectTimeoutSeconds = c.ConnectTimeoutSeconds,
+            Access = c.Access,
+        };
+    }
+
+    /// <summary>What the Schemas step lists over the unlocked draft (#18): a real run of <see cref="PostgresCatalogQueries.UsableSchemas"/>; the tests set their own.</summary>
+    public Func<PostgresNamedConnection, CancellationToken, Task<Sql.SqlRun>>? ListPostgresSchemas { get; set; }
+
+    private Task<Sql.SqlRun> ListPostgresSchemasAsync(PostgresNamedConnection connection, CancellationToken cancellationToken) =>
+        new PostgresAccess(() => new PostgresCatalog([connection], []))
+            .RunAsync(connection.Name, [PostgresCatalogQueries.UsableSchemas], [], PostgresAccess.MaxCatalogRows, _settings.Current.PostgresQueryTimeoutSeconds, cancellationToken);
 
     private Task<int?> PostgresWizardPickAsync(string question, IReadOnlyList<string> choices, int cursor, CancellationToken cancellationToken)
     {
@@ -544,19 +632,7 @@ internal sealed partial class SettingsMenu
     private async Task PostgresWizardTestAsync(PostgresDraft draft, CancellationToken cancellationToken)
     {
         var c = draft.Config;
-        var copy = new PostgresConnectionConfig
-        {
-            Host = c.Host,
-            Port = c.Port,
-            Database = c.Database,
-            Schema = c.Schema,
-            User = c.User,
-            Password = draft.Password,
-            PasswordStore = PostgresConnectionConfig.FileStore,
-            SslMode = c.SslMode,
-            ConnectTimeoutSeconds = c.ConnectTimeoutSeconds,
-            Access = c.Access,
-        };
+        var copy = PostgresWizardCopy(draft, keepLock: true);
         if (copy.Problem is { } problem)
         {
             Sink.Error(problem);
@@ -589,7 +665,7 @@ internal sealed partial class SettingsMenu
         if (run.Grids.Count > 4)
         {
             List<string> Column(int set) => run.Grids[set].Rows.Select(r => r[0]).ToList();
-            string? schema = string.IsNullOrWhiteSpace(c.Schema) ? null : c.Schema.Trim();
+            string? schema = c.LockText;
             var (databases, servers, schemas) = (Column(2), Column(3), Column(4));
             string reach = PostgresText.Reach(c.Database!.Trim(), schema, databases, servers, schemas);
             if (databases.Count > 0 || servers.Count > 0 || (schema is not null && schemas.Count > 0))

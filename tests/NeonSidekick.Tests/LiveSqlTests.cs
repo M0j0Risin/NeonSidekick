@@ -91,6 +91,64 @@ public sealed class LiveSqlTests
     /// <summary>A cross join big enough to run for minutes: what a timeout and a cancel stop (<c>--sql-check</c>'s too, since 2026-10-03).</summary>
     private const string Heavy = SqlCheck.SlowQuery;
 
+    /// <summary>
+    /// <c>sql_explain</c> on AdventureWorks2022 (2026-11-14, the database-tools plan's #12): a scan of <c>Sales.SalesOrderDetail</c> (about
+    /// 121,000 rows) with no usable index is flagged by the rows it reads, with SHOWPLAN's missing-index hint; values given as params plan as
+    /// DECLAREs; a join names both tables. SHOWPLAN goes off after a failed plan too, so the pooled session runs a plain query normally.
+    /// </summary>
+    [LiveSqlFact]
+    public async Task Explain_PlansWithoutRunning_FlagsTheBigScan_AndGoesOffAfter()
+    {
+        string scan = await Invoke<SqlExplainTool>(("sql", "SELECT d.SalesOrderID FROM Sales.SalesOrderDetail d WHERE d.CarrierTrackingNumber = @t"),
+            ("params", System.Text.Json.JsonDocument.Parse("""{"t": "4911-403C-98"}""").RootElement));
+        Assert.StartsWith("Plan for aw/AdventureWorks2022 (estimated, not run; ", scan);
+        Assert.Contains("A full scan of Sales.SalesOrderDetail (~121317 rows)", scan);
+        Assert.Contains("The server suggests an index on Sales.SalesOrderDetail (equality: CarrierTrackingNumber", scan);
+        Assert.EndsWith(QueryPlanText.SqlServerFooter, scan);
+
+        string join = await Invoke<SqlExplainTool>(("sql", "SELECT h.SalesOrderID, d.ProductID FROM Sales.SalesOrderHeader h JOIN Sales.SalesOrderDetail d ON d.SalesOrderID = h.SalesOrderID WHERE h.CustomerID = 29825"));
+        Assert.Contains("Seek on Sales.SalesOrderHeader", join);
+        Assert.Contains("Seek on Sales.SalesOrderDetail", join);
+
+        Assert.StartsWith("Error: the server refused the SQL", await Invoke<SqlExplainTool>(("sql", "SELECT * FROM dbo.NoSuchTable")));
+        Assert.StartsWith("1 row × 1 column from aw/AdventureWorks2022 (", await Invoke<SqlQueryTool>(("sql", "SELECT COUNT(*) AS n FROM Sales.Currency")));
+        Assert.Equal(SqlText.OtherDatabase("master", "AdventureWorks2022"), await Invoke<SqlExplainTool>(("sql", "SELECT name FROM master.sys.objects")));
+        Assert.StartsWith("Error:", await Invoke<SqlExplainTool>(("sql", "DELETE FROM Sales.Currency")));
+    }
+
+    /// <summary>
+    /// <c>sql_profile</c> on AdventureWorks2022 (2026-11-14, the database-tools plan's #14): a small table whole and exact; <c>Sales.SalesOrderDetail</c>
+    /// (about 121,000 rows, past the threshold) sampled with <c>TABLESAMPLE</c>, on a level-160 database through <c>APPROX_COUNT_DISTINCT</c>; then,
+    /// with the threshold lowered to 1, a table's sample (short on a small table, so the first rows) and a view's first rows, so each SQL text the
+    /// dialect writes runs on a real server.
+    /// </summary>
+    [LiveSqlFact]
+    public async Task Profile_AWholeTable_ABigOneSampled_AndAViewsFirstRows()
+    {
+        string currency = await Invoke<SqlProfileTool>(("table", "Sales.Currency"));
+        Assert.StartsWith("Sales.Currency: 105 rows (exact) · 3 columns · aw/AdventureWorks2022 (", currency);
+        Assert.Contains("| CurrencyCode | nchar | 0 | ", currency);
+        Assert.Matches(@"\| ModifiedDate \| datetime \| 0 \| ~?\d+ \| 20\d\d-", currency);
+
+        string detail = await Invoke<SqlProfileTool>(("table", "Sales.SalesOrderDetail"), ("columns", System.Text.Json.JsonDocument.Parse("""["ProductID", "OrderQty", "CarrierTrackingNumber"]""").RootElement), ("top", 3));
+        Assert.Matches(@"^Sales\.SalesOrderDetail: from (a sample of ~\d+|the first 100000) of about 121317 rows · 11 columns · aw/AdventureWorks2022 \(", detail);
+        Assert.Matches(@"\| OrderQty \| smallint \| 0 \| ~\d+ \| 1 \| \d+ \| 1 \(\d+\), ", detail);
+        Assert.DoesNotContain("| SalesOrderID |", detail);
+
+        TableProfile.SampleAbove = 1;
+        try
+        {
+            Assert.Matches(@"^Sales\.Currency: from (a sample of ~1|the first 1) of about 105 rows", await Invoke<SqlProfileTool>(("table", "Sales.Currency")));
+            Assert.Matches(@"^Sales\.vSalesPerson: from the first 1 of more than 1 rows · \d+ columns", await Invoke<SqlProfileTool>(("table", "Sales.vSalesPerson"), ("top", 0)));
+        }
+        finally
+        {
+            TableProfile.SampleAbove = 100_000;
+        }
+
+        Assert.StartsWith("Error:", await Invoke<SqlProfileTool>(("table", "master.sys.objects")));
+    }
+
     [LiveSqlFact]
     public async Task TheCatalog_FromServerToTable()
     {

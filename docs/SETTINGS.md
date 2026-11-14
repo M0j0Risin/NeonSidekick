@@ -807,8 +807,8 @@ The six database families, each read-only unless you choose `read-write` and the
 | SQL add/edit connection | A wizard for a new or saved connection, which can **test** it before saving; the database is required ([Managing connections](TOOLS.md#managing-connections)). | — |
 | SQL %-mention enabled | `%` and part of a name lists the connections; a pick writes `%name`. | on |
 | SQL max rows | Rows `sql_query` returns unless the call says otherwise (1–100000). | 100 |
-| SQL query timeout (s) | How long one batch may run on the server (1–600). | 30 |
-| SQL query result max chars | The most characters of table one `sql_query`, `oracle_query` or `mysql_query` returns (1000–1000000). | 32,000 |
+| SQL query timeout (s) | How long one batch may run on the server (1–600). A profile's passes share it. | 30 |
+| SQL query result max chars | The most characters of table a database query or change returns, every family (1000–1000000). Explain and profile answers keep to 6,000 at most. | 32,000 |
 | SQL connections (profile) | Enter opens the profile's `sql.json` in your editor (made with commented examples). | — |
 | SQL connections (global) | The same for the home's `sql.json`, read by every profile; the profile's entry wins on a name clash. | — |
 
@@ -826,7 +826,7 @@ The other database tabs work like this one, over `mysql.json`, `sqlite.json`, `d
 | MySQL add/edit connection | The wizard; its test warns when the account could change data. See [MySQL and MariaDB](TOOLS.md#mysql-and-mariadb). | — |
 | MySQL %-mention enabled | Lists the MySQL connections in the `%` list too. | on |
 | MySQL max rows | As *SQL max rows*, for `mysql_query`. | 100 |
-| MySQL query timeout (s) | How long one statement may run (1–600). | 30 |
+| MySQL query timeout (s) | How long one statement may run (1–600). A profile's passes share it. | 30 |
 | MySQL connections (profile) | As *SQL connections (profile)*. | — |
 | MySQL connections (global) | As *SQL connections (global)*. | — |
 
@@ -839,10 +839,10 @@ The other database tabs work like this one, over `mysql.json`, `sqlite.json`, `d
 | PostgreSQL statements allowed | As *SQL statements allowed*, for `postgres_execute`. | changing data, creating, reading |
 | PostgreSQL connections offered | As *SQL connections offered*. | empty |
 | PostgreSQL set password | As *SQL set password*. | — |
-| PostgreSQL add/edit connection | The wizard; the database is required, a schema optional. Its test warns when the role could change data. See [PostgreSQL](TOOLS.md#postgresql). | — |
+| PostgreSQL add/edit connection | The wizard; the database is required, *Schemas* optional (none: every schema). Its test warns when the role could change data. See [PostgreSQL](TOOLS.md#postgresql). | — |
 | PostgreSQL %-mention enabled | Lists the PostgreSQL connections in the `%` list too. | on |
 | PostgreSQL max rows | As *SQL max rows*, for `postgres_query`. | 100 |
-| PostgreSQL query timeout (s) | How long one statement may run (1–600). | 30 |
+| PostgreSQL query timeout (s) | How long one statement may run (1–600). A profile's passes share it. | 30 |
 | PostgreSQL connections (profile) | As *SQL connections (profile)*. | — |
 | PostgreSQL connections (global) | As *SQL connections (global)*. | — |
 
@@ -855,10 +855,10 @@ The other database tabs work like this one, over `mysql.json`, `sqlite.json`, `d
 | Oracle statements allowed | As *SQL statements allowed*, for `oracle_execute`. | changing data, creating, reading |
 | Oracle connections offered | As *SQL connections offered*. | empty |
 | Oracle set password | As *SQL set password*. | — |
-| Oracle add/edit connection | The wizard; its *Schema* is the one the connection is held to (the user's own when empty). Its test warns when the account could change data. See [Oracle](TOOLS.md#oracle). | — |
+| Oracle add/edit connection | The wizard; *Schemas* ticks the ones the connection may reach (none: the user's own). Its test warns when the account could change data. See [Oracle](TOOLS.md#oracle). | — |
 | Oracle %-mention enabled | Lists the Oracle connections in the `%` list too. | on |
 | Oracle max rows | As *SQL max rows*, for `oracle_query`. | 100 |
-| Oracle query timeout (s) | How long one statement may run on the server (1–600). | 30 |
+| Oracle query timeout (s) | How long one statement may run on the server (1–600). A profile's passes share it. | 30 |
 | Oracle connections (profile) | As *SQL connections (profile)*. | — |
 | Oracle connections (global) | As *SQL connections (global)*. | — |
 
@@ -874,7 +874,7 @@ The other database tabs work like this one, over `mysql.json`, `sqlite.json`, `d
 | SQLite add/edit database | The wizard for a new or saved database; its test opens the file read-only and counts the tables. | — |
 | SQLite %-mention enabled | Lists the SQLite databases in the `%` list too. | on |
 | SQLite max rows | As *SQL max rows*, for `sqlite_query`. | 100 |
-| SQLite query timeout (s) | How long one statement may run before it is stopped (1–600). | 30 |
+| SQLite query timeout (s) | How long one statement may run before it is stopped (1–600). A profile's passes share it. | 30 |
 | SQLite databases (profile) | Opens this profile's `sqlite.json` in your editor. | — |
 | SQLite databases (global) | Opens the global `sqlite.json` in your editor. | — |
 
@@ -890,7 +890,7 @@ The other database tabs work like this one, over `mysql.json`, `sqlite.json`, `d
 | DuckDB add/edit database | The wizard for a new or saved database; its test opens the file read-only and counts the tables. | — |
 | DuckDB %-mention enabled | Lists the DuckDB databases in the `%` list too. | on |
 | DuckDB max rows | As *SQL max rows*, for `duckdb_query`. | 100 |
-| DuckDB query timeout (s) | How long one statement may run before it is stopped (1–600). | 30 |
+| DuckDB query timeout (s) | How long one statement may run before it is stopped (1–600). A profile's passes share it. | 30 |
 | DuckDB databases (profile) | Opens this profile's `duckdb.json` in your editor. | — |
 | DuckDB databases (global) | Opens the global `duckdb.json` in your editor. | — |
 

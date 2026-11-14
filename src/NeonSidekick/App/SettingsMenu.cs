@@ -735,7 +735,7 @@ public enum SettingsField
     /// <summary>Typed: the largest file one <c>download_file</c> saves, 1 to 102400 MB (<see cref="Settings.AppSettingsData.WebDownloadMaxMegabytes"/>). The Web tab's last row (2026-10-01, the user's ask; a constant 50 MB until then); no reconnect (read at each call).</summary>
     WebDownloadMaxMegabytes,
 
-    /// <summary>Typed: the most characters of table a <c>sql_query</c>, <c>oracle_query</c> or <c>mysql_query</c> answer carries, 1,000 to 1,000,000 (<see cref="Settings.AppSettingsData.QueryResultMaxChars"/>). On the SQL tab under the timeout, the three engines' one row (2026-10-01, the user's ask; the file tools' 32,000 until then); no reconnect (read at each call).</summary>
+    /// <summary>Typed: the most characters of table a database query or change answer carries, every family, 1,000 to 1,000,000 (<see cref="Settings.AppSettingsData.QueryResultMaxChars"/>; the explain and profile answers keep to 6,000 at most). On the SQL tab under the timeout, every family's one row (2026-10-01, the user's ask; the file tools' 32,000 until then); no reconnect (read at each call).</summary>
     QueryResultMaxChars,
 
     /// <summary>A picker: what a reflection may do to a skill installed with <c>/skills add</c> — <c>read-only</c> / <c>allow-and-mark</c> (<see cref="Settings.AppSettingsData.ReflectionInstalledSkills"/>). The Reflection tab of <c>/skills</c>' last row (2026-10-02, the user's call in the reflection audit); no reconnect (read when a reflection is decided). Last in the enum until <see cref="DockerTools"/>.</summary>

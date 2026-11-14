@@ -199,8 +199,7 @@ With *File checkpoints* on, each turn keeps what the file tools changed, so `/un
 * **Workbooks:** a CSV, TSV or JSON file, or a table (`columns`, `rows`), becomes a new workbook, or a new sheet in one (`to` and `sheet`). `overwrite` replaces that sheet, or with no `sheet` the file.
   * Numbers, dates and true/false are typed; leading-zero codes stay text, as does a whole number past 15 digits. No formula is written.
   * Not changed: a macro, protected, encrypted, damaged, Strict or over-100 MB workbook, a protected sheet, one with a chart or table, or one saved elsewhere meanwhile (run it again).
-* **Query results:** with *File tools* and `convert_to_xlsx` on, each database's `*_query` takes `to` (with `sheet`, `overwrite`) and writes every row, up to 1,048,575; the answer shows 5.
-  * The read-only rules hold; Esc or a failure writes nothing. A PostgreSQL `timestamptz` or MySQL `TIMESTAMP` column is UTC, as its header says.
+* **Query results:** a database query's rows go to a workbook too: see [Query results to a file](#query-results-to-a-file).
 * **Word:** headings, lists, quotes, code, tables, links and pictures from the working directory (without location and camera data); a web picture shows as its alt text. The title, or first `#` heading, heads each page.
 * **Where:** beside the source (a plan or audit at the top, out of `.neon/`), or at `to`, which replaces a file only with `overwrite`. Made names: the title or first heading, `table-…` or `query-<connection>-…`, with the minute.
 * **Not written:** PowerPoint or OpenDocument; `write_file` refuses an Office file and names the tool. `/undo` takes back these tools' and exports' files; `/docx` is your own act, with no checkpoint.
@@ -751,7 +750,7 @@ Six families: SQL Server, MySQL/MariaDB, PostgreSQL, Oracle, SQLite and DuckDB, 
 2. **The transaction** is read-only and always rolled back; for PostgreSQL, MySQL, SQLite, DuckDB and Oracle 23ai the whole session is read-only too. SQL Server's is an ordinary transaction, held only by the rollback.
 3. **The account is the real guard.** Give the login read-only grants.
 
-**One place per connection:** each connection reaches **one database** (Oracle: one schema), nothing else on the server.
+**One place per connection:** each connection reaches **one database** (Oracle: one schema, or the schemas its entry lists), nothing else on the server.
 
 * No tool takes a database or lists the server's; for another, add a connection. A statement naming one (`payroll.dbo.salaries`), or the server's catalog (logins, sessions), is refused; rename an alias spelled like a database.
 * When unsure, it refuses: a statement it can't read, or names it can't check against the server's list (cut short, or hidden from the login).
@@ -759,6 +758,16 @@ Six families: SQL Server, MySQL/MariaDB, PostgreSQL, Oracle, SQLite and DuckDB, 
 * **Advisors** never get the database tools, nor see the main chat's database results.
 
 Values go in as `params`. Results are cut at *SQL query result max chars*; `max_rows` is 1–100,000, the family's *… max rows* when left out.
+
+#### Query results to a file
+
+With *File tools* and `convert_to_xlsx` on, each `*_query` takes `to` and writes every row, up to 1,048,575, to a file in the working directory; the answer shows 5.
+
+* **Formats:** `.xlsx` (a folder or a name with no extension makes a workbook; `sheet` adds or replaces one), `.csv`, `.json` (one array) or `.jsonl` (one object a line).
+* **Safe to open:** the read-only rules hold, and Esc or a failure writes nothing. A CSV's text that Excel would run as a formula (`=…`, `-abc`) starts with `'`; numbers are left as they are.
+* **Values:** numbers keep every digit; dates are ISO. JSON tells NULL (`null`) from `''`; a CSV writes NULL as an empty field and `''` as `""`, which Excel reads alike.
+* **UTC:** a PostgreSQL `timestamptz` or MySQL `TIMESTAMP` column is UTC: a workbook's header says so, a CSV or JSON value ends in `Z`.
+* A CSV or JSON file already there is replaced only with `overwrite`.
 
 #### Managing connections
 
@@ -822,9 +831,11 @@ Server families take a connection in `connection`, SQLite and DuckDB a database 
 | `sql_indexes` | `connection?, table?, schema?, missing?` | Indexes with columns, size and use (needs `VIEW SERVER STATE`); `missing` adds the optimizer's suggestions. |
 | `mysql_indexes` / `oracle_indexes` | `connection?, table?` | Indexes with key columns, estimates, and use where readable. |
 | `postgres_indexes` | `connection?, schema?, table?` | Indexes with their definition and scans. |
-| `sql_query` / `mysql_query` / `postgres_query` / `oracle_query` | `sql, connection?, params?, max_rows?, to?, sheet?, overwrite?` | One read-only `SELECT`; `params` is an object of values (`{"id": 43659}`). `to` writes every row to a workbook ([Writing Office files](#writing-office-files)). |
+| `sql_query` / `mysql_query` / `postgres_query` / `oracle_query` | `sql, connection?, params?, max_rows?, to?, sheet?, overwrite?` | One read-only `SELECT`; `params` is an object of values (`{"id": 43659}`). `to` writes every row to a file ([Query results to a file](#query-results-to-a-file)). |
 | `sqlite_query` | `sql, database?, params?, max_rows?, to?, sheet?, overwrite?` | One read-only `SELECT`, `WITH` or `VALUES`; `to` as above. |
 | `duckdb_query` | `sql, database?, params?, max_rows?, to?, sheet?, overwrite?` | One read-only `SELECT` (or `FROM`, `DESCRIBE`, `SUMMARIZE`, `PIVOT`…), over a database, data files, or both; `to` as above. |
+| `sql_explain` / `mysql_explain` / `postgres_explain` / `sqlite_explain` / `duckdb_explain` | `sql, connection?` (or `database?`), `params?` | How the database would run one read: its plan's steps and what to look at (big scans, sorts, missing indexes). Planned, never run. |
+| `sql_profile` / `mysql_profile` / `postgres_profile` / `oracle_profile` / `sqlite_profile` / `duckdb_profile` | `table, connection?` (or `database?`; Postgres `schema?`), `columns?, top?` | A table's data at a glance: its rows and, per column, nulls, distinct values, min, max and the `top` most common values (5; 0–10). Read-only; a big table is sampled, and the answer says so. |
 | `sql_execute` / `mysql_execute` / `postgres_execute` / `oracle_execute` | `sql, connection?, params?, max_rows?` | [Read-write mode](#read-write-mode) only: one changing statement; answers with the rows changed and returned. |
 | `sqlite_execute` / `duckdb_execute` | `sql, database?, params?, max_rows?, create?` | The same; `create: true` makes a new database file. |
 
@@ -851,6 +862,7 @@ Server families take a connection in `connection`, SQLite and DuckDB a database 
 
 * `params` binds `@name`. The gate is SQL Server's own parser; refused, for example: batches, `EXEC`, `INTO`, linked servers, `OPENROWSET`, locking hints (`WITH (UPDLOCK)`).
 * Server-wide views and functions (`sys.databases`, `sys.dm_*`, logins) are refused; the database's own catalog (`sys.objects`, `INFORMATION_SCHEMA`) reads. CLR types (`geography`, `hierarchyid`) need `.ToString()`.
+* `sql_explain` needs `SHOWPLAN` on the database (`GRANT SHOWPLAN TO reader`).
 
 ### MySQL and MariaDB
 
@@ -879,7 +891,7 @@ Server families take a connection in `connection`, SQLite and DuckDB a database 
 `postgres.json`.
 
 * **`host`**, **`port`** (5432 by default), **`database`** (required), **`user`**.
-* **`schema`** (optional): holds the connection to that schema; other schemas and `information_schema` are refused. Without it, every schema of the database is open. Under the lock, also refused:
+* **`schema`** or **`schemas`** (optional): holds the connection to that schema, or to those (the search path, in that order); other schemas, `information_schema` and `pg_*` schemas are refused. Without either, every schema of the database is open. Under the lock, also refused:
   * the catalog: `pg_*` relations and functions, `regclass` and its kin, `to_reg*`, `has_*_privilege` and `obj_description`, but for a few that describe only a value or the session (`pg_typeof`, `pg_backend_pid`, `pg_size_pretty`…). Write your own `pg_notes` table as `schema.pg_notes`.
   * `CASCADE` (it reaches dependents anywhere), another schema named after `SCHEMA` (`DROP SCHEMA`, `SET SCHEMA`), another schema's sequence named as text, and upkeep with no table named (`VACUUM`, `REINDEX DATABASE`).
 * **`sslMode`**: `prefer` (when left out), `require`, `verify-ca`, `verify-full` or `disable`; the wizard starts on `verify-full`, and an unchecked certificate says so in `postgres_connections` and once a session. A server asking for the password in clear text is refused, whatever the mode.
@@ -888,7 +900,8 @@ Server families take a connection in `connection`, SQLite and DuckDB a database 
 {
   "connections": {
     "shop": { "host": "localhost", "database": "shop", "user": "shop_reader", "password": "type-password-here-once", "description": "The sample retail database" },
-    "billing": { "host": "db01.example.com", "database": "billing", "schema": "invoices", "user": "billing_ro", "passwordStore": "credman", "sslMode": "verify-full" }
+    "billing": { "host": "db01.example.com", "database": "billing", "schema": "invoices", "user": "billing_ro", "passwordStore": "credman", "sslMode": "verify-full" },
+    "orders": { "host": "db01.example.com", "database": "erp", "schemas": ["sales", "public"], "user": "erp_ro", "passwordStore": "credman", "sslMode": "verify-full" }
   }
 }
 ```
@@ -899,15 +912,17 @@ Server families take a connection in `connection`, SQLite and DuckDB a database 
 
 ### Oracle
 
-`oracle.json`; no Oracle Client needed. A connection is held to **one schema** rather than a database.
+`oracle.json`; no Oracle Client needed. A connection is held to **one schema**, or the schemas it lists, rather than a database.
 
-* **`dataSource`**: EZConnect `host:port/service` (`localhost:1521/FREEPDB1`) or a whole `(DESCRIPTION=…)`. **`schema`**: the one it is held to (default: the user's own).
+* **`dataSource`**: EZConnect `host:port/service` (`localhost:1521/FREEPDB1`) or a whole `(DESCRIPTION=…)`.
+* **`schema`** or **`schemas`**: the one or ones it is held to (default: the user's own). With a list, the first is current; name the others' tables `OE.ORDERS`. Oracle's own schemas are refused.
 * **`user`**: the database user. `SYS` (and any `AS SYSDBA` sign-in) is refused: Oracle doesn't hold SYS to a read-only transaction.
 
 ```json
 {
   "connections": {
     "hr": { "dataSource": "localhost:1521/FREEPDB1", "user": "hr_reader", "password": "type-password-here-once", "schema": "HR" },
+    "hr_oe": { "dataSource": "localhost:1521/FREEPDB1", "user": "hr_reader", "passwordStore": "credman", "schemas": ["HR", "OE"] },
     "ledger": { "dataSource": "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=dbhost01.example.com)(PORT=1521))(CONNECT_DATA=(SERVICE_NAME=LEDGER)))",
       "user": "ledger_ro", "passwordStore": "credman" }
   }
@@ -919,6 +934,7 @@ Server families take a connection in `connection`, SQLite and DuckDB a database 
 * Refused, for example: `FOR UPDATE`, database links, `UTL_HTTP`/`UTL_FILE`/`DBMS_SQL`/`DBMS_METADATA`, `CONTAINERS()`, and whole-database views (`ALL_*`, `DBA_*`, `CDB_*`, `V$`, `UNIFIED_AUDIT_TRAIL`); `USER_*` views work.
 * A server version the app can't read is refused rather than read without the session layer.
 * A CLOB or BLOB shows its start and length; object types (`SDO_GEOMETRY`, `XMLTYPE`) need converting to text.
+* There is no `oracle_explain`: `EXPLAIN PLAN` writes a table, which the read-only session refuses.
 
 ### SQLite
 
@@ -951,6 +967,7 @@ The DuckDB tools read DuckDB database **files** and the CSV, Parquet and JSON fi
 ```
 
 * **Data files** are read by path (`FROM 'data/sales.csv'`) or with a reader (`read_csv`, `read_parquet`, `read_json`, `read_text`, `read_blob`). A pattern works inside a reader and within one folder (`read_csv('data/*.csv')`); `**` is refused.
+* `duckdb_profile` takes a data file's path as its `table` (`data/sales.csv`), one file at a time.
 * **Only the working directory's files**, and only while *DuckDB sandbox files* is on. A path outside it, or a link leading out, is refused; so is a quoted table name that reads like a file and names none.
 * `params` binds `$name`; positional `?` and `$1` are refused.
 * **Reading** opens the file read-only, whatever the mode; a statement past *DuckDB query timeout (s)*, or stopped with Esc, is interrupted.

@@ -31,7 +31,12 @@ public enum XlsxKind
 /// <param name="Text">A text cell's text, or a number's exact invariant spelling (a decimal as written, a double round-trip).</param>
 /// <param name="When">A date's or a date-time's value.</param>
 /// <param name="Cut">The text was cut at <see cref="MaxChars"/>.</param>
-public readonly record struct XlsxValue(XlsxKind Kind, double Number = 0, string? Text = null, DateTime When = default, bool Cut = false)
+/// <param name="Exact">
+/// A number's source spelling when <see cref="Text"/> is the nearest double's (2026-11-14, the database-tools plan's #13: a fraction past
+/// <see cref="MaxDigits"/> digits is made a double for Excel, and a CSV or JSON file, which has no such limit, would have kept the rounding):
+/// <c>12345678901234.5678901234</c> beside its double's <c>12345678901234.568</c>. Null otherwise; a workbook never reads it.
+/// </param>
+public readonly record struct XlsxValue(XlsxKind Kind, double Number = 0, string? Text = null, DateTime When = default, bool Cut = false, string? Exact = null)
 {
     /// <summary>The most characters Excel holds in a cell.</summary>
     public const int MaxChars = 32_767;
@@ -83,7 +88,7 @@ public readonly record struct XlsxValue(XlsxKind Kind, double Number = 0, string
     {
         string text = value.ToString(CultureInfo.InvariantCulture);
         return SignificantDigits(text) <= MaxDigits ? new XlsxValue(XlsxKind.Number, (double)value, text)
-            : IsFraction(value) && Math.Abs(value) < (decimal)MaxFraction ? OfDouble((double)value)
+            : IsFraction(value) && Math.Abs(value) < (decimal)MaxFraction ? OfDouble((double)value) with { Exact = text }
             : OfText(text);
     }
 
@@ -145,7 +150,7 @@ public readonly record struct XlsxValue(XlsxKind Kind, double Number = 0, string
             || real != Math.Truncate(real));
         if (fraction && Math.Abs(real) < MaxFraction)
         {
-            value = OfDouble(real);
+            value = OfDouble(real) with { Exact = text.Trim() };
             return true;
         }
 
@@ -266,6 +271,38 @@ public readonly record struct XlsxValue(XlsxKind Kind, double Number = 0, string
 
             sb ??= new StringBuilder(text, 0, i, text.Length + 16);
             sb.Append(instead);
+        }
+
+        return sb?.ToString() ?? text;
+    }
+
+    /// <summary>
+    /// <paramref name="text"/> with each lone UTF-16 surrogate (half a pair, which SQL Server's <c>nvarchar</c> and SQLite text can hold) as
+    /// U+FFFD, a pair kept (2026-11-14, the database-tools plan's #13: <c>Utf8JsonWriter</c> throws on a lone one, so a CSV or JSON export
+    /// writes every value and column name through this, as <see cref="Escape"/> does a cell's). The same string when there is none.
+    /// </summary>
+    public static string WellFormed(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        StringBuilder? sb = null;
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (char.IsHighSurrogate(c) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1]))
+            {
+                sb?.Append(c).Append(text[i + 1]);
+                i++;
+                continue;
+            }
+
+            if (!char.IsSurrogate(c))
+            {
+                sb?.Append(c);
+                continue;
+            }
+
+            sb ??= new StringBuilder(text, 0, i, text.Length);
+            sb.Append('�');
         }
 
         return sb?.ToString() ?? text;

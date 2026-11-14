@@ -7263,6 +7263,8 @@ internal sealed partial class ChatScreen
         new SqlRelationshipsTool(sql, effective),
         new SqlIndexesTool(sql, effective),
         new SqlQueryTool(sql, effective) { ExportRoot = saveRoot, Clock = time ?? TimeProvider.System },
+        new SqlExplainTool(sql, effective),
+        new SqlProfileTool(sql, effective),
         new SqlExecuteTool(sql, effective, allow),
     };
 
@@ -7276,6 +7278,8 @@ internal sealed partial class ChatScreen
         SqlRelationshipsTool.ToolName,
         SqlIndexesTool.ToolName,
         SqlQueryTool.ToolName,
+        SqlExplainTool.ToolName,
+        SqlProfileTool.ToolName,
         SqlExecuteTool.ToolName,
     };
 
@@ -7316,6 +7320,7 @@ internal sealed partial class ChatScreen
         new OracleRelationshipsTool(oracle, effective),
         new OracleIndexesTool(oracle, effective),
         new OracleQueryTool(oracle, effective) { ExportRoot = saveRoot, Clock = time ?? TimeProvider.System },
+        new OracleProfileTool(oracle, effective),
         new OracleExecuteTool(oracle, effective, allow),
     };
 
@@ -7329,6 +7334,7 @@ internal sealed partial class ChatScreen
         OracleRelationshipsTool.ToolName,
         OracleIndexesTool.ToolName,
         OracleQueryTool.ToolName,
+        OracleProfileTool.ToolName,
         OracleExecuteTool.ToolName,
     };
 
@@ -7365,6 +7371,8 @@ internal sealed partial class ChatScreen
         new MySqlRelationshipsTool(mysql, effective),
         new MySqlIndexesTool(mysql, effective),
         new MySqlQueryTool(mysql, effective) { ExportRoot = saveRoot, Clock = time ?? TimeProvider.System },
+        new MySqlExplainTool(mysql, effective),
+        new MySqlProfileTool(mysql, effective),
         new MySqlExecuteTool(mysql, effective, allow),
     };
 
@@ -7378,6 +7386,8 @@ internal sealed partial class ChatScreen
         MySqlRelationshipsTool.ToolName,
         MySqlIndexesTool.ToolName,
         MySqlQueryTool.ToolName,
+        MySqlExplainTool.ToolName,
+        MySqlProfileTool.ToolName,
         MySqlExecuteTool.ToolName,
     };
 
@@ -7411,6 +7421,8 @@ internal sealed partial class ChatScreen
         new PostgresRelationshipsTool(postgres, effective),
         new PostgresIndexesTool(postgres, effective),
         new PostgresQueryTool(postgres, effective) { ExportRoot = saveRoot, Clock = time ?? TimeProvider.System },
+        new PostgresExplainTool(postgres, effective),
+        new PostgresProfileTool(postgres, effective),
         new PostgresExecuteTool(postgres, effective, allow),
     };
 
@@ -7419,7 +7431,7 @@ internal sealed partial class ChatScreen
     {
         PostgresConnectionsTool.ToolName, PostgresSchemasTool.ToolName, PostgresTablesTool.ToolName, PostgresColumnsTool.ToolName,
         PostgresDescribeTool.ToolName, PostgresRelationshipsTool.ToolName, PostgresIndexesTool.ToolName, PostgresQueryTool.ToolName,
-        PostgresExecuteTool.ToolName,
+        PostgresExplainTool.ToolName, PostgresProfileTool.ToolName, PostgresExecuteTool.ToolName,
     };
 
     /// <summary>
@@ -7447,7 +7459,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The SQLite tools (2026-10-04), <see cref="MySqlTools"/>' twin, offered while <see cref="SqliteOffered"/> says so (headless too):
-    /// the four reads, and <c>sqlite_execute</c> (2026-10-05) behind <paramref name="allow"/> — null where nothing can ask, and there
+    /// the six reads (databases, tables, describe, query, and explain and profile since 2026-11-14), and <c>sqlite_execute</c> (2026-10-05) behind <paramref name="allow"/> — null where nothing can ask, and there
     /// <see cref="SqliteToolsFor"/> never offers it. What a turn offers of them is <see cref="SqliteToolsFor"/>'s.
     /// </summary>
     /// <remarks><paramref name="saveRoot"/> and <paramref name="time"/> (2026-10-29, the Office writing plan): where the query's <c>to</c> may write, and the workbook's clock; null offers no <c>to</c>.</remarks>
@@ -7457,6 +7469,8 @@ internal sealed partial class ChatScreen
         new SqliteTablesTool(sqlite, effective),
         new SqliteDescribeTool(sqlite, effective),
         new SqliteQueryTool(sqlite, effective) { ExportRoot = saveRoot, Clock = time ?? TimeProvider.System },
+        new SqliteExplainTool(sqlite, effective),
+        new SqliteProfileTool(sqlite, effective),
         new SqliteExecuteTool(sqlite, effective, allow),
     };
 
@@ -7467,6 +7481,8 @@ internal sealed partial class ChatScreen
         SqliteTablesTool.ToolName,
         SqliteDescribeTool.ToolName,
         SqliteQueryTool.ToolName,
+        SqliteExplainTool.ToolName,
+        SqliteProfileTool.ToolName,
         SqliteExecuteTool.ToolName,
     };
 
@@ -7555,8 +7571,8 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// The DuckDB tools (2026-10-25), <see cref="SqliteTools"/>' twin, offered while <see cref="DuckDbOffered"/> says so (headless too): the four
-    /// reads, and <c>duckdb_execute</c> behind <paramref name="allow"/> — null where nothing can ask, and there <see cref="DuckDbToolsFor"/> never
+    /// The DuckDB tools (2026-10-25), <see cref="SqliteTools"/>' twin, offered while <see cref="DuckDbOffered"/> says so (headless too): the six
+    /// reads (explain and profile since 2026-11-14), and <c>duckdb_execute</c> behind <paramref name="allow"/> — null where nothing can ask, and there <see cref="DuckDbToolsFor"/> never
     /// offers it.
     /// </summary>
     /// <remarks><paramref name="saveRoot"/> and <paramref name="time"/> (2026-10-29, the Office writing plan): where the query's <c>to</c> may write, and the workbook's clock; null offers no <c>to</c>.</remarks>
@@ -7566,6 +7582,8 @@ internal sealed partial class ChatScreen
         new DuckDbTablesTool(duckDb, effective),
         new DuckDbDescribeTool(duckDb, effective),
         new DuckDbQueryTool(duckDb, effective) { ExportRoot = saveRoot, Clock = time ?? TimeProvider.System },
+        new DuckDbExplainTool(duckDb, effective),
+        new DuckDbProfileTool(duckDb, effective),
         new DuckDbExecuteTool(duckDb, effective, allow),
     };
 
@@ -7576,6 +7594,8 @@ internal sealed partial class ChatScreen
         DuckDbTablesTool.ToolName,
         DuckDbDescribeTool.ToolName,
         DuckDbQueryTool.ToolName,
+        DuckDbExplainTool.ToolName,
+        DuckDbProfileTool.ToolName,
         DuckDbExecuteTool.ToolName,
     };
 

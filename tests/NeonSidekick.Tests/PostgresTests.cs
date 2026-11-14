@@ -232,7 +232,7 @@ public sealed class PostgresToolsTests : IDisposable
         var catalog = new PostgresCatalog([new PostgresNamedConnection("shop", Config(), "x.json")], []);
         var access = new PostgresAccess(() => catalog.Offered(_settings.PostgresConnectionsOffered));
         var tools = ChatScreen.PostgresTools(access, () => _settings);
-        Assert.Equal(9, tools.Count);   // the eight reads (postgres_databases gone 2026-10-09) and postgres_execute (2026-10-05), which plan mode drops
+        Assert.Equal(11, tools.Count);   // the eight reads (postgres_databases gone 2026-10-09), postgres_explain and postgres_profile (2026-11-14) and postgres_execute (2026-10-05), which plan mode drops
         Assert.Equal(ChatScreen.PostgresToolNames, tools.Select(t => t.Name).ToHashSet());
         Assert.All(tools.Where(t => t is not PostgresExecuteTool), t => Assert.True(PlanTools.Allowed(t.Name), t.Name));
         Assert.StartsWith("1 PostgreSQL connection (every PostgreSQL tool", tools.OfType<PostgresConnectionsTool>().Single().Describe());
@@ -447,6 +447,22 @@ internal static class LivePostgres
                 other.ExecuteNonQuery();
             }
 
+            // A schema list's fixtures (2026-11-14, feature idea #18): a table in ns_other keyed to public's customers, and a third schema to
+            // refuse, whose table's name no listed schema has (ns_other.t exists, so a bare t would resolve there).
+            using (var listed = new NpgsqlCommand(
+                "CREATE TABLE IF NOT EXISTS ns_other.ns_refs (id int PRIMARY KEY, customer_id int NOT NULL CONSTRAINT ns_refs_customer_fk REFERENCES public.ns_customers(id), note text);"
+                + "INSERT INTO ns_other.ns_refs VALUES (1, 1, 'first'), (2, 2, 'second') ON CONFLICT DO NOTHING;"
+                + "CREATE SCHEMA IF NOT EXISTS ns_third; CREATE TABLE IF NOT EXISTS ns_third.ns_hidden (a int)", connection))
+            {
+                listed.ExecuteNonQuery();
+            }
+
+            // The planner's counts (2026-11-14, postgres_profile): a table never analyzed has none, and the profile's TABLESAMPLE runs only on an estimate.
+            using (var analyze = new NpgsqlCommand("ANALYZE ns_customers; ANALYZE ns_orders", connection))
+            {
+                analyze.ExecuteNonQuery();
+            }
+
             Config = new PostgresConnectionConfig
             {
                 Host = builder.Host,
@@ -497,6 +513,50 @@ public sealed class LivePostgresTests
     private Task<SqlRun> Raw(string sql, int timeoutSeconds = 30, CancellationToken cancellationToken = default) =>
         _access.RunAsync("live", [sql], [], 10, timeoutSeconds, cancellationToken);
 
+    /// <summary>
+    /// <c>postgres_explain</c> on the fixtures (2026-11-14, the database-tools plan's #12): a join of <c>ns_orders</c> and <c>ns_customers</c> with
+    /// its value bound over the extended protocol names both tables with an access method; the server's catalog and a change are refused.
+    /// </summary>
+    [LivePostgresFact]
+    public async Task Explain_PlansAJoinOfTheFixtures_WithItsParameters()
+    {
+        string join = await Invoke<PostgresExplainTool>(("sql", "SELECT c.name, o.total FROM ns_orders o JOIN ns_customers c ON c.id = o.customer_id WHERE o.total > @t"),
+            ("params", System.Text.Json.JsonDocument.Parse("""{"t": 5}""").RootElement));
+        Assert.StartsWith("Plan for live/", join);
+        Assert.Contains("(estimated, not run; ", SqlText.Note(join));
+        Assert.Matches(@"Scan on (public\.)?ns_orders", join);
+        Assert.Matches(@"Scan on (public\.)?ns_customers", join);
+        Assert.Equal(PostgresText.ServerCatalog("pg_database"), await Invoke<PostgresExplainTool>(("sql", "SELECT datname FROM pg_database")));
+        Assert.StartsWith("Error:", await Invoke<PostgresExplainTool>(("sql", "DELETE FROM ns_orders")));
+    }
+
+    /// <summary>
+    /// <c>postgres_profile</c> on the fixtures (2026-11-14, the database-tools plan's #14), as is and with the threshold lowered to 1 (the analyzed
+    /// table's <c>TABLESAMPLE SYSTEM … REPEATABLE</c> runs, or its first rows when the sample comes back short): the counts, an array's nulls alone,
+    /// the top values of a column that repeats; the server's catalog refused.
+    /// </summary>
+    [LivePostgresFact]
+    public async Task Profile_TheFixtures_WholeAndSampled()
+    {
+        string orders = await Invoke<PostgresProfileTool>(("table", "ns_orders"));
+        Assert.StartsWith("public.ns_orders: 3 rows (exact) · 5 columns · live/", orders);
+        Assert.Contains("| customer_id | integer | 0 | 2 | 1 | 2 | 2 (2), 1 (1) |", orders);
+        Assert.Contains("| tags | text[] | 2 (67%) | — | — | — | — |", orders);
+        Assert.Contains("| notes | text | 2 (67%) | 1 (unique) | first | first |  |", orders);
+
+        TableProfile.SampleAbove = 1;
+        try
+        {
+            Assert.Matches(@"^public\.ns_orders: from (a sample of ~\d+|the first 1) of about 3 rows", await Invoke<PostgresProfileTool>(("table", "ns_orders")));
+        }
+        finally
+        {
+            TableProfile.SampleAbove = 100_000;
+        }
+
+        Assert.StartsWith("Error:", await Invoke<PostgresProfileTool>(("table", "ns_nope")));
+    }
+
     [LivePostgresFact]
     public async Task TheCatalogTools_FindDescribeAndJoinTheFixtures()
     {
@@ -539,6 +599,42 @@ public sealed class LivePostgresTests
         Assert.Equal(PostgresText.OtherSchema("information_schema", "public"), await query.RunAsync("SELECT * FROM information_schema.tables", null, [], null, CancellationToken.None));
         Assert.Equal(PostgresText.OtherSchema("ns_other", "public"), await query.RunAsync("SELECT * FROM ns_other.t", null, [], null, CancellationToken.None));   // S13: found by the names read
         Assert.Contains("| public |", (string)(await tools.OfType<PostgresSchemasTool>().Single().InvokeAsync(new AIFunctionArguments()))!);
+    }
+
+    /// <summary>
+    /// A list of schemas against a real server (2026-11-14, feature idea #18): the search path is the list in order, a join across the two
+    /// reads, a bare name resolves along the path, the FK between them shows, every catalog tool runs its <c>@lock::text[]</c> filter
+    /// once, and a third schema is refused naming both.
+    /// </summary>
+    [LivePostgresFact]
+    public async Task ASchemaList_SetsTheSearchPath_JoinsAcrossIt_AndRefusesAThird()
+    {
+        var c = LivePostgres.Config!;
+        var listed = new PostgresConnectionConfig { Host = c.Host, Port = c.Port, Database = c.Database, User = c.User, Password = c.Password, SslMode = c.SslMode, ConnectTimeoutSeconds = c.ConnectTimeoutSeconds, Schemas = ["public", "ns_other"] };
+        var tools = ChatScreen.PostgresTools(new PostgresAccess(() => new PostgresCatalog([new PostgresNamedConnection("live", listed, "test")], [])), () => _settings);
+        async Task<string> Run<T>(params (string Name, object? Value)[] pairs) where T : AIFunction =>
+            (string)(await tools.OfType<T>().Single().InvokeAsync(new AIFunctionArguments(pairs.ToDictionary(p => p.Name, p => p.Value))))!;
+
+        Assert.Contains("| {public,ns_other} |", await Run<PostgresQueryTool>(("sql", "SELECT current_schemas(false)::text AS path")));
+        Assert.StartsWith("2 rows", await Run<PostgresQueryTool>(("sql", "SELECT c.name, r.note FROM public.ns_customers c JOIN ns_other.ns_refs r ON r.customer_id = c.id")));
+        Assert.StartsWith("1 row", await Run<PostgresQueryTool>(("sql", "SELECT count(*) FROM ns_refs")));   // along the search path
+        Assert.Equal(PostgresText.OtherSchema("ns_third", ["public", "ns_other"]), await Run<PostgresQueryTool>(("sql", "SELECT * FROM ns_third.ns_hidden")));
+
+        string schemas = await Run<PostgresSchemasTool>();
+        Assert.Contains("| public |", schemas);
+        Assert.Contains("| ns_other |", schemas);
+        Assert.DoesNotContain("ns_third", schemas);
+        string tables = await Run<PostgresTablesTool>();
+        Assert.Contains("ns_refs", tables);
+        Assert.Contains("ns_orders", tables);
+        Assert.DoesNotContain("ns_hidden", tables);
+        Assert.Contains("note", await Run<PostgresColumnsTool>(("pattern", "note%")));
+        Assert.Contains("customer_id", await Run<PostgresDescribeTool>(("table", "ns_refs")));
+        Assert.Contains("ns_refs_customer_fk", await Run<PostgresRelationshipsTool>(("table", "ns_customers")));   // inbound, from the other listed schema
+        Assert.Contains("ns_refs_pkey", await Run<PostgresIndexesTool>(("table", "ns_other.ns_refs")));
+        Assert.Contains("ns_refs: 2 rows", await Run<PostgresProfileTool>(("table", "ns_other.ns_refs")));
+        Assert.StartsWith("Error: no table or view 'ns_hidden'", await Run<PostgresDescribeTool>(("table", "ns_hidden")));   // only in the third
+        Assert.Equal(PostgresText.SchemaElsewhere("ns_third", ["public", "ns_other"]), await Run<PostgresTablesTool>(("schema", "ns_third")));
     }
 
     /// <summary>

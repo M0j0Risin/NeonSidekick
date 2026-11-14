@@ -16,6 +16,10 @@ public static class SqlToolNames
         SqlQueryTool.ToolName,
     };
 
-    /// <summary>The reads and <c>sql_execute</c> (2026-10-05): what <c>ChatScreen.SqlTools</c> makes; plan mode and the read rule know only the reads (seven since <c>sql_databases</c> went, 2026-10-09).</summary>
-    public static readonly string[] WithExecute = [.. All, SqlExecuteTool.ToolName];
+    /// <summary>
+    /// The reads, <c>sql_explain</c> and <c>sql_profile</c> (2026-11-14) and <c>sql_execute</c> (2026-10-05): what <c>ChatScreen.SqlTools</c> makes; the read rule knows only
+    /// <see cref="All"/> (seven since <c>sql_databases</c> went, 2026-10-09). The rule names its tools whether or not each is offered, so it leaves
+    /// explain and profile to their own descriptions: <c>/tools</c> may turn them off.
+    /// </summary>
+    public static readonly string[] WithExecute = [.. All, SqlExplainTool.ToolName, SqlProfileTool.ToolName, SqlExecuteTool.ToolName];
 }

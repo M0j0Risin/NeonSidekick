@@ -84,7 +84,8 @@ public sealed class PostgresConfigFile
         "  //   \"passwordStore\": \"credman\", \"sslMode\": \"verify-full\"\n" +
         "  // },\n" +
         "  //\n" +
-        "  // port: 5432 by default; database: the one the connection reaches; schema (optional): hold it to that schema alone;\n" +
+        "  // port: 5432 by default; database: the one the connection reaches; schema (optional): hold it to that schema alone,\n" +
+        "  // or schemas: [\"invoices\", \"public\"] to those, in search-path order;\n" +
         "  // sslMode: prefer (the default), require, verify-ca, verify-full or disable; connectTimeoutSeconds: 1 to 120 (15 by\n" +
         "  // default). access: read (the default) or readwrite — postgres_execute may change a readwrite connection's database\n" +
         "  // while PostgreSQL mode is read-write, each change allowed by you. An account with SELECT grants alone is the real\n" +

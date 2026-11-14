@@ -111,6 +111,35 @@ public sealed class SqlQueryTool : SqlTool
     }
 
     /// <summary>
+    /// <c>params</c> as the server families' explain tools take it (2026-11-14, the database-tools plan's #12): one object read by
+    /// <see cref="ReadParameters"/>'s rules; null with the <c>Error:</c> sentence (the family's <paramref name="badParams"/> for a wrong shape).
+    /// </summary>
+    internal static IReadOnlyList<SqlParameterValue>? ReadParams(AIFunctionArguments arguments, Func<string, string> badParams, out string error)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+        ArgumentNullException.ThrowIfNull(badParams);
+        error = "";
+        if (!ToolArguments.TryReadObjectList(arguments, ParamsArgument, out var objects, out var sent) || objects.Count > 1)
+        {
+            error = badParams(sent);
+            return null;
+        }
+
+        if (objects.Count == 0)
+        {
+            return [];
+        }
+
+        if (ReadParameters(objects[0], out var bad) is not { } read)
+        {
+            error = bad ?? "";
+            return null;
+        }
+
+        return read;
+    }
+
+    /// <summary>
     /// A params name as Oracle binds it (2026-10-24, the database review's P2: <c>{":id": 5}</c> was refused, and the refusal itself said to
     /// write <c>:name</c>): a leading <c>:</c> dropped as <c>@</c> is, then <see cref="ReadName"/>'s rule.
     /// </summary>

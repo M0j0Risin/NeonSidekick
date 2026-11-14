@@ -43,6 +43,27 @@ public sealed class OracleConnectionConfig : Sql.ISignInConfig
     /// </summary>
     public string? Schema { get; set; }
 
+    /// <summary>
+    /// The schemas the connection is held to (2026-11-14, feature idea #18: <c>HR.EMPLOYEES</c> joined with <c>OE.ORDERS</c> needed two
+    /// connections): <see cref="Schema"/>'s list form, never both. The first is the session's <c>CURRENT_SCHEMA</c>; the others' tables
+    /// are named <c>OE.ORDERS</c>. The listings keep to the list, and a statement reaching a schema off it is refused.
+    /// </summary>
+    public List<string>? Schemas { get; set; }
+
+    /// <summary>The most schemas one entry's <see cref="Schemas"/> may list.</summary>
+    public const int MaxSchemas = 16;
+
+    /// <summary>
+    /// Oracle's own schemas, refused in <see cref="Schema"/> and <see cref="Schemas"/> as written (#18); the session's check reads
+    /// <c>ALL_USERS.ORACLE_MAINTAINED</c> for the rest (<see cref="OracleText.SchemaCheck"/>).
+    /// </summary>
+    public static readonly IReadOnlySet<string> SystemSchemas = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "SYS", "SYSTEM", "XDB", "MDSYS", "CTXSYS", "OUTLN", "DBSNMP", "AUDSYS", "LBACSYS", "GSMADMIN_INTERNAL", "ORDSYS", "ORDDATA", "ORDPLUGINS",
+        "WMSYS", "OJVMSYS", "DVSYS", "DVF", "OLAPSYS", "APPQOSSYS", "SI_INFORMTN_SCHEMA", "GSMCATUSER", "GSMUSER", "GSMROOTUSER", "SYSBACKUP",
+        "SYSDG", "SYSKM", "SYSRAC", "REMOTE_SCHEDULER_AGENT", "DBSFWUSER", "GGSYS", "ANONYMOUS", "XS$NULL", "DIP", "ORACLE_OCM", "SYS$UMF",
+    };
+
     /// <summary>The database user.</summary>
     public string? User { get; set; }
 
@@ -127,13 +148,65 @@ public sealed class OracleConnectionConfig : Sql.ISignInConfig
                 return Sql.SqlText.BadConnectTimeout(seconds, MaxConnectTimeoutSeconds);
             }
 
-            if (!string.IsNullOrWhiteSpace(Schema) && OracleIdentifier.Quote(Schema) is null)
+            return LockProblem(Schema, Schemas);
+        }
+    }
+
+    /// <summary>
+    /// The reason the lock's keys cannot hold the connection, or null (#18): both keys, an empty list, more than <see cref="MaxSchemas"/>,
+    /// a name that is no identifier, one of <see cref="SystemSchemas"/>, or a name listed twice (as the dictionary spells it: <c>hr</c>
+    /// and <c>HR</c> are one). The wizard's typed answer goes through it too.
+    /// </summary>
+    public static string? LockProblem(string? schema, IReadOnlyList<string?>? schemas)
+    {
+        if (schemas is null)
+        {
+            return string.IsNullOrWhiteSpace(schema) ? null : NameProblem(schema.Trim(), "schema");
+        }
+
+        if (!string.IsNullOrWhiteSpace(schema))
+        {
+            return OracleText.BothSchemaKeys;
+        }
+
+        if (schemas.Count == 0)
+        {
+            return OracleText.EmptySchemas;
+        }
+
+        if (schemas.Count > MaxSchemas)
+        {
+            return OracleText.TooManySchemas(MaxSchemas);
+        }
+
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string? name in schemas)
+        {
+            if (NameProblem(name?.Trim() ?? "", "schemas") is { } problem)
             {
-                return OracleText.BadSchemaKey(Schema.Trim());
+                return problem;
             }
 
-            return null;
+            if (!seen.Add(OracleIdentifier.Normalize(name)!))
+            {
+                return OracleText.RepeatedSchema(name!.Trim());
+            }
         }
+
+        return null;
+    }
+
+    private static string? NameProblem(string name, string key) =>
+        OracleIdentifier.Quote(name) is null ? OracleText.BadSchemaKey(name, key)
+        : SystemSchemas.Contains(OracleIdentifier.Normalize(name)!) ? OracleText.SystemSchema(name, key)
+        : null;
+
+    /// <summary>The wizard's lock (#18): none clears both keys, one is <see cref="Schema"/>, several <see cref="Schemas"/> (a one-schema file stays as it was).</summary>
+    public void HoldTo(IReadOnlyList<string> names)
+    {
+        ArgumentNullException.ThrowIfNull(names);
+        Schema = names.Count == 1 ? names[0] : null;
+        Schemas = names.Count > 1 ? [.. names] : null;
     }
 
     /// <summary>

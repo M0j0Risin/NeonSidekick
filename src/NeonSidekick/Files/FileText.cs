@@ -111,7 +111,7 @@ public static class FileText
     public const string SaveNeedsFileTools = "Error: to saves a file, which needs File tools on (/tools › Files › File).";
 
     /// <summary>A query's <c>to</c> with <c>convert_to_xlsx</c> turned off (2026-10-29, review P3-3). Pinned.</summary>
-    public const string SaveNeedsXlsx = "Error: to writes a workbook, which needs convert_to_xlsx on (/tools › Offered).";
+    public const string SaveNeedsXlsx = "Error: writing query results to a file needs convert_to_xlsx on (/tools › Offered).";
 
     /// <summary>A <c>to</c> save in plan mode. Pinned.</summary>
     public const string SaveInPlanMode = "Error: to saves a file, and plan mode writes no files.";

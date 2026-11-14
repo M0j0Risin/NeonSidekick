@@ -28,8 +28,8 @@ public abstract class SqlTool : ServerTool<SqlAccess>
 
     /// <summary>
     /// The characters of table a query tool's answer may carry (2026-10-01, the user's ask): <c>SQL query result max chars</c> (named so on 2026-10-03, the user's ask; <c>Query result max chars</c> before)
-    /// (<see cref="AppSettingsData.QueryResultMaxChars"/>), clamped; one setting for <c>sql_query</c>, <c>oracle_query</c> and
-    /// <c>mysql_query</c>. The catalog tools keep <see cref="Files.WorkingDirectory.MaxReadChars"/>.
+    /// (<see cref="AppSettingsData.QueryResultMaxChars"/>), clamped; one setting for every family's <c>*_query</c> and
+    /// <c>*_execute</c> answers; below <see cref="NeonSidekick.Sql.QueryPlan.MaxAnswerChars"/> it also lowers the explain and profile answers (2026-11-14). The catalog tools keep <see cref="Files.WorkingDirectory.MaxReadChars"/>.
     /// </summary>
     public static int ResultChars(AppSettingsData effective)
     {

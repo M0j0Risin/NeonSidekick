@@ -123,9 +123,17 @@ public static class PostgresBoundary
     /// schema's own and <see cref="AlwaysSchemas"/> (none for most statements); none without a lock. Or the refusal at once: a server
     /// catalog, or under a lock <c>information_schema</c> and the <see cref="XmlExports"/>.
     /// </summary>
-    public static (IReadOnlyList<string> Heads, string? Refused) Qualifiers(string sql, string? schema)
+    public static (IReadOnlyList<string> Heads, string? Refused) Qualifiers(string sql, string? schema) =>
+        QualifiersUnder(sql, string.IsNullOrWhiteSpace(schema) ? [] : [schema.Trim()]);
+
+    /// <summary>
+    /// <see cref="Qualifiers"/> under a lock to <paramref name="locks"/> (none: no lock; 2026-11-14, feature idea #18): a qualifier naming
+    /// any of them is the lock's own, and the refusals name the list.
+    /// </summary>
+    public static (IReadOnlyList<string> Heads, string? Refused) QualifiersUnder(string sql, IReadOnlyList<string> locks)
     {
         ArgumentNullException.ThrowIfNull(sql);
+        ArgumentNullException.ThrowIfNull(locks);
         if (PostgresWriteGate.LexWithBodies(sql, out _) is not { } tokens)
         {
             // A text the boundary cannot read is refused (2026-10-24, mechanism 7): it passed here "because the gate refused it", which
@@ -142,29 +150,29 @@ public static class PostgresBoundary
             }
         }
 
-        if (string.IsNullOrWhiteSpace(schema))
+        if (locks.Count == 0)
         {
             return ([], null);
         }
 
-        string own = schema.Trim();
+        var own = new HashSet<string>(locks, StringComparer.Ordinal);
 
         if (tokens.FirstOrDefault(t => t.Kind is GateTokenKind.Word or GateTokenKind.Name && XmlExports.Contains(t.Text)) is { Text: { } export })
         {
-            return ([], PostgresText.XmlExport(export.ToLowerInvariant(), own));
+            return ([], PostgresText.XmlExport(export.ToLowerInvariant(), locks));
         }
 
         if (tokens.FirstOrDefault(t => t.Kind is GateTokenKind.Word or GateTokenKind.Name && SchemaListings.Contains(t.Text)) is { Text: { } listing })
         {
-            return ([], PostgresText.SchemaListing(listing.ToLowerInvariant(), own));
+            return ([], PostgresText.SchemaListing(listing.ToLowerInvariant(), locks));
         }
 
-        if (LockRefusal(tokens, own) is { } locked)
+        if (LockRefusal(tokens, own, locks) is { } locked)
         {
             return ([], locked);
         }
 
-        var heads = ServerWriteGate.Prefixes(tokens).Select(Fold).Where(h => !h.Equals(own, StringComparison.Ordinal) && !AlwaysSchemas.Contains(h)).ToList();
+        var heads = ServerWriteGate.Prefixes(tokens).Select(Fold).Where(h => !own.Contains(h) && !AlwaysSchemas.Contains(h)).ToList();
 
         // A bare schema name (G2, A11): DROP SCHEMA payroll, ALTER SCHEMA payroll RENAME, COMMENT ON SCHEMA payroll, ALTER TABLE t SET
         // SCHEMA payroll, CREATE SCHEMA scratch — the word after SCHEMA (past IF [NOT] EXISTS) is a schema whatever the names say.
@@ -182,14 +190,14 @@ public static class PostgresBoundary
             }
 
             if (at < tokens.Count && tokens[at].Kind is GateTokenKind.Word or GateTokenKind.Name && Fold(tokens[at]) is { } named
-                && !named.Equals(own, StringComparison.Ordinal) && !(i > 0 && tokens[i - 1].IsWord("CURRENT")))
+                && !own.Contains(named) && !(i > 0 && tokens[i - 1].IsWord("CURRENT")))
             {
-                return (heads, PostgresText.OtherSchema(named, own));
+                return (heads, PostgresText.OtherSchema(named, locks));
             }
         }
 
         return heads.Contains("information_schema")
-            ? (heads, PostgresText.OtherSchema("information_schema", own))
+            ? (heads, PostgresText.OtherSchema("information_schema", locks))
             : (heads, null);
     }
 
@@ -199,12 +207,12 @@ public static class PostgresBoundary
     /// too), unless the lock's own schema qualifies the name; a sequence function handed another schema's sequence as text; and
     /// <c>CASCADE</c>, which drops or empties what depends on the object wherever it is.
     /// </summary>
-    private static string? LockRefusal(IReadOnlyList<GateToken> tokens, string own)
+    private static string? LockRefusal(IReadOnlyList<GateToken> tokens, HashSet<string> own, IReadOnlyList<string> locks)
     {
         int lead = tokens.ToList().FindIndex(t => !t.IsSymbol("("));
         if (lead >= 0 && PostgresWriteGate.WholeDatabase(tokens, lead) is { } whole)
         {
-            return PostgresText.WholeUnderLock(whole, own);   // H8: upkeep over every schema's tables
+            return PostgresText.WholeUnderLock(whole, locks);   // H8: upkeep over every schema's tables
         }
 
         for (int i = 0; i < tokens.Count; i++)
@@ -217,7 +225,7 @@ public static class PostgresBoundary
 
             string name = Fold(t);
             bool qualifiedByOwn = i >= 2 && tokens[i - 1].IsSymbol(".") && tokens[i - 2].Kind is GateTokenKind.Word or GateTokenKind.Name
-                && Fold(tokens[i - 2]).Equals(own, StringComparison.Ordinal);
+                && own.Contains(Fold(tokens[i - 2]));
             bool member = i >= 2 && tokens[i - 1].IsSymbol(".") && !(tokens[i - 2].Kind is GateTokenKind.Word or GateTokenKind.Name && AlwaysSchemas.Contains(Fold(tokens[i - 2])));
             if (qualifiedByOwn || (member && !name.StartsWith("pg_", StringComparison.Ordinal)))
             {
@@ -229,19 +237,19 @@ public static class PostgresBoundary
                   || (name.StartsWith("has_", StringComparison.Ordinal) && name.EndsWith("_privilege", StringComparison.Ordinal));
             if (reader)
             {
-                return PostgresText.CatalogUnderLock(name, own);
+                return PostgresText.CatalogUnderLock(name, locks);
             }
 
             if (t.IsWord("CASCADE") && !(i > 0 && (tokens[i - 1].IsWord("DELETE") || tokens[i - 1].IsWord("UPDATE"))))   // a key's ON DELETE CASCADE stays
             {
-                return PostgresText.CascadeUnderLock(own);
+                return PostgresText.CascadeUnderLock(locks);
             }
 
             if (SequenceFunctions.Contains(name) && i + 2 < tokens.Count && tokens[i + 1].IsSymbol("(") && tokens[i + 2].Kind == GateTokenKind.Other
                 && PostgresWriteGate.StringValue(tokens[i + 2].Text) is { } sequence && SequenceSchema(sequence) is { } named
-                && !named.Equals(own, StringComparison.Ordinal) && !AlwaysSchemas.Contains(named))
+                && !own.Contains(named) && !AlwaysSchemas.Contains(named))
             {
-                return PostgresText.OtherSchema(named, own);
+                return PostgresText.OtherSchema(named, locks);
             }
         }
 
@@ -266,10 +274,14 @@ public static class PostgresBoundary
     /// Null when <paramref name="sql"/> keeps to the connection's database and <paramref name="schema"/> (null for no lock), the schemas
     /// in the database being <paramref name="visible"/>; else the <c>Error:</c> sentence. A text that does not lex is refused (mechanism 7).
     /// </summary>
-    public static string? Check(string sql, string? schema, IEnumerable<string> visible)
+    public static string? Check(string sql, string? schema, IEnumerable<string> visible) =>
+        CheckUnder(sql, string.IsNullOrWhiteSpace(schema) ? [] : [schema.Trim()], visible);
+
+    /// <summary><see cref="Check"/> under a lock to <paramref name="locks"/> (none: no lock; #18).</summary>
+    public static string? CheckUnder(string sql, IReadOnlyList<string> locks, IEnumerable<string> visible)
     {
         ArgumentNullException.ThrowIfNull(visible);
-        var (heads, refused) = Qualifiers(sql, schema);
+        var (heads, refused) = QualifiersUnder(sql, locks);
         if (refused is not null || heads.Count == 0)
         {
             return refused;
@@ -277,6 +289,6 @@ public static class PostgresBoundary
 
         // The heads are folded as PostgreSQL folds them, so the schemas' names compare exactly.
         var others = visible as IReadOnlySet<string> ?? new HashSet<string>(visible, StringComparer.Ordinal);   // a set the names cache built (R14)
-        return heads.FirstOrDefault(h => others.Contains(SqlText.Cell(h))) is { } head ? PostgresText.OtherSchema(head, schema!.Trim()) : null;   // as the names list writes it: a cell, scrubbed, NULL quoted (2026-10-24, the review of these fixes)
+        return heads.FirstOrDefault(h => others.Contains(SqlText.Cell(h))) is { } head ? PostgresText.OtherSchema(head, locks) : null;   // as the names list writes it: a cell, scrubbed, NULL quoted (2026-10-24, the review of these fixes)
     }
 }

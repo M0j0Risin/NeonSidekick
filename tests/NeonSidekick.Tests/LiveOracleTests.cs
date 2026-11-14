@@ -75,6 +75,12 @@ internal static class LiveOracle
                 }
             }
 
+            // The optimizer's counts (2026-11-14, oracle_profile): before statistics num_rows is NULL, and the profile's SAMPLE runs only on an estimate.
+            using (var gather = new OracleCommand("BEGIN DBMS_STATS.GATHER_TABLE_STATS(USER, 'NS_ORDERS'); END;", connection))
+            {
+                gather.ExecuteNonQuery();
+            }
+
             Owner = builder.UserID.ToUpperInvariant();
             Config = new OracleConnectionConfig
             {
@@ -132,6 +138,33 @@ public sealed class LiveOracleTests
 
     private Task<SqlRun> Raw(string sql, int timeoutSeconds = 30, CancellationToken cancellationToken = default) =>
         _access.RunAsync("free", [sql], [], 10, timeoutSeconds, cancellationToken);
+
+    /// <summary>
+    /// <c>oracle_profile</c> on the fixtures (2026-11-14, the database-tools plan's #14), as is and with the threshold lowered to 1 (the gathered
+    /// table's <c>SAMPLE … SEED</c> runs, or its <c>ROWNUM</c> first rows when the sample comes back short; the customers, which the server's own job
+    /// may or may not have gathered, either way): the counts, a CLOB's nulls alone, the top values of a column that repeats; another schema refused.
+    /// </summary>
+    [LiveOracleFact]
+    public async Task Profile_TheFixtures_WholeAndSampled()
+    {
+        string orders = await Invoke<OracleProfileTool>(("table", "ns_orders"));
+        Assert.StartsWith(LiveOracle.Owner + ".NS_ORDERS: 3 rows (exact) · 5 columns · free", orders);
+        Assert.Contains("| CUSTOMER_ID | NUMBER | 0 | ~2 | 1 | 2 | 2 (2), 1 (1) |", orders);
+        Assert.Contains("| NOTES | CLOB | 2 (67%) | — | — | — | — |", orders);
+
+        TableProfile.SampleAbove = 1;
+        try
+        {
+            Assert.Matches(@"\.NS_ORDERS: from (a sample of ~\d+|the first 1) of about 3 rows", SqlText.Note(await Invoke<OracleProfileTool>(("table", "ns_orders"))));
+            Assert.Matches(@"\.NS_CUSTOMERS: from (a sample of ~\d+|the first 1) of (about 2|more than 1) rows", SqlText.Note(await Invoke<OracleProfileTool>(("table", "ns_customers"), ("top", 0))));
+        }
+        finally
+        {
+            TableProfile.SampleAbove = 100_000;
+        }
+
+        Assert.StartsWith("Error:", await Invoke<OracleProfileTool>(("table", "SYS.DUAL")));
+    }
 
     [LiveOracleFact]
     public async Task TheCatalogTools_FindDescribeAndJoinTheFixtures()
@@ -268,6 +301,65 @@ public sealed class LiveOracleTests
         // The pooled session is fine afterwards, and still read-only.
         Assert.Equal(SqlOutcome.Ok, (await Raw("SELECT 1 FROM dual")).Outcome);
         Assert.Equal(SqlOutcome.Failed, (await Raw("UPDATE ns_customers SET name = name")).Outcome);
+    }
+
+    /// <summary>
+    /// A list of schemas against a real server (2026-11-14, feature idea #18). Always: a listed schema the account can't see, and one Oracle
+    /// maintains, refused by the session's check before anything runs. With a second schema whose tables the account may read (on the
+    /// dev container, SHOP after a one-time grant: docs/TESTCONTAINERS.md), every rewritten catalog query runs again with two owner binds,
+    /// a join crosses the two, a bare name only in the second is answered qualified, and a third schema is refused naming both. Without
+    /// one, that half is left out (xunit 2 has no skip from inside a test).
+    /// </summary>
+    [LiveOracleFact]
+    public async Task ASchemaList_IsChecked_AndEveryCatalogToolKeepsToIt()
+    {
+        var c = LiveOracle.Config!;
+        OracleConnectionConfig Listed(params string[] schemas) => new() { DataSource = c.DataSource, User = c.User, Password = c.Password, ConnectTimeoutSeconds = c.ConnectTimeoutSeconds, Schemas = [.. schemas] };
+        async Task<string> Run<T>(OracleConnectionConfig config, params (string Name, object? Value)[] pairs) where T : AIFunction
+        {
+            var tools = ChatScreen.OracleTools(new OracleAccess(() => new OracleCatalog([new OracleNamedConnection("free", config, "test")], [])), () => _settings);
+            return (string)(await tools.OfType<T>().Single().InvokeAsync(new AIFunctionArguments(pairs.ToDictionary(p => p.Name, p => p.Value))))!;
+        }
+
+        Assert.Contains("schema NS_NO_SUCH_SCHEMA doesn't exist, or the account can't see it", await Run<OracleQueryTool>(Listed(LiveOracle.Owner, "NS_NO_SUCH_SCHEMA"), ("sql", "SELECT 1 FROM dual")));
+        Assert.Contains("schema NS_NO_SUCH_SCHEMA doesn't exist", await Run<OracleTablesTool>(Listed(LiveOracle.Owner, "NS_NO_SUCH_SCHEMA")));   // the catalog tools too
+        var maintained = (await Raw("SELECT username FROM sys.all_users WHERE oracle_maintained = 'Y' ORDER BY 1", 30)).Grids[0].Rows.Select(r => r[0])
+            .FirstOrDefault(u => !OracleConnectionConfig.SystemSchemas.Contains(u) && OracleIdentifier.Normalize(u) == u);
+        if (maintained is not null)
+        {
+            Assert.Contains($"schema {maintained} is Oracle's own", await Run<OracleQueryTool>(Listed(LiveOracle.Owner, maintained), ("sql", "SELECT 1 FROM dual")));
+        }
+
+        var others = await Raw(OracleCatalogQueries.Reach[0], 30);
+        Assert.Equal(SqlOutcome.Ok, others.Outcome);
+        if (others.Grids[0].Rows.Select(r => r[0]).FirstOrDefault(o => OracleIdentifier.Normalize(o) == o) is not { } other)
+        {
+            return;   // no second schema the account may read: see the summary
+        }
+
+        string table = (await Raw($"SELECT table_name FROM sys.all_tables WHERE owner = '{other}' AND table_name NOT LIKE 'NS\\_%' ESCAPE '\\' AND REGEXP_LIKE(table_name, '^[A-Z][A-Z0-9_]*$') ORDER BY 1", 30)).Grids[0].Rows[0][0];
+        var two = Listed(LiveOracle.Owner, other);
+        Assert.StartsWith("1 row", await Run<OracleQueryTool>(two, ("sql", $"SELECT COUNT(*) FROM ns_orders o CROSS JOIN (SELECT 1 x FROM {other}.{table} WHERE ROWNUM = 1) t")));
+        Assert.Equal(OracleText.OtherSchema("SYS", [LiveOracle.Owner, other]), await Run<OracleQueryTool>(two, ("sql", "SELECT COUNT(*) FROM sys.obj$")));
+
+        string tables = await Run<OracleTablesTool>(two, ("pattern", "%"));
+        Assert.Contains($"| {LiveOracle.Owner} | NS_ORDERS |", tables);
+        Assert.Contains($"| {other} | {table} |", tables);
+        Assert.Contains($"| {other} | {table} |", await Run<OracleTablesTool>(two, ("pattern", other + "." + table)));   // narrowed by a qualified pattern
+        Assert.DoesNotContain($"| {LiveOracle.Owner} |", await Run<OracleTablesTool>(two, ("pattern", other + ".%")));
+        Assert.Contains($"| {other}.{table} |", await Run<OracleColumnsTool>(two, ("pattern", other + ".%")));
+        Assert.StartsWith($"{other}.{table} (", await Run<OracleDescribeTool>(two, ("table", other + "." + table)));
+        Assert.StartsWith($"{LiveOracle.Owner}.NS_ORDERS (", await Run<OracleDescribeTool>(two, ("table", "ns_orders")));   // a bare name: the current schema first
+        var only = await Raw($"SELECT table_name FROM sys.all_tables WHERE owner = '{other}' AND REGEXP_LIKE(table_name, '^[A-Z][A-Z0-9_]*$') AND table_name NOT IN (SELECT table_name FROM sys.all_tables WHERE owner = '{LiveOracle.Owner}') ORDER BY 1", 30);
+        if (only.Grids[0].Rows.FirstOrDefault() is [var elsewhere, ..])
+        {
+            Assert.Equal(OracleText.GiveItQualified(elsewhere, [other + "." + elsewhere]), await Run<OracleDescribeTool>(two, ("table", elsewhere)));   // only in the second
+        }
+        Assert.DoesNotContain("Error", await Run<OracleRelationshipsTool>(two, ("table", other + "." + table)));
+        Assert.DoesNotContain("Error", await Run<OracleIndexesTool>(two, ("table", other + "." + table)));
+        Assert.StartsWith($"{other}.{table}: ", await Run<OracleProfileTool>(two, ("table", other + "." + table), ("top", 0)));
+        Assert.Equal(OracleText.TableElsewhere("SYS", [LiveOracle.Owner, other]), await Run<OracleDescribeTool>(two, ("table", "SYS.DUAL")));
+        Assert.StartsWith("1 row × 1 column from free/" + LiveOracle.Owner + ", " + other, await Run<OracleQueryTool>(two, ("sql", "SELECT 1 FROM dual")));
     }
 
     [LiveOracleFact]

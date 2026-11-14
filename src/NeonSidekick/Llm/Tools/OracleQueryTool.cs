@@ -92,7 +92,7 @@ public sealed class OracleQueryTool : OracleTool
                 (job, timeout, token) => pinned.ExportAsync(target.Name, body, parameters, job, rows, timeout, token), OracleText.Error, cancellationToken).ConfigureAwait(false);
         }
 
-        var run = await Oracle.RunAsync(connection, [body], parameters, rows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);
+        var run = await Oracle.RunAsync(connection, [body], parameters, rows, TimeoutSeconds(Effective), cancellationToken, modelText: true).ConfigureAwait(false);
         return run.Outcome == SqlOutcome.Ok ? OracleText.Query(run, rows, SqlTool.ResultChars(Effective), CanSave) : OracleText.Error(run);
     }
 

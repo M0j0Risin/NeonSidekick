@@ -159,9 +159,23 @@ public sealed class DatabaseBoundaryTests
     public void Postgres_TheCatalogQueries_KeepToTheLock()
     {
         // C7, C8: the keys pointing in and the relationships keep to the locked schema, and a table is found in it by its exact spelling.
-        Assert.Contains("@lock", PostgresCatalogQueries.Describe[2], StringComparison.Ordinal);
-        Assert.Contains("@lock", PostgresCatalogQueries.Relationships, StringComparison.Ordinal);
-        Assert.Contains("@lock::text IS NULL AND lower(n.nspname)", PostgresCatalogQueries.Resolve, StringComparison.Ordinal);
+        // Since 2026-11-14 (#18) the lock is a text[] of the listed schemas: the listings and Resolve keep to it as well, and no comparison
+        // is left that a list's several rows would break ("more than one row returned by a subquery").
+        string inLock = "(@lock::text[] IS NULL OR n.nspname = ANY(@lock::text[]))";
+        Assert.Contains("con.connamespace IN (SELECT oid FROM pg_namespace WHERE nspname = ANY(@lock::text[]))", PostgresCatalogQueries.Describe[2], StringComparison.Ordinal);
+        Assert.Contains("con.connamespace IN (SELECT oid FROM pg_namespace WHERE nspname = ANY(@lock::text[]))", PostgresCatalogQueries.Relationships, StringComparison.Ordinal);
+        Assert.Contains("@lock::text[] IS NULL AND lower(n.nspname)", PostgresCatalogQueries.Resolve, StringComparison.Ordinal);
+        foreach (string listing in new[] { PostgresCatalogQueries.Resolve, PostgresCatalogQueries.Schemas, PostgresCatalogQueries.Tables, PostgresCatalogQueries.ColumnSearch, PostgresCatalogQueries.Indexes })
+        {
+            Assert.Contains(inLock, listing, StringComparison.Ordinal);
+        }
+
+        foreach (string statement in (string[])[.. PostgresCatalogQueries.Describe, PostgresCatalogQueries.Resolve, PostgresCatalogQueries.Schemas, PostgresCatalogQueries.Tables, PostgresCatalogQueries.ColumnSearch, PostgresCatalogQueries.Relationships, PostgresCatalogQueries.Indexes])
+        {
+            Assert.DoesNotContain("= (SELECT oid FROM pg_namespace", statement, StringComparison.Ordinal);
+            Assert.DoesNotContain("@lock::text ", statement, StringComparison.Ordinal);
+            Assert.DoesNotContain("@lock::text)", statement, StringComparison.Ordinal);
+        }
     }
 
     // ── MySQL / MariaDB ─────────────────────────────────────────────────────

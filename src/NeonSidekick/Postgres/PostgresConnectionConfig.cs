@@ -26,6 +26,14 @@ public sealed class PostgresConnectionConfig : Sql.ISignInConfig
 
     public const int MaxConnectTimeoutSeconds = 120;
 
+    /// <summary>The most schemas one entry's <see cref="Schemas"/> may list (2026-11-14, feature idea #18).</summary>
+    public const int MaxSchemas = 16;
+
+    /// <summary>The JSON keys of the lock, as its refusals name them.</summary>
+    public const string SchemaKey = "schema";
+
+    public const string SchemasKey = "schemas";
+
     /// <summary>What <see cref="Builder"/> sets Npgsql's <c>RequireAuth</c> to while the certificate is unchecked (E3, DB1). Pinned.</summary>
     public const string NoCleartextPassword = "!Password";
 
@@ -51,6 +59,13 @@ public sealed class PostgresConnectionConfig : Sql.ISignInConfig
     /// is refused, and so is a statement qualifying a name with another (<see cref="PostgresBoundary"/>).
     /// </summary>
     public string? Schema { get; set; }
+
+    /// <summary>
+    /// The schemas the connection is held to, in search-path order (2026-11-14, feature idea #18: <c>HR.EMPLOYEES</c> joined with
+    /// <c>OE.ORDERS</c> needed two connections): <see cref="Schema"/>'s list form, never both. The session's <c>search_path</c> is the
+    /// list, so an unqualified name resolves across it; the listings keep to the list, and a qualifier naming a schema off it is refused.
+    /// </summary>
+    public List<string>? Schemas { get; set; }
 
     public string? User { get; set; }
 
@@ -100,6 +115,26 @@ public sealed class PostgresConnectionConfig : Sql.ISignInConfig
     [JsonIgnore]
     public bool IsReadWrite => Sql.ConnectionAccess.IsReadWrite(Access);
 
+    /// <summary>
+    /// The schemas the connection is held to, in order: <see cref="Schemas"/>, else <see cref="Schema"/>, else none (every schema). Each
+    /// trimmed; read only on an entry without a <see cref="Problem"/>.
+    /// </summary>
+    [JsonIgnore]
+    public IReadOnlyList<string> Locks =>
+        Schemas is { Count: > 0 } list ? list.Select(s => s?.Trim() ?? "").ToArray() : string.IsNullOrWhiteSpace(Schema) ? [] : [Schema.Trim()];
+
+    /// <summary>The lock as messages, the listing and the audit write it (<c>sales</c>, <c>sales, ns_other</c>), or null for none.</summary>
+    [JsonIgnore]
+    public string? LockText => Locks is { Count: > 0 } locks ? string.Join(", ", locks) : null;
+
+    /// <summary>The wizard's lock (#18): none clears both keys, one is <see cref="Schema"/>, several <see cref="Schemas"/> (a one-schema file stays as it was).</summary>
+    public void HoldTo(IReadOnlyList<string> names)
+    {
+        ArgumentNullException.ThrowIfNull(names);
+        Schema = names.Count == 1 ? names[0] : null;
+        Schemas = names.Count > 1 ? [.. names] : null;
+    }
+
     /// <summary>The reason this entry cannot connect, or null: no host, no database, no user, a schema it cannot set, a port, store, TLS mode or connect timeout out of range. Pure.</summary>
     [JsonIgnore]
     public string? Problem
@@ -121,7 +156,7 @@ public sealed class PostgresConnectionConfig : Sql.ISignInConfig
                 return PostgresText.NoUser;
             }
 
-            if (SchemaProblem(Schema) is { } schema)
+            if (SchemasProblem() is { } schema)
             {
                 return schema;
             }
@@ -157,8 +192,12 @@ public sealed class PostgresConnectionConfig : Sql.ISignInConfig
         }
     }
 
-    /// <summary>The reason <paramref name="schema"/> cannot be the session's search path, or null (none is fine): a space, a comma, a quote or a backslash, which the session's options would split.</summary>
-    public static string? SchemaProblem(string? schema)
+    /// <summary>
+    /// The reason <paramref name="schema"/> cannot be on the session's search path, or null (none is fine): a space, a comma, a quote or a
+    /// backslash, which the session's options would split; or one of PostgreSQL's own schemas (2026-11-14, #18: <c>pg_*</c>,
+    /// <c>information_schema</c>, a <c>$</c>-led name), which the lock refuses anyway. <paramref name="key"/> is the key it came from.
+    /// </summary>
+    public static string? SchemaProblem(string? schema, string key = SchemaKey)
     {
         if (string.IsNullOrWhiteSpace(schema))
         {
@@ -166,10 +205,73 @@ public sealed class PostgresConnectionConfig : Sql.ISignInConfig
         }
 
         string s = schema.Trim();
-        return s.Any(c => char.IsWhiteSpace(c) || c is ',' or '"' or '\\' or '\'') ? PostgresText.BadSchemaKey(s) : null;
+        if (s.Any(c => char.IsWhiteSpace(c) || c is ',' or '"' or '\\' or '\''))
+        {
+            return PostgresText.BadSchemaKey(s, key);
+        }
+
+        return IsSystemSchema(s) ? PostgresText.SystemSchema(s, key) : null;
     }
 
-    /// <summary>The <c>search_path</c> a schema lock sets: a plain lower-case name as it is, any other in double quotes (its case kept).</summary>
+    /// <summary>Whether <paramref name="schema"/> is one of PostgreSQL's own: <c>pg_*</c>, <c>information_schema</c>, or <c>$</c>-led (<c>$user</c>).</summary>
+    public static bool IsSystemSchema(string schema)
+    {
+        ArgumentNullException.ThrowIfNull(schema);
+        return schema.StartsWith("pg_", StringComparison.Ordinal) || schema == "information_schema" || schema.StartsWith('$');
+    }
+
+    /// <summary>
+    /// The reason the lock's keys cannot hold the connection, or null: both keys, an empty list, more than <see cref="MaxSchemas"/>, a
+    /// blank, bad or system name (<see cref="SchemaProblem"/>), or one listed twice (exactly: <c>Sales</c> and <c>sales</c> are two).
+    /// </summary>
+    private string? SchemasProblem() => LockProblem(Schema, Schemas);
+
+    /// <summary><see cref="SchemasProblem"/> for the two keys' values (the wizard's typed answer goes through it too).</summary>
+    public static string? LockProblem(string? schema, IReadOnlyList<string?>? schemas)
+    {
+        if (schemas is not { } list)
+        {
+            return SchemaProblem(schema);
+        }
+
+        if (!string.IsNullOrWhiteSpace(schema))
+        {
+            return PostgresText.BothSchemaKeys;
+        }
+
+        if (list.Count == 0)
+        {
+            return PostgresText.EmptySchemas;
+        }
+
+        if (list.Count > MaxSchemas)
+        {
+            return PostgresText.TooManySchemas(MaxSchemas);
+        }
+
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string? name in list)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return PostgresText.BadSchemaKey(name?.Trim() ?? "", SchemasKey);
+            }
+
+            if (SchemaProblem(name, SchemasKey) is { } problem)
+            {
+                return problem;
+            }
+
+            if (!seen.Add(name.Trim()))
+            {
+                return PostgresText.RepeatedSchema(name.Trim());
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>One name of the <c>search_path</c> a schema lock sets: a plain lower-case name as it is, any other in double quotes (its case kept).</summary>
     public static string SearchPath(string schema)
     {
         ArgumentNullException.ThrowIfNull(schema);
@@ -179,7 +281,8 @@ public sealed class PostgresConnectionConfig : Sql.ISignInConfig
 
     /// <summary>
     /// The Npgsql connection string for this entry, in its own <see cref="Database"/> alone (the per-call one went 2026-10-09, with the
-    /// lock) and, under a <see cref="Schema"/>, that schema as the whole <c>search_path</c>; <paramref name="password"/> the resolved one. The session is set at startup through <c>Options</c> — every
+    /// lock) and, under a lock (<see cref="Locks"/>), its schemas as the whole <c>search_path</c>, in order, joined by a bare comma (the
+    /// options split on spaces; <see cref="SchemaProblem"/> keeps both out of a name); <paramref name="password"/> the resolved one. The session is set at startup through <c>Options</c> — every
     /// transaction read-only by default, and <c>statement_timeout</c> and <c>lock_timeout</c> at <paramref name="timeoutSeconds"/> — so the
     /// server enforces both even for a statement the gate let through; a connection per call (<see cref="PostgresAccess"/> builds a data
     /// source per call, unpooled, disposed after). <c>standard_conforming_strings</c> is pinned on (the 2026-10-04 review, MySQL's
@@ -205,7 +308,7 @@ public sealed class PostgresConnectionConfig : Sql.ISignInConfig
             Pooling = false,
             Options = (readOnly ? "-c default_transaction_read_only=on " : "") + "-c standard_conforming_strings=on -c statement_timeout=" + millis.ToString(CultureInfo.InvariantCulture)
                 + " -c lock_timeout=" + millis.ToString(CultureInfo.InvariantCulture) + " -c idle_in_transaction_session_timeout=" + (millis * 2).ToString(CultureInfo.InvariantCulture)
-                + (string.IsNullOrWhiteSpace(Schema) ? "" : " -c search_path=" + SearchPath(Schema)),
+                + (Locks is { Count: > 0 } locks ? " -c search_path=" + string.Join(",", locks.Select(SearchPath)) : ""),
             SslMode = (SslMode?.Trim().ToLowerInvariant() ?? "") switch
             {
                 "require" => Npgsql.SslMode.Require,

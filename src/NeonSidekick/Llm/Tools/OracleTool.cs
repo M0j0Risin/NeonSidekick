@@ -54,20 +54,20 @@ public abstract class OracleTool : ServerTool<OracleAccess>
             return null;
         }
 
-        string place = OracleAccess.Place(target.Config);
-        if (OracleBoundary.Refusal(sql, place) is { } refused)
+        var places = OracleAccess.Places(target.Config);
+        if (OracleBoundary.Refusal(sql, places) is { } refused)
         {
             return refused;   // before any names are read (2026-10-24, the database review's Phase 9)
         }
 
-        var (heads, dictionary) = OracleBoundary.Qualifiers(sql, place);
+        var (heads, dictionary) = OracleBoundary.Qualifiers(sql, places);
         if (heads.Count == 0 && dictionary.Count == 0)
         {
             return null;
         }
 
         // The names kept a minute per connection (the review, 2026-10-09: an alias's e.id sent every join for them).
-        var (rows, failed) = await ReadNamesAsync(access.Names, BoundaryNames.Key(target.Name, target.Config.DataSource, target.Config.User, place),
+        var (rows, failed) = await ReadNamesAsync(access.Names, BoundaryNames.Key(target.Name, target.Config.DataSource, target.Config.User, OracleAccess.PlaceText(target.Config)),
             token => access.RunAsync(connection, [OracleBoundary.Names], [], OracleBoundary.MaxNames, TimeoutSeconds(Effective), token), OracleText.Error, cancellationToken).ConfigureAwait(false);
         if (failed is not null)
         {
@@ -75,7 +75,7 @@ public abstract class OracleTool : ServerTool<OracleAccess>
         }
 
         var sets = access.Names.Built(rows!, OracleBoundary.Sets);
-        return OracleBoundary.CheckQualifiers(heads, dictionary, place, sets.Users, sets.Views);
+        return OracleBoundary.CheckQualifiers(heads, dictionary, places, sets.Users, sets.Views);
     }
 
     /// <summary>Runs the app's own statements on the call's connection (in its schema), capped at <see cref="OracleAccess.MaxCatalogRows"/>.</summary>
@@ -89,8 +89,9 @@ public abstract class OracleTool : ServerTool<OracleAccess>
     }
 
     /// <summary>
-    /// The table or view <paramref name="table"/> means in the connection's schema (<see cref="OracleCatalogQueries.Resolve"/>):
-    /// <c>NAME</c>, or <c>OWNER.NAME</c> with the schema's own owner — another is refused (2026-10-09); none is not found.
+    /// The table or view <paramref name="table"/> means in the connection's schemas (<see cref="OracleCatalogQueries.Resolve"/>):
+    /// <c>NAME</c> in the current one, or <c>OWNER.NAME</c> with a listed owner — another is refused (2026-10-09); none is not found.
+    /// A bare name found only in another listed schema (2026-11-14, #18) is answered with how to write it, as Oracle would not find it either.
     /// </summary>
     protected async Task<TableMatch> FindTableAsync(string? connection, string table, CancellationToken cancellationToken)
     {
@@ -100,12 +101,12 @@ public abstract class OracleTool : ServerTool<OracleAccess>
         }
 
         if (parts.Owner is { } owner && Oracle.Resolve(connection, out _) is { } target
-            && !owner.Equals(OracleAccess.Place(target.Config), StringComparison.Ordinal))
+            && OracleAccess.Places(target.Config) is var places && !places.Contains(owner, StringComparer.Ordinal))
         {
-            return TableMatch.Refused(OracleText.TableElsewhere(owner, OracleAccess.Place(target.Config)));
+            return TableMatch.Refused(OracleText.TableElsewhere(owner, places));
         }
 
-        var run = await CatalogAsync(connection, [OracleCatalogQueries.Resolve], [new SqlParameterValue("name", parts.Name)], cancellationToken).ConfigureAwait(false);
+        var run = await CatalogAsync(connection, [OracleCatalogQueries.Resolve], [new SqlParameterValue("name", parts.Name), new SqlParameterValue("owner", parts.Owner)], cancellationToken).ConfigureAwait(false);
         if (run.Outcome != SqlOutcome.Ok)
         {
             return TableMatch.Refused(OracleText.Error(run));
@@ -118,6 +119,11 @@ public abstract class OracleTool : ServerTool<OracleAccess>
         if (pick.Count == 0)
         {
             return TableMatch.Refused(OracleText.TableNotFound(table, run.Connection, run.Database));
+        }
+
+        if (parts.Owner is null && exact.Count == 0)
+        {
+            return TableMatch.Refused(OracleText.GiveItQualified(table, pick.Select(r => r[0] + "." + r[1])));
         }
 
         if (pick.Count > 1)

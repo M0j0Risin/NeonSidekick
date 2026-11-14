@@ -144,15 +144,17 @@ public static class ServerWriteText
     /// characters are escaped and a lone carriage return is a line break (2026-10-24, review F16: it went raw, a bidi override or a CR able to
     /// make the pane show another statement than the one that runs); past <see cref="CaptionChars"/> it is cut, and the pane's v shows it
     /// whole. (A statement that reached past the place was asked about every time from the review of 2026-10-05; since 2026-10-09 each
-    /// family's boundary refuses it before the pane.)
+    /// family's boundary refuses it before the pane.) A connection held to several schemas (<paramref name="places"/>; 2026-11-14, #18)
+    /// stands alone in the first part, since a statement may change any of them, and names them all with the place word's plural.
     /// </summary>
-    public static string AllowCaption(ServerWriteFamily family, string connection, string place, string sql, string where = "", IReadOnlyList<SqlParameterValue>? parameters = null)
+    public static string AllowCaption(ServerWriteFamily family, string connection, string place, string sql, string where = "", IReadOnlyList<SqlParameterValue>? parameters = null, int places = 1)
     {
         ArgumentNullException.ThrowIfNull(family);
         ArgumentNullException.ThrowIfNull(sql);
-        string at = place.Length == 0 ? connection : connection + "/" + place;
+        string at = place.Length == 0 || places > 1 ? connection : connection + "/" + place;
         string server = where.Length == 0 ? "" : " on " + Files.NameScrub.Display(where);
-        return $"The model wants to change {at} ({family.Engine}{server}, {family.Place} {(place.Length == 0 ? "the connection's own" : place)}):\n"
+        string word = places > 1 ? family.Place + "s" : family.Place;
+        return $"The model wants to change {at} ({family.Engine}{server}, {word} {(place.Length == 0 ? "the connection's own" : place)}):\n"
             + CaptionStatement(sql) + Bound(parameters);
     }
 

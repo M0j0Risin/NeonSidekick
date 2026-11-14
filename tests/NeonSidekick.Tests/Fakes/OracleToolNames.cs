@@ -6,6 +6,9 @@ internal static class OracleToolNames
     public static readonly string[] All =
         ["oracle_connections", "oracle_tables", "oracle_columns", "oracle_describe", "oracle_relationships", "oracle_indexes", "oracle_query"];
 
-    /// <summary>The reads and <c>oracle_execute</c> (2026-10-05): what <c>ChatScreen.OracleTools</c> makes; plan mode and the read rule know only the reads.</summary>
-    public static readonly string[] WithExecute = [.. All, "oracle_execute"];
+    /// <summary>
+    /// The reads, <c>oracle_profile</c> (2026-11-14) and <c>oracle_execute</c> (2026-10-05): what <c>ChatScreen.OracleTools</c> makes; the read rule
+    /// knows only <see cref="All"/>, leaving profile to its own description (the rule names its tools whether or not each is offered).
+    /// </summary>
+    public static readonly string[] WithExecute = [.. All, "oracle_profile", "oracle_execute"];
 }

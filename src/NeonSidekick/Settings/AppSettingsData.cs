@@ -2354,7 +2354,8 @@ public sealed class AppSettingsData
     /// The most characters of table one <c>sql_query</c>, <c>oracle_query</c> or <c>mysql_query</c> answer carries (2026-10-01,
     /// the user's ask; the file tools' <see cref="Files.WorkingDirectory.MaxReadChars"/>, 32,000, until then, which cut a wide
     /// result long before its row cap): <see cref="MinQueryResultMaxChars"/> to <see cref="MaxQueryResultMaxChars"/>. The rows
-    /// past it are left off and the header says how many fit. One setting for the three engines, on the SQL tab; the catalog
+    /// past it are left off and the header says how many fit. One setting for every family's query and change answers (2026-11-14: it
+    /// always was, the text said three), on the SQL tab; the explain and profile answers keep to the lower of it and 6,000; the catalog
     /// tools (tables, columns, describe, …) keep the file tools' cap. Read at each call, no reconnect. No variable.
     /// </summary>
     public int QueryResultMaxChars { get; set; } = DefaultQueryResultMaxChars;

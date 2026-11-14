@@ -92,7 +92,7 @@ public sealed class PostgresAccess
 
     /// <summary>
     /// Why the session's settings did not hold, or null: the read-only default (for a read), <c>standard_conforming_strings</c>, a statement
-    /// timeout, and under a schema lock the search path being that schema alone (H1).
+    /// timeout, and under a schema lock the search path being its schemas alone, in order (H1; a list since #18).
     /// </summary>
     private static async Task<string?> SessionRefusalAsync(NpgsqlConnection connection, PostgresConnectionConfig config, bool readOnly, CancellationToken cancellationToken)
     {
@@ -105,8 +105,7 @@ public sealed class PostgresAccess
                 return PostgresText.SessionNotSet("the settings");
             }
 
-            string? schema = string.IsNullOrWhiteSpace(config.Schema) ? null : config.Schema.Trim();
-            return PostgresText.SessionProblem(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), readOnly, schema);
+            return PostgresText.SessionProblemUnder(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), readOnly, config.Locks);
         }
         catch (NpgsqlException ex) when (!cancellationToken.IsCancellationRequested)
         {
@@ -157,7 +156,9 @@ public sealed class PostgresAccess
     /// and a server error are outcomes; a cancelled token throws.
     /// </summary>
     /// <remarks><paramref name="export"/> (2026-10-29, the Office writing plan): the rows go to a workbook's sheet in place of the grid (<see cref="ExportAsync"/>).</remarks>
-    public async Task<SqlRun> RunAsync(string? name, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken, SqlExportJob? export = null)
+    /// <remarks><paramref name="readCell"/> (2026-11-14, the database-tools plan's #12, <c>postgres_explain</c>): the cells read whole (<see cref="Sql.QueryPlan.WholeCell"/>) in place of the clipped grid's.</remarks>
+    public async Task<SqlRun> RunAsync(string? name, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken, SqlExportJob? export = null,
+        Func<DbDataReader, int, string>? readCell = null)
     {
         ArgumentNullException.ThrowIfNull(statements);
         ArgumentNullException.ThrowIfNull(parameters);
@@ -224,7 +225,7 @@ public sealed class PostgresAccess
                         return new SqlRun(SqlOutcome.Timeout, timeoutSeconds.ToString(CultureInfo.InvariantCulture), target.Name, workIn, grids, watch.Elapsed);
                     }
 
-                    grids.Add(await ReadAsync(connection, transaction, statements[i], parameters, maxRows, left, last: i == statements.Count - 1, cancellationToken, export).ConfigureAwait(false));
+                    grids.Add(await ReadAsync(connection, transaction, statements[i], parameters, maxRows, left, last: i == statements.Count - 1, cancellationToken, export, readCell).ConfigureAwait(false));
                 }
             }
             finally
@@ -373,7 +374,8 @@ public sealed class PostgresAccess
     }
 
     /// <summary>One statement's rows: the <c>@names</c> it uses bound, read to the cap; the last statement cancelled on the server when more rows are left (its cancel answer then expected), so a huge result is not drained.</summary>
-    private static async Task<SqlGrid> ReadAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string sql, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, bool last, CancellationToken cancellationToken, SqlExportJob? export = null)
+    private static async Task<SqlGrid> ReadAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string sql, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, bool last, CancellationToken cancellationToken, SqlExportJob? export = null,
+        Func<DbDataReader, int, string>? readCell = null)
     {
         await using var command = new NpgsqlCommand(sql, connection, transaction) { CommandTimeout = timeoutSeconds + 5 };
         var named = PostgresReadOnlyGate.Binds(sql, parameters.Select(p => p.Name));
@@ -388,7 +390,7 @@ public sealed class PostgresAccess
         try
         {
             grid = export is null
-                ? await SqlGrid.ReadAsync(reader, maxRows, cancellationToken, ReadCell).ConfigureAwait(false)
+                ? await SqlGrid.ReadAsync(reader, maxRows, cancellationToken, readCell ?? ReadCell).ConfigureAwait(false)
                 : await export.ReadAsync(reader, maxRows, cancellationToken).ConfigureAwait(false);
             if (grid.More && last)
             {
@@ -415,6 +417,9 @@ public sealed class PostgresAccess
     {
         null => new NpgsqlParameter(name, NpgsqlDbType.Text) { Value = DBNull.Value },
         string s => new NpgsqlParameter(name, NpgsqlDbType.Text) { Value = s },
+
+        // A schema lock's list (2026-11-14, feature idea #18: @lock::text[]), typed so Npgsql never guesses; arrays are enabled in Build.
+        string[] a => new NpgsqlParameter(name, NpgsqlDbType.Array | NpgsqlDbType.Text) { Value = a },
         long l => new NpgsqlParameter(name, NpgsqlDbType.Bigint) { Value = l },
         int i => new NpgsqlParameter(name, NpgsqlDbType.Integer) { Value = i },
         decimal d => new NpgsqlParameter(name, NpgsqlDbType.Numeric) { Value = d },

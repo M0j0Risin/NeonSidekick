@@ -401,7 +401,7 @@ public static partial class HelpSettings
         SettingsField.SqlPercentMention => "Typing % and part of a name on the input line lists the database connections; a pick writes %name.",
         SettingsField.SqlQueryMaxRows => "The rows sql_query returns unless the call asks otherwise (1–100,000).",
         SettingsField.SqlQueryTimeoutSeconds => "The longest one SQL tool's batch may run on the server (1–600 s).",
-        SettingsField.QueryResultMaxChars => "The most characters of table one SQL Server, Oracle or MySQL query result carries (1,000–1,000,000). Rows past it are left off.",
+        SettingsField.QueryResultMaxChars => "The most characters of table a database query result carries, every family (1,000–1,000,000). Rows past it are left off.",
         SettingsField.SqlConnectionsProfile => "Opens this profile's sql.json in your editor (made with examples when missing).",
         SettingsField.SqlConnectionsGlobal => "Opens the global sql.json, which every profile reads, in your editor. On a name clash, the profile's entry wins.",
 
@@ -424,7 +424,7 @@ public static partial class HelpSettings
         SettingsField.PostgresStatementsAllowed => "Under PostgreSQL mode read-write, the kinds of statement postgres_execute may run (changing data, deleting, creating, dropping…). With none ticked, it isn't offered.",
         SettingsField.PostgresConnectionsOffered => "A checklist of the connections in both postgres.json files. Nothing is offered until you tick it.",
         SettingsField.PostgresSetPassword => "Pick a connection and type its password. It is saved encrypted.",
-        SettingsField.PostgresAddConnection => "A wizard to add a connection or edit a saved one. The database is required; a schema to hold it to is optional. It can test it before saving.",
+        SettingsField.PostgresAddConnection => "A wizard to add a connection or edit a saved one. The database is required; the schemas to hold it to are optional. It can test it before saving.",
         SettingsField.PostgresPercentMention => "Typing % and part of a name also lists the PostgreSQL connections; a pick writes %name.",
         SettingsField.PostgresQueryMaxRows => "The rows postgres_query returns unless the call asks otherwise (1–100,000).",
         SettingsField.PostgresQueryTimeoutSeconds => "The longest one PostgreSQL statement may run on the server (1–600 s).",
@@ -432,12 +432,12 @@ public static partial class HelpSettings
         SettingsField.PostgresConnectionsGlobal => "Opens the global postgres.json, which every profile reads, in your editor. On a name clash, the profile's entry wins.",
 
         // /tools › Databases › Oracle
-        SettingsField.OracleTools => "Gives the model Oracle tools (tables, columns, indexes, queries) over the connections in oracle.json. Each is held to one schema. They only read unless Oracle mode is read-write.",
+        SettingsField.OracleTools => "Gives the model Oracle tools (tables, columns, indexes, queries) over the connections in oracle.json. Each is held to its schema or schemas. They only read unless Oracle mode is read-write.",
         SettingsField.OracleMode => "read-only: the Oracle tools only read. read-write: oracle_execute is offered too, on readwrite connections; each change asks you first and is committed as it runs.",
         SettingsField.OracleStatementsAllowed => "Under Oracle mode read-write, the kinds of statement oracle_execute may run (changing data, deleting, creating, dropping…). With none ticked, it isn't offered.",
         SettingsField.OracleConnectionsOffered => "A checklist of the connections in both oracle.json files. Nothing is offered until you tick it.",
         SettingsField.OracleSetPassword => "Pick a connection and type its password. It is saved encrypted.",
-        SettingsField.OracleAddConnection => "A wizard to add a connection or edit a saved one, with the schema it is held to. It can test the connection before saving.",
+        SettingsField.OracleAddConnection => "A wizard to add a connection or edit a saved one, with the schemas it is held to. It can test the connection before saving.",
         SettingsField.OraclePercentMention => "Typing % and part of a name also lists the Oracle connections; a pick writes %name.",
         SettingsField.OracleQueryMaxRows => "The rows oracle_query returns unless the call asks otherwise (1–100,000).",
         SettingsField.OracleQueryTimeoutSeconds => "The longest one Oracle statement may run on the server (1–600 s).",

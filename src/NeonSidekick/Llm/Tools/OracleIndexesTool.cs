@@ -43,6 +43,7 @@ public sealed class OracleIndexesTool : OracleTool
     public async Task<string> DescribeAsync(string? connection, string? table, CancellationToken cancellationToken)
     {
         string? tableName = null;
+        string? tableOwner = null;
         string scope = "";
         if (table is not null)
         {
@@ -53,10 +54,11 @@ public sealed class OracleIndexesTool : OracleTool
             }
 
             tableName = match.Name;
+            tableOwner = match.Owner;   // a listed schema's table (2026-11-14, #18), not the current one's of that name
             scope = $"on {match.Owner}.{match.Name}";
         }
 
-        var run = await CatalogAsync(connection, [OracleCatalogQueries.Indexes], [new SqlParameterValue("name", tableName)], cancellationToken).ConfigureAwait(false);
+        var run = await CatalogAsync(connection, [OracleCatalogQueries.Indexes], [new SqlParameterValue("name", tableName), new SqlParameterValue("owner", tableOwner)], cancellationToken).ConfigureAwait(false);
         if (run.Outcome != SqlOutcome.Ok)
         {
             return OracleText.Error(run);

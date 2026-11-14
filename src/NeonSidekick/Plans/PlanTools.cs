@@ -36,10 +36,12 @@ public static class PlanTools
         "web_links",
         // SQL: read-only by three layers already
         "sql_connections", "sql_tables", "sql_columns", "sql_describe", "sql_indexes", "sql_relationships", "sql_query",
+        // ...and each family's explain and profile (2026-11-14): a plan, never a run; app-built aggregates in the same read-only session
+        "sql_explain", "sql_profile",
         // Oracle: read-only by four layers already (2026-09-30)
-        "oracle_connections", "oracle_tables", "oracle_columns", "oracle_describe", "oracle_indexes", "oracle_relationships", "oracle_query",
+        "oracle_connections", "oracle_tables", "oracle_columns", "oracle_describe", "oracle_indexes", "oracle_relationships", "oracle_query", "oracle_profile",
         // MySQL and MariaDB: read-only by the same layers (2026-09-30)
-        "mysql_connections", "mysql_tables", "mysql_columns", "mysql_describe", "mysql_indexes", "mysql_relationships", "mysql_query",
+        "mysql_connections", "mysql_tables", "mysql_columns", "mysql_describe", "mysql_indexes", "mysql_relationships", "mysql_query", "mysql_explain", "mysql_profile",
         // UNC shares: the reads (2026-09-30); unc_fetch writes the working directory, so it is not here
         "unc_shares", "unc_search", "unc_info", "unc_read",
         // Docker: the reads (2026-10-02)
@@ -59,12 +61,12 @@ public static class PlanTools
         // the screen (2026-10-04): a look at what is on it, asked like the camera's photo; screen_list names windows, no pixels
         "screen_capture", "screen_list",
         // SQLite (2026-10-04): every call reads, on a file opened read-only
-        "sqlite_databases", "sqlite_tables", "sqlite_describe", "sqlite_query",
+        "sqlite_databases", "sqlite_tables", "sqlite_describe", "sqlite_query", "sqlite_explain", "sqlite_profile",
         // DuckDB (2026-10-25): every call reads, on a file opened read-only (or data files in memory), rolled back
-        "duckdb_databases", "duckdb_tables", "duckdb_describe", "duckdb_query",
+        "duckdb_databases", "duckdb_tables", "duckdb_describe", "duckdb_query", "duckdb_explain", "duckdb_profile",
         // PostgreSQL (2026-10-04): every call reads, in a read-only transaction rolled back
         "postgres_connections", "postgres_schemas", "postgres_tables", "postgres_columns", "postgres_describe",
-        "postgres_relationships", "postgres_indexes", "postgres_query",
+        "postgres_relationships", "postgres_indexes", "postgres_query", "postgres_explain", "postgres_profile",
         // the profile advisors (2026-10-10): another profile reads and answers over this chat's read-only tools alone
         "neon_advisor",
         // YouTube (2026-10-05): a search and a playlist's listing (2026-10-08) read the Data API; the status reads the window's last report; the saved list (2026-10-07) reads the profile's file

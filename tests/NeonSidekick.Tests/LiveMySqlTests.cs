@@ -119,6 +119,54 @@ public sealed class LiveMySqlTests
     private Task<SqlRun> Raw(string sql, int timeoutSeconds = 30, CancellationToken cancellationToken = default) =>
         _access.RunAsync("live", [sql], [], 10, timeoutSeconds, cancellationToken);
 
+    /// <summary>
+    /// <c>mysql_explain</c> on the fixtures (2026-11-14, the database-tools plan's #12), on MySQL and on MariaDB (the slice runs twice): a join of
+    /// <c>ns_orders</c> and <c>ns_customers</c> names both tables with an access method, a WITH lead is explained too, and what the gate or the
+    /// boundary refuses never reaches the server.
+    /// </summary>
+    [LiveMySqlFact]
+    public async Task Explain_PlansAJoinOfTheFixtures_PlainAndWith()
+    {
+        string join = await Invoke<MySqlExplainTool>(("sql", "SELECT c.name, o.total FROM ns_orders o JOIN ns_customers c ON c.id = o.customer_id WHERE o.total > @t"),
+            ("params", System.Text.Json.JsonDocument.Parse("""{"t": 5}""").RootElement));
+        Assert.StartsWith("Plan for live/" + LiveMySql.Database + " (estimated, not run; ", join);
+        Assert.Matches(@"- [^\n]+ on o\b", join);
+        Assert.Matches(@"- [^\n]+ on c\b", join);
+
+        string with = await Invoke<MySqlExplainTool>(("sql", "WITH t AS (SELECT customer_id FROM ns_orders WHERE total > 1) SELECT customer_id, COUNT(*) FROM t GROUP BY customer_id"));
+        Assert.StartsWith("Plan for live/", with);
+        Assert.Contains("ns_orders", with);
+
+        Assert.StartsWith("Error:", await Invoke<MySqlExplainTool>(("sql", "DELETE FROM ns_orders")));
+        Assert.StartsWith("Error:", await Invoke<MySqlExplainTool>(("sql", "SELECT * FROM mysql.user")));
+    }
+
+    /// <summary>
+    /// <c>mysql_profile</c> on the fixtures (2026-11-14, the database-tools plan's #14), as is and with the threshold lowered to 1 (so the first
+    /// rows' <c>LIMIT</c> runs): the counts, a TEXT column's nulls alone, the top values of a column that repeats; another database refused.
+    /// </summary>
+    [LiveMySqlFact]
+    public async Task Profile_TheFixtures_WholeAndByTheirFirstRows()
+    {
+        string orders = await Invoke<MySqlProfileTool>(("table", "ns_orders"));
+        Assert.Matches(@"^ns_orders: 3 rows \(exact\) · 4 columns · live/", orders);
+        Assert.Matches(@"\| customer_id \| int(\(11\))? \| 0 \| 2 \| 1 \| 2 \| 2 \(2\), 1 \(1\) \|", orders);   // MariaDB writes int(11)
+        Assert.Contains("| notes | text | 2 (67%) | — | — | — | — |", orders);
+        Assert.Matches(@"\| total \| decimal\(12,2\) \| 0 \| 3 \(unique\) \| 7(\.00)? \| 42\.50? \|", orders);
+
+        TableProfile.SampleAbove = 1;
+        try
+        {
+            Assert.StartsWith("ns_orders: from the first 1 of ", await Invoke<MySqlProfileTool>(("table", "ns_orders")));
+        }
+        finally
+        {
+            TableProfile.SampleAbove = 100_000;
+        }
+
+        Assert.StartsWith("Error:", await Invoke<MySqlProfileTool>(("table", "mysql.user")));
+    }
+
     [LiveMySqlFact]
     public async Task TheCatalogTools_FindDescribeAndJoinTheFixtures()
     {

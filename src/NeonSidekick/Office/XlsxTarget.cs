@@ -22,7 +22,7 @@ public sealed record XlsxRequest(string? To, string? Sheet, bool Overwrite, stri
 /// <see cref="PendingWrite"/> and the sheet; <see cref="Commit"/> puts the file in place. Every write goes through
 /// <see cref="WorkingDirectory.BeginWrite"/>, so the sandbox, the write guard and the file checkpoints hold.
 /// </summary>
-public sealed class XlsxTarget : IDisposable
+public sealed class XlsxTarget : ITableFileTarget
 {
     public const string Extension = ".xlsx";
 

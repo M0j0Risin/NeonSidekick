@@ -1,0 +1,31 @@
+{
+  "query_block": {
+    "select_id": 1,
+    "cost_info": {
+      "query_cost": "5200.60"
+    },
+    "grouping_operation": {
+      "using_temporary_table": true,
+      "using_filesort": false,
+      "table": {
+        "table_name": "big_orders",
+        "access_type": "ALL",
+        "rows_examined_per_scan": 50396,
+        "rows_produced_per_join": 16796,
+        "filtered": "33.33",
+        "cost_info": {
+          "read_cost": "3520.90",
+          "eval_cost": "1679.70",
+          "prefix_cost": "5200.60",
+          "data_read_per_join": "262K"
+        },
+        "used_columns": [
+          "id",
+          "customer_id",
+          "total"
+        ],
+        "attached_condition": "(`neon`.`big_orders`.`total` > 5.00)"
+      }
+    }
+  }
+}

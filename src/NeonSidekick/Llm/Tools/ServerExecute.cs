@@ -13,9 +13,10 @@ public delegate Task<bool?> DatabaseWriteAllow(ServerWriteFamily family, Execute
 /// <summary>
 /// Where a change would run: the connection's name, whether its entry allows changes, the database (or schema) a call works in, and the
 /// server it reaches (<paramref name="Where"/>: the host and port, or the data source; 2026-10-24, decision DB6: the session allow is keyed
-/// on it, so a connection re-pointed at another server is asked again).
+/// on it, so a connection re-pointed at another server is asked again). <paramref name="Places"/> is how many schemas <paramref name="Place"/>
+/// names (2026-11-14, #18: an Oracle connection's list, written <c>HR, OE</c>).
 /// </summary>
-public sealed record ExecuteTarget(string Connection, bool ReadWrite, string Place, string Where = "");
+public sealed record ExecuteTarget(string Connection, bool ReadWrite, string Place, string Where = "", int Places = 1);
 
 /// <summary>
 /// One family's hooks for <see cref="ServerExecute.RunAsync"/>: its write gate (<paramref name="Check"/>, <paramref name="Kinds"/>), its

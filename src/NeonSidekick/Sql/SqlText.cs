@@ -321,6 +321,9 @@ public static class SqlText
     public static string Timeout(string connection, string seconds) => $"Error: the query on {connection} ran past {seconds} s and was stopped; narrow it (WHERE, TOP, fewer joins)";
     public static string Failed(string connection, string detail) => $"Error: the server refused the SQL ({connection}): {detail}";
     public static string ServerError(int number, int line, string message) => $"Msg {Invariant(number)}, line {Invariant(line)}: {message}";
+    /// <summary>The log line for a plan whose <c>SET SHOWPLAN_XML OFF</c> could not be sent (2026-11-14): the pool is cleared, so the session isn't reused.</summary>
+    public static string ShowPlanOffFailed(string detail) => $"SHOWPLAN_XML OFF failed, so the connection pool was cleared: {detail}";
+
     public static string ConnectFailedLogLine(string connection, string database, int number, string detail) => $"{connection}{(database.Length > 0 ? "/" + database : "")} did not connect (error {Invariant(number)}): {detail}";
 
     /// <summary>The sentence for a run that did not return rows.</summary>
@@ -821,10 +824,14 @@ public static class SqlText
         return newline < 0 ? result : result[..newline];
     }
 
-    public static string Count(int n, string singular, string? plural = null) =>
+    public static string Count(int n, string singular, string? plural = null) => Count((long)n, singular, plural);
+
+    /// <summary>A count past 2^31 (2026-11-14, the database-tools plan: a table's rows, a plan's estimate), written as the int one is.</summary>
+    public static string Count(long n, string singular, string? plural = null) =>
         Invariant(n) + " " + (n == 1 ? singular : plural ?? singular + "s");
 
-    private static string Millis(TimeSpan elapsed) => Invariant((long)Math.Round(elapsed.TotalMilliseconds)) + " ms";
+    /// <summary>A run's time as the headers write it (internal since 2026-11-14: the explain and profile headers share it).</summary>
+    internal static string Millis(TimeSpan elapsed) => Invariant((long)Math.Round(elapsed.TotalMilliseconds)) + " ms";
 
     private static string Invariant(long n) => n.ToString(CultureInfo.InvariantCulture);
 }

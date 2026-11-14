@@ -195,6 +195,65 @@ public sealed class LiveQueryExportTests : IDisposable
         Assert.DoesNotContain("2026-10-29", sheet);
     }
 
+    // ── CSV and JSON (2026-11-14, the database-tools plan's #13): one file per server family ─────────────────────
+
+    private string Text(string name) => File.ReadAllText(Path.Combine(_root, name));
+
+    [LiveSqlFact]
+    public async Task SqlServer_WritesACsv_TheGuardOnText_AndADecimalWhole()
+    {
+        var catalog = new SqlCatalog([new SqlNamedConnection("aw", LiveSql.Config!, "test")], []);
+        var tools = ChatScreen.SqlTools(new SqlAccess(() => catalog), () => new AppSettingsData(), saveRoot: Root);
+        string result = await Invoke<SqlQueryTool>(tools,
+            ("sql", "SELECT TOP 2 SalesOrderID, CAST(12345678901234567.89 AS decimal(20,2)) AS big, N'-abc' AS t, CAST('2026-10-29' AS date) AS d FROM Sales.SalesOrderHeader ORDER BY SalesOrderID"),
+            ("to", "aw.csv"));
+        Assert.StartsWith("Made aw.csv (", result);
+        string[] lines = Text("aw.csv").Split("\r\n");
+        Assert.Equal("SalesOrderID,big,t,d", lines[0]);
+        Assert.Equal("43659,12345678901234567.89,'-abc,2026-10-29", lines[1]);
+    }
+
+    [LiveMySqlFact]
+    public async Task MySql_WritesJsonLines_ATimestampWithItsZ()
+    {
+        var catalog = new MySqlCatalog([new MySqlNamedConnection("live", LiveMySql.Config!, "test")], []);
+        var tools = ChatScreen.MySqlTools(new MySqlAccess(() => catalog), () => new AppSettingsData { MySqlTools = true }, saveRoot: Root);
+        string result = await Invoke<MySqlQueryTool>(tools,
+            ("sql", "SELECT CAST('2026-10-29 12:00:00' AS DATETIME) AS at_local, 7 AS n"),
+            ("to", "my.jsonl"));
+        Assert.StartsWith("Made my.jsonl (", result);
+        Assert.Contains("\"at_local\":\"2026-10-29T12:00:00\"", Text("my.jsonl"));
+        Assert.Contains("\"n\":7", Text("my.jsonl"));
+    }
+
+    [LiveOracleFact]
+    public async Task Oracle_WritesJson_NullApartFromANumber()
+    {
+        var catalog = new OracleCatalog([new OracleNamedConnection("free", LiveOracle.Config!, "test")], []);
+        var tools = ChatScreen.OracleTools(new OracleAccess(() => catalog), () => new AppSettingsData { OracleTools = true }, saveRoot: Root);
+        string result = await Invoke<OracleQueryTool>(tools, ("sql", "SELECT 1 AS n, CAST(NULL AS VARCHAR2(10)) AS e, DATE '2026-10-29' AS d FROM dual"), ("to", "ora.json"));
+        Assert.StartsWith("Made ora.json (", result);
+        using var doc = System.Text.Json.JsonDocument.Parse(Text("ora.json"));
+        var row = doc.RootElement[0];
+        Assert.Equal(1, row.GetProperty("N").GetInt32());
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, row.GetProperty("E").ValueKind);
+        Assert.Equal("2026-10-29T00:00:00", row.GetProperty("D").GetString());   // Oracle's DATE holds a time: one shape a column, for the file's readers
+    }
+
+    [LivePostgresFact]
+    public async Task Postgres_WritesACsv_ATimestamptzWithItsZ_AndANumericWhole()
+    {
+        var catalog = new PostgresCatalog([new PostgresNamedConnection("live", LivePostgres.Config!, "test")], []);
+        var tools = ChatScreen.PostgresTools(new PostgresAccess(() => catalog), () => new AppSettingsData { PostgresTools = true }, saveRoot: Root);
+        string result = await Invoke<PostgresQueryTool>(tools,
+            ("sql", "SELECT TIMESTAMPTZ '2026-10-29 12:00:00+00' AS at, 12345678901234.5678901234::numeric AS exact"),
+            ("to", "pg.csv"));
+        Assert.StartsWith("Made pg.csv (", result);
+        string[] lines = Text("pg.csv").Split("\r\n");
+        Assert.Equal("at,exact", lines[0]);   // no " (UTC)": the value carries it (ReadAllText takes the BOM off)
+        Assert.Equal("2026-10-29T12:00:00Z,12345678901234.5678901234", lines[1]);
+    }
+
     /// <summary>Row 2's cell in <paramref name="column"/>: its whole <c>&lt;c&gt;</c> element.</summary>
     private static string Cell(string sheet, string column) =>
         System.Text.RegularExpressions.Regex.Match(sheet, "<c r=\"" + column + "2\".*?</c>").Value;

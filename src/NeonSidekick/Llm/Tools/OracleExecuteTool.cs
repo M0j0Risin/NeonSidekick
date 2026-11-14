@@ -73,17 +73,17 @@ public sealed class OracleExecuteTool : OracleTool
             OracleReadOnlyGate.Check,
             OracleWriteGate.Body,
             () => resolved is { } target
-                ? (new ExecuteTarget(target.Name, target.Config.IsReadWrite, OracleAccess.Place(target.Config), target.Config.SignInHost), null)
+                ? (new ExecuteTarget(target.Name, target.Config.IsReadWrite, OracleAccess.PlaceText(target.Config), target.Config.SignInHost, OracleAccess.Places(target.Config).Count), null)
                 : (null, OracleText.Error(unresolved!)),
             async (body, token) =>
             {
-                var run = await pinned.RunAsync(connection, [body], parameters, rows, timeout, token).ConfigureAwait(false);
+                var run = await pinned.RunAsync(connection, [body], parameters, rows, timeout, token, modelText: true).ConfigureAwait(false);
                 if (IsTooNew(run))
                 {
                     // ORA-01466 (found live, 2026-10-05): a read-only transaction cannot read a table whose DDL is younger than Oracle's
                     // SCN-to-time grain (about three seconds) — what a read straight after this tool's CREATE meets. Read again once, after it.
                     await Task.Delay(TooNewWait, token).ConfigureAwait(false);
-                    run = await pinned.RunAsync(connection, [body], parameters, rows, timeout, token).ConfigureAwait(false);
+                    run = await pinned.RunAsync(connection, [body], parameters, rows, timeout, token, modelText: true).ConfigureAwait(false);
                 }
 
                 return run.Outcome == SqlOutcome.Ok ? OracleText.Query(run, rows, SqlTool.ResultChars(effective)) : OracleText.Error(run);

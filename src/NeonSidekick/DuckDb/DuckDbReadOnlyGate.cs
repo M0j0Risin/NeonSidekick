@@ -391,6 +391,13 @@ public static class DuckDbReadOnlyGate
         return trimmed.EndsWith(';') ? trimmed[..^1].TrimEnd() : trimmed;
     }
 
+    /// <summary>
+    /// The statement's first word, upper-cased, past any opening brackets (2026-11-14, the database-tools plan's #12: <c>duckdb_explain</c>
+    /// refuses a statement the gate passes but that has no plan, or is one already); null when it has none.
+    /// </summary>
+    public static string? LeadWord(string sql) =>
+        Tokenize(sql ?? "", out _) is { } tokens && Lead(tokens) is int lead and >= 0 && tokens[lead].Kind == TokenKind.Word ? tokens[lead].Text : null;
+
     /// <summary>Whether a read's statement is an EXPLAIN (its columns are text already, and it cannot be wrapped in a subquery).</summary>
     public static bool IsExplain(string sql) =>
         Tokenize(sql ?? "", out _) is { } tokens && Lead(tokens) is int lead and >= 0 && IsWord(tokens, lead, "EXPLAIN");

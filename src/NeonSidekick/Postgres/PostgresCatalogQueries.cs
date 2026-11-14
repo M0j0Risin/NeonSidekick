@@ -17,10 +17,14 @@ public static class PostgresCatalogQueries
     private const string Target = "to_regclass(format('%I.%I', @schema::text, @name::text))";
 
     /// <summary>
-    /// The schema lock's namespace, or none (2026-10-24, the database review's C7): <c>@lock</c> is the locked schema, null without a lock;
-    /// a statement that reads <c>@lock</c> keeps what it lists of other tables inside it.
+    /// The schema lock's namespaces, or none (2026-10-24, the database review's C7; a list since 2026-11-14, feature idea #18): <c>@lock</c>
+    /// is the locked schemas as a <c>text[]</c>, null without a lock; a statement that reads <c>@lock</c> keeps what it lists of other
+    /// tables inside them. Compared with <c>IN</c>, never <c>=</c>: a list's subquery returns a row per schema.
     /// </summary>
-    private const string Locked = "(SELECT oid FROM pg_namespace WHERE nspname = @lock::text)";
+    private const string Locked = "(SELECT oid FROM pg_namespace WHERE nspname = ANY(@lock::text[]))";
+
+    /// <summary><c>n</c>'s schema inside the lock, or any without one (#18).</summary>
+    private const string InLock = "(@lock::text[] IS NULL OR n.nspname = ANY(@lock::text[]))";
 
     /// <summary>A constraint's columns on one side, in key order: <paramref name="keys"/> of <paramref name="relation"/>.</summary>
     private static string Columns(string keys, string relation) =>
@@ -52,10 +56,14 @@ public static class PostgresCatalogQueries
         "SELECT n.nspname FROM pg_namespace n WHERE " + UserSchemas + " AND has_schema_privilege(n.oid, 'USAGE') AND NOT n.nspname = ANY(current_schemas(false)) ORDER BY 1",
     ];
 
+    /// <summary>The user schemas the role may use, by name (2026-11-14, #18: the wizard's Schemas checklist, run with no lock).</summary>
+    public const string UsableSchemas =
+        "SELECT n.nspname FROM pg_namespace n WHERE " + UserSchemas + " AND has_schema_privilege(n.oid, 'USAGE') ORDER BY 1";
+
     public const string Schemas =
         "SELECT n.nspname AS schema, count(c.oid) FILTER (WHERE c.relkind IN ('r','p','v','m','f')) AS tables, pg_get_userbyid(n.nspowner) AS owner " +
         "FROM pg_namespace n LEFT JOIN pg_class c ON c.relnamespace = n.oid WHERE " + UserSchemas + " AND has_schema_privilege(n.oid, 'USAGE') " +
-        "AND (@schema::text IS NULL OR n.nspname = @schema::text) GROUP BY n.nspname, n.nspowner ORDER BY n.nspname";
+        "AND (@schema::text IS NULL OR n.nspname = @schema::text) AND " + InLock + " GROUP BY n.nspname, n.nspowner ORDER BY n.nspname";
 
     /// <summary>
     /// The tables and views of a schema (or every user schema): a partition left out, its parent listed as a partitioned table (2026-10-24,
@@ -65,20 +73,21 @@ public static class PostgresCatalogQueries
         "SELECT n.nspname || '.' || c.relname AS name, " + Kind + " AS kind, CASE WHEN c.reltuples < 0 THEN NULL ELSE c.reltuples::bigint END AS rows, " +
         "obj_description(c.oid, 'pg_class') AS description FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace " +
         "WHERE c.relkind IN ('r','p','v','m','f') AND NOT c.relispartition AND " + UserSchemas + " AND has_table_privilege(c.oid, 'SELECT') " +
-        "AND (@schema::text IS NULL OR n.nspname = @schema::text) " +
+        "AND (@schema::text IS NULL OR n.nspname = @schema::text) AND " + InLock + " " +
         "AND (@pattern::text IS NULL OR c.relname ILIKE @pattern::text OR n.nspname || '.' || c.relname ILIKE @pattern::text) ORDER BY 1";
 
     public const string ColumnSearch =
         "SELECT n.nspname || '.' || c.relname AS \"table\", a.attname AS \"column\", format_type(a.atttypid, a.atttypmod) AS type, " +
         "NOT a.attnotnull AS nullable, col_description(c.oid, a.attnum) AS description FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid " +
         "JOIN pg_namespace n ON n.oid = c.relnamespace WHERE a.attnum > 0 AND NOT a.attisdropped AND c.relkind IN ('r','p','v','m','f') AND NOT c.relispartition AND " + UserSchemas + " " +
-        "AND has_table_privilege(c.oid, 'SELECT') AND (@schema::text IS NULL OR n.nspname = @schema::text) AND a.attname ILIKE @pattern::text ORDER BY 1, a.attnum";
+        "AND has_table_privilege(c.oid, 'SELECT') AND (@schema::text IS NULL OR n.nspname = @schema::text) AND " + InLock + " AND a.attname ILIKE @pattern::text ORDER BY 1, a.attnum";
 
     /// <summary>The relations <c>@name</c> may mean (case-insensitive; <c>@schema</c> when given, exactly under a lock since 2026-10-24, review C8): schema, name, kind, whether the case matched, whether its schema is on the search path.</summary>
     public const string Resolve =
         "SELECT n.nspname, c.relname, " + Kind + ", c.relname = @name::text, n.nspname = ANY(current_schemas(false)) FROM pg_class c " +
         "JOIN pg_namespace n ON n.oid = c.relnamespace WHERE c.relkind IN ('r','p','v','m','f') AND " + UserSchemas + " " +
-        "AND lower(c.relname) = lower(@name::text) AND (@schema::text IS NULL OR n.nspname = @schema::text OR @lock::text IS NULL AND lower(n.nspname) = lower(@schema::text)) ORDER BY 1, 2";
+        "AND lower(c.relname) = lower(@name::text) AND (@schema::text IS NULL OR n.nspname = @schema::text OR @lock::text[] IS NULL AND lower(n.nspname) = lower(@schema::text)) " +
+        "AND " + InLock + " ORDER BY 1, 2";
 
     /// <summary>
     /// <c>@schema.@name</c>'s columns (a key column's place counted from 1: <c>indkey</c> is an <c>int2vector</c>, zero-based, found live on
@@ -92,7 +101,7 @@ public static class PostgresCatalogQueries
         "SELECT con.conname, " + Columns("conkey", "conrelid") + ", con.confrelid::regclass::text, " + Columns("confkey", "confrelid") + " " +
             "FROM pg_constraint con WHERE con.conrelid = " + Target + " AND con.contype = 'f' ORDER BY 1",
         "SELECT con.conrelid::regclass::text, " + Columns("conkey", "conrelid") + ", " + Columns("confkey", "confrelid") + " " +
-            "FROM pg_constraint con WHERE con.confrelid = " + Target + " AND con.contype = 'f' AND (@lock::text IS NULL OR con.connamespace = " + Locked + ") ORDER BY 1",
+            "FROM pg_constraint con WHERE con.confrelid = " + Target + " AND con.contype = 'f' AND (@lock::text[] IS NULL OR con.connamespace IN " + Locked + ") ORDER BY 1",
         "SELECT c.relname, pg_get_indexdef(i.indexrelid) FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid WHERE i.indrelid = " + Target + " ORDER BY 1",
         "SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = " + Target + " AND contype = 'c' ORDER BY 1",
         "SELECT obj_description(" + Target + ", 'pg_class')",
@@ -104,12 +113,12 @@ public static class PostgresCatalogQueries
         " AS from_columns, con.confrelid::regclass::text AS \"to\", (SELECT string_agg(a.attname, ', ' ORDER BY k.n) FROM unnest(con.confkey) WITH ORDINALITY k(attnum, n) JOIN pg_attribute a ON a.attrelid = con.confrelid AND a.attnum = k.attnum)" +
         " AS to_columns, con.conname AS name FROM pg_constraint con JOIN pg_namespace n ON n.oid = con.connamespace WHERE con.contype = 'f' AND " + UserSchemas + " " +
         "AND (@name::text IS NULL AND (@schema::text IS NULL OR n.nspname = @schema::text) OR @name::text IS NOT NULL AND " + Target + " IN (con.conrelid, con.confrelid)) " +
-        "AND (@lock::text IS NULL OR con.connamespace = " + Locked + " AND (SELECT relnamespace FROM pg_class WHERE oid = con.confrelid) = " + Locked + ") ORDER BY 1, 3";
+        "AND (@lock::text[] IS NULL OR con.connamespace IN " + Locked + " AND (SELECT relnamespace FROM pg_class WHERE oid = con.confrelid) IN " + Locked + ") ORDER BY 1, 3";
 
     /// <summary>The indexes of a schema (or every user schema), or of one table: table, index, unique, primary, the definition, the scans since the statistics were reset.</summary>
     public const string Indexes =
         "SELECT n.nspname || '.' || t.relname AS \"table\", c.relname AS index, i.indisunique AS \"unique\", i.indisprimary AS \"primary\", " +
         "pg_get_indexdef(i.indexrelid) AS definition, s.idx_scan AS scans FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid " +
         "JOIN pg_class t ON t.oid = i.indrelid JOIN pg_namespace n ON n.oid = t.relnamespace LEFT JOIN pg_stat_all_indexes s ON s.indexrelid = i.indexrelid " +
-        "WHERE " + UserSchemas + " AND (@name::text IS NULL AND (@schema::text IS NULL OR n.nspname = @schema::text) OR @name::text IS NOT NULL AND t.oid = " + Target + ") ORDER BY 1, 2";
+        "WHERE " + UserSchemas + " AND " + InLock + " AND (@name::text IS NULL AND (@schema::text IS NULL OR n.nspname = @schema::text) OR @name::text IS NOT NULL AND t.oid = " + Target + ") ORDER BY 1, 2";
 }

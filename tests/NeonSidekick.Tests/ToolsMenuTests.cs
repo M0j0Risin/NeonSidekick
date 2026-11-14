@@ -713,23 +713,34 @@ public partial class ToolsMenuTests : IDisposable
     {
         string path = NeonSidekick.Oracle.OracleConfigFile.ProfilePath(_settings.ProfileDirectory);
         var tested = new List<(NeonSidekick.Oracle.OracleNamedConnection Connection, bool FileThere)>();
-        var (menu, _, _) = PaneMenu(testOracle: (c, _) =>
+        var listed = new List<NeonSidekick.Oracle.OracleNamedConnection>();
+        var (menu, _, settings) = PaneMenu(testOracle: (c, _) =>
         {
             tested.Add((c, File.Exists(path)));
             return Task.FromResult(new NeonSidekick.Sql.SqlRun(NeonSidekick.Sql.SqlOutcome.Ok, "", c.Name, "NEON",
                 [new NeonSidekick.Sql.SqlGrid(["user", "container", "version"], [["NEON", "FREEPDB1", "23.0.0.0.0"]], false), new NeonSidekick.Sql.SqlGrid(["what"], [["CREATE TABLE"], ["owns 3 tables"]], false)], TimeSpan.Zero));
         });
+
+        // The Schemas step (2026-11-14, #18): the user's own first, then the others the account can see; a lower-case one quoted.
+        settings.ListOracleSchemas = (c, _) =>
+        {
+            listed.Add(c);
+            return Task.FromResult(new NeonSidekick.Sql.SqlRun(NeonSidekick.Sql.SqlOutcome.Ok, "", c.Name, "NEON", [new NeonSidekick.Sql.SqlGrid(["owner"], [["HR"], ["OE"], ["lab"]], false)], TimeSpan.Zero));
+        };
         OpenOracleRow(5);
         Push(Keys.Enter);                         // the profile's file
         Type("free");
         Type("localhost:1521/FREEPDB1");
-        Push(Keys.Enter);                         // no default schema: the user's own
         Type("sys");                              // refused: SYS is never held to a read-only transaction
         Push([.. Enumerable.Repeat(Keys.Backspace, 3)]);
         Type("neon");
         Push(Keys.Enter);                         // file
         Type("s3cret");
         Push(Keys.Enter);                         // the default timeout
+        Push(Keys.Down, Keys.Enter);              // Schemas: NEON, HR, OE, "lab", Continue — HR ticked with Enter
+        Push(Keys.Down, Keys.Char(' '));          // OE with Space
+        Push(Keys.Down, Keys.Down, Keys.Enter);   // Continue
+        Push(Keys.Down, Keys.Enter);              // which is current: OE
         Push(Keys.Enter);                         // read, the default access (2026-10-05)
         Type("the container");
         Push(Keys.Down, Keys.Down, Keys.Enter);   // Test (under the two save rows, always both since 2026-10-01)
@@ -747,6 +758,16 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal("localhost:1521/FREEPDB1", free.Config.DataSource);
         Assert.Equal("neon", free.Config.User);
         Assert.Null(free.Config.Schema);
+        Assert.Equal(["OE", "HR"], free.Config.Schemas);   // the current one first, the rest in the list's order
+        Assert.Equal(["OE", "HR"], connection.Config.Schemas);   // the test tries the draft as it will be saved
+        var unlocked = Assert.Single(listed).Config;
+        Assert.Null(unlocked.Schemas);                     // the listing runs with the lock cleared, the typed password in it
+        Assert.Equal("s3cret", unlocked.Password);
+        Assert.Contains(SettingsMenu.WizardSchemaKeys, Output);
+        Assert.Contains(SettingsMenu.OracleWizardCurrentQuestion, Output);
+        Assert.Contains("\"lab\"", Output);
+        Assert.Equal("\"lab\"", SettingsMenu.OracleWizardSpelling("lab"));
+        Assert.Equal("HR", SettingsMenu.OracleWizardSpelling("HR"));
         Assert.Equal("the container", free.Config.Description);
         Assert.Equal("s3cret", NeonSidekick.Oracle.OracleSecrets.Resolve(free).Value);
         Assert.StartsWith(NeonSidekick.Oracle.OracleConfigFile.EmptyText[..40], File.ReadAllText(path));
@@ -765,20 +786,23 @@ public partial class ToolsMenuTests : IDisposable
     {
         _settings.Update(d => d.OracleConnectionsOffered = ["other"]);
         string home = NeonSidekick.Oracle.OracleConfigFile.GlobalPath(_settings.StorageDirectory);
-        var (menu, _, _) = PaneMenu(testOracle: (c, _) => Task.FromResult(NeonSidekick.Sql.SqlRun.Refused(NeonSidekick.Sql.SqlOutcome.ConnectFailed, "ORA-12541: no listener", c.Name)));
+        var (menu, _, settings) = PaneMenu(testOracle: (c, _) => Task.FromResult(NeonSidekick.Sql.SqlRun.Refused(NeonSidekick.Sql.SqlOutcome.ConnectFailed, "ORA-12541: no listener", c.Name)));
+        settings.ListOracleSchemas = (c, _) => Task.FromResult(NeonSidekick.Sql.SqlRun.Refused(NeonSidekick.Sql.SqlOutcome.ConnectFailed, "ORA-12541: no listener", c.Name));
         OpenOracleRow(5);
         Push(Keys.Escape);                        // the first page: nothing written
         Push(Keys.Enter);                         // again
         Push(Keys.Down, Keys.Enter);              // the home's file
         Type("ledger");
         Type("(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=db)(PORT=1521))(CONNECT_DATA=(SERVICE_NAME=LEDGER)))");
-        Type("not a name");                       // refused
-        Push([.. Enumerable.Repeat(Keys.Backspace, 10)]);
-        Type("ledger");
         Type("ledger_ro");
         Push(Keys.Down, Keys.Enter);              // credman
         Type("pw");
         Type("9");
+        Type("not a name");                       // no listing (no listener): typed, and refused
+        Push([.. Enumerable.Repeat(Keys.Backspace, 10)]);
+        Type("ledger, sys");                      // refused: Oracle's own (2026-11-14, #18)
+        Push([.. Enumerable.Repeat(Keys.Backspace, 11)]);
+        Type("ledger");
         Push(Keys.Down, Keys.Enter);              // readwrite (2026-10-05), while Oracle mode is read-only
         Push(Keys.Enter);                         // no description
         Push(Keys.Down, Keys.Down, Keys.Enter);   // Test: the failure on the status line, still saveable
@@ -792,6 +816,8 @@ public partial class ToolsMenuTests : IDisposable
 
             Assert.Contains(SettingsMenu.SqlWizardCancelledNotice, Output);
             Assert.Contains(NeonSidekick.Oracle.OracleText.BadSchemaKey("not a name"), Output);
+            Assert.Contains(SettingsMenu.WizardSchemasUnlisted(NeonSidekick.Oracle.OracleText.ConnectFailed("ledger", "ORA-12541: no listener")), Output);
+            Assert.Contains(NeonSidekick.Oracle.OracleText.SystemSchema("sys", "schemas"), Output);
             Assert.Contains("Error: could not connect to ledger: ORA-12541: no listener", Output);
             var ledger = Assert.Single(NeonSidekick.Oracle.OracleConfigFile.Load(home).Connections);
             Assert.Equal("ledger", ledger.Config.Schema);

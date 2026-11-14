@@ -79,8 +79,16 @@ public static class OracleBoundary
     /// </summary>
     public static (IReadOnlyList<string> Heads, IReadOnlyList<string> Dictionary) Qualifiers(string sql, string place)
     {
-        ArgumentNullException.ThrowIfNull(sql);
         ArgumentNullException.ThrowIfNull(place);
+        return Qualifiers(sql, [place]);
+    }
+
+    /// <summary><see cref="Qualifiers(string, string)"/> for a connection held to <paramref name="places"/> (2026-11-14, #18): a qualifier naming any is its own.</summary>
+    public static (IReadOnlyList<string> Heads, IReadOnlyList<string> Dictionary) Qualifiers(string sql, IReadOnlyList<string> places)
+    {
+        ArgumentNullException.ThrowIfNull(sql);
+        ArgumentNullException.ThrowIfNull(places);
+        var own = new HashSet<string>(places, StringComparer.Ordinal);
         if (OracleWriteGate.Lex(sql, out _) is not { } tokens)
         {
             return ([], []);
@@ -90,7 +98,7 @@ public static class OracleBoundary
         for (int i = 0; i < tokens.Count; i++)
         {
             var t = tokens[i];
-            bool ownQualifier = i >= 2 && tokens[i - 1].IsSymbol(".") && tokens[i - 2].Text.Equals(place, StringComparison.Ordinal);
+            bool ownQualifier = i >= 2 && tokens[i - 1].IsSymbol(".") && own.Contains(tokens[i - 2].Text);
             if (t.Kind is GateTokenKind.Word or GateTokenKind.Name && !ownQualifier
                 && DictionaryPrefixes.Any(p => t.Text.StartsWith(p, StringComparison.Ordinal)))
             {
@@ -100,7 +108,7 @@ public static class OracleBoundary
 
         // The lexer upper-cases a bare word, as Oracle folds it; a quoted name keeps its case: both compare exactly (the review,
         // 2026-10-09: "Hr" is not HR).
-        var heads = ServerWriteGate.Qualifiers(tokens, Members).Where(h => !h.Equals(place, StringComparison.Ordinal)).ToList();
+        var heads = ServerWriteGate.Qualifiers(tokens, Members).Where(h => !own.Contains(h)).ToList();
         return (heads, dictionary);
     }
 
@@ -121,15 +129,30 @@ public static class OracleBoundary
     /// </summary>
     public static string? Check(string sql, string place, IEnumerable<string> users, IEnumerable<string> views)
     {
+        ArgumentNullException.ThrowIfNull(place);
+        return Check(sql, [place], users, views);
+    }
+
+    /// <summary><see cref="Check(string, string, IEnumerable{string}, IEnumerable{string})"/> for a connection held to <paramref name="places"/> (#18).</summary>
+    public static string? Check(string sql, IReadOnlyList<string> places, IEnumerable<string> users, IEnumerable<string> views)
+    {
         ArgumentNullException.ThrowIfNull(users);
         ArgumentNullException.ThrowIfNull(views);
-        if (Refusal(sql, place) is { } refused)
+        if (Refusal(sql, places) is { } refused)
         {
             return refused;
         }
 
-        var (heads, dictionary) = Qualifiers(sql, place);
-        return CheckQualifiers(heads, dictionary, place, users, views);
+        var (heads, dictionary) = Qualifiers(sql, places);
+        return CheckQualifiers(heads, dictionary, places, users, views);
+    }
+
+    /// <summary><see cref="Check(string, string, IEnumerable{string[]})"/> for a connection held to <paramref name="places"/> (#18).</summary>
+    public static string? Check(string sql, IReadOnlyList<string> places, IEnumerable<string[]> names)
+    {
+        ArgumentNullException.ThrowIfNull(names);
+        var rows = names.ToList();
+        return Check(sql, places, rows.Where(r => r[0] == UserKind).Select(r => r[1]), rows.Where(r => r[0] == ViewKind).Select(r => r[1]));
     }
 
     /// <summary>
@@ -138,6 +161,14 @@ public static class OracleBoundary
     /// </summary>
     public static string? CheckQualifiers(IReadOnlyList<string> heads, IReadOnlyList<string> dictionary, string place, IEnumerable<string> users, IEnumerable<string> views)
     {
+        ArgumentNullException.ThrowIfNull(place);
+        return CheckQualifiers(heads, dictionary, [place], users, views);
+    }
+
+    /// <summary><see cref="CheckQualifiers(IReadOnlyList{string}, IReadOnlyList{string}, string, IEnumerable{string}, IEnumerable{string})"/> for <paramref name="places"/> (#18).</summary>
+    public static string? CheckQualifiers(IReadOnlyList<string> heads, IReadOnlyList<string> dictionary, IReadOnlyList<string> places, IEnumerable<string> users, IEnumerable<string> views)
+    {
+        ArgumentNullException.ThrowIfNull(places);
         ArgumentNullException.ThrowIfNull(heads);
         ArgumentNullException.ThrowIfNull(dictionary);
         ArgumentNullException.ThrowIfNull(users);
@@ -145,11 +176,11 @@ public static class OracleBoundary
         var known = views as IReadOnlySet<string> ?? new HashSet<string>(views, StringComparer.Ordinal);
         if (dictionary.FirstOrDefault(d => known.Contains(SqlText.Cell(d))) is { } view)   // as the names list writes it: a cell, scrubbed, NULL quoted (2026-10-24, the review of these fixes)
         {
-            return OracleText.Dictionary(view, place);
+            return OracleText.Dictionary(view, places);
         }
 
         var others = users as IReadOnlySet<string> ?? new HashSet<string>(users, StringComparer.Ordinal);
-        return heads.FirstOrDefault(h => others.Contains(SqlText.Cell(h))) is { } head ? OracleText.OtherSchema(head, place) : null;
+        return heads.FirstOrDefault(h => others.Contains(SqlText.Cell(h))) is { } head ? OracleText.OtherSchema(head, places) : null;
     }
 
     /// <summary>
@@ -159,8 +190,15 @@ public static class OracleBoundary
     /// </summary>
     public static string? Refusal(string sql, string place)
     {
-        ArgumentNullException.ThrowIfNull(sql);
         ArgumentNullException.ThrowIfNull(place);
+        return Refusal(sql, [place]);
+    }
+
+    /// <summary><see cref="Refusal(string, string)"/> for a connection held to <paramref name="places"/> (#18), whose refusals name the list.</summary>
+    public static string? Refusal(string sql, IReadOnlyList<string> places)
+    {
+        ArgumentNullException.ThrowIfNull(sql);
+        ArgumentNullException.ThrowIfNull(places);
         if (OracleWriteGate.Lex(sql, out _) is not { } tokens)
         {
             return OracleText.BoundaryUnread;
@@ -174,22 +212,22 @@ public static class OracleBoundary
             {
                 if (Instance.Contains(word))
                 {
-                    return OracleText.Dictionary(word, place);
+                    return OracleText.Dictionary(word, places);
                 }
 
                 if (word is "CONTAINERS" or "SHARDS" && i + 1 < tokens.Count && tokens[i + 1].IsSymbol("("))
                 {
-                    return OracleText.Dictionary(word + "()", place);
+                    return OracleText.Dictionary(word + "()", places);
                 }
 
                 if (word == "DBMS_XPLAN" && i + 2 < tokens.Count && tokens[i + 1].IsSymbol(".") && XplanMembers.Contains(tokens[i + 2].Text.ToUpperInvariant()))
                 {
-                    return OracleText.Dictionary("DBMS_XPLAN." + tokens[i + 2].Text.ToUpperInvariant(), place);
+                    return OracleText.Dictionary("DBMS_XPLAN." + tokens[i + 2].Text.ToUpperInvariant(), places);
                 }
             }
             else if (t.Kind == GateTokenKind.Other && t.Text.Contains("oradb:", StringComparison.OrdinalIgnoreCase))
             {
-                return OracleText.Dictionary("fn:collection('oradb:…')", place);
+                return OracleText.Dictionary("fn:collection('oradb:…')", places);
             }
         }
 

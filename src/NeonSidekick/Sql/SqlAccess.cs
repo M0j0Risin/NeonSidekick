@@ -245,7 +245,14 @@ public sealed class SqlAccess
     /// SequentialAccess (E6).
     /// </remarks>
     /// <remarks><paramref name="export"/> (2026-10-29, the Office writing plan): the rows go to a workbook's sheet in place of the grid (<see cref="ExportAsync"/>).</remarks>
-    public async Task<SqlRun> RunAsync(string? name, string sql, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken, bool keepLaterSets = false, SqlExportJob? export = null)
+    /// <remarks>
+    /// <paramref name="readCell"/> and <paramref name="showPlan"/> (2026-11-14, the database-tools plan's #12, <c>sql_explain</c>): the cells read
+    /// by <paramref name="readCell"/> in place of the clipped grid's (<see cref="QueryPlan.WholeCell"/>), and the query compiled, never run,
+    /// between <see cref="SqlServerPlan.On"/> and <see cref="SqlServerPlan.Off"/> (<see cref="ShowPlanAsync"/>). Everything else is this run's own:
+    /// the guarded open, the wrong-database check, the read transaction and its rollback.
+    /// </remarks>
+    public async Task<SqlRun> RunAsync(string? name, string sql, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken, bool keepLaterSets = false, SqlExportJob? export = null,
+        Func<DbDataReader, int, string>? readCell = null, bool showPlan = false)
     {
         ArgumentNullException.ThrowIfNull(sql);
         ArgumentNullException.ThrowIfNull(parameters);
@@ -297,8 +304,15 @@ public sealed class SqlAccess
         try
         {
             await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken).ConfigureAwait(false);
+            bool planning = false;
             try
             {
+                if (showPlan)
+                {
+                    await ShowPlanAsync(connection, transaction, SqlServerPlan.On, timeoutSeconds, cancellationToken).ConfigureAwait(false);
+                    planning = true;
+                }
+
                 await using var command = new SqlCommand(sql, connection, transaction) { CommandTimeout = timeoutSeconds };
                 foreach (var parameter in parameters)
                 {
@@ -315,7 +329,7 @@ public sealed class SqlAccess
                         }
 
                         var grid = export is null
-                            ? await SqlGrid.ReadAsync(reader, maxRows, cancellationToken).ConfigureAwait(false)
+                            ? await SqlGrid.ReadAsync(reader, maxRows, cancellationToken, readCell).ConfigureAwait(false)
                             : await export.ReadAsync(reader, maxRows, cancellationToken).ConfigureAwait(false);
                         grids.Add(grid);
                         if (grid.More && !keepLaterSets)
@@ -329,6 +343,11 @@ public sealed class SqlAccess
             }
             finally
             {
+                if (planning)
+                {
+                    await ShowPlanOffAsync(connection, transaction).ConfigureAwait(false);
+                }
+
                 await RollBackAsync(transaction).ConfigureAwait(false);
             }
         }
@@ -686,6 +705,31 @@ public sealed class SqlAccess
     private static bool IsUnsupportedHere(Exception ex) => ex is PlatformNotSupportedException && !OperatingSystem.IsWindows();
 
     /// <summary>Rolls back what is left of the transaction; a connection the server already dropped has nothing to roll back.</summary>
+    /// <summary>One <c>SET SHOWPLAN_XML</c> batch: the statement must stand alone in its batch.</summary>
+    private static async Task ShowPlanAsync(SqlConnection connection, SqlTransaction transaction, string statement, int timeoutSeconds, CancellationToken cancellationToken)
+    {
+        await using var command = new SqlCommand(statement, connection, transaction) { CommandTimeout = timeoutSeconds };
+        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// <see cref="SqlServerPlan.Off"/> after the plan, whatever the query batch did (2026-11-14): the connection goes back to the pool, and a
+    /// session left planning would compile the next caller's query without running it. When OFF can't be sent (a broken connection), the
+    /// pool is cleared, so the session is never reused.
+    /// </summary>
+    private static async Task ShowPlanOffAsync(SqlConnection connection, SqlTransaction transaction)
+    {
+        try
+        {
+            await ShowPlanAsync(connection, transaction, SqlServerPlan.Off, 30, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is SqlException or InvalidOperationException)
+        {
+            DiagnosticLog.Warn(SqlConfigFile.Category, SqlText.ShowPlanOffFailed(LogText.Excerpt(ex.Message)));
+            SqlConnection.ClearPool(connection);
+        }
+    }
+
     private static async Task RollBackAsync(SqlTransaction transaction)
     {
         try

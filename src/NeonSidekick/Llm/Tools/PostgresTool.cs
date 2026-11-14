@@ -39,30 +39,30 @@ public abstract class PostgresTool : ServerTool<PostgresAccess>
 
     protected sealed override string RetiredRefusal => PostgresText.NoDatabaseArgument;
 
-    /// <summary>The schema the call's connection is held to, or null (no lock, or a connection that does not resolve: the run says why).</summary>
-    protected string? LockedSchema(string? connection) =>
-        Server.Resolve(connection, out _) is { Config.Schema: { } schema } && !string.IsNullOrWhiteSpace(schema) ? schema.Trim() : null;
+    /// <summary>
+    /// The schemas the call's connection is held to, as the <c>@lock</c> bind (<c>text[]</c>), or null (no lock, or a connection that does
+    /// not resolve: the run says why). A list since 2026-11-14 (feature idea #18).
+    /// </summary>
+    protected string[]? LockedSchemas(string? connection) =>
+        Server.Resolve(connection, out _) is { Config.Locks: { Count: > 0 } locks } ? [.. locks] : null;
 
     /// <summary>
-    /// The schema a listing keeps to (2026-10-09): the one <paramref name="asked"/>; under a lock, the locked one — and another asked for
-    /// is <paramref name="error"/>.
+    /// The schema a listing keeps to (2026-10-09): the one <paramref name="asked"/>, or null for every one. Under a lock, an asked one off
+    /// the list is <paramref name="error"/>, and none asked is null too: the statement's <c>@lock</c> keeps it to the list (#18; until then
+    /// the one locked schema came back here).
     /// </summary>
     protected string? ScopeSchema(string? connection, string? asked, out string? error)
     {
         error = null;
-        if (LockedSchema(connection) is not { } locked)
-        {
-            return asked;
-        }
 
         // Spelled exactly (2026-10-24, the database review's P4: under a lock to Sales an asked sales was silently swapped for it; they are
         // two schemas to the server).
-        if (asked is not null && !asked.Equals(locked, StringComparison.Ordinal))
+        if (asked is not null && LockedSchemas(connection) is { } locks && !locks.Contains(asked, StringComparer.Ordinal))
         {
-            error = PostgresText.SchemaElsewhere(asked, locked);
+            error = PostgresText.SchemaElsewhere(asked, locks);
         }
 
-        return locked;
+        return asked;
     }
 
     /// <summary>
@@ -80,8 +80,8 @@ public abstract class PostgresTool : ServerTool<PostgresAccess>
             return null;
         }
 
-        string? schema = string.IsNullOrWhiteSpace(target.Config.Schema) ? null : target.Config.Schema.Trim();
-        var (heads, refused) = PostgresBoundary.Qualifiers(sql, schema);
+        var locks = target.Config.Locks;
+        var (heads, refused) = PostgresBoundary.QualifiersUnder(sql, locks);
         if (refused is not null || heads.Count == 0)
         {
             return refused;
@@ -90,7 +90,7 @@ public abstract class PostgresTool : ServerTool<PostgresAccess>
         // The names kept a minute per connection (the review, 2026-10-09: an alias's t.col sent every join for them).
         var (rows, failed) = await ReadNamesAsync(access.Names, BoundaryNames.Key(target.Name, target.Config.Endpoint, target.Config.Database, target.Config.User),
             token => access.RunAsync(connection, [PostgresBoundary.Names], [], PostgresBoundary.MaxNames, TimeoutSeconds(Effective), token), PostgresText.Error, cancellationToken).ConfigureAwait(false);
-        return failed ?? PostgresBoundary.Check(sql, schema, access.Names.Built(rows!, PostgresBoundary.NameSet));
+        return failed ?? PostgresBoundary.CheckUnder(sql, locks, access.Names.Built(rows!, PostgresBoundary.NameSet));
     }
 
     protected async Task<SqlRun> CatalogAsync(string? connection, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, CancellationToken cancellationToken) =>
@@ -121,7 +121,7 @@ public abstract class PostgresTool : ServerTool<PostgresAccess>
             return TableMatch.Refused(elsewhere);
         }
 
-        var run = await CatalogAsync(connection, [PostgresCatalogQueries.Resolve], [new("schema", scope), new("name", parts.Name), new("lock", LockedSchema(connection))], cancellationToken).ConfigureAwait(false);
+        var run = await CatalogAsync(connection, [PostgresCatalogQueries.Resolve], [new("schema", scope), new("name", parts.Name), new("lock", LockedSchemas(connection))], cancellationToken).ConfigureAwait(false);
         if (run.Outcome != SqlOutcome.Ok)
         {
             return TableMatch.Refused(PostgresText.Error(run));
@@ -194,12 +194,12 @@ public sealed class PostgresSchemasTool : PostgresListingTool
 
     public override string Name => ToolName;
 
-    public override string Description => "Lists the schemas of a PostgreSQL connection's database the account may use (the one schema, on a connection held to it), with how many tables and views each holds and its owner.";
+    public override string Description => "Lists the schemas of a PostgreSQL connection's database the account may use (only its own, on a connection held to some), with how many tables and views each holds and its owner.";
 
     public override JsonElement JsonSchema => Schema;
 
     protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) =>
-        await ListAsync(Optional(arguments, ConnectionArgument), PostgresCatalogQueries.Schemas, [new("schema", LockedSchema(Optional(arguments, ConnectionArgument)))], "schema", "schemas", cancellationToken).ConfigureAwait(false);
+        await ListAsync(Optional(arguments, ConnectionArgument), PostgresCatalogQueries.Schemas, [new("schema", null), new("lock", LockedSchemas(Optional(arguments, ConnectionArgument)))], "schema", "schemas", cancellationToken).ConfigureAwait(false);
 }
 
 public sealed class PostgresTablesTool : PostgresListingTool
@@ -226,7 +226,7 @@ public sealed class PostgresTablesTool : PostgresListingTool
     public async Task<string> DescribeAsync(string? connection, string? schema, string? pattern, CancellationToken cancellationToken)
     {
         string? scope = ScopeSchema(connection, schema, out var elsewhere);
-        return elsewhere ?? await ListAsync(connection, PostgresCatalogQueries.Tables, [new("schema", scope), new("pattern", OracleTablesTool.LikePattern(pattern))], "table or view", "tables and views", cancellationToken).ConfigureAwait(false);
+        return elsewhere ?? await ListAsync(connection, PostgresCatalogQueries.Tables, [new("schema", scope), new("pattern", OracleTablesTool.LikePattern(pattern)), new("lock", LockedSchemas(connection))], "table or view", "tables and views", cancellationToken).ConfigureAwait(false);
     }
 
     protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) =>
@@ -262,7 +262,7 @@ public sealed class PostgresColumnsTool : PostgresListingTool
 
         string? connection = Optional(arguments, ConnectionArgument);
         string? scope = ScopeSchema(connection, Optional(arguments, SchemaArgument), out var elsewhere);
-        return elsewhere ?? await ListAsync(connection, PostgresCatalogQueries.ColumnSearch, [new("schema", scope), new("pattern", OracleTablesTool.LikePattern(pattern))], "column", "columns", cancellationToken).ConfigureAwait(false);
+        return elsewhere ?? await ListAsync(connection, PostgresCatalogQueries.ColumnSearch, [new("schema", scope), new("pattern", OracleTablesTool.LikePattern(pattern)), new("lock", LockedSchemas(connection))], "column", "columns", cancellationToken).ConfigureAwait(false);
     }
 }
 
@@ -299,7 +299,7 @@ public sealed class PostgresDescribeTool : PostgresTool
             return error;
         }
 
-        var run = await CatalogAsync(connection, PostgresCatalogQueries.Describe, [new("schema", found.Schema), new("name", found.Name), new("lock", LockedSchema(connection))], cancellationToken).ConfigureAwait(false);
+        var run = await CatalogAsync(connection, PostgresCatalogQueries.Describe, [new("schema", found.Schema), new("name", found.Name), new("lock", LockedSchemas(connection))], cancellationToken).ConfigureAwait(false);
         return run.Outcome == SqlOutcome.Ok ? PostgresText.Describe(found.Schema, found.Name, found.Kind, run, Files.WorkingDirectory.MaxReadChars) : PostgresText.Error(run);
     }
 
@@ -343,7 +343,7 @@ public abstract class PostgresScopedTool : PostgresListingTool
             (schema, name) = (found.Schema, found.Name);
         }
 
-        return await ListAsync(connection, statement, [new("schema", schema), new("name", name), new("lock", LockedSchema(connection))], singular, plural, cancellationToken).ConfigureAwait(false);
+        return await ListAsync(connection, statement, [new("schema", schema), new("name", name), new("lock", LockedSchemas(connection))], singular, plural, cancellationToken).ConfigureAwait(false);
     }
 }
 
@@ -494,6 +494,145 @@ public sealed class PostgresQueryTool : PostgresTool
         }
 
         return await RunAsync(ToolArguments.ReadString(arguments, SqlArgument), Optional(arguments, ConnectionArgument), parameters, max, cancellationToken, export).ConfigureAwait(false);
+    }
+}
+
+/// <summary>
+/// <c>postgres_explain(sql, connection?, params?)</c> (2026-11-14, the database-tools plan's #12): how PostgreSQL would run one read, from
+/// <c>EXPLAIN (FORMAT JSON)</c>. The statement passes <see cref="PostgresReadOnlyGate"/> and the database and schema boundary as
+/// <c>postgres_query</c>'s does, then runs with the prefix on the same path (the session read back, the read-only transaction, rolled back,
+/// the timeout); the plan is made, never run (no ANALYZE). Parameters bind over the extended protocol, so the plan is the one those values
+/// get. The answer is <see cref="QueryPlanText.Answer"/>'s summary.
+/// </summary>
+public sealed class PostgresExplainTool : PostgresTool
+{
+    public const string ToolName = "postgres_explain";
+
+    private static readonly JsonElement Schema = ToolSchema.Parse(
+        "{ \"type\": \"object\", \"properties\": { " +
+        "\"sql\": { \"type\": \"string\", \"description\": \"The PostgreSQL SELECT to explain, as postgres_query takes it (a WITH clause may lead it). Give the query alone: the tool adds the EXPLAIN.\" }, " +
+        ConnectionProperty + ", " +
+        "\"params\": { \"type\": \"object\", \"description\": \"Values for @name placeholders in the SQL, as postgres_query takes them, so the plan is the one those values get.\" } " +
+        "}, \"required\": [\"sql\"] }");
+
+    public PostgresExplainTool(PostgresAccess postgres, Func<AppSettingsData> effective) : base(postgres, effective)
+    {
+    }
+
+    public override string Name => ToolName;
+
+    public override string Description =>
+        "Shows how PostgreSQL would run one SELECT: its query plan's steps (scans, joins, sorts, with estimated rows and cost) and what is worth a look. " +
+        "The query is planned, never run; use it when a query is slow, before rewriting it.";
+
+    public override JsonElement JsonSchema => Schema;
+
+    public async Task<string> ExplainAsync(string sql, string? connection, IReadOnlyList<SqlParameterValue> parameters, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(sql);
+        ArgumentNullException.ThrowIfNull(parameters);
+        if (PostgresReadOnlyGate.Check(sql) is { } refused)
+        {
+            return refused;
+        }
+
+        string body = PostgresReadOnlyGate.Body(sql);
+        if (await OutsideAsync(body, connection, cancellationToken).ConfigureAwait(false) is { } outside)
+        {
+            return outside;
+        }
+
+        var run = await Server.RunAsync(connection, [PostgresPlan.Prefix + body], parameters, PostgresAccess.MaxCatalogRows, TimeoutSeconds(Effective), cancellationToken, readCell: QueryPlan.WholeCell).ConfigureAwait(false);
+        if (run.Outcome != SqlOutcome.Ok)
+        {
+            return PostgresText.Error(run);
+        }
+
+        string text = QueryPlan.TextOf(run, 0);
+        int cap = Math.Min(QueryPlan.MaxAnswerChars, SqlTool.ResultChars(Effective));
+        return PostgresPlan.Parse(text) is { } plan
+            ? QueryPlanText.Answer(plan, run.Connection, run.Database, run.Elapsed, cap)
+            : QueryPlanText.Unreadable(run.Connection, run.Database, run.Elapsed, text);
+    }
+
+    protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+        if (SqlQueryTool.ReadParams(arguments, PostgresText.BadParams, out var error) is not { } parameters)
+        {
+            return error;
+        }
+
+        return await ExplainAsync(ToolArguments.ReadString(arguments, PostgresQueryTool.SqlArgument), Optional(arguments, ConnectionArgument), parameters, cancellationToken).ConfigureAwait(false);
+    }
+}
+
+/// <summary>
+/// <c>postgres_profile(table, connection?, schema?, columns?, top?)</c> (2026-11-14, the database-tools plan's #14), <see cref="SqlProfileTool"/>'s
+/// PostgreSQL twin: the table found as <c>postgres_describe</c> finds it (a held schema kept to), the SQL the app's own
+/// (<see cref="PostgresProfile"/>), in the read-only transaction that is rolled back; a big table or materialized view is sampled.
+/// </summary>
+public sealed class PostgresProfileTool : PostgresTool
+{
+    public const string ToolName = "postgres_profile";
+
+    private static readonly JsonElement Schema = ToolSchema.Parse(
+        "{ \"type\": \"object\", \"properties\": { \"table\": { \"type\": \"string\", \"description\": \"The table or view: name or schema.name (case-insensitive unless quoted).\" }, " +
+        ConnectionProperty + ", " + SchemaProperty + ", " + ProfileArguments.ColumnsProperty + ", " + ProfileArguments.TopProperty + " }, \"required\": [\"table\"] }");
+
+    public PostgresProfileTool(PostgresAccess postgres, Func<AppSettingsData> effective) : base(postgres, effective)
+    {
+    }
+
+    public override string Name => ToolName;
+
+    public override string Description =>
+        "Profiles one PostgreSQL table or view: its rows and, per column, the nulls, distinct values, min, max and most common values (a big table is " +
+        "sampled, and the answer says so). Read-only; use it before reading pages of sample rows.";
+
+    public override JsonElement JsonSchema => Schema;
+
+    public async Task<string> ProfileAsync(string table, string? connection, string? schema, IReadOnlyList<string>? columns, int top, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(table))
+        {
+            return PostgresText.NoTable;
+        }
+
+        var found = await FindTableAsync(connection, schema, table, cancellationToken).ConfigureAwait(false);
+        if (found.Error is { } error)
+        {
+            return error;
+        }
+
+        var effective = Effective;
+        int timeout = TimeoutSeconds(effective);
+        var catalog = await Server.RunAsync(connection, PostgresProfile.Catalog, [new("schema", found.Schema), new("name", found.Name)], PostgresAccess.MaxCatalogRows, timeout, cancellationToken).ConfigureAwait(false);
+        if (catalog.Outcome != SqlOutcome.Ok)
+        {
+            return PostgresText.Error(catalog);
+        }
+
+        // name, type, category, type name; then reltuples
+        var all = catalog.Grids.Count > 0 ? catalog.Grids[0].Rows.Select(r => new ProfileColumn(r[0], r[1], PostgresProfile.Measure(r[2], r[3]))).ToList() : [];
+        long? estimate = catalog.Grids.Count > 1 ? TableProfile.Whole(catalog.Grids[1].Rows.FirstOrDefault()?[0]) : null;
+        var dialect = PostgresProfile.Instance;
+        var request = new TableProfile.Request(found.Schema + "." + found.Name, dialect.Quote(found.Schema) + "." + dialect.Quote(found.Name), found.Kind, all, columns, top,
+            estimate, timeout, Math.Min(QueryPlan.MaxAnswerChars, SqlTool.ResultChars(effective)), PostgresDescribeTool.ToolName, StringComparison.OrdinalIgnoreCase);
+        return await TableProfile.RunAsync(request, dialect,
+            (statements, seconds, token) => Server.RunAsync(connection, statements, [], PostgresAccess.MaxCatalogRows, seconds, token),
+            PostgresText.Error, cancellationToken).ConfigureAwait(false);
+    }
+
+    protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+        if (ProfileArguments.Read(arguments, out var columns, out int top) is { } refused)
+        {
+            return refused;
+        }
+
+        return await ProfileAsync(ToolArguments.ReadString(arguments, TableArgument), Optional(arguments, ConnectionArgument), Optional(arguments, SchemaArgument), columns, top, cancellationToken).ConfigureAwait(false);
     }
 }
 

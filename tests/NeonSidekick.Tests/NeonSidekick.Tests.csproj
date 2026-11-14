@@ -80,6 +80,9 @@
     <!-- The metasearch's pages, real ones from 2026-11-06 reduced to what the engines parse, and what SearXNG's own code did
          with them (SearXNG/GoldenTests.cs; tools/searxng regenerates that from the saved pages, and fetches nothing). -->
     <None Include="Fixtures\searxng\**\*" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Query plans (2026-11-14, the database-tools plan's #12): each server's EXPLAIN output as the explain tools read it, captured from the
+         test containers (SQL Server's showplan XML, PostgreSQL's, MySQL's and MariaDB's JSON) and from DuckDB in process. -->
+    <None Include="Fixtures\plans\*.*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

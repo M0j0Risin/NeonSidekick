@@ -288,7 +288,7 @@ public sealed class PostgresExecuteTests
     {
         var access = Access();
         var all = ChatScreen.PostgresTools(access, () => _settings);
-        Assert.Equal(9, all.Count);
+        Assert.Equal(11, all.Count);
         Assert.Contains(PostgresExecuteTool.ToolName, ChatScreen.PostgresToolNames);
         Assert.Contains(PostgresExecuteTool.ToolName, PlanTools.Mutating);
         Assert.False(PlanTools.Allowed(PostgresExecuteTool.ToolName));
@@ -304,7 +304,7 @@ public sealed class PostgresExecuteTests
         Assert.DoesNotContain(PostgresExecuteTool.ToolName, Names(pane: true));   // no readwrite connection offered
         _settings.PostgresConnectionsOffered = ["shop", "ro"];
         _settings.PostgresMode = "read-only";
-        Assert.Equal(8, Names(pane: true).Count());
+        Assert.Equal(10, Names(pane: true).Count());
         Assert.Equal(ServerWrites.None, ChatScreen.ServerWritesOf(ChatScreen.PostgresToolsFor(all, _settings, true, access.Catalog())));
     }
 

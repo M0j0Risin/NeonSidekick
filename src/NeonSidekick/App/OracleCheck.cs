@@ -74,12 +74,14 @@ internal static class OracleCheck
         var passed = bypasses.Where(b => OracleReadOnlyGate.Check(b) is null).ToList();
         checks.Add(new SmokeCheck("oracle:gate", passed.Count == 0, passed.Count == 0 ? $"refused all {bypasses.Length.ToString(CultureInfo.InvariantCulture)} bypasses" : "let through: " + string.Join(" | ", passed)));
 
-        string place = OracleAccess.Place(target.Config);
+        // Every run checks the listed schemas (2026-11-14, #18), so the connect above already refused a missing or Oracle-maintained one.
+        var places = OracleAccess.Places(target.Config);
+        checks.Add(new SmokeCheck("oracle:schemas", true, places.Count == 1 ? $"works in schema {places[0]}" : $"works in schemas {OracleAccess.PlaceText(target.Config)} ({places[0]} current), each found and none Oracle's own"));
         var names = await access.RunAsync(name, [OracleBoundary.Names], [], OracleBoundary.MaxNames, timeoutSeconds, cancellationToken).ConfigureAwait(false);
-        checks.Add(BoundaryCheck(place, names));
+        checks.Add(BoundaryCheck(places, names));
         var reach = await access.RunAsync(name, OracleCatalogQueries.Reach, [], 100, timeoutSeconds, cancellationToken).ConfigureAwait(false);
         checks.Add(new SmokeCheck("oracle:reach", reach.Outcome == SqlOutcome.Ok, reach.Outcome == SqlOutcome.Ok
-            ? OracleText.Reach(place, Column(reach, 0), Column(reach, 1))
+            ? OracleText.Reach(OracleAccess.PlaceText(target.Config), Column(reach, 0), Column(reach, 1))
             : OracleText.Error(reach)));
 
         var locked = await Run(["SELECT dummy FROM sys.dual FOR UPDATE"], timeoutSeconds, cancellationToken).ConfigureAwait(false);
@@ -115,9 +117,10 @@ internal static class OracleCheck
 
     /// <summary>
     /// The lock's line, over the users the database lists: the dictionary's views of the whole database, SYS and another user (when
-    /// there is one) refused; the schema's own written out, an alias, a sequence's NEXTVAL and a column that only looks like a view passed.
+    /// there is one) refused; each listed schema's own written out (#18), an alias, a sequence's NEXTVAL and a column that only looks like a
+    /// view passed.
     /// </summary>
-    private static SmokeCheck BoundaryCheck(string place, SqlRun names)
+    private static SmokeCheck BoundaryCheck(IReadOnlyList<string> places, SqlRun names)
     {
         if (names.Outcome != SqlOutcome.Ok)
         {
@@ -126,17 +129,17 @@ internal static class OracleCheck
 
         var rows = names.Grids.FirstOrDefault()?.Rows ?? [];
         var outside = new List<string> { "SELECT * FROM all_tables", "SELECT * FROM v$session", "SELECT * FROM dba_users", "SELECT * FROM sys.obj$" };
-        if (rows.FirstOrDefault(r => r[0] == OracleBoundary.UserKind && r[1] != place && r[1] != "SYS") is { } other)
+        if (rows.FirstOrDefault(r => r[0] == OracleBoundary.UserKind && !places.Contains(r[1]) && r[1] != "SYS") is { } other)
         {
             outside.Add($"SELECT 1 FROM \"{other[1]}\".t");
         }
 
-        string[] inside = [$"SELECT * FROM \"{place}\".t", "SELECT e.id FROM t e", "SELECT s.NEXTVAL FROM dual", "SELECT * FROM user_tables", "SELECT c.dba_name FROM t c"];
-        var passed = outside.Where(s => OracleBoundary.Check(s, place, rows) is null).ToList();
-        var refused = inside.Where(s => OracleBoundary.Check(s, place, rows) is not null).ToList();
+        string[] inside = [.. places.Select(p => $"SELECT * FROM \"{p}\".t"), "SELECT e.id FROM t e", "SELECT s.NEXTVAL FROM dual", "SELECT * FROM user_tables", "SELECT c.dba_name FROM t c"];
+        var passed = outside.Where(s => OracleBoundary.Check(s, places, rows) is null).ToList();
+        var refused = inside.Where(s => OracleBoundary.Check(s, places, rows) is not null).ToList();
         bool ok = passed.Count == 0 && refused.Count == 0;
         return new SmokeCheck("oracle:boundary", ok, ok
-            ? $"held to schema {place}: refused all {outside.Count.ToString(CultureInfo.InvariantCulture)} reaches outside it"
+            ? $"held to {(places.Count == 1 ? "schema " + places[0] : "schemas " + string.Join(", ", places))}: refused all {outside.Count.ToString(CultureInfo.InvariantCulture)} reaches outside {(places.Count == 1 ? "it" : "them")}"
             : (passed.Count > 0 ? "let through: " + string.Join(" | ", passed) : "") + (refused.Count > 0 ? " refused: " + string.Join(" | ", refused) : ""));
     }
 

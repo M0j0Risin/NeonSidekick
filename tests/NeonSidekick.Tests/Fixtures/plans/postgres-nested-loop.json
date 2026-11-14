@@ -1,0 +1,63 @@
+[
+  {
+    "Plan": {
+      "Node Type": "Nested Loop",
+      "Parallel Aware": false,
+      "Async Capable": false,
+      "Join Type": "Inner",
+      "Startup Cost": 0.00,
+      "Total Cost": 17503310.50,
+      "Plan Rows": 333333333,
+      "Plan Width": 24,
+      "Inner Unique": false,
+      "Join Filter": "(o.total < (c.id)::numeric)",
+      "Plans": [
+        {
+          "Node Type": "Seq Scan",
+          "Parent Relationship": "Outer",
+          "Parallel Aware": false,
+          "Async Capable": false,
+          "Relation Name": "big_orders",
+          "Alias": "o",
+          "Startup Cost": 0.00,
+          "Total Cost": 3216.00,
+          "Plan Rows": 200000,
+          "Plan Width": 15
+        },
+        {
+          "Node Type": "Materialize",
+          "Parent Relationship": "Inner",
+          "Parallel Aware": false,
+          "Async Capable": false,
+          "Startup Cost": 0.00,
+          "Total Cost": 107.00,
+          "Plan Rows": 5000,
+          "Plan Width": 9,
+          "Plans": [
+            {
+              "Node Type": "Seq Scan",
+              "Parent Relationship": "Outer",
+              "Parallel Aware": false,
+              "Async Capable": false,
+              "Relation Name": "small_customers",
+              "Alias": "c",
+              "Startup Cost": 0.00,
+              "Total Cost": 82.00,
+              "Plan Rows": 5000,
+              "Plan Width": 9
+            }
+          ]
+        }
+      ]
+    },
+    "JIT": {
+      "Functions": 6,
+      "Options": {
+        "Inlining": true,
+        "Optimization": true,
+        "Expressions": true,
+        "Deforming": true
+      }
+    }
+  }
+]

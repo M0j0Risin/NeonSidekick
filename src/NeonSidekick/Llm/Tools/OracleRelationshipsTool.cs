@@ -37,6 +37,7 @@ public sealed class OracleRelationshipsTool : OracleTool
     public async Task<string> DescribeAsync(string? connection, string? table, CancellationToken cancellationToken)
     {
         string? tableName = null;
+        string? tableOwner = null;
         string? label = null;
         if (table is not null)
         {
@@ -47,10 +48,11 @@ public sealed class OracleRelationshipsTool : OracleTool
             }
 
             tableName = match.Name;
+            tableOwner = match.Owner;   // a listed schema's table (2026-11-14, #18), not the current one's of that name
             label = match.Owner + "." + match.Name;
         }
 
-        var run = await CatalogAsync(connection, [OracleCatalogQueries.Relationships], [new SqlParameterValue("name", tableName)], cancellationToken).ConfigureAwait(false);
+        var run = await CatalogAsync(connection, [OracleCatalogQueries.Relationships], [new SqlParameterValue("name", tableName), new SqlParameterValue("owner", tableOwner)], cancellationToken).ConfigureAwait(false);
         return run.Outcome == SqlOutcome.Ok ? OracleText.Relationships(label, run, Files.WorkingDirectory.MaxReadChars) : OracleText.Error(run);
     }
 

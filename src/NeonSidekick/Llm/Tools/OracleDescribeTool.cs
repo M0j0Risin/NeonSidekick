@@ -20,7 +20,7 @@ public sealed class OracleDescribeTool : OracleTool
         {
           "type": "object",
           "properties": {
-            "table": { "type": "string", "description": "The table or view's name (EMPLOYEES), or SCHEMA.NAME with the connection's schema. Unquoted names are upper-cased, as Oracle does." },
+            "table": { "type": "string", "description": "The table or view's name (EMPLOYEES), or SCHEMA.NAME with one of the connection's schemas. Unquoted names are upper-cased, as Oracle does." },
             {{ConnectionProperty}}
           },
           "required": ["table"]

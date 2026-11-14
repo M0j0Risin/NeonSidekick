@@ -2,7 +2,7 @@ using System.Globalization;
 
 namespace NeonSidekick.Sql;
 
-/// <summary>The words of a query's export to a workbook (2026-10-29, the Office writing plan), shared by the six families.</summary>
+/// <summary>The words of a query's export to a file (2026-10-29, the Office writing plan; CSV and JSON too since 2026-11-14), shared by the six families.</summary>
 public static class SqlExportText
 {
     /// <summary>The sheet an export writes when none is named.</summary>
@@ -22,13 +22,17 @@ public static class SqlExportText
     /// A statement that ran but gave no rows to write (an <c>EXEC</c> with no result set; 2026-10-29, review P1-4: it made an empty file
     /// named as a saved workbook). Pinned.
     /// </summary>
-    public const string NoResultSet = "Error: the query returned no result set, so no workbook was written; to writes the rows a SELECT returns";
+    public const string NoResultSet = "Error: the query returned no result set, so no file was written; to writes the rows a SELECT returns";
+
+    /// <summary>A query's <c>to</c> ending in a type it doesn't write (2026-11-14, the database-tools plan's #13: it names the four). Pinned.</summary>
+    public static string WrongTarget(string to) =>
+        $"Error: '{to}' names another kind of file; to writes .xlsx, .csv, .json or .jsonl files, so end to in one of those or give a folder";
 
     /// <summary>A cell whose value the provider won't hand over in any form: its type said. Pinned.</summary>
     public static string Unreadable(string? typeName) => $"({(string.IsNullOrWhiteSpace(typeName) ? "a value" : typeName)} that can't be read)";
 
     /// <summary>The clause a cut chat query's "more exist" adds while a save root is open, so the model learns <c>to</c> when it helps.</summary>
-    public const string SaveHint = ", or write them all to a spreadsheet with to";
+    public const string SaveHint = ", or write them all to a file with to";
 
     /// <summary>The hint when <paramref name="canSave"/>, else nothing: the six families' cut sentences end with it.</summary>
     public static string Hint(bool canSave) => canSave ? SaveHint : "";
@@ -37,8 +41,9 @@ public static class SqlExportText
     /// An export's answer: the save sentence first (the transcript's note), the cut note when the call's own <c>max_rows</c> stopped it
     /// (<paramref name="given"/>; with none given the sheet stops at Excel's last row, which the save sentence says itself, 2026-10-29, review
     /// P2-4), then the columns and the first rows as the chat would show them. A refusal or a late close is the answer alone.
+    /// <paramref name="format"/> is a CSV or JSON file's (2026-11-14), whose empty result is worded for the file; null for a workbook.
     /// </summary>
-    public static string Answer(string saved, SqlGrid grid, int? given)
+    public static string Answer(string saved, SqlGrid grid, int? given, Office.TextTableFormat? format = null)
     {
         ArgumentNullException.ThrowIfNull(saved);
         ArgumentNullException.ThrowIfNull(grid);
@@ -50,7 +55,13 @@ public static class SqlExportText
         string cut = grid.More && given is { } maxRows ? $"; stopped at max_rows ({maxRows.ToString("N0", CultureInfo.InvariantCulture)}), so later rows are left out" : "";
         if (grid.Rows.Count == 0)
         {
-            return saved + cut + "\n\nNo rows: the sheet holds the header alone.";
+            return saved + cut + "\n\n" + format switch
+            {
+                Office.TextTableFormat.Csv => "No rows: the file holds the header alone.",
+                Office.TextTableFormat.Json => "No rows: the file holds an empty array.",
+                Office.TextTableFormat.JsonLines => "No rows, so the file is empty.",
+                _ => "No rows: the sheet holds the header alone.",
+            };
         }
 
         string table = SqlText.Table(grid, PreviewChars, out _);

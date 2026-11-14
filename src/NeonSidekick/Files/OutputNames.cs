@@ -110,4 +110,28 @@ public static class OutputNames
             || ending.Equals(".csv", StringComparison.OrdinalIgnoreCase) || ending.Equals(".tsv", StringComparison.OrdinalIgnoreCase);
         return known && !ending.Equals(extension, StringComparison.OrdinalIgnoreCase) ? Office.OfficeText.WrongTarget(target, extension) : null;
     }
+
+    /// <summary>The files a query's <c>to</c> writes (2026-11-14, the database-tools plan's #13), in the refusal's order.</summary>
+    public static readonly IReadOnlyList<string> QueryKinds = [".xlsx", ".csv", ".json", ".jsonl"];
+
+    /// <summary>
+    /// <see cref="Refusal"/> for a query's <c>to</c> (2026-11-14, the database-tools plan's #13): a CSV or JSON name is the query's own, any
+    /// other document type the app knows (<c>.docx</c>, <c>.pdf</c>, <c>.tsv</c>) is refused naming the four kinds rather than renamed, and the
+    /// <c>~$</c> prefix is refused for every kind. The extension is matched in any case. Null when the name is fine or a folder.
+    /// </summary>
+    public static string? QueryRefusal(string? to, Func<string, bool> isFolder)
+    {
+        ArgumentNullException.ThrowIfNull(isFolder);
+        string target = (to ?? "").Trim();
+        if (IntoFolder(target, isFolder))
+        {
+            return null;
+        }
+
+        string ending = Path.GetExtension(target);
+        bool query = QueryKinds.Any(k => ending.Equals(k, StringComparison.OrdinalIgnoreCase));
+        string? refused = Refusal(target, query ? ending : ".xlsx", isFolder);
+        return refused is null || refused.StartsWith(Office.OfficeText.ReservedName(target), StringComparison.Ordinal) ? refused
+            : Sql.SqlExportText.WrongTarget(target);
+    }
 }

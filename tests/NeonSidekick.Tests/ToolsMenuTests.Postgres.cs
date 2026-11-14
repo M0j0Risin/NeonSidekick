@@ -30,7 +30,13 @@ public partial class ToolsMenuTests
     {
         string path = PostgresConfigFile.ProfilePath(_settings.ProfileDirectory);
         var tested = new List<PostgresNamedConnection>();
+        var listed = new List<PostgresNamedConnection>();
         var (menu, _, settings) = PaneMenu();
+        settings.ListPostgresSchemas = (c, _) =>
+        {
+            listed.Add(c);
+            return Task.FromResult(new SqlRun(SqlOutcome.Ok, "", c.Name, "shop", [new SqlGrid(["nspname"], [["public"], ["sales"], ["has space"]], false)], TimeSpan.Zero));
+        };
         settings.TestPostgresConnection = (c, _) =>
         {
             tested.Add(c);
@@ -44,12 +50,13 @@ public partial class ToolsMenuTests
         Type("localhost");
         Type("5433");
         Type("shop");
-        Type("sales");                            // the schema lock (2026-10-09)
         Type("postgres");
         Push(Keys.Enter);                         // file
         Type("s3cret");
         Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // require: from verify-full, where the pick starts since 2026-10-24 (DB1), round to required
         Push(Keys.Enter);                         // the default timeout
+        Push(Keys.Down, Keys.Enter);              // the schema lock (2026-10-09; a checklist since 2026-11-14): sales ticked
+        Push(Keys.Down, Keys.Enter);              // Continue (a name the options cannot carry is left off): one ticked, no order page
         Push(Keys.Down, Keys.Enter);              // readwrite (2026-10-05), while PostgreSQL mode is read-only
         Type("the sample shop");
         Push(Keys.Down, Keys.Down, Keys.Enter);   // Test
@@ -62,6 +69,11 @@ public partial class ToolsMenuTests
         var shop = Assert.Single(PostgresConfigFile.Load(path).Connections);
         Assert.Equal(("localhost", 5433, "shop", "sales", "postgres", "require"), (shop.Config.Host, shop.Config.Port, shop.Config.Database, shop.Config.Schema, shop.Config.User, shop.Config.SslMode));
         Assert.Equal("sales", Assert.Single(tested).Config.Schema);
+        Assert.Null(shop.Config.Schemas);                 // one ticked saves as "schema", as the file had it
+        var unlocked = Assert.Single(listed).Config;
+        Assert.Null(unlocked.Schema);                     // the listing runs with no lock, the typed password in it
+        Assert.Equal("s3cret", unlocked.Password);
+        Assert.DoesNotContain("has space", Output);
         Assert.Contains("The role could also connect to postgres; use the schemas public.", Output);
         Assert.Equal("The role could also connect to postgres; use the schemas public. The tools keep to shop.sales; a role granted only it is the lock the server keeps too.",
             PostgresText.Reach("shop", "sales", ["postgres"], [], ["public"]));

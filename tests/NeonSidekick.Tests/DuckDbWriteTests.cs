@@ -357,7 +357,7 @@ public sealed class DuckDbExecuteTests : IDisposable
         Assert.DoesNotContain(DuckDbExecuteTool.ToolName, ChatScreen.DuckDbToolsFor(all, _settings, pane: true).Select(t => t.Name));
         _settings.DuckDbStatementsAllowed = ["data"];
         _settings.DuckDbMode = "read-only";
-        Assert.Equal([DuckDbDatabasesTool.ToolName, DuckDbTablesTool.ToolName, DuckDbDescribeTool.ToolName, DuckDbQueryTool.ToolName], ChatScreen.DuckDbToolsFor(all, _settings, pane: true).Select(t => t.Name));
+        Assert.Equal([DuckDbDatabasesTool.ToolName, DuckDbTablesTool.ToolName, DuckDbDescribeTool.ToolName, DuckDbQueryTool.ToolName, DuckDbExplainTool.ToolName, DuckDbProfileTool.ToolName], ChatScreen.DuckDbToolsFor(all, _settings, pane: true).Select(t => t.Name));
     }
 
     [Fact]
