@@ -687,7 +687,7 @@ The page is plain HTTP. Tailscale Serve puts HTTPS in front of it with a real ce
 
 #### Voice
 
-With *Web UI voice* on, the Chat tab talks both ways. The PC readies its voice models for the page, whatever *TTS output* and *STT input* say.
+With *Web UI voice* on, the Chat tab talks both ways. While the tab is on, the PC readies its voice models for the page, whatever *TTS output* and *STT input* say.
 
 * **🎤** listens until you stop talking; a second tap sends at once, and Cancel (or Esc on a desktop) drops it. It needs the HTTPS address ([HTTPS through Tailscale Serve](#https-through-tailscale-serve)).
 * **What you said** goes where *STT destination* says: sent as a message (never a command), or put in this page's box.
@@ -758,7 +758,7 @@ With *Web UI commands* on (off by default), the page sends slash commands too. T
 | Run | Your [custom commands](COMMANDS.md#custom-commands), `/update notes`, `/new`, `/clear`, `/splash`, `/compact`, `/plan …` (`/plan ralph` too), `/mark <color>`, `/code-audit …`, `/claude`, `/advisor`, `/help <words>`, `/imagine`, `/loop …`, `/botchat …`, `/learn [<note>]`, `/test …`, `/pdf …`, `/docx …`, `/print <file\|reply>`, `/avatar <emoji>\|clear`, `/remember`, `/timer …`, `/rename <name>`, `/tts on\|off`, `/stt on\|off`, `/memory <mode>`, `/cwd`, `/model <id>`, `/reasoning <level>`, `/ha …` (not `stills` or `camera`), `/docker …`, `/shopping …`, `/prompts list\|save\|remove\|<n>`, `/browser save\|unsave`, `/msgclear`, `/undo [<n>]` | Their lines; the status row shows its spinner while it runs |
 | Pick | `/model`, `/reasoning`, `/rewind [<n>]`, `/plan open [--chat]` | A card with the choices, the one in use marked, a filter for a long list |
 | List | `/ha states`, `/docker logs`, `/eventlog …`, `/net …`, `/services …`, `/tasks …`, `/ad …`, `/code-audit open`, `/print`, `/print printers`, `/camera list`, `/screen list`, `/tree` (needs *File tools*), `/vault` (needs *Obsidian tools*), `/process`, `/comfy status`, `/comfy offered` | A card with the lines; Close |
-| Never | `/exit`, `/webui`, `/cmd`, `/profile`, `/plan edit`, `/cwd <path>`, `/sessions`, `/skills`, `/commands`, `/youtube` (bare and `list` point at the tab), `/video`, `/queue`, `/sampling`, `/server`, `/usage`, `/midi` | Refused: they run at the PC only |
+| Never | `/exit`, `/webui`, `/cmd`, `/profile`, `/plan edit`, `/cwd <path>`, `/sessions`, `/skills`, `/commands`, `/youtube` (bare and `list` point at the tab), `/video`, `/queue`, `/sampling`, `/server`, `/usage`, `/midi`, `/settings export\|import` | Refused: they run at the PC only |
 | Page | bare `/prompts` | Opens the 📣 sheet on its Prompts tab (📣 does too, even with *Web UI commands* off) |
 | Other | Every form that opens a pane or a window at the PC, and `/update`'s others, since installing happens at the PC (`/settings`, `/theme`, `/view`, `/prompts list --clear`, `/camera`, `/screen`, `/ha stills`, `/undo purge`…) | Refused, naming the form that works here when there is one |
 

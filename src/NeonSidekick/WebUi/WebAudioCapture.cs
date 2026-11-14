@@ -81,8 +81,12 @@ internal sealed class WebAudioCapture : IAudioCapture
     /// <summary>3 s with no chunk once one has come. Raised once, from a timer thread.</summary>
     public event Action? Stalled;
 
-    /// <summary>Raised once when the capture stops (the pipeline's end, a cancel, a dispose): the owner tells the page to stop recording.</summary>
-    public event Action? Stopped;
+    /// <summary>
+    /// Raised once, by the call that opened the gate (never after a stop), on the pipeline's thread and outside the capture's lock: the
+    /// listen really runs now (2026-11-14, the review's #13/#17: a botchat's bots are held from here, so a listen refused before it
+    /// started cuts no bot short). A handler that throws is logged.
+    /// </summary>
+    public event Action? Started;
 
     /// <summary>The chunks taken so far.</summary>
     public long Delivered
@@ -161,30 +165,25 @@ internal sealed class WebAudioCapture : IAudioCapture
 
             _early.Clear();
         }
+
+        try
+        {
+            Started?.Invoke();
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            DiagnosticLog.Error(Category, "A Web UI listen's start handler failed: " + e.Message, e);
+        }
     }
 
     public void Stop()
     {
-        bool first;
         lock (_gate)
         {
-            first = !_stopped;
             _stopped = true;
             _early.Clear();
             _stall?.Dispose();
             _stall = null;
-        }
-
-        if (first)
-        {
-            try
-            {
-                Stopped?.Invoke();
-            }
-            catch (Exception e) when (e is not OutOfMemoryException)
-            {
-                DiagnosticLog.Error(Category, "A Web UI listen's stop handler failed: " + e.Message, e);
-            }
         }
     }
 

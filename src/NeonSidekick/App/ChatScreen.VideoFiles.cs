@@ -184,7 +184,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>A control tool for <c>/video</c>'s own use, with the hand-off and the pointer the model's read, its answers worded for the user.</summary>
     private VideoControlTool VideoControlToolFor() =>
-        new(_routedVideo, _time, FileHandoffName, () => FilePlayTarget().Kind, () => "/youtube", forUser: true);
+        new(_routedVideo, _time, FileHandoffName, () => FilePlayTarget().Kind, () => YouTubeCommand.Word, forUser: true);
 
     /// <summary>
     /// The video file tools (2026-11-12): <c>play_video</c> and <c>video_control</c>, offered on the interactive screen while <i>Video

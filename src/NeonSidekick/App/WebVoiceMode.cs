@@ -9,19 +9,19 @@ namespace NeonSidekick.App;
 /// </summary>
 internal static class WebVoiceMode
 {
-    /// <summary>Whether the sessions load the voice models for the page: <see cref="AppSettingsData.WebUi"/> and <see cref="AppSettingsData.WebUiVoice"/> both on.</summary>
+    /// <summary>
+    /// Whether the sessions load the voice models for the page: <see cref="AppSettingsData.WebUi"/>, <see cref="AppSettingsData.WebUiVoice"/>
+    /// and the Chat tab (<see cref="AppSettingsData.WebUiChatControls"/>) all on. The Chat tab since 2026-11-14 (the user's call on the review's
+    /// #43): with it off the page has no 🎤 or 🔊, so nothing is loaded for it.
+    /// </summary>
     public static bool Wanted(AppSettingsData effective)
     {
         ArgumentNullException.ThrowIfNull(effective);
-        return effective.WebUi && effective.WebUiVoice;
+        return effective.WebUi && effective.WebUiVoice && effective.WebUiChatControls;
     }
 
-    /// <summary>Whether the page shows 🎤 and 🔊 and the voice endpoints answer: <see cref="Wanted"/> and the Chat tab on.</summary>
-    public static bool Offered(AppSettingsData effective)
-    {
-        ArgumentNullException.ThrowIfNull(effective);
-        return Wanted(effective) && effective.WebUiChatControls;
-    }
+    /// <summary>Whether the page shows 🎤 and 🔊 and the voice endpoints answer: the same rule as <see cref="Wanted"/> (2026-11-14), kept by its name.</summary>
+    public static bool Offered(AppSettingsData effective) => Wanted(effective);
 }
 
 /// <summary>A page a line or a dispatch came from, with its 🔊 as the line carried it (2026-11-13, the webui-voice plan).</summary>

@@ -189,6 +189,22 @@ public sealed class DockerServerTests : IDisposable
         Assert.True((await Switch("vllm_d")).Ok);
     }
 
+    /// <summary>A holder restarting lists no ports; its inspect's bindings still name it (2026-11-14, the review's #33).</summary>
+    [Fact]
+    public async Task SideBySide_ATargetOnAPortARestartingOneHolds_NamesTheHolder()
+    {
+        _settings.DockerServerOneAtATime = false;
+        _engine.Add("vllm_d", "exited", "vllm/vllm-openai:latest", 30000);
+        _engine.Set("sglang_a", "restarting");
+        _settings.DockerServerContainers = ["sglang_a", "vllm_b", "paused_c", "vllm_d"];
+
+        var result = await Switch("vllm_d");
+
+        Assert.False(result.Ok);
+        Assert.Equal(DockerServerText.PortTaken("vllm_d", 30000, "sglang_a"), result.Error);
+        Assert.Empty(Acts());
+    }
+
     [Fact]
     public async Task ALoadThatFails_WithEitherSettingOff_HintsAtTheModelsBesideIt_BeforeItsLastLines()
     {

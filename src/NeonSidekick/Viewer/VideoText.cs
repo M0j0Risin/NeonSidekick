@@ -76,6 +76,18 @@ public static class VideoText
     public static string FileRouteLogLine(string setting, string? name, string target, string? note) =>
         $"Video files play in {setting}: {name} to {target}" + (note is null ? "." : " (" + note.Trim() + ")");
 
+    /// <summary>The menu hint for a <i>Video files play in</i> choice, with its fallback (2026-11-14, the review's #37: moved here from the setting).</summary>
+    public static string PlayInHint(string name) => name switch
+    {
+        VideoFilesPlayIn.VideoWindow => "video files play in the app's video window, else in their default app",
+        VideoFilesPlayIn.WebUiWindow => "video files play in the Web UI's Video tab while it is on, else in the video window",
+        VideoFilesPlayIn.DefaultApp => "video files open in their default app, out of the model's control",
+        _ => "",
+    };
+
+    /// <summary>A file play whose route refused it outright (2026-11-14, the review's #47: born here, not inline): the route's own words.</summary>
+    public static string RouteFailed(string detail) => "Error: " + detail;
+
     /// <summary>The log line for a file the sink refused (the exception's text, which the answer never shows): its default app has it.</summary>
     public static string FileRouteFailedLogLine(string? name, string target, string reason) =>
         $"{name} could not play in {target} ({reason}); its default app has it.";

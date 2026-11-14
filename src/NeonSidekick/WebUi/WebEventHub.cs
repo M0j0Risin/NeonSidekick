@@ -87,6 +87,23 @@ public sealed class WebEventHub
     }
 
     /// <summary>
+    /// The run <paramref name="page"/>'s open stream came from, or null with none (2026-11-14, the review's #52: a voice entry made after
+    /// the page joined learns its run here). One stream per page id, a duplicated tab getting a fresh id, so the answer is the one run.
+    /// </summary>
+    public string? LoadOf(string? page)
+    {
+        if (page is null)
+        {
+            return null;
+        }
+
+        lock (_gate)
+        {
+            return _subscribers.Find(s => s.Page == page)?.Load;
+        }
+    }
+
+    /// <summary>
     /// A new subscription; dispose it when the page's stream ends. <paramref name="page"/> and <paramref name="load"/> must have the id shape
     /// (<see cref="WebVideoPlayer.IsId"/>) to count; otherwise the subscriber gets broadcasts only.
     /// </summary>

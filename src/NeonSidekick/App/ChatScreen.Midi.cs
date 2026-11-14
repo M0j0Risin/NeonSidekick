@@ -31,7 +31,8 @@ internal sealed partial class ChatScreen
         }
 
         _midi = new MidiBoard(system, OnMidiLine, notice => _webUi.Notice(notice, error: true), time);
-        _settings.Changed += saved => _midi?.Apply(saved.MidiInput, _settings.ProfileDirectory);
+        // The effective settings, as StartMidi reads them (2026-11-14, the review's #45: no override of MIDI input exists today).
+        _settings.Changed += _ => _midi?.Apply(_effective().MidiInput, _settings.ProfileDirectory);
         _keys.MidiTaken = line => _pane.Flash(MidiText.Ran(line));
     }
 
@@ -118,6 +119,12 @@ internal sealed partial class ChatScreen
                 return;
             case MidiVerb.Forget:
                 var set = new MidiBindings(_settings.ProfileDirectory).Load();
+                if (MidiText.FileProblem(set.State) is { } problem)
+                {
+                    sink.Error(problem);   // a broken or newer file named, never "no bindings" (2026-11-14, the review's #59)
+                    return;
+                }
+
                 if (parsed.Number < 1 || parsed.Number > set.Bindings.Count)
                 {
                     sink.Error(MidiText.ForgetUsage(set.Bindings.Count));
@@ -125,7 +132,7 @@ internal sealed partial class ChatScreen
                 }
 
                 var binding = set.Bindings[parsed.Number - 1];
-                switch (new MidiBindings(_settings.ProfileDirectory).Remove(parsed.Number - 1))
+                switch (new MidiBindings(_settings.ProfileDirectory).Forget(parsed.Number - 1))
                 {
                     case MidiSaveOutcome.Saved:
                         board.Reload();
@@ -133,6 +140,9 @@ internal sealed partial class ChatScreen
                         break;
                     case MidiSaveOutcome.Newer:
                         sink.Error(MidiText.NewerFile);
+                        break;
+                    case MidiSaveOutcome.Gone:
+                        sink.Error(MidiText.ChangedOnDisk);
                         break;
                     default:
                         sink.Error(MidiText.SaveFailed);

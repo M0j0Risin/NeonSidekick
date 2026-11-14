@@ -36,7 +36,10 @@ public partial class ChatScreenTests
         [.. seen.Where(e => e.Name == "voice").Select(e => JsonSerializer.Deserialize(e.Json.Value, WebUiJsonContext.Default.WebVoicePhase)!)];
 
     /// <summary>Waits for the PC's models, starts a listen from the page, sends one chunk, and waits for the listen's end on the page's stream.</summary>
-    private List<WebVoicePhase> ListenFromThePhone()
+    private List<WebVoicePhase> ListenFromThePhone() => ListenFromThePhoneUntil();
+
+    /// <summary><see cref="ListenFromThePhone"/>, also ending at <paramref name="alsoEnd"/> when given (a canceled listen).</summary>
+    private List<WebVoicePhase> ListenFromThePhoneUntil(string? alsoEnd = null)
     {
         Assert.True(SpinWait.SpinUntil(() => Web.Snapshot().State.VoiceListen == "", TimeSpan.FromSeconds(20)), "the voice models never got ready");
         var voice = Web.Voice!;
@@ -56,7 +59,7 @@ public partial class ChatScreenTests
                 seen.Add(item);
             }
 
-            return VoicePhasesOf(seen).Any(p => p.Phase is "sent" or "heard" or "failed" or "nothing");
+            return VoicePhasesOf(seen).Any(p => p.Phase is "sent" or "heard" or "failed" or "nothing" || p.Phase == alsoEnd);
         }, TimeSpan.FromSeconds(20)), "the listen never ended");
         return VoicePhasesOf(seen);
     }
@@ -119,6 +122,90 @@ public partial class ChatScreenTests
 
         var heard = Assert.Single(phases!, p => p.Phase == "heard");
         Assert.Equal("buy milk", heard.Text);
+        Assert.Empty(_chat.Requests);
+    }
+
+    /// <summary>
+    /// A page that joined while voice was off (2026-11-14, the review's #52): its entry, made at the listen, still learns the stream's run,
+    /// so the 3 s stall rule ends a listen whose chunks stopped, rather than leaving it to run on.
+    /// </summary>
+    [Fact]
+    public async Task APageThatJoinedBeforeVoiceWasOn_StillHasItsStalledListenFinished()
+    {
+        WebVoiceOn();
+        _recognizer.Text = "after the stall";
+        _chat.EnqueueText("Heard you.");
+        var phases = new List<WebVoicePhase>();
+        var input = WhenIdle(
+            _ =>
+            {
+                Assert.True(SpinWait.SpinUntil(() => Web.Snapshot().State.VoiceListen == "", TimeSpan.FromSeconds(20)), "the voice models never got ready");
+                _settings.Update(d => d.WebUiVoice = false);
+                var seen = new List<WebEvent>();
+                using var stream = Web.Events.Subscribe(PhonePage, PhoneLoad);   // joined with voice off: no entry made
+                _settings.Update(d => d.WebUiVoice = true);
+                var voice = Web.Voice!;
+                Assert.Equal(WebOutcome.Ok, voice.Start(new WebVoiceStart { Page = PhonePage, Listen = PhoneListen }, IPAddress.Loopback).Outcome);
+                Assert.Equal(WebOutcome.Ok, voice.Chunk(new WebVoiceChunk { Page = PhonePage, Listen = PhoneListen, Seq = 0, Pcm = Convert.ToBase64String(new byte[3200]) }, IPAddress.Loopback).Outcome);
+                Assert.True(SpinWait.SpinUntil(() =>
+                {
+                    while (stream.Reader.TryRead(out var item))
+                    {
+                        seen.Add(item);
+                    }
+
+                    if (VoicePhasesOf(seen).Any(p => p.Phase is "sent" or "heard" or "failed" or "nothing" or "canceled"))
+                    {
+                        return true;
+                    }
+
+                    _time.Advance(TimeSpan.FromSeconds(1));   // the stall timer runs on the screen's clock; the chunks have stopped
+                    Thread.Sleep(50);
+                    return false;
+                }, TimeSpan.FromSeconds(15)), "the stalled listen never finished");
+                phases.AddRange(VoicePhasesOf(seen));
+            },
+            i => PushLine(i, "/exit"));
+
+        await RunAsync(input);
+
+        Assert.Equal("sent", phases[^1].Phase);
+        Assert.Equal("after the stall", LastUser(_chat.Requests[0]));
+    }
+
+    /// <summary>
+    /// Web UI voice turned off while Whisper ran, and Whisper answered anyway (2026-11-14, the review's #12): the canceled listen sends
+    /// nothing and ends as canceled.
+    /// </summary>
+    [Fact]
+    public async Task ACancelThatLosesTheRaceWithWhisper_SendsNothing()
+    {
+        WebVoiceOn();
+        _recognizer.Text = "too late";
+        _recognizer.IgnoreCancellation = true;
+        _recognizer.OnTranscribe = async (_, ct) =>
+        {
+            _settings.Update(d => d.WebUiVoice = false);
+            for (int i = 0; i < 200 && !ct.IsCancellationRequested; i++)
+            {
+                _time.Advance(TimeSpan.FromSeconds(1));   // the session's tick sees voice off and stops the pages' voice
+                await Task.Delay(25, CancellationToken.None);
+            }
+
+            Assert.True(ct.IsCancellationRequested);
+        };
+        List<WebVoicePhase>? phases = null;
+        var input = WhenIdle(
+            i =>
+            {
+                phases = ListenFromThePhoneUntil("canceled");
+                PushLine(i, "/exit");
+            });
+
+        await RunAsync(input);
+
+        Assert.Equal("canceled", phases![^1].Phase);
+        Assert.DoesNotContain(phases!, p => p.Phase is "sent" or "heard");
         Assert.Empty(_chat.Requests);
     }
 

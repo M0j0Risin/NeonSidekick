@@ -52,6 +52,7 @@ internal sealed class MidiMenu
     public async Task ShowAsync(bool learn, string? command, CancellationToken cancellationToken)
     {
         using var hold = _board.Hold();
+        _board.Reload();   // a hand edit since the board last read the file is shown (2026-11-14, the review's #9); it redraws as it lands
         if (learn)
         {
             await LearnAsync(null, command, cancellationToken).ConfigureAwait(false);
@@ -131,7 +132,7 @@ internal sealed class MidiMenu
             var binding = set.Bindings[index];
             if (pick.Button == Relearn)
             {
-                await LearnAsync(index, binding.Command, cancellationToken).ConfigureAwait(false);
+                await LearnAsync(binding, binding.Command, cancellationToken).ConfigureAwait(false);
                 continue;
             }
 
@@ -139,7 +140,7 @@ internal sealed class MidiMenu
             {
                 if (await _confirm(MidiText.RemoveQuestion(binding), cancellationToken).ConfigureAwait(false))
                 {
-                    Said(File.Remove(index), MidiText.Removed(binding));
+                    Said(File.Remove(binding), MidiText.Removed(binding));
                 }
 
                 continue;
@@ -151,7 +152,7 @@ internal sealed class MidiMenu
                 if (await ArgsAsync(page with { Title = MidiText.ArgsTitle(binding.Trigger) }, pick.Row, binding.Command, cancellationToken).ConfigureAwait(false) is { } edited
                     && !string.Equals(edited, binding.Command, StringComparison.Ordinal))
                 {
-                    Said(File.SetCommand(index, edited), MidiText.Bound(binding with { Command = edited }));
+                    Said(File.SetCommand(binding, edited), MidiText.Bound(binding with { Command = edited }));
                 }
             }
         }
@@ -214,9 +215,10 @@ internal sealed class MidiMenu
 
     /// <summary>
     /// The learn: a button heard, its command picked (or <paramref name="command"/> as given) and saved. For a relearn
-    /// (<paramref name="relearn"/> the binding's index) only its button changes. False when nothing was saved.
+    /// (<paramref name="relearn"/> the binding shown, found again by its button: 2026-11-14, the review's #9) only its button changes. False
+    /// when nothing was saved.
     /// </summary>
-    private async Task<bool> LearnAsync(int? relearn, string? command, CancellationToken cancellationToken)
+    private async Task<bool> LearnAsync(MidiBinding? relearn, string? command, CancellationToken cancellationToken)
     {
         if (await CaptureAsync(cancellationToken).ConfigureAwait(false) is not { } trigger)
         {
@@ -226,9 +228,9 @@ internal sealed class MidiMenu
 
         var set = _board.Bindings;
         var existing = set.Find(trigger);
-        if (relearn is { } index)
+        if (relearn is not null)
         {
-            if (existing is not null && index < set.Bindings.Count && !ReferenceEquals(existing, set.Bindings[index]))
+            if (existing is not null && !existing.Trigger.SameButton(relearn.Trigger))
             {
                 if (!await _confirm(MidiText.Replace(existing), cancellationToken).ConfigureAwait(false))
                 {
@@ -237,7 +239,8 @@ internal sealed class MidiMenu
                 }
             }
 
-            return Said(File.SetTrigger(index, trigger), MidiText.Bound(new MidiBinding(trigger, command ?? "")));
+            // By the shown binding's button, never its index (2026-11-14, the review's #9): a hand edit meanwhile can't move another.
+            return Said(File.SetTrigger(relearn, trigger), MidiText.Bound(new MidiBinding(trigger, command ?? "")));
         }
 
         if (existing is not null && !await _confirm(MidiText.Replace(existing), cancellationToken).ConfigureAwait(false))
@@ -381,6 +384,10 @@ internal sealed class MidiMenu
                 return true;
             case MidiSaveOutcome.Newer:
                 _pane.Error(MidiText.NewerFile);
+                return false;
+            case MidiSaveOutcome.Gone:
+                _pane.Error(MidiText.ChangedOnDisk);
+                _board.Reload();   // the pane shows the file as it is now
                 return false;
             default:
                 _pane.Error(MidiText.SaveFailed);

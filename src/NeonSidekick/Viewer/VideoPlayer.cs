@@ -339,9 +339,13 @@ public sealed record VideoSnapshot(
     public static VideoSnapshot Opening(VideoRequest request, VideoSound? sound) =>
         request.IsFile && sound is { } level ? Opening(request) with { Volume = level.Volume, Muted = level.Muted } : Opening(request);
 
-    /// <summary>The level a new file play carries over from <paramref name="replaced"/> (any kind); null with none.</summary>
+    /// <summary>
+    /// The level a new file play carries over from <paramref name="replaced"/> (any kind); null with none. A failed one's too (2026-11-14,
+    /// the review's #32: every failed snapshot keeps the level it had), and a mute the page forced for autoplay (<see cref="NeedsTap"/>) is
+    /// not the user's, so it never carries (#28).
+    /// </summary>
     public static VideoSound? SoundOf(VideoSnapshot? replaced) =>
-        replaced is null || replaced.State is VideoState.Failed ? null : new VideoSound(replaced.Volume, replaced.Muted);
+        replaced is null ? null : new VideoSound(replaced.Volume, replaced.Muted && !replaced.NeedsTap);
 }
 
 /// <summary>

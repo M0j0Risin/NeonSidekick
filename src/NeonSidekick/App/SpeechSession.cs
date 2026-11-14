@@ -49,6 +49,15 @@ internal sealed class SpeechSession : IDisposable
     /// <summary>Printed (as a Warning) when <see cref="BeginTurn"/> finds a speaker still owing audio: the screen should have stopped it at the input line.</summary>
     public const string TailSilencedWarning = "A new reply started while the last one was still playing; the tail was silenced.";
 
+    /// <summary>
+    /// The Debug line when a new speaker replaces a tail of another origin (2026-11-14, the review's #3): one speaker at a time is the
+    /// design, so a page's reply cutting the PC's tail (or the other way) is no warning. Pinned.
+    /// </summary>
+    public static string TailHandedOverLogLine(string? from, string? to) =>
+        $"A new reply on {Origin(to)} silenced the tail still playing on {Origin(from)}.";
+
+    private static string Origin(string? page) => page is null ? "the PC" : "page " + page;
+
     /// <summary>The detail after a connect cancelled by the caller (Ctrl+C under the spinner, 2026-09-17): what the status line and the TTS tab say until the next connect.</summary>
     public const string ConnectCancelledDetail = "canceled";
 
@@ -214,8 +223,14 @@ internal sealed class SpeechSession : IDisposable
         if (_synth is not null && Available && webWanted && WebVoiceWanted && SameVoice(effective))
         {
             // A PC switch flip (2026-11-13, the webui-voice plan): the synthesizer stays wanted and the same, so it stays, with a page's
-            // speaker on it; only the PC's switch changes.
+            // speaker on it; only the PC's switch changes. Switched off, a PC tail still playing stops, as the full path's stop would
+            // (2026-11-14, the review's #10: a page's /tts off came here and left the PC talking); a page's tail is the page's.
             Enabled = effective.TtsOutput;
+            if (!Enabled && Playing is { } tail && PlayingPage is null)
+            {
+                Stop(tail);
+            }
+
             return;
         }
 
@@ -423,7 +438,19 @@ internal sealed class SpeechSession : IDisposable
     {
         if (Playing is not null)
         {
-            DiagnosticLog.Warn(Category, TailSilencedWarning);
+            // The safety net warns only for a tail of the same origin (2026-11-14, the review's #3): a page's reply over the PC's tail,
+            // or the PC's over a page's, is one speaker at a time by design.
+            string? from = PlayingPage;
+            string? to = (owned as IPageAudio)?.Page;
+            if (from == to)
+            {
+                DiagnosticLog.Warn(Category, TailSilencedWarning);
+            }
+            else
+            {
+                DiagnosticLog.Debug(Category, TailHandedOverLogLine(from, to));
+            }
+
             Stop();
         }
 

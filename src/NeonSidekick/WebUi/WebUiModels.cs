@@ -542,10 +542,11 @@ public sealed record WebState(
 /// <summary>
 /// What a page gets on (re)connecting: the transcript, the open asks, the state, the app's words the page shows of its own, the drafts held for
 /// it, and the status row (2026-10-15). For one page's stream (2026-11-13, the webui-voice plan): <see cref="Page"/>, the id it is to use from now on
-/// (a duplicated tab's fresh one), heard text held for its box, and its speaker's clips so far.
+/// (a duplicated tab's fresh one), heard text held for its box, and its speaker's clips so far. <see cref="Listen"/> (2026-11-14, the review's #50):
+/// the id of its listen still running at the app, null with none, so a page whose listen ended while its stream was down ends it too.
 /// </summary>
 public sealed record WebSnapshot(IReadOnlyList<WebEntry> Entries, IReadOnlyList<WebAskView> Asks, WebState State, WebWords? Words = null, IReadOnlyList<string>? Drafts = null, WebStatus? Status = null, WebStrip? Strip = null, WebPoint? Point = null,
-    string? Page = null, WebHeard? Heard = null, WebSpeaking? Speaking = null);
+    string? Page = null, WebHeard? Heard = null, WebSpeaking? Speaking = null, string? Listen = null);
 
 /// <summary>
 /// The PC's picture strip as the page's drawer shows it (later on 2026-10-15): its ComfyUI pictures newest first and the one the PC has

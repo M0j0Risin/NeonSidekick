@@ -212,18 +212,19 @@ internal sealed partial class ChatScreen
 
         string root = _settings.ProfileImagesDirectory;
         var images = new WorkingDirectory(() => root, _time, WorkingDirectoryOptions.Images);
-        _ = RunHomeCameraAsync(reference, name, id, fetch, images, generation, _homeCameras.Token);
+        _ = RunHomeCameraAsync(reference, name, id, fetch, images, generation, comingLine, _homeCameras.Token);
         return true;
     }
 
-    private async Task RunHomeCameraAsync(string reference, string name, string id, Task<HomeCameraStill> fetch, WorkingDirectory images, int generation, CancellationToken token)
+    /// <summary>The fetch's wait, save and notice. <paramref name="comingLine"/> as <see cref="StartHomeCamera"/>'s: its failure is a line too.</summary>
+    private async Task RunHomeCameraAsync(string reference, string name, string id, Task<HomeCameraStill> fetch, WorkingDirectory images, int generation, bool comingLine, CancellationToken token)
     {
         try
         {
             var still = await fetch.WaitAsync(token).ConfigureAwait(false);
             if (still.Image is not { } image)
             {
-                HomeCameraFailed(reference, name, still.Error ?? "", generation);
+                HomeCameraFailed(reference, name, still.Error ?? "", generation, comingLine);
                 return;
             }
 
@@ -261,7 +262,7 @@ internal sealed partial class ChatScreen
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            HomeCameraFailed(reference, name, ex.Message, generation);
+            HomeCameraFailed(reference, name, ex.Message, generation, comingLine);
         }
     }
 
@@ -269,9 +270,11 @@ internal sealed partial class ChatScreen
     /// A still that didn't come, logged. Where a chip shows the wait now (<see cref="HomeChipShowsWait"/>), the chip marked failed (it clears
     /// after <see cref="HomeFailedShows"/>) and the words flashed; anywhere else an error line, no flash, and the mark taken off, since no
     /// chip would show it. Decided when it fails (2026-11-13, the review), not when it started: the pane off, a short window, a chip paged
-    /// away meanwhile, a camera off the bar (<c>/ha camera</c>), or a command that joined a chip's fetch all get the line.
+    /// away meanwhile, a camera off the bar (<c>/ha camera</c>), or a command that joined a chip's fetch all get the line. One whose
+    /// <see cref="HomeBarText.CameraComing"/> line was printed (<paramref name="comingLine"/>) always gets it (2026-11-14, the review's #41):
+    /// a chip drawn meanwhile (the bar turned on) flashes too, but the line answers the line.
     /// </summary>
-    private void HomeCameraFailed(string reference, string name, string error, int generation)
+    private void HomeCameraFailed(string reference, string name, string error, int generation, bool comingLine)
     {
         if (Volatile.Read(ref _homeCameraGeneration) != generation)
         {
@@ -302,7 +305,8 @@ internal sealed partial class ChatScreen
         {
             _pane.Flash(words);
         }
-        else
+
+        if (!shown || comingLine)
         {
             QueueHomeCamera(new HomeCameraShow(generation, null, words, null, null));
         }

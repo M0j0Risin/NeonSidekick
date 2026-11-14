@@ -1202,7 +1202,8 @@ public sealed partial class WebUiTests : IDisposable
         })
         {
             Assert.False(App.SettingsMenu.IsWebUiField(field));
-            Assert.False(App.SettingsMenu.RefusedMidTurn(field));
+            // Except the Chat tab's (2026-11-14, the review's #43): the voice models load only while it is on, so it is refused as Web UI voice is.
+            Assert.Equal(field == App.SettingsField.WebUiChatControls, App.SettingsMenu.RefusedMidTurn(field));
             Assert.True(App.SettingsMenu.IsToggle(field));
         }
 

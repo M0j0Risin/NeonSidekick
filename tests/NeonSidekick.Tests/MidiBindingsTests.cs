@@ -56,16 +56,76 @@ public sealed class MidiBindingsTests : IDisposable
         file.Bind(Pedal1, "/clear");
         Assert.Equal(["/clear", "/voice"], file.Load().Bindings.Select(b => b.Command));
 
-        Assert.Equal(MidiSaveOutcome.Saved, file.SetCommand(1, "/new"));
-        Assert.Equal(MidiSaveOutcome.Failed, file.SetCommand(5, "/new"));
+        Assert.Equal(MidiSaveOutcome.Saved, file.SetCommand(new MidiBinding(Pedal2, "/voice"), "/new"));
+        Assert.Equal(MidiSaveOutcome.Gone, file.SetCommand(new MidiBinding(Pad, "/x"), "/new"));   // a button the file doesn't bind
         Assert.Equal(["/clear", "/new"], file.Load().Bindings.Select(b => b.Command));
 
         // A relearn onto another binding's button takes its place; the other goes.
-        Assert.Equal(MidiSaveOutcome.Saved, file.SetTrigger(1, Pedal1));
+        Assert.Equal(MidiSaveOutcome.Saved, file.SetTrigger(new MidiBinding(Pedal2, "/new"), Pedal1));
         Assert.Equal([new MidiBinding(Pedal1, "/new")], file.Load().Bindings);
 
-        Assert.Equal(MidiSaveOutcome.Saved, file.Remove(0));
+        Assert.Equal(MidiSaveOutcome.Saved, file.Remove(new MidiBinding(Pedal1, "/new")));
         Assert.Empty(file.Load().Bindings);
+        Assert.Equal(MidiSaveOutcome.Gone, file.Remove(new MidiBinding(Pedal1, "/new")));
+    }
+
+    /// <summary>
+    /// The pane's edits find the binding by its button in the file as it is now (2026-11-14, the review's #9): a hand edit between the pane's
+    /// read and its Del removes the binding shown, never the one that moved to its place.
+    /// </summary>
+    [Fact]
+    public void AnEdit_AfterAHandEdit_ChangesTheBindingShown_NotTheOneAtItsOldPlace()
+    {
+        var file = new MidiBindings(_dir);
+        file.Bind(Pedal1, "/tts");
+        file.Bind(Pedal2, "/voice");
+        var shown = file.Load().Bindings[1];   // Pedal2, second on the pane
+
+        // By hand: Pad put first, so Pedal2 is third now.
+        WriteFile("""
+            { "version": 1, "bindings": [
+              { "device": "PAD", "kind": "note", "channel": 10, "number": 36, "command": "/camera snap" },
+              { "device": "FS-4", "kind": "cc", "channel": 1, "number": 80, "command": "/tts" },
+              { "device": "FS-4", "kind": "cc", "channel": 1, "number": 81, "command": "/voice" } ] }
+            """);
+
+        Assert.Equal(MidiSaveOutcome.Saved, file.Remove(shown));
+        Assert.Equal(["/camera snap", "/tts"], file.Load().Bindings.Select(b => b.Command));
+    }
+
+    /// <summary>
+    /// <c>/midi forget</c> and an import without overwrite keep the entries the pane would have shown as skipped (2026-11-14, the review's #40
+    /// leftover); an import with overwrite replaces the whole list, those too.
+    /// </summary>
+    [Fact]
+    public void ForgetAndImport_KeepTheSkippedEntries_ButOverwriteDropsThem()
+    {
+        const string withTypo = """
+            { "version": 1, "bindings": [
+              { "device": "FS-4", "kind": "cc", "channel": 1, "number": 80, "command": "/tts" },
+              { "device": "FS-4", "kind": "pitch", "channel": 1, "number": 81, "command": "/typo" } ] }
+            """;
+        var file = new MidiBindings(_dir);
+
+        WriteFile(withTypo);
+        Assert.Equal(MidiSaveOutcome.Saved, file.Forget(0));
+        Assert.Empty(file.Load().Bindings);
+        Assert.Equal([MidiText.SkippedKind("pitch")], file.Load().Skipped);
+
+        WriteFile(withTypo);
+        Assert.Equal(MidiImportOutcome.Done, file.Import([new MidiBinding(Pad, "/camera snap")], overwrite: false).Outcome);
+        Assert.Equal(2, file.Load().Bindings.Count);
+        Assert.Equal([MidiText.SkippedKind("pitch")], file.Load().Skipped);
+
+        WriteFile(withTypo);
+        Assert.Equal(MidiImportOutcome.Done, file.Import([new MidiBinding(Pad, "/camera snap")], overwrite: true).Outcome);
+        Assert.Equal([new MidiBinding(Pad, "/camera snap")], file.Load().Bindings);
+        Assert.Empty(file.Load().Skipped);
+
+        // The pane's own save drops them, as it showed them.
+        WriteFile(withTypo);
+        Assert.Equal(MidiSaveOutcome.Saved, file.Bind(Pad, "/camera snap"));
+        Assert.Empty(file.Load().Skipped);
     }
 
     [Fact]

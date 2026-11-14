@@ -30,6 +30,13 @@ public static class MidiText
     /// <summary>The Mac's MIDI server couldn't start (a session with no window server).</summary>
     public static string NoMidiServer(int status) => "The system's MIDI service didn't start (" + status.ToString(CultureInfo.InvariantCulture) + ").";
 
+    /// <summary>
+    /// The Debug line for a WinMM message an open input never asked for (2026-11-14, the review's #8): its name and the message's code
+    /// (<c>MIM_CLOSE</c> is <c>0x3C2</c>, <c>MIM_ERROR</c> <c>0x3C5</c>), so a replug's hand check reads whether the driver says it went.
+    /// </summary>
+    public static string UnaskedMessageLogLine(string device, uint message) =>
+        "MIDI input \"" + device + "\": the driver sent message 0x" + message.ToString("X3", CultureInfo.InvariantCulture) + " unasked.";
+
     // ----- Notices -----
 
     /// <summary>A bound device that couldn't be opened, said once until it opens.</summary>
@@ -68,6 +75,9 @@ public static class MidiText
     public const string OffWithBindings = "MIDI input is off, so these don't run: /midi on turns it on.";
 
     public const string SaveFailed = "Could not save the MIDI bindings; see the log.";
+
+    /// <summary>An edit of a binding the file no longer holds (changed on disk since it was read, 2026-11-14, the review's #9).</summary>
+    public const string ChangedOnDisk = "The MIDI bindings changed on disk meanwhile; nothing was saved.";
 
     public const string NewerFile = "midi.json was written by a newer version; it is left as it is.";
 

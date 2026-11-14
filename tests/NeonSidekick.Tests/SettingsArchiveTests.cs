@@ -247,6 +247,23 @@ public sealed class SettingsArchiveTests : IDisposable
         }
     }
 
+    /// <summary>A file whose read fails partway (another app's lock on its bytes) is named as unreadable, not a write failure (2026-11-14, the review's #62).</summary>
+    [WindowsFact]
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    public void Export_AFileLockedPartway_IsNamedAsUnreadable()
+    {
+        Put(From, "profiles/neon/profile.json", "{}");
+        Put(From, "profiles/neon/persona.md", "be kind");
+        using var holder = new FileStream(Path.Combine(From, "profiles", "neon", "persona.md"), FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite);
+        holder.Lock(0, holder.Length);
+
+        var outcome = Export();
+
+        Assert.NotNull(outcome.Error);
+        Assert.StartsWith(SettingsTransferText.Unreadable("profiles/neon/persona.md", "")[..^2], outcome.Error, StringComparison.Ordinal);   // the reason is the OS's
+        Assert.Empty(Directory.EnumerateFiles(Downloads));
+    }
+
     [Fact]
     public void Export_PastTheEntryCap_RefusesAndNamesTheBiggest()
     {
@@ -883,6 +900,27 @@ public sealed class SettingsArchiveTests : IDisposable
         Assert.DoesNotContain(SettingsTransferText.NothingAdded, Text(outcome));
     }
 
+    /// <summary>A start import where every item failed is not remembered, so the next start tries it again (2026-11-14, the review's #22).</summary>
+    [Fact]
+    public void RunAtStart_WithNothingLanded_TriesTheZipAgainNextStart()
+    {
+        Put(To, "commands", "a file where the folder goes");
+        string zip = Zip([("commands/x.md", "do it")]);
+
+        var first = SettingsArchive.RunAtStart(To, zip, Fake());
+        Assert.Null(first.Error);
+        Assert.True(first.NothingLanded);
+        Assert.False(File.Exists(Path.Combine(To, SettingsArchive.StartMarkerName)));
+
+        File.Delete(Path.Combine(To, "commands"));
+        var second = SettingsArchive.RunAtStart(To, zip, Fake());
+
+        Assert.False(second.NothingLanded);
+        Assert.DoesNotContain(SettingsTransferText.AlreadyImported(zip), Text(second));
+        Assert.True(Has(To, "commands/x.md"));
+        Assert.True(File.Exists(Path.Combine(To, SettingsArchive.StartMarkerName)));
+    }
+
     /// <summary>A theme saved with a byte-order mark is still known by its name (the review's #24).</summary>
     [Fact]
     public void Import_AThemeWithAByteOrderMark_IsMatchedByName()
@@ -941,6 +979,21 @@ public sealed class SettingsArchiveTests : IDisposable
         Assert.True(line.Warn);
     }
 
+    /// <summary>A connection file with a duplicate key, the home's or a profile's, still lands with no error (2026-11-14, the review's #21).</summary>
+    [Fact]
+    public void Import_AConnectionFileWithADuplicateKey_StillLands()
+    {
+        const string home = """{ "connections": [], "connections": [] }""";
+        const string mine = """{ "x": 1, "x": 2 }""";
+        string zip = Zip([("configs/sql.json", home), ("profiles/neon/configs/x.json", mine)]);
+
+        var outcome = Import(zip);
+
+        Assert.Null(outcome.Error);
+        Assert.Equal(home, Read(To, "configs/sql.json"));
+        Assert.Equal(mine, Read(To, "profiles/neon/configs/x.json"));
+    }
+
     [Theory]
     [InlineData("""{ "password": "dpapi:AAAA" }""", true)]
     [InlineData("""{ "a": [ { "b": "keychain:AAAA" } ] }""", true)]
@@ -948,6 +1001,7 @@ public sealed class SettingsArchiveTests : IDisposable
     [InlineData("""{ "passwordStore": "file", "password": "plain" }""", false)]
     [InlineData("""{ "passwordStore": "" }""", false)]
     [InlineData("""{ not json""", false)]
+    [InlineData("""{ "password": "dpapi:A", "password": "x" }""", false)]   // a duplicate key throws on the walk, never out (the review's #21)
     public void HoldsStoredPassword_FindsAnEncryptedValueOrAStore(string json, bool expected) =>
         Assert.Equal(expected, SettingsArchive.HoldsStoredPassword(System.Text.Encoding.UTF8.GetBytes(json)));
 

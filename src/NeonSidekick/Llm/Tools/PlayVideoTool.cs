@@ -158,7 +158,7 @@ public sealed class PlayVideoTool : FileTool
         }
         catch (InvalidOperationException e)
         {
-            return "Error: " + e.Message;
+            return VideoText.RouteFailed(e.Message);
         }
 
         if (!routed.Wait)

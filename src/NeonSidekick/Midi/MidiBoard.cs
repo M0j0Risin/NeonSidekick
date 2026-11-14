@@ -53,9 +53,13 @@ public sealed class MidiBoard : IDisposable
     private long _version;
     private bool _disposed;
 
+    // Whether the last Sync listened (2026-11-14, the review's #18), so off then on says a failed open again. Sync's own, under _gate.
+    private bool _wasListening;
+
     /// <param name="system">The backend.</param>
     /// <param name="onLine">A press's command line, called on a pump thread: it must only queue.</param>
-    /// <param name="notice">A line for the user (a bound input that can't be opened), once per input until it opens; may be called on any thread.</param>
+    /// <param name="notice">A line for the user (a bound input that can't be opened), once per input until it opens, or until MIDI input is turned
+    /// off and on or the bindings are read again; may be called on any thread.</param>
     /// <param name="time">The rescan's clock.</param>
     /// <param name="run">How the opening and closing are run: a pool thread by default; the tests run it inline.</param>
     public MidiBoard(IMidiSystem system, Action<string> onLine, Action<string>? notice = null, TimeProvider? time = null, Action<Action>? run = null)
@@ -162,7 +166,10 @@ public sealed class MidiBoard : IDisposable
         }
     }
 
-    /// <summary>The scan and the opens and closes run now, on this thread (the tests; <c>--midi-check</c>).</summary>
+    /// <summary>
+    /// The scan and the opens and closes run now, on this thread: the body <see cref="Schedule"/> runs (tests drive it through the board's
+    /// run delegate). <c>--midi-check</c> has its own loop and never calls it (2026-11-14, the review's #20).
+    /// </summary>
     public void SyncNow()
     {
         lock (_gate)
@@ -262,6 +269,15 @@ public sealed class MidiBoard : IDisposable
         var set = Volatile.Read(ref _set);
         bool learning = Learning;
         bool listening = Enabled && set.Bindings.Count > 0;
+
+        // An input that couldn't open is said again after MIDI input goes off and on, or the bindings are read again (2026-11-14, the review's
+        // #18): the user just asked for it once more. Tracked here, not in the idle branch below, which a held pane skips.
+        if (reload || (listening && !_wasListening))
+        {
+            _noticed.Clear();
+        }
+
+        _wasListening = listening;
         if (!listening && !learning && !Held)
         {
             // Nothing listens and nothing is shown: every input closed, nothing listed (no enumeration while idle).
@@ -299,7 +315,8 @@ public sealed class MidiBoard : IDisposable
             string key = Key(name, occurrence);
             present.Add(key);
             bool wanted = learning || (listening && Names(set, name, occurrence, sameNamed));
-            if (_open.TryGetValue(key, out var open) && open.Info != info && open.Info.Index != info.Index)
+            // Only its place in the list (2026-11-14, the review's #7): the record compare also caught a rename at the same index.
+            if (_open.TryGetValue(key, out var open) && open.Info.Index != info.Index)
             {
                 // Listed again at another place (a device before it went): reopened there.
                 Close(open);
@@ -315,9 +332,9 @@ public sealed class MidiBoard : IDisposable
                 try
                 {
                     var parser = new MidiParser();
-                    bool unique = sameNamed == 1;
-                    var handle = _system.Open(info, bytes => Heard(key, name, occurrence, unique, parser, bytes));
-                    _open[key] = new OpenInput(key, info, handle);
+                    var entry = new OpenInput(key, info) { Unique = sameNamed == 1 };
+                    entry.Handle = _system.Open(info, bytes => Heard(key, name, occurrence, entry, parser, bytes));
+                    _open[key] = entry;
                     _noticed.Remove(key);
                     changed = true;
                     DiagnosticLog.Info(Category, $"Opened MIDI input \"{name}\"{(occurrence > 0 ? " #" + (occurrence + 1).ToString(CultureInfo.InvariantCulture) : "")}.");
@@ -340,7 +357,14 @@ public sealed class MidiBoard : IDisposable
                 changed = true;
             }
 
-            states.Add(new MidiInputState(name, occurrence, _open.ContainsKey(key), inUse, problem));
+            // Whether it is the only one of its name, each scan (2026-11-14, the review's #1): a twin plugged in or pulled out later changes
+            // which bindings its presses match, with no reopen (that would reset its button state and might lose the port to another app).
+            if (_open.TryGetValue(key, out var held))
+            {
+                held.Unique = sameNamed == 1;
+            }
+
+            states.Add(new MidiInputState(name, occurrence, held is not null, inUse, problem));
         }
 
         // Pulled out: closed, and its button state forgotten.
@@ -395,8 +419,9 @@ public sealed class MidiBoard : IDisposable
     }
 
     /// <summary>An input's bytes, on its pump thread: decoded, judged, and routed. Never takes <c>_gate</c>.</summary>
-    private void Heard(string key, string name, int occurrence, bool unique, MidiParser parser, ReadOnlySpan<byte> bytes)
+    private void Heard(string key, string name, int occurrence, OpenInput input, MidiParser parser, ReadOnlySpan<byte> bytes)
     {
+        bool unique = input.Unique;
         List<string>? lines = null;
         bool any;
         lock (_route)
@@ -452,7 +477,26 @@ public sealed class MidiBoard : IDisposable
 
     private static string Key(string name, int occurrence) => name.ToUpperInvariant() + "#" + occurrence.ToString(CultureInfo.InvariantCulture);
 
-    private sealed record OpenInput(string Key, MidiInputInfo Info, IMidiInput Handle);
+    /// <summary>
+    /// An open input: its key, where it was listed, its handle, and whether it is the only input of its name (2026-11-14, the review's #1:
+    /// refreshed by every <see cref="Sync"/> and read by its callback on the pump thread, so volatile).
+    /// </summary>
+    private sealed class OpenInput(string key, MidiInputInfo info)
+    {
+        private volatile bool _unique;
+
+        public string Key { get; } = key;
+
+        public MidiInputInfo Info { get; } = info;
+
+        public IMidiInput Handle { get; set; } = null!;
+
+        public bool Unique
+        {
+            get => _unique;
+            set => _unique = value;
+        }
+    }
 
     private sealed class Lease(MidiBoard board) : IDisposable
     {

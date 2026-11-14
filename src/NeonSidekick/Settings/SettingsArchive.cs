@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Globalization;
 using System.IO.Compression;
 using System.Security.Cryptography;
@@ -43,6 +44,12 @@ public sealed record SettingsReportLine(string Text, bool Warn = false, bool Com
 public sealed record SettingsTransferOutcome(IReadOnlyList<SettingsReportLine> Lines, string? Error)
 {
     public static SettingsTransferOutcome Failed(string error) => new([], error);
+
+    /// <summary>
+    /// An import that added nothing because every item failed (2026-11-14, the review's #22): <c>--import-settings</c> then leaves the zip
+    /// unremembered, so the next start tries it again. Set only by <see cref="SettingsArchive.ImportFromFile"/>.
+    /// </summary>
+    public bool NothingLanded { get; init; }
 }
 
 /// <summary>
@@ -533,8 +540,36 @@ public static class SettingsArchive
                     entry.ExternalAttributes = attributes;
                 }
 
+                // Copied in steps, only the reads guarded (2026-11-14, the review's #62): a file locked or failing partway is named as unreadable,
+                // while a write to the zip that fails (a full disk) still reaches the caller as it always did.
                 using var body = entry.Open();
-                input.CopyTo(body);
+                byte[] buffer = ArrayPool<byte>.Shared.Rent(81920);
+                try
+                {
+                    while (true)
+                    {
+                        int read;
+                        try
+                        {
+                            read = input.Read(buffer, 0, buffer.Length);
+                        }
+                        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                        {
+                            return SettingsTransferText.Unreadable(file.Relative, ex.Message);
+                        }
+
+                        if (read == 0)
+                        {
+                            break;
+                        }
+
+                        body.Write(buffer, 0, read);
+                    }
+                }
+                finally
+                {
+                    ArrayPool<byte>.Shared.Return(buffer);
+                }
             }
         }
 
@@ -1276,17 +1311,15 @@ public static class SettingsArchive
     /// </summary>
     internal static bool HoldsStoredPassword(byte[] bytes)
     {
-        JsonNode? node;
+        // The walk inside the try too (2026-11-14, the review's #21): a duplicate key parses, then throws as the object is enumerated.
         try
         {
-            node = JsonNode.Parse(WorkingDirectory.Decode(bytes, out _), documentOptions: SettingsImportFixups.ReadOptions);
+            return Holds(JsonNode.Parse(WorkingDirectory.Decode(bytes, out _), documentOptions: SettingsImportFixups.ReadOptions));
         }
-        catch (Exception ex) when (ex is JsonException or ArgumentException)
+        catch (Exception ex) when (ex is JsonException or ArgumentException or InvalidOperationException)
         {
             return false;
         }
-
-        return Holds(node);
 
         static bool Holds(JsonNode? node)
         {
@@ -1502,7 +1535,7 @@ public static class SettingsArchive
             }
 
             var report = Import(home, plan, environment, cancellationToken);
-            return new SettingsTransferOutcome(Lines(report, path, atStart), null);
+            return new SettingsTransferOutcome(Lines(report, path, atStart), null) { NothingLanded = !report.AddedAny && report.Failed.Count > 0 };
         }
         catch (Exception ex) when (ex is InvalidDataException or NotSupportedException or ArgumentException)
         {
@@ -1635,7 +1668,9 @@ public static class SettingsArchive
     /// <c>--import-settings &lt;zip&gt;</c> (before the profile is resolved): the report's lines, or the refusal (then the launch exits 2). A relative
     /// path counts from the process's current folder, as the other command-line paths do. A zip this home took at an earlier start (its SHA-256
     /// in <see cref="StartMarkerName"/>) is skipped with one line and the launch carries on (2026-11-13, the review's #3, the user's pick);
-    /// <c>/settings import</c> takes it again, never reading or writing the marker.
+    /// <c>/settings import</c> takes it again, never reading or writing the marker. One where nothing landed, every item failed, is not
+    /// remembered (2026-11-14, the review's #22): the next start tries it again. One that landed part is, or a retry would add the landed
+    /// profiles a second time under new names.
     /// </summary>
     public static SettingsTransferOutcome RunAtStart(string home, string zip, ImportEnvironment environment)
     {
@@ -1665,7 +1700,7 @@ public static class SettingsArchive
             return SettingsTransferOutcome.Failed(SettingsTransferText.StartRefused(error));
         }
 
-        if (hash is not null)
+        if (hash is not null && !outcome.NothingLanded)
         {
             Remember(marker, hash);
         }

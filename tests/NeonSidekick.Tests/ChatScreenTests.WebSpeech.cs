@@ -243,4 +243,70 @@ public partial class ChatScreenTests
         Assert.Equal(4, _chat.Requests.Count);
         Assert.Contains(BotChat.UserName + ": hello bots", _chat.Requests[2][^1].Text);   // the next bot answers what the phone heard
     }
+
+    /// <summary>
+    /// A phone's 🎤 under a botchat that loses the listen's lock to another listen (2026-11-14, the review's #13/#17): its capture never
+    /// starts, so the bot replying is never cut short and the chat goes on without a hold.
+    /// </summary>
+    [Fact]
+    public async Task APhoneListen_RefusedBeforeItStarted_CutsNoBotShort()
+    {
+        BotChatFixture();
+        WebVoiceOn();
+        _chat.EnqueueText("Hello from Neon.");
+        _chat.EnqueueText("Ada goes on.");
+        _chat.EnqueueText("Answering ", "you.");
+        _chat.EnqueueText("never");
+        WebReply start = default;
+        bool cut = false;
+        string? ended = null;
+        using var occupy = new CancellationTokenSource();
+        _chat.BeforeUpdate = async (i, ct) =>
+        {
+            if (_chat.Requests.Count == 2 && i == 0)
+            {
+                // Another listen takes the lock between the start's checks and the page's listen: the page's is refused as busy.
+                _running!.VoiceStartRaceForTests = () =>
+                {
+                    var blocker = new FakeAudioCapture { OnStart = async (_, token) => await Task.Delay(Timeout.Infinite, token).ConfigureAwait(false) };
+                    _ = _voice.ListenOnAsync(blocker, CancellationToken.None, null, occupy.Token, VoiceSession.PageOptions with { DeliveryWatchdog = TimeSpan.FromMinutes(1) });
+                };
+                start = Web.Voice!.Start(new WebVoiceStart { Page = PhonePage, Listen = PhoneListen, Speak = false }, IPAddress.Loopback);
+                var seen = new List<WebEvent>();
+                SpinWait.SpinUntil(() =>
+                {
+                    DrainInto(_phoneStream!, seen);
+                    ended = VoicePhasesOf(seen).LastOrDefault(p => p.Phase != "listening")?.Phase;
+                    return ended is not null;
+                }, TimeSpan.FromSeconds(20));
+                occupy.Cancel();
+                await Task.Delay(50, CancellationToken.None);
+                cut = ct.IsCancellationRequested;
+            }
+            else if ((_chat.Requests.Count == 3 && i == 1) || (_chat.Requests.Count == 4 && i == 0))
+            {
+                SkipWhenTaken();   // ends the chat: the third bot cut short, then the fourth before a word
+                while (!ct.IsCancellationRequested)
+                {
+                    await Task.Delay(5, CancellationToken.None);
+                }
+            }
+        };
+        var input = WebSteps(
+            i =>
+            {
+                Assert.True(SpinWait.SpinUntil(() => Web.Snapshot().State.VoiceListen == "", TimeSpan.FromSeconds(20)), "the voice models never got ready");
+                _phoneStream = Web.Events.Subscribe(PhonePage, PhoneLoad);
+                PushLine(i, "/botchat");
+            },
+            i => PushLine(i, "/exit"));
+
+        await RunAsync(input);
+        _phoneStream?.Dispose();
+
+        Assert.Equal((WebOutcome.Ok, "listening"), (start.Outcome, start.Listen));
+        Assert.Equal("failed", ended);
+        Assert.False(cut);
+        Assert.Contains("Ada goes on.", string.Join('\n', _chat.Requests[2].Select(m => m.Text)));
+    }
 }

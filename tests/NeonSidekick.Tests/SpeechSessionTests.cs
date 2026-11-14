@@ -205,6 +205,59 @@ public class SpeechSessionTests : IDisposable
         Assert.Equal(new[] { SpeechSession.TailSilencedWarning }, warnings);
     }
 
+    /// <summary>
+    /// A page's reply over the PC's tail, or the PC's over a page's, still silences it (one speaker at a time) but warns of nothing
+    /// (2026-11-14, the review's #3): a Debug line names both origins.
+    /// </summary>
+    [Fact]
+    public async Task BeginTurn_OverATailOfAnotherOrigin_SilencesIt_WithoutAWarning()
+    {
+        await ConnectAsync();
+        var page = new PagePlayback("page-0123456789abcdef");
+        page.Inner.HoldBytes = true;
+        var pageTail = _speech.BeginTurn(CancellationToken.None, page)!;
+        pageTail.Feed("One.");
+        pageTail.CompleteAdding();
+        await WaitUntilAsync(() => page.Inner.Writes.Count == 1);
+
+        SpeechOutput? pc = null;
+        var warnings = await SpeechWarningsAsync(() => { pc = _speech.BeginTurn(CancellationToken.None); return Task.CompletedTask; });
+
+        Assert.Empty(warnings);
+        await pageTail.Completion.WaitAsync(Timeout);
+        Assert.True(pageTail.StoppedEarly);
+        Assert.Same(pc, _speech.Playing);
+        Assert.Null(_speech.PlayingPage);
+        Assert.Equal("A new reply on the PC silenced the tail still playing on page p1.", SpeechSession.TailHandedOverLogLine("p1", null));
+        Assert.Equal("A new reply on page p2 silenced the tail still playing on the PC.", SpeechSession.TailHandedOverLogLine(null, "p2"));
+    }
+
+    /// <summary>
+    /// TTS turned off while Web UI voice keeps the synthesizer (a page's <c>/tts off</c>, 2026-11-14, the review's #10): a PC tail still
+    /// playing stops, as the full connect's stop would; the synthesizer stays for the page.
+    /// </summary>
+    [Fact]
+    public async Task Connect_TtsOff_UnderWebVoice_StopsThePcsTail_AndKeepsTheSynthesizer()
+    {
+        var on = new AppSettingsData { TtsOutput = true, TtsSource = "http", TtsHttpUrl = "http://127.0.0.1:8880", WebUi = true, WebUiVoice = true };
+        await _speech.ConnectAsync(on, null, CancellationToken.None);
+        Assert.True(_speech.IsReady);
+        _playback.HoldBytes = true;
+        var tail = _speech.BeginTurn(CancellationToken.None)!;
+        tail.Feed("One.");
+        tail.CompleteAdding();
+        await WaitUntilAsync(() => _playback.Writes.Count == 1);
+
+        var off = new AppSettingsData { TtsOutput = false, TtsSource = "http", TtsHttpUrl = "http://127.0.0.1:8880", WebUi = true, WebUiVoice = true };
+        await _speech.ConnectAsync(off, null, CancellationToken.None);
+
+        await tail.Completion.WaitAsync(Timeout);
+        Assert.True(tail.StoppedEarly);
+        Assert.Null(_speech.Playing);
+        Assert.True(_speech.Available);
+        Assert.Single(_requests);   // the synthesizer kept
+    }
+
     [Fact]
     public async Task BeginTurn_AfterTheLastSpeakerDrained_ForgetsIt_Quietly()
     {

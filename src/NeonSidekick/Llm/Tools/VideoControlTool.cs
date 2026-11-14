@@ -105,6 +105,13 @@ public sealed class VideoControlTool : AIFunction
             return VideoText.YouTubeIsOpen(_youTubePointer?.Invoke());
         }
 
+        // A file that failed still has its window open (2026-11-14, the review's #34): close closes it, as for a playing one.
+        if (action == "close" && now is { IsFile: true, State: VideoState.Failed } failed && _player is not null)
+        {
+            _player.Close();
+            return YouTubeText.ClosedIn(failed.Place);
+        }
+
         if (now.AsFile() is not { } current || _player is null)
         {
             string? handoff = _handoffName?.Invoke();

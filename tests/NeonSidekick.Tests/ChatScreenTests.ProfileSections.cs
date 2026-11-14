@@ -306,6 +306,22 @@ public sealed partial class ChatScreenTests
         Assert.Equal("{ not json", File.ReadAllText(path));
     }
 
+    /// <summary>A pull from a broken source file names the source's problem, never "no bindings" (2026-11-14, the review's #59); nothing changes.</summary>
+    [Fact]
+    public async Task ProfilePullMidi_FromABrokenFile_SaysSo()
+    {
+        WorkProfile();
+        WriteFile(Profiles.ConfigPath(ProfileDir("work"), Midi.MidiBindings.FileName), "{ not json");
+        PushLine("/profile pull midi work");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(ChatScreen.ProfileMidiSourceError("work", pull: true), output);
+        Assert.DoesNotContain(ChatScreen.ProfileMidiNothingNotice("work", pull: true), output);
+        Assert.False(File.Exists(Profiles.ConfigPath(_settings.ProfileDirectory, Midi.MidiBindings.FileName)));
+    }
+
     // ── monitors ─────────────────────────────────────────────────────────────
 
     /// <summary>A push merges by monitor key: the target's own name and PC input kept, the rest added.</summary>

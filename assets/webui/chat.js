@@ -2197,6 +2197,7 @@ const voiceLiveEl = document.getElementById('voice-live');
 const ChunkRetryMs = 250;
 const ChunkGiveUpMs = 3000;   // the app's stall rule: past it, it transcribes what came
 let listen = null;   // { id, ctx, stream, nodes, frames, seq, posting, phase, started, done, captureStopped, finishWanted, failingSince, flush }
+let lastEnded = null;   // { id, canceled }: the listen that ended last, whose late `voice` event still counts unless it was canceled
 let wakeLock = null;
 let wakeAsking = false;
 
@@ -2297,7 +2298,7 @@ async function startListen() {
   }
   const l = { id: Neon.id(), ctx, stream: null, nodes: [], frames: [], seq: 0, posting: false, phase: 'listening', started: false, done: false,
     captureStopped: false, finishWanted: false, failingSince: 0, flush: null };
-  endSpeech();   // tapping 🎤 while speaking stops the playback first (the app stops that voice at the start)
+  stopTail();   // tapping 🎤 while speaking stops the playback, and tells the app, so a refused start leaves no voice running there (2026-11-14)
   if (speakOn()) unlockPlayback();   // in the gesture: a reply to what's heard plays from here
   listen = l;
   say('');
@@ -2307,7 +2308,11 @@ async function startListen() {
   holdWake();
   try {
     l.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 } });
-    if (l.done) { stopCapture(l); return; }
+    if (l.done) {
+      // Canceled at the permission prompt (2026-11-14): its capture already stopped with no stream, so this one's tracks stop here.
+      for (const t of l.stream.getTracks()) { try { t.stop(); } catch { /* stopped */ } }
+      return;
+    }
     await wireGraph(l);
   } catch {
     if (!l.done) { endLocal(l); say(words.voiceMicRefused || 'The browser did not allow the microphone.'); }
@@ -2452,6 +2457,7 @@ function cancelListen(keepalive) {
   if (!l) return;
   const started = l.started;
   endLocal(l);
+  if (lastEnded && lastEnded.id === l.id) lastEnded.canceled = true;   // Whisper may still answer: its text is not wanted
   if (started) post('/api/voice/end', { page: chatPage, listen: l.id, how: 'cancel' }, { keepalive: !!keepalive });
 }
 
@@ -2474,6 +2480,7 @@ async function stopCapture(l, flush) {
 function endLocal(l) {
   if (l.done) return;
   l.done = true;
+  lastEnded = { id: l.id, canceled: false };
   l.frames.length = 0;
   stopCapture(l);
   if (listen === l) listen = null;
@@ -2482,7 +2489,8 @@ function endLocal(l) {
   paintVoice();
 }
 
-// A listen's phases and its end, for this page alone.
+// A listen's phases and its end, for this page alone: the running listen's, or the last one ended here unless it was canceled (2026-11-14:
+// a cancel that lost the race with Whisper never pastes its text).
 function onVoice(v) {
   const l = listen;
   const mine = l && v.listen === l.id;
@@ -2490,6 +2498,8 @@ function onVoice(v) {
     if (v.phase === 'listening') return;
     if (v.phase === 'transcribing') { applyListenState(l, 'transcribing'); return; }
     endLocal(l);
+  } else if (!lastEnded || v.listen !== lastEnded.id || lastEnded.canceled) {
+    return;
   }
   switch (v.phase) {
     case 'nothing': say(words.voiceHeardNothing || 'Heard nothing.'); break;
@@ -2578,6 +2588,18 @@ function setSpeak(on) {
   holdWake();
   releaseWake();
 }
+
+// 🔊 flipped in another tab of this browser (2026-11-14): the key is shared, so this page follows it and tells the app for its own id.
+window.addEventListener('storage', ev => {
+  if (ev.key !== SpeakKey && ev.key !== null) return;
+  const on = speakOn();
+  speakMemory = on;
+  if (typeof voiceSpeakState() === 'string') post('/api/voice/speak', { page: chatPage, on: on });
+  if (!on) endSpeech();
+  paintSpeak();
+  holdWake();
+  releaseWake();
+});
 
 speakBtn.addEventListener('click', () => {
   if (speakOn()) { setSpeak(false); return; }
@@ -2833,6 +2855,8 @@ function connect() {
     renderAsks(s.asks);
     for (const text of s.drafts || []) takeDraft(text);
     if (s.heard) heardText(s.heard.text, s.heard.message);   // heard while the stream was down (2026-11-13)
+    // A listen the app no longer runs ended while the stream was down, its end told to no one (2026-11-14): it ends here too.
+    if (s.page && listen && listen.started && (s.listen || null) !== listen.id) endLocal(listen);
     if (typeof s.state.voiceSpeak === 'string' && speakOn()) post('/api/voice/speak', { page: chatPage, on: true });   // this page's 🔊
     adoptSpeaking(s.speaking);   // the clips made while the stream was down
     applyStrip(s.strip);

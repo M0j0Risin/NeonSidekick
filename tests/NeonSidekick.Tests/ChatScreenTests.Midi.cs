@@ -177,6 +177,58 @@ public partial class ChatScreenTests
         Assert.Equal(0, _keys?.PendingCommands ?? 0);
     }
 
+    /// <summary>
+    /// A hand edit between the board's read and the pane's Del (2026-11-14, the review's #9): whichever binding the pane shows on its first
+    /// row, the one removed is the one it named, found by its button in the file as it is now.
+    /// </summary>
+    [Fact]
+    public async Task Midi_ThePanesDel_AfterAHandEdit_RemovesTheBindingItNamed()
+    {
+        var fake = MidiFixture(pane: true);
+        MidiBind(Fs80, "/tts toggle");
+        MidiBind(Fs81, "/voice");
+        GatedSteps(
+            Now(input =>
+            {
+                Until(() => fake.IsOpen("FS-4"));
+                // By hand: the two swapped, so an index-keyed remove of the first row would take the other one.
+                File.WriteAllText(Settings.Profiles.ConfigPath(_settings.ProfileDirectory, MidiBindings.FileName), """
+                    { "version": 1, "bindings": [
+                      { "device": "FS-4", "kind": "cc", "channel": 1, "number": 81, "command": "/voice" },
+                      { "device": "FS-4", "kind": "cc", "channel": 1, "number": 80, "command": "/tts toggle" } ] }
+                    """);
+                Line("/midi")(input);
+            }),
+            Shown(MidiText.BindingsTab, input => input.Push(Keys.Delete)),
+            Shown("Remove ", input => input.Push(Keys.Down, Keys.Enter)),
+            Shown("Removed ", input => input.Push(Keys.Escape)),
+            Now(Line("/exit")));
+
+        string output = await RunAsync();
+
+        var left = Assert.Single(new MidiBindings(_settings.ProfileDirectory).Load().Bindings);
+        var removed = left.Trigger.SameButton(Fs80) ? new MidiBinding(Fs81, "/voice") : new MidiBinding(Fs80, "/tts toggle");
+        Assert.Contains(MidiText.Removed(removed), output);
+    }
+
+    /// <summary><c>/midi forget</c> on a broken file names it, never "no bindings" (2026-11-14, the review's #59), and leaves it alone.</summary>
+    [Fact]
+    public async Task Midi_ForgetOnABrokenFile_NamesIt()
+    {
+        MidiFixture(pane: false, on: false);
+        string path = Settings.Profiles.ConfigPath(_settings.ProfileDirectory, MidiBindings.FileName);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, "{ not json");
+        PushLine("/midi forget 1");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(MidiText.BrokenFile, output);
+        Assert.DoesNotContain(MidiText.ForgetUsage(0), output);
+        Assert.Equal("{ not json", File.ReadAllText(path));
+    }
+
     // A send once the input is open (the learn opens it on the pool).
     private static bool SendWhenOpen(FakeMidiSystem fake, byte[] bytes)
     {

@@ -192,6 +192,48 @@ public sealed partial class WebUiYouTubePageTests
             "no blocked report: " + Player.Snapshot);
     }
 
+    /// <summary>
+    /// A muted autoplay retry belongs to its own file (2026-11-14, the review's #57): the last file's retry aborted once another file is
+    /// loaded (a new src aborts it) never reports the new one refused, so no tap hint shows for a file that was never refused.
+    /// </summary>
+    [WindowsFact]
+    public async Task AnAbortedRetry_OfTheFileReplaced_NeverReportsTheNewOneRefused()
+    {
+        if (await OwnerPageAsync() is not { } page)
+        {
+            return;
+        }
+
+        // The first play is refused, which asks the muted retry; every later play is held for the test to answer.
+        await page.EvalAsync("""
+            (() => {
+              window.__plays = [];
+              let n = 0;
+              HTMLMediaElement.prototype.play = function () {
+                n++;
+                if (n === 1) return Promise.reject(new DOMException('no', 'NotAllowedError'));
+                return new Promise((resolve, reject) => window.__plays.push({ resolve, reject }));
+              };
+            })()
+            """);
+        var first = VideoRequest.File(FixtureCopy("clip.webm"));
+        Player.Play(first);
+        await page.WaitAsync("window.__plays.length === 1", "the first file's muted retry asked");
+
+        var second = VideoRequest.File(FixtureCopy("clip.mp4"));
+        Player.Play(second);
+        await page.WaitAsync("window.__plays.length === 2", "the second file's play asked");
+        Assert.True(SpinWait.SpinUntil(() => Player.Snapshot is { State: not VideoState.Opening } s && s.FileToken == second.FileToken, TimeSpan.FromSeconds(20)),
+            "the second file never reported: " + Player.Snapshot);
+
+        await page.EvalAsync("window.__plays[0].reject(new DOMException('aborted', 'AbortError'))");
+        await Task.Delay(500);
+
+        Assert.NotEqual(WebUiText.VideoWords.TapToStart, await page.TextAsync("document.getElementById('hint').textContent"));
+        Assert.False(Player.Snapshot is { NeedsTap: true });
+        Assert.Equal(second.FileToken, Player.Snapshot?.FileToken);
+    }
+
     [WindowsFact]
     public async Task AFileGone_AndOneWithSoundAlone_SaySo_OnThePageAndAtThePc()
     {

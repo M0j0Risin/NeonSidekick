@@ -136,6 +136,12 @@ internal sealed class VoiceSession : IDisposable
     /// <summary>Whether the Web UI wanted the models at the last connect (<see cref="WebVoiceMode.Wanted"/>), kept as <see cref="Enabled"/> is.</summary>
     public bool WebVoiceWanted { get; private set; }
 
+    /// <summary>
+    /// A listen's recognizer failed since the models loaded (2026-11-14, the review's #53): the next connect loads them again rather than
+    /// keep them (<see cref="KeepsModels"/>). A microphone's failure never sets it; the models are fine then.
+    /// </summary>
+    private volatile bool _modelsSuspect;
+
     /// <summary>Whether a listen runs right now, the PC's or a page's (the shared lock is held).</summary>
     public bool Listening => _listen.CurrentCount == 0;
 
@@ -309,8 +315,9 @@ internal sealed class VoiceSession : IDisposable
         bool webWanted = WebVoiceMode.Wanted(effective);
         if (KeepsModels(effective))
         {
-            // A PC switch flip (2026-11-13, the webui-voice plan): the models stay wanted and the same, so a page's listen goes on over
-            // them and only the PC's side (the microphone, the wake word, the interrupt) is redone.
+            // A PC switch flip, or Web UI voice turned on or off with the PC's on (2026-11-13, the webui-voice plan; 2026-11-14, the
+            // review's #42): the models stay wanted and the same, so a page's listen goes on over them and only the PC's side (the
+            // microphone, the wake word, the interrupt) is redone.
             UnloadPcSide();
             await ConnectPcSideAsync(effective, phase, cancellationToken).ConfigureAwait(false);
             return;
@@ -330,14 +337,20 @@ internal sealed class VoiceSession : IDisposable
     }
 
     /// <summary>
-    /// Whether a connect under <paramref name="effective"/> keeps the loaded models (2026-11-13, the webui-voice plan): the page still wants
-    /// them and the Whisper model is the same, so only the PC's side is redone and a page's listen goes on. Else the screen cancels the
-    /// page listens first, as the connect waits them out.
+    /// Whether a connect under <paramref name="effective"/> keeps the loaded models (2026-11-13, the webui-voice plan): the Web UI wants
+    /// them before or after (a PC switch flip under the page's voice, or the page's voice turned on or off with the PC's on, 2026-11-14,
+    /// the review's #42), either side still wants them, the Whisper model is the same and no listen's recognizer has failed over them
+    /// (#53). Then only the PC's side is redone and a page's listen goes on; else the screen cancels the page listens first, as the
+    /// connect waits them out. A connect with the page on neither side reloads, as it always has (the PC's own reprobe).
     /// </summary>
     public bool KeepsModels(AppSettingsData effective)
     {
         ArgumentNullException.ThrowIfNull(effective);
-        return Available && WebVoiceMode.Wanted(effective) && WebVoiceWanted && ModelOf(effective) == Model && _recognizer is not null && _vad is not null;
+        bool webNow = WebVoiceMode.Wanted(effective);
+        return Available && !_modelsSuspect && _recognizer is not null && _vad is not null && ModelOf(effective) == Model
+            && (WebVoiceWanted || webNow)
+            && (WebVoiceWanted || Enabled)
+            && (webNow || effective.SttInput);
     }
 
     private static string ModelOf(AppSettingsData effective) =>
@@ -348,6 +361,7 @@ internal sealed class VoiceSession : IDisposable
         Enabled = effective.SttInput;
         WebVoiceWanted = webWanted;
         Model = model;
+        _modelsSuspect = false;
         PushToTalk = ParsePushToTalk(effective.SttPushToTalkKey);
         Available = false;
         MicrophoneFound = false;
@@ -466,6 +480,7 @@ internal sealed class VoiceSession : IDisposable
     private async Task ConnectPcSideAsync(AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken)
     {
         Enabled = effective.SttInput;
+        WebVoiceWanted = WebVoiceMode.Wanted(effective);
         PushToTalk = ParsePushToTalk(effective.SttPushToTalkKey);
         MicrophoneFound = false;
         Detail = "";
@@ -624,6 +639,7 @@ internal sealed class VoiceSession : IDisposable
             var result = await _pipeline.ListenAsync(finishEarly, phase, cancellationToken, seed).ConfigureAwait(false);
             if (!result.Ok)
             {
+                NoteRecognizerFailure(result);
                 MarkUnavailable(result.Detail);
             }
 
@@ -658,11 +674,24 @@ internal sealed class VoiceSession : IDisposable
             }
 
             var result = await new VoicePipeline(source, vad, recognizer, options).ListenAsync(finishEarly, phase, cancellationToken).ConfigureAwait(false);
+            NoteRecognizerFailure(result);
             return result is { Ok: false, EndedBy: ListenEnd.NoAudio, Detail: VoicePipeline.NoAudioDetail } ? result with { Detail = PhoneNoAudioDetail } : result;
         }
         finally
         {
             _listen.Release();
+        }
+    }
+
+    /// <summary>
+    /// A failed listen that got as far as the recognizer (2026-11-14, the review's #53): every capture failure ends as
+    /// <see cref="ListenEnd.NoAudio"/>, so any other failed end is the recognizer's, and the models are loaded again at the next connect.
+    /// </summary>
+    private void NoteRecognizerFailure(ListenResult result)
+    {
+        if (result is { Ok: false } && result.EndedBy != ListenEnd.NoAudio)
+        {
+            _modelsSuspect = true;
         }
     }
 

@@ -993,7 +993,81 @@ public class VoiceSessionTests : IDisposable
         var serverOff = WebOnly(pc: true);
         serverOff.WebUi = false;
         Assert.False(_voice.KeepsModels(otherModel));
-        Assert.False(_voice.KeepsModels(voiceOff));
-        Assert.False(_voice.KeepsModels(serverOff));
+        Assert.True(_voice.KeepsModels(voiceOff));   // the PC's switch still wants them (2026-11-14, the review's #42)
+        Assert.True(_voice.KeepsModels(serverOff));
+        voiceOff.SttInput = false;
+        Assert.False(_voice.KeepsModels(voiceOff));   // nobody wants them
+    }
+
+    /// <summary>
+    /// Web UI voice turned on or off with the PC's voice on keeps the same models (2026-11-14, the review's #42): only the PC's side is
+    /// redone, and the PC's own reconnect with the page on neither side still loads them again (its reprobe).
+    /// </summary>
+    [Fact]
+    public async Task AWebVoiceFlip_WithThePcOn_KeepsTheModels()
+    {
+        FakeModelFiles.WriteBoth(_models);
+        await ConnectAsync(Enabled());
+        Assert.Single(_recognizerPaths);
+
+        Assert.True(_voice.KeepsModels(WebOnly(pc: true)));
+        await ConnectAsync(WebOnly(pc: true));
+        Assert.Single(_recognizerPaths);
+        Assert.True(_voice.WebVoiceWanted);
+        Assert.True(_voice.IsReady);
+
+        Assert.True(_voice.KeepsModels(Enabled()));
+        await ConnectAsync(Enabled());
+        Assert.Single(_recognizerPaths);
+        Assert.False(_voice.WebVoiceWanted);
+        Assert.True(_voice.IsReady);
+
+        Assert.False(_voice.KeepsModels(Enabled()));
+        await ConnectAsync(Enabled());
+        Assert.Equal(2, _recognizerPaths.Count);
+    }
+
+    /// <summary>
+    /// A listen whose recognizer failed loads the models again at the next connect (2026-11-14, the review's #53), even one that would
+    /// keep them; a microphone's failure keeps them (the models are fine then).
+    /// </summary>
+    [Fact]
+    public async Task ARecognizerFailure_LoadsTheModelsAgain_AtTheNextConnect()
+    {
+        FakeModelFiles.WriteBoth(_models);
+        await ConnectAsync(WebOnly());
+        var quick = VoiceSession.PageOptions with { DeliveryWatchdog = TimeSpan.FromMilliseconds(50) };
+        var deaf = await _voice.ListenOnAsync(new FakeAudioCapture(), CancellationToken.None, null, CancellationToken.None, quick);
+        Assert.Equal(ListenEnd.NoAudio, deaf.EndedBy);
+        Assert.True(_voice.KeepsModels(WebOnly(pc: true)));   // a capture's failure
+
+        _vad.EndAfterBuffers = 1;
+        _recognizer.Fail = true;
+        var page = new FakeAudioCapture { OnStart = (c, _) => { c.Deliver(c.Silence(50), 1600); return Task.CompletedTask; } };
+        var failed = await _voice.ListenOnAsync(page, CancellationToken.None, null, CancellationToken.None, VoiceSession.PageOptions);
+        Assert.False(failed.Ok);
+        Assert.False(_voice.KeepsModels(WebOnly(pc: true)));
+
+        _recognizer.Fail = false;
+        await ConnectAsync(WebOnly(pc: true));
+        Assert.Equal(2, _recognizerPaths.Count);
+        Assert.True(_voice.KeepsModels(WebOnly()));   // a full connect clears it
+    }
+
+    /// <summary>With the Web UI's Chat tab off there is no page voice (2026-11-14, the review's #43): nothing loads for the page.</summary>
+    [Fact]
+    public async Task WebVoice_WithTheChatTabOff_LoadsNothing()
+    {
+        FakeModelFiles.WriteBoth(_models);
+        var noChat = WebOnly();
+        noChat.WebUiChatControls = false;
+
+        await ConnectAsync(noChat);
+
+        Assert.False(_voice.WebVoiceWanted);
+        Assert.False(_voice.ModelsReady);
+        Assert.Empty(_recognizerPaths);
+        Assert.False(WebVoiceMode.Wanted(noChat));
+        Assert.False(WebVoiceMode.Offered(noChat));
     }
 }

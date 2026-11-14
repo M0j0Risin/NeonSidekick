@@ -15797,7 +15797,7 @@ internal sealed partial class ChatScreen
 
         if (pull)
         {
-            await AfterProfileSwitchAsync(cancellationToken, notice: ProfilePulledNotice(from, to)).ConfigureAwait(false);
+            await AfterProfileSwitchAsync(cancellationToken, notice: ProfilePulledNotice(from, to), switched: false).ConfigureAwait(false);
         }
         else
         {
@@ -15859,7 +15859,7 @@ internal sealed partial class ChatScreen
         bool loaded = Profiles.NameEquals(target, _settings.ProfileName);
         if (loaded)
         {
-            await AfterProfileSwitchAsync(cancellationToken, notice: ProfileResetNotice(target, loaded: true, all)).ConfigureAwait(false);
+            await AfterProfileSwitchAsync(cancellationToken, notice: ProfileResetNotice(target, loaded: true, all), switched: false).ConfigureAwait(false);
         }
         else
         {
@@ -15874,9 +15874,11 @@ internal sealed partial class ChatScreen
     /// the switch — <paramref name="notice"/> in place of the switch line when given (a reset), and
     /// <paramref name="preface"/> first, when <c>add</c> created the profile — printed before the wipe
     /// it would be lost — then connect LLM, TTS and voice from the new profile's settings, and name
-    /// the timers that survived.
+    /// the timers that survived. <paramref name="switched"/> (2026-11-14, the review's #30): another profile was loaded, so this run's Docker
+    /// containers are kept running through it (<see cref="LlmSession.ProfileSwitched"/>); false for a pull into the loaded profile or a reset
+    /// of it, which change its own settings as any settings change does.
     /// </summary>
-    private async Task AfterProfileSwitchAsync(CancellationToken cancellationToken, string? preface = null, string? notice = null)
+    private async Task AfterProfileSwitchAsync(CancellationToken cancellationToken, string? preface = null, string? notice = null, bool switched = true)
     {
         _toolsOfferedDirty = true;   // 2026-10-16: the new profile's catalogs and switches
         // The Web UI's copy is the old profile's conversation's (2026-10-14): cleared; the server is reconciled below for the new profile.
@@ -15935,6 +15937,11 @@ internal sealed partial class ChatScreen
         // The profile's own desktop shortcut offer (2026-10-16, per profile since the home's settings.json went): asked here as at the
         // start, before the connects, the first time a run lands on a profile not yet asked (an add, a switch, a reset all, a pull).
         await OfferShortcutAsync(cancellationToken).ConfigureAwait(false);
+        if (switched)
+        {
+            _session.ProfileSwitched();   // the old profile's containers keep running (2026-11-14, the user's call on the review's #30)
+        }
+
         bool connectPage = await ConnectLlmCoreAsync(cancellationToken, quiet: true, startup: false).ConfigureAwait(false);
         await ConnectSpeechAsync(cancellationToken, quiet: true).ConfigureAwait(false);
         await ConnectVoiceAsync(cancellationToken, quiet: true).ConfigureAwait(false);
@@ -16302,11 +16309,6 @@ internal sealed partial class ChatScreen
     private bool _botOnMainLink;
 
     /// <summary>
-    /// Whether a bot's <paramref name="link"/> is the main link for the server's window (2026-11-10, review P3-5/P2-9): none of its own, or
-    /// one whose endpoint URL and model id are the session's (a bot that borrows the session's server). A blank-URL bot with its own model on
-    /// the same server may have its own window (LM Studio, Ollama), so both are compared.
-    /// </summary>
-    /// <summary>
     /// <see cref="LlmSession.ResultCut"/>'s body for both hosts (2026-11-10, review P1-9): a cut <c>read_file</c>'s path is forgotten as seen
     /// (<see cref="WorkingDirectory.ForgetSeen"/>), so a modeless <c>write_file</c> of it refuses; every other call is left alone.
     /// </summary>
@@ -16322,6 +16324,11 @@ internal sealed partial class ChatScreen
         }
     }
 
+    /// <summary>
+    /// Whether a bot's <paramref name="link"/> is the main link for the server's window (2026-11-10, review P3-5/P2-9): none of its own, or
+    /// one whose endpoint URL and model id are the session's (a bot that borrows the session's server). A blank-URL bot with its own model on
+    /// the same server may have its own window (LM Studio, Ollama), so both are compared.
+    /// </summary>
     private bool OnMainLink(BotLink? link) =>
         link is null || (_session.Endpoint is { } main && link.Endpoint.BaseUrl == main.BaseUrl && string.Equals(link.Endpoint.ModelId, main.ModelId, StringComparison.Ordinal));
 

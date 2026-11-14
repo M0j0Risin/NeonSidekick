@@ -165,6 +165,25 @@ public sealed class MidiBoardTests : IDisposable
         Assert.Equal(["FS-4"], fake.Opened);
     }
 
+    /// <summary>Turned off and on, an input that still can't open is said again (2026-11-14, the review's #18).</summary>
+    [Fact]
+    public void ABoundInputAnotherAppHolds_IsSaidAgain_AfterMidiInputOffAndOn()
+    {
+        var fake = new FakeMidiSystem("FS-4");
+        fake.Held.Add("FS-4");
+        Bind(new MidiTrigger("FS-4", 0, MidiKind.ControlChange, 1, 80), "/tts");
+        using var board = Board(fake);
+        board.Apply(true, Profile());
+        _time.Advance(MidiBoard.RescanEvery);
+        Assert.Single(_notices);
+
+        board.Apply(false, Profile());
+        board.Apply(true, Profile());
+        _time.Advance(MidiBoard.RescanEvery);
+
+        Assert.Equal([MidiText.OpenFailedNotice("FS-4", MidiText.InUse), MidiText.OpenFailedNotice("FS-4", MidiText.InUse)], _notices);
+    }
+
     [Fact]
     public void APedalPluggedInLater_IsOpenedByTheRescan_AndOnePulledOut_IsClosed()
     {
@@ -222,6 +241,47 @@ public sealed class MidiBoardTests : IDisposable
         fake.Send("2- FS-4", Down);
         fake.Send("FS-4", Down);
         Assert.Equal(["/voice", "/tts"], _lines);
+    }
+
+    /// <summary>A twin plugged in after the first pedal opened makes the first match by its own occurrence (2026-11-14, the review's #1).</summary>
+    [Fact]
+    public void ATwinPluggedInLater_MakesTheFirstPedalMatchItsOwnOccurrence()
+    {
+        var fake = new FakeMidiSystem("FS-4");
+        Bind(new MidiTrigger("FS-4", 1, MidiKind.ControlChange, 1, 80), "/voice");   // listed first: a lone pedal would take it
+        Bind(new MidiTrigger("FS-4", 0, MidiKind.ControlChange, 1, 80), "/tts");
+        using var board = Board(fake);
+        board.Apply(true, Profile());
+        fake.Send("FS-4", Down);
+        Assert.Equal(["/voice"], _lines);   // alone, the first binding of its button
+        _lines.Clear();
+
+        fake.Plug("2- FS-4");
+        _time.Advance(MidiBoard.RescanEvery);
+        fake.Send("FS-4", Up);
+        fake.Send("FS-4", Down);
+
+        Assert.Equal(["/tts"], _lines);   // two of them now: occurrence 0's own
+        Assert.Equal(["FS-4", "2- FS-4"], fake.Opened);   // the first never reopened
+    }
+
+    /// <summary>Its twin pulled out, the pedal left alone matches whatever its occurrence again (2026-11-14, the review's #1).</summary>
+    [Fact]
+    public void ATwinPulledOut_LeavesTheOtherMatchingWhateverItsOccurrence()
+    {
+        var fake = new FakeMidiSystem("FS-4", "2- FS-4");
+        Bind(new MidiTrigger("FS-4", 1, MidiKind.ControlChange, 1, 80), "/voice");
+        using var board = Board(fake);
+        board.Apply(true, Profile());
+        fake.Send("FS-4", Down);
+        Assert.Empty(_lines);   // occurrence 0 has no binding while its twin is there
+
+        fake.Unplug("FS-4");
+        _time.Advance(MidiBoard.RescanEvery);
+        fake.Send("2- FS-4", Up);
+        fake.Send("2- FS-4", Down);
+
+        Assert.Equal(["/voice"], _lines);
     }
 
     [Fact]

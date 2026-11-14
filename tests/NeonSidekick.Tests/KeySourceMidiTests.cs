@@ -59,6 +59,29 @@ public sealed class KeySourceMidiTests
         Assert.Equal(["/midi list"], taken);
     }
 
+    /// <summary>With no keyboard, a button's line under a reply still reaches the line hook: it wakes the wait (2026-11-14, the review's #5).</summary>
+    [Fact]
+    public async Task PostCommand_UnderAReply_WithNoKeyboard_ReachesTheLineHook()
+    {
+        var keys = new KeySource(new ScriptedInput { NoKeyboard = true }, FastPoll);
+        var offered = new List<KeySource.WatchedLine>();
+        using var turn = new CancellationTokenSource();
+        using var stop = new CancellationTokenSource();
+        var watch = keys.WatchAsync(turn, stop.Token, null, null, onLine: line => { lock (offered) { offered.Add(line); } return Task.FromResult(true); });
+        await WaitUntilAsync(() => keys.Watching);
+        await Task.Delay(20);   // into the no-keyboard wait
+
+        keys.PostCommand("/midi list");
+        await WaitUntilAsync(() => { lock (offered) { return offered.Count == 1; } });
+        keys.PostCommand("/tts toggle");   // the wait re-armed: a second line wakes it too
+        await WaitUntilAsync(() => { lock (offered) { return offered.Count == 2; } });
+        await stop.CancelAsync();
+        await watch.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(["/midi list", "/tts toggle"], offered.Select(l => l.Text));
+        Assert.All(offered, l => Assert.True(l.Chord));
+    }
+
     [Fact]
     public async Task PostCommand_UnderAWatchWithNoHook_IsDropped()
     {

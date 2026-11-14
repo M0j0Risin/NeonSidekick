@@ -63,13 +63,7 @@ public static class VideoFilesPlayIn
     };
 
     /// <summary>The menu hint next to a choice, with its fallback.</summary>
-    public static string Describe(string name) => name switch
-    {
-        VideoWindow => "video files play in the app's video window, else in their default app",
-        WebUiWindow => "video files play in the Web UI's Video tab while it is on, else in the video window",
-        DefaultApp => "video files open in their default app, out of the model's control",
-        _ => "",
-    };
+    public static string Describe(string name) => VideoText.PlayInHint(name);
 
     /// <summary>The choice in force for <paramref name="effective"/>; an unknown saved value warns once and uses <see cref="Default"/>.</summary>
     public static VideoFilesPlayInKind Resolve(AppSettingsData effective)

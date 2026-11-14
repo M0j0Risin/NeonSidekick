@@ -316,6 +316,9 @@ internal sealed unsafe class VideoWindowThread
             _pendingSrc = src;
             _filePath = request.FilePath;
             _snapshot = VideoSnapshot.Opening(request, _pendingSound) with { Version = VideoWindow.NextVersion() };
+            // The last video's commands still queued (a seek sent while it loaded) are never the new one's (2026-11-14, the review's #35),
+            // as a page timeout drops them; a command sent after this play queues after it and still goes.
+            _outbox.Clear();
         }
 
         return Post(PlayMessage);

@@ -245,6 +245,10 @@ public sealed class WebCommandsTests
         Assert.Equal(WebCommandKind.Run, WebCommands.Check("/shopping add milk", On with { ShoppingTab = false }).Kind);   // adds from the chat whatever the tab
         Assert.Equal(WebUiText.PcOnly("/cwd <path>"), WebCommands.Check("/cwd D:\\work", On).Reason);
 
+        // /settings export|import (2026-11-14, the review's #49): the zip lives in the PC's Downloads, so the PC's only, as the docs' Never row says.
+        Assert.Equal(WebUiText.PcOnly("/settings export"), WebCommands.Check("/settings export", On).Reason);
+        Assert.Equal(WebUiText.PcOnly("/settings import"), WebCommands.Check("/settings import neon.zip", On).Reason);
+
         // /youtube list (later on 2026-10-16): the Video tab's saved list, or the setting while the tab is off; every other form the PC's.
         Assert.Equal(WebUiText.UseYouTubePage, WebCommands.Check("/youtube list", On with { YouTubeTab = true }).Reason);
         Assert.Equal(WebUiText.UseYouTubePage, WebCommands.Check("/youtube list --clear", On with { YouTubeTab = true }).Reason);

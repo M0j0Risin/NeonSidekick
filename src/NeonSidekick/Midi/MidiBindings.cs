@@ -45,6 +45,9 @@ public enum MidiSaveOutcome
 
     /// <summary>The file could not be read or written (logged); nothing changed.</summary>
     Failed,
+
+    /// <summary>The binding shown is no longer in the file (a hand edit meanwhile, 2026-11-14, the review's #9); nothing changed.</summary>
+    Gone,
 }
 
 /// <summary>What <see cref="MidiBindings.Import"/> did (2026-11-12, <c>/profile push|pull midi</c>).</summary>
@@ -69,7 +72,8 @@ public readonly record struct MidiImport(MidiImportOutcome Outcome, int Added, i
 /// aside to <c>.bad</c> before the first write, and one from a newer version is left alone and refuses every write. An entry a hand edit
 /// made unusable (a kind that isn't <c>note</c>, <c>cc</c> or <c>program</c>, a channel outside 1–16, a number outside 0–127, a command
 /// that doesn't start with <c>/</c>) is skipped with one warning and listed in <see cref="MidiBindingSet.Skipped"/>; the file keeps it
-/// until the user next saves, so a typo is seen before it is lost. The model can't write here: the file is under the home (<c>WriteGuard</c>).
+/// until the user next saves from the <c>/midi</c> pane, so a typo is seen before it is lost (2026-11-14: <c>/midi forget</c> and an import
+/// without overwrite keep it, as they never showed it). The model can't write here: the file is under the home (<c>WriteGuard</c>).
 /// </summary>
 public sealed class MidiBindings
 {
@@ -131,13 +135,18 @@ public sealed class MidiBindings
         });
     }
 
-    /// <summary>The binding at <paramref name="index"/> (0-based) given <paramref name="command"/> in its place.</summary>
-    public MidiSaveOutcome SetCommand(int index, string command)
+    /// <summary>
+    /// <paramref name="shown"/> (the pane's binding, found by its button in the file as it reads now: 2026-11-14, the review's #9, so a hand
+    /// edit in between never changes another) given <paramref name="command"/>. Failed when that button is no longer bound.
+    /// </summary>
+    public MidiSaveOutcome SetCommand(MidiBinding shown, string command)
     {
+        ArgumentNullException.ThrowIfNull(shown);
         ArgumentException.ThrowIfNullOrWhiteSpace(command);
         return Change(list =>
         {
-            if (index < 0 || index >= list.Count)
+            int index = IndexOf(list, shown);
+            if (index < 0)
             {
                 return false;
             }
@@ -147,13 +156,15 @@ public sealed class MidiBindings
         });
     }
 
-    /// <summary>The binding at <paramref name="index"/> (0-based) given <paramref name="trigger"/>'s button, any other binding of that button removed.</summary>
-    public MidiSaveOutcome SetTrigger(int index, MidiTrigger trigger)
+    /// <summary><paramref name="shown"/> given <paramref name="trigger"/>'s button, any other binding of that button removed; found by its button.</summary>
+    public MidiSaveOutcome SetTrigger(MidiBinding shown, MidiTrigger trigger)
     {
+        ArgumentNullException.ThrowIfNull(shown);
         ArgumentNullException.ThrowIfNull(trigger);
         return Change(list =>
         {
-            if (index < 0 || index >= list.Count)
+            int index = IndexOf(list, shown);
+            if (index < 0)
             {
                 return false;
             }
@@ -175,8 +186,28 @@ public sealed class MidiBindings
         });
     }
 
-    /// <summary>The binding at <paramref name="index"/> (0-based) removed.</summary>
-    public MidiSaveOutcome Remove(int index) => Change(list =>
+    /// <summary><paramref name="shown"/> removed, found by its button (the pane's Del).</summary>
+    public MidiSaveOutcome Remove(MidiBinding shown)
+    {
+        ArgumentNullException.ThrowIfNull(shown);
+        return Change(list =>
+        {
+            int index = IndexOf(list, shown);
+            if (index < 0)
+            {
+                return false;
+            }
+
+            list.RemoveAt(index);
+            return true;
+        });
+    }
+
+    /// <summary>
+    /// <c>/midi forget N</c>: the binding at <paramref name="index"/> (0-based, the number <c>/midi list</c> shows) removed. The entries a hand
+    /// edit made unusable stay in the file (2026-11-14, the review's #40 leftover): the user read only the list, never the pane that shows them.
+    /// </summary>
+    public MidiSaveOutcome Forget(int index) => Change(list =>
     {
         if (index < 0 || index >= list.Count)
         {
@@ -185,7 +216,10 @@ public sealed class MidiBindings
 
         list.RemoveAt(index);
         return true;
-    });
+    }, keepSkipped: true);
+
+    /// <summary>Where <paramref name="shown"/>'s button is bound in <paramref name="list"/> (a button is bound once per file), or -1.</summary>
+    private static int IndexOf(List<MidiBinding> list, MidiBinding shown) => list.FindIndex(b => b.Trigger.SameButton(shown.Trigger));
 
     /// <summary>
     /// <c>/profile push|pull midi [overwrite]</c> (2026-11-12): <paramref name="bindings"/> (another profile's) added in their order. A
@@ -217,8 +251,9 @@ public sealed class MidiBindings
                 added++;
             }
 
+            // The target's unusable entries stay unless the whole list is replaced (2026-11-14, the review's #40 leftover): nobody saw them here.
             bool changed = overwrite || added > 0;
-            return !changed || Write(kept, file.Set.State) ? new(MidiImportOutcome.Done, added, skipped) : new(MidiImportOutcome.Failed, 0, 0);
+            return !changed || Write(kept, file.Set.State, overwrite ? null : file.Skipped) ? new(MidiImportOutcome.Done, added, skipped) : new(MidiImportOutcome.Failed, 0, 0);
         }
     }
 
@@ -281,7 +316,8 @@ public sealed class MidiBindings
         _ => null,
     };
 
-    private MidiSaveOutcome Change(Func<List<MidiBinding>, bool> edit)
+    /// <summary>An edit of the bindings saved; <paramref name="keepSkipped"/> keeps the file's unusable entries (else they go: the pane showed them).</summary>
+    private MidiSaveOutcome Change(Func<List<MidiBinding>, bool> edit, bool keepSkipped = false)
     {
         lock (s_gate)
         {
@@ -297,14 +333,21 @@ public sealed class MidiBindings
             var list = file.Set.Bindings.ToList();
             if (!edit(list))
             {
-                return MidiSaveOutcome.Failed;
+                return MidiSaveOutcome.Gone;
             }
 
-            return Write(list, file.Set.State) ? MidiSaveOutcome.Saved : MidiSaveOutcome.Failed;
+            return Write(list, file.Set.State, keepSkipped ? file.Skipped : null) ? MidiSaveOutcome.Saved : MidiSaveOutcome.Failed;
         }
     }
 
-    private sealed record Loaded(MidiBindingSet Set);
+    /// <summary>The file as read, and its skipped entries as they came (2026-11-14: so a save that keeps them writes them back unchanged).</summary>
+    private sealed record Loaded(MidiBindingSet Set, IReadOnlyList<MidiBindingEntry?> Skipped)
+    {
+        public Loaded(MidiBindingSet set)
+            : this(set, [])
+        {
+        }
+    }
 
     /// <summary>The file as it reads: none for a missing one; none, logged, for a broken one or a newer version's. Caller holds the lock.</summary>
     private Loaded Read()
@@ -331,16 +374,19 @@ public sealed class MidiBindings
 
             var bindings = new List<MidiBinding>();
             var skipped = new List<string>();
+            var raw = new List<MidiBindingEntry?>();
             foreach (var entry in file.Bindings ?? [])
             {
                 var (binding, problem) = Parse(entry);
                 if (binding is null)
                 {
                     skipped.Add(problem!);
+                    raw.Add(entry);
                 }
                 else if (bindings.Any(b => b.Trigger.SameButton(binding.Trigger)))
                 {
                     skipped.Add(MidiText.SkippedDuplicate(MidiText.Describe(binding.Trigger)));
+                    raw.Add(entry);
                 }
                 else
                 {
@@ -353,7 +399,7 @@ public sealed class MidiBindings
                 DiagnosticLog.Warn(Category, $"{FileName}: {skipped.Count.ToString(CultureInfo.InvariantCulture)} entr{(skipped.Count == 1 ? "y" : "ies")} skipped: {string.Join("; ", skipped)}");
             }
 
-            return new Loaded(new(bindings, skipped, MidiFileState.Ok));
+            return new Loaded(new(bindings, skipped, MidiFileState.Ok), raw);
         }
         catch (JsonException ex)
         {
@@ -369,9 +415,10 @@ public sealed class MidiBindings
 
     /// <summary>
     /// The list written (a temp file moved over the old one), a broken file moved aside to <c>.bad</c> first; false, logged, when it could
-    /// not be. Caller holds the lock and has refused a newer version's file.
+    /// not be. Caller holds the lock and has refused a newer version's file. <paramref name="kept"/>: skipped entries written back after the
+    /// bindings, as they came (2026-11-14).
     /// </summary>
-    private bool Write(List<MidiBinding> bindings, MidiFileState state)
+    private bool Write(List<MidiBinding> bindings, MidiFileState state, IReadOnlyList<MidiBindingEntry?>? kept = null)
     {
         string tempPath = $"{_filePath}.{Guid.NewGuid():N}.tmp";
         try
@@ -383,7 +430,7 @@ public sealed class MidiBindings
                 DiagnosticLog.Warn(Category, $"The unreadable {FileName} was moved aside to {FileName}.bad.");
             }
 
-            var file = new MidiBindingsFile { Version = Version, Bindings = [.. bindings.Select(b => (MidiBindingEntry?)Entry(b))] };
+            var file = new MidiBindingsFile { Version = Version, Bindings = [.. bindings.Select(b => (MidiBindingEntry?)Entry(b)), .. kept ?? []] };
             File.WriteAllText(tempPath, JsonSerializer.Serialize(file, MidiJsonContext.Default.MidiBindingsFile));
             File.Move(tempPath, _filePath, overwrite: true);
             Computers.ConfigCache.Invalidate(_filePath);

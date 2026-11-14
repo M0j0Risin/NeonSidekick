@@ -252,6 +252,28 @@ public partial class WebVideoPlayerTests : IDisposable
         Assert.True(b.Attachment.Hello.Resume?.Muted);
     }
 
+    /// <summary>
+    /// A mute the page forced for autoplay (its report's <c>gesture</c>) is not carried into the next file (2026-11-14, the review's #28): the
+    /// next file loads at the level, unmuted.
+    /// </summary>
+    [Fact]
+    public void AnAutoplayMute_IsNotCarried_IntoTheNextFile()
+    {
+        var player = Player();
+        var a = Attach(player, Id('a'), Id('1'));
+        var first = VideoRequest.File(FileClip());
+        player.Play(first);
+        player.Report(Id('a'), "{\"ev\":\"state\",\"file\":\"" + first.FileToken + "\",\"state\":1,\"position\":60,\"duration\":600,\"volume\":40,\"muted\":true,\"gesture\":true}", null);
+        Assert.True(player.Snapshot!.NeedsTap);
+        a.Drain();
+
+        player.Play(VideoRequest.File(FileClip("b.mp4")));
+
+        var load = JsonDocument.Parse(a.Drain().Single(e => e.Name == "load").Json).RootElement;
+        Assert.Equal(40, load.GetProperty("volume").GetInt32());
+        Assert.False(load.GetProperty("muted").GetBoolean());
+    }
+
     /// <summary>A file with no picture is flagged, not failed (2026-11-13): it plays on, the log says so once per load.</summary>
     [Fact]
     public void AFileWithNoPicture_IsFlagged_AndLoggedOnce()

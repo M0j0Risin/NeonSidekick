@@ -68,6 +68,19 @@ public sealed class MidiSystemTests
         Assert.Equal(MidiText.OpenFailed("MMSYSERR 11"), WindowsMidiSystem.Failure(11).Message);
     }
 
+    /// <summary>A fixed name field is cut at its first NUL (2026-11-14, the review's #2): junk a driver leaves after it never reaches the name.</summary>
+    [Fact]
+    public unsafe void AFixedNameField_IsCutAtItsFirstNul()
+    {
+        char* field = stackalloc char[32];
+        new Span<char>(field, 32).Fill('x');
+        "FS-4\0junk".AsSpan().CopyTo(new Span<char>(field, 32));
+        Assert.Equal("FS-4", NeonSidekick.Platform.FixedText.Read(field, 32));
+
+        new Span<char>(field, 32).Fill('y');
+        Assert.Equal(new string('y', 32), NeonSidekick.Platform.FixedText.Read(field, 32));   // no NUL: the whole field
+    }
+
     [MacFact]
     [System.Runtime.Versioning.SupportedOSPlatform("macos")]
     public void Mac_ListsWithoutThrowing_AndAnInputNotThereIsGone()

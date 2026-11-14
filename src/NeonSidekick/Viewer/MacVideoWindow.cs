@@ -424,6 +424,7 @@ internal sealed class MacVideoWindow : AppKitWindow, IWebPageSink
         {
             _pending = request;
             _snapshot = VideoSnapshot.Opening(request) with { Version = MacVideoWindows.NextVersion() };
+            _outbox.Clear();   // the last video's queued commands are never the new one's (2026-11-14, the review's #35, as the Windows window)
         }
 
         return Post(() =>

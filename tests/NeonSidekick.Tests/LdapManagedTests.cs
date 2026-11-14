@@ -1026,6 +1026,12 @@ public sealed class LdapManagedTests
             server.Finished = Task.Run(async () =>
             {
                 server._client = await server._listener.AcceptTcpClientAsync();
+                if (Volatile.Read(ref server._disposing) == 1)
+                {
+                    server._client.Dispose();   // accepted after DisposeAsync read a null client (2026-11-14, the review's #25): never left open
+                    return;
+                }
+
                 try
                 {
                     server._stream = server._client.GetStream();
@@ -1141,6 +1147,8 @@ public sealed class LdapManagedTests
             catch (Exception ex) when (ex is TimeoutException or SocketException or ObjectDisposedException or InvalidOperationException)   // the last: stopped before the accept began
             {
             }
+
+            _client?.Dispose();   // the one the script ran on, and one accepted after the first dispose above
         }
     }
 

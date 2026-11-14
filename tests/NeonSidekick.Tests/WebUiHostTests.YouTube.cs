@@ -297,6 +297,19 @@ public sealed partial class WebUiHostTests
         Assert.Equal((HttpStatusCode.SeeOther, "/video"), (slash.Status, slash.Location));
     }
 
+    /// <summary>The tab's old address goes to the Video tab (2026-11-14, the review's #27), signed in or not: /video decides the rest.</summary>
+    [Fact]
+    public async Task TheOldYouTubeAddress_GoesToTheVideoTab()
+    {
+        YouTubeOn();
+
+        var bare = await PageAsync("/youtube");
+        var html = await PageAsync("/youtube.html");
+
+        Assert.Equal((HttpStatusCode.SeeOther, "/video"), (bare.Status, bare.Location));
+        Assert.Equal((HttpStatusCode.SeeOther, "/video"), (html.Status, html.Location));
+    }
+
     [Fact]
     public void TheReportBucket_IsItsOwn_InEverySwitch()
     {

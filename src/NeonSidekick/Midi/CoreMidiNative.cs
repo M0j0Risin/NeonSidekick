@@ -79,10 +79,15 @@ internal static unsafe partial class CoreMidiNative
         return null;
     }
 
+    // CoreMIDI's handle, loaded once (2026-11-14, the review's #44: each property read loaded it again), as ImageIONative's handles are;
+    // TryLoad rather than Load, so a Mac without it still reads every property as null instead of throwing. 0 when it isn't there.
+    private static readonly Lazy<nint> CoreMidiHandle = new(() => NativeLibrary.TryLoad(CoreMidi, out nint library) ? library : 0);
+
     // A property key: an exported CFStringRef variable, its address the export.
     private static nint? Property(string name)
     {
-        if (!NativeLibrary.TryLoad(CoreMidi, out nint library) || !NativeLibrary.TryGetExport(library, name, out nint export))
+        nint library = CoreMidiHandle.Value;
+        if (library == 0 || !NativeLibrary.TryGetExport(library, name, out nint export))
         {
             return null;
         }

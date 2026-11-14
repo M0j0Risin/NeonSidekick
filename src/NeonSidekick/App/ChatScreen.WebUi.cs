@@ -965,7 +965,7 @@ internal sealed partial class ChatScreen
             return WebReply.Ok;   // a tap on another thread got there first
         }
 
-        var queued = _webUi.QueueChord(BotChat.ResumeLine, remote, request.Page, request.Speak == true);
+        var queued = _webUi.QueueChord(BotChat.ResumeLine, remote, request.Page, request.Speak);
         if (queued.Outcome != WebOutcome.Ok)
         {
             Interlocked.Exchange(ref _webResumeInFlight, 0);

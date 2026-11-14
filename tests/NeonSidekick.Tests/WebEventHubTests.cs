@@ -75,6 +75,11 @@ public sealed class WebEventHubTests
         Assert.True(hub.HasPage(copy.Page, "load-fedcba9876543210"));
         Assert.True(hub.HasPage(Page, Load));
         Assert.False(hub.HasPage(Page, "load-fedcba9876543210"));
+        // Each page id's one run (2026-11-14, the review's #52), null for none.
+        Assert.Equal(Load, hub.LoadOf(Page));
+        Assert.Equal("load-fedcba9876543210", hub.LoadOf(copy.Page));
+        Assert.Null(hub.LoadOf("page-ffffffffffffffff"));
+        Assert.Null(hub.LoadOf(null));
     }
 
     [Fact]

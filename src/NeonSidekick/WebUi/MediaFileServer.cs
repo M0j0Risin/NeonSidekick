@@ -224,6 +224,7 @@ internal static class MediaFileServer
                 }
                 catch (OperationCanceledException)
                 {
+                    context.Abort();   // never a short answer the browser would take as the file (2026-11-14, the review's #23)
                     return;
                 }
                 catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -247,7 +248,8 @@ internal static class MediaFileServer
                 }
                 catch (Exception e) when (e is OperationCanceledException or IOException or ObjectDisposedException)
                 {
-                    return;   // the browser left the range (a seek, a pause, the tab closed) or the host stops
+                    context.Abort();   // the browser left the range (a seek, a pause, the tab closed) or the host stops: never a short answer
+                    return;
                 }
 
                 left -= read;

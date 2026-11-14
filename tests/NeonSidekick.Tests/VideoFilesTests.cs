@@ -222,6 +222,19 @@ public sealed class VideoFilesTests : IDisposable
 
     // ── video_control ────────────────────────────────────────────────────────
 
+    /// <summary>A file that failed keeps its window open, and close still closes it (2026-11-14, the review's #34).</summary>
+    [Fact]
+    public async Task Control_Close_ClosesAFailedFilesWindow()
+    {
+        await Call(Play(), ("path", "clip.mp4"));
+        _player.Report(_player.Snapshot! with { State = VideoState.Failed, Error = 4 });
+        int closes = _player.Closes;
+
+        Assert.Equal(YouTubeText.ClosedIn(VideoPlace.Window), await Call(Control(), ("action", "close")));
+        Assert.Equal(closes + 1, _player.Closes);
+        Assert.Null(_player.Snapshot);
+    }
+
     /// <summary>A page that can't set its volume (an iPhone, 2026-11-13) answers a volume at once, sending nothing; mute still goes.</summary>
     [Fact]
     public async Task Control_AFixedVolume_AnswersAtOnce()
@@ -458,7 +471,10 @@ public sealed class VideoFilesTests : IDisposable
         Assert.Equal(VideoFilesPlayInKind.DefaultApp, kind);
         Assert.All(VideoFilesPlayIn.Names, name => Assert.Equal(name, VideoFilesPlayIn.Name(VideoFilesPlayIn.Resolve(new AppSettingsData { VideoFilesPlayIn = name }))));
         Assert.Equal(VideoFilesPlayInKind.VideoWindow, VideoFilesPlayIn.Resolve(new AppSettingsData { VideoFilesPlayIn = "phone" }));
-        Assert.All(VideoFilesPlayIn.Names, name => Assert.NotEmpty(VideoFilesPlayIn.Describe(name)));
+        Assert.All(VideoFilesPlayIn.Names, name => Assert.Equal(VideoText.PlayInHint(name), VideoFilesPlayIn.Describe(name)));
+        Assert.All(VideoFilesPlayIn.Names, name => Assert.NotEmpty(VideoText.PlayInHint(name)));
+        Assert.Equal("", VideoText.PlayInHint("phone"));
+        Assert.Equal("Error: no window", VideoText.RouteFailed("no window"));
         Assert.False(new AppSettingsData().VideoTools);
         Assert.False(new AppSettingsData().WebUiVideoFilesOverFunnel);
     }
@@ -480,6 +496,19 @@ public sealed class VideoFilesTests : IDisposable
     public void EveryVideoType_IsOnTheOpenList()
     {
         Assert.All(VideoFile.Extensions, ext => Assert.Null(OpenRules.Refusal(Full("clip" + ext), isDirectory: false)));
+    }
+
+    /// <summary>
+    /// The level a new file carries (2026-11-14, the review's #28/#32): a failed play's level too, and never a mute the page forced for
+    /// autoplay.
+    /// </summary>
+    [Fact]
+    public void SoundOf_KeepsAFailedPlaysLevel_AndDropsAnAutoplayMute()
+    {
+        Assert.Null(VideoSnapshot.SoundOf(null));
+        Assert.Equal(new VideoSound(30, false), VideoSnapshot.SoundOf(new VideoSnapshot(VideoState.Failed, null, Volume: 30)));
+        Assert.Equal(new VideoSound(30, true), VideoSnapshot.SoundOf(new VideoSnapshot(VideoState.Playing, null, Volume: 30, Muted: true)));
+        Assert.Equal(new VideoSound(30, false), VideoSnapshot.SoundOf(new VideoSnapshot(VideoState.Playing, null, Volume: 30, Muted: true) { NeedsTap = true }));
     }
 
     [Fact]

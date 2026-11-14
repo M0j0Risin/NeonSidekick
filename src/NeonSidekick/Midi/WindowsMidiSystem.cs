@@ -57,7 +57,12 @@ public sealed unsafe class WindowsMidiSystem : IMidiSystem
     {
         private readonly Action<ReadOnlySpan<byte>> _onBytes;
         private readonly ConcurrentQueue<uint> _words = new();
+
+        // Every other message the driver sends while the input runs and isn't being closed (2026-11-14, the review's #8): logged at Debug by the
+        // pump, never in the callback, so a replug's hand check can tell whether WinMM says anything (MIM_CLOSE, MIM_ERROR) when a device goes.
+        private readonly ConcurrentQueue<uint> _unasked = new();
         private readonly AutoResetEvent _ready = new(false);
+        private volatile bool _closing;
         private readonly Lock _gate = new();
         private GCHandle _self;
         private IntPtr _device;
@@ -112,6 +117,8 @@ public sealed unsafe class WindowsMidiSystem : IMidiSystem
                 _disposed = true;
             }
 
+            _closing = true;   // our own close's MIM_CLOSE is asked for, so never logged as the driver's
+
             // Stop, reset and close: after midiInClose returns the driver calls back no more; then the pump drains and ends.
             if (_device != IntPtr.Zero)
             {
@@ -147,6 +154,11 @@ public sealed unsafe class WindowsMidiSystem : IMidiSystem
             while (true)
             {
                 _ready.WaitOne();
+                while (_unasked.TryDequeue(out uint unasked))
+                {
+                    DiagnosticLog.Debug(Category, MidiText.UnaskedMessageLogLine(Info.Name, unasked));
+                }
+
                 while (_running && _words.TryDequeue(out uint word))
                 {
                     bytes[0] = (byte)word;
@@ -175,8 +187,19 @@ public sealed unsafe class WindowsMidiSystem : IMidiSystem
         {
             try
             {
-                if (message is not (WinMmMidiNative.MimData or WinMmMidiNative.MimMoreData) || instance == IntPtr.Zero)
+                if (instance == IntPtr.Zero)
                 {
+                    return;
+                }
+
+                if (message is not (WinMmMidiNative.MimData or WinMmMidiNative.MimMoreData))
+                {
+                    if (GCHandle.FromIntPtr(instance).Target is WinMmInput other && other._running && !other._closing)
+                    {
+                        other._unasked.Enqueue(message);
+                        other._ready.Set();
+                    }
+
                     return;
                 }
 

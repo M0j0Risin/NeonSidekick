@@ -243,4 +243,54 @@ public partial class ChatScreenTests
         Assert.Equal(2, output.Split(DockerServerText.SwitchedOffError).Length - 1);
         Assert.Empty(docker.Calls);
     }
+
+    [Fact]
+    public async Task ProfileSwitch_ToAProfileWithDockerServersOff_KeepsTheContainerRunning()
+    {
+        // 2026-11-14 (the user's call on the review's #30): the old profile's container keeps running through a switch, whatever the new
+        // profile's Docker setting; work talks to another machine's server.
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var docker = UseDockerServers();
+        _http.Map("http://gpu-box:8000/v1/models", System.Net.HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("work-model"));
+        WorkProfile("http://gpu-box:8000/v1");
+        PushLine("/server docker:sglang_a");
+        _console.Input.PushKey(Keys.Escape);   // keep the reasoning
+        PushLine("/profile work");
+        PushLine("/exit");
+
+        await RunAsync();
+
+        Assert.Equal("work", _settings.ProfileName);
+        Assert.False(_settings.Current.DockerServers);
+        Assert.True(docker.IsRunning("sglang_a"));
+        Assert.Equal(["sglang_a"], _session.DockerRunning);
+        Assert.DoesNotContain("clear", docker.Calls.Skip(1));   // the launch's clear alone
+    }
+
+    [Fact]
+    public async Task ProfileReset_OfTheLoadedProfile_TurnsDockerServersOff_AndStopsItsContainer()
+    {
+        // A reset of the loaded profile is its own settings changing (no switch): Docker servers back to off stops its container.
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var docker = UseDockerServers();
+        PushLine("/server docker:sglang_a");
+        _console.Input.PushKey(Keys.Escape);   // keep the reasoning
+        PushLine("/profile reset");
+        PickYes();
+        PushLine("/exit");
+
+        await RunAsync();
+
+        Assert.False(_settings.Current.DockerServers);
+        Assert.False(docker.IsRunning("sglang_a"));
+        Assert.Empty(_session.DockerRunning);
+    }
 }

@@ -61,6 +61,7 @@ internal sealed class WebAudioPlayback : IAudioPlayback, IPageAudio
     private readonly List<KeptClip> _clips = [];   // kept clips, oldest first
     private readonly ITimer _flush;
     private readonly ITimer _silent;
+    private bool _silentArmed;     // the silent timer runs (under _gate): a new clip leaves it running, so it counts from the last report
     private byte[] _pending = new byte[ClipBytes];
     private int _pendingCount;
     private long _written;         // every byte taken by Write
@@ -237,7 +238,8 @@ internal sealed class WebAudioPlayback : IAudioPlayback, IPageAudio
 
             var found = _clips.Find(c => c.N == clip);
             long length = found?.Bytes.Length ?? 0;
-            long bytes = Math.Min(offset * 2, length);
+            // Clamped before doubling (2026-11-14, the review's #19): a huge offset doubled would wrap negative and read as nothing played.
+            long bytes = offset >= (length + 1) / 2 ? length : offset * 2;
             if (clip < _lastReport || (clip == _lastReport && bytes <= _lastReportBytes))
             {
                 ArmSilentLocked();
@@ -302,7 +304,7 @@ internal sealed class WebAudioPlayback : IAudioPlayback, IPageAudio
             _unfetched = 0;
             _pendingCount = 0;
             _flush.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
-            _silent.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+            DisarmSilentLocked();
         }
 
         DiagnosticLog.Debug(Category, "Web UI voice on page " + Short(Page) + ": the page went; its audio counts heard.");
@@ -316,7 +318,7 @@ internal sealed class WebAudioPlayback : IAudioPlayback, IPageAudio
             _held = on;
             if (on)
             {
-                _silent.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+                DisarmSilentLocked();
             }
             else
             {
@@ -370,7 +372,13 @@ internal sealed class WebAudioPlayback : IAudioPlayback, IPageAudio
         _pendingCount = 0;
         _clips.Add(clip);
         _unfetched += bytes.Length;
-        ArmSilentLocked();
+        if (!_silentArmed)
+        {
+            // Armed only when it isn't (2026-11-14, the review's #6): a clip made while the page reports nothing must not push the
+            // deadline back, or a steady reply would never be found silent. A report (Played) or a listen's end re-arms it.
+            ArmSilentLocked();
+        }
+
         var announced = new WebVoiceClip(Turn, clip.N, bytes.Length);
         return new WebEvent("voice-clip", () => JsonSerializer.Serialize(announced, WebUiJsonContext.Default.WebVoiceClip)) { Page = Page };
     }
@@ -385,7 +393,7 @@ internal sealed class WebAudioPlayback : IAudioPlayback, IPageAudio
         _clipped = _written;
         _firstLive = _nextClip;
         _flush.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
-        _silent.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+        DisarmSilentLocked();
         if (!owed || _gone)
         {
             return null;
@@ -399,11 +407,19 @@ internal sealed class WebAudioPlayback : IAudioPlayback, IPageAudio
     {
         if (_held || _gone || _disposed || _gaveUp || _clips.Count == 0 || _played >= _clipped)
         {
-            _silent.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+            DisarmSilentLocked();
             return;
         }
 
         _silent.Change(SilentAfter, Timeout.InfiniteTimeSpan);
+        _silentArmed = true;
+    }
+
+    /// <summary>Stops the silent timer and says so, so the next clip arms it again (every disarm goes through here).</summary>
+    private void DisarmSilentLocked()
+    {
+        _silent.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+        _silentArmed = false;
     }
 
     private string? CheckCap()
@@ -439,6 +455,7 @@ internal sealed class WebAudioPlayback : IAudioPlayback, IPageAudio
     {
         lock (_gate)
         {
+            _silentArmed = false;   // it fired: a later clip arms it again, whatever this fire decides
             if (_held || _gone || _disposed || _gaveUp || _played >= _clipped)
             {
                 return;

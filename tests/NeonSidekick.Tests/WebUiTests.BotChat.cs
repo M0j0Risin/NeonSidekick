@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using NeonSidekick.Tests.Fakes;
 using NeonSidekick.WebUi;
 
 namespace NeonSidekick.Tests;
@@ -80,6 +81,22 @@ public sealed partial class WebUiTests
         _session.QueueChord(App.BotChat.ResumeLine, null, "bad id", speak: true);
         Assert.True(_session.TryTakeLine(out var bare));
         Assert.Equal((null, false, true), (bare.Page, bare.Speak, bare.Chord));
+    }
+
+    /// <summary>A chord posted without its 🔊 (a hand-made post) tells the voice side nothing, as a send without it does (2026-11-14, the review's #4).</summary>
+    [Fact]
+    public void AChordLine_WithNoSpeak_LeavesThePagesSpeakAlone()
+    {
+        var voice = new FakeWebVoice();
+        _session.Voice = voice;
+        const string Page = "page-0123456789abcdef";
+
+        _session.QueueChord(App.BotChat.ResumeLine, null, Page, speak: null);
+        _session.QueueChord(App.BotChat.ResumeLine, null, Page, speak: false);
+
+        Assert.Equal([(Page, (bool?)null), (Page, false)], voice.Seen);
+        Assert.True(_session.TryTakeLine(out var line));
+        Assert.False(line.Speak);   // no 🔊 said, so no voice for this line
     }
 
     [Fact]

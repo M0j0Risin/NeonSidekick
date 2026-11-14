@@ -64,6 +64,19 @@ public sealed class WebAudioPlaybackTests
         Assert.False(playback.Owed);
     }
 
+    /// <summary>An offset so large its doubling would wrap is still the clip played whole (2026-11-14, the review's #19).</summary>
+    [Fact]
+    public void AHugeOffset_IsTheWholeClip_NeverAWrappedNegative()
+    {
+        using var playback = Make();
+        playback.Write(Pcm(WebAudioPlayback.FirstClipBytes), WebAudioPlayback.FirstClipBytes);
+
+        Assert.Equal(WebPlayedResult.Taken, playback.Played(0, long.MaxValue / 2 + 1));
+
+        Assert.False(playback.Owed);
+        Assert.Equal(0, playback.BufferedBytes);
+    }
+
     [Fact]
     public void AClipNeverMade_OrANegativeOffset_IsRefused()
     {
@@ -143,6 +156,34 @@ public sealed class WebAudioPlaybackTests
         playback.Hold(false);
         _time.Advance(WebAudioPlayback.SilentAfter + TimeSpan.FromMilliseconds(100));
         Assert.Single(gaveUp);
+    }
+
+    /// <summary>
+    /// The silent rule counts from the page's last report, not the last clip (2026-11-14, the review's #6): a clip made while the page
+    /// says nothing leaves the timer running; one made after everything played (the timer off) arms it again.
+    /// </summary>
+    [Fact]
+    public void ANewClip_LeavesTheSilentTimerRunning_ButArmsItAfterADisarm()
+    {
+        using var playback = Make();
+        var gaveUp = new List<string>();
+        playback.GaveUp = gaveUp.Add;
+        playback.Write(Pcm(WebAudioPlayback.FirstClipBytes), WebAudioPlayback.FirstClipBytes);
+        _time.Advance(TimeSpan.FromSeconds(4));
+        playback.Write(Pcm(WebAudioPlayback.ClipBytes), WebAudioPlayback.ClipBytes);
+        _time.Advance(TimeSpan.FromMilliseconds(1100));
+        Assert.Single(gaveUp);
+
+        using var again = Make();
+        var gaveUpAgain = new List<string>();
+        again.GaveUp = gaveUpAgain.Add;
+        again.Write(Pcm(WebAudioPlayback.FirstClipBytes), WebAudioPlayback.FirstClipBytes);
+        again.Played(0, WebAudioPlayback.FirstClipBytes / 2);   // all of it: nothing owed, the timer off
+        _time.Advance(TimeSpan.FromSeconds(10));
+        Assert.Empty(gaveUpAgain);
+        again.Write(Pcm(WebAudioPlayback.ClipBytes), WebAudioPlayback.ClipBytes);
+        _time.Advance(WebAudioPlayback.SilentAfter + TimeSpan.FromMilliseconds(100));
+        Assert.Single(gaveUpAgain);
     }
 
     [Fact]

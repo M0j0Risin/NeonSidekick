@@ -17,6 +17,9 @@ public sealed class FakeRecognizer : ISpeechRecognizer
 
     public bool Fail { get; set; }
 
+    /// <summary>Answers even once the token is cancelled, as Whisper may when its run was already done (a cancel that lost the race).</summary>
+    public bool IgnoreCancellation { get; set; }
+
     public string FailureDetail { get; set; } = "transcription failed: scripted";
 
     public bool LoadFails { get; set; }
@@ -57,7 +60,11 @@ public sealed class FakeRecognizer : ISpeechRecognizer
             await OnTranscribe(pcm, cancellationToken);
         }
 
-        cancellationToken.ThrowIfCancellationRequested();
+        if (!IgnoreCancellation)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+
         if (Fail)
         {
             return RecognitionResult.Failed(FailureDetail);

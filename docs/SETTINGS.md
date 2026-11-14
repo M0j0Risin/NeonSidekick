@@ -126,8 +126,8 @@ A browser front end for this profile, on this computer or (with *Web UI reach* `
 | Web UI bot check control | Chat tab: the page shows a running bot check live and your taps and typing go into it ([A bot check from the page](INTERFACE.md#a-bot-check-from-the-page)). Off: only the allow question and *Give up*. | on |
 | Web UI video files over Funnel | Lets a PC video file play on the Video tab when the page is reached over Tailscale Funnel (only under *Web UI reach* `local`). Only the file playing is served, to a signed-in page. | off |
 | Web UI profile theme | Dresses the pages in the profile's theme, following a `/theme` at once; your lines and review lines take the terminal's colors. Off, they keep their own look. | on |
-| Web UI chat controls | Shows the Chat tab: transcript, message line and the app's questions. Off, the page opens on another [tab](INTERFACE.md#web-ui); the PC is unchanged. | on |
-| Web UI voice | Chat tab: 🎤 to speak a message and 🔊 to hear replies on the page ([Voice](INTERFACE.md#voice)). The PC downloads and loads the voice models for it, even with its own voice off. | off |
+| Web UI chat controls | Shows the Chat tab: transcript, message line and the app's questions. Off, the page opens on another [tab](INTERFACE.md#web-ui), with no voice; the PC is unchanged. | on |
+| Web UI voice | Chat tab: 🎤 to speak a message and 🔊 to hear replies on the page ([Voice](INTERFACE.md#voice)). While the Chat tab is on, the PC downloads and loads the voice models for it, even with its own voice off. | off |
 | Web UI home controls | Shows the [Home tab](INTERFACE.md#the-home-tab) and lets it act. Unlocking, opening a garage, gate or door, and disarming still ask; `/ha` in the chat follows *Web UI commands*. | off |
 | Web UI shopping controls | Shows the Shopping tab: add, tick, change, place and remove lines, and change the store. `/shopping` at the PC is unchanged. | off |
 | Web UI video controls | Shows the [Video tab](INTERFACE.md#the-video-tab) (macOS 14+ on a Mac): it plays videos started there and keeps the saved list. Off, `webui-window` (either setting) plays in the PC's video window. | off |
@@ -270,7 +270,7 @@ Your own LLM containers (vLLM, SGLang, anything serving an OpenAI-compatible API
 | Docker server stop timeout (s) | How long a stopping container gets before the engine kills it (0–120). | 30 |
 | Docker server post-stop delay (s) | The wait after a stop (a container or the embedded model) before the next model loads, so GPU memory frees (0–60). | 2 |
 | Docker server ready timeout (s) | How long a started container may take to answer on its OpenAI-compatible API (30–3600). | 900 |
-| Docker server one at a time | Starting a chosen container stops the other chosen ones first. Off: they keep running side by side; each needs its own host port and GPU share. | on |
+| Docker server one at a time | Starting a chosen container stops the other chosen ones first. Off: they keep running side by side, through a profile switch too (even to one with Docker servers off); each needs its own host port and GPU share. | on |
 | Docker server stop on exit | Once the app has started one, stops the running chosen containers when it exits, the window's close button included. | off |
 
 #### Anthropic

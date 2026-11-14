@@ -1388,8 +1388,8 @@ public enum SettingsField
 
     /// <summary>
     /// A toggle: whether the Chat tab offers voice, 🎤 and 🔊 (<see cref="Settings.AppSettingsData.WebUiVoice"/>, 2026-11-13). The Web UI tab's
-    /// Tabs run, right after <see cref="WebUiChatControls"/> (it extends the Chat tab). Reconnects both voice sessions (<see cref="SettingsMenu.IsWebVoiceField"/>),
-    /// so refused under a reply. Last in the enum, as every newcomer.
+    /// Tabs run, right after <see cref="WebUiChatControls"/> (it extends the Chat tab; with the tab off, nothing loads for it, 2026-11-14). Reconnects
+    /// both voice sessions (<see cref="SettingsMenu.IsWebVoiceField"/>, the Chat tab's row too), so refused under a reply. Last in the enum, as every newcomer.
     /// </summary>
     WebUiVoice,
 }
@@ -2189,10 +2189,11 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// Whether a change to <paramref name="field"/> changes what the voice sessions load for the Web UI (2026-11-13, the webui-voice plan): the inputs of
-    /// <see cref="WebVoiceMode.Wanted"/>, <see cref="SettingsField.WebUi"/> and <see cref="SettingsField.WebUiVoice"/>. Each adds
+    /// <see cref="WebVoiceMode.Wanted"/>, <see cref="SettingsField.WebUi"/>, <see cref="SettingsField.WebUiVoice"/> and, since 2026-11-14,
+    /// <see cref="SettingsField.WebUiChatControls"/> (the Chat tab: no models load without it). Each adds
     /// <see cref="SettingsChanges.Tts"/> | <see cref="SettingsChanges.Voice"/> wherever a field maps to its changes, and is refused under a reply.
     /// </summary>
-    public static bool IsWebVoiceField(SettingsField field) => field is SettingsField.WebUi or SettingsField.WebUiVoice;
+    public static bool IsWebVoiceField(SettingsField field) => field is SettingsField.WebUi or SettingsField.WebUiVoice or SettingsField.WebUiChatControls;
 
     /// <summary>The settings-menu wording for a bad wake phrase. Pinned.</summary>
     public const string WakePhraseError = "must be one to three words of letters";
@@ -8791,8 +8792,8 @@ internal sealed partial class SettingsMenu
         SettingsField.WebUiConnectionDetails => on ? "the page's dropdown shows the % and * connections' notes" : "the page's dropdown names the connections alone",
         SettingsField.WebUiBotCheckControl => on ? "a page's bot check card shows the Browser window and drives it" : "a page's bot check card can only allow or give up",
         SettingsField.WebUiHomeControls => on ? "the Home tab toggles, runs scenes, asks Assist and plays the video" : "there is no Home tab",
-        SettingsField.WebUiChatControls => on ? "the page has its Chat tab" : "there is no Chat tab; / goes to the first tab that is on",
-        SettingsField.WebUiVoice => on ? "the Chat tab has 🎤 and 🔊; the PC readies the voice models" : "the Chat tab has no voice",
+        SettingsField.WebUiChatControls => on ? "the page has its Chat tab" : "there is no Chat tab, and no voice; / goes to the first tab that is on",
+        SettingsField.WebUiVoice => on ? "the Chat tab has 🎤 and 🔊; the voice models load while the tab is on" : "the Chat tab has no voice",
         SettingsField.WebUiShoppingControls => on ? "the Shopping tab adds, ticks, changes and removes lines, picks the store" : "there is no Shopping tab",
         SettingsField.WebUiYouTubeControls => on ? "the Video tab plays videos and keeps the saved list" : "there is no Video tab; webui-window plays in the video window",
         SettingsField.WebUiVideoFilesOverFunnel => on ? "a video file plays on the Video tab over Tailscale Funnel too" : "over Tailscale Funnel the Video tab plays no video file",

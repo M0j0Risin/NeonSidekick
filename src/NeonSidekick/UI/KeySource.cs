@@ -78,6 +78,9 @@ public sealed class KeySource : IAnsiConsoleInput
     private TaskCompletionSource _pressSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private int _phases;
 
+    // A MIDI line posted (2026-11-14, the review's #5), under _requestGate: what wakes the no-keyboard wait, as _pressSignal does for ⏭️.
+    private TaskCompletionSource _commandSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
     /// <summary>ESC as the watch's cancel predicate sees it, for <see cref="PressCancel"/>.</summary>
     private static readonly ConsoleKeyInfo s_escape = new('\u001b', ConsoleKey.Escape, shift: false, alt: false, control: false);
 
@@ -546,9 +549,54 @@ public sealed class KeySource : IAnsiConsoleInput
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(line);
         _commands.Enqueue(line);
+        lock (_requestGate)
+        {
+            _commandSignal.TrySetResult();   // the no-keyboard wait's wake (2026-11-14, the review's #5)
+        }
+
         lock (_wakeGate)
         {
             _wake?.Cancel();
+        }
+    }
+
+    /// <summary>
+    /// The MIDI lines queued (2026-11-12, the MIDI plan), each run a command chord's way, the mid-reply rules deciding; dropped with no hook.
+    /// The signal is re-armed before the drain (2026-11-14, the review's #5, as <see cref="TakePress"/>): a line posted after the drain
+    /// completes the signal the next wait sees. False when a phase ends the watch.
+    /// </summary>
+    private async Task<bool> ServeCommandsAsync(Func<WatchedLine, Task<bool>>? onLine, CancellationToken stop)
+    {
+        lock (_requestGate)
+        {
+            if (_commandSignal.Task.IsCompleted)
+            {
+                _commandSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            }
+        }
+
+        while (_commands.TryDequeue(out string? midi))
+        {
+            if (onLine is null)
+            {
+                continue;
+            }
+
+            MidiTaken?.Invoke(midi);
+            if (!await ServiceAsync(LinePhase(onLine, ChordLine(midi), []), stop, null).ConfigureAwait(false))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private Task CommandSignal()
+    {
+        lock (_requestGate)
+        {
+            return _commandSignal.Task;
         }
     }
 
@@ -876,19 +924,9 @@ public sealed class KeySource : IAnsiConsoleInput
                     }
                 }
 
-                // A MIDI button's line (2026-11-12, the MIDI plan): a command chord's way, the mid-reply rules deciding; dropped with no hook.
-                while (_commands.TryDequeue(out string? midi))
+                if (!await ServeCommandsAsync(onLine, stop).ConfigureAwait(false))
                 {
-                    if (onLine is null)
-                    {
-                        continue;
-                    }
-
-                    MidiTaken?.Invoke(midi);
-                    if (!await ServiceAsync(LinePhase(onLine, ChordLine(midi), []), stop, null).ConfigureAwait(false))
-                    {
-                        return accepted ? Interrupt.Accept : Interrupt.None;
-                    }
+                    return accepted ? Interrupt.Accept : Interrupt.None;
                 }
 
                 // The Web UI's ⏭️ (2026-11-12, PressCancel): ESC's own cancel path.
@@ -922,6 +960,12 @@ public sealed class KeySource : IAnsiConsoleInput
                             }
                         }
 
+                        // A MIDI button's line reaches a turn with no keyboard too (2026-11-14, the review's #5): it wakes this wait.
+                        if (!await ServeCommandsAsync(onLine, stop).ConfigureAwait(false))
+                        {
+                            return accepted ? Interrupt.Accept : Interrupt.None;
+                        }
+
                         // The Web UI's ⏭️ (2026-11-12) still reaches a turn with no keyboard: it wakes this wait.
                         if (TakePress())
                         {
@@ -934,7 +978,7 @@ public sealed class KeySource : IAnsiConsoleInput
                             return Interrupt.Cancel;
                         }
 
-                        await Task.WhenAny(WaitForStopAsync(stop), RequestSignal(), PressSignal()).ConfigureAwait(false);
+                        await Task.WhenAny(WaitForStopAsync(stop), RequestSignal(), PressSignal(), CommandSignal()).ConfigureAwait(false);
                     }
 
                     return accepted ? Interrupt.Accept : Interrupt.None;

@@ -8513,6 +8513,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(SettingsChanges.Llm, ChatScreen.ReloadChanges(["LlmModel: before → by-hand", "GitLibLogMaxCommits: 20 → 33"]));
         Assert.Equal(SettingsChanges.Tts | SettingsChanges.Voice | SettingsChanges.Mcp | SettingsChanges.Conversation, ChatScreen.ReloadChanges(["TtsSpeed: 1 → 1.2", "SttInput: false → true", "McpServers: true → false", "LlmOfferTools: true → false", "NoSuchField: 1 → 2"]));
         Assert.Equal(SettingsChanges.None, ChatScreen.ReloadChanges([]));
+        // The Chat tab's row reconnects both voice sessions (2026-11-14, the review's #43): the page's voice needs the tab.
+        Assert.Equal(SettingsChanges.Tts | SettingsChanges.Voice, ChatScreen.ReloadChanges(["WebUiChatControls: true → false"]));
     }
 
     /// <summary>

@@ -252,7 +252,15 @@ internal sealed partial class ChatScreen
     {
         var theirs = new Midi.MidiBindings(Profiles.Directory(home, other));
         var ours = new Midi.MidiBindings(_settings.ProfileDirectory);
-        var bindings = (pull ? theirs : ours).Load().Bindings;
+        var source = (pull ? theirs : ours).Load();
+        if (source.State != Midi.MidiFileState.Ok)
+        {
+            // A broken, newer or unreadable source named as such, never "no bindings" (2026-11-14, the review's #59).
+            _flow.Error(ProfileMidiSourceError(other, pull));
+            return;
+        }
+
+        var bindings = source.Bindings;
         if (bindings.Count == 0)
         {
             _flow.Notice(ProfileMidiNothingNotice(other, pull));
@@ -782,6 +790,10 @@ internal sealed partial class ChatScreen
     public static string ProfileMidiFailedError(Midi.MidiImportOutcome outcome, string profile, bool pull) =>
         $"Could not copy into {(pull ? "this profile" : $"\"{profile}\"")}'s MIDI bindings: "
         + (outcome == Midi.MidiImportOutcome.Unreadable ? $"its {Midi.MidiBindings.FileName} could not be read, so it was left alone; the log says why." : Midi.MidiText.SaveFailed);
+
+    /// <summary>A MIDI copy whose source file couldn't be read, or is a newer version's (2026-11-14, the review's #59): nothing copied, nothing changed.</summary>
+    public static string ProfileMidiSourceError(string profile, bool pull) =>
+        $"Could not copy {SourceName(profile, pull)}'s MIDI bindings: its {Midi.MidiBindings.FileName} could not be read or is a newer version's; nothing changed.";
 
     /// <summary><c>skills</c> with nothing to copy: <c>(🧩 nothing to copy: this profile has no skills of its own)</c>, or <c>"work"</c> on a pull.</summary>
     public static string ProfileSkillsNothingNotice(string profile, bool pull) =>

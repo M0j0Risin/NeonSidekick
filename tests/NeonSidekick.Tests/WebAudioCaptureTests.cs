@@ -59,18 +59,40 @@ public sealed class WebAudioCaptureTests
     }
 
     [Fact]
-    public void AfterTheStop_EveryChunkIsEnded_AndStoppedIsRaisedOnce()
+    public void AfterTheStop_EveryChunkIsEnded_AndStartedIsRaisedOnce_NeverAfterAStop()
     {
         var capture = new WebAudioCapture(new ManualTimeProvider());
-        int stopped = 0;
-        capture.Stopped += () => stopped++;
+        int started = 0;
+        capture.Started += () => started++;
+        capture.Start();
         capture.Start();
 
         capture.Stop();
         capture.Dispose();
 
         Assert.Equal(WebChunkResult.Ended, capture.Deliver(0, Pcm(1600)));
-        Assert.Equal(1, stopped);
+        Assert.Equal(1, started);
+
+        var stoppedFirst = new WebAudioCapture(new ManualTimeProvider());
+        stoppedFirst.Started += () => started++;
+        stoppedFirst.Stop();
+        stoppedFirst.Start();
+        Assert.Equal(1, started);   // a listen refused before it began never starts (2026-11-14, the review's #13/#17)
+    }
+
+    [Fact]
+    public void AStartHandlerThatThrows_IsLogged_AndTheCaptureStillRuns()
+    {
+        using var capture = new WebAudioCapture(new ManualTimeProvider());
+        int raised = 0;
+        capture.DataAvailable += (_, _) => raised++;
+        capture.Started += () => throw new InvalidOperationException("boom");
+
+        capture.Start();
+
+        Assert.True(capture.IsCapturing);
+        Assert.Equal(WebChunkResult.Delivered, capture.Deliver(0, Pcm(1600)));
+        Assert.Equal(1, raised);
     }
 
     [Fact]

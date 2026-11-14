@@ -397,6 +397,40 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
+    /// A coming line is answered by a line (2026-11-14, the review's #41): the bar off at <c>/ha camera</c>, then on while the still waits, so
+    /// the chip shows the wait when it fails; the error is a line after the coming one all the same.
+    /// </summary>
+    [Fact]
+    public async Task HaCamera_AComingLine_IsAnsweredByAnErrorLine_EvenWhenTheChipIsDrawnBeforeItFails()
+    {
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        CameraCommandServer(async (_, ct) =>
+        {
+            await gate.Task.WaitAsync(ct);
+            return StubHttpMessageHandler.Json(System.Net.HttpStatusCode.InternalServerError, "500: Internal Server Error", "text/plain");
+        });
+        string failed = HomeBarText.Failed("Porch Camera", HaText.CameraNoPicture)[..50];
+        int mark = int.MaxValue;
+        CameraStages(
+            (() => true, input =>
+            {
+                PushLine(input, "/homebar off");
+                PushLine(input, "/ha camera Porch Camera");
+            }),
+            (() => Output.Contains(HomeBarText.CameraComing("Porch Camera"), StringComparison.Ordinal), input =>
+            {
+                mark = Output.Length;
+                PushLine(input, "/homebar on");
+            }),
+            (() => Output.IndexOf("📹 Porch Camera", Math.Min(mark, Output.Length), StringComparison.Ordinal) >= 0, _ => gate.TrySetResult()),   // the chip drawn: now the still fails
+            (() => Output.Contains("  ✗ " + failed, StringComparison.Ordinal), input => PushLine(input, "/exit")));
+
+        string output = await RunAsync();
+
+        Assert.True(output.IndexOf(HomeBarText.CameraComing("Porch Camera"), StringComparison.Ordinal) < output.IndexOf("  ✗ " + failed, StringComparison.Ordinal));
+    }
+
+    /// <summary>
     /// A window too short for the home row (the review of 2026-11-13): the bar's row is still built, but not drawn, so no chip shows the wait —
     /// a camera on the bar gets the "fetching" line, then its saved notice.
     /// </summary>

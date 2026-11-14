@@ -363,7 +363,8 @@ public sealed class DockerServerHost : IDockerServers
     /// <summary>
     /// Why <paramref name="target"/> can't start beside the others (2026-11-11, the review): <see cref="DockerServerText.PortTaken"/> when an
     /// active chosen container publishes a host port the target binds (its inspect's <see cref="DockerInspected.Bound"/>, there while it is
-    /// stopped); null when none does, or the inspect answered nothing (the start then says what the engine says).
+    /// stopped); null when none does, or the inspect answered nothing (the start then says what the engine says). A holder the list shows no
+    /// ports for (restarting) is judged by its inspect, as <see cref="MayServeAsync"/> judges it (2026-11-14, the review's #33).
     /// </summary>
     private async Task<string?> PortTakenAsync(DockerContainer target, IReadOnlyList<DockerContainer> all, IReadOnlyList<string> names, CancellationToken cancellationToken)
     {
@@ -379,15 +380,43 @@ public sealed class DockerServerHost : IDockerServers
             return null;
         }
 
-        foreach (int port in inspected.Bound.Select(b => b.HostPort).Distinct())
+        var wanted = inspected.Bound.Select(b => b.HostPort).Distinct().ToList();
+        if (wanted.Count == 0)
         {
-            if (others.FirstOrDefault(o => HostPortsOf(o).Contains(port)) is { } holder)
+            return null;
+        }
+
+        var held = new List<(DockerContainer Holder, IReadOnlyList<int> Ports)>();
+        foreach (var other in others)
+        {
+            held.Add((other, (await PortsHeldAsync(other, cancellationToken).ConfigureAwait(false)).Ports));
+        }
+
+        foreach (int port in wanted)
+        {
+            if (held.FirstOrDefault(h => h.Ports.Contains(port)).Holder is { } holder)
             {
                 return DockerServerText.PortTaken(target.Name, port, holder.Name);
             }
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// The host ports <paramref name="container"/> holds (2026-11-14, the review's #33): the list's, else (a restarting one shows none) its
+    /// inspect's published and asked-for bindings, with the inspect for a caller that needs more of it; none when the inspect answers nothing.
+    /// </summary>
+    private async Task<(IReadOnlyList<int> Ports, DockerInspected? Inspected)> PortsHeldAsync(DockerContainer container, CancellationToken cancellationToken)
+    {
+        var listed = HostPortsOf(container);
+        if (listed.Count > 0)
+        {
+            return (listed, null);
+        }
+
+        var (inspected, _) = await _docker.InspectAsync(container.Id, cancellationToken).ConfigureAwait(false);
+        return inspected is null ? ([], null) : ([.. inspected.Published.Concat(inspected.Bound).Select(b => b.HostPort).Distinct()], inspected);
     }
 
     /// <summary>
@@ -402,15 +431,8 @@ public sealed class DockerServerHost : IDockerServers
             return true;
         }
 
-        var ports = HostPortsOf(container);
-        if (ports.Count > 0)
-        {
-            return ports.Contains(port);
-        }
-
-        var (inspected, _) = await _docker.InspectAsync(container.Id, cancellationToken).ConfigureAwait(false);
-        return inspected is not null && (string.Equals(inspected.NetworkMode, "host", StringComparison.Ordinal)
-            || inspected.Published.Concat(inspected.Bound).Any(b => b.HostPort == port));
+        var (ports, inspected) = await PortsHeldAsync(container, cancellationToken).ConfigureAwait(false);
+        return ports.Contains(port) || (inspected is not null && string.Equals(inspected.NetworkMode, "host", StringComparison.Ordinal));
     }
 
     /// <summary>When the GPU was just freed (a container stopped, or the caller's own stop), <c>Docker server post-stop delay</c> for its memory to settle before the next model loads.</summary>

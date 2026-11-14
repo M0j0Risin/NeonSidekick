@@ -87,7 +87,11 @@ internal sealed partial class ChatScreen : IWebVoice
         public CancellationTokenSource Cancel { get; } = new();
 
         /// <summary>The running botchat's hold this listen took (Design 2b), lifted at its end; null with no chat.</summary>
-        public TaskCompletionSource? BotHold { get; set; }
+        /// <remarks>
+        /// Set from the capture's <see cref="WebAudioCapture.Started"/> on the pipeline's thread (2026-11-14, the review's #13/#17), so a
+        /// field taken with <see cref="Interlocked.Exchange{T}(ref T, T)"/> at the listen's end.
+        /// </remarks>
+        public TaskCompletionSource? BotHold;
 
         /// <summary>The phase it ended in (<c>transcribing</c> while Whisper runs), or null while listening.</summary>
         public volatile string? Phase;
@@ -136,14 +140,15 @@ internal sealed partial class ChatScreen : IWebVoice
             listen = new PageListen(request.Listen!, capture, entry.Load, remote);
             entry.Listen = listen;
             capture.Stalled += () => OnListenStalled(page, listen);
+            // Under a botchat, the person is talking: the bots wait (Design 2b), from the capture's real start (2026-11-14, the review's
+            // #13/#17), so a listen refused before it began (another listen took the lock) cuts no bot short.
+            capture.Started += () => Volatile.Write(ref listen.BotHold, RequestBotPhoneTalk());
         }
 
         if (tapped is not null)
         {
             _speech.Stop(tapped);
         }
-
-        listen.BotHold = RequestBotPhoneTalk();   // under a botchat, the person is talking: the bots wait (Design 2b)
 
         DiagnosticLog.Info(WebUiCategory, WebUiText.ListenStartLogLine(page, remote));
         _webUi.FlashPc(WebUiText.ListeningFlash);
@@ -287,7 +292,7 @@ internal sealed partial class ChatScreen : IWebVoice
             }
 
             HoldPageSpeech(page, false);   // a reply's voice that began mid-listen plays now (the page schedules it from its first clip)
-            if (listen.BotHold is { } botHold)
+            if (Interlocked.Exchange(ref listen.BotHold, null) is { } botHold)
             {
                 LiftBotPhoneHold(botHold);   // after the heard line was queued, so the next bot's TakeInterjections sees it
             }
@@ -304,6 +309,13 @@ internal sealed partial class ChatScreen : IWebVoice
     /// </summary>
     private void DeliverHeard(string page, PageListen listen, string text)
     {
+        if (listen.Cancel.IsCancellationRequested)
+        {
+            // Canceled while Whisper ran (2026-11-14, the review's #12: the page's ✕, Web UI voice turned off, a reload): nothing is sent.
+            EndListen(page, listen, VoicePhases.Canceled);
+            return;
+        }
+
         if (SttDestinationMode.Resolve(_effective()) == SttTarget.Chat)
         {
             bool? speak;
@@ -337,9 +349,12 @@ internal sealed partial class ChatScreen : IWebVoice
         {
             lock (_voiceGate)
             {
-                var entry = EntryOf(page);
-                entry.Heard = new WebHeard(text ?? "", detail);
-                entry.HeardAt = _time.GetUtcNow();
+                // Never a new entry (2026-11-14, the review's #12): one dropped meanwhile (Web UI voice off) takes the text with it.
+                if (_voicePages.TryGetValue(page, out var entry))
+                {
+                    entry.Heard = new WebHeard(text ?? "", detail);
+                    entry.HeardAt = _time.GetUtcNow();
+                }
             }
 
             return;
@@ -606,11 +621,17 @@ internal sealed partial class ChatScreen : IWebVoice
         }
     }
 
-    /// <summary>The page's entry, made if new; past <see cref="MaxVoicePages"/> the oldest with no stream goes first. Under the lock.</summary>
+    /// <summary>
+    /// The page's entry, made if new; past <see cref="MaxVoicePages"/> the oldest with no stream goes first. Under the lock. An entry
+    /// with no run yet takes its open stream's (2026-11-14, the review's #52): one made after the page joined (voice turned on later, a
+    /// profile switch, a 🔊 post before the stream was up) would otherwise never know it, so the stall rule and reload detection would
+    /// never apply. The hub's lock is taken inside this one, as <see cref="WebEventHub.HasPage(string?)"/> already is here.
+    /// </summary>
     private VoicePage EntryOf(string page)
     {
         if (_voicePages.TryGetValue(page, out var entry))
         {
+            entry.Load ??= _webUi.Events.LoadOf(page);
             return entry;
         }
 
@@ -620,7 +641,7 @@ internal sealed partial class ChatScreen : IWebVoice
             Drop(oldest);
         }
 
-        entry = new VoicePage(page, _time.GetUtcNow());
+        entry = new VoicePage(page, _time.GetUtcNow()) { Load = _webUi.Events.LoadOf(page) };
         _voicePages[page] = entry;
         return entry;
     }
@@ -665,20 +686,28 @@ internal sealed partial class ChatScreen : IWebVoice
     private void PublishVoice(string page, WebVoicePhase phase) =>
         _webUi.Events.Publish(new WebEvent("voice", () => JsonSerializer.Serialize(phase, WebUiJsonContext.Default.WebVoicePhase)) { Page = page });
 
-    /// <summary>A page's voice part of its snapshot: its held heard text (taken) and its speaker.</summary>
-    private (WebHeard? Heard, WebSpeaking? Speaking) WebVoiceSnapshot(string page)
+    /// <summary>
+    /// A page's voice part of its snapshot: its held heard text (taken), its speaker, and the id of its listen still running (2026-11-14, the
+    /// review's #50: a listen that ended while the stream was down told the page nothing, so the page ends one this doesn't name).
+    /// </summary>
+    private (WebHeard? Heard, WebSpeaking? Speaking, string? Listen) WebVoiceSnapshot(string page)
     {
         WebHeard? heard = null;
+        string? running = null;
         lock (_voiceGate)
         {
-            if (_voicePages.TryGetValue(page, out var entry) && entry.Heard is { } held)
+            if (_voicePages.TryGetValue(page, out var entry))
             {
-                heard = _time.GetUtcNow() - entry.HeardAt < HeardKeep ? held : null;
-                entry.Heard = null;
+                running = entry.Listen?.Id;
+                if (entry.Heard is { } held)
+                {
+                    heard = _time.GetUtcNow() - entry.HeardAt < HeardKeep ? held : null;
+                    entry.Heard = null;
+                }
             }
         }
 
-        return (heard, PageSpeakingNow(page));
+        return (heard, PageSpeakingNow(page), running);
     }
 
     /// <summary>The page's latest 🔊 as the voice knows it: null for a page never heard from.</summary>

@@ -91,7 +91,7 @@ public static partial class HelpSettings
         SettingsField.WebUiBotCheckControl => "Lets the Web UI show and control the Browser window during a bot check, so you can pass the check from your phone.",
         SettingsField.WebUiProfileTheme => "Dresses the Web UI's pages in the profile's theme, following theme changes. Off, the pages keep their own look.",
         SettingsField.WebUiChatControls => "Shows the Web UI's Chat tab: the transcript, the message box, and answers to the PC's questions.",
-        SettingsField.WebUiVoice => "Gives the Chat tab 🎤 to speak a message and 🔊 to hear replies on the phone.",
+        SettingsField.WebUiVoice => "Gives the Chat tab 🎤 to speak a message and 🔊 to hear replies on the phone; nothing loads with the tab off.",
         SettingsField.WebUiHomeControls => "Shows the Web UI's Home tab, which controls Home Assistant devices, rooms and scenes. Unlocking and opening doors still ask first.",
         SettingsField.WebUiShoppingControls => "Shows the Web UI's Shopping tab, to see and change the shopping list from your phone.",
         SettingsField.WebUiVideoFilesOverFunnel => "Lets a PC video file play on the Video tab over Tailscale Funnel too, not only on the LAN or a tailnet.",

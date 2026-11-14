@@ -3703,7 +3703,8 @@ public partial class SettingsMenuTests : IDisposable
             bool expected = field is SettingsField.Profile or SettingsField.WorkingDirectory or SettingsField.LlmOfferTools or SettingsField.Theme
                 || SettingsMenu.IsLlmField(field) || SettingsMenu.IsTtsField(field) || SettingsMenu.IsVoiceField(field) || SettingsMenu.IsMcpField(field)
                 || SettingsMenu.IsWebUiField(field)   // the Web UI's rows (2026-10-14): a reply's hand-over would drop the restart
-                || field == SettingsField.WebUiVoice;   // it loads or drops the voice models (2026-11-13, the webui-voice plan)
+                || field == SettingsField.WebUiVoice   // it loads or drops the voice models (2026-11-13, the webui-voice plan)
+                || field == SettingsField.WebUiChatControls;   // so does the Chat tab's row (2026-11-14, the review's #43)
             Assert.Equal(expected, SettingsMenu.RefusedMidTurn(field));
         }
 

@@ -110,17 +110,24 @@ function NeonFile(send, hooks) {
     if (opts.onBlocked) opts.onBlocked();
   }
 
+  // Each answer is this load's alone (2026-11-14): a file loaded meanwhile is never reported muted or refused by the last one's play,
+  // and only a refusal is one (a pause or a new src aborts the play with AbortError).
   function playNow() {
+    const mine = token;
     let p;
     try { p = video.play(); } catch { return; }
     if (!p || !p.catch) return;
     p.catch(err => {
-      if (!token || !err || err.name !== 'NotAllowedError') return;
+      if (!token || token !== mine || !err || err.name !== 'NotAllowedError') return;
       if (!opts.autoplayFallback || video.muted) { refused(); return; }
       mutedForAutoplay = true;
       video.muted = true;
       const again = video.play();
-      if (again && again.then) again.then(() => report('muted'), refused);
+      if (again && again.then) {
+        again.then(
+          () => { if (token === mine) report('muted'); },
+          e => { if (token === mine && e && e.name === 'NotAllowedError') refused(); });
+      }
     });
   }
 

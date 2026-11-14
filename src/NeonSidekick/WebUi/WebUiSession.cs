@@ -774,14 +774,14 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
         // its id back (a duplicated tab's fresh one), heard text held for its box and its speaker's clips so far.
         var voice = page is not null && VoiceSnapshot is { } pieces ? pieces(page) : default;
         return new WebSnapshot(Feed.Snapshot((Func<string, string, string>)WebUiMarkdown.ToHtml, defer: true), Asks.OpenAsks().Select(View).ToList(), _state(), WebUiText.Words, TakeDrafts(), StatusNow?.Invoke().Status,
-            StripView?.Invoke(), PointNow?.Invoke(), page, voice.Heard, voice.Speaking);
+            StripView?.Invoke(), PointNow?.Invoke(), page, voice.Heard, voice.Speaking, voice.Listen);
     }
 
     /// <summary>The Chat tab's voice (2026-11-13, the webui-voice plan), filled by the screen, as <see cref="Video"/> is; null without one.</summary>
     public IWebVoice? Voice { get; set; }
 
-    /// <summary>A page's voice part of its snapshot (2026-11-13): its held heard text, taken, and its speaker. The screen fills it.</summary>
-    public Func<string, (WebHeard? Heard, WebSpeaking? Speaking)>? VoiceSnapshot { get; set; }
+    /// <summary>A page's voice part of its snapshot (2026-11-13): its held heard text, taken, its speaker and its running listen's id (2026-11-14). The screen fills it.</summary>
+    public Func<string, (WebHeard? Heard, WebSpeaking? Speaking, string? Listen)>? VoiceSnapshot { get; set; }
 
     public void SignedIn(WebUiOrigin origin)
     {
@@ -849,17 +849,17 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     /// page's 🔊 seen first, the waiting cap, the idle line woken — but never <see cref="Accepted"/> (the history), and never checked here: the
     /// screen checks it before calling this, and again as it runs it.
     /// </summary>
-    public WebReply QueueChord(string text, IPAddress? remote, string? page, bool speak)
+    public WebReply QueueChord(string text, IPAddress? remote, string? page, bool? speak)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(text);
         page = WebVideoPlayer.IsId(page) ? page : null;
-        Voice?.Saw(page, speak);
+        Voice?.Saw(page, speak);   // null (a post without it) changes nothing, as Send's does (2026-11-14, the review's #4)
         if (WaitingCount >= MaxWaiting)
         {
             return new WebReply(WebOutcome.TooMany, WebUiText.QueueFull(MaxWaiting));
         }
 
-        _lines.Enqueue(new WebLine(text, null, remote, false, page, page is not null && speak, Chord: true));
+        _lines.Enqueue(new WebLine(text, null, remote, false, page, page is not null && speak == true, Chord: true));
         Interlocked.Increment(ref _linesAdded);
         PublishState();
         Nudge?.Invoke();

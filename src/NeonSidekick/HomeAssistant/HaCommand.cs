@@ -94,7 +94,7 @@ public static class HaCommand
             case "toggle":
                 return await SwitchAsync(ha, ask, verb, rest, cancellationToken).ConfigureAwait(false);
 
-            // Headless's only (the screen takes /ha camera first); with no options, as no caller passes today, the usage.
+            // Headless passes its options; the screen takes /ha camera first and passes none, so null is the usage (2026-11-14, the review's #26).
             case HaCameraCommand.Word:
                 return camera is null ? HaCommandResult.Error(HaText.Usage) : await CameraAsync(ha, rest.Length == 0 ? null : rest, camera, cancellationToken).ConfigureAwait(false);
 

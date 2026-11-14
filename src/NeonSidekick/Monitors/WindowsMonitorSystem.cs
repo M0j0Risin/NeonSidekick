@@ -360,12 +360,7 @@ public sealed unsafe class WindowsMonitorSystem : IMonitorSystem
         return DisplayConfigGetDeviceInfo(&request.Header) == ErrorSuccess ? Text(request.ViewGdiDeviceName, 32) : null;
     }
 
-    private static string Text(char* buffer, int length)
-    {
-        var span = new ReadOnlySpan<char>(buffer, length);
-        int end = span.IndexOf('\0');
-        return new string(end >= 0 ? span[..end] : span);
-    }
+    private static string Text(char* buffer, int length) => Platform.FixedText.Read(buffer, length);
 
     // The HMONITORs in EnumDisplayMonitors' order (the screen capture's numbers) with their GDI names.
     private static List<(IntPtr Handle, string Name)> GdiOrder()

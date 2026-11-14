@@ -65,7 +65,8 @@ internal static unsafe partial class WinMmMidiNative
             return null;
         }
 
-        return new string(caps.szPname, 0, 32).TrimEnd('\0').Trim();
+        // Cut at the first NUL (2026-11-14, the review's #2): a driver may leave junk after it, which TrimEnd('\0') kept.
+        return Platform.FixedText.Read(caps.szPname, 32).Trim();
     }
 
     /// <summary>

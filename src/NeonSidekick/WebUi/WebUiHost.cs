@@ -326,6 +326,14 @@ public sealed class WebUiHost : IWebUiHost
                 return;
             }
 
+            // The tab's old address (2026-11-14, the review's #27: the YouTube tab became the Video tab), kept for bookmarks: /video then
+            // decides sign-in and whether the tab is on, as for any page.
+            if (get && path is "/youtube" or "/youtube.html")
+            {
+                SeeOther(response, "/video");
+                return;
+            }
+
             bool signedIn = SignedIn(context);
             if (get && path is "/" or "/index.html" or "/shopping" or "/shopping.html" or "/home" or "/home.html" or "/video" or "/video.html" || get && IsAboutPath(path))
             {
