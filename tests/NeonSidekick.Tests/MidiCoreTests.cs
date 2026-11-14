@@ -121,6 +121,13 @@ public sealed class MidiCoreTests
     [InlineData("  12- FS-4 ", "FS-4")]
     [InlineData("1234- FS-4", "1234- FS-4")]
     [InlineData("X- FS-4", "X- FS-4")]
+    [InlineData("2 - STARRYPAD MINI", "STARRYPAD MINI")]
+    [InlineData("12  -  Pad", "Pad")]
+    [InlineData("MIDIIN2 (3 - STARRYPAD MINI)", "MIDIIN2 (STARRYPAD MINI)")]
+    [InlineData("MIDIIN2 (STARRYPAD MINI)", "MIDIIN2 (STARRYPAD MINI)")]
+    [InlineData("4 - MIDIIN3 (4 - PAD)", "MIDIIN3 (PAD)")]
+    [InlineData("2 -Pad", "2 -Pad")]
+    [InlineData("(2 - Pad)", "(2 - Pad)")]
     [InlineData(null, "")]
     public void Names_TakeOffWindowsPrefix(string? name, string expected) => Assert.Equal(expected, MidiNames.Normalize(name));
 

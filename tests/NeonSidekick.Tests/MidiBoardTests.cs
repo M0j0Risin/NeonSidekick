@@ -265,6 +265,35 @@ public sealed class MidiBoardTests : IDisposable
         Assert.Equal(["FS-4", "2- FS-4"], fake.Opened);   // the first never reopened
     }
 
+    /// <summary>
+    /// A pad replugged comes back under Windows' next number (2026-11-14, the user's STARRYPAD MINI: "2 - ", then "3 - "): a binding learned on
+    /// the old name still fires, after a slow replug (gone a rescan, then back at the end of the list) and a quick one (renamed in place
+    /// within one rescan, the review's #8: reopened, not kept on the dead handle).
+    /// </summary>
+    [Fact]
+    public void APadReplugged_UnderWindowsNextNumber_KeepsItsBinding_SlowOrQuick()
+    {
+        var fake = new FakeMidiSystem("Keys", "2 - STARRYPAD MINI");
+        Bind(new MidiTrigger("2 - STARRYPAD MINI", 0, MidiKind.ControlChange, 1, 80), "/tts");
+        using var board = Board(fake);
+        board.Apply(true, Profile());
+
+        fake.Unplug("2 - STARRYPAD MINI");
+        _time.Advance(MidiBoard.RescanEvery);
+        fake.Plug("3 - STARRYPAD MINI");
+        _time.Advance(MidiBoard.RescanEvery);
+        Assert.True(fake.Send("3 - STARRYPAD MINI", Down));
+        fake.Send("3 - STARRYPAD MINI", Up);
+
+        fake.Replug("3 - STARRYPAD MINI", "4 - STARRYPAD MINI");
+        _time.Advance(MidiBoard.RescanEvery);
+        Assert.True(fake.Send("4 - STARRYPAD MINI", Down));
+
+        Assert.Equal(["/tts", "/tts"], _lines);
+        Assert.Equal(["2 - STARRYPAD MINI", "3 - STARRYPAD MINI", "4 - STARRYPAD MINI"], fake.Opened);
+        Assert.Equal(["2 - STARRYPAD MINI", "3 - STARRYPAD MINI"], fake.Closed);
+    }
+
     /// <summary>Its twin pulled out, the pedal left alone matches whatever its occurrence again (2026-11-14, the review's #1).</summary>
     [Fact]
     public void ATwinPulledOut_LeavesTheOtherMatchingWhateverItsOccurrence()

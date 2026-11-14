@@ -36,6 +36,16 @@ internal sealed class FakeMidiSystem : IMidiSystem
         }
     }
 
+    /// <summary>The input named <paramref name="name"/> pulled out and plugged back in place under <paramref name="now"/>, inside one rescan.</summary>
+    public void Replug(string name, string now)
+    {
+        lock (_gate)
+        {
+            int at = _inputs.FindIndex(i => string.Equals(i, name, StringComparison.OrdinalIgnoreCase));
+            _inputs[at] = now;
+        }
+    }
+
     public void Unplug(string name)
     {
         lock (_gate)

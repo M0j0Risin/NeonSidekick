@@ -315,10 +315,11 @@ public sealed class MidiBoard : IDisposable
             string key = Key(name, occurrence);
             present.Add(key);
             bool wanted = learning || (listening && Names(set, name, occurrence, sameNamed));
-            // Only its place in the list (2026-11-14, the review's #7): the record compare also caught a rename at the same index.
-            if (_open.TryGetValue(key, out var open) && open.Info.Index != info.Index)
+            // Its place in the list or its listed name changed (2026-11-14, the review's #7 and #8): reopened. WinMM says nothing when a
+            // device is unplugged, so a replug inside one rescan was kept on a dead handle; Windows numbers it anew as it comes back
+            // ("2 - PAD", then "3 - PAD"), the same input to the bindings (Normalize) but another name to the listing, and that is the sign.
+            if (_open.TryGetValue(key, out var open) && open.Info != info)
             {
-                // Listed again at another place (a device before it went): reopened there.
                 Close(open);
                 _open.Remove(key);
                 changed = true;

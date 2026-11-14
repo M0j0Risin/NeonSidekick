@@ -40,19 +40,45 @@ public sealed record MidiInputInfo(int Index, string Name);
 public static class MidiNames
 {
     /// <summary>
-    /// <paramref name="name"/> trimmed, with the <c>2- </c> prefix Windows puts before the second of a kind (and later ones) taken off, so a
+    /// <paramref name="name"/> trimmed, with the number Windows puts before the second of a kind (and later ones) taken off, so a
     /// pedal plugged into another port, or listed after an identical one, keeps its bindings. Pure.
+    /// <para>Both spellings (2026-11-14, the user's STARRYPAD MINIs): <c>2- FS-4</c> and <c>2 - STARRYPAD MINI</c>, and the number inside a
+    /// further port's parentheses, <c>MIDIIN2 (3 - STARRYPAD MINI)</c>. Windows counts on at each replug (2, then 3, then 4), so a name
+    /// kept with its number never matched the pad once it came back.</para>
     /// </summary>
     public static string Normalize(string? name)
     {
-        string text = (name ?? "").Trim();
-        int dash = text.IndexOf("- ", StringComparison.Ordinal);
-        if (dash > 0 && dash <= 3 && text[..dash].All(char.IsAsciiDigit))
+        string text = WithoutNumber((name ?? "").Trim());
+        int open = text.IndexOf('(', StringComparison.Ordinal);
+        if (open > 0 && text.EndsWith(')'))
         {
-            text = text[(dash + 2)..].TrimStart();
+            text = text[..(open + 1)] + WithoutNumber(text[(open + 1)..^1].Trim()) + ")";
         }
 
         return text;
+    }
+
+    /// <summary><paramref name="text"/> without a leading <c>N- </c> or <c>N - </c> (one to three digits); otherwise as it is.</summary>
+    private static string WithoutNumber(string text)
+    {
+        int digits = 0;
+        while (digits < text.Length && char.IsAsciiDigit(text[digits]))
+        {
+            digits++;
+        }
+
+        if (digits is 0 or > 3)
+        {
+            return text;
+        }
+
+        int dash = digits;
+        while (dash < text.Length && text[dash] == ' ')
+        {
+            dash++;
+        }
+
+        return dash + 1 < text.Length && text[dash] == '-' && text[dash + 1] == ' ' ? text[(dash + 2)..].TrimStart() : text;
     }
 
     /// <summary>Whether two names are one input's: <see cref="Normalize"/>d, case ignored. Pure.</summary>
