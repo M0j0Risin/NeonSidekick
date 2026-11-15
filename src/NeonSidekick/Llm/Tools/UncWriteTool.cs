@@ -11,12 +11,17 @@ namespace NeonSidekick.Llm.Tools;
 /// create (the default), overwrite or append. A replaced file is replaced in place (its permissions kept) and nothing is kept of
 /// what it held: a share has no trash (the user's call).
 /// </summary>
-public sealed class UncWriteTool : UncTool, IRefusesPrunedStubs
+public sealed class UncWriteTool : UncTool, IRefusesPrunedStubs, IAcceptsArguments
 {
     /// <inheritdoc/>
     public IReadOnlyCollection<string> StubArguments { get; } = [ContentArgument];
 
     public const string ToolName = "unc_write";
+
+    /// <summary>
+    /// <c>old_text</c>, <c>new_text</c> and <c>edits</c>, read for the "use patch_file" refusal (<see cref="WriteFileTool.SentEdit"/>), never run (2026-11-15, #42).
+    /// </summary>
+    public IReadOnlyCollection<string> ExtraArguments => WriteFileTool.EditArguments;
     public const string ContentArgument = WriteFileTool.ContentArgument;
     public const string ModeArgument = WriteFileTool.ModeArgument;
 

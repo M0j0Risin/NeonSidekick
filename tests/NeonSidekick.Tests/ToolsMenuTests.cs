@@ -2403,7 +2403,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Contains("  · Offered\n  ·   Clock (3)\n  ·     get_current_time      on   ", Output);
         Assert.Contains("  ·   Files (15 of 16)\n", Output);   // 13 of 14 with read_office, 2026-10-28; 15 of 16 until the picture tools went to Image, 2026-10-10
         Assert.Contains("  ·     read_file             off  Reads a text file", Output);   // the console wraps the long line
-        Assert.Contains("switched off in /tools", Output);
+        Assert.Contains("— not offered: switched off in", Output);   // the note wraps before "/tools" since read_file's paths sentence (2026-11-15)
         Assert.Contains("  ·   Questions (1) (off: no pane)\n", Output);
         // The tabs in strip order (Core Web, Shell, Timers, Ask, Options; Admin Network first; Devices Camera, Screen, Print since 2026-10-16, the user's order); the user's since 2026-10-03: Offered, Ask, Web, Shell, Files, UNC, Print, Camera, Obsidian, SQL, MySQL, Oracle, Claude, Docker, HA, ComfyUI, GitLib, Options. Before it Web right after Offered, then Files, Shell, Ask (the user's order, later on 2026-09-21), Claude (Claude (CLI) until 2026-09-29, the Anthropic API's four rows last since), Obsidian, ComfyUI, SQL, Git (native) (the user's order, 2026-09-27), HA (2026-09-28; second to last since later on 2026-10-01, the user's ask) and Options last (2026-09-22).
         Assert.Contains("  ·   Web\n  ·     Web tools: on\n  ·     Web browser mode: auto\n  ·     Web browser path: (auto: msedge.exe)\n", Output);
@@ -2439,7 +2439,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Contains("  · Offered\n  ·   Clock (3)\n  ·     get_current_time      on   ", Output);
         Assert.Contains("  ·   Files (15 of 16)\n", Output);   // read_office 2026-10-28; the picture tools on Image since 2026-10-10
         Assert.Contains("  ·     read_file             off  Reads a text file", Output);   // the console wraps the long line
-        Assert.Contains("switched off in /tools", Output);
+        Assert.Contains("— not offered: switched off in", Output);   // the note wraps before "/tools" since read_file's paths sentence (2026-11-15)
         Assert.Contains("  ·   Questions (1) (off: no pane)\n", Output);
         // The tabs in strip order (Core Web, Shell, Timers, Ask, Options; Admin Network first; Devices Camera, Screen, Print since 2026-10-16, the user's order); the user's since 2026-10-03: Offered, Ask, Web, Shell, Files, UNC, Print, Camera, Obsidian, SQL, MySQL, Oracle, Claude, Docker, HA, ComfyUI, GitLib, Options. Before it Web right after Offered, then Files, Shell, Ask (the user's order, later on 2026-09-21), Claude (Claude (CLI) until 2026-09-29, the Anthropic API's four rows last since), Obsidian, ComfyUI, SQL, Git (native) (the user's order, 2026-09-27), HA (2026-09-28; second to last since later on 2026-10-01, the user's ask) and Options last (2026-09-22).
         Assert.Contains("  ·   Web\n  ·     Web tools: on\n  ·     Web browser mode: auto\n  ·     Web browser path: " + SettingsMenu.AutoBrowserLabel(FakeBrowserPath) + "\n", Output);

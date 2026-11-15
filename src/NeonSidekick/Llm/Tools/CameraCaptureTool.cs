@@ -38,7 +38,7 @@ public abstract record CameraAnswer
 /// to carry on, and the rest of the turn's calls answer it without asking again (the screen keeps the turn's stamp). Read-only
 /// in the plan-mode sense, like <c>ask_user</c>: it asks the user, it changes nothing of theirs.
 /// </summary>
-public sealed class CameraCaptureTool : AIFunction
+public sealed class CameraCaptureTool : AIFunction, IAcceptsArguments
 {
     public const string ToolName = "camera_capture";
 
@@ -46,6 +46,9 @@ public sealed class CameraCaptureTool : AIFunction
 
     /// <summary>The other names a model sends the prompt under (lenient, the <c>ask_user</c> lesson).</summary>
     public static readonly string[] PromptAliases = ["reason", "message", "text", "question"];
+
+    /// <summary>The prompt's aliases, read on purpose (2026-11-15, #42).</summary>
+    public IReadOnlyCollection<string> ExtraArguments => PromptAliases;
 
     private static readonly JsonElement Schema = ToolSchema.Parse(
         "{ \"type\": \"object\", \"properties\": { " +

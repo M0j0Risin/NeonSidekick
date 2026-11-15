@@ -89,6 +89,12 @@ public static class FileText
     /// <summary>A required path argument left out (2026-09-18: a `write_file` with `content` alone was told `'' is a folder`). Pinned.</summary>
     public static string PathRequired(string argument) => $"Error: {argument} is required: the file or folder, relative to {RootName}";
 
+    /// <summary><see cref="PathRequired"/> for a tool that takes one path or several (2026-11-15, <c>read_file</c>'s <c>paths</c>). Pinned.</summary>
+    public static string PathsRequired => $"Error: path (or paths, for several) is required: the file or folder, relative to {RootName}";
+
+    /// <summary>A window asked of a read of several files (2026-11-15): start_line and max_lines name one file's lines. Pinned.</summary>
+    public const string WindowNeedsOneFile = "Error: start_line and max_lines go with one file; read the files one at a time for a window";
+
     /// <summary>
     /// A write with no <c>content</c> at all (2026-10-17, the toki-pona session: <c>write_file</c> sent with <c>old_text</c> and <c>new_text</c>
     /// and no <c>content</c> replaced a 27 KB file with nothing). <paramref name="sentEdit"/>, when old_text or new_text came instead, points
@@ -462,7 +468,11 @@ public static class FileText
     public static string TooBig(string path) => $"Error: '{path}' is too large to handle as text";
     public static string BadPattern(string detail) => $"Error: the regular expression is invalid: {detail}";
     public static string BadBoolean(string argument, string raw) => $"Error: '{raw.Trim()}' is not true or false for '{argument}'";
-    public static string BadStringList(string argument, string raw) => $"Error: '{raw.Trim()}' is not a list of paths for '{argument}'";
+    /// <summary>
+    /// A list argument that is no list of strings. The raw value is echoed short (2026-11-15: it is the array's whole JSON, so a broken 2 MB
+    /// <c>paths</c> came back as a 2 MB answer). Pinned.
+    /// </summary>
+    public static string BadStringList(string argument, string raw) => $"Error: '{Llm.Tools.ArgumentText.Echo(raw.Trim())}' is not a list of paths for '{argument}'";
     public static string ZipSlip(string archive, string entry) => $"Error: '{archive}' holds an entry that would land outside the destination ('{entry}'); nothing was extracted";
     public static string CouldNot(string verb, string path, string detail) => $"Error: could not {verb} '{Name(path)}': {detail}";
 
@@ -911,6 +921,28 @@ public static class FileText
     /// <summary>What <see cref="Info"/> says of a file with a byte-order mark. Pinned.</summary>
     public const string BomNote = "UTF-8 BOM";
 
+    /// <summary>
+    /// The first line of a read of several files (2026-11-15, feature idea #31): how many were read and refused, so a refusal in the first
+    /// file doesn't make the whole result read as failed. Pinned.
+    /// </summary>
+    public static string ReadMany(int files, int refused) =>
+        "read " + Count(files, "file", "files") + (refused > 0 ? " (" + refused.ToString(CultureInfo.InvariantCulture) + " refused)" : "") + ":";
+
+    /// <summary>The first line when none of several files could be read: an <c>Error:</c>, so the call counts as failed. Pinned.</summary>
+    public static string NoneRead(int files) => "Error: none of the " + files.ToString(CultureInfo.InvariantCulture) + " files could be read:";
+
+    /// <summary>
+    /// The line after a read of several files once their shared limit ran out (2026-11-15): the files not read, and the call that reads them.
+    /// At most <see cref="MaxMoreNamed"/> names, the rest counted. Pinned.
+    /// </summary>
+    public static string NotRead(IReadOnlyList<string> rest, int limit)
+    {
+        ArgumentNullException.ThrowIfNull(rest);
+        string names = string.Join(", ", rest.Take(MaxMoreNamed)) + (rest.Count > MaxMoreNamed ? ", and " + (rest.Count - MaxMoreNamed).ToString(CultureInfo.InvariantCulture) + " more" : "");
+        return rest.Count.ToString(CultureInfo.InvariantCulture) + " more not read, past the " + limit.ToString("N0", CultureInfo.InvariantCulture)
+            + "-character limit the files share; call again with paths: " + names;
+    }
+
     /// <summary>The read result: a header naming the window, then the text as it is (numbered on request until 2026-09-19).</summary>
     public static string Read(ReadResult result)
     {
@@ -956,10 +988,10 @@ public static class FileText
     public const string ImageFollows = "the picture is in the next message";
 
     /// <summary>
-    /// The last line of a <c>view_image</c> given more than its cap (2026-09-18; 17 paths were refused whole
+    /// The last line of a tool given more paths than its cap (2026-09-18, a <c>view_image</c>: 17 paths were refused whole
     /// and the model started over in batches): <c>13 more not shown; call again with paths: e.png, f.png</c>.
     /// </summary>
-    public static string MorePictures(IReadOnlyList<string> rest)
+    public static string MorePaths(IReadOnlyList<string> rest)
     {
         ArgumentNullException.ThrowIfNull(rest);
         // At most MaxMoreNamed names, the rest counted (2026-10-22, review T9: every remaining path was echoed).
@@ -1005,10 +1037,11 @@ public static class FileText
         string window = result.FromLine == 1 && result.ToLine == result.TotalLines && !result.Truncated
             ? Count(result.TotalLines, "line", "lines")
             : "lines " + result.FromLine.ToString(CultureInfo.InvariantCulture) + "–" + result.ToLine.ToString(CultureInfo.InvariantCulture) + " of " + total;
-        string tail = result.Truncated ? "; cut at " + WorkingDirectory.MaxReadChars.ToString("N0", CultureInfo.InvariantCulture) + " characters" : "";
+        // The read's own cap (2026-11-15: a file in a read of several gets what the shared limit has left).
+        string tail = result.Truncated ? "; cut at " + result.Cap.ToString("N0", CultureInfo.InvariantCulture) + " characters" : "";
         // A cut line said (2026-10-22, review Q2: a one-line 50,000-character file read as complete), and the encoding when it is not UTF-8 (Q1).
         string cut = result.CutLine > 0
-            ? "; line " + result.CutLine.ToString(CultureInfo.InvariantCulture) + " is " + result.CutLength.ToString("N0", CultureInfo.InvariantCulture) + " characters long, cut at " + WorkingDirectory.MaxReadChars.ToString("N0", CultureInfo.InvariantCulture)
+            ? "; line " + result.CutLine.ToString(CultureInfo.InvariantCulture) + " is " + result.CutLength.ToString("N0", CultureInfo.InvariantCulture) + " characters long, cut at " + result.Cap.ToString("N0", CultureInfo.InvariantCulture)
             : "";
         string encoding = result.Encoding is { } name ? "; read as " + name : "";
         string next = result.ToLine < result.TotalLines ? NextHint(result.ToLine + 1) : "";
@@ -1074,6 +1107,17 @@ public static class FileText
     public static string Edited(EditResult result)
     {
         ArgumentNullException.ThrowIfNull(result);
+        // A patch_file edits list (2026-11-15): its refusal names the edit, its success every edit's lines.
+        if (result.FailedEdit > 0)
+        {
+            return EditOfList(result.FailedEdit, result.EditCount, Edited(result with { FailedEdit = 0 }));
+        }
+
+        if (result.Edits.Count > 0 && result.Outcome == FileOutcome.Ok)
+        {
+            return EditedMany(result);
+        }
+
         if (result.Outcome == FileOutcome.AlreadyApplied)
         {
             return AlreadyApplied(Shown(result.Relative));
@@ -1122,6 +1166,108 @@ public static class FileText
 
         return sb.ToString();
     }
+
+    /// <summary>
+    /// A refusal of edit <paramref name="number"/> of a list of <paramref name="count"/> (2026-11-15): <c>Error: edit 3 of 5 (lines as edits 1–2
+    /// left them): …</c>, the line numbers it names being those of the text the earlier edits left. Nothing was saved. Pinned.
+    /// </summary>
+    public static string EditOfList(int number, int count, string refusal)
+    {
+        ArgumentNullException.ThrowIfNull(refusal);
+        string body = refusal.StartsWith("Error: ", StringComparison.Ordinal) ? refusal["Error: ".Length..] : refusal;
+        string earlier = number switch
+        {
+            1 => "",
+            2 => " (lines as edit 1 left them)",
+            _ => " (lines as edits 1–" + (number - 1).ToString(CultureInfo.InvariantCulture) + " left them)",
+        };
+        return "Error: edit " + number.ToString(CultureInfo.InvariantCulture) + " of " + count.ToString(CultureInfo.InvariantCulture) + earlier + ": " + body;
+    }
+
+    /// <summary>
+    /// A list's success (2026-11-15, feature idea #30): <c>edited x with 3 edits (lines 4–6, 18, 40–41; now N lines, W words)</c>, a note per edit
+    /// matched other than exactly or skipped as already in the file, then the regions around the edits numbered, merged where they touch — or,
+    /// over <see cref="WorkingDirectory.MaxEditRegionLines"/> in all, <see cref="RegionTooBig"/>. A <c>replace_all</c> edit over several places is
+    /// in the line list alone, as the single form shows one.
+    /// </summary>
+    public static string EditedMany(EditResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        var ranges = result.Edits.SelectMany(p => p.Ranges).OrderBy(r => r.From).ToList();
+        var merged = new List<(int From, int To)>();
+        foreach (var r in ranges)
+        {
+            if (merged.Count > 0 && r.From <= merged[^1].To + 1)
+            {
+                merged[^1] = (merged[^1].From, Math.Max(merged[^1].To, r.To));
+            }
+            else
+            {
+                merged.Add(r);
+            }
+        }
+
+        string listed = string.Join(", ", merged.Take(MaxListedLines).Select(r => r.From == r.To
+            ? r.From.ToString(CultureInfo.InvariantCulture)
+            : r.From.ToString(CultureInfo.InvariantCulture) + "–" + r.To.ToString(CultureInfo.InvariantCulture))) + (merged.Count > MaxListedLines ? ", …" : "");
+        var sb = new StringBuilder("edited ").Append(Shown(result.Relative)).Append(" with ").Append(Count(result.Count, "edit", "edits"))
+            .Append(" (").Append(merged.Count == 1 && merged[0].From == merged[0].To ? "line " : "lines ").Append(listed).Append(Now(result)).Append(')');
+        foreach (var part in result.Edits)
+        {
+            if (part.AlreadyApplied)
+            {
+                sb.Append(" (edit ").Append(part.Number.ToString(CultureInfo.InvariantCulture)).Append(" was in the file already; skipped)");
+            }
+            else if (StrategyNote(part.Strategy) is { Length: > 0 } note)
+            {
+                sb.Append(" (edit ").Append(part.Number.ToString(CultureInfo.InvariantCulture)).Append(": ").Append(note.Trim().TrimStart('('));
+            }
+        }
+
+        if (result.Blocks.Count > 0)
+        {
+            sb.Append(":\n").Append(string.Join("\n…\n", result.Blocks.Select(b => Numbered(b.Lines, b.From, b.From + b.Lines.Count - 1))));
+        }
+        else if (result.Edits.Any(p => !p.AlreadyApplied && !p.Several))
+        {
+            sb.Append(RegionTooBig);
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>An <c>edits</c> value that is no list of objects (2026-11-15), echoed short. Pinned.</summary>
+    public static string BadObjectList(string argument, string raw) =>
+        $"Error: '{Llm.Tools.ArgumentText.Echo(raw.Trim())}' is not a list of {{old_text, new_text}} edits for '{argument}'";
+
+    /// <summary>An <c>edits</c> list with nothing in it (2026-11-15): never a silent "edited with 0 edits". Pinned.</summary>
+    public const string EditsEmpty = "Error: edits is empty; give at least one {old_text, new_text}";
+
+    /// <summary>An <c>edits</c> list over the cap (2026-11-15), refused whole before anything is read: applying the first ones would break all-or-none. Pinned.</summary>
+    public static string TooManyEdits(int count, int max) =>
+        "Error: edits holds " + count.ToString(CultureInfo.InvariantCulture) + " edits, more than the " + max.ToString(CultureInfo.InvariantCulture)
+        + " one call takes; split them over several calls";
+
+    /// <summary>A <c>patch_file</c> call with neither form (2026-11-15). Pinned.</summary>
+    public const string EditFormRequired = "Error: give old_text and new_text for one change, or edits (a list of {old_text, new_text, replace_all?}) for several";
+
+    /// <summary>A <c>patch_file</c> call with both forms (2026-11-15). Pinned.</summary>
+    public const string EditFormsBoth = "Error: give either old_text and new_text, or edits, not both";
+
+    /// <summary>The prefix an <c>edits</c> item's own refusal carries (2026-11-15): <c>edit 3 of 5: </c> before the item's error, its <c>Error:</c> first. Pinned.</summary>
+    public static string EditItem(int number, int count, string refusal)
+    {
+        ArgumentNullException.ThrowIfNull(refusal);
+        string body = refusal.StartsWith("Error: ", StringComparison.Ordinal) ? refusal["Error: ".Length..] : refusal;
+        return "Error: edit " + number.ToString(CultureInfo.InvariantCulture) + " of " + count.ToString(CultureInfo.InvariantCulture) + ": " + body;
+    }
+
+    /// <summary>An <c>edits</c> item holding a key it doesn't take (2026-11-15), with the nearest real one when there is one. Pinned.</summary>
+    public static string EditUnknownKey(string key, string? nearest) =>
+        "Error: an edit takes old_text, new_text and replace_all, not '" + key + "'" + (nearest is null ? "" : "; did you mean '" + nearest + "'?");
+
+    /// <summary>An <c>edits</c> item that is no object of strings (2026-11-15). Pinned.</summary>
+    public const string EditNotText = "Error: old_text and new_text must be text";
 
     /// <summary>Lines a <c>replace_all</c> sentence names before <c>…</c>.</summary>
     public const int MaxListedLines = 10;

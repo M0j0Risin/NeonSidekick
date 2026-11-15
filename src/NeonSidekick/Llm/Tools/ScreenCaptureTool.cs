@@ -35,7 +35,7 @@ public abstract record ScreenAnswer
 /// on, and the rest of the turn's calls answer it without asking again. Read-only in the plan-mode sense, as
 /// <c>camera_capture</c>: it looks, it changes nothing. <see cref="CameraCaptureTool"/>'s twin.
 /// </summary>
-public sealed class ScreenCaptureTool : AIFunction
+public sealed class ScreenCaptureTool : AIFunction, IAcceptsArguments
 {
     public const string ToolName = "screen_capture";
 
@@ -45,6 +45,9 @@ public sealed class ScreenCaptureTool : AIFunction
 
     /// <summary>The other names a model sends the target under.</summary>
     public static readonly string[] TargetAliases = ["window", "monitor", "what"];
+
+    /// <summary>The target's and the prompt's aliases, read on purpose (2026-11-15, #42).</summary>
+    public IReadOnlyCollection<string> ExtraArguments => [.. TargetAliases, .. CameraCaptureTool.PromptAliases];
 
     private static readonly JsonElement Schema = ToolSchema.Parse(
         "{ \"type\": \"object\", \"properties\": { " +

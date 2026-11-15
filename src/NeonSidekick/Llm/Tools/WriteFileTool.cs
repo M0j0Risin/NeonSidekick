@@ -11,12 +11,20 @@ namespace NeonSidekick.Llm.Tools;
 /// (<c>overwrite</c>) or adds to its end (<c>append</c>, on a new line, creating a missing file —
 /// <c>append_file</c>'s job until 2026-09-19).
 /// </summary>
-public sealed class WriteFileTool : FileTool, IRefusesPrunedStubs
+public sealed class WriteFileTool : FileTool, IRefusesPrunedStubs, IAcceptsArguments
 {
     /// <inheritdoc/>
     public IReadOnlyCollection<string> StubArguments { get; } = [ContentArgument];
 
     public const string ToolName = "write_file";
+
+    /// <summary>The edit tool's arguments, read only to point an edit sent here at <c>patch_file</c>.</summary>
+    public static readonly IReadOnlyCollection<string> EditArguments = [PatchFileTool.OldTextArgument, PatchFileTool.NewTextArgument, PatchFileTool.EditsArgument];
+
+    /// <summary>
+    /// <c>old_text</c>, <c>new_text</c> and <c>edits</c>, read for the "use patch_file" refusal (<see cref="WriteFileTool.SentEdit"/>), never run (2026-11-15, #42).
+    /// </summary>
+    public IReadOnlyCollection<string> ExtraArguments => WriteFileTool.EditArguments;
 
     public const string ContentArgument = "content";
     public const string ModeArgument = "mode";
@@ -188,7 +196,7 @@ public sealed class WriteFileTool : FileTool, IRefusesPrunedStubs
 
     /// <summary>Whether a call sent an edit's arguments (<c>old_text</c> or <c>new_text</c>) in place of a write's <c>content</c> (2026-10-17).</summary>
     public static bool SentEdit(AIFunctionArguments arguments) =>
-        ToolArguments.Has(arguments, PatchFileTool.OldTextArgument) || ToolArguments.Has(arguments, PatchFileTool.NewTextArgument);
+        EditArguments.Any(name => ToolArguments.Has(arguments, name));
 }
 
 /// <summary>What <c>write_file</c> does with a file that is there: refuses (<see cref="Create"/>), replaces it, or adds to its end.</summary>

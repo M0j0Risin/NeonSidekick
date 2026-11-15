@@ -31,7 +31,7 @@ namespace NeonSidekick.Llm.Tools;
 /// never by <c>write_file</c>, which would bypass the frontmatter. Offered only with a <see cref="SkillFileAccess"/>: the main chat always,
 /// a reflection when <c>Reflection edit supporting files</c> is on; without it the schema names create and update alone.</para>
 /// </summary>
-public sealed class SkillEditorTool : AIFunction, IRefusesPrunedStubs
+public sealed class SkillEditorTool : AIFunction, IRefusesPrunedStubs, IAcceptsArguments
 {
     /// <inheritdoc/>
     public IReadOnlyCollection<string> StubArguments { get; } = [ContentArgument, NewTextArgument, InstructionsArgument];
@@ -212,6 +212,16 @@ public sealed class SkillEditorTool : AIFunction, IRefusesPrunedStubs
 
     /// <summary>Whether <c>create</c> is offered (2026-10-16): false for a reflection under <c>Reflection mode</c> <c>update-only</c>.</summary>
     public bool OffersCreate => _create;
+
+    /// <summary>
+    /// <c>scope</c>, which the update-only and profile-only schemas leave out but the tool still reads: a create there is answered
+    /// <see cref="SkillText.CreateRefused"/> or <see cref="SkillText.GlobalSkillsOff"/>, an update's scope is only a guess (2026-11-15, #42).
+    /// With the file actions off, their arguments too: a <c>write_file</c> sent anyway is answered that it is not an action, which says more
+    /// than naming its arguments would.
+    /// </summary>
+    public IReadOnlyCollection<string> ExtraArguments => _files is null
+        ? [ScopeArgument, PathArgument, ContentArgument, OldTextArgument, NewTextArgument, ReplaceAllArgument]
+        : [ScopeArgument];
 
     public override string Name => ToolName;
 

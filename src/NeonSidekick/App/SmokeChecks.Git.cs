@@ -210,6 +210,31 @@ public static partial class SmokeChecks
             }
 
             legs.Add("branch deleted");
+            // The tag and revert legs (2026-11-15), last, on the clean tree the delete leaves: an annotated tag is written as raw bytes (the
+            // GitBuf prettify is empty on the published exe), and a revert commits through the app's own commit for the same reason.
+            var tagged = git.CreateTag("", "v1", "", "Release one\n\nnotes");
+            using (var repo = new Repository(root))
+            {
+                var annotation = repo.Tags["v1"]?.Annotation;
+                if (tagged.Outcome != GitOutcome.Ok || annotation is null || annotation.Message != "Release one\n\nnotes\n"
+                    || annotation.Tagger is null || annotation.Target.Sha != repo.Head.Tip.Sha)
+                {
+                    return Fail(name, "tag", tagged.Outcome, tagged.Detail + " message=" + annotation?.Message);
+                }
+            }
+
+            legs.Add("annotated tag read back");
+            var reverted = git.Revert("", "HEAD", "");
+            using (var repo = new Repository(root))
+            {
+                if (reverted.Outcome != GitOutcome.Ok || !repo.Head.Tip.MessageShort.StartsWith("Revert \"third\"", StringComparison.Ordinal)
+                    || repo.Info.CurrentOperation != CurrentOperation.None || File.ReadAllText(file) != "one\n")
+                {
+                    return Fail(name, "revert", reverted.Outcome, reverted.Detail + " subject=" + repo.Head.Tip.MessageShort);
+                }
+            }
+
+            legs.Add("reverted");
             return new SmokeCheck(name, true, $"libgit2 {version.LibGit2CommitSha} ({version.Features}); " + string.Join(", ", legs));
         }
         catch (Exception ex)

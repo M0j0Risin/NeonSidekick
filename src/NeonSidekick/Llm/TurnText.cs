@@ -110,6 +110,60 @@ public static class TurnText
         : first == 0 ? Assistant.Plural(second, secondNoun)
         : Assistant.Plural(first, firstNoun) + " and " + Assistant.Plural(second, secondNoun);
 
+    /// <summary>
+    /// The answer to a call carrying an argument its tool does not take (2026-11-15, feature idea #42: <c>web_search {limit: 5}</c> ran as if
+    /// unfiltered, and the model believed it had filtered). Each key is named with what it should have been, then the tool's own names; nothing
+    /// ran. <paramref name="keys"/> are already echoed (<see cref="Tools.ArgumentText.Echo"/>) and hinted by <see cref="ArgumentHint"/>. Pinned.
+    /// </summary>
+    public static string UnknownArguments(string tool, IReadOnlyList<(string Key, string? Hint)> keys, int more, IReadOnlyList<string> takes)
+    {
+        ArgumentNullException.ThrowIfNull(keys);
+        ArgumentNullException.ThrowIfNull(takes);
+        string named;
+        if (keys.Count == 1 && more == 0)
+        {
+            named = "takes no argument '" + keys[0].Key + "'" + (keys[0].Hint is { } hint ? "; " + hint : "");
+        }
+        else
+        {
+            var items = keys.Select(k => "'" + k.Key + "'" + (k.Hint is { } hint ? " (" + hint + ")" : "")).ToList();
+            if (more > 0)
+            {
+                items.Add("and " + more.ToString(CultureInfo.InvariantCulture) + " more");
+                named = "takes no arguments " + string.Join(", ", items);
+            }
+            else
+            {
+                named = "takes no arguments " + string.Join(", ", items.Take(items.Count - 1)) + " and " + items[^1];
+            }
+        }
+
+        return "Error: " + tool + " " + named + (named.EndsWith('?') ? " " : ". ") + "It takes: " + string.Join(", ", takes) + ". Nothing ran.";
+    }
+
+    /// <summary>The hint beside a misnamed argument: the name nearest it. Pinned.</summary>
+    public static string NearestHint(string name) => "did you mean '" + name + "'?";
+
+    /// <summary>The hint beside a count synonym in a call refused for another key: the tool's own name for it. Pinned.</summary>
+    public static string SynonymHint(string name) => "it is '" + name + "'";
+
+    /// <summary>The hint beside a count synonym sent with the tool's own name for it too: the model contradicted itself. Pinned.</summary>
+    public static string BothSentHint(string name) => "send only '" + name + "'";
+
+    /// <summary>
+    /// The line after the result of a tool that takes no arguments and was sent some (2026-11-15, #42): it ran, since nothing could have
+    /// been filtered, and the model learns the keys went unread. <paramref name="keys"/> are already echoed. Pinned.
+    /// </summary>
+    public static string IgnoredArguments(string tool, IReadOnlyList<string> keys, int more)
+    {
+        ArgumentNullException.ThrowIfNull(keys);
+        string list = string.Join(", ", keys) + (more > 0 ? ", and " + more.ToString(CultureInfo.InvariantCulture) + " more" : "");
+        return "(ignored: " + list + "; " + tool + " takes no arguments)";
+    }
+
+    /// <summary>The <c>--log</c> line for a count synonym read as the tool's own name (2026-11-15, #42), shaped like <see cref="LeakedParameters.LogLine"/>. Pinned.</summary>
+    internal static string RenameLogLine(string tool, string from, string to) => "Tool " + tool + ": read " + from + " as " + to;
+
     /// <summary><paramref name="notice"/> as the user reads it: <see cref="AskAgain"/> after a notice that asks for it, unless a loop's pass runs (F96).</summary>
     public static string Shown(TurnEvent.Notice notice, bool loopPass)
     {

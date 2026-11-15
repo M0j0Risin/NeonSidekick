@@ -28,7 +28,7 @@ namespace NeonSidekick.Llm.Tools;
 /// <para><c>fields: true</c> (later on 2026-10-14, the PDF plan's gap 98) lists a form's fields instead — each name, kind, value and the
 /// values it takes, what <c>pdf_edit</c>'s <c>fill_form</c> sets — cached with the texts under the file's stamp.</para>
 /// </summary>
-public sealed class ReadPdfTool : FileTool
+public sealed class ReadPdfTool : FileTool, IAcceptsArguments
 {
     public const string ToolName = "read_pdf";
     public const string PagesArgument = "pages";
@@ -42,6 +42,9 @@ public sealed class ReadPdfTool : FileTool
     /// </summary>
     public const string FromCharArgument = "from_char";
     public const string ShareArgument = UncTool.ShareArgument;
+
+    /// <summary><c>share</c> while the schema hides it (no read-write shares offered): read for <see cref="UncText.NoSharesOffered"/> (2026-11-15, #42).</summary>
+    public IReadOnlyCollection<string> ExtraArguments => [ShareArgument];
 
     /// <summary>The most pages one call reads for its text (the rest are the next call's).</summary>
     public const int PagesPerCall = 40;

@@ -32,10 +32,13 @@ namespace NeonSidekick.Llm.Tools;
 /// picture or a folder only (code review, later that day: the shell would run any other file found there,
 /// <see cref="FileText.OpenImagesFolderNotPicture"/>), and the schema's <c>path</c> says a full path there works.</para>
 /// </summary>
-public sealed class OpenTool : FileTool
+public sealed class OpenTool : FileTool, IAcceptsArguments
 {
     public const string ToolName = "open";
     public const string ShareArgument = UncTool.ShareArgument;
+
+    /// <summary><c>share</c> while the schema hides it (no read-write shares offered): read for <see cref="UncText.NoSharesOffered"/> (2026-11-15, #42).</summary>
+    public IReadOnlyCollection<string> ExtraArguments => [ShareArgument];
 
     // The four schemas, by whether the images folder is reached and a UNC share offered (code review, later on 2026-10-11: four
     // literals that differed by a phrase each). The images folder's (as file_info's): path may be a full path there too, so the

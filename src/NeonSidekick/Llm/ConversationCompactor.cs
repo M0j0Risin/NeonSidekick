@@ -45,10 +45,12 @@ public static partial class ConversationCompactor
     /// <summary>
     /// The tools whose list arguments are recorded elsewhere (2026-10-18, the code audit): <c>present_audit</c>'s findings, retractions,
     /// revisions, nits, questions and coverage are in the report on disk, so a long array of them is stubbed too, as a long string is;
-    /// no other tool's arrays are touched. Only a <see cref="System.Text.Json.JsonElement"/> array is measured (by its JSON's length): any other
+    /// since 2026-11-15 <c>patch_file</c>'s and <c>unc_patch</c>'s <c>edits</c> too, recorded in the file itself as a <c>write_file</c> body is
+    /// (a lone-object <c>edits</c> stays whole: one edit is no longer than the single form's <c>new_text</c>, which isn't pruned either).
+    /// No other tool's arrays are touched. Only a <see cref="System.Text.Json.JsonElement"/> array is measured (by its JSON's length): any other
     /// shape is left alone rather than serialized, since serializing an unknown type is the reflection path NativeAOT forbids. Pinned.
     /// </summary>
-    public static readonly IReadOnlyList<string> RecordedArguments = [Tools.PresentAuditTool.ToolName];
+    public static readonly IReadOnlyList<string> RecordedArguments = [Tools.PresentAuditTool.ToolName, Tools.PatchFileTool.ToolName, Tools.UncPatchTool.ToolName];
 
     /// <summary>The stub a pruned argument becomes: <c>(a 27,610-character argument, pruned by /compact)</c> (2026-10-17). Pinned.</summary>
     public static string PrunedArgumentStub(int length) =>
@@ -854,12 +856,23 @@ public static partial class ConversationCompactor
     }
 
     /// <summary>
-    /// Whether <paramref name="call"/> is a <c>read_file</c> of a plan file (2026-11-09, one test for <see cref="StubSupersededPlans"/> and
-    /// <see cref="CutLatestResults"/>): not an opening call, its <c>path</c> passing <see cref="IsPlanPath"/>.
+    /// Whether <paramref name="call"/> is a <c>read_file</c> of a plan file alone (2026-11-09; split 2026-11-15), for <see cref="StubSupersededPlans"/>:
+    /// not an opening call, its <c>path</c> passing <see cref="IsPlanPath"/>, and no <c>paths</c> — a read of several files keeps its others, so
+    /// it is never stubbed.
     /// </summary>
     private static bool IsPlanRead(FunctionCallContent call) =>
         call.Name == Tools.ReadFileTool.ToolName && call.Arguments is { } arguments && !Assistant.IsOpeningCallId(call.CallId)
+        && !(arguments.TryGetValue(Tools.FileTool.PathsArgument, out object? paths) && paths is not null and not System.Text.Json.JsonElement { ValueKind: System.Text.Json.JsonValueKind.Null })
         && arguments.TryGetValue(Tools.FileTool.PathArgument, out object? path) && ArgumentText(path) is { } text && IsPlanPath(text);
+
+    /// <summary>
+    /// Whether <paramref name="call"/> is a <c>read_file</c> naming a plan file in <c>path</c> or any of <c>paths</c> (2026-11-15), for
+    /// <see cref="CutLatestResults"/>' exemption: such a read is kept whole. The list is read as the tool reads it
+    /// (<see cref="Tools.FileTool.TryReadPaths"/>).
+    /// </summary>
+    private static bool ReadsAPlan(FunctionCallContent call) =>
+        call.Name == Tools.ReadFileTool.ToolName && call.Arguments is { } arguments && !Assistant.IsOpeningCallId(call.CallId)
+        && Tools.FileTool.TryReadPaths(new AIFunctionArguments(arguments), out var paths, out _) && paths.Any(IsPlanPath);
 
     /// <summary>A <c>present_plan</c> call (not an opening one) whose <c>markdown</c> is real text, not missing and not a stub (2026-10-18).</summary>
     private static bool IsRealPresentation(AIContent content) =>
@@ -987,7 +1000,7 @@ public static partial class ConversationCompactor
         {
             if (message.Contents[i] is FunctionResultContent { Result: string text } found && text.Length > CutLeastChars
                 && !Assistant.IsOpeningCallId(found.CallId) && !(protectSkills && ConversationHistory.IsSkillResult(found))
-                && !(calls.TryGetValue(found.CallId, out var call) && (IsPlanRead(call) || call.Name == Tools.AskUserTool.ToolName)))
+                && !(calls.TryGetValue(found.CallId, out var call) && (ReadsAPlan(call) || call.Name == Tools.AskUserTool.ToolName)))
             {
                 candidates.Add((i, text));
             }

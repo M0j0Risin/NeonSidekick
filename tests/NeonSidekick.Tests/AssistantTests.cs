@@ -251,13 +251,13 @@ public class AssistantTests
         Assert.Equal(Assistant.DefaultRules(false, true) + " " + Assistant.SessionRule, Assistant.DefaultRules(false, true, sessions: true));
     }
 
-    /// <summary>The git rule (2026-09-20): after the download rule, with the sandbox's sentences, only with tools, only while a git tool is offered; it names the nine default-on tools and neither opt-in.</summary>
+    /// <summary>The git rule (2026-09-20): after the download rule, with the sandbox's sentences, only with tools, only while a git tool is offered; it names the eleven default-on tools (nine until revert and tag, 2026-11-15) and neither of the two that lose work.</summary>
     [Fact]
     public void SystemPrompt_GitOn_AppendsTheGitRule_AfterTheDownloadRule_ToTheDefaultRulesOnly()
     {
         Assert.Equal(
             "The working directory may be a git repository (or hold one): gitlib_status shows its state, gitlib_log its history, gitlib_show a commit or a file at a commit, " +
-            "gitlib_diff the changes, gitlib_blame who wrote a line; gitlib_stage, gitlib_commit, gitlib_branch and gitlib_stash change it — commit only what the user asked to commit, " +
+            "gitlib_diff the changes, gitlib_blame who wrote a line; gitlib_stage, gitlib_commit, gitlib_branch, gitlib_stash, gitlib_revert and gitlib_tag change it — commit, revert or tag only what the user asked for, " +
             "with the message they gave or a short imperative one, and never remove or overwrite work the user did not name.",
             Assistant.GitRule);
         Assert.DoesNotContain("gitlib_discard", Assistant.GitRule);

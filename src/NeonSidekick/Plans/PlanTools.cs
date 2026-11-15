@@ -92,7 +92,7 @@ public static class PlanTools
     {
         "start_timer", "stop_timer",
         "write_file", "patch_file", "create_directory", "move", "copy", "delete", "zip", "unzip", "open", "convert_to_pdf", "convert_to_docx", "convert_to_xlsx", "pdf_edit", "image_edit", "set_splash_image",
-        "gitlib_stage", "gitlib_commit", "gitlib_stash", "gitlib_discard", "gitlib_delete", "gitlib_branch",
+        "gitlib_stage", "gitlib_commit", "gitlib_stash", "gitlib_revert", "gitlib_tag", "gitlib_discard", "gitlib_delete", "gitlib_branch",
         "run_command", "process", "execute_code",
         "download_file", "open_url",
         // the saved links (later still on 2026-10-13): a link saved, removed or renamed

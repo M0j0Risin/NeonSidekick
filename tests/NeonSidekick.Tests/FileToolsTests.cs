@@ -94,10 +94,10 @@ public sealed class FileToolsTests : IDisposable
     [Theory]
     [InlineData(GetWorkingDirectoryTool.ToolName, "", "")]
     [InlineData(SearchFilesTool.ToolName, "text,path,files,regex,context,output,order,limit,depth", "")]
-    [InlineData(FileInfoTool.ToolName, "path", "path")]
-    [InlineData(ReadFileTool.ToolName, "path,start_line,max_lines", "path")]
+    [InlineData(FileInfoTool.ToolName, "path,paths", "")]
+    [InlineData(ReadFileTool.ToolName, "path,paths,start_line,max_lines", "")]
     [InlineData(WriteFileTool.ToolName, "path,content,mode", "path,content")]
-    [InlineData(PatchFileTool.ToolName, "path,old_text,new_text,replace_all", "path,old_text,new_text")]
+    [InlineData(PatchFileTool.ToolName, "path,old_text,new_text,replace_all,edits", "path")]
     [InlineData(CreateDirectoryTool.ToolName, "path", "path")]
     [InlineData(MoveTool.ToolName, "from,to,overwrite", "from,to")]
     [InlineData(CopyTool.ToolName, "from,to,overwrite", "from,to")]
@@ -125,7 +125,7 @@ public sealed class FileToolsTests : IDisposable
         foreach (var property in schema.GetProperty("properties").EnumerateObject())
         {
             string type = property.Value.GetProperty("type").GetString()!;
-            Assert.Equal(property.Name is "depth" or "limit" or "start_line" or "max_lines" or "context" ? "integer" : property.Name is "overwrite" or "regex" or "replace_all" ? "boolean" : property.Name is "paths" ? "array" : "string", type);
+            Assert.Equal(property.Name is "depth" or "limit" or "start_line" or "max_lines" or "context" ? "integer" : property.Name is "overwrite" or "regex" or "replace_all" ? "boolean" : property.Name is "paths" or "edits" ? "array" : "string", type);
             if (property.Name is "mode" or "output" or "order")
             {
                 string[] choices = property.Value.GetProperty("enum").EnumerateArray().Select(e => e.GetString()!).ToArray();
@@ -504,7 +504,7 @@ public sealed class FileToolsTests : IDisposable
         Assert.Equal(FileText.PathRequired("path"), await Invoke(Tool<CreateDirectoryTool>()));
         Assert.Equal(FileText.PathRequired("path"), await Invoke(Tool<UnzipTool>()));
         Assert.Equal(FileText.PathRequired("path"), await Invoke(Tool<WriteFileTool>(), ("content", "x"), ("mode", "append")));
-        Assert.Equal(FileText.PathRequired("path"), await Invoke(Tool<ReadFileTool>()));
+        Assert.Equal(FileText.PathsRequired, await Invoke(Tool<ReadFileTool>()));
 
         var copy = Tool<CopyTool>();
         Assert.Equal("copied papers\\b.txt to d.txt", await Invoke(copy, ("from", @"papers\b.txt"), ("to", "d.txt")));
@@ -558,7 +558,7 @@ public sealed class FileToolsTests : IDisposable
         Assert.Equal(FileText.PathRequired("path"), await Invoke(Tool<CreateDirectoryTool>()));
         Assert.Equal(FileText.PathRequired("path"), await Invoke(Tool<UnzipTool>()));
         Assert.Equal(FileText.PathRequired("path"), await Invoke(Tool<WriteFileTool>(), ("content", "x"), ("mode", "append")));
-        Assert.Equal(FileText.PathRequired("path"), await Invoke(Tool<ReadFileTool>()));
+        Assert.Equal(FileText.PathsRequired, await Invoke(Tool<ReadFileTool>()));
 
         var copy = Tool<CopyTool>();
         Assert.Equal("copied papers/b.txt to d.txt", await Invoke(copy, ("from", @"papers/b.txt"), ("to", "d.txt")));
@@ -811,8 +811,8 @@ public sealed class FileToolsTests : IDisposable
         _settings.FileViewImageMaxPerCall = 4;
         Assert.Equal(4, view.Limit);
         string over = await Invoke(view, ("paths", Json("[\"1\",\"2\",\"3\",\"4\",\"5\",\"6\"]")));
-        Assert.Equal(FileText.Missing("1") + "\n" + FileText.Missing("2") + "\n" + FileText.Missing("3") + "\n" + FileText.Missing("4") + "\n" + FileText.MorePictures(["5", "6"]), over);
-        Assert.Equal("2 more not shown; call again with paths: 5, 6", FileText.MorePictures(["5", "6"]));
+        Assert.Equal(FileText.Missing("1") + "\n" + FileText.Missing("2") + "\n" + FileText.Missing("3") + "\n" + FileText.Missing("4") + "\n" + FileText.MorePaths(["5", "6"]), over);
+        Assert.Equal("2 more not shown; call again with paths: 5, 6", FileText.MorePaths(["5", "6"]));
         var five = Assert.IsType<ToolImageResult>(await view.InvokeAsync(Args(("paths", Json("[\"gone.png\", \"a.bmp\", \"gone.png\", \"b.bmp\", \"a.bmp\"]"))), CancellationToken.None));
         // Each path once (2026-10-22, review K12): the repeats take no slot, so all three fit and nothing is left for the next call.
         Assert.Equal(["a.bmp", "b.bmp"], five.Images.Select(i => i.Path));

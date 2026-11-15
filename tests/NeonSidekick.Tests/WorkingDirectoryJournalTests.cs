@@ -33,7 +33,7 @@ public sealed class WorkingDirectoryJournalTests : IDisposable
     public static TheoryData<string> Writes => new()
     {
         "write", "write bytes", "begin write", "append", "edit", "create folder", "move", "copy", "copy between", "delete file",
-        "delete folder", "zip", "unzip",
+        "delete folder", "zip", "unzip", "edits",
     };
 
     [Theory]
@@ -72,6 +72,7 @@ public sealed class WorkingDirectoryJournalTests : IDisposable
                 "delete folder" => files.Delete("dir").Outcome == FileOutcome.Ok,
                 "zip" => files.Zip("dir", "pack.zip", overwrite: true).Outcome == FileOutcome.Ok,
                 "unzip" => files.Unzip("pack.zip", "dir", overwrite: true).Outcome == FileOutcome.Ok,
+                "edits" => files.EditTexts("a.txt", [new EditStep("a", "e", false), new EditStep("e", "f", false)]).Outcome == FileOutcome.Ok,
                 _ => false,
             };
             Assert.True(ok, write);

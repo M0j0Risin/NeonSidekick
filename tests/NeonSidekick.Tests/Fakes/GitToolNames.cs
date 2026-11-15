@@ -16,6 +16,8 @@ public static class GitToolNames
         GitStageTool.ToolName,
         GitCommitTool.ToolName,
         GitStashTool.ToolName,
+        GitRevertTool.ToolName,
+        GitTagTool.ToolName,
         GitDiscardTool.ToolName,
         GitDeleteTool.ToolName,
     };

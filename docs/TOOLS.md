@@ -127,12 +127,12 @@ Under *File tools*. Paths are relative to the working directory; nothing outside
 |---|---|---|
 | `get_working_directory` | — | The working directory's path. Called at the start of every conversation. |
 | `search_files` | `text?, path?, files?, regex?, context?, output?, order?, limit?, depth?` | Searches text files for a word, phrase or regex. Without `text`, lists a folder, a tree (`depth` 2–4), matching names or the newest files (the `images` folder too). |
-| `file_info` | `path` | A file's size, time, lines, words, line ending and BOM, or a folder's counts; also whether something exists. |
-| `read_file` | `path, start_line?, max_lines?` | Reads a text file or part of it (a negative `start_line` counts from the end) in its encoding: UTF-8, UTF-16 or UTF-32, else Windows-1252 as a guess the header names. A line over 32,000 characters is cut, as the header says. |
+| `file_info` | `path?, paths?` | A file's size, time, lines, words, line ending and BOM, or a folder's counts; also whether something exists; `paths` checks several. |
+| `read_file` | `path?, paths?, start_line?, max_lines?` | Reads a text file or part of it in its encoding (UTF-8, UTF-16 or UTF-32, else Windows-1252 as a guess the header names); `paths` reads up to 20 sharing one 32,000-character limit, and a longer line is cut. |
 | `read_pdf` | `path, pages?, pictures?, find?, fields?, share?` | A PDF's text page by page; `find` lists pages holding words, `pictures` sends pages as pictures, `fields` lists a form's fields ([Reading PDFs](#reading-pdfs)). |
 | `read_office` | `path, sheet?, range?, slides?, notes?, formulas?, from_char?, share?` | A Word document as Markdown, an Excel workbook's sheets and cells as tables, or a PowerPoint deck's slides ([Reading Office files](#reading-office-files)). |
 | `write_file` | `path, content, mode?` | Writes a text file: `create` (default), `overwrite` or `append`. Without a mode it replaces only a file the model read whole, wrote or patched, unchanged since. Keeps the file's encoding, BOM and line ending; an append stops at 8 MB. |
-| `patch_file` | `path, old_text, new_text, replace_all?` | Replaces `old_text` once (or everywhere, with `replace_all`), tolerating spacing, indentation and quote differences; a one-line `old_text` must match closely. An edit already made isn't made twice; the result stays under 8 MB. |
+| `patch_file` | `path, old_text?, new_text?, replace_all?, edits?` | Replaces `old_text` once (or everywhere, with `replace_all`), tolerating spacing, indentation and quote differences. `edits` makes several changes in order, all or none. An edit already made isn't made twice; the result stays under 8 MB. |
 | `create_directory` | `path` | Creates a folder and any missing parents. |
 | `move` | `from, to, overwrite?` | Renames or moves a file or folder; replaces nothing unless `overwrite`, and says what it replaced. |
 | `copy` | `from, to, overwrite?` | Copies under the same rule; a folder over a folder merges. Hidden files come along; every `.git` and guarded file is left out and named. Refused if it would leave under 1 GB free. |
@@ -282,7 +282,7 @@ Under *UNC tools*. They reach named network shares (`\\server\share`, or a folde
 | `unc_read` | `share?, path, start_line?, max_lines?` | Reads a text file, whole or in part. |
 | `unc_fetch` | `share?, path, to?, overwrite?` | Copies into the working directory (needs *File tools*), up to 5,000 files and 500 MB. Esc stops a folder's copy between files and takes back what it copied. |
 | `unc_write` | `share?, path, content, mode?` | Writes a text file: `create` (default), `overwrite` or `append`. |
-| `unc_patch` | `share?, path, old_text, new_text, replace_all?` | Changes part of a text file. |
+| `unc_patch` | `share?, path, old_text?, new_text?, replace_all?, edits?` | Changes part of a text file, or several parts with `edits`. |
 | `unc_create_directory` | `share?, path` | Creates a folder. |
 | `unc_move` / `unc_copy` | `share?, from, to, overwrite?` | Moves, renames or copies within one share. |
 | `unc_delete` | `share?, path` | Deletes a file or folder: for good on a network share; in an outside folder on this PC, to the Recycle bin under *File deletes to Recycle bin*. Off by default. |
@@ -302,12 +302,12 @@ Under *UNC tools*. They reach named network shares (`\\server\share`, or a folde
 Under *GitLib tools*: git inside the app, for when the model should never run `git`. Local only (no `fetch`, `pull`, `push` or `clone`), on a repository at or under the working directory; `path` picks it.
 
 * `gitlib_discard` and `gitlib_delete` lose work for good; `gitlib_delete` starts off.
-* Commits need *GitLib user email* and *GitLib user name*, which `/gituser` writes into the repository.
+* Commits, reverts and annotated tags need *GitLib user email* and *GitLib user name*, which `/gituser` writes into the repository.
 
 | Tool | Arguments | What it does |
 |---|---|---|
 | `gitlib_status` | `path?` | The branch, ahead/behind, and every staged, modified, untracked or conflicted path. |
-| `gitlib_log` | `path?, ref?, max_commits?` | Commits from `ref` (HEAD by default), newest first; with a file, those that changed it. |
+| `gitlib_log` | `path?, ref?, max_commits?, since?, until?, author?, grep?` | Commits from `ref` (HEAD by default), newest first; with a file, those that changed it; filtered by time, author or message. |
 | `gitlib_show` | `ref, path?` | One commit's author, date, message and files; with a file, its text then. |
 | `gitlib_diff` | `path?, ref?, from?, to?, staged?, max_lines?` | A diff of unstaged or staged changes, a commit, or two commits. |
 | `gitlib_blame` | `path, from_line?, to_line?, ref?` | Who last changed each line, and in which commit. |
@@ -315,6 +315,8 @@ Under *GitLib tools*: git inside the app, for when the model should never run `g
 | `gitlib_stage` | `action, paths, path?` | `stage` or `unstage` paths, or `.` for everything under `path`. |
 | `gitlib_commit` | `message, amend?, allow_empty?, path?` | Commits what is staged as `user.name` / `user.email`. |
 | `gitlib_stash` | `action, message?, index?, include_untracked?, path?` | `push`, `pop`, `apply` or `list` stashes. |
+| `gitlib_revert` | `ref, message?, path?` | Undoes a commit with a new one; refuses while there are uncommitted changes, and a revert that would conflict changes nothing. |
+| `gitlib_tag` | `name?, ref?, message?, path?` | Lists the tags, or tags a commit: lightweight, or annotated with a message. Never moves an existing tag. |
 | `gitlib_discard` | `paths?, ref?, path?` | Throws away uncommitted changes in `paths`, or resets hard (untracked files stay). |
 | `gitlib_delete` | `kind, name?, index?, path?` | Removes a local `branch` (never the checked-out one), a `tag`, or a `stash` by index. |
 
@@ -1115,7 +1117,8 @@ Under *Agent skills*.
 | `skill_editor` | `action, scope?, name, description?, instructions?, path?, content?, old_text?, new_text?, replace_all?, summary?` | Creates or updates a skill in `profile` (default) or `global` scope (*Global skills*); `write_file` and `edit_file` change a supporting file, `edit_file` on `SKILL.md` part of its instructions. |
 
 * `skill_editor` never deletes, and never touches an external skill or one you [locked](SETTINGS.md#locking-a-skill) or disabled.
-* **Writes need their text:** `skill_editor`'s `write_file`, `write_file`, `unc_write` and `vault_write` refuse a call with no `content`; `edit_file`, `patch_file` and `unc_patch` one with no `new_text`. An empty `""` is allowed; a pruned stub copied from the history is not.
+* **Writes need their text:** `skill_editor`'s `write_file`, `write_file`, `unc_write` and `vault_write` refuse a call with no `content`; `edit_file`, `patch_file` and `unc_patch` one with no `new_text`, as does each of their `edits`. An empty `""` is allowed; a pruned stub copied from the history is not.
+* **A misnamed argument is answered:** a tool sent an argument it doesn't take runs nothing and names the right one.
 * **A cut result isn't written back:** a write, command or MCP tool whose arguments hold a cut result's marker is refused; reads and searches pass it. A cut `read_file` no longer counts as read, so `write_file` without a mode won't replace that file.
 * **A skill's files by full path:** the file tools refuse a path inside a skill folder and name `load_skill` instead.
 

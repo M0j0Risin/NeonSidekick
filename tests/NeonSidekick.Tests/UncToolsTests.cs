@@ -81,7 +81,7 @@ public sealed class UncToolsTests : IDisposable
         Assert.Equal(["share", "path", "start_line", "max_lines"], Properties(Tool<UncReadTool>()));
         Assert.Equal(["share", "path", "to", "overwrite"], Properties(Tool<UncFetchTool>()));
         Assert.Equal(["share", "path", "content", "mode"], Properties(Tool<UncWriteTool>()));
-        Assert.Equal(["share", "path", "old_text", "new_text", "replace_all"], Properties(Tool<UncPatchTool>()));
+        Assert.Equal(["share", "path", "old_text", "new_text", "replace_all", "edits"], Properties(Tool<UncPatchTool>()));
         Assert.Equal(["share", "path"], Properties(Tool<UncCreateDirectoryTool>()));
         Assert.Equal(["share", "from", "to", "overwrite"], Properties(Tool<UncMoveTool>()));
         Assert.Equal(["share", "from", "to", "overwrite"], Properties(Tool<UncCopyTool>()));
@@ -219,6 +219,19 @@ public sealed class UncToolsTests : IDisposable
         Assert.Equal(UncText.ReadOnlyShare("eng"), await Invoke<UncPutTool>(("from", "nothing.txt"), ("share", "eng")));
         Assert.False(File.Exists(Path.Combine(_eng, "x.txt")));
         Assert.True(File.Exists(Path.Combine(_eng, @"specs\a.md")));
+    }
+
+    /// <summary><c>unc_patch</c>'s <c>edits</c> (2026-11-15): several changes in one call, in order, inside the same impersonated write.</summary>
+    [WindowsFact]
+    public async Task OnAReadWriteShare_EditsMakeSeveralChanges_InOneCall()
+    {
+        _settings.UncWrites = true;
+        using var edits = System.Text.Json.JsonDocument.Parse("[{\"old_text\": \"one\", \"new_text\": \"un\"}, {\"old_text\": \"un\", \"new_text\": \"eins\"}, {\"old_text\": \"two\", \"new_text\": \"zwei\"}]");
+
+        Assert.StartsWith("edited notes.txt with 3 edits", await Invoke<UncPatchTool>(("share", "data"), ("path", "notes.txt"), ("edits", edits.RootElement.Clone())), StringComparison.Ordinal);
+        Assert.Equal("eins\nzwei\n", File.ReadAllText(Path.Combine(_data, "notes.txt")));
+        Assert.Equal(FileText.EditFormRequired, await Invoke<UncPatchTool>(("share", "data"), ("path", "notes.txt")));
+        Assert.Contains("edits", Tool<UncPatchTool>().Description, StringComparison.Ordinal);
     }
 
     [WindowsFact]

@@ -7162,9 +7162,9 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// The eleven git tools (2026-09-20), offered on every turn while the setting <c>GitLib tools</c> (<c>Git tools</c> until 2026-09-21, <c>Git native tools</c> until 2026-09-30) is on
-    /// (headless too): the reads first, then the writes, the two that lose work last — those two are off
-    /// by name in a fresh profile's <c>ToolsDisabled</c>. Each reads the settings in force at the call.
+    /// The thirteen git tools (2026-09-20; revert and tag 2026-11-15), offered on every turn while the setting <c>GitLib tools</c> (<c>Git tools</c> until 2026-09-21, <c>Git native tools</c> until 2026-09-30) is on
+    /// (headless too): the reads first, then the writes, the two that lose work last; <c>gitlib_delete</c> starts off in a fresh
+    /// profile's <c>ToolsDisabled</c>. Each reads the settings in force at the call.
     /// </summary>
     public static IReadOnlyList<AIFunction> GitTools(GitAccess git, Func<AppSettingsData> effective) => new AIFunction[]
     {
@@ -7177,6 +7177,8 @@ internal sealed partial class ChatScreen
         new GitStageTool(git, effective),
         new GitCommitTool(git, effective),
         new GitStashTool(git, effective),
+        new GitRevertTool(git, effective),
+        new GitTagTool(git, effective),
         new GitDiscardTool(git, effective),
         new GitDeleteTool(git, effective),
     };
@@ -7193,6 +7195,8 @@ internal sealed partial class ChatScreen
         GitStageTool.ToolName,
         GitCommitTool.ToolName,
         GitStashTool.ToolName,
+        GitRevertTool.ToolName,
+        GitTagTool.ToolName,
         GitDiscardTool.ToolName,
         GitDeleteTool.ToolName,
     };
@@ -7853,6 +7857,8 @@ internal sealed partial class ChatScreen
         GitStageTool.ToolName,
         GitCommitTool.ToolName,
         GitStashTool.ToolName,
+        GitRevertTool.ToolName,
+        GitTagTool.ToolName,
         GitDiscardTool.ToolName,
         GitDeleteTool.ToolName,
         RunCommandTool.ToolName,
@@ -16336,11 +16342,14 @@ internal sealed partial class ChatScreen
     {
         ArgumentNullException.ThrowIfNull(files);
         ArgumentNullException.ThrowIfNull(call);
-        if (string.Equals(call.Name, ReadFileTool.ToolName, StringComparison.Ordinal)
-            && call.Arguments?.TryGetValue(FileTool.PathArgument, out object? path) == true
-            && ConversationCompactor.ArgumentText(path) is { Length: > 0 } relative)
+        // Every file the call named in path and paths (2026-11-15), read as the tool reads them; a paths that doesn't parse read nothing.
+        if (string.Equals(call.Name, ReadFileTool.ToolName, StringComparison.Ordinal) && call.Arguments is { } arguments
+            && FileTool.TryReadPaths(new AIFunctionArguments(arguments), out var paths, out _))
         {
-            files.ForgetSeen(relative);
+            foreach (string relative in paths)
+            {
+                files.ForgetSeen(relative);
+            }
         }
     }
 

@@ -7,7 +7,7 @@ using NeonSidekick.Tests.Fakes;
 
 namespace NeonSidekick.Tests;
 
-/// <summary>The eleven git tools over a temp sandbox holding a real repository: the pinned names, schemas and descriptions, the argument reading, every action's sentence and every refusal.</summary>
+/// <summary>The thirteen git tools over a temp sandbox holding a real repository: the pinned names, schemas and descriptions, the argument reading, every action's sentence and every refusal.</summary>
 public sealed class GitToolsTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"));
@@ -58,7 +58,7 @@ public sealed class GitToolsTests : IDisposable
     public void Names_Schemas_AndDescriptions_ArePinned()
     {
         Assert.Equal(GitToolNames.All, _tools.Select(t => t.Name));
-        Assert.Equal(["gitlib_status", "gitlib_log", "gitlib_show", "gitlib_diff", "gitlib_blame", "gitlib_branch", "gitlib_stage", "gitlib_commit", "gitlib_stash", "gitlib_discard", "gitlib_delete"], GitToolNames.All);
+        Assert.Equal(["gitlib_status", "gitlib_log", "gitlib_show", "gitlib_diff", "gitlib_blame", "gitlib_branch", "gitlib_stage", "gitlib_commit", "gitlib_stash", "gitlib_revert", "gitlib_tag", "gitlib_discard", "gitlib_delete"], GitToolNames.All);
         Assert.All(_tools, t => Assert.Equal("object", t.JsonSchema.GetProperty("type").GetString()));
         Assert.All(_tools, t => Assert.True(t.JsonSchema.GetProperty("properties").TryGetProperty("path", out _), t.Name + " takes path"));
 
@@ -68,7 +68,8 @@ public sealed class GitToolsTests : IDisposable
 
         Assert.Equal(["path"], Props(Tool<GitStatusTool>()));
         Assert.Empty(Required(Tool<GitStatusTool>()));
-        Assert.Equal(["path", "ref", "max_commits"], Props(Tool<GitLogTool>()));
+        Assert.Equal(["path", "ref", "max_commits", "since", "until", "author", "grep"], Props(Tool<GitLogTool>()));
+        Assert.Empty(Required(Tool<GitLogTool>()));
         Assert.Equal(["ref", "path"], Props(Tool<GitShowTool>()));
         Assert.Equal(["ref"], Required(Tool<GitShowTool>()));
         Assert.Equal(["path", "ref", "from", "to", "staged", "max_lines"], Props(Tool<GitDiffTool>()));
@@ -83,6 +84,10 @@ public sealed class GitToolsTests : IDisposable
         Assert.Equal(["message"], Required(Tool<GitCommitTool>()));
         Assert.Equal(["action", "message", "index", "include_untracked", "path"], Props(Tool<GitStashTool>()));
         Assert.Equal(["push", "pop", "apply", "list"], Enum(Tool<GitStashTool>(), "action"));
+        Assert.Equal(["ref", "message", "path"], Props(Tool<GitRevertTool>()));
+        Assert.Equal(["ref"], Required(Tool<GitRevertTool>()));
+        Assert.Equal(["name", "ref", "message", "path"], Props(Tool<GitTagTool>()));
+        Assert.False(Tool<GitTagTool>().JsonSchema.TryGetProperty("required", out _));
         Assert.Equal(["paths", "ref", "path"], Props(Tool<GitDiscardTool>()));
         Assert.Empty(Required(Tool<GitDiscardTool>()));
         Assert.Equal(["kind", "name", "index", "path"], Props(Tool<GitDeleteTool>()));
@@ -98,7 +103,7 @@ public sealed class GitToolsTests : IDisposable
             Tool<GitStatusTool>().Description);
         Assert.Equal(
             "Lists the git history: the commits reachable from ref (HEAD by default), newest first, one line each with the short sha, the date, the author and the subject. " +
-            "With a file or folder as path, only the commits that changed it.",
+            "With a file or folder as path, only the commits that changed it. since and until (an age or a moment), author and grep (the message) filter it.",
             Tool<GitLogTool>().Description);
         Assert.Equal(
             "Shows one commit: who made it, when, its message and the files it changed with their line counts. " +
@@ -129,6 +134,15 @@ public sealed class GitToolsTests : IDisposable
             "Puts the working tree's changes aside and brings them back: push saves them as a stash and cleans the tree, pop or apply restores stash@{index}, list shows them. " +
             "Dropping a stash is gitlib_delete's job.",
             Tool<GitStashTool>().Description);
+        Assert.Equal(
+            "Undoes a commit with a new commit that reverses its changes; nothing is lost, and the reverted commit stays in the history. " +
+            "Refuses while there are uncommitted changes, and for a merge commit; a revert that would conflict is put back and its files named. " +
+            "It never rewrites history, and leaves nothing half done to abort.",
+            Tool<GitRevertTool>().Description);
+        Assert.Equal(
+            "Lists the tags, or with a name makes one on ref (HEAD by default): lightweight, or annotated with a message; " +
+            "never moves an existing tag, and never takes a branch's name; deleting a tag is gitlib_delete's job.",
+            Tool<GitTagTool>().Description);
         Assert.Equal(
             "Throws uncommitted changes away for good: the paths named go back to how they are at ref (HEAD by default), index and working tree alike; " +
             "with no paths the whole tree is reset hard to ref (untracked files are left alone). Nothing brings the changes back — do it only when the user asked for exactly that.",
@@ -474,5 +488,67 @@ public sealed class GitToolsTests : IDisposable
             GitText.Status(new GitStatusReport(GitOutcome.Ok, "", "main", false, false, "abc1234", "origin/main", 2, 1, [new GitEntry('R', "new", "old")], [], [], [new GitEntry('U', "c")], false)));
         Assert.Equal("On branch main (up to date with origin/main): clean", GitText.Status(new GitStatusReport(GitOutcome.Ok, "", "main", false, false, "abc1234", "origin/main", 0, 0, [], [], [], [], false)));
         Assert.Equal("Detached at abc1234: clean", GitText.Status(new GitStatusReport(GitOutcome.Ok, "", "(no branch)", false, true, "abc1234", null, null, null, [], [], [], [], false)));
+    }
+    // ---- log filters, revert, tag (2026-11-15) ----
+
+    [Fact]
+    public async Task Log_Filters_ReadAsAgesOrMoments_AndTheHeaderNamesThem()
+    {
+        Repo();
+        Commit("a.txt", "1\n", "first");
+        Commit("a.txt", "2\n", "second");
+        Commit("a.txt", "3\n", "third");
+        var log = Tool<GitLogTool>();
+
+        string window = await Invoke(log, ("since", "2026-09-01T12:02"), ("until", "2026-09-01T12:02"));
+        Assert.StartsWith("1 commit since 2026-09-01 12:02 until 2026-09-01 12:02 on main, newest first:\n", window, StringComparison.Ordinal);
+        Assert.EndsWith("second", window, StringComparison.Ordinal);
+        Assert.Equal("No commits since 2026-09-04 14:05 on main", await Invoke(log, ("since", "1w")));   // the clock's now less a week, in the user's zone
+        Assert.StartsWith("2 commits by test matching \"I\" on main", await Invoke(log, ("author", "test"), ("grep", "I")), StringComparison.Ordinal);
+        Assert.StartsWith("3 commits on main", await Invoke(log, ("author", " "), ("since", "")), StringComparison.Ordinal);   // blank is not given
+    }
+
+    [Fact]
+    public async Task Log_Refuses_ABadTime_AWindowEndingBeforeItStarts_AndATextTooLong()
+    {
+        Repo();
+        Commit("a.txt", "1\n", "first");
+        var log = Tool<GitLogTool>();
+
+        Assert.Equal(GitText.BadTime("since", "soon"), await Invoke(log, ("since", "soon")));
+        Assert.Equal("Error: until 'soon' is not an age (30m, 2h, 1d, 1w) or a moment (2026-10-14T21:00).", await Invoke(log, ("until", "soon")));
+        Assert.Equal(GitText.SinceAfterUntil, await Invoke(log, ("since", "2026-09-02"), ("until", "2026-09-01")));
+        Assert.Equal(ArgumentText.TooLong("grep", ArgumentText.MaxTextChars), await Invoke(log, ("grep", new string('x', ArgumentText.MaxTextChars + 1))));
+    }
+
+    [Fact]
+    public async Task Revert_NeedsARef_ThenCommitsTheUndo()
+    {
+        Repo();
+        Commit("a.txt", "one\n", "first");
+        string second = Commit("a.txt", "one\ntwo\n", "second");
+        var revert = Tool<GitRevertTool>();
+
+        Assert.Equal(GitText.NoRevertReference, await Invoke(revert));
+        Assert.Equal(GitText.NoRevertReference, await Invoke(revert, ("ref", "  ")));
+        string done = await Invoke(revert, ("ref", second[..7]));
+        Assert.Matches("^Reverted " + second[..7] + " with [0-9a-f]{7} on main: Revert \"second\" \\(1 file\\)$", done);
+        Assert.Equal("one\n", File.ReadAllText(Path.Combine(_root, "a.txt")));
+        Assert.Equal(GitText.NothingToRevert(second[..7]), await Invoke(revert, ("ref", second[..7]), ("message", "again")));
+    }
+
+    [Fact]
+    public async Task Tag_ListsWithoutAName_MakesOneWithIt_AndARefOrMessageAloneIsRefused()
+    {
+        Repo();
+        string first = Commit("a.txt", "one\n", "first");
+        var tag = Tool<GitTagTool>();
+
+        Assert.Equal(GitText.NoTags, await Invoke(tag));
+        Assert.Equal(GitText.TagNeedsName, await Invoke(tag, ("ref", "HEAD")));
+        Assert.Equal(GitText.TagNeedsName, await Invoke(tag, ("message", "notes")));
+        Assert.Equal($"Tagged {first[..7]} as v1 (annotated)", await Invoke(tag, ("name", "v1"), ("message", "One")));
+        Assert.Equal("Error: 'v1' exists already", await Invoke(tag, ("name", "v1")));
+        Assert.Equal($"1 tag:\n  v1 {first[..7]} first", await Invoke(tag, ("name", "")));
     }
 }

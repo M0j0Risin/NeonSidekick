@@ -199,7 +199,7 @@ public sealed class AuditReuseTests : IDisposable
         Assert.Equal(ConversationCompactor.PrunedArgumentStub(big.GetRawText().Length), stubbed);
         Assert.Same(messages[3], pruned[3]);   // ask_user's array is never stubbed
         Assert.Same(messages[5], pruned[5]);   // the last iteration's call
-        Assert.Equal([PresentAuditTool.ToolName], ConversationCompactor.RecordedArguments);
+        Assert.Equal([PresentAuditTool.ToolName, PatchFileTool.ToolName, UncPatchTool.ToolName], ConversationCompactor.RecordedArguments);
     }
 
     [Fact]

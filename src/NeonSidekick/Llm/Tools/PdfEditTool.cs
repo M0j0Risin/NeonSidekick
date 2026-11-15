@@ -19,7 +19,6 @@ public sealed class PdfEditTool : FileTool
     public const string ToolName = "pdf_edit";
 
     public const string ActionArgument = "action";
-    public const string PathsArgument = "paths";
     public const string PagesArgument = "pages";
     public const string AngleArgument = "angle";
     public const string FieldsArgument = "fields";

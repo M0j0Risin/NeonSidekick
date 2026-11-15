@@ -17,8 +17,6 @@ public sealed class ImageInfoTool : FileTool
 {
     public const string ToolName = "image_info";
 
-    public const string PathsArgument = "paths";
-
     private static readonly JsonElement Schema = ToolSchema.Parse(
         """
         {
@@ -101,7 +99,7 @@ public sealed class ImageInfoTool : FileTool
         var rest = paths.Distinct(StringComparer.OrdinalIgnoreCase).Skip(MaxPaths).ToList();
         if (rest.Count > 0)
         {
-            lines.Add(FileText.MorePictures(rest));
+            lines.Add(FileText.MorePaths(rest));
         }
 
         lines.Add(ImageText.Formats(ImageFormats.WritableFormats(), ImageEditTool.QualityOf(effective), ImageWords.MetadataName(effective.ImageEditMetadata), ImageEditTool.OutputFolderFor(effective.ImageEditOutputFolder, images?.Root) ?? ""));

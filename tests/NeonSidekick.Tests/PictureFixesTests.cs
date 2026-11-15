@@ -163,7 +163,7 @@ public sealed class PictureFixesTests : IDisposable
     [Fact]
     public void TheMoreLine_NamesTwentyAtMost()
     {
-        string line = FileText.MorePictures(Enumerable.Range(0, 30).Select(i => i + ".png").ToList());
+        string line = FileText.MorePaths(Enumerable.Range(0, 30).Select(i => i + ".png").ToList());
         Assert.Contains("19.png, and 10 more", line, StringComparison.Ordinal);
         Assert.DoesNotContain("20.png", line, StringComparison.Ordinal);
     }

@@ -77,6 +77,9 @@ public sealed class GitAccess
     /// <summary>The zone the tools show a commit's moment in: the clock's.</summary>
     public TimeZoneInfo Zone => _time.LocalTimeZone;
 
+    /// <summary>The clock's now, in its zone: what <c>gitlib_log</c>'s ages count back from (2026-11-15).</summary>
+    public DateTimeOffset Now => _time.GetLocalNow();
+
     // ---- discovery ----
 
     /// <summary>
@@ -261,8 +264,14 @@ public sealed class GitAccess
             upstream?.Name, upstream?.Ahead, upstream?.Behind, staged, unstaged, untracked, conflicts, truncated);
     });
 
-    /// <summary>The commits reachable from <paramref name="reference"/> (blank = HEAD), newest first, at most <paramref name="max"/>; under a file or folder <paramref name="relative"/> only those that changed it.</summary>
-    public GitLogReport Log(string relative, string reference, int max) => Run(relative, GitLogReport.Refused, (repo, location, full) =>
+    /// <summary>
+    /// The commits reachable from <paramref name="reference"/> (blank = HEAD), newest first, at most <paramref name="max"/>; under a file or
+    /// folder <paramref name="relative"/> only those that changed it, and only those <paramref name="filter"/> keeps (2026-11-15).
+    /// </summary>
+    public GitLogReport Log(string relative, string reference, int max, GitLogFilter? filter = null) => Log(relative, reference, max, filter, MaxLogWalk);
+
+    /// <summary><see cref="Log(string, string, int, GitLogFilter?)"/> with the walk's cap given (tests reach it over a small repository).</summary>
+    internal GitLogReport Log(string relative, string reference, int max, GitLogFilter? filter, int walkCap) => Run(relative, GitLogReport.Refused, (repo, location, full) =>
     {
         if (RepoPath(location, full) is not { } prefix)
         {
@@ -276,18 +285,24 @@ public sealed class GitAccess
         }
 
         max = Math.Max(1, max);
+        var keep = filter is { Any: true } ? filter : null;
+        bool skipping = prefix.Length > 0 || keep is not null;
         var commits = new List<GitCommitInfo>();
         bool truncated = false;
+        bool walkCapped = false;
         int walked = 0;
+        // No early stop on a date: the topological sort isn't strictly by time.
         foreach (var commit in repo.Commits.QueryBy(new CommitFilter { IncludeReachableFrom = tip, SortBy = CommitSortStrategies.Topological | CommitSortStrategies.Time }))
         {
-            if (walked++ >= MaxLogWalk)
+            if (walked++ >= walkCap)
             {
-                truncated = true;
+                // With commits skipped, only the newest were searched; with none, every one walked counted, so more are known to exist.
+                walkCapped = skipping;
+                truncated = !skipping;
                 break;
             }
 
-            if (prefix.Length > 0 && !Touches(commit, prefix))
+            if ((prefix.Length > 0 && !Touches(commit, prefix)) || (keep is not null && !Keeps(commit, keep)))
             {
                 continue;
             }
@@ -301,7 +316,12 @@ public sealed class GitAccess
             commits.Add(Info(commit));
         }
 
-        return new GitLogReport(GitOutcome.Ok, "", ReferenceName(repo, reference), prefix.Length == 0 ? null : _files.Relative(full, Directory.Exists(full)), commits, truncated);
+        return new GitLogReport(GitOutcome.Ok, "", ReferenceName(repo, reference), prefix.Length == 0 ? null : _files.Relative(full, Directory.Exists(full)), commits, truncated)
+        {
+            Filter = keep,
+            WalkCapped = walkCapped,
+            WalkCap = walkCap,
+        };
     });
 
     /// <summary>One commit (<paramref name="relative"/> = <c>""</c>: its header and the files it changed) or the path at that commit (a file's text, a folder's entries).</summary>
@@ -516,11 +536,13 @@ public sealed class GitAccess
         }
 
         var tags = new List<GitRef>();
+        bool tagsTruncated = false;
         foreach (var tag in repo.Tags.OrderBy(t => t.FriendlyName, StringComparer.Ordinal))
         {
             if (tags.Count >= MaxTags)
             {
                 truncated = true;
+                tagsTruncated = true;
                 break;
             }
 
@@ -528,7 +550,10 @@ public sealed class GitAccess
             tags.Add(new GitRef(tag.FriendlyName, target is null ? tag.Target.Sha[..ShortShaLength] : Short(target), target?.MessageShort ?? ""));
         }
 
-        return new GitRefsReport(GitOutcome.Ok, "", repo.Info.IsHeadDetached ? null : BranchName(repo), repo.Info.IsHeadDetached, local, remote, tags, truncated);
+        return new GitRefsReport(GitOutcome.Ok, "", repo.Info.IsHeadDetached ? null : BranchName(repo), repo.Info.IsHeadDetached, local, remote, tags, truncated)
+        {
+            TagsTruncated = tagsTruncated,
+        };
     });
 
     /// <summary>
@@ -759,6 +784,246 @@ public sealed class GitAccess
             ? new GitBranchResult(GitOutcome.Ok, "", name, Short(commit!))
             : new GitBranchResult(switched, "", name, Short(commit!));
     });
+
+    /// <summary>
+    /// A new commit undoing <paramref name="reference"/> (2026-11-15, feature idea #32): nothing lost, history never rewritten. Refused while
+    /// HEAD is unborn, the index has conflicts, anything is staged or a tracked file is changed anywhere in the repository (the commit holds only
+    /// the revert; untracked files don't count), and for a merge commit. libgit2's revert runs without committing (its own commit would go
+    /// through the GitBuf prettify that comes back empty under NativeAOT), then the app's commit as <see cref="Commit"/> makes one. A revert that
+    /// conflicts is put back (<see cref="PutBack"/>) and answered <see cref="GitOutcome.RevertConflicted"/>; one that would change nothing is
+    /// <see cref="GitOutcome.NothingToRevert"/>; an untracked file in the way is <see cref="GitOutcome.CheckoutConflict"/>, libgit2 having
+    /// changed nothing. A throw once the revert started is put back too, then worded by <see cref="Run{T}"/>. <paramref name="message"/> blank
+    /// once tidied takes git's default.
+    /// </summary>
+    public GitRevertResult Revert(string relative, string reference, string message) => Run(relative, GitRevertResult.Refused, (repo, location, full) =>
+    {
+        if (repo.Info.IsHeadUnborn)
+        {
+            return GitRevertResult.Refused(GitOutcome.Unborn);
+        }
+
+        var found = TryCommit(repo, reference, out var target, out string detail);
+        if (found != GitOutcome.Ok)
+        {
+            return GitRevertResult.Refused(found, detail);
+        }
+
+        if (repo.Index.Conflicts.Any())
+        {
+            return GitRevertResult.Refused(GitOutcome.Conflicts);
+        }
+
+        // The whole work tree, never the path's prefix: path only picks the repository, and a revert touches files anywhere in it. The same
+        // letters gitlib_status shows, so the two never disagree about what counts as changed.
+        if (StatusEntries(repo, location, "", recurseUntracked: false).Any(e => IndexCode(e.State) is not null || WorkdirCode(e.State) is not null))
+        {
+            return GitRevertResult.Refused(GitOutcome.DirtyTree);
+        }
+
+        if (target!.Parents.Count() > 1)
+        {
+            return GitRevertResult.Refused(GitOutcome.MergeCommit, Short(target));
+        }
+
+        var identity = Identity(repo, out var signature);
+        if (identity != GitOutcome.Ok)
+        {
+            return GitRevertResult.Refused(identity);
+        }
+
+        // What the revert recreates (paths the target deleted), worked out before it runs, so a put-back never depends on an index a throw may
+        // have left unwritten: only those absent from HEAD and from the disk now, so nothing tracked or already there is ever removed.
+        string workTree = repo.Info.WorkingDirectory;
+        var head = repo.Head.Tip!;
+        var parent = target.Parents.FirstOrDefault();
+        List<string> recreated = parent is null ? [] : BlobPaths(parent.Tree, "")
+            .Where(p => target.Tree[p] is null && head.Tree[p] is null && !File.Exists(Path.Combine(workTree, p)))
+            .ToList();
+        string targetShort = Short(target);
+        string pretty = Prettify(message);
+        string text = pretty.Length > 0 ? pretty : "Revert \"" + target.MessageShort + "\"\n\nThis reverts commit " + target.Sha + ".\n";
+
+        Commit commit;
+        try
+        {
+            var result = repo.Revert(target, signature!, new RevertOptions { CommitOnSuccess = false });
+            if (result.Status == RevertStatus.Conflicts)
+            {
+                var paths = repo.Index.Conflicts.Select(c => (c.Ours ?? c.Theirs ?? c.Ancestor).Path).Distinct(StringComparer.Ordinal).ToList();
+                PutBack(repo, workTree, recreated);
+                DiagnosticLog.Debug(Category, RevertUndoneLogLine(targetShort, paths.Count));
+                string listed = string.Join(", ", paths.Take(MaxConflictPaths).Select(p => Llm.Tools.ArgumentText.Echo(SandboxPath(location, p))))
+                    + (paths.Count > MaxConflictPaths ? ", and " + (paths.Count - MaxConflictPaths).ToString(CultureInfo.InvariantCulture) + " more" : "");
+                return GitRevertResult.Refused(GitOutcome.RevertConflicted, targetShort + " conflicts in " + listed);
+            }
+
+            if (result.Status == RevertStatus.NothingToRevert)
+            {
+                PutBack(repo, workTree, recreated);
+                return GitRevertResult.Refused(GitOutcome.NothingToRevert, targetShort);
+            }
+
+            // PrettifyMessage would go through git_message_prettify's GitBuf (empty on the published exe): the tidying is Prettify's.
+            commit = repo.Commit(text, signature!, signature!, new CommitOptions { PrettifyMessage = false });
+        }
+        catch (CheckoutConflictException)
+        {
+            // An untracked file where the revert would write: libgit2's own on_error cleared REVERT_HEAD and MERGE_MSG, nothing written.
+            return GitRevertResult.Refused(GitOutcome.CheckoutConflict);
+        }
+        catch (Exception ex) when (ex is LibGit2SharpException or IOException or UnauthorizedAccessException)
+        {
+            // A revert that failed before it wrote anything (a stray index.lock refuses its first index write, and libgit2 clears its own
+            // state) needs no put-back, and a put-back would only fail on the same lock and claim a mess that isn't there.
+            if (Untouched(repo, location, workTree, recreated))
+            {
+                throw;
+            }
+
+            try
+            {
+                PutBack(repo, workTree, recreated);
+            }
+            catch (Exception again) when (again is LibGit2SharpException or IOException or UnauthorizedAccessException)
+            {
+                DiagnosticLog.Info(Category, RevertPutBackFailedLogLine(targetShort, recreated, again.Message));
+                return GitRevertResult.Refused(GitOutcome.Failed, LogText.Excerpt(ex.Message) + "; putting it back failed too, so check gitlib_status");
+            }
+
+            throw;
+        }
+
+        var (changes, _) = Compare(repo, location, commit.Parents.FirstOrDefault()?.Tree, commit.Tree, "");
+        DiagnosticLog.Debug(Category, RevertedLogLine(targetShort, Short(commit), BranchName(repo)));
+        return new GitRevertResult(GitOutcome.Ok, "", targetShort, Short(commit), BranchName(repo), commit.MessageShort, changes.Count);
+    });
+
+    /// <summary>
+    /// Whether a failed revert left the repository as it found it: no operation in progress, nothing it recreates on the disk, no change
+    /// staged or in a tracked file. False when the look itself fails, so the put-back still runs.
+    /// </summary>
+    private bool Untouched(Repository repo, RepoLocation location, string workTree, IReadOnlyList<string> recreated)
+    {
+        try
+        {
+            return repo.Info.CurrentOperation == CurrentOperation.None
+                && !recreated.Any(p => File.Exists(Path.Combine(workTree, p)))
+                && !StatusEntries(repo, location, "", recurseUntracked: false).Any(e => IndexCode(e.State) is not null || WorkdirCode(e.State) is not null);
+        }
+        catch (Exception ex) when (ex is LibGit2SharpException or IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>The most conflicted paths a revert's refusal names; the rest are counted.</summary>
+    public const int MaxConflictPaths = 10;
+
+    /// <summary>
+    /// Puts a revert back (2026-11-15): a hard reset to HEAD, which restores the clean tree the revert started from and clears REVERT_HEAD and
+    /// MERGE_MSG, then the files it recreated, which the reset leaves as untracked, deleted. Safe only because <see cref="Revert"/> refused a
+    /// tree with any change first. Internal for the test that reverts a tree by hand.
+    /// </summary>
+    internal static void PutBack(Repository repo, string workTree, IReadOnlyList<string> recreated)
+    {
+        repo.Reset(ResetMode.Hard);
+        foreach (string path in recreated)
+        {
+            string full = Path.Combine(workTree, path);
+            if (File.Exists(full))
+            {
+                File.Delete(full);
+            }
+        }
+    }
+
+    /// <summary>Every file's repository path in <paramref name="tree"/>, folders walked.</summary>
+    private static IEnumerable<string> BlobPaths(Tree tree, string prefix)
+    {
+        foreach (var entry in tree)
+        {
+            string path = prefix + entry.Name;
+            if (entry.TargetType == TreeEntryTargetType.Tree && entry.Target is Tree sub)
+            {
+                foreach (string inner in BlobPaths(sub, path + "/"))
+                {
+                    yield return inner;
+                }
+            }
+            else if (entry.TargetType == TreeEntryTargetType.Blob)
+            {
+                yield return path;
+            }
+        }
+    }
+
+    /// <summary>
+    /// A tag <paramref name="name"/> on <paramref name="reference"/> (blank = HEAD; 2026-11-15, feature idea #32): lightweight, or annotated with
+    /// <paramref name="message"/> (blank once tidied counts as none), <see cref="Identity"/> as its tagger. Never moves an existing tag, and never
+    /// takes a local branch's name: libgit2 resolves a short name as a tag before a branch, so a tag <c>main</c> would take over <c>ref: main</c>
+    /// in every git tool. An annotated tag's object is written as bytes (<see cref="TagObject"/>): LibGit2Sharp's tag APIs run the message through
+    /// <c>git_message_prettify</c>, the GitBuf call that comes back empty under NativeAOT.
+    /// </summary>
+    public GitTagResult CreateTag(string relative, string name, string reference, string message) => Run(relative, GitTagResult.Refused, (repo, location, full) =>
+    {
+        name = name.Trim();
+        var found = TryCommit(repo, reference, out var commit, out string detail);
+        if (found != GitOutcome.Ok)
+        {
+            return GitTagResult.Refused(found, detail);
+        }
+
+        if (!Reference.IsValidName("refs/tags/" + name))
+        {
+            return GitTagResult.Refused(GitOutcome.BadName, name);
+        }
+
+        if (repo.Tags[name] is not null || repo.Branches[name] is { IsRemote: false })
+        {
+            return GitTagResult.Refused(GitOutcome.NameConflict, name);
+        }
+
+        string pretty = Prettify(message);
+        try
+        {
+            if (pretty.Length == 0)
+            {
+                repo.Tags.Add(name, commit!);
+            }
+            else
+            {
+                var identity = Identity(repo, out var tagger);
+                if (identity != GitOutcome.Ok)
+                {
+                    return GitTagResult.Refused(identity);
+                }
+
+                var id = repo.ObjectDatabase.Write<TagAnnotation>(TagObject(commit!.Sha, name, tagger!, pretty));
+                repo.Refs.Add("refs/tags/" + name, id);
+            }
+        }
+        catch (NameConflictException)
+        {
+            return GitTagResult.Refused(GitOutcome.NameConflict, name);
+        }
+
+        DiagnosticLog.Debug(Category, TaggedLogLine(name, Short(commit!), pretty.Length > 0));
+        return new GitTagResult(GitOutcome.Ok, "", name, Short(commit!), pretty.Length > 0);
+    });
+
+    /// <summary>
+    /// An annotated tag object's bytes, as git writes one: <c>object</c>, <c>type commit</c>, <c>tag</c>, <c>tagger name &lt;email&gt; seconds ±hhmm</c>,
+    /// a blank line, the message (already tidied). Pure.
+    /// </summary>
+    public static byte[] TagObject(string sha, string name, Signature tagger, string message)
+    {
+        ArgumentNullException.ThrowIfNull(tagger);
+        var offset = tagger.When.Offset;
+        string zone = (offset < TimeSpan.Zero ? "-" : "+") + offset.Duration().ToString("hhmm", CultureInfo.InvariantCulture);
+        string text = "object " + sha + "\ntype commit\ntag " + name + "\ntagger " + tagger.Name + " <" + tagger.Email + "> "
+            + tagger.When.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture) + " " + zone + "\n\n" + message;
+        return System.Text.Encoding.UTF8.GetBytes(text);
+    }
 
     /// <summary>Checks the local branch <paramref name="name"/> out, never over local changes.</summary>
     public GitBranchResult SwitchBranch(string relative, string name) => Run(relative, GitBranchResult.Refused, (repo, location, full) =>
@@ -1340,6 +1605,21 @@ public sealed class GitAccess
     /// <summary>The first <see cref="ShortShaLength"/> characters of a commit's sha; <c>""</c> for none.</summary>
     public static string Short(Commit? commit) => commit is null ? "" : commit.Sha[..ShortShaLength];
 
+    /// <summary>
+    /// Whether <paramref name="commit"/> passes <paramref name="filter"/> (2026-11-15): its author date within the window, both ends inclusive,
+    /// the author's name or email holding <see cref="GitLogFilter.Author"/> and the message <see cref="GitLogFilter.Grep"/>, case ignored.
+    /// </summary>
+    private static bool Keeps(Commit commit, GitLogFilter filter)
+    {
+        var when = commit.Author.When;
+        return (filter.Since is not { } since || when >= since)
+            && (filter.Until is not { } until || when <= until)
+            && (filter.Author is not { } author
+                || commit.Author.Name.Contains(author, StringComparison.OrdinalIgnoreCase)
+                || commit.Author.Email.Contains(author, StringComparison.OrdinalIgnoreCase))
+            && (filter.Grep is not { } grep || commit.Message.Contains(grep, StringComparison.OrdinalIgnoreCase));
+    }
+
     private static GitCommitInfo Info(Commit commit) =>
         new(commit.Sha, Short(commit), commit.Author.Name, commit.Author.When, commit.MessageShort, commit.Message);
 
@@ -1809,6 +2089,11 @@ public sealed class GitAccess
 
     public static string StagedLogLine(int count, bool unstage) => (unstage ? "Unstaged " : "Staged ") + count.ToString(CultureInfo.InvariantCulture) + (count == 1 ? " path" : " paths");
     public static string CommittedLogLine(string sha, string branch, bool amend) => (amend ? "Amended " : "Committed ") + sha + " on " + branch;
+    public static string RevertedLogLine(string target, string sha, string branch) => "Reverted " + target + " with " + sha + " on " + branch;
+    public static string RevertUndoneLogLine(string target, int paths) => "Reverting " + target + " conflicted in " + paths.ToString(CultureInfo.InvariantCulture) + (paths == 1 ? " path" : " paths") + "; put back";
+    public static string RevertPutBackFailedLogLine(string target, IReadOnlyList<string> recreated, string why) =>
+        "Putting back the revert of " + target + " failed (" + why + "); files it may have left: " + (recreated.Count == 0 ? "none" : string.Join(", ", recreated));
+    public static string TaggedLogLine(string name, string sha, bool annotated) => "Tagged " + sha + " as " + name + (annotated ? " (annotated)" : " (lightweight)");
     public static string BranchCreatedLogLine(string name, string sha) => "Created branch " + name + " at " + sha;
     public static string BranchRenamedLogLine(string name, string newName) => "Renamed branch " + name + " to " + newName;
     public static string SwitchedLogLine(string name) => "Switched to " + name;

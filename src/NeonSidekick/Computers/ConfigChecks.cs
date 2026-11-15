@@ -67,9 +67,13 @@ public static class ConfigChecks
         return best is not null && bestDistance <= Math.Max(1, wanted.Length / 3) ? best : null;
     }
 
-    /// <summary>The edit distance (insert, delete, change) between two short words.</summary>
+    /// <summary>
+    /// The edit distance (insert, delete, change, and two neighbors swapped) between two short words. A swap counts as one edit (2026-11-15,
+    /// feature idea #42: a tool argument typed <c>qurey</c> was two edits from <c>query</c>, past a five-letter key's third).
+    /// </summary>
     private static int Distance(string a, string b)
     {
+        var before = new int[b.Length + 1];
         var previous = new int[b.Length + 1];
         var current = new int[b.Length + 1];
         for (int j = 0; j <= b.Length; j++)
@@ -84,9 +88,13 @@ public static class ConfigChecks
             {
                 int change = previous[j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1);
                 current[j] = Math.Min(change, Math.Min(previous[j] + 1, current[j - 1] + 1));
+                if (i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1])
+                {
+                    current[j] = Math.Min(current[j], before[j - 2] + 1);
+                }
             }
 
-            (previous, current) = (current, previous);
+            (before, previous, current) = (previous, current, before);
         }
 
         return previous[b.Length];

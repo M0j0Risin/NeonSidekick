@@ -146,9 +146,14 @@ public sealed class HangingTool(string name) : AIFunction
     }
 }
 
+/// <summary>
+/// A stand-in for any tool under its name, answering a fixed text whatever it is sent. Its schema declares no <c>properties</c> at all, so the
+/// misnamed-argument check (2026-11-15, <see cref="NeonSidekick.Llm.ToolArgumentCheck"/>) leaves its calls alone, as it does any schema it
+/// can't judge: the tests send it whatever the real tool would take.
+/// </summary>
 public sealed class FixedTool(string name, string text) : AIFunction
 {
-    private static readonly JsonElement Schema = ToolSchema.Parse("""{"type":"object","properties":{}}""");
+    private static readonly JsonElement Schema = ToolSchema.Parse("""{"type":"object"}""");
 
     public override string Name => name;
 

@@ -4098,7 +4098,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task WithGeometry_SysPromptWithAskOff_SaysSo_OnTheToolsTab()
     {
         _settings.Update(d => { d.TtsOutput = false; d.AskUser = false; d.MenuMaxHeight = "full"; });   // the whole tab (2026-10-01)
-        _console.Profile.Height = 132;   // the Git group (2026-09-20) makes the Tools tab eleven rows taller; image_edit's and image_info's lossless-strip lines (2026-10-05) a few more; read_office (2026-10-28) a few more; convert_to_xlsx's and convert_to_docx's longer descriptions (2026-10-29, review P2-6) a few more
+        _console.Profile.Height = 140;   // gitlib_revert and gitlib_tag with the longer file-tool descriptions (2026-11-15) a few more; the Git group (2026-09-20) makes the Tools tab eleven rows taller; image_edit's and image_info's lossless-strip lines (2026-10-05) a few more; read_office (2026-10-28) a few more; convert_to_xlsx's and convert_to_docx's longer descriptions (2026-10-29, review P2-6) a few more
         _geometry = new ScreenGeometry(() => null);
         PushLine("/usage prompt");   // /sys' Prompt tab until 2026-11-07
         _console.Input.PushKey(Keys.Right);
@@ -4109,7 +4109,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.DoesNotMatch(GroupHeading("Questions"), output);   // not offered: left out of the tab (2026-09-26)
         Assert.Matches(ToolsHeading("Files (19)", null, "get_working_directory"), output);
-        Assert.Matches(ToolsHeading("GitLib (11)", null, "gitlib_status"), output);   // between Files and Web (2026-09-20; the fixture opts every tool on; the tab's word since 2026-09-21)
+        Assert.Matches(ToolsHeading("GitLib (13)", null, "gitlib_status"), output);   // between Files and Web (2026-09-20; the fixture opts every tool on; the tab's word since 2026-09-21)
         Assert.Matches(ToolsHeading("Web (6)", null, "web_search"), output);
         Assert.Matches(ToolsHeading("Sessions (1)", null, "session_manager"), output);   // 2026-09-18, ahead of the questions
         Assert.Contains("── Operating rules ── default ─", output);
@@ -4120,7 +4120,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task WithGeometry_SysPromptWithAskOff_SaysSo_OnTheToolsTab_Unix()
     {
         _settings.Update(d => { d.TtsOutput = false; d.AskUser = false; d.MenuMaxHeight = "full"; });   // the whole tab (2026-10-01)
-        _console.Profile.Height = 132;   // the Git group (2026-09-20) makes the Tools tab eleven rows taller; image_edit's and image_info's lossless-strip lines (2026-10-05) a few more; read_office (2026-10-28) a few more; convert_to_xlsx's and convert_to_docx's longer descriptions (2026-10-29, review P2-6; the Mac pass of 2026-11-01) a few more
+        _console.Profile.Height = 140;   // gitlib_revert and gitlib_tag with the longer file-tool descriptions (2026-11-15) a few more; the Git group (2026-09-20) makes the Tools tab eleven rows taller; image_edit's and image_info's lossless-strip lines (2026-10-05) a few more; read_office (2026-10-28) a few more; convert_to_xlsx's and convert_to_docx's longer descriptions (2026-10-29, review P2-6; the Mac pass of 2026-11-01) a few more
         _geometry = new ScreenGeometry(() => null);
         PushLine("/usage prompt");   // /sys' Prompt tab until 2026-11-07
         _console.Input.PushKey(Keys.Right);
@@ -4131,7 +4131,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.DoesNotMatch(GroupHeading("Questions"), output);   // not offered: left out of the tab (2026-09-26)
         Assert.Matches(ToolsHeading("Files (19)", null, "get_working_directory"), output);   // pdf_edit's, as on Windows (2026-10-17, the Mac pass)
-        Assert.Matches(ToolsHeading("GitLib (11)", null, "gitlib_status"), output);   // between Files and Web (2026-09-20; the fixture opts every tool on; the tab's word since 2026-09-21)
+        Assert.Matches(ToolsHeading("GitLib (13)", null, "gitlib_status"), output);   // between Files and Web (2026-09-20; the fixture opts every tool on; the tab's word since 2026-09-21)
         Assert.Matches(ToolsHeading("Web (6)", null, "web_search"), output);
         Assert.Matches(ToolsHeading("Sessions (1)", null, "session_manager"), output);   // 2026-09-18, ahead of the questions
         Assert.Contains("── Operating rules ── default ─", output);
@@ -11429,7 +11429,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Matches(ToolsHeading("Clock (3)", null, "get_current_time"), output);
         Assert.Matches(ToolsHeading("Timers (3)", null, "start_timer"), output);
         Assert.Matches(ToolsHeading("Files (19)", null, "get_working_directory"), output);
-        Assert.Matches(ToolsHeading("GitLib (11)", null, "gitlib_status"), output);   // between Files and Web (2026-09-20; the fixture opts every tool on; the tab's word since 2026-09-21)
+        Assert.Matches(ToolsHeading("GitLib (13)", null, "gitlib_status"), output);   // between Files and Web (2026-09-20; the fixture opts every tool on; the tab's word since 2026-09-21)
         Assert.Matches(ToolsHeading("Web (6)", null, "web_search"), output);
         Assert.Matches(ToolsHeading("Memory (2)", null, "save_memory"), output);
         Assert.Matches(ToolsHeading("Sessions (1)", null, "session_manager"), output);   // 2026-09-18, between the skills and the questions
@@ -11476,7 +11476,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Matches(ToolsHeading("Clock (3)", null, "get_current_time"), output);
         Assert.Matches(ToolsHeading("Timers (3)", null, "start_timer"), output);
         Assert.Matches(ToolsHeading("Files (19)", null, "get_working_directory"), output);   // pdf_edit's, as on Windows (2026-10-17, the Mac pass)
-        Assert.Matches(ToolsHeading("GitLib (11)", null, "gitlib_status"), output);   // between Files and Web (2026-09-20; the fixture opts every tool on; the tab's word since 2026-09-21)
+        Assert.Matches(ToolsHeading("GitLib (13)", null, "gitlib_status"), output);   // between Files and Web (2026-09-20; the fixture opts every tool on; the tab's word since 2026-09-21)
         Assert.Matches(ToolsHeading("Web (6)", null, "web_search"), output);
         Assert.Matches(ToolsHeading("Memory (2)", null, "save_memory"), output);
         Assert.Matches(ToolsHeading("Sessions (1)", null, "session_manager"), output);   // 2026-09-18, between the skills and the questions

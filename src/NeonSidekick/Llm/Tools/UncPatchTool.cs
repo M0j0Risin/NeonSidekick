@@ -6,7 +6,10 @@ using NeonSidekick.Unc;
 
 namespace NeonSidekick.Llm.Tools;
 
-/// <summary><c>unc_patch(share?, path, old_text, new_text, replace_all?)</c> (2026-09-30): <c>patch_file</c> on a read-write share, under <c>UNC writes</c>; the file replaced in place, nothing kept.</summary>
+/// <summary>
+/// <c>unc_patch(share?, path, old_text, new_text, replace_all? | edits)</c> (2026-09-30): <c>patch_file</c> on a read-write share, under <c>UNC
+/// writes</c>; the file replaced in place, nothing kept. <c>edits</c> as <c>patch_file</c>'s (2026-11-15).
+/// </summary>
 public sealed class UncPatchTool : UncTool, IRefusesPrunedStubs
 {
     /// <inheritdoc/>
@@ -16,6 +19,7 @@ public sealed class UncPatchTool : UncTool, IRefusesPrunedStubs
     public const string OldTextArgument = PatchFileTool.OldTextArgument;
     public const string NewTextArgument = PatchFileTool.NewTextArgument;
     public const string ReplaceAllArgument = PatchFileTool.ReplaceAllArgument;
+    public const string EditsArgument = PatchFileTool.EditsArgument;
 
     private static readonly JsonElement Schema = ToolSchema.Parse(
         """
@@ -26,9 +30,10 @@ public sealed class UncPatchTool : UncTool, IRefusesPrunedStubs
             "path": { "type": "string", "description": "The text file to change, relative to the share (or a full path under it)." },
             "old_text": { "type": "string", "description": "The exact text to replace, copied from unc_read; enough of it to match one place." },
             "new_text": { "type": "string", "description": "What goes in its place." },
-            "replace_all": { "type": "boolean", "description": "true to replace every place old_text matches. Default false: it must match exactly one." }
+            "replace_all": { "type": "boolean", "description": "true to replace every place old_text matches. Default false: it must match exactly one." },
+            "edits": { "type": "array", "items": { "type": "object", "properties": { "old_text": { "type": "string" }, "new_text": { "type": "string" }, "replace_all": { "type": "boolean" } }, "required": ["old_text", "new_text"] }, "description": "Several changes in one call (at most 50), each {old_text, new_text, replace_all?}, in order, all or none. Leave old_text and new_text out when you give this." }
           },
-          "required": ["path", "old_text", "new_text"]
+          "required": ["path"]
         }
         """);
 
@@ -40,7 +45,7 @@ public sealed class UncPatchTool : UncTool, IRefusesPrunedStubs
 
     public override string Description =>
         "Changes part of a text file on one of the user's read-write network shares (or outside folders): old_text, copied from unc_read, is replaced by new_text; the result shows the changed lines. " +
-        "The old text is gone for good: nothing is kept on a share. Only when the user asks for the change.";
+        "The old text is gone for good: nothing is kept on a share. Only when the user asks for the change. edits makes several changes at once, in order, all or none.";
 
     public override JsonElement JsonSchema => Schema;
 
@@ -58,6 +63,29 @@ public sealed class UncPatchTool : UncTool, IRefusesPrunedStubs
             return FileText.PathRequired(PathArgument);
         }
 
+        if (PatchFileTool.EditForm(arguments, out bool list) is { } form)
+        {
+            return form;
+        }
+
+        FileDiff? diff = null;
+        if (list)
+        {
+            if (!PatchFileTool.TryReadEdits(arguments, out var steps, out string error))
+            {
+                return error;
+            }
+
+            // Inside the impersonation wrapper, on its thread (it is bound to it): no Task.Run here; the token reaches EditTexts by the closure.
+            string many = await WriteAsync(ReadShare(arguments), path, "patched", (files, relative) =>
+            {
+                var edited = files.EditTexts(relative, steps, cancellationToken);
+                diff = edited.Diff;
+                return (FileText.Edited(edited), edited.Outcome == FileOutcome.Ok);
+            }, cancellationToken).ConfigureAwait(false);
+            return ToolDiffResult.Of(many, diff);
+        }
+
         // A missing new_text is not "" (2026-10-17): read as empty it removed old_text.
         if (!ToolArguments.Has(arguments, NewTextArgument))
         {
@@ -72,7 +100,6 @@ public sealed class UncPatchTool : UncTool, IRefusesPrunedStubs
         string oldText = ToolArguments.ReadString(arguments, OldTextArgument);
         string newText = ToolArguments.ReadString(arguments, NewTextArgument);
         // The diff beside the sentence for the transcript (2026-10-03, ToolDiffResult).
-        FileDiff? diff = null;
         string text = await WriteAsync(ReadShare(arguments), path, "patched", (files, relative) =>
         {
             var edited = files.EditText(relative, oldText, newText, replaceAll ?? false);

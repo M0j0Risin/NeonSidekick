@@ -279,8 +279,9 @@ public static class ToolArguments
     /// A list-of-strings argument (<c>view_image</c>'s <c>paths</c>): empty when missing, JSON null
     /// or an empty array; the strings of a JSON array of strings or a CLR sequence of strings; a
     /// single string counts as a list of one (a model that sends <c>"a.png"</c> for <c>paths</c>
-    /// meant that). False for anything else — an array holding a number, an object — with
-    /// <paramref name="raw"/> holding what was sent, for the error sentence.
+    /// meant that). A string that is itself a list — <c>"[\"a.txt\",\"b.txt\"]"</c>, or Python-style <c>['a.txt', 'b.txt']</c> from a
+    /// server's failed parse (2026-11-15) — is that list (<see cref="TakeEncodedStrings"/>). False for anything else — an array holding a
+    /// number, an object — with <paramref name="raw"/> holding what was sent, for the error sentence.
     /// </summary>
     public static bool TryReadStringList(AIFunctionArguments arguments, string name, out IReadOnlyList<string> values, out string raw)
     {
@@ -298,7 +299,7 @@ public static class ToolArguments
             case JsonElement { ValueKind: JsonValueKind.Null }:
                 return true;
             case JsonElement { ValueKind: JsonValueKind.String } element:
-                if (!string.IsNullOrWhiteSpace(element.GetString()))
+                if (!string.IsNullOrWhiteSpace(element.GetString()) && !TakeEncodedStrings(element.GetString()!, found))
                 {
                     found.Add(element.GetString()!);
                 }
@@ -322,7 +323,7 @@ public static class ToolArguments
                 raw = element.GetRawText();
                 return false;
             case string s:
-                if (!string.IsNullOrWhiteSpace(s))
+                if (!string.IsNullOrWhiteSpace(s) && !TakeEncodedStrings(s, found))
                 {
                     found.Add(s);
                 }
@@ -335,6 +336,42 @@ public static class ToolArguments
                 raw = sent.ToString() ?? "";
                 return false;
         }
+    }
+
+    /// <summary>
+    /// A string that is a list of strings written as text (2026-11-15, feature idea #31: <c>"paths": "[\"a.txt\",\"b.txt\"]"</c> read as one
+    /// path named <c>[…]</c>): its strings into <paramref name="into"/> and true, through <see cref="LooseJson.TryParse"/> as
+    /// <see cref="TryReadObjectList"/> reads one. Only text that starts with <c>[</c> and ends with <c>]</c> once trimmed, so the parser's
+    /// first-value cut never reads <c>["x"] y</c> as a list; and only an array of strings, so a YAML-style <c>[a, b]</c> (a vault tag list) or
+    /// a path with brackets stays one string. False, <paramref name="into"/> untouched, for anything else.
+    /// </summary>
+    private static bool TakeEncodedStrings(string text, List<string> into)
+    {
+        string trimmed = text.Trim();
+        if (trimmed.Length < 2 || trimmed[0] != '[' || trimmed[^1] != ']')
+        {
+            return false;
+        }
+
+        using var document = LooseJson.TryParse(trimmed);
+        if (document is null || document.RootElement.ValueKind != JsonValueKind.Array)
+        {
+            return false;
+        }
+
+        var items = new List<string>();
+        foreach (var item in document.RootElement.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.String)
+            {
+                return false;
+            }
+
+            items.Add(item.GetString() ?? "");
+        }
+
+        into.AddRange(items);
+        return true;
     }
 
     /// <summary>

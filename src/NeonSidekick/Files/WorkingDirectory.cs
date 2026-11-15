@@ -269,6 +269,13 @@ public sealed record ReadResult(FileOutcome Outcome, string Relative, string Tex
     public int CutLength { get; init; }
 
     /// <summary>
+    /// The most characters the read could return (2026-11-15: a file in a read of several gets what their shared limit has left), which the
+    /// header's "cut at" states. <see cref="WorkingDirectory.MaxReadChars"/> unless <see cref="WorkingDirectory.ReadText"/> was given less, so a
+    /// result built elsewhere (a vault note, an Office or PDF text) reads as before.
+    /// </summary>
+    public int Cap { get; init; } = WorkingDirectory.MaxReadChars;
+
+    /// <summary>
     /// Every line of the file came back as it is (2026-10-11, the review: a window or a cut read marked the whole file seen, and
     /// <c>write_file</c> without a mode then replaced it with the part the model had): only such a read marks the file seen.
     /// </summary>
@@ -489,7 +496,36 @@ public sealed record EditResult(
 
     /// <summary>What the edit changed, for the transcript (2026-10-03, <see cref="FileDiff"/>); null unless <see cref="FileOutcome.Ok"/>.</summary>
     public FileDiff? Diff { get; init; }
+
+    /// <summary>
+    /// Each edit of a <c>patch_file</c> <c>edits</c> list (2026-11-15, feature idea #30), in order; empty for the single form, whose result
+    /// and wording stay as they were. <see cref="FileText.Edited"/> hands a result with any of these to <see cref="FileText.EditedMany"/>.
+    /// </summary>
+    public IReadOnlyList<EditPart> Edits { get; init; } = [];
+
+    /// <summary>The numbered regions of a list's edits in the final text, merged where they touch; empty over <see cref="WorkingDirectory.MaxEditRegionLines"/> in all.</summary>
+    public IReadOnlyList<EditBlock> Blocks { get; init; } = [];
+
+    /// <summary>The edit of a list that was refused (1-based), 0 when none: the "edit N of M" a refusal starts with.</summary>
+    public int FailedEdit { get; init; }
+
+    /// <summary>How many edits the list held (the M of "edit N of M").</summary>
+    public int EditCount { get; init; }
 }
+
+/// <summary>One edit of a <c>patch_file</c> <c>edits</c> list (2026-11-15).</summary>
+public sealed record EditStep(string OldText, string NewText, bool ReplaceAll = false);
+
+/// <summary>
+/// What one edit of a list did (2026-11-15): <paramref name="Ranges"/> the lines its new text holds in the final text (a deletion's one line
+/// where it was), <paramref name="Strategy"/> how its <c>old_text</c> was found, <paramref name="AlreadyApplied"/> when it was in the file
+/// already and was skipped, <paramref name="Several"/> for a <c>replace_all</c> that touched more than one place (shown by its lines, never
+/// as a region, as the single form shows one).
+/// </summary>
+public sealed record EditPart(int Number, IReadOnlyList<(int From, int To)> Ranges, MatchStrategy Strategy, bool AlreadyApplied, bool Several);
+
+/// <summary>A numbered region of an edit list's result: its first line's number and its lines.</summary>
+public sealed record EditBlock(int From, IReadOnlyList<string> Lines);
 
 public sealed record CreateResult(FileOutcome Outcome, string Relative, string Detail = "");
 
@@ -2504,6 +2540,7 @@ public sealed class WorkingDirectory
                 Seen = seen,
                 CutLine = cutLine,
                 CutLength = cutLength,
+                Cap = maxChars,
             };
         }
         catch (Exception ex) when (IsFileFailure(ex))
@@ -2994,6 +3031,216 @@ public sealed class WorkingDirectory
         {
             return new EditResult(FileOutcome.Failed, display, 0, 0, Detail: ex.Message);
         }
+    }
+
+    /// <summary>The most edits one <see cref="EditTexts"/> call applies (2026-11-15).</summary>
+    public const int MaxEdits = 50;
+
+    /// <summary>
+    /// Several edits to one file, applied in order, each to the text the one before left, all or none (2026-11-15, feature idea #30: five
+    /// changes took five <c>patch_file</c> round trips). One resolve, one load, the matches in memory, then the stamp check and one save — one
+    /// journal entry, so one <c>/undo</c> checkpoint — and one whole-file diff. The first refusal (a blank or unchanged edit, checked before any
+    /// is applied; then not found, ambiguous, drift, approximate, too large) answers with <see cref="EditResult.FailedEdit"/> set and nothing
+    /// saved, its line numbers those of the text the earlier edits left. An edit already in the file is skipped and noted; when every one is,
+    /// the answer is the single form's <see cref="FileOutcome.AlreadyApplied"/>. Each edit's placed text is carried through the later edits:
+    /// a span after a replacement shifts by its change in length, and one a later edit overlaps grows to cover it. Cancellation is checked
+    /// before each edit; nothing is written until the end.
+    /// </summary>
+    public EditResult EditTexts(string relative, IReadOnlyList<EditStep> steps, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(steps);
+        var outcome = Resolve(relative, forWrite: true, out string full);
+        if (outcome != FileOutcome.Ok)
+        {
+            return new EditResult(outcome, relative, 0, 0);
+        }
+
+        string display = Relative(full);
+        int total = steps.Count;
+        EditResult Failed(EditResult refusal, int number) => refusal with { FailedEdit = number, EditCount = total };
+
+        var needles = new List<(string Needle, string Replacement)>(total);
+        long written = 0;
+        for (int i = 0; i < total; i++)
+        {
+            var step = steps[i];
+            if (step.OldText.Trim().Length == 0)
+            {
+                return Failed(new EditResult(FileOutcome.Empty, display, 0, 0), i + 1);
+            }
+
+            string needle = NormalizeNewlines(step.OldText);
+            string replacement = NormalizeNewlines(step.NewText);
+            if (string.Equals(needle, replacement, StringComparison.Ordinal))
+            {
+                return Failed(new EditResult(FileOutcome.Same, display, 0, 0), i + 1);
+            }
+
+            written += step.NewText.Length;
+            needles.Add((needle, replacement));
+        }
+
+        if (written > MaxWriteChars)
+        {
+            return new EditResult(FileOutcome.TooLong, display, 0, 0);
+        }
+
+        try
+        {
+            var loaded = LoadForEdit(full, display, out string content, out var codec, out string ending, out var before);
+            if (loaded is not null)
+            {
+                return loaded;
+            }
+
+            string text = content;
+            var tracked = new List<(int Number, TextSpan Span, bool Several)>();
+            var parts = new List<(int Number, MatchStrategy Strategy, bool AlreadyApplied, bool Several)>(total);
+            for (int i = 0; i < total; i++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var match = FuzzyMatch.Replace(text, needles[i].Needle, needles[i].Replacement, steps[i].ReplaceAll);
+                // An edit already in the file is skipped, not a refusal (EditRefusal maps it to one for the single form).
+                if (match.Outcome == MatchOutcome.AlreadyApplied)
+                {
+                    parts.Add((i + 1, MatchStrategy.Exact, true, false));
+                    continue;
+                }
+
+                if (EditRefusal(match, display) is { } refused)
+                {
+                    return Failed(refused, i + 1);
+                }
+
+                for (int t = 0; t < tracked.Count; t++)
+                {
+                    tracked[t] = tracked[t] with { Span = Shift(tracked[t].Span, match.Spans, match.Placed) };
+                }
+
+                bool several = match.Count > 1;
+                foreach (var placed in match.Placed)
+                {
+                    tracked.Add((i + 1, placed, several));
+                }
+
+                parts.Add((i + 1, match.Strategy, false, several));
+                text = match.Content;
+            }
+
+            if (parts.TrueForAll(p => p.AlreadyApplied))
+            {
+                return new EditResult(FileOutcome.AlreadyApplied, display, 0, 0);
+            }
+
+            if (StampOf(full) != before)
+            {
+                return new EditResult(FileOutcome.Failed, display, 0, 0, Detail: FileText.ChangedWhileEditing);
+            }
+
+            if (!Save(full, text, codec, ending))
+            {
+                return new EditResult(FileOutcome.NotEncodable, display, 0, 0, Detail: codec.Label ?? "UTF-8");
+            }
+
+            var diff = FileDiff.Of(display, content, text);
+            var lines = SplitLines(text);
+            Count(text, out int totalLines, out int words);
+            (int From, int To) RangeOf(TextSpan span)
+            {
+                int from = 1 + text.AsSpan(0, span.Start).Count('\n');
+                int to = from + text.AsSpan(span.Start, span.Length).Count('\n');
+                return (from, span.Length == 0 ? from : Math.Min(to, Math.Max(from, totalLines)));
+            }
+
+            var editParts = parts.Select(p => new EditPart(
+                p.Number,
+                tracked.Where(t => t.Number == p.Number).Select(t => RangeOf(t.Span)).ToList(),
+                p.Strategy,
+                p.AlreadyApplied,
+                p.Several)).ToList();
+            var blocks = RegionsOf(lines, tracked.Where(t => !t.Several).Select(t => RangeOf(t.Span)).ToList());
+            int first = editParts.SelectMany(p => p.Ranges).Select(r => r.From).DefaultIfEmpty(1).Min();
+            return new EditResult(FileOutcome.Ok, display, first, parts.Count(p => !p.AlreadyApplied), TotalLines: totalLines, Words: words)
+            {
+                Diff = diff,
+                Edits = editParts,
+                Blocks = blocks,
+                EditCount = total,
+            };
+        }
+        catch (Exception ex) when (IsFileFailure(ex))
+        {
+            return new EditResult(FileOutcome.Failed, display, 0, 0, Detail: ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// <paramref name="span"/>, a stretch of the text before a replacement, where it lies after it: shifted by each earlier replacement's change
+    /// in length, and grown to cover any replacement it overlaps (<paramref name="spans"/> in the old text, <paramref name="placed"/> where each
+    /// landed, both in order).
+    /// </summary>
+    internal static TextSpan Shift(TextSpan span, IReadOnlyList<TextSpan> spans, IReadOnlyList<TextSpan> placed)
+    {
+        int start = MapPoint(span.Start, atStart: true);
+        int end = MapPoint(span.Start + span.Length, atStart: false);
+        return new TextSpan(start, Math.Max(start, end));
+
+        int MapPoint(int x, bool atStart)
+        {
+            int delta = 0;
+            for (int k = 0; k < spans.Count; k++)
+            {
+                int s = spans[k].Start, e = spans[k].Start + spans[k].Length;
+                if (atStart ? (x >= s && x < e) : (x > s && x <= e))
+                {
+                    return atStart ? placed[k].Start : placed[k].Start + placed[k].Length;
+                }
+
+                if (x >= e)
+                {
+                    // placed is in the new text's terms, so this is the whole shift so far.
+                    delta = placed[k].Start + placed[k].Length - e;
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            return x + delta;
+        }
+    }
+
+    /// <summary>
+    /// The numbered regions around <paramref name="ranges"/> in <paramref name="lines"/> (<see cref="EditContextLines"/> each side), merged
+    /// where they touch; none when they come to more than <see cref="MaxEditRegionLines"/> in all.
+    /// </summary>
+    private static List<EditBlock> RegionsOf(List<string> lines, List<(int From, int To)> ranges)
+    {
+        var windows = ranges
+            .Select(r => (From: Math.Max(1, r.From - EditContextLines), To: Math.Min(lines.Count, r.To + EditContextLines)))
+            .Where(w => w.To >= w.From)
+            .OrderBy(w => w.From)
+            .ToList();
+        var merged = new List<(int From, int To)>();
+        foreach (var w in windows)
+        {
+            if (merged.Count > 0 && w.From <= merged[^1].To + 1)
+            {
+                merged[^1] = (merged[^1].From, Math.Max(merged[^1].To, w.To));
+            }
+            else
+            {
+                merged.Add(w);
+            }
+        }
+
+        if (merged.Sum(m => m.To - m.From + 1) > MaxEditRegionLines)
+        {
+            return [];
+        }
+
+        return merged.Select(m => new EditBlock(m.From, lines.GetRange(m.From - 1, m.To - m.From + 1))).ToList();
     }
 
     /// <summary>

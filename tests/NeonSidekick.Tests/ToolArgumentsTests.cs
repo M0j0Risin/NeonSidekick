@@ -130,6 +130,28 @@ public class ToolArgumentsTests
         Assert.Equal(["c", "d"], values);
     }
 
+    /// <summary>
+    /// A list written as text (2026-11-15): a whole string that parses as an array of strings, JSON or Python-quoted, is that list, in a JSON
+    /// string or a CLR one; a path with brackets, YAML's <c>[a, b]</c> and an array holding a number stay one string.
+    /// </summary>
+    [Theory]
+    [InlineData("[\"a.txt\", \"b.txt\"]", "a.txt|b.txt")]
+    [InlineData(" ['a.txt', 'b.txt'] ", "a.txt|b.txt")]
+    [InlineData("[]", "")]
+    [InlineData("[a, b]", "[a, b]")]
+    [InlineData("[milk]", "[milk]")]
+    [InlineData("notes [draft].md", "notes [draft].md")]
+    [InlineData("[\"x\"] y", "[\"x\"] y")]
+    [InlineData("[1, \"a\"]", "[1, \"a\"]")]
+    public void TryReadStringList_AListWrittenAsText_IsThatList_AndNothingElseIs(string text, string expected)
+    {
+        string[] want = expected.Length == 0 ? [] : expected.Split('|');
+        Assert.True(ToolArguments.TryReadStringList(Args(Json("\"" + JsonEncodedText.Encode(text) + "\"")), "x", out var values, out _));
+        Assert.Equal(want, values);
+        Assert.True(ToolArguments.TryReadStringList(Args(text), "x", out values, out _));
+        Assert.Equal(want, values);
+    }
+
     [Theory]
     [InlineData("[1, \"a\"]", "[1, \"a\"]")]
     [InlineData("{\"p\":\"a\"}", "{\"p\":\"a\"}")]

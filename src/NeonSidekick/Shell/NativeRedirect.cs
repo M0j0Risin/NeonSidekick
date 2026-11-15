@@ -43,6 +43,8 @@ public static class NativeRedirect
         Map(Llm.Tools.GitCommitTool.ToolName, "git commit");
         Map(Llm.Tools.GitBranchTool.ToolName, "git branch");
         Map(Llm.Tools.GitStashTool.ToolName, "git stash");
+        Map(Llm.Tools.GitRevertTool.ToolName, "git revert");
+        Map(Llm.Tools.GitTagTool.ToolName, "git tag");
         Map(Llm.Tools.WebFetchTool.ToolName, "curl", "wget", "invoke-webrequest", "iwr", "invoke-restmethod", "irm");
         Map(Llm.Tools.SqlQueryTool.ToolName, "sqlcmd", "invoke-sqlcmd");
         Map(Llm.Tools.OracleQueryTool.ToolName, "sqlplus");

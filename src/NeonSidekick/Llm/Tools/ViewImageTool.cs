@@ -19,8 +19,6 @@ public sealed class ViewImageTool : FileTool
 {
     public const string ToolName = "view_image";
 
-    public const string PathsArgument = "paths";
-
     /// <summary>The sentence for a call with neither <c>path</c> nor <c>paths</c>. Pinned.</summary>
     public const string NoPathError = "Error: give path (one picture) or paths (several)";
 
@@ -100,7 +98,7 @@ public sealed class ViewImageTool : FileTool
     /// <summary>
     /// The first <see cref="Limit"/> paths loaded in order: the text (one line each) and the pictures
     /// that loaded. Over the cap the rest are not touched and the text ends with
-    /// <see cref="FileText.MorePictures"/> naming them (2026-09-18; a call with 17 was refused whole
+    /// <see cref="FileText.MorePaths"/> naming them (2026-09-18; a call with 17 was refused whole
     /// before, and the model began again in batches — now the first batch shows and the rest are spelled out).
     /// </summary>
     public (string Text, IReadOnlyList<ImageAttachment> Images) Load(IReadOnlyList<string> paths) => Load(paths, CancellationToken.None);
@@ -129,7 +127,7 @@ public sealed class ViewImageTool : FileTool
 
         if (paths.Count > limit)
         {
-            lines.Add(FileText.MorePictures(paths.Skip(limit).ToList()));
+            lines.Add(FileText.MorePaths(paths.Skip(limit).ToList()));
         }
 
         return (string.Join("\n", lines), images);

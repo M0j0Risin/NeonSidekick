@@ -46,9 +46,14 @@ public readonly record struct AskLimits(int MaxQuestions, int MaxChoices)
 /// reconnect. The <see cref="SaveMemoryTool"/> pattern throughout; the questions array is the one
 /// nested schema in the repo, read through <see cref="ToolArguments.TryReadObjectList"/>.
 /// </summary>
-public sealed class AskUserTool : AIFunction
+public sealed class AskUserTool : AIFunction, IAcceptsArguments
 {
     public const string ToolName = "ask_user";
+
+    /// <summary>Any key: the tool reads several shapes of one question and answers the rest with <see cref="AskUserText.SentKeys"/> (2026-11-15, #42).</summary>
+    public IReadOnlyCollection<string> ExtraArguments => [];
+
+    public bool AcceptsAnyArgument => true;
 
     public const string QuestionsArgument = "questions";
     public const string QuestionArgument = "question";

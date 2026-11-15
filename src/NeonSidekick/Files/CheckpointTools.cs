@@ -28,6 +28,8 @@ public static class CheckpointTools
         ["gitlib_stage"] = UntrackedKind.Git,
         ["gitlib_commit"] = UntrackedKind.Git,
         ["gitlib_stash"] = UntrackedKind.Git,
+        ["gitlib_revert"] = UntrackedKind.Git,
+        ["gitlib_tag"] = UntrackedKind.Git,
         ["gitlib_discard"] = UntrackedKind.Git,
         ["gitlib_delete"] = UntrackedKind.Git,
         ["gitlib_branch"] = UntrackedKind.Git,

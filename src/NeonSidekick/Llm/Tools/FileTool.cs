@@ -44,6 +44,35 @@ public abstract class FileTool : AIFunction
 
     protected static string ReadPath(AIFunctionArguments arguments) => ToolArguments.ReadString(arguments, PathArgument);
 
+    /// <summary>The argument a tool that takes several files reads them from (2026-11-15, <c>read_file</c> and <c>file_info</c>).</summary>
+    public const string PathsArgument = "paths";
+
+    /// <summary>
+    /// The files a call names (2026-11-15, feature ideas #31 and #45): <c>path</c> first, then <c>paths</c> (a list, a lone string, or a list
+    /// written as text, <see cref="ToolArguments.TryReadStringList"/>), trimmed, blanks dropped, duplicates removed with the OS's comparer. None
+    /// when neither names one: the caller decides whether that is the root or an error. False with <see cref="FileText.BadStringList"/> when
+    /// <c>paths</c> is no list of strings. Shared with <c>ChatScreen.ForgetCutRead</c> and <c>ConversationCompactor.ReadsAPlan</c>, so all
+    /// three agree on what a past call named.
+    /// </summary>
+    internal static bool TryReadPaths(AIFunctionArguments arguments, out IReadOnlyList<string> paths, out string error)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+        paths = [];
+        error = "";
+        if (!ToolArguments.TryReadStringList(arguments, PathsArgument, out var listed, out string raw))
+        {
+            error = FileText.BadStringList(PathsArgument, raw);
+            return false;
+        }
+
+        paths = ((string[])[ToolArguments.ReadString(arguments, PathArgument), .. listed])
+            .Select(p => p.Trim())
+            .Where(p => p.Length > 0)
+            .Distinct(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal)
+            .ToList();
+        return true;
+    }
+
     /// <summary>
     /// The shopping list's tripwire for a write onto <paramref name="path"/> (2026-10-17, the user's report: the model now and then kept the list
     /// in a file): <see cref="Shopping.ShoppingText.NotAFile"/> while the working directory's <see cref="WorkingDirectory.ShoppingListGuard"/>

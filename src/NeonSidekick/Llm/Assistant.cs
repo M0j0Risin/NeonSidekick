@@ -215,7 +215,7 @@ public sealed class Assistant
     /// <summary>
     /// The sentence the default rules gain while the git tools are offered (the setting <c>GitLib tools</c> on,
     /// 2026-09-20): appended after <see cref="DownloadRule"/>, with the sandbox's sentences, by <see cref="DefaultRules"/>.
-    /// It names nine of the tools a fresh profile offers and neither of the two that lose work (<c>gitlib_discard</c>,
+    /// It names eleven of the tools a fresh profile offers and neither of the two that lose work (<c>gitlib_discard</c>,
     /// on out of the box since 2026-09-23, and <c>gitlib_delete</c>, off by name in <c>ToolsDisabled</c>), so no variant is needed whichever is off; a custom
     /// <c>operata.md</c> stands verbatim. Pinned.
     /// </summary>
@@ -223,8 +223,9 @@ public sealed class Assistant
         "The working directory may be a git repository (or hold one): " + NeonSidekick.Llm.Tools.GitStatusTool.ToolName + " shows its state, " +
         NeonSidekick.Llm.Tools.GitLogTool.ToolName + " its history, " + NeonSidekick.Llm.Tools.GitShowTool.ToolName + " a commit or a file at a commit, " +
         NeonSidekick.Llm.Tools.GitDiffTool.ToolName + " the changes, " + NeonSidekick.Llm.Tools.GitBlameTool.ToolName + " who wrote a line; " +
-        NeonSidekick.Llm.Tools.GitStageTool.ToolName + ", " + NeonSidekick.Llm.Tools.GitCommitTool.ToolName + ", " + NeonSidekick.Llm.Tools.GitBranchTool.ToolName + " and " + NeonSidekick.Llm.Tools.GitStashTool.ToolName +
-        " change it — commit only what the user asked to commit, with the message they gave or a short imperative one, and never remove or overwrite work the user did not name.";
+        NeonSidekick.Llm.Tools.GitStageTool.ToolName + ", " + NeonSidekick.Llm.Tools.GitCommitTool.ToolName + ", " + NeonSidekick.Llm.Tools.GitBranchTool.ToolName + ", " + NeonSidekick.Llm.Tools.GitStashTool.ToolName +
+        ", " + NeonSidekick.Llm.Tools.GitRevertTool.ToolName + " and " + NeonSidekick.Llm.Tools.GitTagTool.ToolName +
+        " change it — commit, revert or tag only what the user asked for, with the message they gave or a short imperative one, and never remove or overwrite work the user did not name.";
 
     /// <summary>
     /// The sentence the default rules gain while the vault tools are offered (the setting <c>Obsidian tools</c> on and
@@ -3427,7 +3428,32 @@ public sealed class Assistant
             return (refusal, [], null, null, true);
         }
 
+        // A key the tool doesn't take (2026-11-15, feature idea #42, ToolArgumentCheck): a count synonym is read as the tool's own name, written
+        // onto the call as the leaked-parameter repair is; any other refuses the call, naming the right one, so nothing runs unfiltered unknown
+        // to the model. A tool with no arguments runs, its result ending with a note of what went unread.
+        var checkedArguments = ToolArgumentCheck.Check(tool, call.Arguments);
+        if (checkedArguments.Verdict == ArgumentVerdict.Refused)
+        {
+            string refusal = checkedArguments.Text!;
+            DiagnosticLog.Info(Category, ToolErrorLogLine(call.Name, refusal));
+            return (refusal, [], null, null, true);
+        }
+
+        if (checkedArguments.Verdict == ArgumentVerdict.Renamed)
+        {
+            call.Arguments = checkedArguments.Arguments;
+            foreach (var (from, to) in checkedArguments.Renames)
+            {
+                DiagnosticLog.Info(Category, TurnText.RenameLogLine(call.Name, from, to));
+            }
+        }
+
         var (text, images, diff, shown) = await InvokeAsync(tool, call, cancellationToken).ConfigureAwait(false);
+        if (checkedArguments.Note is { } note)
+        {
+            text += "\n" + note;
+        }
+
         return (text, images, diff, shown, false);
     }
 

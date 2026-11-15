@@ -28,6 +28,30 @@ public static class GitText
     public const string Conflicts = "Error: the index has unmerged conflicts; ask the user to resolve them first";
     public const string BadDiffArguments = "Error: give \"ref\" alone, \"from\" with \"to\", or \"staged\" — not a mix";
 
+    /// <summary>A <c>gitlib_revert</c> with no <c>ref</c> (2026-11-15): never read as HEAD, which would revert the latest commit unasked. Pinned.</summary>
+    public const string NoRevertReference = "Error: give the commit to revert (a sha, a branch, a tag, HEAD~1)";
+
+    /// <summary>A revert while something is staged or a tracked file is changed (2026-11-15). Pinned.</summary>
+    public const string DirtyTree = "Error: there are uncommitted changes (staged, or in tracked files); commit or stash them first, so the revert's commit holds only the revert";
+
+    /// <summary>A <c>gitlib_tag</c> given a ref or a message but no name (2026-11-15): answered by the tool itself. Pinned.</summary>
+    public const string TagNeedsName = "Error: give the tag's name to make one; without ref and message, gitlib_tag lists the tags";
+
+    /// <summary>The tag list when there are none (2026-11-15). Pinned.</summary>
+    public const string NoTags = "No tags";
+
+    /// <summary>A revert of a merge commit (2026-11-15). Pinned.</summary>
+    public static string MergeCommit(string sha) => $"Error: {sha} is a merge commit; which parent to keep is the user's call, so ask them to revert it";
+
+    /// <summary>A revert that would change nothing (2026-11-15). Pinned.</summary>
+    public static string NothingToRevert(string sha) => $"Error: reverting {sha} would change nothing (its changes are undone already); nothing was committed";
+
+    /// <summary>A revert that conflicted and was put back (2026-11-15); <paramref name="detail"/> is <c>abc1234 conflicts in a.txt, b.txt</c>. Pinned.</summary>
+    public static string RevertConflicts(string detail) => $"Error: reverting {detail}; nothing changed";
+
+    /// <summary>A tag name git can't hold (2026-11-15). Pinned.</summary>
+    public static string BadTagName(string name) => $"Error: '{Llm.Tools.ArgumentText.Echo(name)}' is not a valid tag name";
+
     public static string NoRepository(string root) => $"Error: '{root}' is not inside a git repository; /cwd into one, or ask the user to git init it";
     public static string AboveSandbox(string workTree) => $"Error: the repository's root '{workTree}' is above the working directory, so the git tools cannot reach it; the user can /cwd to the repository's root";
     public static string Bare(string path) => $"Error: '{path}' is a bare repository (no working tree)";
@@ -87,6 +111,11 @@ public static class GitText
         GitOutcome.TooManyPaths => TooManyPaths(GitAccess.MaxPathsPerCall),
         GitOutcome.BadArguments => CannotStageRoot(detail),
         GitOutcome.Guarded => detail,
+        GitOutcome.DirtyTree => DirtyTree,
+        GitOutcome.MergeCommit => MergeCommit(detail),
+        GitOutcome.NothingToRevert => NothingToRevert(detail),
+        GitOutcome.BadName => BadTagName(detail),
+        GitOutcome.RevertConflicted => RevertConflicts(detail),
         _ => Failed(detail),
     };
 
@@ -187,15 +216,21 @@ public static class GitText
 
     // ---- log ----
 
-    /// <summary><c>20 commits on main, newest first:</c> / <c>12 commits touching src\a.cs on main, newest first:</c> then one row per commit.</summary>
+    /// <summary>
+    /// <c>20 commits on main, newest first:</c> / <c>12 commits touching src\a.cs on main, newest first:</c> then one row per commit. The filters
+    /// are named (2026-11-15): <c>5 commits by bob matching "parser" since 2026-11-08 00:00 on main, newest first:</c>, the times in the user's
+    /// zone and the model's text echoed short; a walk that stopped at its cap while skipping commits says only the newest were searched.
+    /// </summary>
     public static string Log(GitLogReport report, TimeZoneInfo zone)
     {
         ArgumentNullException.ThrowIfNull(report);
         ArgumentNullException.ThrowIfNull(zone);
         var sb = new StringBuilder();
+        string filters = Filters(report.Filter, zone);
+        string searched = report.WalkCapped ? " (searched the newest " + report.WalkCap.ToString("N0", CultureInfo.InvariantCulture) + " commits)" : "";
         if (report.Commits.Count == 0)
         {
-            sb.Append(report.Path is { } none ? $"No commits touch {none} on {report.Reference}" : $"No commits on {report.Reference}");
+            sb.Append(report.Path is { } none ? $"No commits touch {none}" : "No commits").Append(filters).Append(" on ").Append(report.Reference).Append(searched);
             return sb.ToString();
         }
 
@@ -205,11 +240,13 @@ public static class GitText
             sb.Append(" touching ").Append(path);
         }
 
-        sb.Append(" on ").Append(report.Reference).Append(", newest first");
+        sb.Append(filters).Append(" on ").Append(report.Reference).Append(", newest first");
         if (report.Truncated)
         {
             sb.Append(" (more before them)");
         }
+
+        sb.Append(searched);
 
         sb.Append(':');
         foreach (var commit in report.Commits)
@@ -219,6 +256,45 @@ public static class GitText
 
         return sb.ToString();
     }
+
+    /// <summary>The filters as the header names them (2026-11-15): <c> by bob matching "parser" since … until …</c>; empty for none.</summary>
+    private static string Filters(GitLogFilter? filter, TimeZoneInfo zone)
+    {
+        if (filter is null)
+        {
+            return "";
+        }
+
+        var sb = new StringBuilder();
+        if (filter.Author is { } author)
+        {
+            sb.Append(" by ").Append(Llm.Tools.ArgumentText.Echo(author));
+        }
+
+        if (filter.Grep is { } grep)
+        {
+            sb.Append(" matching \"").Append(Llm.Tools.ArgumentText.Echo(grep)).Append('"');
+        }
+
+        if (filter.Since is { } since)
+        {
+            sb.Append(" since ").Append(When(since, zone));
+        }
+
+        if (filter.Until is { } until)
+        {
+            sb.Append(" until ").Append(When(until, zone));
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>A <c>since</c> or <c>until</c> that is no time (2026-11-15), worded as the event logs'. Pinned.</summary>
+    public static string BadTime(string argument, string text) =>
+        $"Error: {argument} '{Llm.Tools.ArgumentText.Echo(text)}' is not an age (30m, 2h, 1d, 1w) or a moment (2026-10-14T21:00).";
+
+    /// <summary>A window that ends before it starts (2026-11-15). Pinned.</summary>
+    public const string SinceAfterUntil = "Error: since is later than until; nothing could match.";
 
     /// <summary><c>abc1234 2026-09-20 14:05 Chris: subject</c>.</summary>
     public static string CommitRow(GitCommitInfo commit, TimeZoneInfo zone) =>
@@ -414,6 +490,41 @@ public static class GitText
     }
 
     public static string Created(GitBranchResult result) => $"Created branch {result.Name} at {result.Short}";
+
+    // ---- revert / tag (2026-11-15) ----
+
+    /// <summary><c>Reverted abc1234 with def5678 on main: Revert "…" (2 files)</c>: a first line that stands alone. Pinned.</summary>
+    public static string Reverted(GitRevertResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        return $"Reverted {result.Target} with {result.Short} on {result.Branch}: {result.Subject} ({Count(result.Files, "file")})";
+    }
+
+    /// <summary><c>Tagged abc1234 as v1.0 (annotated)</c>. Pinned.</summary>
+    public static string Tagged(GitTagResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        return $"Tagged {result.Short} as {result.Name} ({(result.Annotated ? "annotated" : "lightweight")})";
+    }
+
+    /// <summary><c>3 tags:</c> then a row each, as <see cref="Refs"/> shows them; <see cref="NoTags"/> for none. Pinned.</summary>
+    public static string Tags(GitRefsReport report)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        if (report.Tags.Count == 0)
+        {
+            return NoTags;
+        }
+
+        var sb = new StringBuilder(Count(report.Tags.Count, "tag"));
+        sb.Append(report.TagsTruncated ? " (cut at " + N(GitAccess.MaxTags) + "):" : ":");
+        foreach (var t in report.Tags)
+        {
+            sb.Append("\n  ").Append(t.Name).Append(' ').Append(t.Short).Append(' ').Append(t.Subject);
+        }
+
+        return sb.ToString();
+    }
     public static string CreatedAndSwitched(GitBranchResult result) => $"Created branch {result.Name} at {result.Short} and switched to it";
     public static string Switched(GitBranchResult result) => $"Switched to branch {result.Name} ({result.Short})";
     public static string Renamed(GitBranchResult result) => $"Renamed branch {result.OldName} to {result.Name}";

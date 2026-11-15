@@ -17,7 +17,7 @@ namespace NeonSidekick.Llm.Tools;
 /// offered UNC share where it is, under the share's sign-in. An argument that doesn't fit the file's kind is refused with what that kind
 /// takes. Like <c>read_pdf</c>, it marks the file neither seen nor viewed: no file tool edits an Office file's content. Macros are never run.
 /// </summary>
-public sealed class ReadOfficeTool : FileTool
+public sealed class ReadOfficeTool : FileTool, IAcceptsArguments
 {
     public const string ToolName = "read_office";
     public const string SheetArgument = "sheet";
@@ -27,6 +27,9 @@ public sealed class ReadOfficeTool : FileTool
     public const string FormulasArgument = "formulas";
     public const string FromCharArgument = "from_char";
     public const string ShareArgument = UncTool.ShareArgument;
+
+    /// <summary><c>share</c> while the schema hides it (no read-write shares offered): read for <see cref="UncText.NoSharesOffered"/> (2026-11-15, #42).</summary>
+    public IReadOnlyCollection<string> ExtraArguments => [ShareArgument];
 
     private static readonly JsonElement Schema = SchemaFor(shares: false);
     private static readonly JsonElement ShareSchema = SchemaFor(shares: true);

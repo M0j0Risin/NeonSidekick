@@ -5,7 +5,7 @@ using NeonSidekick.Settings;
 namespace NeonSidekick.Llm.Tools;
 
 /// <summary>
-/// What the eleven git tools share (2026-09-20): the <see cref="GitAccess"/> door, the settings in force
+/// What the thirteen git tools share (2026-09-20; eleven until 2026-11-15): the <see cref="GitAccess"/> door, the settings in force
 /// at each call, the optional <c>path</c> every one takes (the sandbox-relative file or folder the call is
 /// about, and where the repository is looked for — blank for the working directory itself), and the
 /// synchronous act run off the turn's thread (<see cref="SessionManagerTool"/>'s shape). A refused

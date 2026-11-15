@@ -141,6 +141,29 @@ public sealed class FileSeenTests : IDisposable
         Assert.Equal("one\nthree\n", Text("Program.cs"));
     }
 
+    /// <summary>A cut read of several files forgets each, its list read as the tool reads it: an array, a list written as text, or nothing that doesn't parse (2026-11-15).</summary>
+    [Fact]
+    public async Task ACutReadOfSeveralFiles_ForgetsEach_AsTheToolReadTheList()
+    {
+        foreach (string name in new[] { "a.cs", "b.cs", "c.cs", "d.cs" })
+        {
+            File.WriteAllText(Path.Combine(_root, name), "x\n");
+        }
+
+        using var list = System.Text.Json.JsonDocument.Parse("[\"b.cs\"]");
+        await Invoke<ReadFileTool>(("paths", new[] { "a.cs", "b.cs", "c.cs", "d.cs" }));
+        Assert.All(new[] { "a.cs", "b.cs", "c.cs", "d.cs" }, n => Assert.True(_files.WasSeen(n), n));   // a batch read whole marks each
+
+        ChatScreen.ForgetCutRead(_files, new FunctionCallContent("c1", ReadFileTool.ToolName, new Dictionary<string, object?> { ["path"] = "a.cs", ["paths"] = list.RootElement.Clone() }));
+        ChatScreen.ForgetCutRead(_files, new FunctionCallContent("c2", ReadFileTool.ToolName, new Dictionary<string, object?> { ["paths"] = "[\"c.cs\"]" }));
+        ChatScreen.ForgetCutRead(_files, new FunctionCallContent("c3", ReadFileTool.ToolName, new Dictionary<string, object?> { ["paths"] = 7 }));
+
+        Assert.False(_files.WasSeen("a.cs"));
+        Assert.False(_files.WasSeen("b.cs"));
+        Assert.False(_files.WasSeen("c.cs"));
+        Assert.True(_files.WasSeen("d.cs"));
+    }
+
     [Fact]
     public void ForgetSeen_UnderSeenOff_ForgetsNothing()
     {

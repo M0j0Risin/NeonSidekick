@@ -77,6 +77,21 @@ public enum GitOutcome
     /// <summary>A path the write guard refuses (2026-10-22, <see cref="Files.WriteGuard"/>); the detail is the file tools' own sentence.</summary>
     Guarded,
 
+    /// <summary>A revert asked while something is staged or a tracked file is changed (2026-11-15): the revert's commit must hold only itself.</summary>
+    DirtyTree,
+
+    /// <summary>A revert of a merge commit (2026-11-15): which parent to keep is the user's call.</summary>
+    MergeCommit,
+
+    /// <summary>A revert that would change nothing: the commit's changes are undone already (2026-11-15). Nothing was committed.</summary>
+    NothingToRevert,
+
+    /// <summary>A tag name git can't hold (2026-11-15, <c>Reference.IsValidName</c>).</summary>
+    BadName,
+
+    /// <summary>A revert that conflicted and was put back (2026-11-15); the detail is <c>abc1234 conflicts in a.txt, b.txt</c>.</summary>
+    RevertConflicted,
+
     /// <summary>Anything else libgit2 or the file system refused; the detail carries the message.</summary>
     Failed,
 }

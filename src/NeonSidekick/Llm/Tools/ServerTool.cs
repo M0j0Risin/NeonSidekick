@@ -24,7 +24,7 @@ namespace NeonSidekick.Llm.Tools;
 /// method so it never leaks to the caller); a direct call to a tool's own <c>RunAsync</c> (the tests', the slash commands') reads the
 /// settings as it goes, as before.
 /// </remarks>
-public abstract class ServerTool<TAccess> : AIFunction where TAccess : class
+public abstract class ServerTool<TAccess> : AIFunction, IAcceptsArguments where TAccess : class
 {
     public const string ConnectionArgument = "connection";
     public const string TableArgument = "table";
@@ -106,6 +106,9 @@ public abstract class ServerTool<TAccess> : AIFunction where TAccess : class
 
     /// <summary>The refusal of <see cref="RetiredArgument"/>.</summary>
     protected abstract string RetiredRefusal { get; }
+
+    /// <summary>The retired argument, read for <see cref="RetiredRefusal"/>'s own words rather than the generic misnamed-argument answer (2026-11-15, #42).</summary>
+    public IReadOnlyCollection<string> ExtraArguments => RetiredArgument is { } retired ? [retired] : [];
 
     /// <summary>
     /// Every tool's call: refused when it still names the retired argument (a model that remembers it would otherwise believe it reached

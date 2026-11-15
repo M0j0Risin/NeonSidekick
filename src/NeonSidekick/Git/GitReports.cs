@@ -42,6 +42,28 @@ public sealed record GitStatusReport(
 public sealed record GitLogReport(GitOutcome Outcome, string Detail, string Reference, string? Path, IReadOnlyList<GitCommitInfo> Commits, bool Truncated)
 {
     public static GitLogReport Refused(GitOutcome outcome, string detail = "") => new(outcome, detail, "", null, [], false);
+
+    /// <summary>The filters the walk applied (2026-11-15, feature idea #44), for the header; null for none.</summary>
+    public GitLogFilter? Filter { get; init; }
+
+    /// <summary>
+    /// The walk stopped at <see cref="WalkCap"/> while a path or a filter skipped commits (2026-11-15): only the newest that many were
+    /// searched, which is all the header can say — not that more matches are known to exist (<see cref="Truncated"/>).
+    /// </summary>
+    public bool WalkCapped { get; init; }
+
+    /// <summary>The most commits the walk looks at (<see cref="GitAccess.MaxLogWalk"/>), for the header's note.</summary>
+    public int WalkCap { get; init; } = GitAccess.MaxLogWalk;
+}
+
+/// <summary>
+/// <c>gitlib_log</c>'s filters (2026-11-15, feature idea #44): the author date within <see cref="Since"/> and <see cref="Until"/> (both
+/// inclusive), <see cref="Author"/> in the name or email and <see cref="Grep"/> in the message, case ignored. Null for each not given.
+/// </summary>
+public sealed record GitLogFilter(DateTimeOffset? Since = null, DateTimeOffset? Until = null, string? Author = null, string? Grep = null)
+{
+    /// <summary>Whether any filter is set.</summary>
+    public bool Any => Since is not null || Until is not null || Author is not null || Grep is not null;
 }
 
 /// <summary>
@@ -136,6 +158,24 @@ public sealed record GitMergeBaseReport(GitOutcome Outcome, string Detail, strin
 public sealed record GitRefsReport(GitOutcome Outcome, string Detail, string? Current, bool Detached, IReadOnlyList<GitRef> Local, IReadOnlyList<GitRef> Remote, IReadOnlyList<GitRef> Tags, bool Truncated)
 {
     public static GitRefsReport Refused(GitOutcome outcome, string detail = "") => new(outcome, detail, null, false, [], [], [], false);
+
+    /// <summary>The tag list alone was cut at <see cref="GitAccess.MaxTags"/> (2026-11-15: <see cref="Truncated"/> is any of the three caps), for <c>gitlib_tag</c>'s list.</summary>
+    public bool TagsTruncated { get; init; }
+}
+
+/// <summary>
+/// A revert committed (2026-11-15, <c>gitlib_revert</c>): the reverted commit's short sha, the new commit's, the branch, the new commit's
+/// subject and the files it changed.
+/// </summary>
+public sealed record GitRevertResult(GitOutcome Outcome, string Detail, string Target, string Short, string Branch, string Subject, int Files)
+{
+    public static GitRevertResult Refused(GitOutcome outcome, string detail = "") => new(outcome, detail, "", "", "", "", 0);
+}
+
+/// <summary>A tag made (2026-11-15, <c>gitlib_tag</c>): its name, the commit's short sha, and whether it carries a message.</summary>
+public sealed record GitTagResult(GitOutcome Outcome, string Detail, string Name, string Short, bool Annotated)
+{
+    public static GitTagResult Refused(GitOutcome outcome, string detail = "") => new(outcome, detail, "", "", false);
 }
 
 /// <summary>
