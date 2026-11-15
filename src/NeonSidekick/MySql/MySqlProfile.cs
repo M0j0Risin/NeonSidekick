@@ -11,11 +11,13 @@ public sealed class MySqlProfile : ProfileDialect
 {
     /// <summary>
     /// The columns of <c>@db</c>.<c>@name</c> (name, the column type as declared, the data type, the character length), then the table's
-    /// row estimate (InnoDB's, approximate; null for a view).
+    /// row estimate (InnoDB's, approximate; null for a view). Invisible columns are left out (#17; <c>EXTRA</c> may read
+    /// <c>VIRTUAL GENERATED INVISIBLE</c>, so a match, not an equality); the schema lists only columns the account holds a privilege on.
     /// </summary>
     public static readonly IReadOnlyList<string> Catalog =
     [
-        "SELECT COLUMN_NAME, COLUMN_TYPE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = @db AND TABLE_NAME = @name ORDER BY ORDINAL_POSITION",
+        "SELECT COLUMN_NAME, COLUMN_TYPE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = @db AND TABLE_NAME = @name " +
+        "AND COALESCE(EXTRA, '') NOT LIKE '%INVISIBLE%' ORDER BY ORDINAL_POSITION",
         "SELECT TABLE_ROWS FROM information_schema.TABLES WHERE TABLE_SCHEMA = @db AND TABLE_NAME = @name AND TABLE_TYPE = 'BASE TABLE'",
     ];
 
@@ -52,9 +54,17 @@ public sealed class MySqlProfile : ProfileDialect
         return "`" + name.Replace("`", "``", StringComparison.Ordinal) + "`";
     }
 
-    public override string FirstRows(string table, long rows) => $"(SELECT * FROM {table} LIMIT {Invariant(rows)}) p";
+    /// <summary>Backticks as well as double quotes (2026-11-15, #51): a backticked name is matched as written.</summary>
+    public override (string Name, bool Quoted) Unquote(string written)
+    {
+        ArgumentNullException.ThrowIfNull(written);
+        string name = written.Trim();
+        return name.Length > 1 && name[0] == '`' && name[^1] == '`'
+            ? (name[1..^1].Replace("``", "`", StringComparison.Ordinal), true)
+            : base.Unquote(name);
+    }
+
+    public override string FirstRows(string table, string list, long rows) => $"(SELECT {list} FROM {table} LIMIT {Invariant(rows)}) p";
 
     protected override string Limit(string query, int rows) => query + " LIMIT " + Invariant(rows);
-
-    private static string Invariant(long n) => n.ToString(CultureInfo.InvariantCulture);
 }

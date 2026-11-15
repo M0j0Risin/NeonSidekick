@@ -10,7 +10,7 @@ namespace NeonSidekick.Sql;
 /// </summary>
 public enum ProfileMeasure
 {
-    /// <summary>Nothing at all: a type even <c>IS NOT NULL</c> refuses (Oracle's LONG).</summary>
+    /// <summary>Nothing at all: a type even <c>IS NOT NULL</c> refuses (Oracle's LONG). Never selected into a source.</summary>
     None,
 
     /// <summary>The nulls alone: LOBs, XML, JSON, binary, geometry, arrays.</summary>
@@ -26,7 +26,7 @@ public enum ProfileMeasure
     Bool,
 }
 
-/// <summary>One column a profile may read: its name as the catalog spells it, its type as shown, and what is measured.</summary>
+/// <summary>One column a profile may read: its name as the catalog spells it (read whole), its type as shown, and what is measured.</summary>
 public sealed record ProfileColumn(string Name, string Type, ProfileMeasure Measure);
 
 /// <summary>What the profiled rows were: the whole table, a sample, or the first rows (a view, MySQL, SQLite: no sample to take).</summary>
@@ -44,6 +44,12 @@ public sealed record ColumnStats(ProfileColumn Column, long? NonNull, long? Dist
 
     /// <summary>Whether its values can be grouped for the top values (DuckDB's nested types can't be ordered).</summary>
     public bool Groupable { get; init; } = true;
+
+    /// <summary>
+    /// Pass 2 found every value once (2026-11-15, #65): the most common value's count is 1, so no value repeats in the rows read. An
+    /// approximate distinct count can't show that on its own.
+    /// </summary>
+    public bool AllDistinct { get; init; }
 }
 
 /// <summary>
@@ -57,6 +63,19 @@ public abstract class ProfileDialect
     public const int Seed = 42;
 
     public abstract string Quote(string name);
+
+    /// <summary>
+    /// A name as the <c>columns</c> argument wrote it, its quotes taken off (2026-11-15, #51): <paramref name="Quoted"/> when it was quoted, so
+    /// it is matched exactly. Double quotes here; SQL Server adds brackets, MySQL backticks.
+    /// </summary>
+    public virtual (string Name, bool Quoted) Unquote(string written)
+    {
+        ArgumentNullException.ThrowIfNull(written);
+        string name = written.Trim();
+        return name.Length > 1 && name[0] == '"' && name[^1] == '"'
+            ? (name[1..^1].Replace("\"\"", "\"", StringComparison.Ordinal), true)
+            : (name, false);
+    }
 
     /// <summary>Every row counted (SQL Server's <c>COUNT_BIG</c>, past 2^31).</summary>
     public virtual string CountAll => "COUNT(*)";
@@ -72,28 +91,109 @@ public abstract class ProfileDialect
 
     public virtual string Max(string column, ProfileMeasure measure) => "MAX(" + column + ")";
 
+    /// <summary>Whether a column's values can be grouped for its top values (DuckDB's nested types can't).</summary>
+    public virtual bool Groupable(ProfileColumn column) => true;
+
+    /// <summary>
+    /// Whether <see cref="Sample"/> of a source smaller than the rows asked for returns every row of it (DuckDB's reservoir): then a source with
+    /// no estimate is read as a sample of one more than the cap, and fewer rows back means the whole source was read.
+    /// </summary>
+    public virtual bool SampleTakesSmallWhole => false;
+
+    /// <summary>
+    /// The select list a source reads (2026-11-15, #17/#60/#123/#124): the picked columns by name, never <c>*</c>, so a hidden column, one the
+    /// account can't read, or Oracle's LONG (measured <see cref="ProfileMeasure.None"/>, left out) never reaches the source's own select.
+    /// </summary>
+    public string SelectList(IReadOnlyList<ProfileColumn> columns)
+    {
+        ArgumentNullException.ThrowIfNull(columns);
+        var read = columns.Where(c => c.Measure != ProfileMeasure.None).Select(c => Quote(c.Name)).ToList();
+        return read.Count > 0 ? string.Join(", ", read) : "1 AS " + Quote("_");
+    }
+
     /// <summary>The whole table as a FROM source.</summary>
     public virtual string Whole(string table) => table + " p";
 
-    /// <summary>The first <paramref name="rows"/> rows as a FROM source, bounded whatever the table's size.</summary>
-    public abstract string FirstRows(string table, long rows);
+    /// <summary>The first <paramref name="rows"/> rows of <paramref name="list"/> as a FROM source, bounded whatever the table's size.</summary>
+    public abstract string FirstRows(string table, string list, long rows);
 
     /// <summary>
     /// A sample of about <paramref name="rows"/> rows of a <paramref name="kind"/> as a FROM source, capped at that many; null when this kind
     /// isn't sampled here (a view, a foreign table) or the family samples nothing. <paramref name="estimate"/> is the catalog's count, null when
     /// it has none.
     /// </summary>
-    public virtual string? Sample(string table, string kind, long rows, long? estimate) => null;
+    public virtual string? Sample(string table, string list, string kind, long rows, long? estimate) => null;
 
-    /// <summary><paramref name="query"/> (ordered) cut at <paramref name="rows"/> rows.</summary>
+    /// <summary><paramref name="query"/> (a <c>SELECT</c>, ordered) cut at <paramref name="rows"/> rows.</summary>
     protected abstract string Limit(string query, int rows);
 
     /// <summary>The <paramref name="top"/> most common values of <paramref name="column"/> with their counts, the most common first.</summary>
     public virtual string Top(string column, string from, int top) =>
         Limit($"SELECT {column}, {CountAll} FROM {from} WHERE {column} IS NOT NULL GROUP BY {column} ORDER BY 2 DESC, 1", top);
 
-    /// <summary>The rows of <paramref name="table"/> counted to <paramref name="cap"/> at most: bounded on a table of any size.</summary>
-    public string CappedCount(string table, long cap) => $"SELECT {CountAll} FROM {FirstRows(table, cap)}";
+    /// <summary>Pass 2's statements for <paramref name="columns"/>: one a column here; one in all where the family reads its source once.</summary>
+    public virtual IReadOnlyList<string> Tops(IReadOnlyList<ProfileColumn> columns, string from, int top)
+    {
+        ArgumentNullException.ThrowIfNull(columns);
+        return [.. columns.Select(c => Top(Quote(c.Name), from, top))];
+    }
+
+    /// <summary>Pass 2's grids read back: each of <paramref name="count"/> columns' values with their counts, null for one not read.</summary>
+    public virtual IReadOnlyList<IReadOnlyList<(string Value, long Count)>?> ReadTops(IReadOnlyList<SqlGrid> grids, int count)
+    {
+        ArgumentNullException.ThrowIfNull(grids);
+        var tops = new IReadOnlyList<(string, long)>?[count];
+        for (int g = 0; g < Math.Min(grids.Count, count); g++)
+        {
+            tops[g] = [.. grids[g].Rows.Where(r => r.Length >= 2).Select(r => (r[0], TableProfile.Whole(r[1]) ?? 0))];
+        }
+
+        return tops;
+    }
+
+    /// <summary>
+    /// Pass 2 for a family that reads its source once (2026-11-15, #5/#21/#104: PostgreSQL, DuckDB): the source as one CTE <c>s</c> (the
+    /// keyword <paramref name="materialized"/> or none), then each column's group as a parenthesized branch that orders and limits on the
+    /// typed value and numbers its rows, all <c>UNION ALL</c>ed. Only the outer select casts to text (<paramref name="text"/>), so ties still
+    /// break by the typed value. Each row carries its column's index and its rank: <c>UNION ALL</c> keeps no order.
+    /// </summary>
+    protected string OneSourceTops(IReadOnlyList<ProfileColumn> columns, string from, int top, string materialized, string text)
+    {
+        ArgumentNullException.ThrowIfNull(columns);
+        var branches = columns.Select((c, i) =>
+        {
+            string q = Quote(c.Name);
+            return $"SELECT {Invariant(i)} AS i, CAST(r.v AS {text}) AS v, r.n, row_number() OVER (ORDER BY r.n DESC, r.v) AS k "
+                + $"FROM (SELECT {q} AS v, {CountAll} AS n FROM s WHERE {q} IS NOT NULL GROUP BY {q} ORDER BY 2 DESC, 1 LIMIT {Invariant(top)}) r";
+        });
+        return $"WITH s AS {materialized}(SELECT * FROM {from})\nSELECT i, v, n, k FROM (\n" + string.Join("\nUNION ALL\n", branches) + "\n) t ORDER BY i, k";
+    }
+
+    /// <summary><see cref="OneSourceTops"/>' rows read back from <paramref name="grid"/>: by index, then rank (the statement's order, held here too).</summary>
+    protected static IReadOnlyList<IReadOnlyList<(string Value, long Count)>?> ReadOneSourceTops(SqlGrid? grid, int count)
+    {
+        var tops = new List<(string, long)>?[count];
+        if (grid is null)
+        {
+            return tops;
+        }
+
+        foreach (var row in grid.Rows.Where(r => r.Length >= 4).OrderBy(r => TableProfile.Whole(r[0]) ?? -1).ThenBy(r => TableProfile.Whole(r[3]) ?? 0))
+        {
+            if (TableProfile.Whole(row[0]) is { } i && i >= 0 && i < count)
+            {
+                (tops[i] ??= []).Add((row[1], TableProfile.Whole(row[2]) ?? 0));
+            }
+        }
+
+        // A column with no non-null value has no rows here, as its own statement would have none.
+        for (int i = 0; i < count; i++)
+        {
+            tops[i] ??= [];
+        }
+
+        return tops;
+    }
 
     /// <summary>
     /// Pass 1's statements: one aggregate, <c>COUNT(*)</c> then four slots a column (non-null count, distinct, min, max), <c>NULL</c> in a
@@ -138,11 +238,13 @@ public abstract class ProfileDialect
             int at = 1 + 4 * i;
             var column = columns[i];
             stats.Add(new ColumnStats(column, column.Measure == ProfileMeasure.None ? null : TableProfile.Whole(row[at]),
-                TableProfile.Whole(row[at + 1]), ApproximateDistinct, Value(column, row[at + 2]), Value(column, row[at + 3])));
+                TableProfile.Whole(row[at + 1]), ApproximateDistinct, Value(column, row[at + 2]), Value(column, row[at + 3])) { Groupable = Groupable(column) });
         }
 
         return stats;
     }
+
+    protected static string Invariant(long n) => n.ToString(CultureInfo.InvariantCulture);
 
     private static string? Value(ProfileColumn column, string cell) =>
         column.Measure is ProfileMeasure.Full or ProfileMeasure.Bool ? cell : null;
@@ -150,10 +252,10 @@ public abstract class ProfileDialect
 
 /// <summary>
 /// <c>*_profile</c>'s engine (2026-11-14, the database-tools plan's #14): a table's data at a glance in one answer, so a model need not read
-/// pages of sample rows. Two passes inside one deadline, each through the family's read-only run routine: an aggregate (rows, and per column
-/// nulls, distinct, min, max), then the most common values of the columns that repeat. A table over <see cref="SampleAbove"/> rows (the
-/// catalog's estimate) is sampled to about that many; one with no estimate is counted first, with a count bounded whatever its size. Pure but
-/// for the runner it is given.
+/// pages of sample rows. Two passes inside the call's one deadline, each through the family's read-only run routine: an aggregate (rows, and
+/// per column nulls, distinct, min, max), then the most common values of the columns that repeat. A table whose catalog estimate is over the
+/// request's <see cref="Request.SampleAbove"/> is sampled to about that many rows; any other is read as its first cap + 1 rows, so fewer back
+/// is the whole table, exact, and the cap + 1st says it is bigger (2026-11-15, #3/#106: no count pass). Pure but for the runner it is given.
 /// </summary>
 public static class TableProfile
 {
@@ -164,22 +266,53 @@ public static class TableProfile
     /// <summary>A column with more distinct values than this has no top values worth showing.</summary>
     public const int MaxDistinctForTop = 1_000;
 
-    /// <summary>The rows a profile reads at most: a bigger table is sampled. Internal and settable so the live facts make each server sample.</summary>
-    internal static long SampleAbove { get; set; } = 100_000;
+    /// <summary>The rows a profile reads at most: a bigger table is sampled. Each tool's own (its settable <c>SampleAbove</c>, for the live facts).</summary>
+    public const long DefaultSampleAbove = 100_000;
 
     /// <summary>A sample under this share of the rows asked for is page sampling come back short: the first rows are read instead.</summary>
     public const double ShortSample = 0.1;
 
-    /// <summary>One run of the family's: the statements in one session, given the seconds left of the call's deadline.</summary>
+    /// <summary>One run of the family's: the statements in one session, given the seconds left of the call's deadline (never 0).</summary>
     public delegate Task<SqlRun> Runner(IReadOnlyList<string> statements, int timeoutSeconds, CancellationToken cancellationToken);
 
     /// <summary>
     /// One call: <paramref name="Shown"/> is the table as the answer names it, <paramref name="Table"/> its quoted SQL (or a parenthesized
     /// source), <paramref name="Columns"/> every column in the catalog's order, <paramref name="Asked"/> the <c>columns</c> argument (null:
-    /// all), <paramref name="Estimate"/> the catalog's row count (null: none), <paramref name="Describe"/> the tool that lists the columns.
+    /// all), <paramref name="Estimate"/> the catalog's row count (null: none), <paramref name="Describe"/> what lists the columns, and
+    /// <paramref name="Watch"/> the call's clock, started as the tool began (2026-11-15, #22/#74/#137: the resolve and the catalog spend the
+    /// same deadline as the passes).
     /// </summary>
     public sealed record Request(string Shown, string Table, string Kind, IReadOnlyList<ProfileColumn> Columns, IReadOnlyList<string>? Asked, int Top,
-        long? Estimate, int TimeoutSeconds, int MaxChars, string Describe, StringComparison NameMatch);
+        long? Estimate, int TimeoutSeconds, int MaxChars, string Describe, Stopwatch Watch)
+    {
+        /// <summary>The rows read at most (<see cref="DefaultSampleAbove"/>): a table estimated bigger is sampled.</summary>
+        public long SampleAbove { get; init; } = DefaultSampleAbove;
+
+        /// <summary>The column catalog came back cut at its row cap (2026-11-15, #105): the answer says only the first ones were read.</summary>
+        public bool ColumnsCut { get; init; }
+
+        /// <summary>The seconds left of the call's deadline: 0 once it has passed.</summary>
+        public int Left => SqlDeadline.Left(Watch, TimeoutSeconds);
+    }
+
+    /// <summary>
+    /// A profile catalog's cell read whole (2026-11-15, #34): a column's name is quoted back into the SQL, so the grid's scrubbed and clipped
+    /// cell (a control character, a long name) would name a column the table doesn't have. Catalog values are short; a NULL reads empty, and a
+    /// value that can't be read reads empty too, and is never quoted (<see cref="Pick"/>). Not <see cref="QueryPlan.WholeCell"/>'s text
+    /// reader: SQLite's opens a blob handle on the column's table, which <c>sqlite_master</c> refuses.
+    /// </summary>
+    public static string CatalogCell(System.Data.Common.DbDataReader reader, int ordinal)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+        try
+        {
+            return reader.IsDBNull(ordinal) ? "" : Convert.ToString(reader.GetValue(ordinal), CultureInfo.InvariantCulture) ?? "";
+        }
+        catch (Exception ex) when (ex is not (System.Data.Common.DbException or OperationCanceledException or OutOfMemoryException))
+        {
+            return "";
+        }
+    }
 
     /// <summary>A count cell as a whole number (an Oracle NUMBER reads <c>1204</c>, a DuckDB one as text); null for NULL or anything else.</summary>
     public static long? Whole(string? cell)
@@ -201,28 +334,40 @@ public static class TableProfile
 
     /// <summary>
     /// The columns a call profiles, in the order asked (or the catalog's), at most <see cref="MaxColumns"/>; <paramref name="rest"/> the ones
-    /// past it. Null and <paramref name="refusal"/> set for a name the table doesn't have.
+    /// past it. A name is matched exactly, then (unquoted) case-blind, as the families read an unquoted name; two case twins (<c>Id</c>,
+    /// <c>ID</c>) for one unquoted name are refused as ambiguous (2026-11-15, #98). A column whose name read back empty is never picked.
+    /// Null and <paramref name="refusal"/> set for a name the table doesn't have.
     /// </summary>
-    public static IReadOnlyList<ProfileColumn>? Pick(Request request, out IReadOnlyList<string> rest, out string? refusal)
+    public static IReadOnlyList<ProfileColumn>? Pick(Request request, ProfileDialect dialect, out IReadOnlyList<string> rest, out string? refusal)
     {
         ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(dialect);
         rest = [];
         refusal = null;
+        var named = request.Columns.Where(c => c.Name.Length > 0).ToList();
         var picked = new List<ProfileColumn>();
         if (request.Asked is not { Count: > 0 } asked)
         {
-            picked.AddRange(request.Columns);
+            picked.AddRange(named);
         }
         else
         {
-            foreach (string name in asked)
+            foreach (string written in asked)
             {
-                // A quoted name ("MixedCase") is matched as written alone, as Oracle and PostgreSQL read it.
-                string wanted = name.Trim();
-                bool quoted = wanted.Length > 1 && wanted[0] == '"' && wanted[^1] == '"';
-                wanted = quoted ? wanted[1..^1].Replace("\"\"", "\"", StringComparison.Ordinal) : wanted;
-                var match = request.Columns.FirstOrDefault(c => c.Name.Equals(wanted, StringComparison.Ordinal))
-                    ?? (quoted ? null : request.Columns.FirstOrDefault(c => c.Name.Equals(wanted, request.NameMatch)));
+                var (wanted, quoted) = dialect.Unquote(written);
+                var match = named.FirstOrDefault(c => c.Name.Equals(wanted, StringComparison.Ordinal));
+                if (match is null && !quoted)
+                {
+                    var folded = named.Where(c => c.Name.Equals(wanted, StringComparison.OrdinalIgnoreCase)).ToList();
+                    if (folded.Count > 1)
+                    {
+                        refusal = TableProfileText.Ambiguous(wanted, request.Shown, [.. folded.Select(c => c.Name)]);
+                        return null;
+                    }
+
+                    match = folded.FirstOrDefault();
+                }
+
                 if (match is null)
                 {
                     refusal = TableProfileText.NoSuchColumn(wanted, request.Shown, request.Describe);
@@ -252,99 +397,109 @@ public static class TableProfile
         ArgumentNullException.ThrowIfNull(dialect);
         ArgumentNullException.ThrowIfNull(run);
         ArgumentNullException.ThrowIfNull(error);
-        if (Pick(request, out var rest, out string? refusal) is not { } columns)
+        if (Pick(request, dialect, out var rest, out string? refusal) is not { } columns)
         {
             return refusal!;
         }
 
-        var watch = Stopwatch.StartNew();
-        long cap = SampleAbove;
-        long? about = request.Estimate is > 0 ? request.Estimate : null;   // a zero estimate is as often stale as empty: counted instead
-        bool moreThan = false;
-        var scope = ProfileScope.Whole;
-        string from = dialect.Whole(request.Table);
-        string connection = "", database = "";
+        long cap = request.SampleAbove;
+        long? about = request.Estimate is > 0 ? request.Estimate : null;   // a zero estimate is as often stale as empty: read as first rows
+        string list = dialect.SelectList(columns);
 
-        if (about is null)
+        // How much is read (#3/#106): an estimate past the cap is sampled to the cap; anything else is read as cap + 1 rows, which tells
+        // the whole table (fewer back) from a bigger one (all of them back) in the one pass.
+        bool probe = about is null || about <= cap;
+        ProfileScope scope;
+        string from;
+        if (probe)
         {
-            var counted = await run([dialect.CappedCount(request.Table, cap + 1)], Left(watch, request), cancellationToken).ConfigureAwait(false);
-            (connection, database) = (counted.Connection, counted.Database);
-            if (counted.Outcome != SqlOutcome.Ok)
-            {
-                return Failed(counted, request, error);
-            }
-
-            if (Whole(counted.Grids.FirstOrDefault()?.Rows.FirstOrDefault()?[0]) is > 0 and var n && n > cap)
-            {
-                moreThan = true;
-                (scope, from) = dialect.Sample(request.Table, request.Kind, cap, null) is { } sampled ? (ProfileScope.Sample, sampled) : (ProfileScope.FirstRows, dialect.FirstRows(request.Table, cap));
-            }
+            (scope, from) = about is null && dialect.SampleTakesSmallWhole && dialect.Sample(request.Table, list, request.Kind, cap + 1, null) is { } whole
+                ? (ProfileScope.Sample, whole)
+                : (ProfileScope.FirstRows, dialect.FirstRows(request.Table, list, cap + 1));
         }
-        else if (about > cap)
+        else
         {
-            (scope, from) = dialect.Sample(request.Table, request.Kind, cap, about) is { } sampled ? (ProfileScope.Sample, sampled) : (ProfileScope.FirstRows, dialect.FirstRows(request.Table, cap));
+            (scope, from) = dialect.Sample(request.Table, list, request.Kind, cap, about) is { } sampled
+                ? (ProfileScope.Sample, sampled)
+                : (ProfileScope.FirstRows, dialect.FirstRows(request.Table, list, cap));
         }
 
-        if (Left(watch, request) == 0)
+        var first = await Pass1Async(request, dialect, run, columns, from, cancellationToken).ConfigureAwait(false);
+
+        // A sample that fails (#148: an external or foreign table, a memory-optimized one) or comes back far short of the rows asked for (page
+        // sampling over a skewed table) is read again as the first rows, inside the same deadline.
+        if (scope == ProfileScope.Sample && (first.Run?.Outcome == SqlOutcome.Failed || (!probe && first.Stats is not null && first.Rows < cap * ShortSample)))
         {
-            return TableProfileText.Stopped(request.Shown, connection, request.TimeoutSeconds);
+            from = dialect.FirstRows(request.Table, list, probe ? cap + 1 : cap);
+            scope = ProfileScope.FirstRows;
+            first = await Pass1Async(request, dialect, run, columns, from, cancellationToken).ConfigureAwait(false);
         }
 
-        var first = await run(dialect.Aggregate(columns, from), Left(watch, request), cancellationToken).ConfigureAwait(false);
-        (connection, database) = (first.Connection, first.Database);
-        if (first.Outcome != SqlOutcome.Ok)
+        if (first.Answer is { } stopped)
         {
-            return Failed(first, request, error);
+            return stopped;
         }
 
-        if (dialect.ReadAggregate(first.Grids, columns, out long rows) is not { } stats)
+        if (first.Run!.Outcome != SqlOutcome.Ok)
+        {
+            return Failed(first.Run, request, error);
+        }
+
+        if (first.Stats is not { } stats)
         {
             return TableProfileText.Unreadable(request.Shown);
         }
 
-        // Page sampling can come back far short of the rows asked for (a skewed or fragmented table): the first rows instead, same deadline.
-        if (scope == ProfileScope.Sample && rows < cap * ShortSample)
+        long rows = first.Rows;
+        bool moreThan = false;
+        if (probe)
         {
-            if (Left(watch, request) == 0)
+            // cap + 1 back: the table is bigger than the cap (and than any estimate); fewer: every row was read.
+            if (rows > cap)
             {
-                return TableProfileText.Stopped(request.Shown, connection, request.TimeoutSeconds);
+                moreThan = true;
             }
-
-            from = dialect.FirstRows(request.Table, cap);
-            scope = ProfileScope.FirstRows;
-            var again = await run(dialect.Aggregate(columns, from), Left(watch, request), cancellationToken).ConfigureAwait(false);
-            if (again.Outcome != SqlOutcome.Ok)
+            else
             {
-                return Failed(again, request, error);
+                scope = ProfileScope.Whole;
             }
-
-            if (dialect.ReadAggregate(again.Grids, columns, out rows) is not { } firstRows)
-            {
-                return TableProfileText.Unreadable(request.Shown);
-            }
-
-            stats = firstRows;
         }
+
+        string connection = first.Run.Connection, database = first.Run.Database;
 
         // Pass 2: the columns that repeat, each one's most common values.
         var notes = new List<string>();
+        if (request.ColumnsCut)
+        {
+            notes.Add(TableProfileText.ColumnsCut(request.Columns.Count));
+        }
+
         if (request.Top > 0)
         {
             var candidates = stats.Select((s, i) => (s, i)).Where(p => Repeats(p.s)).ToList();
             if (candidates.Count > 0)
             {
-                if (Left(watch, request) == 0)
+                if (request.Left is not (> 0 and var left))
                 {
                     notes.Add(TableProfileText.TopStopped(request.TimeoutSeconds));
                 }
                 else
                 {
-                    var tops = await run([.. candidates.Select(p => dialect.Top(dialect.Quote(p.s.Column.Name), from, request.Top))], Left(watch, request), cancellationToken).ConfigureAwait(false);
+                    var asked = candidates.Select(p => p.s.Column).ToList();
+                    var tops = await run(dialect.Tops(asked, from, request.Top), left, cancellationToken).ConfigureAwait(false);
+                    var read = dialect.ReadTops(tops.Grids, asked.Count);
                     var filled = stats.ToList();
-                    for (int g = 0; g < Math.Min(tops.Grids.Count, candidates.Count); g++)
+                    for (int g = 0; g < candidates.Count; g++)
                     {
-                        var values = tops.Grids[g].Rows.Where(r => r.Length >= 2).Select(r => (r[0], Whole(r[1]) ?? 0)).ToList();
-                        filled[candidates[g].i] = filled[candidates[g].i] with { Top = values };
+                        if (read[g] is not { } values)
+                        {
+                            continue;
+                        }
+
+                        // Every count 1 (#65): nothing repeats in the rows read, so the column is all distinct there and has no top worth listing.
+                        filled[candidates[g].i] = values is [{ Count: 1 }, ..]
+                            ? filled[candidates[g].i] with { AllDistinct = true }
+                            : filled[candidates[g].i] with { Top = values };
                     }
 
                     stats = filled;
@@ -361,8 +516,33 @@ public static class TableProfile
         }
 
         var result = new ProfileResult(request.Shown, scope, rows, about, moreThan ? cap : null, request.Columns.Count, stats, rest,
-            QueryPlanText.Where(connection, database), watch.Elapsed, scope == ProfileScope.Whole && !dialect.ApproximateDistinct);
+            QueryPlanText.Where(connection, database), request.Watch.Elapsed, !dialect.ApproximateDistinct);
         return TableProfileText.Answer(result, notes, request.MaxChars);
+    }
+
+    /// <summary>Pass 1 read: the run and what it read, or <see cref="Answer"/> when the deadline passed before it could start.</summary>
+    private sealed record Pass1(SqlRun? Run, IReadOnlyList<ColumnStats>? Stats, long Rows, string? Answer);
+
+    /// <summary>
+    /// One pass 1 over <paramref name="from"/> (2026-11-15, #88: the first try and the first-rows rerun alike, so the answer's labels are the
+    /// run's that read the rows shown). The seconds left are read once: a 0 (time is up) ends the call before the runner, which would read a
+    /// 0 as "no limit" on SQL Server and MySQL (#74).
+    /// </summary>
+    private static async Task<Pass1> Pass1Async(Request request, ProfileDialect dialect, Runner run, IReadOnlyList<ProfileColumn> columns, string from, CancellationToken cancellationToken)
+    {
+        if (request.Left is not (> 0 and var left))
+        {
+            return new Pass1(null, null, 0, TableProfileText.Stopped(request.Shown, "", request.TimeoutSeconds));
+        }
+
+        var ran = await run(dialect.Aggregate(columns, from), left, cancellationToken).ConfigureAwait(false);
+        if (ran.Outcome != SqlOutcome.Ok)
+        {
+            return new Pass1(ran, null, 0, null);
+        }
+
+        var stats = dialect.ReadAggregate(ran.Grids, columns, out long rows);
+        return new Pass1(ran, stats, rows, null);
     }
 
     /// <summary>Whether a column's values repeat few enough to list: measured, not unique, at most <see cref="MaxDistinctForTop"/>.</summary>
@@ -370,16 +550,14 @@ public static class TableProfile
         stats.Groupable && stats.Column.Measure is ProfileMeasure.Distinct or ProfileMeasure.Full or ProfileMeasure.Bool
         && stats is { NonNull: > 0, Distinct: > 0 and <= MaxDistinctForTop } && stats.Distinct < stats.NonNull;
 
-    private static int Left(Stopwatch watch, Request request) => SqlDeadline.Left(watch, request.TimeoutSeconds);
-
     private static string Failed(SqlRun run, Request request, Func<SqlRun, string> error) =>
         run.Outcome == SqlOutcome.Timeout ? TableProfileText.Stopped(request.Shown, run.Connection, request.TimeoutSeconds) : error(run);
 }
 
 /// <summary>
 /// A profile as read, for <see cref="TableProfileText.Answer"/>: the rows profiled and how (<paramref name="About"/> the catalog's estimate,
-/// <paramref name="MoreThan"/> the cap a bounded count passed), every column's measures, the columns left past <see cref="TableProfile.MaxColumns"/>,
-/// and whether the distinct counts are exact.
+/// <paramref name="MoreThan"/> the cap the read passed), every column's measures, the columns left past <see cref="TableProfile.MaxColumns"/>,
+/// and whether the distinct counts are exact over the rows read (<paramref name="ExactDistinct"/>: not an approximate count).
 /// </summary>
 public sealed record ProfileResult(string Table, ProfileScope Scope, long Rows, long? About, long? MoreThan, int ColumnCount, IReadOnlyList<ColumnStats> Columns,
     IReadOnlyList<string> NotProfiled, string Where, TimeSpan Elapsed, bool ExactDistinct);

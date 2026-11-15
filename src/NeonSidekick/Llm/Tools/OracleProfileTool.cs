@@ -33,6 +33,9 @@ public sealed class OracleProfileTool : OracleTool
     {
     }
 
+    /// <summary>The rows a profile reads at most: a table estimated bigger is sampled. Settable so the live facts make the server sample.</summary>
+    internal long SampleAbove { get; set; } = TableProfile.DefaultSampleAbove;
+
     public override string Name => ToolName;
 
     public override string Description =>
@@ -43,34 +46,47 @@ public sealed class OracleProfileTool : OracleTool
 
     public async Task<string> ProfileAsync(string table, string? connection, IReadOnlyList<string>? columns, int top, CancellationToken cancellationToken)
     {
+        var watch = System.Diagnostics.Stopwatch.StartNew();
         if (string.IsNullOrWhiteSpace(table))
         {
             return OracleText.NoTable;
         }
 
+        var effective = Effective;
+        int timeout = TimeoutSeconds(effective);
         var match = await FindTableAsync(connection, table.Trim(), cancellationToken).ConfigureAwait(false);
         if (match.Error is { } refused)
         {
             return refused;
         }
 
-        var effective = Effective;
-        int timeout = TimeoutSeconds(effective);
+        string shown = match.Owner + "." + match.Name;
+        if (SqlDeadline.Left(watch, timeout) is not (> 0 and var left))
+        {
+            return TableProfileText.Stopped(shown, "", timeout);
+        }
+
         var catalog = await Oracle.RunAsync(connection, OracleProfile.Catalog, [new SqlParameterValue("owner", match.Owner), new SqlParameterValue("name", match.Name)],
-            OracleAccess.MaxCatalogRows, timeout, cancellationToken).ConfigureAwait(false);
+            OracleAccess.MaxCatalogRows, left, ownerMarker: false, cancellationToken, readCell: TableProfile.CatalogCell).ConfigureAwait(false);
         if (catalog.Outcome != SqlOutcome.Ok)
         {
-            return OracleText.Error(catalog);
+            return catalog.Outcome == SqlOutcome.Timeout ? TableProfileText.Stopped(shown, catalog.Connection, timeout) : OracleText.Error(catalog);
         }
 
         // name, data type, char length; then num_rows
-        var all = catalog.Grids.Count > 0 ? catalog.Grids[0].Rows.Select(r => new ProfileColumn(r[0], r[1], OracleProfile.Measure(r[1]))).ToList() : [];
+        var listed = catalog.Grids.Count > 0 ? catalog.Grids[0] : null;
+        var all = listed?.Rows.Select(r => new ProfileColumn(r[0], r[1], OracleProfile.Measure(r[1], TableProfile.Whole(r[2])))).ToList() ?? [];
         long? estimate = match.Kind == "table" && catalog.Grids.Count > 1 ? TableProfile.Whole(catalog.Grids[1].Rows.FirstOrDefault()?[0]) : null;
         var dialect = OracleProfile.Instance;
-        var request = new TableProfile.Request(match.Owner + "." + match.Name, dialect.Quote(match.Owner) + "." + dialect.Quote(match.Name), match.Kind, all, columns, top,
-            estimate, timeout, Math.Min(QueryPlan.MaxAnswerChars, SqlTool.ResultChars(effective)), OracleDescribeTool.ToolName, StringComparison.OrdinalIgnoreCase);
+        var request = new TableProfile.Request(shown, dialect.Quote(match.Owner) + "." + dialect.Quote(match.Name), match.Kind, all, columns, top,
+            estimate, timeout, SqlTool.AnswerChars(effective), OracleDescribeTool.ToolName, watch)
+        {
+            SampleAbove = SampleAbove,
+            ColumnsCut = listed?.More == true,
+        };
         return await TableProfile.RunAsync(request, dialect,
-            (statements, seconds, token) => Oracle.RunAsync(connection, statements, [], OracleAccess.MaxCatalogRows, seconds, token),
+            // The owner and the names are the ones resolved and quoted in, so no marker is written out (#139).
+            (statements, seconds, token) => Oracle.RunAsync(connection, statements, [], OracleAccess.MaxCatalogRows, seconds, ownerMarker: false, token),
             OracleText.Error, cancellationToken).ConfigureAwait(false);
     }
 

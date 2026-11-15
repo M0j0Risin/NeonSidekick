@@ -127,7 +127,7 @@ public sealed class LiveSqlTests
     {
         string currency = await Invoke<SqlProfileTool>(("table", "Sales.Currency"));
         Assert.StartsWith("Sales.Currency: 105 rows (exact) · 3 columns · aw/AdventureWorks2022 (", currency);
-        Assert.Contains("| CurrencyCode | nchar | 0 | ", currency);
+        Assert.Contains("| CurrencyCode | nchar(3) | 0 | ", currency);
         Assert.Matches(@"\| ModifiedDate \| datetime \| 0 \| ~?\d+ \| 20\d\d-", currency);
 
         string detail = await Invoke<SqlProfileTool>(("table", "Sales.SalesOrderDetail"), ("columns", System.Text.Json.JsonDocument.Parse("""["ProductID", "OrderQty", "CarrierTrackingNumber"]""").RootElement), ("top", 3));
@@ -135,18 +135,75 @@ public sealed class LiveSqlTests
         Assert.Matches(@"\| OrderQty \| smallint \| 0 \| ~\d+ \| 1 \| \d+ \| 1 \(\d+\), ", detail);
         Assert.DoesNotContain("| SalesOrderID |", detail);
 
-        TableProfile.SampleAbove = 1;
+        // A view has no estimate: its first cap + 1 rows, all back, say it is bigger than the cap.
+        _tools.OfType<SqlProfileTool>().Single().SampleAbove = 1;
+        Assert.Matches(@"^Sales\.Currency: from (a sample of ~1|the first 1) of about 105 rows", await Invoke<SqlProfileTool>(("table", "Sales.Currency")));
+        Assert.Matches(@"^Sales\.vSalesPerson: from the first 2 of more than 1 rows · \d+ columns", await Invoke<SqlProfileTool>(("table", "Sales.vSalesPerson"), ("top", 0)));
+
+        Assert.StartsWith("Error:", await Invoke<SqlProfileTool>(("table", "master.sys.objects")));
+    }
+
+    /// <summary>
+    /// The profile's column list (2026-11-15, the database-tools review) on a scratch table in tempdb, so AdventureWorks is never changed: its
+    /// HIDDEN period columns are left out, and through a login denied one column, that column too (#124: one it can't read failed the whole
+    /// call). Read through a tempdb connection beside aw's, as sa and as the login; the table, the user and the login are dropped after.
+    /// </summary>
+    [LiveSqlFact]
+    public async Task Profile_LeavesOutHiddenColumns_AndOneTheLoginIsDenied()
+    {
+        string id = Guid.NewGuid().ToString("N")[..12];
+        string table = "ns_hidden_" + id;
+        string login = "ns_limited_" + id;
+        string password = "Ns!" + Guid.NewGuid().ToString("N") + "aA1";
+        var c = LiveSql.Config!;
+        SqlConnectionConfig Tempdb(string? user = null, string? secret = null) => new()
+        {
+            Server = c.Server,
+            Database = "tempdb",
+            Auth = c.Auth,
+            User = user ?? c.User,
+            Password = secret is null ? c.Password : WindowsCredentials.Protect(secret).Value ?? secret,
+            TrustServerCertificate = c.TrustServerCertificate,
+            Encrypt = c.Encrypt,
+            ConnectTimeoutSeconds = 5,
+        };
+        async Task<string> Profile(SqlConnectionConfig config)
+        {
+            var tools = ChatScreen.SqlTools(new SqlAccess(() => new SqlCatalog([new SqlNamedConnection("tmp", config, "test")], [])), () => _settings);
+            return (string)(await tools.OfType<SqlProfileTool>().Single().InvokeAsync(new AIFunctionArguments(new Dictionary<string, object?> { ["table"] = "dbo." + table })))!;
+        }
+
+        await using var admin = new SqlConnection(Tempdb().Builder(password: LiveSql.Password).ConnectionString);
+        await admin.OpenAsync();
+        async Task Exec(string sql)
+        {
+            await using var command = new SqlCommand(sql, admin);
+            await command.ExecuteNonQueryAsync();
+        }
+
+        await Exec($"CREATE TABLE dbo.{table} (id int PRIMARY KEY, name nvarchar(50), secret nvarchar(50), "
+            + "valid_from datetime2 GENERATED ALWAYS AS ROW START HIDDEN NOT NULL, valid_to datetime2 GENERATED ALWAYS AS ROW END HIDDEN NOT NULL, PERIOD FOR SYSTEM_TIME (valid_from, valid_to))");
         try
         {
-            Assert.Matches(@"^Sales\.Currency: from (a sample of ~1|the first 1) of about 105 rows", await Invoke<SqlProfileTool>(("table", "Sales.Currency")));
-            Assert.Matches(@"^Sales\.vSalesPerson: from the first 1 of more than 1 rows · \d+ columns", await Invoke<SqlProfileTool>(("table", "Sales.vSalesPerson"), ("top", 0)));
+            await Exec($"INSERT INTO dbo.{table} (id, name, secret) VALUES (1, N'a', N'x'), (2, N'b', N'y'), (3, N'b', N'z')");
+            string whole = await Profile(Tempdb());
+            Assert.StartsWith($"dbo.{table}: 3 rows (exact) · 3 columns · tmp/tempdb (", whole);
+            Assert.Contains("| secret | nvarchar(50) | 0 |", whole);
+            Assert.DoesNotContain("valid_", whole);
+
+            await Exec($"CREATE LOGIN {login} WITH PASSWORD = '{password}', CHECK_POLICY = OFF");
+            await Exec($"CREATE USER {login} FOR LOGIN {login}; GRANT SELECT ON dbo.{table} TO {login}; DENY SELECT ON dbo.{table} (secret) TO {login}");
+            string limited = await Profile(Tempdb(login, password));
+            Assert.StartsWith($"dbo.{table}: 3 rows (exact) · 2 columns · tmp/tempdb (", limited);
+            Assert.Contains("| name | nvarchar(50) | 0 |", limited);
+            Assert.DoesNotContain("secret", limited);
         }
         finally
         {
-            TableProfile.SampleAbove = 100_000;
+            SqlConnection.ClearAllPools();   // the login's pooled session, which would hold DROP LOGIN off
+            await Exec($"DROP TABLE IF EXISTS dbo.{table}; IF USER_ID(N'{login}') IS NOT NULL DROP USER {login}; "
+                + $"IF EXISTS (SELECT 1 FROM sys.server_principals WHERE name = N'{login}') DROP LOGIN {login}");
         }
-
-        Assert.StartsWith("Error:", await Invoke<SqlProfileTool>(("table", "master.sys.objects")));
     }
 
     [LiveSqlFact]

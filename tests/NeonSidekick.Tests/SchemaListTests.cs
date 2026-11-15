@@ -34,13 +34,19 @@ public sealed class SchemaListTests : IDisposable
         Assert.Null(OracleConnectionConfig.LockProblem(null, ["HR", "\"hr\""]));                                 // a quoted one is its own
         Assert.Equal(OracleText.BadSchemaKey("not a name", "schemas"), OracleConnectionConfig.LockProblem(null, ["HR", "not a name"]));
         Assert.Equal(OracleText.BadSchemaKey("", "schemas"), OracleConnectionConfig.LockProblem(null, ["HR", " "]));
-        Assert.Equal(OracleText.TooManySchemas(OracleConnectionConfig.MaxSchemas), OracleConnectionConfig.LockProblem(null, Many(OracleConnectionConfig.MaxSchemas + 1)));
-        Assert.Null(OracleConnectionConfig.LockProblem(null, Many(OracleConnectionConfig.MaxSchemas)));
+        Assert.Equal(OracleText.TooManySchemas(SchemaLock.MaxSchemas), OracleConnectionConfig.LockProblem(null, Many(SchemaLock.MaxSchemas + 1)));
+        Assert.Null(OracleConnectionConfig.LockProblem(null, Many(SchemaLock.MaxSchemas)));
         foreach (string system in new[] { "SYS", "system", "XDB", "MDSYS", "CTXSYS", "AUDSYS" })
         {
             Assert.Equal(OracleText.SystemSchema(system, "schemas"), OracleConnectionConfig.LockProblem(null, ["HR", system]));
-            Assert.Equal(OracleText.SystemSchema(system), OracleConnectionConfig.LockProblem(system, null));
+            Assert.Null(OracleConnectionConfig.LockProblem(system, null));   // #159: a saved single schema loads as it did before the list
+            Assert.Equal(OracleText.SystemSchema(system), OracleConnectionConfig.PickProblem([system]));   // the wizard still refuses it
         }
+
+        Assert.Equal(OracleText.BadSchemaKey("not a name"), OracleConnectionConfig.LockProblem("not a name", null));
+        Assert.Null(OracleConnectionConfig.PickProblem([]));
+        Assert.Equal(OracleText.RepeatedSchema("hr"), OracleConnectionConfig.PickProblem(["HR", "hr"]));
+        Assert.Null(new OracleConnectionConfig { DataSource = "x:1/y", User = "neon", Password = "p", Schema = "XDB" }.Problem);
 
         var entry = new OracleConnectionConfig { DataSource = "x:1/y", User = "neon", Password = "p", Schemas = ["HR", "OE"] };
         Assert.Null(entry.Problem);
@@ -57,22 +63,70 @@ public sealed class SchemaListTests : IDisposable
         Assert.Null(PostgresConnectionConfig.LockProblem(null, ["sales", "Sales"]));   // exact: two schemas of their own case
         Assert.Equal(PostgresText.BadSchemaKey("a b", "schemas"), PostgresConnectionConfig.LockProblem(null, ["sales", "a b"]));
         Assert.Equal(PostgresText.BadSchemaKey("a,b", "schemas"), PostgresConnectionConfig.LockProblem(null, ["a,b"]));   // the option would split
-        Assert.Equal(PostgresText.TooManySchemas(PostgresConnectionConfig.MaxSchemas), PostgresConnectionConfig.LockProblem(null, Many(PostgresConnectionConfig.MaxSchemas + 1)));
+        Assert.Equal(PostgresText.TooManySchemas(SchemaLock.MaxSchemas), PostgresConnectionConfig.LockProblem(null, Many(SchemaLock.MaxSchemas + 1)));
         foreach (string system in new[] { "pg_catalog", "pg_toast", "information_schema", "$user" })
         {
             Assert.Equal(PostgresText.SystemSchema(system, "schemas"), PostgresConnectionConfig.LockProblem(null, ["sales", system]));
-            Assert.Equal(PostgresText.SystemSchema(system), PostgresConnectionConfig.LockProblem(system, null));
+            Assert.Null(PostgresConnectionConfig.LockProblem(system, null));   // #160: a saved single schema loads as it did before the list
+            Assert.Equal(PostgresText.SystemSchema(system), PostgresConnectionConfig.PickProblem([system]));   // the wizard still refuses it
         }
+
+        Assert.Equal(PostgresText.BadSchemaKey("a b"), PostgresConnectionConfig.LockProblem("a b", null));
+        Assert.Null(PostgresConnectionConfig.PickProblem([]));
+        Assert.Equal(PostgresText.BadSchemaKey("a,b"), PostgresConnectionConfig.PickProblem(["a,b"]));
+        Assert.Null(new PostgresConnectionConfig { Host = "db", Database = "shop", User = "u", Password = "p", Schema = "$user" }.Problem);
 
         var entry = new PostgresConnectionConfig { Host = "db", Database = "shop", User = "u", Password = "p", Schemas = [" sales ", "public"] };
         Assert.Null(entry.Problem);
         Assert.Equal(["sales", "public"], entry.Locks);
         Assert.Equal("sales, public", entry.LockText);
         entry.HoldTo(["sales"]);
-        Assert.Equal("sales", entry.Schema);
-        Assert.Null(entry.Schemas);
+        Assert.Null(entry.Schema);   // #29: a list stays a list, one name or many
+        Assert.Equal(["sales"], entry.Schemas);
         entry.HoldTo([]);
         Assert.Null(entry.LockText);
+        entry.HoldTo(["sales"]);
+        Assert.Equal("sales", entry.Schema);   // no list before: one name is a schema
+        Assert.Null(entry.Schemas);
+        entry.HoldTo(["sales", "public"]);
+        Assert.Equal(["sales", "public"], entry.Schemas);
+        Assert.Null(entry.Schema);
+    }
+
+    [Fact]
+    public void Oracle_HoldTo_KeepsTheEntrysForm()
+    {
+        // 2026-11-15, the database-tools review's #29.
+        var listed = new OracleConnectionConfig { DataSource = "db", User = "u", Schemas = ["HR"] };
+        listed.HoldTo(["OE"]);
+        Assert.Equal(["OE"], listed.Schemas);
+        Assert.Null(listed.Schema);
+        var single = new OracleConnectionConfig { DataSource = "db", User = "u", Schema = "HR" };
+        single.HoldTo(["OE"]);
+        Assert.Equal("OE", single.Schema);
+        Assert.Null(single.Schemas);
+        Assert.Equal((null, null), SchemaLock.Hold([], asList: true));
+    }
+
+    [Fact]
+    public void TheSharedListRules_RunInOrder()
+    {
+        // #44: both keys, then empty, then the cap, then each name, then a repeat (by the family's sameness).
+        var words = new SchemaLock.Words("both", "empty", n => "many " + n, s => "twice " + s);
+        Assert.Equal("both", SchemaLock.ListProblem("a", [], words, _ => null, s => s));
+        Assert.Equal("empty", SchemaLock.ListProblem(null, [], words, _ => null, s => s));
+        Assert.Equal("many 16", SchemaLock.ListProblem(null, Enumerable.Range(0, 17).Select(i => (string?)("s" + i)).ToList(), words, _ => null, s => s));
+        Assert.Equal("bad x", SchemaLock.ListProblem(null, ["a", "x", "a"], words, n => n == "x" ? "bad x" : null, s => s));
+        Assert.Equal("twice A", SchemaLock.ListProblem(null, ["a", " A "], words, _ => null, s => s.ToUpperInvariant()));
+        Assert.Null(SchemaLock.ListProblem(null, ["a", "A"], words, _ => null, s => s));
+    }
+
+    /// <summary>#95: the relationships list holds only the key's owner to the lock, so an FK into another owner's table is shown.</summary>
+    [Fact]
+    public void Oracle_Relationships_HoldOnlyTheKeysOwner()
+    {
+        Assert.Contains("k.owner IN (:neon_owners)", OracleCatalogQueries.Relationships, StringComparison.Ordinal);
+        Assert.DoesNotContain("r.owner IN", OracleCatalogQueries.Relationships, StringComparison.Ordinal);
     }
 
     // ─── the boundary ────────────────────────────────────────────────────────
@@ -95,9 +149,14 @@ public sealed class SchemaListTests : IDisposable
     {
         Assert.Contains("schemas 'HR', 'OE'", OracleText.OtherSchema("SH", ["HR", "OE"]), StringComparison.Ordinal);
         Assert.Contains("schemas 'HR', 'OE'", OracleText.TableElsewhere("SH", ["HR", "OE"]), StringComparison.Ordinal);
-        Assert.Equal(OracleText.TableElsewhere("SH", ["READER"]), OracleText.TableElsewhere("SH", "READER"));   // one place reads as before
+        Assert.Contains("held to schema 'READER'; give the table as NAME or READER.NAME", OracleText.TableElsewhere("SH", ["READER"]), StringComparison.Ordinal);   // one place reads as before
         Assert.Contains("OE.ORDERS", OracleText.GiveItQualified("orders", ["OE.ORDERS"]), StringComparison.Ordinal);
         Assert.Equal("schema 'HR'", OracleText.HeldTo(["HR"]));
+        Assert.Contains("visible in free's schemas 'HR', 'OE';", OracleText.TableNotFound("t", "free", ["HR", "OE"]), StringComparison.Ordinal);   // #116
+        Assert.Contains("visible in free/HR;", OracleText.TableNotFound("t", "free", ["HR"]), StringComparison.Ordinal);
+        Assert.Contains("The tools keep to schemas HR, OE;", OracleText.Reach(["HR", "OE"], ["SH"], []), StringComparison.Ordinal);   // #101: told by the list
+        Assert.Contains("The tools keep to schema HR;", OracleText.Reach(["HR"], ["SH"], []), StringComparison.Ordinal);
+        Assert.Contains("than HR's and", OracleText.Reach(["HR"], [], []), StringComparison.Ordinal);
     }
 
     [Theory]
@@ -111,7 +170,7 @@ public sealed class SchemaListTests : IDisposable
         string[] visible = ["public", "ns_other", "ns_third", "pg_catalog"];
         Assert.Equal(other is null ? null : PostgresText.OtherSchema(other, locks), PostgresBoundary.CheckUnder(sql, locks, visible));
         Assert.Contains("schemas 'public', 'ns_other'", PostgresText.OtherSchema("ns_third", locks), StringComparison.Ordinal);
-        Assert.Equal(PostgresText.OtherSchema("x", ["sales"]), PostgresText.OtherSchema("x", "sales"));
+        Assert.Contains("held to schema 'sales';", PostgresText.OtherSchema("x", ["sales"]), StringComparison.Ordinal);
     }
 
     // ─── Oracle's schema check and its binds ────────────────────────────────
@@ -119,10 +178,32 @@ public sealed class SchemaListTests : IDisposable
     [Fact]
     public void Oracle_TheSchemaCheck_RefusesAMissingOrMaintainedSchema()
     {
+        Assert.Contains("u.oracle_maintained", OracleCatalogQueries.SchemaCheckFor("23.26.0.0.0", 2), StringComparison.Ordinal);
+        Assert.Contains("u.oracle_maintained", OracleCatalogQueries.SchemaCheckFor("12.1.0.2.0", 2), StringComparison.Ordinal);
+        Assert.DoesNotContain("oracle_maintained", OracleCatalogQueries.SchemaCheckFor("11.2.0.4.0", 2), StringComparison.Ordinal);   // #64: 11g has no such column
+        Assert.Contains(":neon_s1", OracleCatalogQueries.SchemaCheckFor("11.2.0.4.0", 2), StringComparison.Ordinal);
         Assert.Null(OracleText.SchemaCheck([["HR", "N"], ["OE", "N"]], ["HR", "OE"]));
         Assert.Contains("schema OE doesn't exist", OracleText.SchemaCheck([["HR", "N"]], ["HR", "OE"]), StringComparison.Ordinal);
         Assert.Contains("schema SYSTEM is Oracle's own", OracleText.SchemaCheck([["HR", "N"], ["SYSTEM", "Y"]], ["HR", "SYSTEM"]), StringComparison.Ordinal);
         Assert.Contains("schema hr doesn't exist", OracleText.SchemaCheck([["HR", "N"]], ["hr"]), StringComparison.Ordinal);   // as the dictionary spells it
+    }
+
+    [Fact]
+    public void Oracle_BeforeTwelve_EveryQueryReadsMaintainedAsN()
+    {
+        // 2026-11-15, #64/#118: the wizard's listing and the catalogs join ALL_USERS.ORACLE_MAINTAINED, which 11g lacks.
+        Assert.Contains("'N' = 'N'", OracleCatalogQueries.ForServer(OracleCatalogQueries.UserSchemas, "11.2.0.4.0"), StringComparison.Ordinal);
+        Assert.DoesNotContain("oracle_maintained", OracleCatalogQueries.ForServer(OracleCatalogQueries.Columns, "11.2.0.4.0"), StringComparison.Ordinal);
+        Assert.Equal(OracleCatalogQueries.UserSchemas, OracleCatalogQueries.ForServer(OracleCatalogQueries.UserSchemas, "12.1.0.2.0"));
+        Assert.Equal(OracleCatalogQueries.UserSchemas, OracleCatalogQueries.ForServer(OracleCatalogQueries.UserSchemas, null));
+    }
+
+    [Fact]
+    public void Postgres_TheSavedLookup_IsTheListingsRule_OverTheSavedNames()
+    {
+        // #146: "usable" means what it means in the listing; the filter comes before the ORDER BY.
+        Assert.StartsWith(PostgresCatalogQueries.UsableSchemas[..^" ORDER BY 1".Length], PostgresCatalogQueries.SavedSchemas, StringComparison.Ordinal);
+        Assert.EndsWith(" AND n.nspname = ANY(@saved::text[]) ORDER BY 1", PostgresCatalogQueries.SavedSchemas, StringComparison.Ordinal);
     }
 
     /// <summary>Every app-written statement holding the owner marker gets one bind per place and no other name it can't be given.</summary>

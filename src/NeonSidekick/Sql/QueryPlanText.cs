@@ -22,15 +22,25 @@ public static class QueryPlanText
     public const string FlagsHeading = "Worth a look:";
     public const string NoFlags = "Nothing stands out: no full scan of a big table, big sort or missing index.";
 
-    /// <summary>SQL Server's answers end with this, since the server keeps its suggestions across queries too.</summary>
-    public const string SqlServerFooter = "See also sql_indexes with missing: true for the server's index suggestions.";
+    /// <summary>SQL Server's answers end with this, since the server keeps its suggestions across queries too (#167: built from the tool's own names).</summary>
+    public static readonly string SqlServerFooter =
+        $"See also {SqlIndexesTool.ToolName} with {SqlIndexesTool.MissingArgument}: true for the server's index suggestions.";
 
-    /// <summary>Oracle's absence, said where the tools are listed: <c>EXPLAIN PLAN</c> writes <c>PLAN_TABLE</c>, which the read-only session refuses.</summary>
-    public const string NoOracle = "Oracle has no explain tool: its EXPLAIN PLAN writes a table, which the read-only session refuses.";
+    /// <summary>
+    /// A refused lead: the tool adds the explain itself, and DuckDB's DESCRIBE, SHOW and SUMMARIZE aren't plans (2026-11-15, #156: an EXPLAIN
+    /// lead has its own sentence, and "an" goes before a vowel).
+    /// </summary>
+    public static string NotPlannable(string word)
+    {
+        ArgumentNullException.ThrowIfNull(word);
+        if (string.Equals(word, "EXPLAIN", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Error: give the query alone, without EXPLAIN; the tool explains it itself (never runs it).";
+        }
 
-    /// <summary>A refused lead: the tool adds the explain itself, and DuckDB's DESCRIBE, SHOW and SUMMARIZE aren't plans.</summary>
-    public static string NotPlannable(string word) =>
-        $"Error: give the query alone; the tool explains it itself (never runs it), and a {word} statement has no plan to show.";
+        string article = word.Length > 0 && "AEIOUaeiou".Contains(word[0], StringComparison.Ordinal) ? "an" : "a";
+        return $"Error: give the query alone; the tool explains it itself (never runs it), and {article} {word} statement has no plan to show.";
+    }
 
     /// <summary>SQL Server's refusal for an account without SHOWPLAN (Msg 262).</summary>
     public const string NeedsShowplan = "Error: the account needs SHOWPLAN on the database to see a query's plan (GRANT SHOWPLAN TO the user).";
@@ -43,13 +53,19 @@ public static class QueryPlanText
     public static string Where(string connection, string database) =>
         database.Length == 0 || string.Equals(connection, database, StringComparison.Ordinal) ? connection : connection + "/" + database;
 
-    /// <summary>The answer for a plan the parser could not read: the header, the reason, and the raw plan's start fenced as the server's text.</summary>
-    public static string Unreadable(string connection, string database, TimeSpan elapsed, string raw)
+    /// <summary>
+    /// The answer for a plan the parser could not read: the header, the reason, and the raw plan's start fenced as the server's text, at most
+    /// <see cref="RawChars"/> of it and the whole within <paramref name="maxChars"/> (2026-11-15, #83: a lower result-chars setting holds here too).
+    /// </summary>
+    public static string Unreadable(string connection, string database, TimeSpan elapsed, string raw, int maxChars = QueryPlan.MaxAnswerChars)
     {
         ArgumentNullException.ThrowIfNull(raw);
-        string start = raw.Length <= RawChars ? raw : Files.TextCut.Safe(raw, RawChars) + "…";
-        return $"Plan for {Where(connection, database)} (estimated, not run; {SqlText.Millis(elapsed)}): the plan couldn't be read, so here is its start.\n"
-            + UntrustedText.QuoteNote + "\n" + UntrustedText.Fenced(start);
+        string head = $"Plan for {Where(connection, database)} (estimated, not run; {SqlText.Millis(elapsed)}): the plan couldn't be read, so here is its start.\n"
+            + UntrustedText.QuoteNote + "\n";
+        int room = Math.Min(RawChars, maxChars - head.Length - UntrustedText.Fenced("…").Length);
+        string start = raw.Length <= room ? raw : room <= 0 ? "…" : Files.TextCut.Safe(raw, room) + "…";
+        string answer = head + UntrustedText.Fenced(start);
+        return answer.Length <= maxChars ? answer : Files.TextCut.Safe(answer, Math.Max(0, maxChars - 1)) + "…";
     }
 
     // ─── flags ──────────────────────────────────────────────────────────────────
@@ -83,6 +99,14 @@ public static class QueryPlanText
     public static string JoinBuffer(string target, double? rows) =>
         $"A join with no usable index on {Name(target)} ({RowsOrEvery(rows)}, through a join buffer).";
 
+    /// <summary>SQLite's Bloom filter on a join's table (#162): it judged a lookup by those columns worth speeding up on every run.</summary>
+    public static string BloomFilter(string target) =>
+        $"SQLite builds a Bloom filter on {Name(target)} for every run: an index on the columns it joins on may help.";
+
+    /// <summary>A plan read only to its first <paramref name="steps"/> (#165).</summary>
+    public static string PlanCut(int steps) =>
+        $"The plan was cut at {steps.ToString("N0", CultureInfo.InvariantCulture)} steps; the rest weren't read.";
+
     public static string AutomaticIndex(string target) =>
         $"SQLite builds a temporary index on {Name(target)} for every run: a lasting index on those columns saves that.";
 
@@ -114,6 +138,13 @@ public static class QueryPlanText
     public static string ImplicitConversion(string expression) =>
         $"An implicit conversion ({Name(expression)}) may keep an index from being used: compare values of the column's own type.";
 
+    /// <summary>Columns the optimizer had no statistics for (#59): its estimates over them are guesses.</summary>
+    public static string NoStatistics(IReadOnlyList<string> columns)
+    {
+        ArgumentNullException.ThrowIfNull(columns);
+        return $"No statistics on {string.Join(", ", columns.Select(Name))}: the row estimates over them are guesses; statistics or an index on them may help.";
+    }
+
     public const string NoJoinPredicate = "A join with no join predicate: every row of one input meets every row of the other.";
 
     public static string Warning(string text) => $"The plan warns: {Name(text)}.";
@@ -122,11 +153,14 @@ public static class QueryPlanText
 
     /// <summary>
     /// The answer: the header, the steps (indented by depth), the flags, then <paramref name="footer"/>. Within <paramref name="maxChars"/>:
-    /// a plan whose steps don't fit keeps every flag and the costliest steps (by cost, else rows), in tree order, and says how many it left out.
+    /// a plan whose steps don't fit keeps the costliest steps (by cost, else rows), each with the steps above it (#127, so the indented tree
+    /// never shows a child without its parent), in tree order, and says how many it left out. The flags are said once each (#7) and take
+    /// at most about half the room, the rest counted (#63); the footer is always kept.
     /// </summary>
     public static string Answer(QueryPlan plan, string connection, string database, TimeSpan elapsed, int maxChars, string? footer = null)
     {
         ArgumentNullException.ThrowIfNull(plan);
+        var flags = plan.Flags.Distinct(StringComparer.Ordinal).ToList();
         var head = new StringBuilder();
         head.Append("Plan for ").Append(Where(connection, database)).Append(" (estimated, not run; ").Append(SqlText.Millis(elapsed)).Append("): ")
             .Append(SqlText.Count(plan.Steps.Count, "step"));
@@ -144,23 +178,36 @@ public static class QueryPlanText
 
         var tail = new StringBuilder();
         tail.Append('\n').Append(FlagsHeading).Append('\n');
-        if (plan.Flags.Count == 0)
+        if (flags.Count == 0)
         {
             tail.Append(NoFlags).Append('\n');
         }
 
-        foreach (string flag in plan.Flags)
+        // The flags' share: about half the answer, the note's own line reserved when any is left out.
+        int flagRoom = maxChars / 2;
+        int said = 0;
+        foreach (string flag in flags)
         {
+            int length = flag.Length + 3;
+            bool last = said == flags.Count - 1;
+            if (length + (last ? 0 : MoreFlags(flags.Count - said - 1).Length + 1) > flagRoom)
+            {
+                break;
+            }
+
             tail.Append("- ").Append(flag).Append('\n');
+            flagRoom -= length;
+            said++;
         }
 
-        if (footer is not null)
+        if (said < flags.Count)
         {
-            tail.Append(footer).Append('\n');
+            tail.Append(MoreFlags(flags.Count - said)).Append('\n');
         }
 
+        string end = footer is null ? "" : footer + "\n";
         var lines = plan.Steps.Select(StepLine).ToList();
-        int fixedLength = head.Length + 1 + StepsHeading.Length + 1 + tail.Length;
+        int fixedLength = head.Length + 1 + StepsHeading.Length + 1 + tail.Length + end.Length;
         int room = maxChars - fixedLength;
         var keep = new bool[lines.Count];
         if (lines.Sum(l => l.Length + 1) <= room)
@@ -169,16 +216,24 @@ public static class QueryPlanText
         }
         else
         {
-            // The costliest first; the note's own line reserved.
+            // The costliest first, each with its ancestors (#127); the note's own line reserved.
             room -= LeftOut(lines.Count).Length + 1;
+            var parent = Parents(plan.Steps);
             var order = Enumerable.Range(0, lines.Count)
                 .OrderByDescending(i => plan.Steps[i].Cost ?? -1).ThenByDescending(i => plan.Steps[i].Rows ?? -1).ThenBy(i => i);
             foreach (int i in order)
             {
-                if (lines[i].Length + 1 <= room)
+                var chain = new List<int>();
+                for (int at = i; at >= 0 && !keep[at]; at = parent[at])
                 {
-                    keep[i] = true;
-                    room -= lines[i].Length + 1;
+                    chain.Add(at);
+                }
+
+                int length = chain.Sum(c => lines[c].Length + 1);
+                if (chain.Count > 0 && length <= room)
+                {
+                    chain.ForEach(c => keep[c] = true);
+                    room -= length;
                 }
             }
         }
@@ -202,11 +257,41 @@ public static class QueryPlanText
             sb.Append(LeftOut(left)).Append('\n');
         }
 
-        string answer = sb.Append(tail).ToString().TrimEnd('\n');
+        string body = sb.Append(tail).ToString().TrimEnd('\n');
+        string closing = end.TrimEnd('\n');
+        int bodyRoom = maxChars - (closing.Length == 0 ? 0 : closing.Length + 1);
+        if (body.Length > bodyRoom)
+        {
+            body = Files.TextCut.Safe(body, Math.Max(0, bodyRoom - 1)) + "…";
+        }
+
+        string answer = closing.Length == 0 ? body : body + "\n" + closing;
         return answer.Length <= maxChars ? answer : Files.TextCut.Safe(answer, Math.Max(0, maxChars - 1)) + "…";
     }
 
     public static string LeftOut(int steps) => $"({SqlText.Count(steps, "more step")} left out)";
+
+    /// <summary>The flags past the answer's share for them (#63).</summary>
+    public static string MoreFlags(int flags) => $"({SqlText.Count(flags, "more flag")} left out)";
+
+    /// <summary>Each step's parent: the nearest step before it at a lower depth, or -1 for a root.</summary>
+    private static int[] Parents(IReadOnlyList<QueryPlanStep> steps)
+    {
+        var parent = new int[steps.Count];
+        var open = new Stack<int>();
+        for (int i = 0; i < steps.Count; i++)
+        {
+            while (open.Count > 0 && steps[open.Peek()].Depth >= steps[i].Depth)
+            {
+                open.Pop();
+            }
+
+            parent[i] = open.Count > 0 ? open.Peek() : -1;
+            open.Push(i);
+        }
+
+        return parent;
+    }
 
     private static string StepLine(QueryPlanStep step)
     {

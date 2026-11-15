@@ -12,13 +12,18 @@ public sealed record DuckDbPrepared(string Sql, IReadOnlyDictionary<string, stri
     /// <summary>A statement that names no file: run as written.</summary>
     public static DuckDbPrepared AsWritten(string sql) => new(sql, new Dictionary<string, string>());
 
-    /// <summary><paramref name="text"/> (one of DuckDB's messages) with each full path put back as the model wrote it, both slash forms.</summary>
+    /// <summary>
+    /// <paramref name="text"/> (one of DuckDB's messages, or an explain answer) with each full path put back as the model wrote it: both slash
+    /// forms, and the JSON-escaped one (<c>D:\\…</c>) an unreadable plan's raw text holds (2026-11-15, #172).
+    /// </summary>
     public string Unspell(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
         foreach (var (full, spelled) in Spelled.OrderByDescending(p => p.Key.Length))
         {
-            text = text.Replace(full, spelled, StringComparison.OrdinalIgnoreCase).Replace(full.Replace('\\', '/'), spelled, StringComparison.OrdinalIgnoreCase);
+            text = text.Replace(full.Replace("\\", "\\\\", StringComparison.Ordinal), spelled, StringComparison.OrdinalIgnoreCase)
+                .Replace(full, spelled, StringComparison.OrdinalIgnoreCase)
+                .Replace(full.Replace('\\', '/'), spelled, StringComparison.OrdinalIgnoreCase);
         }
 
         return text;

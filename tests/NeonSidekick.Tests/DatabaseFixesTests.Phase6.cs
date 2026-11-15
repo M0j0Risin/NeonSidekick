@@ -37,12 +37,12 @@ public sealed class DatabaseSessionTests
     [Fact]
     public void PostgresSession_ReadBack_RefusesWhatDidNotHold()
     {
-        Assert.Null(PostgresText.SessionProblem("on", "on", "30s", "sales", readOnly: true, "sales"));
-        Assert.Equal(PostgresText.SessionNotSet("default_transaction_read_only"), PostgresText.SessionProblem("off", "on", "30s", "public", readOnly: true, null));
-        Assert.Null(PostgresText.SessionProblem("off", "on", "30s", "public", readOnly: false, null));
-        Assert.Equal(PostgresText.SessionNotSet("standard_conforming_strings"), PostgresText.SessionProblem("on", "off", "30s", "public", readOnly: true, null));
-        Assert.Equal(PostgresText.SessionNotSet("statement_timeout"), PostgresText.SessionProblem("on", "on", "0", "public", readOnly: true, null));
-        Assert.Equal(PostgresText.SchemasMissing(["sales"]), PostgresText.SessionProblem("on", "on", "30s", "\"$user\",public", readOnly: true, "sales"));
+        Assert.Null(PostgresText.SessionProblemUnder("on", "on", "30s", "sales", readOnly: true, ["sales"]));
+        Assert.Equal(PostgresText.SessionNotSet("default_transaction_read_only"), PostgresText.SessionProblemUnder("off", "on", "30s", "public", readOnly: true, []));
+        Assert.Null(PostgresText.SessionProblemUnder("off", "on", "30s", "public", readOnly: false, []));
+        Assert.Equal(PostgresText.SessionNotSet("standard_conforming_strings"), PostgresText.SessionProblemUnder("on", "off", "30s", "public", readOnly: true, []));
+        Assert.Equal(PostgresText.SessionNotSet("statement_timeout"), PostgresText.SessionProblemUnder("on", "on", "0", "public", readOnly: true, []));
+        Assert.Equal(PostgresText.SchemasMissing(["sales"]), PostgresText.SessionProblemUnder("on", "on", "30s", "\"$user\",public", readOnly: true, ["sales"]));
 
         // A list (2026-11-14, #18): the read-back must be the list in its order; one the server lacks is named; one out of order is the setting lost.
         Assert.Null(PostgresText.SessionProblemUnder("on", "on", "30s", "public,ns_other", readOnly: true, ["public", "ns_other"]));

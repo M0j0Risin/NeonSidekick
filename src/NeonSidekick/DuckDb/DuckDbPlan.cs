@@ -8,8 +8,9 @@ namespace NeonSidekick.DuckDb;
 /// <c>explain_key</c> (<c>physical_plan</c>) and <c>explain_value</c>, the plan in the second (the run reads the last column). It is an array of
 /// nodes, each a <c>name</c>, its <c>children</c> and an <c>extra_info</c> object (<c>Table</c>, <c>Function</c>, <c>Estimated Cardinality</c>
 /// as text; seen on 1.5.6). DuckDB gives no costs, so the costliest steps are the ones with the most rows. <c>PROJECTION</c> nodes are left
-/// out (they pick columns, and a plan holds many), their children taking their place. Flags: a sequential scan of a big table, a nested
-/// loop or cross product over a big input, a big sort. Pure.
+/// out (they pick columns, and a plan holds many), their children taking their place. Flags: a sequential scan of a big table (a file's scan
+/// has no index to suggest, #72), a nested loop over a big input, a cross product that makes many rows from two inputs of more than one
+/// row each (#50: a one-row side, a scalar subquery's, is harmless), a big sort. The plan's rows are its root's (#170). Pure.
 /// </summary>
 public static class DuckDbPlan
 {
@@ -22,7 +23,7 @@ public static class DuckDbPlan
         ArgumentNullException.ThrowIfNull(json);
         try
         {
-            using var document = JsonDocument.Parse(json);
+            using var document = PlanJson.Parse(json);
             var root = document.RootElement;
             if (root.ValueKind != JsonValueKind.Array || root.GetArrayLength() == 0 || root[0].ValueKind != JsonValueKind.Object || !root[0].TryGetProperty("name", out _))
             {
@@ -36,8 +37,7 @@ public static class DuckDbPlan
                 Walk(node, 0, steps, flags);
             }
 
-            double? rows = steps.FirstOrDefault(s => s.Rows is not null)?.Rows;
-            return new QueryPlan(steps, flags, null, rows);
+            return new QueryPlan(steps, flags, null, Rows(root[0]));
         }
         catch (JsonException)
         {
@@ -47,17 +47,18 @@ public static class DuckDbPlan
 
     private static void Walk(JsonElement node, int depth, List<QueryPlanStep> steps, List<string> flags)
     {
-        string name = (node.TryGetProperty("name", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString() : null)?.Trim() ?? "?";
+        string name = PlanJson.Text(node, "name")?.Trim() ?? "?";
         var info = node.TryGetProperty("extra_info", out var extra) && extra.ValueKind == JsonValueKind.Object ? extra : default;
-        double? rows = info.ValueKind == JsonValueKind.Object ? QueryPlan.Number(Text(info, "Estimated Cardinality")) : null;
+        double? rows = Rows(node);
         bool shown = name != "PROJECTION";
         if (shown)
         {
-            string? target = info.ValueKind == JsonValueKind.Object ? Text(info, "Table") ?? Text(info, "Function") : null;
+            string? table = PlanJson.Text(info, "Table");
+            string? target = table ?? PlanJson.Text(info, "Function");
             steps.Add(new QueryPlanStep(depth, name, target, rows, null));
-            if (name is "SEQ_SCAN" or "TABLE_SCAN" && target is not null && Text(info, "Type") != "Index Scan" && rows >= QueryPlan.BigRows)
+            if (name is "SEQ_SCAN" or "TABLE_SCAN" && table is not null && PlanJson.Text(info, "Type") != "Index Scan" && rows >= QueryPlan.BigRows)
             {
-                flags.Add(QueryPlanText.FullScan(target, rows));
+                flags.Add(QueryPlanText.FullScan(table, rows));
             }
 
             if (name == "ORDER_BY" && Biggest(node) is { } sorted and >= QueryPlan.BigRows)
@@ -70,7 +71,7 @@ public static class DuckDbPlan
                 flags.Add(QueryPlanText.NestedLoop(outer));
             }
 
-            if (name == "CROSS_PRODUCT")
+            if (name == "CROSS_PRODUCT" && rows >= QueryPlan.BigRows && Smallest(node) > 1)
             {
                 flags.Add(QueryPlanText.CrossProduct(rows));
             }
@@ -85,25 +86,19 @@ public static class DuckDbPlan
         }
     }
 
-    /// <summary>The most rows any direct input of <paramref name="node"/> is estimated to bring (through PROJECTIONs).</summary>
-    private static double? Biggest(JsonElement node)
-    {
-        double? most = null;
-        if (node.TryGetProperty("children", out var children) && children.ValueKind == JsonValueKind.Array)
-        {
-            foreach (var child in children.EnumerateArray().Where(c => c.ValueKind == JsonValueKind.Object))
-            {
-                double? rows = child.TryGetProperty("extra_info", out var info) && info.ValueKind == JsonValueKind.Object ? QueryPlan.Number(Text(info, "Estimated Cardinality")) : null;
-                if (rows > (most ?? -1))
-                {
-                    most = rows;
-                }
-            }
-        }
+    /// <summary>A node's own estimate (<c>extra_info</c>'s <c>Estimated Cardinality</c>), or null.</summary>
+    private static double? Rows(JsonElement node) =>
+        node.ValueKind == JsonValueKind.Object && node.TryGetProperty("extra_info", out var info) ? PlanJson.Number(info, "Estimated Cardinality") : null;
 
-        return most;
-    }
+    /// <summary>The estimates of <paramref name="node"/>'s direct inputs (a PROJECTION input by its own estimate, the same rows as below it).</summary>
+    private static IEnumerable<double> Inputs(JsonElement node) =>
+        node.TryGetProperty("children", out var children) && children.ValueKind == JsonValueKind.Array
+            ? children.EnumerateArray().Select(Rows).OfType<double>()
+            : [];
 
-    private static string? Text(JsonElement node, string name) =>
-        node.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+    /// <summary>The most rows any direct input of <paramref name="node"/> is estimated to bring.</summary>
+    private static double? Biggest(JsonElement node) => Inputs(node).Select(r => (double?)r).Max();
+
+    /// <summary>The fewest rows any direct input of <paramref name="node"/> is estimated to bring (#50).</summary>
+    private static double? Smallest(JsonElement node) => Inputs(node).Select(r => (double?)r).Min();
 }

@@ -61,17 +61,27 @@ public sealed class SqlQueryTool : SqlTool
     /// <see cref="decimal"/>, else <see cref="double"/>), a boolean or null. A family whose placeholders are written otherwise
     /// passes its own <paramref name="readName"/> (the bound name, or null for none) and <paramref name="badName"/> sentence:
     /// SQLite's <c>:id</c>, <c>#id</c>, <c>a$b</c> and <c>$a(1)</c> (<see cref="Sqlite.SqliteReadOnlyGate.ParamName"/>, the fourth
-    /// 2026-10-04 review: the ASCII rule refused <c>{":id": 5}</c> and left such placeholders bound NULL).
+    /// 2026-10-04 review: the ASCII rule refused <c>{":id": 5}</c> and left such placeholders bound NULL). A name given twice but for case
+    /// (<c>id</c> and <c>@ID</c>) is refused while <paramref name="caseBlind"/> (2026-11-15, #28): SQL Server, MySQL, Oracle and PostgreSQL bind
+    /// names without regard to case, so the two could never bind apart. SQLite and DuckDB, whose names keep their case, pass false.
     /// </summary>
-    public static IReadOnlyList<SqlParameterValue>? ReadParameters(JsonElement values, out string? error, Func<string, string?>? readName = null, Func<string, string>? badName = null)
+    public static IReadOnlyList<SqlParameterValue>? ReadParameters(JsonElement values, out string? error, Func<string, string?>? readName = null, Func<string, string>? badName = null,
+        bool caseBlind = true)
     {
         error = null;
         var list = new List<SqlParameterValue>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var property in values.EnumerateObject())
         {
             if ((readName ?? ReadName)(property.Name) is not { } name)
             {
                 error = (badName ?? SqlText.BadParamName)(property.Name);
+                return null;
+            }
+
+            if (caseBlind && !seen.Add(name))
+            {
+                error = SqlText.RepeatedParamName(name);
                 return null;
             }
 
@@ -111,10 +121,13 @@ public sealed class SqlQueryTool : SqlTool
     }
 
     /// <summary>
-    /// <c>params</c> as the server families' explain tools take it (2026-11-14, the database-tools plan's #12): one object read by
-    /// <see cref="ReadParameters"/>'s rules; null with the <c>Error:</c> sentence (the family's <paramref name="badParams"/> for a wrong shape).
+    /// <c>params</c> as every database tool takes it (2026-11-14, the database-tools plan's #12; every query, execute and explain tool's since
+    /// 2026-11-15, the review's #43: five copies of the block): one object read by <see cref="ReadParameters"/>'s rules, with the family's
+    /// <paramref name="readName"/>, <paramref name="badName"/> and <paramref name="caseBlind"/>; null with the <c>Error:</c> sentence (the
+    /// family's <paramref name="badParams"/> for a wrong shape).
     /// </summary>
-    internal static IReadOnlyList<SqlParameterValue>? ReadParams(AIFunctionArguments arguments, Func<string, string> badParams, out string error)
+    internal static IReadOnlyList<SqlParameterValue>? ReadParams(AIFunctionArguments arguments, Func<string, string> badParams, out string error,
+        Func<string, string?>? readName = null, Func<string, string>? badName = null, bool caseBlind = true)
     {
         ArgumentNullException.ThrowIfNull(arguments);
         ArgumentNullException.ThrowIfNull(badParams);
@@ -130,7 +143,7 @@ public sealed class SqlQueryTool : SqlTool
             return [];
         }
 
-        if (ReadParameters(objects[0], out var bad) is not { } read)
+        if (ReadParameters(objects[0], out var bad, readName, badName, caseBlind) is not { } read)
         {
             error = bad ?? "";
             return null;
@@ -193,20 +206,9 @@ public sealed class SqlQueryTool : SqlTool
             return ClockText.BadInteger(MaxRowsArgument, raw);
         }
 
-        if (!ToolArguments.TryReadObjectList(arguments, ParamsArgument, out var objects, out var sent) || objects.Count > 1)
+        if (SqlQueryTool.ReadParams(arguments, SqlText.BadParams, out var error) is not { } parameters)
         {
-            return SqlText.BadParams(sent);
-        }
-
-        IReadOnlyList<SqlParameterValue> parameters = [];
-        if (objects.Count == 1)
-        {
-            if (ReadParameters(objects[0], out var error) is not { } read)
-            {
-                return error;
-            }
-
-            parameters = read;
+            return error;
         }
 
         if (ReadExport(arguments, out var export) is { } badExport)

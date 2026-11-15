@@ -1,7 +1,6 @@
 using System.Data.Common;
 using System.Globalization;
 using System.Text;
-using Microsoft.Data.SqlClient;
 
 namespace NeonSidekick.Sql;
 
@@ -27,38 +26,48 @@ public sealed record QueryPlan(IReadOnlyList<QueryPlanStep> Steps, IReadOnlyList
     /// </summary>
     public const int MaxPlanChars = 4 * 1024 * 1024;
 
-    /// <summary>The most characters an explain answer carries (2026-11-14): a short summary, lowered by <c>SQL query result max chars</c>.</summary>
+    /// <summary>The most characters an explain answer carries (2026-11-14): a short summary, lowered by <c>SQL query result max chars</c> (<see cref="Llm.Tools.SqlTool.AnswerChars"/>).</summary>
     public const int MaxAnswerChars = 6_000;
 
     /// <summary>
-    /// A plan cell read whole (to <see cref="MaxPlanChars"/>), in place of the grid's clipped and scrubbed one: SQL Server's showplan
-    /// column through <c>GetChars</c> in order (the reader runs with SequentialAccess), any other by its value's text. NULL is empty.
+    /// A cell read whole (to <see cref="MaxPlanChars"/>), in place of the grid's clipped and scrubbed one: a plan, or a name a catalog read
+    /// brings. Text goes through the provider's reader in chunks (2026-11-15, #100: SQL Server, under SequentialAccess, and PostgreSQL stream
+    /// it, so a huge value isn't loaded whole); any other value by its text. NULL is empty. A read that fails in any way but the server's
+    /// own error, a cancel or memory is empty too (#154, as the grid's cell is): the plan is then unreadable and a name is left out. Never
+    /// SQLite's text reader: it opens a blob on the column's table through <c>sqlite3_table_column_metadata</c>, which crashed the process
+    /// (an access violation, 2026-11-15) on an <c>EXPLAIN QUERY PLAN</c> row; a SQLite plan's rows are short, so it is read by its text.
     /// </summary>
     public static string WholeCell(DbDataReader reader, int ordinal)
     {
         ArgumentNullException.ThrowIfNull(reader);
-        if (reader.IsDBNull(ordinal))
+        try
+        {
+            if (reader.IsDBNull(ordinal))
+            {
+                return "";
+            }
+
+            if (reader is not Microsoft.Data.Sqlite.SqliteDataReader && reader.GetFieldType(ordinal) == typeof(string))
+            {
+                using var source = reader.GetTextReader(ordinal);
+                var text = new StringBuilder();
+                var buffer = new char[8192];
+                int read;
+                while (text.Length < MaxPlanChars && (read = source.Read(buffer, 0, Math.Min(buffer.Length, MaxPlanChars - text.Length))) > 0)
+                {
+                    text.Append(buffer, 0, read);
+                }
+
+                return text.ToString();
+            }
+
+            string value = Convert.ToString(reader.GetValue(ordinal), CultureInfo.InvariantCulture) ?? "";
+            return value.Length <= MaxPlanChars ? value : Files.TextCut.Safe(value, MaxPlanChars);
+        }
+        catch (Exception ex) when (ex is not (DbException or OperationCanceledException or OutOfMemoryException))
         {
             return "";
         }
-
-        if (reader is SqlDataReader sql && sql.GetFieldType(ordinal) == typeof(string))
-        {
-            var text = new StringBuilder();
-            var buffer = new char[8192];
-            long at = 0;
-            int read;
-            while (text.Length < MaxPlanChars && (read = (int)sql.GetChars(ordinal, at, buffer, 0, buffer.Length)) > 0)
-            {
-                text.Append(buffer, 0, Math.Min(read, MaxPlanChars - text.Length));
-                at += read;
-            }
-
-            return text.ToString();
-        }
-
-        string value = Convert.ToString(reader.GetValue(ordinal), CultureInfo.InvariantCulture) ?? "";
-        return value.Length <= MaxPlanChars ? value : value[..MaxPlanChars];
     }
 
     /// <summary>The plan text a run read: column <paramref name="column"/> of every row of its first result set, joined in order (a server may split one plan across rows).</summary>

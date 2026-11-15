@@ -23,7 +23,7 @@ public sealed class OracleIndexesTool : OracleTool
           "type": "object",
           "properties": {
             {{ConnectionProperty}},
-            "table": { "type": "string", "description": "Only this table's indexes; leave it out for the whole schema." }
+            "table": { "type": "string", "description": "Only this table's indexes; leave it out for the connection's whole schema or schemas." }
           }
         }
         """);
@@ -35,7 +35,7 @@ public sealed class OracleIndexesTool : OracleTool
     public override string Name => ToolName;
 
     public override string Description =>
-        "Lists the indexes of an Oracle table or of the connection's schema: kind, key columns, status and visibility, the optimizer's row and distinct-key counts, " +
+        "Lists the indexes of an Oracle table or of the connection's schema or schemas: kind, key columns, status and visibility, the optimizer's row and distinct-key counts, " +
         "with each one's recorded use when the account may read it (an index with none recorded is marked). Use it for questions about performance or indexing.";
 
     public override JsonElement JsonSchema => Schema;

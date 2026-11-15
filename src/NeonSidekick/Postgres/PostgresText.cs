@@ -110,7 +110,7 @@ public static class PostgresText
     /// <summary>A schema listed twice (#18).</summary>
     public static string RepeatedSchema(string schema) => $"\"schemas\" lists '{schema}' twice";
 
-    /// <summary>A list past <see cref="PostgresConnectionConfig.MaxSchemas"/> (#18).</summary>
+    /// <summary>A list past <see cref="Sql.SchemaLock.MaxSchemas"/> (#18).</summary>
     public static string TooManySchemas(int max) =>
         $"\"schemas\" lists more than {Invariant(max)} schemas; hold the connection to fewer, or leave the key out for every schema";
 
@@ -158,8 +158,6 @@ public static class PostgresText
             : $"Error: the SQL reads {named}, which can describe other schemas than {string.Join(", ", schemas)}, the ones this connection is held to; postgres_tables, postgres_columns and postgres_describe read their catalogs — and a table of {first} named {named} is written {first}.{named}";
     }
 
-    public static string CatalogUnderLock(string named, string schema) => CatalogUnderLock(named, [schema]);
-
     /// <summary>Upkeep over the whole database under a schema lock (2026-10-24, review H8). Pinned.</summary>
     public static string WholeUnderLock(string what, IReadOnlyList<string> schemas)
     {
@@ -169,16 +167,12 @@ public static class PostgresText
             : $"Error: the SQL runs {what}, which reaches every schema's tables, not only those of {string.Join(", ", schemas)}, the ones this connection is held to; name the table";
     }
 
-    public static string WholeUnderLock(string what, string schema) => WholeUnderLock(what, [schema]);
-
     /// <summary>CASCADE under a schema lock (2026-10-24, review H8). Pinned.</summary>
     public static string CascadeUnderLock(IReadOnlyList<string> schemas)
     {
         ArgumentNullException.ThrowIfNull(schemas);
         return $"Error: the SQL uses CASCADE, which drops or empties what depends on the object wherever it is, other schemas than {string.Join(", ", schemas)} among them; name each object to change instead";
     }
-
-    public static string CascadeUnderLock(string schema) => CascadeUnderLock([schema]);
 
     /// <summary>A placeholder run straight into a $ or a dot (2026-10-24, review F1, G11). Pinned.</summary>
     public static string PlaceholderRunOn(string text, int line, int column) =>
@@ -190,15 +184,9 @@ public static class PostgresText
 
     /// <summary>
     /// Why the read-back settings fail (H1), or null: <paramref name="readOnly"/> wants the read-only default on, every session the string rule
-    /// on and a statement timeout, and a schema lock the search path being <paramref name="schema"/> alone. Pure.
-    /// </summary>
-    public static string? SessionProblem(string defaultReadOnly, string conformingStrings, string statementTimeout, string schemas, bool readOnly, string? schema) =>
-        SessionProblemUnder(defaultReadOnly, conformingStrings, statementTimeout, schemas, readOnly, schema is null ? [] : [schema]);
-
-    /// <summary>
-    /// <see cref="SessionProblem(string, string, string, string, bool, string?)"/> for a lock of <paramref name="locks"/> (none: no lock;
-    /// 2026-11-14, #18): <paramref name="schemas"/> is <c>current_schemas(false)</c> joined by commas, which must be the list in its
-    /// order; a listed schema missing from it is named (<see cref="SchemasMissing"/>).
+    /// on and a statement timeout, and a schema lock of <paramref name="locks"/> (none: no lock; 2026-11-14, #18) the search path being the
+    /// list alone: <paramref name="schemas"/> is <c>current_schemas(false)</c> joined by commas, which must be the list in its order; a listed
+    /// schema missing from it is named (<see cref="SchemasMissing"/>). Pure. The one-schema overload went 2026-11-15 (#27).
     /// </summary>
     public static string? SessionProblemUnder(string defaultReadOnly, string conformingStrings, string statementTimeout, string schemas, bool readOnly, IReadOnlyList<string> locks)
     {
@@ -242,13 +230,9 @@ public static class PostgresText
     public static string OtherSchema(string named, IReadOnlyList<string> schemas) =>
         $"Error: the SQL names '{named}', another schema of this database (an alias spelled like it reads the same: rename it), but this connection is held to {HeldTo(schemas)}; another schema needs a connection of its own, or a place on the connection's schemas list, which the user adds";
 
-    public static string OtherSchema(string named, string schema) => OtherSchema(named, [schema]);
-
     /// <summary>A function that reads a table, schema or database named in a string, under a schema lock (the review, 2026-10-09). Pinned.</summary>
     public static string XmlExport(string named, IReadOnlyList<string> schemas) =>
         $"Error: the SQL uses {named}, which reads the table, schema or database its argument names, but this connection is held to {HeldTo(schemas)}; select from {(schemas.Count == 1 ? "the schema's" : "those schemas'")} tables instead";
-
-    public static string XmlExport(string named, string schema) => XmlExport(named, [schema]);
 
     /// <summary>
     /// A catalog that lists every schema's objects, or a function that describes one named in its argument, under a schema lock
@@ -257,27 +241,24 @@ public static class PostgresText
     public static string SchemaListing(string named, IReadOnlyList<string> schemas) =>
         $"Error: the SQL reads {named}, which lists or describes the objects of every schema in this database, but this connection is held to {HeldTo(schemas)}; postgres_tables, postgres_columns and postgres_describe read {(schemas.Count == 1 ? "the schema's own catalog" : "those schemas' own catalogs")}";
 
-    public static string SchemaListing(string named, string schema) => SchemaListing(named, [schema]);
-
     /// <summary>A tool's <c>schema</c> (or a <c>schema.name</c> table) naming another under a schema lock. Pinned.</summary>
     public static string SchemaElsewhere(string named, IReadOnlyList<string> schemas) =>
         $"Error: this connection is held to {HeldTo(schemas)}, so '{named}' is out of its reach; leave \"schema\" out or give {(schemas.Count == 1 ? schemas[0] : "one of " + string.Join(", ", schemas))}";
 
-    public static string SchemaElsewhere(string named, string schema) => SchemaElsewhere(named, [schema]);
-
     /// <summary>
     /// What else the role could reach (the wizard's test and <c>--postgres-check</c>, 2026-10-09): the other databases it may connect to
     /// (PUBLIC may connect to a new database unless that is revoked), the foreign servers it may use, and under a schema lock the other
-    /// schemas it may use; or that it reaches none. Pinned.
+    /// schemas it may use; or that it reaches none. <paramref name="locks"/> is the lock, empty for none (2026-11-15, the database-tools
+    /// review's #101: its joined text was told apart by a comma). Pinned.
     /// </summary>
-    public static string Reach(string database, string? schema, IReadOnlyList<string> databases, IReadOnlyList<string> servers, IReadOnlyList<string> schemas)
+    public static string Reach(string database, IReadOnlyList<string> locks, IReadOnlyList<string> databases, IReadOnlyList<string> servers, IReadOnlyList<string> schemas)
     {
+        ArgumentNullException.ThrowIfNull(locks);
         ArgumentNullException.ThrowIfNull(databases);
         ArgumentNullException.ThrowIfNull(servers);
         ArgumentNullException.ThrowIfNull(schemas);
         static string Names(IReadOnlyList<string> names) => string.Join(", ", names.Take(10)) + (names.Count > 10 ? $" and {Invariant(names.Count - 10)} more" : "");
-        // A lock of several schemas comes as its LockText, "a, b" (#18; a name holds no comma).
-        string place = string.IsNullOrWhiteSpace(schema) ? database : schema.Contains(',') ? $"{database} (schemas {schema.Trim()})" : database + "." + schema.Trim();
+        string place = locks.Count switch { 0 => database, 1 => database + "." + locks[0], _ => $"{database} (schemas {string.Join(", ", locks)})" };
         var parts = new List<string>();
         if (databases.Count > 0)
         {
@@ -289,14 +270,14 @@ public static class PostgresText
             parts.Add("use the foreign servers " + Names(servers));
         }
 
-        if (!string.IsNullOrWhiteSpace(schema) && schemas.Count > 0)
+        if (locks.Count > 0 && schemas.Count > 0)
         {
             parts.Add("use the schemas " + Names(schemas));
         }
 
         // An empty report says nothing more is in reach than the lists cover (the review, 2026-10-09): the system catalogs are every role's.
         return parts.Count == 0
-            ? $"The role reaches no other database, foreign server{(string.IsNullOrWhiteSpace(schema) ? "" : " or schema")} beyond {place} (the system catalogs aside)."
+            ? $"The role reaches no other database, foreign server{(locks.Count == 0 ? "" : " or schema")} beyond {place} (the system catalogs aside)."
             : $"The role could also {string.Join("; ", parts)}. The tools keep to {place}; a role granted only it is the lock the server keeps too.";
     }
 

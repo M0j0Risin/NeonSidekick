@@ -26,9 +26,6 @@ public sealed class PostgresConnectionConfig : Sql.ISignInConfig
 
     public const int MaxConnectTimeoutSeconds = 120;
 
-    /// <summary>The most schemas one entry's <see cref="Schemas"/> may list (2026-11-14, feature idea #18).</summary>
-    public const int MaxSchemas = 16;
-
     /// <summary>The JSON keys of the lock, as its refusals name them.</summary>
     public const string SchemaKey = "schema";
 
@@ -127,13 +124,8 @@ public sealed class PostgresConnectionConfig : Sql.ISignInConfig
     [JsonIgnore]
     public string? LockText => Locks is { Count: > 0 } locks ? string.Join(", ", locks) : null;
 
-    /// <summary>The wizard's lock (#18): none clears both keys, one is <see cref="Schema"/>, several <see cref="Schemas"/> (a one-schema file stays as it was).</summary>
-    public void HoldTo(IReadOnlyList<string> names)
-    {
-        ArgumentNullException.ThrowIfNull(names);
-        Schema = names.Count == 1 ? names[0] : null;
-        Schemas = names.Count > 1 ? [.. names] : null;
-    }
+    /// <summary>The wizard's lock (#18), kept in the entry's form (#29, <see cref="Sql.SchemaLock.Hold"/>).</summary>
+    public void HoldTo(IReadOnlyList<string> names) => (Schema, Schemas) = Sql.SchemaLock.Hold(names, asList: Schemas is not null);
 
     /// <summary>The reason this entry cannot connect, or null: no host, no database, no user, a schema it cannot set, a port, store, TLS mode or connect timeout out of range. Pure.</summary>
     [JsonIgnore]
@@ -194,8 +186,9 @@ public sealed class PostgresConnectionConfig : Sql.ISignInConfig
 
     /// <summary>
     /// The reason <paramref name="schema"/> cannot be on the session's search path, or null (none is fine): a space, a comma, a quote or a
-    /// backslash, which the session's options would split; or one of PostgreSQL's own schemas (2026-11-14, #18: <c>pg_*</c>,
-    /// <c>information_schema</c>, a <c>$</c>-led name), which the lock refuses anyway. <paramref name="key"/> is the key it came from.
+    /// backslash, which the session's options would split. <paramref name="key"/> is the key it came from. One of PostgreSQL's own schemas
+    /// passes here, as a single <c>schema</c> always did (2026-11-15, #160, the user's call: <c>"$user"</c> still loads); a <c>schemas</c>
+    /// element and the wizard's pick refuse them (<see cref="ListedProblem"/>).
     /// </summary>
     public static string? SchemaProblem(string? schema, string key = SchemaKey)
     {
@@ -205,12 +198,21 @@ public sealed class PostgresConnectionConfig : Sql.ISignInConfig
         }
 
         string s = schema.Trim();
-        if (s.Any(c => char.IsWhiteSpace(c) || c is ',' or '"' or '\\' or '\''))
-        {
-            return PostgresText.BadSchemaKey(s, key);
-        }
+        return s.Any(c => char.IsWhiteSpace(c) || c is ',' or '"' or '\\' or '\'') ? PostgresText.BadSchemaKey(s, key) : null;
+    }
 
-        return IsSystemSchema(s) ? PostgresText.SystemSchema(s, key) : null;
+    /// <summary><see cref="SchemaProblem"/>, then one of PostgreSQL's own schemas (2026-11-14, #18: <c>pg_*</c>, <c>information_schema</c>, a <c>$</c>-led name).</summary>
+    private static string? ListedProblem(string schema, string key) =>
+        SchemaProblem(schema, key) ?? (IsSystemSchema(schema.Trim()) ? PostgresText.SystemSchema(schema.Trim(), key) : null);
+
+    /// <summary>
+    /// The reason the wizard's picked <paramref name="names"/> cannot hold the connection, or null (none is no lock): one name is judged as a
+    /// <c>schema</c>, several as a <c>schemas</c> list, and one of PostgreSQL's own schemas is refused in both (2026-11-15, #160).
+    /// </summary>
+    public static string? PickProblem(IReadOnlyList<string?> names)
+    {
+        ArgumentNullException.ThrowIfNull(names);
+        return names.Count == 0 ? null : names.Count == 1 ? ListedProblem(names[0] ?? "", SchemaKey) : LockProblem(null, names);
     }
 
     /// <summary>Whether <paramref name="schema"/> is one of PostgreSQL's own: <c>pg_*</c>, <c>information_schema</c>, or <c>$</c>-led (<c>$user</c>).</summary>
@@ -221,8 +223,9 @@ public sealed class PostgresConnectionConfig : Sql.ISignInConfig
     }
 
     /// <summary>
-    /// The reason the lock's keys cannot hold the connection, or null: both keys, an empty list, more than <see cref="MaxSchemas"/>, a
-    /// blank, bad or system name (<see cref="SchemaProblem"/>), or one listed twice (exactly: <c>Sales</c> and <c>sales</c> are two).
+    /// The reason the lock's keys cannot hold the connection, or null: both keys, an empty list, more than <see cref="Sql.SchemaLock.MaxSchemas"/>, a
+    /// blank or bad name (<see cref="SchemaProblem"/>), a system name in the list (<see cref="ListedProblem"/>), or one listed twice
+    /// (exactly: <c>Sales</c> and <c>sales</c> are two).
     /// </summary>
     private string? SchemasProblem() => LockProblem(Schema, Schemas);
 
@@ -234,42 +237,10 @@ public sealed class PostgresConnectionConfig : Sql.ISignInConfig
             return SchemaProblem(schema);
         }
 
-        if (!string.IsNullOrWhiteSpace(schema))
-        {
-            return PostgresText.BothSchemaKeys;
-        }
-
-        if (list.Count == 0)
-        {
-            return PostgresText.EmptySchemas;
-        }
-
-        if (list.Count > MaxSchemas)
-        {
-            return PostgresText.TooManySchemas(MaxSchemas);
-        }
-
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        foreach (string? name in list)
-        {
-            if (string.IsNullOrWhiteSpace(name))
-            {
-                return PostgresText.BadSchemaKey(name?.Trim() ?? "", SchemasKey);
-            }
-
-            if (SchemaProblem(name, SchemasKey) is { } problem)
-            {
-                return problem;
-            }
-
-            if (!seen.Add(name.Trim()))
-            {
-                return PostgresText.RepeatedSchema(name.Trim());
-            }
-        }
-
-        return null;
+        return Sql.SchemaLock.ListProblem(schema, list, LockWords, static name => string.IsNullOrWhiteSpace(name) ? PostgresText.BadSchemaKey(name?.Trim() ?? "", SchemasKey) : ListedProblem(name, SchemasKey), static name => name);
     }
+
+    private static readonly Sql.SchemaLock.Words LockWords = new(PostgresText.BothSchemaKeys, PostgresText.EmptySchemas, PostgresText.TooManySchemas, PostgresText.RepeatedSchema);
 
     /// <summary>One name of the <c>search_path</c> a schema lock sets: a plain lower-case name as it is, any other in double quotes (its case kept).</summary>
     public static string SearchPath(string schema)

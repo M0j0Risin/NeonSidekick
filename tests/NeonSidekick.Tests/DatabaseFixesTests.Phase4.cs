@@ -38,8 +38,9 @@ public sealed class DatabaseAllowAndAuditTests : IDisposable
     public void TheSessionAllowsKey_NamesTheServer_AndASqliteFilesKeepsItsCase()
     {
         var family = MySqlStatementKinds.Family;
-        Assert.NotEqual(ChatScreen.DatabaseAllowKey(family, new ExecuteTarget("shop", true, "sales", "db1:3306")), ChatScreen.DatabaseAllowKey(family, new ExecuteTarget("shop", true, "sales", "db2:3306")));
-        Assert.Equal(ChatScreen.DatabaseAllowKey(family, new ExecuteTarget("shop", true, "sales", "db1:3306")), ChatScreen.DatabaseAllowKey(family, new ExecuteTarget("shop ", true, "sales", " db1:3306")));
+        Assert.NotEqual(ChatScreen.DatabaseAllowKey(family, new ExecuteTarget("shop", true, ["sales"], "db1:3306")), ChatScreen.DatabaseAllowKey(family, new ExecuteTarget("shop", true, ["sales"], "db2:3306")));
+        Assert.Equal(ChatScreen.DatabaseAllowKey(family, new ExecuteTarget("shop", true, ["sales"], "db1:3306")), ChatScreen.DatabaseAllowKey(family, new ExecuteTarget("shop ", true, ["sales"], " db1:3306")));
+        Assert.Equal("HR, OE", new ExecuteTarget("shop", true, ["HR", "OE"]).Place);   // #141: the key still reads the joined places
 
         using (CaseRule.Override(_ => true))
         {
@@ -89,7 +90,7 @@ public sealed class DatabaseAllowAndAuditTests : IDisposable
         {
             ServerExecuteHooks Hooks(Func<CancellationToken, Task<SqlRun>> execute) => new(
                 (_, _) => null, _ => [ServerStatementKind.Data], _ => null, body => body,
-                () => (new ExecuteTarget("shop", true, "sales"), null),
+                () => (new ExecuteTarget("shop", true, ["sales"]), null),
                 (_, _) => Task.FromResult("read"), (_, token) => execute(token), _ => "Error: refused");
             var family = MySqlStatementKinds.Family;
             string[] all = [.. ServerStatementKinds.Names];

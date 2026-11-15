@@ -37,6 +37,12 @@ public abstract class SqlTool : ServerTool<SqlAccess>
         return Math.Clamp(effective.QueryResultMaxChars, AppSettingsData.MinQueryResultMaxChars, AppSettingsData.MaxQueryResultMaxChars);
     }
 
+    /// <summary>
+    /// The most characters an explain or profile answer carries (2026-11-15, the database-tools review's #57: the one cap, where eleven
+    /// tools wrote it out): <see cref="NeonSidekick.Sql.QueryPlan.MaxAnswerChars"/>, or <see cref="ResultChars"/> when that is lower.
+    /// </summary>
+    public static int AnswerChars(AppSettingsData effective) => Math.Min(NeonSidekick.Sql.QueryPlan.MaxAnswerChars, ResultChars(effective));
+
     /// <summary>The batch timeout: the setting, clamped to the range a hand-edited value may have left.</summary>
     public static int TimeoutSeconds(AppSettingsData effective)
     {

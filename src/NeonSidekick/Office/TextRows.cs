@@ -16,14 +16,21 @@ public enum TextTableFormat
 }
 
 /// <summary>
-/// What the CSV and JSON writers share (2026-11-14, the database-tools plan's #13): the header made unique (<see cref="SheetWriter.Unique"/>,
-/// case-blind, as a workbook's, so a JSON key never repeats), the row cap a sheet has (<see cref="SheetWriter.MaxDataRows"/>, so <c>to</c>'s
-/// counts and its cut note read the same for every format), the cells cut at <see cref="XlsxValue.MaxChars"/> counted, and each kind's text.
+/// What the CSV and JSON writers share (2026-11-14, the database-tools plan's #13): the header made well formed, then unique
+/// (<see cref="SheetWriter.Unique"/>, case-blind, as a workbook's, so a JSON key never repeats; 2026-11-15, #113: in that order, so two names
+/// that differ only in a lone surrogate can't both become the same key), the row cap a sheet has (<see cref="SheetWriter.MaxDataRows"/>, so
+/// <c>to</c>'s counts and its cut note read the same for every format), the cells cut at <see cref="CellCap"/> counted, and each kind's text.
 /// They can't be an <see cref="IWorkbookJob"/>, whose sheet is the workbook's own writer, so <see cref="Finish"/> is theirs.
 /// </summary>
 public abstract class TextRows : ISheetRows, IDisposable
 {
-    private readonly IReadOnlySet<int> _utc;
+    /// <summary>
+    /// The most characters a CSV or JSON cell holds (2026-11-15, the database-tools review's #32: Excel's 32,767 cut text no such file
+    /// limits): a bound on the memory one cell takes, a mebi-character.
+    /// </summary>
+    public const int CellCap = 1_048_576;
+
+    private readonly HashSet<int> _utc;
     private bool _started;
     private bool _finished;
     private long _rows;
@@ -31,7 +38,23 @@ public abstract class TextRows : ISheetRows, IDisposable
     private bool _rowsCut;
 
     /// <param name="utc">The columns whose date-times are UTC (a header the family marked <c> (UTC)</c>, taken off it): written with a <c>Z</c>.</param>
-    protected TextRows(IReadOnlySet<int>? utc) => _utc = utc ?? new HashSet<int>();
+    protected TextRows(IReadOnlySet<int>? utc) => _utc = utc is null ? [] : [.. utc];
+
+    public int CellChars => CellCap;
+
+    /// <summary>
+    /// Column <paramref name="column"/> marked as holding UTC date-times, before <see cref="Begin"/> (2026-11-15, the database-tools review's
+    /// #46: the export's family hook says so, and the name stays as the server gave it).
+    /// </summary>
+    public void MarkUtc(int column)
+    {
+        if (_started)
+        {
+            throw new InvalidOperationException("The header is already written.");
+        }
+
+        _utc.Add(column);
+    }
 
     /// <summary>The header as written: made unique, every lone surrogate U+FFFD.</summary>
     protected string[] Columns { get; private set; } = [];
@@ -50,7 +73,7 @@ public abstract class TextRows : ISheetRows, IDisposable
         }
 
         _started = true;
-        Columns = [.. SheetWriter.Unique(columns).Select(XlsxValue.WellFormed)];
+        Columns = [.. SheetWriter.Unique([.. columns.Select(XlsxValue.WellFormed)])];
         WriteHeader();
         return null;
     }
@@ -127,15 +150,21 @@ public abstract class TextRows : ISheetRows, IDisposable
         return new TimeOnly(ticks).ToString("HH:mm:ss.FFFFFFF", CultureInfo.InvariantCulture);
     }
 
-    /// <summary>A duration from Excel's days: the hours however many (<c>36:00:00</c>), then minutes and seconds, a fraction only when there is one.</summary>
+    /// <summary>
+    /// A duration from Excel's days: the hours however many (<c>36:00:00</c>), then minutes and seconds, a fraction only when there is one;
+    /// a negative one with its sign (<c>-26:00:00</c>, 2026-11-15, #144: it was clamped to 0).
+    /// </summary>
     public static string DurationText(double days)
     {
-        long ticks = Math.Max(0, (long)Math.Round(days * TimeSpan.TicksPerDay));
+        double scaled = Math.Round(days * TimeSpan.TicksPerDay);
+        long ticks = scaled >= long.MaxValue ? long.MaxValue : scaled <= -long.MaxValue ? -long.MaxValue : (long)scaled;
+        string sign = ticks < 0 ? "-" : "";
+        ticks = Math.Abs(ticks);
         var span = TimeSpan.FromTicks(ticks);
         long hours = ticks / TimeSpan.TicksPerHour;
         string fraction = span.Ticks % TimeSpan.TicksPerSecond == 0 ? ""
             : "." + (span.Ticks % TimeSpan.TicksPerSecond).ToString("0000000", CultureInfo.InvariantCulture).TrimEnd('0');
-        return hours.ToString(CultureInfo.InvariantCulture) + ":" + span.Minutes.ToString("00", CultureInfo.InvariantCulture)
+        return sign + hours.ToString(CultureInfo.InvariantCulture) + ":" + span.Minutes.ToString("00", CultureInfo.InvariantCulture)
             + ":" + span.Seconds.ToString("00", CultureInfo.InvariantCulture) + fraction;
     }
 

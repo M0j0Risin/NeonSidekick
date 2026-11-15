@@ -20,7 +20,7 @@ public sealed class OracleColumnsTool : OracleTool
         {
           "type": "object",
           "properties": {
-            "pattern": { "type": "string", "description": "The column name, or part of it (EMAIL, CUSTOMER_ID), or a LIKE pattern with %; case-insensitive." },
+            "pattern": { "type": "string", "description": "The column name, or part of it (EMAIL, CUSTOMER_ID), or a LIKE pattern with %; case-insensitive. OWNER.COLUMN (HR.EMAIL) narrows to one schema." },
             {{ConnectionProperty}}
           },
           "required": ["pattern"]

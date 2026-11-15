@@ -50,12 +50,9 @@ public sealed class OracleConnectionConfig : Sql.ISignInConfig
     /// </summary>
     public List<string>? Schemas { get; set; }
 
-    /// <summary>The most schemas one entry's <see cref="Schemas"/> may list.</summary>
-    public const int MaxSchemas = 16;
-
     /// <summary>
-    /// Oracle's own schemas, refused in <see cref="Schema"/> and <see cref="Schemas"/> as written (#18); the session's check reads
-    /// <c>ALL_USERS.ORACLE_MAINTAINED</c> for the rest (<see cref="OracleText.SchemaCheck"/>).
+    /// Oracle's own schemas, refused in <see cref="Schemas"/> and the wizard's pick as written (#18; a saved single <see cref="Schema"/> is
+    /// not, #159); the session's check reads <c>ALL_USERS.ORACLE_MAINTAINED</c> for the rest of a list (<see cref="OracleText.SchemaCheck"/>).
     /// </summary>
     public static readonly IReadOnlySet<string> SystemSchemas = new HashSet<string>(StringComparer.Ordinal)
     {
@@ -153,47 +150,32 @@ public sealed class OracleConnectionConfig : Sql.ISignInConfig
     }
 
     /// <summary>
-    /// The reason the lock's keys cannot hold the connection, or null (#18): both keys, an empty list, more than <see cref="MaxSchemas"/>,
-    /// a name that is no identifier, one of <see cref="SystemSchemas"/>, or a name listed twice (as the dictionary spells it: <c>hr</c>
-    /// and <c>HR</c> are one). The wizard's typed answer goes through it too.
+    /// The reason the lock's keys cannot hold the connection, or null (#18): both keys, an empty list, more than <see cref="Sql.SchemaLock.MaxSchemas"/>,
+    /// a name that is no identifier, a <c>schemas</c> element naming one of <see cref="SystemSchemas"/>, or a name listed twice (as the
+    /// dictionary spells it: <c>hr</c> and <c>HR</c> are one). A single <c>schema</c> is judged as before the list came (2026-11-15, #159,
+    /// the user's call): a valid name is enough, so a file that already held a connection to <c>XDB</c> still loads. The wizard asks
+    /// <see cref="PickProblem"/>, which refuses Oracle's own schemas either way.
     /// </summary>
     public static string? LockProblem(string? schema, IReadOnlyList<string?>? schemas)
     {
         if (schemas is null)
         {
-            return string.IsNullOrWhiteSpace(schema) ? null : NameProblem(schema.Trim(), "schema");
+            return string.IsNullOrWhiteSpace(schema) || OracleIdentifier.Quote(schema.Trim()) is not null ? null : OracleText.BadSchemaKey(schema.Trim());
         }
 
-        if (!string.IsNullOrWhiteSpace(schema))
-        {
-            return OracleText.BothSchemaKeys;
-        }
+        return Sql.SchemaLock.ListProblem(schema, schemas, LockWords, static name => NameProblem(name?.Trim() ?? "", "schemas"), static name => OracleIdentifier.Normalize(name)!);
+    }
 
-        if (schemas.Count == 0)
-        {
-            return OracleText.EmptySchemas;
-        }
+    private static readonly Sql.SchemaLock.Words LockWords = new(OracleText.BothSchemaKeys, OracleText.EmptySchemas, OracleText.TooManySchemas, OracleText.RepeatedSchema);
 
-        if (schemas.Count > MaxSchemas)
-        {
-            return OracleText.TooManySchemas(MaxSchemas);
-        }
-
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        foreach (string? name in schemas)
-        {
-            if (NameProblem(name?.Trim() ?? "", "schemas") is { } problem)
-            {
-                return problem;
-            }
-
-            if (!seen.Add(OracleIdentifier.Normalize(name)!))
-            {
-                return OracleText.RepeatedSchema(name!.Trim());
-            }
-        }
-
-        return null;
+    /// <summary>
+    /// The reason the wizard's picked <paramref name="names"/> cannot hold the connection, or null (none is no lock): one name is judged as a
+    /// <c>schema</c>, several as a <c>schemas</c> list, and one of <see cref="SystemSchemas"/> is refused in both (2026-11-15, #159).
+    /// </summary>
+    public static string? PickProblem(IReadOnlyList<string?> names)
+    {
+        ArgumentNullException.ThrowIfNull(names);
+        return names.Count == 0 ? null : names.Count == 1 ? NameProblem(names[0]?.Trim() ?? "", "schema") : LockProblem(null, names);
     }
 
     private static string? NameProblem(string name, string key) =>
@@ -201,13 +183,15 @@ public sealed class OracleConnectionConfig : Sql.ISignInConfig
         : SystemSchemas.Contains(OracleIdentifier.Normalize(name)!) ? OracleText.SystemSchema(name, key)
         : null;
 
-    /// <summary>The wizard's lock (#18): none clears both keys, one is <see cref="Schema"/>, several <see cref="Schemas"/> (a one-schema file stays as it was).</summary>
-    public void HoldTo(IReadOnlyList<string> names)
-    {
-        ArgumentNullException.ThrowIfNull(names);
-        Schema = names.Count == 1 ? names[0] : null;
-        Schemas = names.Count > 1 ? [.. names] : null;
-    }
+    /// <summary>
+    /// Whether the entry names its own lock, <see cref="Schema"/> or <see cref="Schemas"/> (2026-11-15, the database-tools review's #136: the
+    /// test was written out in three places); else it works in the user's own schema.
+    /// </summary>
+    [JsonIgnore]
+    public bool NamesLock => Schemas is { Count: > 0 } || !string.IsNullOrWhiteSpace(Schema);
+
+    /// <summary>The wizard's lock (#18), kept in the entry's form (#29, <see cref="Sql.SchemaLock.Hold"/>).</summary>
+    public void HoldTo(IReadOnlyList<string> names) => (Schema, Schemas) = Sql.SchemaLock.Hold(names, asList: Schemas is not null);
 
     /// <summary>
     /// The ODP.NET connection string for this entry, <paramref name="password"/> the resolved one

@@ -5,7 +5,7 @@ The Docker containers the live tests run against. Each live test skips unless it
 | Container | What it is | Image |
 |---|---|---|
 | `sql_server_dev` | SQL Server 2022 with AdventureWorks2022, for the SQL tools. | [microsoft/mssql-server](https://hub.docker.com/r/microsoft/mssql-server) (`mcr.microsoft.com/mssql/server:2022-latest`) |
-| `oracle_free_dev` | Oracle Database 23ai Free (`FREEPDB1`), for the Oracle tools. A second schema whose tables the app user can SELECT turns on the multi-schema half of the live facts. | [gvenzl/oracle-free](https://hub.docker.com/r/gvenzl/oracle-free) (`23-slim-faststart`) |
+| `oracle_free_dev` | Oracle Database 23ai Free (`FREEPDB1`), for the Oracle tools. A second schema the app user can SELECT from turns on the multi-schema facts; REFERENCES on `SHOP.CUSTOMERS`, the cross-schema key. | [gvenzl/oracle-free](https://hub.docker.com/r/gvenzl/oracle-free) (`23-slim-faststart`) |
 | `mysql_dev` | MySQL 8.4, for the MySQL tools; also the container the Docker tools' live tests inspect. | [mysql](https://hub.docker.com/_/mysql) (`8.4`) |
 | `mariadb_dev` | MariaDB 11, for the MySQL tools' MariaDB side. | [mariadb](https://hub.docker.com/_/mariadb) (`11`) |
 | `postgres_dev` | PostgreSQL 17, for the PostgreSQL tools. | [postgres](https://hub.docker.com/_/postgres) (`17`) |

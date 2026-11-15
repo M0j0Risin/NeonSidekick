@@ -81,11 +81,54 @@ public sealed class OfficeWriterTests
         Assert.Equal(XlsxKind.Time, XlsxValue.From(new TimeOnly(18, 0)).Kind);
         Assert.Equal(XlsxKind.Time, XlsxValue.From(TimeSpan.FromHours(23)).Kind);
         Assert.Equal(XlsxKind.Duration, XlsxValue.From(TimeSpan.FromHours(36)).Kind);
-        Assert.Equal(XlsxKind.Text, XlsxValue.From(TimeSpan.FromHours(-1)).Kind);
+        Assert.Equal(XlsxKind.Duration, XlsxValue.From(TimeSpan.FromHours(-1)).Kind);   // 2026-11-15, #144: one form for the column
         Assert.Equal("2026-10-29T09:30:00+02:00", XlsxValue.From(new DateTimeOffset(2026, 10, 29, 9, 30, 0, TimeSpan.FromHours(2))).Text);
         Assert.Null(NumberFormats.Serial(new DateTime(1900, 2, 28), date1904: false));
         Assert.Equal(61, NumberFormats.Serial(new DateTime(1900, 3, 1), date1904: false));
         Assert.Equal(0, NumberFormats.Serial(new DateTime(1904, 1, 1), date1904: true));
+    }
+
+    [Fact]
+    public void ANegativeDuration_IsItsSignedText_InASheet()
+    {
+        // 2026-11-15, the database-tools review's #144: Excel shows a negative [h]:mm:ss number as ####, so the sheet writes the text.
+        Assert.Equal("-26:00:00", TextRows.DurationText(XlsxValue.From(TimeSpan.FromHours(-26)).Number));
+        Assert.Equal("-0:00:01.5", TextRows.DurationText(XlsxValue.From(TimeSpan.FromSeconds(-1.5)).Number));
+        Assert.Equal("36:00:00", TextRows.DurationText(XlsxValue.From(TimeSpan.FromHours(36)).Number));
+        byte[] book = NewBook(["d"], [[XlsxValue.From(TimeSpan.FromHours(-26))]]);
+        Assert.Contains("-26:00:00", Part(book, "xl/worksheets/sheet1.xml"));
+    }
+
+    [Fact]
+    public void TheCellCap_IsTheCallers_WhenGiven()
+    {
+        // 2026-11-15, the database-tools review's #32: a CSV or JSON file's export keeps text Excel would cut.
+        string big = new('a', XlsxValue.MaxChars + 10);
+        Assert.False(XlsxValue.OfText(big, TextRows.CellCap).Cut);
+        Assert.True(XlsxValue.OfText(big).Cut);
+        Assert.False(XlsxValue.OfBytes(new byte[40_000], maxChars: TextRows.CellCap).Cut);
+        Assert.True(XlsxValue.OfBytes(new byte[40_000]).Cut);
+        Assert.False(XlsxValue.From(big, maxChars: TextRows.CellCap).Cut);
+    }
+
+    [Fact]
+    public void TheOneWalk_KeepsPairs_AndReplacesWhatEachAsks()
+    {
+        // 2026-11-15, #68: Escape, WellFormed and XmlSafe share one surrogate walk.
+        Assert.Equal("a_x0001__x005F_x0041_\uFFFD\U0001F600", XlsxValue.Escape("a\u0001_x0041_\uD800\U0001F600"));
+        Assert.Equal("\U0001F600\uFFFD", XlsxValue.WellFormed("\U0001F600\uDC00"));
+        Assert.Equal("a\uFFFDb", XlsxValue.XmlSafe("a\u0001\uD800b"));
+        Assert.Same("plain", XlsxValue.WellFormed("plain"));
+    }
+
+    [Fact]
+    public void AFractionsExactSpelling_IsTheDecimalsOwn()
+    {
+        // 2026-11-15, the database-tools review's #112: a reader's ".5…" is written "0.5…" in a CSV or JSON file.
+        Assert.True(XlsxValue.TryExcelNumber(".50000000000000000001", out var value));
+        Assert.Equal("0.50000000000000000001", value.Exact);
+        Assert.True(XlsxValue.TryExcelNumber("1e-30", out var tiny));
+        Assert.Equal(XlsxKind.Number, tiny.Kind);
     }
 
     [Fact]

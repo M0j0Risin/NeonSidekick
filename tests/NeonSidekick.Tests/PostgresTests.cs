@@ -277,18 +277,18 @@ public sealed class PostgresToolsTests : IDisposable
 
         config.Schema = "sales";
         Assert.Contains("- shop: 127.0.0.1:1 / shop (schema sales alone), user reader", tools.OfType<PostgresConnectionsTool>().Single().Describe());
-        Assert.Equal(PostgresText.SchemaElsewhere("public", "sales"), await tools.OfType<PostgresTablesTool>().Single().DescribeAsync(null, "public", null, CancellationToken.None));
-        Assert.Equal(PostgresText.SchemaElsewhere("public", "sales"), await tools.OfType<PostgresDescribeTool>().Single().DescribeAsync("public.orders", null, null, CancellationToken.None));
-        Assert.Equal(PostgresText.SchemaElsewhere("public", "sales"), (string)(await tools.OfType<PostgresIndexesTool>().Single().InvokeAsync(new AIFunctionArguments { ["schema"] = "public" }))!);
+        Assert.Equal(PostgresText.SchemaElsewhere("public", ["sales"]), await tools.OfType<PostgresTablesTool>().Single().DescribeAsync(null, "public", null, CancellationToken.None));
+        Assert.Equal(PostgresText.SchemaElsewhere("public", ["sales"]), await tools.OfType<PostgresDescribeTool>().Single().DescribeAsync("public.orders", null, null, CancellationToken.None));
+        Assert.Equal(PostgresText.SchemaElsewhere("public", ["sales"]), (string)(await tools.OfType<PostgresIndexesTool>().Single().InvokeAsync(new AIFunctionArguments { ["schema"] = "public" }))!);
         // An asked schema is spelled exactly since 2026-10-24 (the database review's P4): Sales is another schema than sales.
-        Assert.Equal(PostgresText.SchemaElsewhere("Sales", "sales"), await tools.OfType<PostgresTablesTool>().Single().DescribeAsync(null, "Sales", null, CancellationToken.None));
-        Assert.Equal(PostgresText.OtherSchema("information_schema", "sales"), await query.RunAsync("SELECT * FROM information_schema.tables", null, [], null, CancellationToken.None));
+        Assert.Equal(PostgresText.SchemaElsewhere("Sales", ["sales"]), await tools.OfType<PostgresTablesTool>().Single().DescribeAsync(null, "Sales", null, CancellationToken.None));
+        Assert.Equal(PostgresText.OtherSchema("information_schema", ["sales"]), await query.RunAsync("SELECT * FROM information_schema.tables", null, [], null, CancellationToken.None));
         Assert.StartsWith("Error: could not connect to shop", await query.RunAsync("SELECT * FROM sales.orders o WHERE o.id = 1", null, [], null, CancellationToken.None));   // the alias sends for the names
         Assert.StartsWith("Error: could not connect to shop", await tools.OfType<PostgresDescribeTool>().Single().DescribeAsync("SALES.orders", null, null, CancellationToken.None));
 
         // The names come back (2026-10-24, the database review's S3): the refusal is the boundary's, the own schema's goes on to the run.
         access.Names.Seed([["sales"], ["archive"]]);
-        Assert.Equal(PostgresText.OtherSchema("archive", "sales"), await query.RunAsync("SELECT * FROM archive.orders", null, [], null, CancellationToken.None));
+        Assert.Equal(PostgresText.OtherSchema("archive", ["sales"]), await query.RunAsync("SELECT * FROM archive.orders", null, [], null, CancellationToken.None));
         Assert.StartsWith("Error: could not connect to shop", await query.RunAsync("SELECT * FROM sales.orders o WHERE o.id = 1", null, [], null, CancellationToken.None));
     }
 
@@ -306,7 +306,7 @@ public sealed class PostgresToolsTests : IDisposable
     public void TheBoundary_HoldsALockedSchema(string sql, string? schema, string? other)
     {
         string[] visible = ["sales", "archive", "public", "pg_catalog", "information_schema"];
-        Assert.Equal(other is null ? null : PostgresText.OtherSchema(other, schema!), PostgresBoundary.Check(sql, schema, visible));
+        Assert.Equal(other is null ? null : PostgresText.OtherSchema(other, [schema!]), PostgresBoundary.CheckUnder(sql, schema is null ? [] : [schema], visible));
     }
 
     /// <summary>
@@ -316,14 +316,14 @@ public sealed class PostgresToolsTests : IDisposable
     [Fact]
     public void TheBoundary_ACaseTwin_AndTheXmlExports()
     {
-        Assert.Equal(PostgresText.OtherSchema("Sales", "sales"), PostgresBoundary.Check("SELECT * FROM \"Sales\".t", "sales", ["sales", "Sales"]));
-        Assert.Null(PostgresBoundary.Check("SELECT * FROM SALES.t", "sales", ["sales", "Sales"]));   // a bare word folds to sales, the lock's own
-        Assert.Equal(PostgresText.OtherSchema("sales", "Sales"), PostgresBoundary.Check("SELECT * FROM sales.t", "Sales", ["sales", "Sales"]));
+        Assert.Equal(PostgresText.OtherSchema("Sales", ["sales"]), PostgresBoundary.CheckUnder("SELECT * FROM \"Sales\".t", ["sales"], ["sales", "Sales"]));
+        Assert.Null(PostgresBoundary.CheckUnder("SELECT * FROM SALES.t", ["sales"], ["sales", "Sales"]));   // a bare word folds to sales, the lock's own
+        Assert.Equal(PostgresText.OtherSchema("sales", ["Sales"]), PostgresBoundary.CheckUnder("SELECT * FROM sales.t", ["Sales"], ["sales", "Sales"]));
         foreach (string export in new[] { "schema_to_xml('archive', true, false, '')", "table_to_xml('archive.t', true, false, '')", "database_to_xml(true, false, '')" })
         {
             string name = export[..export.IndexOf('(', StringComparison.Ordinal)];
-            Assert.Equal(PostgresText.XmlExport(name, "sales"), PostgresBoundary.Qualifiers("SELECT " + export, "sales").Refused);
-            Assert.Null(PostgresBoundary.Check("SELECT " + export, null, []));
+            Assert.Equal(PostgresText.XmlExport(name, ["sales"]), PostgresBoundary.QualifiersUnder("SELECT " + export, ["sales"]).Refused);
+            Assert.Null(PostgresBoundary.CheckUnder("SELECT " + export, [], []));
         }
     }
 
@@ -339,9 +339,9 @@ public sealed class PostgresToolsTests : IDisposable
     [InlineData("SELECT * FROM pg_locks", "pg_locks")]
     public void TheBoundary_RefusesTheClustersCatalogs_LockedOrNot(string sql, string named)
     {
-        Assert.Equal(PostgresText.ServerCatalog(named), PostgresBoundary.Check(sql, null, []));
-        Assert.Equal(PostgresText.ServerCatalog(named), PostgresBoundary.Qualifiers(sql, "sales").Refused);
-        Assert.Null(PostgresBoundary.Check("SELECT relname FROM pg_class", null, []));
+        Assert.Equal(PostgresText.ServerCatalog(named), PostgresBoundary.CheckUnder(sql, [], []));
+        Assert.Equal(PostgresText.ServerCatalog(named), PostgresBoundary.QualifiersUnder(sql, ["sales"]).Refused);
+        Assert.Null(PostgresBoundary.CheckUnder("SELECT relname FROM pg_class", [], []));
     }
 
     /// <summary>The review of 2026-10-11: under a schema lock the catalogs that list every schema's objects read another schema's names, as <c>information_schema</c> did.</summary>
@@ -352,8 +352,8 @@ public sealed class PostgresToolsTests : IDisposable
     [InlineData("SELECT pg_get_viewdef('payroll.v'::regclass)", "pg_get_viewdef")]
     public void TheBoundary_RefusesTheSchemaListings_UnderALock(string sql, string named)
     {
-        Assert.Equal(PostgresText.SchemaListing(named, "sales"), PostgresBoundary.Check(sql, "sales", ["sales", "payroll"]));
-        Assert.Null(PostgresBoundary.Check(sql, null, []));
+        Assert.Equal(PostgresText.SchemaListing(named, ["sales"]), PostgresBoundary.CheckUnder(sql, ["sales"], ["sales", "payroll"]));
+        Assert.Null(PostgresBoundary.CheckUnder(sql, [], []));
     }
 
     [Fact]
@@ -457,8 +457,27 @@ internal static class LivePostgres
                 listed.ExecuteNonQuery();
             }
 
+            // Later fixtures (2026-11-15, the database-tools review), made on every run as ns_other's are: a name in two schemas, which the search
+            // path's order settles (#19); a table partitioned two levels deep, estimated from its leaves (#62); a domain over uuid, counted as a
+            // uuid is (#114).
+            using (var later = new NpgsqlCommand(
+                "CREATE TABLE IF NOT EXISTS public.ns_twin (a int); CREATE TABLE IF NOT EXISTS ns_other.ns_twin (b int);"
+                + "CREATE TABLE IF NOT EXISTS ns_parted (id int NOT NULL, region text NOT NULL, n int) PARTITION BY LIST (region);"
+                + "CREATE TABLE IF NOT EXISTS ns_parted_east PARTITION OF ns_parted FOR VALUES IN ('east') PARTITION BY RANGE (id);"
+                + "CREATE TABLE IF NOT EXISTS ns_parted_east_lo PARTITION OF ns_parted_east FOR VALUES FROM (0) TO (100);"
+                + "CREATE TABLE IF NOT EXISTS ns_parted_east_hi PARTITION OF ns_parted_east FOR VALUES FROM (100) TO (1000);"
+                + "CREATE TABLE IF NOT EXISTS ns_parted_west PARTITION OF ns_parted FOR VALUES IN ('west');"
+                + "INSERT INTO ns_parted SELECT g, CASE WHEN g % 2 = 0 THEN 'east' ELSE 'west' END, g % 5 FROM generate_series(1, 200) g WHERE NOT EXISTS (SELECT 1 FROM ns_parted);"
+                + "DO $$ BEGIN CREATE DOMAIN ns_uid AS uuid; EXCEPTION WHEN duplicate_object THEN NULL; END $$;"
+                + "CREATE TABLE IF NOT EXISTS ns_doms (id int PRIMARY KEY, ref ns_uid);"
+                + "INSERT INTO ns_doms VALUES (1, '00000000-0000-0000-0000-000000000001'), (2, '00000000-0000-0000-0000-000000000002'), (3, '00000000-0000-0000-0000-000000000001') ON CONFLICT DO NOTHING", connection))
+            {
+                later.ExecuteNonQuery();
+            }
+
             // The planner's counts (2026-11-14, postgres_profile): a table never analyzed has none, and the profile's TABLESAMPLE runs only on an estimate.
-            using (var analyze = new NpgsqlCommand("ANALYZE ns_customers; ANALYZE ns_orders", connection))
+            // A partitioned table's ANALYZE reaches its partitions too.
+            using (var analyze = new NpgsqlCommand("ANALYZE ns_customers; ANALYZE ns_orders; ANALYZE ns_parted", connection))
             {
                 analyze.ExecuteNonQuery();
             }
@@ -544,17 +563,72 @@ public sealed class LivePostgresTests
         Assert.Contains("| tags | text[] | 2 (67%) | — | — | — | — |", orders);
         Assert.Contains("| notes | text | 2 (67%) | 1 (unique) | first | first |  |", orders);
 
-        TableProfile.SampleAbove = 1;
+        _tools.OfType<PostgresProfileTool>().Single().SampleAbove = 1;
+        Assert.Matches(@"^public\.ns_orders: from (a sample of ~\d+|the first [12]) of (about 3|more than 1) rows", await Invoke<PostgresProfileTool>(("table", "ns_orders")));
+
+        Assert.StartsWith("Error:", await Invoke<PostgresProfileTool>(("table", "ns_nope")));
+    }
+
+    /// <summary>
+    /// The later fixtures (2026-11-15, the database-tools review): a name in two listed schemas resolves to the one first on the search path
+    /// (#19); a domain over uuid is counted as a uuid is (#114); a table partitioned two levels deep is estimated from its leaves, so the
+    /// lowered threshold samples it as "about 200 rows" (#62; without the estimate it would read "more than 1").
+    /// </summary>
+    [LivePostgresFact]
+    public async Task TheSearchPathsOrder_ADomain_AndAPartitionedEstimate()
+    {
+        var c = LivePostgres.Config!;
+        async Task<string> Describe(params string[] schemas)
+        {
+            var listed = new PostgresConnectionConfig { Host = c.Host, Port = c.Port, Database = c.Database, User = c.User, Password = c.Password, SslMode = c.SslMode, ConnectTimeoutSeconds = c.ConnectTimeoutSeconds, Schemas = [.. schemas] };
+            var tools = ChatScreen.PostgresTools(new PostgresAccess(() => new PostgresCatalog([new PostgresNamedConnection("live", listed, "test")], [])), () => _settings);
+            return (string)(await tools.OfType<PostgresDescribeTool>().Single().InvokeAsync(new AIFunctionArguments(new Dictionary<string, object?> { ["table"] = "ns_twin" })))!;
+        }
+
+        Assert.StartsWith("ns_other.ns_twin (", await Describe("ns_other", "public"));
+        Assert.StartsWith("public.ns_twin (", await Describe("public", "ns_other"));
+
+        Assert.Matches(@"\| ref \| ns_uid \| 0 \| 2 \|", await Invoke<PostgresProfileTool>(("table", "ns_doms")));
+
+        _tools.OfType<PostgresProfileTool>().Single().SampleAbove = 1;
+        Assert.Matches(@"^public\.ns_parted: from (a sample of ~\d+|the first 1) of about 200 rows", await Invoke<PostgresProfileTool>(("table", "ns_parted"), ("top", 0)));
+    }
+
+    /// <summary>
+    /// A column the role may not read is left out of the profile, not a failure of the whole call (2026-11-15, the database-tools review's
+    /// #123). <c>postgres</c> bypasses column privileges, so a role is made with SELECT on two of ns_customers' columns, signed in as, and
+    /// dropped after, its sessions ended first.
+    /// </summary>
+    [LivePostgresFact]
+    public async Task Profile_LeavesOutAColumnTheRoleMayNotRead()
+    {
+        string role = "ns_limited_" + Guid.NewGuid().ToString("N")[..12];
+        string password = Guid.NewGuid().ToString("N");
+        var c = LivePostgres.Config!;
+        await using var admin = PostgresAccess.Build(Environment.GetEnvironmentVariable(LivePostgres.Variable)!);
+        async Task Exec(string sql)
+        {
+            await using var command = admin.CreateCommand(sql);
+            await command.ExecuteNonQueryAsync();
+        }
+
+        await Exec($"CREATE ROLE {role} LOGIN PASSWORD '{password}'");
         try
         {
-            Assert.Matches(@"^public\.ns_orders: from (a sample of ~\d+|the first 1) of about 3 rows", await Invoke<PostgresProfileTool>(("table", "ns_orders")));
+            await Exec($"GRANT SELECT (id, name) ON public.ns_customers TO {role}");
+            var limited = new PostgresConnectionConfig { Host = c.Host, Port = c.Port, Database = c.Database, User = role, Password = WindowsCredentials.Protect(password).Value ?? password, SslMode = c.SslMode, ConnectTimeoutSeconds = c.ConnectTimeoutSeconds };
+            var tools = ChatScreen.PostgresTools(new PostgresAccess(() => new PostgresCatalog([new PostgresNamedConnection("live", limited, "test")], [])), () => _settings);
+            string profile = (string)(await tools.OfType<PostgresProfileTool>().Single().InvokeAsync(new AIFunctionArguments(new Dictionary<string, object?> { ["table"] = "ns_customers" })))!;
+            Assert.StartsWith("public.ns_customers: 2 rows (exact) · 2 columns · live/", profile);
+            Assert.Contains("| name | text | 0 |", profile);
+            Assert.DoesNotContain("email", profile);
         }
         finally
         {
-            TableProfile.SampleAbove = 100_000;
+            await Exec($"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE usename = '{role}'");
+            await Exec($"REVOKE ALL ON public.ns_customers FROM {role}");
+            await Exec($"DROP ROLE {role}");
         }
-
-        Assert.StartsWith("Error:", await Invoke<PostgresProfileTool>(("table", "ns_nope")));
     }
 
     [LivePostgresFact]
@@ -596,8 +670,8 @@ public sealed class LivePostgresTests
         Assert.Contains("| {public} |", await query.RunAsync("SELECT current_schemas(false)::text AS path", null, [], null, CancellationToken.None));
         Assert.StartsWith("1 row", await query.RunAsync("SELECT count(o.id) FROM ns_orders o", null, [], null, CancellationToken.None));
         Assert.StartsWith("1 row", await query.RunAsync("SELECT count(*) FROM public.ns_orders", null, [], null, CancellationToken.None));
-        Assert.Equal(PostgresText.OtherSchema("information_schema", "public"), await query.RunAsync("SELECT * FROM information_schema.tables", null, [], null, CancellationToken.None));
-        Assert.Equal(PostgresText.OtherSchema("ns_other", "public"), await query.RunAsync("SELECT * FROM ns_other.t", null, [], null, CancellationToken.None));   // S13: found by the names read
+        Assert.Equal(PostgresText.OtherSchema("information_schema", ["public"]), await query.RunAsync("SELECT * FROM information_schema.tables", null, [], null, CancellationToken.None));
+        Assert.Equal(PostgresText.OtherSchema("ns_other", ["public"]), await query.RunAsync("SELECT * FROM ns_other.t", null, [], null, CancellationToken.None));   // S13: found by the names read
         Assert.Contains("| public |", (string)(await tools.OfType<PostgresSchemasTool>().Single().InvokeAsync(new AIFunctionArguments()))!);
     }
 

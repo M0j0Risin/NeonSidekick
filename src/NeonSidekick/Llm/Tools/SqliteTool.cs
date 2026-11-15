@@ -38,8 +38,9 @@ public abstract class SqliteTool : ServerTool<SqliteAccess>
     }
 
     /// <summary>Runs the app's own statements on the call's database, capped at <see cref="SqliteAccess.MaxCatalogRows"/>.</summary>
-    protected async Task<SqlRun> CatalogAsync(string? database, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, CancellationToken cancellationToken) =>
-        SqlText.CatalogRun(await Files.RunAsync(database, statements, parameters, SqliteAccess.MaxCatalogRows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false));
+    protected async Task<SqlRun> CatalogAsync(string? database, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, CancellationToken cancellationToken,
+        Func<System.Data.Common.DbDataReader, int, string>? readCell = null) =>
+        SqlText.CatalogRun(await Files.RunAsync(database, statements, parameters, SqliteAccess.MaxCatalogRows, TimeoutSeconds(Effective), cancellationToken, readCell).ConfigureAwait(false));
 }
 
 /// <summary>
@@ -277,28 +278,8 @@ public sealed class SqliteQueryTool : SqliteTool
     /// <c>params</c> as <c>sqlite_query</c> and <c>sqlite_execute</c> take it: one object, each name read as SQLite reads a
     /// placeholder's; null with the <c>Error:</c> sentence in <paramref name="error"/>.
     /// </summary>
-    internal static IReadOnlyList<SqlParameterValue>? ReadParams(AIFunctionArguments arguments, out string error)
-    {
-        error = "";
-        if (!ToolArguments.TryReadObjectList(arguments, ParamsArgument, out var objects, out var sent) || objects.Count > 1)
-        {
-            error = SqliteText.BadParams(sent);
-            return null;
-        }
-
-        if (objects.Count == 0)
-        {
-            return [];
-        }
-
-        if (SqlQueryTool.ReadParameters(objects[0], out var bad, SqliteReadOnlyGate.ParamName, SqliteText.BadParamName) is not { } read)
-        {
-            error = bad ?? "";
-            return null;
-        }
-
-        return read;
-    }
+    internal static IReadOnlyList<SqlParameterValue>? ReadParams(AIFunctionArguments arguments, out string error) =>
+        SqlQueryTool.ReadParams(arguments, SqliteText.BadParams, out error, SqliteReadOnlyGate.ParamName, SqliteText.BadParamName, caseBlind: false);
 }
 
 /// <summary>
@@ -345,16 +326,18 @@ public sealed class SqliteExplainTool : SqliteTool
             return refused;
         }
 
-        var run = await Files.RunAsync(database, [SqlitePlan.Prefix + SqliteReadOnlyGate.Body(sql)], parameters, SqliteAccess.MaxCatalogRows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);
+        // The detail read whole (#155); a plan past the read's rows says so (#165).
+        var effective = Effective;
+        var run = await Files.RunAsync(database, [SqlitePlan.Prefix + SqliteReadOnlyGate.Body(sql)], parameters, SqliteAccess.MaxCatalogRows, TimeoutSeconds(effective), cancellationToken,
+            readCell: QueryPlan.WholeCell).ConfigureAwait(false);
         if (run.Outcome != SqlOutcome.Ok)
         {
             return SqliteText.Error(run);
         }
 
-        int cap = Math.Min(QueryPlan.MaxAnswerChars, SqlTool.ResultChars(Effective));
-        return run.Grids.Count > 0 && SqlitePlan.Parse(run.Grids[0]) is { } plan
-            ? QueryPlanText.Answer(plan, run.Connection, run.Database, run.Elapsed, cap)
-            : QueryPlanText.Unreadable(run.Connection, run.Database, run.Elapsed, string.Join("\n", run.Grids.SelectMany(g => g.Rows).Select(r => string.Join(" | ", r))));
+        var plan = run.Grids.Count > 0 ? SqlitePlan.Parse(run.Grids[0]) : null;
+        string raw = string.Join("\n", run.Grids.SelectMany(g => g.Rows).Select(r => string.Join(" | ", r)));
+        return ExplainAnswer.Of(plan, run, raw, effective, run.Grids is [{ More: true }, ..] ? QueryPlanText.PlanCut(SqliteAccess.MaxCatalogRows) : null);
     }
 
     protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
@@ -372,7 +355,8 @@ public sealed class SqliteExplainTool : SqliteTool
 /// <summary>
 /// <c>sqlite_profile(table, database?, columns?, top?)</c> (2026-11-14, the database-tools plan's #14), <see cref="SqlProfileTool"/>'s SQLite
 /// twin: the table found as <c>sqlite_describe</c> finds it, the SQL the app's own (<see cref="SqliteProfile"/>), on the file opened read-only;
-/// a file has no row estimate, so it is counted first (bounded), and a big one profiled by its first rows.
+/// a file has no row estimate, so it is read as its first rows, one past the cap: fewer back is the whole table, and a big one is profiled by
+/// its first rows.
 /// </summary>
 public sealed class SqliteProfileTool : SqliteTool
 {
@@ -396,6 +380,9 @@ public sealed class SqliteProfileTool : SqliteTool
     {
     }
 
+    /// <summary>The rows a profile reads at most. Settable so the tests read a small file as a big one.</summary>
+    internal long SampleAbove { get; set; } = TableProfile.DefaultSampleAbove;
+
     public override string Name => ToolName;
 
     public override string Description =>
@@ -406,12 +393,15 @@ public sealed class SqliteProfileTool : SqliteTool
 
     public async Task<string> ProfileAsync(string table, string? database, IReadOnlyList<string>? columns, int top, CancellationToken cancellationToken)
     {
+        var watch = System.Diagnostics.Stopwatch.StartNew();
         if (string.IsNullOrWhiteSpace(table))
         {
             return SqliteText.NoTable;
         }
 
-        var found = await CatalogAsync(database, [SqliteCatalogQueries.Resolve], [new SqlParameterValue("name", table.Trim())], cancellationToken).ConfigureAwait(false);
+        var effective = Effective;
+        int timeout = TimeoutSeconds(effective);
+        var found = await CatalogAsync(database, [SqliteCatalogQueries.Resolve], [new SqlParameterValue("name", table.Trim())], cancellationToken, readCell: TableProfile.CatalogCell).ConfigureAwait(false);
         if (found.Outcome != SqlOutcome.Ok)
         {
             return SqliteText.Error(found);
@@ -422,19 +412,28 @@ public sealed class SqliteProfileTool : SqliteTool
             return SqliteText.TableNotFound(table.Trim(), found.Connection);
         }
 
-        var effective = Effective;
-        int timeout = TimeoutSeconds(effective);
-        var catalog = await Files.RunAsync(database, [SqliteProfile.Catalog], [new SqlParameterValue("name", row[0])], SqliteAccess.MaxCatalogRows, timeout, cancellationToken).ConfigureAwait(false);
-        if (catalog.Outcome != SqlOutcome.Ok)
+        if (SqlDeadline.Left(watch, timeout) is not (> 0 and var left))
         {
-            return SqliteText.Error(catalog);
+            return TableProfileText.Stopped(row[0], "", timeout);
         }
 
-        // Types are dynamic: every column takes every measure.
-        var all = catalog.Grids.Count > 0 ? catalog.Grids[0].Rows.Select(r => new ProfileColumn(r[0], r[1] == SqlText.Null ? "" : r[1], ProfileMeasure.Full)).ToList() : [];
+        var catalog = await Files.RunAsync(database, [SqliteProfile.Catalog], [new SqlParameterValue("name", row[0])], SqliteAccess.MaxCatalogRows, left, cancellationToken,
+            readCell: TableProfile.CatalogCell).ConfigureAwait(false);
+        if (catalog.Outcome != SqlOutcome.Ok)
+        {
+            return catalog.Outcome == SqlOutcome.Timeout ? TableProfileText.Stopped(row[0], catalog.Connection, timeout) : SqliteText.Error(catalog);
+        }
+
+        // Types are dynamic: a column takes every measure but a BLOB's.
+        var listed = catalog.Grids.Count > 0 ? catalog.Grids[0] : null;
+        var all = listed?.Rows.Select(r => new ProfileColumn(r[0], r[1], SqliteProfile.Measure(r[1]))).ToList() ?? [];
         var dialect = SqliteProfile.Instance;
         var request = new TableProfile.Request(row[0], dialect.Quote(row[0]), row[1], all, columns, top, null, timeout,
-            Math.Min(QueryPlan.MaxAnswerChars, SqlTool.ResultChars(effective)), SqliteDescribeTool.ToolName, StringComparison.OrdinalIgnoreCase);
+            SqlTool.AnswerChars(effective), SqliteDescribeTool.ToolName, watch)
+        {
+            SampleAbove = SampleAbove,
+            ColumnsCut = listed?.More == true,
+        };
         return await TableProfile.RunAsync(request, dialect,
             (statements, seconds, token) => Files.RunAsync(database, statements, [], SqliteAccess.MaxCatalogRows, seconds, token),
             SqliteText.Error, cancellationToken).ConfigureAwait(false);

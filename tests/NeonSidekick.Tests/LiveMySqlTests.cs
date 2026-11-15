@@ -60,6 +60,17 @@ internal static class LiveMySql
                 }
             }
 
+            // An INVISIBLE column on ns_audit (2026-11-15, the database-tools review; MySQL 8.0.23+, MariaDB 10.3+), made on the first run that
+            // lacks it, which the profile leaves out.
+            using (var invisible = new MySqlCommand("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ns_audit' AND COLUMN_NAME = 'secret'", connection))
+            {
+                if (Convert.ToInt32(invisible.ExecuteScalar(), CultureInfo.InvariantCulture) == 0)
+                {
+                    using var add = new MySqlCommand("ALTER TABLE ns_audit ADD COLUMN secret VARCHAR(20) INVISIBLE", connection);
+                    add.ExecuteNonQuery();
+                }
+            }
+
             Database = builder.Database;
             Config = new MySqlConnectionConfig
             {
@@ -154,17 +165,16 @@ public sealed class LiveMySqlTests
         Assert.Contains("| notes | text | 2 (67%) | — | — | — | — |", orders);
         Assert.Matches(@"\| total \| decimal\(12,2\) \| 0 \| 3 \(unique\) \| 7(\.00)? \| 42\.50? \|", orders);
 
-        TableProfile.SampleAbove = 1;
-        try
-        {
-            Assert.StartsWith("ns_orders: from the first 1 of ", await Invoke<MySqlProfileTool>(("table", "ns_orders")));
-        }
-        finally
-        {
-            TableProfile.SampleAbove = 100_000;
-        }
+        // TABLE_ROWS may read 0 before InnoDB's statistics: then the first cap + 1 rows.
+        _tools.OfType<MySqlProfileTool>().Single().SampleAbove = 1;
+        Assert.Matches(@"^ns_orders: from the first [12] of ", await Invoke<MySqlProfileTool>(("table", "ns_orders")));
 
         Assert.StartsWith("Error:", await Invoke<MySqlProfileTool>(("table", "mysql.user")));
+
+        // An INVISIBLE column (2026-11-15, the database-tools review): left out of the list, so out of the SELECT.
+        string audit = await Invoke<MySqlProfileTool>(("table", "ns_audit"));
+        Assert.Contains(" · 1 column · ", audit);
+        Assert.DoesNotContain("secret", audit);
     }
 
     [LiveMySqlFact]

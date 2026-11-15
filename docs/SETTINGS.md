@@ -799,7 +799,7 @@ The six database families, each read-only unless you choose `read-write` and the
 
 | Setting | What it does | Default |
 |---|---|---|
-| SQL tools | Offers the SQL Server tools (connections, tables, columns, describe, relationships, indexes, query) over `sql.json`'s connections, each held to its own database. | off |
+| SQL tools | Offers the SQL Server tools (connections, tables, columns, describe, relationships, indexes, query, explain, profile) over `sql.json`'s connections, each held to its own database. | off |
 | SQL mode | `read-only`: the tools only read. `read-write`: `sql_execute` too, on connections marked `"access": "readwrite"`, each change asking you ([Read-write mode](TOOLS.md#read-write-mode)). | `read-only` |
 | SQL statements allowed | Under `read-write`, the kinds of statement `sql_execute` may run (a checklist). | changing data, creating, reading |
 | SQL connections offered | A checklist of both `sql.json` files' connections; none until you tick one. A hidden connection is invisible to every tool. | empty |
@@ -834,12 +834,12 @@ The other database tabs work like this one, over `mysql.json`, `sqlite.json`, `d
 
 | Setting | What it does | Default |
 |---|---|---|
-| PostgreSQL tools | Offers the PostgreSQL tools, each connection held to its own database (and to one schema when its entry names one). | off |
+| PostgreSQL tools | Offers the PostgreSQL tools, each connection held to its own database (and to its schema or schemas when its entry names them). | off |
 | PostgreSQL mode | As *SQL mode*, with `postgres_execute`. | `read-only` |
 | PostgreSQL statements allowed | As *SQL statements allowed*, for `postgres_execute`. | changing data, creating, reading |
 | PostgreSQL connections offered | As *SQL connections offered*. | empty |
 | PostgreSQL set password | As *SQL set password*. | — |
-| PostgreSQL add/edit connection | The wizard; the database is required, *Schemas* optional (none: every schema). Its test warns when the role could change data. See [PostgreSQL](TOOLS.md#postgresql). | — |
+| PostgreSQL add/edit connection | The wizard; the database is required, *Schemas* optional (none: every schema), the first ticked first on the search path ([keys](INTERFACE.md#pane-keys)). Its test warns when the role could change data. See [PostgreSQL](TOOLS.md#postgresql). | — |
 | PostgreSQL %-mention enabled | Lists the PostgreSQL connections in the `%` list too. | on |
 | PostgreSQL max rows | As *SQL max rows*, for `postgres_query`. | 100 |
 | PostgreSQL query timeout (s) | How long one statement may run (1–600). A profile's passes share it. | 30 |
@@ -850,12 +850,12 @@ The other database tabs work like this one, over `mysql.json`, `sqlite.json`, `d
 
 | Setting | What it does | Default |
 |---|---|---|
-| Oracle tools | Offers the Oracle tools, each connection held to its one schema. | off |
+| Oracle tools | Offers the Oracle tools, each connection held to its schema or schemas. | off |
 | Oracle mode | As *SQL mode*, with `oracle_execute`. | `read-only` |
 | Oracle statements allowed | As *SQL statements allowed*, for `oracle_execute`. | changing data, creating, reading |
 | Oracle connections offered | As *SQL connections offered*. | empty |
 | Oracle set password | As *SQL set password*. | — |
-| Oracle add/edit connection | The wizard; *Schemas* ticks the ones the connection may reach (none: the user's own). Its test warns when the account could change data. See [Oracle](TOOLS.md#oracle). | — |
+| Oracle add/edit connection | The wizard; *Schemas* ticks the ones the connection may reach (none: the user's own), the first ticked current ([keys](INTERFACE.md#pane-keys)). Its test warns when the account could change data. See [Oracle](TOOLS.md#oracle). | — |
 | Oracle %-mention enabled | Lists the Oracle connections in the `%` list too. | on |
 | Oracle max rows | As *SQL max rows*, for `oracle_query`. | 100 |
 | Oracle query timeout (s) | How long one statement may run on the server (1–600). A profile's passes share it. | 30 |
@@ -866,7 +866,7 @@ The other database tabs work like this one, over `mysql.json`, `sqlite.json`, `d
 
 | Setting | What it does | Default |
 |---|---|---|
-| SQLite tools | Offers the SQLite tools (databases, tables, describe, query) over the databases `sqlite.json` names. While on, the shell and file tools keep out of SQLite files ([SQLite](TOOLS.md#sqlite)). | off |
+| SQLite tools | Offers the SQLite tools (databases, tables, describe, query, explain, profile) over the databases `sqlite.json` names. While on, the shell and file tools keep out of SQLite files ([SQLite](TOOLS.md#sqlite)). | off |
 | SQLite mode | `read-only`: the tools only read. `read-write`: `sqlite_execute` too, one change per call, each asking first. | `read-only` |
 | SQLite statements allowed | Under `read-write`, the kinds of statement `sqlite_execute` may run (a checklist). | changing data, creating, reading |
 | SQLite databases offered | Which `sqlite.json` databases the model sees; none until you tick one. | empty |
@@ -882,7 +882,7 @@ The other database tabs work like this one, over `mysql.json`, `sqlite.json`, `d
 
 | Setting | What it does | Default |
 |---|---|---|
-| DuckDB tools | Offers the DuckDB tools (databases, tables, describe, query) over the databases `duckdb.json` names and the working directory's data files. While on, the shell and file tools keep out of DuckDB files ([DuckDB](TOOLS.md#duckdb)). | off |
+| DuckDB tools | Offers the DuckDB tools (databases, tables, describe, query, explain, profile) over the databases `duckdb.json` names and the working directory's data files. While on, the shell and file tools keep out of DuckDB files ([DuckDB](TOOLS.md#duckdb)). | off |
 | DuckDB mode | `read-only`: the tools only read. `read-write`: `duckdb_execute` too, one change per call, each asking first. | `read-only` |
 | DuckDB statements allowed | Under `read-write`, the kinds of statement `duckdb_execute` may run (a checklist). | changing data, creating, reading |
 | DuckDB databases offered | Which `duckdb.json` databases the model sees; none until you tick one. | empty |

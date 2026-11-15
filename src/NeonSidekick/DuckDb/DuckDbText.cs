@@ -230,6 +230,12 @@ public static class DuckDbText
     // ─── arguments ──────────────────────────────────────────────────────────────
 
     public const string NoTable = "Error: give the table or view in \"table\"";
+
+    /// <summary><c>duckdb_profile</c>'s empty <c>table</c>: it also takes a data file.</summary>
+    public const string NoProfileSource = "Error: give the table, view or data file (data/sales.csv) to profile in \"table\".";
+
+    /// <summary>What lists a data file's columns, for <c>duckdb_profile</c>'s unknown-column refusal (2026-11-15, #164).</summary>
+    public const string DescribeFile = "duckdb_query with DESCRIBE SELECT * FROM the file";
     public static string BadParamName(string name) => $"Error: '{name}' is not a valid parameter name; give the name as the SQL writes it after its $, e.g. \"id\" for $id";
     public static string BadParams(string raw) => $"Error: \"params\" must be one object of names and values, e.g. {{\"id\": 5}} for $id (got {Clip(raw, 200)})";
     public static string TableNotFound(string table, string database) => $"Error: no table or view '{table}' in {database}; duckdb_tables lists them";

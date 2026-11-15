@@ -306,6 +306,9 @@ public static class SqlText
     public static string BadMaxRows(int min, int max) => $"Error: max_rows must be {Invariant(min)} to {Invariant(max)}";
     public static string BadParams(string raw) => $"Error: \"params\" must be one object of names and values, e.g. {{\"id\": 5, \"name\": \"x\"}} for @id and @name (got {Clip(raw, 200)})";
     public static string BadParamName(string name) => $"Error: '{name}' is not a valid parameter name; use letters, digits and _ (bound as @name)";
+    /// <summary>A params name given twice but for case (#28): the servers bind names without regard to case.</summary>
+    public static string RepeatedParamName(string name) => $"Error: '{name}' is given twice in params (names are matched whatever their case); give each once";
+
     public static string BadParamValue(string name) => $"Error: the value of '{name}' must be a string, a number, true, false or null";
     public static string TableNotFound(string table, string connection, string database) => $"Error: no table or view '{table}' in {connection}/{database}; sql_tables lists them";
     public static string TableAmbiguous(string table, IEnumerable<string> candidates) => $"Error: '{table}' matches more than one table or view; give the schema: {string.Join(", ", candidates)}";

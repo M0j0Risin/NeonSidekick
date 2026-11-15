@@ -399,8 +399,7 @@ public static class DuckDbReadOnlyGate
         Tokenize(sql ?? "", out _) is { } tokens && Lead(tokens) is int lead and >= 0 && tokens[lead].Kind == TokenKind.Word ? tokens[lead].Text : null;
 
     /// <summary>Whether a read's statement is an EXPLAIN (its columns are text already, and it cannot be wrapped in a subquery).</summary>
-    public static bool IsExplain(string sql) =>
-        Tokenize(sql ?? "", out _) is { } tokens && Lead(tokens) is int lead and >= 0 && IsWord(tokens, lead, "EXPLAIN");
+    public static bool IsExplain(string sql) => string.Equals(LeadWord(sql), "EXPLAIN", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Whether the statement has a RETURNING clause (its rows are the answer and the count of a change).</summary>
     public static bool Returns(string sql) =>

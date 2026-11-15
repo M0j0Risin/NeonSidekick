@@ -74,16 +74,10 @@ public static class OracleBoundary
     }
 
     /// <summary>
-    /// What of <paramref name="sql"/> the database must be asked about: its qualifiers but the schema <paramref name="place"/>, and its
-    /// words with a dictionary prefix that the schema does not qualify — none of either for most statements.
+    /// What of <paramref name="sql"/> the database must be asked about: its qualifiers but the schemas <paramref name="places"/> (2026-11-14,
+    /// #18: a qualifier naming any is its own), and its words with a dictionary prefix that no place qualifies — none of either for most
+    /// statements. The one-schema overloads went 2026-11-15 (the database-tools review's #27): only tests called them.
     /// </summary>
-    public static (IReadOnlyList<string> Heads, IReadOnlyList<string> Dictionary) Qualifiers(string sql, string place)
-    {
-        ArgumentNullException.ThrowIfNull(place);
-        return Qualifiers(sql, [place]);
-    }
-
-    /// <summary><see cref="Qualifiers(string, string)"/> for a connection held to <paramref name="places"/> (2026-11-14, #18): a qualifier naming any is its own.</summary>
     public static (IReadOnlyList<string> Heads, IReadOnlyList<string> Dictionary) Qualifiers(string sql, IReadOnlyList<string> places)
     {
         ArgumentNullException.ThrowIfNull(sql);
@@ -113,27 +107,9 @@ public static class OracleBoundary
     }
 
     /// <summary>
-    /// Null when <paramref name="sql"/> keeps to the schema <paramref name="place"/>, the database's names being <paramref name="names"/>
-    /// (<see cref="Names"/>' rows); else the <c>Error:</c> sentence. A text that does not lex passes: the gate refused it.
-    /// </summary>
-    public static string? Check(string sql, string place, IEnumerable<string[]> names)
-    {
-        ArgumentNullException.ThrowIfNull(names);
-        var rows = names.ToList();
-        return Check(sql, place, rows.Where(r => r[0] == UserKind).Select(r => r[1]), rows.Where(r => r[0] == ViewKind).Select(r => r[1]));
-    }
-
-    /// <summary>
-    /// Null when <paramref name="sql"/> keeps to the schema <paramref name="place"/>, the users in the database being
+    /// Null when <paramref name="sql"/> keeps to the schemas <paramref name="places"/> (#18), the users in the database being
     /// <paramref name="users"/> and its dictionary views <paramref name="views"/>; else the <c>Error:</c> sentence.
     /// </summary>
-    public static string? Check(string sql, string place, IEnumerable<string> users, IEnumerable<string> views)
-    {
-        ArgumentNullException.ThrowIfNull(place);
-        return Check(sql, [place], users, views);
-    }
-
-    /// <summary><see cref="Check(string, string, IEnumerable{string}, IEnumerable{string})"/> for a connection held to <paramref name="places"/> (#18).</summary>
     public static string? Check(string sql, IReadOnlyList<string> places, IEnumerable<string> users, IEnumerable<string> views)
     {
         ArgumentNullException.ThrowIfNull(users);
@@ -147,7 +123,10 @@ public static class OracleBoundary
         return CheckQualifiers(heads, dictionary, places, users, views);
     }
 
-    /// <summary><see cref="Check(string, string, IEnumerable{string[]})"/> for a connection held to <paramref name="places"/> (#18).</summary>
+    /// <summary>
+    /// Null when <paramref name="sql"/> keeps to the schemas <paramref name="places"/> (#18), the database's names being <paramref name="names"/>
+    /// (<see cref="Names"/>' rows); else the <c>Error:</c> sentence. A text that does not lex passes: the gate refused it.
+    /// </summary>
     public static string? Check(string sql, IReadOnlyList<string> places, IEnumerable<string[]> names)
     {
         ArgumentNullException.ThrowIfNull(names);
@@ -186,15 +165,9 @@ public static class OracleBoundary
     /// <summary>
     /// What is refused before any names are read (2026-10-24): a text that does not lex (mechanism 7: it passed "because the gate refused
     /// it"), an <see cref="Instance"/> package or view, a <see cref="XplanMembers"/> call, <c>CONTAINERS(</c>/<c>SHARDS(</c>, and a string
-    /// naming a repository path or another schema to XQuery (<c>fn:collection('oradb:/HR/T')</c>, C4). Null for the rest.
+    /// naming a repository path or another schema to XQuery (<c>fn:collection('oradb:/HR/T')</c>, C4), for a connection held to
+    /// <paramref name="places"/> (#18), whose refusals name the list. Null for the rest.
     /// </summary>
-    public static string? Refusal(string sql, string place)
-    {
-        ArgumentNullException.ThrowIfNull(place);
-        return Refusal(sql, [place]);
-    }
-
-    /// <summary><see cref="Refusal(string, string)"/> for a connection held to <paramref name="places"/> (#18), whose refusals name the list.</summary>
     public static string? Refusal(string sql, IReadOnlyList<string> places)
     {
         ArgumentNullException.ThrowIfNull(sql);

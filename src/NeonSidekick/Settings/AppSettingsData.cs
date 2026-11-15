@@ -2456,7 +2456,7 @@ public sealed class AppSettingsData
     // The SQLite tools (the user's pick of the integration ideas): read-only queries on SQLite files — the named databases of
     // sqlite.json (the profile's and the home's) and, with SqliteSandboxFiles on, any file in the working directory by its path.
 
-    /// <summary>Whether a turn offers the four SQLite tools (2026-10-04); read at each turn, no reconnect. Off by default. No variable.</summary>
+    /// <summary>Whether a turn offers the six SQLite tools (2026-10-04; <c>sqlite_explain</c> and <c>sqlite_profile</c> since 2026-11-14), and <c>sqlite_execute</c> under read-write; read at each turn, no reconnect. Off by default. No variable.</summary>
     public bool SqliteTools { get; set; }
 
     /// <summary>

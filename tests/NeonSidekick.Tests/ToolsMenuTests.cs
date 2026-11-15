@@ -722,7 +722,7 @@ public partial class ToolsMenuTests : IDisposable
         });
 
         // The Schemas step (2026-11-14, #18): the user's own first, then the others the account can see; a lower-case one quoted.
-        settings.ListOracleSchemas = (c, _) =>
+        settings.ListOracleSchemas = (c, _, _) =>
         {
             listed.Add(c);
             return Task.FromResult(new NeonSidekick.Sql.SqlRun(NeonSidekick.Sql.SqlOutcome.Ok, "", c.Name, "NEON", [new NeonSidekick.Sql.SqlGrid(["owner"], [["HR"], ["OE"], ["lab"]], false)], TimeSpan.Zero));
@@ -739,8 +739,8 @@ public partial class ToolsMenuTests : IDisposable
         Push(Keys.Enter);                         // the default timeout
         Push(Keys.Down, Keys.Enter);              // Schemas: NEON, HR, OE, "lab", Continue — HR ticked with Enter
         Push(Keys.Down, Keys.Char(' '));          // OE with Space
-        Push(Keys.Down, Keys.Down, Keys.Enter);   // Continue
-        Push(Keys.Down, Keys.Enter);              // which is current: OE
+        Push(Keys.Shift(ConsoleKey.Home));        // OE to the top: current (2026-11-15, #31: the order page went in the pane)
+        Push([.. Enumerable.Repeat(Keys.Down, 4), Keys.Enter]);   // Continue
         Push(Keys.Enter);                         // read, the default access (2026-10-05)
         Type("the container");
         Push(Keys.Down, Keys.Down, Keys.Enter);   // Test (under the two save rows, always both since 2026-10-01)
@@ -764,7 +764,9 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Null(unlocked.Schemas);                     // the listing runs with the lock cleared, the typed password in it
         Assert.Equal("s3cret", unlocked.Password);
         Assert.Contains(SettingsMenu.WizardSchemaKeys, Output);
-        Assert.Contains(SettingsMenu.OracleWizardCurrentQuestion, Output);
+        Assert.Contains(SettingsMenu.OracleWizardSchemaOrderNote, Output);
+        Assert.DoesNotContain(SettingsMenu.OracleWizardCurrentQuestion, Output);   // asked only without the pane
+        Assert.Contains(SettingsMenu.WizardSchemaListing("localhost:1521/FREEPDB1"), Output);   // #99
         Assert.Contains("\"lab\"", Output);
         Assert.Equal("\"lab\"", SettingsMenu.OracleWizardSpelling("lab"));
         Assert.Equal("HR", SettingsMenu.OracleWizardSpelling("HR"));
@@ -787,7 +789,7 @@ public partial class ToolsMenuTests : IDisposable
         _settings.Update(d => d.OracleConnectionsOffered = ["other"]);
         string home = NeonSidekick.Oracle.OracleConfigFile.GlobalPath(_settings.StorageDirectory);
         var (menu, _, settings) = PaneMenu(testOracle: (c, _) => Task.FromResult(NeonSidekick.Sql.SqlRun.Refused(NeonSidekick.Sql.SqlOutcome.ConnectFailed, "ORA-12541: no listener", c.Name)));
-        settings.ListOracleSchemas = (c, _) => Task.FromResult(NeonSidekick.Sql.SqlRun.Refused(NeonSidekick.Sql.SqlOutcome.ConnectFailed, "ORA-12541: no listener", c.Name));
+        settings.ListOracleSchemas = (c, _, _) => Task.FromResult(NeonSidekick.Sql.SqlRun.Refused(NeonSidekick.Sql.SqlOutcome.ConnectFailed, "ORA-12541: no listener", c.Name));
         OpenOracleRow(5);
         Push(Keys.Escape);                        // the first page: nothing written
         Push(Keys.Enter);                         // again

@@ -57,13 +57,20 @@ public static class PostgresCatalogQueries
     ];
 
     /// <summary>The user schemas the role may use, by name (2026-11-14, #18: the wizard's Schemas checklist, run with no lock).</summary>
-    public const string UsableSchemas =
-        "SELECT n.nspname FROM pg_namespace n WHERE " + UserSchemas + " AND has_schema_privilege(n.oid, 'USAGE') ORDER BY 1";
+    public const string UsableSchemas = "SELECT n.nspname FROM pg_namespace n WHERE " + Usable + " ORDER BY 1";
+
+    /// <summary>
+    /// <see cref="UsableSchemas"/> among <c>@saved</c> (2026-11-15, the database-tools review's #146): a saved schema past the listing's cap,
+    /// looked up by name before it is called missing. The same rule, so "usable" means what it means in the listing.
+    /// </summary>
+    public const string SavedSchemas = "SELECT n.nspname FROM pg_namespace n WHERE " + Usable + " AND n.nspname = ANY(@saved::text[]) ORDER BY 1";
+
+    private const string Usable = UserSchemas + " AND has_schema_privilege(n.oid, 'USAGE')";
 
     public const string Schemas =
         "SELECT n.nspname AS schema, count(c.oid) FILTER (WHERE c.relkind IN ('r','p','v','m','f')) AS tables, pg_get_userbyid(n.nspowner) AS owner " +
         "FROM pg_namespace n LEFT JOIN pg_class c ON c.relnamespace = n.oid WHERE " + UserSchemas + " AND has_schema_privilege(n.oid, 'USAGE') " +
-        "AND (@schema::text IS NULL OR n.nspname = @schema::text) AND " + InLock + " GROUP BY n.nspname, n.nspowner ORDER BY n.nspname";
+        "AND " + InLock + " GROUP BY n.nspname, n.nspowner ORDER BY n.nspname";
 
     /// <summary>
     /// The tables and views of a schema (or every user schema): a partition left out, its parent listed as a partitioned table (2026-10-24,
@@ -82,9 +89,13 @@ public static class PostgresCatalogQueries
         "JOIN pg_namespace n ON n.oid = c.relnamespace WHERE a.attnum > 0 AND NOT a.attisdropped AND c.relkind IN ('r','p','v','m','f') AND NOT c.relispartition AND " + UserSchemas + " " +
         "AND has_table_privilege(c.oid, 'SELECT') AND (@schema::text IS NULL OR n.nspname = @schema::text) AND " + InLock + " AND a.attname ILIKE @pattern::text ORDER BY 1, a.attnum";
 
-    /// <summary>The relations <c>@name</c> may mean (case-insensitive; <c>@schema</c> when given, exactly under a lock since 2026-10-24, review C8): schema, name, kind, whether the case matched, whether its schema is on the search path.</summary>
+    /// <summary>
+    /// The relations <c>@name</c> may mean (case-insensitive; <c>@schema</c> when given, exactly under a lock since 2026-10-24, review C8):
+    /// schema, name, kind, whether the case matched, and its schema's place on the search path, NULL off it (2026-11-15, #19: the lowest
+    /// wins, as PostgreSQL's own lookup).
+    /// </summary>
     public const string Resolve =
-        "SELECT n.nspname, c.relname, " + Kind + ", c.relname = @name::text, n.nspname = ANY(current_schemas(false)) FROM pg_class c " +
+        "SELECT n.nspname, c.relname, " + Kind + ", c.relname = @name::text, array_position(current_schemas(false), n.nspname) FROM pg_class c " +
         "JOIN pg_namespace n ON n.oid = c.relnamespace WHERE c.relkind IN ('r','p','v','m','f') AND " + UserSchemas + " " +
         "AND lower(c.relname) = lower(@name::text) AND (@schema::text IS NULL OR n.nspname = @schema::text OR @lock::text[] IS NULL AND lower(n.nspname) = lower(@schema::text)) " +
         "AND " + InLock + " ORDER BY 1, 2";

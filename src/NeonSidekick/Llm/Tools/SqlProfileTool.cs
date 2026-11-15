@@ -9,8 +9,8 @@ namespace NeonSidekick.Llm.Tools;
 /// <c>sql_profile(table, connection?, columns?, top?)</c> (2026-11-14, the database-tools plan's #14): one table or view's data at a glance —
 /// its rows, and per column the nulls, distinct values, min, max and most common values — in one answer, so the model need not page sample
 /// rows into its context. The table found as <c>sql_describe</c> finds it (the connection's one database), the SQL the app's own
-/// (<see cref="SqlServerProfile"/>), run in the read transaction that is rolled back; a table past <see cref="TableProfile.SampleAbove"/> rows
-/// is sampled, and the answer says so.
+/// (<see cref="SqlServerProfile"/>), run in the read transaction that is rolled back; a table past <see cref="SampleAbove"/> rows is sampled,
+/// and the answer says so. The resolve, the catalog and both passes share the one deadline (2026-11-15, #22).
 /// </summary>
 public sealed class SqlProfileTool : SqlTool
 {
@@ -34,6 +34,9 @@ public sealed class SqlProfileTool : SqlTool
     {
     }
 
+    /// <summary>The rows a profile reads at most: a table estimated bigger is sampled. Settable so the live facts make the server sample.</summary>
+    internal long SampleAbove { get; set; } = TableProfile.DefaultSampleAbove;
+
     public override string Name => ToolName;
 
     public override string Description =>
@@ -44,31 +47,46 @@ public sealed class SqlProfileTool : SqlTool
 
     public async Task<string> ProfileAsync(string table, string? connection, IReadOnlyList<string>? columns, int top, CancellationToken cancellationToken)
     {
+        var watch = System.Diagnostics.Stopwatch.StartNew();
         if (string.IsNullOrWhiteSpace(table))
         {
             return SqlText.NoTable;
         }
 
+        var effective = Effective;
+        int timeout = TimeoutSeconds(effective);
         var match = await FindTableAsync(connection, table.Trim(), cancellationToken).ConfigureAwait(false);
         if (match.Error is { } error)
         {
             return error;
         }
 
-        var effective = Effective;
-        int timeout = TimeoutSeconds(effective);
-        var catalog = await Sql.RunAsync(connection, SqlServerProfile.Catalog, [new SqlParameterValue("id", match.Id)], SqlAccess.MaxCatalogRows, timeout, cancellationToken, keepLaterSets: true).ConfigureAwait(false);
-        if (catalog.Outcome != SqlOutcome.Ok)
+        string shown = match.Schema + "." + match.Name;
+        if (SqlDeadline.Left(watch, timeout) is not (> 0 and var left))
         {
-            return SqlText.Error(catalog);
+            return TableProfileText.Stopped(shown, "", timeout);
         }
 
-        // name, declared type, system type, max_length; then rows, compatibility level
-        var all = catalog.Grids.Count > 0 ? catalog.Grids[0].Rows.Select(r => new ProfileColumn(r[0], r[1], SqlServerProfile.Measure(r[2], TableProfile.Whole(r[3])))).ToList() : [];
+        // Names read whole (#34): a scrubbed one would be quoted back into the SQL as a name the table doesn't have.
+        var catalog = await Sql.RunAsync(connection, SqlServerProfile.Catalog, [new SqlParameterValue("id", match.Id)], SqlAccess.MaxCatalogRows, left, cancellationToken,
+            keepLaterSets: true, readCell: TableProfile.CatalogCell).ConfigureAwait(false);
+        if (catalog.Outcome != SqlOutcome.Ok)
+        {
+            return catalog.Outcome == SqlOutcome.Timeout ? TableProfileText.Stopped(shown, catalog.Connection, timeout) : SqlText.Error(catalog);
+        }
+
+        // name, declared type, system type, max_length, precision, scale; then rows, compatibility level, memory-optimized
+        var listed = catalog.Grids.Count > 0 ? catalog.Grids[0] : null;
+        var all = listed?.Rows.Select(r => new ProfileColumn(r[0], SqlText.TypeName(r[1], r[3], r[4], r[5]), SqlServerProfile.Measure(r[2], TableProfile.Whole(r[3])))).ToList() ?? [];
         var facts = catalog.Grids.Count > 1 ? catalog.Grids[1].Rows.FirstOrDefault() : null;
         var dialect = SqlServerProfile.For(TableProfile.Whole(facts?[1]));
-        var request = new TableProfile.Request(match.Schema + "." + match.Name, dialect.Quote(match.Schema) + "." + dialect.Quote(match.Name), match.Kind, all, columns, top,
-            match.Kind == "table" ? TableProfile.Whole(facts?[0]) : null, timeout, Math.Min(QueryPlan.MaxAnswerChars, ResultChars(effective)), SqlDescribeTool.ToolName, StringComparison.OrdinalIgnoreCase);
+        string kind = TableProfile.Whole(facts?[2]) is > 0 ? SqlServerProfile.MemoryOptimizedKind : match.Kind;
+        var request = new TableProfile.Request(shown, dialect.Quote(match.Schema) + "." + dialect.Quote(match.Name), kind, all, columns, top,
+            match.Kind == "table" ? TableProfile.Whole(facts?[0]) : null, timeout, AnswerChars(effective), SqlDescribeTool.ToolName, watch)
+        {
+            SampleAbove = SampleAbove,
+            ColumnsCut = listed?.More == true,
+        };
         return await TableProfile.RunAsync(request, dialect,
             (statements, seconds, token) => Sql.RunAsync(connection, string.Join(";\n", statements), [], SqlAccess.MaxCatalogRows, seconds, token, keepLaterSets: true),
             SqlText.Error, cancellationToken).ConfigureAwait(false);

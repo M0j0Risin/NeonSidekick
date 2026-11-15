@@ -101,7 +101,7 @@ public sealed class DatabaseBoundaryTests
     [InlineData("SELECT * FROM information_schema.user_mapping_options")]                     // C6
     [InlineData("SELECT oid::regrole FROM generate_series(1, 100) AS oid")]                    // R1
     [InlineData("SELECT shobj_description(1, 'pg_database')")]
-    public void Postgres_RefusesTheServer_WhateverTheLock(string sql) => Assert.NotNull(PostgresBoundary.Qualifiers(sql, null).Refused);
+    public void Postgres_RefusesTheServer_WhateverTheLock(string sql) => Assert.NotNull(PostgresBoundary.QualifiersUnder(sql, []).Refused);
 
     [Theory]
     [InlineData("SELECT pg_relation_size('payroll.t')")]                                       // DB2, R2
@@ -126,7 +126,7 @@ public sealed class DatabaseBoundaryTests
     [InlineData("REINDEX DATABASE shop")]
     [InlineData("REINDEX SYSTEM shop")]
     [InlineData("SELECT 'x")]                                                                  // mechanism 7
-    public void Postgres_UnderALock_Refuses(string sql) => Assert.NotNull(PostgresBoundary.Check(sql, "sales", ["sales", "payroll"]));
+    public void Postgres_UnderALock_Refuses(string sql) => Assert.NotNull(PostgresBoundary.CheckUnder(sql, ["sales"], ["sales", "payroll"]));
 
     [Theory]
     [InlineData("SELECT pg_typeof(1), pg_backend_pid(), lower('A') FROM sales.orders")]
@@ -135,7 +135,7 @@ public sealed class DatabaseBoundaryTests
     [InlineData("SELECT nextval('seq'), nextval('sales.seq')")]
     [InlineData("CREATE TABLE sales.t (a int REFERENCES sales.p ON DELETE CASCADE)")]
     [InlineData("CREATE SCHEMA IF NOT EXISTS sales")]
-    public void Postgres_UnderALock_Allows(string sql) => Assert.Null(PostgresBoundary.Check(sql, "sales", ["sales", "payroll"]));
+    public void Postgres_UnderALock_Allows(string sql) => Assert.Null(PostgresBoundary.CheckUnder(sql, ["sales"], ["sales", "payroll"]));
 
     [Theory]
     [InlineData("SELECT x::payroll.money2 FROM sales.t")]                                      // F3
@@ -143,14 +143,14 @@ public sealed class DatabaseBoundaryTests
     [InlineData("SELECT 1 OPERATOR(payroll.+) 2")]                                             // F4
     [InlineData("CREATE FUNCTION sales.f() RETURNS int LANGUAGE sql AS 'SELECT count(*) FROM payroll.salaries'")]   // G1
     public void Postgres_UnderALock_SeesAHeadItMissed(string sql) =>
-        Assert.Equal(PostgresText.OtherSchema("payroll", "sales"), PostgresBoundary.Check(sql, "sales", ["sales", "payroll"]));
+        Assert.Equal(PostgresText.OtherSchema("payroll", ["sales"]), PostgresBoundary.CheckUnder(sql, ["sales"], ["sales", "payroll"]));
 
     [Fact]
     public void Postgres_FoldsAsTheServerDoes()
     {
         // B3: only A to Z fold, so Ärger stays Ärger; F5: an unbound @name after an operator is a bare name, folded.
-        Assert.Equal(PostgresText.OtherSchema("Ärger", "sales"), PostgresBoundary.Check("SELECT * FROM Ärger.t", "sales", ["sales", "Ärger"]));
-        Assert.Null(PostgresBoundary.Check("SELECT * FROM Ärger.t", "sales", ["sales", "ärger"]));
+        Assert.Equal(PostgresText.OtherSchema("Ärger", ["sales"]), PostgresBoundary.CheckUnder("SELECT * FROM Ärger.t", ["sales"], ["sales", "Ärger"]));
+        Assert.Null(PostgresBoundary.CheckUnder("SELECT * FROM Ärger.t", ["sales"], ["sales", "ärger"]));
         Assert.Equal(GateTokenKind.Word, PostgresWriteGate.Lex("SELECT a <@Payroll", out _)!.Last().Kind);
         Assert.Equal("PAYROLL", PostgresWriteGate.Lex("SELECT a <@Payroll", out _)!.Last().Text);
     }
@@ -200,14 +200,14 @@ public sealed class DatabaseBoundaryTests
     [InlineData("SELECT * FROM UNIFIED_AUDIT_TRAIL")]
     [InlineData("SELECT * FROM CONTAINERS(t)")]                                                // R13
     [InlineData("SELECT 'x FROM dual")]                                                        // mechanism 7
-    public void Oracle_Refuses(string sql) => Assert.NotNull(OracleBoundary.Refusal(sql, "APP"));
+    public void Oracle_Refuses(string sql) => Assert.NotNull(OracleBoundary.Refusal(sql, ["APP"]));
 
     [Fact]
     public void Oracle_AllowsThePlanTable_AndSeesAHeadAfterAColon_AndListsEveryPublicDictionarySynonym()
     {
-        Assert.Null(OracleBoundary.Refusal("SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY())", "APP"));
-        Assert.Contains("HR", OracleBoundary.Qualifiers("SELECT JSON_OBJECT('k' : HR.f()) FROM dual", "APP").Heads);   // R7
+        Assert.Null(OracleBoundary.Refusal("SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY())", ["APP"]));
+        Assert.Contains("HR", OracleBoundary.Qualifiers("SELECT JSON_OBJECT('k' : HR.f()) FROM dual", ["APP"]).Heads);   // R7
         Assert.DoesNotContain("table_owner", OracleBoundary.Names, StringComparison.Ordinal);                           // R5
-        Assert.Null(OracleBoundary.Check("SELECT :NEW.x FROM dual", "APP", ["HR", "NEW"], []));                        // a bind is never a head
+        Assert.Null(OracleBoundary.Check("SELECT :NEW.x FROM dual", ["APP"], ["HR", "NEW"], []));                        // a bind is never a head
     }
 }

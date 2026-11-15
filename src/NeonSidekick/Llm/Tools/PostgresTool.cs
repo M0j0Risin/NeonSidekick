@@ -40,24 +40,32 @@ public abstract class PostgresTool : ServerTool<PostgresAccess>
     protected sealed override string RetiredRefusal => PostgresText.NoDatabaseArgument;
 
     /// <summary>
-    /// The schemas the call's connection is held to, as the <c>@lock</c> bind (<c>text[]</c>), or null (no lock, or a connection that does
-    /// not resolve: the run says why). A list since 2026-11-14 (feature idea #18).
+    /// One call's connection, resolved once (2026-11-15, the database-tools review's #12/#138: each step resolved the file again, so an edit
+    /// mid-call could mix two versions of the entry, and the lock's array was rebuilt four to six times): the access every step runs on
+    /// (pinned to the entry as read now, or the tool's own when it doesn't resolve, so the run says why), the name to run it by, and the
+    /// schemas it is held to as the <c>@lock</c> bind (<c>text[]</c>), or null for none.
     /// </summary>
-    protected string[]? LockedSchemas(string? connection) =>
-        Server.Resolve(connection, out _) is { Config.Locks: { Count: > 0 } locks } ? [.. locks] : null;
+    protected sealed record PostgresCall(PostgresAccess Access, string? Connection, string[]? Locks);
+
+    /// <summary>The call's connection resolved and pinned (<see cref="PostgresCall"/>).</summary>
+    protected PostgresCall Pin(string? connection) =>
+        Server.Resolve(connection, out _) is { } target
+            ? new PostgresCall(Server.Pinned(target), target.Name, target.Config.Locks is { Count: > 0 } locks ? [.. locks] : null)
+            : new PostgresCall(Server, connection, null);
 
     /// <summary>
     /// The schema a listing keeps to (2026-10-09): the one <paramref name="asked"/>, or null for every one. Under a lock, an asked one off
     /// the list is <paramref name="error"/>, and none asked is null too: the statement's <c>@lock</c> keeps it to the list (#18; until then
     /// the one locked schema came back here).
     /// </summary>
-    protected string? ScopeSchema(string? connection, string? asked, out string? error)
+    protected static string? ScopeSchema(PostgresCall call, string? asked, out string? error)
     {
+        ArgumentNullException.ThrowIfNull(call);
         error = null;
 
         // Spelled exactly (2026-10-24, the database review's P4: under a lock to Sales an asked sales was silently swapped for it; they are
         // two schemas to the server).
-        if (asked is not null && LockedSchemas(connection) is { } locks && !locks.Contains(asked, StringComparer.Ordinal))
+        if (asked is not null && call.Locks is { } locks && !locks.Contains(asked, StringComparer.Ordinal))
         {
             error = PostgresText.SchemaElsewhere(asked, locks);
         }
@@ -72,9 +80,11 @@ public abstract class PostgresTool : ServerTool<PostgresAccess>
     /// Null when it keeps to its place, or when the connection does not resolve (the run that follows says why); a failed read of the
     /// names is its error, never a pass.
     /// </summary>
-    protected async Task<string?> OutsideAsync(string sql, string? connection, CancellationToken cancellationToken, PostgresAccess? via = null)
+    protected async Task<string?> OutsideAsync(string sql, PostgresCall call, CancellationToken cancellationToken)
     {
-        var access = via ?? Server;
+        ArgumentNullException.ThrowIfNull(call);
+        var access = call.Access;
+        string? connection = call.Connection;
         if (access.Resolve(connection, out _) is not { } target)
         {
             return null;
@@ -93,8 +103,8 @@ public abstract class PostgresTool : ServerTool<PostgresAccess>
         return failed ?? PostgresBoundary.CheckUnder(sql, locks, access.Names.Built(rows!, PostgresBoundary.NameSet));
     }
 
-    protected async Task<SqlRun> CatalogAsync(string? connection, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, CancellationToken cancellationToken) =>
-        SqlText.CatalogRun(await Server.RunAsync(connection, statements, parameters, PostgresAccess.MaxCatalogRows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false));
+    protected async Task<SqlRun> CatalogAsync(PostgresCall call, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, CancellationToken cancellationToken) =>
+        SqlText.CatalogRun(await call.Access.RunAsync(call.Connection, statements, parameters, PostgresAccess.MaxCatalogRows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false));
 
     protected sealed record TableMatch(string Schema, string Name, string Kind, string? Error)
     {
@@ -103,10 +113,12 @@ public abstract class PostgresTool : ServerTool<PostgresAccess>
 
     /// <summary>
     /// The table or view <paramref name="table"/> means: <c>schema.name</c> as written, else in <paramref name="schema"/>, else the one
-    /// of that name in any schema — the exact spelling over a case-folded one, then the search path's; several is ambiguous with the
-    /// candidates named. Under a schema lock (2026-10-09) the locked schema alone: another, as <paramref name="schema"/> or written, is refused.
+    /// of that name in any schema — the exact spelling over a case-folded one, then the one earliest on the search path (2026-11-15, the
+    /// database-tools review's #19: under a lock to several schemas a name in two was refused as ambiguous, where PostgreSQL takes the
+    /// first); several off the path are ambiguous with the candidates named. Under a schema lock (2026-10-09) the locked schemas alone:
+    /// another, as <paramref name="schema"/> or written, is refused.
     /// </summary>
-    protected async Task<TableMatch> FindTableAsync(string? connection, string? schema, string table, CancellationToken cancellationToken)
+    protected async Task<TableMatch> FindTableAsync(PostgresCall call, string? schema, string table, CancellationToken cancellationToken)
     {
         if (PostgresAccess.Split(table) is not { } parts)
         {
@@ -115,24 +127,24 @@ public abstract class PostgresTool : ServerTool<PostgresAccess>
 
         // A table's unquoted schema part folds as the server folds it (2026-10-24, with P4's exact compare: SALES.orders is sales.orders).
         string? written = parts.Schema is { } part && !table.TrimStart().StartsWith('"') ? PostgresReadOnlyGate.AsciiLower(part) : parts.Schema;
-        string? scope = ScopeSchema(connection, written ?? schema, out var elsewhere);
+        string? scope = ScopeSchema(call, written ?? schema, out var elsewhere);
         if (elsewhere is not null)
         {
             return TableMatch.Refused(elsewhere);
         }
 
-        var run = await CatalogAsync(connection, [PostgresCatalogQueries.Resolve], [new("schema", scope), new("name", parts.Name), new("lock", LockedSchemas(connection))], cancellationToken).ConfigureAwait(false);
+        var run = await CatalogAsync(call, [PostgresCatalogQueries.Resolve], [new("schema", scope), new("name", parts.Name), new("lock", call.Locks)], cancellationToken).ConfigureAwait(false);
         if (run.Outcome != SqlOutcome.Ok)
         {
             return TableMatch.Refused(PostgresText.Error(run));
         }
 
-        // schema, name, kind, exact, on the search path
+        // schema, name, kind, exact, the position on the search path (empty off it): the lowest position wins.
         var rows = run.Grids.Count > 0 ? run.Grids[0].Rows.ToList() : [];
         var pick = rows.Where(r => r[3] == "true").ToList() is { Count: > 0 } exact ? exact : rows;
-        if (pick.Count > 1 && pick.Where(r => r[4] == "true").ToList() is [var onPath])
+        if (pick.Count > 1 && pick.Select(r => PathPosition(r[4])).Where(p => p is not null).Min() is { } first)
         {
-            pick = [onPath];
+            pick = [.. pick.Where(r => PathPosition(r[4]) == first)];
         }
 
         return pick.Count switch
@@ -142,6 +154,10 @@ public abstract class PostgresTool : ServerTool<PostgresAccess>
             _ => TableMatch.Refused(PostgresText.TableAmbiguous(table, pick.Select(r => r[0] + "." + r[1]))),
         };
     }
+
+    /// <summary>A candidate's place on the search path (<c>array_position</c>, 1-based), or null off it.</summary>
+    private static int? PathPosition(string cell) =>
+        int.TryParse(cell, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out int at) ? at : null;
 }
 
 public sealed class PostgresConnectionsTool : PostgresTool
@@ -174,9 +190,9 @@ public abstract class PostgresListingTool : PostgresTool
     {
     }
 
-    protected async Task<string> ListAsync(string? connection, string statement, IReadOnlyList<SqlParameterValue> parameters, string singular, string plural, CancellationToken cancellationToken)
+    protected async Task<string> ListAsync(PostgresCall call, string statement, IReadOnlyList<SqlParameterValue> parameters, string singular, string plural, CancellationToken cancellationToken)
     {
-        var run = await CatalogAsync(connection, [statement], parameters, cancellationToken).ConfigureAwait(false);
+        var run = await CatalogAsync(call, [statement], parameters, cancellationToken).ConfigureAwait(false);
         return run.Outcome != SqlOutcome.Ok ? PostgresText.Error(run)
             : PostgresText.Listing(singular, plural, run.Grids.Count > 0 ? run with { Grids = [SqlText.WithoutEmptyColumn(run.Grids[0], "description")] } : run, Files.WorkingDirectory.MaxReadChars);
     }
@@ -198,8 +214,11 @@ public sealed class PostgresSchemasTool : PostgresListingTool
 
     public override JsonElement JsonSchema => Schema;
 
-    protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) =>
-        await ListAsync(Optional(arguments, ConnectionArgument), PostgresCatalogQueries.Schemas, [new("schema", null), new("lock", LockedSchemas(Optional(arguments, ConnectionArgument)))], "schema", "schemas", cancellationToken).ConfigureAwait(false);
+    protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    {
+        var call = Pin(Optional(arguments, ConnectionArgument));
+        return await ListAsync(call, PostgresCatalogQueries.Schemas, [new("lock", call.Locks)], "schema", "schemas", cancellationToken).ConfigureAwait(false);
+    }
 }
 
 public sealed class PostgresTablesTool : PostgresListingTool
@@ -225,8 +244,9 @@ public sealed class PostgresTablesTool : PostgresListingTool
 
     public async Task<string> DescribeAsync(string? connection, string? schema, string? pattern, CancellationToken cancellationToken)
     {
-        string? scope = ScopeSchema(connection, schema, out var elsewhere);
-        return elsewhere ?? await ListAsync(connection, PostgresCatalogQueries.Tables, [new("schema", scope), new("pattern", OracleTablesTool.LikePattern(pattern)), new("lock", LockedSchemas(connection))], "table or view", "tables and views", cancellationToken).ConfigureAwait(false);
+        var call = Pin(connection);
+        string? scope = ScopeSchema(call, schema, out var elsewhere);
+        return elsewhere ?? await ListAsync(call, PostgresCatalogQueries.Tables, [new("schema", scope), new("pattern", OracleTablesTool.LikePattern(pattern)), new("lock", call.Locks)], "table or view", "tables and views", cancellationToken).ConfigureAwait(false);
     }
 
     protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) =>
@@ -260,9 +280,9 @@ public sealed class PostgresColumnsTool : PostgresListingTool
             return PostgresText.NoPattern;
         }
 
-        string? connection = Optional(arguments, ConnectionArgument);
-        string? scope = ScopeSchema(connection, Optional(arguments, SchemaArgument), out var elsewhere);
-        return elsewhere ?? await ListAsync(connection, PostgresCatalogQueries.ColumnSearch, [new("schema", scope), new("pattern", OracleTablesTool.LikePattern(pattern)), new("lock", LockedSchemas(connection))], "column", "columns", cancellationToken).ConfigureAwait(false);
+        var call = Pin(Optional(arguments, ConnectionArgument));
+        string? scope = ScopeSchema(call, Optional(arguments, SchemaArgument), out var elsewhere);
+        return elsewhere ?? await ListAsync(call, PostgresCatalogQueries.ColumnSearch, [new("schema", scope), new("pattern", OracleTablesTool.LikePattern(pattern)), new("lock", call.Locks)], "column", "columns", cancellationToken).ConfigureAwait(false);
     }
 }
 
@@ -293,13 +313,14 @@ public sealed class PostgresDescribeTool : PostgresTool
             return PostgresText.NoTable;
         }
 
-        var found = await FindTableAsync(connection, schema, table, cancellationToken).ConfigureAwait(false);
+        var call = Pin(connection);
+        var found = await FindTableAsync(call, schema, table, cancellationToken).ConfigureAwait(false);
         if (found.Error is { } error)
         {
             return error;
         }
 
-        var run = await CatalogAsync(connection, PostgresCatalogQueries.Describe, [new("schema", found.Schema), new("name", found.Name), new("lock", LockedSchemas(connection))], cancellationToken).ConfigureAwait(false);
+        var run = await CatalogAsync(call, PostgresCatalogQueries.Describe, [new("schema", found.Schema), new("name", found.Name), new("lock", call.Locks)], cancellationToken).ConfigureAwait(false);
         return run.Outcome == SqlOutcome.Ok ? PostgresText.Describe(found.Schema, found.Name, found.Kind, run, Files.WorkingDirectory.MaxReadChars) : PostgresText.Error(run);
     }
 
@@ -324,8 +345,8 @@ public abstract class PostgresScopedTool : PostgresListingTool
     protected async Task<string> ScopedAsync(AIFunctionArguments arguments, string statement, string singular, string plural, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
-        string? connection = Optional(arguments, ConnectionArgument);
-        string? schema = ScopeSchema(connection, Optional(arguments, SchemaArgument), out var elsewhere);
+        var call = Pin(Optional(arguments, ConnectionArgument));
+        string? schema = ScopeSchema(call, Optional(arguments, SchemaArgument), out var elsewhere);
         if (elsewhere is not null)
         {
             return elsewhere;
@@ -334,7 +355,7 @@ public abstract class PostgresScopedTool : PostgresListingTool
         string? name = null;
         if (Optional(arguments, TableArgument) is { } table)
         {
-            var found = await FindTableAsync(connection, schema, table, cancellationToken).ConfigureAwait(false);
+            var found = await FindTableAsync(call, schema, table, cancellationToken).ConfigureAwait(false);
             if (found.Error is { } error)
             {
                 return error;
@@ -343,7 +364,7 @@ public abstract class PostgresScopedTool : PostgresListingTool
             (schema, name) = (found.Schema, found.Name);
         }
 
-        return await ListAsync(connection, statement, [new("schema", schema), new("name", name), new("lock", LockedSchemas(connection))], singular, plural, cancellationToken).ConfigureAwait(false);
+        return await ListAsync(call, statement, [new("schema", schema), new("name", name), new("lock", call.Locks)], singular, plural, cancellationToken).ConfigureAwait(false);
     }
 }
 
@@ -440,27 +461,28 @@ public sealed class PostgresQueryTool : PostgresTool
         }
 
         string body = PostgresReadOnlyGate.Body(sql);
-        if (await OutsideAsync(body, connection, cancellationToken).ConfigureAwait(false) is { } outside)
+        var call = Pin(connection);
+        if (await OutsideAsync(body, call, cancellationToken).ConfigureAwait(false) is { } outside)
         {
             return outside;
         }
 
         if (export is not null)
         {
-            if (Server.Resolve(connection, out var unresolved) is not { } target)
+            if (call.Access.Resolve(call.Connection, out var unresolved) is not { } target)
             {
                 return PostgresText.Error(unresolved!);
             }
 
-            // The run on the entry resolved here, never a second read of the file (2026-10-30, review F54: an edit between the two could
-            // name the workbook after one connection and read another).
-            var pinned = Server.Pinned(target);
+            // The run on the entry resolved once (2026-10-30, review F54: an edit between two reads could name the workbook after one
+            // connection and read another).
+            var pinned = call.Access;
             return await ExportAsync(export, target.Name, rows, maxRows, TimeoutSeconds(Effective), PostgresAccess.ExportCell,
                 (job, timeout, token) => pinned.ExportAsync(target.Name, body, parameters, job, rows, timeout, token), PostgresText.Error, cancellationToken,
-                PostgresAccess.ExportHeader).ConfigureAwait(false);
+                PostgresAccess.IsUtcColumn).ConfigureAwait(false);
         }
 
-        var run = await Server.RunAsync(connection, [body], parameters, rows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);
+        var run = await call.Access.RunAsync(call.Connection, [body], parameters, rows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);
         return run.Outcome == SqlOutcome.Ok ? PostgresText.Query(run, rows, SqlTool.ResultChars(Effective), CanSave) : PostgresText.Error(run);
     }
 
@@ -472,20 +494,9 @@ public sealed class PostgresQueryTool : PostgresTool
             return ClockText.BadInteger(MaxRowsArgument, raw);
         }
 
-        if (!ToolArguments.TryReadObjectList(arguments, ParamsArgument, out var objects, out var sent) || objects.Count > 1)
+        if (SqlQueryTool.ReadParams(arguments, PostgresText.BadParams, out var error) is not { } parameters)
         {
-            return PostgresText.BadParams(sent);
-        }
-
-        IReadOnlyList<SqlParameterValue> parameters = [];
-        if (objects.Count == 1)
-        {
-            if (SqlQueryTool.ReadParameters(objects[0], out var error) is not { } read)
-            {
-                return error;
-            }
-
-            parameters = read;
+            return error;
         }
 
         if (ReadExport(arguments, out var export) is { } badExport)
@@ -537,22 +548,21 @@ public sealed class PostgresExplainTool : PostgresTool
         }
 
         string body = PostgresReadOnlyGate.Body(sql);
-        if (await OutsideAsync(body, connection, cancellationToken).ConfigureAwait(false) is { } outside)
+        var call = Pin(connection);
+        if (await OutsideAsync(body, call, cancellationToken).ConfigureAwait(false) is { } outside)
         {
             return outside;
         }
 
-        var run = await Server.RunAsync(connection, [PostgresPlan.Prefix + body], parameters, PostgresAccess.MaxCatalogRows, TimeoutSeconds(Effective), cancellationToken, readCell: QueryPlan.WholeCell).ConfigureAwait(false);
+        var effective = Effective;
+        var run = await call.Access.RunAsync(call.Connection, [PostgresPlan.Prefix + body], parameters, PostgresAccess.MaxCatalogRows, TimeoutSeconds(effective), cancellationToken, readCell: QueryPlan.WholeCell).ConfigureAwait(false);
         if (run.Outcome != SqlOutcome.Ok)
         {
             return PostgresText.Error(run);
         }
 
         string text = QueryPlan.TextOf(run, 0);
-        int cap = Math.Min(QueryPlan.MaxAnswerChars, SqlTool.ResultChars(Effective));
-        return PostgresPlan.Parse(text) is { } plan
-            ? QueryPlanText.Answer(plan, run.Connection, run.Database, run.Elapsed, cap)
-            : QueryPlanText.Unreadable(run.Connection, run.Database, run.Elapsed, text);
+        return ExplainAnswer.Of(PostgresPlan.Parse(text), run, text, effective);
     }
 
     protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
@@ -592,35 +602,52 @@ public sealed class PostgresProfileTool : PostgresTool
 
     public override JsonElement JsonSchema => Schema;
 
+    /// <summary>The rows a profile reads at most: a table estimated bigger is sampled. Settable so the live facts make the server sample.</summary>
+    internal long SampleAbove { get; set; } = TableProfile.DefaultSampleAbove;
+
     public async Task<string> ProfileAsync(string table, string? connection, string? schema, IReadOnlyList<string>? columns, int top, CancellationToken cancellationToken)
     {
+        var watch = System.Diagnostics.Stopwatch.StartNew();
         if (string.IsNullOrWhiteSpace(table))
         {
             return PostgresText.NoTable;
         }
 
-        var found = await FindTableAsync(connection, schema, table, cancellationToken).ConfigureAwait(false);
+        var effective = Effective;
+        int timeout = TimeoutSeconds(effective);
+        var call = Pin(connection);
+        var found = await FindTableAsync(call, schema, table, cancellationToken).ConfigureAwait(false);
         if (found.Error is { } error)
         {
             return error;
         }
 
-        var effective = Effective;
-        int timeout = TimeoutSeconds(effective);
-        var catalog = await Server.RunAsync(connection, PostgresProfile.Catalog, [new("schema", found.Schema), new("name", found.Name)], PostgresAccess.MaxCatalogRows, timeout, cancellationToken).ConfigureAwait(false);
-        if (catalog.Outcome != SqlOutcome.Ok)
+        string shown = found.Schema + "." + found.Name;
+        if (SqlDeadline.Left(watch, timeout) is not (> 0 and var left))
         {
-            return PostgresText.Error(catalog);
+            return TableProfileText.Stopped(shown, "", timeout);
         }
 
-        // name, type, category, type name; then reltuples
-        var all = catalog.Grids.Count > 0 ? catalog.Grids[0].Rows.Select(r => new ProfileColumn(r[0], r[1], PostgresProfile.Measure(r[2], r[3]))).ToList() : [];
+        var catalog = await call.Access.RunAsync(call.Connection, PostgresProfile.Catalog, [new("schema", found.Schema), new("name", found.Name)], PostgresAccess.MaxCatalogRows, left, cancellationToken,
+            readCell: TableProfile.CatalogCell).ConfigureAwait(false);
+        if (catalog.Outcome != SqlOutcome.Ok)
+        {
+            return catalog.Outcome == SqlOutcome.Timeout ? TableProfileText.Stopped(shown, catalog.Connection, timeout) : PostgresText.Error(catalog);
+        }
+
+        // name, type, category, type name (a domain's base); then the row estimate
+        var listed = catalog.Grids.Count > 0 ? catalog.Grids[0] : null;
+        var all = listed?.Rows.Select(r => new ProfileColumn(r[0], r[1], PostgresProfile.Measure(r[2], r[3]))).ToList() ?? [];
         long? estimate = catalog.Grids.Count > 1 ? TableProfile.Whole(catalog.Grids[1].Rows.FirstOrDefault()?[0]) : null;
         var dialect = PostgresProfile.Instance;
-        var request = new TableProfile.Request(found.Schema + "." + found.Name, dialect.Quote(found.Schema) + "." + dialect.Quote(found.Name), found.Kind, all, columns, top,
-            estimate, timeout, Math.Min(QueryPlan.MaxAnswerChars, SqlTool.ResultChars(effective)), PostgresDescribeTool.ToolName, StringComparison.OrdinalIgnoreCase);
+        var request = new TableProfile.Request(shown, dialect.Quote(found.Schema) + "." + dialect.Quote(found.Name), found.Kind, all, columns, top,
+            estimate, timeout, SqlTool.AnswerChars(effective), PostgresDescribeTool.ToolName, watch)
+        {
+            SampleAbove = SampleAbove,
+            ColumnsCut = listed?.More == true,
+        };
         return await TableProfile.RunAsync(request, dialect,
-            (statements, seconds, token) => Server.RunAsync(connection, statements, [], PostgresAccess.MaxCatalogRows, seconds, token),
+            (statements, seconds, token) => call.Access.RunAsync(call.Connection, statements, [], PostgresAccess.MaxCatalogRows, seconds, token),
             PostgresText.Error, cancellationToken).ConfigureAwait(false);
     }
 
@@ -697,7 +724,7 @@ public sealed class PostgresExecuteTool : PostgresTool
             PostgresReadOnlyGate.Check,
             PostgresReadOnlyGate.Body,
             () => resolved is { } target
-                ? (new ExecuteTarget(target.Name, target.Config.IsReadWrite, target.Config.Database?.Trim() ?? "", target.Config.SignInHost), null)
+                ? (new ExecuteTarget(target.Name, target.Config.IsReadWrite, [target.Config.Database?.Trim() ?? ""], target.Config.SignInHost), null)
                 : (null, PostgresText.Error(unresolved!)),
             async (body, token) =>
             {
@@ -706,7 +733,7 @@ public sealed class PostgresExecuteTool : PostgresTool
             },
             (body, token) => pinned.ExecuteAsync(connection, body, parameters, rows, timeout, token),
             PostgresText.Error,
-            (body, token) => OutsideAsync(body, connection, token, pinned), Changed: pinned.Names.Forget);
+            (body, token) => OutsideAsync(body, new PostgresCall(pinned, connection, resolved?.Config.Locks is { Count: > 0 } locks ? [.. locks] : null), token), Changed: pinned.Names.Forget);
         return ServerExecute.RunAsync(PostgresStatementKinds.Family, effective.PostgresMode, effective.PostgresStatementsAllowed, sql, parameters, rows, SqlTool.ResultChars(effective), hooks, _allow, cancellationToken);
     }
 
@@ -718,20 +745,9 @@ public sealed class PostgresExecuteTool : PostgresTool
             return ClockText.BadInteger(PostgresQueryTool.MaxRowsArgument, raw);
         }
 
-        if (!ToolArguments.TryReadObjectList(arguments, PostgresQueryTool.ParamsArgument, out var objects, out var sent) || objects.Count > 1)
+        if (SqlQueryTool.ReadParams(arguments, PostgresText.BadParams, out var error) is not { } parameters)
         {
-            return PostgresText.BadParams(sent);
-        }
-
-        IReadOnlyList<SqlParameterValue> parameters = [];
-        if (objects.Count == 1)
-        {
-            if (SqlQueryTool.ReadParameters(objects[0], out var error) is not { } read)
-            {
-                return error;
-            }
-
-            parameters = read;
+            return error;
         }
 
         return await RunAsync(ToolArguments.ReadString(arguments, PostgresQueryTool.SqlArgument), Optional(arguments, ConnectionArgument), parameters, max, cancellationToken).ConfigureAwait(false);

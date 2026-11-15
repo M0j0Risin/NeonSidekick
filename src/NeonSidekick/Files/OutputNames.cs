@@ -100,7 +100,7 @@ public static class OutputNames
             return null;
         }
 
-        if (Path.GetFileName(target.TrimEnd('/', '\\')).StartsWith(OfficeFile.LockFilePrefix, StringComparison.Ordinal))
+        if (IsReservedName(target))
         {
             return Office.OfficeText.ReservedName(target);
         }
@@ -111,27 +111,51 @@ public static class OutputNames
         return known && !ending.Equals(extension, StringComparison.OrdinalIgnoreCase) ? Office.OfficeText.WrongTarget(target, extension) : null;
     }
 
-    /// <summary>The files a query's <c>to</c> writes (2026-11-14, the database-tools plan's #13), in the refusal's order.</summary>
-    public static readonly IReadOnlyList<string> QueryKinds = [".xlsx", ".csv", ".json", ".jsonl"];
+    /// <summary>Whether <paramref name="target"/>'s file name starts with Office's <c>~$</c> lock-file prefix (2026-11-15, the database-tools review's #90).</summary>
+    public static bool IsReservedName(string target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        return Path.GetFileName(target.Trim().TrimEnd('/', '\\')).StartsWith(OfficeFile.LockFilePrefix, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The files a query's <c>to</c> writes (2026-11-14, the database-tools plan's #13): a workbook, then <see cref="Office.TextTableTarget.Kinds"/>.
+    /// </summary>
+    public static readonly IReadOnlyList<string> QueryKinds = [".xlsx", .. Office.TextTableTarget.Kinds.Select(k => k.Extension)];
+
+    /// <summary>
+    /// The data and text types a model may mean as a file of their own that a query doesn't write (2026-11-15, the database-tools review's
+    /// #38): refused, not made <c>out.txt.xlsx</c>.
+    /// </summary>
+    private static readonly string[] OtherDataKinds = [".tsv", ".txt", ".parquet", ".xml", ".html", ".htm", ".md"];
 
     /// <summary>
     /// <see cref="Refusal"/> for a query's <c>to</c> (2026-11-14, the database-tools plan's #13): a CSV or JSON name is the query's own, any
-    /// other document type the app knows (<c>.docx</c>, <c>.pdf</c>, <c>.tsv</c>) is refused naming the four kinds rather than renamed, and the
-    /// <c>~$</c> prefix is refused for every kind. The extension is matched in any case. Null when the name is fine or a folder.
+    /// other document or data type the app knows (<c>.docx</c>, <c>.pdf</c>, <c>.tsv</c>, <c>.txt</c>) is refused naming the kinds rather than
+    /// renamed, and the <c>~$</c> prefix is refused for every kind. The extension is matched in any case. Null when the name is fine or
+    /// <paramref name="intoFolder"/> (<see cref="IntoFolder"/>, asked once by the caller, #128).
     /// </summary>
-    public static string? QueryRefusal(string? to, Func<string, bool> isFolder)
+    public static string? QueryRefusal(string? to, bool intoFolder)
     {
-        ArgumentNullException.ThrowIfNull(isFolder);
         string target = (to ?? "").Trim();
-        if (IntoFolder(target, isFolder))
+        if (intoFolder)
         {
             return null;
         }
 
+        if (IsReservedName(target))
+        {
+            return Office.OfficeText.ReservedName(target);
+        }
+
         string ending = Path.GetExtension(target);
-        bool query = QueryKinds.Any(k => ending.Equals(k, StringComparison.OrdinalIgnoreCase));
-        string? refused = Refusal(target, query ? ending : ".xlsx", isFolder);
-        return refused is null || refused.StartsWith(Office.OfficeText.ReservedName(target), StringComparison.Ordinal) ? refused
-            : Sql.SqlExportText.WrongTarget(target);
+        if (QueryKinds.Any(k => ending.Equals(k, StringComparison.OrdinalIgnoreCase)))
+        {
+            return null;
+        }
+
+        bool known = OfficeFile.IsAnyOfficePath(target) || PdfFile.IsPdfPath(target)
+            || ending.Equals(".csv", StringComparison.OrdinalIgnoreCase) || OtherDataKinds.Any(k => ending.Equals(k, StringComparison.OrdinalIgnoreCase));
+        return known ? Sql.SqlExportText.WrongTarget(target) : null;
     }
 }

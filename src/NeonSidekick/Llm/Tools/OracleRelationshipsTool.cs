@@ -17,7 +17,7 @@ public sealed class OracleRelationshipsTool : OracleTool
           "type": "object",
           "properties": {
             {{ConnectionProperty}},
-            "table": { "type": "string", "description": "Only the keys into or out of this table; leave it out for every one in the schema." }
+            "table": { "type": "string", "description": "Only the keys into or out of this table; leave it out for every one in the connection's schema or schemas." }
           }
         }
         """);
@@ -30,7 +30,7 @@ public sealed class OracleRelationshipsTool : OracleTool
 
     public override string Description =>
         "Lists the foreign-key relationships of an Oracle database as join paths, from_table.from_column -> to_table.to_column, " +
-        "every one in the connection's schema, or those touching one table. Use them to write JOINs without guessing column names.";
+        "every one in the connection's schema or schemas, or those touching one table. Use them to write JOINs without guessing column names.";
 
     public override JsonElement JsonSchema => Schema;
 

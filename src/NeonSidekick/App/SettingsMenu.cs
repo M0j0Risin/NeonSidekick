@@ -867,7 +867,7 @@ public enum SettingsField
     /// <summary>A toggle: whether a stored session keeps the screenshots (<see cref="Settings.AppSettingsData.ScreenKeepInSessions"/>). The Screen tab's last row (2026-10-04).</summary>
     ScreenKeepInSessions,
 
-    /// <summary>A toggle: whether a turn offers the four SQLite tools (<see cref="Settings.AppSettingsData.SqliteTools"/>). The SQLite tab's first row (2026-10-04); no reconnect.</summary>
+    /// <summary>A toggle: whether a turn offers the six SQLite tools (<see cref="Settings.AppSettingsData.SqliteTools"/>). The SQLite tab's first row (2026-10-04); no reconnect.</summary>
     SqliteTools,
 
     /// <summary>A picker: what the SQLite tools may do — <c>read-only</c> / <c>read-write</c> (<see cref="Settings.AppSettingsData.SqliteMode"/>). The SQLite tab's second row (2026-10-05).</summary>

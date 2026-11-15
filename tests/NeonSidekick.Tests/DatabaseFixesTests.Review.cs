@@ -74,7 +74,7 @@ public sealed class DatabaseFixesReviewTests : IDisposable
     {
         var hooks = new ServerExecuteHooks(
             PostgresWriteGate.Check, PostgresWriteGate.Kinds, PostgresReadOnlyGate.Check, s => s,
-            () => (new ExecuteTarget("c", true, "db", "h"), null),
+            () => (new ExecuteTarget("c", true, ["db"], "h"), null),
             (_, _) => throw new InvalidOperationException("no read"),
             (_, _) => throw new InvalidOperationException("no run"),
             PostgresText.Error);
@@ -97,7 +97,7 @@ public sealed class DatabaseFixesReviewTests : IDisposable
         Assert.Equal(describe, OracleCatalogQueries.ForServer(describe, "19.3.0.0.0"));
 
         // A name the names list writes as a cell (a schema named NULL) still matches.
-        Assert.Equal(PostgresText.OtherSchema("NULL", "sales"), PostgresBoundary.Check("SELECT * FROM \"NULL\".t", "sales", ["sales", "'NULL'"]));
+        Assert.Equal(PostgresText.OtherSchema("NULL", ["sales"]), PostgresBoundary.CheckUnder("SELECT * FROM \"NULL\".t", ["sales"], ["sales", "'NULL'"]));
 
         // A partial database list leaves the alias's head for the server to settle.
         const string call = "SELECT payroll.dbo.f() FROM dbo.t AS payroll";

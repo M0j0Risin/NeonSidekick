@@ -763,9 +763,9 @@ Values go in as `params`. Results are cut at *SQL query result max chars*; `max_
 
 With *File tools* and `convert_to_xlsx` on, each `*_query` takes `to` and writes every row, up to 1,048,575, to a file in the working directory; the answer shows 5.
 
-* **Formats:** `.xlsx` (a folder or a name with no extension makes a workbook; `sheet` adds or replaces one), `.csv`, `.json` (one array) or `.jsonl` (one object a line).
+* **Formats:** `.xlsx` (a folder or a name with no extension makes a workbook; `sheet` adds or replaces one), `.csv`, `.json` (one array) or `.jsonl` (one object a line; `.ndjson` too). Another type, such as `.txt`, is refused.
 * **Safe to open:** the read-only rules hold, and Esc or a failure writes nothing. A CSV's text that Excel would run as a formula (`=…`, `-abc`) starts with `'`; numbers are left as they are.
-* **Values:** numbers keep every digit; dates are ISO. JSON tells NULL (`null`) from `''`; a CSV writes NULL as an empty field and `''` as `""`, which Excel reads alike.
+* **Values:** numbers keep every digit; dates are ISO; a CSV or JSON cell holds up to 1,048,576 characters. JSON tells NULL (`null`) from `''`, and writes json, jsonb and arrays as strings; a CSV writes NULL as an empty field and `''` as `""`.
 * **UTC:** a PostgreSQL `timestamptz` or MySQL `TIMESTAMP` column is UTC: a workbook's header says so, a CSV or JSON value ends in `Z`.
 * A CSV or JSON file already there is replaced only with `overwrite`.
 
@@ -834,8 +834,8 @@ Server families take a connection in `connection`, SQLite and DuckDB a database 
 | `sql_query` / `mysql_query` / `postgres_query` / `oracle_query` | `sql, connection?, params?, max_rows?, to?, sheet?, overwrite?` | One read-only `SELECT`; `params` is an object of values (`{"id": 43659}`). `to` writes every row to a file ([Query results to a file](#query-results-to-a-file)). |
 | `sqlite_query` | `sql, database?, params?, max_rows?, to?, sheet?, overwrite?` | One read-only `SELECT`, `WITH` or `VALUES`; `to` as above. |
 | `duckdb_query` | `sql, database?, params?, max_rows?, to?, sheet?, overwrite?` | One read-only `SELECT` (or `FROM`, `DESCRIBE`, `SUMMARIZE`, `PIVOT`…), over a database, data files, or both; `to` as above. |
-| `sql_explain` / `mysql_explain` / `postgres_explain` / `sqlite_explain` / `duckdb_explain` | `sql, connection?` (or `database?`), `params?` | How the database would run one read: its plan's steps and what to look at (big scans, sorts, missing indexes). Planned, never run. |
-| `sql_profile` / `mysql_profile` / `postgres_profile` / `oracle_profile` / `sqlite_profile` / `duckdb_profile` | `table, connection?` (or `database?`; Postgres `schema?`), `columns?, top?` | A table's data at a glance: its rows and, per column, nulls, distinct values, min, max and the `top` most common values (5; 0–10). Read-only; a big table is sampled, and the answer says so. |
+| `sql_explain` / `mysql_explain` / `postgres_explain` / `sqlite_explain` / `duckdb_explain` | `sql, connection?` (or `database?`), `params?` | How the database would run one read: its plan's steps and what to look at (big scans, sorts, missing indexes). Planned, never run (MySQL may compute a constant subquery while planning). |
+| `sql_profile` / `mysql_profile` / `postgres_profile` / `oracle_profile` / `sqlite_profile` / `duckdb_profile` | `table, connection?` (or `database?`; Postgres `schema?`), `columns?, top?` | A table's data at a glance: its rows and, per column, nulls, distinct values, min, max and the `top` most common values (5; 0–10). Read-only; a big table is sampled (MySQL, SQLite: its first rows). |
 | `sql_execute` / `mysql_execute` / `postgres_execute` / `oracle_execute` | `sql, connection?, params?, max_rows?` | [Read-write mode](#read-write-mode) only: one changing statement; answers with the rows changed and returned. |
 | `sqlite_execute` / `duckdb_execute` | `sql, database?, params?, max_rows?, create?` | The same; `create: true` makes a new database file. |
 
@@ -891,7 +891,8 @@ Server families take a connection in `connection`, SQLite and DuckDB a database 
 `postgres.json`.
 
 * **`host`**, **`port`** (5432 by default), **`database`** (required), **`user`**.
-* **`schema`** or **`schemas`** (optional): holds the connection to that schema, or to those (the search path, in that order); other schemas, `information_schema` and `pg_*` schemas are refused. Without either, every schema of the database is open. Under the lock, also refused:
+* **`schema`** or **`schemas`** (optional): holds the connection to that schema, or to those in search-path order. Without either, every schema of the database is open.
+* **Under the lock**, other schemas, `information_schema` and `pg_*` schemas are refused, and also:
   * the catalog: `pg_*` relations and functions, `regclass` and its kin, `to_reg*`, `has_*_privilege` and `obj_description`, but for a few that describe only a value or the session (`pg_typeof`, `pg_backend_pid`, `pg_size_pretty`…). Write your own `pg_notes` table as `schema.pg_notes`.
   * `CASCADE` (it reaches dependents anywhere), another schema named after `SCHEMA` (`DROP SCHEMA`, `SET SCHEMA`), another schema's sequence named as text, and upkeep with no table named (`VACUUM`, `REINDEX DATABASE`).
 * **`sslMode`**: `prefer` (when left out), `require`, `verify-ca`, `verify-full` or `disable`; the wizard starts on `verify-full`, and an unchecked certificate says so in `postgres_connections` and once a session. A server asking for the password in clear text is refused, whatever the mode.
@@ -915,7 +916,8 @@ Server families take a connection in `connection`, SQLite and DuckDB a database 
 `oracle.json`; no Oracle Client needed. A connection is held to **one schema**, or the schemas it lists, rather than a database.
 
 * **`dataSource`**: EZConnect `host:port/service` (`localhost:1521/FREEPDB1`) or a whole `(DESCRIPTION=…)`.
-* **`schema`** or **`schemas`**: the one or ones it is held to (default: the user's own). With a list, the first is current; name the others' tables `OE.ORDERS`. Oracle's own schemas are refused.
+* **`schema`** or **`schemas`**: the one or ones it is held to (default: the user's own). With a list, the first is current; name the others' tables `OE.ORDERS`.
+* **Oracle's own schemas** (`SYS`, `XDB`…) are refused in `schemas` and in the wizard.
 * **`user`**: the database user. `SYS` (and any `AS SYSDBA` sign-in) is refused: Oracle doesn't hold SYS to a read-only transaction.
 
 ```json

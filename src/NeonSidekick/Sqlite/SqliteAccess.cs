@@ -213,7 +213,8 @@ public sealed class SqliteAccess
     /// does not give as NULL), all inside
     /// one transaction that is rolled back. A timeout, a failed open and an SQLite error are outcomes; a cancelled token throws.
     /// </summary>
-    public async Task<SqlRun> RunAsync(string? database, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
+    public async Task<SqlRun> RunAsync(string? database, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken,
+        Func<DbDataReader, int, string>? readCell = null)
     {
         ArgumentNullException.ThrowIfNull(statements);
         ArgumentNullException.ThrowIfNull(parameters);
@@ -222,12 +223,16 @@ public sealed class SqliteAccess
             return refused!;
         }
 
-        return await Task.Run(() => Run(target, statements, parameters, maxRows, timeoutSeconds, cancellationToken), cancellationToken).ConfigureAwait(false);
+        return await Task.Run(() => Run(target, statements, parameters, maxRows, timeoutSeconds, cancellationToken, readCell), cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>The run itself, on the calling thread: <see cref="RunAsync"/> puts it on the pool.</summary>
-    public static SqlRun Run(SqliteTarget target, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken) =>
-        Run(target, statements, parameters, maxRows, timeoutSeconds, write: false, create: false, SqliteReadLayers.All, cancellationToken);
+    /// <summary>
+    /// The run itself, on the calling thread: <see cref="RunAsync"/> puts it on the pool. <paramref name="readCell"/> reads a cell in place of the
+    /// grid's clipped one (2026-11-15, #155: an explain's whole detail, a profile's whole names).
+    /// </summary>
+    public static SqlRun Run(SqliteTarget target, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken,
+        Func<DbDataReader, int, string>? readCell = null) =>
+        Run(target, statements, parameters, maxRows, timeoutSeconds, write: false, create: false, SqliteReadLayers.All, cancellationToken, readCell: readCell);
 
     /// <summary>
     /// A query's rows written to a workbook (2026-10-29, the Office writing plan), on the pool: <see cref="Run"/>'s read-only open,
@@ -266,7 +271,7 @@ public sealed class SqliteAccess
     /// computed dates were text): one shaped like an ISO date (<see cref="LooksIso"/>) that reads as one is a date or a date-time, anything
     /// else goes to <see cref="SqlExport.FromValue"/> as read. In SQLite a date is text by convention, so a text column may mix the two.
     /// </summary>
-    public static XlsxValue ExportCell(DbDataReader reader, int ordinal, string? typeName)
+    public static XlsxValue ExportCell(DbDataReader reader, int ordinal, string? typeName, int maxChars = XlsxValue.MaxChars)
     {
         ArgumentNullException.ThrowIfNull(reader);
         if (DeclaredDateOf(typeName) is not { } dateOnly)
@@ -283,7 +288,7 @@ public sealed class SqliteAccess
             }
             catch (Exception ex) when (ex is InvalidCastException or OverflowException)
             {
-                return SqlExport.FromProvider(reader, ordinal, typeName);
+                return SqlExport.FromProvider(reader, ordinal, typeName, maxChars: maxChars);
             }
 
             if (value is string iso && LooksIso(iso))
@@ -300,25 +305,28 @@ public sealed class SqliteAccess
                 }
             }
 
-            return SqlExport.FromValue(value, typeName, SqlExport.InvariantText);
+            return SqlExport.FromValue(value, typeName, v => SqlExport.InvariantText(v, maxChars), maxChars);
         }
 
         if (!reader.IsDBNull(ordinal) && reader.GetValue(ordinal) is string text)
         {
-            if (dateOnly && DateOnly.TryParseExact(text.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+            // Only a date's ten characters make a date (2026-11-15, the database-tools review's #151: a DATE column's timestamped text
+            // went in as a date at midnight, its time dropped); anything longer that reads is a date-time.
+            string trimmed = text.Trim();
+            if (dateOnly && trimmed.Length == 10 && DateOnly.TryParseExact(trimmed, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
             {
                 return XlsxValue.OfDate(date);
             }
 
-            if (DateTime.TryParseExact(text.Trim(), IsoDateTimes, CultureInfo.InvariantCulture, DateTimeStyles.None, out var when))
+            if (DateTime.TryParseExact(trimmed, IsoDateTimes, CultureInfo.InvariantCulture, DateTimeStyles.None, out var when))
             {
-                return XlsxValue.OfDateTime(when, dateColumn: dateOnly);
+                return XlsxValue.OfDateTime(when);
             }
 
-            return XlsxValue.OfDbText(text);
+            return XlsxValue.OfDbText(text, maxChars);
         }
 
-        return SqlExport.Typed(reader, ordinal, typeName, SqlExport.InvariantText);
+        return SqlExport.Typed(reader, ordinal, typeName, v => SqlExport.InvariantText(v, maxChars), maxChars: maxChars);
     }
 
     /// <summary>
@@ -452,7 +460,8 @@ public sealed class SqliteAccess
     /// The run: <paramref name="write"/> false is <c>sqlite_query</c>'s four layers (read-only open, <c>query_only</c>, a deferred
     /// transaction rolled back); true is <see cref="Execute"/>'s read-write open with neither.
     /// </summary>
-    private static SqlRun Run(SqliteTarget target, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, bool write, bool create, SqliteReadLayers layers, CancellationToken cancellationToken, SqlExportJob? export = null)
+    private static SqlRun Run(SqliteTarget target, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, bool write, bool create, SqliteReadLayers layers, CancellationToken cancellationToken, SqlExportJob? export = null,
+        Func<DbDataReader, int, string>? readCell = null)
     {
         ArgumentNullException.ThrowIfNull(target);
         if (!(write && create) && !File.Exists(target.FullPath))
@@ -553,7 +562,7 @@ public sealed class SqliteAccess
                     using (var reader = ExecuteWaiting(command, watch, deadline, cancellationToken))
                     {
                         grids.Add(export is null
-                            ? SqlGrid.ReadAsync(reader, maxRows, CancellationToken.None, ReadCell).GetAwaiter().GetResult()
+                            ? SqlGrid.ReadAsync(reader, maxRows, CancellationToken.None, readCell ?? ReadCell).GetAwaiter().GetResult()
                             : export.ReadAsync(reader, maxRows, CancellationToken.None).GetAwaiter().GetResult());
                     }
 

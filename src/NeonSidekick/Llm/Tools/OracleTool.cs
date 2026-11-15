@@ -68,7 +68,7 @@ public abstract class OracleTool : ServerTool<OracleAccess>
 
         // The names kept a minute per connection (the review, 2026-10-09: an alias's e.id sent every join for them).
         var (rows, failed) = await ReadNamesAsync(access.Names, BoundaryNames.Key(target.Name, target.Config.DataSource, target.Config.User, OracleAccess.PlaceText(target.Config)),
-            token => access.RunAsync(connection, [OracleBoundary.Names], [], OracleBoundary.MaxNames, TimeoutSeconds(Effective), token), OracleText.Error, cancellationToken).ConfigureAwait(false);
+            token => access.RunAsync(connection, [OracleBoundary.Names], [], OracleBoundary.MaxNames, TimeoutSeconds(Effective), ownerMarker: true, token), OracleText.Error, cancellationToken).ConfigureAwait(false);
         if (failed is not null)
         {
             return failed;
@@ -80,7 +80,7 @@ public abstract class OracleTool : ServerTool<OracleAccess>
 
     /// <summary>Runs the app's own statements on the call's connection (in its schema), capped at <see cref="OracleAccess.MaxCatalogRows"/>.</summary>
     protected async Task<SqlRun> CatalogAsync(string? connection, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, CancellationToken cancellationToken) =>
-        SqlText.CatalogRun(await Oracle.RunAsync(connection, statements, parameters, OracleAccess.MaxCatalogRows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false));
+        SqlText.CatalogRun(await Oracle.RunAsync(connection, statements, parameters, OracleAccess.MaxCatalogRows, TimeoutSeconds(Effective), ownerMarker: true, cancellationToken).ConfigureAwait(false));
 
     /// <summary>What <see cref="FindTableAsync"/> found: the object's owner, name and kind — or the <c>Error:</c> sentence.</summary>
     protected sealed record TableMatch(string Owner, string Name, string Kind, string? Error)
@@ -100,8 +100,9 @@ public abstract class OracleTool : ServerTool<OracleAccess>
             return TableMatch.Refused(OracleText.BadTable(table));
         }
 
-        if (parts.Owner is { } owner && Oracle.Resolve(connection, out _) is { } target
-            && OracleAccess.Places(target.Config) is var places && !places.Contains(owner, StringComparer.Ordinal))
+        // Read once (#116): the refusals name each listed place, not their joined text.
+        var places = Oracle.Resolve(connection, out _) is { } target ? OracleAccess.Places(target.Config) : null;
+        if (parts.Owner is { } owner && places is not null && !places.Contains(owner, StringComparer.Ordinal))
         {
             return TableMatch.Refused(OracleText.TableElsewhere(owner, places));
         }
@@ -118,7 +119,7 @@ public abstract class OracleTool : ServerTool<OracleAccess>
         var pick = exact.Count == 1 ? exact : rows.ToList();
         if (pick.Count == 0)
         {
-            return TableMatch.Refused(OracleText.TableNotFound(table, run.Connection, run.Database));
+            return TableMatch.Refused(OracleText.TableNotFound(table, run.Connection, places ?? [run.Database]));
         }
 
         if (parts.Owner is null && exact.Count == 0)

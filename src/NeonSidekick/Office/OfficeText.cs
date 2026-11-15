@@ -264,8 +264,8 @@ public static class OfficeText
     public const string Category = "office";
 
     /// <summary>The log line of a workbook part that threw as it was let go (2026-11-02, review P13-2): logged, never rethrown.</summary>
-    public static string ReleaseFailedLogLine(string part, string? workbook, string kind, string message) =>
-        $"xlsx {part} of {workbook ?? "a workbook"} failed to close ({kind}): {message}";
+    public static string ReleaseFailedLogLine(string format, string part, string? file, string kind, string message) =>
+        $"{format} {part} of {file ?? "a file"} failed to close ({kind}): {message}";
 
     /// <summary>A table with no columns. Pinned.</summary>
     public const string NoColumns = "Error: the result has no columns, so there is nothing to write";
@@ -519,12 +519,15 @@ public static class OfficeText
             + Count(sheet.Rows, "row") + " × " + Count(sheet.Columns, "column") + TextNotes(sheet);
     }
 
-    /// <summary>The notes after a CSV or JSON file's sentence: cells cut at a cell's cap, rows past the last row a workbook holds.</summary>
+    /// <summary>
+    /// The notes after a CSV or JSON file's sentence: cells cut at a text file's cap (<see cref="TextRows.CellCap"/>, 2026-11-15, #32), rows
+    /// past the last row a workbook holds, said to be a workbook's limit (#14: a CSV has none of its own).
+    /// </summary>
     public static string TextNotes(SheetResult result)
     {
         ArgumentNullException.ThrowIfNull(result);
-        return (result.CutCells > 0 ? $"; {Count(result.CutCells, "cell")} cut at {N(XlsxValue.MaxChars)} characters" : "")
-            + (result.RowsCut ? $"; stopped at {N(SheetWriter.MaxDataRows)} rows, so later rows are left out" : "");
+        return (result.CutCells > 0 ? $"; {Count(result.CutCells, "cell")} cut at {N(TextRows.CellCap)} characters" : "")
+            + (result.RowsCut ? $"; stopped at {N(SheetWriter.MaxDataRows)} rows (a workbook's limit), so later rows are left out" : "");
     }
 
     /// <summary>A <c>to</c> ending in another document type than the tool writes. Pinned.</summary>

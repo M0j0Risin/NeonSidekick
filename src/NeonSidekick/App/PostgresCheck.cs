@@ -50,7 +50,8 @@ internal static class PostgresCheck
         {
             outside.Add("SELECT * FROM information_schema.tables");
             outside.Add("SELECT schemaname, tablename FROM pg_tables");   // a catalog listing every schema (2026-10-11)
-            if (visible.FirstOrDefault(v => !locks.Any(l => v.Equals(l, StringComparison.OrdinalIgnoreCase)) && !PostgresBoundary.AlwaysSchemas.Contains(v) && v != "information_schema") is { } other)
+            // Compared exactly (2026-11-15, the database-tools review's #161): a quoted case twin ("Sales" beside sales) is another schema, so it is probed.
+            if (visible.FirstOrDefault(v => !locks.Contains(v, StringComparer.Ordinal) && !PostgresBoundary.AlwaysSchemas.Contains(v) && v != "information_schema") is { } other)
             {
                 outside.Add($"SELECT 1 FROM \"{other}\".t");
             }
@@ -121,7 +122,7 @@ internal static class PostgresCheck
         checks.Add(BoundaryCheck(target.Config.Locks, names));
         var reach = await access.RunAsync(name, PostgresCatalogQueries.Reach, [], 100, timeoutSeconds, cancellationToken).ConfigureAwait(false);
         checks.Add(new SmokeCheck("postgres:reach", reach.Outcome == SqlOutcome.Ok, reach.Outcome == SqlOutcome.Ok
-            ? PostgresText.Reach(target.Config.Database?.Trim() ?? "", target.Config.LockText, Column(reach, 0), Column(reach, 1), Column(reach, 2))
+            ? PostgresText.Reach(target.Config.Database?.Trim() ?? "", target.Config.Locks, Column(reach, 0), Column(reach, 1), Column(reach, 2))
             : PostgresText.Error(reach)));
 
         var write = await Run(["CREATE TEMP TABLE neonsidekick_check (a int)"], timeoutSeconds).ConfigureAwait(false);

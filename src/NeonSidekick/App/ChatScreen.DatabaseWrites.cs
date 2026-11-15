@@ -98,7 +98,7 @@ internal sealed partial class ChatScreen
         // The whole statement for the pane's v, its line ends as the server reads them and its hiding characters escaped (F16), the bound
         // values under it (B5); the caption the same on the PC's pane and the Web UI's ask.
         var whole = Shell.ShellText.WholeCommandLines(new Shell.CommandRequest("sql", Files.NameScrub.Display(ServerWriteText.Lines(sql), keepLineBreaks: true) + ServerWriteText.Bound(parameters), [], IsScript: true));
-        string caption = ServerWriteText.AllowCaption(family, target.Connection, target.Place, sql, target.Where, parameters, target.Places);
+        string caption = ServerWriteText.AllowCaption(family, target.Connection, target.Place, sql, target.Where, parameters, target.Places.Count);
         var allow = await AllowBothAsync(ServerWriteText.AllowTitle(family), caption, whole, token => _cameraMenu.AllowAsync(caption, token, ServerWriteText.AllowTitle(family), ServerWriteText.AllowTitle(family), whole), turnToken).ConfigureAwait(false);
         if (allow is not { } choice)
         {

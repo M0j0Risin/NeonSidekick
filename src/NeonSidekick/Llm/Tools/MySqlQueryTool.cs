@@ -89,7 +89,7 @@ public sealed class MySqlQueryTool : MySqlTool
             var pinned = Server.Pinned(target);
             return await ExportAsync(export, target.Name, rows, maxRows, TimeoutSeconds(Effective), MySqlAccess.ExportCell,
                 (job, timeout, token) => pinned.ExportAsync(target.Name, body, parameters, job, rows, timeout, token), MySqlText.Error, cancellationToken,
-                MySqlAccess.ExportHeader).ConfigureAwait(false);
+                MySqlAccess.IsUtcColumn).ConfigureAwait(false);
         }
 
         var run = await Server.RunAsync(connection, [body], parameters, rows, TimeoutSeconds(Effective), cancellationToken).ConfigureAwait(false);
@@ -104,20 +104,9 @@ public sealed class MySqlQueryTool : MySqlTool
             return ClockText.BadInteger(MaxRowsArgument, raw);
         }
 
-        if (!ToolArguments.TryReadObjectList(arguments, ParamsArgument, out var objects, out var sent) || objects.Count > 1)
+        if (SqlQueryTool.ReadParams(arguments, MySqlText.BadParams, out var error) is not { } parameters)
         {
-            return MySqlText.BadParams(sent);
-        }
-
-        IReadOnlyList<SqlParameterValue> parameters = [];
-        if (objects.Count == 1)
-        {
-            if (SqlQueryTool.ReadParameters(objects[0], out var error) is not { } read)
-            {
-                return error;
-            }
-
-            parameters = read;
+            return error;
         }
 
         if (ReadExport(arguments, out var export) is { } badExport)

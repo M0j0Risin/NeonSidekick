@@ -107,7 +107,7 @@ public sealed class OracleWriteGateTests
     [InlineData("CREATE TRIGGER tr BEFORE INSERT ON t FOR EACH ROW BEGIN :NEW.a := 1; END;", "")]
     [InlineData("UPDATE t SET t.a = 1", "T")]
     public void TheBoundary_AsksTheDatabaseOnlyAboutAnotherQualifier(string sql, string heads) =>
-        Assert.Equal(heads, string.Join(",", OracleBoundary.Qualifiers(sql, "NEON").Heads));
+        Assert.Equal(heads, string.Join(",", OracleBoundary.Qualifiers(sql, ["NEON"]).Heads));
 
     [Fact]
     public void TheBody_KeepsAPlSqlUnitsSemicolon_AndDropsPlainSqls()
@@ -159,8 +159,8 @@ public sealed class OracleExecuteTests
             asked.Add((target.Connection, target.Place, sql));
             return Task.FromResult<bool?>(false);
         });
-        Assert.Equal(OracleText.Dictionary("DBA_USERS", "HR"), await named.RunAsync("SELECT * FROM dba_users", "hr", [], null, CancellationToken.None));
-        Assert.Equal(OracleText.OtherSchema("APP", "HR"), await named.RunAsync("DELETE FROM app.t", "hr", [], null, CancellationToken.None));
+        Assert.Equal(OracleText.Dictionary("DBA_USERS", ["HR"]), await named.RunAsync("SELECT * FROM dba_users", "hr", [], null, CancellationToken.None));
+        Assert.Equal(OracleText.OtherSchema("APP", ["HR"]), await named.RunAsync("DELETE FROM app.t", "hr", [], null, CancellationToken.None));
         Assert.StartsWith("Error: the SQL uses UTL_HTTP", await tool.RunAsync("SELECT UTL_HTTP.REQUEST('x') FROM dual", null, [], null, CancellationToken.None));
         _settings.OracleMode = "read-only";
         Assert.Equal(ServerWriteText.ReadOnlyMode(OracleStatementKinds.Family), await tool.RunAsync("INSERT INTO t VALUES (1)", null, [], null, CancellationToken.None));

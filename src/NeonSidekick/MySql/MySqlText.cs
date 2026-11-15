@@ -12,6 +12,33 @@ namespace NeonSidekick.MySql;
 /// </summary>
 public static class MySqlText
 {
+    // ─── mysql_explain's step labels (2026-11-15, #171) ─────────────────────────
+
+    public const string PlanFullTableScan = "Full table scan";
+    public const string PlanFullIndexScan = "Full index scan";
+    public const string PlanIndexRange = "Index range scan";
+    public const string PlanTable = "Table";
+
+    /// <summary>An index lookup step, by its <c>access_type</c> (<c>ref</c>, <c>eq_ref</c>, <c>const</c>…).</summary>
+    public static string PlanIndexLookup(string access) => "Index lookup (" + access + ")";
+
+    /// <summary>The plan's containers, by their JSON key, as the step each stands for.</summary>
+    public static readonly IReadOnlyDictionary<string, string> PlanContainers = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["ordering_operation"] = "Order",
+        ["grouping_operation"] = "Group",
+        ["duplicates_removal"] = "Remove duplicates",
+        ["windowing"] = "Window",
+        ["filesort"] = "Filesort",
+        ["temporary_table"] = "Temporary table",
+        ["read_sorted_file"] = "Read sorted file",
+        ["block-nl-join"] = "Join buffer",
+        ["materialized_from_subquery"] = "Materialize",
+        ["materialized"] = "Materialize",
+        ["materialization"] = "Materialize",
+        ["union_result"] = "Union",
+    };
+
     // ─── mysql.json ─────────────────────────────────────────────────────────────
 
     public const string NoHost = "no \"host\" is given";

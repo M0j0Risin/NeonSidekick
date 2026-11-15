@@ -66,7 +66,7 @@ public sealed class MySqlExecuteTool : MySqlTool
             MySqlReadOnlyGate.Check,
             MySqlReadOnlyGate.Body,
             () => resolved is { } target
-                ? (new ExecuteTarget(target.Name, target.Config.IsReadWrite, target.Config.Database?.Trim() ?? "", target.Config.SignInHost), null)
+                ? (new ExecuteTarget(target.Name, target.Config.IsReadWrite, [target.Config.Database?.Trim() ?? ""], target.Config.SignInHost), null)
                 : (null, MySqlText.Error(unresolved!)),
             async (body, token) =>
             {
@@ -87,20 +87,9 @@ public sealed class MySqlExecuteTool : MySqlTool
             return ClockText.BadInteger(MySqlQueryTool.MaxRowsArgument, raw);
         }
 
-        if (!ToolArguments.TryReadObjectList(arguments, MySqlQueryTool.ParamsArgument, out var objects, out var sent) || objects.Count > 1)
+        if (SqlQueryTool.ReadParams(arguments, MySqlText.BadParams, out var error) is not { } parameters)
         {
-            return MySqlText.BadParams(sent);
-        }
-
-        IReadOnlyList<SqlParameterValue> parameters = [];
-        if (objects.Count == 1)
-        {
-            if (SqlQueryTool.ReadParameters(objects[0], out var error) is not { } read)
-            {
-                return error;
-            }
-
-            parameters = read;
+            return error;
         }
 
         return await RunAsync(ToolArguments.ReadString(arguments, MySqlQueryTool.SqlArgument), Optional(arguments, ConnectionArgument), parameters, max, cancellationToken).ConfigureAwait(false);

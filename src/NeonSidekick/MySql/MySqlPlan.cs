@@ -9,13 +9,16 @@ namespace NeonSidekick.MySql;
 /// <list type="bullet">
 /// <item>MySQL's format 1 (8.x's default): a <c>query_block</c> whose <c>table</c>s sit in <c>nested_loop</c>s and operations
 /// (<c>ordering_operation</c>, <c>grouping_operation</c>…), each with <c>access_type</c>, <c>rows_examined_per_scan</c> and
-/// <c>cost_info.prefix_cost</c> (text).</item>
+/// <c>cost_info</c> (text): a step's own cost is <c>read_cost</c> + <c>eval_cost</c> (#81; <c>prefix_cost</c> is the join's running total).
+/// A table holds its own subqueries (<c>attached_subqueries</c>…, #47).</item>
 /// <item>MariaDB's: the same <c>query_block</c>, with <c>rows</c> and a numeric <c>cost</c>, and <c>filesort</c>, <c>temporary_table</c> and
-/// <c>block-nl-join</c> as containers.</item>
+/// <c>block-nl-join</c> as containers; a subquery's cache (<c>expression_cache</c> in 10.x, <c>subquery_cache</c> in 11.x) is walked
+/// through without a step of its own (#48).</item>
 /// <item>MySQL's format 2 (<c>explain_json_format_version=2</c>): an <c>operation</c> tree with <c>inputs</c>, <c>access_type</c>,
 /// <c>estimated_rows</c> and <c>estimated_total_cost</c>.</item>
 /// </list>
-/// Flags: a full scan of a big table, a join through a join buffer (no usable index), a filesort and a temporary table. Pure.
+/// Flags: a full scan of a big table, a join through a join buffer (no usable index), a filesort and a temporary table. The steps' labels
+/// are <see cref="MySqlText"/>'s (#171). Pure.
 /// </summary>
 public static class MySqlPlan
 {
@@ -28,7 +31,7 @@ public static class MySqlPlan
         ArgumentNullException.ThrowIfNull(json);
         try
         {
-            using var document = JsonDocument.Parse(json);
+            using var document = PlanJson.Parse(json);
             var root = document.RootElement;
             if (root.ValueKind != JsonValueKind.Object)
             {
@@ -70,19 +73,16 @@ public static class MySqlPlan
     };
 
     /// <summary>The containers that hold tables and blocks, named as the step they stand for.</summary>
-    private static readonly Dictionary<string, string> Containers = new(StringComparer.Ordinal)
+    private static IReadOnlyDictionary<string, string> Containers => MySqlText.PlanContainers;
+
+    /// <summary>
+    /// The arrays of subqueries a block or a table holds (MySQL's <c>opt_explain_json.cc</c>, 8.4, names the SELECT kinds; #47 adds
+    /// <c>group_by_subqueries</c>). <c>optimized_away_subqueries</c> stays out: those ran while planning and aren't part of the plan.
+    /// </summary>
+    private static readonly HashSet<string> SubqueryArrays = new(StringComparer.Ordinal)
     {
-        ["ordering_operation"] = "Order",
-        ["grouping_operation"] = "Group",
-        ["duplicates_removal"] = "Remove duplicates",
-        ["windowing"] = "Window",
-        ["filesort"] = "Filesort",
-        ["temporary_table"] = "Temporary table",
-        ["read_sorted_file"] = "Read sorted file",
-        ["block-nl-join"] = "Join buffer",
-        ["materialized_from_subquery"] = "Materialize",
-        ["materialized"] = "Materialize",
-        ["union_result"] = "Union",
+        "nested_loop", "query_specifications", "subqueries", "attached_subqueries", "order_by_subqueries", "select_list_subqueries",
+        "having_subqueries", "group_by_subqueries",
     };
 
     private static void Block(JsonElement block, int depth, List<QueryPlanStep> steps, List<string> flags)
@@ -103,8 +103,15 @@ public static class MySqlPlan
             case "query_block" when value.ValueKind == JsonValueKind.Object:
                 Block(value, depth, steps, flags);
                 return;
-            case "nested_loop" or "query_specifications" or "subqueries" or "attached_subqueries" or "order_by_subqueries" or "select_list_subqueries" or "having_subqueries"
-                when value.ValueKind == JsonValueKind.Array:
+            case "expression_cache" or "subquery_cache" when value.ValueKind == JsonValueKind.Object:
+                // MariaDB's cache around a subquery (#48): what it holds, at the cache's own depth.
+                foreach (var property in value.EnumerateObject())
+                {
+                    Member(property.Name, property.Value, depth, steps, flags, buffered);
+                }
+
+                return;
+            case var array when SubqueryArrays.Contains(array) && value.ValueKind == JsonValueKind.Array:
                 foreach (var item in value.EnumerateArray().Where(i => i.ValueKind == JsonValueKind.Object))
                 {
                     foreach (var property in item.EnumerateObject())
@@ -123,12 +130,12 @@ public static class MySqlPlan
 
         if (Containers.TryGetValue(name, out string? step))
         {
-            if (name is "filesort" || True(value, "using_filesort"))
+            if (name is "filesort" || PlanJson.True(value, "using_filesort"))
             {
                 flags.Add(QueryPlanText.Filesort(null));
             }
 
-            if (name is "temporary_table" || True(value, "using_temporary_table"))
+            if (name is "temporary_table" || PlanJson.True(value, "using_temporary_table"))
             {
                 flags.Add(QueryPlanText.TempTable(Purposes.GetValueOrDefault(name)));
             }
@@ -143,23 +150,25 @@ public static class MySqlPlan
 
     private static void Table(JsonElement table, int depth, List<QueryPlanStep> steps, List<string> flags, bool buffered)
     {
-        string name = Text(table, "table_name") ?? "?";
-        string access = Text(table, "access_type") ?? "";
-        string? key = Text(table, "key");
-        double? rows = Number(table, "rows_examined_per_scan") ?? Number(table, "rows");
-        double? cost = table.TryGetProperty("cost_info", out var info) && info.ValueKind == JsonValueKind.Object ? Number(info, "prefix_cost") : Number(table, "cost");
+        string name = PlanJson.Text(table, "table_name") ?? "?";
+        string access = PlanJson.Text(table, "access_type") ?? "";
+        string? key = PlanJson.Text(table, "key");
+        double? rows = PlanJson.Number(table, "rows_examined_per_scan") ?? PlanJson.Number(table, "rows");
+        double? cost = table.TryGetProperty("cost_info", out var info) && info.ValueKind == JsonValueKind.Object
+            ? PlanJson.Number(info, "read_cost") is { } read ? read + (PlanJson.Number(info, "eval_cost") ?? 0) : null
+            : PlanJson.Number(table, "cost");
         steps.Add(new QueryPlanStep(depth, Access(access), key is null ? name : name + " using " + key, rows, cost));
         if (access == "ALL" && rows >= QueryPlan.BigRows)
         {
             flags.Add(QueryPlanText.FullScan(name, rows));
         }
 
-        if ((buffered || Text(table, "using_join_buffer") is not null) && access is "ALL" or "index")
+        if ((buffered || PlanJson.Text(table, "using_join_buffer") is not null) && access is "ALL" or "index")
         {
             flags.Add(QueryPlanText.JoinBuffer(name, rows));
         }
 
-        // A derived table's or a subquery's own block sits inside the table.
+        // A derived table's or a subquery's own block sits inside the table, and so do the subqueries its condition runs (#47).
         foreach (var property in table.EnumerateObject())
         {
             if (property.Value.ValueKind == JsonValueKind.Object && property.Name is "materialized_from_subquery" or "materialized" or "derived" or "query_block")
@@ -167,17 +176,21 @@ public static class MySqlPlan
                 var inner = property.Value.TryGetProperty("query_block", out var block) ? block : property.Value;
                 Block(inner, depth + 1, steps, flags);
             }
+            else if (property.Value.ValueKind == JsonValueKind.Array && SubqueryArrays.Contains(property.Name))
+            {
+                Member(property.Name, property.Value, depth + 1, steps, flags, buffered: false);
+            }
         }
     }
 
     /// <summary>An <c>access_type</c> as a step's operation.</summary>
     private static string Access(string access) => access switch
     {
-        "ALL" => "Full table scan",
-        "index" => "Full index scan",
-        "range" => "Index range scan",
-        "ref" or "eq_ref" or "ref_or_null" or "const" or "system" => "Index lookup (" + access + ")",
-        "" => "Table",
+        "ALL" => MySqlText.PlanFullTableScan,
+        "index" => MySqlText.PlanFullIndexScan,
+        "range" => MySqlText.PlanIndexRange,
+        "ref" or "eq_ref" or "ref_or_null" or "const" or "system" => MySqlText.PlanIndexLookup(access),
+        "" => MySqlText.PlanTable,
         _ => access,
     };
 
@@ -185,12 +198,12 @@ public static class MySqlPlan
 
     private static void Operation(JsonElement node, int depth, List<QueryPlanStep> steps, List<string> flags)
     {
-        string operation = Text(node, "operation") ?? "?";
-        string access = Text(node, "access_type") ?? "";
-        string? table = Text(node, "table_name");
-        string? index = Text(node, "index_name");
-        double? rows = Number(node, "estimated_rows");
-        steps.Add(new QueryPlanStep(depth, operation, table is null ? index : index is null ? table : table + " using " + index, rows, Number(node, "estimated_total_cost")));
+        string operation = PlanJson.Text(node, "operation") ?? "?";
+        string access = PlanJson.Text(node, "access_type") ?? "";
+        string? table = PlanJson.Text(node, "table_name");
+        string? index = PlanJson.Text(node, "index_name");
+        double? rows = PlanJson.Number(node, "estimated_rows");
+        steps.Add(new QueryPlanStep(depth, operation, table is null ? index : index is null ? table : table + " using " + index, rows, PlanJson.Number(node, "estimated_total_cost")));
         if (access == "table" && table is not null && rows >= QueryPlan.BigRows)
         {
             flags.Add(QueryPlanText.FullScan(table, rows));
@@ -210,26 +223,6 @@ public static class MySqlPlan
         }
     }
 
-    // ─── values ─────────────────────────────────────────────────────────────────
-
-    private static bool True(JsonElement node, string name) => node.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.True;
-
-    private static string? Text(JsonElement node, string name) =>
-        node.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
-
     /// <summary>A number written as one (MariaDB) or as text (MySQL's <c>"1.20"</c>).</summary>
-    private static double? Number(JsonElement node, string name)
-    {
-        if (!node.TryGetProperty(name, out var value))
-        {
-            return null;
-        }
-
-        return value.ValueKind switch
-        {
-            JsonValueKind.Number when value.TryGetDouble(out double d) => d,
-            JsonValueKind.String => QueryPlan.Number(value.GetString()),
-            _ => null,
-        };
-    }
+    private static double? Number(JsonElement node, string name) => PlanJson.Number(node, name);
 }

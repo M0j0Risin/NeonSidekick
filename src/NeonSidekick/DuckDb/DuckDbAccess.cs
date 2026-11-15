@@ -314,7 +314,9 @@ public sealed class DuckDbAccess
     /// one's rows read to <paramref name="maxRows"/>, all inside one transaction rolled back. A timeout, a failed open and a DuckDB error are
     /// outcomes; a canceled token throws.
     /// </summary>
-    public async Task<SqlRun> RunAsync(string? database, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken)
+    /// <remarks><paramref name="readCell"/> (2026-11-15, #34): the cells read whole (<see cref="QueryPlan.WholeCell"/>), for names quoted back into SQL.</remarks>
+    public async Task<SqlRun> RunAsync(string? database, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken,
+        Func<DbDataReader, int, string>? readCell = null)
     {
         ArgumentNullException.ThrowIfNull(statements);
         ArgumentNullException.ThrowIfNull(parameters);
@@ -324,7 +326,7 @@ public sealed class DuckDbAccess
         }
 
         string? root = _sandbox()?.Root;
-        return await Task.Run(() => Run(target, [.. statements.Select(DuckDbPrepared.AsWritten)], parameters, maxRows, timeoutSeconds, root, cancellationToken), cancellationToken).ConfigureAwait(false);
+        return await Task.Run(() => Run(target, [.. statements.Select(DuckDbPrepared.AsWritten)], parameters, maxRows, timeoutSeconds, root, cancellationToken, readCell), cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>A read on the calling thread with every layer: <paramref name="root"/> is the folder data files may be read from (null: none).</summary>
@@ -345,10 +347,10 @@ public sealed class DuckDbAccess
     }
 
     /// <summary>A cell of a wrapped read before the types are known (an EXPLAIN keeps it): DuckDB's text, NULL blank, <c>''</c> empty text (review F15).</summary>
-    public static XlsxValue TextCell(DbDataReader reader, int ordinal, string? typeName)
+    public static XlsxValue TextCell(DbDataReader reader, int ordinal, string? typeName, int maxChars = XlsxValue.MaxChars)
     {
         ArgumentNullException.ThrowIfNull(reader);
-        return reader.IsDBNull(ordinal) ? XlsxValue.Blank : XlsxValue.OfDbText(Convert.ToString(reader.GetValue(ordinal), CultureInfo.InvariantCulture) ?? "");
+        return reader.IsDBNull(ordinal) ? XlsxValue.Blank : XlsxValue.OfDbText(Convert.ToString(reader.GetValue(ordinal), CultureInfo.InvariantCulture) ?? "", maxChars);
     }
 
     /// <summary>
@@ -361,7 +363,7 @@ public sealed class DuckDbAccess
     public static SqlCellReader ExportCell(IReadOnlyList<Type> types)
     {
         ArgumentNullException.ThrowIfNull(types);
-        return (reader, ordinal, _) =>
+        return (reader, ordinal, _, maxChars) =>
         {
             if (reader.IsDBNull(ordinal))
             {
@@ -370,7 +372,7 @@ public sealed class DuckDbAccess
 
             string text = Convert.ToString(reader.GetValue(ordinal), CultureInfo.InvariantCulture) ?? "";
             var type = ordinal < types.Count ? types[ordinal] : typeof(string);
-            return FromText(text, type);
+            return FromText(text, type, maxChars);
         };
     }
 
@@ -408,14 +410,14 @@ public sealed class DuckDbAccess
         return [.. bytes];
     }
 
-    /// <summary>DuckDB's text of a value of <paramref name="type"/> (the driver's type of the column) as the sheet's cell.</summary>
-    public static XlsxValue FromText(string text, Type type)
+    /// <summary>DuckDB's text of a value of <paramref name="type"/> (the driver's type of the column) as the sheet's cell, cut at <paramref name="maxChars"/>.</summary>
+    public static XlsxValue FromText(string text, Type type, int maxChars = XlsxValue.MaxChars)
     {
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(type);
         if (type == typeof(bool))
         {
-            return text switch { "true" => XlsxValue.OfBool(true), "false" => XlsxValue.OfBool(false), _ => XlsxValue.OfDbText(text) };
+            return text switch { "true" => XlsxValue.OfBool(true), "false" => XlsxValue.OfBool(false), _ => XlsxValue.OfDbText(text, maxChars) };
         }
 
         if (type == typeof(float) || type == typeof(double))
@@ -426,20 +428,20 @@ public sealed class DuckDbAccess
             {
                 "inf" => XlsxValue.OfDouble(double.PositiveInfinity),
                 "-inf" => XlsxValue.OfDouble(double.NegativeInfinity),
-                _ => double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out double real) ? XlsxValue.OfDouble(real) : XlsxValue.OfDbText(text),
+                _ => double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out double real) ? XlsxValue.OfDouble(real) : XlsxValue.OfDbText(text, maxChars),
             };
         }
 
         if (type == typeof(byte[]) || typeof(Stream).IsAssignableFrom(type))
         {
-            return BlobBytes(text) is { } bytes ? XlsxValue.OfBytes(bytes) : XlsxValue.OfDbText(text);
+            return BlobBytes(text) is { } bytes ? XlsxValue.OfBytes(bytes, maxChars: maxChars) : XlsxValue.OfDbText(text, maxChars);
         }
 
         if (type == typeof(sbyte) || type == typeof(byte) || type == typeof(short) || type == typeof(ushort) || type == typeof(int) || type == typeof(uint)
             || type == typeof(long) || type == typeof(ulong) || type == typeof(Int128) || type == typeof(UInt128) || type == typeof(System.Numerics.BigInteger)
             || type == typeof(decimal))
         {
-            return XlsxValue.OfNumberText(text);
+            return XlsxValue.OfNumberText(text, maxChars);
         }
 
         // A fraction past .NET's seven digits (TIMESTAMP_NS, TIME_NS) cut to seven, so the value reads (2026-10-29, review P5-10).
@@ -453,17 +455,17 @@ public sealed class DuckDbAccess
 
             return DateTime.TryParseExact(text, ["yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd HH:mm:ss.FFFFFFF"], CultureInfo.InvariantCulture, DateTimeStyles.None, out var when)
                 ? XlsxValue.OfDateTime(when)
-                : XlsxValue.OfDbText(text);
+                : XlsxValue.OfDbText(text, maxChars);
         }
 
         if (type == typeof(TimeOnly))
         {
             return TimeOnly.TryParseExact(text, ["HH:mm:ss", "HH:mm:ss.FFFFFFF"], CultureInfo.InvariantCulture, DateTimeStyles.None, out var time)
                 ? XlsxValue.OfTime(time)
-                : XlsxValue.OfDbText(text);
+                : XlsxValue.OfDbText(text, maxChars);
         }
 
-        return XlsxValue.OfDbText(text);
+        return XlsxValue.OfDbText(text, maxChars);
     }
 
     /// <summary>A time's fraction past seven digits cut to seven (the rest is below a tick); any other text as it is. Pure.</summary>

@@ -51,6 +51,7 @@ public static partial class CsvCell
         return PlainNumber().IsMatch(value);
     }
 
-    [GeneratedRegex(@"^-?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?$", RegexOptions.CultureInvariant)]
+    /// <summary>The one number grammar (2026-11-15, #78/#122: <c>\z</c>, since <c>$</c> also matched before a trailing line feed).</summary>
+    [GeneratedRegex(@"^-?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?\z", RegexOptions.CultureInvariant)]
     private static partial Regex PlainNumber();
 }

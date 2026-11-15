@@ -32,7 +32,7 @@ public partial class ToolsMenuTests
         var tested = new List<PostgresNamedConnection>();
         var listed = new List<PostgresNamedConnection>();
         var (menu, _, settings) = PaneMenu();
-        settings.ListPostgresSchemas = (c, _) =>
+        settings.ListPostgresSchemas = (c, _, _) =>
         {
             listed.Add(c);
             return Task.FromResult(new SqlRun(SqlOutcome.Ok, "", c.Name, "shop", [new SqlGrid(["nspname"], [["public"], ["sales"], ["has space"]], false)], TimeSpan.Zero));
@@ -76,8 +76,9 @@ public partial class ToolsMenuTests
         Assert.DoesNotContain("has space", Output);
         Assert.Contains("The role could also connect to postgres; use the schemas public.", Output);
         Assert.Equal("The role could also connect to postgres; use the schemas public. The tools keep to shop.sales; a role granted only it is the lock the server keeps too.",
-            PostgresText.Reach("shop", "sales", ["postgres"], [], ["public"]));
-        Assert.Equal("The role reaches no other database, foreign server beyond shop (the system catalogs aside).", PostgresText.Reach("shop", null, [], [], ["public"]));
+            PostgresText.Reach("shop", ["sales"], ["postgres"], [], ["public"]));
+        Assert.Equal("The role reaches no other database, foreign server beyond shop (the system catalogs aside).", PostgresText.Reach("shop", [], [], [], ["public"]));
+        Assert.Contains("The tools keep to shop (schemas sales, ns_other);", PostgresText.Reach("shop", ["sales", "ns_other"], ["postgres"], [], []), StringComparison.Ordinal);   // #101
         Assert.Equal("s3cret", PostgresSecrets.Resolve(shop).Value);
         Assert.Contains(PostgresText.TestOk("shop", "postgres", "shop", "PostgreSQL 17.2"), Output);
         Assert.Contains("This account can change data (superuser). As readwrite, postgres_execute may use those powers", Output);

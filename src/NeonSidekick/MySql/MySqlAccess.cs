@@ -161,7 +161,7 @@ public sealed class MySqlAccess
         try
         {
             // An export's session in UTC (2026-11-02, review P10-4, the user's call): a TIMESTAMP is handed in the session's zone, never
-            // named, so the workbook's header says UTC (ExportHeader). The pool resets the session on its way back, so a chat read after it
+            // named, so the workbook's header says UTC (IsUtcColumn). The pool resets the session on its way back, so a chat read after it
             // sees the server's zone again.
             await ExecuteAsync(connection, null, SessionStatement(connection.ServerVersion, timeoutSeconds, utc: export is not null), timeoutSeconds, cancellationToken).ConfigureAwait(false);
             if (await ModeRefusalAsync(connection, timeoutSeconds, cancellationToken).ConfigureAwait(false) is { } kept)
@@ -206,10 +206,10 @@ public sealed class MySqlAccess
         }
         catch (MySqlException ex)
         {
-            return new SqlRun(SqlOutcome.Failed, Message(ex), target.Name, workIn, grids, watch.Elapsed);
+            return new SqlRun(SqlOutcome.Failed, Message(ex), target.Name, workIn, grids, watch.Elapsed) { ServerVersion = connection.ServerVersion };
         }
 
-        return new SqlRun(SqlOutcome.Ok, "", target.Name, workIn, grids, watch.Elapsed);
+        return new SqlRun(SqlOutcome.Ok, "", target.Name, workIn, grids, watch.Elapsed) { ServerVersion = connection.ServerVersion };
     }
 
     /// <summary>
@@ -499,7 +499,7 @@ public sealed class MySqlAccess
     /// rules — <c>BIT</c> and unsigned <c>BIGINT</c> numbers within 15 digits, <c>TIME</c> a time or duration, a whole decimal past 15
     /// digits text and a fraction the nearest double (<see cref="XlsxValue.TryExcelNumber"/>). <c>TINYINT(1)</c> stays the number the chat shows (<c>TreatTinyAsBoolean</c> is off).
     /// </summary>
-    public static XlsxValue ExportCell(DbDataReader reader, int ordinal, string? typeName)
+    public static XlsxValue ExportCell(DbDataReader reader, int ordinal, string? typeName, int maxChars = XlsxValue.MaxChars)
     {
         ArgumentNullException.ThrowIfNull(reader);
         try
@@ -518,13 +518,13 @@ public sealed class MySqlAccess
                     : XlsxValue.OfText(DateCell(date));
             }
 
-            return SqlExport.FromValue(value, typeName, SqlExport.InvariantText);
+            return SqlExport.FromValue(value, typeName, v => SqlExport.InvariantText(v, maxChars), maxChars);
         }
         catch (Exception ex) when (ex is FormatException or OverflowException or InvalidCastException or MySqlConversionException)
         {
             // A value GetValue won't hand over (a decimal past decimal's range): its MySqlDecimal's digits, the chat's read (2026-11-02,
             // review P10-1: the generic provider value isn't overridden by MySqlConnector, so it threw again and wrote the placeholder).
-            return SqlExport.FromProvider(reader, ordinal, typeName, ProviderNumber);
+            return SqlExport.FromProvider(reader, ordinal, typeName, ProviderNumber, maxChars);
         }
     }
 
@@ -533,19 +533,14 @@ public sealed class MySqlAccess
         reader is MySqlDataReader mysql ? mysql.GetMySqlDecimal(ordinal).ToString() : SqlExport.InvariantText(reader.GetProviderSpecificValue(ordinal));
 
     /// <summary>
-    /// A column's header in a workbook (2026-11-02, review P10-4): its name, and <see cref="SqlExport.UtcColumn"/> on a <c>TIMESTAMP</c>,
-    /// whose cells the export's UTC session hands in UTC (<see cref="SessionStatement"/>). A <c>DATETIME</c> stores no zone and is left as it is.
+    /// Whether an export's column holds UTC (2026-11-02, review P10-4; a bool since 2026-11-15, the database-tools review's #46): a
+    /// <c>TIMESTAMP</c>, whose cells the export's UTC session hands in UTC (<see cref="SessionStatement"/>), so a workbook's header adds
+    /// <see cref="SqlExport.UtcColumn"/> and a CSV or JSON value a <c>Z</c>. A <c>DATETIME</c> stores no zone and is left as it is.
     /// </summary>
-    public static string ExportHeader(DbDataReader reader, int ordinal)
+    public static bool IsUtcColumn(DbDataReader reader, int ordinal)
     {
         ArgumentNullException.ThrowIfNull(reader);
-        string name = reader.GetName(ordinal);
-        if (string.IsNullOrEmpty(name))
-        {
-            name = SqlText.UnnamedColumn(ordinal);
-        }
-
-        return string.Equals(reader.GetDataTypeName(ordinal), "TIMESTAMP", StringComparison.OrdinalIgnoreCase) ? name + SqlExport.UtcColumn : name;
+        return string.Equals(reader.GetDataTypeName(ordinal), "TIMESTAMP", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>The server's message with its number — <c>Error 1146: Table 'shop.x' doesn't exist</c> is what the model needs to fix the text.</summary>

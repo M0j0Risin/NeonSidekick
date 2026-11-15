@@ -23,7 +23,7 @@ public sealed class SqlExplainTool : SqlTool
           "properties": {
             "sql": { "type": "string", "description": "The T-SQL SELECT to explain, as sql_query takes it (a WITH … CTE may lead it). Give the query alone: the tool asks for the plan itself." },
             {{ConnectionProperty}},
-            "params": { "type": "object", "description": "Values for @name placeholders in the SQL, as sql_query takes them, so the plan is the one those values get." }
+            "params": { "type": "object", "description": "Values for @name placeholders in the SQL, as sql_query takes them. SQL Server plans them as unknown values: its guess from the column's statistics, not the given ones." }
           },
           "required": ["sql"]
         }
@@ -51,7 +51,8 @@ public sealed class SqlExplainTool : SqlTool
         }
 
         // The values as DECLAREs in the batch: a call with parameters goes as an RPC, which SHOWPLAN_XML doesn't plan.
-        var run = await Sql.RunAsync(connection, SqlServerPlan.WithDeclarations(sql, parameters), [], SqlAccess.MaxCatalogRows, TimeoutSeconds(Effective), cancellationToken,
+        var effective = Effective;
+        var run = await Sql.RunAsync(connection, SqlServerPlan.WithDeclarations(sql, parameters), [], SqlAccess.MaxCatalogRows, TimeoutSeconds(effective), cancellationToken,
             readCell: QueryPlan.WholeCell, showPlan: true).ConfigureAwait(false);
         if (run.Outcome != SqlOutcome.Ok)
         {
@@ -61,10 +62,7 @@ public sealed class SqlExplainTool : SqlTool
         }
 
         string text = QueryPlan.TextOf(run, 0);
-        int cap = Math.Min(QueryPlan.MaxAnswerChars, ResultChars(Effective));
-        return SqlServerPlan.Parse(text) is { } plan
-            ? QueryPlanText.Answer(plan, run.Connection, run.Database, run.Elapsed, cap, QueryPlanText.SqlServerFooter)
-            : QueryPlanText.Unreadable(run.Connection, run.Database, run.Elapsed, text);
+        return ExplainAnswer.Of(SqlServerPlan.Parse(text), run, text, effective, QueryPlanText.SqlServerFooter);
     }
 
     protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)

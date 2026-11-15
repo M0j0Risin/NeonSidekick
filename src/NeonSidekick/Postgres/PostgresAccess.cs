@@ -430,7 +430,7 @@ public sealed class PostgresAccess
 
     /// <summary>
     /// A query's rows written to a workbook (2026-10-29, the Office writing plan): <see cref="RunAsync"/>'s read-only transaction and
-    /// rollback, the rows handed to <paramref name="export"/> (typed by <see cref="ExportCell"/>, headed by <see cref="ExportHeader"/>)
+    /// rollback, the rows handed to <paramref name="export"/> (typed by <see cref="ExportCell"/>, UTC columns by <see cref="IsUtcColumn"/>)
     /// instead of read into a grid.
     /// </summary>
     public Task<SqlRun> ExportAsync(string? name, string statement, IReadOnlyList<SqlParameterValue> parameters, SqlExportJob export, int maxRows, int timeoutSeconds, CancellationToken cancellationToken) =>
@@ -442,15 +442,15 @@ public sealed class PostgresAccess
     /// NaN or an infinity as the word; money a number, as Npgsql hands it (2026-10-30, review F16/F117, the live run: money came as a bare
     /// decimal with no currency, so the text it was written as carried nothing more, while a month's interval, NaN and a numeric past
     /// <see cref="decimal"/> all wrote the can't-be-read placeholder); dates, timestamps and
-    /// the rest by the common rules. A timestamptz is its UTC value, the column's header saying so (<see cref="ExportHeader"/>). A
+    /// the rest by the common rules. A timestamptz is its UTC value, the column's header saying so (<see cref="IsUtcColumn"/>). A
     /// <c>±infinity</c> date or timestamp (Npgsql's <see cref="DateTime.MaxValue"/>/<see cref="DateTime.MinValue"/>, exactly) is the word,
     /// never a date in 9999 (2026-10-29, review P1-1: a real 9999-12-31 12:00 read as infinity too; a real 0001-01-01 00:00 still can't be
     /// told from <c>-infinity</c>). A <c>date</c> column is the exception: Npgsql hands its <c>infinity</c> as 9999-12-31 at midnight (the live
     /// run of 2026-10-29), so there that day is the word, and a real 9999-12-31 date reads infinity too, the lesser harm than a
     /// date in 9999 for every open-ended row. A timetz is its time and offset as text (review P6-3: it came on a dummy date in year 1). Arrays, bit
-    /// strings and hstore are written in full to the cell's cap (<see cref="ExportText"/>).
+    /// strings and hstore are written in full to the cell's cap (<see cref="ExportText"/>, <paramref name="maxChars"/>).
     /// </summary>
-    public static XlsxValue ExportCell(DbDataReader reader, int ordinal, string? typeName)
+    public static XlsxValue ExportCell(DbDataReader reader, int ordinal, string? typeName, int maxChars = XlsxValue.MaxChars)
     {
         ArgumentNullException.ThrowIfNull(reader);
         if (reader.IsDBNull(ordinal))
@@ -471,7 +471,7 @@ public sealed class PostgresAccess
         {
             try
             {
-                return SqlExport.FromValue(reader.GetValue(ordinal), typeName, ExportText);
+                return SqlExport.FromValue(reader.GetValue(ordinal), typeName, v => ExportText(v, maxChars), maxChars);
             }
             catch (Exception ex) when (ex is InvalidCastException or OverflowException)
             {
@@ -484,7 +484,7 @@ public sealed class PostgresAccess
             return XlsxValue.OfText(TimeTz(timetz));
         }
 
-        var cell = SqlExport.Typed(reader, ordinal, typeName, ExportText);
+        var cell = SqlExport.Typed(reader, ordinal, typeName, v => ExportText(v, maxChars), maxChars: maxChars);
         if (cell.Kind is XlsxKind.Date or XlsxKind.DateTime)
         {
             if (cell.When == DateTime.MaxValue || (typeName == DateType && cell.When == DateTime.MaxValue.Date))
@@ -763,20 +763,20 @@ public sealed class PostgresAccess
     /// it at 500 characters): an array as <c>{a, b}</c>, a bit string as its 0s and 1s, an hstore as <c>"k"=>"v"</c>; anything else its
     /// invariant text.
     /// </summary>
-    public static string ExportText(object value) => value switch
+    public static string ExportText(object value, int maxChars = XlsxValue.MaxChars) => value switch
     {
-        Array array and not byte[] => ExportArrayText(array),
+        Array array and not byte[] => ExportArrayText(array, maxChars),
         BitArray bits => Bits(bits),
         IEnumerable<KeyValuePair<string, string?>> hstore => Hstore(hstore),
-        _ => SqlExport.InvariantText(value),
+        _ => SqlExport.InvariantText(value, maxChars),
     };
 
-    /// <summary>An array as <see cref="ArrayText"/> writes it, unclipped and unscrubbed, built no further than the cell's cap.</summary>
-    public static string ExportArrayText(Array array)
+    /// <summary>An array as <see cref="ArrayText"/> writes it, unclipped and unscrubbed, built no further than the cell's cap (<paramref name="maxChars"/>).</summary>
+    public static string ExportArrayText(Array array, int maxChars = XlsxValue.MaxChars)
     {
         ArgumentNullException.ThrowIfNull(array);
         var sb = new StringBuilder();
-        AppendDimension(sb, array, 0, new int[array.Rank], ExportElement, XlsxValue.MaxChars);
+        AppendDimension(sb, array, 0, new int[array.Rank], ExportElement, maxChars);
         return sb.ToString();
     }
 
@@ -809,19 +809,14 @@ public sealed class PostgresAccess
     }
 
     /// <summary>
-    /// A column's header in a workbook: its name, and <see cref="SqlExport.UtcColumn"/> on a timestamptz, whose cells hold UTC; a
-    /// <c>timestamptz(3)</c> too (2026-11-02, review P9-3: Npgsql names it <c>timestamp(3) with time zone</c>, so its header was unmarked).
+    /// Whether an export's column holds UTC (a bool since 2026-11-15, the database-tools review's #46): a timestamptz, whose cells hold UTC, so
+    /// a workbook's header adds <see cref="SqlExport.UtcColumn"/> and a CSV or JSON value a <c>Z</c>; a <c>timestamptz(3)</c> too (2026-11-02,
+    /// review P9-3: Npgsql names it <c>timestamp(3) with time zone</c>, so its header was unmarked).
     /// </summary>
-    public static string ExportHeader(DbDataReader reader, int ordinal)
+    public static bool IsUtcColumn(DbDataReader reader, int ordinal)
     {
         ArgumentNullException.ThrowIfNull(reader);
-        string name = reader.GetName(ordinal);
-        if (string.IsNullOrEmpty(name))
-        {
-            name = SqlText.UnnamedColumn(ordinal);
-        }
-
-        return BaseTypeName(reader.GetDataTypeName(ordinal)) == TimestampTzType ? name + SqlExport.UtcColumn : name;
+        return BaseTypeName(reader.GetDataTypeName(ordinal)) == TimestampTzType;
     }
 
     /// <summary>One cell as text: <see cref="SqlText.Cell"/>, an array as <c>{a, b}</c>; a value the client cannot hold (a numeric past <see cref="decimal"/>) as <see cref="PostgresText.Unreadable"/>.</summary>

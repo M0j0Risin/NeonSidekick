@@ -210,16 +210,54 @@ public sealed class QueryTextExportTests : IDisposable
     }
 
     [Fact]
-    public void TheHeaderHook_TakesOffOnlyTheUtcItAdded()
+    public async Task TheUtcHook_MarksATextFilesColumn_AndKeepsEveryName()
     {
-        using var reader = new FakeDataReader(["created_at", "x (UTC)", ""], ["timestamptz", "text", "timestamptz"]);
-        static string Hook(System.Data.Common.DbDataReader r, int i) =>
-            r.GetDataTypeName(i) == "timestamptz" ? (string.IsNullOrEmpty(r.GetName(i)) ? SqlText.UnnamedColumn(i) : r.GetName(i)) + SqlExport.UtcColumn : r.GetName(i);
-        var utc = new HashSet<int>();
-        var header = ServerTool<SqliteAccess>.TextHeader(Hook, utc)!;
-        Assert.Equal(["created_at", "x (UTC)", SqlText.UnnamedColumn(2)], Enumerable.Range(0, 3).Select(i => header(reader, i)));
-        Assert.Equal([0, 2], utc.Order());
-        Assert.Null(ServerTool<SqliteAccess>.TextHeader(null, utc));
+        // 2026-11-15, the database-tools review's #46: the family says which columns are UTC; a text file keeps the names (a user's own
+        // "x (UTC)" too) and writes a Z, a workbook's header adds the suffix. The preview shows the file's spelling.
+        var when = new DateTime(2026, 11, 14, 9, 30, 0);
+        static bool IsUtc(System.Data.Common.DbDataReader r, int i) => r.GetDataTypeName(i) == "timestamptz";
+        using var stream = new MemoryStream();
+        using (var csv = new CsvRows(stream))
+        {
+            using var reader = new FakeDataReader(["created_at", "x (UTC)", ""], ["timestamptz", "text", "timestamptz"], [when, "a", when]);
+            var job = new SqlExportJob(csv, (r, i, _, _) => XlsxValue.From(r.GetValue(i)), IsUtc);
+            var grid = await job.ReadAsync(reader, 10, CancellationToken.None);
+            Assert.Equal(["2026-11-14T09:30:00Z", "a", "2026-11-14T09:30:00Z"], grid.Rows[0]);
+            csv.Finish();
+        }
+
+        string[] lines = Encoding.UTF8.GetString(stream.ToArray()).TrimStart('\uFEFF').Split("\r\n");
+        Assert.Equal("created_at,x (UTC)," + SqlText.UnnamedColumn(2), lines[0]);
+        Assert.Equal("2026-11-14T09:30:00Z,a,2026-11-14T09:30:00Z", lines[1]);
+
+        var sheet = new HeaderRows();
+        using var again = new FakeDataReader(["created_at"], ["timestamptz"], [when]);
+        await new SqlExportJob(sheet, (r, i, _, _) => XlsxValue.From(r.GetValue(i)), IsUtc).ReadAsync(again, 10, CancellationToken.None);
+        Assert.Equal(["created_at" + SqlExport.UtcColumn], sheet.Header);
+    }
+
+    /// <summary>A sheet that keeps the header it was given.</summary>
+    private sealed class HeaderRows : ISheetRows
+    {
+        public IReadOnlyList<string> Header { get; private set; } = [];
+
+        public string? Begin(IReadOnlyList<string> columns)
+        {
+            Header = [.. columns];
+            return null;
+        }
+
+        public bool Add(IReadOnlyList<XlsxValue> row) => true;
+    }
+
+    /// <summary>A writer whose close throws after it lets go, as a full disk's flush does.</summary>
+    private sealed class ThrowingDispose(IDisposable inner) : IDisposable
+    {
+        public void Dispose()
+        {
+            inner.Dispose();
+            throw new IOException("the disk is full");
+        }
     }
 
     // ── shapes ──────────────────────────────────────────────────────────────
@@ -328,7 +366,7 @@ public sealed class QueryTextExportTests : IDisposable
         Assert.Null(refusal);
         var rows = target.Begin(out refusal)!;
         Assert.Null(rows.Begin(["a"]));
-        target.ReleaseRowsOverride = () => throw new IOException("the disk is full");
+        target.WrapWriter(writer => new ThrowingDispose(writer));
         target.Dispose();
         Assert.Empty(Directory.GetFiles(_root, "*.neon-tmp*", SearchOption.AllDirectories));
         Assert.False(File.Exists(Path.Combine(_root, "out.csv")));
@@ -364,6 +402,170 @@ public sealed class QueryTextExportTests : IDisposable
         Assert.Contains("| id | price | name | t |", result);
         Assert.Contains("| 1 | 2.5 | plain | BIGINT |", result);
         Assert.Contains("| 4 | 0.25 | -5 | BIGINT |", result);
+    }
+
+    // ── the review's fixes (2026-11-15) ─────────────────────────────────────
+
+    [Theory]
+    [InlineData("out.txt")]
+    [InlineData("out.parquet")]
+    [InlineData("out.md")]
+    [InlineData("out.TSV")]
+    public async Task ADataTypeAQueryDoesntWrite_IsRefused_NotMadeAWorkbook(string to)
+    {
+        // #38: out.txt was out.txt.xlsx.
+        Assert.Equal(SqlExportText.WrongTarget(to), await FromSqlite(to));
+        Assert.Empty(Directory.GetFiles(_root, "out*"));
+    }
+
+    [Fact]
+    public async Task AnNdjsonName_IsJsonLines_AndKeepsItsName()
+    {
+        // #45: one table of names; .ndjson reads as JSON Lines, the messages still say .jsonl.
+        Assert.Equal(TextTableFormat.JsonLines, TextTableTarget.FormatOf("rows.NDJSON"));
+        Assert.Equal(".jsonl", TextTableTarget.ExtensionOf(TextTableFormat.JsonLines));
+        Assert.Equal([".xlsx", ".csv", ".json", ".jsonl", ".ndjson"], OutputNames.QueryKinds);
+        Assert.StartsWith("Made rows.ndjson (", await FromSqlite("rows.ndjson"));
+        Assert.Equal(4, Text("rows.ndjson").Split('\n', StringSplitOptions.RemoveEmptyEntries).Length);
+    }
+
+    [Fact]
+    public void TheLockFilePrefix_IsJudgedOnItsOwn()
+    {
+        // #90: no longer told apart by the refusal's wording.
+        Assert.True(OutputNames.IsReservedName("~$a.csv"));
+        Assert.True(OutputNames.IsReservedName("sub/~$b.xlsx"));
+        Assert.False(OutputNames.IsReservedName("a~$.csv"));
+        Assert.Equal(OfficeText.ReservedName("~$a.csv"), OutputNames.QueryRefusal("~$a.csv", intoFolder: false));
+        Assert.Null(OutputNames.QueryRefusal("~$a.csv", intoFolder: true));
+    }
+
+    [Fact]
+    public async Task ACsvCell_KeepsTextExcelWouldCut()
+    {
+        // #32: 40,000 characters, past Excel's 32,767, written whole; the workbook still cuts.
+        string sql = "SELECT replace(hex(zeroblob(20000)), '00', 'ab') AS big";
+        Assert.DoesNotContain("cell cut", await FromSqlite("big.csv", sql));
+        Assert.Equal(40_000, Text("big.csv").Split("\r\n")[1].Length);
+        Assert.Contains("1 cell cut at", await FromSqlite("big.xlsx", sql));
+    }
+
+    [Fact]
+    public void TheNotes_SayTheRowCapIsAWorkbooks_AndTheCellCapIsTheFiles()
+    {
+        string notes = OfficeText.TextNotes(new SheetResult(5, 1, 2, true, ""));
+        Assert.Contains("(a workbook's limit)", notes);   // #14
+        Assert.Contains("cut at " + TextRows.CellCap.ToString("N0", CultureInfo.InvariantCulture) + " characters", notes);
+        Assert.StartsWith("csv writer of out.csv failed to close", OfficeText.ReleaseFailedLogLine("csv", "writer", "out.csv", "IOException", "full"));   // #133
+    }
+
+    [Theory]
+    [InlineData("007", false)]
+    [InlineData("-007", false)]
+    [InlineData("0", true)]
+    [InlineData("-0.5", true)]
+    [InlineData("0.5", true)]
+    [InlineData("1E+20", true)]
+    [InlineData("5\n", false)]
+    [InlineData(".5", false)]
+    public void AJsonNumber_IsThePlainGrammar_WithNoLeadingZero(string text, bool number) =>
+        Assert.Equal(number, JsonRows.IsJsonNumber(text));   // #78/#134/#122
+
+    [Fact]
+    public void ATrailingLineFeed_IsNoPlainNumber()
+    {
+        Assert.False(CsvCell.IsPlainNumber("5\n"));   // #122: $ matched before it
+        Assert.Equal("'-5\n", CsvCell.Guard("-5\n", exemptNumbers: true));
+    }
+
+    [Fact]
+    public void AnExactSpellingJsonCantRead_IsAString()
+    {
+        var odd = XlsxValue.OfDouble(7) with { Exact = "007" };
+        string json = Write(s => new JsonRows(s, lines: true), ["n", "m"], [odd, XlsxValue.OfDecimal(0.5m)]);
+        Assert.Equal("{\"n\":\"007\",\"m\":0.5}\n", json);
+    }
+
+    [Fact]
+    public void NamesAreMadeWellFormed_BeforeTheyAreMadeUnique()
+    {
+        // #113: two names that differ only in a lone surrogate became one key.
+        string json = Write(s => new JsonRows(s, lines: true), ["a\uD800", "a\uDBFF"], [XlsxValue.OfInteger(1), XlsxValue.OfInteger(2)]);
+        using var doc = JsonDocument.Parse(json);
+        Assert.Equal(["a\uFFFD", "a\uFFFD (2)"], doc.RootElement.EnumerateObject().Select(p => p.Name));
+    }
+
+    [Fact]
+    public void ANegativeDuration_IsSigned_AndNotGuarded()
+    {
+        // #144: it was c text (-1.02:00:00), which the guard then prefixed.
+        Assert.Equal("-26:00:00", CsvRows.Field(XlsxValue.From(TimeSpan.FromHours(-26)), utc: false));
+    }
+
+    [Fact]
+    public void JsonLines_ManyRows_AllReachTheFile()
+    {
+        // #61: rows gather in a buffer and drain past 64 KB, never one flush a row.
+        var rows = Enumerable.Range(0, 5000).Select(i => (IReadOnlyList<XlsxValue>)[XlsxValue.OfInteger(i), XlsxValue.OfText(new string('x', 40))]).ToArray();
+        string json = Write(s => new JsonRows(s, lines: true), ["i", "t"], rows);
+        string[] lines = json.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(5000, lines.Length);
+        Assert.StartsWith("{\"i\":4999,", lines[^1]);
+    }
+
+    [Fact]
+    public void ThePreview_OfATextFile_ShowsTheFilesSpelling()
+    {
+        // #30/#132: the answer's rows read as the file does.
+        var when = XlsxValue.OfDateTime(new DateTime(2026, 11, 14, 9, 30, 0));
+        Assert.Equal("2026-11-14T09:30:00Z", SqlExport.Show(when, asText: true, utc: true));
+        var exact = XlsxValue.OfDecimal(12345678901234.5678901234m);
+        Assert.Equal("12345678901234.5678901234", SqlExport.Show(exact, asText: true));
+        Assert.Equal("-26:00:00", SqlExport.Show(XlsxValue.From(TimeSpan.FromHours(-26))));
+    }
+
+    [Fact]
+    public void ASqliteDateColumnsTimestamp_KeepsItsTime()
+    {
+        // #151: a DATE column's "… 00:00:00" was made a date; only the ten characters of a date are one.
+        using var reader = new FakeDataReader(["d"], ["DATE"], ["2026-11-14 00:00:00"], ["2026-11-14"]);
+        Assert.True(reader.Read());
+        Assert.Equal(XlsxKind.DateTime, SqliteAccess.ExportCell(reader, 0, "DATE").Kind);
+        Assert.True(reader.Read());
+        Assert.Equal(XlsxKind.Date, SqliteAccess.ExportCell(reader, 0, "DATE").Kind);
+    }
+
+    [Fact]
+    public void Commit_LetsGoOfTheWriter_BeforeTheFileIsPutInPlace()
+    {
+        // #18/#130: the writer was released only at Dispose, after the commit.
+        using var target = TextTableTarget.Plan(_files, "made.csv", TextTableFormat.Csv, null, overwrite: false, out _)!;
+        var rows = target.Begin(out _)!;
+        rows.Begin(["a"]);
+        rows.Add([XlsxValue.OfInteger(1)]);
+        var counted = new CountingDispose();
+        target.WrapWriter(writer => counted.Over(writer));
+        Assert.StartsWith("Made made.csv (", target.Commit().Answer);
+        Assert.Equal(1, counted.Count);
+        target.Dispose();
+        Assert.Equal(1, counted.Count);
+        Assert.Equal("\uFEFFa\r\n1\r\n", Text("made.csv"));
+    }
+
+    private sealed class CountingDispose
+    {
+        public int Count { get; private set; }
+
+        public IDisposable Over(IDisposable inner) => new Wrapped(this, inner);
+
+        private sealed class Wrapped(CountingDispose owner, IDisposable inner) : IDisposable
+        {
+            public void Dispose()
+            {
+                owner.Count++;
+                inner.Dispose();
+            }
+        }
     }
 
     [Fact]

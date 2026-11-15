@@ -74,36 +74,36 @@ public sealed class OracleAccess
         _schemasChecked = schemasChecked ?? new(StringComparer.Ordinal);
     }
 
-    /// <summary>Forgets the schema checks (a test's, or after a change that may have dropped a schema).</summary>
-    public void ForgetSchemaChecks() => _schemasChecked.Clear();
-
     /// <summary>
     /// The schema a connection works in, as the dictionary spells it: the entry's own, else the user's (2026-10-09: the one it is locked
-    /// to, <see cref="OracleBoundary"/>; no call names another).
+    /// to, <see cref="OracleBoundary"/>; no call names another). Always <see cref="Places"/>' first (2026-11-15, the database-tools
+    /// review's #153: the two had their own fallbacks).
     /// </summary>
-    public static string Place(OracleConnectionConfig config)
-    {
-        ArgumentNullException.ThrowIfNull(config);
-        return (config.Schemas is { Count: > 0 } list ? OracleIdentifier.Normalize(list[0]) : null)
-            ?? OracleIdentifier.Normalize(config.Schema) ?? OracleIdentifier.Normalize(config.User) ?? config.User?.Trim().ToUpperInvariant() ?? "";
-    }
+    public static string Place(OracleConnectionConfig config) => Places(config)[0];
 
     /// <summary>
-    /// Every schema a connection may reach, as the dictionary spells them, the current one (<see cref="Place"/>) first (2026-11-14, feature
-    /// idea #18): the entry's <c>schemas</c>, else its one <see cref="Place"/>.
+    /// Every schema a connection may reach, as the dictionary spells them, the current one first (2026-11-14, feature idea #18): the entry's
+    /// <c>schemas</c>, else its <c>schema</c>, else the user's own. Never empty. A run reads it once (#153).
     /// </summary>
     public static IReadOnlyList<string> Places(OracleConnectionConfig config)
     {
         ArgumentNullException.ThrowIfNull(config);
-        return config.Schemas is { Count: > 0 } list ? list.Select(s => OracleIdentifier.Normalize(s) ?? s?.Trim() ?? "").ToArray() : [Place(config)];
+        return config.Schemas is { Count: > 0 } list
+            ? list.Select(s => OracleIdentifier.Normalize(s) ?? s?.Trim() ?? "").ToArray()
+            : [OracleIdentifier.Normalize(config.Schema) ?? OracleIdentifier.Normalize(config.User) ?? config.User?.Trim().ToUpperInvariant() ?? ""];
     }
 
     /// <summary>The places as messages, the allow key, the audit and a run's <see cref="SqlRun.Database"/> write them: <c>HR</c>, <c>HR, OE</c>.</summary>
-    public static string PlaceText(OracleConnectionConfig config) => string.Join(", ", Places(config));
+    public static string PlaceText(OracleConnectionConfig config) => PlaceText(Places(config));
 
-    /// <summary>The schemas the entry names itself (<c>schema</c> or <c>schemas</c>), which the session checks; none for the user's own.</summary>
-    private static IReadOnlyList<string> Listed(OracleConnectionConfig config) =>
-        config.Schemas is { Count: > 0 } || !string.IsNullOrWhiteSpace(config.Schema) ? Places(config) : [];
+    /// <inheritdoc cref="PlaceText(OracleConnectionConfig)"/>
+    public static string PlaceText(IReadOnlyList<string> places) => string.Join(", ", places);
+
+    /// <summary>
+    /// The schemas a <c>schemas</c> list names, which the session checks; none for a single <c>schema</c> (2026-11-15, #42: <c>ALTER SESSION</c>
+    /// checks that one, as it always did) or the user's own. <paramref name="places"/> is the run's own read of <see cref="Places"/>.
+    /// </summary>
+    internal static IReadOnlyList<string> Listed(OracleConnectionConfig config, IReadOnlyList<string> places) => config.Schemas is { Count: > 0 } ? places : [];
 
     /// <summary>The connections as the files hold them now.</summary>
     public OracleCatalog Catalog() => _catalog();
@@ -154,11 +154,13 @@ public sealed class OracleAccess
     /// </summary>
     /// <remarks>
     /// <paramref name="export"/> (2026-10-29, the Office writing plan): the rows go to a workbook's sheet in place of the grid (<see cref="ExportAsync"/>).
-    /// An app-written run (<paramref name="modelText"/> false; 2026-11-14, #18) has <see cref="OracleCatalogQueries.OwnerList"/> written out
-    /// for the connection's places and their binds (<see cref="OracleCatalogQueries.OwnerBinds"/>) added; the model's own text never has
-    /// either, so a <c>:neon_s0</c> it writes stays unbound like any other.
+    /// <paramref name="ownerMarker"/> (2026-11-14, #18; required since 2026-11-15, the database-tools review's #24, so no caller gets it by
+    /// leaving it out): the app's catalog text with <see cref="OracleCatalogQueries.OwnerList"/> in it, written out for the connection's
+    /// places and their binds (<see cref="OracleCatalogQueries.OwnerBinds"/>) added. False for the model's own text, so a <c>:neon_s0</c> it
+    /// writes stays unbound like any other, and for app text that quotes names it read (#139: a column named <c>NOTE:neon_owners</c>).
     /// </remarks>
-    public async Task<SqlRun> RunAsync(string? name, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, CancellationToken cancellationToken, SqlExportJob? export = null, bool modelText = false)
+    public async Task<SqlRun> RunAsync(string? name, IReadOnlyList<string> statements, IReadOnlyList<SqlParameterValue> parameters, int maxRows, int timeoutSeconds, bool ownerMarker,
+        CancellationToken cancellationToken, SqlExportJob? export = null, Func<DbDataReader, int, string>? readCell = null)
     {
         ArgumentNullException.ThrowIfNull(statements);
         ArgumentNullException.ThrowIfNull(parameters);
@@ -173,10 +175,10 @@ public sealed class OracleAccess
             return SqlRun.Refused(SqlOutcome.ConnectFailed, missing, target.Name);
         }
 
-        string workIn = Place(target.Config);
-        string placeText = PlaceText(target.Config);
         var places = Places(target.Config);
-        IReadOnlyList<SqlParameterValue> binds = modelText ? parameters : [.. parameters, .. OracleCatalogQueries.OwnerBinds(places)];
+        string workIn = places[0];
+        string placeText = PlaceText(places);
+        IReadOnlyList<SqlParameterValue> binds = ownerMarker ? [.. parameters, .. OracleCatalogQueries.OwnerBinds(places)] : parameters;
         await using var connection = new OracleConnection(target.Config.Builder(secret.Value).ConnectionString);
         try
         {
@@ -204,9 +206,9 @@ public sealed class OracleAccess
                 return SqlRun.Refused(SqlOutcome.Failed, unprotected, target.Name);
             }
 
-            if (await CheckSchemasAsync(connection, target, timeoutSeconds, cancellationToken).ConfigureAwait(false) is { } unfit)
+            if (await CheckSchemasAsync(connection, target, places, watch, timeoutSeconds, cancellationToken).ConfigureAwait(false) is { } unfit)
             {
-                return SqlRun.Refused(SqlOutcome.Failed, unfit, target.Name);
+                return unfit;
             }
 
             using var transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted);
@@ -221,7 +223,7 @@ public sealed class OracleAccess
                         return new SqlRun(SqlOutcome.Timeout, timeoutSeconds.ToString(CultureInfo.InvariantCulture), target.Name, placeText, grids, watch.Elapsed);
                     }
 
-                    string text = modelText ? sql : OracleCatalogQueries.ForPlaces(sql, places.Count);
+                    string text = ownerMarker ? OracleCatalogQueries.ForPlaces(sql, places.Count) : sql;
                     await using var command = new OracleCommand(OracleCatalogQueries.ForServer(text, connection.ServerVersion), connection)
                     {
                         Transaction = transaction,
@@ -237,7 +239,7 @@ public sealed class OracleAccess
 
                     await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                     grids.Add(export is null
-                        ? await SqlGrid.ReadAsync(reader, maxRows, cancellationToken, ReadCell).ConfigureAwait(false)
+                        ? await SqlGrid.ReadAsync(reader, maxRows, cancellationToken, readCell ?? ReadCell).ConfigureAwait(false)
                         : await export.ReadAsync(reader, maxRows, cancellationToken).ConfigureAwait(false));
                 }
             }
@@ -298,8 +300,9 @@ public sealed class OracleAccess
             return SqlRun.Refused(SqlOutcome.ConnectFailed, missing, target.Name);
         }
 
-        string workIn = Place(target.Config);
-        string placeText = PlaceText(target.Config);
+        var places = Places(target.Config);
+        string workIn = places[0];
+        string placeText = PlaceText(places);
         await using var connection = new OracleConnection(target.Config.Builder(secret.Value, pooling: false).ConnectionString);
         try
         {
@@ -327,9 +330,9 @@ public sealed class OracleAccess
                 return SqlRun.Refused(SqlOutcome.Failed, unset, target.Name);
             }
 
-            if (await CheckSchemasAsync(connection, target, timeoutSeconds, cancellationToken).ConfigureAwait(false) is { } unfit)
+            if (await CheckSchemasAsync(connection, target, places, watch, timeoutSeconds, cancellationToken).ConfigureAwait(false) is { } unfit)
             {
-                return SqlRun.Refused(SqlOutcome.Failed, unfit, target.Name);
+                return unfit;
             }
 
             await using var command = new OracleCommand(sql, connection) { BindByName = true, CommandTimeout = timeoutSeconds };
@@ -396,28 +399,35 @@ public sealed class OracleAccess
     /// <summary>
     /// The schemas the entry lists, checked against <c>ALL_USERS</c> (2026-11-14, feature idea #18): one Oracle maintains, or one missing or
     /// invisible to the account, refuses the call (<see cref="OracleText.SchemaCheck"/>) — the first was checked by <c>ALTER SESSION</c>
-    /// failing, the rest by nothing. A pass is kept for <see cref="Sql.BoundaryNames.Lifetime"/> per connection and list; the user's own
-    /// schema (no key) is never checked. Null when they hold.
+    /// failing, the rest by nothing. A pass is kept for <see cref="Sql.BoundaryNames.Lifetime"/> per connection and list; a single
+    /// <c>schema</c> and the user's own (no key) are never checked (#42). It takes what is left of the call's deadline (#120), and none left
+    /// is the call's timeout. Null when they hold; else the refused or timed-out run.
     /// </summary>
-    private async Task<string?> CheckSchemasAsync(OracleConnection connection, OracleNamedConnection target, int timeoutSeconds, CancellationToken cancellationToken)
+    private async Task<SqlRun?> CheckSchemasAsync(OracleConnection connection, OracleNamedConnection target, IReadOnlyList<string> places, Stopwatch watch, int timeoutSeconds, CancellationToken cancellationToken)
     {
-        var listed = Listed(target.Config);
+        var listed = Listed(target.Config, places);
         if (listed.Count == 0)
         {
             return null;
         }
 
-        string key = Sql.BoundaryNames.Key(target.Name, target.Config.DataSource, target.Config.User, string.Join(",", listed));
+        // #140: a quoted name may hold a comma, so the list is joined on a character no name can.
+        string key = Sql.BoundaryNames.Key(target.Name, target.Config.DataSource, target.Config.User, string.Join("\u0001", listed));
         long now = Environment.TickCount64;
         if (_schemasChecked.TryGetValue(key, out long at) && now - at < (long)Sql.BoundaryNames.Lifetime.TotalMilliseconds)
         {
             return null;
         }
 
-        await using var command = new OracleCommand(OracleCatalogQueries.ForPlaces(OracleCatalogQueries.SchemaCheck, listed.Count), connection)
+        if (SqlDeadline.Left(watch, timeoutSeconds) is not (> 0 and var left))
+        {
+            return SqlRun.Refused(SqlOutcome.Timeout, timeoutSeconds.ToString(CultureInfo.InvariantCulture), target.Name);
+        }
+
+        await using var command = new OracleCommand(OracleCatalogQueries.SchemaCheckFor(connection.ServerVersion, listed.Count), connection)
         {
             BindByName = true,
-            CommandTimeout = Math.Max(1, timeoutSeconds),
+            CommandTimeout = left,
         };
         foreach (var bind in OracleCatalogQueries.OwnerBinds(listed))
         {
@@ -435,7 +445,7 @@ public sealed class OracleAccess
 
         if (OracleText.SchemaCheck(rows, listed) is { } problem)
         {
-            return problem;
+            return SqlRun.Refused(SqlOutcome.Failed, problem, target.Name);
         }
 
         _schemasChecked[key] = now;
@@ -548,7 +558,7 @@ public sealed class OracleAccess
     /// the rows handed to <paramref name="export"/> (typed by <see cref="ExportCell"/>) instead of read into a grid.
     /// </summary>
     public Task<SqlRun> ExportAsync(string? name, string statement, IReadOnlyList<SqlParameterValue> parameters, SqlExportJob export, int maxRows, int timeoutSeconds, CancellationToken cancellationToken) =>
-        RunAsync(name, [statement], parameters, maxRows, timeoutSeconds, cancellationToken, export ?? throw new ArgumentNullException(nameof(export)), modelText: true);
+        RunAsync(name, [statement], parameters, maxRows, timeoutSeconds, ownerMarker: false, cancellationToken, export ?? throw new ArgumentNullException(nameof(export)));
 
     /// <summary>
     /// An Oracle cell for a workbook (2026-10-29): a CLOB read to Excel's cap and a BLOB's, BFILE's or LONG RAW's bytes to the hex that fits,
@@ -559,20 +569,20 @@ public sealed class OracleAccess
     /// always a date-time, midnight too: Oracle's DATE holds a time (review P1-7: its type name "Date" read as a date alone). A LOB is read
     /// until the buffer is full or the LOB ends (review P1-8: one read may return fewer).
     /// </summary>
-    public static XlsxValue ExportCell(DbDataReader reader, int ordinal, string? typeName)
+    public static XlsxValue ExportCell(DbDataReader reader, int ordinal, string? typeName, int maxChars = XlsxValue.MaxChars)
     {
         ArgumentNullException.ThrowIfNull(reader);
         try
         {
             if (reader is OracleDataReader oracle && !oracle.IsDBNull(ordinal))
             {
-                int fit = (XlsxValue.MaxChars - 3) / 2;
+                int fit = XlsxValue.BytesFit(maxChars);
                 switch (typeName)
                 {
                     case "Clob" or "NClob":
                         using (var clob = oracle.GetOracleClob(ordinal))
                         {
-                            var buffer = new char[(int)Math.Min(clob.Length, XlsxValue.MaxChars + 1)];
+                            var buffer = new char[(int)Math.Min(clob.Length, maxChars + 1L)];
                             int read = 0;
                             while (read < buffer.Length && clob.Read(buffer, read, buffer.Length - read) is > 0 and var got)
                             {
@@ -580,7 +590,7 @@ public sealed class OracleAccess
                             }
 
                             // An EMPTY_CLOB() is no NULL (2026-11-02, review P10-3: OfText wrote it blank, F15/F42's rule missed the LOBs).
-                            return XlsxValue.OfDbText(new string(buffer, 0, read));
+                            return XlsxValue.OfDbText(new string(buffer, 0, read), maxChars);
                         }
 
                     case "Blob":
@@ -588,7 +598,7 @@ public sealed class OracleAccess
                         {
                             var buffer = new byte[(int)Math.Min(blob.Length, fit)];
                             int read = blob.ReadAtLeast(buffer, buffer.Length, throwOnEndOfStream: false);
-                            return XlsxValue.OfBytes(buffer.AsSpan(0, read), more: blob.Length > fit);
+                            return XlsxValue.OfBytes(buffer.AsSpan(0, read), more: blob.Length > fit, maxChars);
                         }
 
                     case "BFile":
@@ -601,21 +611,21 @@ public sealed class OracleAccess
 
                             var buffer = new byte[(int)Math.Min(file.Length, fit)];
                             int read = file.ReadAtLeast(buffer, buffer.Length, throwOnEndOfStream: false);
-                            return XlsxValue.OfBytes(buffer.AsSpan(0, read), more: file.Length > fit);
+                            return XlsxValue.OfBytes(buffer.AsSpan(0, read), more: file.Length > fit, maxChars);
                         }
 
                     case "LongRaw":
                         {
                             var buffer = new byte[fit + 1];
                             int read = (int)oracle.GetBytes(ordinal, 0, buffer, 0, buffer.Length);
-                            return XlsxValue.OfBytes(buffer.AsSpan(0, Math.Min(read, fit)), more: read > fit);
+                            return XlsxValue.OfBytes(buffer.AsSpan(0, Math.Min(read, fit)), more: read > fit, maxChars);
                         }
 
                     case "Long":
                         {
-                            var buffer = new char[XlsxValue.MaxChars + 1];
+                            var buffer = new char[maxChars + 1];
                             int read = (int)oracle.GetChars(ordinal, 0, buffer, 0, buffer.Length);
-                            return XlsxValue.OfDbText(new string(buffer, 0, read));
+                            return XlsxValue.OfDbText(new string(buffer, 0, read), maxChars);
                         }
 
                     // INTERVAL DAY TO SECOND too (2026-10-30, review F49: the doc promised it, but it fell through to a duration).
@@ -624,7 +634,7 @@ public sealed class OracleAccess
                 }
             }
 
-            return SqlExport.Typed(reader, ordinal, typeName: null, SqlExport.InvariantText);
+            return SqlExport.Typed(reader, ordinal, typeName: null, v => SqlExport.InvariantText(v, maxChars), maxChars: maxChars);
         }
         catch (Exception ex) when (ex is not (DbException or OperationCanceledException or OutOfMemoryException))
         {

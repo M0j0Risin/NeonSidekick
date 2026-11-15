@@ -170,6 +170,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | A store's layout (`l`) | tabs **Aisles**, **Sections**, **Facts**, **Guesses** · Enter renames, moves or removes · Delete removes · on **Aisles**, Shift+↑/↓ move an aisle along the walk, Shift+Home/End to either end |
 | **Settings and bars** | |
 | `/settings changed` | Enter edits · `r` back to default |
+| The Oracle and PostgreSQL wizards' *Schemas* page | Enter or Space ticks · `a` all · `n` none · Shift+↑/↓, Shift+Home/End move: the first ticked is current (Oracle) or first on the search path · Continue goes on · Esc back |
 | `/toolbar edit`, `/perfbar edit`, *Status bar* | [Bar checklists](#bar-checklists) |
 | `/homebar edit` | **On the bar**: [Bar checklists](#bar-checklists); Enter for rename and emoji · other tabs: Space or Enter adds or removes, type to filter |
 | A room's pane on the home bar | Space switches a device · Enter its actions |

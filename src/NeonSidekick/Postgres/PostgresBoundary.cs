@@ -118,16 +118,10 @@ public static class PostgresBoundary
     public static IReadOnlySet<string> NameSet(IReadOnlyList<string[]> rows) => new HashSet<string>(rows.Select(r => r[0]), StringComparer.Ordinal);
 
     /// <summary>
-    /// What of <paramref name="sql"/> the server must be asked about: under a lock to <paramref name="schema"/>, every part of a dotted
-    /// name but its last (<see cref="ServerWriteGate.Prefixes"/>: a three-part name's schema too), as PostgreSQL reads it, but the
-    /// schema's own and <see cref="AlwaysSchemas"/> (none for most statements); none without a lock. Or the refusal at once: a server
-    /// catalog, or under a lock <c>information_schema</c> and the <see cref="XmlExports"/>.
-    /// </summary>
-    public static (IReadOnlyList<string> Heads, string? Refused) Qualifiers(string sql, string? schema) =>
-        QualifiersUnder(sql, string.IsNullOrWhiteSpace(schema) ? [] : [schema.Trim()]);
-
-    /// <summary>
-    /// <see cref="Qualifiers"/> under a lock to <paramref name="locks"/> (none: no lock; 2026-11-14, feature idea #18): a qualifier naming
+    /// What of <paramref name="sql"/> the server must be asked about: every part of a dotted name but its last (<see cref="ServerWriteGate.Prefixes"/>:
+    /// a three-part name's schema too), as PostgreSQL reads it, but the locked schemas' own and <see cref="AlwaysSchemas"/> (none for most
+    /// statements); none without a lock. Or the refusal at once: a server catalog, or under a lock <c>information_schema</c> and the
+    /// <see cref="XmlExports"/>. Under a lock to <paramref name="locks"/> (none: no lock; 2026-11-14, feature idea #18): a qualifier naming
     /// any of them is the lock's own, and the refusals name the list.
     /// </summary>
     public static (IReadOnlyList<string> Heads, string? Refused) QualifiersUnder(string sql, IReadOnlyList<string> locks)
@@ -271,13 +265,10 @@ public static class PostgresBoundary
     }
 
     /// <summary>
-    /// Null when <paramref name="sql"/> keeps to the connection's database and <paramref name="schema"/> (null for no lock), the schemas
-    /// in the database being <paramref name="visible"/>; else the <c>Error:</c> sentence. A text that does not lex is refused (mechanism 7).
+    /// Null when <paramref name="sql"/> keeps to the connection's database and the schemas <paramref name="locks"/> (none: no lock; #18), the
+    /// schemas in the database being <paramref name="visible"/>; else the <c>Error:</c> sentence. A text that does not lex is refused
+    /// (mechanism 7). The one-schema overloads went 2026-11-15 (the database-tools review's #27).
     /// </summary>
-    public static string? Check(string sql, string? schema, IEnumerable<string> visible) =>
-        CheckUnder(sql, string.IsNullOrWhiteSpace(schema) ? [] : [schema.Trim()], visible);
-
-    /// <summary><see cref="Check"/> under a lock to <paramref name="locks"/> (none: no lock; #18).</summary>
     public static string? CheckUnder(string sql, IReadOnlyList<string> locks, IEnumerable<string> visible)
     {
         ArgumentNullException.ThrowIfNull(visible);

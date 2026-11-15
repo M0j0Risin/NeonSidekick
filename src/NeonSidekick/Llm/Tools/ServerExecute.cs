@@ -11,12 +11,16 @@ namespace NeonSidekick.Llm.Tools;
 public delegate Task<bool?> DatabaseWriteAllow(ServerWriteFamily family, ExecuteTarget target, string sql, IReadOnlyList<SqlParameterValue> parameters, CancellationToken cancellationToken);
 
 /// <summary>
-/// Where a change would run: the connection's name, whether its entry allows changes, the database (or schema) a call works in, and the
+/// Where a change would run: the connection's name, whether its entry allows changes, the database (or schemas) a call works in, and the
 /// server it reaches (<paramref name="Where"/>: the host and port, or the data source; 2026-10-24, decision DB6: the session allow is keyed
-/// on it, so a connection re-pointed at another server is asked again). <paramref name="Places"/> is how many schemas <paramref name="Place"/>
-/// names (2026-11-14, #18: an Oracle connection's list, written <c>HR, OE</c>).
+/// on it, so a connection re-pointed at another server is asked again). <paramref name="Places"/> is one database, or an Oracle
+/// connection's schemas (2026-11-14, #18), carried as the list (2026-11-15, the database-tools review's #141: a joined text and a count).
 /// </summary>
-public sealed record ExecuteTarget(string Connection, bool ReadWrite, string Place, string Where = "", int Places = 1);
+public sealed record ExecuteTarget(string Connection, bool ReadWrite, IReadOnlyList<string> Places, string Where = "")
+{
+    /// <summary>The places as the allow's key and caption write them: <c>sales</c>, or <c>HR, OE</c>.</summary>
+    public string Place => string.Join(", ", Places);
+}
 
 /// <summary>
 /// One family's hooks for <see cref="ServerExecute.RunAsync"/>: its write gate (<paramref name="Check"/>, <paramref name="Kinds"/>), its

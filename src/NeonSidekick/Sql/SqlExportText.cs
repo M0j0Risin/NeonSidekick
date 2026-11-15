@@ -24,9 +24,9 @@ public static class SqlExportText
     /// </summary>
     public const string NoResultSet = "Error: the query returned no result set, so no file was written; to writes the rows a SELECT returns";
 
-    /// <summary>A query's <c>to</c> ending in a type it doesn't write (2026-11-14, the database-tools plan's #13: it names the four). Pinned.</summary>
+    /// <summary>A query's <c>to</c> ending in a type it doesn't write (2026-11-14, the database-tools plan's #13: it names the kinds). Pinned.</summary>
     public static string WrongTarget(string to) =>
-        $"Error: '{to}' names another kind of file; to writes .xlsx, .csv, .json or .jsonl files, so end to in one of those or give a folder";
+        $"Error: '{to}' names another kind of file; to writes .xlsx, .csv, .json or .jsonl (or .ndjson) files, so end to in one of those or give a folder";
 
     /// <summary>A cell whose value the provider won't hand over in any form: its type said. Pinned.</summary>
     public static string Unreadable(string? typeName) => $"({(string.IsNullOrWhiteSpace(typeName) ? "a value" : typeName)} that can't be read)";

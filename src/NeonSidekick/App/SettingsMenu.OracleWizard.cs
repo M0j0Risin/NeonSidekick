@@ -26,10 +26,13 @@ internal sealed partial class SettingsMenu
     public const string OracleWizardDataSourceQuestion = "The database: host:port/service (EZConnect, e.g. localhost:1521/FREEPDB1) or a whole (DESCRIPTION=…).";
     public const string OracleWizardSchemaQuestion = "The schemas the connection is held to (the tools never leave them); none ticked is the user's own.";
 
+    /// <summary>The checklist's caption on the pane (#31/#33): the order is the rows'.</summary>
+    public const string OracleWizardSchemaOrderNote = "The first ticked is current (unqualified names resolve there).";
+
     /// <summary>The typed fallback's question, when the schemas could not be listed (#18).</summary>
     public const string OracleWizardSchemaTypedQuestion = "The schemas the connection is held to, comma-separated, the current one first; empty for the user's own.";
 
-    /// <summary>The order page's question, with two or more ticked (#18).</summary>
+    /// <summary>The first order page's question, with two or more ticked and no pane (#18; on the pane the rows are moved instead, #31).</summary>
     public const string OracleWizardCurrentQuestion = "Which is current (unqualified names resolve there)?";
 
     /// <summary>The Schemas row of a draft with none: the user's own.</summary>
@@ -82,6 +85,9 @@ internal sealed partial class SettingsMenu
         public string? OriginalHost { get; init; }
 
         public OracleConnectionConfig Config { get; init; } = new() { PasswordStore = OracleConnectionConfig.FileStore };
+
+        /// <summary>The Schemas step's last listing (#99).</summary>
+        public SchemaListCache Schemas { get; } = new();
     }
 
     private string OracleWizardPath(bool global) =>
@@ -118,7 +124,7 @@ internal sealed partial class SettingsMenu
             OracleWizardStep.File => SqlWizardFileRow(draft.Global, OracleWizardPath(draft.Global)),
             OracleWizardStep.Name => OrUnset(draft.Name),
             OracleWizardStep.DataSource => OrUnset(c.DataSource),
-            OracleWizardStep.Schema => c.Schemas is { Count: > 0 } || !string.IsNullOrWhiteSpace(c.Schema) ? OracleAccess.PlaceText(c) : OracleWizardOwnSchema,
+            OracleWizardStep.Schema => c.NamesLock ? OracleAccess.PlaceText(c) : OracleWizardOwnSchema,
             OracleWizardStep.User => OrUnset(c.User),
             OracleWizardStep.Store => c.InCredentialManager ? OracleConnectionConfig.CredmanStore + " (" + c.CredentialTarget(draft.Name.Length > 0 ? draft.Name : "<name>") + ")" : OracleConnectionConfig.FileStore,
             OracleWizardStep.Password => draft.Password.Length > 0 ? (draft.PasswordKept ? SqlWizardMaskedKept : SqlWizardMasked) : SqlWizardUnset,
@@ -226,10 +232,19 @@ internal sealed partial class SettingsMenu
                 continue;
             }
 
+            string reach = OracleWizardReachKey(draft);
             if (await OracleWizardStepAsync(step, draft, cancellationToken).ConfigureAwait(false))
             {
-            ForgetKeptPasswordOnMove(draft.OriginalHost, draft.Config.SignInHost, draft.PasswordKept, () => { draft.Password = ""; draft.PasswordKept = false; });
-                step = fromSummary ? OracleWizardMissing(draft) ?? OracleWizardStep.Summary : step + 1;
+                ForgetKeptPasswordOnMove(draft.OriginalHost, draft.Config.SignInHost, draft.PasswordKept, () => { draft.Password = ""; draft.PasswordKept = false; });
+                var next = fromSummary ? OracleWizardMissing(draft) ?? OracleWizardStep.Summary : step + 1;
+
+                // #163: a summary edit of where it connects or as whom, with a lock held, checks the lock against the new account.
+                if (fromSummary && next == OracleWizardStep.Summary && step != OracleWizardStep.Schema && draft.Config.NamesLock && OracleWizardReachKey(draft) != reach)
+                {
+                    next = OracleWizardStep.Schema;
+                }
+
+                step = next;
                 fromSummary = fromSummary && step != OracleWizardStep.Summary;
                 continue;
             }
@@ -541,7 +556,7 @@ internal sealed partial class SettingsMenu
         if (run.Grids.Count > 3)
         {
             var (owners, any) = (run.Grids[2].Rows.Select(r => r[0]).ToList(), run.Grids[3].Rows.Select(r => r[0]).ToList());
-            string reach = OracleText.Reach(OracleAccess.PlaceText(copy), owners, any);
+            string reach = OracleText.Reach(OracleAccess.Places(copy), owners, any);
             if (owners.Count > 0 || any.Count > 0)
             {
                 Sink.Warning(reach);
@@ -554,67 +569,50 @@ internal sealed partial class SettingsMenu
     }
 
     /// <summary>
-    /// The Schemas step (2026-11-14, feature idea #18): the user's own schema and the others whose tables or views the account can see,
-    /// listed with the draft's lock cleared (a listed schema since dropped would otherwise fail the session and hide the fix), as a
-    /// checklist and a page for the current one; typed, comma-separated, when they cannot be listed. True once answered, false for ESC.
+    /// The Schemas step (2026-11-14, feature idea #18; one step with PostgreSQL's since 2026-11-15, #11): the user's own schema first, then
+    /// the others <c>ALL_USERS</c> lists that Oracle doesn't maintain (#118: an empty schema was "(missing)" while the list read only schemas
+    /// holding a table), listed with the draft's lock cleared (a listed schema since dropped would otherwise fail the session and hide the fix).
+    /// Saved names past the listing's cap are looked up by name (#146). True once answered, false for ESC.
     /// </summary>
-    private async Task<bool> OracleWizardSchemasAsync(OracleWizardStep step, OracleDraft draft, CancellationToken cancellationToken)
+    private Task<bool> OracleWizardSchemasAsync(OracleWizardStep step, OracleDraft draft, CancellationToken cancellationToken)
     {
         var c = draft.Config;
-        IReadOnlyList<string> saved = c.Schemas is { Count: > 0 } || !string.IsNullOrWhiteSpace(c.Schema) ? OracleAccess.Places(c) : [];
         var copy = OracleWizardCopy(draft, keepLock: false);
         string own = OracleAccess.Place(copy);
-        string? unlisted = copy.Problem;
-        var available = new List<string>();
-        if (unlisted is null)
+        IReadOnlyList<string> saved = c.NamesLock ? OracleAccess.Places(c) : [];
+        var connection = new OracleNamedConnection(draft.Name, copy, OracleWizardPath(draft.Global));
+        async Task<SchemaListing> ListAsync(CancellationToken token)
         {
-            var run = await (ListOracleSchemas ?? ListOracleSchemasAsync)(new OracleNamedConnection(draft.Name, copy, OracleWizardPath(draft.Global)), cancellationToken).ConfigureAwait(false);
-            if (run.Outcome == Sql.SqlOutcome.Ok && run.Grids.Count > 0)
+            var run = await (ListOracleSchemas ?? ListOracleSchemasAsync)(connection, saved, token).ConfigureAwait(false);
+            if (run.Outcome != Sql.SqlOutcome.Ok || run.Grids.Count == 0)
             {
-                // As the entry writes them: a dictionary name that a bare word would fold differently ("hr") in quotes.
-                available = [OracleWizardSpelling(own), .. run.Grids[0].Rows.Select(r => r[0]).Where(n => n != own).Select(OracleWizardSpelling).Where(n => OracleConnectionConfig.LockProblem(n, null) is null)];
+                return new SchemaListing([], false, [], OracleText.Error(run));
             }
-            else
-            {
-                unlisted = OracleText.Error(run);
-            }
+
+            // As the entry writes them: a dictionary name that a bare word would fold differently ("hr") in quotes. A name that read back
+            // empty (a failed read) is left out; one the lock refuses is left out unless it is the user's own (#53: shown, refused).
+            var others = run.Grids[0].Rows.Select(r => r[0]).Where(n => n.Length > 0 && n != own).Select(OracleWizardSpelling).Where(n => OracleConnectionConfig.PickProblem([n]) is null);
+            var found = run.Grids.Count > 1 ? run.Grids[1].Rows.Select(r => r[0]).Where(n => n.Length > 0).Select(OracleWizardSpelling).ToList() : [];
+            return new SchemaListing([OracleWizardSpelling(own), .. others], run.Grids[0].More, found, null);
         }
 
-        if (unlisted is not null)
-        {
-            Sink.Notice(WizardSchemasUnlisted(unlisted));
-            return await OracleWizardTypeAsync(step, draft, OracleWizardSchemaTypedQuestion, string.Join(", ", saved), allowEmpty: true, mask: false, text =>
-            {
-                var names = WizardSchemaNames(text);
-                if ((names.Count == 1 ? OracleConnectionConfig.LockProblem(names[0], null) : OracleConnectionConfig.LockProblem(null, names.Count == 0 ? null : names)) is { } problem)
-                {
-                    return problem;
-                }
-
-                c.HoldTo(names);
-                return null;
-            }, cancellationToken).ConfigureAwait(false);
-        }
-
-        while (true)
-        {
-            if (await WizardSchemasAsync(OracleWizardTitle, OracleWizardSchemaQuestion, OracleWizardCurrentQuestion, available, saved.Select(OracleWizardSpelling).ToList(), OracleWizardSpelling(own), StringComparer.Ordinal, cancellationToken).ConfigureAwait(false) is not { } chosen)
-            {
-                return false;
-            }
-
-            if (chosen.Count > OracleConnectionConfig.MaxSchemas)
-            {
-                Sink.Error(OracleText.TooManySchemas(OracleConnectionConfig.MaxSchemas));
-                saved = chosen;
-                continue;
-            }
-
+        var family = new SchemaFamily(OracleWizardTitle, OracleWizardSchemaQuestion, OracleWizardSchemaOrderNote, OracleWizardSchemaTypedQuestion, OracleWizardCurrentQuestion,
+            c.DataSource?.Trim() ?? "", OracleWizardListingKey(draft), draft.Schemas, [.. saved.Select(OracleWizardSpelling)], copy.Problem, ListAsync,
+            OracleConnectionConfig.PickProblem, OracleText.TooManySchemas,
             // The user's own alone is the default: no key written, as before the list (a file stays as it was).
-            c.HoldTo(chosen is [var only] && only == OracleWizardSpelling(own) && string.IsNullOrWhiteSpace(c.Schema) ? [] : chosen);
-            return true;
-        }
+            chosen => chosen is [var only] && only == OracleWizardSpelling(own) && !c.NamesLock ? [] : chosen,
+            c.HoldTo,
+            (question, start, accept, token) => OracleWizardTypeAsync(step, draft, question, start, allowEmpty: true, mask: false, accept, token));
+        return WizardSchemaStepAsync(family, cancellationToken);
     }
+
+    /// <summary>What the draft connects with, as the Schemas listing's cache keys it (#99): the data source, user, password and timeout.</summary>
+    private static string OracleWizardListingKey(OracleDraft draft) =>
+        OracleWizardReachKey(draft) + "\u0001" + draft.Config.ConnectTimeoutSeconds?.ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>The fields whose edit from the summary goes on to Schemas while a lock is held (#163): where it connects and as whom.</summary>
+    private static string OracleWizardReachKey(OracleDraft draft) =>
+        string.Join("\u0001", draft.Config.DataSource?.Trim(), draft.Config.User?.Trim(), draft.Password);
 
     /// <summary>A dictionary name as an entry writes it: bare when a bare word reads back the same, else in double quotes.</summary>
     public static string OracleWizardSpelling(string name)
@@ -643,17 +641,22 @@ internal sealed partial class SettingsMenu
         };
     }
 
-    /// <summary>What the Schemas step lists over the unlocked draft (#18): a real run of <see cref="OracleCatalogQueries.Reach"/>' first statement; the tests set their own.</summary>
-    public Func<OracleNamedConnection, CancellationToken, Task<Sql.SqlRun>>? ListOracleSchemas { get; set; }
+    /// <summary>
+    /// What the Schemas step lists over the unlocked draft (#18), given the saved schemas as the dictionary spells them: a real run of
+    /// <see cref="OracleCatalogQueries.UserSchemas"/>, then, with any saved, <see cref="OracleCatalogQueries.SchemaCheck"/> over them (#146);
+    /// the tests set their own.
+    /// </summary>
+    public Func<OracleNamedConnection, IReadOnlyList<string>, CancellationToken, Task<Sql.SqlRun>>? ListOracleSchemas { get; set; }
 
-    private Task<Sql.SqlRun> ListOracleSchemasAsync(OracleNamedConnection connection, CancellationToken cancellationToken) =>
+    private Task<Sql.SqlRun> ListOracleSchemasAsync(OracleNamedConnection connection, IReadOnlyList<string> saved, CancellationToken cancellationToken) =>
         new OracleAccess(() => new OracleCatalog([connection], []))
-            .RunAsync(connection.Name, [OracleCatalogQueries.Reach[0]], [], OracleAccess.MaxCatalogRows, _settings.Current.OracleQueryTimeoutSeconds, cancellationToken);
+            .RunAsync(connection.Name, saved.Count == 0 ? [OracleCatalogQueries.UserSchemas] : [OracleCatalogQueries.UserSchemas, OracleCatalogQueries.ForPlaces(OracleCatalogQueries.SchemaCheck, saved.Count)],
+                OracleCatalogQueries.OwnerBinds(saved), OracleAccess.MaxCatalogRows, _settings.Current.OracleQueryTimeoutSeconds, ownerMarker: false, cancellationToken, readCell: Sql.TableProfile.CatalogCell);
 
     /// <summary>The app's test: <see cref="OracleAccess.RunAsync"/> over the one connection, <see cref="OracleCatalogQueries.WhoAmI"/>, <see cref="OracleCatalogQueries.WritePowers"/> and <see cref="OracleCatalogQueries.Reach"/>, the Oracle tab's timeout.</summary>
     private Task<Sql.SqlRun> TestOracleConnectionAsync(OracleNamedConnection connection, CancellationToken cancellationToken) =>
         new OracleAccess(() => new OracleCatalog([connection], []))
-            .RunAsync(connection.Name, [OracleCatalogQueries.WhoAmI, OracleCatalogQueries.WritePowers, .. OracleCatalogQueries.Reach], [], 100, _settings.Current.OracleQueryTimeoutSeconds, cancellationToken);
+            .RunAsync(connection.Name, [OracleCatalogQueries.WhoAmI, OracleCatalogQueries.WritePowers, .. OracleCatalogQueries.Reach], [], 100, _settings.Current.OracleQueryTimeoutSeconds, ownerMarker: true, cancellationToken);
 
     /// <summary>
     /// Writes the draft: the entry (<see cref="OracleConfigFile.AddConnection"/>), then its password to its store, then — when

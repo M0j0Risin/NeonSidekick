@@ -72,7 +72,7 @@ public sealed class SqlExecuteTool : SqlTool
             SqlReadOnlyGate.Check,
             text => text.Trim(),
             () => resolved is { } target
-                ? (new ExecuteTarget(target.Name, target.Config.IsReadWrite, target.Config.Database?.Trim() ?? "", target.Config.SignInHost), null)
+                ? (new ExecuteTarget(target.Name, target.Config.IsReadWrite, [target.Config.Database?.Trim() ?? ""], target.Config.SignInHost), null)
                 : (null, SqlText.Error(unresolved!)),
             async (body, token) =>
             {
@@ -93,20 +93,9 @@ public sealed class SqlExecuteTool : SqlTool
             return ClockText.BadInteger(SqlQueryTool.MaxRowsArgument, raw);
         }
 
-        if (!ToolArguments.TryReadObjectList(arguments, SqlQueryTool.ParamsArgument, out var objects, out var sent) || objects.Count > 1)
+        if (SqlQueryTool.ReadParams(arguments, SqlText.BadParams, out var error) is not { } parameters)
         {
-            return SqlText.BadParams(sent);
-        }
-
-        IReadOnlyList<SqlParameterValue> parameters = [];
-        if (objects.Count == 1)
-        {
-            if (SqlQueryTool.ReadParameters(objects[0], out var error) is not { } read)
-            {
-                return error;
-            }
-
-            parameters = read;
+            return error;
         }
 
         return await RunAsync(ToolArguments.ReadString(arguments, SqlQueryTool.SqlArgument), Optional(arguments, ConnectionArgument), parameters, max, cancellationToken).ConfigureAwait(false);

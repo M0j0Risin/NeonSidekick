@@ -33,7 +33,7 @@ public static class OracleText
     /// <summary>A schema listed twice (#18).</summary>
     public static string RepeatedSchema(string schema) => $"\"schemas\" lists '{schema}' twice";
 
-    /// <summary>A list past <see cref="OracleConnectionConfig.MaxSchemas"/> (#18).</summary>
+    /// <summary>A list past <see cref="Sql.SchemaLock.MaxSchemas"/> (#18).</summary>
     public static string TooManySchemas(int max) =>
         $"\"schemas\" lists more than {Invariant(max)} schemas; hold the connection to fewer";
 
@@ -95,7 +95,7 @@ public static class OracleText
     {
         ArgumentNullException.ThrowIfNull(connection);
         var config = connection.Config;
-        string where = "Oracle · " + config.DataSource?.Trim() + " / " + OracleAccess.Place(config);
+        string where = "Oracle · " + config.DataSource?.Trim() + " / " + OracleAccess.PlaceText(config);   // #37: every listed schema
         return string.IsNullOrWhiteSpace(config.Description) ? where : where + " — " + config.Description.Trim();
     }
 
@@ -154,8 +154,6 @@ public static class OracleText
     public static string OtherSchema(string named, IReadOnlyList<string> places) =>
         $"Error: the SQL names '{named}', another schema (an alias spelled like it reads the same: rename it), but this connection is held to {HeldTo(places)}; another schema needs a connection of its own, or a place on the connection's schemas list, which the user adds (oracle_connections lists them)";
 
-    public static string OtherSchema(string named, string schema) => OtherSchema(named, [schema]);
-
     /// <summary>A dictionary view of the whole database the schema does not qualify. Pinned.</summary>
     public static string Dictionary(string named, IReadOnlyList<string> places)
     {
@@ -164,8 +162,6 @@ public static class OracleText
             ? $"Error: the SQL reads {named}, which describes the whole database rather than schema '{places[0]}'; the Oracle tools keep to the connection's schema (oracle_tables, oracle_columns and oracle_describe read its catalog; a table of its own named so is written {places[0]}.NAME)"
             : $"Error: the SQL reads {named}, which describes the whole database rather than {HeldTo(places)}; the Oracle tools keep to the connection's schemas (oracle_tables, oracle_columns and oracle_describe read their catalogs; a table of theirs named so is written {places[0]}.NAME)";
     }
-
-    public static string Dictionary(string named, string schema) => Dictionary(named, [schema]);
 
     /// <summary>A table named in another schema (<c>HR.EMPLOYEES</c> as a catalog tool's <c>table</c>). Pinned.</summary>
     public static string TableElsewhere(string named, IReadOnlyList<string> places)
@@ -176,22 +172,25 @@ public static class OracleText
             : $"Error: '{named}' is another schema, but this connection is held to {HeldTo(places)}; give the table as NAME (in {places[0]}) or one of them and NAME ({places[1]}.NAME)";
     }
 
-    public static string TableElsewhere(string named, string schema) => TableElsewhere(named, [schema]);
-
     /// <summary>A bare name found only in another listed schema (#18): the current one is searched first. Pinned.</summary>
     public static string GiveItQualified(string table, IEnumerable<string> qualified) =>
         $"Error: no table or view '{table}' in the current schema; give it as {string.Join(" or ", qualified)}";
 
-    /// <summary>What else the account could read (the wizard's test and <c>--oracle-check</c>, 2026-10-09). Pinned.</summary>
-    public static string Reach(string schema, IReadOnlyList<string> owners, IReadOnlyList<string> anyPrivileges)
+    /// <summary>
+    /// What else the account could read (the wizard's test and <c>--oracle-check</c>, 2026-10-09), <paramref name="places"/> the
+    /// connection's schemas (2026-11-15, the database-tools review's #101: their joined text was told apart by a comma). Pinned.
+    /// </summary>
+    public static string Reach(IReadOnlyList<string> places, IReadOnlyList<string> owners, IReadOnlyList<string> anyPrivileges)
     {
+        ArgumentNullException.ThrowIfNull(places);
         ArgumentNullException.ThrowIfNull(owners);
         ArgumentNullException.ThrowIfNull(anyPrivileges);
         // Oracle's own schemas are left out of the list (the dictionary's ALL_ views are every account's), so an empty one says no
         // other user schema, not that the database holds the account to one (the review, 2026-10-09).
+        string schema = string.Join(", ", places);
         if (owners.Count == 0 && anyPrivileges.Count == 0)
         {
-            return schema.Contains(',', StringComparison.Ordinal)
+            return places.Count > 1
                 ? $"The account reads no other schema's tables than those of {schema} and holds no SELECT ANY privilege (Oracle's own schemas aside)."
                 : $"The account reads no other schema's tables than {schema}'s and holds no SELECT ANY privilege (Oracle's own schemas aside).";
         }
@@ -199,8 +198,7 @@ public static class OracleText
         string names = string.Join(", ", owners.Take(10)) + (owners.Count > 10 ? $" and {Invariant(owners.Count - 10)} more" : "");
         string what = owners.Count == 0 ? "" : "read tables of " + names;
         string any = anyPrivileges.Count == 0 ? "" : (what.Length > 0 ? ", and holds " : "hold ") + string.Join(", ", anyPrivileges);
-        // A lock of several schemas comes as its PlaceText, "HR, OE" (#18).
-        return schema.Contains(',', StringComparison.Ordinal)
+        return places.Count > 1
             ? $"The account could also {what}{any}. The tools keep to schemas {schema}; an account that reads only them is the lock the database keeps too."
             : $"The account could also {what}{any}. The tools keep to schema {schema}; an account that reads only it is the lock the database keeps too.";
     }
@@ -221,7 +219,14 @@ public static class OracleText
         $"the session cannot be set to schema '{schema}', so the connection could work in another; nothing was run — give \"schema\" or \"schemas\" in oracle.json";
 
     public static string BadParamName(string name) => $"Error: '{name}' is not a valid parameter name; use letters, digits and _ (bound as :name)";
-    public static string TableNotFound(string table, string connection, string schema) => $"Error: no table or view '{table}' visible in {connection}/{schema}; oracle_tables lists them";
+    /// <summary>A table found in none of the connection's <paramref name="places"/> (2026-11-15, the database-tools review's #116: a list read <c>conn/HR, OE</c>).</summary>
+    public static string TableNotFound(string table, string connection, IReadOnlyList<string> places)
+    {
+        ArgumentNullException.ThrowIfNull(places);
+        return places.Count == 1
+            ? $"Error: no table or view '{table}' visible in {connection}/{places[0]}; oracle_tables lists them"
+            : $"Error: no table or view '{table}' visible in {connection}'s {HeldTo(places)}; oracle_tables lists them";
+    }
     public static string TableAmbiguous(string table, IEnumerable<string> candidates) => $"Error: '{table}' matches more than one table or view; give the schema: {string.Join(", ", candidates)}";
 
     // ─── outcomes ───────────────────────────────────────────────────────────────

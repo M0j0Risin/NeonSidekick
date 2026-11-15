@@ -8,9 +8,10 @@ namespace NeonSidekick.Sql;
 
 /// <summary>
 /// A cell read for a workbook: the family's typed reader of one column of the current row. <paramref name="typeName"/> is the column's
-/// type name, read once per result set (2026-10-29, review P4-8: asked per cell, it cost a provider call each).
+/// type name, read once per result set (2026-10-29, review P4-8: asked per cell, it cost a provider call each); <paramref name="maxChars"/>
+/// the file's cell cap (<see cref="ISheetRows.CellChars"/>, 2026-11-15, the database-tools review's #32), which a reader reads no further than.
 /// </summary>
-public delegate XlsxValue SqlCellReader(DbDataReader reader, int ordinal, string? typeName);
+public delegate XlsxValue SqlCellReader(DbDataReader reader, int ordinal, string? typeName, int maxChars);
 
 /// <summary>
 /// A query's rows streamed into a workbook's sheet (2026-10-29, the Office writing plan's export, the six query tools' <c>to</c>): in place of
@@ -27,27 +28,32 @@ public sealed class SqlExportJob
 {
     private readonly Func<(ISheetRows? Sink, string? Refusal)> _begin;
     private SqlCellReader _cell;
-    private readonly Func<DbDataReader, int, string>? _header;
+    private readonly Func<DbDataReader, int, bool>? _isUtc;
     private readonly Func<Exception, string>? _failed;
 
     /// <param name="begin">The sheet begun (the pending file opened): the rows' sink, or null with the refusal. Called once, inside the session.</param>
-    /// <param name="header">A column's header when the family adds to its name (PostgreSQL's and MySQL's <see cref="SqlExport.UtcColumn"/>); null for the name.</param>
+    /// <param name="isUtc">
+    /// Whether a column's date-times are UTC (PostgreSQL's timestamptz, MySQL's TIMESTAMP under the export's UTC session); null for none. A
+    /// workbook's header then adds <see cref="SqlExport.UtcColumn"/>; a CSV or JSON file keeps the name and writes each value with a <c>Z</c>
+    /// (2026-11-15, the database-tools review's #46: the text file took the suffix back off by matching it, which a name of the user's own
+    /// could fool).
+    /// </param>
     /// <param name="failed">
     /// The refusal for a file failure (<see cref="XlsxTarget.Failure"/>) while the sheet takes the columns or a row, worded with the workbook's
     /// name; null lets it throw.
     /// </param>
-    public SqlExportJob(Func<(ISheetRows? Sink, string? Refusal)> begin, SqlCellReader cell, Func<DbDataReader, int, string>? header = null,
+    public SqlExportJob(Func<(ISheetRows? Sink, string? Refusal)> begin, SqlCellReader cell, Func<DbDataReader, int, bool>? isUtc = null,
         Func<Exception, string>? failed = null)
     {
         _begin = begin ?? throw new ArgumentNullException(nameof(begin));
         _cell = cell ?? throw new ArgumentNullException(nameof(cell));
-        _header = header;
+        _isUtc = isUtc;
         _failed = failed;
     }
 
     /// <summary>A job over a sheet already begun.</summary>
-    public SqlExportJob(ISheetRows sink, SqlCellReader cell, Func<DbDataReader, int, string>? header = null)
-        : this(Already(sink ?? throw new ArgumentNullException(nameof(sink))), cell, header)
+    public SqlExportJob(ISheetRows sink, SqlCellReader cell, Func<DbDataReader, int, bool>? isUtc = null)
+        : this(Already(sink ?? throw new ArgumentNullException(nameof(sink))), cell, isUtc)
     {
     }
 
@@ -94,7 +100,20 @@ public sealed class SqlExportJob
             return new SqlGrid(columns, [], true);
         }
 
-        var headers = _header is null ? columns : [.. columns.Select((c, i) => _header(reader, i))];
+        var text = sink as TextRows;
+        var utc = new bool[columns.Length];
+        var headers = new string[columns.Length];
+        for (int i = 0; i < columns.Length; i++)
+        {
+            utc[i] = _isUtc?.Invoke(reader, i) == true;
+            if (utc[i] && text is not null)
+            {
+                text.MarkUtc(i);
+            }
+
+            headers[i] = utc[i] && text is null ? columns[i] + SqlExport.UtcColumn : columns[i];
+        }
+
         try
         {
             Refusal = sink.Begin(headers);
@@ -117,6 +136,7 @@ public sealed class SqlExportJob
 
         var preview = new List<string[]>();
         var row = new XlsxValue[columns.Length];
+        int cap = sink.CellChars;
         bool more = false;
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
@@ -128,7 +148,7 @@ public sealed class SqlExportJob
 
             for (int i = 0; i < row.Length; i++)
             {
-                row[i] = _cell(reader, i, types[i]);
+                row[i] = _cell(reader, i, types[i], cap);
             }
 
             bool added;
@@ -151,7 +171,7 @@ public sealed class SqlExportJob
 
             if (preview.Count < SqlExport.PreviewRows)
             {
-                preview.Add([.. row.Select(SqlExport.Show)]);
+                preview.Add([.. row.Select((value, i) => SqlExport.Show(value, text is not null, utc[i]))]);
             }
 
             Rows++;
@@ -200,29 +220,30 @@ public static class SqlExport
     /// holds a date alone); anything else (an array, a provider's own type) the family's export text through <paramref name="text"/>, never
     /// the chat's clipped cell (2026-10-29, review P5-1: an array was cut at the chat's 500 characters and scrubbed). A value the provider
     /// can't hand over (past <see cref="decimal"/>) is its provider value's text, by the 15-digit rule when it is a number, read through
-    /// <paramref name="provider"/> when the family gives one (<see cref="FromProvider"/>).
+    /// <paramref name="provider"/> when the family gives one (<see cref="FromProvider"/>). Text is cut at <paramref name="maxChars"/>.
     /// </summary>
-    public static XlsxValue Typed(DbDataReader reader, int ordinal, string? typeName, Func<object, string> text, Func<DbDataReader, int, string>? provider = null)
+    public static XlsxValue Typed(DbDataReader reader, int ordinal, string? typeName, Func<object, string> text, Func<DbDataReader, int, string>? provider = null,
+        int maxChars = XlsxValue.MaxChars)
     {
         ArgumentNullException.ThrowIfNull(reader);
         ArgumentNullException.ThrowIfNull(text);
         try
         {
-            return reader.IsDBNull(ordinal) ? XlsxValue.Blank : FromValue(reader.GetValue(ordinal), typeName, text);
+            return reader.IsDBNull(ordinal) ? XlsxValue.Blank : FromValue(reader.GetValue(ordinal), typeName, text, maxChars);
         }
         catch (Exception ex) when (ex is InvalidCastException or OverflowException)
         {
-            return FromProvider(reader, ordinal, typeName, provider);
+            return FromProvider(reader, ordinal, typeName, provider, maxChars);
         }
     }
 
     /// <summary>A value already read (MySQL's, judged for its zero dates first) by <see cref="Typed"/>'s rules.</summary>
-    public static XlsxValue FromValue(object? value, string? typeName, Func<object, string> text)
+    public static XlsxValue FromValue(object? value, string? typeName, Func<object, string> text, int maxChars = XlsxValue.MaxChars)
     {
         ArgumentNullException.ThrowIfNull(text);
         return value is null or DBNull ? XlsxValue.Blank
-            : IsScalar(value) ? XlsxValue.From(value, IsDateType(typeName))
-            : XlsxValue.OfText(text(value));
+            : IsScalar(value) ? XlsxValue.From(value, IsDateType(typeName), maxChars)
+            : XlsxValue.OfText(text(value), maxChars);
     }
 
     /// <summary>
@@ -231,12 +252,13 @@ public static class SqlExport
     /// doesn't override <see cref="DbDataReader.GetProviderSpecificValue"/>, so a DECIMAL past <see cref="decimal"/> threw again and exported
     /// as the placeholder while the chat showed every digit through <c>GetMySqlDecimal</c>); null for the generic provider value.
     /// </summary>
-    public static XlsxValue FromProvider(DbDataReader reader, int ordinal, string? typeName, Func<DbDataReader, int, string>? provider = null)
+    public static XlsxValue FromProvider(DbDataReader reader, int ordinal, string? typeName, Func<DbDataReader, int, string>? provider = null,
+        int maxChars = XlsxValue.MaxChars)
     {
         ArgumentNullException.ThrowIfNull(reader);
         try
         {
-            return XlsxValue.OfNumberText(provider is null ? InvariantText(reader.GetProviderSpecificValue(ordinal)) : provider(reader, ordinal));
+            return XlsxValue.OfNumberText(provider is null ? InvariantText(reader.GetProviderSpecificValue(ordinal), maxChars) : provider(reader, ordinal), maxChars);
         }
         catch (Exception inner) when (inner is not (DbException or OperationCanceledException or OutOfMemoryException))
         {
@@ -246,10 +268,13 @@ public static class SqlExport
 
     /// <summary>
     /// A value's text for a cell, in full and culture-free (2026-10-29, review P1-11: a provider's own number type wrote the culture's
-    /// separators): dates and times as ISO, bytes as hex, a double round-trip, anything formattable invariant, else its own text. The
-    /// cell's cap is <see cref="XlsxValue.OfText"/>'s.
+    /// separators): dates and times as ISO, bytes as hex (read no further than <paramref name="maxChars"/> holds), a double round-trip,
+    /// anything formattable invariant, else its own text. The cell's cap is <see cref="XlsxValue.OfText"/>'s.
     /// </summary>
-    public static string InvariantText(object? value) => value switch
+    public static string InvariantText(object? value) => InvariantText(value, XlsxValue.MaxChars);
+
+    /// <inheritdoc cref="InvariantText(object?)"/>
+    public static string InvariantText(object? value, int maxChars) => value switch
     {
         null or DBNull => "",
         string s => s,
@@ -259,7 +284,7 @@ public static class SqlExport
         DateOnly d => d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
         TimeOnly t => t.ToString("HH:mm:ss.FFFFFFF", CultureInfo.InvariantCulture),
         TimeSpan t => t.ToString("c", CultureInfo.InvariantCulture),
-        byte[] bytes => "0x" + Convert.ToHexString(bytes, 0, Math.Min(bytes.Length, (XlsxValue.MaxChars - 3) / 2 + 1)),
+        byte[] bytes => "0x" + Convert.ToHexString(bytes, 0, Math.Min(bytes.Length, XlsxValue.BytesFit(maxChars) + 1)),
         Guid g => g.ToString("D", CultureInfo.InvariantCulture),
         double f => f.ToString("R", CultureInfo.InvariantCulture),
         float f => f.ToString("R", CultureInfo.InvariantCulture),
@@ -274,16 +299,19 @@ public static class SqlExport
 
     /// <summary>
     /// A cell of the preview as the chat shows one (<see cref="SqlText.Cell"/>: scrubbed, clipped): NULL for a blank, the number's own
-    /// text, the date or time as ISO.
+    /// text, the date or time as ISO, a duration as <see cref="TextRows.DurationText"/> (a sign when negative). For a CSV or JSON file
+    /// (<paramref name="asText"/>) the file's own spellings, so the preview matches the file (2026-11-15, the database-tools review's
+    /// #30/#132): a number's exact text, a date-time in ISO 8601 with its <c>Z</c> when <paramref name="utc"/>, a time to its fraction.
     /// </summary>
-    public static string Show(XlsxValue value) => value.Kind switch
+    public static string Show(XlsxValue value, bool asText = false, bool utc = false) => value.Kind switch
     {
         XlsxKind.Blank => SqlText.Null,
         XlsxKind.Bool => value.Number != 0 ? "true" : "false",
-        XlsxKind.Number => value.Text ?? value.Number.ToString("R", CultureInfo.InvariantCulture),
+        XlsxKind.Number => asText ? TextRows.NumberText(value) : value.Text ?? value.Number.ToString("R", CultureInfo.InvariantCulture),
         XlsxKind.Date => value.When.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-        XlsxKind.DateTime => SqlText.Cell(value.When),
-        XlsxKind.Time or XlsxKind.Duration => SqlText.Cell(TimeSpan.FromDays(value.Number)),
+        XlsxKind.DateTime => asText ? TextRows.DateTimeText(value.When, utc) : SqlText.Cell(value.When),
+        XlsxKind.Time => asText ? TextRows.TimeText(value.Number) : SqlText.Cell(TimeSpan.FromDays(value.Number)),
+        XlsxKind.Duration => TextRows.DurationText(value.Number),
         _ => SqlText.Cell(value.Text ?? ""),
     };
 }

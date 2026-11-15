@@ -19,15 +19,23 @@ public static class OracleCatalogQueries
     /// </summary>
     public const string OverflowClause = " ON OVERFLOW TRUNCATE '…' WITHOUT COUNT";
 
-    /// <summary><paramref name="sql"/> as <paramref name="serverVersion"/> reads it: without <see cref="OverflowClause"/> before 12.2.</summary>
+    /// <summary>
+    /// <paramref name="sql"/> as <paramref name="serverVersion"/> reads it: without <see cref="OverflowClause"/> before 12.2, and before 12c
+    /// with <see cref="Maintained"/> read as <c>'N'</c> (2026-11-15, #64/#118: <c>ALL_USERS.ORACLE_MAINTAINED</c> came with 12c, so every
+    /// schema then reads as not Oracle's own, and the names <see cref="OracleConnectionConfig.SystemSchemas"/> holds are still refused).
+    /// </summary>
     public static string ForServer(string sql, string? serverVersion)
     {
         ArgumentNullException.ThrowIfNull(sql);
         string[] parts = (serverVersion ?? "").Split('.');
-        bool modern = int.TryParse(parts[0], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out int major)
-            && (major > 12 || (major == 12 && parts.Length > 1 && int.TryParse(parts[1], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out int minor) && minor >= 2));
-        return modern ? sql : sql.Replace(OverflowClause, "", StringComparison.Ordinal);
+        bool known = int.TryParse(parts[0], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out int major);
+        bool modern = known && (major > 12 || (major == 12 && parts.Length > 1 && int.TryParse(parts[1], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out int minor) && minor >= 2));
+        string text = modern ? sql : sql.Replace(OverflowClause, "", StringComparison.Ordinal);
+        return known && major is > 0 and < 12 ? text.Replace(Maintained, "'N'", StringComparison.Ordinal) : text;
     }
+
+    /// <summary>How the queries name <c>ALL_USERS.ORACLE_MAINTAINED</c>, always as <c>u.oracle_maintained</c>, so <see cref="ForServer"/> finds it.</summary>
+    public const string Maintained = "u.oracle_maintained";
 
     /// <summary>
     /// The marker an app-written statement holds for the connection's places (2026-11-14, feature idea #18): <see cref="OracleAccess.RunAsync"/>
@@ -57,6 +65,19 @@ public static class OracleCatalogQueries
 
     /// <summary>The listed schemas as <c>ALL_USERS</c> knows them (#18): name and whether Oracle maintains it; a missing one has no row.</summary>
     public const string SchemaCheck = "SELECT u.username, u.oracle_maintained FROM sys.all_users u WHERE u.username IN (" + OwnerList + ")";
+
+    /// <summary>
+    /// <see cref="SchemaCheck"/> for <paramref name="count"/> places as <paramref name="serverVersion"/> reads it (2026-11-15, #64: before 12c
+    /// every listed schema reads as not maintained, <see cref="ForServer"/>).
+    /// </summary>
+    public static string SchemaCheckFor(string? serverVersion, int count) => ForServer(ForPlaces(SchemaCheck, count), serverVersion);
+
+    /// <summary>
+    /// The schemas the wizard's Schemas step lists (2026-11-15, the database-tools review's #118): every user <c>ALL_USERS</c> shows that Oracle
+    /// doesn't maintain, by name. <see cref="Reach"/>' first statement listed only those holding a table the account may see, so a new, empty
+    /// schema read as "(missing)".
+    /// </summary>
+    public const string UserSchemas = "SELECT u.username FROM sys.all_users u WHERE u.oracle_maintained = 'N' ORDER BY 1";
 
     /// <summary>
     /// What else the account could read (2026-10-09, the wizard's test and <c>--oracle-check</c>; <c>oracle_schemas</c>' listing until the
@@ -176,8 +197,9 @@ public static class OracleCatalogQueries
     ];
 
     /// <summary>
-    /// The foreign-key join paths of the connection's schemas (both ends listed, #18), one row per column pair: every one, or those
-    /// touching the table <c>:owner</c>.<c>:name</c>.
+    /// The foreign-key join paths of the connection's schemas, one row per column pair: every one, or those touching the table
+    /// <c>:owner</c>.<c>:name</c>. The key's table is in a listed schema (#18); the table it points to may be anywhere the account sees
+    /// (2026-11-15, #95: as before the list came, an FK into another owner's table is shown).
     /// </summary>
     public const string Relationships =
         """
@@ -187,7 +209,7 @@ public static class OracleCatalogQueries
         JOIN sys.all_constraints r ON r.owner = k.r_owner AND r.constraint_name = k.r_constraint_name
         JOIN sys.all_cons_columns fc ON fc.owner = k.owner AND fc.constraint_name = k.constraint_name
         JOIN sys.all_cons_columns rc ON rc.owner = r.owner AND rc.constraint_name = r.constraint_name AND rc.position = fc.position
-        WHERE k.constraint_type = 'R' AND k.owner IN (:neon_owners) AND r.owner IN (:neon_owners)
+        WHERE k.constraint_type = 'R' AND k.owner IN (:neon_owners)
           AND (:name IS NULL OR (k.owner = :owner AND k.table_name = :name) OR (r.owner = :owner AND r.table_name = :name))
         ORDER BY 2, 1, fc.position
         """;

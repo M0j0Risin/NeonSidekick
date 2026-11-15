@@ -138,10 +138,10 @@ internal static class HelpToolCatalog
         // Oracle
         T(OracleConnectionsTool.ToolName, ToolsText.OracleTabTitle, SettingsField.OracleTools, "Lists the Oracle connections the user has set up.", setup: Conn("oracle.json", "oracle")),
         T(OracleTablesTool.ToolName, ToolsText.OracleTabTitle, SettingsField.OracleTools, "Lists an Oracle schema's tables and views with their row counts and comments.", setup: Conn("oracle.json", "oracle")),
-        T(OracleColumnsTool.ToolName, ToolsText.OracleTabTitle, SettingsField.OracleTools, "Finds the columns of an Oracle schema whose name matches.", setup: Conn("oracle.json", "oracle")),
+        T(OracleColumnsTool.ToolName, ToolsText.OracleTabTitle, SettingsField.OracleTools, "Finds the columns whose name matches in an Oracle connection's schema or schemas.", setup: Conn("oracle.json", "oracle")),
         T(OracleDescribeTool.ToolName, ToolsText.OracleTabTitle, SettingsField.OracleTools, "Describes one Oracle table or view: columns, keys, joins, indexes, checks and triggers.", setup: Conn("oracle.json", "oracle")),
-        T(OracleRelationshipsTool.ToolName, ToolsText.OracleTabTitle, SettingsField.OracleTools, "Lists an Oracle schema's foreign keys as join paths.", setup: Conn("oracle.json", "oracle")),
-        T(OracleIndexesTool.ToolName, ToolsText.OracleTabTitle, SettingsField.OracleTools, "Lists an Oracle table's or schema's indexes and their recorded use.", setup: Conn("oracle.json", "oracle")),
+        T(OracleRelationshipsTool.ToolName, ToolsText.OracleTabTitle, SettingsField.OracleTools, "Lists the foreign keys of an Oracle connection's schema or schemas as join paths.", setup: Conn("oracle.json", "oracle")),
+        T(OracleIndexesTool.ToolName, ToolsText.OracleTabTitle, SettingsField.OracleTools, "Lists the indexes of an Oracle table or of the connection's schema or schemas, and their recorded use.", setup: Conn("oracle.json", "oracle")),
         T(OracleQueryTool.ToolName, ToolsText.OracleTabTitle, SettingsField.OracleTools, "Runs one read-only Oracle SELECT and gives back the rows, or writes them all to an Excel, CSV or JSON file.", setup: Conn("oracle.json", "oracle")),
         T(OracleProfileTool.ToolName, ToolsText.OracleTabTitle, SettingsField.OracleTools, "Profiles one Oracle table or view in one answer: its rows and, per column, nulls, distinct values, min, max and most common values (a big table sampled).", setup: Conn("oracle.json", "oracle")),
         T(OracleExecuteTool.ToolName, ToolsText.OracleTabTitle, SettingsField.OracleTools, "Runs one statement that changes an Oracle database.", headless: false, pane: true, needs: [SettingsField.OracleMode], setup: ExecuteSetup),
@@ -153,7 +153,7 @@ internal static class HelpToolCatalog
         T(MySqlRelationshipsTool.ToolName, ToolsText.MySqlTabTitle, SettingsField.MySqlTools, "Lists a MySQL database's foreign keys as join paths.", setup: Conn("mysql.json", "mysql")),
         T(MySqlIndexesTool.ToolName, ToolsText.MySqlTabTitle, SettingsField.MySqlTools, "Lists a MySQL table's or database's indexes and how much each is used.", setup: Conn("mysql.json", "mysql")),
         T(MySqlQueryTool.ToolName, ToolsText.MySqlTabTitle, SettingsField.MySqlTools, "Runs one read-only SELECT on a MySQL or MariaDB connection and gives back the rows, or writes them all to an Excel, CSV or JSON file.", setup: Conn("mysql.json", "mysql")),
-        T(MySqlExplainTool.ToolName, ToolsText.MySqlTabTitle, SettingsField.MySqlTools, "Shows how MySQL or MariaDB would run a SELECT (its query plan), without running it.", setup: Conn("mysql.json", "mysql")),
+        T(MySqlExplainTool.ToolName, ToolsText.MySqlTabTitle, SettingsField.MySqlTools, "Shows how MySQL or MariaDB would run a SELECT (its query plan), without running it (MySQL may compute a constant subquery while planning).", setup: Conn("mysql.json", "mysql")),
         T(MySqlProfileTool.ToolName, ToolsText.MySqlTabTitle, SettingsField.MySqlTools, "Profiles one MySQL or MariaDB table or view in one answer: its rows and, per column, nulls, distinct values, min, max and most common values (a big table's first rows).", setup: Conn("mysql.json", "mysql")),
         T(MySqlExecuteTool.ToolName, ToolsText.MySqlTabTitle, SettingsField.MySqlTools, "Runs one statement that changes a MySQL database.", headless: false, pane: true, needs: [SettingsField.MySqlMode], setup: ExecuteSetup),
         // SQLite

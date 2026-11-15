@@ -10,8 +10,10 @@ namespace NeonSidekick.Llm.Tools;
 /// <c>mysql_explain(sql, connection?, params?)</c> (2026-11-14, the database-tools plan's #12): how MySQL or MariaDB would run one read, from
 /// <c>EXPLAIN FORMAT=JSON</c>. The statement passes <see cref="MySqlReadOnlyGate"/> and the database boundary as <c>mysql_query</c>'s does, then
 /// runs with the prefix on the same path (the hardened session, its mode read back, the read-only session and transaction, rolled back,
-/// the timeout); the plan is made, never run. MariaDB's reference names only SELECT after EXPLAIN, so a WITH it refuses is answered with
-/// the server's words and the way round. The answer is <see cref="QueryPlanText.Answer"/>'s summary (<see cref="MySqlPlan"/> reads both servers' JSON).
+/// the timeout); the plan is made, never run, though MySQL may compute a constant subquery while planning (#150: the read-only session and
+/// the rollback still hold). MariaDB's reference names only SELECT after EXPLAIN, so a WITH it refuses (a syntax error, on MariaDB alone,
+/// #23) is answered with the server's words and the way round. The answer is <see cref="QueryPlanText.Answer"/>'s summary
+/// (<see cref="MySqlPlan"/> reads both servers' JSON).
 /// </summary>
 public sealed class MySqlExplainTool : MySqlTool
 {
@@ -35,7 +37,7 @@ public sealed class MySqlExplainTool : MySqlTool
 
     public override string Description =>
         "Shows how MySQL or MariaDB would run one SELECT: its query plan's steps (table scans, index lookups, joins, with estimated rows and cost) and what is worth a look. " +
-        "The query is planned, never run; use it when a query is slow, before rewriting it.";
+        "The query is planned, never run (MySQL may compute a constant subquery while planning); use it when a query is slow, before rewriting it.";
 
     public override JsonElement JsonSchema => Schema;
 
@@ -54,27 +56,26 @@ public sealed class MySqlExplainTool : MySqlTool
             return outside;
         }
 
-        var run = await Server.RunAsync(connection, [MySqlPlan.Prefix + body], parameters, MySqlAccess.MaxCatalogRows, TimeoutSeconds(Effective), cancellationToken, readCell: QueryPlan.WholeCell).ConfigureAwait(false);
+        var effective = Effective;
+        var run = await Server.RunAsync(connection, [MySqlPlan.Prefix + body], parameters, MySqlAccess.MaxCatalogRows, TimeoutSeconds(effective), cancellationToken, readCell: QueryPlan.WholeCell).ConfigureAwait(false);
         if (run.Outcome != SqlOutcome.Ok)
         {
-            return run.Outcome == SqlOutcome.Failed && LeadsWithWith(body) && run.Detail.StartsWith(MySqlText.ServerError(SyntaxError, ""), StringComparison.Ordinal)
+            return run.Outcome == SqlOutcome.Failed && MySqlAccess.IsMariaDb(run.ServerVersion) && LeadsWithWith(body)
+                && run.Detail.StartsWith(MySqlText.ServerError(SyntaxError, ""), StringComparison.Ordinal)
                 ? QueryPlanText.WithRefused(run.Detail)
                 : MySqlText.Error(run);
         }
 
         string text = QueryPlan.TextOf(run, 0);
-        int cap = Math.Min(QueryPlan.MaxAnswerChars, SqlTool.ResultChars(Effective));
-        return MySqlPlan.Parse(text) is { } plan
-            ? QueryPlanText.Answer(plan, run.Connection, run.Database, run.Elapsed, cap)
-            : QueryPlanText.Unreadable(run.Connection, run.Database, run.Elapsed, text);
+        return ExplainAnswer.Of(MySqlPlan.Parse(text), run, text, effective);
     }
 
-    /// <summary>Whether the statement leads with WITH (past any opening brackets).</summary>
+    /// <summary>Whether the statement leads with WITH, past any opening brackets and comments (#23: as the gate's tokenizer reads it).</summary>
     internal static bool LeadsWithWith(string body)
     {
         ArgumentNullException.ThrowIfNull(body);
-        string lead = body.TrimStart().TrimStart('(').TrimStart();
-        return lead.Length > 4 && lead.StartsWith("WITH", StringComparison.OrdinalIgnoreCase) && !char.IsAsciiLetterOrDigit(lead[4]) && lead[4] != '_';
+        return MySqlReadOnlyGate.Tokenize(body, out _) is { } tokens
+            && tokens.FirstOrDefault(t => !(t.Kind == MySqlReadOnlyGate.TokenKind.Symbol && t.Text == "(")) is { Kind: MySqlReadOnlyGate.TokenKind.Word, Text: "WITH" };
     }
 
     protected override async ValueTask<object?> InvokeToolAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)

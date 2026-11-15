@@ -27,6 +27,9 @@ internal static class LiveOracle
     /// <summary>The user the tests sign in as, upper-cased: the schema the fixtures live in.</summary>
     public static readonly string Owner = "";
 
+    /// <summary>Whether the user may key a table to <c>SHOP.CUSTOMERS</c> (a one-time grant on the dev container: docs/TESTCONTAINERS.md).</summary>
+    public static readonly bool ShopKey;
+
     private static readonly string[] Fixtures =
     [
         "CREATE TABLE ns_customers (id NUMBER(10) PRIMARY KEY, name VARCHAR2(100 CHAR) NOT NULL, email VARCHAR2(200) UNIQUE, created DATE DEFAULT SYSDATE)",
@@ -43,6 +46,18 @@ internal static class LiveOracle
         "INSERT INTO ns_orders (id, customer_id, total, notes) VALUES (10, 1, 42.5, 'first')",
         "INSERT INTO ns_orders (id, customer_id, total) VALUES (11, 2, 7)",
         "INSERT INTO ns_orders (id, customer_id, total) VALUES (12, 2, 9)",
+    ];
+
+    /// <summary>
+    /// A LONG column, which the profile lists but never selects (2026-11-15, the database-tools review's #60: a LONG in its inline view raised
+    /// ORA-00997), beside a quoted name that holds the owner marker's text, which the profile's statements leave alone (#139).
+    /// </summary>
+    private static readonly string[] LegacyFixtures =
+    [
+        "CREATE TABLE ns_legacy (id NUMBER(10) PRIMARY KEY, body LONG, \"tag:neon_owners\" VARCHAR2(20))",
+        "INSERT INTO ns_legacy VALUES (1, 'old', 'a')",
+        "INSERT INTO ns_legacy VALUES (2, 'older', 'b')",
+        "INSERT INTO ns_legacy VALUES (3, NULL, 'a')",
     ];
 
     static LiveOracle()
@@ -75,8 +90,24 @@ internal static class LiveOracle
                 }
             }
 
+            // Later fixtures (2026-11-15, the database-tools review), each made on the first run that lacks it, so an older fixture schema gains
+            // them: NS_LEGACY; an INVISIBLE column on NS_AUDIT, which the profile leaves out; and, once the grant is there, a key into
+            // SHOP.CUSTOMERS, which the relationships list with only the own schema held (#95).
+            Ensure(connection, "SELECT COUNT(*) FROM user_tables WHERE table_name = 'NS_LEGACY'", LegacyFixtures);
+            Ensure(connection, "SELECT COUNT(*) FROM user_tab_cols WHERE table_name = 'NS_AUDIT' AND column_name = 'SECRET'", ["ALTER TABLE ns_audit ADD (secret VARCHAR2(20) INVISIBLE)"]);
+            using (var granted = new OracleCommand("SELECT COUNT(*) FROM user_tab_privs WHERE owner = 'SHOP' AND table_name = 'CUSTOMERS' AND privilege = 'REFERENCES'", connection))
+            {
+                ShopKey = Convert.ToInt32(granted.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture) > 0;
+            }
+
+            if (ShopKey)
+            {
+                Ensure(connection, "SELECT COUNT(*) FROM user_tables WHERE table_name = 'NS_SHOP_REFS'",
+                    ["CREATE TABLE ns_shop_refs (id NUMBER(10) PRIMARY KEY, customer_id NUMBER(10) CONSTRAINT ns_shop_refs_fk REFERENCES shop.customers(customer_id))"]);
+            }
+
             // The optimizer's counts (2026-11-14, oracle_profile): before statistics num_rows is NULL, and the profile's SAMPLE runs only on an estimate.
-            using (var gather = new OracleCommand("BEGIN DBMS_STATS.GATHER_TABLE_STATS(USER, 'NS_ORDERS'); END;", connection))
+            using (var gather = new OracleCommand("BEGIN DBMS_STATS.GATHER_TABLE_STATS(USER, 'NS_ORDERS'); DBMS_STATS.GATHER_TABLE_STATS(USER, 'NS_LEGACY'); END;", connection))
             {
                 gather.ExecuteNonQuery();
             }
@@ -94,6 +125,25 @@ internal static class LiveOracle
         {
             Unavailable = "No Oracle database (or its user may not create the fixtures): " + ex.Message;
         }
+    }
+
+    /// <summary>Runs <paramref name="statements"/> and commits when <paramref name="countSql"/> counts none: a fixture made once.</summary>
+    private static void Ensure(OracleConnection connection, string countSql, IReadOnlyList<string> statements)
+    {
+        using var count = new OracleCommand(countSql, connection);
+        if (Convert.ToInt32(count.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture) > 0)
+        {
+            return;
+        }
+
+        foreach (string sql in statements)
+        {
+            using var command = new OracleCommand(sql, connection);
+            command.ExecuteNonQuery();
+        }
+
+        using var commit = new OracleCommand("COMMIT", connection);
+        commit.ExecuteNonQuery();
     }
 
     /// <summary>A plain count through a connection of the test's own, outside the tools: what the read-only layers must leave unchanged.</summary>
@@ -137,7 +187,7 @@ public sealed class LiveOracleTests
         (string)(await _tools.OfType<T>().Single().InvokeAsync(new AIFunctionArguments(pairs.ToDictionary(p => p.Name, p => p.Value))))!;
 
     private Task<SqlRun> Raw(string sql, int timeoutSeconds = 30, CancellationToken cancellationToken = default) =>
-        _access.RunAsync("free", [sql], [], 10, timeoutSeconds, cancellationToken);
+        _access.RunAsync("free", [sql], [], 10, timeoutSeconds, ownerMarker: true, cancellationToken);
 
     /// <summary>
     /// <c>oracle_profile</c> on the fixtures (2026-11-14, the database-tools plan's #14), as is and with the threshold lowered to 1 (the gathered
@@ -152,27 +202,61 @@ public sealed class LiveOracleTests
         Assert.Contains("| CUSTOMER_ID | NUMBER | 0 | ~2 | 1 | 2 | 2 (2), 1 (1) |", orders);
         Assert.Contains("| NOTES | CLOB | 2 (67%) | — | — | — | — |", orders);
 
-        TableProfile.SampleAbove = 1;
-        try
-        {
-            Assert.Matches(@"\.NS_ORDERS: from (a sample of ~\d+|the first 1) of about 3 rows", SqlText.Note(await Invoke<OracleProfileTool>(("table", "ns_orders"))));
-            Assert.Matches(@"\.NS_CUSTOMERS: from (a sample of ~\d+|the first 1) of (about 2|more than 1) rows", SqlText.Note(await Invoke<OracleProfileTool>(("table", "ns_customers"), ("top", 0))));
-        }
-        finally
-        {
-            TableProfile.SampleAbove = 100_000;
-        }
+        _tools.OfType<OracleProfileTool>().Single().SampleAbove = 1;
+        Assert.Matches(@"\.NS_ORDERS: from (a sample of ~\d+|the first 1) of about 3 rows", SqlText.Note(await Invoke<OracleProfileTool>(("table", "ns_orders"))));
+        Assert.Matches(@"\.NS_CUSTOMERS: from (a sample of ~\d+|the first [12]) of (about 2|more than 1) rows", SqlText.Note(await Invoke<OracleProfileTool>(("table", "ns_customers"), ("top", 0))));
 
         Assert.StartsWith("Error:", await Invoke<OracleProfileTool>(("table", "SYS.DUAL")));
+    }
+
+    /// <summary>
+    /// The profile on the later fixtures (2026-11-15, the database-tools review): NS_LEGACY's LONG is listed, not measured and never selected,
+    /// whole and with the threshold at 1 (its SAMPLE runs on the gathered estimate; #60), and a quoted name holding the marker's text reads as
+    /// itself (#139). NS_AUDIT's INVISIBLE column is left out.
+    /// </summary>
+    [LiveOracleFact]
+    public async Task Profile_NeverSelectsALong_AndLeavesAnInvisibleColumnOut()
+    {
+        string whole = await Invoke<OracleProfileTool>(("table", "ns_legacy"));
+        Assert.StartsWith(LiveOracle.Owner + ".NS_LEGACY: 3 rows (exact) · 3 columns · free", whole);
+        Assert.Contains("| BODY | LONG | — | — | — | — | — |", whole);
+        Assert.Matches(@"\| tag:neon_owners \| VARCHAR2 \| 0 \| ~?2 \| a \| b \| a \(2\), b \(1\) \|", whole);
+
+        _tools.OfType<OracleProfileTool>().Single().SampleAbove = 1;
+        string sampled = await Invoke<OracleProfileTool>(("table", "ns_legacy"));
+        Assert.Matches(@"\.NS_LEGACY: from (a sample of ~\d+|the first 1) of about 3 rows", SqlText.Note(sampled));
+        Assert.Contains("| BODY | LONG | — | — | — | — | — |", sampled);
+
+        string audit = await Invoke<OracleProfileTool>(("table", "ns_audit"));
+        Assert.Contains(" · 1 column · ", audit);
+        Assert.DoesNotContain("SECRET", audit);
+    }
+
+    /// <summary>
+    /// A key from the own schema into one the connection isn't held to (2026-11-15, the database-tools review's #95): the relationships and
+    /// describe list it, as before schema lists. Needs the one-time REFERENCES grant on SHOP.CUSTOMERS (docs/TESTCONTAINERS.md); without it,
+    /// left out (xunit 2 has no skip from inside a test).
+    /// </summary>
+    [LiveOracleFact]
+    public async Task AKeyIntoAnotherSchema_IsListed()
+    {
+        if (!LiveOracle.ShopKey)
+        {
+            return;
+        }
+
+        string key = LiveOracle.Owner + ".NS_SHOP_REFS.CUSTOMER_ID -> SHOP.CUSTOMERS.CUSTOMER_ID";
+        Assert.Contains(key, await Invoke<OracleRelationshipsTool>(("table", "ns_shop_refs")));
+        Assert.Contains("- out: " + key, await Invoke<OracleDescribeTool>(("table", "ns_shop_refs")));
     }
 
     [LiveOracleFact]
     public async Task TheCatalogTools_FindDescribeAndJoinTheFixtures()
     {
         // The lock (2026-10-09): the dictionary's whole-database views and a schema argument are refused; the own schema written out reads.
-        Assert.Equal(OracleText.Dictionary("ALL_USERS", LiveOracle.Owner), await Invoke<OracleQueryTool>(("sql", "SELECT username FROM all_users")));
+        Assert.Equal(OracleText.Dictionary("ALL_USERS", [LiveOracle.Owner]), await Invoke<OracleQueryTool>(("sql", "SELECT username FROM all_users")));
         Assert.Equal(OracleText.NoSchemaArgument, await Invoke<OracleTablesTool>(("schema", LiveOracle.Owner)));
-        Assert.Equal(OracleText.OtherSchema("SYS", LiveOracle.Owner), await Invoke<OracleQueryTool>(("sql", "SELECT COUNT(*) FROM sys.obj$")));
+        Assert.Equal(OracleText.OtherSchema("SYS", [LiveOracle.Owner]), await Invoke<OracleQueryTool>(("sql", "SELECT COUNT(*) FROM sys.obj$")));
         Assert.StartsWith("1 row", await Invoke<OracleQueryTool>(("sql", $"SELECT COUNT(*) FROM {LiveOracle.Owner}.ns_orders o WHERE o.id > 0")));
 
         string tables = await Invoke<OracleTablesTool>(("pattern", "ns_"));
@@ -194,7 +278,7 @@ public sealed class LiveOracleTests
         Assert.Contains("Where to write", customers);
         Assert.Contains("- in : " + LiveOracle.Owner + ".NS_ORDERS.CUSTOMER_ID -> " + LiveOracle.Owner + ".NS_CUSTOMERS.ID", customers);
 
-        Assert.Equal(OracleText.TableNotFound("ns_nothing", "free", LiveOracle.Owner), await Invoke<OracleDescribeTool>(("table", "ns_nothing")));
+        Assert.Equal(OracleText.TableNotFound("ns_nothing", "free", [LiveOracle.Owner]), await Invoke<OracleDescribeTool>(("table", "ns_nothing")));
         Assert.Contains(LiveOracle.Owner + ".NS_ORDERS.CUSTOMER_ID -> " + LiveOracle.Owner + ".NS_CUSTOMERS.ID", await Invoke<OracleRelationshipsTool>(("table", "ns_customers")));
         Assert.Contains("| " + LiveOracle.Owner + ".NS_CUSTOMERS | table | EMAIL | VARCHAR2(200) | yes | Where to write |", await Invoke<OracleColumnsTool>(("pattern", "email")));
         string indexes = await Invoke<OracleIndexesTool>(("table", "ns_orders"));
@@ -365,7 +449,7 @@ public sealed class LiveOracleTests
     [LiveOracleFact]
     public async Task TheWizardsTest_SaysWhoItIs_AndWarnsOfAnAccountThatCanWrite()
     {
-        var run = await _access.RunAsync("free", [OracleCatalogQueries.WhoAmI, OracleCatalogQueries.WritePowers], [], 50, 30, CancellationToken.None);
+        var run = await _access.RunAsync("free", [OracleCatalogQueries.WhoAmI, OracleCatalogQueries.WritePowers], [], 50, 30, ownerMarker: true, CancellationToken.None);
         Assert.Equal(SqlOutcome.Ok, run.Outcome);
         Assert.Equal(LiveOracle.Owner, run.Grids[0].Rows[0][0]);
         Assert.StartsWith(LiveOracle.Release.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".", run.Grids[0].Rows[0][2]);

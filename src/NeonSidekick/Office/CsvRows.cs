@@ -8,7 +8,7 @@ namespace NeonSidekick.Office;
 /// without one; the AD tools' CSV has it too), CRLF line ends, a header row. A number is its exact spelling, a boolean <c>true</c>/<c>false</c>,
 /// dates and times ISO; NULL is an empty field and <c>''</c> a quoted empty one (<c>""</c>), which DuckDB reads apart and Excel doesn't. Text
 /// is guarded against a spreadsheet reading it as a formula (<see cref="CsvCell"/>), a plain number left as it is; every value is written
-/// exactly, a lone surrogate as U+FFFD.
+/// exactly, whole up to 1,048,576 characters a cell (<see cref="TextRows.CellCap"/>), a lone surrogate as U+FFFD.
 /// </summary>
 public sealed class CsvRows : TextRows
 {
@@ -52,7 +52,8 @@ public sealed class CsvRows : TextRows
         XlsxKind.DateTime => DateTimeText(value.When, utc),
         XlsxKind.Time => TimeText(value.Number),
         XlsxKind.Duration => DurationText(value.Number),
-        _ => value.Text is not { Length: > 0 } text ? "\"\"" : CsvCell.Text(XlsxValue.WellFormed(text), exemptNumbers: true),
+        // No WellFormed pass (2026-11-15, #68): the writer's UTF8Encoding replaces a lone surrogate with U+FFFD itself.
+        _ => value.Text is not { Length: > 0 } text ? "\"\"" : CsvCell.Text(text, exemptNumbers: true),
     };
 
     private void Line(IEnumerable<string> fields)

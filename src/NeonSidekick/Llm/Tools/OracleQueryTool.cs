@@ -92,7 +92,7 @@ public sealed class OracleQueryTool : OracleTool
                 (job, timeout, token) => pinned.ExportAsync(target.Name, body, parameters, job, rows, timeout, token), OracleText.Error, cancellationToken).ConfigureAwait(false);
         }
 
-        var run = await Oracle.RunAsync(connection, [body], parameters, rows, TimeoutSeconds(Effective), cancellationToken, modelText: true).ConfigureAwait(false);
+        var run = await Oracle.RunAsync(connection, [body], parameters, rows, TimeoutSeconds(Effective), ownerMarker: false, cancellationToken).ConfigureAwait(false);
         return run.Outcome == SqlOutcome.Ok ? OracleText.Query(run, rows, SqlTool.ResultChars(Effective), CanSave) : OracleText.Error(run);
     }
 
@@ -104,20 +104,9 @@ public sealed class OracleQueryTool : OracleTool
             return ClockText.BadInteger(MaxRowsArgument, raw);
         }
 
-        if (!ToolArguments.TryReadObjectList(arguments, ParamsArgument, out var objects, out var sent) || objects.Count > 1)
+        if (SqlQueryTool.ReadParams(arguments, OracleText.BadParams, out var error, SqlQueryTool.ReadColonName, OracleText.BadParamName) is not { } parameters)
         {
-            return OracleText.BadParams(sent);
-        }
-
-        IReadOnlyList<SqlParameterValue> parameters = [];
-        if (objects.Count == 1)
-        {
-            if (SqlQueryTool.ReadParameters(objects[0], out var error, SqlQueryTool.ReadColonName, OracleText.BadParamName) is not { } read)
-            {
-                return error?.Replace("@name", ":name", StringComparison.Ordinal);
-            }
-
-            parameters = read;
+            return error.Replace("@name", ":name", StringComparison.Ordinal);
         }
 
         if (ReadExport(arguments, out var export) is { } badExport)

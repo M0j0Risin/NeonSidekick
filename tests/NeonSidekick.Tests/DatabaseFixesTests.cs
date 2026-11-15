@@ -32,7 +32,7 @@ public sealed partial class DatabaseFixesTests
             body => { kinds++; return body.StartsWith("SELECT", StringComparison.Ordinal) ? [ServerStatementKind.Read] : [ServerStatementKind.Data]; },
             _ => readRefusal,
             body => body,
-            () => (new ExecuteTarget("shop", true, "sales"), null),
+            () => (new ExecuteTarget("shop", true, ["sales"]), null),
             (_, _) => Task.FromResult("read"),
             (_, _) => Task.FromResult(new SqlRun(SqlOutcome.Ok, "", "shop", "sales", [], TimeSpan.Zero) { Changes = 1 }),
             run => "error",

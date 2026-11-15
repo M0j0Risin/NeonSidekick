@@ -156,6 +156,9 @@ public sealed record SqlRun(SqlOutcome Outcome, string Detail, string Connection
 
     /// <summary>The rows a change changed (2026-10-05, <c>sqlite_execute</c>'s <c>sqlite3_changes</c>); null for a read.</summary>
     public int? Changes { get; init; }
+
+    /// <summary>The server's version as the session read it, where a run hands it back (2026-11-15, #23: MySQL's, so <c>mysql_explain</c> knows MariaDB).</summary>
+    public string? ServerVersion { get; init; }
 }
 
 /// <summary>
@@ -309,8 +312,9 @@ public sealed class SqlAccess
             {
                 if (showPlan)
                 {
-                    await ShowPlanAsync(connection, transaction, SqlServerPlan.On, timeoutSeconds, cancellationToken).ConfigureAwait(false);
+                    // Set before the await (2026-11-15, #1): a cancel or timeout after the server applied ON still turns it off below.
                     planning = true;
+                    await ShowPlanAsync(connection, transaction, SqlServerPlan.On, timeoutSeconds, cancellationToken).ConfigureAwait(false);
                 }
 
                 await using var command = new SqlCommand(sql, connection, transaction) { CommandTimeout = timeoutSeconds };
@@ -343,12 +347,17 @@ public sealed class SqlAccess
             }
             finally
             {
-                if (planning)
+                try
                 {
-                    await ShowPlanOffAsync(connection, transaction).ConfigureAwait(false);
+                    if (planning)
+                    {
+                        await ShowPlanOffAsync(connection, transaction, watch, timeoutSeconds, cancellationToken).ConfigureAwait(false);
+                    }
                 }
-
-                await RollBackAsync(transaction).ConfigureAwait(false);
+                finally
+                {
+                    await RollBackAsync(transaction).ConfigureAwait(false);
+                }
             }
         }
         catch (SqlException ex) when (cancellationToken.IsCancellationRequested)
@@ -386,12 +395,12 @@ public sealed class SqlAccess
     /// type the app carries no assembly for) is <see cref="SqlText.Unreadable"/>, never a second read. The buffers are the shared pool's
     /// (2026-10-29, review P1-10: 64 KB a text cell, allocated per cell of every row).
     /// </summary>
-    public static XlsxValue ExportCell(DbDataReader reader, int ordinal, string? typeName)
+    public static XlsxValue ExportCell(DbDataReader reader, int ordinal, string? typeName, int maxChars = XlsxValue.MaxChars)
     {
         ArgumentNullException.ThrowIfNull(reader);
         if (reader is not SqlDataReader sql)
         {
-            return SqlExport.Typed(reader, ordinal, typeName, SqlExport.InvariantText);
+            return SqlExport.Typed(reader, ordinal, typeName, v => SqlExport.InvariantText(v, maxChars), maxChars: maxChars);
         }
 
         try
@@ -404,11 +413,11 @@ public sealed class SqlAccess
             var type = sql.GetFieldType(ordinal);
             if (type == typeof(string))
             {
-                char[] buffer = ArrayPool<char>.Shared.Rent(XlsxValue.MaxChars + 1);
+                char[] buffer = ArrayPool<char>.Shared.Rent(maxChars + 1);
                 try
                 {
-                    int read = (int)sql.GetChars(ordinal, 0, buffer, 0, XlsxValue.MaxChars + 1);
-                    return read == 0 ? XlsxValue.EmptyText : XlsxValue.OfText(new string(buffer, 0, read));
+                    int read = (int)sql.GetChars(ordinal, 0, buffer, 0, maxChars + 1);
+                    return read == 0 ? XlsxValue.EmptyText : XlsxValue.OfText(new string(buffer, 0, read), maxChars);
                 }
                 finally
                 {
@@ -418,12 +427,12 @@ public sealed class SqlAccess
 
             if (type == typeof(byte[]))
             {
-                int fit = (XlsxValue.MaxChars - 3) / 2;
+                int fit = XlsxValue.BytesFit(maxChars);
                 byte[] buffer = ArrayPool<byte>.Shared.Rent(fit + 1);
                 try
                 {
                     int read = (int)sql.GetBytes(ordinal, 0, buffer, 0, fit + 1);
-                    return XlsxValue.OfBytes(buffer.AsSpan(0, Math.Min(read, fit)), more: read > fit);
+                    return XlsxValue.OfBytes(buffer.AsSpan(0, Math.Min(read, fit)), more: read > fit, maxChars);
                 }
                 finally
                 {
@@ -434,7 +443,7 @@ public sealed class SqlAccess
             object value = type == typeof(decimal) ? sql.GetProviderSpecificValue(ordinal)
                 : type == typeof(TimeSpan) ? sql.GetTimeSpan(ordinal)
                 : sql.GetValue(ordinal);
-            return ExportValue(value, typeName);
+            return ExportValue(value, typeName, maxChars);
         }
         catch (Exception ex) when (ex is not (DbException or OperationCanceledException or OutOfMemoryException))
         {
@@ -446,15 +455,15 @@ public sealed class SqlAccess
     /// <summary>
     /// A SQL Server value read for a workbook, as a cell (2026-10-29, review P3-13: the per-type rules apart from the sealed reader, so they
     /// are tested): a decimal's provider value by its exact digits (a whole one past 15 text), money as its decimal, a <c>time</c> a time of day, a
-    /// <c>date</c> column's values dates, anything the sheet can't type as its invariant text. Pure.
+    /// <c>date</c> column's values dates, anything the sheet can't type as its invariant text, cut at <paramref name="maxChars"/>. Pure.
     /// </summary>
-    public static XlsxValue ExportValue(object? value, string? typeName) => value switch
+    public static XlsxValue ExportValue(object? value, string? typeName, int maxChars = XlsxValue.MaxChars) => value switch
     {
         null or DBNull or INullable { IsNull: true } => XlsxValue.Blank,
         SqlDecimal d => XlsxValue.OfNumberText(d.ToString()),
         SqlMoney m => XlsxValue.OfDecimal(m.Value),
-        INullable other => XlsxValue.OfNumberText(SqlExport.InvariantText(other)),
-        _ => SqlExport.FromValue(value, typeName, SqlExport.InvariantText),
+        INullable other => XlsxValue.OfNumberText(SqlExport.InvariantText(other, maxChars), maxChars),
+        _ => SqlExport.FromValue(value, typeName, v => SqlExport.InvariantText(v, maxChars), maxChars),
     };
 
     /// <summary>
@@ -704,7 +713,6 @@ public sealed class SqlAccess
     /// </summary>
     private static bool IsUnsupportedHere(Exception ex) => ex is PlatformNotSupportedException && !OperatingSystem.IsWindows();
 
-    /// <summary>Rolls back what is left of the transaction; a connection the server already dropped has nothing to roll back.</summary>
     /// <summary>One <c>SET SHOWPLAN_XML</c> batch: the statement must stand alone in its batch.</summary>
     private static async Task ShowPlanAsync(SqlConnection connection, SqlTransaction transaction, string statement, int timeoutSeconds, CancellationToken cancellationToken)
     {
@@ -714,22 +722,30 @@ public sealed class SqlAccess
 
     /// <summary>
     /// <see cref="SqlServerPlan.Off"/> after the plan, whatever the query batch did (2026-11-14): the connection goes back to the pool, and a
-    /// session left planning would compile the next caller's query without running it. When OFF can't be sent (a broken connection), the
-    /// pool is cleared, so the session is never reused.
+    /// session left planning would compile the next caller's query without running it. OFF takes what is left of the call's deadline
+    /// (2026-11-15, #89). When it can't be sent — the call was cancelled (Esc, which then returns at once), no time is left (a 0 timeout would
+    /// be none at all), or the connection fails in any way — the pool is cleared, so the session is never reused.
     /// </summary>
-    private static async Task ShowPlanOffAsync(SqlConnection connection, SqlTransaction transaction)
+    private static async Task ShowPlanOffAsync(SqlConnection connection, SqlTransaction transaction, Stopwatch watch, int timeoutSeconds, CancellationToken cancellationToken)
     {
+        if (cancellationToken.IsCancellationRequested || SqlDeadline.Left(watch, timeoutSeconds) is not (> 0 and var left))
+        {
+            SqlConnection.ClearPool(connection);
+            return;
+        }
+
         try
         {
-            await ShowPlanAsync(connection, transaction, SqlServerPlan.Off, 30, CancellationToken.None).ConfigureAwait(false);
+            await ShowPlanAsync(connection, transaction, SqlServerPlan.Off, left, CancellationToken.None).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is SqlException or InvalidOperationException)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             DiagnosticLog.Warn(SqlConfigFile.Category, SqlText.ShowPlanOffFailed(LogText.Excerpt(ex.Message)));
             SqlConnection.ClearPool(connection);
         }
     }
 
+    /// <summary>Rolls back what is left of the transaction; a connection the server already dropped has nothing to roll back.</summary>
     private static async Task RollBackAsync(SqlTransaction transaction)
     {
         try

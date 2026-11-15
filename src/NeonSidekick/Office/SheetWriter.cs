@@ -13,6 +13,12 @@ public interface ISheetRows
     /// <summary>The header; null when it starts, else the refusal (no columns, past Excel's <see cref="CellReference.MaxColumn"/>).</summary>
     string? Begin(IReadOnlyList<string> columns);
 
+    /// <summary>
+    /// The most characters a cell of this file holds (2026-11-15, the database-tools review's #32): Excel's <see cref="XlsxValue.MaxChars"/>
+    /// for a sheet, <see cref="TextRows.CellCap"/> for a CSV or JSON file. A query's export reads each cell no further.
+    /// </summary>
+    int CellChars => XlsxValue.MaxChars;
+
     /// <summary>One data row (copied when kept); false once the sheet is full at Excel's last row, so the caller stops reading.</summary>
     bool Add(IReadOnlyList<XlsxValue> row);
 }
@@ -297,6 +303,12 @@ public sealed class SheetWriter : ISheetRows
         if (value.Kind is XlsxKind.Date or XlsxKind.DateTime && NumberFormats.Serial(value.When, _date1904) is null)
         {
             value = XlsxValue.OfText(IsoText(value));
+        }
+
+        // A negative duration is its text (2026-11-15, #144): Excel shows a negative [h]:mm:ss number as ####.
+        if (value.Kind == XlsxKind.Duration && value.Number < 0)
+        {
+            value = XlsxValue.OfText(TextRows.DurationText(value.Number));
         }
 
         _w.WriteStartElement("c", Ns);

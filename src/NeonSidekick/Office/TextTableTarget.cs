@@ -37,6 +37,7 @@ public sealed class TextTableTarget : ITableFileTarget
     private readonly bool _overwrite;
     private PendingWrite? _pending;
     private TextRows? _rows;
+    private IDisposable? _writer;
 
     private TextTableTarget(WorkingDirectory files, string relative, TextTableFormat format, bool overwrite)
     {
@@ -52,30 +53,41 @@ public sealed class TextTableTarget : ITableFileTarget
     public TextTableFormat Format { get; }
 
     /// <summary>
-    /// The columns whose date-times are UTC, filled by the export's header hook before <see cref="Begin"/>'s sink takes the header (the
-    /// family's <c> (UTC)</c> taken off the name and carried as each value's <c>Z</c>).
+    /// The text files a query writes, by extension (2026-11-15, the database-tools review's #45: one table in place of four lists that could
+    /// drift), read by <see cref="FormatOf"/>, <see cref="ExtensionOf"/> and <see cref="OutputNames.QueryKinds"/>. A format's first entry
+    /// is its own name, so <c>.ndjson</c> reads as JSON Lines and keeps its name while the messages say <c>.jsonl</c>.
     /// </summary>
-    public HashSet<int> UtcColumns { get; } = [];
+    public static readonly IReadOnlyList<(string Extension, TextTableFormat Format)> Kinds =
+    [
+        (".csv", TextTableFormat.Csv),
+        (".json", TextTableFormat.Json),
+        (".jsonl", TextTableFormat.JsonLines),
+        (".ndjson", TextTableFormat.JsonLines),
+    ];
 
-    /// <summary>The file's format by <paramref name="to"/>'s extension in any case (<c>.csv</c>, <c>.json</c>, <c>.jsonl</c>), or null for none of them.</summary>
+    /// <summary>The file's format by <paramref name="to"/>'s extension in any case (<see cref="Kinds"/>), or null for none of them.</summary>
     public static TextTableFormat? FormatOf(string? to)
     {
         string ending = Path.GetExtension((to ?? "").Trim());
-        return ending.Equals(".csv", StringComparison.OrdinalIgnoreCase) ? TextTableFormat.Csv
-            : ending.Equals(".json", StringComparison.OrdinalIgnoreCase) ? TextTableFormat.Json
-            : ending.Equals(".jsonl", StringComparison.OrdinalIgnoreCase) ? TextTableFormat.JsonLines
-            : null;
+        foreach (var (extension, format) in Kinds)
+        {
+            if (ending.Equals(extension, StringComparison.OrdinalIgnoreCase))
+            {
+                return format;
+            }
+        }
+
+        return null;
     }
 
-    /// <summary>The extension a format's file ends in.</summary>
-    public static string ExtensionOf(TextTableFormat format) => format switch
-    {
-        TextTableFormat.Csv => ".csv",
-        TextTableFormat.Json => ".json",
-        _ => ".jsonl",
-    };
+    /// <summary>The extension a format's file ends in: its first in <see cref="Kinds"/>.</summary>
+    public static string ExtensionOf(TextTableFormat format) => Kinds.First(k => k.Format == format).Extension;
 
-    /// <summary>The write judged: the target, or null with the refusal. Nothing is written yet.</summary>
+    /// <summary>
+    /// The write judged: the target, or null with the refusal. Nothing is written yet. <paramref name="to"/> names a file, never a folder:
+    /// the caller has judged that once (2026-11-15, the database-tools review's #128, <see cref="OutputNames.IntoFolder"/>), and a folder made
+    /// meanwhile fails <see cref="WorkingDirectory.BeginWrite"/>.
+    /// </summary>
     public static TextTableTarget? Plan(WorkingDirectory files, string to, TextTableFormat format, string? sheet, bool overwrite, out string? refusal)
     {
         ArgumentNullException.ThrowIfNull(files);
@@ -95,12 +107,6 @@ public sealed class TextTableTarget : ITableFileTarget
         }
 
         string relative = files.Relative(full);
-        if (Directory.Exists(full))
-        {
-            refusal = FileText.Error(FileOutcome.IsDirectory, files.Relative(full, isDirectory: true), "write");
-            return null;
-        }
-
         if (File.Exists(full) && !overwrite)
         {
             refusal = OfficeText.TextFileExists(relative);
@@ -122,64 +128,50 @@ public sealed class TextTableTarget : ITableFileTarget
         }
 
         _pending = pending;
-        _rows = Format == TextTableFormat.Csv ? new CsvRows(pending.Stream, UtcColumns) : new JsonRows(pending.Stream, Format == TextTableFormat.JsonLines, UtcColumns);
+        _rows = Format == TextTableFormat.Csv ? new CsvRows(pending.Stream) : new JsonRows(pending.Stream, Format == TextTableFormat.JsonLines);
+        _writer = _rows;
         return _rows;
     }
 
     /// <summary>
     /// <see cref="XlsxTarget.Commit"/>'s order: the file's end written (a throw from it, a full disk, leaves the pending file uncommitted, for
-    /// <see cref="Dispose"/>), <paramref name="stillOpen"/> judged again (a refusal discards the file), then the file put in place.
+    /// <see cref="Dispose"/>), then the writer let go before anything else (2026-11-15, the database-tools review's #18/#130: released only at
+    /// <see cref="Dispose"/>, after the file was put in place, a writer could flush into a closed stream), then
+    /// <paramref name="stillOpen"/> judged again (a refusal discards the file) and the file put in place (<see cref="TableFileWrite.Put"/>).
     /// </summary>
     public (string Answer, SheetResult? Sheet) Commit(Func<string?>? stillOpen = null)
     {
         var rows = _rows ?? throw new InvalidOperationException("Begin comes first.");
         var sheet = rows.Finish();
-        if (stillOpen?.Invoke() is { } closed)
+        var writer = _writer;
+        _writer = null;
+        writer?.Dispose();
+        var (refused, result) = TableFileWrite.Put(_pending!, stillOpen);
+        if (result is null)
         {
-            _pending!.Dispose();
-            return (closed == FileText.SaveMovedLate ? closed : FileText.SaveClosedLate(closed), sheet);
+            return (refused!, sheet);
         }
 
-        var result = _pending!.Commit();
-        if (result.Outcome != FileOutcome.Ok)
-        {
-            return (OfficeText.WriteFailed(result), sheet);
-        }
-
-        string format = ExtensionOf(Format).TrimStart('.');
+        string format = FormatName;
         DiagnosticLog.Debug(OfficeText.Category, $"{format} {result.Relative}: {sheet.Rows.ToString(CultureInfo.InvariantCulture)} rows × {sheet.Columns.ToString(CultureInfo.InvariantCulture)} columns, {result.Bytes.ToString(CultureInfo.InvariantCulture)} bytes, {_clock.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture)} ms");
         return (OfficeText.TextFile(result, sheet), sheet);
     }
 
+    /// <summary>The format's name in the log: its extension without the dot.</summary>
+    private string FormatName => ExtensionOf(Format).TrimStart('.');
+
     /// <summary>
-    /// The writer, then the pending file, each let go in its own try (2026-11-02, review P13-2's rule, <see cref="XlsxTarget.Dispose"/>'s): a
-    /// throw from the writer's flush on a full disk never leaves the pending <c>.neon-tmp</c> held open. Logged, never rethrown.
+    /// The writer (when <see cref="Commit"/> didn't get to it), then the pending file, each let go in its own try (2026-11-02, review P13-2's
+    /// rule, <see cref="XlsxTarget.Dispose"/>'s): a throw from the writer's flush on a full disk never leaves the pending <c>.neon-tmp</c> held
+    /// open. Logged, never rethrown.
     /// </summary>
     public void Dispose()
     {
-        Release(_rows, "writer");
-        Release(_pending, "pending file");
+        TableFileWrite.Release(_writer, FormatName, "writer", Relative);
+        _writer = null;
+        TableFileWrite.Release(_pending, FormatName, "pending file", Relative);
     }
 
-    /// <summary>A test's seam: the writer's dispose replaced, so a test can make it throw.</summary>
-    internal Action? ReleaseRowsOverride { get; set; }
-
-    private void Release(IDisposable? part, string what)
-    {
-        try
-        {
-            if (part is TextRows && ReleaseRowsOverride is { } over)
-            {
-                over();
-            }
-            else
-            {
-                part?.Dispose();
-            }
-        }
-        catch (Exception ex) when (XlsxTarget.Failure(ex) || ex is InvalidOperationException or ObjectDisposedException)
-        {
-            DiagnosticLog.Warn(OfficeText.Category, OfficeText.ReleaseFailedLogLine(what, Relative, ex.GetType().Name, LogText.Excerpt(ex.Message)));
-        }
-    }
+    /// <summary>A test's seam (2026-11-15, #130, <see cref="XlsxTarget.WrapJob"/>'s shape): the begun writer wrapped, so a test can make its close throw. Nothing before <see cref="Begin"/>.</summary>
+    internal void WrapWriter(Func<IDisposable, IDisposable> wrap) => _writer = _writer is null ? null : wrap(_writer);
 }

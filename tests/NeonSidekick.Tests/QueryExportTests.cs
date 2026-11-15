@@ -234,7 +234,7 @@ public sealed class QueryExportTests : IDisposable
 
         public Task<string> Export(string to, string? sheet, Func<SqlExportJob, Task<SqlRun>> run, bool overwrite = false) =>
             ExportAsync(new ExportTarget(to, sheet, overwrite), "probe", 10, null, 30,
-                (r, i, _) => XlsxValue.From(r.GetValue(i)), (job, _, token) => run(job), r => "Error: " + r.Detail, CancellationToken.None);
+                (r, i, _, _) => XlsxValue.From(r.GetValue(i)), (job, _, token) => run(job), r => "Error: " + r.Detail, CancellationToken.None);
     }
 
     private ExportProbe Probe(Func<SaveRoot>? root = null) => new() { ExportRoot = root ?? (() => _saveRoot), Clock = _time };
@@ -596,7 +596,7 @@ public sealed class QueryExportTests : IDisposable
     private static XlsxValue Cell(SqlCellReader cell, FakeDataReader reader, int ordinal = 0)
     {
         Assert.True(reader.Read());
-        return cell(reader, ordinal, reader.GetDataTypeName(ordinal));
+        return cell(reader, ordinal, reader.GetDataTypeName(ordinal), XlsxValue.MaxChars);
     }
 
     [Fact]
@@ -728,8 +728,8 @@ public sealed class QueryExportTests : IDisposable
         Assert.Equal(XlsxKind.Date, Cell(PostgresAccess.ExportCell, new FakeDataReader(["d"], ["date"], [new DateTime(2026, 10, 29)])).Kind);
         var utc = new FakeDataReader(["at", "plain"], ["timestamp with time zone", "text"], [new DateTime(2026, 10, 29, 12, 0, 0, DateTimeKind.Utc), "x"]);
         Assert.Equal(XlsxKind.DateTime, Cell(PostgresAccess.ExportCell, utc).Kind);
-        Assert.Equal("at" + SqlExport.UtcColumn, PostgresAccess.ExportHeader(utc, 0));
-        Assert.Equal("plain", PostgresAccess.ExportHeader(utc, 1));
+        Assert.True(PostgresAccess.IsUtcColumn(utc, 0));
+        Assert.False(PostgresAccess.IsUtcColumn(utc, 1));
     }
 
     /// <summary>
@@ -795,7 +795,7 @@ public sealed class QueryExportTests : IDisposable
         Assert.Equal((XlsxKind.Text, "09:00:00+02:00"), Pair(Cell(PostgresAccess.ExportCell, new FakeDataReader(["t"], ["time(0) with time zone"], [timetz]))));
         Assert.Equal(SqlExportText.Unreadable("numeric"), Cell(PostgresAccess.ExportCell, new FakeDataReader(["n"], ["numeric(10, 2)"], [new InvalidCastException()])).Text);
         var utc = new FakeDataReader(["at"], ["timestamp(3) with time zone"], [new DateTime(2026, 10, 29, 12, 0, 0, DateTimeKind.Utc)]);
-        Assert.Equal("at" + SqlExport.UtcColumn, PostgresAccess.ExportHeader(utc, 0));
+        Assert.True(PostgresAccess.IsUtcColumn(utc, 0));
     }
 
     /// <summary>
@@ -846,8 +846,8 @@ public sealed class QueryExportTests : IDisposable
         Assert.EndsWith(MySqlAccess.UtcZone, MySqlAccess.SessionStatement("8.4.0", 30, utc: true));
         Assert.DoesNotContain("time_zone", MySqlAccess.SessionStatement("8.4.0", 30));
         var reader = new FakeDataReader(["at", "on"], ["TIMESTAMP", "DATETIME"], [DateTime.UtcNow, DateTime.Now]);
-        Assert.Equal("at" + SqlExport.UtcColumn, MySqlAccess.ExportHeader(reader, 0));
-        Assert.Equal("on", MySqlAccess.ExportHeader(reader, 1));
+        Assert.True(MySqlAccess.IsUtcColumn(reader, 0));
+        Assert.False(MySqlAccess.IsUtcColumn(reader, 1));
     }
 
     [Fact]
@@ -886,7 +886,7 @@ public sealed class QueryExportTests : IDisposable
     {
         var reader = new FakeDataReader(["n"], ["int"], [1], [2], [3], [4], [5], [6]);
         var sink = new RecordingRows(reader);
-        var job = new SqlExportJob(sink, (r, i, _) => XlsxValue.From(r.GetValue(i)));
+        var job = new SqlExportJob(sink, (r, i, _, _) => XlsxValue.From(r.GetValue(i)));
         var grid = await job.ReadAsync(reader, 4, CancellationToken.None);
         Assert.Equal([1, 2, 3, 4], sink.ReadsAtAdd);   // row n reached the sheet before row n + 1 was read
         Assert.True(grid.More);
@@ -905,12 +905,12 @@ public sealed class QueryExportTests : IDisposable
     public async Task ARefusedSheet_ReadsNoRow_AndSaysMore()
     {
         var refused = new FakeDataReader(["n"], ["int"], [1], [2], [3]);
-        var none = new SqlExportJob(() => (null, "Error: no"), (r, i, _) => XlsxValue.From(r.GetValue(i)));
+        var none = new SqlExportJob(() => (null, "Error: no"), (r, i, _, _) => XlsxValue.From(r.GetValue(i)));
         var grid = await none.ReadAsync(refused, 10, CancellationToken.None);
         Assert.Equal(("Error: no", true, 0), (none.Refusal, grid.More, refused.Reads));
 
         var columns = new FakeDataReader(["n"], ["int"], [1], [2], [3]);
-        var wide = new SqlExportJob(new ThrowingRows(begin: "Error: too many columns"), (r, i, _) => XlsxValue.From(r.GetValue(i)));
+        var wide = new SqlExportJob(new ThrowingRows(begin: "Error: too many columns"), (r, i, _, _) => XlsxValue.From(r.GetValue(i)));
         grid = await wide.ReadAsync(columns, 10, CancellationToken.None);
         Assert.Equal(("Error: too many columns", true, 0), (wide.Refusal, grid.More, columns.Reads));
     }
@@ -923,7 +923,7 @@ public sealed class QueryExportTests : IDisposable
     public async Task AFileFailureMidStream_IsTheWorkbooksSentence_AndStopsTheRead()
     {
         var reader = new FakeDataReader(["n"], ["int"], [1], [2], [3], [4], [5]);
-        var job = new SqlExportJob(() => (new ThrowingRows(failAt: 2), null), (r, i, _) => XlsxValue.From(r.GetValue(i)), failed: ex => "Error: book.xlsx: " + ex.Message);
+        var job = new SqlExportJob(() => (new ThrowingRows(failAt: 2), null), (r, i, _, _) => XlsxValue.From(r.GetValue(i)), failed: ex => "Error: book.xlsx: " + ex.Message);
         var grid = await job.ReadAsync(reader, 10, CancellationToken.None);
         Assert.Equal("Error: book.xlsx: disk full", job.Refusal);
         Assert.True(grid.More);
@@ -931,7 +931,7 @@ public sealed class QueryExportTests : IDisposable
         Assert.Equal(1, job.Rows);
 
         // A job with no wording lets it throw, as before.
-        var bare = new SqlExportJob(new ThrowingRows(failAt: 1), (r, i, _) => XlsxValue.From(r.GetValue(i)));
+        var bare = new SqlExportJob(new ThrowingRows(failAt: 1), (r, i, _, _) => XlsxValue.From(r.GetValue(i)));
         await Assert.ThrowsAsync<IOException>(() => bare.ReadAsync(new FakeDataReader(["n"], ["int"], [1]), 10, CancellationToken.None));
     }
 

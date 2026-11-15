@@ -73,17 +73,17 @@ public sealed class OracleExecuteTool : OracleTool
             OracleReadOnlyGate.Check,
             OracleWriteGate.Body,
             () => resolved is { } target
-                ? (new ExecuteTarget(target.Name, target.Config.IsReadWrite, OracleAccess.PlaceText(target.Config), target.Config.SignInHost, OracleAccess.Places(target.Config).Count), null)
+                ? (new ExecuteTarget(target.Name, target.Config.IsReadWrite, OracleAccess.Places(target.Config), target.Config.SignInHost), null)
                 : (null, OracleText.Error(unresolved!)),
             async (body, token) =>
             {
-                var run = await pinned.RunAsync(connection, [body], parameters, rows, timeout, token, modelText: true).ConfigureAwait(false);
+                var run = await pinned.RunAsync(connection, [body], parameters, rows, timeout, ownerMarker: false, token).ConfigureAwait(false);
                 if (IsTooNew(run))
                 {
                     // ORA-01466 (found live, 2026-10-05): a read-only transaction cannot read a table whose DDL is younger than Oracle's
                     // SCN-to-time grain (about three seconds) — what a read straight after this tool's CREATE meets. Read again once, after it.
                     await Task.Delay(TooNewWait, token).ConfigureAwait(false);
-                    run = await pinned.RunAsync(connection, [body], parameters, rows, timeout, token, modelText: true).ConfigureAwait(false);
+                    run = await pinned.RunAsync(connection, [body], parameters, rows, timeout, ownerMarker: false, token).ConfigureAwait(false);
                 }
 
                 return run.Outcome == SqlOutcome.Ok ? OracleText.Query(run, rows, SqlTool.ResultChars(effective)) : OracleText.Error(run);
@@ -112,20 +112,9 @@ public sealed class OracleExecuteTool : OracleTool
             return ClockText.BadInteger(OracleQueryTool.MaxRowsArgument, raw);
         }
 
-        if (!ToolArguments.TryReadObjectList(arguments, OracleQueryTool.ParamsArgument, out var objects, out var sent) || objects.Count > 1)
+        if (SqlQueryTool.ReadParams(arguments, OracleText.BadParams, out var error, SqlQueryTool.ReadColonName, OracleText.BadParamName) is not { } parameters)
         {
-            return OracleText.BadParams(sent);
-        }
-
-        IReadOnlyList<SqlParameterValue> parameters = [];
-        if (objects.Count == 1)
-        {
-            if (SqlQueryTool.ReadParameters(objects[0], out var error, SqlQueryTool.ReadColonName, OracleText.BadParamName) is not { } read)
-            {
-                return error?.Replace("@name", ":name", StringComparison.Ordinal);
-            }
-
-            parameters = read;
+            return error.Replace("@name", ":name", StringComparison.Ordinal);
         }
 
         return await RunAsync(ToolArguments.ReadString(arguments, OracleQueryTool.SqlArgument), Optional(arguments, ConnectionArgument), parameters, max, cancellationToken).ConfigureAwait(false);

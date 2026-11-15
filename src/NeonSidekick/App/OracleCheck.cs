@@ -49,7 +49,7 @@ internal static class OracleCheck
         }
 
         Task<SqlRun> Run(IReadOnlyList<string> statements, int timeout, CancellationToken token) =>
-            access.RunAsync(name, statements, [], 10, timeout, token);
+            access.RunAsync(name, statements, [], 10, timeout, ownerMarker: true, token);
 
         var who = await Run([OracleCatalogQueries.WhoAmI], timeoutSeconds, cancellationToken).ConfigureAwait(false);
         if (who.Outcome != SqlOutcome.Ok)
@@ -74,14 +74,23 @@ internal static class OracleCheck
         var passed = bypasses.Where(b => OracleReadOnlyGate.Check(b) is null).ToList();
         checks.Add(new SmokeCheck("oracle:gate", passed.Count == 0, passed.Count == 0 ? $"refused all {bypasses.Length.ToString(CultureInfo.InvariantCulture)} bypasses" : "let through: " + string.Join(" | ", passed)));
 
-        // Every run checks the listed schemas (2026-11-14, #18), so the connect above already refused a missing or Oracle-maintained one.
+        // The calls' own check of a schemas list (2026-11-14, #18), run here rather than taken on trust (2026-11-15, the database-tools
+        // review's #67: it always passed). A single schema, or the user's own, is set by ALTER SESSION at the connect above.
         var places = OracleAccess.Places(target.Config);
-        checks.Add(new SmokeCheck("oracle:schemas", true, places.Count == 1 ? $"works in schema {places[0]}" : $"works in schemas {OracleAccess.PlaceText(target.Config)} ({places[0]} current), each found and none Oracle's own"));
-        var names = await access.RunAsync(name, [OracleBoundary.Names], [], OracleBoundary.MaxNames, timeoutSeconds, cancellationToken).ConfigureAwait(false);
+        var listed = OracleAccess.Listed(target.Config, places);
+        string? unfit = null;
+        if (listed.Count > 0)
+        {
+            var found = await access.RunAsync(name, [OracleCatalogQueries.SchemaCheck], [], Sql.SchemaLock.MaxSchemas, timeoutSeconds, ownerMarker: true, cancellationToken).ConfigureAwait(false);
+            unfit = found.Outcome == SqlOutcome.Ok ? OracleText.SchemaCheck(found.Grids[0].Rows, listed) : OracleText.Error(found);
+        }
+
+        checks.Add(new SmokeCheck("oracle:schemas", unfit is null, unfit ?? (places.Count == 1 ? $"works in schema {places[0]}" : $"works in schemas {OracleAccess.PlaceText(places)} ({places[0]} current), each found and none Oracle's own")));
+        var names = await access.RunAsync(name, [OracleBoundary.Names], [], OracleBoundary.MaxNames, timeoutSeconds, ownerMarker: true, cancellationToken).ConfigureAwait(false);
         checks.Add(BoundaryCheck(places, names));
-        var reach = await access.RunAsync(name, OracleCatalogQueries.Reach, [], 100, timeoutSeconds, cancellationToken).ConfigureAwait(false);
+        var reach = await access.RunAsync(name, OracleCatalogQueries.Reach, [], 100, timeoutSeconds, ownerMarker: true, cancellationToken).ConfigureAwait(false);
         checks.Add(new SmokeCheck("oracle:reach", reach.Outcome == SqlOutcome.Ok, reach.Outcome == SqlOutcome.Ok
-            ? OracleText.Reach(OracleAccess.PlaceText(target.Config), Column(reach, 0), Column(reach, 1))
+            ? OracleText.Reach(places, Column(reach, 0), Column(reach, 1))
             : OracleText.Error(reach)));
 
         var locked = await Run(["SELECT dummy FROM sys.dual FOR UPDATE"], timeoutSeconds, cancellationToken).ConfigureAwait(false);

@@ -33,6 +33,9 @@ public sealed class MySqlProfileTool : MySqlTool
     {
     }
 
+    /// <summary>The rows a profile reads at most: a table estimated bigger is sampled. Settable so the live facts make the server sample.</summary>
+    internal long SampleAbove { get; set; } = TableProfile.DefaultSampleAbove;
+
     public override string Name => ToolName;
 
     public override string Description =>
@@ -43,32 +46,43 @@ public sealed class MySqlProfileTool : MySqlTool
 
     public async Task<string> ProfileAsync(string table, string? connection, IReadOnlyList<string>? columns, int top, CancellationToken cancellationToken)
     {
+        var watch = System.Diagnostics.Stopwatch.StartNew();
         if (string.IsNullOrWhiteSpace(table))
         {
             return MySqlText.NoTable;
         }
 
+        var effective = Effective;
+        int timeout = TimeoutSeconds(effective);
         var match = await FindTableAsync(connection, table.Trim(), cancellationToken).ConfigureAwait(false);
         if (match.Error is { } refused)
         {
             return refused;
         }
 
-        var effective = Effective;
-        int timeout = TimeoutSeconds(effective);
+        if (SqlDeadline.Left(watch, timeout) is not (> 0 and var left))
+        {
+            return TableProfileText.Stopped(match.Name, "", timeout);
+        }
+
         var catalog = await Server.RunAsync(connection, MySqlProfile.Catalog, [new SqlParameterValue("db", match.Database), new SqlParameterValue("name", match.Name)],
-            MySqlAccess.MaxCatalogRows, timeout, cancellationToken).ConfigureAwait(false);
+            MySqlAccess.MaxCatalogRows, left, cancellationToken, readCell: TableProfile.CatalogCell).ConfigureAwait(false);
         if (catalog.Outcome != SqlOutcome.Ok)
         {
-            return MySqlText.Error(catalog);
+            return catalog.Outcome == SqlOutcome.Timeout ? TableProfileText.Stopped(match.Name, catalog.Connection, timeout) : MySqlText.Error(catalog);
         }
 
         // name, column type, data type, character length; then TABLE_ROWS
-        var all = catalog.Grids.Count > 0 ? catalog.Grids[0].Rows.Select(r => new ProfileColumn(r[0], r[1], MySqlProfile.Measure(r[2], TableProfile.Whole(r[3])))).ToList() : [];
+        var listed = catalog.Grids.Count > 0 ? catalog.Grids[0] : null;
+        var all = listed?.Rows.Select(r => new ProfileColumn(r[0], r[1], MySqlProfile.Measure(r[2], TableProfile.Whole(r[3])))).ToList() ?? [];
         long? estimate = catalog.Grids.Count > 1 ? TableProfile.Whole(catalog.Grids[1].Rows.FirstOrDefault()?[0]) : null;
         var dialect = MySqlProfile.Instance;
         var request = new TableProfile.Request(match.Name, dialect.Quote(match.Database) + "." + dialect.Quote(match.Name), match.Kind, all, columns, top,
-            estimate, timeout, Math.Min(QueryPlan.MaxAnswerChars, SqlTool.ResultChars(effective)), MySqlDescribeTool.ToolName, StringComparison.OrdinalIgnoreCase);
+            estimate, timeout, SqlTool.AnswerChars(effective), MySqlDescribeTool.ToolName, watch)
+        {
+            SampleAbove = SampleAbove,
+            ColumnsCut = listed?.More == true,
+        };
         return await TableProfile.RunAsync(request, dialect,
             (statements, seconds, token) => Server.RunAsync(connection, statements, [], MySqlAccess.MaxCatalogRows, seconds, token),
             MySqlText.Error, cancellationToken).ConfigureAwait(false);

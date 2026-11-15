@@ -179,11 +179,11 @@ public abstract class ServerTool<TAccess> : AIFunction where TAccess : class
     /// sentence (the transcript's note), the cut note, and the columns with the first rows. A failed or timed-out run writes nothing and says
     /// how many rows it had read. A workbook that won't read or write is answered, never thrown (review P1-4); the run's own errors stay the
     /// family's. <paramref name="name"/> is the connection's or database's, for a made-up file name; <paramref name="given"/> the call's own
-    /// <c>max_rows</c>, which the cut note names only when it was given.
+    /// <c>max_rows</c>, which the cut note names only when it was given; <paramref name="isUtc"/> the family's UTC columns (<see cref="SqlExportJob"/>).
     /// </summary>
     protected async Task<string> ExportAsync(ExportTarget export, string name, int rows, int? given, int timeoutSetting, SqlCellReader cell,
         Func<SqlExportJob, int, CancellationToken, Task<SqlRun>> run, Func<SqlRun, string> error, CancellationToken cancellationToken,
-        Func<DbDataReader, int, string>? header = null)
+        Func<DbDataReader, int, bool>? isUtc = null)
     {
         ArgumentNullException.ThrowIfNull(export);
         ArgumentNullException.ThrowIfNull(run);
@@ -195,21 +195,23 @@ public abstract class ServerTool<TAccess> : AIFunction where TAccess : class
         }
 
         string folder = files.Root;
-        if (OutputNames.QueryRefusal(export.To, files.IsExistingDirectory) is { } wrongKind)
+
+        // Asked once (2026-11-15, the database-tools review's #128): the refusal and the format both read it.
+        bool intoFolder = OutputNames.IntoFolder(export.To, files.IsExistingDirectory);
+        if (OutputNames.QueryRefusal(export.To, intoFolder) is { } wrongKind)
         {
             return wrongKind;
         }
 
         // A CSV or JSON name is a text file (2026-11-14, the database-tools plan's #13); a folder or any other name, a workbook as before.
-        var format = OutputNames.IntoFolder(export.To, files.IsExistingDirectory) ? null : TextTableTarget.FormatOf(export.To);
+        var format = intoFolder ? null : TextTableTarget.FormatOf(export.To);
         ITableFileTarget? planned;
         string? refusal;
-        TextTableTarget? text = null;
         try
         {
             if (format is { } kind)
             {
-                planned = text = TextTableTarget.Plan(files, export.To, kind, export.Sheet, export.Overwrite, out refusal);
+                planned = TextTableTarget.Plan(files, export.To, kind, export.Sheet, export.Overwrite, out refusal);
             }
             else
             {
@@ -239,7 +241,7 @@ public abstract class ServerTool<TAccess> : AIFunction where TAccess : class
             {
                 return (null, XlsxTarget.FailureText(ex, target.Relative));
             }
-        }, cell, text is null ? header : TextHeader(header, text.UtcColumns), ex => XlsxTarget.FailureText(ex, target.Relative));
+        }, cell, isUtc, ex => XlsxTarget.FailureText(ex, target.Relative));
         var result = await run(job, SqlExport.TimeoutFor(timeoutSetting), cancellationToken).ConfigureAwait(false);
         if (job.Refusal is { } refusedRows)
         {
@@ -268,35 +270,6 @@ public abstract class ServerTool<TAccess> : AIFunction where TAccess : class
         }
 
         return SqlExportText.Answer(answer, grid, given, format);
-    }
-
-    /// <summary>
-    /// A CSV or JSON file's header hook (2026-11-14, the database-tools plan's #13): the family's own, with the <see cref="SqlExport.UtcColumn"/>
-    /// it adds taken back off and the column marked in <paramref name="utc"/>, so a key reads <c>created_at</c> (code reads these files) and
-    /// each value carries a <c>Z</c>. Only a suffix the hook added comes off: the reader's own name (or, for a blank one, its made-up
-    /// <see cref="SqlText.UnnamedColumn"/>) with the suffix after it. A column the user named <c>x (UTC)</c> is left as it is.
-    /// </summary>
-    internal static Func<DbDataReader, int, string>? TextHeader(Func<DbDataReader, int, string>? header, HashSet<int> utc)
-    {
-        ArgumentNullException.ThrowIfNull(utc);
-        if (header is null)
-        {
-            return null;
-        }
-
-        return (reader, ordinal) =>
-        {
-            string named = header(reader, ordinal);
-            string raw = reader.GetName(ordinal);
-            string own = string.IsNullOrEmpty(raw) ? SqlText.UnnamedColumn(ordinal) : raw;
-            if (string.Equals(named, own + SqlExport.UtcColumn, StringComparison.Ordinal))
-            {
-                utc.Add(ordinal);
-                return own;
-            }
-
-            return named;
-        };
     }
 
     /// <summary>

@@ -271,24 +271,14 @@ public sealed class XlsxTarget : ITableFileTarget
         var sheet = job.Finish();
         _existing?.Dispose();
         _existing = null;
-        if (stillOpen?.Invoke() is { } closed)
-        {
-            _pending!.Dispose();
-            return (closed == FileText.SaveMovedLate ? closed : FileText.SaveClosedLate(closed), sheet);
-        }
 
-        if (_appender is not null && Stamp(_files, Relative) != _stamp)
+        // Saved elsewhere while the rows were written (Excel for Mac holds no lock, a sync client): the copy is of the old file, so putting
+        // it in place would lose that save (2026-10-29, review P2-1).
+        var (refused, result) = TableFileWrite.Put(_pending!, stillOpen,
+            () => _appender is not null && Stamp(_files, Relative) != _stamp ? OfficeText.ChangedMeanwhile(Relative) : null);
+        if (result is null)
         {
-            // Saved elsewhere while the rows were written (Excel for Mac holds no lock, a sync client): the copy is of the old file, so
-            // putting it in place would lose that save (2026-10-29, review P2-1).
-            _pending!.Dispose();
-            return (OfficeText.ChangedMeanwhile(Relative), sheet);
-        }
-
-        var result = _pending!.Commit();
-        if (result.Outcome != FileOutcome.Ok)
-        {
-            return (OfficeText.WriteFailed(result), sheet);
+            return (refused!, sheet);
         }
 
         DiagnosticLog.Debug(OfficeText.Category, $"xlsx {Mode} {result.Relative}: {sheet.Rows.ToString(CultureInfo.InvariantCulture)} rows × {sheet.Columns.ToString(CultureInfo.InvariantCulture)} columns, {result.Bytes.ToString(CultureInfo.InvariantCulture)} bytes, {_clock.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture)} ms");
@@ -307,24 +297,12 @@ public sealed class XlsxTarget : ITableFileTarget
     /// </summary>
     public void Dispose()
     {
-        Release(_job, "job");
-        Release(_appender, "appender");
-        Release(_pending, "pending file");
-        Release(_existing, "workbook read");
+        TableFileWrite.Release(_job, "xlsx", "job", Relative);
+        TableFileWrite.Release(_appender, "xlsx", "appender", Relative);
+        TableFileWrite.Release(_pending, "xlsx", "pending file", Relative);
+        TableFileWrite.Release(_existing, "xlsx", "workbook read", Relative);
     }
 
     /// <summary>A test's seam (P13-2): the begun job wrapped, so a test can make its close throw. Null until <see cref="Begin"/>.</summary>
     internal void WrapJob(Func<IWorkbookJob, IWorkbookJob> wrap) => _job = _job is null ? null : wrap(_job);
-
-    private void Release(IDisposable? part, string what)
-    {
-        try
-        {
-            part?.Dispose();
-        }
-        catch (Exception ex) when (Failure(ex) || ex is InvalidOperationException or ObjectDisposedException)
-        {
-            DiagnosticLog.Warn(OfficeText.Category, OfficeText.ReleaseFailedLogLine(what, Relative, ex.GetType().Name, LogText.Excerpt(ex.Message)));
-        }
-    }
 }

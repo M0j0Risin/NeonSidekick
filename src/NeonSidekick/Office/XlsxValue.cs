@@ -24,8 +24,9 @@ public enum XlsxKind
 /// isn't mangled into <c>1.23457E+18</c>), while a fraction below 10^15 is the nearest double whatever its digits (2026-11-02, review
 /// P9-5/P9-6/P10-2: every AVG, ratio and round-trip double was text); a date kept as its <see cref="DateTime"/> until the writer knows the workbook's date system, then text
 /// when the system can't hold it (before 1900-03-01, Lotus's leap-day bug); a <see cref="DateTimeOffset"/> as ISO 8601 text with its offset;
-/// a <see cref="TimeSpan"/> a time of day in [0, 24 h), a <c>[h]:mm:ss</c> duration past it, text when negative; text cut at Excel's
-/// <see cref="MaxChars"/> with <c>…</c> (<see cref="Cut"/> counted by the answer); bytes as <c>0x…</c> hex under the same cap. Pure.
+/// a <see cref="TimeSpan"/> a time of day in [0, 24 h), else a <c>[h]:mm:ss</c> duration (a negative one too, 2026-11-15, #144); text cut at
+/// Excel's <see cref="MaxChars"/> with <c>…</c> (<see cref="Cut"/> counted by the answer), or at the cap a CSV or JSON file's export gives;
+/// bytes as <c>0x…</c> hex under the same cap. Pure.
 /// </summary>
 /// <param name="Number">A number's value, a time's or a duration's in days.</param>
 /// <param name="Text">A text cell's text, or a number's exact invariant spelling (a decimal as written, a double round-trip).</param>
@@ -56,19 +57,22 @@ public readonly record struct XlsxValue(XlsxKind Kind, double Number = 0, string
     /// A database's text: <see cref="EmptyText"/> for <c>''</c>, else <see cref="OfText"/> (2026-10-30, review F15/F42: DuckDB's cells and
     /// SQLite's date-column text still went through <see cref="OfText"/>, so their <c>''</c> came out blank like a NULL).
     /// </summary>
-    public static XlsxValue OfDbText(string text) => text.Length == 0 ? EmptyText : OfText(text);
+    public static XlsxValue OfDbText(string text, int maxChars = MaxChars) => text.Length == 0 ? EmptyText : OfText(text, maxChars);
 
-    /// <summary>Text, cut at <see cref="MaxChars"/>; null or empty is a blank cell.</summary>
-    public static XlsxValue OfText(string? text)
+    /// <summary>
+    /// Text, cut at <paramref name="maxChars"/> (Excel's <see cref="MaxChars"/> unless a CSV or JSON file's export gives its own, 2026-11-15,
+    /// the database-tools review's #32); null or empty is a blank cell.
+    /// </summary>
+    public static XlsxValue OfText(string? text, int maxChars = MaxChars)
     {
         if (string.IsNullOrEmpty(text))
         {
             return Blank;
         }
 
-        return text.Length <= MaxChars
+        return text.Length <= maxChars
             ? new XlsxValue(XlsxKind.Text, Text: text)
-            : new XlsxValue(XlsxKind.Text, Text: TextCut.Safe(text, MaxChars - 1) + "…", Cut: true);
+            : new XlsxValue(XlsxKind.Text, Text: TextCut.Safe(text, maxChars - 1) + "…", Cut: true);
     }
 
     public static XlsxValue OfBool(bool value) => new(XlsxKind.Bool, value ? 1 : 0);
@@ -108,11 +112,11 @@ public readonly record struct XlsxValue(XlsxKind Kind, double Number = 0, string
         return SignificantDigits(text) <= MaxDigits ? new XlsxValue(XlsxKind.Number, (double)value, text) : OfText(text);
     }
 
-    /// <summary>A number already in invariant text (a reader's own spelling): a number by <see cref="TryExcelNumber"/>, else text.</summary>
-    public static XlsxValue OfNumberText(string text)
+    /// <summary>A number already in invariant text (a reader's own spelling): a number by <see cref="TryExcelNumber"/>, else text cut at <paramref name="maxChars"/>.</summary>
+    public static XlsxValue OfNumberText(string text, int maxChars = MaxChars)
     {
         ArgumentNullException.ThrowIfNull(text);
-        return TryExcelNumber(text, out var number) ? number : OfText(text);
+        return TryExcelNumber(text, out var number) ? number : OfText(text, maxChars);
     }
 
     /// <summary>
@@ -146,11 +150,14 @@ public readonly record struct XlsxValue(XlsxKind Kind, double Number = 0, string
 
         // A fraction past 15 digits: judged on the decimal where it reads (its digits are the text's to 28), else on the double (a tiny
         // value past decimal's scale), so 1.0000000000000000001 is a fraction though its double is 1.
-        bool fraction = parsed && ((decimal.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out decimal asDecimal) && IsFraction(asDecimal))
-            || real != Math.Truncate(real));
+        bool asDecimal = decimal.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out decimal held);
+        bool fraction = parsed && ((asDecimal && IsFraction(held)) || real != Math.Truncate(real));
         if (fraction && Math.Abs(real) < MaxFraction)
         {
-            value = OfDouble(real) with { Exact = text.Trim() };
+            // The exact spelling is the decimal's own when it holds every digit (2026-11-15, the database-tools review's #112: a reader's
+            // ".5…" or "+1.5…" went to a CSV or JSON file as given); else the text as it came (a tiny value past decimal's scale).
+            string spelled = asDecimal && held.ToString(CultureInfo.InvariantCulture) is var own && SignificantDigits(own) == digits ? own : text.Trim();
+            value = OfDouble(real) with { Exact = spelled };
             return true;
         }
 
@@ -166,19 +173,25 @@ public readonly record struct XlsxValue(XlsxKind Kind, double Number = 0, string
 
     public static XlsxValue OfTime(TimeOnly value) => new(XlsxKind.Time, NumberFormats.Days(value.ToTimeSpan()));
 
-    /// <summary>A time of day in [0, 24 h), a duration past it, text when negative.</summary>
+    /// <summary>
+    /// A time of day in [0, 24 h) (SQL Server's and PostgreSQL's <c>time</c> columns arrive this way), else a duration: past a day, or
+    /// negative (2026-11-15, the database-tools review's #144: a negative one was <c>c</c> text, <c>-1.02:00:00</c>, so a column read in two
+    /// forms; a sheet writes it as <see cref="TextRows.DurationText"/>'s text, which Excel would show as <c>####</c> as a number).
+    /// </summary>
     public static XlsxValue OfTimeSpan(TimeSpan value) =>
-        value < TimeSpan.Zero ? OfText(value.ToString("c", CultureInfo.InvariantCulture))
-        : value < TimeSpan.FromDays(1) ? new XlsxValue(XlsxKind.Time, NumberFormats.Days(value))
+        value >= TimeSpan.Zero && value < TimeSpan.FromDays(1) ? new XlsxValue(XlsxKind.Time, NumberFormats.Days(value))
         : new XlsxValue(XlsxKind.Duration, NumberFormats.Days(value));
 
     /// <summary>ISO 8601 text with the offset: the offset is the value, so it is never converted away.</summary>
     public static XlsxValue OfOffset(DateTimeOffset value) => OfText(value.ToString("yyyy-MM-dd'T'HH:mm:ss.FFFFFFFzzz", CultureInfo.InvariantCulture));
 
-    /// <summary>Bytes as <c>0x…</c> hex, cut at <see cref="MaxChars"/>; <paramref name="more"/> when the reader stopped short of the end.</summary>
-    public static XlsxValue OfBytes(ReadOnlySpan<byte> bytes, bool more = false)
+    /// <summary>How many bytes a cell of <paramref name="maxChars"/> holds as <c>0x…</c> hex with the cut mark.</summary>
+    public static int BytesFit(int maxChars = MaxChars) => (maxChars - 3) / 2;
+
+    /// <summary>Bytes as <c>0x…</c> hex, cut at <paramref name="maxChars"/>; <paramref name="more"/> when the reader stopped short of the end.</summary>
+    public static XlsxValue OfBytes(ReadOnlySpan<byte> bytes, bool more = false, int maxChars = MaxChars)
     {
-        int fit = (MaxChars - 3) / 2;
+        int fit = BytesFit(maxChars);
         bool cut = more || bytes.Length > fit;
         string hex = "0x" + Convert.ToHexString(bytes.Length > fit ? bytes[..fit] : bytes);
         return new XlsxValue(XlsxKind.Text, Text: cut ? hex + "…" : hex, Cut: cut);
@@ -186,13 +199,13 @@ public readonly record struct XlsxValue(XlsxKind Kind, double Number = 0, string
 
     /// <summary>
     /// Any value a reader hands over, by its runtime type: the numbers, booleans, dates, times, offsets, bytes and GUIDs; anything else
-    /// as its invariant text. <paramref name="dateColumn"/> as <see cref="OfDateTime"/> takes it.
+    /// as its invariant text. <paramref name="dateColumn"/> as <see cref="OfDateTime"/> takes it; text and bytes are cut at <paramref name="maxChars"/>.
     /// </summary>
-    public static XlsxValue From(object? value, bool dateColumn = false) => value switch
+    public static XlsxValue From(object? value, bool dateColumn = false, int maxChars = MaxChars) => value switch
     {
         null or DBNull => Blank,
         string { Length: 0 } => EmptyText,
-        string s => OfText(s),
+        string s => OfText(s, maxChars),
         bool b => OfBool(b),
         double d => OfDouble(d),
         float f => OfDouble(double.Parse(f.ToString("R", CultureInfo.InvariantCulture), CultureInfo.InvariantCulture)),
@@ -214,11 +227,11 @@ public readonly record struct XlsxValue(XlsxKind Kind, double Number = 0, string
         DateTimeOffset offset => OfOffset(offset),
         TimeOnly time => OfTime(time),
         TimeSpan span => OfTimeSpan(span),
-        byte[] bytes => OfBytes(bytes),
+        byte[] bytes => OfBytes(bytes, maxChars: maxChars),
         Guid guid => OfText(guid.ToString("D", CultureInfo.InvariantCulture)),
         char c => OfText(c.ToString()),
-        IFormattable formattable => OfText(formattable.ToString(null, CultureInfo.InvariantCulture)),
-        _ => OfText(value.ToString()),
+        IFormattable formattable => OfText(formattable.ToString(null, CultureInfo.InvariantCulture), maxChars),
+        _ => OfText(value.ToString(), maxChars),
     };
 
     /// <summary>The significant digits of a number's invariant text: leading and trailing zeros, the sign, the point and an exponent left out.</summary>
@@ -238,42 +251,13 @@ public readonly record struct XlsxValue(XlsxKind Kind, double Number = 0, string
     public static string Escape(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        StringBuilder? sb = null;
-        for (int i = 0; i < text.Length; i++)
+        return Walk(text, static (t, i) => t[i] switch
         {
-            char c = text[i];
-            string? instead = null;
-            if (char.IsHighSurrogate(c) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1]))
-            {
-                sb?.Append(c).Append(text[i + 1]);
-                i++;
-                continue;
-            }
-
-            if (char.IsSurrogate(c))
-            {
-                instead = "�";
-            }
-            else if ((c < 0x20 && c is not '\t' and not '\n') || c is '￾' or '￿')
-            {
-                instead = "_x" + ((int)c).ToString("X4", CultureInfo.InvariantCulture) + "_";
-            }
-            else if (c == '_' && LooksEscaped(text, i))
-            {
-                instead = "_x005F_";
-            }
-
-            if (instead is null)
-            {
-                sb?.Append(c);
-                continue;
-            }
-
-            sb ??= new StringBuilder(text, 0, i, text.Length + 16);
-            sb.Append(instead);
-        }
-
-        return sb?.ToString() ?? text;
+            var c when char.IsSurrogate(c) => "\uFFFD",
+            var c when (c < 0x20 && c is not '\t' and not '\n') || c is '\uFFFE' or '\uFFFF' => "_x" + ((int)c).ToString("X4", CultureInfo.InvariantCulture) + "_",
+            '_' when LooksEscaped(t, i) => "_x005F_",
+            _ => null,
+        });
     }
 
     /// <summary>
@@ -284,28 +268,7 @@ public readonly record struct XlsxValue(XlsxKind Kind, double Number = 0, string
     public static string WellFormed(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        StringBuilder? sb = null;
-        for (int i = 0; i < text.Length; i++)
-        {
-            char c = text[i];
-            if (char.IsHighSurrogate(c) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1]))
-            {
-                sb?.Append(c).Append(text[i + 1]);
-                i++;
-                continue;
-            }
-
-            if (!char.IsSurrogate(c))
-            {
-                sb?.Append(c);
-                continue;
-            }
-
-            sb ??= new StringBuilder(text, 0, i, text.Length);
-            sb.Append('�');
-        }
-
-        return sb?.ToString() ?? text;
+        return Walk(text, static (t, i) => char.IsSurrogate(t[i]) ? "\uFFFD" : null);
     }
 
     /// <summary>
@@ -315,6 +278,22 @@ public readonly record struct XlsxValue(XlsxKind Kind, double Number = 0, string
     public static string XmlSafe(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
+        return Walk(text, static (t, i) => t[i] switch
+        {
+            var c when char.IsSurrogate(c) => "\uFFFD",
+            var c when (c < 0x20 && c is not '\t' and not '\n') || c is '\uFFFE' or '\uFFFF' => "",
+            _ => null,
+        });
+    }
+
+    /// <summary>
+    /// The one walk over UTF-16 that <see cref="Escape"/>, <see cref="WellFormed"/> and <see cref="XmlSafe"/> share (2026-11-15, the
+    /// database-tools review's #68: three copies of it): a surrogate pair is always kept; every other character (a lone surrogate too) is
+    /// handed to <paramref name="instead"/> with its index, which gives null to keep it, else what stands in its place (<c>""</c> drops it).
+    /// The same string when nothing changes.
+    /// </summary>
+    private static string Walk(string text, Func<string, int, string?> instead)
+    {
         StringBuilder? sb = null;
         for (int i = 0; i < text.Length; i++)
         {
@@ -326,18 +305,14 @@ public readonly record struct XlsxValue(XlsxKind Kind, double Number = 0, string
                 continue;
             }
 
-            bool bad = char.IsSurrogate(c) || (c < 0x20 && c is not '\t' and not '\n') || c is '￾' or '￿';
-            if (!bad)
+            if (instead(text, i) is not { } replaced)
             {
                 sb?.Append(c);
                 continue;
             }
 
-            sb ??= new StringBuilder(text, 0, i, text.Length);
-            if (char.IsSurrogate(c))
-            {
-                sb.Append('�');
-            }
+            sb ??= new StringBuilder(text, 0, i, text.Length + 16);
+            sb.Append(replaced);
         }
 
         return sb?.ToString() ?? text;
