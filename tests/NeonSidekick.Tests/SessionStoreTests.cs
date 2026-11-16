@@ -244,6 +244,27 @@ public class SessionStoreTests : IDisposable
         Assert.Empty(_store.Search("vosk", 0));
     }
 
+    /// <summary>
+    /// The Web UI's marked search (2026-11-16, #40): with a pair, the snippet is the matching column's whole text with each match between it
+    /// (the reply's when the user's line has none); without one, FTS5's own snippet, unmarked, as before.
+    /// </summary>
+    [Fact]
+    public void Search_WithMarks_GivesTheWholeColumnMarked_AndWithoutThemTheSnippetAsBefore()
+    {
+        long a = Begin("a");
+        _store.AppendTurn(a, "Where did I put the tax forms?", "In the drawer.", 0, [], [], 0, 0, 0, false);
+        long b = Begin("b");
+        _store.AppendTurn(b, "Something else entirely", "The tax office closes at five.", 0, [], [], 0, 0, 0, false);
+
+        var marked = _store.Search("tax", 10, marks: ("<", ">"));
+        Assert.Equal("Where did I put the <tax> forms?", Assert.Single(marked, h => h.Session.Id == a).Snippet);
+        Assert.Equal("The <tax> office closes at five.", Assert.Single(marked, h => h.Session.Id == b).Snippet);
+
+        var plain = _store.Search("tax", 10);
+        Assert.All(plain, h => Assert.DoesNotContain("<", h.Snippet, StringComparison.Ordinal));
+        Assert.Contains("tax", Assert.Single(plain, h => h.Session.Id == a).Snippet, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Search_NeverTripsOnFts5Syntax()
     {

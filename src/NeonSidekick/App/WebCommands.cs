@@ -36,6 +36,12 @@ public sealed record WebCommandVerdict(WebCommandKind Kind, string? Reason = nul
 
     /// <summary>Bare <c>/prompts</c> from the page (later on 2026-10-15): the page's own saved prompts sheet; refused with its reason if it ever reached the PC.</summary>
     public static readonly WebCommandVerdict PromptsSheet = new(WebCommandKind.Page, WebUiText.OpensOnThePage) { Open = WebUiText.OpenPrompts };
+
+    /// <summary>Bare <c>/sessions</c> from the page (2026-11-16, #40): the 🗂️ sheet's Sessions tab.</summary>
+    public static readonly WebCommandVerdict SessionsTab = new(WebCommandKind.Page, WebUiText.OpensOnThePage) { Open = WebUiText.OpenSessions };
+
+    /// <summary>Bare <c>/queue</c> from the page (2026-11-16, #42): the 🗂️ sheet's Queue tab.</summary>
+    public static readonly WebCommandVerdict QueueTab = new(WebCommandKind.Page, WebUiText.OpensOnThePage) { Open = WebUiText.OpenQueue };
 }
 
 /// <summary>
@@ -65,11 +71,9 @@ public static class WebCommands
         SlashCommand.WebUi,
         SlashCommand.Cmd,
         SlashCommand.Profile,
-        SlashCommand.Session,
         SlashCommand.Skills,
         SlashCommand.YouTube,
         SlashCommand.Video,   // 2026-11-12: as /youtube; the phone has the Video tab and the Home remote
-        SlashCommand.Queue,
         SlashCommand.Sampling,
         SlashCommand.Server,
         SlashCommand.Usage,
@@ -90,6 +94,8 @@ public static class WebCommands
         SlashCommand.Custom,   // 2026-10-30: the user's own commands, a message once expanded
         SlashCommand.Update,   // 2026-11-04, self-update: /update notes alone
         SlashCommand.BotChat,   // 2026-11-12, the user's ask: every form, the chat shown on the page (no webcam from the page)
+        SlashCommand.Queue,   // 2026-11-16 (#42): the bare word opens the 🗂️ sheet's Queue tab
+        SlashCommand.Session,   // 2026-11-16 (#40): its Sessions tab; a restore and a title run
     };
 
     /// <summary>Whether any form of <paramref name="command"/> may run from the page (the dropdown's commands).</summary>
@@ -200,6 +206,25 @@ public static class WebCommands
             SlashCommand.Net or SlashCommand.Services or SlashCommand.Tasks or SlashCommand.Ad => WebCommandVerdict.List,   // 2026-10-15, the admin-tools plan: their lines as a list card
             SlashCommand.About => Refused(WebUiText.UseAboutPage),   // 2026-11-08, the user's pick: the page has an About card of its own
             SlashCommand.Shopping => text.Length == 0 || Is(text, "add") ? Refused(settings.ShoppingTab ? WebUiText.UseShoppingPage : WebUiText.ShoppingTabOff) : WebCommandVerdict.Run,
+            // 2026-11-16 (#42): the bare word opens the Queue tab; its send and modes are the tab's buttons; a clear-all is the PC's. Classed by the
+            // PC's own parser, so /queue clear all is the usage answer, never PC-only.
+            // 2026-11-16 (#40): the bare word opens the Sessions tab; a restore and a title run (as /rename); purges and exports are the PC's.
+            // Classed by the PC's own parser, so the page and the PC never read a line two ways.
+            SlashCommand.Session => ChatScreen.ParseSessionArgs(args).Kind switch
+            {
+                SessionActionKind.Pane => WebCommandVerdict.SessionsTab,
+                SessionActionKind.Restore or SessionActionKind.Title => WebCommandVerdict.Run,
+                SessionActionKind.TitlePane => Pane(word, "/rename <name>"),
+                SessionActionKind.Purge or SessionActionKind.PurgeOlder or SessionActionKind.PurgeAll or SessionActionKind.Export => Refused(WebUiText.PcOnly(word + " " + first)),
+                _ => Pane(word, "/sessions <id>|title <text>"),
+            },
+            SlashCommand.Queue => ChatScreen.ParseQueueArgs(args) switch
+            {
+                QueueAction.List => WebCommandVerdict.QueueTab,
+                QueueAction.Clear => Refused(WebUiText.PcOnly(word + " " + first)),
+                QueueAction.Send or QueueAction.Mode or QueueAction.Cancel => Refused(WebUiText.UseQueueTab),
+                _ => Pane(word, "/queue"),
+            },
             SlashCommand.Prompts => PromptsCommand.Parse(args).Verb switch
             {
                 PromptsVerb.Pane => WebCommandVerdict.PromptsSheet,   // later on 2026-10-15: the page's own sheet

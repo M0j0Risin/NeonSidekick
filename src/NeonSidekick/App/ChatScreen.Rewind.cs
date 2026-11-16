@@ -167,7 +167,10 @@ internal sealed partial class ChatScreen
     /// </summary>
     private void RewindTo(RewindTurn turn, RestoreReport? report = null, RestorePlan? plan = null)
     {
+        // The made files of the turns cut go (2026-11-16, #41): by their messages, so a /compact's shifted indexes don't matter.
+        var before = new HashSet<ChatMessage>(_session.History.Messages, ReferenceEqualityComparer.Instance);
         var (cut, picked) = ConversationRewind.Apply(_session.History, turn, _sessionId is null ? null : _sessions, _sessionId);
+        _madeFiles.Rewound(before, _session.History.Messages);
         // Only the notes of turns the cut took go (2026-10-28, review P6-04): an /undo of a turn that stays still tells the model.
         _undoNotes.Prune(_session.History.Messages);
         _claudeServerSessionId = null;

@@ -103,7 +103,27 @@ public sealed class FakeEmbeddedLlm : IEmbeddedLlm
 
     public long FreedBytes(EmbeddedModel model) => Freed(model);
 
-    public BackendChoice Backend(AppSettingsData effective) => new(LlamaBackend.Cuda, "fake driver");
+    /// <summary>The backend every start reports; CUDA unless a test says (2026-11-16, #43's fit marks).</summary>
+    public BackendChoice Choice { get; set; } = new(LlamaBackend.Cuda, "fake driver");
+
+    /// <summary>The GPU memory read; none unless a test says, so the pickers show no fit marks (2026-11-16, #43).</summary>
+    public long? Gpu { get; set; }
+
+    public BackendChoice Backend(AppSettingsData effective) => Choice;
+
+    public long? GpuBytes() => Gpu;
+
+    public event Action<EmbeddedServerInfo>? MainExited;
+
+    public bool RestartsAfterCrash { get; set; }
+
+    /// <summary>The main server dies on its own (2026-11-16, #44): it is no longer running, and <see cref="MainExited"/> is raised.</summary>
+    public void Crash()
+    {
+        var lost = Running ?? throw new InvalidOperationException("nothing running to crash");
+        Running = null;   // not a stop the app asked for: Stops stays
+        MainExited?.Invoke(lost);
+    }
 
     public long RuntimeBytesToDownload(AppSettingsData effective) => RuntimeBytes;
 
@@ -381,6 +401,19 @@ public sealed class FakeLlamaServerHost : ILlamaServerHost
         bool had = Running is not null;
         Running = null;
         return had;
+    }
+
+    public event Action<EmbeddedServerInfo>? Exited;
+
+    public bool RestartsAfterCrash { get; set; }
+
+    /// <summary>The server dies on its own (2026-11-16, #44): no longer running, and <see cref="Exited"/> is raised as the real host's would be.</summary>
+    public void Crash()
+    {
+        var lost = Running ?? throw new InvalidOperationException("nothing running to crash");
+        Running = null;
+        _runningLaunch = null;
+        Exited?.Invoke(lost);
     }
 
     public ValueTask DisposeAsync()

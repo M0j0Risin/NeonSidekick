@@ -242,37 +242,52 @@ public sealed class FileJournal
     }
 
     // ---- the hooks WorkingDirectory calls, after Resolve(forWrite) and before the disk is touched ----
+    // Each tells the made files' list first (2026-11-16, plan lucid-roaming-lantern #41), whether or not a journal is entered.
 
     /// <summary>A file at <paramref name="full"/> is about to be written: its old bytes saved, or that it (and its missing folders) wasn't there.</summary>
-    internal static JournalMark Writing(WorkingDirectory directory, string full) =>
-        Hook(directory, journal => journal.LogFor(full) is { } log ? journal.RecordWrite(log, full) : null);
+    internal static JournalMark Writing(WorkingDirectory directory, string full)
+    {
+        MadeFiles.Writing(full);
+        return Hook(directory, journal => journal.LogFor(full) is { } log ? journal.RecordWrite(log, full) : null);
+    }
 
     /// <summary>A folder at <paramref name="full"/> (and its missing parents) is about to be made.</summary>
     internal static JournalMark Making(WorkingDirectory directory, string full) =>
         Hook(directory, journal => journal.LogFor(full) is { } log ? journal.RecordMissing(log, full, directory: true) : null);
 
     /// <summary><paramref name="from"/> is about to move to <paramref name="to"/>: a file in the way saved, the missing folders noted, the move recorded.</summary>
-    internal static JournalMark Moving(WorkingDirectory directory, string from, string to) =>
-        Hook(directory, journal => journal.RecordMove(from, to));
+    internal static JournalMark Moving(WorkingDirectory directory, string from, string to)
+    {
+        MadeFiles.Moving(from, to);
+        return Hook(directory, journal => journal.RecordMove(from, to));
+    }
 
     /// <summary><paramref name="full"/> is about to be deleted: a file's bytes, a link, or a folder with everything in it.</summary>
-    internal static JournalMark Removing(WorkingDirectory directory, string full) =>
-        Hook(directory, journal => journal.LogFor(full) is { } log ? journal.RecordRemove(log, full) : null);
+    internal static JournalMark Removing(WorkingDirectory directory, string full)
+    {
+        MadeFiles.Removing();
+        return Hook(directory, journal => journal.LogFor(full) is { } log ? journal.RecordRemove(log, full) : null);
+    }
 
     /// <summary>Many paths are about to be written: the <paramref name="folders"/> made where missing, then each of <paramref name="files"/>.</summary>
-    internal static JournalMark Placing(WorkingDirectory directory, IEnumerable<string> folders, IEnumerable<string> files) =>
-        Hook(directory, journal =>
+    internal static JournalMark Placing(WorkingDirectory directory, IEnumerable<string> folders, IEnumerable<string> files)
+    {
+        MadeFiles.Placing(files);
+        return Hook(directory, journal =>
         {
             journal.RecordPlacing(folders, files);
             return null;
         });
+    }
 
     /// <summary>
     /// A folder copied over the file <paramref name="file"/> in its way (2026-10-28, review P3-02): the file saved, the folder noted as made
     /// (the file still stands at the hook, so <see cref="Placing"/> alone saw nothing missing), then its folders and files.
     /// </summary>
-    internal static JournalMark Replacing(WorkingDirectory directory, string file, IEnumerable<string> folders, IEnumerable<string> files) =>
-        Hook(directory, journal =>
+    internal static JournalMark Replacing(WorkingDirectory directory, string file, IEnumerable<string> folders, IEnumerable<string> files)
+    {
+        MadeFiles.Placing(files);
+        return Hook(directory, journal =>
         {
             if (journal.LogFor(file) is { } log)
             {
@@ -283,6 +298,7 @@ public sealed class FileJournal
             journal.RecordPlacing(folders, files);
             return null;
         });
+    }
 
     /// <summary>
     /// Takes back what a hook added (2026-10-28, review P4-03): the write it stood for was refused after it (a file appeared, a link moved),

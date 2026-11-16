@@ -1110,6 +1110,11 @@ internal sealed partial class ChatScreen
             return false;
         }
 
+        if (!await EnsureLlmAsync(cancellationToken).ConfigureAwait(false))
+        {
+            return false;
+        }
+
         if (_session.Assistant is null)
         {
             _transcript.Error(NoAssistantError);
@@ -1489,7 +1494,7 @@ internal sealed partial class ChatScreen
             return false;
         }
 
-        if (_session.Assistant is null)
+        if (_session.Assistant is null && !_session.ShownUnloaded)   // an unloaded model reloads at the first message (2026-11-16, #44)
         {
             _transcript.Error(NoAssistantError);
             return false;

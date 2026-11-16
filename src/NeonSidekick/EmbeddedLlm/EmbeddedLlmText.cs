@@ -71,19 +71,69 @@ public static class EmbeddedLlmText
     /// keeps its column down the list — with the trailing blanks cut; empty for a row that is no embedded model (a scanned
     /// server's) or one that has none of them.
     /// </summary>
-    public static string CapabilityColumns(EmbeddedModel? model, string detail, int detailWidth)
+    /// <remarks>
+    /// <paramref name="fit"/> (2026-11-16, plan lucid-roaming-lantern #43): the fit mark's slot first, padded to two cells by
+    /// <see cref="UI.TextCells.Width"/> (✗ has no emoji form and takes one), so a ✗ row's marks sit where a ✅ row's do; null leaves the
+    /// row as it was.
+    /// </remarks>
+    public static string CapabilityColumns(EmbeddedModel? model, string detail, int detailWidth, FitMark? fit = null)
     {
         if (model is null)
         {
             return "";
         }
 
-        string slots = Slot(model.HasMtp, DrafterGlyph) + Slot(model.Vision, VisionGlyph) + Slot(model.ToolCalls, ToolsGlyph) + Slot(model.Uncensored, UncensoredGlyph);
+        string slots = (fit is { } mark ? "  " + Two(FitGlyph(mark)) : "")
+            + Slot(model.HasMtp, DrafterGlyph) + Slot(model.Vision, VisionGlyph) + Slot(model.ToolCalls, ToolsGlyph) + Slot(model.Uncensored, UncensoredGlyph);
         slots = slots.TrimEnd(' ');
         return slots.Length == 0 ? "" : new string(' ', Math.Max(0, detailWidth - UI.TextCells.Width(detail ?? ""))) + slots;
 
         static string Slot(bool on, string glyph) => "  " + (on ? glyph : "  ");
+        static string Two(string glyph) => glyph + new string(' ', Math.Max(0, 2 - UI.TextCells.Width(glyph)));
     }
+
+    /// <summary>
+    /// The idle unload's dim line, at the PC and on the page (2026-11-16, plan lucid-roaming-lantern #44): <c>🦙 Unloaded Gemma 4 26B after
+    /// 20 min idle; the next message or command loads it again</c>, or for a model parked behind another server <c>🦙 Unloaded Gemma 4 26B,
+    /// parked behind LM Studio, after 20 min idle</c>. Pinned.
+    /// </summary>
+    public static string IdleUnloadedNotice(EmbeddedModel model, TimeSpan idle, string? parkedBehind)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+        string minutes = string.Create(CultureInfo.InvariantCulture, $"{idle.TotalMinutes:0} min idle");
+        return parkedBehind is null
+            ? $"🦙 Unloaded {model.Display} after {minutes}; the next message or command loads it again"
+            : $"🦙 Unloaded {model.Display}, parked behind {parkedBehind}, after {minutes}";
+    }
+
+    /// <summary>The fit marks (2026-11-16, #43): ✅ fits, ⚠️ small context only, ✗ won't fit, 🐢 partly on the CPU. Pinned.</summary>
+    public static string FitGlyph(FitMark mark) => mark switch
+    {
+        FitMark.Fits => "✅",
+        FitMark.SmallContext => "⚠️",
+        FitMark.WontFit => "✗",
+        _ => "🐢",
+    };
+
+    /// <summary>A GPU's memory as it is sold: bytes ÷ 2³⁰ to a whole number, <c>24 GB</c> for a 24 GiB card (not <see cref="ModelStore.SizeLabel"/>'s decimal). Pinned.</summary>
+    public static string GpuGb(long bytes) =>
+        Math.Round(bytes / (double)(1L << 30), MidpointRounding.AwayFromZero).ToString("0", CultureInfo.InvariantCulture) + " GB";
+
+    /// <summary>
+    /// The picker's caption over marked rows (2026-11-16, #43): the legend, then what the estimate is for; <paramref name="fixedContext"/>
+    /// (a set <c>Embedded context size</c>) adds that the marks are for a fitted context, a large set one needing more. Pinned.
+    /// </summary>
+    public static string FitLegend(long gpuBytes, bool fixedContext) =>
+        "✅ fits · ⚠️ small context only · ✗ won't fit · 🐢 partly on the CPU: an estimate for this GPU's " + GpuGb(gpuBytes)
+        + ", with nothing else on it" + (fixedContext ? ", for a fitted context" : "");
+
+    /// <summary>The catalog's caption when no mark is given, saying why (2026-11-16, #43). Pinned.</summary>
+    public static string FitNoneCaption(FitNone why) => why switch
+    {
+        FitNone.Cpu => "No fit marks: the CPU backend runs every model, slower.",
+        FitNone.NoRead => "No fit marks: no GPU memory was read.",
+        _ => "No fit marks: Embedded GPU layers is a count; auto or all marks each model.",
+    };
 
     /// <summary>
     /// What an install costs to download: the model's files not yet on disk (<paramref name="download"/>, the whole model when
@@ -185,9 +235,13 @@ public static class EmbeddedLlmText
     public static string ExitedEarly(int code, string tail) =>
         string.Create(CultureInfo.InvariantCulture, $"llama-server exited with code {code} before it was ready") + Tail(tail);
 
-    /// <summary>The server stopped on its own while in use (2026-11-11, the review: "to it", true for a model kept behind another server too).</summary>
-    public static string Exited(int code, string tail) =>
-        string.Create(CultureInfo.InvariantCulture, $"llama-server stopped unexpectedly (code {code}); the next message to it restarts it") + Tail(tail);
+    /// <summary>
+    /// The server stopped on its own while in use (2026-11-11, the review: "to it", true for a model kept behind another server too).
+    /// <paramref name="restarts"/> (2026-11-16, plan lucid-roaming-lantern #44): only the screen restarts a crashed server at the next
+    /// message (<see cref="ILlamaServerHost.RestartsAfterCrash"/>), so a headless run's line leaves that clause out. Pinned.
+    /// </summary>
+    public static string Exited(int code, string tail, bool restarts = true) =>
+        string.Create(CultureInfo.InvariantCulture, $"llama-server stopped unexpectedly (code {code})") + (restarts ? "; the next message to it restarts it" : "") + Tail(tail);
 
     public static string StartTimeout(TimeSpan waited) =>
         string.Create(CultureInfo.InvariantCulture, $"llama-server was not ready after {waited.TotalSeconds:0} s");

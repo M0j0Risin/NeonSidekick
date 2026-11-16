@@ -312,9 +312,9 @@ public static class HelpCommands
         ]),
         new("/pasted",
         [
-            new("/pasted view", "Open the picture viewer on the *Pasted images folder*, where pasted pictures are saved as their messages are sent. Works while a reply runs."),
+            new("/pasted view", "Open the picture viewer on the *Pasted images folder*, where pasted pictures and the Web UI's attachments are saved as their messages are sent. Works while a reply runs."),
             new("/pasted thumbs", "Open the thumbnail browser on the *Pasted images folder*. Works while a reply runs."),
-            new("/pasted purge", "Delete every picture in the *Pasted images folder*, to the Recycle bin while *File deletes to Recycle bin* is on (a drive with no bin deletes for good), else for good, after a yes. Refused when the folder is the profile's `images` folder itself. Waits for a running reply."),
+            new("/pasted purge", "Delete every file in the *Pasted images folder* (pictures, and PDFs sent from the Web UI), to the Recycle bin while *File deletes to Recycle bin* is on (a drive with no bin deletes for good), else for good, after a yes. Refused when the folder is the profile's `images` folder itself. Waits for a running reply."),
         ]),
         new("/pdf",
         [

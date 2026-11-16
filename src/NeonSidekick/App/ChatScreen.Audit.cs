@@ -108,6 +108,11 @@ internal sealed partial class ChatScreen
     private async Task<bool> StartAuditAsync(AuditArguments parsed, IReadOnlyList<ImageAttachment> images, CancellationToken cancellationToken)
     {
         _sentFromWebPage = null;   // its passes are PC turns for speech, whoever started it (2026-11-13, the webui-voice plan)
+        if (!await EnsureLlmAsync(cancellationToken).ConfigureAwait(false))
+        {
+            return false;
+        }
+
         var effective = _effective();
         if (AuditRefusal(effective) is { } refused)
         {
@@ -225,6 +230,11 @@ internal sealed partial class ChatScreen
     private async Task<bool> ResumeAuditAsync(string? name, PlanReviewer? reviewer, int? passes, IReadOnlyList<ImageAttachment> images, CancellationToken cancellationToken, bool said = true)
     {
         _sentFromWebPage = null;   // its passes are PC turns for speech, whoever started it (2026-11-13, the webui-voice plan)
+        if (!await EnsureLlmAsync(cancellationToken).ConfigureAwait(false))
+        {
+            return false;
+        }
+
         var effective = _effective();
         if (AuditRefusal(effective) is { } refused)
         {
@@ -360,6 +370,11 @@ internal sealed partial class ChatScreen
     /// <summary>Fix via plan: the report marked fixing, then plan mode entered on its open findings (<see cref="EnterPlanAsync"/>).</summary>
     private async Task<bool> FixAuditReportAsync(string path, bool newest, CancellationToken cancellationToken)
     {
+        if (!await EnsureLlmAsync(cancellationToken).ConfigureAwait(false))
+        {
+            return false;
+        }
+
         // Another NeonSidekick auditing it (2026-10-29): its saves would put this one's "fixing" back. Read, marked and saved holding the lock
         // (2026-10-30, review F2: a check, then the read and the save, let an audit started elsewhere in between have its findings overwritten).
         string name = System.IO.Path.GetFileNameWithoutExtension(path);
@@ -441,6 +456,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task<bool> SendPassAsync(string message, IReadOnlyList<ImageAttachment> images, CancellationToken cancellationToken)
     {
+        using var hold = HoldIdle();   // the model kept between the passes' requests (2026-11-16, #44)
         while (true)
         {
             _transcript.User(message);
@@ -818,6 +834,11 @@ internal sealed partial class ChatScreen
         if (!_effective().LlmOfferTools)
         {
             _transcript.Error(PlanText.NeedsToolsError);
+            return false;
+        }
+
+        if (!await EnsureLlmAsync(cancellationToken).ConfigureAwait(false))
+        {
             return false;
         }
 

@@ -5180,7 +5180,7 @@ public sealed class WorkingDirectory
     /// </summary>
     private static JournalMark JournalCopy(WorkingDirectory to, string destination, CopyPlan? plan, bool fileInTheWay)
     {
-        if (FileJournal.Current is null)
+        if (FileJournal.Current is null && MadeFiles.Current is null)   // the made files' list hears a copy with no journal too (2026-11-16, #41)
         {
             return JournalMark.None;
         }

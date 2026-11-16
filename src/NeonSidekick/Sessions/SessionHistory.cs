@@ -145,6 +145,13 @@ public sealed class StoredHistory
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Mark { get; set; }
+
+    /// <summary>
+    /// The files the model made (2026-11-16, plan lucid-roaming-lantern #41: the Web UI's Files tab lists a resumed session's own): each path
+    /// with its turn's store ordinal when it has one; absent with none, so an older row reads as having made nothing.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<Files.StoredMadeFile>? MadeFiles { get; set; }
 }
 
 /// <summary>
@@ -218,10 +225,14 @@ public static class SessionHistory
     /// screenshot (<see cref="ConversationHistory.ScreenKey"/>) likewise unless <paramref name="keepScreen"/> (<c>Screen capture keep
     /// in sessions</c>, 2026-10-04).
     /// </summary>
-    public static string ToJson(IReadOnlyList<ChatMessage> messages, StoredPlan? plan = null, StoredPlan? executing = null, string? claudeSessionId = null, bool withThinking = false, string? claudeServerSessionId = null, bool keepCamera = false, bool keepScreen = false, Dictionary<string, List<Advisors.AdvisorPair>>? advisorThreads = null, Dictionary<string, string>? advisorSessions = null, string? mark = null)
+    public static string ToJson(IReadOnlyList<ChatMessage> messages, StoredPlan? plan = null, StoredPlan? executing = null, string? claudeSessionId = null, bool withThinking = false, string? claudeServerSessionId = null, bool keepCamera = false, bool keepScreen = false, Dictionary<string, List<Advisors.AdvisorPair>>? advisorThreads = null, Dictionary<string, string>? advisorSessions = null, string? mark = null, IReadOnlyList<Files.StoredMadeFile>? madeFiles = null)
     {
         ArgumentNullException.ThrowIfNull(messages);
-        var document = new StoredHistory { Plan = plan, Executing = executing, ClaudeSessionId = claudeSessionId, ClaudeServerSessionId = claudeServerSessionId, AdvisorThreads = advisorThreads, AdvisorSessions = advisorSessions, Mark = mark };
+        var document = new StoredHistory
+        {
+            Plan = plan, Executing = executing, ClaudeSessionId = claudeSessionId, ClaudeServerSessionId = claudeServerSessionId, AdvisorThreads = advisorThreads,
+            AdvisorSessions = advisorSessions, Mark = mark, MadeFiles = madeFiles is { Count: > 0 } made ? [.. made] : null,
+        };
         foreach (var message in messages)
         {
             document.Messages.Add(Store(message, withThinking, keepCamera, keepScreen));

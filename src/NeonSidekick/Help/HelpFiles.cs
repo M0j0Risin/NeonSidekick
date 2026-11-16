@@ -152,7 +152,7 @@ internal static class HelpFiles
             new(HelpFileScope.Profile, AppSettings.ImagesFolderName + "/" + HomeAssistant.HaCamera.FolderName + "/", "Home Assistant camera stills", "`/ha stills`"),
             new(HelpFileScope.Profile, AppSettings.ImagesFolderName + "/" + AppSettingsData.DefaultScreenOutputFolder + "/", "the screenshots", null, SettingsField.ScreenOutputFolder),
             new(HelpFileScope.Profile, AppSettings.ImagesFolderName + "/" + AppSettingsData.DefaultComfyOutputFolder + "/", "the pictures ComfyUI made", null, SettingsField.ComfyOutputFolder),
-            new(HelpFileScope.Profile, AppSettings.ImagesFolderName + "/" + AppSettingsData.DefaultPastedImagesFolder + "/", "the pictures pasted from the clipboard", "`/pasted`", SettingsField.PastedImagesFolder),
+            new(HelpFileScope.Profile, AppSettings.ImagesFolderName + "/" + AppSettingsData.DefaultPastedImagesFolder + "/", "the pictures pasted from the clipboard, and the Web UI's pictures and PDFs", "`/pasted`", SettingsField.PastedImagesFolder),
             new(HelpFileScope.Profile, AppSettings.ImagesFolderName + "/" + UI.SplashImages.ProfileFolderName + "/", "the splash pictures, in place of the built-in ones", "`/splash`"),
             new(HelpFileScope.Profile, Skills.SkillRoots.DirectoryName + "/", "this profile's skills", "`/skills`"),
             new(HelpFileScope.Profile, Comfy.ComfyWorkflowCatalog.DirectoryName + "/", "this profile's ComfyUI workflows", "`/comfy`"),

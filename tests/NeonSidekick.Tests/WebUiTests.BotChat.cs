@@ -75,7 +75,7 @@ public sealed partial class WebUiTests
         Assert.Equal([App.BotChat.ResumeLine], _session.Waiting);
         Assert.Equal(1, _session.LinesAdded);
         Assert.True(_session.TryTakeLine(out var line));
-        Assert.Equal(new WebLine(App.BotChat.ResumeLine, null, IPAddress.Loopback, false, Page, true, Chord: true), line);
+        Assert.Equal(new WebLine(App.BotChat.ResumeLine, null, IPAddress.Loopback, false, Page, true, Chord: true, Key: 1), line);
 
         // A page id of the wrong shape is no page: the line goes on, speaking nowhere of its own.
         _session.QueueChord(App.BotChat.ResumeLine, null, "bad id", speak: true);

@@ -1381,17 +1381,18 @@ public enum SettingsField
     VideoFilesPlayIn,
 
     /// <summary>
-    /// A toggle: whether a video file plays on the Video tab over Tailscale Funnel (<see cref="Settings.AppSettingsData.WebUiVideoFilesOverFunnel"/>,
-    /// 2026-11-12). <c>/settings</c> › Client › Web UI, under Guardrails after <see cref="WebUiBotCheckControl"/> (2026-11-13, the user agreed: a safety switch, not a tab); read at each request. Last in the enum, as every newcomer.
-    /// </summary>
-    WebUiVideoFilesOverFunnel,
-
-    /// <summary>
     /// A toggle: whether the Chat tab offers voice, 🎤 and 🔊 (<see cref="Settings.AppSettingsData.WebUiVoice"/>, 2026-11-13). The Web UI tab's
     /// Tabs run, right after <see cref="WebUiChatControls"/> (it extends the Chat tab; with the tab off, nothing loads for it, 2026-11-14). Reconnects
     /// both voice sessions (<see cref="SettingsMenu.IsWebVoiceField"/>, the Chat tab's row too), so refused under a reply. Last in the enum, as every newcomer.
     /// </summary>
     WebUiVoice,
+
+    /// <summary>
+    /// Typed: the minutes the embedded model may sit idle before it is unloaded, 0 (off) to 1440 (<see cref="Settings.AppSettingsData.EmbeddedIdleUnloadMinutes"/>,
+    /// <c>EmbeddedLlm.EmbeddedIdleUnload</c>, 2026-11-16, plan lucid-roaming-lantern #44). The Embedded tab's row after <see cref="EmbeddedHfDownloadType"/>,
+    /// which sits under the catalog by the user's ask; no reconnect (read at each arming), allowed mid-turn. Last in the enum, as every newcomer.
+    /// </summary>
+    EmbeddedIdleUnloadMinutes,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1614,6 +1615,9 @@ internal sealed partial class SettingsMenu
 
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.ReflectionCooldownMinutes"/>. Pinned.</summary>
     public static readonly string ReflectionCooldownMinutesRangeError = "must be 0 (off) or 1 to " + AppSettingsData.MaxReflectionCooldownMinutes.ToString(CultureInfo.InvariantCulture) + " minutes";
+
+    /// <summary>The settings-menu wording for a bad <see cref="SettingsField.EmbeddedIdleUnloadMinutes"/> (2026-11-16, #44). Pinned.</summary>
+    public static readonly string EmbeddedIdleUnloadMinutesRangeError = "must be 0 (off) or 1 to " + AppSettingsData.MaxEmbeddedIdleUnloadMinutes.ToString(CultureInfo.InvariantCulture) + " minutes";
 
     /// <summary>The settings-menu wording for a bad <see cref="SettingsField.ReflectionMaxRequests"/>. Pinned.</summary>
     public static readonly string ReflectionMaxRequestsRangeError = "must be " + AppSettingsData.MinReflectionMaxRequests.ToString(CultureInfo.InvariantCulture) + " to " + AppSettingsData.MaxReflectionMaxRequests.ToString(CultureInfo.InvariantCulture) + " requests";
@@ -1880,7 +1884,7 @@ internal sealed partial class SettingsMenu
          SettingsField.SessionNamingMode, SettingsField.SessionShowName,
          SettingsField.SessionTool, SettingsField.SessionSearchMaxResults],
         [SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatLimitedComfyWorkflows, SettingsField.BotChatImageMode, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageMentionMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatLimitedTools, SettingsField.BotChatLimitedSkills, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.BotChatVision, SettingsField.BotChatCamera, SettingsField.BotChatRecentContext],
-        [SettingsField.WebUi, SettingsField.WebUiPort, SettingsField.WebUiReach, SettingsField.WebUiHttpsAddress, SettingsField.WebUiCommands, SettingsField.WebUiConnectionDetails, SettingsField.WebUiBotCheckControl, SettingsField.WebUiVideoFilesOverFunnel, SettingsField.WebUiProfileTheme, SettingsField.WebUiChatControls, SettingsField.WebUiVoice, SettingsField.WebUiHomeControls, SettingsField.WebUiShoppingControls, SettingsField.WebUiYouTubeControls],
+        [SettingsField.WebUi, SettingsField.WebUiPort, SettingsField.WebUiReach, SettingsField.WebUiHttpsAddress, SettingsField.WebUiCommands, SettingsField.WebUiConnectionDetails, SettingsField.WebUiBotCheckControl, SettingsField.WebUiProfileTheme, SettingsField.WebUiChatControls, SettingsField.WebUiVoice, SettingsField.WebUiHomeControls, SettingsField.WebUiShoppingControls, SettingsField.WebUiYouTubeControls],
         [SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmOneLocalModel,
          SettingsField.LlmReasoning, SettingsField.LlmShowThinking,
          SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds,
@@ -1889,7 +1893,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.LlmScanMode, SettingsField.LlmApiKey,
          SettingsField.LlmPreserveThinking, SettingsField.LlmReasoningEstimate,
          SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace],
-        [SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedModels, SettingsField.EmbeddedHfDownloadType, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedVramOnly, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter],
+        [SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedModels, SettingsField.EmbeddedHfDownloadType, SettingsField.EmbeddedIdleUnloadMinutes, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedVramOnly, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter],
         [SettingsField.DockerServers, SettingsField.DockerServerContainers, SettingsField.DockerServerMatchWords, SettingsField.DockerServerStopTimeoutSeconds, SettingsField.DockerServerPostStopDelaySeconds, SettingsField.DockerServerReadyTimeoutSeconds, SettingsField.DockerServerOneAtATime, SettingsField.DockerServerStopOnExit],
         [SettingsField.ClaudeCodeExecutable, SettingsField.ClaudeCodeServer, SettingsField.ClaudeCodePermissions, SettingsField.ClaudeCodeModel, SettingsField.ClaudeCodeEffort,
          SettingsField.AnthropicApi, SettingsField.AnthropicApiKey, SettingsField.AnthropicApiMaxTokens, SettingsField.AnthropicApiPromptCaching],
@@ -2296,9 +2300,10 @@ internal sealed partial class SettingsMenu
     /// <paramref name="whereWidth"/> cells, so every row's detail starts in one column (2026-09-29, the user's ask: the
     /// embedded rows' names and the servers' URLs made the details ragged), and whose detail is padded to
     /// <paramref name="detailWidth"/> ahead of the capability columns an embedded model carries
-    /// (<see cref="NeonSidekick.EmbeddedLlm.EmbeddedLlmText.CapabilityColumns"/>: the drafter, vision and tools marks, later that day, the user's asks). Pinned.
+    /// (<see cref="NeonSidekick.EmbeddedLlm.EmbeddedLlmText.CapabilityColumns"/>: the drafter, vision and tools marks, later that day, the user's asks),
+    /// led by <paramref name="fit"/>'s mark when given (2026-11-16, plan lucid-roaming-lantern #43). Pinned.
     /// </summary>
-    public static string ServerLabel(LlmServer server, int whereWidth, int detailWidth)
+    public static string ServerLabel(LlmServer server, int whereWidth, int detailWidth, NeonSidekick.EmbeddedLlm.FitMark? fit = null)
     {
         ArgumentNullException.ThrowIfNull(server);
         var (where, quant) = ServerWhereParts(server);
@@ -2306,7 +2311,7 @@ internal sealed partial class SettingsMenu
         var model = NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(server.BaseUrl) ? EmbeddedRowModel(server) : null;
         return Markup.Escape(server.Name.PadRight(ServerNameWidth)) + Theme.ColorMarkup(Theme.Ink, Markup.Escape(where))
             + Theme.DimMarkup(Markup.Escape(quant) + pad + "  " + Markup.Escape(server.Result.Detail))
-            + Markup.Escape(NeonSidekick.EmbeddedLlm.EmbeddedLlmText.CapabilityColumns(model, server.Result.Detail, detailWidth));
+            + Markup.Escape(NeonSidekick.EmbeddedLlm.EmbeddedLlmText.CapabilityColumns(model, server.Result.Detail, detailWidth, model is null ? null : fit));
     }
 
     /// <summary>
@@ -2337,13 +2342,16 @@ internal sealed partial class SettingsMenu
         return MenuFilter.Matches(filter, server.Name, server.BaseUrl + " " + server.Result.Detail + " " + string.Join(' ', server.Result.ModelIds));
     }
 
-    /// <summary>The picker's rows with the URL-or-model column as wide as its widest entry, and the details as wide as the widest one.</summary>
-    public static IReadOnlyList<string> ServerLabels(IReadOnlyList<LlmServer> servers)
+    /// <summary>
+    /// The picker's rows with the URL-or-model column as wide as its widest entry, and the details as wide as the widest one; an embedded
+    /// row led by <paramref name="fit"/>'s mark for it when given (2026-11-16, #43).
+    /// </summary>
+    public static IReadOnlyList<string> ServerLabels(IReadOnlyList<LlmServer> servers, Func<LlmServer, NeonSidekick.EmbeddedLlm.FitMark?>? fit = null)
     {
         ArgumentNullException.ThrowIfNull(servers);
         int width = servers.Count == 0 ? 0 : servers.Max(s => ServerWhereParts(s) is var (where, quant) ? TextCells.Width(where + quant) : 0);
         int detailWidth = servers.Count == 0 ? 0 : servers.Max(s => TextCells.Width(s.Result.Detail));
-        return servers.Select(s => ServerLabel(s, width, detailWidth)).ToList();
+        return servers.Select(s => ServerLabel(s, width, detailWidth, fit?.Invoke(s))).ToList();
     }
 
     /// <summary>
@@ -2421,7 +2429,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.ShoppingTools or SettingsField.EventLogTools or SettingsField.MonitorTools
             or SettingsField.WebUi or SettingsField.WebUiCommands or SettingsField.WebUiConnectionDetails or SettingsField.WebUiHomeControls or SettingsField.WebUiProfileTheme
             or SettingsField.WebUiChatControls or SettingsField.WebUiShoppingControls or SettingsField.WebUiYouTubeControls or SettingsField.WebUiBotCheckControl
-            or SettingsField.WebUiVideoFilesOverFunnel or SettingsField.WebUiVoice
+            or SettingsField.WebUiVoice
             or SettingsField.TimerTools or SettingsField.FileDeletesToRecycleBin or SettingsField.FileCheckpoints or SettingsField.ClockTools or SettingsField.HelpTools
             or SettingsField.NetworkTools or SettingsField.NetworkCertificateStores or SettingsField.ServiceTools or SettingsField.ServiceWrites
             or SettingsField.TaskTools or SettingsField.TaskWrites or SettingsField.DirectoryTools
@@ -2532,7 +2540,6 @@ internal sealed partial class SettingsMenu
         SettingsField.WebUiVoice => "Web UI voice",
         SettingsField.WebUiShoppingControls => "Web UI shopping controls",
         SettingsField.WebUiYouTubeControls => "Web UI video controls",
-        SettingsField.WebUiVideoFilesOverFunnel => "Web UI video files over Funnel",
         SettingsField.WebUiProfileTheme => "Web UI profile theme",
         SettingsField.ImageThumbnailSize => "Image thumbnail size",
         SettingsField.FileTreeMaxLength => "File /tree max entries",
@@ -2796,6 +2803,7 @@ internal sealed partial class SettingsMenu
         SettingsField.EmbeddedVramBudget => "Embedded VRAM budget (%)",
         SettingsField.EmbeddedVramOnly => "Embedded VRAM only",
         SettingsField.EmbeddedHfDownloadType => "Embedded download mode",
+        SettingsField.EmbeddedIdleUnloadMinutes => "Embedded idle unload (min)",
         SettingsField.EmbeddedVision => "Embedded vision",
         SettingsField.EmbeddedLlmServer => "Embedded servers enabled",
         SettingsField.EmbeddedDrafter => "Embedded drafter",
@@ -3003,6 +3011,7 @@ internal sealed partial class SettingsMenu
             SettingsField.EmbeddedGpuLayers => data.EmbeddedGpuLayers,
             SettingsField.EmbeddedVramBudget => data.EmbeddedVramBudget == NeonSidekick.EmbeddedLlm.EmbeddedVramBudget.Off ? NeonSidekick.EmbeddedLlm.EmbeddedVramBudget.OffWord : Percent(data.EmbeddedVramBudget),
             SettingsField.EmbeddedHfDownloadType => data.EmbeddedHfDownloadType,
+            SettingsField.EmbeddedIdleUnloadMinutes => Minutes(data.EmbeddedIdleUnloadMinutes),
             SettingsField.EmbeddedVision => OnOff(data.EmbeddedVision),
             SettingsField.EmbeddedVramOnly => OnOff(data.EmbeddedVramOnly),
             SettingsField.EmbeddedLlmServer => OnOff(data.EmbeddedLlmServer),
@@ -3232,7 +3241,6 @@ internal sealed partial class SettingsMenu
             SettingsField.WebUiVoice => OnOff(data.WebUiVoice),
             SettingsField.WebUiShoppingControls => OnOff(data.WebUiShoppingControls),
             SettingsField.WebUiYouTubeControls => OnOff(data.WebUiYouTubeControls),
-            SettingsField.WebUiVideoFilesOverFunnel => OnOff(data.WebUiVideoFilesOverFunnel),
             SettingsField.WebUiProfileTheme => OnOff(data.WebUiProfileTheme),
             SettingsField.WebUiPort => data.WebUiPort.ToString(CultureInfo.InvariantCulture),
             SettingsField.WebUiReach => data.WebUiReach,
@@ -4349,6 +4357,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ReflectionMinToolCalls => data.ReflectionMinToolCalls.ToString(CultureInfo.InvariantCulture),
         SettingsField.ReflectionMaxRequests => data.ReflectionMaxRequests.ToString(CultureInfo.InvariantCulture),
         SettingsField.ReflectionCooldownMinutes => data.ReflectionCooldownMinutes.ToString(CultureInfo.InvariantCulture),
+        SettingsField.EmbeddedIdleUnloadMinutes => data.EmbeddedIdleUnloadMinutes.ToString(CultureInfo.InvariantCulture),
         SettingsField.LlmAutoCompactPercent => data.LlmAutoCompactPercent.ToString(CultureInfo.InvariantCulture),
         SettingsField.LlmMaxTurns => data.LlmMaxTurns > 0 ? data.LlmMaxTurns.ToString(CultureInfo.InvariantCulture) : LlmMaxTurnsAutoLabel,
         SettingsField.LlmMaxToolIterations => data.LlmMaxToolIterations.ToString(CultureInfo.InvariantCulture),
@@ -5262,7 +5271,13 @@ internal sealed partial class SettingsMenu
             cursor >= 0 && cursor < servers.Count && NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(servers[cursor].BaseUrl) ? EmbeddedRowModel(servers[cursor]) : null);
         // The embedded filter buttons only while an embedded model is listed; the typed filter always (2026-10-07, the user's ask).
         bool embedded = servers.Any(s => NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(s.BaseUrl));
-        var labels = ServerLabels(servers);
+        // The fit marks (2026-11-16, #43), read once at the open; the legend shows only over a marked embedded row, and gives way to
+        // the typed filter's caption while text is typed.
+        var marks = embedded ? FitMarks() : default;
+        NeonSidekick.EmbeddedLlm.FitMark? MarkOf(LlmServer server) =>
+            marks.Fit is { } fit && NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(server.BaseUrl) && EmbeddedRowModel(server) is { } model ? fit(model) : null;
+        string? legend = servers.Any(s => MarkOf(s) is not null) ? marks.Legend : null;
+        var labels = ServerLabels(servers, MarkOf);
         string baseHint = embedded ? keys.Replace(" · Esc", " · " + NeonSidekick.EmbeddedLlm.EmbeddedModelFilter.Keys + " · Esc", StringComparison.Ordinal) : keys;
         string text = "";
         try
@@ -5274,7 +5289,7 @@ internal sealed partial class SettingsMenu
                 {
                     Filter = text,
                     Placeholder = shown.Count == 0,
-                    Caption = MenuFilter.CaptionOrNull(text, shown.Count, servers.Count),
+                    Caption = MenuFilter.CaptionOrNull(text, shown.Count, servers.Count) ?? legend,
                     Footer = (_, row) => row < shown.Count ? ServerFooter(servers[shown[row]]) : null,
                 };
                 if (await _pane.PickAsync(page with { Buttons = embedded ? filter.Buttons() : null }, Math.Max(0, shown.IndexOf(cursor)), cancellationToken).ConfigureAwait(false) is not { } pick)
@@ -5296,7 +5311,7 @@ internal sealed partial class SettingsMenu
 
                 if (pick.Button >= 0)
                 {
-                    filter = filter.Press(pick.Button);
+                    filter = filter.Press(pick.Button, marks.CanFit);
                     continue;
                 }
 
@@ -5313,7 +5328,7 @@ internal sealed partial class SettingsMenu
 
         bool Passes(LlmServer server) =>
             !NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(server.BaseUrl)
-            || (EmbeddedRowModel(server) is { } model ? filter.Matches(model) : !filter.Active);
+            || (EmbeddedRowModel(server) is { } model ? filter.Matches(model, fit: marks.Fit) : !filter.Active);
     }
 
     /// <summary>
@@ -6281,6 +6296,16 @@ internal sealed partial class SettingsMenu
                 }
 
                 Apply(field, d => d.ReflectionCooldownMinutes = minutes);
+                return true;
+
+            case SettingsField.EmbeddedIdleUnloadMinutes:
+                if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int idle) || idle < AppSettingsData.MinEmbeddedIdleUnloadMinutes || idle > AppSettingsData.MaxEmbeddedIdleUnloadMinutes)
+                {
+                    Sink.Error($"{FieldName(field)} {EmbeddedIdleUnloadMinutesRangeError}; keeping {EditableValue(field, saved)}.");
+                    return false;
+                }
+
+                Apply(field, d => d.EmbeddedIdleUnloadMinutes = idle);
                 return true;
 
             case SettingsField.BotChatNonTtsDelaySeconds:
@@ -8499,7 +8524,6 @@ internal sealed partial class SettingsMenu
             SettingsField.WebUiVoice => data.WebUiVoice,
             SettingsField.WebUiShoppingControls => data.WebUiShoppingControls,
             SettingsField.WebUiYouTubeControls => data.WebUiYouTubeControls,
-            SettingsField.WebUiVideoFilesOverFunnel => data.WebUiVideoFilesOverFunnel,
             SettingsField.WebUiProfileTheme => data.WebUiProfileTheme,
             SettingsField.ExternalSkills => data.ExternalSkills,
             SettingsField.ProjectFile => data.ProjectFile,
@@ -8643,7 +8667,6 @@ internal sealed partial class SettingsMenu
             case SettingsField.WebUiVoice: data.WebUiVoice = on; break;
             case SettingsField.WebUiShoppingControls: data.WebUiShoppingControls = on; break;
             case SettingsField.WebUiYouTubeControls: data.WebUiYouTubeControls = on; break;
-            case SettingsField.WebUiVideoFilesOverFunnel: data.WebUiVideoFilesOverFunnel = on; break;
             case SettingsField.WebUiProfileTheme: data.WebUiProfileTheme = on; break;
             case SettingsField.ExternalSkills: data.ExternalSkills = on; break;
             case SettingsField.ProjectFile: data.ProjectFile = on; break;
@@ -8796,7 +8819,6 @@ internal sealed partial class SettingsMenu
         SettingsField.WebUiVoice => on ? "the Chat tab has 🎤 and 🔊; the voice models load while the tab is on" : "the Chat tab has no voice",
         SettingsField.WebUiShoppingControls => on ? "the Shopping tab adds, ticks, changes and removes lines, picks the store" : "there is no Shopping tab",
         SettingsField.WebUiYouTubeControls => on ? "the Video tab plays videos and keeps the saved list" : "there is no Video tab; webui-window plays in the video window",
-        SettingsField.WebUiVideoFilesOverFunnel => on ? "a video file plays on the Video tab over Tailscale Funnel too" : "over Tailscale Funnel the Video tab plays no video file",
         SettingsField.WebUiProfileTheme => on ? "the pages wear the profile's theme" : "the pages keep their own look",
         SettingsField.ExternalSkills => on ? (OperatingSystem.IsMacOS() ? "~/.agents/skills is read too" : "%USERPROFILE%\\.agents\\skills is read too") : "no external skills",   // the Mac's home, 2026-10-06
         SettingsField.ProjectFile => on ? "use the working directory's NEON.md, AGENTS.md or CLAUDE.md" : "project files in the working directory are ignored",   // the user's wording, 2026-10-01; CLAUDE.md 2026-10-18 (reworded to fit the row's 72)
@@ -8892,12 +8914,13 @@ internal sealed partial class SettingsMenu
         var inUse = NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(effective.LlmUrl) ? NeonSidekick.EmbeddedLlm.EmbeddedModelCatalog.Find(effective.LlmModel, embedded.Catalog) : null;
         var filter = NeonSidekick.EmbeddedLlm.EmbeddedModelFilter.For(inUse);
         int cursor = inUse is null ? 0 : Math.Max(0, embedded.Catalog.ToList().IndexOf(inUse));   // the catalog index under the cursor
+        var marks = FitMarks();   // read once at the open (2026-11-16, #43)
         while (true)
         {
             // Every row laid out over the whole catalog, so a filter does not move the columns.
-            var labels = EmbeddedModelLabels(embedded.Catalog, embedded.State, embedded.BytesToDownload);
-            var shown = filter.Arrange(Enumerable.Range(0, embedded.Catalog.Count).Where(i => filter.Matches(embedded.Catalog[i], embedded.State(embedded.Catalog[i]).IsInstalled)).ToList(), i => embedded.Catalog[i]);
-            var page = new MenuPage(Crumb(FieldName(SettingsField.EmbeddedModels)), FilteredRows(labels, shown), EmbeddedModelsKeys) { Placeholder = shown.Count == 0 };
+            var labels = EmbeddedModelLabels(embedded.Catalog, embedded.State, embedded.BytesToDownload, marks.Fit);
+            var shown = filter.Arrange(Enumerable.Range(0, embedded.Catalog.Count).Where(i => filter.Matches(embedded.Catalog[i], embedded.State(embedded.Catalog[i]).IsInstalled, marks.Fit)).ToList(), i => embedded.Catalog[i]);
+            var page = new MenuPage(Crumb(FieldName(SettingsField.EmbeddedModels)), FilteredRows(labels, shown), EmbeddedModelsKeys) { Placeholder = shown.Count == 0, Caption = marks.Legend };
             if (await PickChecklistAsync(page, Math.Max(0, shown.IndexOf(cursor)), cancellationToken, filter.Buttons(withInstalled: true)).ConfigureAwait(false) is not { } pick)
             {
                 return Unchanged();
@@ -8910,7 +8933,7 @@ internal sealed partial class SettingsMenu
 
             if (pick.Button >= 0)
             {
-                filter = filter.Press(pick.Button, withInstalled: true);
+                filter = filter.Press(pick.Button, marks.CanFit, withInstalled: true);
                 continue;
             }
 
@@ -9022,23 +9045,47 @@ internal sealed partial class SettingsMenu
     /// A catalog row whose state-and-size detail is padded to <paramref name="detailWidth"/> cells, so the capability columns
     /// (<see cref="NeonSidekick.EmbeddedLlm.EmbeddedLlmText.CapabilityColumns"/>: ⚡ 👁️ 🛠️, 2026-09-29, the user's asks) line up down the list. Pinned.
     /// </summary>
-    public static string EmbeddedModelLabel(NeonSidekick.EmbeddedLlm.EmbeddedModel model, NeonSidekick.EmbeddedLlm.EmbeddedModelState state, int detailWidth, long? download = null)
+    public static string EmbeddedModelLabel(NeonSidekick.EmbeddedLlm.EmbeddedModel model, NeonSidekick.EmbeddedLlm.EmbeddedModelState state, int detailWidth, long? download = null, NeonSidekick.EmbeddedLlm.FitMark? fit = null)
     {
         ArgumentNullException.ThrowIfNull(model);
         string detail = NeonSidekick.EmbeddedLlm.EmbeddedLlmText.ModelDetail(model, state, download);
         return Markup.Escape(model.Display.PadRight(EmbeddedModelNameWidth)) + Theme.DimMarkup(Markup.Escape(model.Quant.PadRight(EmbeddedModelQuantWidth) + detail))
-            + Markup.Escape(NeonSidekick.EmbeddedLlm.EmbeddedLlmText.CapabilityColumns(model, detail, detailWidth));
+            + Markup.Escape(NeonSidekick.EmbeddedLlm.EmbeddedLlmText.CapabilityColumns(model, detail, detailWidth, fit));
     }
 
-    /// <summary>The catalog's rows, the details as wide as the widest one so each capability column is one column.</summary>
-    public static IReadOnlyList<string> EmbeddedModelLabels(IReadOnlyList<NeonSidekick.EmbeddedLlm.EmbeddedModel> models, Func<NeonSidekick.EmbeddedLlm.EmbeddedModel, NeonSidekick.EmbeddedLlm.EmbeddedModelState> state, Func<NeonSidekick.EmbeddedLlm.EmbeddedModel, long>? download = null)
+    /// <summary>The catalog's rows, the details as wide as the widest one so each capability column is one column; each led by <paramref name="fit"/>'s mark when given (2026-11-16, #43).</summary>
+    public static IReadOnlyList<string> EmbeddedModelLabels(IReadOnlyList<NeonSidekick.EmbeddedLlm.EmbeddedModel> models, Func<NeonSidekick.EmbeddedLlm.EmbeddedModel, NeonSidekick.EmbeddedLlm.EmbeddedModelState> state, Func<NeonSidekick.EmbeddedLlm.EmbeddedModel, long>? download = null, Func<NeonSidekick.EmbeddedLlm.EmbeddedModel, NeonSidekick.EmbeddedLlm.FitMark?>? fit = null)
     {
         ArgumentNullException.ThrowIfNull(models);
         ArgumentNullException.ThrowIfNull(state);
         var states = models.Select(state).ToList();
         var downloads = models.Select(m => download?.Invoke(m)).ToList();   // what an install would still fetch (2026-10-06)
         int width = models.Count == 0 ? 0 : models.Select((m, i) => TextCells.Width(NeonSidekick.EmbeddedLlm.EmbeddedLlmText.ModelDetail(m, states[i], downloads[i]))).Max();
-        return models.Select((m, i) => EmbeddedModelLabel(m, states[i], width, downloads[i])).ToList();
+        return models.Select((m, i) => EmbeddedModelLabel(m, states[i], width, downloads[i], fit?.Invoke(m))).ToList();
+    }
+
+    /// <summary>
+    /// The pickers' fit marks (2026-11-16, plan lucid-roaming-lantern #43), read once at an open: the GPU's memory and the backend a start
+    /// would use, under the settings now (<see cref="NeonSidekick.EmbeddedLlm.EmbeddedFit"/>). The mark of a model, whether the size button
+    /// may stop at fits, and the caption: the legend, or why no mark is given; all empty with no embedded service.
+    /// </summary>
+    private (Func<NeonSidekick.EmbeddedLlm.EmbeddedModel, NeonSidekick.EmbeddedLlm.FitMark?>? Fit, bool CanFit, string? Legend) FitMarks()
+    {
+        if (EmbeddedLlm is not { } embedded)
+        {
+            return (null, false, null);
+        }
+
+        var effective = EffectiveNow();
+        long? gpu = embedded.GpuBytes();
+        var backend = embedded.Backend(effective).Backend;
+        if (NeonSidekick.EmbeddedLlm.EmbeddedFit.WhyNone(effective, gpu, backend) is { } why)
+        {
+            return (null, false, NeonSidekick.EmbeddedLlm.EmbeddedLlmText.FitNoneCaption(why));
+        }
+
+        return (m => NeonSidekick.EmbeddedLlm.EmbeddedFit.Mark(m, effective, gpu, backend), true,
+            NeonSidekick.EmbeddedLlm.EmbeddedLlmText.FitLegend(gpu!.Value, NeonSidekick.EmbeddedLlm.EmbeddedFit.FixedContext(effective)));
     }
 
     /// <summary>

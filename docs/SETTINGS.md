@@ -124,7 +124,6 @@ A browser front end for this profile, on this computer or (with *Web UI reach* `
 | Web UI commands | Chat tab: lets the page run the slash commands that work from a phone ([Commands from the page](INTERFACE.md#commands-from-the-page)). Off, it only sends messages. | off |
 | Web UI connection details | Chat tab: the page's dropdown shows the `%` and `*` connections' server and database, not just names. The chat shows what the model says either way. | off |
 | Web UI bot check control | Chat tab: the page shows a running bot check live and your taps and typing go into it ([A bot check from the page](INTERFACE.md#a-bot-check-from-the-page)). Off: only the allow question and *Give up*. | on |
-| Web UI video files over Funnel | Lets a PC video file play on the Video tab when the page is reached over Tailscale Funnel (only under *Web UI reach* `local`). Only the file playing is served, to a signed-in page. | off |
 | Web UI profile theme | Dresses the pages in the profile's theme, following a `/theme` at once; your lines and review lines take the terminal's colors. Off, they keep their own look. | on |
 | Web UI chat controls | Shows the Chat tab: transcript, message line and the app's questions. Off, the page opens on another [tab](INTERFACE.md#web-ui), with no voice; the PC is unchanged. | on |
 | Web UI voice | Chat tab: 🎤 to speak a message and 🔊 to hear replies on the page ([Voice](INTERFACE.md#voice)). While the Chat tab is on, the PC downloads and loads the voice models for it, even with its own voice off. | off |
@@ -205,8 +204,8 @@ A model the app downloads and runs itself on llama.cpp's `llama-server`, on Wind
 * **Switch:** needs *Embedded servers enabled*; Connect a model's *Download an embedded model* turns it on once your model is ready.
 * **Use:** `/server` and the startup picker list an **Embedded** row per installed model; `/model` picks between them.
 * **Loading:** the status bar shows `🦙 loading <model>`; Esc, Ctrl+C or a double-click on the spinner cancels.
-* **Each row:** size, state (`installed`, `download`, `partial · 42%`), quantization, then ⚡ a drafter, 👁️ images, 🛠️ tool calls, ⛓️‍💥 uncensored.
-* **Buttons** filter by size (any, up to 8 GB, up to 16 GB), installed or not and drafter, and sort by name or size; uncensored builds show only under **uncensored** (`x`). Keys: [Pane keys](INTERFACE.md#pane-keys).
+* **Each row:** a fit mark for this GPU alone (`✅` fits, `⚠️` small context only, `✗` won't fit, `🐢` partly on the CPU), size, state (`installed`, `download`, `partial · 42%`), quantization, then ⚡ a drafter, 👁️ images, 🛠️ tool calls, ⛓️‍💥 uncensored.
+* **Buttons** filter by size (any, `fits` when the GPU is read, up to 8 GB, up to 16 GB), installed or not and drafter, and sort by name or size; uncensored builds show only under **uncensored** (`x`). Keys: [Pane keys](INTERFACE.md#pane-keys).
 
 The catalog, one row per model; the pane lists each build with its size.
 
@@ -241,6 +240,7 @@ The catalog, one row per model; the pane lists each build with its size.
 | Embedded servers enabled | Offers the embedded models. Off, `/server` lists none and a running one stops; installed models stay on disk. Connect a model turns it on for the model you pick. | off |
 | Embedded models | The catalog. Enter on an installed model offers *Use now* and *Remove* (asks, then deletes its folder); on any other, *Install*. | — |
 | Embedded download mode | `parallel` fetches each file over 8 connections (about twice as fast); `single` uses one. | `parallel` |
+| Embedded idle unload (min) | Unloads the embedded model, or one parked behind another server, after this many idle minutes; the next message or command reloads it (Esc cancels). `off` keeps it. Extra servers stay; [not in headless runs](HEADLESS.md#flags-in-headless-runs). | `off` |
 | Embedded backend | The llama.cpp build: `auto` (CUDA with NVIDIA driver 580+, else Vulkan, else CPU), `cuda`, `vulkan` or `cpu`. On a Mac, `auto` and `metal` both pick Metal. | `auto` |
 | Embedded context length | The context window in tokens: 0 (**fit**) is the largest that fits on the GPU within *Embedded VRAM budget (%)*, else 512–262,144. | 0 (fit) |
 | Embedded GPU layers | Layers on the GPU: `auto` (as many as free VRAM holds), `all`, or a number (0 runs on the CPU). | `auto` |
@@ -629,7 +629,7 @@ The file tools and the places beyond the working directory they reach.
 | Image edit metadata | Metadata `image_edit` keeps: `none`, `basic` (author, date taken, camera…) or `all` (basic plus GPS position). | `none` |
 | Image edit mode | `beside-original` writes an edit to a new file beside the source; `overwrite-original` replaces the source without asking. For `image_edit` and the picture windows' right-click menu. | `beside-original` |
 | Image edit output folder | Where `image_edit` writes when the model names no `to`: a folder under the profile's `images`. Empty writes beside the source. | empty (beside the source) |
-| Pasted images folder | Where a pasted picture is saved, under the profile's `images`, for the picture tools. `/pasted view`, `thumbs` and `purge` open or empty it. | `pasted` |
+| Pasted images folder | Where a pasted picture, or a picture or PDF sent from the Web UI, is saved, under the profile's `images`, for the picture tools. `/pasted view`, `thumbs` and `purge` open or empty it. | `pasted` |
 
 #### Video
 

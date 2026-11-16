@@ -11,7 +11,7 @@
 // A video file from the PC (2026-11-12, the video-files plan): a load with file plays in the frame's own <video> (file-core.js, served as
 // /youtube-file.js) while YouTube's player is hidden, not destroyed; every command after a load goes to that load's kind, and the hidden
 // YouTube player's reports are dropped. A file needs no internet, so YouTube's script failing counts for YouTube loads only. A file that
-// won't play asks its address once (HEAD) for why: refused over Funnel (403), gone (410), unreadable on the PC (503), or signed out (401,
+// won't play asks its address once (HEAD) for why: gone (410), unreadable on the PC (503), or signed out (401,
 // which reloads the page to sign in). Which player the last load went to is one `active` object (2026-11-13), never a scattered kind test.
 'use strict';
 
@@ -133,9 +133,8 @@ const core = NeonPlayer(m => { if (!active.isFile) send(m); }, {
   onBlocked: () => { if (!active.isFile) { tapHint = (words && words.tapToStart) || ''; draw(); } },
 });
 
-// A file's MediaError says nothing of a refusal: its address answers why (403 over Funnel, 410 gone, 503 unreadable on the PC, 401 signed
-// out), and the sentence goes with the code. Any other answer (a 404: the play is no longer current) keeps the browser's own code.
-const FunnelCode = 1002;
+// A file's MediaError says nothing of a refusal: its address answers why (410 gone, 503 unreadable on the PC, 401 signed out), and the
+// sentence goes with the code. Any other answer (a 404: the play is no longer current) keeps the browser's own code.
 const GoneCode = 1001;
 const NoPictureCode = 1000;
 const ReadCode = 2;
@@ -147,12 +146,12 @@ async function fileError(message) {
     try {
       const r = await fetch(fileSrc, { method: 'HEAD', credentials: 'same-origin', cache: 'no-store' });
       if (r.status === 401) { location.reload(); return; }   // signed out: the reload signs in again
-      if (r.status === 403) code = FunnelCode; else if (r.status === 410) code = GoneCode; else if (r.status === 503) code = ReadCode;
+      if (r.status === 410) code = GoneCode; else if (r.status === 503) code = ReadCode;
     } catch { /* offline: the browser's own code stands */ }
   }
   if (!active.isFile || message.file !== currentToken) return;   // another load meanwhile
   if (fw) {
-    fileSaid = code === FunnelCode ? fw.funnelOff : code === GoneCode ? fw.gone : code === NoPictureCode ? fw.noPicture : fw.failed;
+    fileSaid = code === GoneCode ? fw.gone : code === NoPictureCode ? fw.noPicture : fw.failed;
     Neon.say(fileSaid);
   }
   send(Object.assign({}, message, { code }));

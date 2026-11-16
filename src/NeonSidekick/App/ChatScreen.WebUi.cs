@@ -142,8 +142,6 @@ internal sealed partial class ChatScreen
             // The Chat tab's voice (2026-11-13, the webui-voice plan): ChatScreen.WebVoice.cs.
             Voice = this,
             VoiceSnapshot = WebVoiceSnapshot,
-            // A video file over Tailscale Funnel (2026-11-12, the video-files plan), per request.
-            VideoFilesOverFunnelNow = () => _effective().WebUiVideoFilesOverFunnel,
             // The pages wear the profile's theme (2026-10-15), per request.
             ProfileTheme = () => _effective().WebUiProfileTheme,
             // Each tab only while its controls are on (later on 2026-10-15), per request.
@@ -178,6 +176,18 @@ internal sealed partial class ChatScreen
             // The queue held after a cancel (2026-10-17): the page's lines from before it wait for the hold to lift, its Resume lifts it.
             CancelHoldNow = () => _queue.Held,
             QueueResume = WebResumeQueue,
+            // The 🗂️ sheet's Queue tab (2026-11-16, #42): ChatScreen.WebQueue.cs, on Kestrel threads, never printing.
+            QueueNow = WebQueueNow,
+            QueueRemove = WebRemoveQueued,
+            QueueSend = WebSendQueued,
+            QueueModeSet = WebSetQueueMode,
+            QueueCancelSet = WebSetQueueCancelMode,
+            // Its Sessions tab (2026-11-16, #40): ChatScreen.WebSessions.cs, the same rules.
+            SessionsNow = WebSessionsNow,
+            SessionResume = WebResumeSession,
+            // Its Files tab (2026-11-16, #41): ChatScreen.WebFiles.cs.
+            FilesNow = WebFilesNow,
+            MadeFileOf = WebMadeFileOf,
             // The Video tab's saved list (later on 2026-10-16): ChatScreen.WebSaved.cs; none without a web player.
             SavedVideosNow = () => _webVideo is null ? null : WebSavedNow(),
             SavedPlay = WebPlaySaved,
@@ -730,11 +740,11 @@ internal sealed partial class ChatScreen
             _settings.ProfileName,
             effective.ModelAvatar ?? "",
             effective.UserAvatar ?? "",
-            ModelLabel(_session.Endpoint?.ModelId),
+            PageModelLabel(),
             working,
             loading,
             _plan.Active,
-            _sessionTitle?.Title ?? "",
+            PasteBlocks.WithoutSavedPaths(_sessionTitle?.Title ?? ""),   // an older title may hold a saved picture's path (2026-11-16)
             _webUi.Waiting,
             WaitingAtPc(working),
             WebUiText.Version,
@@ -758,7 +768,11 @@ internal sealed partial class ChatScreen
             BotResume: WebBotResumeOffered,
             // The Chat tab's 🎤 and 🔊 (2026-11-13, the webui-voice plan): null when not offered, "" when ready, else why not.
             VoiceListen: WebVoiceListenState(effective),
-            VoiceSpeak: WebVoiceSpeakState(effective));
+            VoiceSpeak: WebVoiceSpeakState(effective),
+            // The 🗂️ sheet's Queue tab re-reads when this moves (2026-11-16, #42).
+            QueueTag: WebQueueTagNow(),
+            // Its Files tab re-reads when this moves (2026-11-16, #41).
+            FilesTag: WebFilesTagNow());
     }
 
     /// <summary>
@@ -917,18 +931,18 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// A page's 👥 on its way (2026-11-14): set as its line is queued, cleared once that line has run (or was dropped with the page's lines,
-    /// or failed to queue). A second tap meanwhile — or one in the moment before the chat's flag flips — would queue a resume that waited for
+    /// One page chord waits at a time (2026-11-14 for the 👥; since 2026-11-16 a session resume too, #40, sharing it: any chord's end frees it):
+    /// set as its line is queued, cleared once that line has run (or was dropped with the page's lines, or failed to queue). A second tap meanwhile — or one in the moment before the chat's flag flips — would queue a resume that waited for
     /// the chat's end and carried it on again. Interlocked: the taps come on Kestrel's threads.
     /// </summary>
-    private int _webResumeInFlight;
+    private int _webChordInFlight;
 
     /// <summary>
     /// Whether the page's status row offers 👥 (2026-11-14, the user's ask: the PC's 👥 on the page): the PC's own (<see cref="BotChatResumable"/>),
     /// no 👥 of the page's already on its way, and <c>/botchat --resume</c> allowed from the page (not under <i>Web UI commands</i> off). Any thread.
     /// </summary>
     private bool WebBotResumeOffered =>
-        BotChatResumable && Volatile.Read(ref _webResumeInFlight) == 0
+        BotChatResumable && Volatile.Read(ref _webChordInFlight) == 0
         && WebCommands.Check(SlashCommand.BotChat, BotChat.ResumeSwitch, BotChat.ResumeLine, WebCommandSettingsNow()).Allowed;
 
     /// <summary>
@@ -939,7 +953,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     private WebReply WebResumeBot(WebBotResume request, IPAddress? remote)
     {
-        if (_botChatRunning || Volatile.Read(ref _webResumeInFlight) != 0)
+        if (_botChatRunning || Volatile.Read(ref _webChordInFlight) != 0)
         {
             return WebReply.Ok;
         }
@@ -960,7 +974,7 @@ internal sealed partial class ChatScreen
             return new WebReply(WebOutcome.Refused, verdict.Reason);
         }
 
-        if (Interlocked.CompareExchange(ref _webResumeInFlight, 1, 0) != 0)
+        if (Interlocked.CompareExchange(ref _webChordInFlight, 1, 0) != 0)
         {
             return WebReply.Ok;   // a tap on another thread got there first
         }
@@ -968,7 +982,7 @@ internal sealed partial class ChatScreen
         var queued = _webUi.QueueChord(BotChat.ResumeLine, remote, request.Page, request.Speak);
         if (queued.Outcome != WebOutcome.Ok)
         {
-            Interlocked.Exchange(ref _webResumeInFlight, 0);
+            Interlocked.Exchange(ref _webChordInFlight, 0);
             return queued;
         }
 
@@ -1010,7 +1024,9 @@ internal sealed partial class ChatScreen
             return null;
         }
 
-        return WebLine(line.Text, line.AsText, line.Remote, line.Page is { } page ? new WebPageRef(page, line.Speak) : null, line.Chord);
+        var built = WebLine(line.Text, line.AsText, line.Remote, line.Page is { } page ? new WebPageRef(page, line.Speak) : null, line.Chord) with { WebKey = line.Key, WebProfile = line.Profile };
+        // The phone's pictures and PDFs (2026-11-16, plan lucid-roaming-lantern #39): saved and attached as the line goes; nothing left, the next line.
+        return line.Attachments is { Count: > 0 } attachments ? PhoneLine(built, attachments, line.Page) ?? TakeWebLine() : built;
     }
 
     /// <summary>
@@ -1023,8 +1039,11 @@ internal sealed partial class ChatScreen
         return new SubmittedLine(text, text.TrimEnd(), [], label) { FromWeb = true, AsText = asText, Remote = remote, WebPage = page?.Page, Speak = page?.Speak == true, Chord = chord };
     }
 
-    /// <summary>A message from the page, withdrawn before the model answered: back to the page's draft.</summary>
-    private void WithdrawWebLine(string text) => _webUi.Withdrawn(text);
+    /// <summary>
+    /// A message from the page, withdrawn before the model answered: back to the page's draft, its attachments (2026-11-16, #39) held again under
+    /// their own page, their saved files kept.
+    /// </summary>
+    private void WithdrawWebLine(string text, IReadOnlyList<WebHeldAttachment>? attachments = null) => _webUi.Withdrawn(text, attachments);
 
     // ── /webui ─────────────────────────────────────────────────────────────
 

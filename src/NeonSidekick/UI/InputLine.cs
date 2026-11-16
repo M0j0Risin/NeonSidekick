@@ -803,7 +803,8 @@ public sealed partial class InputLine
     {
         ArgumentNullException.ThrowIfNull(line);
         beforeCommit?.Invoke();
-        _pane.CommitInput(_pastes.Display(line.Draft), PreviewText(_pastes.Previews(line.Draft, pastePreview)));
+        // A phone line's own › row (2026-11-16, #39): its labels and its typed text, since its draft holds no paste token for the photo.
+        _pane.CommitInput(line.Shown ?? _pastes.Display(line.Draft), line.Shown is null ? PreviewText(_pastes.Previews(line.Draft, pastePreview)) : "");
         return new InputResult.Submitted(line.Text, line.Images);
     }
 

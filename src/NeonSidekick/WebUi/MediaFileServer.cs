@@ -114,7 +114,17 @@ internal static class MediaFileServer
     /// <paramref name="path"/> served as <paramref name="name"/> (the name only for the browser's display): the range asked, or the whole
     /// file, or the 304, 410 (not found), 503 (unreadable: locked, denied, a dead share) or 416. <paramref name="stopping"/> is the host's stop.
     /// </summary>
-    public static async Task ServeAsync(HttpContext context, string path, string name, CancellationToken stopping)
+    public static Task ServeAsync(HttpContext context, string path, string name, CancellationToken stopping) => ServeAsync(context, path, name, null, stopping);
+
+    /// <summary>
+    /// A file the model made (2026-11-16, plan lucid-roaming-lantern #41): whole only, <c>Accept-Ranges: none</c> and a <c>Range</c> header
+    /// never read (a viewer told of ranges and answered whole can loop, and an unsatisfiable one would get its 416 first), its type and
+    /// disposition from <see cref="MadeFileTypes"/>, a text's charset read off the file, and the sandbox on all but a PDF.
+    /// </summary>
+    public static Task ServeMadeAsync(HttpContext context, string path, string name, CancellationToken stopping) =>
+        ServeAsync(context, path, name, MadeFileTypes.Of(name), stopping);
+
+    private static async Task ServeAsync(HttpContext context, string path, string name, MadeFileType? made, CancellationToken stopping)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(path);
@@ -123,7 +133,7 @@ internal static class MediaFileServer
         var response = context.Response;
         response.Headers.CacheControl = "private, no-cache";
         response.Headers["Cross-Origin-Resource-Policy"] = "same-origin";
-        response.Headers.AcceptRanges = "bytes";
+        response.Headers.AcceptRanges = made is null ? "bytes" : "none";
         bool head = HttpMethods.IsHead(request.Method);
 
         FileStream stream;
@@ -136,7 +146,7 @@ internal static class MediaFileServer
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            WebFileResponse.Gone(response, WebUiText.VideoFileGoneDebug(name, e.Message), WebFileResponse.StatusFor(e));
+            WebFileResponse.Gone(response, GoneLine(made, name, e.Message), WebFileResponse.StatusFor(e));
             return;
         }
 
@@ -149,12 +159,30 @@ internal static class MediaFileServer
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
-                WebFileResponse.Gone(response, WebUiText.VideoFileGoneDebug(name, e.Message), WebFileResponse.StatusFor(e));
+                WebFileResponse.Gone(response, GoneLine(made, name, e.Message), WebFileResponse.StatusFor(e));
                 return;
             }
 
             if (WebFileResponse.NotModified(context, tag))
             {
+                return;
+            }
+
+            if (made is not null)
+            {
+                if (!MadeHeaders(response, stream, name, made))
+                {
+                    return;
+                }
+
+                response.ContentLength = length;
+                if (head || length == 0)
+                {
+                    return;
+                }
+
+                using var whole = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, stopping);
+                await CopyAsync(context, stream, 0, length, name, whole.Token).ConfigureAwait(false);
                 return;
             }
 
@@ -188,6 +216,58 @@ internal static class MediaFileServer
             using var mine = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, stopping);
             await CopyAsync(context, stream, start, count, name, mine.Token).ConfigureAwait(false);
         }
+    }
+
+    private static string GoneLine(MadeFileType? made, string name, string why) =>
+        made is null ? WebUiText.VideoFileGoneDebug(name, why) : WebUiText.MadeFileGoneDebug(name, why);
+
+    /// <summary>
+    /// A made file's type, disposition and policy: a text's charset read off the open file (UTF-32 goes as a download), Office files and
+    /// anything unlisted as attachments, and the page's policy narrowed by <c>sandbox</c> for every kind but a PDF. False: unreadable (a 503).
+    /// </summary>
+    private static bool MadeHeaders(HttpResponse response, FileStream stream, string name, MadeFileType made)
+    {
+        string type = made.ContentType;
+        bool inline = made.Inline;
+        if (made.Text)
+        {
+            string? charset;
+            try
+            {
+                charset = MadeFileTypes.Charset(stream);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                WebFileResponse.Gone(response, WebUiText.MadeFileGoneDebug(name, e.Message), WebFileResponse.StatusFor(e));
+                return false;
+            }
+
+            if (charset is null)
+            {
+                (type, inline) = (MadeFileTypes.Bytes, false);
+            }
+            else
+            {
+                type += "; charset=" + charset;
+            }
+        }
+
+        response.ContentType = type;
+        if (inline)
+        {
+            WebFileResponse.Inline(response, name);
+        }
+        else
+        {
+            WebFileResponse.Attachment(response, name);
+        }
+
+        if (made.Sandboxed)
+        {
+            response.Headers.ContentSecurityPolicy = WebUiHost.ContentSecurityPolicy + "; sandbox";
+        }
+
+        return true;
     }
 
     // Plain digits only (no sign, no blanks inside), as the RFC's range numbers are.

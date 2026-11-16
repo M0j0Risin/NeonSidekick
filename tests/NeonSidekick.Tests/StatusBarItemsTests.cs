@@ -76,7 +76,7 @@ public sealed class StatusBarItemsTests
         Assert.Equal("Status, Queued, Timers, Reading, Model | Usage", StatusBarItems.Value(null, null, ["usage"]));
         Assert.Equal("| Status, Usage", StatusBarItems.Value(["usage", "status"], null, ["usage", "status"]));
         Assert.Equal("[[x]] Status             " + Theme.DimMarkup("status icons: 🔊 🎤 👂 ✋, 🧠, 🏷️…"), StatusBarItems.Label("status", true));
-        Assert.Equal("[[ ]] Model              " + Theme.DimMarkup("the model's name and its reasoning mark"), StatusBarItems.Label("model", false));
+        Assert.Equal("[[ ]] Model              " + Theme.DimMarkup("the model's name and its reasoning mark, or 💤 while unloaded"), StatusBarItems.Label("model", false));
         Assert.Equal("[[ ]] Working directory  " + Theme.DimMarkup("the working directory, as the tool bar shows it (/cwd browse)"), StatusBarItems.Label("cwd", false));
         Assert.Equal(["Status", "Spinner", "Queued", "Timers", "Reading", "Usage", "Model", "Working directory"], StatusBarItems.Names.Select(StatusBarItems.Title));
     }

@@ -108,7 +108,7 @@ public static class VideoText
 
     /// <summary>
     /// A video file's error as a sentence (2026-11-12): <c>MediaError</c>'s codes (1 aborted, 2 network, 3 decode, 4 not supported) and
-    /// the app's <see cref="VideoFile.GoneCode"/> and <see cref="VideoFile.FunnelCode"/>. Each but those two offers the default app,
+    /// the app's <see cref="VideoFile.GoneCode"/>. Each but that one offers the default app,
     /// unless <paramref name="wayOut"/> is false (2026-11-13: the Home card on the phone, where the PC's default app is no way out).
     /// Read by the snapshot's kind: YouTube's codes overlap these.
     /// </summary>
@@ -123,7 +123,6 @@ public static class VideoText
             3 => $"{file} could not be decoded: the file may be damaged, or its codec is one the player can't show.{own}",
             4 => $"{file} is in a format the player can't play (its codec or its container: an HEVC video or an MKV, say).{own}",
             VideoFile.GoneCode => $"{file} is no longer there: it was moved or deleted.",
-            VideoFile.FunnelCode => $"{file} can't play on the Web UI page: it is reached over Tailscale Funnel, and Web UI video files over Funnel is off.",
             _ => $"{file} could not play (error {code?.ToString(CultureInfo.InvariantCulture) ?? "unknown"}).{own}",
         };
     }

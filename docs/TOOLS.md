@@ -252,7 +252,7 @@ Under *Video tools* (`/tools` › Files › Video); off in a new profile. They p
 | `video_control` | `action, value?` | `play`, `pause`, `seek`, `forward` / `back` (10 s by default), `volume` (0–100), `mute`, `unmute`, `close` or `status`. |
 
 * **The default app:** a file goes there when no window can play it; the app can't see or control it there.
-* **The Web UI** serves only the file playing, to a signed-in page; over Tailscale Funnel see [*Web UI video files over Funnel*](SETTINGS.md#web-ui).
+* **The Web UI** streams only the video playing, to a signed-in page, over Tailscale Funnel too; a file the model made opens from the page's 🗂️ sheet ([Files](INTERFACE.md#sessions-files-and-queue)).
 * `/view clip.mp4` and `/video` play a file whatever *Video tools* says ([COMMANDS.md](COMMANDS.md#pictures-camera-and-screen)).
 * A file's own title (its metadata) reaches the model fenced (`⟪ ⟫`); `/video` shows it bare.
 

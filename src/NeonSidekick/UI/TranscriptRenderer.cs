@@ -424,6 +424,12 @@ public sealed class TranscriptRenderer : INoticeSink
         Line(WarningMarkup(text), Theme.ColorMarkup(Theme.Warn, text));
     }
 
+    /// <summary>
+    /// A warning for the PC alone (2026-11-16, plan lucid-roaming-lantern #39): a phone attachment's failed save names the PC's path, which the page
+    /// never reads; the page gets its own short words instead.
+    /// </summary>
+    public void WarningAtPc(string text) => Line(WarningMarkup(text), Theme.ColorMarkup(Theme.Warn, text));
+
     public void Error(string text)
     {
         Feed?.Add(WebUi.FeedKind.Error, text);

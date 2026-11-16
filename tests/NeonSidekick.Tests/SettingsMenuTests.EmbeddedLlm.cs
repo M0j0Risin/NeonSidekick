@@ -25,7 +25,7 @@ public partial class SettingsMenuTests
     private static int NormalRow(string id) => EmbeddedModelCatalog.Models.Where(m => !m.Uncensored).ToList().FindIndex(m => m.Id == id);
 
     [Fact]
-    public void TheTab_IsAfterHttp_WithItsNineRows_AllButTheFilterTypeReconnecting()
+    public void TheTab_IsAfterHttp_WithItsRows_AllButTheDownloadModeAndIdleUnloadReconnecting()
     {
         int tab = (int)SettingsTab.Embedded;
         Assert.Equal("Embedded", SettingsMenu.TabTitles[tab]);
@@ -36,16 +36,19 @@ public partial class SettingsMenuTests
         Assert.Equal("Docker", SettingsMenu.TabTitles[tab + 1]);   // the Docker servers' tab next to it (2026-10-02, the user's ask)
         Assert.Equal("Anthropic", SettingsMenu.TabTitles[tab + 2]);   // the Anthropic ("Claude" until 2026-10-04) and OpenAI tabs after Docker since 2026-10-03
         // The switch first and MTP last (2026-09-29, the user's asks); the VRAM budget under the GPU layers (later that day), the HF
-        // download type under the catalog (2026-09-30; under the filter type until it went, 2026-10-02), VRAM only under the budget (2026-10-01).
-        Assert.Equal([SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedModels, SettingsField.EmbeddedHfDownloadType, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedVramOnly, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter], SettingsMenu.TabFields[tab]);
-        var reconnecting = SettingsMenu.TabFields[tab].Where(f => f is not SettingsField.EmbeddedHfDownloadType).ToList();
+        // download type under the catalog (2026-09-30; under the filter type until it went, 2026-10-02), VRAM only under the budget (2026-10-01),
+        // the idle unload under the download mode (2026-11-16, plan lucid-roaming-lantern #44).
+        Assert.Equal([SettingsField.EmbeddedLlmServer, SettingsField.EmbeddedModels, SettingsField.EmbeddedHfDownloadType, SettingsField.EmbeddedIdleUnloadMinutes, SettingsField.EmbeddedBackend, SettingsField.EmbeddedContextSize, SettingsField.EmbeddedGpuLayers, SettingsField.EmbeddedVramBudget, SettingsField.EmbeddedVramOnly, SettingsField.EmbeddedVision, SettingsField.EmbeddedDrafter], SettingsMenu.TabFields[tab]);
+        var reconnecting = SettingsMenu.TabFields[tab].Where(f => f is not (SettingsField.EmbeddedHfDownloadType or SettingsField.EmbeddedIdleUnloadMinutes)).ToList();
         Assert.All(reconnecting, f => Assert.True(SettingsMenu.IsLlmField(f), f.ToString()));
         Assert.All(reconnecting, f => Assert.True(SettingsMenu.RefusedMidTurn(f), f.ToString()));
         Assert.False(SettingsMenu.IsLlmField(SettingsField.EmbeddedHfDownloadType));   // read as each download starts
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.EmbeddedHfDownloadType));
+        Assert.False(SettingsMenu.IsLlmField(SettingsField.EmbeddedIdleUnloadMinutes));   // read at each arming
+        Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.EmbeddedIdleUnloadMinutes));
         Assert.True(SettingsMenu.IsToggle(SettingsField.EmbeddedVision) && SettingsMenu.IsToggle(SettingsField.EmbeddedLlmServer) && SettingsMenu.IsToggle(SettingsField.EmbeddedDrafter) && SettingsMenu.IsToggle(SettingsField.EmbeddedVramOnly));
         Assert.False(SettingsMenu.IsToggle(SettingsField.EmbeddedBackend));
-        Assert.Equal(["Embedded servers enabled", "Embedded models", "Embedded download mode", "Embedded backend", "Embedded context length", "Embedded GPU layers", "Embedded VRAM budget (%)", "Embedded VRAM only", "Embedded vision", "Embedded drafter"], SettingsMenu.TabFields[tab].Select(SettingsMenu.FieldName));
+        Assert.Equal(["Embedded servers enabled", "Embedded models", "Embedded download mode", "Embedded idle unload (min)", "Embedded backend", "Embedded context length", "Embedded GPU layers", "Embedded VRAM budget (%)", "Embedded VRAM only", "Embedded vision", "Embedded drafter"], SettingsMenu.TabFields[tab].Select(SettingsMenu.FieldName));
         var data = new AppSettingsData();
         Assert.True(!data.EmbeddedLlmServer && data.EmbeddedDrafter);   // the switch off by default since 2026-10-21 (the user's call), the drafter on
         Assert.Equal(("off", "on"), (SettingsMenu.FieldValue(SettingsField.EmbeddedLlmServer, data, "C:\\p"), SettingsMenu.FieldValue(SettingsField.EmbeddedDrafter, data, "C:\\p")));
@@ -462,7 +465,15 @@ public partial class SettingsMenuTests
     {
         var (menu, pane, _) = EmbeddedPane();
         GoTo(SettingsTab.Embedded);
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter); // Embedded context length (the switch first since 2026-09-29, the HF download type above since 2026-09-30; the filter type from later on 2026-09-29 to 2026-10-02)
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // Embedded idle unload (min) (2026-11-16, #44)
+        Backspace(10);
+        _console.Input.PushText("1441");
+        Push(Keys.Enter);                       // refused
+        Push(Keys.Enter);
+        Backspace(10);
+        _console.Input.PushText("20");
+        Push(Keys.Enter);
+        Push(Keys.Down, Keys.Down, Keys.Enter); // Embedded context length (the switch first since 2026-09-29, the HF download type above since 2026-09-30; the filter type from later on 2026-09-29 to 2026-10-02)
         Backspace(10);
         _console.Input.PushText("100");
         Push(Keys.Enter);                       // refused
@@ -487,6 +498,10 @@ public partial class SettingsMenuTests
         Assert.Equal(SettingsChanges.Llm, await menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal(16_384, _settings.Current.EmbeddedContextSize);
+        Assert.Equal(20, _settings.Current.EmbeddedIdleUnloadMinutes);
+        Assert.Equal("20", SettingsMenu.EditableValue(SettingsField.EmbeddedIdleUnloadMinutes, _settings.Current));
+        Assert.Contains("Embedded idle unload (min) " + SettingsMenu.EmbeddedIdleUnloadMinutesRangeError + "; keeping 0.", Output);
+        Assert.Equal("must be 0 (off) or 1 to 1440 minutes", SettingsMenu.EmbeddedIdleUnloadMinutesRangeError);
         Assert.Equal("all", _settings.Current.EmbeddedGpuLayers);
         Assert.Equal(93, _settings.Current.EmbeddedVramBudget);
         Assert.Contains("Embedded context length " + EmbeddedContextSize.Error + "; keeping 0.", Output);   // fit, the default since later on 2026-09-29
@@ -499,7 +514,7 @@ public partial class SettingsMenuTests
     {
         var (menu, pane, _) = EmbeddedPane();
         GoTo(SettingsTab.Embedded);
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter); // Embedded backend: the page opens on auto
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter); // Embedded backend: the page opens on auto (the idle unload above it since 2026-11-16)
         bool mac = OperatingSystem.IsMacOS();   // a Mac's picker is auto and metal (2026-10-07)
         Push(mac ? new[] { Keys.Down, Keys.Enter } : new[] { Keys.Down, Keys.Down, Keys.Enter }); // vulkan, or metal
         Push(Keys.Escape);

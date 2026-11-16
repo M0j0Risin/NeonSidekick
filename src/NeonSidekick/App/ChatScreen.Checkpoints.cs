@@ -290,6 +290,7 @@ internal sealed partial class ChatScreen
             return true;
         }), KeySource.IsTurnCancel, cancellationToken).ConfigureAwait(false);
         report ??= new RestoreReport([], Stopped: true, []);
+        _madeFiles.Touch();   // files back or gone show or hide the Files tab's rows (2026-11-16, #41)
         DiagnosticLog.Info(CheckpointStore.Category, "Restore: " + FileRestore.Summary(report) + (report.Stopped ? " (stopped)" : ""));
         return report;
     }

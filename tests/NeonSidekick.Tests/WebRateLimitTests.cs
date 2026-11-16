@@ -78,6 +78,10 @@ public sealed class WebRateLimitTests
     [InlineData("/api/history/clear", WebRateBucket.Act)]
     [InlineData("/api/learn/cancel", WebRateBucket.Act)]   // the status row's 🧠 (2026-10-17)
     [InlineData("/api/queue/resume", WebRateBucket.Act)]   // the held queue's Resume (2026-10-17)
+    [InlineData("/api/queue/remove", WebRateBucket.Act)]   // the 🗂️ sheet's Queue tab (2026-11-16)
+    [InlineData("/api/queue/send", WebRateBucket.Act)]
+    [InlineData("/api/queue/mode", WebRateBucket.Act)]
+    [InlineData("/api/queue/cancel", WebRateBucket.Act)]
     [InlineData("/api/home/say", WebRateBucket.Say)]
     [InlineData("/signin", WebRateBucket.SignIn)]
     public void TheLimitedPosts_CountAgainstTheirKind(string path, WebRateBucket bucket)
@@ -95,6 +99,7 @@ public sealed class WebRateLimitTests
     [InlineData("/api/shopping", false)]
     [InlineData("/api/shopping/bought", false)]
     [InlineData("/api/shopping/places", false)]
+    [InlineData("/api/queue", false)]   // the Queue tab's read (2026-11-16)
     public void EverythingElse_IsNotLimited(string path, bool post)
     {
         Assert.Null(WebRateLimit.BucketOf(path, post));
@@ -158,6 +163,24 @@ public sealed class WebRateLimitTests
         Assert.Null(WebRateLimit.BucketOf("/signin", post: false));   // a HEAD spends nothing
         Assert.Null(WebRateLimit.BucketOf("/api/shopping", post: false, get: true));
         Assert.Null(WebRateLimit.BucketOf("/", post: false, get: true));
+    }
+
+    /// <summary>A phone's uploads (2026-11-16, plan lucid-roaming-lantern #39): four at once, then one each 5 s; the route spends it itself.</summary>
+    [Fact]
+    public void Uploads_AreFourAtOnce_ThenOneEachFiveSeconds()
+    {
+        var limit = new WebRateLimit(_time);
+        for (int i = 0; i < 4; i++)
+        {
+            Assert.True(limit.TryTake(Phone, WebRateBucket.Attach, out _));
+        }
+
+        Assert.False(limit.TryTake(Phone, WebRateBucket.Attach, out var retry));
+        Assert.Equal(TimeSpan.FromSeconds(5), retry);
+        _time.Advance(TimeSpan.FromSeconds(5));
+        Assert.True(limit.TryTake(Phone, WebRateBucket.Attach, out _));
+        Assert.Null(WebRateLimit.BucketOf(WebUiHost.AttachPath, post: true));
+        Assert.Equal(WebRateBucket.Act, WebRateLimit.BucketOf(WebUiHost.AttachForgetPath, post: true));
     }
 
     [Fact]

@@ -15,12 +15,16 @@ namespace NeonSidekick.WebUi;
 /// </summary>
 public sealed record WebPictureSource(string Name, string? FullPath, byte[]? Bytes, string MediaType);
 
-/// <summary>The three sizes a picture is served at: the transcript's grid, the overlay's, and the original.</summary>
+/// <summary>
+/// The three sizes a picture is served at: the transcript's grid, the overlay's, and the original; and a phone upload's chip (2026-11-16, plan
+/// lucid-roaming-lantern #39), encoded once at upload and never served (<see cref="PictureServer.SizeOf"/> doesn't know it).
+/// </summary>
 public enum PictureSize
 {
     Thumb,
     Mid,
     Full,
+    Chip,
 }
 
 /// <summary>
@@ -38,6 +42,9 @@ internal sealed class PictureServer
 {
     /// <summary>The grid's longest side.</summary>
     public const int ThumbSide = 640;
+
+    /// <summary>A phone upload's chip's longest side (2026-11-16, #39): a few KB, riding in every chips event and snapshot.</summary>
+    public const int ChipSide = 96;
 
     /// <summary>The overlay's longest side for a picture decoded from its file.</summary>
     public const int MidSide = 2048;
@@ -346,6 +353,7 @@ internal sealed class PictureServer
             {
                 PictureSize.Thumb => ThumbSide,
                 PictureSize.Mid => MidSide,
+                PictureSize.Chip => ChipSide,
                 _ => Math.Max(frame.Width, frame.Height),
             };
             string type = frame.HasAlpha ? "image/png" : "image/jpeg";

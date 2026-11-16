@@ -1689,6 +1689,13 @@ public sealed class Assistant
     public Files.FileJournal? Journal { get; set; }
 
     /// <summary>
+    /// The conversation's made files (2026-11-16, plan lucid-roaming-lantern #41, the Web UI's Files tab): entered around each tool call beside
+    /// <see cref="Journal"/>, whatever the checkpoint setting, with the turn's user message. Set by the screen for its main Assistant's turns
+    /// (Ralph's and the audit's too), never a bot's or an advisor's; null records nothing.
+    /// </summary>
+    public Files.MadeFiles? MadeFiles { get; set; }
+
+    /// <summary>
     /// The <c>/undo</c> note the next turn carries ahead of the user's text (2026-10-28, the checkpoints plan): taken, and cleared, as the turn
     /// adds its message; null for none.
     /// </summary>
@@ -3338,6 +3345,7 @@ public sealed class Assistant
         ToolInvocation answer;
         using (Files.WriteGuard.Watch(slot))
         using (Files.FileJournal.Enter(journal))
+        using (Files.MadeFiles.Enter(MadeFiles, LastUserMessage))
         {
             answer = await InvokeToolWithDiffAsync(_tools, call, cancellationToken).ConfigureAwait(false);
         }
@@ -3360,6 +3368,7 @@ public sealed class Assistant
 
         using (Files.WriteGuard.AllowProjectFile())
         using (Files.FileJournal.Enter(journal))
+        using (Files.MadeFiles.Enter(MadeFiles, LastUserMessage))
         {
             return await InvokeToolWithDiffAsync(_tools, call, cancellationToken).ConfigureAwait(false);
         }

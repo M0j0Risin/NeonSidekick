@@ -242,7 +242,7 @@ internal sealed partial class ChatScreen
         }
 
         bool first = _sessionId is null;
-        _sessionId ??= _sessions.Begin(SessionText.FirstLineTitle(line), _session.Endpoint?.ModelId ?? "");
+        _sessionId ??= _sessions.Begin(SessionText.FirstLineTitle(UI.PasteBlocks.WithoutSavedPaths(line)), _session.Endpoint?.ModelId ?? "");
         if (_sessionId is not { } id)
         {
             return;
@@ -262,7 +262,7 @@ internal sealed partial class ChatScreen
     {
         if (_sessionId is { } id)
         {
-            _sessions.SaveHistory(id, SessionHistory.ToJson(_session.History.Messages, _plan.ToStored(), _executingPlan, _claudeSessionId, _effective().SessionSaveThinking, _claudeServerSessionId, _effective().CameraKeepInSessions, _effective().ScreenKeepInSessions, _advisorThreads.Snapshot(), _advisorThreads.Sessions(), _markName));
+            _sessions.SaveHistory(id, SessionHistory.ToJson(_session.History.Messages, _plan.ToStored(), _executingPlan, _claudeSessionId, _effective().SessionSaveThinking, _claudeServerSessionId, _effective().CameraKeepInSessions, _effective().ScreenKeepInSessions, _advisorThreads.Snapshot(), _advisorThreads.Sessions(), _markName, _madeFiles.Saved(_session.History.Messages)));
         }
     }
 }

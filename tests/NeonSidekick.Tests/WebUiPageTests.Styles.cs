@@ -10,7 +10,7 @@ namespace NeonSidekick.Tests;
 /// </summary>
 public sealed partial class WebUiPageTests
 {
-    private const string StyledSheet = ":root { --accent-3: #010203; --user: #040506; --text: #0a0b0c; }\n";
+    private const string StyledSheet = ":root { --accent-3: #010203; --user: #040506; --text: #0a0b0c; --line: #0d0e0f; }\n";
 
     private static Task<string> ComputedAsync(HeadlessPage page, string selector, string property) =>
         page.TextAsync("getComputedStyle(document.querySelector('" + selector + "'))." + property);

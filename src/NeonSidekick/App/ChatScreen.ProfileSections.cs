@@ -547,7 +547,8 @@ internal sealed partial class ChatScreen
     /// reasoning, its estimate, the sampling overrides (every model's, a deep copy) and the Hugging Face switch — and the Anthropic and OpenAI
     /// APIs' own rows beyond their switches; later that day (the user's pick) <c>/claude</c>'s four rows. Each name is its settings row's too
     /// (<c>SettingsField</c>), so the done line reads the pane's words. The order each joined in, pinned, as nothing reads it by position.
-    /// 2026-11-10 (the user's ask): <c>LLM one local model</c> and <c>Docker server one at a time</c>, what a connect stops.
+    /// 2026-11-10 (the user's ask): <c>LLM one local model</c> and <c>Docker server one at a time</c>, what a connect stops. 2026-11-16 (plan
+    /// lucid-roaming-lantern #44): <c>Embedded idle unload (min)</c>, with the embedded tuning.
     /// </summary>
     public static readonly IReadOnlyDictionary<ProfileSection, IReadOnlyList<(string Name, Action<AppSettingsData, AppSettingsData> Copy)>> ProfileSettingGroups =
         new Dictionary<ProfileSection, IReadOnlyList<(string Name, Action<AppSettingsData, AppSettingsData> Copy)>>
@@ -590,6 +591,7 @@ internal sealed partial class ChatScreen
                 (nameof(AppSettingsData.OpenAIApiProject), (from, to) => to.OpenAIApiProject = from.OpenAIApiProject),
                 (nameof(AppSettingsData.LlmOneLocalModel), (from, to) => to.LlmOneLocalModel = from.LlmOneLocalModel),
                 (nameof(AppSettingsData.DockerServerOneAtATime), (from, to) => to.DockerServerOneAtATime = from.DockerServerOneAtATime),
+                (nameof(AppSettingsData.EmbeddedIdleUnloadMinutes), (from, to) => to.EmbeddedIdleUnloadMinutes = from.EmbeddedIdleUnloadMinutes),   // 2026-11-16 (#44, the user's pick)
             ],
             [ProfileSection.HomeAssistant] =
             [

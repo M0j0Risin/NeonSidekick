@@ -1,4 +1,5 @@
 using System.Net;
+using NeonSidekick.App;
 
 namespace NeonSidekick.WebUi;
 
@@ -21,6 +22,12 @@ public readonly record struct WebReply(WebOutcome Outcome, string? Message = nul
 {
     public static WebReply Ok => new(WebOutcome.Ok);
 }
+
+/// <summary>
+/// An upload's outcome (2026-11-16, plan lucid-roaming-lantern #39): its HTTP status written directly (400, 409, 415, 422, 507 don't fit
+/// <see cref="WebOutcome"/>, whose catch-all would make a new value a 429), the refusal's words, and the chip on a 200.
+/// </summary>
+public readonly record struct WebAttachReply(int Status, string? Message, WebChip? Chip);
 
 /// <summary>
 /// The Home tab's side of the app (2026-10-15, the plan's Part D): called on Kestrel threads, never waiting on the screen; the screen implements it.
@@ -206,6 +213,45 @@ public interface IWebUiBackend
     /// <summary>The queue held after a cancel released from the page's banner (2026-10-17); NotFound without a screen.</summary>
     WebReply ResumeQueue(IPAddress? remote) => new(WebOutcome.NotFound);
 
+    /// <summary>The 🗂️ sheet's Queue tab (2026-11-16): the PC's queue and the pages' lines, with the modes; null without a screen (a 404). Reads only.</summary>
+    WebQueueView? Queue() => null;
+
+    /// <summary>A line taken back from the Queue tab: a page's by key (into the drafts), a PC one by index and label; Conflict when it is no longer there.</summary>
+    WebReply RemoveQueued(WebQueueRemoveRequest request, IPAddress? remote) => new(WebOutcome.NotFound);
+
+    /// <summary>The Queue tab's ➤ Send now: the front PC line sent next, as the queue pane's ➤; Conflict when there is none or the queue sends itself.</summary>
+    WebReply SendQueued(IPAddress? remote) => new(WebOutcome.NotFound);
+
+    /// <summary>The Queue tab's <i>Queue mode</i> choice, saved as the PC's settings row saves it.</summary>
+    WebReply SetQueueMode(Queueing mode, IPAddress? remote) => new(WebOutcome.NotFound);
+
+    /// <summary>The Queue tab's <i>Queue cancel mode</i> choice, saved as the PC's settings row saves it.</summary>
+    WebReply SetQueueCancelMode(QueueCancel mode, IPAddress? remote) => new(WebOutcome.NotFound);
+
+    /// <summary>The 🗂️ sheet's Sessions tab (2026-11-16, #40): the stored sessions, filtered and searched by <paramref name="query"/>; null without a screen (a 404). Reads only.</summary>
+    WebSessionsView? Sessions(string? query) => null;
+
+    /// <summary>A session resumed from the Sessions tab: queued as the page's chord <c>/sessions &lt;id&gt;</c>; Conflict when it can't be now.</summary>
+    WebReply ResumeSession(WebSessionResume request, IPAddress? remote) => new(WebOutcome.NotFound);
+
+    /// <summary>The 🗂️ sheet's Files tab (2026-11-16, #41): the made files still there; null without a screen (a 404). Reads only.</summary>
+    WebFilesView? Files() => null;
+
+    /// <summary>The full path a listed made file's <paramref name="token"/> stands for, past the serve check at this request; null: a 404.</summary>
+    string? MadeFilePath(string token) => null;
+
+    /// <summary>
+    /// The held uploads' epoch (2026-11-16, plan lucid-roaming-lantern #39): read before an upload's body, checked again as it is held, so one
+    /// arriving across a profile switch is dropped, never held under the new profile.
+    /// </summary>
+    long AttachEpoch => 0;
+
+    /// <summary>An upload's body for <paramref name="page"/>, read and held: its chip, or the refusal's status and words. 404 without a screen.</summary>
+    WebAttachReply Attach(string page, byte[] body, long epoch, IPAddress? remote) => new(404, null, null);
+
+    /// <summary>A chip's ✕: the upload let go when it is held under the asking page; an unknown id is a quiet OK.</summary>
+    WebReply ForgetAttachment(WebAttachForget request, IPAddress? remote) => new(WebOutcome.NotFound);
+
     /// <summary>The Home tab (2026-10-15), or null in a build without one.</summary>
     IWebHome? Home { get; }
 
@@ -220,12 +266,6 @@ public interface IWebUiBackend
     /// <c>/api/voice/*</c> with the tab-off 404.
     /// </summary>
     IWebVoice? Voice => null;
-
-    /// <summary>
-    /// Whether a video file may play on the Video tab over Tailscale Funnel (2026-11-12, <i>Web UI video files over Funnel</i>, read per
-    /// request); off by default, and off where nothing says.
-    /// </summary>
-    bool VideoFilesOverFunnel => false;
 
     /// <summary>The Video tab's saved list (later on 2026-10-16), or null where there is none; reads only (a missing title's lookup may start).</summary>
     WebSavedVideos? SavedVideos() => null;

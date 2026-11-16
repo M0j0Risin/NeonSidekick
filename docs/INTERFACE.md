@@ -329,7 +329,7 @@ The keys that apply right now, on a row of their own over the status bar (*Hints
 The row under the hints bar (*Status bar*); [Bar checklists](#bar-checklists) moves and pins its sections.
 
 * **Left by default:** **Status** (🔊 🎤 👂 ✋, 🧠, 🏷️…), **Spinner** (during a reply, with its clock and **Esc to stop**; always on), **Queued**, **Timers** (⏰ countdowns, ⏱️ stopwatches), **Reading** (`/read`, `/echo`) and **Usage** (context and tokens).
-* **Right by default:** **Model** (name and reasoning icon) and **Working directory** (off by default). The busy row keeps the same sides.
+* **Right by default:** **Model** (name and reasoning icon, 💤 while [unloaded when idle](SETTINGS.md#embedded)) and **Working directory** (off by default). The busy row keeps the same sides.
 * **The spinner's word:** `thinking`, `writing` for the text, `writing present_audit` while the model writes a tool call, then the tool's name while it runs.
 * **A call's size**, `(41.0k chars)`, shows past 1,000 characters where the server sends the call as it's written; elsewhere nothing shows until it's done.
 * **A runaway `present_audit` call** (the model repeating itself) is stopped, and the reply ends on an error.
@@ -643,10 +643,12 @@ The page is plain HTTP. Tailscale Serve puts HTTPS in front of it with a real ce
 
 * **Drafts:** the page and the PC never see each other's drafts (one set aside with Esc at the PC included). Sent lines share the profile's message history, so ↑/↓ on either side bring them back.
 * **Sending:** Enter sends on a desktop; on a phone it adds a line (tap ➤). ✕ clears the box and *Undo* puts it back. Stop (■) shows while a reply runs or this page's voice plays on.
+* **📎 Attach:** up to 4 pictures or PDFs go with your next message: 20 MB each, 60 MB in all, counting waiting messages'. An unsent one is let go after 15 minutes.
+* **Attachments are saved** under *Pasted images folder*, a picture's location data stripped. An iPhone's HEIC photo needs Windows' HEIF extension, or *Most Compatible* in its camera settings (Windows only; [MAC.md](MAC.md#what-works)).
 * **The dropdown** completes the `@ # $ % ^ *` mentions and, with *Web UI commands* on, the commands the page may run. `@` lists files only while *File tools* is on. *Web UI connection details* adds a `%` or `*` connection's server and database.
-* **Queued:** a message goes after anything queued at the PC. During a reply it waits (counted in Queued, not in `/queue`) and goes when the reply ends, even under *Queue mode* `manual`. At most 20 wait, up to 48 KB each.
+* **Queued:** a message goes after the PC's queue. During a reply it waits (in Queued and on the 🗂️ [Queue tab](#sessions-files-and-queue), not in `/queue`) and goes when the reply ends, even under *Queue mode* `manual`. At most 20 wait, 48 KB each.
 * **After a cancel** under *Queue cancel mode* `hold`, waiting messages are held under a **Resume** banner; a new message runs first.
-* **Dropped** by `/clear`, `/new`, a resume, a rewind, a profile switch or *Queue cancel mode* `empty`, their text sent back to the page; `/queue clear` leaves them.
+* **Dropped** by `/clear`, `/new`, a resume, a rewind, a profile switch or *Queue cancel mode* `empty`, their text and attachments sent back to the page; `/queue clear` leaves them.
 * **Stop** ends a reply, a compact, a botchat, an advisor, `/imagine`, `/test` or a `/loop`, and stops speech (after the reply, only this page's voice); before the reply's first word it takes the message back. It never stops a model loading (Esc or Ctrl+C at the PC) or your editor under `/draft`.
 
 #### What the page shows
@@ -668,13 +670,22 @@ The page is plain HTTP. Tailscale Serve puts HTTPS in front of it with a real ce
 * **💾 Memory:** ⇪ saves the message line as a memory, as `/remember` does (refused with *Memory mode* off). A tap on a memory edits it or turns it off or on.
 * A 🗑️ and *Clear all* take two taps. The PC's hint row flashes what the page saved, edited or deleted.
 
+#### Sessions, files and queue
+
+* **🗂️** at the top opens a sheet on its last tab; Back or Esc closes it. It opens with *Web UI commands* off too.
+* **Sessions:** the newest 50, the one on screen marked. Two taps on another resume it, as `/sessions <id>` at the PC; it needs *Web UI commands* and waits for the PC to be free. The filter searches titles, and from three letters what was said.
+* **Files:** what the model made in this conversation with the file tools, newest first; a tap opens it. It lists what `/undo` covers ([not covered](TOOLS.md#undoing-file-changes)), and `/clear` or `/new` empties it.
+* **What opens:** PDFs, pictures and text show in the browser; Office files download for Word or Excel; anything else downloads as is.
+* **Queue:** the PC's waiting messages and the page's. Two taps on ✕ take one back (a page's goes to the draft); *Send now* and *Resume* show when they apply, and both queue modes can be set.
+* A tap on the ⏳ lines over the message box opens the Queue tab.
+
 #### Pictures
 
 * **Every picture the chat holds** shows as a thumbnail, even with *Show image thumbnails* off. The model's own `camera_capture` and `screen_capture` pictures show nowhere, as at the PC.
 * **A tap** opens it full screen: swipe or ‹ › to step; *Open original* opens the file itself. On the newest picture it's live, replaced as new ones arrive.
 * **It follows the PC:** moving to a picture at the PC (strip, viewer or thumbnail browser) moves an open full view to it.
 * **🎞️** (while *ComfyUI picture strip* is on and there are pictures) opens a drawer of the strip, the PC's pick outlined; a tap there moves the PC's strip, viewer and thumbnail browser too.
-* **🗑️** (two taps) deletes a picture as the viewer's Del does: to the Recycle bin or Trash under *File deletes to Recycle bin*, else for good. A pasted picture or a camera watch frame has none.
+* **🗑️** (two taps) deletes a picture as the viewer's Del does: to the Recycle bin or Trash under *File deletes to Recycle bin*, else for good. A pasted or phone picture or a camera watch frame has none.
 * A picture is served only while the page's transcript holds it: after `/clear` or a rewind its address answers nothing.
 * **On a Mac**, where the app makes no thumbnails, the page shows the originals scaled down.
 
@@ -701,7 +712,7 @@ With *Web UI voice* on, the Chat tab talks both ways. While the tab is on, the P
 
 #### The PC sees the phone
 
-* Each change made on the page (a shopping line, a tile, a scene, the video remote, a saved video, a prompt…) flashes on the PC's hint row (📱 Kitchen light: toggle). None of it goes in the PC's transcript.
+* Each change made on the page (a shopping line, a tile, a scene, the video remote, a saved video, a prompt…) flashes on the PC's hint row (📱 Kitchen light: toggle). None of it goes in the PC's transcript unless it changed the PC's own messages or settings, which also leave a dim line.
 * **A page's listen** flashes on the hint row too; the PC's push-to-talk is refused until it ends.
 
 ### The Shopping tab
@@ -725,7 +736,7 @@ With *Web UI voice* on, the Chat tab talks both ways. While the tab is on, the P
 * **Reach:** only the home bar's and the rooms' devices can be read or acted on. Unlocking, opening a garage, gate or door, and disarming ask on the page first.
 * **Ask the house:** a line for Home Assistant's Assist (as `/ha say`), its answer under it.
 * **Now playing** (while a video is open, in the PC's window or on the Video tab): its title and a remote.
-* **The PC:** CPU, RAM, GPU, VRAM, the network's rates, and the model's name, server, context window and usage.
+* **The PC:** CPU, RAM, GPU, VRAM, the network's rates, and the model's name (💤 while unloaded), server, context window and usage.
 * **The log:** each action and camera still viewed is logged with the phone's address; what was asked of the house is not. `/ha` typed in Chat follows *Web UI commands*, not this tab's setting.
 
 ### The Video tab
@@ -739,7 +750,7 @@ With *Web UI voice* on, the Chat tab talks both ways. While the tab is on, the P
 * **Which tab plays:** the one shown most recently; a playing tab keeps playing, even hidden. The others offer *Play here*, taking the video over from about 3 seconds back.
 * **Sound:** a phone starts a video only after a tap on it. The tab tries with sound, then muted, else asks for the tap.
 * **Resume:** leaving the tab, locking the phone or a reload stops the video and keeps its place; coming back offers *Resume "title" at 3:12*.
-* **Video files** from the PC play here under *Video files play in* `webui-window`, tagged *file on the PC*. Only that file is served; over Funnel see [*Web UI video files over Funnel*](SETTINGS.md#web-ui).
+* **Video files** from the PC play here under *Video files play in* `webui-window`, tagged *file on the PC*. Only that file is served, to a signed-in page, over Tailscale Funnel too.
 * **A file's keys:** Space or K pause and play, ← → go 5 s, M mutes, F full screen; a focused button keeps its own keys.
 * **On an iPhone** a file's volume is the phone's buttons: Home hides quieter and louder for it; mute works.
 * **Saved videos** (`/youtube list`'s) sit under the player: a tap plays one here, whatever the setting says; ⋯ moves or removes it; ☆ saves the playing video; while a playlist plays, ☆ Save the playlist saves it (▤, resumed at its entry).
@@ -757,16 +768,17 @@ With *Web UI commands* on (off by default), the page sends slash commands too. T
 
 | Kind | Commands | On the page |
 |---|---|---|
-| Run | Your [custom commands](COMMANDS.md#custom-commands), `/update notes`, `/new`, `/clear`, `/splash`, `/compact`, `/plan …` (`/plan ralph` too), `/mark <color>`, `/code-audit …`, `/claude`, `/advisor`, `/help <words>`, `/imagine`, `/loop …`, `/botchat …`, `/learn [<note>]`, `/test …`, `/pdf …`, `/docx …`, `/print <file\|reply>`, `/avatar <emoji>\|clear`, `/remember`, `/timer …`, `/rename <name>`, `/tts on\|off`, `/stt on\|off`, `/memory <mode>`, `/cwd`, `/model <id>`, `/reasoning <level>`, `/ha …` (not `stills` or `camera`), `/docker …`, `/shopping …`, `/prompts list\|save\|remove\|<n>`, `/browser save\|unsave`, `/msgclear`, `/undo [<n>]` | Their lines; the status row shows its spinner while it runs |
+| Run | Your [custom commands](COMMANDS.md#custom-commands), `/update notes`, `/new`, `/clear`, `/splash`, `/compact`, `/plan …` (`/plan ralph` too), `/mark <color>`, `/code-audit …`, `/claude`, `/advisor`, `/help <words>`, `/imagine`, `/loop …`, `/botchat …`, `/learn [<note>]`, `/test …`, `/pdf …`, `/docx …`, `/print <file\|reply>`, `/avatar <emoji>\|clear`, `/remember`, `/timer …`, `/rename <name>`, `/sessions <id>`, `/sessions title <text>`, `/tts on\|off`, `/stt on\|off`, `/memory <mode>`, `/cwd`, `/model <id>`, `/reasoning <level>`, `/ha …` (not `stills` or `camera`), `/docker …`, `/shopping …`, `/prompts list\|save\|remove\|<n>`, `/browser save\|unsave`, `/msgclear`, `/undo [<n>]` | Their lines; the status row shows its spinner while it runs |
 | Pick | `/model`, `/reasoning`, `/rewind [<n>]`, `/plan open [--chat]` | A card with the choices, the one in use marked, a filter for a long list |
 | List | `/ha states`, `/docker logs`, `/eventlog …`, `/net …`, `/services …`, `/tasks …`, `/ad …`, `/code-audit open`, `/print`, `/print printers`, `/camera list`, `/screen list`, `/tree` (needs *File tools*), `/vault` (needs *Obsidian tools*), `/process`, `/comfy status`, `/comfy offered` | A card with the lines; Close |
-| Never | `/exit`, `/webui`, `/cmd`, `/profile`, `/plan edit`, `/cwd <path>`, `/sessions`, `/skills`, `/commands`, `/youtube` (bare and `list` point at the tab), `/video`, `/queue`, `/sampling`, `/server`, `/usage`, `/midi`, `/settings export\|import` | Refused: they run at the PC only |
-| Page | bare `/prompts` | Opens the 📣 sheet on its Prompts tab (📣 does too, even with *Web UI commands* off) |
+| Never | `/exit`, `/webui`, `/cmd`, `/profile`, `/plan edit`, `/cwd <path>`, `/sessions purge\|export`, `/skills`, `/commands`, `/youtube` (bare and `list` point at the tab), `/video`, `/queue clear`, `/sampling`, `/server`, `/usage`, `/midi`, `/settings export\|import` | Refused: they run at the PC only |
+| Page | bare `/prompts`, `/sessions`, `/queue` | Opens the 📣 sheet on its Prompts tab, or the 🗂️ sheet on its Sessions or Queue tab (📣 and 🗂️ do too, even with *Web UI commands* off) |
 | Other | Every form that opens a pane or a window at the PC, and `/update`'s others, since installing happens at the PC (`/settings`, `/theme`, `/view`, `/prompts list --clear`, `/camera`, `/screen`, `/ha stills`, `/undo purge`…) | Refused, naming the form that works here when there is one |
 
 * **A Ralph loop:** its confirm, checkpoint and by-hand check ask on both sides; the status row shows 🔁, and Stop ends the loop.
 * **`/loop`** runs as at the PC (a looped `/read` is refused).
 * **Pointers:** bare `/shopping` points at the Shopping tab; bare `/youtube` and `/youtube list` at the Video tab's saved videos (or its setting while the tab is off). Bare `/about` points at ☰ › About.
+* **`/queue send|mode|cancel`** point at the 🗂️ sheet's Queue tab.
 * **`/ha camera`** points at the Home tab's camera tiles, for the cameras on the home bar (or at its setting while the tab is off).
 * **What differs:** `/ha` and `/docker` ask before a change (at the PC they don't), though `/ha` runs a read or a *Home Assistant safe services* call unasked. A bare `/docker` lists the containers.
 * `/msgclear` asks on both sides at once. `/rewind` puts the text on the page's draft; its pictures, PDFs and pasted blocks come back on the PC's line only.
@@ -795,8 +807,9 @@ A bot check (a Cloudflare click, a captcha) runs in the PC's Browser window, sin
 * **Plain HTTP:** the page itself is plain HTTP; for HTTPS, see [HTTPS through Tailscale Serve](#https-through-tailscale-serve).
 * **The firewall:** Windows asks to let the app through the first time it serves the network; allow it on private networks (on one Windows calls Public, the phone can't connect). A Mac asks too.
 * **A port that won't open:** another program uses it, or Windows reserves it (`netsh int ipv4 show excludedportrange protocol=tcp` lists the reserved ranges). Pick another in *Web UI port*.
-* **Too fast:** taps, a bot check card's input, Ask the house, voice and pasted sign-ins are limited per address; past that the page says to slow down.
+* **Too fast:** taps, uploads, a bot check card's input, Ask the house, voice and pasted sign-ins are limited per address; past that the page says to slow down.
 * **Voice:** a page's audio goes only to and from a signed-in page, and is never saved.
+* **Files:** the video file playing and the files the model made serve only to a signed-in page, over Tailscale Funnel too. Made files come whole and never run as the page.
 
 ### The page's look
 

@@ -67,6 +67,9 @@ let chatLoad = Neon.id();
 // The shared helpers (common.js, 2026-10-15): the element maker, the post, the sentence under the composer with its buttons.
 const { el, post } = Neon;
 const say = text => Neon.say(text);
+// The 🗂️ sheet (2026-11-16, manage.js, loaded after this script): reached through its hooks alone, at call time.
+const manage = () => window.NeonManage || null;
+const manageOpen = () => !!(manage() && manage().isOpen());
 const sayWith = Neon.say;
 
 function nearBottom() {
@@ -372,6 +375,7 @@ function reset() {
   loadQueue.length = 0;
   entryQueue.length = 0;
   if (shown && !shown.fromStrip) closeOverlay();
+  if (manage()) manage().reset();   // an open 🗂️ tab is the new conversation's
   floatSoon();
 }
 
@@ -520,7 +524,7 @@ function openOverlayOn(list, id, fromStrip) {
   shown = { list, at, fromStrip };
   showPicture();
   overlayEl.classList.remove('hidden');
-  if (!wasOpen) history.pushState({ overlay: true, drawer: drawerOpen, prompts: promptsOpen }, '');
+  if (!wasOpen) history.pushState({ overlay: true, drawer: drawerOpen, prompts: promptsOpen, manage: manageOpen() }, '');
   floatSoon();
 }
 
@@ -695,7 +699,8 @@ function settleHistory() {
   if (!st.overlay && shown) hideOverlay();
   if (!st.drawer && drawerOpen) hideDrawer();
   if (!st.prompts && promptsOpen) hidePrompts(false);
-  if (!shown && (st.overlay || (st.drawer && !drawerOpen) || (st.prompts && !promptsOpen))) history.back();
+  if (!st.manage && manageOpen()) manage().hide(true);
+  if (!shown && (st.overlay || (st.drawer && !drawerOpen) || (st.prompts && !promptsOpen) || (st.manage && !manageOpen()))) history.back();
 }
 overlayClose.addEventListener('click', closeOverlay);
 overlayPrev.addEventListener('click', ev => { ev.stopPropagation(); step(-1); });
@@ -750,6 +755,7 @@ function applyState(s) {
   queuedEl.replaceChildren();
   for (const line of s.queued || []) queuedEl.appendChild(el('div', null, '⏳ ' + line.replace(/\s+/g, ' ')));
   queuedEl.classList.toggle('hidden', !(s.queued || []).length);
+  if (manage()) manage().state(s);   // an open Queue tab re-reads when the queue tag moved
   paintVoice();   // 🎤 as the PC's voice stands (2026-11-13)
   updateTitle();
 }
@@ -985,6 +991,7 @@ async function toggleUsage() {
   document.getElementById('usage-close').textContent = words.close || 'Close';
   closeDrawer();   // one footer panel at a time
   closePrompts(false);
+  if (manage()) manage().close(false);
   usageCard.classList.remove('hidden');
   floatSoon();
 }
@@ -1022,6 +1029,7 @@ function renderAsks(list) {
     // once (it can't be seen) and its entry is stepped over when the overlay closes, so the picture isn't pulled away.
     if (drawerOpen) { if (shown) hideDrawer(); else closeDrawer(); }
     if (promptsOpen) { if (shown) hidePrompts(false); else closePrompts(false); }
+    if (manageOpen()) { if (shown) manage().hide(false); else manage().close(false); }
     if (navigator.vibrate) {
       try { navigator.vibrate(200); } catch { /* not allowed */ }
     }
@@ -1413,6 +1421,277 @@ function questionForm(card, ask) {
   return form;
 }
 
+// ── 📎 Pictures and PDFs from the phone (2026-11-16, plan lucid-roaming-lantern #39) ──
+// The 📎 opens the file picker (the camera, the gallery, files). Each file gets a chip at once, and the uploads go one at a time, in pick order
+// (HTTP/1.1: four at once would hold back the page's own requests). An upload is an XHR for its progress bar; a 401 reloads, a 429 waits its
+// Retry-After and tries again (three times), anything else drops the chip with the app's words. A HEIC, or a photo past the app's pixel cap,
+// is drawn on a canvas first (its size read from its header, never by decoding it whole) and goes as a JPEG of at most 4096 px a side. The
+// server holds the uploads for the page: its chips event (and the snapshot) is the row's source, a chip still uploading kept after them. A send
+// waits for every chip to land or fail, then names the held ids. The 📎 hides while four are held.
+
+const attachBtn = document.getElementById('attach');
+const attachInput = document.getElementById('attach-input');
+const chipsEl = document.getElementById('draft-chips');
+const AttachMaxHeld = 4;
+const AttachSide = 4096;
+const AttachTries = 3;
+const HeifBrands = ['heic', 'heix', 'mif1', 'msf1'];
+let attachMaxBytes = 0;
+let attachMaxPixels = 0;
+let chips = [];   // { id, kind, size, thumb, state: 'queued'|'uploading'|'waiting'|'held', progress, file, xhr, done, settle }
+let uploadChain = Promise.resolve();
+
+attachBtn.addEventListener('click', () => attachInput.click());
+attachInput.addEventListener('change', () => {
+  const files = [...attachInput.files];
+  attachInput.value = '';
+  pickFiles(files);
+});
+
+function pickFiles(files) {
+  const room = Math.max(0, AttachMaxHeld - chips.length);
+  const taken = files.slice(0, room);
+  if (files.length > taken.length) say((words.attachRoom || '{0} not added.').replace('{0}', String(files.length - taken.length)));
+  for (const file of taken) {
+    const chip = { id: null, kind: file.type === 'application/pdf' ? 'pdf' : 'picture', size: '', thumb: null, state: 'queued', progress: 0, file: file };
+    chip.done = new Promise(resolve => { chip.settle = resolve; });
+    chips.push(chip);
+    uploadChain = uploadChain.then(() => uploadChip(chip)).catch(() => {});
+  }
+  drawChips();
+}
+
+function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+async function uploadChip(chip) {
+  try {
+    if (!chips.includes(chip)) return;   // its ✕ before it started
+    let body = chip.file;
+    try { body = await shrinkForUpload(chip.file); } catch { body = chip.file; }   // a decode that throws: the file as it is, and the app's own words
+    if (attachMaxBytes > 0 && body.size > attachMaxBytes) { dropChip(chip, words.attachTooBig); return; }
+    const type = body.type && (body.type.startsWith('image/') || body.type === 'application/pdf') ? body.type : 'application/octet-stream';
+    for (let tries = 1; ; tries++) {
+      chip.state = 'uploading';
+      chip.progress = 0;
+      drawChips();
+      const r = await xhrUpload(body, type, chip);
+      if (!chips.includes(chip)) {
+        if (r.status === 200 && r.json && r.json.chip) post('/api/attach/forget', { id: r.json.chip.id, page: chatPage });   // ✕ while it went
+        return;
+      }
+      if (r.status === 200 && r.json && r.json.chip) { adoptChip(chip, r.json.chip); return; }
+      if (r.status === 401) { location.reload(); return; }
+      if (r.status === 429 && tries < AttachTries) {
+        chip.state = 'waiting';
+        drawChips();
+        await sleep(Math.max(1, r.retryAfter || 1) * 1000);
+        if (!chips.includes(chip)) return;
+        continue;
+      }
+      dropChip(chip, r.status === 413 ? words.attachTooBig : r.status === 0 ? words.attachStopped : (r.json && r.json.message) || words.attachStopped);
+      return;
+    }
+  } finally {
+    chip.settle();
+  }
+}
+
+function xhrUpload(body, type, chip) {
+  return new Promise(resolve => {
+    const x = new XMLHttpRequest();
+    chip.xhr = x;
+    x.open('POST', '/api/attach?page=' + encodeURIComponent(chatPage));
+    x.setRequestHeader('Content-Type', type);   // set by hand: a typeless file would go with none, and the gate wants one
+    x.setRequestHeader('X-Neon', '1');
+    x.upload.onprogress = ev => {
+      if (!ev.lengthComputable) return;
+      chip.progress = ev.loaded / ev.total;
+      if (chip.bar) chip.bar.value = chip.progress;
+    };
+    x.onload = () => {
+      let j = null;
+      try { j = JSON.parse(x.responseText); } catch { /* a bare status */ }
+      resolve({ status: x.status, json: j, retryAfter: Number(x.getResponseHeader('Retry-After')) || null });
+    };
+    x.onerror = x.onabort = x.ontimeout = () => resolve({ status: 0, json: null });
+    x.send(body);
+  });
+}
+
+// The server's chip for an upload: the pending one becomes it, unless a chips event showed it already.
+function adoptChip(chip, server) {
+  chip.xhr = null;
+  if (chips.some(c => c !== chip && c.id === server.id)) {
+    chips = chips.filter(c => c !== chip);
+  } else {
+    Object.assign(chip, server, { state: 'held', file: null });
+  }
+  drawChips();
+}
+
+function dropChip(chip, why) {
+  chips = chips.filter(c => c !== chip);
+  chip.dropped = true;
+  drawChips();
+  if (why) say(why);
+}
+
+function removeChip(chip) {
+  chips = chips.filter(c => c !== chip);
+  if (chip.xhr) { try { chip.xhr.abort(); } catch { /* done */ } }
+  if (chip.id) post('/api/attach/forget', { id: chip.id, page: chatPage });
+  drawChips();
+}
+
+// The page's row as the server holds it, a chip still uploading kept after them (an event, a snapshot).
+function applyChips(list, message) {
+  const pending = chips.filter(c => !c.id);
+  chips = (list || []).map(s => Object.assign(chips.find(c => c.id === s.id) || {}, s, { state: 'held' })).concat(pending);
+  drawChips();
+  if (message) say(message);
+}
+
+function drawChips() {
+  const row = chips.map(chipElement);
+  chipsEl.replaceChildren(...row);
+  chipsEl.classList.toggle('hidden', row.length === 0);
+  attachBtn.classList.toggle('hidden', chips.length >= AttachMaxHeld);
+}
+
+function chipElement(chip) {
+  const el = document.createElement('span');
+  el.className = 'draft-chip' + (chip.state === 'waiting' ? ' waiting' : '');
+  if (chip.id) el.dataset.id = chip.id;
+  if (chip.thumb) {
+    const img = document.createElement('img');
+    img.src = chip.thumb;   // a data URL the server made: the page's img-src allows it, a blob: preview it wouldn't
+    img.alt = '';
+    el.appendChild(img);
+  } else {
+    const glyph = document.createElement('span');
+    glyph.className = 'chip-glyph';
+    glyph.textContent = chip.kind === 'pdf' ? '📄' : '🖼️';
+    el.appendChild(glyph);
+  }
+  const label = document.createElement('span');
+  label.className = 'chip-label';
+  label.textContent = chip.state === 'waiting' ? words.attachWaiting : chip.kind === 'pdf' ? (words.attachPdf + ' ' + chip.size).trim() : chip.size;
+  el.appendChild(label);
+  chip.bar = null;
+  if (!chip.id) {
+    const bar = document.createElement('progress');
+    bar.max = 1;
+    bar.value = chip.progress || 0;
+    chip.bar = bar;
+    el.appendChild(bar);
+  }
+  const x = document.createElement('button');
+  x.type = 'button';
+  x.className = 'chip-remove';
+  x.textContent = '✕';
+  x.setAttribute('aria-label', words.attachRemove || 'Remove');
+  x.addEventListener('click', () => removeChip(chip));
+  el.appendChild(x);
+  return el;
+}
+
+// Every chip landed or failed: a photo picked just before ➤ goes with the message it was picked for. True when one failed meanwhile.
+async function settleUploads() {
+  const waiting = chips.filter(c => !c.id);
+  if (waiting.length === 0) return false;
+  await Promise.all(waiting.map(c => c.done));
+  return waiting.some(c => c.dropped);
+}
+
+function heldIds() { return chips.filter(c => c.id).map(c => c.id); }
+
+// ── The picture's size from its header (never decoding it): a JPEG's SOF and EXIF orientation, a PNG's IHDR, a WebP's VP8/VP8L/VP8X ──
+
+function imageSize(bytes) {
+  const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  const u16 = (i, le) => le ? b[i] | (b[i + 1] << 8) : (b[i] << 8) | b[i + 1];
+  const u32 = (i, le) => le ? (b[i] | (b[i + 1] << 8) | (b[i + 2] << 16) | (b[i + 3] << 24)) >>> 0 : ((b[i] << 24) | (b[i + 1] << 16) | (b[i + 2] << 8) | b[i + 3]) >>> 0;
+  if (b.length >= 24 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4E && b[3] === 0x47) {
+    return { width: u32(16, false), height: u32(20, false) };
+  }
+  if (b.length >= 30 && b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) {
+    const kind = String.fromCharCode(b[12], b[13], b[14], b[15]);
+    if (kind === 'VP8 ') return { width: u16(26, true) & 0x3FFF, height: u16(28, true) & 0x3FFF };
+    if (kind === 'VP8L') return { width: 1 + (((b[22] & 0x3F) << 8) | b[21]), height: 1 + (((b[24] & 0x0F) << 10) | (b[23] << 2) | ((b[22] & 0xC0) >> 6)) };
+    if (kind === 'VP8X') return { width: 1 + (b[24] | (b[25] << 8) | (b[26] << 16)), height: 1 + (b[27] | (b[28] << 8) | (b[29] << 16)) };
+    return null;
+  }
+  if (b.length < 4 || b[0] !== 0xFF || b[1] !== 0xD8) return null;
+  let orientation = 1;
+  let i = 2;
+  while (i + 4 <= b.length) {
+    if (b[i] !== 0xFF) return null;
+    const marker = b[i + 1];
+    if (marker === 0xFF) { i++; continue; }   // fill
+    if (marker === 0xD8 || (marker >= 0xD0 && marker <= 0xD7) || marker === 0x01) { i += 2; continue; }   // no length
+    if (marker === 0xD9 || marker === 0xDA) return null;   // the image's end, or its scan, before any size
+    const length = u16(i + 2, false);
+    if (marker === 0xE1 && i + 10 <= b.length && String.fromCharCode(b[i + 4], b[i + 5], b[i + 6], b[i + 7]) === 'Exif') {
+      orientation = exifOrientation(b, i + 10, Math.min(b.length, i + 2 + length)) || orientation;
+    }
+    if (marker >= 0xC0 && marker <= 0xCF && marker !== 0xC4 && marker !== 0xC8 && marker !== 0xCC) {
+      if (i + 9 > b.length) return null;
+      const height = u16(i + 5, false);
+      const width = u16(i + 7, false);
+      return orientation >= 5 && orientation <= 8 ? { width: height, height: width } : { width: width, height: height };
+    }
+    i += 2 + length;
+  }
+  return null;
+}
+
+function exifOrientation(b, tiff, end) {
+  if (tiff + 8 > end) return 0;
+  const le = b[tiff] === 0x49 && b[tiff + 1] === 0x49;
+  if (!le && !(b[tiff] === 0x4D && b[tiff + 1] === 0x4D)) return 0;
+  const u16 = i => le ? b[i] | (b[i + 1] << 8) : (b[i] << 8) | b[i + 1];
+  const u32 = i => le ? (b[i] | (b[i + 1] << 8) | (b[i + 2] << 16) | (b[i + 3] << 24)) >>> 0 : ((b[i] << 24) | (b[i + 1] << 16) | (b[i + 2] << 8) | b[i + 3]) >>> 0;
+  const ifd = tiff + u32(tiff + 4);
+  if (ifd + 2 > end) return 0;
+  const count = u16(ifd);
+  for (let n = 0; n < count; n++) {
+    const entry = ifd + 2 + n * 12;
+    if (entry + 12 > end) return 0;
+    if (u16(entry) === 0x0112) return u16(entry + 8);
+  }
+  return 0;
+}
+
+function isHeif(b) {
+  return b.length >= 12 && String.fromCharCode(b[4], b[5], b[6], b[7]) === 'ftyp' && HeifBrands.includes(String.fromCharCode(b[8], b[9], b[10], b[11]));
+}
+
+// A HEIC (by its type, or a typeless file's ftyp brand) or a photo past the pixel cap, drawn on a canvas at most 4096 px a side and sent as a
+// JPEG; anything else as it is. Past the cap it decodes straight to the smaller size, the upright one (a JPEG's orientation read above).
+async function shrinkForUpload(file) {
+  if (file.type === 'application/pdf') return file;
+  const head = new Uint8Array(await file.slice(0, 65536).arrayBuffer());
+  const heic = /^image\/hei[cf]$/i.test(file.type) || (!file.type && isHeif(head));
+  const size = imageSize(head);
+  const big = !!size && attachMaxPixels > 0 && size.width * size.height > attachMaxPixels;
+  if (!heic && !big) return file;
+  let bitmap;
+  if (size) {
+    const scale = Math.min(1, AttachSide / Math.max(size.width, size.height));
+    bitmap = await createImageBitmap(file, { resizeWidth: Math.max(1, Math.round(size.width * scale)), resizeHeight: Math.max(1, Math.round(size.height * scale)), resizeQuality: 'high' });
+  } else {
+    bitmap = await createImageBitmap(file);
+  }
+  const scale = Math.min(1, AttachSide / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+  canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  if (bitmap.close) bitmap.close();
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+  return blob || file;
+}
+
 // ── Sending ───────────────────────────────────────────────────────────
 
 function saveDraft() {
@@ -1450,14 +1729,23 @@ function send(asText) {
 async function sendText(text, opts) {
   const fromDraft = !!(opts && opts.fromDraft);
   const asText = !!(opts && opts.asText);
-  if (!text.trim()) return;
+  const attaching = fromDraft && chips.length > 0;   // the draft's ➤ takes the chips (2026-11-16, #39); a saved prompt's doesn't
+  if (!text.trim() && !attaching) return;
   if (pendingText !== text) { pendingId = newId(); pendingText = text; }
   if (speakOn()) unlockPlayback();   // before any await: the reply plays from this gesture's unlock (2026-11-13)
   sendBtn.disabled = true;
+  let attachments;
+  let leftOut = false;
+  if (attaching) {
+    leftOut = await settleUploads();   // every chip landed or failed first
+    attachments = heldIds();
+    if (!text.trim() && attachments.length === 0) { sendBtn.disabled = false; return; }
+  }
   // The page and its 🔊 (2026-11-13): a reply speaks where its message came from.
-  const r = await post('/api/send', { id: pendingId, text: text, asText: asText, page: chatPage, speak: speakOn() });
+  const r = await post('/api/send', { id: pendingId, text: text, asText: asText, page: chatPage, speak: speakOn(), attachments: attachments });
   sendBtn.disabled = false;
   if (r.ok) {
+    if (attachments && attachments.length) { chips = chips.filter(c => !attachments.includes(c.id)); drawChips(); }
     if (speakOn()) { sentSpoken = Date.now(); holdWake(); }
     if (fromDraft && draft.value === text) draft.value = '';
     remembered(text);   // the app has it in the history now; the page's copy at once
@@ -1468,8 +1756,9 @@ async function sendText(text, opts) {
       saveDraft();
       grow();
     }
-    say('');
+    say(r.message || (leftOut ? words.attachLeftOut : ''));   // an attachment let go meanwhile, or one that didn't upload
     if (r.json && r.json.open === 'prompts') openPrompts('prompts');   // bare /prompts: the page's own sheet, on its Prompts tab
+    else if (r.json && r.json.open && manage() && manage().has(r.json.open)) manage().open(r.json.open);   // bare /queue: the 🗂️ sheet's tab
     return;
   }
   // A refused command (later on 2026-10-14): the app's reason, and what it offers instead.
@@ -1771,9 +2060,10 @@ async function openPrompts(tab) {
   if (!sheet || promptsOpen) return;
   closeUsage();
   renderSheet(want, sheet);
-  if (drawerOpen && !shown) {
+  if ((drawerOpen || manageOpen()) && !shown) {
     hideDrawer();
-    history.replaceState({ prompts: true }, '');   // the drawer's entry becomes the sheet's
+    if (manage()) manage().hide(false);
+    history.replaceState({ prompts: true }, '');   // the drawer's or the 🗂️ sheet's entry becomes the sheet's
   } else {
     history.pushState({ prompts: true }, '');
   }
@@ -2098,9 +2388,10 @@ function showDrawer(on) {
 function openDrawer() {
   if (!strip || drawerOpen) return;
   closeUsage();
-  if (promptsOpen) {
+  if (promptsOpen || manageOpen()) {
     hidePrompts(true);
-    history.replaceState({ drawer: true }, '');   // the sheet's entry becomes the drawer's
+    if (manage()) manage().hide(false);
+    history.replaceState({ drawer: true }, '');   // the sheet's (either) entry becomes the drawer's
   } else {
     history.pushState({ drawer: true }, '');
   }
@@ -2145,6 +2436,7 @@ stripClose.addEventListener('click', closeDrawer);
 document.querySelector('main').addEventListener('click', ev => {
   if (drawerOpen && !ev.target.closest('.tile')) closeDrawer();
   if (promptsOpen && !ev.target.closest('.tile')) closePrompts(false);
+  if (manageOpen() && !ev.target.closest('.tile')) manage().close(false);
 });
 stripRow.addEventListener('keydown', ev => {
   if (shown || (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight')) return;
@@ -2174,6 +2466,8 @@ function applyWords() {
   stripClose.setAttribute('aria-label', words.closeStrip);
   stripClose.title = words.closeStrip;
   drawerEl.setAttribute('aria-label', words.stripButton);
+  attachBtn.setAttribute('aria-label', words.attachButton || 'Attach a picture or PDF');
+  attachBtn.title = words.attachButton || 'Attach a picture or PDF';
   promptsBtn.setAttribute('aria-label', words.promptsButton || 'Prompts, history and memory');
   promptsBtn.title = words.promptsButton || 'Prompts, history and memory';
   promptsEl.setAttribute('aria-label', words.promptsButton || 'Prompts, history and memory');
@@ -2192,10 +2486,11 @@ function applyWords() {
   overlayLive.title = words.liveLabel || 'following new pictures';
   paintExpand();
   paintVoice();
+  if (manage()) manage().paintWords();
 }
 
 // A reload keeps the history's entries but not what they held: the current one is the page's own again.
-if (history.state && (history.state.overlay || history.state.drawer || history.state.prompts)) history.replaceState(null, '');
+if (history.state && (history.state.overlay || history.state.drawer || history.state.prompts || history.state.manage)) history.replaceState(null, '');
 
 // ── Voice (2026-11-13, the webui-voice plan) ──────────────────────────
 // 🎤 works like the PC's key: one tap listens until the PC's Silero hears you stop, or a second tap sends what was said; Cancel (or Esc on a
@@ -2333,7 +2628,8 @@ async function startListen() {
     return;
   }
   if (l.done) return;
-  const r = await post('/api/voice/start', { page: chatPage, listen: l.id, speak: speakOn() });
+  // The chips held now go with what is heard (2026-11-16, #39), taken at its send: a cancelled listen leaves them held.
+  const r = await post('/api/voice/start', { page: chatPage, listen: l.id, speak: speakOn(), attachments: heldIds() });
   if (l.done) {
     if (r.ok) post('/api/voice/end', { page: chatPage, listen: l.id, how: 'cancel' });   // cancelled while the start was in flight
     return;
@@ -2860,6 +3156,9 @@ function connect() {
     }
     if (s.words) words = s.words;
     applyWords();
+    attachMaxBytes = s.attachMaxBytes || 0;   // the upload's caps, checked on the page first (2026-11-16, #39)
+    attachMaxPixels = s.attachMaxPixels || 0;
+    applyChips(s.chips || []);
     applyState(s.state);
     applyStatus(s.status);
     reset();
@@ -2901,6 +3200,7 @@ function connect() {
   source.addEventListener('draft', ev => takeDraft(JSON.parse(ev.data).text));
   source.addEventListener('withdrawn', ev => putBack(JSON.parse(ev.data).text));
   source.addEventListener('dropped', ev => putBack(JSON.parse(ev.data).text));
+  source.addEventListener('chips', ev => { const c = JSON.parse(ev.data); applyChips(c.chips, c.message); });   // this page's held uploads (2026-11-16)
   source.addEventListener('voice', ev => onVoice(JSON.parse(ev.data)));   // this page's listen (2026-11-13)
   source.addEventListener('voice-clip', ev => onClip(JSON.parse(ev.data)));   // this page's spoken reply
   source.addEventListener('voice-stop', ev => onSpeechStop(JSON.parse(ev.data)));

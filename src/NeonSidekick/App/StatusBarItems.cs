@@ -74,7 +74,7 @@ public static class StatusBarItems
         Timers => "timer info while timer(s) active",
         Reading => "reading info while reading is active (/read or /echo)",
         Usage => "context and usage info",
-        Model => "the model's name and its reasoning mark",
+        Model => "the model's name and its reasoning mark, or 💤 while unloaded",
         WorkingDirectory => "the working directory, as the tool bar shows it (/cwd browse)",
         _ => "",
     };

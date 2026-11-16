@@ -764,6 +764,9 @@ internal sealed partial class ChatScreen
     /// (<see cref="WorkingDirectoryOptions.Images"/>) — what the picture tools reach besides the sandbox.
     /// </summary>
     private readonly WorkingDirectory _images;
+
+    /// <summary>The conversation's made files (2026-11-16, plan lucid-roaming-lantern #41): ChatScreen.WebFiles.cs.</summary>
+    private readonly MadeFiles _madeFiles;
     private readonly IReadOnlyList<AIFunction> _fileTools;
 
     // The picture tools (2026-10-10): their own group under Image tools, File tools' until then.
@@ -888,8 +891,19 @@ internal sealed partial class ChatScreen
     private IReadOnlyList<AIFunction> _sessionTools = null!;
     private SessionsMenu _sessionsMenu = null!;
 
-    /// <summary>The store row the conversation on screen is written to (2026-09-18): null until its first completed turn and after every conversation clear, so an empty conversation is never stored.</summary>
-    private long? _sessionId;
+    /// <summary>
+    /// The store row the conversation on screen is written to (2026-09-18): null until its first completed turn and after every conversation clear, so an empty conversation is never stored.
+    /// A property over <see cref="_sessionRow"/> since 2026-11-16 (#40): the Web UI's Sessions tab reads it on a Kestrel thread, and a
+    /// <c>long?</c> has no atomic read.
+    /// </summary>
+    private long? _sessionId
+    {
+        get => Volatile.Read(ref _sessionRow) is var row and not 0 ? row : null;
+        set => Volatile.Write(ref _sessionRow, value ?? 0);
+    }
+
+    /// <summary>The row behind <see cref="_sessionId"/>: 0 for none (the store's ids start at 1).</summary>
+    private long _sessionRow;
 
     /// <summary>
     /// The current session's summary as last read — its title and where it came from, for the rule
@@ -921,6 +935,8 @@ internal sealed partial class ChatScreen
             StopRalphOnReset();
             // A pending /undo note too (2026-10-28): the conversation it described is gone.
             DropUndoNote();
+            // The made files too (2026-11-16, #41): the Files tab is the conversation's; a purge of the row keeps it.
+            _madeFiles.Clear();
         }
         ForgetAllows();
     }
@@ -1372,6 +1388,9 @@ internal sealed partial class ChatScreen
         _effective = effective ?? throw new ArgumentNullException(nameof(effective));
         _overriddenBy = overriddenBy ?? throw new ArgumentNullException(nameof(overriddenBy));
         _session = session ?? throw new ArgumentNullException(nameof(session));
+        // The embedded model's idle unload (2026-11-16, #44): the minutes read at each arming, a change re-arming from the last use.
+        _settings.Changed += _ => _session.RearmIdle();
+        _session.UseIdleUnload(() => EmbeddedLlm.EmbeddedIdleUnload.Resolve(_effective()), IdleBusy, SignalAlert);
         // A model write to the project file asks on the pane (2026-10-22, review P1, the fix plan's D2).
         _session.ProjectFileAsk = AllowProjectFileAsync;
         // A bot's or an advisor's embedded load reads LLM one local model as it stands now (2026-11-10): the setting reconnects nothing.
@@ -1417,6 +1436,8 @@ internal sealed partial class ChatScreen
         _images = new WorkingDirectory(() => _settings.ProfileImagesDirectory, time, WorkingDirectoryOptions.Images);
         // A refused path in the images folder names the tools that reach it (2026-10-09).
         _files.ImagesFolder = () => _images.Root;
+        // The files the model made, for the Web UI's Files tab (2026-11-16, #41): under today's working and images folders.
+        _madeFiles = new MadeFiles(MadeFileRoots);
         // The UNC shares' door (2026-09-30) before the file tools: open reaches the offered shares too (2026-10-01).
         // The profile's unc.json over the home's, read at every call, narrowed to the shares the profile offers.
         _unc = new UncAccess(() => UncConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Offered(_effective().UncSharesOffered), time);
@@ -1607,8 +1628,8 @@ internal sealed partial class ChatScreen
             // The update's marker left of it (2026-11-04, self-update): 📦 0.5.7 at quit, nothing while no update is known or under way.
             LowerRuleMarker = UpdateMarkerNow,
             // The model and its mark while the Hint bar's Model is checked (2026-10-12).
-            Trailer = () => HintOn(StatusBarItems.Model) ? ModelLabel(_session.Endpoint?.ModelId) : "",
-            TrailerMark = () => HintOn(StatusBarItems.Model) ? ModelMark(_session.Endpoint?.ModelId, _effective().LlmReasoning) : "",
+            Trailer = () => HintOn(StatusBarItems.Model) ? ModelLabel(_session.ShownModelId) : "",
+            TrailerMark = () => HintOn(StatusBarItems.Model) ? ModelMark(_session.ShownModelId, _effective().LlmReasoning, _session.ShownUnloaded) : "",
             // The queued count after the row's lead in both states (2026-09-18): the pane draws it
             // and records where, so a double-click on it can open /queue mid-turn and at idle.
             Queued = () => _queue.Count + _webUi.WaitingCount is > 0 and var queued && HintOn(StatusBarItems.Queued) ? QueuedHintPart(queued) : "",
@@ -1710,7 +1731,7 @@ internal sealed partial class ChatScreen
         {
             if (tool.Zone is ScreenPane.ToolbarZone.Model or ScreenPane.ToolbarZone.Mark)
             {
-                _pane.Flash(ToolbarItems.ModelNote(ModelLabel(_session.Endpoint?.ModelId)));   // the model's name (2026-10-12)
+                _pane.Flash(ToolbarItems.ModelNote(ModelLabel(_session.ShownModelId)));   // the model's name (2026-10-12)
                 return;
             }
 
@@ -2552,8 +2573,8 @@ internal sealed partial class ChatScreen
         // The profile folder as ~ (2026-10-04, the UI review).
         string path = WorkingDirectoryLabel(shown);
         // The model's name (2026-10-12, the user's ask: Model name), its reasoning glyph after it since later that day (the user's ask), as on the hint row.
-        string model = ModelLabel(_session.Endpoint?.ModelId);
-        string mark = model.Length == 0 ? "" : ModelMark(_session.Endpoint?.ModelId, shown.LlmReasoning);
+        string model = ModelLabel(_session.ShownModelId);
+        string mark = model.Length == 0 ? "" : ModelMark(_session.ShownModelId, shown.LlmReasoning, _session.ShownUnloaded);
         // The items this system shows (2026-10-22): a Mac's checked 🧩 or 📅 (a profile from Windows) never draws.
         var items = ToolbarItems.Resolve(shown.ToolbarItems).Where(ToolbarItemHere).ToHashSet(StringComparer.Ordinal);
         var parts = ToolbarPartsFor(items, shown, path, model, mark, _noToolsOffered, EventLogsHere, DirectoryHere);
@@ -2835,13 +2856,20 @@ internal sealed partial class ChatScreen
     /// The mark after the trailer: the reasoning level's glyph (<see cref="ReasoningLevel.Glyph"/>,
     /// the empty circle for <c>none</c> since 2026-09-21) — <c>Qwen3-30B ◕</c> in place of
     /// <c>(high)</c>, the user's call 2026-09-15; empty while no server is connected, like the label.
-    /// A double-click on it opens <c>/reasoning</c>, one on the name <c>/model</c>. Pinned.
+    /// A double-click on it opens <c>/reasoning</c>, one on the name <c>/model</c>. Pinned. <paramref name="unloaded"/> (2026-11-16, plan
+    /// lucid-roaming-lantern #44): the embedded model unloaded while idle, <see cref="UnloadedGlyph"/> after the glyph, in the mark's cells.
     /// </summary>
-    public static string ModelMark(string? modelId, string reasoning)
+    public static string ModelMark(string? modelId, string reasoning, bool unloaded = false)
     {
         ArgumentNullException.ThrowIfNull(reasoning);
-        return string.IsNullOrEmpty(modelId) ? "" : ReasoningLevel.Glyph(reasoning);
+        return string.IsNullOrEmpty(modelId) ? "" : ReasoningLevel.Glyph(reasoning) + (unloaded ? " " + UnloadedGlyph : "");
     }
+
+    /// <summary>The unloaded model's mark (2026-11-16, #44): after the reasoning glyph at the PC, before the name on the page. Pinned.</summary>
+    public const string UnloadedGlyph = "💤";
+
+    /// <summary>The model's name as the page shows it: <see cref="UnloadedGlyph"/> leading while unloaded, so a clipped header still shows it.</summary>
+    private string PageModelLabel() => (_session.ShownUnloaded ? UnloadedGlyph + " " : "") + ModelLabel(_session.ShownModelId);
 
     /// <summary>
     /// The standing hint: <see cref="ExitHint"/> while the exit is armed (the pane's tick re-reads
@@ -3192,12 +3220,12 @@ internal sealed partial class ChatScreen
     private async Task<bool> HelpLookupAsync(string words, CancellationToken cancellationToken)
     {
         var effective = _effective();
-        if (_session.Assistant is not null && HelpLookupOffered(effective.LlmOfferTools, HelpOffered(effective), TurnDisabled(effective)))
+        if ((_session.Assistant is not null || _session.ShownUnloaded) && HelpLookupOffered(effective.LlmOfferTools, HelpOffered(effective), TurnDisabled(effective)))   // an unloaded model reloads through the message (#44)
         {
             return await RunMessageAsync(Help.HelpText.AskPrompt(words), [], cancellationToken, Llm.TurnMark.App).ConfigureAwait(false);
         }
 
-        if (_session.Assistant is not null)
+        if (_session.Assistant is not null || _session.ShownUnloaded)
         {
             _transcript.Notice(Help.HelpText.NotAskedNotice);
         }
@@ -3794,18 +3822,18 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>Every queued message dropped with <see cref="QueueDroppedNotice"/> — nothing said when there was none. Every conversation clear calls it: a forgotten conversation never receives stale questions.</summary>
-    private void DropQueue(bool web = true)
+    private void DropQueue(bool web = true, bool giveBack = true)
     {
         // The Web UI's waiting messages go with the PC's (2026-10-14), back to the page's draft — but not for /queue clear, which empties
-        // the queue its pane shows (web: false).
-        if (_queue.Clear(keepHold: !web) + (web ? _webUi.DropLines() + DropPendingWebLines() : 0) is > 0 and var dropped)
+        // the queue its pane shows (web: false). Without giveBack (a profile switch, 2026-11-16, #39) the phone's attachments are let go.
+        if (_queue.Clear(keepHold: !web) + (web ? _webUi.DropLines(giveBack) + DropPendingWebLines(giveBack) : 0) is > 0 and var dropped)
         {
             _transcript.Notice(QueueDroppedNotice(dropped));
         }
 
         if (web)
         {
-            Interlocked.Exchange(ref _webResumeInFlight, 0);   // a page's 👥 waiting went with the rest (2026-11-14)
+            Interlocked.Exchange(ref _webChordInFlight, 0);   // a page's chord (👥 or a resume) waiting went with the rest (2026-11-14)
         }
     }
 
@@ -4645,7 +4673,7 @@ internal sealed partial class ChatScreen
     /// (<see cref="ParseLearnArgs"/>, <see cref="LearnFromSessions"/>). The same refusals as
     /// <c>/skills</c> for the skills or the tools off; with no turn to learn from, <see cref="LearnNoTurnError"/>.
     /// </summary>
-    private void HandleLearn(string args, CancellationToken cancellationToken)
+    private async Task HandleLearnAsync(string args, CancellationToken cancellationToken)
     {
         var effective = _effective();
         if (!effective.AgentSkills)
@@ -4661,6 +4689,11 @@ internal sealed partial class ChatScreen
         }
 
         var action = ParseLearnArgs(args);
+        if (action.Kind != LearnKind.BadCount && !await EnsureLlmAsync(cancellationToken).ConfigureAwait(false))
+        {
+            return;   // an unloaded model's reload cancelled or failed (2026-11-16, #44): its words said
+        }
+
         switch (action.Kind)
         {
             case LearnKind.BadCount:
@@ -6540,7 +6573,7 @@ internal sealed partial class ChatScreen
     /// <summary><c>/model</c>'s argument list (2026-10-04): the installed embedded models while the embedded server is the one in use; none for any other server.</summary>
     private IReadOnlyList<CompletionItem> EmbeddedModelChoices()
     {
-        if (_session.Embedded is not { } embedded || !EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(_session.Endpoint?.BaseUrl))
+        if (_session.Embedded is not { } embedded || !EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(_session.ShownBaseUrl))
         {
             return [];
         }
@@ -8945,6 +8978,8 @@ internal sealed partial class ChatScreen
             _conversation++;
             ForgetAllows();   // nor are its allows (2026-10-24, review D3)
             _claudeSessionId = stored.ClaudeSessionId;
+            // The restored session's own made files (2026-11-16, #41): a cut turn's (past the row's turns) go.
+            _madeFiles.Restore(stored.MadeFiles, _session.History.Messages, record.Summary.Turns);
             _advisorThreads.Restore(stored.AdvisorThreads);
             _advisorThreads.RestoreSessions(stored.AdvisorSessions);
             _claudeServerSessionId = stored.ClaudeServerSessionId;
@@ -12226,10 +12261,11 @@ internal sealed partial class ChatScreen
                     replay = attach;
                     _attachReplay = null;
                 }
-                else if (_pendingLines.TryDequeue(out var pendingLine))
+                else if (TakePendingLine() is { } pendingLine)
                 {
                     // A line left for the idle line under the reply (2026-09-25): a message with the queue
-                    // off, or the command that cancelled the reply — sent before anything else.
+                    // off, or the command that cancelled the reply — sent before anything else. A page's line the Queue tab
+                    // took back is skipped (2026-11-16).
                     send = pendingLine;
                 }
                 else if (_restoreDraft is null && QueueDrains && _queue.TryDequeue(out var queued))
@@ -12244,7 +12280,7 @@ internal sealed partial class ChatScreen
                 else if (TakeWebLine() is { } webLine)
                 {
                     // A message from the Web UI's page (2026-10-14): after the PC's queue, sent as a queued line is; not under a held queue.
-                    // Queue mode manual never holds it — the page has no /queue to send it with.
+                    // Queue mode manual never holds it: the page's own lines are sent from the page; the Queue tab can still take one back.
                     send = webLine;
                 }
 
@@ -12269,6 +12305,8 @@ internal sealed partial class ChatScreen
                     _sentDraft = send.Draft;
                     _sentFromWeb = send.FromWeb;
                     _sentFromWebPage = send.WebPage is { } linePage ? new WebPageRef(linePage, send.Speak) : null;
+                    _sentWebProfile = send.WebProfile;
+                    _sentWebAttachments = send.WebAttachments;
                 }
                 else
                 {
@@ -12279,6 +12317,8 @@ internal sealed partial class ChatScreen
                         _sentDraft = typed;
                         _sentFromWeb = false;
                         _sentFromWebPage = null;
+                        _sentWebProfile = null;
+                        _sentWebAttachments = null;
                     }
 
                     if (_input.Chat.Text.Length == 0)
@@ -12582,9 +12622,11 @@ internal sealed partial class ChatScreen
                             _webDispatching = false;
                             _sentFromWeb = false;
                             _sentFromWebPage = null;
+                            _sentWebProfile = null;
+                            _sentWebAttachments = null;
                             if (send?.Chord == true)
                             {
-                                Interlocked.Exchange(ref _webResumeInFlight, 0);   // the page's 👥 has run (2026-11-14)
+                                Interlocked.Exchange(ref _webChordInFlight, 0);   // the page's chord (👥 or a resume) has run (2026-11-14)
                             }
                         }
 
@@ -12731,8 +12773,8 @@ internal sealed partial class ChatScreen
         }
 
         Volatile.Write(ref _alertSignal, alert);
-        if (_timers.HasAlerts || _processes.HasAlerts || LearnPending || _jobs.HasCompletions || ImagineReady || WindowWorkReady || ReadSeekReady
-            || _webUi.LinesReady || _webUi.NoticesReady || _settings.OutsideChangesReady || !_homeCameraShows.IsEmpty || !_updateLines.IsEmpty || Volatile.Read(ref _updateFinalLine) is not null)
+        if (_timers.HasAlerts || _processes.HasAlerts || LearnPending || _session.UnloadPending || _jobs.HasCompletions || ImagineReady || WindowWorkReady || ReadSeekReady
+            || _webUi.LinesReady || !_pendingLines.IsEmpty || _webUi.NoticesReady || _settings.OutsideChangesReady || !_homeCameraShows.IsEmpty || !_updateLines.IsEmpty || Volatile.Read(ref _updateFinalLine) is not null)
         {
             // Queued between the loop's drain and this arm: the read returns at once.
             alert.Cancel();
@@ -12929,6 +12971,7 @@ internal sealed partial class ChatScreen
     private async Task<bool> AnnounceAlertsAsync(CancellationToken cancellationToken)
     {
         DrainLearn();
+        DrainIdleUnload();
         await TakeOutsideChangesAsync(cancellationToken).ConfigureAwait(false);
         // A reflection's write waiting for the user (2026-10-12, Reflection confirm mode): asked on the pane before anything else.
         // The reflection writes (or not) on its own task after the answer; its line comes with its own alert.
@@ -12979,6 +13022,11 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task CompactAsync(string? focus, int? autoPercent, CancellationToken cancellationToken)
     {
+        if (!await EnsureLlmAsync(cancellationToken).ConfigureAwait(false))
+        {
+            return;
+        }
+
         if (_session.Assistant is not { } assistant)
         {
             _transcript.Error(NoAssistantError);
@@ -14183,7 +14231,7 @@ internal sealed partial class ChatScreen
             var scope = Llm.LlmScanMode.Resolve(effective);
             // The server in use, else the one saved (2026-10-22, a review: with the scan off and nothing else offered — every default since 2026-10-21 —
             // a typed URL in use met "no server set", and no picker): asked even with the scan off.
-            Uri? inUse = _session.Endpoint?.BaseUrl ?? (BlankLlmUrl(effective) || !Uri.TryCreate(effective.LlmUrl, UriKind.Absolute, out var saved) ? null : saved);
+            Uri? inUse = _session.ShownBaseUrl ?? (BlankLlmUrl(effective) || !Uri.TryCreate(effective.LlmUrl, UriKind.Absolute, out var saved) ? null : saved);
             if (inUse is null && !Llm.LlmScanMode.Scans(scope) && !Llm.Anthropic.ClaudeApi.Offered(effective) && !Llm.OpenAIPlatform.OpenAIApi.Offered(effective) && !EmbeddedOffered && !_session.ClaudeCliOffered(effective) && !_session.DockerOffered(effective))
             {
                 // Disabled entirely (the user's call, 2026-09-15): no spinner, no request, the session as it was. Then the Connect a
@@ -14211,7 +14259,7 @@ internal sealed partial class ChatScreen
                 return;
             }
 
-            var choice = await _menu.PickServerAsync(servers, _session.Endpoint?.BaseUrl, SettingsMenu.ServerTitle, cancellationToken, _session.Endpoint?.ModelId).ConfigureAwait(false);
+            var choice = await _menu.PickServerAsync(servers, _session.ShownBaseUrl, SettingsMenu.ServerTitle, cancellationToken, _session.ShownModelId).ConfigureAwait(false);
             if (choice is null)
             {
                 return;
@@ -14279,7 +14327,7 @@ internal sealed partial class ChatScreen
                     return;
                 }
 
-                if (await _menu.PickServerAsync(rows, _session.Endpoint?.BaseUrl, SettingsMenu.ServerTitle, cancellationToken, _session.Endpoint?.ModelId).ConfigureAwait(false) is { } row)
+                if (await _menu.PickServerAsync(rows, _session.ShownBaseUrl, SettingsMenu.ServerTitle, cancellationToken, _session.ShownModelId).ConfigureAwait(false) is { } row)
                 {
                     await UseEmbeddedRowAsync(row, cancellationToken).ConfigureAwait(false);
                 }
@@ -15351,7 +15399,7 @@ internal sealed partial class ChatScreen
                 return await HandleBotChatAsync(args, cancellationToken).ConfigureAwait(false);
 
             case SlashCommand.Learn:
-                HandleLearn(args, cancellationToken);
+                await HandleLearnAsync(args, cancellationToken).ConfigureAwait(false);
                 return false;
 
             case SlashCommand.About:
@@ -15931,7 +15979,10 @@ internal sealed partial class ChatScreen
         ThemeName.Apply(_effective(), _settings.ThemesDirectory);
         ApplyWindowTitle();
         _session.History.Clear();
-        DropQueue();
+        // The phone's uploads are the old profile's (2026-11-16, #39): the dropped lines' text goes back, their attachments and the held ones let go,
+        // and an upload still arriving is refused (the session's epoch), never held under the new profile.
+        DropQueue(giveBack: false);
+        _webUi.ForgetAttachments();
         _lastTrace = null;
         _learnTrace = null;
         _session.Usage.ResetConversation();
@@ -16153,7 +16204,7 @@ internal sealed partial class ChatScreen
                     return false;
                 }
 
-                if (_session.Assistant is not null)
+                if (_session.Assistant is not null || _session.ShownUnloaded)
                 {
                     _transcript.Notice(CustomCommandText.SentNotice(custom));
                     DiagnosticLog.Debug(CustomCommandCatalog.Category, CustomCommandText.RunLogLine(custom, prompt.Length));
@@ -16186,6 +16237,11 @@ internal sealed partial class ChatScreen
                 await RunLoopedCommandAsync(command, commandArgs, count, delay, cancellationToken).ConfigureAwait(false);
                 return false;
             }
+        }
+
+        if (!await EnsureLlmAsync(cancellationToken).ConfigureAwait(false))
+        {
+            return false;
         }
 
         // A message loop with no model refused once, up front (2026-10-31, review P3-2): each pass said NoAssistantError and set neither stop
@@ -16480,6 +16536,11 @@ internal sealed partial class ChatScreen
         if (cast.Count < 2)
         {
             _transcript.Error(BotChat.TooFewError);
+            return false;
+        }
+
+        if (!await EnsureLlmAsync(cancellationToken).ConfigureAwait(false))
+        {
             return false;
         }
 
@@ -17734,6 +17795,14 @@ internal sealed partial class ChatScreen
                 continue;
             }
 
+            if (web.Images.Count > 0)
+            {
+                // A phone picture or PDF (2026-11-16, #39): an interjection carries no pictures, so the line waits whole for the idle line, saved and
+                // built already (the idle line sends a pended line as it is, so nothing is saved twice).
+                Pend(web);
+                continue;
+            }
+
             _transcript.User(web.Label);
             lines.Add(new BotChatLine(BotChat.UserName, web.Text, IsUser: true));
             joined = true;
@@ -17802,9 +17871,17 @@ internal sealed partial class ChatScreen
         bool passMessage = _passMessage is { } pass && ReferenceEquals(pass, text);
         mark = passMessage ? Llm.TurnMark.App : mark;
         _passMessage = null;
+        if (!await EnsureLlmAsync(cancellationToken).ConfigureAwait(false))
+        {
+            // The reload cancelled or failed (2026-11-16, #44): its words said, the message back where it came from.
+            PutBackWithdrawn(text, passMessage);
+            return false;
+        }
+
         if (_session.Assistant is not { } assistant)
         {
             _transcript.Error(NoAssistantError);
+            PutBackPageLine(text, NoAssistantError, passMessage);
             return false;
         }
 
@@ -17825,6 +17902,12 @@ internal sealed partial class ChatScreen
                     _transcript.Error(refused);
                 }
 
+                // A page's line back to its page's draft with its chips (2026-11-16, #39), never onto the PC's row.
+                if (PutBackPageLine(text, refused, passMessage))
+                {
+                    return false;
+                }
+
                 // The draft back on the row, its tokens as they were, so a PDF can be taken off and the line sent again.
                 _restoreDraft = _sentDraft ?? PasteBlocks.WithoutSavedPaths(text);
                 _input.Chat.Load(_restoreDraft, prependToCurrent: true);
@@ -17838,6 +17921,7 @@ internal sealed partial class ChatScreen
         {
             // The embedded model without its vision projector (2026-09-29): llama-server would refuse the image anyway. A PDF goes as text.
             _transcript.Error(EmbeddedLlm.EmbeddedLlmText.NoVisionError);
+            PutBackPageLine(text, EmbeddedLlm.EmbeddedLlmText.NoVisionError, passMessage);
             return false;
         }
 
@@ -17926,37 +18010,13 @@ internal sealed partial class ChatScreen
                 return true;
             }
 
-            if (outcome == TurnOutcome.Withdrawn && InRalphPass)
-            {
-                // A Ralph pass withdrawn (2026-10-18): no draft comes back (the message was the loop's, the whole plan), and the loop stops.
-                _lastTurnCancelled = true;
-                return false;
-            }
-
-            if (outcome == TurnOutcome.Withdrawn && passMessage)
-            {
-                // An audit's or a gap review's pass withdrawn (2026-10-19): its message was the app's, and the loop has stopped above.
-                _lastTurnCancelled = true;
-                return false;
-            }
-
-            if (outcome == TurnOutcome.Withdrawn && _sentFromWeb)
-            {
-                // A message from the Web UI's page (2026-10-14): back to the page's draft. The PC's row is left alone, and no draft is
-                // parked there, so the PC's queue never waits on it.
-                WithdrawWebLine(_sentDraft ?? text);
-                return false;
-            }
-
             if (outcome == TurnOutcome.Withdrawn)
             {
-                // ESC before the model's first event: the line comes back for the next read, as
-                // the history recalls it (its tokens intact; a spoken request was remembered too).
-                // A drained message went through the same Enter arm, so it comes back the same way,
-                // and the idle loop reads that draft before it drains the next (2026-09-18).
-                _restoreDraft = _sentDraft ?? PasteBlocks.WithoutSavedPaths(text);
-                // Back on the row at once (2026-09-25), ahead of whatever was typed under the reply.
-                _input.Chat.Load(_restoreDraft, prependToCurrent: true);
+                // ESC before the model's first event (one PutBackWithdrawn since 2026-11-16, #44, shared with a cancelled reload): a Ralph pass
+                // (2026-10-18) or an audit's or gap review's pass (2026-10-19) puts nothing back, the message the loop's; a page's line goes back
+                // to its draft (2026-10-14), the PC's row left alone; anything else comes back for the next read, as the history recalls it,
+                // ahead of whatever was typed under the reply (2026-09-25), and the idle loop reads that draft before it drains the next.
+                PutBackWithdrawn(text, passMessage);
                 return false;
             }
 
@@ -18286,6 +18346,8 @@ internal sealed partial class ChatScreen
             _sentDraft = text;
             _sentFromWeb = false;
             _sentFromWebPage = null;
+            _sentWebProfile = null;
+            _sentWebAttachments = null;
         }
 
         return new ListenOutcome(text, Exit: false, Discarded: false);
@@ -18522,6 +18584,9 @@ internal sealed partial class ChatScreen
                 ShowBotPicture(bot, picture, late: false);
             }
         }
+
+        // The made files (2026-11-16, #41): the main Assistant's turns, Ralph's and the audit's too, whatever the checkpoint setting; never a bot's.
+        assistant.MadeFiles = bot is null ? _madeFiles : null;
 
         // The turn's file journal, and a pending /undo note ahead of the message (2026-10-28, the checkpoints plan): a main-chat turn's only.
         var (journal, undoNote) = BeginTurnJournal(assistant, bot);
@@ -18849,7 +18914,8 @@ internal sealed partial class ChatScreen
         // A custom command that opens a session titles it with the typed line (2026-10-30, the user's pick), the title source still the first
         // line's, so the model may retitle it.
         string? customTitle = TakeCustomCommandTitle();
-        _sessionId ??= _sessions.Begin(pass?.Title ?? (customTitle is null ? SessionText.FirstLineTitle(text) : SessionText.FirstLineTitle(customTitle)), _session.Endpoint?.ModelId ?? "");
+        // Titled without a saved picture's path (2026-11-16, #40): the title shows on the page, and a phone photo's line starts with its label.
+        _sessionId ??= _sessions.Begin(pass?.Title ?? (customTitle is null ? SessionText.FirstLineTitle(PasteBlocks.WithoutSavedPaths(text)) : SessionText.FirstLineTitle(customTitle)), _session.Endpoint?.ModelId ?? "");
         if (_sessionId is not { } id)
         {
             return;
@@ -18881,7 +18947,7 @@ internal sealed partial class ChatScreen
         if (_sessionId is { } id)
         {
             var messages = assistant.History.Messages;
-            _sessions.SaveHistory(id, SessionHistory.ToJson(messages, _plan.ToStored(), _executingPlan, _claudeSessionId, _effective().SessionSaveThinking, _claudeServerSessionId, _effective().CameraKeepInSessions, _effective().ScreenKeepInSessions, _advisorThreads.Snapshot(), _advisorThreads.Sessions(), _markName));
+            _sessions.SaveHistory(id, SessionHistory.ToJson(messages, _plan.ToStored(), _executingPlan, _claudeSessionId, _effective().SessionSaveThinking, _claudeServerSessionId, _effective().CameraKeepInSessions, _effective().ScreenKeepInSessions, _advisorThreads.Snapshot(), _advisorThreads.Sessions(), _markName, _madeFiles.Saved(messages)));
         }
     }
 

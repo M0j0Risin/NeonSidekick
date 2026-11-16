@@ -43,6 +43,24 @@ public sealed record SubmittedLine(string Draft, string Text, IReadOnlyList<Imag
     /// its line — under the page's origin, but with no › row (the history never had it), and never handed back to the page's draft.
     /// </summary>
     public bool Chord { get; init; }
+
+    /// <summary>A page line's key in the Web UI's session (2026-11-16, #42): what the Queue tab's ✕ names it by; 0 for any other line.</summary>
+    public long WebKey { get; init; }
+
+    /// <summary>The profile a page's chord was queued under (2026-11-16, #40: a session resume names ids of one profile); null for any other line.</summary>
+    public string? WebProfile { get; init; }
+
+    /// <summary>
+    /// What the › row commits instead of the draft's display (2026-11-16, plan lucid-roaming-lantern #39): a phone line's bare attachment labels then
+    /// its typed text, with its line breaks, since its draft is the typed text alone. Null for every other line.
+    /// </summary>
+    public string? Shown { get; init; }
+
+    /// <summary>
+    /// A phone line's uploads (2026-11-16, #39), each with its saved path once saved: what a withdraw, a drop or a Queue tab's ✕ hands back to its
+    /// own page as chips, beside <see cref="Draft"/>. Null for every other line.
+    /// </summary>
+    public IReadOnlyList<WebUi.WebHeldAttachment>? WebAttachments { get; init; }
 }
 
 /// <summary>What one event did to an <see cref="InputLine.Editor"/> (2026-09-25).</summary>

@@ -9559,6 +9559,7 @@ public partial class ChatScreenTests : IDisposable
                 SettingsField.AnthropicApi, SettingsField.AnthropicApiMaxTokens, SettingsField.AnthropicApiPromptCaching,
                 SettingsField.OpenAIApi, SettingsField.OpenAIApiMaxTokens, SettingsField.OpenAIApiOrganization, SettingsField.OpenAIApiProject,
                 SettingsField.LlmOneLocalModel, SettingsField.DockerServerOneAtATime,   // 2026-11-10
+                SettingsField.EmbeddedIdleUnloadMinutes,   // 2026-11-16, plan lucid-roaming-lantern #44 (the user's pick)
             ];
         var group = ChatScreen.ProfileSettingGroups[ProfileSection.Servers];
         Assert.Equal(fields.Select(f => f.ToString()), group.Select(g => g.Name));
@@ -9580,6 +9581,7 @@ public partial class ChatScreenTests : IDisposable
             ClaudeCodeExecutable = @"D:\bin\claude.exe", ClaudeCodePermissions = "read-write", ClaudeCodeModel = "opus", ClaudeCodeEffort = "high",
             OpenAIApi = true, OpenAIApiMaxTokens = 4_096, OpenAIApiOrganization = "org-neon", OpenAIApiProject = "proj-neon",
             LlmOneLocalModel = false, DockerServerOneAtATime = false,
+            EmbeddedIdleUnloadMinutes = 20,
         };
         var to = new AppSettingsData();
         foreach (var (_, copy) in group)

@@ -786,6 +786,214 @@ public static class WebUiText
     /// <summary>The audit line.</summary>
     public static string QueueResumedLogLine(IPAddress? remote) => "Web UI resumed the held queue from " + Where(remote) + ".";
 
+    // ── The 🗂️ sheet (2026-11-16, plan lucid-roaming-lantern: #40 sessions, #41 made files, #42 the queue) ──
+
+    /// <summary>🗂️'s name, and its sheet's.</summary>
+    public const string ManageButton = "Sessions, files and queue";
+
+    /// <summary>The sheet's ✕.</summary>
+    public const string CloseManage = "Close the sheet";
+
+    /// <summary>The sheet's three tabs, in their order; the Sessions tab wears the PC's Sessions glyph.</summary>
+    public const string SessionsTab = "💬 Sessions";
+
+    public const string FilesTab = "📄 Files";
+
+    public const string QueueTab = "⏳ Queue";
+
+    /// <summary>What the page opens for bare <c>/queue</c>, and the Queue tab's name in the sheet's list.</summary>
+    public const string OpenQueue = "queue";
+
+    /// <summary>What the page opens for bare <c>/sessions</c>, and the Sessions tab's name in the sheet's list.</summary>
+    public const string OpenSessions = "sessions";
+
+    /// <summary><c>/queue send|mode|cancel …</c> typed on the page: the tab has them.</summary>
+    public const string UseQueueTab = "The queue's send and modes are on the 🗂️ sheet's Queue tab here.";
+
+    // ── The Queue tab (2026-11-16, #42) ──
+
+    /// <summary>The tab with nothing waiting, over its controls.</summary>
+    public const string QueueNone = "Nothing waiting.";
+
+    /// <summary>The tab's two parts.</summary>
+    public const string QueueAtPc = "At the PC";
+
+    public const string QueueFromPage = "From this page";
+
+    /// <summary>The tab's ➤.</summary>
+    public const string QueueSendNow = "➤ Send now";
+
+    /// <summary>The two rows of choices: the settings' own names.</summary>
+    public const string QueueModeLabel = "Queue mode";
+
+    public const string QueueCancelLabel = "Queue cancel mode";
+
+    /// <summary>A row's ✕, and its label once armed.</summary>
+    public const string RemoveRow = "Take back";
+
+    public const string RemoveRowArmed = "Take back?";
+
+    /// <summary>A chord's line (a 👥 or a resume waiting): no ✕, and this says why.</summary>
+    public const string QueueChordLine = "The app's own line: it runs when the PC is free.";
+
+    /// <summary>A ✕ on a line that went meanwhile (sent, or taken back from another page).</summary>
+    public const string LineGone = "That line is no longer waiting.";
+
+    /// <summary>The PC's hint row and the audit line after the page took back one of the PC's lines.</summary>
+    public static string QueueRemovedFlash(string label) => "📱 took back: " + label;
+
+    public static string QueueRemovedLogLine(string label, IPAddress? remote) => "Web UI took back the queued line " + Diagnostics.LogText.Quoted(label) + " from " + Where(remote) + ".";
+
+    /// <summary>A page's own line taken back: flashed and logged, never printed (the line is the page's).</summary>
+    public const string PageLineRemovedFlash = "📱 took back a line it sent";
+
+    public static string PageLineRemovedLogLine(IPAddress? remote) => "Web UI took back a line it sent from " + Where(remote) + ".";
+
+    /// <summary>The Queue tab's ➤ Send now.</summary>
+    public static string QueueSentFlash(string label) => "📱 sent now: " + label;
+
+    public static string QueueSentLogLine(string label, IPAddress? remote) => "Web UI sent the queued line " + Diagnostics.LogText.Quoted(label) + " now from " + Where(remote) + ".";
+
+    /// <summary>A mode set from the Queue tab: the setting's name and its new word.</summary>
+    public static string QueueModeFlash(string setting, string word) => "📱 " + setting + ": " + word;
+
+    public static string QueueModeLogLine(string setting, string word, IPAddress? remote) => "Web UI set " + setting + " to " + word + " from " + Where(remote) + ".";
+
+    // ── The Sessions tab (2026-11-16, #40) ──
+
+    /// <summary>The tab with no stored session (none with Session logging off, so no "yet").</summary>
+    public const string SessionsNone = "No stored sessions.";
+
+    /// <summary>A filter or search with no row.</summary>
+    public const string SessionsNoMatch = "Nothing matches.";
+
+    /// <summary>The filter box's placeholder and label: past three letters it also searches what was said.</summary>
+    public const string SessionsFilter = "Filter, or search what was said";
+
+    /// <summary>The divider over the full-text hits.</summary>
+    public const string SessionsFound = "Found in the conversation";
+
+    /// <summary>A row's second line once its first tap armed it.</summary>
+    public const string SessionsArmed = "tap again to resume";
+
+    /// <summary>The current session's mark.</summary>
+    public const string SessionsCurrent = "this conversation";
+
+    /// <summary>The note while the PC is busy: a reply or botchat, or a model loading.</summary>
+    public const string SessionsBusy = "The PC is busy; resume once it's free.";
+
+    public const string SessionsLoading = "A model is loading; resume once it's ready.";
+
+    /// <summary>Above the rows with Session logging off: the stored ones still resume, as at the PC.</summary>
+    public const string SessionsNotSaved = "This conversation isn't saved: Session logging is off.";
+
+    /// <summary>A resume after the PC switched profile: the ids are the old profile's.</summary>
+    public const string ProfileSwitched = "The PC switched profile; reopen the sheet.";
+
+    /// <summary>A resume while a code audit, gap review or Ralph loop runs: a phone can't see the loop it would derail.</summary>
+    public const string ResumeNotUnderLoop = "A code audit or Ralph loop is running; stop it at the PC first.";
+
+    /// <summary>A resume while another of the page's own lines (a 👥 or a resume) waits for the idle line.</summary>
+    public const string ChordWaiting = "The page's last tap is still waiting at the PC.";
+
+    /// <summary>The PC's hint row and the audit line for a resume from the page.</summary>
+    public static string SessionResumedFlash(long id) => "📱 resumed session " + Sessions.SessionText.Id(id);
+
+    public static string SessionResumeLogLine(long id, IPAddress? remote) => "Web UI resumed session " + Sessions.SessionText.Id(id) + " from " + Where(remote) + ".";
+
+    // ── The 🗂️ sheet's Files tab (2026-11-16, plan lucid-roaming-lantern #41) ──
+
+    /// <summary>The Files tab with nothing made in this conversation, or nothing still there.</summary>
+    public const string FilesNone = "No files made in this conversation yet.";
+
+    /// <summary>Under the rows when the list let older entries go.</summary>
+    public const string FilesTrimmed = "Older files aren't listed.";
+
+    /// <summary>Above the rows: what is listed, and what isn't.</summary>
+    public const string FilesHint = "Files the file tools made or changed; not a shell command's or a script's.";
+
+    /// <summary>A made file opened from the page (audit, spaced per file).</summary>
+    public static string MadeFileOpenedLogLine(string name, WebUiOrigin origin)
+    {
+        ArgumentNullException.ThrowIfNull(origin);
+        return "Web UI opened the made file " + name + " for " + Where(origin) + ".";
+    }
+
+    /// <summary>A made file not served: gone, or unreadable (Debug).</summary>
+    public static string MadeFileGoneDebug(string name, string why) => "Web UI: the made file " + name + " was not served: " + why;
+
+    // ── The page's 📎 (2026-11-16, plan lucid-roaming-lantern #39): pictures and PDFs sent from the phone ──
+
+    /// <summary>The 📎's label.</summary>
+    public const string AttachButton = "Attach a picture or PDF";
+
+    /// <summary>A chip's ✕.</summary>
+    public const string AttachRemove = "Remove";
+
+    /// <summary>A chip whose upload met the rate limit and waits to try again.</summary>
+    public const string AttachWaiting = "waiting";
+
+    /// <summary>A PDF's chip, before its size.</summary>
+    public const string AttachPdf = "PDF";
+
+    /// <summary>A file over the cap, refused on the page before any byte goes (and a bare 413).</summary>
+    public static readonly string AttachTooBig = "Over " + Files.FileText.Size(Files.ImageFile.MaxFileBytes) + "; too big to send.";
+
+    /// <summary>A pick of more than there is room for: <c>{0}</c> how many were left out. The server's fifth says it with 1.</summary>
+    public static readonly string AttachRoom = WebUiSession.MaxHeldPerPage.ToString(System.Globalization.CultureInfo.InvariantCulture) + " at a time; {0} not added.";
+
+    /// <summary>A fifth upload for a page (409).</summary>
+    public static readonly string AttachFull = AttachRoom.Replace("{0}", "1", StringComparison.Ordinal);
+
+    /// <summary>An upload whose connection dropped.</summary>
+    public const string AttachStopped = "The upload stopped; try again.";
+
+    /// <summary>A send whose chip failed meanwhile: it went without that one.</summary>
+    public const string AttachLeftOut = "An attachment didn't upload; the message went without it.";
+
+    /// <summary>An upload that is neither a picture nor a PDF (415).</summary>
+    public const string AttachNotPicture = "Only a picture or a PDF can be sent.";
+
+    /// <summary>A HEIF photo the PC's codecs can't read (422): what to change on the phone.</summary>
+    public const string AttachHeic = "This picture's format can't be read on the PC; choose Most Compatible in the iPhone's camera settings.";
+
+    /// <summary>A photo over the pixel cap that reached the server (422).</summary>
+    public static readonly string AttachTooManyPixels = "This photo has more than " + (Files.ImageFile.MaxPixels / 1_000_000).ToString(System.Globalization.CultureInfo.InvariantCulture)
+        + " megapixels; choose a lower resolution in the camera's settings.";
+
+    /// <summary>A picture the codecs refused (422).</summary>
+    public const string AttachUnreadable = "This picture can't be read.";
+
+    /// <summary>An upload past the bytes held in all (507).</summary>
+    public const string AttachTooMuch = "Too many pictures waiting; send or remove some.";
+
+    /// <summary>An upload that arrived across a profile switch (409): dropped, never held under the new profile.</summary>
+    public const string AttachProfileSwitched = "The PC switched profile; send it again.";
+
+    /// <summary>A send naming an upload let go after its time: said once, the line going without it.</summary>
+    public static readonly string AttachExpired = "An attachment was let go after " + (int)WebUiSession.HeldFor.TotalMinutes + " minutes; add it again.";
+
+    /// <summary>A give-back past the caps: the oldest let go to make room.</summary>
+    public const string AttachTrimmed = "The oldest attachment was let go to make room.";
+
+    /// <summary>A command with attachments (the PC's rule: they go with a message).</summary>
+    public const string AttachCommand = "A command can't carry attachments; send them with a message.";
+
+    /// <summary>
+    /// A phone attachment not saved, as the page reads it (the PC's warning names the file and the system's reason, which names the PC's
+    /// path): a picture still went, a PDF didn't.
+    /// </summary>
+    public static string PhoneNotSaved(int number, bool pdf) => pdf
+        ? "[PDF #" + number.ToString(System.Globalization.CultureInfo.InvariantCulture) + "] couldn't be sent."
+        : UI.PasteBlocks.ImageLabel(number) + " wasn't saved on the PC; it was sent without a file.";
+
+    /// <summary>The PC's warning for a phone PDF whose save failed (the reason names the file): left off, the rest going.</summary>
+    public static string PhonePdfNotSavedWarning(int number, string why) =>
+        "[PDF #" + number.ToString(System.Globalization.CultureInfo.InvariantCulture) + "] from the phone was not saved (" + why + "); it is left off.";
+
+    /// <summary>An upload held (audit): its kind and size, never a name (the phone's is never sent).</summary>
+    public static string AttachLogLine(string kind, string size, IPAddress? remote) => "Web UI took a " + kind + " (" + size + ") from " + Where(remote) + ".";
+
     // ── The status row's 🧠 (2026-10-17, the user's ask: no sign on the page that a reflection held the server, and no way to stop it) ──
 
     /// <summary>The 🧠's label while a reflection runs, and once the first tap armed it.</summary>
@@ -881,7 +1089,12 @@ public static class WebUiText
         MemoryEdit, MemoryEditSave, MemoryEditCancel, MemoryTurnOff, MemoryTurnOn,
         Skip, BotResume,
         VoiceMic, VoiceListening, VoiceTranscribing, VoiceCancel, VoiceSpeakOn, VoiceSpeakOff,
-        VoiceHeardNothing, VoiceNeedsHttps, VoiceMicRefused, VoiceFailed);
+        VoiceHeardNothing, VoiceNeedsHttps, VoiceMicRefused, VoiceFailed,
+        ManageButton, CloseManage, SessionsTab, FilesTab, QueueTab, QueueNone, QueueAtPc, QueueFromPage, QueueSendNow, QueueModeLabel,
+        QueueCancelLabel, RemoveRow, RemoveRowArmed, QueueChordLine,
+        SessionsNone, SessionsNoMatch, SessionsFilter, SessionsFound, SessionsArmed, SessionsCurrent, SessionsBusy, SessionsLoading, SessionsNotSaved,
+        FilesNone, FilesTrimmed, FilesHint,
+        AttachButton, AttachRemove, AttachWaiting, AttachTooBig, AttachRoom, AttachStopped, AttachLeftOut, AttachPdf);
 
     // ── A bot check's card (2026-10-17): the Browser window on the page while a check runs in it ──
 
@@ -1105,8 +1318,7 @@ public static class WebUiText
             Tag: "file on the PC",
             Failed: "This video file won't play in this browser: its format or codec isn't one it plays, or it couldn't be read.",
             NoPicture: "This video file plays sound but no picture here: it has no video, or its video codec isn't one this browser shows.",
-            Gone: "This video file is no longer on the PC: it was moved or deleted.",
-            FunnelOff: VideoFileFunnelOff),
+            Gone: "This video file is no longer on the PC: it was moved or deleted."),
         // The saved list under the player (later on 2026-10-16).
         Saved = new WebSavedWords(
             Filter: "Filter the saved videos",
@@ -1245,19 +1457,6 @@ public static class WebUiText
 
     /// <summary><see cref="VideoFileReadDebug"/>'s reason for a file that shrank under the copy (moved here from <c>MediaFileServer</c>, 2026-11-13).</summary>
     public const string VideoFileShrank = "it got shorter while it was sent";
-
-    /// <summary>
-    /// A video file asked for over Tailscale Funnel with <i>Web UI video files over Funnel</i> off: the 403's words, and the tab's. Pinned.
-    /// </summary>
-    public const string VideoFileFunnelOff =
-        "Video files from the PC don't play over Tailscale Funnel. Use the home network or the tailnet, or turn on Web UI video files over Funnel at the PC.";
-
-    /// <summary>A video file refused over Funnel (audit, at most once a while per address).</summary>
-    public static string VideoFileFunnelLogLine(WebUiOrigin origin)
-    {
-        ArgumentNullException.ThrowIfNull(origin);
-        return "Web UI: a video file was refused over Tailscale Funnel to " + Where(origin) + " (Web UI video files over Funnel is off).";
-    }
 
     /// <summary>A video file not served: gone, or unreadable (Debug).</summary>
     public static string VideoFileGoneDebug(string name, string why) => "Web UI: the video file " + name + " was not served: " + why;

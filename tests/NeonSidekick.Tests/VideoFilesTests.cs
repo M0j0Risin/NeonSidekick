@@ -478,7 +478,6 @@ public sealed class VideoFilesTests : IDisposable
         Assert.Equal("", VideoText.PlayInHint("phone"));
         Assert.Equal("Error: no window", VideoText.RouteFailed("no window"));
         Assert.False(new AppSettingsData().VideoTools);
-        Assert.False(new AppSettingsData().WebUiVideoFilesOverFunnel);
     }
 
     [Fact]

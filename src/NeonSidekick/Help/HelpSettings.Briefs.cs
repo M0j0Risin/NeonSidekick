@@ -94,7 +94,6 @@ public static partial class HelpSettings
         SettingsField.WebUiVoice => "Gives the Chat tab 🎤 to speak a message and 🔊 to hear replies on the phone; nothing loads with the tab off.",
         SettingsField.WebUiHomeControls => "Shows the Web UI's Home tab, which controls Home Assistant devices, rooms and scenes. Unlocking and opening doors still ask first.",
         SettingsField.WebUiShoppingControls => "Shows the Web UI's Shopping tab, to see and change the shopping list from your phone.",
-        SettingsField.WebUiVideoFilesOverFunnel => "Lets a PC video file play on the Video tab over Tailscale Funnel too, not only on the LAN or a tailnet.",
         SettingsField.WebUiYouTubeControls => "Shows the Web UI's Video tab, which plays videos and keeps the saved list. A video started there plays there.",
 
         // /settings › Servers › Common
@@ -129,7 +128,7 @@ public static partial class HelpSettings
 
         // /settings › Servers › Embedded
         SettingsField.EmbeddedLlmServer => "Offers the embedded models in /server. Off, none is offered and a running embedded server stops; installed models stay on disk.",
-        SettingsField.EmbeddedModels => "The embedded models, each with its size and state. Enter on one installs, uses or removes it. The title row's buttons filter and sort the list.",
+        SettingsField.EmbeddedModels => "The embedded models, each with its size and state. A mark says whether it fits this GPU. Enter on one installs, uses or removes it. The title row's buttons filter and sort the list.",
         SettingsField.EmbeddedHfDownloadType => "Model downloads from Hugging Face: parallel uses 8 connections per file, about twice as fast; single uses one.",
         SettingsField.EmbeddedBackend => "Which llama.cpp build runs the model: auto picks CUDA, then Vulkan, then the CPU; or choose cuda, vulkan or cpu. The row shows what auto picked.",
         SettingsField.EmbeddedContextSize => "The server's context window in tokens (512–262,144). 0 fits the largest context that keeps every layer on the GPU.",
@@ -137,6 +136,7 @@ public static partial class HelpSettings
         SettingsField.EmbeddedVramBudget => "How full the GPU may be after the embedded load (other programs count): off, or 50–99 %. To fit, the context shrinks first, then layers move to the CPU, which is much slower.",
         SettingsField.EmbeddedVramOnly => "Keeps the whole model on the GPU: every layer goes there, and the server stops, saying what to lower, if it does not all fit.",
         SettingsField.EmbeddedVision => "Loads the model's vision projector so it can read images, at the cost of more memory (about 1 GB for most models). Off, images are refused.",
+        SettingsField.EmbeddedIdleUnloadMinutes => "Frees the GPU: the embedded model unloads after this many idle minutes, and the next message loads it again. 0 keeps it.",
         SettingsField.EmbeddedDrafter => "Speeds up replies: the model drafts tokens ahead and checks them, so the text is the same, only faster. Turn it off if a model misbehaves with it.",
 
         // /settings › Servers › Docker
@@ -288,7 +288,7 @@ public static partial class HelpSettings
         SettingsField.ImageEditMetadata => "The metadata image_edit keeps: none, basic (author, date, camera…) or all, which also keeps the GPS position.",
         SettingsField.ImageEditMode => "Where an edited picture goes: beside-original writes a new file; overwrite-original replaces the source. No confirmation either way.",
         SettingsField.ImageEditOutputFolder => "Where image_edit writes when the model names no file: a folder under the profile's images folder. Empty writes beside the source.",
-        SettingsField.PastedImagesFolder => "The folder under the profile's images folder where pictures pasted from the clipboard are saved. Empty uses the images folder itself.",
+        SettingsField.PastedImagesFolder => "The folder under the profile's images folder where pictures pasted from the clipboard, or sent from the Web UI, are saved. Empty uses the images folder itself.",
 
         // /tools › Files › Video
         SettingsField.VideoTools => "Gives the model two tools that play a video file from the working folder for you, and pause, seek or close it. Never YouTube.",

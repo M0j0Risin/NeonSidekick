@@ -93,7 +93,7 @@ header.top .tab-menu-button {
 header.top .tab-menu-button.here { color: var(--text); background: var(--panel-2); }
 /* 🔊 (2026-11-13, the webui-voice plan): replies spoken on this page, left of the dot; on shows by the glyph and the panel, not color
    alone. Dimmed with aria-disabled while the PC can't speak here, so the tap still says why. */
-header.top .speak { flex: none; min-height: 36px; min-width: 36px; padding: 4px 8px; border: none; border-radius: 999px; background: none; }
+header.top .speak, header.top .manage-button { flex: none; min-height: 36px; min-width: 36px; padding: 4px 8px; border: none; border-radius: 999px; background: none; }
 header.top .speak.on { background: var(--panel-2); }
 header.top .speak.speak-dim { opacity: 0.45; cursor: default; }
 header.top .tab-menu-list {
@@ -112,11 +112,13 @@ header.top .tab-menu-list {
 header.top nav .tab-menu-list a { display: flex; align-items: center; min-height: 44px; padding: 8px 12px; border-radius: 6px; color: var(--text); white-space: nowrap; }
 header.top nav .tab-menu-list a.here { background: var(--panel); }
 header.top nav .tab-menu-list a.here::after { content: "✓"; margin-left: auto; padding-left: 16px; color: var(--accent-2); }
-/* A phone's header (2026-10-16): the pills a little tighter, so the profile's name keeps its room beside Chat and the menu. */
+/* A phone's header (2026-10-16): the pills a little tighter, so the profile's name keeps its room beside Chat and the menu; 🗂️ and 🔈
+   too since 2026-11-16 (the 🗂️ sheet's button), 32 px with 7 px sides. */
 @media (max-width: 420px) {
   header.top { gap: 6px; }
   header.top nav { gap: 2px; }
   header.top nav > a, header.top .tab-menu-button { padding: 6px 7px; }
+  header.top .speak, header.top .manage-button { min-width: 32px; padding: 4px 7px; }
 }
 /* The Chat badge on the other tabs (2026-10-15): a dot while a reply runs, the count of questions waiting. */
 header.top nav a.busy::after { content: " •"; color: var(--accent); }
@@ -343,7 +345,7 @@ footer.bottom .inner { max-width: 900px; margin: 0 auto; display: flex; flex-dir
 .banner { font-size: 14px; color: var(--dim); }
 .banner.waiting { color: var(--warn); }
 .banner.message { color: var(--warn); }
-.queued { font-size: 14px; color: var(--dim); }
+.queued { font-size: 14px; color: var(--dim); cursor: pointer; }
 /* The held queue's banner (2026-10-17): over the waiting lines while a cancel holds them, its Resume sending them. */
 .queue-held { display: flex; align-items: center; gap: 10px; color: var(--warn); }
 .queue-held-text { flex: 1; min-width: 0; }
@@ -407,6 +409,28 @@ footer.bottom .inner { max-width: 900px; margin: 0 auto; display: flex; flex-dir
 /* The saved prompts (later on 2026-10-15): 📣 at the box's left, its sheet a footer panel; a saved prompt's text sends it and its ✎ fills the
    draft (2026-10-16), a history line's text fills the draft and its ➤ sends it. */
 .prompts-button { flex: none; width: 44px; min-height: 44px; padding: 0; }
+/* The 📎 and its chips (2026-11-16, plan lucid-roaming-lantern #39): a row of its own above the compose row, so the draft box and its ✕ are as
+   they were; each chip the live pill's shape in the theme's own colors (a waiting one's border the warning's), its bar the accent. */
+.attach-button { flex: none; width: 44px; min-height: 44px; padding: 0; }
+.draft-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.draft-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 1px 2px 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--dim);
+  font-size: 12px;
+  line-height: 18px;
+}
+.draft-chip.waiting { border-color: var(--warn); }
+.draft-chip img { width: 24px; height: 24px; object-fit: cover; border-radius: 4px; }
+.draft-chip .chip-glyph { font-size: 16px; }
+.draft-chip progress { width: 48px; height: 6px; accent-color: var(--accent); }
+.draft-chip .chip-remove { min-width: 32px; min-height: 32px; padding: 0; border: none; background: transparent; color: var(--dim); }
 /* 🎤 and the listen's Cancel (2026-11-13, the webui-voice plan): 44 px like 📣, Cancel in ➤'s place while listening. Dimmed with
    aria-disabled, never the disabled property, so the tap still says why. Listening pulses (and says so in its label); transcribing dims. */
 .compose .mic, .compose .listen-cancel { flex: none; width: 44px; min-height: 44px; padding: 0; }
@@ -434,15 +458,45 @@ footer.bottom .inner { max-width: 900px; margin: 0 auto; display: flex; flex-dir
 .prompts-none { color: var(--dim); font-size: 14px; }
 /* The sheet's tabs, its ⇪ or clear all, and a row's 🗑️ (2026-10-16): the tabs in the nav's look, the 🗑️ red while armed, as the overlay's. */
 .strip-bar.sheet-bar { flex-wrap: nowrap; }
-.sheet-tabs { display: flex; gap: 4px; flex: 1; min-width: 0; }
-.strip-bar .sheet-tab { min-height: 36px; padding: 2px 10px; background: none; border-color: transparent; color: var(--dim); white-space: nowrap; }
-.strip-bar .sheet-tab.on { color: var(--text); background: var(--panel-2); }
+.sheet-tabs, .manage-tabs { display: flex; gap: 4px; flex: 1; min-width: 0; }
+.strip-bar .sheet-tab, .strip-bar .manage-tab { min-height: 36px; padding: 2px 10px; background: none; border-color: transparent; color: var(--dim); white-space: nowrap; }
+.strip-bar .sheet-tab.on, .strip-bar .manage-tab.on { color: var(--text); background: var(--panel-2); }
 .sheet-bar .tab-glyph:not(:empty) { margin-right: 4px; }
 .strip-bar .sheet-action { min-height: 36px; white-space: nowrap; }
-.sheet-action.armed, .row-delete.armed, .yt-delete.armed, .yt-clear.armed { background: var(--error, #c0392b); color: #fff; border-color: transparent; }
+.sheet-action.armed, .row-delete.armed, .manage-remove.armed, .session-row.armed, .yt-delete.armed, .yt-clear.armed { background: var(--error, #c0392b); color: #fff; border-color: transparent; }
 .prompt-row .row-delete { flex: none; width: 44px; min-height: 44px; padding: 0; }
 .prompt-row .row-delete.armed { width: auto; padding: 0 10px; font-size: 13px; }
 .prompts-note { color: var(--warn); font-size: 14px; }
+/* The 🗂️ sheet (2026-11-16, manage.js): the 📣 sheet's look under its own classes. The Queue tab: a head over each side, a row's text and its
+   🖼️ count beside a two-tap ✕, a chord's line dimmed without one; ➤ Send now and Resume; the two modes' one-tap choices, the one in force on. */
+.manage { display: flex; flex-direction: column; gap: 6px; }
+.manage-note { color: var(--warn); font-size: 14px; }
+.manage-list { display: flex; flex-direction: column; gap: 4px; max-height: 40vh; overflow-y: auto; }
+.manage-none { color: var(--dim); font-size: 14px; }
+.manage-head { color: var(--dim); font-size: 14px; margin-top: 4px; }
+.manage-row { display: flex; gap: 6px; align-items: center; min-height: 44px; }
+.manage-row .manage-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.manage-row.chord .manage-text { color: var(--dim); }
+.manage-row .manage-pictures { flex: none; color: var(--dim); font-size: 14px; }
+.manage-row .manage-remove { flex: none; width: 44px; min-height: 44px; padding: 0; }
+.manage-row .manage-remove.armed { width: auto; padding: 0 10px; font-size: 13px; }
+/* The Sessions tab (2026-11-16, #40): each row a button, its title over when, turns and model (or "tap again to resume" while armed), a
+   hit's snippet under it with the match marked; the current one disabled, every row dimmed while the PC is busy. */
+.manage-row.session-row { flex-direction: column; align-items: stretch; gap: 2px; text-align: left; padding: 6px 10px; }
+.session-row .manage-meta, .session-row .manage-snippet { color: var(--dim); font-size: 13px; overflow-wrap: anywhere; }
+.session-row .manage-snippet mark { background: var(--panel-2); color: var(--text); border-radius: 3px; }
+.manage-list.dim .session-row { opacity: 0.55; }
+/* The Files tab (#41): a link per made file, its kind's glyph, its name over its folder and size. */
+.manage-row.file-row { padding: 6px 10px; color: var(--text); text-decoration: none; border-radius: 8px; background: var(--panel-2); }
+.file-row .manage-glyph { flex: none; font-size: 20px; }
+.file-row .manage-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.file-row .manage-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-row .manage-meta { color: var(--dim); font-size: 13px; overflow-wrap: anywhere; }
+.manage-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.manage-choices { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.manage-choices .manage-choice-label { color: var(--dim); font-size: 14px; margin-right: 4px; }
+.manage-choices .manage-choice { min-height: 36px; padding: 2px 10px; }
+.manage-choices .manage-choice.on { background: var(--panel-2); color: var(--text); }
 .memory-row .prompt-text { display: flex; align-items: center; padding: 6px 10px; -webkit-line-clamp: unset; line-clamp: unset; overflow-wrap: anywhere; }
 .memory-row.off .prompt-text { color: var(--dim); }
 .memory-row .off-mark { color: var(--dim); white-space: pre; }
@@ -939,3 +993,9 @@ body.yt-windowed .yt-frame {
 
 /* The banner a page shows instead of jumping to a waiting video (2026-10-16): a link to the Video tab under the header. */
 .watch-banner { display: block; padding: 10px 16px; background: var(--panel-2); color: var(--accent); font-weight: 600; text-decoration: none; text-align: center; }
+/* The compose row at a small phone's width with the 📎 (2026-11-16, #39): narrower buttons and gaps, so the draft keeps its room beside ➤ and ■. */
+@media (max-width: 360px) {
+  .compose { gap: 4px; }
+  .compose .prompts-button, .compose .attach-button { width: 36px; }
+  .compose button.primary, .compose button.stop { padding-left: 10px; padding-right: 10px; }
+}

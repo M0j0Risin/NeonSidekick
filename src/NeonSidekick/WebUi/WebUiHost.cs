@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using NeonSidekick.App;
 using NeonSidekick.Diagnostics;
 
 namespace NeonSidekick.WebUi;
@@ -376,7 +377,13 @@ public sealed class WebUiHost : IWebUiHost
 
             if (get && path.StartsWith(YouTubeFilePrefix, StringComparison.Ordinal))
             {
-                await YouTubeFileAsync(context, path[YouTubeFilePrefix.Length..], origin).ConfigureAwait(false);
+                await YouTubeFileAsync(context, path[YouTubeFilePrefix.Length..]).ConfigureAwait(false);
+                return;
+            }
+
+            if (get && path.StartsWith(MadeFilePrefix, StringComparison.Ordinal))
+            {
+                await MadeFileAsync(context, path[MadeFilePrefix.Length..], origin).ConfigureAwait(false);
                 return;
             }
 
@@ -459,6 +466,42 @@ public sealed class WebUiHost : IWebUiHost
                         }
 
                         return;
+                    case QueuePath:
+                        // The 🗂️ sheet's Queue tab (2026-11-16, #42): read as it opens and as the state's queue tag moves, so an unchanged one is a 304.
+                        if (_backend.Queue() is { } queue)
+                        {
+                            await TaggedJsonAsync(context, queue, WebUiJsonContext.Default.WebQueueView).ConfigureAwait(false);
+                        }
+                        else
+                        {
+                            response.StatusCode = StatusCodes.Status404NotFound;
+                        }
+
+                        return;
+                    case FilesPath:
+                        // The 🗂️ sheet's Files tab (2026-11-16, #41): the made files still there, tagged, as the tab re-reads on the files tag.
+                        if (_backend.Files() is { } files)
+                        {
+                            await TaggedJsonAsync(context, files, WebUiJsonContext.Default.WebFilesView).ConfigureAwait(false);
+                        }
+                        else
+                        {
+                            response.StatusCode = StatusCodes.Status404NotFound;
+                        }
+
+                        return;
+                    case SessionsPath:
+                        // The 🗂️ sheet's Sessions tab (2026-11-16, #40): ?q= filters and, past three letters, searches; tagged, as the tab re-reads.
+                        if (_backend.Sessions(context.Request.Query["q"].ToString()) is { } sessions)
+                        {
+                            await TaggedJsonAsync(context, sessions, WebUiJsonContext.Default.WebSessionsView).ConfigureAwait(false);
+                        }
+                        else
+                        {
+                            response.StatusCode = StatusCodes.Status404NotFound;
+                        }
+
+                        return;
                     case HistoryPath:
                         // The message history (2026-10-16): read at each walk and as the box takes focus, so an unchanged one is a 304.
                         await TaggedJsonAsync(context, _backend.History(), WebUiJsonContext.Default.WebHistory).ConfigureAwait(false);
@@ -500,6 +543,13 @@ public sealed class WebUiHost : IWebUiHost
             }
             else if (post)
             {
+                // A phone's upload (2026-11-16, plan lucid-roaming-lantern #39): a raw body, not JSON, so it is matched before the JSON check with its own.
+                if (path == AttachPath)
+                {
+                    await AttachAsync(context, remote).ConfigureAwait(false);
+                    return;
+                }
+
                 if (!CrossSiteSafe(context.Request))
                 {
                     await ResultAsync(context, StatusCodes.Status403Forbidden, new WebResult(false, WebUiText.PostRefused)).ConfigureAwait(false);
@@ -553,6 +603,18 @@ public sealed class WebUiHost : IWebUiHost
                     VoiceSpeakPath when _backend.Voice is { } voice => await ReadAsync(context, WebUiJsonContext.Default.WebVoiceSpeak).ConfigureAwait(false) is { } speak ? voice.Speak(speak, remote) : null,
                     VoicePlayedPath when _backend.Voice is { } voice => await ReadAsync(context, WebUiJsonContext.Default.WebVoicePlayed).ConfigureAwait(false) is { } played ? voice.Played(played, remote) : null,
                     QueueResumePath => _backend.ResumeQueue(remote),   // the held queue's banner (2026-10-17); no body either
+                    QueueRemovePath => await ReadAsync(context, WebUiJsonContext.Default.WebQueueRemoveRequest).ConfigureAwait(false) is { } taken
+                        && WebQueueRemoveRequest.WellFormed(taken) ? _backend.RemoveQueued(taken, remote) : null,   // the Queue tab's ✕ (2026-11-16)
+                    QueueSendPath => _backend.SendQueued(remote),   // its ➤ Send now; no body
+                    AttachForgetPath => await ReadAsync(context, WebUiJsonContext.Default.WebAttachForget).ConfigureAwait(false) is { } unattach
+                        ? _backend.ForgetAttachment(unattach, remote) : null,   // a 📎 chip's ✕ (2026-11-16)
+                    SessionResumePath => await ReadAsync(context, WebUiJsonContext.Default.WebSessionResume).ConfigureAwait(false) is { Id: > 0, Profile: { Length: > 0 } } resumed
+                        ? _backend.ResumeSession(resumed, remote) : null,   // the Sessions tab's two taps (2026-11-16)
+                    QueueModePath => await ReadAsync(context, WebUiJsonContext.Default.WebQueueModeRequest).ConfigureAwait(false) is { } mode
+                        && QueueMode.TryParse(mode.Mode, out var queueing)
+                            ? _backend.SetQueueMode(queueing, remote) : null,   // the /queue mode words; any other is a 400
+                    QueueCancelPath => await ReadAsync(context, WebUiJsonContext.Default.WebQueueModeRequest).ConfigureAwait(false) is { } cancel
+                        && QueueCancelMode.TryParse(cancel.Cancel, out var queueCancel) ? _backend.SetQueueCancelMode(queueCancel, remote) : null,
                     YouTubeReportPath => await YouTubeReportAsync(context, remote).ConfigureAwait(false),
                     YouTubeSeenPath => await YouTubeSeenAsync(context, remote).ConfigureAwait(false),
                     YouTubeSavedPlayPath => await ReadAsync(context, WebUiJsonContext.Default.WebSavedPlay).ConfigureAwait(false) is { } play ? _backend.PlaySaved(play, remote) : null,
@@ -705,10 +767,12 @@ public sealed class WebUiHost : IWebUiHost
 
         return path is "/api/events" or "/api/send" or "/api/stop" or "/api/answer" or "/api/complete" or "/api/usage" or "/api/strip/select" or "/api/prompts"
                 or PromptSavePath or PromptDeletePath or MemoryPath or MemorySavePath or MemoryDeletePath or MemoryEditPath or MemoryTogglePath or HistoryPath or HistoryClearPath
-                or LearnCancelPath or QueueResumePath or BotSkipPath or BotResumePath
+                or LearnCancelPath or QueueResumePath or QueuePath or QueueRemovePath or QueueSendPath or QueueModePath or QueueCancelPath or BotSkipPath or BotResumePath
+                or SessionsPath or SessionResumePath or FilesPath or AttachPath or AttachForgetPath
                 or BotCheckFramePath or BotCheckInputPath
             || path.StartsWith(EntryPrefix, StringComparison.Ordinal) || path.StartsWith(PicturePrefix, StringComparison.Ordinal)
             || path.StartsWith(VoicePrefix, StringComparison.Ordinal)   // the voice (2026-11-13)
+            || path.StartsWith(MadeFilePrefix, StringComparison.Ordinal)   // the made files (2026-11-16, #41)
             ? WebTab.Chat
             : null;
     }
@@ -901,6 +965,76 @@ public sealed class WebUiHost : IWebUiHost
         await response.Body.WriteAsync(picture.Bytes, context.RequestAborted).ConfigureAwait(false);
     }
 
+    /// <summary>A phone's upload (2026-11-16, plan lucid-roaming-lantern #39): <c>POST /api/attach?page=</c>, a raw picture or PDF.</summary>
+    public const string AttachPath = "/api/attach";
+
+    /// <summary>A 📎 chip's ✕: <c>{id, page}</c>, JSON, in the Act bucket.</summary>
+    public const string AttachForgetPath = "/api/attach/forget";
+
+    /// <summary>The content types an upload may carry: none is CORS-safelisted, so a cross-site page can't send one without a preflight.</summary>
+    public static bool AttachTypeAllowed(string? type) =>
+        type is { } t && (t.StartsWith("image/", StringComparison.OrdinalIgnoreCase) || t.StartsWith(Files.PdfFile.MediaType, StringComparison.OrdinalIgnoreCase)
+            || t.StartsWith("application/octet-stream", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// A phone's upload (2026-11-16, plan lucid-roaming-lantern #39). The sign-in and the tab are checked already. Here, before a byte is read:
+    /// <c>X-Neon</c> (403), a <c>Sec-Fetch-Site</c> of <c>cross-site</c> or <c>same-site</c> (403; none passes, as for a GET), an allowed content type
+    /// (415: the type is only the cross-site gate, what the file is comes from the sniff), a page id (400). Then the request's body limit is raised to
+    /// <see cref="Files.ImageFile.MaxFileBytes"/> (Kestrel's own 413 past it), the <see cref="WebRateBucket.Attach"/> bucket spent, the held list's
+    /// epoch read, and the body handed to the backend, whose status is written as it is.
+    /// </summary>
+    private async Task AttachAsync(HttpContext context, IPAddress? remote)
+    {
+        var request = context.Request;
+        if (request.Headers[CsrfHeader] != "1" || CrossSiteGet(request))
+        {
+            await ResultAsync(context, StatusCodes.Status403Forbidden, new WebResult(false, WebUiText.PostRefused)).ConfigureAwait(false);
+            return;
+        }
+
+        if (!AttachTypeAllowed(request.ContentType))
+        {
+            await ResultAsync(context, StatusCodes.Status415UnsupportedMediaType, new WebResult(false, WebUiText.AttachNotPicture)).ConfigureAwait(false);
+            return;
+        }
+
+        string page = request.Query["page"].ToString();
+        if (!WebVideoPlayer.IsId(page))
+        {
+            await ResultAsync(context, StatusCodes.Status400BadRequest, new WebResult(false, WebUiText.BadRequest)).ConfigureAwait(false);
+            return;
+        }
+
+        // Raised for this request alone, before anything reads the body (read-only once reading starts).
+        if (context.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>() is { IsReadOnly: false } limit)
+        {
+            limit.MaxRequestBodySize = Files.ImageFile.MaxFileBytes;
+        }
+
+        if (!await TakeAsync(context, remote, WebRateBucket.Attach).ConfigureAwait(false))
+        {
+            return;
+        }
+
+        long epoch = _backend.AttachEpoch;
+        using var body = new MemoryStream(request.ContentLength is > 0 and <= Files.ImageFile.MaxFileBytes ? (int)request.ContentLength.Value : 64 * 1024);
+        await request.Body.CopyToAsync(body, context.RequestAborted).ConfigureAwait(false);
+        if (body.Length > Files.ImageFile.MaxFileBytes)
+        {
+            context.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;   // a server whose limit wasn't raised: the same answer as Kestrel's own
+            return;
+        }
+
+        var reply = _backend.Attach(page, body.ToArray(), epoch, remote);
+        if (reply.Status == StatusCodes.Status200OK)
+        {
+            await JsonAsync(context, StatusCodes.Status200OK, new WebAttachResult(true, Chip: reply.Chip), WebUiJsonContext.Default.WebAttachResult).ConfigureAwait(false);
+            return;
+        }
+
+        await ResultAsync(context, reply.Status, new WebResult(false, reply.Message)).ConfigureAwait(false);
+    }
+
     /// <summary>Where a deferred entry is read whole: <c>/api/entry/{seq}</c> (2026-10-15).</summary>
     public const string EntryPrefix = "/api/entry/";
 
@@ -966,6 +1100,27 @@ public sealed class WebUiHost : IWebUiHost
 
     /// <summary>The held queue's Resume (2026-10-17): the lines held after a cancel sent.</summary>
     public const string QueueResumePath = "/api/queue/resume";
+
+    /// <summary>The 🗂️ sheet's Queue tab (2026-11-16, #42): the PC's queue and the pages' lines (GET).</summary>
+    public const string QueuePath = "/api/queue";
+
+    /// <summary>The Queue tab's ✕: a line taken back.</summary>
+    public const string QueueRemovePath = "/api/queue/remove";
+
+    /// <summary>The Queue tab's ➤ Send now: the front PC line sent next.</summary>
+    public const string QueueSendPath = "/api/queue/send";
+
+    /// <summary>The Queue tab's <i>Queue mode</i> choice.</summary>
+    public const string QueueModePath = "/api/queue/mode";
+
+    /// <summary>The Queue tab's <i>Queue cancel mode</i> choice.</summary>
+    public const string QueueCancelPath = "/api/queue/cancel";
+
+    /// <summary>The 🗂️ sheet's Sessions tab (2026-11-16, #40): the stored sessions (GET, <c>?q=</c>).</summary>
+    public const string SessionsPath = "/api/sessions";
+
+    /// <summary>The Sessions tab's resume.</summary>
+    public const string SessionResumePath = "/api/sessions/resume";
 
     /// <summary>The Shopping tab's 🕘 sheet (2026-10-16): what was bought before and is not on the list now.</summary>
     public const string ShopBoughtPath = "/api/shopping/bought";
@@ -1046,22 +1201,11 @@ public sealed class WebUiHost : IWebUiHost
     /// A video file for the Video tab (2026-11-12, the video-files plan), past the sign-in, the cross-site and the tab's gates: the first
     /// segment the token (exactly 32 hex digits; the rest, the name, ignored, and a name's <c>%2F</c> only adds segments), which must be the
     /// current file's (<see cref="IWebVideo.FileOf"/>), else a 404. No <c>X-Neon</c> header (a <c>&lt;video src&gt;</c> can send none):
-    /// <c>Sec-Fetch-Site</c>, CORP and the token keep it to the page. Over Tailscale Funnel a 403 unless <i>Web UI video files over Funnel</i>
-    /// is on (the page reads the status when its video fails). Unbucketed, as every GET: a video's range requests are many.
+    /// <c>Sec-Fetch-Site</c>, CORP and the token keep it to the page. Over Tailscale Funnel too (2026-11-14, the user's call: the setting went).
+    /// Unbucketed, as every GET: a video's range requests are many.
     /// </summary>
-    private async Task YouTubeFileAsync(HttpContext context, string rest, WebUiOrigin origin)
+    private async Task YouTubeFileAsync(HttpContext context, string rest)
     {
-        if (origin.Funnel && !_backend.VideoFilesOverFunnel)
-        {
-            if (_limits.LogDue(origin.Remote, nameof(WebUiText.VideoFileFunnelLogLine)))
-            {
-                DiagnosticLog.Info(Category, WebUiText.VideoFileFunnelLogLine(origin));
-            }
-
-            await ResultAsync(context, StatusCodes.Status403Forbidden, new WebResult(false, WebUiText.VideoFileFunnelOff)).ConfigureAwait(false);
-            return;
-        }
-
         int slash = rest.IndexOf('/', StringComparison.Ordinal);
         string token = slash < 0 ? rest : rest[..slash];
         if (_backend.Video is not { } video || video.FileOf(token) is not { } file)
@@ -1071,6 +1215,38 @@ public sealed class WebUiHost : IWebUiHost
         }
 
         await MediaFileServer.ServeAsync(context, file.Path, file.Name, _stopping.Token).ConfigureAwait(false);
+    }
+
+    /// <summary>The 🗂️ sheet's Files tab (2026-11-16, plan lucid-roaming-lantern #41): the made files (GET).</summary>
+    public const string FilesPath = "/api/files";
+
+    /// <summary>Where a made file is opened from: <c>/api/files/{token}/{name}</c>, the name only for the browser's tab and saved file.</summary>
+    public const string MadeFilePrefix = "/api/files/";
+
+    /// <summary>
+    /// A file the model made (2026-11-16, #41), served as the playing video is: only the first segment, the token, is read, and the file goes
+    /// under its recorded name, never one read back from the url. The screen's serve check runs at every request (the path still on the list,
+    /// inside today's working or images folder, no link out of it): a refusal is the unknown token's 404, a file gone the 410. Whole files
+    /// only (<see cref="MediaFileServer.ServeMadeAsync"/>). Over Tailscale Funnel too (2026-11-14, the user's call), as the video file is.
+    /// Unbucketed, as every GET; an open is logged, spaced per token.
+    /// </summary>
+    private async Task MadeFileAsync(HttpContext context, string rest, WebUiOrigin origin)
+    {
+        int slash = rest.IndexOf('/', StringComparison.Ordinal);
+        string token = slash < 0 ? rest : rest[..slash];
+        if (token.Length != 32 || !token.All(char.IsAsciiHexDigitLower) || _backend.MadeFilePath(token) is not { } full)
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+
+        string name = Path.GetFileName(full);
+        if (_limits.LogDue(origin.Remote, token))
+        {
+            DiagnosticLog.Info(Category, WebUiText.MadeFileOpenedLogLine(name, origin));
+        }
+
+        await MediaFileServer.ServeMadeAsync(context, full, name, _stopping.Token).ConfigureAwait(false);
     }
 
     /// <summary>

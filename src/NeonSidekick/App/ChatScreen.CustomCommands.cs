@@ -57,6 +57,11 @@ internal sealed partial class ChatScreen
             return false;
         }
 
+        if (!await EnsureLlmAsync(cancellationToken).ConfigureAwait(false))
+        {
+            return false;
+        }
+
         if (_session.Assistant is null)
         {
             _transcript.Error(NoAssistantError);

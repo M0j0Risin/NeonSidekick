@@ -191,10 +191,23 @@ public sealed class WebCommandsTests
     [InlineData("/profile work", WebCommandKind.Refused)]
     [InlineData("/msgclear", WebCommandKind.Run)]   // 2026-10-16: the page shares the message history, and may clear it
     [InlineData("/msgclear all", WebCommandKind.Refused)]
-    [InlineData("/sessions", WebCommandKind.Refused)]
+    [InlineData("/sessions", WebCommandKind.Page)]   // 2026-11-16 (#40): the 🗂️ sheet's Sessions tab
+    [InlineData("/sessions 12", WebCommandKind.Run)]
+    [InlineData("/sessions #12", WebCommandKind.Run)]
+    [InlineData("/sessions title Trip notes", WebCommandKind.Run)]
+    [InlineData("/sessions title", WebCommandKind.Refused)]
+    [InlineData("/sessions purge 3", WebCommandKind.Refused)]
+    [InlineData("/sessions purge all", WebCommandKind.Refused)]
+    [InlineData("/sessions export", WebCommandKind.Refused)]
+    [InlineData("/sessions foo", WebCommandKind.Refused)]
     [InlineData("/skills", WebCommandKind.Refused)]
     [InlineData("/youtube", WebCommandKind.Refused)]
     [InlineData("/queue clear", WebCommandKind.Refused)]
+    [InlineData("/queue", WebCommandKind.Page)]   // 2026-11-16 (#42): the 🗂️ sheet's Queue tab
+    [InlineData("/queue send", WebCommandKind.Refused)]
+    [InlineData("/queue mode manual", WebCommandKind.Refused)]
+    [InlineData("/queue cancel hold", WebCommandKind.Refused)]
+    [InlineData("/queue foo", WebCommandKind.Refused)]
     [InlineData("/botchat", WebCommandKind.Run)]   // 2026-11-12, the user's ask: every form, the chat shown on the page
     [InlineData("/botchat ada max -- pizza", WebCommandKind.Run)]
     [InlineData("/botchat --resume", WebCommandKind.Run)]
@@ -259,6 +272,42 @@ public sealed class WebCommandsTests
         Assert.Equal(WebUiText.PcOnly("/youtube"), WebCommands.Check("/youtube status", On with { YouTubeTab = true }).Reason);
         Assert.Equal(WebUiText.PcOnly("/youtube"), WebCommands.Check("/youtube play aqz-KE-bpKQ", On with { YouTubeTab = true }).Reason);
         Assert.Contains(SlashCommand.YouTube, WebCommands.Never);
+    }
+
+    /// <summary>
+    /// <c>/queue</c> from the page (2026-11-16, #42), classed by the PC's own parser: the bare word opens the Queue tab, send and the modes point
+    /// at it, a clear-all is the PC's, and anything the PC calls a usage error (a clear with more words too) gets the usable form.
+    /// </summary>
+    [Fact]
+    public void TheQueuesForms_PointAtTheQueueTab_OrThePc()
+    {
+        Assert.Equal(WebUiText.OpenQueue, WebCommands.Check("/queue", On).Open);
+        Assert.Equal(WebUiText.UseQueueTab, WebCommands.Check("/queue send", On).Reason);
+        Assert.Equal(WebUiText.UseQueueTab, WebCommands.Check("/queue mode off", On).Reason);
+        Assert.Equal(WebUiText.UseQueueTab, WebCommands.Check("/queue cancel drain", On).Reason);
+        Assert.Equal(WebUiText.PcOnly("/queue clear"), WebCommands.Check("/queue clear", On).Reason);
+        Assert.Equal(WebUiText.OpensPane("/queue", "/queue"), WebCommands.Check("/queue clear all", On).Reason);
+        Assert.Equal(WebUiText.OpensPane("/queue", "/queue"), WebCommands.Check("/queue mode bogus", On).Reason);
+        Assert.Equal(WebUiText.CommandsOff, WebCommands.Check("/queue", On with { Commands = false }).Reason);
+        Assert.True(WebCommands.Offers(SlashCommand.Queue));
+        Assert.DoesNotContain(SlashCommand.Queue, WebCommands.Never);
+    }
+
+    /// <summary>
+    /// <c>/sessions</c> from the page (2026-11-16, #40): the bare word opens the Sessions tab, a restore and a title run, the rename box is the
+    /// PC's pane, a purge or an export only at the PC, and none of it with commands off.
+    /// </summary>
+    [Fact]
+    public void TheSessionsForms_OpenTheSessionsTab_Run_OrStayAtThePc()
+    {
+        Assert.Equal(WebUiText.OpenSessions, WebCommands.Check("/sessions", On).Open);
+        Assert.Equal(WebUiText.OpensPane("/sessions", "/rename <name>"), WebCommands.Check("/sessions title", On).Reason);
+        Assert.Equal(WebUiText.PcOnly("/sessions purge"), WebCommands.Check("/sessions purge 3", On).Reason);
+        Assert.Equal(WebUiText.PcOnly("/sessions export"), WebCommands.Check("/sessions export", On).Reason);
+        Assert.Equal(WebUiText.OpensPane("/sessions", "/sessions <id>|title <text>"), WebCommands.Check("/sessions foo", On).Reason);
+        Assert.Equal(WebUiText.CommandsOff, WebCommands.Check("/sessions 12", On with { Commands = false }).Reason);
+        Assert.Equal(WebUiText.CommandsOff, WebCommands.Check("/sessions", On with { Commands = false }).Reason);
+        Assert.True(WebCommands.Offers(SlashCommand.Session));
     }
 
     [Fact]

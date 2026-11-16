@@ -14,11 +14,13 @@
 <script src="/common.js" defer></script>
 <script src="/voice-worklet.js" defer></script>
 <script src="/chat.js" defer></script>
+<script src="/manage.js" defer></script>
 </head>
 <body data-tab="chat">
 <header class="top">
   <div class="who"><span id="profile">NeonSidekick</span><span class="model" id="model"></span></div>
   <nav><a href="/" class="here">Chat</a><div class="tab-menu"><button type="button" class="tab-menu-button" aria-haspopup="menu" aria-expanded="false" aria-controls="tab-menu-list">☰</button><div class="tab-menu-list hidden" role="menu" id="tab-menu-list"><a href="/home" role="menuitem">🏠 Home</a><a href="/shopping" role="menuitem">🛒 Shopping</a><a href="/video" role="menuitem" class="hidden">▶️ Video</a><a href="/about" role="menuitem">ℹ️ About</a></div></div></nav>
+  <button type="button" class="manage-button" id="manage-button">🗂️</button>
   <button type="button" class="speak hidden" id="speak" aria-pressed="false">🔈</button>
   <span class="dot" id="dot" title="connection"></span>
 </header>
@@ -45,7 +47,7 @@
     </section>
     <div class="banner waiting hidden" id="waiting"></div>
     <div class="banner queue-held hidden" id="queue-held"><span class="queue-held-text"></span><button type="button" class="queue-resume" id="queue-resume"></button></div>
-    <div class="queued hidden" id="queued"></div>
+    <div class="queued hidden" id="queued" role="button" tabindex="0"></div>
     <div class="banner message hidden" id="message"></div>
     <div class="complete hidden" id="complete" role="listbox"></div>
     <section class="prompts hidden" id="prompts" role="region">
@@ -62,6 +64,19 @@
       <input type="search" id="prompts-filter" class="hidden" autocomplete="off">
       <div class="prompts-list" id="prompts-list"></div>
     </section>
+    <section class="manage hidden" id="manage" role="region">
+      <div class="strip-bar sheet-bar">
+        <div class="manage-tabs" role="tablist">
+          <button type="button" class="manage-tab" role="tab" data-tab="sessions"><span class="tab-glyph">💬</span><span class="tab-word">Sessions</span></button>
+          <button type="button" class="manage-tab" role="tab" data-tab="files"><span class="tab-glyph">📄</span><span class="tab-word">Files</span></button>
+          <button type="button" class="manage-tab" role="tab" data-tab="queue"><span class="tab-glyph">⏳</span><span class="tab-word">Queue</span></button>
+        </div>
+        <button type="button" id="manage-close">✕</button>
+      </div>
+      <div class="manage-note hidden" id="manage-note" role="status" aria-live="polite"></div>
+      <input type="search" id="manage-filter" class="hidden" autocomplete="off">
+      <div class="manage-list" id="manage-list"></div>
+    </section>
     <section class="strip hidden" id="strip" role="region" aria-labelledby="strip-head">
       <div class="strip-bar"><span id="strip-head"></span><button type="button" id="strip-close">✕</button></div>
       <div class="strip-row" id="strip-row"></div>
@@ -74,8 +89,11 @@
       <button type="button" class="skip-button hidden" id="bot-resume">👥</button>
       <button type="button" class="usage hidden" id="usage"></button>
     </div>
+    <div class="draft-chips hidden" id="draft-chips"></div>
     <div class="compose">
       <button type="button" class="prompts-button" id="prompts-button">📣</button>
+      <button type="button" class="attach-button" id="attach">📎</button>
+      <input type="file" class="hidden" id="attach-input" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf" multiple>
       <div class="draft-box">
         <textarea id="draft" rows="1" placeholder="Message…" enterkeyhint="send"></textarea>
         <button type="button" class="clear-draft hidden" id="clear-draft">✕</button>

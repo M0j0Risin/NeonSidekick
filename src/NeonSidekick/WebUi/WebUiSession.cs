@@ -14,8 +14,12 @@ namespace NeonSidekick.WebUi;
 /// command goes as a message (later on 2026-10-14). <see cref="Page"/> and <see cref="Speak"/> (2026-11-13, the webui-voice plan): the sending page and its
 /// 🔊 as the line carried it, for the turn's voice (the page's latest 🔊 wins when it has one). <see cref="Chord"/> (2026-11-14): the app's own line for a
 /// page's button (the status row's 👥), run as the PC's chord runs its line — no › row, never in the history, never handed back to a draft.
+/// <see cref="Key"/> (2026-11-16, plan lucid-roaming-lantern #42): the session's own serial for it, from 1, never reused — what the Queue tab's ✕
+/// names (the page's <see cref="Id"/> is its retry id, and optional). <see cref="Attachments"/> (2026-11-16, #39): the page's uploads it took, moved
+/// out of the held list so a line waiting behind a reply never expires them.
 /// </summary>
-public sealed record WebLine(string Text, string? Id, IPAddress? Remote = null, bool AsText = false, string? Page = null, bool Speak = false, bool Chord = false);
+public sealed record WebLine(string Text, string? Id, IPAddress? Remote = null, bool AsText = false, string? Page = null, bool Speak = false, bool Chord = false, long Key = 0, string? Profile = null,
+    IReadOnlyList<WebHeldAttachment>? Attachments = null);
 
 /// <summary>
 /// The app's side of the Web UI (2026-10-14), one per screen and outliving the server's restarts: the transcript as the pages see it
@@ -25,7 +29,7 @@ public sealed record WebLine(string Text, string? Id, IPAddress? Remote = null, 
 /// transcript and never waits on the screen — a message or a notice is queued and <see cref="Nudge"/> wakes the idle line, which takes
 /// them on its own task. The screen supplies what only it knows through the hooks given at construction.
 /// </summary>
-public sealed class WebUiSession : IWebUiBackend, IDisposable
+public sealed partial class WebUiSession : IWebUiBackend, IDisposable
 {
     /// <summary>The most bytes one message may hold (UTF-8), under the request's own 64 KB cap.</summary>
     public const int MaxMessageBytes = 48 * 1024;
@@ -45,14 +49,20 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     private readonly Func<IPAddress?, WebReply> _stop;
     private readonly Func<ShoppingList?> _shopping;
     private readonly Action _shoppingChanged;
-    private readonly ConcurrentQueue<WebLine> _lines = new();
+    // The page's lines waiting (2026-11-16, #42: lists under one lock, so the Queue tab's ✕ takes one from the middle; two queues until then).
+    private readonly List<WebLine> _lines = [];
 
     /// <summary>
     /// The lines that waited behind a reply canceled under <i>Queue cancel mode</i> <c>hold</c> (2026-10-17, the user's question): set apart by
     /// <see cref="HoldForCancel"/>, taken only once the screen's hold lifts (<see cref="CancelHoldNow"/>), while a line sent after the cancel
     /// goes at once — the page's next message, as the PC's typed one.
     /// </summary>
-    private readonly ConcurrentQueue<WebLine> _cancelHeld = new();
+    private readonly List<WebLine> _cancelHeld = [];
+
+    /// <summary>The lock over <see cref="_lines"/>, <see cref="_cancelHeld"/>, the key serial and <see cref="Version"/>.</summary>
+    private readonly object _linesGate = new();
+    private long _lineKey;
+    private long _version;
     private readonly ConcurrentQueue<(string Text, bool Error)> _notices = new();
     private readonly ConcurrentQueue<string> _flashes = new();
     private int _flashing;
@@ -151,8 +161,11 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     /// <summary>The settings a command from the page is checked against, read at each send (later on 2026-10-14); null refuses every command.</summary>
     public Func<WebCommandSettings>? CommandSettings { get; set; }
 
-    /// <summary>The page's lines the screen holds for the idle line (a command sent under a botchat), listed as waiting on the page.</summary>
-    public Func<IReadOnlyList<string>>? HeldForPc { get; set; }
+    /// <summary>
+    /// The page's lines the screen holds for the idle line (a command sent under a botchat), listed as waiting on the page; with their keys since
+    /// 2026-11-16 (#42), so the Queue tab's ✕ reaches them.
+    /// </summary>
+    public Func<IReadOnlyList<WebQueueLine>>? HeldForPc { get; set; }
 
     /// <summary>The screen's picture by id (under its own lock), asked only for an id the feed holds; null for none.</summary>
     public Func<int, WebPictureSource?>? PictureSource { get; set; }
@@ -444,11 +457,6 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     /// <summary>The Video tab's player (2026-10-16, the screen's), or null with none.</summary>
     public IWebVideo? Video { get; set; }
 
-    /// <summary>Whether a video file plays over Tailscale Funnel (2026-11-12, the screen's setting, read per request); null: never.</summary>
-    public Func<bool>? VideoFilesOverFunnelNow { get; set; }
-
-    public bool VideoFilesOverFunnel => VideoFilesOverFunnelNow?.Invoke() ?? false;
-
     // ── The Video tab's saved list (later on 2026-10-16): the screen's hooks, the prompts sheet's shape; a null hook is a 404 ──────────
 
     /// <summary>The saved list now (the screen's, on a Kestrel thread); null: none.</summary>
@@ -574,7 +582,28 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     private bool CancelHolding => CancelHoldNow?.Invoke() == true;
 
     /// <summary>The lines waiting now set apart under the screen's hold (lines that waited behind a canceled reply).</summary>
-    public int CancelHeldCount => _cancelHeld.Count;
+    public int CancelHeldCount
+    {
+        get
+        {
+            lock (_linesGate)
+            {
+                return _cancelHeld.Count;
+            }
+        }
+    }
+
+    /// <summary>Bumped by every change to the page's own lines (2026-11-16, #42): an add, a take, a removal, a hold, a drop. The Queue tab's tag reads it.</summary>
+    public long Version
+    {
+        get
+        {
+            lock (_linesGate)
+            {
+                return _version;
+            }
+        }
+    }
 
     /// <summary>
     /// The screen's hold applied (2026-10-17, <c>ApplyQueueCancelMode</c>'s <c>hold</c>): the lines waiting now are set apart until it lifts;
@@ -582,11 +611,13 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     /// </summary>
     public void HoldForCancel()
     {
-        bool moved = false;
-        while (_lines.TryDequeue(out var line))
+        bool moved;
+        lock (_linesGate)
         {
-            _cancelHeld.Enqueue(line);
-            moved = true;
+            moved = _lines.Count > 0;
+            _cancelHeld.AddRange(_lines);
+            _lines.Clear();
+            _version += moved ? 1 : 0;
         }
 
         if (moved)
@@ -604,16 +635,61 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     public long LinesAdded => Interlocked.Read(ref _linesAdded);
 
     /// <summary>Whether a message can be taken: a fresh one, or a held one once the hold lifted (a held one alone never wakes the idle line).</summary>
-    public bool LinesReady => !_lines.IsEmpty || (!_cancelHeld.IsEmpty && !CancelHolding);
+    public bool LinesReady
+    {
+        get
+        {
+            bool held;
+            lock (_linesGate)
+            {
+                if (_lines.Count > 0)
+                {
+                    return true;
+                }
+
+                held = _cancelHeld.Count > 0;
+            }
+
+            return held && !CancelHolding;   // the hook asked outside the lock: it reads the screen's queue
+        }
+    }
 
     /// <summary>Whether a notice waits.</summary>
     public bool NoticesReady => !_notices.IsEmpty;
 
     /// <summary>The messages waiting now, oldest first (the state's list): the ones held after a cancel, the queue's, then the screen's pended ones.</summary>
-    public IReadOnlyList<string> Waiting => [.. _cancelHeld.Select(l => l.Text), .. _lines.Select(l => l.Text), .. HeldForPc?.Invoke() ?? []];
+    public IReadOnlyList<string> Waiting => [.. WaitingLines.Select(l => l.Text)];
 
-    /// <summary>How many messages wait (the Status bar's Queued count), held ones too.</summary>
-    public int WaitingCount => _lines.Count + _cancelHeld.Count;
+    /// <summary>
+    /// The messages waiting now with their keys (2026-11-16, #42, the Queue tab's "From this page"), oldest first: the ones held after a cancel, the
+    /// queue's, then the screen's pended ones (<see cref="HeldForPc"/>).
+    /// </summary>
+    public IReadOnlyList<WebQueueLine> WaitingLines
+    {
+        get
+        {
+            List<WebQueueLine> lines;
+            lock (_linesGate)
+            {
+                lines = [.. _cancelHeld.Concat(_lines).Select(l => new WebQueueLine(l.Key, l.Text, l.Chord))];
+            }
+
+            lines.AddRange(HeldForPc?.Invoke() ?? []);   // outside the lock: the screen's own list
+            return lines;
+        }
+    }
+
+    /// <summary>How many messages wait (the Status bar's Queued count, and <see cref="MaxWaiting"/>'s), held ones too: the session's own, not the screen's pended.</summary>
+    public int WaitingCount
+    {
+        get
+        {
+            lock (_linesGate)
+            {
+                return _lines.Count + _cancelHeld.Count;
+            }
+        }
+    }
 
     /// <summary>
     /// The next message for the idle line, oldest first: once the screen's hold lifted, the ones held after a cancel first; while it holds, only a
@@ -621,25 +697,67 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     /// </summary>
     public bool TryTakeLine(out WebLine line)
     {
-        if (!CancelHolding && _cancelHeld.TryDequeue(out line!))
+        bool holding = CancelHolding;   // the screen's queue, read before the lock
+        lock (_linesGate)
         {
+            var from = !holding && _cancelHeld.Count > 0 ? _cancelHeld : _lines;
+            if (from.Count == 0)
+            {
+                line = null!;
+                return false;
+            }
+
+            line = from[0];
+            from.RemoveAt(0);
+            _version++;
             return true;
         }
-
-        return _lines.TryDequeue(out line!);
     }
 
-    /// <summary>Every waiting message dropped and handed back to the pages' drafts (a conversation cleared); their count.</summary>
-    public int DropLines()
+    /// <summary>
+    /// The line <paramref name="key"/> taken out of the waiting lists (2026-11-16, #42: the Queue tab's ✕), held or not; false when it is no longer
+    /// waiting here (sent, dropped, or pended at the screen). A chord's line stays: it is never the page's to take back.
+    /// </summary>
+    public bool TryRemoveLine(long key, out WebLine line)
     {
-        int dropped = 0;
-        while (_cancelHeld.TryDequeue(out var line) || _lines.TryDequeue(out line))
+        lock (_linesGate)
         {
-            dropped++;
-            if (!line.Chord)
+            foreach (var list in new[] { _cancelHeld, _lines })
             {
-                HandBack("dropped", line.Text);   // a 👥's line was never the page's draft (2026-11-14)
+                int at = list.FindIndex(l => l.Key == key && !l.Chord);
+                if (at >= 0)
+                {
+                    line = list[at];
+                    list.RemoveAt(at);
+                    _version++;
+                    return true;
+                }
             }
+        }
+
+        line = null!;
+        return false;
+    }
+
+    /// <summary>
+    /// Every waiting message dropped and handed back to the pages' drafts (a conversation cleared); their count. Without
+    /// <paramref name="giveBack"/> (a profile switch, 2026-11-16, #39) their attachments are let go, the text alone going back.
+    /// </summary>
+    public int DropLines(bool giveBack = true)
+    {
+        List<WebLine> taken;
+        lock (_linesGate)
+        {
+            taken = [.. _cancelHeld, .. _lines];
+            _cancelHeld.Clear();
+            _lines.Clear();
+            _version += taken.Count > 0 ? 1 : 0;
+        }
+
+        int dropped = taken.Count;
+        foreach (var line in taken.Where(l => !l.Chord))
+        {
+            HandBack("dropped", line.Text, giveBack ? line.Attachments : null);   // a 👥's line was never the page's draft (2026-11-14)
         }
 
         if (dropped > 0)
@@ -650,11 +768,11 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
         return dropped;
     }
 
-    /// <summary>A message the screen withdrew (stopped before the model answered): back into the page's draft.</summary>
-    public void Withdrawn(string text) => HandBack("withdrawn", text);
+    /// <summary>A message the screen withdrew (stopped before the model answered): back into the page's draft, its attachments held again (2026-11-16, #39).</summary>
+    public void Withdrawn(string text, IReadOnlyList<WebHeldAttachment>? attachments = null) => HandBack("withdrawn", text, attachments);
 
-    /// <summary>A line the screen held for the idle line, dropped with the conversation: back into the page's draft.</summary>
-    public void Dropped(string text) => HandBack("dropped", text);
+    /// <summary>A line the screen held for the idle line, dropped with the conversation: back into the page's draft, its attachments held again.</summary>
+    public void Dropped(string text, IReadOnlyList<WebHeldAttachment>? attachments = null) => HandBack("dropped", text, attachments);
 
     private readonly List<string> _drafts = [];
 
@@ -774,7 +892,8 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
         // its id back (a duplicated tab's fresh one), heard text held for its box and its speaker's clips so far.
         var voice = page is not null && VoiceSnapshot is { } pieces ? pieces(page) : default;
         return new WebSnapshot(Feed.Snapshot((Func<string, string, string>)WebUiMarkdown.ToHtml, defer: true), Asks.OpenAsks().Select(View).ToList(), _state(), WebUiText.Words, TakeDrafts(), StatusNow?.Invoke().Status,
-            StripView?.Invoke(), PointNow?.Invoke(), page, voice.Heard, voice.Speaking, voice.Listen);
+            StripView?.Invoke(), PointNow?.Invoke(), page, voice.Heard, voice.Speaking, voice.Listen,
+            page is not null ? ChipsOf(page) : null, NeonSidekick.Files.ImageFile.MaxFileBytes, NeonSidekick.Files.ImageFile.MaxPixels);
     }
 
     /// <summary>The Chat tab's voice (2026-11-13, the webui-voice plan), filled by the screen, as <see cref="Video"/> is; null without one.</summary>
@@ -796,7 +915,11 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
         string? page = WebVideoPlayer.IsId(request.Page) ? request.Page : null;
         Voice?.Saw(page, request.Speak);   // the page's latest 🔊, before the line queues (2026-11-13)
         string text = Clean(request.Text ?? "");
-        if (text.Trim().Length == 0)
+        // The page's held uploads that go with it (2026-11-16, #39): ids only, taken below under the lock; a picture alone may be sent.
+        var ids = page is not null && request.Attachments is { Count: > 0 } named
+            ? named.Where(id => !string.IsNullOrEmpty(id)).Distinct(StringComparer.Ordinal).Take(MaxHeldPerPage).ToList()
+            : [];
+        if (text.Trim().Length == 0 && ids.Count == 0)
         {
             return new WebReply(WebOutcome.Refused, WebUiText.EmptyMessage);
         }
@@ -811,6 +934,11 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
         var commandSettings = !request.AsText && text.TrimStart().StartsWith('/') ? CommandSettings?.Invoke() ?? default : default;
         if (!request.AsText && WebCommands.Parse(text, commandSettings) is var (command, args) && command != SlashCommand.None)
         {
+            if (ids.Count > 0)
+            {
+                return new WebReply(WebOutcome.Refused, WebUiText.AttachCommand);   // the PC's rule: attachments go with a message (2026-11-16, #39)
+            }
+
             var verdict = WebCommands.Check(command, args, text, commandSettings);
             DiagnosticLog.Info(Category, WebUiText.CommandLogLine(WebCommands.Word(text), remote, verdict.Kind == WebCommandKind.Refused ? "refused" : verdict.Kind.ToString().ToLowerInvariant()));
             if (verdict.Kind == WebCommandKind.Page)
@@ -836,12 +964,42 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
             return new WebReply(WebOutcome.TooMany, WebUiText.QueueFull(MaxWaiting));
         }
 
-        _lines.Enqueue(new WebLine(text, request.Id, remote, request.AsText, page, page is not null && request.Speak == true));
+        // The take and the enqueue under one lock (2026-11-16, #39): after the retry check, so a retried send never takes them twice, and after the
+        // queue's cap, so a full queue leaves them held.
+        if (ids.Count > 0)
+        {
+            ExpireHeld();
+        }
+
+        int missing = 0;
+        bool added;
+        lock (_linesGate)
+        {
+            var taken = ids.Count > 0 ? TakeHeldLocked(page!, ids, out missing) : [];
+            added = text.Trim().Length > 0 || taken.Count > 0;
+            if (added)
+            {
+                AddLocked(new WebLine(text, request.Id, remote, request.AsText, page, page is not null && request.Speak == true, Attachments: taken.Count > 0 ? taken : null));
+            }
+        }
+
+        if (!added)
+        {
+            Forget(request.Id);   // a picture alone, let go meanwhile: nothing to send
+            PublishChips(page!);
+            return new WebReply(WebOutcome.Refused, WebUiText.AttachExpired);
+        }
+
         Interlocked.Increment(ref _linesAdded);
+        if (ids.Count > 0)
+        {
+            PublishChips(page!);
+        }
+
         Accepted?.Invoke(text);
         PublishState();
         Nudge?.Invoke();
-        return WebReply.Ok;
+        return missing > 0 ? new WebReply(WebOutcome.Ok, WebUiText.AttachExpired) : WebReply.Ok;
     }
 
     /// <summary>
@@ -849,7 +1007,7 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
     /// page's 🔊 seen first, the waiting cap, the idle line woken — but never <see cref="Accepted"/> (the history), and never checked here: the
     /// screen checks it before calling this, and again as it runs it.
     /// </summary>
-    public WebReply QueueChord(string text, IPAddress? remote, string? page, bool? speak)
+    public WebReply QueueChord(string text, IPAddress? remote, string? page, bool? speak, string? profile = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(text);
         page = WebVideoPlayer.IsId(page) ? page : null;
@@ -859,14 +1017,85 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
             return new WebReply(WebOutcome.TooMany, WebUiText.QueueFull(MaxWaiting));
         }
 
-        _lines.Enqueue(new WebLine(text, null, remote, false, page, page is not null && speak == true, Chord: true));
-        Interlocked.Increment(ref _linesAdded);
+        Add(new WebLine(text, null, remote, false, page, page is not null && speak == true, Chord: true, Profile: profile));
         PublishState();
         Nudge?.Invoke();
         return WebReply.Ok;
     }
 
+    /// <summary>A line queued for the idle line under the lock, given its key (2026-11-16, #42).</summary>
+    private void Add(WebLine line)
+    {
+        lock (_linesGate)
+        {
+            AddLocked(line);
+        }
+
+        Interlocked.Increment(ref _linesAdded);
+    }
+
+    /// <summary><see cref="Add"/>'s queueing, with <c>_linesGate</c> held (2026-11-16, #39: a send's take of its uploads and its enqueue are one step).</summary>
+    private void AddLocked(WebLine line)
+    {
+        _lines.Add(line with { Key = ++_lineKey });
+        _version++;
+    }
+
     public WebReply Stop(IPAddress? remote) => _stop(remote);
+
+    // ── The 🗂️ sheet's Queue tab (2026-11-16, plan lucid-roaming-lantern #42): the screen's hooks, on Kestrel threads, never printing ──
+
+    /// <summary>The Queue tab's view, built by the screen (its queue, the pages' lines, the modes); null: no queue.</summary>
+    public Func<WebQueueView>? QueueNow { get; set; }
+
+    /// <summary>A ✕ on the Queue tab: a page's line by key, or a PC line by index and label.</summary>
+    public Func<WebQueueRemoveRequest, IPAddress?, WebReply>? QueueRemove { get; set; }
+
+    /// <summary>The tab's ➤ Send now: the front PC line pended, as the pane's ➤.</summary>
+    public Func<IPAddress?, WebReply>? QueueSend { get; set; }
+
+    /// <summary>The tab's <i>Queue mode</i> choice, its word read already.</summary>
+    public Func<Queueing, IPAddress?, WebReply>? QueueModeSet { get; set; }
+
+    /// <summary>The tab's <i>Queue cancel mode</i> choice, its word read already.</summary>
+    public Func<QueueCancel, IPAddress?, WebReply>? QueueCancelSet { get; set; }
+
+    public WebQueueView? Queue() => QueueNow?.Invoke();
+
+    public WebReply RemoveQueued(WebQueueRemoveRequest request, IPAddress? remote) =>
+        QueueRemove is { } remove ? remove(request, remote) : new WebReply(WebOutcome.NotFound);
+
+    public WebReply SendQueued(IPAddress? remote) => QueueSend is { } send ? send(remote) : new WebReply(WebOutcome.NotFound);
+
+    public WebReply SetQueueMode(Queueing mode, IPAddress? remote) => QueueModeSet is { } set ? set(mode, remote) : new WebReply(WebOutcome.NotFound);
+
+    public WebReply SetQueueCancelMode(QueueCancel mode, IPAddress? remote) => QueueCancelSet is { } set ? set(mode, remote) : new WebReply(WebOutcome.NotFound);
+
+    // ── The 🗂️ sheet's Sessions tab (2026-11-16, plan lucid-roaming-lantern #40): the screen's hooks, on Kestrel threads, never printing ──
+
+    /// <summary>The Sessions tab's view for a query (null or empty: the newest).</summary>
+    public Func<string?, WebSessionsView>? SessionsNow { get; set; }
+
+    /// <summary>The tab's two-tap resume.</summary>
+    public Func<WebSessionResume, IPAddress?, WebReply>? SessionResume { get; set; }
+
+    public WebSessionsView? Sessions(string? query) => SessionsNow?.Invoke(query);
+
+    public WebReply ResumeSession(WebSessionResume request, IPAddress? remote) =>
+        SessionResume is { } resume ? resume(request, remote) : new WebReply(WebOutcome.NotFound);
+
+    /// <summary>The 🗂️ sheet's Files tab (2026-11-16, #41): the screen's made files.</summary>
+    public Func<WebFilesView>? FilesNow { get; set; }
+
+    /// <summary>A made file's path past the screen's serve check.</summary>
+    public Func<string, string?>? MadeFileOf { get; set; }
+
+    public WebFilesView? Files() => FilesNow?.Invoke();
+
+    public string? MadeFilePath(string token) => MadeFileOf?.Invoke(token);
+
+    /// <summary>A page's line taken back from the Queue tab: into the pages' drafts, as a withdrawn one goes, its attachments held again under its own page.</summary>
+    public void TakenBack(string text, IReadOnlyList<WebHeldAttachment>? attachments = null) => HandBack("withdrawn", text, attachments);
 
     public WebReply Answer(WebAnswerRequest request, IPAddress? remote) => Asks.Answer(request, remote);
 
@@ -1143,6 +1372,7 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
         try
         {
             Tick?.Invoke();
+            ExpireHeld();   // 2026-11-16, #39: the phone's unsent uploads let go after their time
             PublishState();
             PublishStatus();
             // A flip of ComfyUI picture strip changes nothing in the strip itself: the tick reads its key (free when nothing changed).
@@ -1200,8 +1430,14 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
         Events.Publish(new WebEvent("asks", () => JsonSerializer.Serialize(new WebAsks(asks.Select(View).ToList()), WebUiJsonContext.Default.WebAsks)));
     }
 
-    private void HandBack(string name, string text) =>
-        Events.Publish(new WebEvent(name, () => JsonSerializer.Serialize(new WebTextBack(text), WebUiJsonContext.Default.WebTextBack)));
+    private void HandBack(string name, string text, IReadOnlyList<WebHeldAttachment>? attachments = null)
+    {
+        // The attachments first (2026-11-16, #39): held again, so the page's chips event and its own snapshot agree; the text stays broadcast, and a
+        // page names the returned chips only when their ids are in its own row.
+        Rehold(attachments);
+        IReadOnlyList<WebChip>? chips = attachments is { Count: > 0 } ? [.. attachments.Select(a => a.Chip)] : null;
+        Events.Publish(new WebEvent(name, () => JsonSerializer.Serialize(new WebTextBack(text, chips), WebUiJsonContext.Default.WebTextBack)));
+    }
 
     private static WebAskView View(WebAskHandle handle)
     {

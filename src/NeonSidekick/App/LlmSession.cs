@@ -17,7 +17,7 @@ namespace NeonSidekick.App;
 /// the conversation stays. Shared by the headless REPL and the chat screen so the two modes
 /// cannot drift in how they find a server.
 /// </summary>
-internal sealed class LlmSession : IDisposable
+internal sealed partial class LlmSession : IDisposable
 {
     private const string Category = "App";
 
@@ -341,6 +341,7 @@ internal sealed class LlmSession : IDisposable
         finally
         {
             _clearedAll = false;
+            IdleFromNow();   // a load's end, or a model left parked behind the new server (2026-11-16, #44)
         }
     }
 
@@ -1277,7 +1278,13 @@ internal sealed class LlmSession : IDisposable
         try
         {
             _client = _factory(Endpoint, Timeouts, default);
+            if (EmbeddedEndpoint.IsEmbedded(endpoint.BaseUrl))
+            {
+                _client = new UseTracker(_client, _use);   // its requests are the idle unload's use (2026-11-16, #44)
+            }
+
             Assistant = new Assistant(_client, History, Timeouts, time: _time, reasoning: ReasoningLevel.Resolve(effective)) { Meter = Meter, Sampling = LlmSampling.Resolve(effective, endpoint.ModelId), ProjectFileAsk = ProjectFileAsk, ResultCut = ResultCut, PublishSentEstimate = true };
+            IdleFromNow();
             return true;
         }
         catch (Exception ex)
@@ -1422,7 +1429,15 @@ internal sealed class LlmSession : IDisposable
         try
         {
             // The client is told the profile (2026-10-10): its own server takes its own caps and headers; a borrowed one the loaded profile's.
-            return (new BotLink(_factory(endpoint, timeouts, new ChatClientFor(borrowed ? null : profile, Linked: true)), endpoint, timeouts, ReasoningLevel.Resolve(profile), LlmSampling.Resolve(profile, endpoint.ModelId)) { SharedEmbedded = shared }, null);
+            // A link to the main host's own server (running, parked, or started by this link; never an extra, which has its own port) counts
+            // its requests on the connection's one count, so the idle unload waits for them (2026-11-16, #44).
+            var client = _factory(endpoint, timeouts, new ChatClientFor(borrowed ? null : profile, Linked: true));
+            if (EmbeddedEndpoint.IsEmbedded(endpoint.BaseUrl) && endpoint.LiveUrl is { } live && _embedded?.Running is { } main && main.BaseUrl == live)
+            {
+                client = new UseTracker(client, _use);
+            }
+
+            return (new BotLink(client, endpoint, timeouts, ReasoningLevel.Resolve(profile), LlmSampling.Resolve(profile, endpoint.ModelId)) { SharedEmbedded = shared }, null);
         }
         catch (Exception ex)
         {
@@ -1608,6 +1623,7 @@ internal sealed class LlmSession : IDisposable
         var cts = CancellationTokenSource.CreateLinkedTokenSource(appToken);
         _learningCts = cts;
         Learning = Task.Run(() => job(assistant, cts.Token), CancellationToken.None);
+        _ = Learning.ContinueWith(_ => IdleFromNow(), CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);   // a confirm ask held it, no request in flight (#44)
         return Learning;
     }
 
@@ -1668,11 +1684,13 @@ internal sealed class LlmSession : IDisposable
             DiagnosticLog.Debug(Category, DisconnectedLogLine(previous));
         }
 
+        Volatile.Write(ref _idleUnloaded, null);   // any connect, discovery or kill supersedes an unloaded model (2026-11-16, #44)
         Disconnect();
     }
 
     private void Disconnect()
     {
+        RetireIdle();
         CancelLearning();
         CancelTitling();
         Assistant = null;
@@ -1727,6 +1745,11 @@ internal sealed class LlmSession : IDisposable
 
     public void Dispose()
     {
+        if (_embedded is { } embedded)
+        {
+            embedded.MainExited -= OnMainExited;
+        }
+
         Disconnect();
         _embeddedLinks.Dispose();
         _learningCts?.Dispose();

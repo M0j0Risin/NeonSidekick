@@ -9,7 +9,7 @@ namespace NeonSidekick.Tests;
 /// <summary>
 /// A video file at the host (2026-11-12, the video-files plan): <c>/api/youtube/file/{token}/{name}</c> serves the file playing in ranges, by
 /// its token alone (the name ignored), behind the sign-in, the cross-site and the tab gates; another token, a path, a closed play or the tab
-/// off is a 404; over Tailscale Funnel a 403 with its sentence and an audit line until <i>Web UI video files over Funnel</i> is on.
+/// off is a 404; over Tailscale Funnel too (2026-11-14, the user's call: the setting went).
 /// </summary>
 public sealed partial class WebUiHostTests
 {
@@ -112,7 +112,7 @@ public sealed partial class WebUiHostTests
     }
 
     [Fact]
-    public async Task OverFunnel_AVideoFile_IsRefused_UntilItsSettingIsOn()
+    public async Task OverFunnel_AVideoFile_Plays()
     {
         YouTubeOn();
         string clip = VideoFileClip();
@@ -125,22 +125,17 @@ public sealed partial class WebUiHostTests
             _backend.VideoPlayer!.Play(request);
             string src = WebVideoPlayer.FileAddress(request.FileToken!, request.FileName);
 
-            using (var refused = await _client.SendAsync(ThroughServe(FileGet(src), "203.0.113.9", funnel: true)))
+            using (var funnel = await _client.SendAsync(ThroughServe(FileGet(src), "203.0.113.9", funnel: true)))
             {
-                Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
-                Assert.Equal(WebUiText.VideoFileFunnelOff, System.Text.Json.JsonSerializer.Deserialize(await refused.Content.ReadAsStringAsync(), WebUiJsonContext.Default.WebResult)?.Message);
+                Assert.Equal(HttpStatusCode.PartialContent, funnel.StatusCode);   // at once: no setting to turn on
             }
 
-            lock (lines) { Assert.Contains(lines, l => l.Contains("a video file was refused over Tailscale Funnel", StringComparison.Ordinal)); }
+            lock (lines) { Assert.DoesNotContain(lines, l => l.Contains("refused over Tailscale Funnel", StringComparison.Ordinal)); }
 
             using (var tailnet = await _client.SendAsync(ThroughServe(FileGet(src), "100.64.1.2")))
             {
                 Assert.Equal(HttpStatusCode.PartialContent, tailnet.StatusCode);   // Serve on the tailnet: no Funnel
             }
-
-            _backend.VideoFilesOverFunnel = true;
-            using var allowed = await _client.SendAsync(ThroughServe(FileGet(src), "203.0.113.9", funnel: true));
-            Assert.Equal(HttpStatusCode.PartialContent, allowed.StatusCode);
         }
         finally
         {

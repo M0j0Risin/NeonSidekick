@@ -163,6 +163,11 @@ internal sealed partial class ChatScreen
             return await ResumeRalphAsync(path, passes, cancellationToken).ConfigureAwait(false);
         }
 
+        if (!await EnsureLlmAsync(cancellationToken).ConfigureAwait(false))
+        {
+            return false;
+        }
+
         if (RalphRefusal() is { } refused)
         {
             _transcript.Error(refused);
@@ -207,6 +212,11 @@ internal sealed partial class ChatScreen
     /// <summary>The paused loop again (<c>/plan ralph</c>): no confirm; the file read again (a plan done meanwhile clears the state), the baseline, the loop.</summary>
     private async Task<bool> ResumeRalphAsync(string path, int? passes, CancellationToken cancellationToken)
     {
+        if (!await EnsureLlmAsync(cancellationToken).ConfigureAwait(false))
+        {
+            return false;
+        }
+
         if (RalphRefusal() is { } refused)
         {
             _transcript.Error(refused);
@@ -309,6 +319,11 @@ internal sealed partial class ChatScreen
         if (_plan.Path is not { } path)
         {
             _transcript.Error(PlanText.NothingPresentedError);
+            return false;
+        }
+
+        if (!await EnsureLlmAsync(cancellationToken).ConfigureAwait(false))
+        {
             return false;
         }
 
@@ -533,6 +548,7 @@ internal sealed partial class ChatScreen
     /// <summary>The flat driver: pass after pass until a stop; true when the shell should exit.</summary>
     private async Task<bool> RunRalphAsync(CancellationToken cancellationToken)
     {
+        using var hold = HoldIdle();   // the model kept while the loop judges between passes (2026-11-16, #44)
         _sentFromWebPage = null;   // its passes are PC turns for speech, whoever started it (2026-11-13, the webui-voice plan)
         var loop = _ralph!;
 

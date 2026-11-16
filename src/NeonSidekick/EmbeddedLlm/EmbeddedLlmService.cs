@@ -38,6 +38,18 @@ public interface IEmbeddedLlm : IAsyncDisposable
     /// <summary>The backend a start under <paramref name="effective"/> would use, and why.</summary>
     BackendChoice Backend(AppSettingsData effective);
 
+    /// <summary>The main server stopped on its own once ready (2026-11-16, #44; never an extra's); on the process's exit thread.</summary>
+    event Action<EmbeddedServerInfo>? MainExited;
+
+    /// <summary>Whether the screen restarts a crashed main server at its next message (2026-11-16, #44): its error line says so only then.</summary>
+    bool RestartsAfterCrash { get; set; }
+
+    /// <summary>
+    /// The biggest GPU's dedicated memory in bytes, the budget's own read (Metal's working set on a Mac); null when none was read
+    /// (2026-11-16, plan lucid-roaming-lantern #43: the pickers' fit marks, read once at each open).
+    /// </summary>
+    long? GpuBytes();
+
     /// <summary>What a start under <paramref name="effective"/> would download for the llama.cpp runtime first: 0 when it is installed.</summary>
     long RuntimeBytesToDownload(AppSettingsData effective);
 
@@ -163,6 +175,15 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
         _totalVram = totalVram ?? Perf.GpuMemory.DedicatedBytes;
         _extraHost = extraHost ?? (() => new LlamaServerHost());
         _vcLoads = vcLoads;
+        _host.Exited += info => MainExited?.Invoke(info);
+    }
+
+    public event Action<EmbeddedServerInfo>? MainExited;
+
+    public bool RestartsAfterCrash
+    {
+        get => _host.RestartsAfterCrash;
+        set => _host.RestartsAfterCrash = value;
     }
 
     /// <summary>The app's service: the real catalog and runtimes under the two folders, a download client with no timeout (gigabytes), the real host.</summary>
@@ -201,6 +222,8 @@ public sealed class EmbeddedLlmService : IEmbeddedLlm
     }
 
     public long RuntimeBytesToDownload(AppSettingsData effective) => _files.RuntimeBytesToDownload(Backend(effective).Backend);
+
+    public long? GpuBytes() => _totalVram();
 
     public async Task<ModelResult> InstallAsync(EmbeddedModel model, AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken)
     {

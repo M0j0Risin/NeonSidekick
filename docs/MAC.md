@@ -31,8 +31,8 @@ You need an Apple Silicon Mac (M1 or later). Unpack the Mac package as the [READ
 |---|---|---|
 | Chat, tools, MCP, Git, sessions, skills, custom commands, headless | Works | Also Office files (read and write), file checkpoints (`/undo`, `/rewind … files`), Home Assistant and its cameras, ComfyUI, Obsidian, the Claude Code server; the shell is zsh ([below](#setup)). |
 | Database tools: SQL Server, Oracle, MySQL, PostgreSQL, SQLite, DuckDB | Works | SQL Server's Windows sign-in is Kerberos only ([below](#sql-server-sign-in)); no named-pipe (`np:`) servers. |
-| Embedded model | Works (Metal) | No NVFP4 models (they're for NVIDIA cards). |
-| Pictures: pasted, dropped, `image_info`, `image_edit` | Works | Also reads HEIC/HEIF, TIFF and AVIF; no JPEG XL writes; `image_edit` refuses `chroma`, `colors` and `dither` ([Editing pictures](TOOLS.md#editing-pictures)). |
+| Embedded model | Works (Metal) | No NVFP4 models (they're for NVIDIA cards). The fit marks read Metal's working set. |
+| Pictures: pasted, dropped, sent from the Web UI, `image_info`, `image_edit` | Works | Also reads HEIC/HEIF, TIFF and AVIF (a phone's HEIC photo too); no JPEG XL writes; `image_edit` refuses `chroma`, `colors` and `dither` ([Editing pictures](TOOLS.md#editing-pictures)). |
 | Picture viewer, thumbnail browser, picture menu, log, process and Docker log windows | Works | On the Mac's desktop, not over SSH. |
 | Voice: Kokoro, Whisper, push-to-talk, wake word, interrupt | Works | Whisper runs on the GPU. |
 | Camera | Works (macOS 14+) | The built-in camera, a USB webcam, or an iPhone (Continuity Camera). |

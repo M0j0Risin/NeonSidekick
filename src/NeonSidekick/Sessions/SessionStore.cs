@@ -571,10 +571,16 @@ public sealed class SessionStore : IDisposable
     /// every word must occur), each with its best-ranked turn and a snippet; session <paramref name="exclude"/>
     /// (the one on screen) left out. Empty for a blank query.
     /// </summary>
-    public IReadOnlyList<SessionHit> Search(string query, int max, long? exclude = null)
+    /// <remarks>
+    /// <paramref name="marks"/> (2026-11-16, the Web UI's Sessions tab): with a pair given, a hit's <see cref="SessionHit.Snippet"/> is instead
+    /// the whole text of the first column holding a match (the user's line, else the reply), each match between the pair, bound as parameters,
+    /// never spliced: the caller cleans the text (a saved picture's label keeps its full path, which FTS5's own snippet could cut in half) and
+    /// cuts its own window. Without one, the snippet is FTS5's, as <c>session_manager</c> and <c>/learn sessions</c> read it.
+    /// </remarks>
+    public IReadOnlyList<SessionHit> Search(string query, int max, long? exclude = null, (string Open, string Close)? marks = null)
     {
         ArgumentNullException.ThrowIfNull(query);
-        return SearchFts(FtsQuery(query), max, exclude);
+        return SearchFts(FtsQuery(query), max, exclude, marks);
     }
 
     /// <summary>
@@ -588,7 +594,7 @@ public sealed class SessionStore : IDisposable
         return SearchFts(FtsQueryAny(words), max, exclude);
     }
 
-    private IReadOnlyList<SessionHit> SearchFts(string fts, int max, long? exclude)
+    private IReadOnlyList<SessionHit> SearchFts(string fts, int max, long? exclude, (string Open, string Close)? marks = null)
     {
         if (fts.Length == 0 || max <= 0)
         {
@@ -608,10 +614,21 @@ public sealed class SessionStore : IDisposable
                 var order = new List<long>();
                 using (var command = connection.CreateCommand())
                 {
-                    command.CommandText = "SELECT t.session_id, t.ordinal, snippet(turns_fts, -1, '', '', '…', $tokens) FROM turns_fts JOIN turns t ON t.id = turns_fts.rowid WHERE turns_fts MATCH $query ORDER BY bm25(turns_fts) LIMIT $scan";
+                    command.CommandText = marks is null
+                        ? "SELECT t.session_id, t.ordinal, snippet(turns_fts, -1, '', '', '…', $tokens) FROM turns_fts JOIN turns t ON t.id = turns_fts.rowid WHERE turns_fts MATCH $query ORDER BY bm25(turns_fts) LIMIT $scan"
+                        : "SELECT t.session_id, t.ordinal, highlight(turns_fts, 0, $open, $close), highlight(turns_fts, 1, $open, $close) FROM turns_fts JOIN turns t ON t.id = turns_fts.rowid WHERE turns_fts MATCH $query ORDER BY bm25(turns_fts) LIMIT $scan";
                     command.Parameters.AddWithValue("$query", fts);
-                    command.Parameters.AddWithValue("$tokens", SnippetTokens);
                     command.Parameters.AddWithValue("$scan", SearchScan);
+                    if (marks is null)
+                    {
+                        command.Parameters.AddWithValue("$tokens", SnippetTokens);
+                    }
+                    else if (marks is { } pair)
+                    {
+                        command.Parameters.AddWithValue("$open", pair.Open);
+                        command.Parameters.AddWithValue("$close", pair.Close);
+                    }
+
                     using var reader = command.ExecuteReader();
                     while (reader.Read() && order.Count < max)
                     {
@@ -621,7 +638,13 @@ public sealed class SessionStore : IDisposable
                             continue;
                         }
 
-                        best[session] = (reader.GetInt32(1), reader.GetString(2));
+                        string snippet = reader.IsDBNull(2) ? "" : reader.GetString(2);
+                        if (marks is { } held && !snippet.Contains(held.Open, StringComparison.Ordinal) && reader.FieldCount > 3 && !reader.IsDBNull(3))
+                        {
+                            snippet = reader.GetString(3);   // the match is in the reply
+                        }
+
+                        best[session] = (reader.GetInt32(1), snippet);
                         order.Add(session);
                     }
                 }

@@ -27,7 +27,7 @@ internal sealed partial class ChatScreen
         var history = new BenchHistory(_settings.ProfileDirectory);
         if (args.Length == 0)
         {
-            string? model = _session.Endpoint?.ModelId;
+            string? model = _session.ShownModelId;
             WriteMarkdownReply(BenchText.Listing(model is null ? new Dictionary<string, (BenchResult, DateTimeOffset)>() : history.Latest(model), model));
             return;
         }
@@ -51,6 +51,11 @@ internal sealed partial class ChatScreen
         if (tests.Count == 0)
         {
             _transcript.Error(BenchText.UnknownTest(args));
+            return;
+        }
+
+        if (!await EnsureLlmAsync(cancellationToken).ConfigureAwait(false))
+        {
             return;
         }
 

@@ -317,7 +317,7 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        if (await _menu.PickServerAsync(LlmSession.DockerRows(list), _session.Endpoint?.BaseUrl, SettingsMenu.ServerTitle, cancellationToken).ConfigureAwait(false) is { } row
+        if (await _menu.PickServerAsync(LlmSession.DockerRows(list), _session.ShownBaseUrl, SettingsMenu.ServerTitle, cancellationToken).ConfigureAwait(false) is { } row
             && DockerEndpoint.ContainerOf(row.BaseUrl) is { } name)
         {
             await UseDockerAsync(name, cancellationToken).ConfigureAwait(false);

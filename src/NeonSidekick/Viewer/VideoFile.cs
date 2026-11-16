@@ -33,12 +33,6 @@ public static class VideoFile
     public const int GoneCode = 1001;
 
     /// <summary>
-    /// The Web UI tab's code for a file refused over Tailscale Funnel (2026-11-12): <i>Web UI video files over Funnel</i> is off. The page reads
-    /// the refusal's status when its <c>&lt;video&gt;</c> fails, which a <c>MediaError</c> can't say.
-    /// </summary>
-    public const int FunnelCode = 1002;
-
-    /// <summary>
     /// A file error's code asked of the disk (2026-11-13, the review's fix): a missing <c>file:</c> video and a dead share both report
     /// <c>MediaError</c> 2 or 4, so for those two the player that knows the path stats it. <see cref="GoneCode"/> only when the file or its
     /// folder is not found; 2, "couldn't be read", when the stat fails otherwise (a share that doesn't answer, access denied); the code

@@ -421,6 +421,97 @@ internal sealed class FakeWebUiBackend : IWebUiBackend
         return ResumeReply ?? WebReply.Ok;
     }
 
+    /// <summary>The 🗂️ sheet's Queue tab (2026-11-16): the view to serve (null: a 404), each action as it arrived, <see cref="QueueReply"/> answering them.</summary>
+    public WebQueueView? QueueView { get; set; }
+
+    public ConcurrentQueue<string> QueueActions { get; } = new();
+
+    public WebReply? QueueReply { get; set; }
+
+    public WebQueueView? Queue() => QueueView;
+
+    public WebReply RemoveQueued(WebQueueRemoveRequest request, IPAddress? remote)
+    {
+        QueueActions.Enqueue(request.Key is { } key ? "remove key " + key : "remove " + request.Index + " " + request.Label);
+        return QueueReply ?? WebReply.Ok;
+    }
+
+    public WebReply SendQueued(IPAddress? remote)
+    {
+        QueueActions.Enqueue("send");
+        return QueueReply ?? WebReply.Ok;
+    }
+
+    public WebReply SetQueueMode(NeonSidekick.App.Queueing mode, IPAddress? remote)
+    {
+        QueueActions.Enqueue("mode " + mode);
+        return QueueReply ?? WebReply.Ok;
+    }
+
+    public WebReply SetQueueCancelMode(NeonSidekick.App.QueueCancel mode, IPAddress? remote)
+    {
+        QueueActions.Enqueue("cancel " + mode);
+        return QueueReply ?? WebReply.Ok;
+    }
+
+    /// <summary>The 🗂️ sheet's Sessions tab (2026-11-16): the view per query (null: a 404), each query and resume as it arrived, <see cref="SessionReply"/> answering resumes.</summary>
+    public Func<string?, WebSessionsView?> SessionsFor { get; set; } = _ => null;
+
+    public ConcurrentQueue<string> SessionQueries { get; } = new();
+
+    public ConcurrentQueue<WebSessionResume> SessionResumes { get; } = new();
+
+    public WebReply? SessionReply { get; set; }
+
+    public WebSessionsView? Sessions(string? query)
+    {
+        SessionQueries.Enqueue(query ?? "");
+        return SessionsFor(query);
+    }
+
+    public WebReply ResumeSession(WebSessionResume request, IPAddress? remote)
+    {
+        SessionResumes.Enqueue(request);
+        return SessionReply ?? WebReply.Ok;
+    }
+
+    /// <summary>The 🗂️ sheet's Files tab (2026-11-16): the view (null: a 404), and each token's path past the serve check.</summary>
+    public WebFilesView? FilesView { get; set; }
+
+    public ConcurrentDictionary<string, string> MadeFilePaths { get; } = new(StringComparer.Ordinal);
+
+    public WebFilesView? Files() => FilesView;
+
+    public string? MadeFilePath(string token) => MadeFilePaths.TryGetValue(token, out string? full) ? full : null;
+
+    /// <summary>The uploads that reached the backend (2026-11-16, #39): the page, the body's length and the epoch read before it.</summary>
+    public ConcurrentQueue<(string Page, int Bytes, long Epoch)> Attached { get; } = new();
+
+    /// <summary>The uploads' bodies, in order.</summary>
+    public ConcurrentQueue<byte[]> Bodies { get; } = new();
+
+    /// <summary>What an upload answers; a chip with a fresh id by default.</summary>
+    public Func<string, byte[], WebAttachReply>? AttachReply { get; set; }
+
+    public long Epoch { get; set; }
+
+    public long AttachEpoch => Epoch;
+
+    public WebAttachReply Attach(string page, byte[] body, long epoch, System.Net.IPAddress? remote)
+    {
+        Attached.Enqueue((page, body.Length, epoch));
+        Bodies.Enqueue(body);
+        return AttachReply?.Invoke(page, body) ?? new WebAttachReply(200, null, new WebChip(Guid.NewGuid().ToString("N"), "picture", NeonSidekick.Files.FileText.Size(body.LongLength)));
+    }
+
+    public ConcurrentQueue<WebAttachForget> Forgotten { get; } = new();
+
+    public WebReply ForgetAttachment(WebAttachForget request, System.Net.IPAddress? remote)
+    {
+        Forgotten.Enqueue(request);
+        return WebReply.Ok;
+    }
+
 public IWebHome? Home { get; set; }
 
     /// <summary>
@@ -430,9 +521,6 @@ public IWebHome? Home { get; set; }
     public WebVideoPlayer? VideoPlayer { get; set; }
 
     public IWebVideo? Video => VideoPlayer;
-
-    /// <summary>Whether a video file plays over Tailscale Funnel (2026-11-12, <i>Web UI video files over Funnel</i>); off as the default.</summary>
-    public bool VideoFilesOverFunnel { get; set; }
 
     // ── A bot check's card (2026-10-17) ──────────────────────────────────────
 

@@ -25,11 +25,13 @@ namespace NeonSidekick.EmbeddedLlm;
 /// halves, never both. It moved last, after sort size, on the key X; uninstalled took U, and N went. A pane whose model in
 /// use is uncensored starts with it lit (<see cref="For"/>, the user's pick), so that row shows.</para>
 /// <para>Two cycling buttons since later on 2026-10-13 (the user's call, <c>/queue</c>'s shape): the sizes are one button,
-/// <c>size: any|8GB|16GB</c> on S (<see cref="NextSize"/>), and the catalog's installed and uninstalled one more,
+/// <c>size: any|fits|8GB|16GB</c> on S (<see cref="NextSize"/>), and the catalog's installed and uninstalled one more,
 /// <c>show: all|installed|uninstalled</c> on I (<see cref="NextInstalled"/>), each lit while it thins the list; sort moved to O.</para>
+/// <para><see cref="Fits"/> (2026-11-16, plan lucid-roaming-lantern #43): the size button's first stop after any, offered where a fit mark
+/// can be given (<see cref="EmbeddedFit.CanMark"/>), keeps the ✅ and ⚠️ rows. Never saved, as the rest.</para>
 /// Pure: the tests drive it.
 /// </summary>
-public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Installed = null, bool SortSize = false, bool Drafter = false)
+public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Installed = null, bool SortSize = false, bool Drafter = false, bool Fits = false)
 {
     /// <summary>No button lit: every normal model, the uncensored builds left out (later on 2026-09-30).</summary>
     public static readonly EmbeddedModelFilter None = new(null, false);
@@ -65,22 +67,37 @@ public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Inst
     /// <summary>The sizes' gigabytes, in the size button's order after <c>any</c> (32 went on 2026-10-05: every catalog model is under it). Pinned.</summary>
     public static readonly int[] Sizes = [8, 16];
 
-    /// <summary>The size button (later on 2026-10-13; one button per size from later on 2026-09-29): <c>size: any</c>, <c>size: 8GB</c>, <c>size: 16GB</c>. Pinned.</summary>
-    public static string SizeTitle(int? maxGb) => "size: " + (maxGb is { } gb ? SizeButton(gb) : "any");
+    /// <summary>
+    /// The size button (later on 2026-10-13; one button per size from later on 2026-09-29): <c>size: any</c>, <c>size: fits</c>
+    /// (<paramref name="fits"/>, 2026-11-16), <c>size: 8GB</c>, <c>size: 16GB</c>. Pinned.
+    /// </summary>
+    public static string SizeTitle(int? maxGb, bool fits = false) => "size: " + (fits ? FitsWord : maxGb is { } gb ? SizeButton(gb) : "any");
+
+    /// <summary>The size button's fit stop's word (2026-11-16, #43). Pinned.</summary>
+    public const string FitsWord = "fits";
 
     /// <summary>The size button's key: S (the sizes were 1 and 2, and S sort, until later on 2026-10-13).</summary>
     public const char SizeKey = 's';
 
-    /// <summary>The size after <paramref name="maxGb"/>: any, then each of <see cref="Sizes"/>, then any again; a size not among them goes to any. Pure.</summary>
-    public static int? NextSize(int? maxGb)
+    /// <summary>
+    /// The size after <paramref name="maxGb"/> and <paramref name="fits"/>: any, then fits (2026-11-16, #43; skipped unless
+    /// <paramref name="canFit"/>, a mark could be given here), then each of <see cref="Sizes"/>, then any again; a size not among them
+    /// goes to any. Pure.
+    /// </summary>
+    public static (int? MaxGb, bool Fits) NextSize(int? maxGb, bool fits, bool canFit)
     {
+        if (fits)
+        {
+            return (Sizes[0], false);
+        }
+
         if (maxGb is not { } gb)
         {
-            return Sizes[0];
+            return canFit ? (null, true) : (Sizes[0], false);
         }
 
         int at = Array.IndexOf(Sizes, gb);
-        return at < 0 || at + 1 >= Sizes.Length ? null : Sizes[at + 1];
+        return (at < 0 || at + 1 >= Sizes.Length ? null : Sizes[at + 1], false);
     }
 
     /// <summary>The uncensored button's title. Pinned.</summary>
@@ -135,7 +152,7 @@ public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Inst
     public static string SizeButton(int gb) => gb.ToString(System.Globalization.CultureInfo.InvariantCulture) + "GB";
 
     /// <summary>Whether any filter button is lit (sort size thins nothing, so it is not one; dark uncensored thins, but is no button lit).</summary>
-    public bool Active => MaxGb is not null || Uncensored || Installed is not null || Drafter;
+    public bool Active => MaxGb is not null || Fits || Uncensored || Installed is not null || Drafter;
 
     /// <summary>
     /// The buttons, the lit ones <see cref="MenuButton.On"/>: the size on S, then — <paramref name="withInstalled"/>, the catalog's — the
@@ -146,7 +163,7 @@ public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Inst
     {
         var buttons = new List<MenuButton>(5)
         {
-            new(SizeTitle(MaxGb), SizeKey, MaxGb is not null),
+            new(SizeTitle(MaxGb, Fits), SizeKey, MaxGb is not null || Fits),
         };
 
         if (withInstalled)
@@ -163,13 +180,15 @@ public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Inst
     /// <summary>
     /// The filter after the button at <paramref name="index"/> of <see cref="Buttons"/> is pressed: the size steps to the next
     /// (<see cref="NextSize"/>), the show button likewise (<see cref="NextInstalled"/>); drafter, sort size and uncensored flip. Each
-    /// leaves the others be; any other index changes nothing.
+    /// leaves the others be; any other index changes nothing. <paramref name="canFit"/> (2026-11-16, #43) has no default, so each
+    /// picker says whether its size button may stop at fits.
     /// </summary>
-    public EmbeddedModelFilter Press(int index, bool withInstalled = false)
+    public EmbeddedModelFilter Press(int index, bool canFit, bool withInstalled = false)
     {
         if (index == SizeIndex)
         {
-            return this with { MaxGb = NextSize(MaxGb) };
+            var (maxGb, fits) = NextSize(MaxGb, Fits, canFit);
+            return this with { MaxGb = maxGb, Fits = fits };
         }
 
         if (withInstalled && index == ShowIndex)
@@ -194,11 +213,17 @@ public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Inst
     /// Whether <paramref name="model"/> passes. The size is compared as a row shows it — gigabytes of 10⁹ to one decimal, as
     /// <c>ModelStore.SizeLabel</c> writes them — so a row that reads "8 GB" passes 8GB. <paramref name="installed"/> is the
     /// model's state on disk (a paused download is not installed); <c>/server</c>'s rows are all installed. Uncensored picks a
-    /// half (later on 2026-09-30): lit, the uncensored builds alone; dark, the others alone.
+    /// half (later on 2026-09-30): lit, the uncensored builds alone; dark, the others alone. Under <see cref="Fits"/> (2026-11-16, #43)
+    /// only a ✅ or ⚠️ mark from <paramref name="fit"/> passes.
     /// </summary>
-    public bool Matches(EmbeddedModel model, bool installed = true)
+    public bool Matches(EmbeddedModel model, bool installed = true, Func<EmbeddedModel, FitMark?>? fit = null)
     {
         ArgumentNullException.ThrowIfNull(model);
+        if (Fits && fit?.Invoke(model) is not (FitMark.Fits or FitMark.SmallContext))
+        {
+            return false;
+        }
+
         if (Uncensored != model.Uncensored)
         {
             return false;

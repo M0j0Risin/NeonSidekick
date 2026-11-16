@@ -22,9 +22,15 @@ public sealed class WebSendRequest
 
     /// <summary>The page's 🔊 as it has it (2026-11-13). Missing counts as off.</summary>
     public bool? Speak { get; set; }
+
+    /// <summary>
+    /// The ids of the page's held uploads that go with the line (2026-11-16, plan lucid-roaming-lantern #39), in the chips' order; only ids held
+    /// under this page are taken, any other skipped as unknown.
+    /// </summary>
+    public List<string>? Attachments { get; set; }
 }
 
-/// <summary>A page's 🎤 tapped (2026-11-13): its page id, the listen's own id and its 🔊.</summary>
+/// <summary>A page's 🎤 tapped (2026-11-13): its page id, the listen's own id and its 🔊; the chips its heard line takes (2026-11-16, #39).</summary>
 public sealed class WebVoiceStart
 {
     public string? Page { get; set; }
@@ -32,7 +38,29 @@ public sealed class WebVoiceStart
     public string? Listen { get; set; }
 
     public bool? Speak { get; set; }
+
+    public List<string>? Attachments { get; set; }
 }
+
+/// <summary>A chip's ✕ (2026-11-16, #39): its upload let go, when it is held under this page.</summary>
+public sealed class WebAttachForget
+{
+    public string? Id { get; set; }
+
+    public string? Page { get; set; }
+}
+
+/// <summary>
+/// A held upload as the page's chip shows it (2026-11-16, plan lucid-roaming-lantern #39): the server's id, its kind (<c>picture</c>, <c>pdf</c>),
+/// its size already written, and a small data-URL picture for a picture's chip (null for a PDF, or one the codecs wouldn't shrink).
+/// </summary>
+public sealed record WebChip(string Id, string Kind, string Size, string? Thumb = null);
+
+/// <summary>A page's whole chip row (2026-11-16, #39): the <c>chips</c> event, aimed at that page alone; <see cref="Message"/> says what went (over the caps, expired).</summary>
+public sealed record WebChips(IReadOnlyList<WebChip> Chips, string? Message = null);
+
+/// <summary>An upload's answer (2026-11-16, #39): its chip on success, else the refusal's words.</summary>
+public sealed record WebAttachResult(bool Ok, string? Message = null, WebChip? Chip = null);
 
 /// <summary>
 /// The status row's 👥 tapped (2026-11-14, the user's ask: a way on the page to carry a stopped botchat on, as the PC's 👥 and Ctrl+Alt+B do):
@@ -319,8 +347,11 @@ public sealed record WebDelta(long Seq, int At, string Text);
 /// <summary>An entry's end: a reply's Markdown as HTML; a thinking block's summary (2026-10-15); a run or an output just over, with neither.</summary>
 public sealed record WebEnd(long Seq, string? Html, string? Summary = null);
 
-/// <summary>A text handed back to the page's draft: a message withdrawn or dropped.</summary>
-public sealed record WebTextBack(string Text);
+/// <summary>
+/// A text handed back to the page's draft: a message withdrawn or dropped. <see cref="Chips"/> (2026-11-16, #39): the attachments that came back
+/// with it, held again under their own page, which names them only when they are in its own row.
+/// </summary>
+public sealed record WebTextBack(string Text, IReadOnlyList<WebChip>? Chips = null);
 
 /// <summary>
 /// The Home tab (2026-10-15, the plan's Part D): Home Assistant's state (<c>live</c>, <c>connecting</c>, <c>retrying</c>, <c>unauthorized</c>,
@@ -537,7 +568,9 @@ public sealed record WebState(
     bool BotChat = false,
     bool BotResume = false,
     string? VoiceListen = null,
-    string? VoiceSpeak = null);
+    string? VoiceSpeak = null,
+    string QueueTag = "",
+    string FilesTag = "");
 
 /// <summary>
 /// What a page gets on (re)connecting: the transcript, the open asks, the state, the app's words the page shows of its own, the drafts held for
@@ -545,8 +578,12 @@ public sealed record WebState(
 /// (a duplicated tab's fresh one), heard text held for its box, and its speaker's clips so far. <see cref="Listen"/> (2026-11-14, the review's #50):
 /// the id of its listen still running at the app, null with none, so a page whose listen ended while its stream was down ends it too.
 /// </summary>
+/// <remarks>
+/// <see cref="Chips"/> (2026-11-16, plan lucid-roaming-lantern #39): the page's held uploads, so a reloaded or returning page rebuilds its chip row;
+/// <see cref="AttachMaxBytes"/> and <see cref="AttachMaxPixels"/> the upload's caps the page checks first (0: it doesn't).
+/// </remarks>
 public sealed record WebSnapshot(IReadOnlyList<WebEntry> Entries, IReadOnlyList<WebAskView> Asks, WebState State, WebWords? Words = null, IReadOnlyList<string>? Drafts = null, WebStatus? Status = null, WebStrip? Strip = null, WebPoint? Point = null,
-    string? Page = null, WebHeard? Heard = null, WebSpeaking? Speaking = null, string? Listen = null);
+    string? Page = null, WebHeard? Heard = null, WebSpeaking? Speaking = null, string? Listen = null, IReadOnlyList<WebChip>? Chips = null, long AttachMaxBytes = 0, long AttachMaxPixels = 0);
 
 /// <summary>
 /// The PC's picture strip as the page's drawer shows it (later on 2026-10-15): its ComfyUI pictures newest first and the one the PC has
@@ -604,7 +641,76 @@ public sealed record WebWords(string PictureGone, string PictureTooLarge, string
     string Skip = "",
     string BotResume = "",
     string VoiceMic = "", string VoiceListening = "", string VoiceTranscribing = "", string VoiceCancel = "", string VoiceSpeakOn = "", string VoiceSpeakOff = "",
-    string VoiceHeardNothing = "", string VoiceNeedsHttps = "", string VoiceMicRefused = "", string VoiceFailed = "");
+    string VoiceHeardNothing = "", string VoiceNeedsHttps = "", string VoiceMicRefused = "", string VoiceFailed = "",
+    string ManageButton = "", string CloseManage = "", string SessionsTab = "", string FilesTab = "", string QueueTab = "",
+    string QueueNone = "", string QueueAtPc = "", string QueueFromPage = "", string QueueSendNow = "", string QueueModeLabel = "",
+    string QueueCancelLabel = "", string RemoveRow = "", string RemoveRowArmed = "", string QueueChordLine = "",
+    string SessionsNone = "", string SessionsNoMatch = "", string SessionsFilter = "", string SessionsFound = "", string SessionsArmed = "",
+    string SessionsCurrent = "", string SessionsBusy = "", string SessionsLoading = "", string SessionsNotSaved = "",
+    string FilesNone = "", string FilesTrimmed = "", string FilesHint = "",
+    string AttachButton = "", string AttachRemove = "", string AttachWaiting = "", string AttachTooBig = "", string AttachRoom = "", string AttachStopped = "",
+    string AttachLeftOut = "", string AttachPdf = "");
+
+/// <summary>
+/// The 🗂️ sheet's Queue tab (2026-11-16, plan lucid-roaming-lantern #42): the PC's queued lines (<see cref="Pc"/>, the <c>/queue</c> pane's), the
+/// pages' own waiting lines (<see cref="Page"/>: the session's and the ones pended at the screen), the saved <i>Queue mode</i> and <i>Queue cancel
+/// mode</i> words as the PC pane's buttons show them, every word of each (<see cref="Modes"/>, <see cref="CancelModes"/>: spelled in one place, the
+/// app's), whether a cancel holds the queue (<i>Resume</i> offered) and whether ➤ <i>Send now</i> is (the mode in force's rule).
+/// </summary>
+public sealed record WebQueueView(IReadOnlyList<WebQueuePcLine> Pc, IReadOnlyList<WebQueueLine> Page, string Mode, string CancelMode, bool Held, bool SendOffered,
+    IReadOnlyList<string> Modes, IReadOnlyList<string> CancelModes);
+
+/// <summary>A line of the PC's queue: its place now, its label (what a remove names with it, so a shifted queue refuses), its pictures, PDFs included.</summary>
+public sealed record WebQueuePcLine(int Index, string Label, int Pictures);
+
+/// <summary>
+/// A page's line waiting (2026-11-16, #42): the session's own key for it (never reused, so a stale ✕ names nothing), its text, whether it is a
+/// chord (a 👥 or a resume waiting: never handed back, shown without ✕) and its attachments' count (0 until #39 gives lines attachments).
+/// </summary>
+public sealed record WebQueueLine(long Key, string Text, bool Chord, int Pictures = 0);
+
+/// <summary>
+/// A ✕ on the Queue tab (2026-11-16, #42): <see cref="Key"/> names a page's line, <see cref="Index"/> with <see cref="Label"/> a line of the PC's
+/// queue, checked against the queue now. One or the other: both or neither doesn't read (<see cref="WellFormed"/>).
+/// </summary>
+public sealed record WebQueueRemoveRequest(int? Index = null, string? Label = null, long? Key = null)
+{
+    /// <summary>Exactly one form: a key alone, or an index with a label.</summary>
+    public static bool WellFormed(WebQueueRemoveRequest request) =>
+        request is not null
+        && ((request.Key is not null && request.Index is null && request.Label is null) || (request.Key is null && request.Index is not null && request.Label is not null));
+}
+
+/// <summary>The Queue tab's mode choices (2026-11-16, #42): <c>{mode}</c> to <c>/api/queue/mode</c>, <c>{cancel}</c> to <c>/api/queue/cancel</c>, each the setting's word.</summary>
+public sealed record WebQueueModeRequest(string? Mode = null, string? Cancel = null);
+
+/// <summary>
+/// The 🗂️ sheet's Sessions tab (2026-11-16, plan lucid-roaming-lantern #40): the loaded profile's name (a resume names it back), the 50 newest
+/// sessions, or with a filter the title and model matches across every session; past three letters <see cref="Found"/>, the full-text hits not
+/// among them. <see cref="ResumeOffered"/> and its <see cref="Note"/> follow the page's command rule; <see cref="NotSaved"/>: Session logging off.
+/// </summary>
+public sealed record WebSessionsView(string Profile, IReadOnlyList<WebSessionRow> Rows, IReadOnlyList<WebSessionRow> Found, bool ResumeOffered, string? Note = null, bool NotSaved = false);
+
+/// <summary>A session's row: its id, title (no saved paths), when it last moved and its turns as the PC's pane reads them, its model's label; the current one marked; a hit's snippet.</summary>
+public sealed record WebSessionRow(long Id, string Title, string When, string Turns, string Model, bool Current, IReadOnlyList<WebSnippetPart>? Snippet = null);
+
+/// <summary>A piece of a hit's snippet: its text, and whether it is what matched (a <c>&lt;mark&gt;</c> on the page).</summary>
+public sealed record WebSnippetPart(string Text, bool Match = false);
+
+/// <summary>The Sessions tab's resume: the session and the profile the tab was read from.</summary>
+public sealed record WebSessionResume(long Id = 0, string? Profile = null);
+
+/// <summary>
+/// The 🗂️ sheet's Files tab (2026-11-16, plan lucid-roaming-lantern #41): the files the model made in this conversation that are still there,
+/// newest first; <see cref="Trimmed"/> when older ones went past the list's 200.
+/// </summary>
+public sealed record WebFilesView(IReadOnlyList<WebFileRow> Rows, bool Trimmed = false);
+
+/// <summary>
+/// A made file's row: its name, its folder relative to its root (<c>out/sub</c>, an images folder's under <c>images/</c>, joined with <c>/</c>; the PC's
+/// full paths never sent), its size as the file tools write it, its kind and glyph, and the url the server built (the page never assembles one).
+/// </summary>
+public sealed record WebFileRow(string Name, string Folder, string Size, string Kind, string Glyph, string Url);
 
 /// <summary>
 /// The page's saved prompts, the sheet's 📣 tab (later on 2026-10-15): the profile's prompts, numbered as at the PC. The title went on
@@ -808,9 +914,10 @@ public sealed record WebVideoWords(string Waiting, string PlayHere, string TapFo
 
 /// <summary>
 /// The Video tab's words for a video file from the PC (2026-11-12): the header's tag, a file the browser can't play (its format, a read
-/// that failed), one with sound but no picture, one moved or deleted, and one refused over Tailscale Funnel.
+/// that failed), one with sound but no picture, and one moved or deleted. (One refused over Tailscale Funnel went with its setting,
+/// 2026-11-14: video files play over Funnel too.)
 /// </summary>
-public sealed record WebFileWords(string Tag, string Failed, string NoPicture, string Gone, string FunnelOff);
+public sealed record WebFileWords(string Tag, string Failed, string NoPicture, string Gone);
 
 /// <summary>
 /// The saved list's words on the Video tab (later on 2026-10-16): the filter's placeholder and its no-match line (<c>{0}</c> the filter), the
@@ -1033,4 +1140,17 @@ public sealed class WebVideoReport
 [JsonSerializable(typeof(WebVoiceStopped))]
 [JsonSerializable(typeof(WebHeard))]
 [JsonSerializable(typeof(WebSpeaking))]
+[JsonSerializable(typeof(WebQueueView))]
+[JsonSerializable(typeof(WebQueuePcLine))]
+[JsonSerializable(typeof(WebQueueLine))]
+[JsonSerializable(typeof(WebQueueRemoveRequest))]
+[JsonSerializable(typeof(WebQueueModeRequest))]
+[JsonSerializable(typeof(WebSessionsView))]
+[JsonSerializable(typeof(WebSessionRow))]
+[JsonSerializable(typeof(WebSnippetPart))]
+[JsonSerializable(typeof(WebSessionResume))]
+[JsonSerializable(typeof(WebFilesView))]
+[JsonSerializable(typeof(WebAttachForget))]
+[JsonSerializable(typeof(WebChips))]
+[JsonSerializable(typeof(WebAttachResult))]
 public sealed partial class WebUiJsonContext : JsonSerializerContext;

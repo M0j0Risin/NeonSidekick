@@ -512,7 +512,7 @@ public sealed partial class WebUiTests : IDisposable
         Assert.Equal(1, _nudges);
         Assert.Equal(["hello"], _session.Waiting);
         Assert.True(_session.TryTakeLine(out var line));
-        Assert.Equal(new WebLine("hello", "m1"), line);
+        Assert.Equal(new WebLine("hello", "m1", Key: 1), line);   // the session gives each line its key
         Assert.False(_session.LinesReady);
     }
 
@@ -544,7 +544,7 @@ public sealed partial class WebUiTests : IDisposable
         Assert.Equal(WebUiText.PcOnly("/exit"), never.Message);
         Assert.False(pane.AsText);
         Assert.True(_session.TryTakeLine(out var line));
-        Assert.Equal(new WebLine("/clear", null, IPAddress.Loopback), line);
+        Assert.Equal(new WebLine("/clear", null, IPAddress.Loopback, Key: 1), line);
     }
 
     /// <summary>A plain message never reads the command settings, which scan the custom commands (2026-10-31, review P2-7).</summary>
@@ -629,7 +629,7 @@ public sealed partial class WebUiTests : IDisposable
     [Fact]
     public void TheHeldLines_AreListedAsWaiting()
     {
-        _session.HeldForPc = () => ["/clear"];
+        _session.HeldForPc = () => [new WebQueueLine(7, "/clear", false)];
         _session.Send(new WebSendRequest { Text = "hello" }, null);
 
         Assert.Equal(["hello", "/clear"], _session.Waiting);
@@ -1187,7 +1187,7 @@ public sealed partial class WebUiTests : IDisposable
         Assert.Equal("must be a port from 1024 to 65535", App.SettingsMenu.WebUiPortRangeError);
         // Server, Guardrails, Tabs (2026-10-16, the user's ask); the Funnel row under Guardrails since 2026-11-13.
         Assert.Equal([App.SettingsField.WebUi, App.SettingsField.WebUiPort, App.SettingsField.WebUiReach, App.SettingsField.WebUiHttpsAddress, App.SettingsField.WebUiCommands, App.SettingsField.WebUiConnectionDetails,
-            App.SettingsField.WebUiBotCheckControl, App.SettingsField.WebUiVideoFilesOverFunnel, App.SettingsField.WebUiProfileTheme, App.SettingsField.WebUiChatControls, App.SettingsField.WebUiVoice, App.SettingsField.WebUiHomeControls, App.SettingsField.WebUiShoppingControls, App.SettingsField.WebUiYouTubeControls],
+            App.SettingsField.WebUiBotCheckControl, App.SettingsField.WebUiProfileTheme, App.SettingsField.WebUiChatControls, App.SettingsField.WebUiVoice, App.SettingsField.WebUiHomeControls, App.SettingsField.WebUiShoppingControls, App.SettingsField.WebUiYouTubeControls],
             App.SettingsMenu.TabFields[(int)App.SettingsTab.WebUi]);
         // Web UI HTTPS address (2026-10-31): read when /webui opens, so neither a restart nor refused under a reply; typed, not a toggle.
         Assert.False(App.SettingsMenu.IsWebUiField(App.SettingsField.WebUiHttpsAddress));

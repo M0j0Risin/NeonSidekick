@@ -36,6 +36,12 @@ internal sealed partial class ChatScreen
     /// </summary>
     private WebPageRef? _sentFromWebPage;
 
+    /// <summary>The page's uploads the line this dispatch sent carried (2026-11-16, #39), set and cleared with <see cref="_sentFromWeb"/>: a withdraw hands them back.</summary>
+    private IReadOnlyList<WebUi.WebHeldAttachment>? _sentWebAttachments;
+
+    /// <summary>The profile the page's chord was queued under (2026-11-16, #40), set and cleared with <see cref="_sentFromWeb"/>: a session resume runs only under it.</summary>
+    private string? _sentWebProfile;
+
     /// <summary>
     /// Where a turn speaks: a page's line with <i>Web UI voice</i> on goes to that page while its latest 🔊 is on (the line's own only when
     /// the page has no entry) and Kokoro is loaded, else nowhere; anything else by today's rule (<i>TTS output</i> and speech ready).

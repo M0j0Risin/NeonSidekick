@@ -473,6 +473,12 @@ public sealed partial class WebUiHostTests
     [InlineData("/api/history/clear", WebTab.Chat)]
     [InlineData("/api/learn/cancel", WebTab.Chat)]
     [InlineData("/api/queue/resume", WebTab.Chat)]
+    [InlineData("/api/queue", WebTab.Chat)]   // the 🗂️ sheet's Queue tab (2026-11-16)
+    [InlineData("/api/queue/remove", WebTab.Chat)]
+    [InlineData("/api/queue/send", WebTab.Chat)]
+    [InlineData("/api/queue/mode", WebTab.Chat)]
+    [InlineData("/api/queue/cancel", WebTab.Chat)]
+    [InlineData("/api/queuex", null)]
     [InlineData("/api/memoryx", null)]
     [InlineData("/api/entry/12", WebTab.Chat)]
     [InlineData("/api/picture/r/1/full", WebTab.Chat)]

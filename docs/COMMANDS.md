@@ -183,7 +183,7 @@ Each purge asks first, saying where things go: to the Recycle bin (the Trash on 
 | `/screen behind` | Captures the window right behind the app's own. |
 | `/screen list` | Lists the monitors and windows, front to back, with their targets. |
 | `/screen view`, `/screen thumbs`, `/screen purge` | The picture viewer or thumbnail browser on *Screen output folder*, or deletes everything in it. |
-| `/pasted view`, `/pasted thumbs`, `/pasted purge` | The same for *Pasted images folder*, where pasted pictures are saved as their messages are sent. |
+| `/pasted view`, `/pasted thumbs`, `/pasted purge` | The same for *Pasted images folder*, where pasted pictures and the Web UI's attachments are saved as their messages are sent. |
 | `/ha stills view\|thumbs\|purge` | The same for the Home Assistant camera stills (`home-cameras` under the profile's `images` folder). |
 
 ### Voice

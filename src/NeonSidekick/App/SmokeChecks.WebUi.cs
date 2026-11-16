@@ -9,7 +9,7 @@ public static partial class SmokeChecks
     /// <c>webui:kestrel</c> (2026-10-14): the Web UI's server on the published binary — ASP.NET Core trimmed and compiled ahead of time —
     /// started on loopback port 0 over a session with nothing in it: <c>/health</c> answers, an API without the cookie is refused, the
     /// sign-in link sets the cookie and leaves the address, the chat page then comes from memory with its policy, and a reply's Markdown
-    /// renders with a link vetted. Stopped at the end.
+    /// renders with a link vetted; a phone's upload past the JSON cap is held (2026-11-16). Stopped at the end.
     /// </summary>
     public static SmokeCheck ProbeWebUi()
     {
@@ -70,6 +70,22 @@ public static partial class SmokeChecks
                 return new SmokeCheck(name, false, "the chat page did not come (" + (int)chat.StatusCode + ")");
             }
 
+            // A phone's upload (2026-11-16, plan lucid-roaming-lantern #39): its body past the JSON cap, so the raised per-request limit
+            // (IHttpMaxRequestBodySizeFeature) is proven on the trimmed, ahead-of-time server.
+            byte[] pdf = new byte[WebUiHost.MaxBodyBytes * 2];
+            "%PDF-1.4 smoke"u8.CopyTo(pdf);
+            using var upload = new HttpRequestMessage(HttpMethod.Post, WebUiHost.AttachPath + "?page=" + WebVideoPlayer.NewId()) { Content = new ByteArrayContent(pdf) };
+            upload.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(Files.PdfFile.MediaType);
+            upload.Headers.Add("Cookie", cookie);
+            upload.Headers.Add(WebUiHost.CsrfHeader, "1");
+            using (var held = await client.SendAsync(upload).ConfigureAwait(false))
+            {
+                if (held.StatusCode != HttpStatusCode.OK || session.HeldCount != 1)
+                {
+                    return new SmokeCheck(name, false, "an upload past the JSON cap answered " + (int)held.StatusCode);
+                }
+            }
+
             string html = WebUiMarkdown.ToHtml("**bold** [ok](https://example.com) [no](javascript:alert(1))");
             if (!html.Contains("<strong>bold</strong>", StringComparison.Ordinal) || html.Contains("javascript:", StringComparison.Ordinal))
             {
@@ -77,7 +93,7 @@ public static partial class SmokeChecks
             }
 
             await host.StopAsync().ConfigureAwait(false);
-            return new SmokeCheck(name, true, "served on loopback:" + host.Port + "; health, cookie gate, sign-in, page and Markdown ok");
+            return new SmokeCheck(name, true, "served on loopback:" + host.Port + "; health, cookie gate, sign-in, page, upload and Markdown ok");
         }
     }
 }

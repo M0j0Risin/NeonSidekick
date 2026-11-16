@@ -76,6 +76,15 @@ public interface ILlamaServerHost : IAsyncDisposable
     /// <see cref="EmbeddedLlmException.Killed"/>. True when there was a process to kill.
     /// </summary>
     bool Kill();
+
+    /// <summary>
+    /// The server stopped on its own once ready (2026-11-16, plan lucid-roaming-lantern #44): raised beside the error line, never for a stop
+    /// or kill the app asked for, on the process's exit thread; the server that was lost.
+    /// </summary>
+    event Action<EmbeddedServerInfo>? Exited;
+
+    /// <summary>Whether something restarts a crashed server at the next message (the screen does; headless doesn't), for the error line's words.</summary>
+    bool RestartsAfterCrash { get; set; }
 }
 
 /// <summary>
@@ -601,8 +610,13 @@ public sealed class LlamaServerHost : ILlamaServerHost
             code = -1;
         }
 
-        DiagnosticLog.Error(Category, EmbeddedLlmText.Exited(code, ErrorTail()) + $" ({lost.ModelId})");
+        DiagnosticLog.Error(Category, EmbeddedLlmText.Exited(code, ErrorTail(), RestartsAfterCrash) + $" ({lost.ModelId})");
+        Exited?.Invoke(lost);   // outside the lock, after the guard for a stop we asked for (2026-11-16, #44)
     }
+
+    public event Action<EmbeddedServerInfo>? Exited;
+
+    public bool RestartsAfterCrash { get; set; }
 
     /// <summary>The lines that say what went wrong: those mentioning an error or failure among the last kept, else the last three.</summary>
     private string ErrorTail()

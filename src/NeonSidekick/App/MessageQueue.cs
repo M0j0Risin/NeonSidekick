@@ -59,6 +59,7 @@ public sealed class MessageQueue
         {
             lock (_gate)
             {
+                _version += _held != value ? 1 : 0;
                 _held = value;
             }
         }
@@ -81,6 +82,23 @@ public sealed class MessageQueue
         }
     }
 
+    private long _version;
+
+    /// <summary>
+    /// Bumped by every change to the entries or the hold (2026-11-16, #42): the Web UI's state carries it in its queue tag, so the
+    /// 🗂️ sheet's Queue tab re-reads only when something moved.
+    /// </summary>
+    public long Version
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _version;
+            }
+        }
+    }
+
     /// <summary>Adds <paramref name="message"/> at the back.</summary>
     public void Enqueue(QueuedMessage message)
     {
@@ -90,6 +108,7 @@ public sealed class MessageQueue
         {
             _entries.Add(message);
             _added++;
+            _version++;
             count = _entries.Count;
         }
 
@@ -128,6 +147,7 @@ public sealed class MessageQueue
 
             message = _entries[0];
             _entries.RemoveAt(0);
+            _version++;
             waiting = _entries.Count;
         }
 
@@ -149,6 +169,7 @@ public sealed class MessageQueue
             }
 
             _entries.RemoveAt(index);
+            _version++;
         }
 
         DiagnosticLog.Debug(Category, RemovedLogLine(label));
@@ -175,6 +196,7 @@ public sealed class MessageQueue
         lock (_gate)
         {
             dropped = _entries.Count;
+            _version += dropped > 0 || (_held && !keepHold) ? 1 : 0;
             _entries.Clear();
             _held &= keepHold;
         }

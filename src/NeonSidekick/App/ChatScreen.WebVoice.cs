@@ -72,9 +72,12 @@ internal sealed partial class ChatScreen : IWebVoice
     }
 
     /// <summary>One listen of a page: its capture, its two ends (finish transcribes, cancel discards) and the phase it ended in.</summary>
-    private sealed class PageListen(string id, WebAudioCapture capture, string? load, IPAddress? remote)
+    private sealed class PageListen(string id, WebAudioCapture capture, string? load, IPAddress? remote, List<string>? attachments = null)
     {
         public string Id { get; } = id;
+
+        /// <summary>The page's chips its heard line takes (2026-11-16, plan lucid-roaming-lantern #39): ids only, taken at the send, so a listen cancelled or refused leaves them held.</summary>
+        public List<string>? Attachments { get; } = attachments;
 
         public WebAudioCapture Capture { get; } = capture;
 
@@ -137,7 +140,7 @@ internal sealed partial class ChatScreen : IWebVoice
             }
 
             var capture = new WebAudioCapture(_time, VoiceStallForTests);
-            listen = new PageListen(request.Listen!, capture, entry.Load, remote);
+            listen = new PageListen(request.Listen!, capture, entry.Load, remote, request.Attachments);
             entry.Listen = listen;
             capture.Stalled += () => OnListenStalled(page, listen);
             // Under a botchat, the person is talking: the bots wait (Design 2b), from the capture's real start (2026-11-14, the review's
@@ -324,7 +327,7 @@ internal sealed partial class ChatScreen : IWebVoice
                 speak = _voicePages.TryGetValue(page, out var entry) ? entry.Speak : null;
             }
 
-            var sent = _webUi.Send(new WebSendRequest { Id = listen.Id, Text = text, AsText = true, Page = page, Speak = speak }, listen.Remote);
+            var sent = _webUi.Send(new WebSendRequest { Id = listen.Id, Text = text, AsText = true, Page = page, Speak = speak, Attachments = listen.Attachments }, listen.Remote);
             if (sent.Outcome == WebOutcome.Ok)
             {
                 EndListen(page, listen, VoicePhases.Sent);

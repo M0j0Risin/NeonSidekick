@@ -64,7 +64,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     private void KillSwitch()
     {
-        if (_session.Embedded is not { } embedded || (embedded.Running is null && embedded.Extras.Count == 0 && !embedded.Starting))
+        if (_session.Embedded is not { } embedded || (embedded.Running is null && embedded.Extras.Count == 0 && !embedded.Starting && _session.IdleUnloaded is null))
         {
             DiagnosticLog.Debug(AppCategory, KillSwitchIdleLog);
             return;
@@ -81,6 +81,10 @@ internal sealed partial class ChatScreen
 
         Volatile.Write(ref _killArmedUntil, 0);
         _pane.SetAlertHint(null, TimeSpan.Zero);
+        // An idle-unloaded model is forgotten too (2026-11-16, #44), even with nothing loaded: the next message asks for a server, as after any
+        // kill, and a parked model's countdown goes with it.
+        var forgotten = _session.IdleUnloaded;
+        _session.ForgetIdleUnload();
         if (_session.EmbeddedParked && embedded.Extras.Count == 0 && !embedded.Starting && Volatile.Read(ref _botLadder) is null)
         {
             // Nothing running uses it (2026-11-11, the review): the chat is on another server, so its work is left alone.
@@ -105,6 +109,11 @@ internal sealed partial class ChatScreen
         if (ids.Count == 0)
         {
             DiagnosticLog.Debug(AppCategory, KillSwitchIdleLog);
+            if (forgotten is not null)
+            {
+                RunOrPost(() => _transcript.Notice(EmbeddedLlmText.KilledNotice([forgotten.Model.Display])));
+            }
+
             return;
         }
 

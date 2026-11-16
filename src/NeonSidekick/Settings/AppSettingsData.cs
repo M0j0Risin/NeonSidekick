@@ -3515,6 +3515,24 @@ public sealed class AppSettingsData
     /// </summary>
     public bool EmbeddedDrafter { get; set; } = true;
 
+    /// <summary>
+    /// The minutes the embedded model may sit idle before it is unloaded (2026-11-16, plan lucid-roaming-lantern #44, the user's ask):
+    /// no request in flight, no load, reflection, title, turn, botchat, Ralph loop, code audit or gap review running. The next message or
+    /// command loads it again under 🦙 (Esc cancels). A model parked behind another server (<c>LLM one local model</c> off) is stopped by the
+    /// same rule; a botchat's or an advisor's extra servers stay. 0, the default, is off. <see cref="MinEmbeddedIdleUnloadMinutes"/> to
+    /// <see cref="MaxEmbeddedIdleUnloadMinutes"/>; a value outside is warned and read as off (<see cref="EmbeddedLlm.EmbeddedIdleUnload.Resolve"/>).
+    /// Not read by headless runs. No variable.
+    /// </summary>
+    public int EmbeddedIdleUnloadMinutes { get; set; } = DefaultEmbeddedIdleUnloadMinutes;
+
+    /// <summary>Off. Pinned.</summary>
+    public const int DefaultEmbeddedIdleUnloadMinutes = 0;
+
+    public const int MinEmbeddedIdleUnloadMinutes = 0;
+
+    /// <summary>A day.</summary>
+    public const int MaxEmbeddedIdleUnloadMinutes = 1440;
+
     // ─── Home Assistant (2026-09-28) ────────────────────────────────────────────
     // The ha_ tools and /ha (2026-09-28, the user's ask: "plan an integration for Home Assistant" — a Docker instance with
     // Hue lights and a Bravia TV; read and act, the risky calls behind the pane; /ha for direct control; Assist as a fallback).
@@ -3710,14 +3728,6 @@ public sealed class AppSettingsData
     /// variable.
     /// </summary>
     public bool WebUiYouTubeControls { get; set; }
-
-    /// <summary>
-    /// Whether a video file plays on the Video tab when the Web UI is reached over Tailscale Funnel (2026-11-12, the video-files plan and
-    /// the user's call: off by default). Off, a Funnel request for the playing file's stream is refused and the tab says why; over the LAN, a
-    /// tailnet or the PC itself it plays either way. It matters under reach <c>local</c>, where Funnel arrives through the local proxy (reach
-    /// <c>lan</c> refuses every Funnel request already). Read at each request. No variable.
-    /// </summary>
-    public bool WebUiVideoFilesOverFunnel { get; set; }
 
     /// <summary>
     /// Whether the Web UI's pages wear the profile's theme (2026-10-15, the user's call: on by default): on, their accents, tones and grounds are

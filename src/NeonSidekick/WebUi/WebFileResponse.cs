@@ -43,6 +43,13 @@ internal static class WebFileResponse
         response.Headers.ContentDisposition = "inline; filename*=UTF-8''" + Uri.EscapeDataString(name);
 
     /// <summary>
+    /// Downloaded as <paramref name="name"/> (2026-11-16, #41's made files): always the <c>filename*</c> form, never a quoted <c>filename="…"</c>,
+    /// since Kestrel refuses a non-ASCII header value and a <c>résumé.docx</c> would throw.
+    /// </summary>
+    public static void Attachment(HttpResponse response, string name) =>
+        response.Headers.ContentDisposition = "attachment; filename*=UTF-8''" + Uri.EscapeDataString(name);
+
+    /// <summary>
     /// A 404 (by default) for a file that is gone or unreadable, its reason in a Debug line, never in the transcript. The video file server
     /// (2026-11-13) says which: <paramref name="status"/> 410 for a file not found, 503 for one it couldn't read (locked, denied, a share
     /// that doesn't answer), so the page can word it.

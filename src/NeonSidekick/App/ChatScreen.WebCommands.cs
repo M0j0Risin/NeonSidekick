@@ -88,6 +88,12 @@ internal sealed partial class ChatScreen
             return verdict.Reason;
         }
 
+        // A session resume from the page (2026-11-16, #40): checked again where it runs, the Kestrel check being a moment old.
+        if (command == SlashCommand.Session && WebSessionRefusal(args) is { } sessionRefusal)
+        {
+            return sessionRefusal;
+        }
+
         if (command is SlashCommand.Model or SlashCommand.Reasoning)
         {
             // The connect's own test (2026-10-17, the user's question: a saved hosted API switched off, an embedded server switched off or an
@@ -355,6 +361,8 @@ internal sealed partial class ChatScreen
             _pended++;
         }
 
+        Interlocked.Increment(ref _pendingVersion);   // the Queue tab's tag (2026-11-16)
+
         return true;
     }
 
@@ -373,8 +381,11 @@ internal sealed partial class ChatScreen
         }
     }
 
-    /// <summary>The page's lines held for the idle line, handed back to the page's draft (a conversation cleared, a profile switch); their count.</summary>
-    private int DropPendingWebLines()
+    /// <summary>
+    /// The page's lines held for the idle line, handed back to the page's draft (a conversation cleared, a profile switch); their count. Without
+    /// <paramref name="giveBack"/> (a profile switch, 2026-11-16, #39) their attachments are let go, the text alone going back.
+    /// </summary>
+    private int DropPendingWebLines(bool giveBack = true)
     {
         List<SubmittedLine> dropped = [];
         lock (_pendingGate)
@@ -384,7 +395,11 @@ internal sealed partial class ChatScreen
             {
                 if (line.FromWeb)
                 {
-                    dropped.Add(line);
+                    // Claimed as taken (2026-11-16, #42): one the Queue tab took back already is not handed back twice.
+                    if (line.WebKey == 0 || _claimedWebKeys.TryAdd(line.WebKey, false))
+                    {
+                        dropped.Add(line);
+                    }
                 }
                 else
                 {
@@ -393,9 +408,14 @@ internal sealed partial class ChatScreen
             }
         }
 
+        if (dropped.Count > 0)
+        {
+            Interlocked.Increment(ref _pendingVersion);
+        }
+
         foreach (var line in dropped.Where(l => !l.Chord))
         {
-            _webUi.Dropped(line.Draft);   // a 👥's line was never the page's draft (2026-11-14)
+            _webUi.Dropped(line.Draft, giveBack ? line.WebAttachments : null);   // a 👥's line was never the page's draft (2026-11-14)
         }
 
         return dropped.Count;
@@ -504,6 +524,11 @@ internal sealed partial class ChatScreen
         }
     }
 
-    /// <summary>The page's lines held for the idle line, as the page lists them waiting.</summary>
-    private IReadOnlyList<string> HeldWebLines() => [.. _pendingLines.Where(l => l.FromWeb).Select(l => l.Draft)];
+    /// <summary>
+    /// The page's lines held for the idle line, as the page lists them waiting, with their keys (2026-11-16, #42), leaving out any the Queue tab
+    /// took back (still in the queue until the idle line skips it). A line with no key (a saved prompt the page sent) lists with none.
+    /// </summary>
+    private IReadOnlyList<WebQueueLine> HeldWebLines() =>
+        [.. _pendingLines.Where(l => l.FromWeb && !(_claimedWebKeys.TryGetValue(l.WebKey, out bool removed) && removed))
+            .Select(l => new WebQueueLine(l.WebKey, l.Draft, l.Chord))];
 }

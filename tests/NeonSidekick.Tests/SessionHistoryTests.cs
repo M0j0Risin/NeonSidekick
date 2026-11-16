@@ -27,6 +27,24 @@ public class SessionHistoryTests
     }
 
     /// <summary>
+    /// The made files (2026-11-16, plan lucid-roaming-lantern #41): kept with their ordinals, absent when there are none, and an older row
+    /// without the field reads as none.
+    /// </summary>
+    [Fact]
+    public void MadeFiles_RoundTrip_AndAnOlderRowReadsAsNone()
+    {
+        var messages = new List<ChatMessage> { new(ChatRole.User, "hello") };
+        string json = SessionHistory.ToJson(messages, madeFiles: [new StoredMadeFile(@"C:\work\a.txt", 1), new StoredMadeFile(@"C:\work\b.txt")]);
+        SessionHistory.FromJsonWhole(json, out var stored);
+        Assert.Equal([new StoredMadeFile(@"C:\work\a.txt", 1), new StoredMadeFile(@"C:\work\b.txt")], stored.MadeFiles);
+
+        string none = SessionHistory.ToJson(messages, madeFiles: []);
+        Assert.DoesNotContain("MadeFiles", none, StringComparison.Ordinal);
+        SessionHistory.FromJsonWhole("{\"SchemaVersion\":1,\"Messages\":[]}", out var older);
+        Assert.Null(older.MadeFiles);
+    }
+
+    /// <summary>
     /// An <c>/undo</c> note rides in the user's one text and its exact words are saved beside it, so a restored session strips only that
     /// (2026-10-28, review P10-01, P5-08); a summary's checkpoint list survives the store (P2-06).
     /// </summary>
