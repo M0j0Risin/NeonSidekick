@@ -1152,7 +1152,7 @@ public sealed class TranscriptRenderer : INoticeSink
     /// only, never the page's feed; nothing with no reply open. <paramref name="sources"/> (2026-11-15, the web-tools plan's §2) draw the
     /// 📚 line above it (<see cref="SourcesLine"/>), on the screen and as the feed's own entry; its own gate, so the two never gate each other.
     /// </summary>
-    public void EndAssistant(string? footer = null, IReadOnlyList<Llm.Tools.WebSource>? sources = null)
+    public void EndAssistant(string? footer = null, IReadOnlyList<Web.WebSource>? sources = null)
     {
         Feed?.End();
         EndThinking();
@@ -1164,9 +1164,9 @@ public sealed class TranscriptRenderer : INoticeSink
             return;
         }
 
-        if (Web.WebText.HasSourcesLine(sources))
+        if (Web.WebSources.HasLine(sources))
         {
-            Feed?.AddSources(App.SessionExport.SourcesLineMarkdown(sources!));
+            Feed?.AddSources(Web.WebSources.LineMarkdown(sources!));
         }
 
         _heldWhitespace.Clear();
@@ -1223,9 +1223,9 @@ public sealed class TranscriptRenderer : INoticeSink
     }
 
     /// <summary>The 📚 line at a line's start (2026-11-15); nothing for a turn that read no page and saved no file.</summary>
-    private void WriteSources(IReadOnlyList<Llm.Tools.WebSource>? sources)
+    private void WriteSources(IReadOnlyList<Web.WebSource>? sources)
     {
-        if (Web.WebText.HasSourcesLine(sources))
+        if (Web.WebSources.HasLine(sources))
         {
             _console.Write(SourcesLine(sources!));
             _console.WriteLine();
@@ -1234,19 +1234,20 @@ public sealed class TranscriptRenderer : INoticeSink
 
     /// <summary>
     /// The 📚 line under a reply (2026-11-15, the web-tools plan's §2, feature idea #27): <c>📚 Title (host) · 📥 file (host) · +3 more ·
-    /// 2 searches</c>. Each title is the page's own words, so it is shown through <see cref="Llm.Tools.UntrustedText.Name"/> (one line, bidi
-    /// and zero-width escaped) and appended as plain text, never markup, its host after it in the dim color, and it carries its URL as the
+    /// 2 searches</c>. Each title is the page's own words, so it is shown through <see cref="Llm.Tools.UntrustedText.OneLine"/> (one line, bidi
+    /// overrides and hidden characters escaped; since 2026-11-16, the web-tools review's #47, a joiner and a direction mark kept, so an emoji
+    /// family and a right-to-left title read as written) and appended as plain text, never markup, its host after it in the dim color, and it carries its URL as the
     /// reply's links do (<see cref="LinkText.WebTarget"/>: the hover hint, the link chord, OSC 8); one the vetting refuses stays plain text.
     /// The first <see cref="Web.WebText.SourcesShown"/>, then a count, so a resize's reflow keeps it whole: it wraps like any line. Pure.
     /// </summary>
-    public static Paragraph SourcesLine(IReadOnlyList<Llm.Tools.WebSource> sources)
+    public static Paragraph SourcesLine(IReadOnlyList<Web.WebSource> sources)
     {
         ArgumentNullException.ThrowIfNull(sources);
         var dim = Theme.DimText;
         var line = new Paragraph();
         line.Append(Web.WebText.SourcesGlyph + " ", dim);
-        var listed = sources.Where(s => s.Kind != Llm.Tools.WebSourceKind.Search).ToList();
-        int searches = sources.Count - listed.Count;
+        var listed = Web.WebSources.Listed(sources);
+        int searches = Web.WebSources.Searches(sources);
         bool first = true;
         void Separator()
         {
@@ -1261,11 +1262,11 @@ public sealed class TranscriptRenderer : INoticeSink
         foreach (var source in listed.Take(Web.WebText.SourcesShown))
         {
             Separator();
-            var (label, host) = Web.WebText.SourceLabel(source);
-            line.Append(Llm.Tools.UntrustedText.Name(label), Theme.Assistant, MarkdownView.LinkOf(LinkText.WebTarget(source.Url)));
+            var (label, host) = Web.WebSources.Label(source);
+            line.Append(Llm.Tools.UntrustedText.OneLine(label), Theme.Assistant, MarkdownView.LinkOf(LinkText.WebTarget(source.Url)));
             if (host is not null)
             {
-                line.Append(" (" + Llm.Tools.UntrustedText.Name(host) + ")", dim);
+                line.Append(" (" + Llm.Tools.UntrustedText.OneLine(host) + ")", dim);
             }
         }
 

@@ -39,7 +39,7 @@ public sealed class HaSceneTool : HaTool
 
     protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
-        string scene = ToolArguments.ReadString(arguments, SceneArgument).Trim();
+        string scene = ToolArguments.ReadName(arguments, SceneArgument).Trim();
         if (scene.Length == 0)
         {
             return HaText.Missing(SceneArgument);
@@ -58,7 +58,7 @@ public sealed class HaSceneTool : HaTool
 
         if (match.Entities.Count != 1)
         {
-            return HaText.Ambiguous(scene, match.Entities.Take(HaSnapshot.MaxCandidates).ToList(), match.Entities.Count);
+            return HaText.Ambiguous(scene, match.Entities.Take(HaSnapshot.MaxCandidates).ToList(), match.Entities.Count, fenced: true);
         }
 
         string? data = transition is { } t ? HaJson.Object(w => w.WriteNumber("transition", t)) : null;

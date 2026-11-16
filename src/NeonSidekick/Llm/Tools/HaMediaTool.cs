@@ -80,7 +80,7 @@ public sealed class HaMediaTool : HaTool
             return error;
         }
 
-        var (player, refused) = Player(snapshot, Optional(arguments, TargetArgument));
+        var (player, refused) = Player(snapshot, OptionalName(arguments, TargetArgument));
         if (player is null)
         {
             return refused;
@@ -106,7 +106,7 @@ public sealed class HaMediaTool : HaTool
                 detail = mute ? "muted" : "unmuted";
                 break;
             case "source":
-                string wanted = Optional(arguments, SourceArgument) ?? "";
+                string wanted = OptionalName(arguments, SourceArgument) ?? "";
                 if (wanted.Length == 0)
                 {
                     return HaText.Missing(SourceArgument);
@@ -115,7 +115,7 @@ public sealed class HaMediaTool : HaTool
                 var sources = HaJson.Strings(player.Attributes, "source_list");
                 if (MatchSource(sources, wanted) is not { } source)
                 {
-                    return sources.Count == 0 ? HaText.BadChoice(SourceArgument, wanted, ["(the player lists none)"]) : HaText.BadChoice(SourceArgument, wanted, sources);
+                    return sources.Count == 0 ? HaText.BadChoice(SourceArgument, wanted, ["(the player lists none)"]) : HaText.BadChoice(SourceArgument, wanted, sources, fenced: true);
                 }
 
                 data = HaJson.Object(w => w.WriteString("source", source));

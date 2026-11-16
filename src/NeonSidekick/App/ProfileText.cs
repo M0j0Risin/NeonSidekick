@@ -80,13 +80,7 @@ public static class ProfileText
     /// <c>MarkOfTheWeb</c> writes a download's address (2026-10-26, the review's R22: a done line is a transcript line, kept in the session).
     /// Anything that isn't an absolute address with user info, a label among them, comes back as it is. Pure.
     /// </summary>
-    public static string WithoutUserInfo(string url)
-    {
-        ArgumentNullException.ThrowIfNull(url);
-        return Uri.TryCreate(url, UriKind.Absolute, out var parsed) && parsed.UserInfo.Length > 0
-            ? new UriBuilder(parsed) { UserName = "", Password = "" }.Uri.AbsoluteUri
-            : url;
-    }
+    public static string WithoutUserInfo(string url) => Files.SafeText.WithoutUserInfo(url);
 
     /// <summary>
     /// The settings another writer changed in the loaded profile's file, taken (2026-10-26, the review's R24: a push from another copy of the

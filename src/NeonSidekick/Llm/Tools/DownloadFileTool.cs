@@ -108,12 +108,13 @@ public sealed class DownloadFileTool : AIFunction
             return folder;
         }
 
-        string name = Sanitise(headerName);
+        // Both are the server's names: their hidden characters made visible (FileNames.ServerName); one left empty falls back to the URL's.
+        string name = FileNames.ServerName(Sanitise(headerName));
         if (name.Length == 0)
         {
             string segment = finalUrl.AbsolutePath;
             int cut = segment.LastIndexOf('/');
-            name = Sanitise(Uri.UnescapeDataString(cut >= 0 ? segment[(cut + 1)..] : segment));
+            name = FileNames.ServerName(Sanitise(Uri.UnescapeDataString(cut >= 0 ? segment[(cut + 1)..] : segment)));
         }
 
         if (name.Length == 0)
@@ -126,9 +127,8 @@ public sealed class DownloadFileTool : AIFunction
 
     /// <summary>
     /// A candidate file name with any path and the characters Windows refuses stripped, trimmed of dots and blanks; <c>""</c> when nothing is
-    /// left. A character that hides how the name reads (<see cref="NameScrub.Hides"/>: bidi, zero-width, controls) becomes <c>-</c> (2026-11-15, the web-tools plan's §5, feature idea #29),
-    /// as <see cref="FileNames.Safe"/> does: a server's <c>invoice\u202Efdp.exe</c> would show as <c>invoiceexe.pdf</c>. A zero-width joiner inside an
-    /// emoji stays.
+    /// left. The user's names keep every other character as given (<c>OutputNames</c>); a server's go on through <see cref="FileNames.ServerName"/>
+    /// (2026-11-16, the web-tools review's #108: this rule had grown to change the user's Persian names too).
     /// </summary>
     public static string Sanitise(string name)
     {
@@ -137,12 +137,11 @@ public sealed class DownloadFileTool : AIFunction
         string tail = cut >= 0 ? name[(cut + 1)..] : name;
         var invalid = Path.GetInvalidFileNameChars();
         var kept = new System.Text.StringBuilder(tail.Length);
-        for (int i = 0; i < tail.Length; i++)
+        foreach (char c in tail)
         {
-            char c = tail[i];
             if (Array.IndexOf(invalid, c) < 0)
             {
-                kept.Append(NameScrub.Hides(c) && !FileNames.IsJoining(tail, i) ? '-' : c);
+                kept.Append(c);
             }
         }
 
@@ -158,7 +157,10 @@ public sealed class DownloadFileTool : AIFunction
 
     /// <summary>
     /// The <c>sha256</c> / <c>sha512</c> arguments (2026-11-15, the web-tools plan's §5, feature idea #29): blank ones as not given; both given an error; a value read with spaces
-    /// dropped, case ignored and a <c>sha256:</c> prefix tolerated, refused unless it is 64 (or 128) hex digits. Pure.
+    /// dropped, case ignored and a <c>sha256:</c> prefix tolerated, refused unless it is 64 (or 128) hex digits. Since 2026-11-16 (the web-tools
+    /// review's #85) a value that fails that is split on spaces, <c>=</c>, <c>:</c> and parentheses, and the one token of exactly that many hex
+    /// digits is the digest: a <c>sha256sum</c> line, <c>sha-256:…</c>, <c>sha256=…</c>, the BSD <c>SHA256 (f) = …</c>. Two different such
+    /// tokens, or none, is refused. Pure.
     /// </summary>
     internal static (Expected? Digest, string? Error) ReadDigest(string sha256, string sha512)
     {
@@ -177,16 +179,26 @@ public sealed class DownloadFileTool : AIFunction
         }
 
         var (argument, raw, digits, algorithm, name) = has256
-            ? (Sha256Argument, sha256, 64, HashAlgorithmName.SHA256, "SHA-256")
-            : (Sha512Argument, sha512, 128, HashAlgorithmName.SHA512, "SHA-512");
+            ? (Sha256Argument, sha256, 64, HashAlgorithmName.SHA256, WebText.Sha256Name)
+            : (Sha512Argument, sha512, 128, HashAlgorithmName.SHA512, WebText.Sha512Name);
         string hex = string.Concat(raw.Where(c => !char.IsWhiteSpace(c))).ToLowerInvariant();
         if (hex.StartsWith(argument + ":", StringComparison.Ordinal))
         {
             hex = hex[(argument.Length + 1)..];
         }
 
-        return hex.Length == digits && hex.All(char.IsAsciiHexDigit)
-            ? (new Expected(algorithm, name, hex), null)
+        if (hex.Length == digits && hex.All(char.IsAsciiHexDigit))
+        {
+            return (new Expected(algorithm, name, hex), null);
+        }
+
+        var tokens = raw.Split([' ', '\t', '\r', '\n', '=', ':', '(', ')'], StringSplitOptions.RemoveEmptyEntries)
+            .Where(t => t.Length == digits && t.All(char.IsAsciiHexDigit))
+            .Select(t => t.ToLowerInvariant())
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        return tokens.Count == 1
+            ? (new Expected(algorithm, name, tokens[0]), null)
             : (null, WebText.BadDigest(argument, digits, raw));
     }
 
@@ -206,7 +218,8 @@ public sealed class DownloadFileTool : AIFunction
 
         var effective = _effective();
         long maxBytes = MaxBytesOf(effective);
-        var options = WebAccess.Options(effective);
+        // With a digest the body is asked for as sent (2026-11-16, the web-tools review's #55), so the digest is of the server's bytes.
+        var options = WebAccess.Options(effective) with { RawBody = expected is not null };
         var opened = await _web.Fetcher.OpenDownloadAsync(parsed, options, maxBytes, cancellationToken).ConfigureAwait(false);
         try
         {
@@ -261,7 +274,8 @@ public sealed class DownloadFileTool : AIFunction
         var begun = _files.BeginWrite(target, overwrite, out var pending);
         if (pending is null)
         {
-            return (WebText.Downloaded(begun, opened.Url, opened.MediaType), null);
+            // Refused before a byte was read: a digest given was never checked, and the answer says so (2026-11-16, the review's #173).
+            return (WebText.Downloaded(begun, opened.Url, opened.MediaType) + (expected is null ? "" : WebText.DigestNotChecked(expected.Name)), null);
         }
 
         using (pending)
@@ -278,14 +292,15 @@ public sealed class DownloadFileTool : AIFunction
             // it, and a file there under overwrite stays as it was.
             if (expected is not null && !string.Equals(saved.Digest, expected.Hex, StringComparison.Ordinal))
             {
-                return (WebText.HashMismatch(expected.Name, expected.Hex, saved.Digest ?? "", opened.Url, target), null);
+                return (WebText.HashMismatch(expected.Name, expected.Hex, saved.Digest ?? "", opened.Url, opened.FinalUrl, opened.ContentEncoding, begun.Replaced), null);
             }
 
             string from = opened.FinalUrl.Length > 0 ? opened.FinalUrl : opened.Url;
             var written = pending.Commit(MarkOfTheWeb.ForDownload(from, _web.Time.GetUtcNow()));
-            string text = WebText.Downloaded(written, opened.Url, opened.MediaType) + (expected is not null && written.Outcome == Files.FileOutcome.Ok ? WebText.Verified(expected.Name) : "");
-            // The file saved, named as the answer names it, for the 📥 under the reply (2026-11-15, the web-tools plan's §2).
-            return (text, written.Outcome == Files.FileOutcome.Ok ? new WebSource(WebSourceKind.Download, from, Path.GetFileName(written.Relative)) : null);
+            string text = WebText.Downloaded(written, opened.Url, opened.MediaType, expected is not null && written.Outcome == Files.FileOutcome.Ok ? WebText.Verified(expected.Name) : "");
+            // The file saved, named as the answer names it, for the 📥 under the reply (2026-11-15, the web-tools plan's §2). The address asked,
+            // not the one it ended at (2026-11-16, the web-tools review's #43): a redirect's signed URL carries its key, and stays in the mark.
+            return (text, written.Outcome == Files.FileOutcome.Ok ? new WebSource(WebSourceKind.Download, opened.Url, Path.GetFileName(written.Relative)) : null);
         }
     }
 
@@ -304,6 +319,6 @@ public sealed class DownloadFileTool : AIFunction
 
         string path = ToolArguments.ReadString(arguments, PathArgument);
         var (text, source) = await DownloadSourcedAsync(ToolArguments.ReadString(arguments, UrlArgument), path, overwrite ?? false, expected, cancellationToken).ConfigureAwait(false);
-        return source is null ? text : new ToolSourcedResult(text, source);
+        return ToolSourcedResult.Of(text, source);
     }
 }

@@ -249,7 +249,7 @@ public sealed class HaCameraTests : IDisposable
 
         Assert.Null(player);
         Assert.StartsWith("Error: 'media player' could be " + count.ToString(System.Globalization.CultureInfo.InvariantCulture) + " things; ", error);
-        Assert.EndsWith(" (and 1 more)", error, StringComparison.Ordinal);
+        Assert.EndsWith(" (and 1 more)", NeonSidekick.Llm.Tools.UntrustedText.WithoutNote(error!), StringComparison.Ordinal);   // the names fenced, the note last
     }
 
     [Fact]

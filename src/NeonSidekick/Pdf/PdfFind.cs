@@ -24,17 +24,33 @@ public static class PdfFind
         return [.. Fold(query.Replace('"', ' ')).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.Ordinal)];
     }
 
-    /// <summary><paramref name="text"/> lowercased with its accents taken off (decomposed, the combining marks dropped).</summary>
+    /// <summary>
+    /// <paramref name="text"/> lowercased with its accents taken off (decomposed, the combining marks dropped). Since 2026-11-16 (the web-tools
+    /// review's #117) format characters go too — a soft hyphen inside a word, a zero-width space — but a joiner between two characters, and a
+    /// soft hyphen ending a line (<see cref="Joined"/> reads it), stay.
+    /// </summary>
     public static string Fold(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
         var sb = new StringBuilder(text.Length);
-        foreach (char c in text.Normalize(NormalizationForm.FormD))
+        string decomposed = text.Normalize(NormalizationForm.FormD);
+        for (int i = 0; i < decomposed.Length; i++)
         {
-            if (CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark)
+            char c = decomposed[i];
+            var category = CharUnicodeInfo.GetUnicodeCategory(c);
+            if (category == UnicodeCategory.NonSpacingMark)
             {
-                sb.Append(char.ToLowerInvariant(c));
+                continue;
             }
+
+            bool joiner = c == '\u200D' && i > 0 && i + 1 < decomposed.Length && !char.IsWhiteSpace(decomposed[i - 1]) && !char.IsWhiteSpace(decomposed[i + 1]);
+            bool lineEndHyphen = c == '\u00AD' && i + 1 < decomposed.Length && decomposed[i + 1] is '\n' or '\r';
+            if (category == UnicodeCategory.Format && !joiner && !lineEndHyphen)
+            {
+                continue;
+            }
+
+            sb.Append(char.ToLowerInvariant(c));
         }
 
         return sb.ToString().Normalize(NormalizationForm.FormC);

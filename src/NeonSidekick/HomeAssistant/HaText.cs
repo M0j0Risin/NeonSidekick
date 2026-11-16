@@ -105,16 +105,30 @@ public static partial class HaText
     }
 
     /// <summary>A target that matched several with nothing to choose between them.</summary>
-    public static string Ambiguous(string target, IReadOnlyList<HaEntity> shown, int total)
+    /// <remarks>
+    /// The target is the model's own word, echoed (<see cref="Llm.Tools.ArgumentText.Echo"/>); with <paramref name="fenced"/> (2026-11-16, the
+    /// web-tools review's #184) each candidate's name and id are fenced, the note last, so the user's view drops the marks. <c>/ha</c> passes
+    /// false.
+    /// </remarks>
+    public static string Ambiguous(string target, IReadOnlyList<HaEntity> shown, int total, bool fenced = false)
     {
         ArgumentNullException.ThrowIfNull(shown);
         string more = total > shown.Count ? $" (and {(total - shown.Count).ToString(CultureInfo.InvariantCulture)} more)" : "";
-        return $"Error: '{target.Trim()}' could be {total.ToString(CultureInfo.InvariantCulture)} things; name one: " + string.Join(", ", shown.Select(Label)) + more;
+        string answer = $"Error: '{Llm.Tools.ArgumentText.Echo(target.Trim())}' could be {total.ToString(CultureInfo.InvariantCulture)} things; name one: "
+            + string.Join(", ", shown.Select(e => fenced ? $"{Outside(e.Name, true)} ({Outside(e.Id, true)})" : Label(e))) + more;
+        return fenced ? Llm.Tools.UntrustedText.WithNote(answer) : answer;
     }
 
-    /// <summary>An argument outside what the tool takes: <paramref name="choices"/> names what it does.</summary>
-    public static string BadChoice(string argument, string given, IEnumerable<string> choices) =>
-        $"Error: '{given.Trim()}' is not a valid {argument}; use one of: " + string.Join(", ", choices);
+    /// <summary>
+    /// An argument outside what the tool takes: <paramref name="choices"/> names what it does, fenced with <paramref name="fenced"/> (2026-11-16,
+    /// the web-tools review's #184: a player's sources are its own words), the note last. The given value is the model's, echoed.
+    /// </summary>
+    public static string BadChoice(string argument, string given, IEnumerable<string> choices, bool fenced = false)
+    {
+        string answer = $"Error: '{Llm.Tools.ArgumentText.Echo(given.Trim())}' is not a valid {argument}; use one of: "
+            + string.Join(", ", fenced ? choices.Select(c => Outside(c, true)) : choices);
+        return fenced ? Llm.Tools.UntrustedText.WithNote(answer) : answer;
+    }
 
     /// <summary>A number argument out of its range.</summary>
     public static string OutOfRange(string argument, string given, int min, int max) =>
@@ -355,11 +369,11 @@ public static partial class HaText
     }
 
     /// <summary>The names of entities, joined; a long list cut with a count.</summary>
-    public static string Names(IReadOnlyList<HaEntity> entities)
+    public static string Names(IReadOnlyList<HaEntity> entities, bool fenced = false)
     {
         ArgumentNullException.ThrowIfNull(entities);
         const int shown = 6;
-        string head = string.Join(", ", entities.Take(shown).Select(e => e.Name));
+        string head = string.Join(", ", entities.Take(shown).Select(e => Outside(e.Name, fenced)));
         return entities.Count > shown ? head + $" and {(entities.Count - shown).ToString(CultureInfo.InvariantCulture)} more" : head;
     }
 
@@ -367,21 +381,10 @@ public static partial class HaText
     public static string Label(HaEntity entity) => $"{entity.Name} ({entity.Id})";
 
     /// <summary>
-    /// A service's own answer (<c>?return_response</c>) or the changed states, for the generic tool: the header and the body cut short.
-    /// No caller yet: whoever wires this fences the body through <c>UntrustedText.FenceBody</c> (2026-11-15, the web-tools plan's §3).
+    /// A value Home Assistant gave — a name, an id, a state, an attribute — fenced in place for the model (2026-11-16, the web-tools review's
+    /// #166: the body was one fence, so <c>⟪- milk⟫</c> came back as an item's name); bare for <c>/ha</c>. Blank stays blank.
     /// </summary>
-    public static string ServiceAnswer(string header, string body)
-    {
-        ArgumentNullException.ThrowIfNull(header);
-        ArgumentNullException.ThrowIfNull(body);
-        string text = body.Trim();
-        if (text.Length == 0 || text == "[]")
-        {
-            return header;
-        }
-
-        return header + "\n" + Clip(text, 2000);
-    }
+    public static string Outside(string? text, bool fenced) => fenced ? Llm.Tools.UntrustedText.QuoteOr(text, text ?? "") : text ?? "";
 
     /// <summary>
     /// Assist's answer: its kind and what it said. For the model (<paramref name="fenced"/>, (2026-11-15, the web-tools plan's §3)) Home Assistant's words are
@@ -393,12 +396,15 @@ public static partial class HaText
         try
         {
             using var document = JsonDocument.Parse(body);
-            var response = document.RootElement.TryGetProperty("response", out var r) ? r : default;
+            var root = document.RootElement;
+
+            // Each object checked before it is read (2026-11-16, the web-tools review's #137: a list or a string threw past the catch).
+            var response = root.ValueKind == JsonValueKind.Object && root.TryGetProperty("response", out var r) ? r : default;
             string kind = HaJson.String(response, "response_type") ?? "";
-            string speech = response.ValueKind == JsonValueKind.Object && response.TryGetProperty("speech", out var s)
+            string speech = response.ValueKind == JsonValueKind.Object && response.TryGetProperty("speech", out var s) && s.ValueKind == JsonValueKind.Object
                 && s.TryGetProperty("plain", out var plain) ? HaJson.String(plain, "speech") ?? "" : "";
             string said = speech.Trim().Length > 0 ? (fenced ? Llm.Tools.UntrustedText.Fenced(speech.Trim()) : speech.Trim()) : "(no words)";
-            string answer = kind == "error" ? "Error: Assist could not do it: " + said : "Assist (" + (kind.Length > 0 ? kind.Replace('_', ' ') : "answer") + "): " + said;
+            string answer = kind == "error" ? "Error: Assist could not do it: " + said : "Assist (" + AssistKind(kind) + "): " + said;
             return fenced ? Llm.Tools.UntrustedText.WithNote(answer) : answer;
         }
         catch (JsonException)
@@ -406,6 +412,17 @@ public static partial class HaText
             return BadAnswer("/api/conversation/process");
         }
     }
+
+    /// <summary>
+    /// Assist's <c>response_type</c> in the app's words (2026-11-16, the web-tools review's #71): the kinds Home Assistant documents, and
+    /// "answer" for any other, so a server's own word never sits in the app's prefix unfenced.
+    /// </summary>
+    private static string AssistKind(string kind) => kind switch
+    {
+        "action_done" => "action done",
+        "query_answer" => "query answer",
+        _ => "answer",
+    };
 
     /// <summary>The log line of a service call: the service and the ids.</summary>
     public static string CallLog(string domain, string service, IReadOnlyList<string> ids) =>
@@ -417,14 +434,14 @@ public static partial class HaText
     /// One entity on one line: <c>light.den_den · Den · on · 80% · 2700 K · group · Den</c> — the id, the name, the state and
     /// what matters for its domain, then the area.
     /// </summary>
-    public static string StateLine(HaEntity entity)
+    public static string StateLine(HaEntity entity, bool fenced = false)
     {
         ArgumentNullException.ThrowIfNull(entity);
-        var parts = new List<string> { entity.Id, entity.Name, StateOf(entity) };
-        parts.AddRange(Details(entity));
+        var parts = new List<string> { Outside(entity.Id, fenced), Outside(entity.Name, fenced), Outside(StateOf(entity), fenced) };
+        parts.AddRange(Details(entity, fenced));
         if (entity.Area is { } area)
         {
-            parts.Add("in " + area);
+            parts.Add("in " + Outside(area, fenced));
         }
 
         return string.Join(" · ", parts);
@@ -439,7 +456,7 @@ public static partial class HaText
     }
 
     /// <summary>The attributes worth a word, by domain.</summary>
-    public static IEnumerable<string> Details(HaEntity entity)
+    public static IEnumerable<string> Details(HaEntity entity, bool fenced = false)
     {
         ArgumentNullException.ThrowIfNull(entity);
         var a = entity.Attributes;
@@ -465,7 +482,7 @@ public static partial class HaText
             case "media_player":
                 if (HaJson.String(a, "source") is { Length: > 0 } source)
                 {
-                    yield return "source " + source;
+                    yield return "source " + Outside(source, fenced);
                 }
 
                 if (HaJson.Number(a, "volume_level") is { } volume)
@@ -480,7 +497,7 @@ public static partial class HaText
 
                 if (HaJson.String(a, "media_title") is { Length: > 0 } title)
                 {
-                    yield return "playing " + title;
+                    yield return "playing " + Outside(title, fenced);
                 }
 
                 break;
@@ -488,7 +505,7 @@ public static partial class HaText
             case "sensor":
                 if (HaJson.String(a, "device_class") is { Length: > 0 } kind)
                 {
-                    yield return kind;
+                    yield return Outside(kind, fenced);
                 }
 
                 break;
@@ -505,11 +522,11 @@ public static partial class HaText
     /// whole) no secret is: <c>access_token</c> is left out, and each line goes through <see cref="Redacted"/> before the cut, so a
     /// cut never leaves half a token showing. Every domain alike.
     /// </summary>
-    public static string Full(HaEntity entity)
+    public static string Full(HaEntity entity, bool fenced = false)
     {
         ArgumentNullException.ThrowIfNull(entity);
         var sb = new StringBuilder();
-        sb.Append(StateLine(entity));
+        sb.Append(StateLine(entity, fenced));
         if (entity.LastChanged is { } changed)
         {
             sb.Append("\nlast changed: ").Append(changed.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss 'UTC'", CultureInfo.InvariantCulture));
@@ -525,7 +542,7 @@ public static partial class HaText
                 }
 
                 string value = attribute.Value.ValueKind == JsonValueKind.String ? attribute.Value.GetString() ?? "" : attribute.Value.GetRawText();
-                sb.Append('\n').Append(attribute.Name).Append(": ").Append(Clip(Single(Redacted(value)), 400));
+                sb.Append('\n').Append(attribute.Name).Append(": ").Append(Outside(Clip(Single(Redacted(value)), 400), fenced));
             }
         }
 
@@ -554,7 +571,7 @@ public static partial class HaText
     private static partial Regex LinkQuery();
 
     /// <summary>The <c>ha_states</c> list: a header with the count and the filter, then a line per entity.</summary>
-    public static string States(IReadOnlyList<HaEntity> entities, int total, string filter)
+    public static string States(IReadOnlyList<HaEntity> entities, int total, string filter, bool fenced = false)
     {
         ArgumentNullException.ThrowIfNull(entities);
         string what = filter.Length > 0 ? " matching " + filter : "";
@@ -562,7 +579,7 @@ public static partial class HaText
         var sb = new StringBuilder(Count(total, "entity", "entities") + what + shown);
         foreach (var entity in entities)
         {
-            sb.Append('\n').Append(StateLine(entity));
+            sb.Append('\n').Append(StateLine(entity, fenced));
         }
 
         return sb.ToString();
@@ -572,7 +589,7 @@ public static partial class HaText
     /// The overview (<c>ha_overview</c> and <c>/ha</c>): the lights on by area with each room's group, the media players,
     /// the temperatures, the motion, the low batteries, the to-do lists, how many scenes and what is unavailable.
     /// </summary>
-    public static IReadOnlyList<string> Overview(HaSnapshot snapshot)
+    public static IReadOnlyList<string> Overview(HaSnapshot snapshot, bool fenced = false)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         var lines = new List<string>();
@@ -593,48 +610,48 @@ public static partial class HaText
             var group = groups.FirstOrDefault(g => area.EntityIds.Contains(g.Id, StringComparer.Ordinal));
             string state = lit == 0 ? "off" : $"{lit.ToString(CultureInfo.InvariantCulture)} of {inside.Count.ToString(CultureInfo.InvariantCulture)} on";
             string brightest = lit == 0 ? "" : inside.Where(e => e.State == "on").Select(e => HaJson.Number(e.Attributes, "brightness")).Max() is { } top ? " up to " + Percent(top) : "";
-            lines.Add($"- {area.Name}: {state}{brightest}" + (group is null ? "" : $" · group {group.Id}"));
+            lines.Add($"- {Outside(area.Name, fenced)}: {state}{brightest}" + (group is null ? "" : $" · group {Outside(group.Id, fenced)}"));
         }
 
         var loose = on.Where(e => e.Area is null).ToList();
         if (loose.Count > 0)
         {
-            lines.Add("- no area: " + Names(loose) + " on");
+            lines.Add("- no area: " + Names(loose, fenced) + " on");
         }
 
         var wide = groups.Where(g => g.Area is null).ToList();
         if (wide.Count > 0)
         {
-            lines.Add("Light groups: " + string.Join(", ", wide.Select(g => $"{g.Name} ({g.Id}, {g.State})")));
+            lines.Add("Light groups: " + string.Join(", ", wide.Select(g => $"{Outside(g.Name, fenced)} ({Outside(g.Id, fenced)}, {Outside(g.State, fenced)})")));
         }
 
         foreach (var player in snapshot.Of("media_player"))
         {
-            lines.Add("Media: " + StateLine(player));
+            lines.Add("Media: " + StateLine(player, fenced));
         }
 
         var temperatures = snapshot.Of("sensor").Where(e => HaJson.String(e.Attributes, "device_class") == "temperature" && !e.Unavailable).ToList();
         if (temperatures.Count > 0)
         {
-            lines.Add("Temperature: " + string.Join("; ", temperatures.Select(e => $"{e.Name} {StateOf(e)}")));
+            lines.Add("Temperature: " + string.Join("; ", temperatures.Select(e => $"{Outside(e.Name, fenced)} {Outside(StateOf(e), fenced)}")));
         }
 
         var motion = snapshot.Of("binary_sensor").Where(e => HaJson.String(e.Attributes, "device_class") is "motion" or "occupancy" && !e.Unavailable).ToList();
         if (motion.Count > 0)
         {
-            lines.Add("Motion: " + string.Join("; ", motion.Select(e => $"{e.Name} {(e.State == "on" ? "detected" : "clear")}")));
+            lines.Add("Motion: " + string.Join("; ", motion.Select(e => $"{Outside(e.Name, fenced)} {(e.State == "on" ? "detected" : "clear")}")));
         }
 
         var low = snapshot.Of("sensor").Where(e => HaJson.String(e.Attributes, "device_class") == "battery"
             && double.TryParse(e.State, NumberStyles.Float, CultureInfo.InvariantCulture, out double level) && level < 20).ToList();
         if (low.Count > 0)
         {
-            lines.Add("Low batteries: " + string.Join("; ", low.Select(e => $"{e.Name} {StateOf(e)}")));
+            lines.Add("Low batteries: " + string.Join("; ", low.Select(e => $"{Outside(e.Name, fenced)} {Outside(StateOf(e), fenced)}")));
         }
 
         foreach (var list in snapshot.Of("todo"))
         {
-            lines.Add($"To-do: {list.Name} ({list.Id}) {list.State} open");
+            lines.Add($"To-do: {Outside(list.Name, fenced)} ({Outside(list.Id, fenced)}) {Outside(list.State, fenced)} open");
         }
 
         int scenes = snapshot.Of("scene").Count;
@@ -646,7 +663,7 @@ public static partial class HaText
         var gone = lights.Where(e => e.Unavailable).ToList();
         if (gone.Count > 0)
         {
-            lines.Add("Unavailable lights: " + Names(gone));
+            lines.Add("Unavailable lights: " + Names(gone, fenced));
         }
 
         return lines;
@@ -687,10 +704,11 @@ public static partial class HaText
             }
 
             var all = items.EnumerateArray().Select(i => (Summary: HaJson.String(i, "summary") ?? "", Done: HaJson.String(i, "status") == "completed")).ToList();
-            var sb = new StringBuilder($"{list.Name}: {Count(all.Count(i => !i.Done), "open item")}" + (all.Any(i => i.Done) ? $", {all.Count(i => i.Done).ToString(CultureInfo.InvariantCulture)} completed" : ""));
+            // Fenced in place (2026-11-16, the web-tools review's #166): the list's name and each item, so a copied item names it.
+            var sb = new StringBuilder($"{Outside(list.Name, true)}: {Count(all.Count(i => !i.Done), "open item")}" + (all.Any(i => i.Done) ? $", {all.Count(i => i.Done).ToString(CultureInfo.InvariantCulture)} completed" : ""));
             foreach (var (summary, done) in all.OrderBy(i => i.Done))
             {
-                sb.Append("\n- ").Append(summary).Append(done ? " (completed)" : "");
+                sb.Append("\n- ").Append(Outside(summary, true)).Append(done ? " (completed)" : "");
             }
 
             return sb.ToString();
@@ -734,7 +752,7 @@ public static partial class HaText
             }
 
             string unit = HaJson.String(entity.Attributes, "unit_of_measurement") is { Length: > 0 } u ? (u == "%" ? "%" : " " + u) : "";
-            var sb = new StringBuilder($"{entity.Name} ({entity.Id}): {Count(changes.Count, "state")} in the last {Count(hours, "hour")}");
+            var sb = new StringBuilder($"{Outside(entity.Name, true)} ({Outside(entity.Id, true)}): {Count(changes.Count, "state")} in the last {Count(hours, "hour")}");
             var kept = changes.OrderBy(c => c.When).ToList();
             if (kept.Count > max)
             {
@@ -745,7 +763,7 @@ public static partial class HaText
             foreach (var (when, state) in kept)
             {
                 var local = TimeZoneInfo.ConvertTime(when, zone);
-                sb.Append('\n').Append(local.ToString("ddd HH:mm", CultureInfo.InvariantCulture)).Append(' ').Append(state).Append(state is "unavailable" or "unknown" ? "" : unit);
+                sb.Append('\n').Append(local.ToString("ddd HH:mm", CultureInfo.InvariantCulture)).Append(' ').Append(Outside(state + (state is "unavailable" or "unknown" ? "" : unit), true));
             }
 
             return sb.ToString();

@@ -86,15 +86,44 @@ public class WebFindTests
         Assert.True(passage.Text.Length <= 2 * WebFind.PassageChars, passage.Text.Length.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 
+    /// <summary>
+    /// Folded a grapheme cluster at a time (2026-11-16, the web-tools review's #1, #8): a page's conjoining Hangul jamo and a split Tamil vowel
+    /// sign match the composed word typed.
+    /// </summary>
+    [Theory]
+    [InlineData("\u1112\u1161\u11AB\u1100\u1173\u11AF", "\uD55C\uAE00")]
+    [InlineData("\u0B95\u0BC6\u0BBE\u0BB2\u0BCD", "\u0B95\u0BCA\u0BB2\u0BCD")]
+    public void AWordTypedComposed_FindsItsDecomposedForm(string onPage, string typed)
+    {
+        var found = WebFind.Passages(Filler(20) + " " + onPage + " " + Filler(20), PdfFind.Words(typed));
+
+        Assert.Contains(onPage, Assert.Single(found.Shown).Text, StringComparison.Ordinal);
+    }
+
+    /// <summary>A link longer than the edge slack is kept whole at a passage's end (2026-11-16, the web-tools review's #186).</summary>
+    [Fact]
+    public void ALongLinkAtAPassagesEdge_IsKeptWhole()
+    {
+        string url = "https://example.com/" + new string('a', 200);
+        string text = "cat " + string.Join(" ", Enumerable.Repeat("word", 79)) + " " + url + " tail " + Filler(100);
+
+        var passage = Assert.Single(WebFind.Passages(text, PdfFind.Words("cat")).Shown);
+
+        Assert.Contains(url + "", passage.Text, StringComparison.Ordinal);
+        Assert.EndsWith(url, passage.Text.TrimEnd(), StringComparison.Ordinal);
+    }
+
     [Fact]
     public void AtMostTenPassages_TheRestCounted()
     {
-        string text = string.Join(" ", Enumerable.Range(0, 30).Select(i => "cat " + Filler(200)));
+        // Hits about 1,400 characters apart, so no two windows touch (ones that overlap merge, HitsCloseTogether_MergeIntoOnePassage).
+        string text = string.Join(" ", Enumerable.Range(0, 30).Select(i => "cat " + Filler(300)));
 
         var found = WebFind.Passages(text, PdfFind.Words("cat"));
 
         Assert.Equal(WebFind.MaxPassages, found.Shown.Count);
         Assert.Equal(30, found.Total);
+        Assert.True(found.Shown.Max(p => p.Offset) < found.NextOffset);
     }
 
     [Fact]
@@ -120,9 +149,9 @@ public class WebFindTests
     [Fact]
     public void Fold_MapsEachCharacterBack()
     {
-        var (folded, map) = WebFind.Fold("Ée😀");
+        var (folded, map) = WebFind.FoldOne("Ée😀");
 
         Assert.Equal("ee😀", folded);
-        Assert.Equal([0, 1, 2, 2, 4], map);
+        Assert.Equal([0, 1, 2, 2, 4], map!);
     }
 }

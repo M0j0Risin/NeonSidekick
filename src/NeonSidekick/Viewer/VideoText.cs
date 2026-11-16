@@ -316,7 +316,11 @@ public static class VideoText
 
         string title = string.IsNullOrWhiteSpace(snapshot.Title) ? name : snapshot.Title.Trim();
         string file = string.Equals(title, name, StringComparison.Ordinal) ? "" : " · file " + name;
-        string line = YouTubeText.StateWord(snapshot.State, "Ready (press play to start)") + " \"" + title + "\"" + YouTubeText.WhereAndSound(snapshot)
+
+        // The file's own title is its metadata, whoever wrote it (2026-11-16, the web-tools review's #62): fenced for the model; the name the
+        // user's file goes by, and the user's view, bare.
+        string shown = forUser || file.Length == 0 ? title : Llm.Tools.UntrustedText.Fenced(title);
+        string line = YouTubeText.StateWord(snapshot.State, "Ready (press play to start)") + " \"" + shown + "\"" + YouTubeText.WhereAndSound(snapshot)
             + file + YouTubeText.OnTheTab(snapshot);
         return snapshot.NoPicture ? line + ". " + NoPictureNote(snapshot.FileName, forUser) : line;
     }

@@ -29,7 +29,12 @@ public sealed class DownloadHashTests : IDisposable
         _root = Path.Combine(_dir, "files");
         _download = new DownloadFileTool(web, new Files.WorkingDirectory(() => _root, _time), () => new AppSettingsData());
         _http.Map("https://example.com/tool.zip", (_, _) => Task.FromResult(StubHttpMessageHandler.Bytes(HttpStatusCode.OK, Body, "application/zip")));
-        _http.Map("https://example.com/data.tgz", (_, _) => Task.FromResult(StubHttpMessageHandler.Bytes(HttpStatusCode.OK, Body, "application/gzip")));
+        _http.Map("https://example.com/data.tgz", (_, _) =>
+        {
+            var response = StubHttpMessageHandler.Bytes(HttpStatusCode.OK, Body, "application/gzip");
+            response.Content.Headers.ContentEncoding.Add("gzip");
+            return Task.FromResult(response);
+        });
     }
 
     public void Dispose()
@@ -59,23 +64,100 @@ public sealed class DownloadHashTests : IDisposable
     {
         string answer = await CallAsync(("url", "https://example.com/tool.zip"), ("sha256", Wrong));
 
-        Assert.Equal(WebText.HashMismatch("SHA-256", Wrong, Sha256, "https://example.com/tool.zip", "tool.zip"), answer);
+        Assert.Equal(WebText.HashMismatch(WebText.Sha256Name, Wrong, Sha256, "https://example.com/tool.zip", "https://example.com/tool.zip", "", replaced: false), answer);
         Assert.StartsWith("Error:", answer, StringComparison.Ordinal);
         Assert.False(File.Exists(Path.Combine(_root, "tool.zip")));
         Assert.Empty(Directory.Exists(_root) ? Directory.GetFiles(_root, "*", SearchOption.AllDirectories) : []);
 
         Directory.CreateDirectory(_root);
         File.WriteAllBytes(Path.Combine(_root, "tool.zip"), [7]);
-        Assert.StartsWith("Error:", await CallAsync(("url", "https://example.com/tool.zip"), ("sha256", Wrong), ("overwrite", true)), StringComparison.Ordinal);
+        string replaced = await CallAsync(("url", "https://example.com/tool.zip"), ("sha256", Wrong), ("overwrite", true));
+        Assert.StartsWith("Error:", replaced, StringComparison.Ordinal);
+        Assert.Equal(WebText.HashMismatch(WebText.Sha256Name, Wrong, Sha256, "https://example.com/tool.zip", "https://example.com/tool.zip", "", replaced: true), replaced);
         Assert.Equal([7], File.ReadAllBytes(Path.Combine(_root, "tool.zip")));
         Assert.Single(Directory.GetFiles(_root));
     }
 
     [Fact]
-    public async Task AMismatchOnACompressedName_SaysItMayHaveBeenUnpackedInTransit()
+    public async Task AMismatchSentCompressed_NamesTheEncoding_AndAPlainOneDoesNot()
     {
-        Assert.Contains("unpacked in transit", await CallAsync(("url", "https://example.com/data.tgz"), ("sha256", Wrong)), StringComparison.Ordinal);
-        Assert.DoesNotContain("unpacked", await CallAsync(("url", "https://example.com/tool.zip"), ("sha256", Wrong)), StringComparison.Ordinal);
+        string compressed = await CallAsync(("url", "https://example.com/data.tgz"), ("sha256", Wrong));
+        string plain = await CallAsync(("url", "https://example.com/tool.zip"), ("sha256", Wrong));
+
+        Assert.Equal(WebText.HashMismatch(WebText.Sha256Name, Wrong, Sha256, "https://example.com/data.tgz", "https://example.com/data.tgz", "gzip", replaced: false), compressed);
+        Assert.Contains("Content-Encoding: gzip", compressed, StringComparison.Ordinal);
+        Assert.DoesNotContain("Content-Encoding", plain, StringComparison.Ordinal);
+        Assert.DoesNotContain("Content-Encoding", WebText.HashMismatch("SHA-256", "a", "b", "https://x.example/", "", "identity", false), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AMismatchAfterARedirect_NamesTheHostItCameFrom()
+    {
+        Assert.Contains("(via cdn.example)", WebText.HashMismatch("SHA-256", "a", "b", "https://x.example/f", "https://cdn.example/f", "", false), StringComparison.Ordinal);
+        Assert.DoesNotContain("via", WebText.HashMismatch("SHA-256", "a", "b", "https://x.example/f", "https://x.example/g", "", false), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("{0}  tool.zip")]
+    [InlineData("sha-256:{0}")]
+    [InlineData("sha256={0}")]
+    [InlineData("SHA256 (tool.zip) = {0}")]
+    public void ADigestInACommonForm_IsRead(string form)
+    {
+        var (expected, error) = DownloadFileTool.ReadDigest(string.Format(System.Globalization.CultureInfo.InvariantCulture, form, Sha256.ToUpperInvariant()), "");
+
+        Assert.Null(error);
+        Assert.Equal(Sha256, expected!.Hex);
+    }
+
+    [Fact]
+    public void TwoDifferentDigestsInOneValue_AreRefused()
+    {
+        Assert.NotNull(DownloadFileTool.ReadDigest(Sha256 + " " + Wrong, "").Error);
+        Assert.Null(DownloadFileTool.ReadDigest(Sha256 + " = " + Sha256, "").Error);
+    }
+
+    [Fact]
+    public async Task ARefusalBeforeAnyByte_SaysTheDigestWasNotChecked()
+    {
+        Directory.CreateDirectory(_root);
+        File.WriteAllBytes(Path.Combine(_root, "tool.zip"), [7]);
+
+        string answer = await CallAsync(("url", "https://example.com/tool.zip"), ("sha256", Sha256));
+
+        Assert.EndsWith(WebText.DigestNotChecked(WebText.Sha256Name), answer, StringComparison.Ordinal);
+        Assert.Equal([7], File.ReadAllBytes(Path.Combine(_root, "tool.zip")));
+    }
+
+    [Fact]
+    public async Task AFailedDownloadIntoNewFolders_LeavesNoFolderBehind_AndKeepsOneThatWasThere()
+    {
+        string answer = await CallAsync(("url", "https://example.com/tool.zip"), ("path", "new/deep/x.zip"), ("sha256", Wrong));
+
+        Assert.StartsWith("Error:", answer, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(Path.Combine(_root, "new")));
+
+        Directory.CreateDirectory(Path.Combine(_root, "kept"));
+        await CallAsync(("url", "https://example.com/tool.zip"), ("path", "kept/inner/x.zip"), ("sha256", Wrong));
+        Assert.True(Directory.Exists(Path.Combine(_root, "kept")));
+        Assert.False(Directory.Exists(Path.Combine(_root, "kept", "inner")));
+    }
+
+    [Fact]
+    public async Task ADigest_AsksForTheBodyAsSent()
+    {
+        HttpRequestMessage? seen = null;
+        _http.Map("https://example.com/raw.bin", (request, _) =>
+        {
+            seen = request;
+            return Task.FromResult(StubHttpMessageHandler.Bytes(HttpStatusCode.OK, Body, "application/octet-stream"));
+        });
+
+        await CallAsync(("url", "https://example.com/raw.bin"), ("sha256", Sha256));
+
+        Assert.NotNull(seen);
+        Assert.True(seen!.Options.TryGetValue(WebHttp.RawBodyKey, out bool raw) && raw);
+        Assert.Equal(["identity"], seen.Headers.AcceptEncoding.Select(e => e.Value));
     }
 
     [Theory]
@@ -99,11 +181,38 @@ public sealed class DownloadHashTests : IDisposable
     }
 
     [Fact]
-    public void AServersFileName_LosesTheCharactersThatWouldDisguiseIt_ButKeepsAnEmojisJoiner()
+    public void AServersFileName_LosesTheCharactersThatWouldDisguiseIt_ButKeepsItsJoiners()
     {
-        Assert.Equal("invoice-fdp.exe", DownloadFileTool.Sanitise("invoice‮fdp.exe"));
-        Assert.Equal("a-b.txt", DownloadFileTool.Sanitise("a​b.txt"));
-        Assert.Equal("Family 👨‍👩.png", DownloadFileTool.Sanitise("Family 👨‍👩.png"));
+        Assert.Equal("invoice-fdp.exe", Files.FileNames.ServerName("invoice\u202Efdp.exe"));
+        Assert.Equal("a-b.txt", Files.FileNames.ServerName("a\u200Bb.txt"));
+        Assert.Equal("a-b.txt", Files.FileNames.ServerName("a\u00ADb.txt"));
+        Assert.Equal("a-b.txt", Files.FileNames.ServerName("a\u200E\u200Fb.txt"));
+        Assert.Equal("Family 👨\u200D👩.png", Files.FileNames.ServerName("Family 👨\u200D👩.png"));
+        Assert.Equal("می\u200Cخواهم.pdf", Files.FileNames.ServerName("می\u200Cخواهم.pdf"));
+        Assert.Equal("a-.txt", Files.FileNames.ServerName("a\u200D.txt"));
+        Assert.Equal("", Files.FileNames.ServerName("\u202E\u200B"));
+    }
+
+    [Fact]
+    public void TheUsersOwnName_KeepsEveryCharacterButAPathsAndTheInvalidOnes()
+    {
+        Assert.Equal("می\u200Cخواهم.docx", DownloadFileTool.Sanitise("می\u200Cخواهم.docx"));
+        Assert.Equal("x.txt", DownloadFileTool.Sanitise("dir/x.txt"));
+    }
+
+    [Fact]
+    public async Task AServerNameOfOnlyHiddenCharacters_FallsBackToTheUrls()
+    {
+        _http.Map("https://example.com/report.pdf", (_, _) =>
+        {
+            var response = StubHttpMessageHandler.Bytes(HttpStatusCode.OK, Body, "application/pdf");
+            response.Content.Headers.ContentDisposition = new System.Net.Http.Headers.ContentDispositionHeaderValue("attachment") { FileNameStar = "\u202E\u200B" };
+            return Task.FromResult(response);
+        });
+
+        await CallAsync(("url", "https://example.com/report.pdf"));
+
+        Assert.True(File.Exists(Path.Combine(_root, "report.pdf")));
     }
 
     [Fact]

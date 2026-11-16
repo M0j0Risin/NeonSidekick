@@ -22,6 +22,12 @@ public sealed record PageText(string Title, string Markdown, IReadOnlyDictionary
     /// show the text's end, can end with it; null otherwise.
     /// </summary>
     public string? More { get; init; }
+
+    /// <summary>
+    /// The spans of <see cref="Markdown"/> the app wrote, not the document (2026-11-16, the web-tools review's #31): a PDF's <c>Outline:</c>
+    /// block and its page markers. <c>find</c> masks them, so a word in a marker is never a hit. Null for an HTML page.
+    /// </summary>
+    public IReadOnlyList<(int Start, int Length)>? AppSpans { get; init; }
 }
 
 /// <summary>
@@ -29,7 +35,8 @@ public sealed record PageText(string Title, string Markdown, IReadOnlyDictionary
 /// where its line starts in the page's text. A PDF outline item pointing past the pages read has no <paramref name="Offset"/>, only its
 /// <paramref name="Page"/>.
 /// </summary>
-public sealed record PageHeading(int Level, string Text, int? Offset, int? Page = null);
+/// <param name="Own">The app's own heading, a PDF's page marker (2026-11-16, the web-tools review's #63): shown bare, never fenced.</param>
+public sealed record PageHeading(int Level, string Text, int? Offset, int? Page = null, bool Own = false);
 
 /// <summary>
 /// HTML to light Markdown over <see cref="HtmlTokenizer"/>: headings as <c>#</c>, links as
@@ -181,9 +188,10 @@ public static class HtmlToMarkdown
                 Pop();
             }
 
-            var offsets = new List<(string Id, int Offset)>(_anchors.Count + _headings.Count);
-            offsets.AddRange(_anchors);
-            offsets.AddRange(_headings.Select(h => ("", h.Offset)));
+            // The anchors' offsets, then the headings', mapped in one pass (2026-11-16, the web-tools review's #151: plain offsets).
+            var offsets = new List<int>(_anchors.Count + _headings.Count);
+            offsets.AddRange(_anchors.Select(a => a.Offset));
+            offsets.AddRange(_headings.Select(h => h.Offset));
             string markdown = Tidy(_out.ToString(), offsets, out var mapped);
             IReadOnlyDictionary<string, int>? anchors = null;
             if (_anchors.Count > 0 && mapped is not null)
@@ -200,8 +208,8 @@ public static class HtmlToMarkdown
             return new PageText(Collapse(_title.ToString()), markdown, anchors) { Headings = mapped is null ? [] : Headings(markdown, mapped) };
         }
 
-        // Each heading's text read from its line in the result, the marker off; one whose line no longer starts with its marker (a
-        // link card wrote it over as one line) is no heading.
+        // Each heading's text read from its line in the result, the marker off and its markup taken out (HeadingText); one whose line no
+        // longer starts with its marker (a link card wrote it over as one line) is no heading.
         private List<PageHeading> Headings(string markdown, int[] mapped)
         {
             var headings = new List<PageHeading>(_headings.Count);
@@ -223,17 +231,117 @@ public static class HtmlToMarkdown
                     continue;
                 }
 
-                headings.Add(new PageHeading(level, line[marker.Length..].Trim(), at));
+                string text = HeadingText(line[marker.Length..]);
+                if (text.Length == 0)
+                {
+                    continue;
+                }
+
+                headings.Add(new PageHeading(level, text, at));
                 last = at;
             }
 
             return headings;
         }
 
+        /// <summary>
+        /// A heading line's text as the outline lists it (2026-11-16, the web-tools review's #128, #140, #176): links and pictures reduced to
+        /// their words (<c>[Two](…)</c> to <c>Two</c>, <c>[image: logo]</c> to <c>logo</c>), emphasis and code marks off, and a trailing lone
+        /// permalink mark (<c>¶</c>, <c>#</c>, <c>§</c>, a zero-width space) dropped. Pure.
+        /// </summary>
+        internal static string HeadingText(string line)
+        {
+            var sb = new System.Text.StringBuilder(line.Length);
+            for (int i = 0; i < line.Length; i++)
+            {
+                char c = line[i];
+                if (c == '\\' && i + 1 < line.Length && line[i + 1] is ']' or '|')
+                {
+                    sb.Append(line[++i]);
+                    continue;
+                }
+
+                if (c == '[')
+                {
+                    // [text](href): the text alone; [image: alt]: the alt.
+                    int close = ClosingBracket(line, i + 1);
+                    if (close > i)
+                    {
+                        string inner = line[(i + 1)..close];
+                        if (close + 1 < line.Length && line[close + 1] == '(' && line.IndexOf(')', close + 2) is int paren and > 0)
+                        {
+                            sb.Append(HeadingText(inner));
+                            i = paren;
+                            continue;
+                        }
+
+                        if (inner.StartsWith(ImagePrefix, StringComparison.Ordinal))
+                        {
+                            sb.Append(inner[ImagePrefix.Length..].Trim());
+                            i = close;
+                            continue;
+                        }
+                    }
+                }
+
+                if (c == '`' || (c is '*' or '~' && i + 1 < line.Length && line[i + 1] == c))
+                {
+                    i += c == '`' ? 0 : 1;
+                    continue;
+                }
+
+                if (c == '*' && IsEmphasisEdge(line, i))
+                {
+                    continue;
+                }
+
+                sb.Append(c);
+            }
+
+            string text = Collapse(sb.ToString());
+            int space = text.LastIndexOf(' ');
+            string tail = space < 0 ? text : text[(space + 1)..];
+            if (tail is "¶" or "#" or "§" or "\u200B")
+            {
+                text = space < 0 ? "" : text[..space].TrimEnd();
+            }
+
+            return text.Trim('\u200B').Trim();
+        }
+
+        private const string ImagePrefix = "image: ";
+
+        // The ] closing a [ opened before start, an escaped \] skipped; -1 for none.
+        private static int ClosingBracket(string line, int start)
+        {
+            for (int i = start; i < line.Length; i++)
+            {
+                if (line[i] == '\\')
+                {
+                    i++;
+                }
+                else if (line[i] == ']')
+                {
+                    return i;
+                }
+            }
+
+            return -1;
+        }
+
+        // Whether the * at i opens or closes emphasis: against a word on one side and a space or an edge on the other.
+        private static bool IsEmphasisEdge(string line, int i)
+        {
+            bool before = i > 0 && !char.IsWhiteSpace(line[i - 1]);
+            bool after = i + 1 < line.Length && !char.IsWhiteSpace(line[i + 1]);
+            return before != after;
+        }
+
         /// <summary>The most headings a page keeps (2026-11-15); past it a page's later headings are not recorded.</summary>
         public const int MaxHeadings = 10_000;
 
-        // Each h1–h6's level and the start of its marker in the output as written (2026-11-15); Truncate drops any it cuts away.
+        // Each h1–h6's level and the start of its marker in the output as written (2026-11-15), recorded as it opens, so the list is in page
+        // order (2026-11-16, the web-tools review's #172); Truncate drops any it cuts away, an empty heading's included.
         private readonly List<(int Level, int Offset)> _headings = new();
 
         /// <summary>The most anchors a page keeps (2026-10-17); past it a page's later ids are not recorded.</summary>
@@ -317,6 +425,13 @@ public static class HtmlToMarkdown
             switch (name)
             {
                 case "br":
+                    // Inside a heading a break is a space (2026-11-16, the web-tools review's #54): the heading stays one line.
+                    if (InHeading())
+                    {
+                        Text(" ");
+                        return;
+                    }
+
                     if (!EndsWith("\n\n"))
                     {
                         TrimTrailingSpaces();
@@ -347,8 +462,22 @@ public static class HtmlToMarkdown
             switch (name)
             {
                 case "h1" or "h2" or "h3" or "h4" or "h5" or "h6":
+                    // A heading inside a heading (2026-11-16, the web-tools review's #46) is the outer one's words: no break, no marker, and
+                    // no record, a plain frame so its close still pairs.
+                    if (InHeading())
+                    {
+                        Text(" ");
+                        Push(new Frame(name, FrameKind.Plain, _out.Length));
+                        return;
+                    }
+
                     BlockBreak();
                     string marker = new string('#', name[1] - '0') + " ";
+                    if (_headings.Count < MaxHeadings)
+                    {
+                        _headings.Add((marker.Length - 1, _out.Length));
+                    }
+
                     _out.Append(marker);
                     Push(new Frame(name, FrameKind.Heading, _out.Length) { Marker = marker });
                     return;
@@ -500,10 +629,6 @@ public static class HtmlToMarkdown
                     {
                         Truncate(frame.Start - frame.Marker.Length);
                     }
-                    else if (_headings.Count < MaxHeadings && _skip == 0)
-                    {
-                        _headings.Add((frame.Marker.Length - 1, frame.Start - frame.Marker.Length));
-                    }
 
                     BlockBreak();
                     return;
@@ -636,7 +761,8 @@ public static class HtmlToMarkdown
         {
             string inner = Since(frame.Start);
             string trimmed = inner.Trim();
-            if (trimmed.Length == 0 || trimmed.Contains('\n'))
+            // Any break, an edge's too (2026-11-16, the web-tools review's #140): a mark moved across it would land on another line.
+            if (trimmed.Length == 0 || inner.Contains('\n'))
             {
                 return;
             }
@@ -707,6 +833,13 @@ public static class HtmlToMarkdown
                 return;
             }
 
+            // A block inside a heading (2026-11-16, the web-tools review's #54) is a space: the heading stays one line.
+            if (InHeading())
+            {
+                Text(" ");
+                return;
+            }
+
             TrimTrailingSpaces();
             if (_out.Length == 0)
             {
@@ -727,6 +860,12 @@ public static class HtmlToMarkdown
         {
             if (_skip > 0 || _out.Length == 0)
             {
+                return;
+            }
+
+            if (InHeading())
+            {
+                Text(" ");
                 return;
             }
 
@@ -786,6 +925,9 @@ public static class HtmlToMarkdown
         }
 
         // ── Stack queries ───────────────────────────────────────────────────
+
+        // Whether a heading is open: its text stays on its marker's line.
+        private bool InHeading() => Innermost(FrameKind.Heading) is not null;
 
         private Frame? Innermost(FrameKind kind)
         {
@@ -885,7 +1027,7 @@ public static class HtmlToMarkdown
         /// <paramref name="anchors"/> comes out as the start of its line in the result (2026-10-17): a line dropped as blank sends it to
         /// the next line kept, and with none after, to the last; null when there are none.
         /// </summary>
-        private static string Tidy(string text, List<(string Id, int Offset)> anchors, out int[]? mapped)
+        private static string Tidy(string text, List<int> anchors, out int[]? mapped)
         {
             var lines = text.Split('\n');
             var sb = new StringBuilder(text.Length);
@@ -923,7 +1065,7 @@ public static class HtmlToMarkdown
         }
 
         // Each offset (an anchor's, then each heading's, in the order given) mapped into the result.
-        private static int[] MapAnchors(string[] lines, int[] starts, List<(string Id, int Offset)> anchors)
+        private static int[] MapAnchors(string[] lines, int[] starts, List<int> anchors)
         {
             // The kept line at or after each line, else the last kept one (0 for an empty result).
             var target = new int[lines.Length];
@@ -948,7 +1090,7 @@ public static class HtmlToMarkdown
             var map = new int[anchors.Count];
             for (int k = 0; k < anchors.Count; k++)
             {
-                int offset = anchors[k].Offset;
+                int offset = anchors[k];
                 int line = Array.BinarySearch(lineStarts, offset);
                 line = line >= 0 ? line : ~line - 1;
                 line = Math.Clamp(line, 0, lines.Length - 1);

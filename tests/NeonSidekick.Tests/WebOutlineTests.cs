@@ -16,12 +16,46 @@ public class WebOutlineTests
         var page = Convert("<h1>One</h1><p>Some text.</p><h2>Two <a href=\"/x\">link</a></h2><div><h3>Three</h3></div><h6>Six</h6>");
 
         var headings = page.Headings!;
-        Assert.Equal(["One", "Two [link](https://example.com/x)", "Three", "Six"], headings.Select(h => h.Text));
+        // The recorded text is the heading's words, its link markup off (2026-11-16, the web-tools review); the offset is its marker's.
+        Assert.Equal(["One", "Two link", "Three", "Six"], headings.Select(h => h.Text));
         Assert.Equal([1, 2, 3, 6], headings.Select(h => h.Level));
         foreach (var heading in headings)
         {
-            Assert.StartsWith(new string('#', heading.Level) + " " + heading.Text, page.Markdown[heading.Offset!.Value..], StringComparison.Ordinal);
+            string line = page.Markdown[heading.Offset!.Value..].Split('\n')[0];
+            Assert.StartsWith(new string('#', heading.Level) + " ", line, StringComparison.Ordinal);
+            Assert.All(heading.Text.Split(' '), word => Assert.Contains(word, line, StringComparison.Ordinal));
         }
+    }
+
+    /// <summary>
+    /// A heading's line stays one line, its text the words (2026-11-16, the web-tools review's #46, #54, #128, #140): a break or a block
+    /// inside it is a space, a heading opened inside it joins its line, and a picture is its alt text.
+    /// </summary>
+    [Fact]
+    public void AHeadingsBreaks_Blocks_NestedHeadingsAndPictures_KeepItOneLine()
+    {
+        var page = Convert("<h2>Line one<br>line two</h2><p>a</p><h2><div>Block</div> after</h2><p>b</p><h2>Outer <h3>Inner</h3></h2><p>c</p><h2><img alt=\"Logo\" src=\"/l.png\"> Products ¶</h2>");
+
+        var headings = page.Headings!;
+        Assert.Contains(headings, h => h.Text == "Line one line two");
+        Assert.Contains(headings, h => h.Text.Contains("Block", StringComparison.Ordinal) && h.Text.Contains("after", StringComparison.Ordinal));
+        Assert.Contains(headings, h => h.Text == "Logo Products");
+        Assert.DoesNotContain("## Outer ###", page.Markdown, StringComparison.Ordinal);
+        foreach (var heading in headings)
+        {
+            string line = page.Markdown[heading.Offset!.Value..].Split('\n')[0];
+            Assert.Single(line.Split(' '), word => word.Length > 0 && word.All(c => c == '#'));
+        }
+    }
+
+    /// <summary>A Markdown answer's own <c>#</c> lines are its outline, a fenced block's left out (2026-11-16, the web-tools review's #133).</summary>
+    [Fact]
+    public void AMarkdownAnswersHeadings_AreItsHashLines_OutsideItsCodeBlocks()
+    {
+        var headings = WebOutline.MarkdownHeadings("# Title\ntext\n```\n# not one\n```\n## Part two\n#not-a-heading");
+
+        Assert.Equal(["Title", "Part two"], headings.Select(h => h.Text));
+        Assert.Equal([1, 2], headings.Select(h => h.Level));
     }
 
     [Fact]
@@ -68,8 +102,8 @@ public class WebOutlineTests
         Assert.Null(headings[2].Offset);
         Assert.Equal("(page 90, not read) · ⟪Appendix⟫", WebOutline.Line(headings[2]));
         Assert.Equal(WebText.PdfMore(2, 90), page.More);
-        Assert.EndsWith(page.More, page.Markdown, StringComparison.Ordinal);
-        Assert.Equal(WebFetcher.PdfAnswerText(read), page.Markdown);
+        // The note lives beside the text, never in it, so find never matches it and each answer adds it once (2026-11-16).
+        Assert.DoesNotContain(page.More!, page.Markdown, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -88,8 +122,9 @@ public class WebOutlineTests
     {
         var headings = Enumerable.Range(0, 100).Select(i => new PageHeading(1 + i % 2, "Heading " + i, i * 100)).ToList();
 
-        Assert.Equal("0 · ⟪Heading 0⟫\n  100 · ⟪Heading 1⟫", WebOutline.Render(headings.Take(2).ToList(), 1000));
-        string cut = WebOutline.Render(headings, 200);
+        Assert.Equal(("0 · ⟪Heading 0⟫\n  100 · ⟪Heading 1⟫", (int?)null), WebOutline.Render(headings.Take(2).ToList(), 1000));
+        var (cut, next) = WebOutline.Render(headings, 200);
+        Assert.NotNull(next);
         Assert.True(cut.Length <= 200, cut.Length.ToString(System.Globalization.CultureInfo.InvariantCulture));
         Assert.EndsWith(" more)", cut, StringComparison.Ordinal);
         int shown = cut.Split('\n').Length - 1;

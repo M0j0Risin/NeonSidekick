@@ -122,7 +122,8 @@ public sealed record GitDiffReport(
     int Added,
     int Deleted,
     bool Truncated,
-    int TotalLines)
+    int TotalLines,
+    string? Subject = null)
 {
     public static GitDiffReport Refused(GitDiffKind kind, GitOutcome outcome, string detail = "") => new(outcome, detail, kind, "", [], false, "", 0, 0, false, 0);
 }
@@ -137,7 +138,8 @@ public sealed record GitBlameReport(GitOutcome Outcome, string Detail, string Pa
 }
 
 /// <summary>One branch or tag: its name, the short sha it points at, its subject, and for a local branch its upstream and whether it is checked out.</summary>
-public sealed record GitRef(string Name, string Short, string Subject, bool Current = false, string? Upstream = null);
+/// <param name="Annotated">An annotated tag's row (2026-11-16, the web-tools review's #25): <paramref name="Subject"/> is its own message's first line, marked as it is shown.</param>
+public sealed record GitRef(string Name, string Short, string Subject, bool Current = false, string? Upstream = null, bool Annotated = false);
 
 /// <summary>
 /// The files git knows under a path (2026-10-18, <see cref="GitAccess.TrackedFiles"/>): the index's entries and the untracked files, sandbox-relative,

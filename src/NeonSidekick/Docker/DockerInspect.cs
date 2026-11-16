@@ -19,8 +19,29 @@ public static class DockerInspect
     /// <summary>The most health checks listed, newest last.</summary>
     public const int MaxHealthLogs = 3;
 
-    /// <summary>The summary of an inspect answer, or null for one that cannot be read.</summary>
-    public static string? Summary(string json)
+    /// <summary>
+    /// A value the image wrote, fenced when <paramref name="fenced"/>; the redaction's <see cref="DockerText.Redacted"/> is the app's word and
+    /// stays outside the fence, on its own or after a secret's <c>name=</c>.
+    /// </summary>
+    private static string Value(string text, bool fenced)
+    {
+        if (!fenced || text.Length == 0 || text == DockerText.Redacted)
+        {
+            return text;
+        }
+
+        return text.EndsWith("=" + DockerText.Redacted, StringComparison.Ordinal)
+            ? Llm.Tools.UntrustedText.Fenced(text[..^DockerText.Redacted.Length]) + DockerText.Redacted
+            : Llm.Tools.UntrustedText.Fenced(text);
+    }
+
+    /// <summary>
+    /// The summary of an inspect answer, or null for one that cannot be read. <paramref name="fenced"/> (2026-11-16, the web-tools review's #69,
+    /// #179): the values the image or the container wrote — the entrypoint's and the command's arguments, the health check's command, each
+    /// health log's output and the label values — fenced where each is appended, for the model; <c>/docker</c>'s check keeps the bare form.
+    /// The field names, states, ports, mounts, env names and the redaction's <see cref="DockerText.Redacted"/> stay outside.
+    /// </summary>
+    public static string? Summary(string json, bool fenced = false)
     {
         using var doc = DockerJson.TryParse(json);
         if (doc is null || doc.RootElement.ValueKind != JsonValueKind.Object)
@@ -80,7 +101,7 @@ public static class DockerInspect
             {
                 var checks = log.EnumerateArray().TakeLast(MaxHealthLogs).Select(entry =>
                     (Moment(DockerJson.Str(entry, "End")) ?? "?") + " exit " + (DockerJson.Long(entry, "ExitCode") ?? 0).ToString(CultureInfo.InvariantCulture)
-                    + (DockerJson.Str(entry, "Output") is { Length: > 0 } output ? " \"" + Clip(DockerRedaction.Line(Single(output)), 200) + "\"" : ""));
+                    + (DockerJson.Str(entry, "Output") is { Length: > 0 } output ? " \"" + Value(Clip(DockerRedaction.Line(Single(output)), 200), fenced) + "\"" : ""));
                 text.Append(" · last checks: ").Append(string.Join("; ", checks));
             }
 
@@ -91,17 +112,17 @@ public static class DockerInspect
         var cmd = DockerJson.Strings(config, "Cmd");
         if (entrypoint.Count > 0)
         {
-            text.Append("Entrypoint: ").Append(string.Join(' ', DockerRedaction.Args(entrypoint))).Append('\n');
+            text.Append("Entrypoint: ").Append(string.Join(' ', DockerRedaction.Args(entrypoint).Select(a => Value(a, fenced)))).Append('\n');
         }
 
         if (cmd.Count > 0)
         {
-            text.Append("Command: ").Append(string.Join(' ', DockerRedaction.Args(cmd))).Append('\n');
+            text.Append("Command: ").Append(string.Join(' ', DockerRedaction.Args(cmd).Select(a => Value(a, fenced)))).Append('\n');
         }
 
         if (Child(config, "Healthcheck") is { ValueKind: JsonValueKind.Object } check && DockerJson.Strings(check, "Test") is { Count: > 0 } test)
         {
-            text.Append("Health check: ").Append(string.Join(' ', test.Select(DockerRedaction.Line))).Append('\n');
+            text.Append("Health check: ").Append(string.Join(' ', test.Select(t => Value(DockerRedaction.Line(t), fenced)))).Append('\n');
         }
 
         var where = new List<string>(2);
@@ -189,7 +210,7 @@ public static class DockerInspect
             .OrderBy(l => l.Key, StringComparer.Ordinal).ToList();
         if (other.Count > 0)
         {
-            text.Append("Labels: ").Append(string.Join(", ", other.Take(MaxLabels).Select(l => l.Key + "=" + Clip(DockerRedaction.Label(l.Key, l.Value), 120))));
+            text.Append("Labels: ").Append(string.Join(", ", other.Take(MaxLabels).Select(l => l.Key + "=" + Value(Clip(DockerRedaction.Label(l.Key, l.Value), 120), fenced))));
             if (other.Count > MaxLabels)
             {
                 text.Append(" (and ").Append((other.Count - MaxLabels).ToString(CultureInfo.InvariantCulture)).Append(" more)");

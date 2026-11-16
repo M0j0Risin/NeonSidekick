@@ -29,47 +29,22 @@ public static class UntrustedText
     public static string Quote(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        return QuoteOpen + text.Replace(QuoteOpen, "‹‹", StringComparison.Ordinal).Replace(QuoteClose, "››", StringComparison.Ordinal) + QuoteClose;
+        return QuoteOpen + Defang(text) + QuoteClose;
+    }
+
+    /// <summary>
+    /// <paramref name="text"/> with every <see cref="QuoteOpen"/> and <see cref="QuoteClose"/> replaced by its visible look-alike (‹‹ and ››),
+    /// the swap <see cref="Quote"/> makes inside a fence (2026-11-16, the web-tools review's #105 and #139): the model's own words echoed back
+    /// bare, a refused argument or a search's query, can then never open or close a fence. Pure.
+    /// </summary>
+    public static string Defang(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return text.Replace(QuoteOpen, "‹‹", StringComparison.Ordinal).Replace(QuoteClose, "››", StringComparison.Ordinal);
     }
 
     /// <summary><paramref name="text"/> scrubbed (<see cref="Scrub"/>) and fenced (<see cref="Quote"/>): what a tool answer shows of a stranger's text.</summary>
     public static string Fenced(string text) => Quote(Scrub(text));
-
-    /// <summary>
-    /// A tool's answer with everything under its first line fenced (2026-11-15, the web-tools plan's §3, feature idea #39): the header
-    /// stays line one, the tool's own words, so the transcript's one-line note reads it; the rest, a page's or a server's text, goes
-    /// through <see cref="Fenced"/> as one block, the blank lines between them kept outside; <see cref="QuoteNote"/> is the last line. An
-    /// answer starting with <c>Error</c> passes unchanged, so the failure contract holds; so does a one-line answer or one with nothing
-    /// under its header. A header holding outside text fences it in place before this runs. Pure.
-    /// </summary>
-    public static string FenceBody(string answer)
-    {
-        ArgumentNullException.ThrowIfNull(answer);
-        if (answer.StartsWith("Error", StringComparison.Ordinal))
-        {
-            return answer;
-        }
-
-        int newline = answer.IndexOf('\n');
-        if (newline < 0)
-        {
-            return answer;
-        }
-
-        int start = newline;
-        while (start < answer.Length && answer[start] is '\n' or '\r')
-        {
-            start++;
-        }
-
-        string body = answer[start..].TrimEnd('\n', '\r');
-        if (body.Trim().Length == 0)
-        {
-            return answer;
-        }
-
-        return answer[..start] + Fenced(body) + "\n" + QuoteNote;
-    }
 
     /// <summary>
     /// <paramref name="text"/> fenced in place inside the app's own sentence, or the app's placeholder for it left bare (2026-11-15): a fence
@@ -96,40 +71,125 @@ public static class UntrustedText
     }
 
     /// <summary>
+    /// A tool's result with <see cref="QuoteNote"/> added when it is text holding a fence; any other result (a picture, a shown or sourced
+    /// wrapper, null) as it is (2026-11-16, the web-tools review's #12: nine copies of this switch in the YouTube and video tools).
+    /// </summary>
+    public static object? WithNote(object? result) => result is string answer ? WithNote(answer) : result;
+
+    /// <summary>
+    /// Whether <paramref name="answer"/> ends with <see cref="QuoteNote"/> on its own last line (2026-11-16, the web-tools review's #4 and #7):
+    /// the one sign the user's views key on to unfence a result, so text that was never fenced, a real ⟪ ⟫ included, is left alone.
+    /// </summary>
+    public static bool EndsWithNote(string? answer) =>
+        answer is not null && answer.EndsWith("\n" + QuoteNote, StringComparison.Ordinal);
+
+    /// <summary>
+    /// <paramref name="answer"/> with its trailing <see cref="QuoteNote"/> line taken off (2026-11-16, the web-tools review's #75): an answer
+    /// joined into another one that adds the note once at its end. Text without the note is returned as it is.
+    /// </summary>
+    public static string WithoutNote(string answer)
+    {
+        ArgumentNullException.ThrowIfNull(answer);
+        return EndsWithNote(answer) ? answer[..^(QuoteNote.Length + 1)] : answer;
+    }
+
+    /// <summary>
+    /// A name the model copied back out of a fenced list, with the fence dropped (2026-11-16, the web-tools review's #166: <c>⟪milk⟫</c>
+    /// names milk): the marks go only when the trimmed value both starts with <see cref="QuoteOpen"/> and ends with
+    /// <see cref="QuoteClose"/>, so a name written with one stray mark is kept as written. Pure.
+    /// </summary>
+    public static string Unquoted(string value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        string trimmed = value.Trim();
+        return trimmed.Length >= QuoteOpen.Length + QuoteClose.Length
+            && trimmed.StartsWith(QuoteOpen, StringComparison.Ordinal)
+            && trimmed.EndsWith(QuoteClose, StringComparison.Ordinal)
+            ? trimmed[QuoteOpen.Length..^QuoteClose.Length].Trim()
+            : value;
+    }
+
+    /// <summary>
+    /// The fence a document reader applies to each piece of a file's text (2026-11-16, the web-tools review's #2 and #89): <see cref="Fenced"/>
+    /// for a file carrying the mark of the web, else the text as it is. It follows the mark, never the answer's text.
+    /// </summary>
+    public static Func<string, string> FenceIf(bool marked) => marked ? Fenced : static text => text;
+
+    /// <summary>
     /// <paramref name="text"/> with every C0 and C1 control character (and DEL) replaced by U+FFFD, a tab and a newline kept, a carriage
     /// return dropped (2026-10-15: an event is anyone's text; for tool answers, the Web UI, sessions and headless alike). Since 2026-10-23
     /// (the admin review's A4, mechanism 3) the bidi overrides, embeddings and isolates (U+202A–U+202E, U+2066–U+2069), which reorder what
     /// is shown, are written as <c>\u202E</c>-style escapes; the joiners (ZWJ, ZWNJ) and the marks (LRM, RLM) stay, since emoji sequences
-    /// and Persian, Arabic and Indic text need them. A name a pane asks about goes through <see cref="Name"/>, the stronger rule.
+    /// and Persian, Arabic and Indic text need them. Since 2026-11-16 the tag characters and the invisible spaces are escaped too
+    /// (<see cref="Hides"/>). A name a pane asks about goes through <see cref="Name"/>, the stronger rule.
     /// </summary>
     public static string Scrub(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
+        return ScrubPrefix(text, 0, int.MaxValue).Scrubbed;
+    }
+
+    /// <summary>
+    /// <see cref="Scrub"/> of <paramref name="text"/> from <paramref name="start"/>, taking source characters only while the scrubbed text
+    /// stays within <paramref name="maxOut"/> (2026-11-16, the web-tools review's #112: an escape is six characters or ten, so a window of
+    /// 32,000 RLOs grew to 192,000). Returns the scrubbed text and how many source characters it consumed, so a page's next window starts
+    /// at <c>start + consumed</c>. A surrogate pair is never split. Pure.
+    /// </summary>
+    public static (string Scrubbed, int Consumed) ScrubPrefix(string text, int start, int maxOut)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        start = Math.Clamp(start, 0, text.Length);
         StringBuilder? built = null;
-        for (int i = 0; i < text.Length; i++)
+        int i = start;
+        int written = 0;
+        while (i < text.Length)
         {
             char c = text[i];
+            int width = char.IsHighSurrogate(c) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1]) ? 2 : 1;
+            int codePoint = width == 2 ? char.ConvertToUtf32(c, text[i + 1]) : c;
             bool control = (c < 0x20 && c is not '\t' and not '\n') || c == 0x7F || (c >= 0x80 && c <= 0x9F);
-            bool reorders = c is (>= '\u202A' and <= '\u202E') or (>= '\u2066' and <= '\u2069');
-            if (!control && !reorders)
+            bool hidden = !control && Hides(codePoint);
+            int grows = control ? (c == '\r' ? 0 : 1) : hidden ? (codePoint > 0xFFFF ? 10 : 6) : width;
+            if (written + grows > maxOut)
             {
-                built?.Append(c);
-                continue;
+                break;
             }
 
-            built ??= new StringBuilder(text, 0, i, text.Length + 8);
-            if (reorders)
+            if (!control && !hidden)
             {
-                built.Append("\\u").Append(((int)c).ToString("X4", System.Globalization.CultureInfo.InvariantCulture));
+                built?.Append(text, i, width);
             }
-            else if (c != '\r')
+            else
             {
-                built.Append('�');
+                built ??= new StringBuilder(text, start, i - start, i - start + 64);
+                if (hidden)
+                {
+                    built.Append(codePoint > 0xFFFF ? "\\U" : "\\u")
+                        .Append(codePoint.ToString(codePoint > 0xFFFF ? "X8" : "X4", System.Globalization.CultureInfo.InvariantCulture));
+                }
+                else if (c != '\r')
+                {
+                    built.Append('\uFFFD');
+                }
             }
+
+            written += grows;
+            i += width;
         }
 
-        return built?.ToString() ?? text;
+        return (built?.ToString() ?? text[start..i], i - start);
     }
+
+    /// <summary>
+    /// The characters <see cref="Scrub"/> writes as escapes (2026-11-16, the web-tools review's #124 beside 2026-10-23's bidi controls): the bidi
+    /// overrides, embeddings and isolates (U+202A–U+202E, U+2066–U+2069), which reorder what is shown; the Unicode tag characters
+    /// (U+E0000–U+E007F), which can spell invisible instructions; the zero-width space, the word joiner and the invisible operators
+    /// (U+200B, U+2060–U+2064); and the BOM (U+FEFF). The joiners (ZWJ, ZWNJ) and the marks (LRM, RLM) stay, since emoji sequences and
+    /// Persian, Arabic and Indic text need them.
+    /// </summary>
+    private static bool Hides(int codePoint) =>
+        codePoint is (>= 0x202A and <= 0x202E) or (>= 0x2066 and <= 0x2069) or (>= 0xE0000 and <= 0xE007F)
+            or 0x200B or (>= 0x2060 and <= 0x2064) or 0xFEFF;
 
     /// <summary>
     /// A name or an identifier as a pane, a question or an answer shows it (2026-10-23, the admin review's A4, mechanism 3): one line, and every
@@ -213,29 +273,6 @@ public static class UntrustedText
     }
 
     /// <summary>
-    /// <paramref name="text"/> held to <paramref name="max"/> characters for a reader of the history (2026-11-15, the web-tools plan's §3: an
-    /// advisor's recent context cut a fenced page raw, leaving ⟪ open and the note gone): a fence the cut leaves open closed, a surrogate
-    /// pair kept whole, <paramref name="cutMark"/> where it was cut, and a closing <see cref="QuoteNote"/> kept whole after it. Pure.
-    /// </summary>
-    public static string CutKeepingNote(string text, int max, string cutMark)
-    {
-        ArgumentNullException.ThrowIfNull(text);
-        ArgumentNullException.ThrowIfNull(cutMark);
-        if (text.Length <= max)
-        {
-            return text;
-        }
-
-        if (!text.EndsWith(QuoteNote, StringComparison.Ordinal))
-        {
-            return CutClosed(text, max) + cutMark;
-        }
-
-        string body = text[..^QuoteNote.Length].TrimEnd('\n', '\r');
-        return CutClosed(body, Math.Max(0, max - QuoteNote.Length - 1)) + cutMark + "\n" + QuoteNote;
-    }
-
-    /// <summary>
     /// <paramref name="text"/>'s first <paramref name="room"/> characters for a reader's cut (2026-11-15): <see cref="CutFenced"/> when it holds a
     /// fence, else the plain surrogate-safe cut, so text with no fence keeps every character it kept before. Pure.
     /// </summary>
@@ -260,18 +297,21 @@ public static class UntrustedText
         }
 
         string cut = body[..room];
-        int opens = 0;
-        int closes = 0;
-        for (int at = cut.IndexOf(QuoteOpen, StringComparison.Ordinal); at >= 0; at = cut.IndexOf(QuoteOpen, at + 1, StringComparison.Ordinal))
+
+        // One ordered pass (2026-11-16, the web-tools review): a ⟫ seen with no fence open is the text's own and closes nothing.
+        int depth = 0;
+        for (int at = 0; at < cut.Length; at++)
         {
-            opens++;
+            if (string.CompareOrdinal(cut, at, QuoteOpen, 0, QuoteOpen.Length) == 0)
+            {
+                depth++;
+            }
+            else if (depth > 0 && string.CompareOrdinal(cut, at, QuoteClose, 0, QuoteClose.Length) == 0)
+            {
+                depth--;
+            }
         }
 
-        for (int at = cut.IndexOf(QuoteClose, StringComparison.Ordinal); at >= 0; at = cut.IndexOf(QuoteClose, at + 1, StringComparison.Ordinal))
-        {
-            closes++;
-        }
-
-        return opens > closes ? cut + QuoteClose : cut;
+        return depth > 0 ? cut + QuoteClose : cut;
     }
 }

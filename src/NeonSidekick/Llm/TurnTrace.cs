@@ -1,3 +1,4 @@
+using NeonSidekick.Web;
 using NeonSidekick.Llm.Tools;
 
 namespace NeonSidekick.Llm;
@@ -48,7 +49,7 @@ public sealed class TurnTrace
     public IReadOnlyList<string> ToolNames => _names;
 
     private readonly List<WebSource> _sources = [];
-    private readonly HashSet<(WebSourceKind, string)> _sourceKeys = [];
+    private readonly HashSet<(WebSourceKind, string, string)> _sourceKeys = [];
 
     /// <summary>
     /// What the turn took from the web (2026-11-15, the web-tools plan's §2, feature idea #27), in first-use order: each page read and file
@@ -169,13 +170,17 @@ public sealed class TurnTrace
 
     private void NoteSource(TurnEvent.ToolResult result)
     {
-        if (string.Equals(result.Name, WebSearchTool.ToolName, StringComparison.Ordinal))
+        // A search counts by its own source (2026-11-16, the web-tools review's #35): web_search hands one only when it listed results.
+        if (result.Source is { Kind: WebSourceKind.Search })
         {
             _sources.Add(new WebSource(WebSourceKind.Search, "", ""));
             return;
         }
 
-        if (Kept(result.Source) is { } source && _sourceKeys.Add((source.Kind, KeyOf(source.Url))))
+        // A page once per address; a download once per address and name (2026-11-16, the web-tools review's #44): one URL saved to two
+        // paths is two files.
+        if (Kept(result.Source) is { } source
+            && _sourceKeys.Add((source.Kind, Web.WebFetcher.PageKey(source.Url), source.Kind == WebSourceKind.Download ? source.Title : "")))
         {
             _sources.Add(source);
         }
@@ -189,16 +194,29 @@ public sealed class TurnTrace
             return null;
         }
 
-        string url = source.Url.Trim();
-        if (Uri.TryCreate(url, UriKind.Absolute, out var parsed) && parsed.UserInfo.Length > 0)
+        // No credentials (2026-11-16, the web-tools review's #36: the one rule); an address too long to be a link at all is kept without its
+        // query and fragment, where a signed URL's key sits, then cut to the cap (#34, #43).
+        string url = Files.SafeText.WithoutUserInfo(source.Url.Trim());
+
+        // A page is the page: its fragment off, as web_fetch's cache keys it (#33), so the line links the page, not the place read.
+        if (source.Kind == WebSourceKind.Page)
         {
-            url = new UriBuilder(parsed) { UserName = "", Password = "" }.Uri.AbsoluteUri;
+            url = Web.WebFetcher.PageKey(url);
+        }
+        if (url.Length > Files.SafeText.MaxWebLinkLength)
+        {
+            if (Uri.TryCreate(url, UriKind.Absolute, out var parsed))
+            {
+                url = parsed.GetLeftPart(UriPartial.Path);
+            }
+
+            url = Files.TextCut.Safe(url, Files.SafeText.MaxWebLinkLength);
         }
 
-        return source with { Url = url, Title = UntrustedText.Cut(UntrustedText.OneLine(source.Title), MaxSourceTitleChars) };
+        // The raw title cut first, then made one line, so an escape is never split (#141).
+        return source with { Url = url, Title = UntrustedText.OneLine(UntrustedText.Cut(source.Title, MaxSourceTitleChars)) };
     }
 
-    private static string KeyOf(string url) => Uri.TryCreate(url, UriKind.Absolute, out var parsed) ? Web.WebFetcher.PageKey(parsed) : url;
 
     /// <summary>How many turns <see cref="Absorb"/> folded in; zero for a single turn's own trace.</summary>
     public int Turns { get; private set; }

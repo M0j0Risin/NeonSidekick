@@ -54,7 +54,7 @@ public sealed class GitRevertTool : GitTool
     protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
-        string reference = ToolArguments.ReadString(arguments, ReferenceArgument);
+        string reference = ToolArguments.ReadName(arguments, ReferenceArgument);
         string message = ToolArguments.ReadString(arguments, MessageArgument);
         string path = ReadPath(arguments);
         return OffThread(() => Describe(reference, message, path), cancellationToken);

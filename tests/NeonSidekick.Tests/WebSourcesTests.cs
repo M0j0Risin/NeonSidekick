@@ -43,8 +43,9 @@ public sealed class WebSourcesTests : IDisposable
     public void TheTrace_KeepsEachPageOnce_InFirstUseOrder_ItsFragmentAside_AndCountsTheSearchesThatAnswered()
     {
         var trace = new TurnTrace();
-        trace.Observe(Result(WebSearchTool.ToolName, "Searched \"x\" (3 results, SearXNG):"));
-        trace.Observe(Result(WebSearchTool.ToolName, "Error: the search failed"));
+        trace.Observe(Result(WebSearchTool.ToolName, "Searched \"x\" (3 results, SearXNG):", new WebSource(WebSourceKind.Search, "", "")));
+        trace.Observe(Result(WebSearchTool.ToolName, "Error: the search failed", new WebSource(WebSourceKind.Search, "", "")));
+        trace.Observe(Result(WebSearchTool.ToolName, "Searched \"y\" (SearXNG): no results"));   // no source: found nothing
         trace.Observe(Result(WebFetchTool.ToolName, "page b", Page("https://b.example/#one", "B")));
         trace.Observe(Result(WebFetchTool.ToolName, "page a", Page("https://a.example/", "A")));
         trace.Observe(Result(WebFetchTool.ToolName, "page b again", Page("https://b.example/#two", "B")));
@@ -52,18 +53,24 @@ public sealed class WebSourcesTests : IDisposable
         trace.Observe(Result(WebFetchTool.ToolName, "Error: offset past the end", Page("https://c.example/", "C")));
 
         Assert.Equal([WebSourceKind.Search, WebSourceKind.Page, WebSourceKind.Page, WebSourceKind.Download], trace.Sources.Select(s => s.Kind));
-        Assert.Equal(["", "https://b.example/#one", "https://a.example/", "https://b.example/"], trace.Sources.Select(s => s.Url));
+        Assert.Equal(["", "https://b.example/", "https://a.example/", "https://b.example/"], trace.Sources.Select(s => s.Url));   // the fragment off (#33)
     }
 
     [Fact]
     public void ASourcesUrl_LosesItsCredentials_AndItsTitle_IsOneShortLine()
     {
-        var kept = TurnTrace.Kept(Page("https://user:secret@example.com/a?q=1", "Line one\nline\u202Etwo " + new string('x', 400)))!;
+        var kept = TurnTrace.Kept(Page("https://user:secret@example.com/a?q=1", "Line one\nline\u202Etwo"))!;
+        var longer = TurnTrace.Kept(Page("https://example.com/b", new string('x', 400)))!;
 
         Assert.Equal("https://example.com/a?q=1", kept.Url);
         Assert.DoesNotContain('\n', kept.Title);
-        Assert.Contains("\\u202E", kept.Title, StringComparison.Ordinal);
-        Assert.True(kept.Title.Length <= TurnTrace.MaxSourceTitleChars);
+        Assert.Contains("\\u202E", kept.Title, StringComparison.Ordinal);   // cut raw first, so an escape is never split (#141)
+        Assert.Equal(TurnTrace.MaxSourceTitleChars, longer.Title.Length);
+
+        // An address past the link cap is kept without its query, and cut if still too long (#36).
+        var signed = TurnTrace.Kept(Page("https://example.com/f?sig=" + new string('a', 3000)))!;
+        Assert.Equal("https://example.com/f", signed.Url);
+        Assert.True(TurnTrace.Kept(Page("https://example.com/" + new string('p', 3000)))!.Url.Length <= Files.SafeText.MaxWebLinkLength);
         Assert.Null(TurnTrace.Kept(Page("  ")));
     }
 
@@ -200,7 +207,7 @@ public sealed class WebSourcesTests : IDisposable
     [Fact]
     public void TheFeedsMarkdown_NeverLinksAnUnsafeUrl()
     {
-        string markdown = SessionExport.SourcesLineMarkdown([Page("javascript:alert(1)", "Script"), Page("https://ok.example/", "a](javascript:x)")]);
+        string markdown = WebSources.LineMarkdown([Page("javascript:alert(1)", "Script"), Page("https://ok.example/", "a](javascript:x)")]);
 
         string html = WebUiMarkdown.ToHtml(markdown, "f1-");
         Assert.DoesNotContain("javascript:", html.Replace("a](javascript:x)", "", StringComparison.Ordinal), StringComparison.OrdinalIgnoreCase);
@@ -282,7 +289,7 @@ public sealed class WebSourcesTests : IDisposable
         Assert.Contains(SessionText.ExportSourcesHeading + "\n\n"
             + "- [Notes \\[draft\\] \\| \\#1](<https://example.com/a%20b>) (example.com)\n"
             + "- [en.wikipedia.org](<https://en.wikipedia.org/wiki/Mercury_(planet)>)\n"
-            + "- and 2 searches\n", doc.Text, StringComparison.Ordinal);
+            + "\n" + SessionText.ExportSourcesSearches(2) + "\n", doc.Text, StringComparison.Ordinal);   // a line after the list (#94)
         Assert.True(doc.Text.IndexOf("web_fetch", StringComparison.Ordinal) < doc.Text.IndexOf(SessionText.ExportSourcesHeading, StringComparison.Ordinal));
     }
 

@@ -479,10 +479,12 @@ public class AssistantTests
         Assert.Equal(Assistant.OperatingRules, Assistant.DefaultRules(false, tools: true, timers: true));
 
         // No clock tool offered (2026-10-18: Clock tools off, or the three switched off on /tools): the clock sentence goes, the "use a tool" one stays.
-        Assert.Equal(Assistant.ToolUseRule + " " + Assistant.ClockRule, Assistant.ToolRulesWithoutTimers);
+        // The marks rule rides with the tools, the only thing that fences (2026-11-16, the web-tools review's #183).
+        Assert.Equal(Assistant.ToolUseRule + " " + Assistant.QuoteMarksRule + " " + Assistant.ClockRule, Assistant.ToolRulesWithoutTimers);
+        Assert.Equal("Leave ⟪ ⟫ out of what you write or say: they mark others' text for you.", Assistant.QuoteMarksRule);
         Assert.Equal("Use a tool when it helps; otherwise answer directly.", Assistant.ToolUseRule);
-        Assert.Equal(Assistant.PlainTextRule + " " + Assistant.ToolUseRule + " " + Assistant.TimerRule + " " + Assistant.FileRule, Assistant.DefaultRules(false, tools: true, clock: false));
-        Assert.Equal(Assistant.PlainTextRule + " " + Assistant.ToolUseRule + " " + Assistant.FileRule, Assistant.DefaultRules(false, tools: true, timers: false, clock: false));
+        Assert.Equal(Assistant.PlainTextRule + " " + Assistant.ToolUseRule + " " + Assistant.QuoteMarksRule + " " + Assistant.TimerRule + " " + Assistant.FileRule, Assistant.DefaultRules(false, tools: true, clock: false));
+        Assert.Equal(Assistant.PlainTextRule + " " + Assistant.ToolUseRule + " " + Assistant.QuoteMarksRule + " " + Assistant.FileRule, Assistant.DefaultRules(false, tools: true, timers: false, clock: false));
         Assert.DoesNotContain("get_current_time", Assistant.SystemPrompt(false, null, clock: false), StringComparison.Ordinal);
         Assert.Equal(Assistant.PlainTextRule, Assistant.DefaultRules(false, tools: false, clock: false));
 
@@ -1260,6 +1262,7 @@ public class AssistantTests
             Assistant.DefaultPersona + "\n\n" +   // the persona is the repo's asset since 2026-10-03, pinned against the file on its own
             "Reply in plain text: no Markdown headings or tables, and no code fences unless the user asks for code. " +
             "Use a tool when it helps; otherwise answer directly. " +
+            "Leave ⟪ ⟫ out of what you write or say: they mark others' text for you. " +
             "You do not know the current date or time; call get_current_time when a question depends on it, " +
             "and use shift_date or date_difference for calendar arithmetic instead of counting yourself. " +
             "For a countdown, use start_timer, stop_timer and list_timers; never guess what is left on a timer. " +

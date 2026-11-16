@@ -95,11 +95,15 @@ public static class BrowserLinkText
     }
 
     /// <summary>A line of the printed list (the pane off, headless, macOS): <c>3. News — https://example.com/</c>, the address alone with no name.</summary>
-    public static string PrintedRow(int number, BrowserLink link)
+    public static string PrintedRow(int number, BrowserLink link) => Row(number, link, name => name);
+
+    // A row's number, name and address (2026-11-16, the web-tools review's #13: the printed list and web_links share it), the name through
+    // shown: as it is for the user, fenced for the model.
+    private static string Row(int number, BrowserLink link, Func<string, string> shown)
     {
         ArgumentNullException.ThrowIfNull(link);
         string at = number.ToString(CultureInfo.InvariantCulture) + ". ";
-        return at + (link.Name is { Length: > 0 } name ? name + " — " + link.Url : link.Url);
+        return at + (link.Name is { Length: > 0 } name ? shown(name) + " — " + link.Url : link.Url);
     }
 
     // ── The answers ──────────────────────────────────────────────────────────
@@ -122,6 +126,18 @@ public static class BrowserLinkText
         link.Name is { Length: > 0 } ? $"{link.Url} is saved already, as {Name(link)}; ✎ name on /browser list renames it." : $"{link.Url} is saved already.";
 
     public static string Removed(BrowserLink link) => $"Removed {Name(link)} from the saved links.";
+
+    /// <summary>
+    /// <c>web_save_link</c>'s <see cref="Removed"/> (2026-11-16, the web-tools review's #19): a saved name can be a page's title, so the model
+    /// reads it fenced, the note under it; the menu's stays bare.
+    /// </summary>
+    public static string RemovedForModel(BrowserLink link)
+    {
+        ArgumentNullException.ThrowIfNull(link);
+        return link.Name is { Length: > 0 } name
+            ? Llm.Tools.UntrustedText.WithNote($"Removed \"{Llm.Tools.UntrustedText.Fenced(name)}\" from the saved links.")
+            : Removed(link);
+    }
 
     public static string Renamed(BrowserLink link, string? name) =>
         string.IsNullOrEmpty(name) ? $"{link.Url} has no name now." : $"Renamed to \"{name}\".";
@@ -205,9 +221,7 @@ public static class BrowserLinkText
         ArgumentNullException.ThrowIfNull(link);
         ArgumentNullException.ThrowIfNull(zone);
         // A link saved without a name is named by its page's title (2026-11-15, the web-tools plan's §3): the model reads every name fenced.
-        string at = number.ToString(CultureInfo.InvariantCulture) + ". ";
-        string row = at + (link.Name is { Length: > 0 } name ? Llm.Tools.UntrustedText.Fenced(name) + " — " + link.Url : link.Url);
-        return row + " · saved " + Sessions.SessionText.Moment(link.Added, zone);
+        return Row(number, link, Llm.Tools.UntrustedText.Fenced) + " · saved " + Sessions.SessionText.Moment(link.Added, zone);
     }
 
     /// <summary>

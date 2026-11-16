@@ -354,7 +354,9 @@ public sealed class VideoFilesTests : IDisposable
         Assert.Equal("Opening clip.mp4 in the Web UI's Video tab; video_control status says when it plays.", VideoText.FileStatus(opening with { Place = VideoPlace.WebTab }));
         Assert.Equal("Loaded, not started \"clip.mp4\", volume 100% · in the Web UI's Video tab; tap the video on the phone to start",
             VideoText.FileStatus(opening with { State = VideoState.Unstarted, Place = VideoPlace.WebTab }));
-        Assert.Equal("Playing \"Holiday\" at 0:05, volume 100% · file clip.mp4", VideoText.FileStatus(opening with { State = VideoState.Playing, Title = "Holiday", Position = 5 }));
+        // The file's own title is its metadata: fenced for the model, bare for /video (2026-11-16, the web-tools review's #62).
+        Assert.Equal("Playing \"⟪Holiday⟫\" at 0:05, volume 100% · file clip.mp4", VideoText.FileStatus(opening with { State = VideoState.Playing, Title = "Holiday", Position = 5 }));
+        Assert.Equal("Playing \"Holiday\" at 0:05, volume 100% · file clip.mp4", VideoText.FileStatus(opening with { State = VideoState.Playing, Title = "Holiday", Position = 5 }, forUser: true));
 
         // YouTube's own status words a file's snapshot as a file, so its code is never read as YouTube's.
         Assert.Equal(VideoText.FileStatus(opening with { Error = 2 }), YouTubeText.Status(opening with { Error = 2 }));

@@ -21,6 +21,13 @@ public static class WebHttp
     /// </summary>
     public static readonly HttpRequestOptionsKey<bool> NoCookiesKey = new("NeonSidekick.Web.NoCookies");
 
+    /// <summary>
+    /// Set on a request whose body must arrive as the server sent it (2026-11-16, the web-tools review's #55): its own pools, which unpack
+    /// nothing. The decompressing handler adds gzip, deflate and br to <c>Accept-Encoding</c> whatever a request asks, so a header alone
+    /// can't do it. A <c>download_file</c> with a digest; judged by the same LAN policy.
+    /// </summary>
+    public static readonly HttpRequestOptionsKey<bool> RawBodyKey = new("NeonSidekick.Web.RawBody");
+
     /// <param name="cookies">The jar to send from (2026-10-11: <see cref="WebAccess"/> hands the same one to its fetcher, which fills it from the headless browser); a new one when null.</param>
     /// <remarks>
     /// One pool per judgement (2026-10-23, the admin review's U2): the reach is judged as a socket is opened, and a pooled socket was reused for 5
@@ -39,12 +46,15 @@ public static class WebHttp
         };
     }
 
-    /// <summary>A sockets handler whose connects are judged under <paramref name="reach"/> alone; with no <paramref name="cookies"/> it keeps none.</summary>
-    private static SocketsHttpHandler Pool(NetworkReach reach, CookieContainer? cookies)
+    /// <summary>
+    /// A sockets handler whose connects are judged under <paramref name="reach"/> alone; with no <paramref name="cookies"/> it keeps none; a
+    /// <paramref name="raw"/> one unpacks nothing.
+    /// </summary>
+    private static SocketsHttpHandler Pool(NetworkReach reach, CookieContainer? cookies, bool raw = false)
     {
         var pool = new SocketsHttpHandler
         {
-            AutomaticDecompression = DecompressionMethods.All,
+            AutomaticDecompression = raw ? DecompressionMethods.None : DecompressionMethods.All,
             AllowAutoRedirect = false,
             UseCookies = cookies is not null,
             PooledConnectionLifetime = ConnectionLifetime,
@@ -61,13 +71,14 @@ public static class WebHttp
     /// <summary>The request's pool: <c>both</c>'s for <see cref="LanPolicy.ExemptKey"/>, else the reach's in force now (U2), apart for <see cref="NoCookiesKey"/>.</summary>
     private sealed class PerReachHandler(LanPolicy policy, CookieContainer cookies) : HttpMessageHandler
     {
-        private readonly System.Collections.Concurrent.ConcurrentDictionary<(NetworkReach Reach, bool NoCookies), HttpMessageInvoker> _pools = new();
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<(NetworkReach Reach, bool NoCookies, bool Raw), HttpMessageInvoker> _pools = new();
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             bool exempt = request.Options.TryGetValue(LanPolicy.ExemptKey, out bool value) && value;
             bool none = request.Options.TryGetValue(NoCookiesKey, out bool off) && off;
-            var pool = _pools.GetOrAdd((exempt ? NetworkReach.Both : policy.Reach, none), key => new HttpMessageInvoker(Pool(key.Reach, key.NoCookies ? null : cookies), disposeHandler: true));
+            bool raw = request.Options.TryGetValue(RawBodyKey, out bool unpacked) && unpacked;
+            var pool = _pools.GetOrAdd((exempt ? NetworkReach.Both : policy.Reach, none, raw), key => new HttpMessageInvoker(Pool(key.Reach, key.NoCookies ? null : cookies, key.Raw), disposeHandler: true));
             return pool.SendAsync(request, cancellationToken);
         }
 

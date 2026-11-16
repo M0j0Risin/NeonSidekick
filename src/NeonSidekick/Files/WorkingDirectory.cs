@@ -380,13 +380,16 @@ public sealed class PendingWrite : IDisposable
     private readonly bool _preserve;
     private readonly FileStream _stream;
     private readonly JournalMark _mark;
+    private readonly IReadOnlyList<string> _made;
     private bool _done;
 
     /// <param name="mark">What the checkpoint journal recorded for this write, taken back when the write never lands (2026-10-29, review P2-8).</param>
-    internal PendingWrite(string full, string display, bool overwrite, bool preserve, JournalMark mark = default)
+    /// <param name="made">The folders <see cref="WorkingDirectory.BeginWrite"/> made for it, deepest first: removed if the write never lands and they hold nothing.</param>
+    internal PendingWrite(string full, string display, bool overwrite, bool preserve, JournalMark mark = default, IReadOnlyList<string>? made = null)
     {
         _full = full;
         _mark = mark;
+        _made = made ?? [];
         _overwrite = overwrite;
         _preserve = preserve;
         Relative = display;
@@ -415,6 +418,7 @@ public sealed class PendingWrite : IDisposable
     {
         ObjectDisposedException.ThrowIf(_done, this);
         _done = true;
+        bool landed = false;
         try
         {
             long length = _stream.Length;
@@ -445,6 +449,7 @@ public sealed class PendingWrite : IDisposable
                 DiagnosticLog.Warn("Files", Relative + " took no internet mark (the volume keeps none)");
             }
 
+            landed = true;
             return new WriteResult(FileOutcome.Ok, Relative, length, existed);
         }
         catch (Exception ex) when (WorkingDirectory.IsFileFailure(ex))
@@ -455,6 +460,29 @@ public sealed class PendingWrite : IDisposable
         finally
         {
             WorkingDirectory.DeleteQuietly(_temp);
+            if (!landed)
+            {
+                RemoveMade();
+            }
+        }
+    }
+
+    // The folders made for a write that didn't land, each while it holds nothing (a file another write put there keeps it).
+    private void RemoveMade()
+    {
+        foreach (string folder in _made)
+        {
+            try
+            {
+                if (Directory.Exists(folder) && !Directory.EnumerateFileSystemEntries(folder).Any())
+                {
+                    Directory.Delete(folder);
+                }
+            }
+            catch (Exception ex) when (WorkingDirectory.IsFileFailure(ex))
+            {
+                return;
+            }
         }
     }
 
@@ -467,6 +495,7 @@ public sealed class PendingWrite : IDisposable
             _done = true;
             WorkingDirectory.DeleteQuietly(_temp);
             FileJournal.TakeBack(_mark);
+            RemoveMade();
         }
     }
 }
@@ -2803,8 +2832,15 @@ public sealed class WorkingDirectory
             var mark = PrepareWrite(() => FileJournal.Writing(this, full), full);
             try
             {
+                // The folders this write makes, deepest first (2026-11-16, the web-tools review's #147): one that never takes the file goes.
+                var made = new List<string>();
+                for (string? folder = Path.GetDirectoryName(full); folder is not null && !Directory.Exists(folder); folder = Path.GetDirectoryName(folder))
+                {
+                    made.Add(folder);
+                }
+
                 Directory.CreateDirectory(Path.GetDirectoryName(full)!);
-                pending = new PendingWrite(full, display, overwrite, _options.PreserveOnReplace, mark);
+                pending = new PendingWrite(full, display, overwrite, _options.PreserveOnReplace, mark, made);
             }
             catch (Exception ex) when (IsFileFailure(ex))
             {

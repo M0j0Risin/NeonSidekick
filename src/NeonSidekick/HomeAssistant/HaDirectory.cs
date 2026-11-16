@@ -152,7 +152,8 @@ public sealed class HaSnapshot
     /// Several targets separated by commas or " and " are each resolved. No match, or several with nothing to choose between
     /// them, is an <c>Error:</c> sentence naming the candidates, so the model asks or picks. Pure.
     /// </summary>
-    public HaMatch Resolve(string target, IReadOnlyList<string> domains)
+    /// <remarks><paramref name="fenced"/>: the tools' form, whose refusal for several candidates fences their names (<see cref="HaText.Ambiguous"/>).</remarks>
+    public HaMatch Resolve(string target, IReadOnlyList<string> domains, bool fenced = false)
     {
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(domains);
@@ -165,7 +166,7 @@ public sealed class HaSnapshot
         var found = new List<HaEntity>();
         foreach (string part in parts)
         {
-            var one = ResolveOne(part, domains);
+            var one = ResolveOne(part, domains, fenced);
             if (one.Error is not null)
             {
                 return one;
@@ -192,7 +193,7 @@ public sealed class HaSnapshot
             .ToList();
     }
 
-    private HaMatch ResolveOne(string target, IReadOnlyList<string> domains)
+    private HaMatch ResolveOne(string target, IReadOnlyList<string> domains, bool fenced)
     {
         var pool = domains.Count == 0 ? Entities : Entities.Where(e => domains.Contains(e.Domain, StringComparer.Ordinal)).ToList();
         string wanted = target.Trim();
@@ -214,7 +215,7 @@ public sealed class HaSnapshot
         var named = pool.Where(e => string.Equals(Normalize(e.Name), Normalize(wanted), StringComparison.Ordinal)).ToList();
         if (named.Count > 0)
         {
-            return Pick(named, wanted);
+            return Pick(named, wanted, fenced);
         }
 
         var words = Words(wanted);
@@ -263,11 +264,11 @@ public sealed class HaSnapshot
             return new HaMatch(fewest, null);
         }
 
-        return Pick(holding, wanted);
+        return Pick(holding, wanted, fenced);
     }
 
     /// <summary>One of several: the only one, else the only group, else the only available one, else the ambiguity.</summary>
-    private static HaMatch Pick(IReadOnlyList<HaEntity> candidates, string wanted)
+    private static HaMatch Pick(IReadOnlyList<HaEntity> candidates, string wanted, bool fenced)
     {
         if (candidates.Count == 1)
         {
@@ -286,7 +287,7 @@ public sealed class HaSnapshot
             return new HaMatch(available, null);
         }
 
-        return HaMatch.Refused(HaText.Ambiguous(wanted, candidates.Take(MaxCandidates).ToList(), candidates.Count));
+        return HaMatch.Refused(HaText.Ambiguous(wanted, candidates.Take(MaxCandidates).ToList(), candidates.Count, fenced));
     }
 
     private static bool Holds(HaEntity entity, IReadOnlyList<string> words)

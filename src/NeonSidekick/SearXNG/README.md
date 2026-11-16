@@ -13,7 +13,7 @@ Generated tables keep their data's own terms. `Locales/LocaleData.cs` comes from
 | Area | State |
 |---|---|
 | Parallel search, timeouts, resting failed engines | Ported |
-| Time ranges (`time_range`: Brave, Startpage, Brave Search API) | Ported |
+| Time ranges (`time_range`: Brave, Startpage, Brave Search API) | Ported. Bing, DuckDuckGo and Wikipedia have none in SearXNG: Bing's docstring says its ranges need JavaScript, and DuckDuckGo's web engine leaves them as a to-do. |
 | Result merging and ranking (`searx/results.py`) | Ported for main results |
 | Engines | Bing, Brave, Brave Search API (`braveapi`, with a key), DuckDuckGo, Startpage, Wikipedia |
 | Answers, infoboxes, plugins, web UI, bot limiter | Not ported, and not planned |

@@ -266,7 +266,7 @@ public sealed partial class WebToolsTests : IDisposable
         _http.Map("http://localhost:8080/search", HttpStatusCode.OK, SearxngHits);
         _settings.WebSearchMaxResults = 3;
 
-        string answer = (string)(await _search.InvokeAsync(Args(("query", Json("\"rust async traits\""))), CancellationToken.None))!;
+        string answer = ToolAnswers.Text(await _search.InvokeAsync(Args(("query", Json("\"rust async traits\""))), CancellationToken.None))!;
 
         Assert.StartsWith("Searched \"rust async traits\" (3 results, SearXNG):\n1. ", answer);
         Assert.Equal(3, answer.Split('\n').Count(l => l.Length > 1 && char.IsDigit(l[0]) && l[1] == '.'));
@@ -278,7 +278,7 @@ public sealed partial class WebToolsTests : IDisposable
     {
         _http.Map("http://localhost:8080/search", HttpStatusCode.OK, SearxngHits);
 
-        Assert.StartsWith("Searched \"x\" (2 results, SearXNG):", (string)(await _search.InvokeAsync(Args(("query", "x"), ("max_results", Json("2"))), CancellationToken.None))!);
+        Assert.StartsWith("Searched \"x\" (2 results, SearXNG):", ToolAnswers.Text(await _search.InvokeAsync(Args(("query", "x"), ("max_results", Json("2"))), CancellationToken.None))!);
         Assert.Equal(WebText.BadResultCount, await _search.InvokeAsync(Args(("query", "x"), ("max_results", Json("25"))), CancellationToken.None));
         Assert.Equal(WebText.BadResultCount, await _search.InvokeAsync(Args(("query", "x"), ("max_results", 0)), CancellationToken.None));
         Assert.Equal("Error: 'lots' is not a whole number for 'max_results'", await _search.InvokeAsync(Args(("query", "x"), ("max_results", Json("\"lots\""))), CancellationToken.None));
@@ -313,7 +313,10 @@ public sealed partial class WebToolsTests : IDisposable
         Assert.Equal(WebText.MetaSearchName, _web.Engine(_settings).Name);
 
         _settings.WebSearchMethod = "searxng";
-        Assert.Equal("Searched \"x\" (1 result, SearXNG):\n1. ⟪A⟫ — https://a/\n   ⟪one⟫" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, await _search.InvokeAsync(Args(("query", "x")), CancellationToken.None));
+        // A search that found something carries a source, so the turn's 📚 line counts it (2026-11-16, the web-tools review's #35).
+        var found = Assert.IsType<ToolSourcedResult>(await _search.InvokeAsync(Args(("query", "x")), CancellationToken.None));
+        Assert.Equal("Searched \"x\" (1 result, SearXNG):\n1. ⟪A⟫ — https://a/\n   ⟪one⟫" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, found.Text);
+        Assert.Equal(WebSourceKind.Search, found.Source.Kind);
 
         // searxng with no usable URL falls back to the metasearch quietly; the URL keeps its value across a switch back.
         _settings.WebSearxngUrl = "not a url";
@@ -481,7 +484,8 @@ public sealed partial class WebToolsTests : IDisposable
         _browser.Html = Article;
 
         _settings.WebBrowserMode = "httpclient";
-        Assert.Equal("Error: 'https://example.com/' refused the request (HTTP 403 Forbidden)", ToolAnswers.Text(await _fetch.InvokeAsync(Args(("url", "https://example.com/")), CancellationToken.None)));
+        // The server's reason phrase is its own words: fenced, the note last (2026-11-16, the web-tools review's #123).
+        Assert.Equal("Error: 'https://example.com/' refused the request (HTTP 403 ⟪Forbidden⟫)" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, ToolAnswers.Text(await _fetch.InvokeAsync(Args(("url", "https://example.com/")), CancellationToken.None)));
         Assert.Empty(_browser.Runs);
 
         _settings.WebBrowserMode = "default";
@@ -688,7 +692,7 @@ public sealed partial class WebToolsTests : IDisposable
 
         _settings.WebBrowserNetworkMode = "internet";
         _http.Map("https://example.com/gone.png", HttpStatusCode.NotFound, "no", "text/plain");
-        Assert.Equal("Error: could not fetch 'https://example.com/gone.png': HTTP 404 Not Found", await _download.DownloadAsync("https://example.com/gone.png", null, false, CancellationToken.None));
+        Assert.Equal("Error: could not fetch 'https://example.com/gone.png': HTTP 404 ⟪Not Found⟫" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, await _download.DownloadAsync("https://example.com/gone.png", null, false, CancellationToken.None));
         Assert.False(Directory.Exists(_root));
     }
 }

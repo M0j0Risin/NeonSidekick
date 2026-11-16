@@ -168,9 +168,14 @@ public static class PdfText
     /// A form's fields for <c>read_pdf</c> (gap 98): a header naming how many and what sets them, then a line each — the name, its kind, its
     /// value (<c>empty</c> for none), the values it takes, its page — or why there is nothing to fill. Pinned.
     /// </summary>
-    public static string FieldList(string path, IReadOnlyList<Web.PdfFormField> fields, bool pureXfa)
+    /// <remarks>
+    /// <paramref name="fence"/> (2026-11-16, the web-tools review's #2) fences each field's name, value and choices, the document's author's
+    /// words, for a file carrying the mark of the web; the header, the kinds and the page numbers are the app's.
+    /// </remarks>
+    public static string FieldList(string path, IReadOnlyList<Web.PdfFormField> fields, bool pureXfa, Func<string, string>? fence = null)
     {
         ArgumentNullException.ThrowIfNull(fields);
+        fence ??= static text => text;
         if (pureXfa)
         {
             return $"{path}: an XFA form; pdf_edit cannot fill it (it fills AcroForm fields)";
@@ -185,12 +190,12 @@ public static class PdfText
         foreach (var field in fields.Take(MaxFieldLines))
         {
             // Every string the PDF gave escaped and cut (2026-10-22, review S3).
-            sb.Append("\n- ").Append(FromPdf(field.Name, MaxLabelChars * 2)).Append(": ").Append(field.Kind.Length > 0 ? FromPdf(field.Kind, MaxLabelChars) : "field").Append(", ")
-              .Append(field.Value.Length > 0 ? "\"" + FromPdf(field.Value, MaxFieldValueChars) + "\"" : "empty");
+            sb.Append("\n- ").Append(fence(FromPdf(field.Name, MaxLabelChars * 2))).Append(": ").Append(field.Kind.Length > 0 ? FromPdf(field.Kind, MaxLabelChars) : "field").Append(", ")
+              .Append(field.Value.Length > 0 ? "\"" + fence(FromPdf(field.Value, MaxFieldValueChars)) + "\"" : "empty");
             if (field.Options.Count > 0)
             {
                 sb.Append(field.Kind == "checkbox" ? "; on value " : "; one of ")
-                  .Append(FromPdf(string.Join(", ", field.Options.Select(o => "\"" + o + "\"")), MaxFieldValueChars));
+                  .Append(fence(FromPdf(string.Join(", ", field.Options.Select(o => "\"" + o + "\"")), MaxFieldValueChars)));
             }
 
             if (field.ReadOnly)
@@ -317,7 +322,8 @@ public static class PdfText
     /// and <see cref="MaxOutlineChars"/>, <see cref="OutlineMore"/> where it was cut. The one drawing of it: <c>read_pdf</c> and <c>web_fetch</c>
     /// each had their own until 2026-10-20 (review: <c>web_fetch</c>'s lacked the character cap).
     /// </summary>
-    public static void AppendOutline(System.Text.StringBuilder text, IReadOnlyList<Web.PdfOutlineItem> outline)
+    /// <remarks><paramref name="fence"/> fences each title (2026-11-16, the web-tools review's #2), the page numbers left the app's.</remarks>
+    public static void AppendOutline(System.Text.StringBuilder text, IReadOnlyList<Web.PdfOutlineItem> outline, Func<string, string>? fence = null)
     {
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(outline);
@@ -326,7 +332,7 @@ public static class PdfText
         int shown = 0;
         foreach (var item in outline)
         {
-            string line = OutlineLine(item.Title, item.Level, item.Page);
+            string line = OutlineLine(fence is null ? item.Title : fence(item.Title), item.Level, item.Page);
             if (shown >= MaxOutlineLines || text.Length - start + line.Length > MaxOutlineChars)
             {
                 text.Append('\n').Append(OutlineMore);
@@ -342,14 +348,19 @@ public static class PdfText
     /// A page appended to <paramref name="text"/>: its heading (<see cref="PageHeading"/>, a line break before it when the text holds anything),
     /// then its text when it has any. Shared by <c>web_fetch</c>'s answer and an attached PDF's text (2026-10-20, review).
     /// </summary>
-    public static void AppendPage(System.Text.StringBuilder text, int page, string? label, ReadOnlySpan<char> pageText)
+    /// <returns>Where the page's heading starts in <paramref name="text"/> (2026-11-16, the web-tools review's #125).</returns>
+    public static int AppendPage(System.Text.StringBuilder text, int page, string? label, ReadOnlySpan<char> pageText)
     {
         ArgumentNullException.ThrowIfNull(text);
-        text.Append(text.Length > 0 ? "\n" : "").Append(PageHeading(page, label));
+        text.Append(text.Length > 0 ? "\n" : "");
+        int at = text.Length;
+        text.Append(PageHeading(page, label));
         if (pageText.Length > 0)
         {
             text.Append('\n').Append(pageText);
         }
+
+        return at;
     }
 
     /// <summary>Where the pages' pictures went: <c>pictures of pages 1–4 are in the next message</c>, and the pages left out over the cap.</summary>

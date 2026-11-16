@@ -7797,34 +7797,6 @@ internal sealed partial class ChatScreen
     };
 
     /// <summary>
-    /// The tools whose answers fence outside text (2026-11-15, the web-tools plan's §3, feature idea #39), beside the GitLib, Home Assistant
-    /// and Docker families and every MCP tool (<see cref="IsFencedResult"/>): their results reach the screen unfenced.
-    /// </summary>
-    public static readonly IReadOnlySet<string> FencedResultTools = new HashSet<string>(StringComparer.Ordinal)
-    {
-        WebSearchTool.ToolName,
-        WebFetchTool.ToolName,
-        WebSaveLinkTool.ToolName,
-        WebLinksTool.ToolName,
-        ReadPdfTool.ToolName,
-        ReadOfficeTool.ToolName,
-        YouTubeSearchTool.ToolName,
-        YouTubePlayTool.ToolName,
-        YouTubeControlTool.ToolName,
-        YouTubeStatusTool.ToolName,
-        YouTubePlaylistTool.ToolName,
-        YouTubeSaveTool.ToolName,
-        YouTubeSavedTool.ToolName,
-        PlayVideoTool.ToolName,
-        VideoControlTool.ToolName,
-    };
-
-    /// <summary>Whether <paramref name="name"/>'s results are fenced for the model, so the user's view unfences them.</summary>
-    public static bool IsFencedResult(string name) =>
-        FencedResultTools.Contains(name) || GitToolNames.Contains(name) || HomeAssistantToolNames.Contains(name) || DockerToolNames.Contains(name)
-        || name.Contains(Mcp.McpToolName.Separator, StringComparison.Ordinal);
-
-    /// <summary>
     /// The tools whose call line the transcript skips, showing the result alone as one dim
     /// <c>🛠️</c> line: the result sentence says it all and the arguments would repeat it
     /// (<c>ask_user</c>'s answers one line each, <see cref="TranscriptRenderer.ToolNotes"/>).
@@ -19456,8 +19428,10 @@ internal sealed partial class ChatScreen
         }
 
         // The model reads outside text fenced (2026-11-15, the web-tools plan's §3); the user's view of it drops the marks and the note,
-        // once, ahead of every path a result takes to the transcript and the Web UI. The history keeps the fenced text.
-        if (evt is TurnEvent.ToolResult fencedResult && IsFencedResult(fencedResult.Name))
+        // once, ahead of every path a result takes to the transcript and the Web UI. The history keeps the fenced text. Since 2026-11-16
+        // (the web-tools review's #4, #7, #178) the sign is the answer's last line, the note, never a list of tool names: text that was
+        // never fenced, a real ⟪ ⟫ included, is left as it is, and every tool that fences, MCP and the admin families too, is covered.
+        if (evt is TurnEvent.ToolResult fencedResult && UntrustedText.EndsWithNote(fencedResult.Text))
         {
             evt = fencedResult with { Text = UntrustedText.Unfenced(fencedResult.Text) };
         }

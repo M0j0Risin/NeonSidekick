@@ -235,6 +235,7 @@ public sealed class NeonAdvisorTool : AIFunction
         int requests = 0;
         string? failure = null;
         int calls = 0;
+        bool sawFenced = false;
         try
         {
             await foreach (var evt in assistant.RunTurnAsync(AdvisorText.Prompt(question, context, recent), cancellationToken).ConfigureAwait(false))
@@ -247,6 +248,10 @@ public sealed class NeonAdvisorTool : AIFunction
                     case TurnEvent.ToolCall call:
                         calls++;
                         _view?.Tool(advisor, call.Name, call.ArgumentsJson);
+                        break;
+                    case TurnEvent.ToolResult result when UntrustedText.EndsWithNote(result.Text):
+                        // An answer drawn from fenced text (2026-11-16, the web-tools review's #167): a page the advisor read can steer its words.
+                        sawFenced = true;
                         break;
                     case TurnEvent.Usage used:
                         usage += used.Tokens;   // one per request: summed
@@ -287,6 +292,9 @@ public sealed class NeonAdvisorTool : AIFunction
         }
 
         _view?.Answered(advisor, text, link.Model, usage, link.Warning, avatar);
-        return text;
+
+        // The model reads an answer drawn from fenced text fenced itself, the note last; the view and the thread keep it bare, and the
+        // app's own placeholder stays the app's.
+        return sawFenced && answer.Length > 0 && text != AdvisorText.NoAnswer(advisor.Profile) ? UntrustedText.WithNote(UntrustedText.Fenced(text)) : text;
     }
 }

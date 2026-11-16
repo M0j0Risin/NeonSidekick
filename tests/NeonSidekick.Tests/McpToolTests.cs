@@ -93,7 +93,10 @@ public class McpToolTests
         Assert.Equal("(a resource_link block was dropped)", McpText.BlockDropped("resource_link"));
         Assert.Equal("⟪text⟫\n(an image block was dropped)\n" + UntrustedText.QuoteNote, McpTool.Render(new CallToolResult { Content = [new TextContentBlock { Text = "text" }, new ImageContentBlock { Data = new byte[] { 1 }, MimeType = "image/png" }] }));
         Assert.Equal("Error: ⟪boom⟫\n" + UntrustedText.QuoteNote, McpTool.Render(new CallToolResult { Content = [new TextContentBlock { Text = "boom" }], IsError = true }));
-        Assert.Equal("Error: ⟪Error: already⟫\n" + UntrustedText.QuoteNote, McpTool.Render(new CallToolResult { Content = [new TextContentBlock { Text = "Error: already" }], IsError = true }));
+        Assert.Equal("Error: ⟪already⟫\n" + UntrustedText.QuoteNote, McpTool.Render(new CallToolResult { Content = [new TextContentBlock { Text = "Error: already" }], IsError = true }));
+        Assert.Equal("Error: ⟪Errors pile up⟫\n" + UntrustedText.QuoteNote, McpTool.Render(new CallToolResult { Content = [new TextContentBlock { Text = "Errors pile up" }], IsError = true }));
+        Assert.Equal(McpText.ImageDropped, McpTool.Render(new CallToolResult { Content = [new TextContentBlock { Text = "  " }, new ImageContentBlock { Data = new byte[] { 1 }, MimeType = "image/png" }] }));
+        Assert.Equal(McpText.NoContent, McpTool.Render(new CallToolResult { Content = [new TextContentBlock { Text = "" }] }));
         Assert.Equal("Error: (no content)", McpTool.Render(new CallToolResult { Content = [], IsError = true }));
         Assert.Equal("Error: ", McpText.ErrorPrefix);
         Assert.True(Assistant.IsToolError(McpTool.Render(new CallToolResult { Content = [new TextContentBlock { Text = "x" }], IsError = true })));

@@ -73,7 +73,7 @@ public sealed class GitBlameTool : GitTool
         }
 
         string path = ReadPath(arguments);
-        string reference = ToolArguments.ReadString(arguments, ReferenceArgument);
+        string reference = ToolArguments.ReadName(arguments, ReferenceArgument);
         return OffThread(() => Describe(path, from, to, reference), cancellationToken);
     }
 }

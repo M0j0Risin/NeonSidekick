@@ -9,7 +9,7 @@ namespace NeonSidekick.App;
 public static class BackgroundJobText
 {
     /// <summary>An embedded model downloading.</summary>
-    public const string DownloadGlyph = "📥";
+    public const string DownloadGlyph = Web.WebSources.DownloadGlyph;
 
     /// <summary>The MCP servers connecting (the glyph <c>/mcp</c> and the toolbar already wear).</summary>
     public const string McpGlyph = Mcp.McpText.Glyph;

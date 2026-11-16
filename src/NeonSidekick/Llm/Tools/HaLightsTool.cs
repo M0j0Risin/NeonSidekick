@@ -62,7 +62,7 @@ public sealed class HaLightsTool : HaTool
 
     protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
-        string target = ToolArguments.ReadString(arguments, TargetArgument).Trim();
+        string target = ToolArguments.ReadName(arguments, TargetArgument).Trim();
         if (target.Length == 0)
         {
             return HaText.Missing(TargetArgument);

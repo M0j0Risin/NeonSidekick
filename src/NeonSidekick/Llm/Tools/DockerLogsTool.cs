@@ -132,18 +132,22 @@ public sealed class DockerLogsTool : DockerTool
             return grep is null ? DockerText.NoLogLines(name) : DockerText.LogsHeader(name, 0, tail, grep, capped);
         }
 
-        int budget = MaxChars;
+        // Each line budgeted as the model reads it (2026-11-16, the web-tools review's #22, #112): scrubbed, so a line of bidi controls costs
+        // its escapes, and the fence and the note taken off first, so the answer stays within MaxChars.
+        int room = fenced ? MaxChars - UntrustedText.QuoteOpen.Length - UntrustedText.QuoteClose.Length - 1 - UntrustedText.QuoteNote.Length : MaxChars;
+        int Cost(string line) => fenced ? UntrustedText.Scrub(line).Length : line.Length;
+        int budget = room;
         int from = kept.Count;
-        while (from > 0 && budget - (kept[from - 1].Length + 1) >= 0)
+        while (from > 0 && budget - (Cost(kept[from - 1]) + 1) >= 0)
         {
-            budget -= kept[from - 1].Length + 1;
+            budget -= Cost(kept[from - 1]) + 1;
             from--;
         }
 
-        var body = kept.Skip(from).Select(l => l.Length > MaxChars ? DockerText.Clip(l, MaxChars) : l).ToList();
+        var body = kept.Skip(from).Select(l => l.Length > room ? DockerText.Clip(l, room) : l).ToList();
         if (body.Count == 0)
         {
-            body.Add(DockerText.Clip(kept[^1], MaxChars));
+            body.Add(DockerText.Clip(kept[^1], fenced ? room / 6 : room));
             from = kept.Count - 1;
         }
 

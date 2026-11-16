@@ -133,9 +133,15 @@ public sealed class MetaSearch
                 continue;
             }
 
-            // get_params: an engine without paging sits out later pages.
+            // get_params: an engine without paging sits out later pages. Skipped is the port's own field: an engine a range would have left out
+            // is named there whichever check skipped it, so the order stays SearXNG's.
             if (query.PageNumber > 1 && !engine.Paging)
             {
+                if (query.TimeRange is not null && !engine.TimeRangeSupport)
+                {
+                    skipped.Add(engine.Name);
+                }
+
                 continue;
             }
 

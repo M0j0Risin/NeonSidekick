@@ -28,6 +28,13 @@ public static class ToolArguments
     /// </summary>
     public static bool IsGiven(object? value) => value is not null and not JsonElement { ValueKind: JsonValueKind.Null or JsonValueKind.Undefined };
 
+    /// <summary>
+    /// <see cref="ReadString"/> for a name the model may copy from a fenced list (2026-11-16, the web-tools review's #166: a to-do item, a
+    /// branch or an entity shown <c>⟪milk⟫</c> came back with its marks and named nothing): a value both opened and closed by the fence's
+    /// marks is read without them (<see cref="UntrustedText.Unquoted"/>); one stray mark is kept as written.
+    /// </summary>
+    public static string ReadName(AIFunctionArguments arguments, string name) => UntrustedText.Unquoted(ReadString(arguments, name));
+
     /// <summary>The string argument, or empty when missing or null. A non-string JSON value is its raw text.</summary>
     public static string ReadString(AIFunctionArguments arguments, string name)
     {

@@ -46,7 +46,12 @@ public static class OfficeReader
     }
 
     /// <summary><paramref name="path"/> in <paramref name="files"/> read as <paramref name="request"/> asks; the answer, or the sentence why not.</summary>
-    public static string Read(WorkingDirectory files, string path, OfficeRequest request, CancellationToken cancellationToken, OfficeLimits? limits = null)
+    /// <remarks>
+    /// <paramref name="marked"/> (2026-11-16, the web-tools review's #2, #89): a file carrying the mark of the web has its text fenced where
+    /// it is built — a document's text, each slide's — and the answer ends with the note; a workbook's cells are fenced as one block under
+    /// its header line. The headers and the app's cut notes stay outside. The fence follows the mark, never the answer's text.
+    /// </remarks>
+    public static string Read(WorkingDirectory files, string path, OfficeRequest request, CancellationToken cancellationToken, bool marked, OfficeLimits? limits = null)
     {
         ArgumentNullException.ThrowIfNull(files);
         ArgumentNullException.ThrowIfNull(request);
@@ -58,7 +63,7 @@ public static class OfficeReader
 
         using (stream)
         {
-            return Read(stream, display, OfficeFile.Kind(display) ?? OfficeKind.Word, request, limits, cancellationToken);
+            return Read(stream, display, OfficeFile.Kind(display) ?? OfficeKind.Word, request, limits, cancellationToken, marked);
         }
     }
 
@@ -217,7 +222,7 @@ public static class OfficeReader
     }
 
     /// <summary>The read of an open stream: the package judged, then the reader for its kind.</summary>
-    public static string Read(Stream stream, string display, OfficeKind kind, OfficeRequest request, OfficeLimits limits, CancellationToken cancellationToken)
+    public static string Read(Stream stream, string display, OfficeKind kind, OfficeRequest request, OfficeLimits limits, CancellationToken cancellationToken, bool marked = false)
     {
         ArgumentNullException.ThrowIfNull(stream);
         ArgumentNullException.ThrowIfNull(request);
@@ -240,13 +245,15 @@ public static class OfficeReader
                 return OfficeText.OtherKind(display, actual);
             }
 
+            var fence = UntrustedText.FenceIf(marked);
             string answer = kind switch
             {
-                OfficeKind.Word => Word(package!, main!, display, request, cancellationToken),
-                OfficeKind.Excel => new ExcelReader(package!, main!, cancellationToken).Read(display, request.Sheet, request.Range, request.Formulas, WorkingDirectory.MaxReadChars),
-                _ => Slides(package!, main!, display, request, cancellationToken),
+                OfficeKind.Word => Word(package!, main!, display, request, cancellationToken, fence),
+                OfficeKind.Excel => FenceUnderHeader(new ExcelReader(package!, main!, cancellationToken).Read(display, request.Sheet, request.Range, request.Formulas, WorkingDirectory.MaxReadChars), marked),
+                _ => Slides(package!, main!, display, request, cancellationToken, fence),
             };
-            return UntrustedText.Scrub(answer);
+            answer = UntrustedText.Scrub(answer);
+            return marked && !answer.StartsWith("Error", StringComparison.Ordinal) ? UntrustedText.WithNote(answer) : answer;
         }
         catch (Exception ex) when (IsRefusal(ex))
         {
@@ -323,7 +330,22 @@ public static class OfficeReader
         }
     }
 
-    private static string Word(OfficePackage package, string main, string display, OfficeRequest request, CancellationToken cancellationToken)
+    /// <summary>
+    /// A workbook's answer with the lines under its header fenced as one block (2026-11-16): its cells are laid out in a table the reader
+    /// builds whole. A refusal (<c>Error</c>) and a one-line answer pass as they are.
+    /// </summary>
+    private static string FenceUnderHeader(string answer, bool marked)
+    {
+        int newline = answer.IndexOf('\n');
+        if (!marked || newline < 0 || answer.StartsWith("Error", StringComparison.Ordinal) || answer[(newline + 1)..].Trim().Length == 0)
+        {
+            return answer;
+        }
+
+        return answer[..(newline + 1)] + UntrustedText.Fenced(answer[(newline + 1)..]);
+    }
+
+    private static string Word(OfficePackage package, string main, string display, OfficeRequest request, CancellationToken cancellationToken, Func<string, string> fence)
     {
         int budget = WorkingDirectory.MaxReadChars;
 
@@ -342,10 +364,10 @@ public static class OfficeReader
         bool more = end < text.Length || read.More;
         string header = OfficeText.WordHeader(display, start, end, more ? null : text.Length, more ? end : null);
         string body = text.Substring(start, length);
-        return header + (body.Length > 0 ? "\n" + body : "") + (read.Note is { } note ? "\n" + note : "");
+        return header + (body.Length > 0 ? "\n" + fence(body) : "") + (read.Note is { } note ? "\n" + note : "");
     }
 
-    private static string Slides(OfficePackage package, string main, string display, OfficeRequest request, CancellationToken cancellationToken)
+    private static string Slides(OfficePackage package, string main, string display, OfficeRequest request, CancellationToken cancellationToken, Func<string, string> fence)
     {
         var reader = new SlidesReader(package, main, cancellationToken);
         int count = reader.Count;
@@ -371,6 +393,7 @@ public static class OfficeReader
         foreach (int number in asked)
         {
             string text;
+            bool own = false;
             try
             {
                 text = SlidesReader.Render(reader.Read(number, request.Notes, aloud: false, slideLimit));
@@ -387,7 +410,10 @@ public static class OfficeReader
                 }
 
                 text = OfficeText.SlideNotRead(number, ex.Part, ex.TooLarge);
+                own = true;
             }
+
+            Func<string, string> piece = own ? static t => t : fence;
 
             int skipped = 0;
             if (request.FromChar > 0)
@@ -411,11 +437,11 @@ public static class OfficeReader
             if (text.Length > Math.Max(room, 0) && shown.Count == 0)
             {
                 int cut = TextCut.SafeLength(text, Math.Min(Math.Max(room, 1000), text.Length));
-                body.Append(text.AsSpan(0, cut)).Append('\n').Append(OfficeText.SlideCut(number, skipped + cut, skipped + text.Length));
+                body.Append(piece(text[..cut])).Append('\n').Append(OfficeText.SlideCut(number, skipped + cut, skipped + text.Length));
             }
             else
             {
-                body.Append(text);
+                body.Append(piece(text));
             }
 
             shown.Add(number);

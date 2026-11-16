@@ -23,13 +23,13 @@ public sealed record SessionSummary(long Id, DateTimeOffset StartedAt, DateTimeO
 /// calls answered with an error; then the request's tokens and whether the keys cut it short.
 /// The replay never shows the names (one <c>🛠️ N tool calls</c> line per turn as ever).
 /// </summary>
-public sealed record SessionTurn(int Ordinal, DateTimeOffset At, string UserText, string ReplyText, int ToolCalls, IReadOnlyList<string> ToolNames, IReadOnlyList<string> SkillsLoaded, int Errors, long InputTokens, long OutputTokens, bool Cancelled, IReadOnlyList<Llm.Tools.WebSource>? Sources = null)
+public sealed record SessionTurn(int Ordinal, DateTimeOffset At, string UserText, string ReplyText, int ToolCalls, IReadOnlyList<string> ToolNames, IReadOnlyList<string> SkillsLoaded, int Errors, long InputTokens, long OutputTokens, bool Cancelled, IReadOnlyList<Web.WebSource>? Sources = null)
 {
     /// <summary>
     /// What the turn took from the web (2026-11-15, the web-tools plan's §2, <see cref="Llm.TurnTrace.Sources"/>), from <c>turn_sources</c>:
     /// the 📚 line a load or a rewind redraws and the export's list. Empty for an older row, or a turn that read nothing.
     /// </summary>
-    public IReadOnlyList<Llm.Tools.WebSource> SourceList => Sources ?? [];
+    public IReadOnlyList<Web.WebSource> SourceList => Sources ?? [];
 }
 
 /// <summary>A whole session: the row, its turns in order and the stored history (<see cref="SessionHistory"/>).</summary>
@@ -201,9 +201,9 @@ public sealed class SessionStore : IDisposable
     /// </summary>
     /// <remarks>
     /// <paramref name="sources"/> (2026-11-15, the web-tools plan's §2) go in <c>turn_sources</c> in the same transaction, one row each in
-    /// order; a <see cref="Llm.Tools.WebSourceKind.Search"/> with no URL or title, so replay and export count searches without storing a query.
+    /// order; a <see cref="Web.WebSourceKind.Search"/> with no URL or title, so replay and export count searches without storing a query.
     /// </remarks>
-    public int? AppendTurn(long id, string userText, string replyText, int toolCalls, IReadOnlyList<string> toolNames, IReadOnlyList<string> skillsLoaded, int errors, long inputTokens, long outputTokens, bool cancelled, IReadOnlyList<Llm.Tools.WebSource>? sources = null)
+    public int? AppendTurn(long id, string userText, string replyText, int toolCalls, IReadOnlyList<string> toolNames, IReadOnlyList<string> skillsLoaded, int errors, long inputTokens, long outputTokens, bool cancelled, IReadOnlyList<Web.WebSource>? sources = null)
     {
         ArgumentNullException.ThrowIfNull(userText);
         ArgumentNullException.ThrowIfNull(replyText);
@@ -222,7 +222,8 @@ public sealed class SessionStore : IDisposable
                 using var transaction = connection.BeginTransaction();
                 using var insert = connection.CreateCommand();
                 insert.Transaction = transaction;
-                insert.CommandText = "INSERT INTO turns(session_id, ordinal, at, user_text, reply_text, tool_calls, tool_names, skills_loaded, errors, input_tokens, output_tokens, cancelled) VALUES ($id, (SELECT turns + 1 FROM sessions WHERE id = $id), $at, $user, $reply, $tools, $names, $skills, $errors, $input, $output, $cancelled)";
+                // The new row's id comes back with the insert (2026-11-16, the web-tools review's #93), for its sources.
+                insert.CommandText = "INSERT INTO turns(session_id, ordinal, at, user_text, reply_text, tool_calls, tool_names, skills_loaded, errors, input_tokens, output_tokens, cancelled) VALUES ($id, (SELECT turns + 1 FROM sessions WHERE id = $id), $at, $user, $reply, $tools, $names, $skills, $errors, $input, $output, $cancelled) RETURNING id";
                 insert.Parameters.AddWithValue("$id", id);
                 insert.Parameters.AddWithValue("$at", now);
                 insert.Parameters.AddWithValue("$user", userText);
@@ -234,10 +235,10 @@ public sealed class SessionStore : IDisposable
                 insert.Parameters.AddWithValue("$input", inputTokens);
                 insert.Parameters.AddWithValue("$output", outputTokens);
                 insert.Parameters.AddWithValue("$cancelled", cancelled ? 1 : 0);
-                insert.ExecuteNonQuery();
+                long turnId = (long)insert.ExecuteScalar()!;
                 if (sources is { Count: > 0 })
                 {
-                    InsertSources(connection, transaction, sources);
+                    InsertSources(connection, transaction, turnId, sources);
                 }
 
                 using var bump = connection.CreateCommand();
@@ -264,7 +265,7 @@ public sealed class SessionStore : IDisposable
     }
 
     // The turn just inserted's sources (2026-11-15), keyed by its row id, in order.
-    private static void InsertSources(SqliteConnection connection, SqliteTransaction transaction, IReadOnlyList<Llm.Tools.WebSource> sources)
+    private static void InsertSources(SqliteConnection connection, SqliteTransaction transaction, long turn, IReadOnlyList<Web.WebSource> sources)
     {
         using var insert = connection.CreateCommand();
         insert.Transaction = transaction;
@@ -272,13 +273,6 @@ public sealed class SessionStore : IDisposable
         var kind = insert.Parameters.Add("$kind", SqliteType.Text);
         var url = insert.Parameters.Add("$url", SqliteType.Text);
         var title = insert.Parameters.Add("$title", SqliteType.Text);
-        long turn;
-        using (var last = connection.CreateCommand())
-        {
-            last.Transaction = transaction;
-            last.CommandText = "SELECT last_insert_rowid()";
-            turn = (long)last.ExecuteScalar()!;
-        }
 
         insert.CommandText = "INSERT INTO turn_sources(turn_id, seq, kind, url, title) VALUES ($turn, $seq, $kind, $url, $title)";
         insert.Parameters.AddWithValue("$turn", turn);
@@ -293,19 +287,21 @@ public sealed class SessionStore : IDisposable
     }
 
     /// <summary>A source kind's name in <c>turn_sources.kind</c>. Contract: an older or newer build reads these.</summary>
-    public static string SourceKindName(Llm.Tools.WebSourceKind kind) => kind switch
+    /// <remarks>Every kind by name (2026-11-16, the web-tools review's #190): a new one must be given its word, never stored as a page.</remarks>
+    public static string SourceKindName(Web.WebSourceKind kind) => kind switch
     {
-        Llm.Tools.WebSourceKind.Download => "download",
-        Llm.Tools.WebSourceKind.Search => "search",
-        _ => "page",
+        Web.WebSourceKind.Page => "page",
+        Web.WebSourceKind.Download => "download",
+        Web.WebSourceKind.Search => "search",
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "a web source kind with no stored name"),
     };
 
     /// <summary><see cref="SourceKindName"/> read back; null for a name this build doesn't know, which is skipped.</summary>
-    public static Llm.Tools.WebSourceKind? SourceKindOf(string name) => name switch
+    public static Web.WebSourceKind? SourceKindOf(string name) => name switch
     {
-        "page" => Llm.Tools.WebSourceKind.Page,
-        "download" => Llm.Tools.WebSourceKind.Download,
-        "search" => Llm.Tools.WebSourceKind.Search,
+        "page" => Web.WebSourceKind.Page,
+        "download" => Web.WebSourceKind.Download,
+        "search" => Web.WebSourceKind.Search,
         _ => null,
     };
 
@@ -329,6 +325,14 @@ public sealed class SessionStore : IDisposable
             try
             {
                 using var transaction = connection.BeginTransaction();
+
+                // The turns' sources first, by hand as every other child goes (2026-11-16, the web-tools review's #160): never the CASCADE's.
+                using var sources = connection.CreateCommand();
+                sources.Transaction = transaction;
+                sources.CommandText = "DELETE FROM turn_sources WHERE turn_id IN (SELECT id FROM turns WHERE session_id = $id AND ordinal > $keep)";
+                sources.Parameters.AddWithValue("$id", id);
+                sources.Parameters.AddWithValue("$keep", keepThrough);
+                sources.ExecuteNonQuery();
                 using var delete = connection.CreateCommand();
                 delete.Transaction = transaction;
                 delete.CommandText = "DELETE FROM turns WHERE session_id = $id AND ordinal > $keep";
@@ -520,7 +524,7 @@ public sealed class SessionStore : IDisposable
                 }
 
                 // Each turn's sources (2026-11-15, the web-tools plan's §2), joined by ordinal in the same read.
-                var sources = new Dictionary<int, List<Llm.Tools.WebSource>>();
+                var sources = new Dictionary<int, List<Web.WebSource>>();
                 using (var command = connection.CreateCommand())
                 {
                     command.CommandText = "SELECT t.ordinal, s.kind, s.url, s.title FROM turn_sources s JOIN turns t ON t.id = s.turn_id WHERE t.session_id = $id ORDER BY t.ordinal, s.seq";
@@ -536,7 +540,7 @@ public sealed class SessionStore : IDisposable
                                 sources[ordinal] = list = [];
                             }
 
-                            list.Add(new Llm.Tools.WebSource(kind, reader.GetString(2), reader.GetString(3)));
+                            list.Add(new Web.WebSource(kind, reader.GetString(2), reader.GetString(3)));
                         }
                     }
                 }
@@ -1235,6 +1239,10 @@ public sealed class SessionStore : IDisposable
             using var reflections = connection.CreateCommand();
             reflections.Transaction = transaction;
             reflections.CommandText = "DELETE FROM reflections " + turnsWhere;
+            // The turns' sources (2026-11-16, the web-tools review's #160): turn_sources has no session_id, so through its turns.
+            using var sources = connection.CreateCommand();
+            sources.Transaction = transaction;
+            sources.CommandText = "DELETE FROM turn_sources WHERE turn_id IN (SELECT id FROM turns " + turnsWhere + ")";
             using var turns = connection.CreateCommand();
             turns.Transaction = transaction;
             turns.CommandText = "DELETE FROM turns " + turnsWhere;
@@ -1244,6 +1252,7 @@ public sealed class SessionStore : IDisposable
             if (parameter is { } p)
             {
                 reflections.Parameters.AddWithValue(p.Name, p.Value);
+                sources.Parameters.AddWithValue(p.Name, p.Value);
                 turns.Parameters.AddWithValue(p.Name, p.Value);
                 sessions.Parameters.AddWithValue(p.Name, p.Value);
             }
@@ -1262,6 +1271,7 @@ public sealed class SessionStore : IDisposable
                 passes.ExecuteNonQuery();
             }
 
+            sources.ExecuteNonQuery();
             turns.ExecuteNonQuery();
             var gone = new List<long>();
             if (ids is not null)

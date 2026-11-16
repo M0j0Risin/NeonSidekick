@@ -59,7 +59,7 @@ public abstract record TurnEvent
     /// <see cref="TurnTrace"/> counts it as an error, and a later good call as the recovery. <paramref name="Source"/> (2026-11-15, the
     /// web-tools plan's §2, <see cref="Tools.ToolSourcedResult"/>) is the page read or the file saved, for the 📚 line; null otherwise.
     /// </summary>
-    public sealed record ToolResult(string Name, string CallId, string Text, IReadOnlyList<ImageAttachment>? Images = null, FileDiff? Diff = null, string? Shown = null, TimeSpan? Took = null, TimeSpan Asked = default, bool GuardRefused = false, bool ArgumentError = false, NeonSidekick.Llm.Tools.WebSource? Source = null) : TurnEvent;
+    public sealed record ToolResult(string Name, string CallId, string Text, IReadOnlyList<ImageAttachment>? Images = null, FileDiff? Diff = null, string? Shown = null, TimeSpan? Took = null, TimeSpan Asked = default, bool GuardRefused = false, bool ArgumentError = false, NeonSidekick.Web.WebSource? Source = null) : TurnEvent;
 
     /// <summary>
     /// Something the user should see that is not reply text: a timeout, a server error, an iteration cap. <paramref name="AskAgain"/>: the

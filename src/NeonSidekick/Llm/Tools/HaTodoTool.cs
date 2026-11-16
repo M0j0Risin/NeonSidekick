@@ -56,7 +56,7 @@ public sealed class HaTodoTool : HaTool
             return action.Length == 0 ? HaText.Missing(ActionArgument) : HaText.BadChoice(ActionArgument, action, Actions.Keys);
         }
 
-        string item = Optional(arguments, ItemArgument) ?? "";
+        string item = OptionalName(arguments, ItemArgument) ?? "";
         if (action != "list" && item.Length == 0)
         {
             return HaText.Missing(ItemArgument);
@@ -68,7 +68,7 @@ public sealed class HaTodoTool : HaTool
             return error;
         }
 
-        var (list, refused) = List(snapshot, Optional(arguments, ListArgument));
+        var (list, refused) = List(snapshot, OptionalName(arguments, ListArgument));
         if (list is null)
         {
             return refused;
@@ -83,7 +83,7 @@ public sealed class HaTodoTool : HaTool
 
             var reply = await Ha.CallAsync("todo", service, [list.Id], null, cancellationToken, returnResponse: true).ConfigureAwait(false);
             // Items anyone in the household can add: the body under the header fenced (2026-11-15, the web-tools plan's §3).
-            return reply.Ok ? UntrustedText.FenceBody(HaText.TodoItems(list, reply.Body)) : reply.Error;
+            return reply.Ok ? UntrustedText.WithNote(HaText.TodoItems(list, reply.Body)) : reply.Error;
         }
 
         string data = HaJson.Object(w =>
@@ -108,16 +108,16 @@ public sealed class HaTodoTool : HaTool
             {
                 0 => (null, HaText.NoneOf("to-do list")),
                 1 => (lists[0], null),
-                _ => (null, HaText.Ambiguous("to-do list", lists, lists.Count)),
+                _ => (null, HaText.Ambiguous("to-do list", lists, lists.Count, fenced: true)),
             };
         }
 
-        var match = snapshot.Resolve(target, ["todo"]);
+        var match = snapshot.Resolve(target, ["todo"], fenced: true);
         if (match.Error is not null)
         {
             return (null, match.Error);
         }
 
-        return match.Entities.Count == 1 ? (match.Entities[0], null) : (null, HaText.Ambiguous(target, match.Entities, match.Entities.Count));
+        return match.Entities.Count == 1 ? (match.Entities[0], null) : (null, HaText.Ambiguous(target, match.Entities, match.Entities.Count, fenced: true));
     }
 }

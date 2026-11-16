@@ -98,7 +98,7 @@ public partial class ChatScreenTests
         Assert.Empty(failures);
         Assert.Equal(1, asked);
         Assert.Empty(_browserWindow!.Solves);
-        Assert.All(WebResults(), r => Assert.EndsWith("; the user declined to solve it in the Browser window)", r));
+        Assert.All(WebResults(), r => Assert.EndsWith("; the user declined to solve it in the Browser window)", NeonSidekick.Llm.Tools.UntrustedText.WithoutNote(r!)));
     }
 
     [Fact]
@@ -119,7 +119,7 @@ public partial class ChatScreenTests
         Assert.True(card!.Live);
         Assert.Equal(BotCheckText.WaitTitle, card.Title);
         Assert.True(_browserWindow!.CancelSeen);
-        Assert.EndsWith("; the user gave up on it in the Browser window)", Assert.Single(WebResults()));
+        Assert.EndsWith("; the user gave up on it in the Browser window)", NeonSidekick.Llm.Tools.UntrustedText.WithoutNote(Assert.Single(WebResults())!));
         Assert.Contains(WebUiText.AnsweredNotice(BotCheckText.GiveUpRow), output);
         Assert.Empty(Web.Asks.OpenAsks());
     }
@@ -250,7 +250,7 @@ public partial class ChatScreenTests
         Assert.Empty(failures);
         Assert.Equal(1, cards);
         Assert.True(_browserWindow!.CancelSeen);
-        Assert.EndsWith("; the user gave up on it in the Browser window)", Assert.Single(WebResults()));
+        Assert.EndsWith("; the user gave up on it in the Browser window)", NeonSidekick.Llm.Tools.UntrustedText.WithoutNote(Assert.Single(WebResults())!));
         Assert.DoesNotContain(WebUiText.AnsweredNotice(BotCheckText.GiveUpRow), output);
         Assert.Empty(Web.Asks.OpenAsks());
     }

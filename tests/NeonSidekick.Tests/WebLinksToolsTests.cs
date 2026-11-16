@@ -160,7 +160,7 @@ public sealed class WebLinksToolsTests : IDisposable
         Assert.Equal(BrowserLinkText.SavedForModel(new BrowserLink("https://example.com/docs", "The Docs", _time.GetUtcNow()), nameFromPage: true), await Save(("action", "add"), ("url", "current")));
         Assert.Equal(BrowserLinkText.Renamed(Links().List()[0], "Docs"), await Save(("action", "rename"), ("url", "current"), ("name", "Docs")));
         Assert.Equal("Docs", Links().List()[0].Name);
-        Assert.Equal(BrowserLinkText.Removed(Links().List()[0]), await Save(("action", "remove"), ("url", "CURRENT")));
+        Assert.Equal(BrowserLinkText.RemovedForModel(Links().List()[0]), await Save(("action", "remove"), ("url", "CURRENT")));
         Assert.Empty(Links().List());
         Assert.Equal(3, _changed);
     }
@@ -207,8 +207,8 @@ public sealed class WebLinksToolsTests : IDisposable
         Assert.Null(Links().List()[1].Name);
 
         var a = Links().List()[0];
-        Assert.Equal(BrowserLinkText.Removed(a), await Save(("action", "remove"), ("url", "https://a.example/")));
-        Assert.Equal(BrowserLinkText.Removed(Links().List()[1]), await Save(("action", "remove"), ("url", "2")));
+        Assert.Equal(BrowserLinkText.RemovedForModel(a), await Save(("action", "remove"), ("url", "https://a.example/")));
+        Assert.Equal(BrowserLinkText.RemovedForModel(Links().List()[1]), await Save(("action", "remove"), ("url", "2")));
         Assert.Equal("https://b.example/", Assert.Single(Links().List()).Url);
 
         Assert.Equal(BrowserLinkText.NotSavedForModel("7"), await Save(("action", "remove"), ("url", "7")));

@@ -85,7 +85,8 @@ public sealed class VideoControlTool : AIFunction
 
     // The answer with the quote note last when YouTube's words were fenced in it (2026-11-15, the web-tools plan's §3).
     protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) =>
-        await AnswerAsync(arguments, cancellationToken).ConfigureAwait(false) is var result && result is string answer ? UntrustedText.WithNote(answer) : result;
+        _forUser ? await AnswerAsync(arguments, cancellationToken).ConfigureAwait(false)
+            : UntrustedText.WithNote(await AnswerAsync(arguments, cancellationToken).ConfigureAwait(false));
 
     private async ValueTask<object?> AnswerAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {

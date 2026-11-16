@@ -39,7 +39,7 @@ public abstract class HaTool : AIFunction
             {
                 0 => (null, HaText.NoneOf(noun)),
                 1 => (all[0], null),
-                _ => (null, HaText.Ambiguous(noun, all.Take(HaSnapshot.MaxCandidates).ToList(), all.Count)),
+                _ => (null, HaText.Ambiguous(noun, all.Take(HaSnapshot.MaxCandidates).ToList(), all.Count, fenced: true)),
             };
         }
 
@@ -48,7 +48,7 @@ public abstract class HaTool : AIFunction
             return (null, otherDomain(exact));
         }
 
-        var match = snapshot.Resolve(target, [domain]);
+        var match = snapshot.Resolve(target, [domain], fenced: true);
         if (match.Error is not null)
         {
             return (null, match.Error);
@@ -56,7 +56,7 @@ public abstract class HaTool : AIFunction
 
         return match.Entities.Count == 1
             ? (match.Entities[0], null)
-            : (null, HaText.Ambiguous(target, match.Entities.Take(HaSnapshot.MaxCandidates).ToList(), match.Entities.Count));
+            : (null, HaText.Ambiguous(target, match.Entities.Take(HaSnapshot.MaxCandidates).ToList(), match.Entities.Count, fenced: true));
     }
 
     protected AppSettingsData Effective => _ha.Effective;
@@ -64,6 +64,12 @@ public abstract class HaTool : AIFunction
     /// <summary>A string argument, or null when blank.</summary>
     protected static string? Optional(AIFunctionArguments arguments, string name) =>
         ToolArguments.ReadString(arguments, name).Trim() is { Length: > 0 } text ? text : null;
+
+    /// <summary>
+    /// <see cref="Optional"/> for a name the model may copy from a fenced list (2026-11-16, the web-tools review's #166: <c>⟪milk⟫</c> names
+    /// milk): <see cref="AdminArguments.OptionalName"/>.
+    /// </summary>
+    protected static string? OptionalName(AIFunctionArguments arguments, string name) => AdminArguments.OptionalName(arguments, name);
 
     /// <summary>
     /// Whether <paramref name="domain"/>.<paramref name="service"/> on <paramref name="targets"/> may run: null when it may,
@@ -116,7 +122,7 @@ public abstract class HaTool : AIFunction
             return (null, HaMatch.Refused(error ?? HaText.NotConfigured));
         }
 
-        return (snapshot, snapshot.Resolve(target, domains));
+        return (snapshot, snapshot.Resolve(target, domains, fenced: true));
     }
 
     /// <summary>Gates and runs one service call on <paramref name="targets"/>, answering <see cref="HaText.Done"/> or the failure.</summary>

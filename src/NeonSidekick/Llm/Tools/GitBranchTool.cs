@@ -136,9 +136,9 @@ public sealed class GitBranchTool : GitTool, IListOnlyTwin
         }
 
         string action = ToolArguments.ReadString(arguments, ActionArgument);
-        string name = ToolArguments.ReadString(arguments, NameArgument);
+        string name = ToolArguments.ReadName(arguments, NameArgument);
         string newName = ToolArguments.ReadString(arguments, NewNameArgument);
-        string start = ToolArguments.ReadString(arguments, StartPointArgument);
+        string start = ToolArguments.ReadName(arguments, StartPointArgument);
         string path = ReadPath(arguments);
         return OffThread(() => Describe(action, name, newName, start, switchTo ?? false, path), cancellationToken);
     }

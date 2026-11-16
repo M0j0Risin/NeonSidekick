@@ -305,7 +305,7 @@ internal sealed partial class ChatScreen
     /// user's ask) the turn's <paramref name="pictures"/> are drawn where a live turn drew them: <c>/imagine</c>'s before the
     /// user's row, the user's own under it, the tools' after the tool line.
     /// </summary>
-    private void ReplayTurn(string userText, string replyText, int toolCalls, bool styled, TurnPictures? pictures = null, UI.ThumbnailBox? box = null, IReadOnlyList<Llm.Tools.WebSource>? sources = null)
+    private void ReplayTurn(string userText, string replyText, int toolCalls, bool styled, TurnPictures? pictures = null, UI.ThumbnailBox? box = null, IReadOnlyList<Web.WebSource>? sources = null)
     {
         // Every turn's pictures: drawn with a box, offered to the Web UI's page alone without (later on 2026-10-14).
         var drawn = pictures is { Any: true } turn ? turn : null;
@@ -320,7 +320,9 @@ internal sealed partial class ChatScreen
 
         ReplayThumbnails(drawn?.Tools, box, sandbox: true);
 
-        if (replyText.Length > 0)
+        // A turn that read pages but said nothing (cancelled, failed) still opens its reply (2026-11-16, the web-tools review's #9): the
+        // end writes the no-reply line itself, as the live turn showed it, and the sources under it.
+        if (replyText.Length > 0 || Web.WebSources.HasLine(sources))
         {
             bool claude = ClaudeText.IsClaudeLine(userText);
             if (claude)
@@ -331,7 +333,11 @@ internal sealed partial class ChatScreen
 
             // The profile's avatar (2026-10-10): a session is its profile's, so its replies wear today's face; Claude's keep the dot.
             _transcript.BeginAssistant(styled, claude ? null : UI.TranscriptRenderer.GlyphFor(_effective().ModelAvatar));
-            _transcript.AppendDelta(replyText);
+            if (replyText.Length > 0)
+            {
+                _transcript.AppendDelta(replyText);
+            }
+
             // The turn's stored sources (2026-11-15, the web-tools plan's §2): a resumed session shows where its answers came from.
             _transcript.EndAssistant(sources: sources);
         }

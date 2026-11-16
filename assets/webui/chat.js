@@ -118,8 +118,8 @@ function renderEntry(entry) {
       break;
     }
     case 'sources': {
-      // The 📚 line under a reply (2026-11-15, the web-tools plan's §2): its links rendered on the server, as a reply's are; the plain text
-      // until the end that carries them arrives.
+      // The 📚 line under a reply (2026-11-15, the web-tools plan's §2): its links rendered on the server, as a reply's are, and sent with
+      // it (2026-11-16); the plain text only if a render ever failed.
       node = el('div', 'entry sources');
       const body = el('div', 'body');
       if (entry.html) {
@@ -350,7 +350,7 @@ function end(e) {
     keepPlace(record.el, () => record.el.replaceChildren(foldedThinking({ text: record.text, summary: e.summary }, record)));
     return;
   }
-  if ((record.kind !== 'assistant' && record.kind !== 'sources') || !record.body) return;
+  if (record.kind !== 'assistant' || !record.body) return;
   const was = nearBottom();
   record.body.classList.remove('streaming');
   record.body.innerHTML = e.html;

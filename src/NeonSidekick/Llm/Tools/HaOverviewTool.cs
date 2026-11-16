@@ -30,6 +30,6 @@ public sealed class HaOverviewTool : HaTool
     {
         var (snapshot, error) = await Ha.SnapshotAsync(cancellationToken).ConfigureAwait(false);
         // States and attribute values are the integrations' words: the body under the header fenced (2026-11-15, the web-tools plan's §3).
-        return snapshot is null ? error : UntrustedText.FenceBody(string.Join('\n', HaText.Overview(snapshot)));
+        return snapshot is null ? error : UntrustedText.WithNote(string.Join('\n', HaText.Overview(snapshot, fenced: true)));
     }
 }

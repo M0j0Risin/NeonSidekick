@@ -176,15 +176,8 @@ public sealed class ReadPdfTool : FileTool, IAcceptsArguments
 
         // A downloaded document's text is its author's (2026-11-15, the web-tools plan's §3): fenced when the file carries the mark of the web,
         // read on every call, since read_pdf's cache keys a document by a stamp an unblock doesn't change.
-        return await AnswerAsync(key!, display, token => Task.FromResult(Bytes(files, path)), request, Scope(Marked(files, path)), cancellationToken).ConfigureAwait(false);
+        return await AnswerAsync(key!, display, token => Task.FromResult(Bytes(files, path)), request, MarkOfTheWeb.IsFromInternet(files, path), cancellationToken).ConfigureAwait(false);
     }
-
-    /// <summary>Whether the file <paramref name="path"/> names carries the mark of the web (<see cref="MarkOfTheWeb.IsFromInternet"/>).</summary>
-    internal static bool Marked(WorkingDirectory files, string path) =>
-        files.Resolve(path, forWrite: false, out string full) == FileOutcome.Ok && MarkOfTheWeb.IsFromInternet(full);
-
-    /// <summary>An answer as the model reads it: everything under its header fenced for a marked file, as it is for the user's own.</summary>
-    internal static Func<string, string> Scope(bool marked) => marked ? UntrustedText.FenceBody : text => text;
 
     private async Task<object?> ReadOnShareAsync(string? share, string path, Request request, CancellationToken cancellationToken)
     {
@@ -200,7 +193,7 @@ public sealed class ReadPdfTool : FileTool, IAcceptsArguments
         }
 
         // The mark read under the call's impersonation, beside the stamp (2026-11-15): NTFS shares carry the stream.
-        var stamped = await _unc.RunAsync(target, write: false, files => (Refused: Stamped(files, relative, out var key, out string display), Key: key, Display: display, Marked: Marked(files, relative)), cancellationToken).ConfigureAwait(false);
+        var stamped = await _unc.RunAsync(target, write: false, files => (Refused: Stamped(files, relative, out var key, out string display), Key: key, Display: display, Marked: MarkOfTheWeb.IsFromInternet(files, relative)), cancellationToken).ConfigureAwait(false);
         if (stamped.Error is { } failed)
         {
             return failed;
@@ -221,7 +214,7 @@ public sealed class ReadPdfTool : FileTool, IAcceptsArguments
         {
             var read = await _unc.RunAsync(target, write: false, files => Bytes(files, relative), token).ConfigureAwait(false);
             return read.Error is { } e ? (null, e) : read.Value;
-        }, request, Scope(marked), cancellationToken).ConfigureAwait(false);
+        }, request, marked, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>Whether a call without a share means one: a full path outside the working directory (and the images folder) while a share is offered (<c>open</c>'s rule).</summary>
@@ -236,13 +229,20 @@ public sealed class ReadPdfTool : FileTool, IAcceptsArguments
     private static (byte[]? Bytes, string? Error) Bytes(WorkingDirectory files, string path) => PdfReading.BytesOf(files, path);
 
     /// <summary>The read asked of <see cref="PdfReading"/> for the request, then the answer composed from what it holds.</summary>
-    private async Task<object?> AnswerAsync(PdfDocKey key, string display, Func<CancellationToken, Task<(byte[]? Bytes, string? Error)>> bytes, Request request, Func<string, string> scope, CancellationToken cancellationToken)
+    /// <remarks>
+    /// <paramref name="marked"/> (2026-11-16, the web-tools review's #2, #89): a file carrying the mark of the web has each piece of its text
+    /// fenced where it is built — page text, <c>find</c> contexts, outline titles, form fields — and the answer ends with the note; the
+    /// headings, page numbers and the app's notes stay outside. The fence follows the mark, never the answer's text.
+    /// </remarks>
+    private async Task<object?> AnswerAsync(PdfDocKey key, string display, Func<CancellationToken, Task<(byte[]? Bytes, string? Error)>> bytes, Request request, bool marked, CancellationToken cancellationToken)
     {
+        var fence = UntrustedText.FenceIf(marked);
+        Func<string, string> scope = marked ? UntrustedText.WithNote : static text => text;
         if (request.Fields)
         {
             // The form alone (gap 98): no page's text, the fields cached with the document.
             var form = await _reading.ReadAsync(key, display, bytes, new PdfAsk([], [], Outline: false, Labels: false, MaxPages: 0, Fields: true), cancellationToken).ConfigureAwait(false);
-            return scope(form.Error ?? PdfText.FieldList(display, form.Fields ?? [], form.PureXfa));
+            return form.Error ?? scope(PdfText.FieldList(display, form.Fields ?? [], form.PureXfa, fence));
         }
 
         bool finding = request.Find.Length > 0;
@@ -254,27 +254,27 @@ public sealed class ReadPdfTool : FileTool, IAcceptsArguments
         var read = await _reading.ReadAsync(key, display, bytes, ask, cancellationToken).ConfigureAwait(false);
         if (read.Error is { } error)
         {
-            return scope(error);
+            return error;
         }
 
         if (finding)
         {
-            return scope(FindAnswer(display, request, read));
+            return scope(FindAnswer(display, request, read, fence));
         }
 
         // A PDF of no pages is said as one (2026-10-22, review K17: it was "pages "" names none of them").
         if (read.PageCount == 0)
         {
-            return scope(PdfText.NoPages(display));
+            return PdfText.NoPages(display);
         }
 
         var asked = request.Range?.Resolve(read.PageCount) ?? [.. Enumerable.Range(1, read.PageCount)];
         if (asked.Count == 0)
         {
-            return scope(PdfText.PastTheEnd(display, read.PageCount, request.Spec));
+            return PdfText.PastTheEnd(display, read.PageCount, request.Spec);
         }
 
-        var (text, shownPages) = TextAnswer(display, request, read, asked);
+        var (text, shownPages) = TextAnswer(display, request, read, asked, fence);
         var drawn = read.Pictures.Where(p => p.Png is not null).OrderBy(p => p.Number).ToList();
         if (!request.Pictures)
         {
@@ -307,12 +307,12 @@ public sealed class ReadPdfTool : FileTool, IAcceptsArguments
     }
 
     /// <summary>The header, the outline when no pages were given, and the pages' text up to the cap.</summary>
-    private static (string Text, IReadOnlyList<int> Shown) TextAnswer(string display, Request request, PdfPages read, IReadOnlyList<int> asked)
+    private static (string Text, IReadOnlyList<int> Shown) TextAnswer(string display, Request request, PdfPages read, IReadOnlyList<int> asked, Func<string, string> fence)
     {
         var body = new StringBuilder();
         if (request.Range is null && read.Outline is { Count: > 0 } outline)
         {
-            PdfText.AppendOutline(body, outline);
+            PdfText.AppendOutline(body, outline, fence);
         }
 
         var shown = new List<int>();
@@ -347,11 +347,11 @@ public sealed class ReadPdfTool : FileTool, IAcceptsArguments
                 if (pageText.Length > Math.Max(room, 0) && shown.Count == 0)
                 {
                     int cut = NeonSidekick.Files.TextCut.SafeLength(pageText, Math.Min(Math.Max(room, 1000), pageText.Length));
-                    body.Append('\n').Append(pageText.AsSpan(0, cut)).Append('\n').Append(PdfText.PageCut(page, skipped + cut, skipped + pageText.Length));
+                    body.Append('\n').Append(fence(pageText[..cut])).Append('\n').Append(PdfText.PageCut(page, skipped + cut, skipped + pageText.Length));
                 }
                 else
                 {
-                    body.Append('\n').Append(pageText);
+                    body.Append('\n').Append(fence(pageText));
                 }
             }
 
@@ -380,7 +380,7 @@ public sealed class ReadPdfTool : FileTool, IAcceptsArguments
     }
 
     /// <summary><c>find</c>'s answer: the pages holding every word (the first <see cref="PdfFind.MaxResults"/>), a line from each.</summary>
-    private static string FindAnswer(string display, Request request, PdfPages read)
+    private static string FindAnswer(string display, Request request, PdfPages read, Func<string, string> fence)
     {
         var words = PdfFind.Words(request.Find);
         var within = request.Range?.Resolve(read.PageCount) ?? [.. Enumerable.Range(1, read.PageCount)];
@@ -395,7 +395,7 @@ public sealed class ReadPdfTool : FileTool, IAcceptsArguments
         var sb = new StringBuilder(PdfText.Found(display, request.Find, matches.Count, searched.Count, read.PageCount));
         foreach (int page in matches.Take(PdfFind.MaxResults))
         {
-            sb.Append('\n').Append(PdfText.FoundLine(page, read.LabelOf(page), PdfFind.Context(read.Texts[page], words)));
+            sb.Append('\n').Append(PdfText.FoundLine(page, read.LabelOf(page), fence(PdfFind.Context(read.Texts[page], words))));
         }
 
         if (matches.Count > PdfFind.MaxResults)

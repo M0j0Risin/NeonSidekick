@@ -47,7 +47,7 @@ public sealed class HaHistoryTool : HaTool
 
     protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
-        string target = ToolArguments.ReadString(arguments, EntityArgument).Trim();
+        string target = ToolArguments.ReadName(arguments, EntityArgument).Trim();
         if (target.Length == 0)
         {
             return HaText.Missing(EntityArgument);
@@ -66,7 +66,7 @@ public sealed class HaHistoryTool : HaTool
 
         if (match.Entities.Count != 1)
         {
-            return HaText.Ambiguous(target, match.Entities.Take(HaSnapshot.MaxCandidates).ToList(), match.Entities.Count);
+            return HaText.Ambiguous(target, match.Entities.Take(HaSnapshot.MaxCandidates).ToList(), match.Entities.Count, fenced: true);
         }
 
         if (Ha.Client() is not { } client)
@@ -79,6 +79,6 @@ public sealed class HaHistoryTool : HaTool
         var now = Ha.Time.GetUtcNow();
         var reply = await client.HistoryAsync(entity.Id, now.AddHours(-hours), now, Ha.Timeout, cancellationToken).ConfigureAwait(false);
         // States and attribute values are the integrations' words: the body under the header fenced (2026-11-15, the web-tools plan's §3).
-        return reply.Ok ? UntrustedText.FenceBody(HaText.History(entity, reply.Body, hours, _zone)) : reply.Error;
+        return reply.Ok ? UntrustedText.WithNote(HaText.History(entity, reply.Body, hours, _zone)) : reply.Error;
     }
 }

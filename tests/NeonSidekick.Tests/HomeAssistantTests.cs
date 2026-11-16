@@ -256,7 +256,8 @@ public sealed class HomeAssistantTests : IDisposable
 
         string text = HaText.History(entity, body, 24, ManualTimeProvider.DefaultZone);
 
-        Assert.Equal("Sensor 1 - Pantry Motion (binary_sensor.sensor_1_pantry_motion): 3 states in the last 24 hours\nFri 10:59 off\nFri 14:45 on\nFri 14:45 off", text);
+        // Home Assistant's names and states fenced each in place (2026-11-16, the web-tools review's #166); the app's words bare.
+        Assert.Equal("⟪Sensor 1 - Pantry Motion⟫ (⟪binary_sensor.sensor_1_pantry_motion⟫): 3 states in the last 24 hours\nFri 10:59 ⟪off⟫\nFri 14:45 ⟪on⟫\nFri 14:45 ⟪off⟫", text);
     }
 
     [Fact]
@@ -265,7 +266,7 @@ public sealed class HomeAssistantTests : IDisposable
         var list = Snapshot().Find("todo.shopping_list")!;
         const string body = """{"changed_states":[],"service_response":{"todo.shopping_list":{"items":[{"summary":"eggs","uid":"1","status":"completed"},{"summary":"milk","uid":"2","status":"needs_action"}]}}}""";
 
-        Assert.Equal("Shopping list: 1 open item, 1 completed\n- milk\n- eggs (completed)", HaText.TodoItems(list, body));
+        Assert.Equal("⟪Shopping list⟫: 1 open item, 1 completed\n- ⟪milk⟫\n- ⟪eggs⟫ (completed)", HaText.TodoItems(list, body));
         Assert.Equal("Error: Home Assistant's answer to todo.get_items could not be read", HaText.TodoItems(list, "{}"));
     }
 
@@ -486,7 +487,9 @@ public sealed class HomeAssistantTests : IDisposable
         Assert.Equal("media_player.volume_set → BRAVIA XR-55A80L · volume 25%", await Invoke(tool, ("action", "volume"), ("volume_pct", 25)));
         Assert.Equal("""{"entity_id":"media_player.bravia_xr_55a80l","volume_level":0.25}""", ServiceCalls()[^1].Body);
 
-        Assert.StartsWith("Error: 'hdmi' is not a valid source; use one of: STR-AN1000, HDMI 1", await Invoke(tool, ("action", "source"), ("source", "hdmi")));
+        string refused = await Invoke(tool, ("action", "source"), ("source", "hdmi"));
+        Assert.StartsWith("Error: 'hdmi' is not a valid source; use one of: ⟪STR-AN1000⟫, ⟪HDMI 1⟫", refused);   // the player's list, fenced (#184)
+        Assert.EndsWith(NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, refused, StringComparison.Ordinal);
         Assert.Equal(HaText.Missing("volume_pct"), await Invoke(tool, ("action", "volume")));
     }
 
@@ -515,11 +518,15 @@ public sealed class HomeAssistantTests : IDisposable
         _settings.HomeAssistantActionPolicy = HaPolicy.Off;
         var tool = new HaTodoTool(ha, Answer(null));
 
-        Assert.Equal("Shopping list: 1 open item\n⟪- milk⟫" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, await Invoke(tool, ("action", "list")));
+        Assert.Equal("⟪Shopping list⟫: 1 open item\n- ⟪milk⟫" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, await Invoke(tool, ("action", "list")));
         Assert.Equal(HaText.PolicyOff, await Invoke(tool, ("action", "add"), ("item", "eggs")));
 
         _settings.HomeAssistantActionPolicy = HaPolicy.Ask;
         Assert.Equal("todo.update_item → Shopping list · 'milk'", await Invoke(tool, ("action", "complete"), ("item", "milk")));
+        Assert.Equal("""{"entity_id":"todo.shopping_list","item":"milk","status":"completed"}""", stub.Requests[^1].Body);
+
+        // A name copied back from the fenced list, marks and all, still names it (2026-11-16, the web-tools plan's copy-back).
+        await Invoke(tool, ("action", "complete"), ("item", "⟪milk⟫"));
         Assert.Equal("""{"entity_id":"todo.shopping_list","item":"milk","status":"completed"}""", stub.Requests[^1].Body);
         Assert.Equal(HaText.Missing("item"), await Invoke(tool, ("action", "remove")));
     }
@@ -678,11 +685,12 @@ public sealed class HomeAssistantTests : IDisposable
         var tool = new HaStatesTool(_ha);
 
         string one = await Invoke(tool, ("query", "media_player.bravia_xr_55a80l"));
-        Assert.StartsWith("media_player.bravia_xr_55a80l · BRAVIA XR-55A80L · on", one);
-        Assert.Contains("\nsource_list: [\"STR-AN1000\", \"HDMI 1\", \"HDMI 2\", \"HDMI 3 (eARC/ARC)\", \"HDMI 4\", \"Video\"]", one);
+        Assert.StartsWith("⟪media_player.bravia_xr_55a80l⟫ · ⟪BRAVIA XR-55A80L⟫ · ⟪on⟫", one);
+        Assert.Contains("\nsource_list: ⟪[\"STR-AN1000\", \"HDMI 1\", \"HDMI 2\", \"HDMI 3 (eARC/ARC)\", \"HDMI 4\", \"Video\"]⟫", one);
 
         string scenes = await Invoke(tool, ("domain", "scene"), ("area", "den"));
-        Assert.Equal("2 entities matching domain scene, area Den\n⟪scene.den_den_relax · Den Relax · unknown · in Den\nscene.den_den_read · Den Read · unknown · in Den⟫" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, scenes);
+        // Each value Home Assistant gave fenced in place, a matched area's name too (2026-11-16, #166); the app's words and the · bare.
+        Assert.Equal("2 entities matching domain scene, area ⟪Den⟫\n⟪scene.den_den_relax⟫ · ⟪Den Relax⟫ · ⟪unknown⟫ · in ⟪Den⟫\n⟪scene.den_den_read⟫ · ⟪Den Read⟫ · ⟪unknown⟫ · in ⟪Den⟫" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, scenes);
     }
 
     [Fact]
@@ -693,7 +701,7 @@ public sealed class HomeAssistantTests : IDisposable
 
         string text = await Invoke(tool, ("entity", "pantry motion"), ("hours", 2));
 
-        Assert.Equal("Sensor 1 - Pantry Motion (binary_sensor.sensor_1_pantry_motion): 1 state in the last 2 hours\n⟪Fri 13:00 on⟫" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, text);
+        Assert.Equal("⟪Sensor 1 - Pantry Motion⟫ (⟪binary_sensor.sensor_1_pantry_motion⟫): 1 state in the last 2 hours\nFri 13:00 ⟪on⟫" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, text);
         Assert.Equal(HaClient.HistoryPath("binary_sensor.sensor_1_pantry_motion", ManualTimeProvider.DefaultUtcNow.AddHours(-2), ManualTimeProvider.DefaultUtcNow), _stub.Requests[^1].Uri.PathAndQuery);
         Assert.StartsWith("Error: '0' is not a whole number from 1 to 336", await Invoke(tool, ("entity", "pantry motion"), ("hours", 0)));
     }
@@ -703,7 +711,7 @@ public sealed class HomeAssistantTests : IDisposable
     {
         string text = await Invoke(new HaOverviewTool(_ha));
 
-        Assert.StartsWith("Home Assistant: 3 of 8 lights on\n⟪- Den: 2 of 3 on", text);
+        Assert.StartsWith("Home Assistant: 3 of 8 lights on\n- ⟪Den⟫: 2 of 3 on", text);
     }
 
     [Fact]

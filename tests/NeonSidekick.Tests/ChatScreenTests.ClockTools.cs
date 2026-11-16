@@ -33,7 +33,7 @@ public partial class ChatScreenTests
         string prompt = _chat.Requests[0][0].Text!;
         Assert.DoesNotContain(Assistant.ClockRule, prompt, StringComparison.Ordinal);
         Assert.DoesNotContain(GetCurrentTimeTool.ToolName, prompt, StringComparison.Ordinal);
-        Assert.Contains(Assistant.ToolUseRule + " " + Assistant.TimerRule, prompt, StringComparison.Ordinal);
+        Assert.Contains(Assistant.ToolUseRule + " " + Assistant.QuoteMarksRule + " " + Assistant.TimerRule, prompt, StringComparison.Ordinal);
         Assert.Equal(SkilledPrompt(false, Array.Empty<string>(), web: true, clock: false), prompt);
         Assert.DoesNotContain(_chat.Requests[0], m => m.Contents.OfType<FunctionCallContent>().Any(c => c.CallId == Assistant.OpeningClockCallId));
         Assert.Contains(_chat.Requests[0], m => m.Contents.OfType<FunctionCallContent>().Any(c => c.CallId == Assistant.OpeningCwdCallId));

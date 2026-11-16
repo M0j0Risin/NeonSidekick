@@ -108,19 +108,34 @@ public sealed class McpTool : AIFunction
     /// fenced on its own (<see cref="Llm.Tools.UntrustedText.Fenced"/>), the app's notes between them bare, and
     /// <see cref="Llm.Tools.UntrustedText.QuoteNote"/> is the last line. An <c>isError</c> result, MCP's signal for a failed call, always
     /// starts <see cref="McpText.ErrorPrefix"/>, ahead of the first fence (it was left off one whose text began "Error" until then: fenced,
-    /// that text would no longer read as failed). A result without <c>isError</c> whose text says "Error" reads as the server's text. Pure.
+    /// that text would no longer read as failed). A result without <c>isError</c> whose text says "Error" reads as the server's text.
+    /// Since 2026-11-16: a blank text block is skipped, so a result of nothing else is <see cref="McpText.NoContent"/> (the web-tools review's
+    /// #107), and an <c>isError</c> result's own leading "Error:" is taken off its first block, so neither the model nor the user reads
+    /// "Error: Error:" (#145). Pure.
     /// </summary>
     public static string Render(CallToolResult result)
     {
         ArgumentNullException.ThrowIfNull(result);
         var sb = new StringBuilder();
         bool fenced = false;
+        bool error = result.IsError == true;
         foreach (var block in result.Content ?? [])
         {
             string piece;
             if (block is TextContentBlock text)
             {
-                piece = Llm.Tools.UntrustedText.Fenced(text.Text ?? "");
+                string words = text.Text ?? "";
+                if (string.IsNullOrWhiteSpace(words))
+                {
+                    continue;
+                }
+
+                if (error && !fenced)
+                {
+                    words = WithoutErrorPrefix(words);
+                }
+
+                piece = Llm.Tools.UntrustedText.Fenced(words);
                 fenced = true;
             }
             else
@@ -142,6 +157,25 @@ public sealed class McpTool : AIFunction
             rendered += "\n" + Llm.Tools.UntrustedText.QuoteNote;
         }
 
-        return result.IsError == true ? McpText.ErrorPrefix + rendered : rendered;
+        return error ? McpText.ErrorPrefix + rendered : rendered;
+    }
+
+    // A server's own "Error:" (any case) off the front of its failed call's text, the rest kept; the app's prefix says it once.
+    private static string WithoutErrorPrefix(string text)
+    {
+        string trimmed = text.TrimStart();
+        if (!trimmed.StartsWith("error", StringComparison.OrdinalIgnoreCase))
+        {
+            return text;
+        }
+
+        string rest = trimmed[5..].TrimStart();
+        if (!rest.StartsWith(':'))
+        {
+            return text;
+        }
+
+        rest = rest[1..].TrimStart();
+        return rest.Length > 0 ? rest : text;
     }
 }

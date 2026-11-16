@@ -95,10 +95,19 @@ public sealed class Assistant
     /// group emptied drops its rule, as every other group does). <see cref="ToolUseRule"/> and <see cref="ClockRule"/> since 2026-10-18,
     /// byte for byte the one const they were. Pinned.
     /// </summary>
-    public const string ToolRulesWithoutTimers = ToolUseRule + " " + ClockRule;
+    public const string ToolRulesWithoutTimers = ToolUseRule + " " + QuoteMarksRule + " " + ClockRule;
 
     /// <summary>The first tool sentence (2026-10-18, out of <see cref="ToolRulesWithoutTimers"/>): in the default rules whenever tools are offered. Pinned.</summary>
     public const string ToolUseRule = "Use a tool when it helps; otherwise answer directly.";
+
+    /// <summary>
+    /// The fence sentence (2026-11-16, the web-tools review's #183, the user's call): tools fence others' text in ⟪ ⟫, and the model's own
+    /// words must not carry the marks on. Right after <see cref="ToolUseRule"/> whenever any tool is offered, since only tools fence; a
+    /// custom <c>operata.md</c> replaces it with the rest, and each fenced answer's own <see cref="NeonSidekick.Llm.Tools.UntrustedText.QuoteNote"/>
+    /// still says the text is data. Pinned.
+    /// </summary>
+    public const string QuoteMarksRule =
+        "Leave " + NeonSidekick.Llm.Tools.UntrustedText.QuoteOpen + " " + NeonSidekick.Llm.Tools.UntrustedText.QuoteClose + " out of what you write or say: they mark others' text for you.";
 
     /// <summary>
     /// The clock sentence (2026-10-18, out of <see cref="ToolRulesWithoutTimers"/>): in the default rules while a clock tool is offered, gone
@@ -817,7 +826,7 @@ public sealed class Assistant
     /// </summary>
     public static string DefaultRules(bool markdown, bool tools, bool files = true, bool web = false, AskLimits? ask = null, bool sessions = false, bool download = true, bool delete = true, bool mcp = false, bool timers = true, bool git = false, bool shell = false, bool police = true, bool obsidian = false, bool obsidianDelete = false, bool sql = false, bool native = false, bool homeAssistant = false, bool oracle = false, bool mysql = false, bool unc = false, bool uncFetch = false, bool uncWrite = false, bool docker = false, bool dockerWrite = false, bool help = false, bool sqlite = false, bool postgres = false, bool sqliteWrite = false, ServerWrites serverWrites = ServerWrites.None, bool images = false, bool advisors = false, bool shopping = false, bool eventLog = false, AdminRules admin = AdminRules.None, bool clock = true, bool duckDb = false, bool duckDbWrite = false) =>
         tools
-            ? TextRule(markdown) + " " + ToolUseRule + (clock ? " " + ClockRule : "") + (timers ? " " + TimerRule : "") + (files ? " " + (delete ? FileRule : FileRuleWithoutDelete) : "") + (images ? " " + ImageRule : "") + (shopping ? " " + ShoppingRule : "") + (help ? " " + HelpRule : "") + (web ? " " + WebRule : "") + (web && files && download ? " " + DownloadRule : "") + (git ? " " + GitRule : "") + (shell ? " " + ShellRuleFor(police) + NativeTail(native, files, git, web, sql, oracle, mysql, unc, sqlite, postgres, duckDb) : "") + (obsidian ? " " + ObsidianRule + (obsidianDelete ? " " + ObsidianDeleteRule : "") : "") + (sql ? " " + SqlRule + WriteTail(serverWrites, ServerWrites.Sql, SqlWriteRule) : "") + (oracle ? " " + OracleRule + WriteTail(serverWrites, ServerWrites.Oracle, OracleWriteRule) : "") + (mysql ? " " + MySqlRule + WriteTail(serverWrites, ServerWrites.MySql, MySqlWriteRule) : "") + (sqlite ? " " + SqliteRule + (sqliteWrite ? " " + SqliteWriteRule : "") : "") + (duckDb ? " " + DuckDbRule + (duckDbWrite ? " " + DuckDbWriteRule : "") : "") + (postgres ? " " + PostgresRule + WriteTail(serverWrites, ServerWrites.Postgres, PostgresWriteRule) : "") + (unc ? " " + UncRule + (uncFetch ? " " + UncFetchRule : "") + (uncWrite ? " " + UncWriteRule : "") : "") + (homeAssistant ? " " + HomeAssistantRule : "") + (docker ? " " + DockerRule + (dockerWrite ? " " + DockerWriteRule : "") : "") + (eventLog ? " " + EventLogRuleHere : "") + AdminTail(admin, eventLog) + (advisors ? " " + NeonAdvisorRule : "") + (ask is { } limits ? " " + AskRule(limits) : "") + (sessions ? " " + SessionRule : "") + (mcp ? " " + McpRule : "")
+            ? TextRule(markdown) + " " + ToolUseRule + " " + QuoteMarksRule + (clock ? " " + ClockRule : "") + (timers ? " " + TimerRule : "") + (files ? " " + (delete ? FileRule : FileRuleWithoutDelete) : "") + (images ? " " + ImageRule : "") + (shopping ? " " + ShoppingRule : "") + (help ? " " + HelpRule : "") + (web ? " " + WebRule : "") + (web && files && download ? " " + DownloadRule : "") + (git ? " " + GitRule : "") + (shell ? " " + ShellRuleFor(police) + NativeTail(native, files, git, web, sql, oracle, mysql, unc, sqlite, postgres, duckDb) : "") + (obsidian ? " " + ObsidianRule + (obsidianDelete ? " " + ObsidianDeleteRule : "") : "") + (sql ? " " + SqlRule + WriteTail(serverWrites, ServerWrites.Sql, SqlWriteRule) : "") + (oracle ? " " + OracleRule + WriteTail(serverWrites, ServerWrites.Oracle, OracleWriteRule) : "") + (mysql ? " " + MySqlRule + WriteTail(serverWrites, ServerWrites.MySql, MySqlWriteRule) : "") + (sqlite ? " " + SqliteRule + (sqliteWrite ? " " + SqliteWriteRule : "") : "") + (duckDb ? " " + DuckDbRule + (duckDbWrite ? " " + DuckDbWriteRule : "") : "") + (postgres ? " " + PostgresRule + WriteTail(serverWrites, ServerWrites.Postgres, PostgresWriteRule) : "") + (unc ? " " + UncRule + (uncFetch ? " " + UncFetchRule : "") + (uncWrite ? " " + UncWriteRule : "") : "") + (homeAssistant ? " " + HomeAssistantRule : "") + (docker ? " " + DockerRule + (dockerWrite ? " " + DockerWriteRule : "") : "") + (eventLog ? " " + EventLogRuleHere : "") + AdminTail(admin, eventLog) + (advisors ? " " + NeonAdvisorRule : "") + (ask is { } limits ? " " + AskRule(limits) : "") + (sessions ? " " + SessionRule : "") + (mcp ? " " + McpRule : "")
             : TextRule(markdown);
 
     /// <summary>A family's write sentence after a space while <paramref name="writes"/> holds <paramref name="family"/> (2026-10-05), else nothing.</summary>
@@ -2388,12 +2397,12 @@ public sealed class Assistant
 
                 // A call the length limit cut off (2026-10-18) is answered by why the reply ended, never run; any other parse failure as before.
                 // A call that runs is timed, its asks apart (2026-11-02, the review: the screen's clock counted panes no tool opened).
-                (string Text, IReadOnlyList<ImageAttachment> Images, FileDiff? Diff, string? Shown, bool Refused, bool ArgumentError, NeonSidekick.Llm.Tools.WebSource? Source) invoked;
+                ToolInvocation invoked;
                 TimeSpan? took = null;
                 TimeSpan asked = default;
                 if (cutOff && call.Exception is not null)
                 {
-                    invoked = (CutOffAnswer(call.Name, usage, cutOffTools, turnGuard), [], null, null, false, false, null);
+                    invoked = new ToolInvocation(CutOffAnswer(call.Name, usage, cutOffTools, turnGuard));
                 }
                 else
                 {
@@ -2401,7 +2410,8 @@ public sealed class Assistant
                     (invoked, took, asked) = (timed.Result, timed.Took, timed.Asked);
                 }
 
-                var (result, pictures, diff, shown, refused, argumentError, source) = invoked;
+                var (result, _, diff, shown, refused, argumentError, source) = invoked;
+                var pictures = invoked.Images;
                 // A tool whose pictures are the user's alone (ToolPicturesUnseen) still hands them to the screen below; the model's
                 // copy of the result says so, so it never describes a picture it was not shown.
                 bool seen = !ToolPicturesUnseen.Contains(call.Name);
@@ -3298,7 +3308,7 @@ public sealed class Assistant
     /// (<see cref="ProjectFileAsk"/> and <c>ask_user</c> offered), a yes runs the call again with the file allowed for that one call — the
     /// refused attempt wrote nothing — and a no answers <see cref="Files.FileText.ProjectFileDeclined"/>.
     /// </summary>
-    private async Task<(string Text, IReadOnlyList<ImageAttachment> Images, FileDiff? Diff, string? Shown, bool Refused, bool ArgumentError, NeonSidekick.Llm.Tools.WebSource? Source)> InvokeGuardedAsync(FunctionCallContent call, CancellationToken cancellationToken)
+    private async Task<ToolInvocation> InvokeGuardedAsync(FunctionCallContent call, CancellationToken cancellationToken)
     {
         var journal = Journal;
 
@@ -3322,10 +3332,10 @@ public sealed class Assistant
     }
 
     /// <summary><see cref="InvokeGuardedAsync"/>'s body: the call under the project-file watch, and the ask and the re-run after a yes.</summary>
-    private async Task<(string Text, IReadOnlyList<ImageAttachment> Images, FileDiff? Diff, string? Shown, bool Refused, bool ArgumentError, NeonSidekick.Llm.Tools.WebSource? Source)> InvokeWatchedAsync(FunctionCallContent call, Files.FileJournal? journal, CancellationToken cancellationToken)
+    private async Task<ToolInvocation> InvokeWatchedAsync(FunctionCallContent call, Files.FileJournal? journal, CancellationToken cancellationToken)
     {
         var slot = new Files.ProjectFileSlot();
-        (string Text, IReadOnlyList<ImageAttachment> Images, FileDiff? Diff, string? Shown, bool Refused, bool ArgumentError, NeonSidekick.Llm.Tools.WebSource? Source) answer;
+        ToolInvocation answer;
         using (Files.WriteGuard.Watch(slot))
         using (Files.FileJournal.Enter(journal))
         {
@@ -3345,7 +3355,7 @@ public sealed class Assistant
 
         if (allowed == false)
         {
-            return (Files.FileText.ProjectFileDeclined(Path.GetFileName(refused)), [], null, null, false, false, null);
+            return new ToolInvocation(Files.FileText.ProjectFileDeclined(Path.GetFileName(refused)));
         }
 
         using (Files.WriteGuard.AllowProjectFile())
@@ -3367,8 +3377,8 @@ public sealed class Assistant
     /// </summary>
     public static async Task<(string Text, IReadOnlyList<ImageAttachment> Images)> InvokeToolAsync(IReadOnlyList<AIFunction> tools, FunctionCallContent call, CancellationToken cancellationToken)
     {
-        var (text, images, _, _, _, _, _) = await InvokeToolWithDiffAsync(tools, call, cancellationToken).ConfigureAwait(false);
-        return (text, images);
+        var answer = await InvokeToolWithDiffAsync(tools, call, cancellationToken).ConfigureAwait(false);
+        return (answer.Text, answer.Images);
     }
 
     /// <summary>
@@ -3377,7 +3387,7 @@ public sealed class Assistant
     /// <see cref="ToolShownResult"/>'s line for the user alone (later on 2026-10-03, the forbidden strings), null otherwise. <c>Refused</c>
     /// (2026-11-10, review P20-1/P22-2) is true for the loop's own refusal of a copied stub or cut marker, which ran nothing.
     /// </summary>
-    public static async Task<(string Text, IReadOnlyList<ImageAttachment> Images, FileDiff? Diff, string? Shown, bool Refused, bool ArgumentError, NeonSidekick.Llm.Tools.WebSource? Source)> InvokeToolWithDiffAsync(IReadOnlyList<AIFunction> tools, FunctionCallContent call, CancellationToken cancellationToken)
+    public static async Task<ToolInvocation> InvokeToolWithDiffAsync(IReadOnlyList<AIFunction> tools, FunctionCallContent call, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(tools);
         ArgumentNullException.ThrowIfNull(call);
@@ -3389,14 +3399,14 @@ public sealed class Assistant
         if (tool is null)
         {
             DiagnosticLog.Info(Category, $"The model called unknown tool '{call.Name}'.");
-            return ($"Error: unknown tool '{call.Name}'.", [], null, null, false, false, null);
+            return new ToolInvocation($"Error: unknown tool '{call.Name}'.");
         }
 
         if (call.Exception is not null)
         {
             // The adapter puts a JSON parse failure here instead of throwing.
             DiagnosticLog.Info(Category, $"Arguments for tool '{call.Name}' could not be parsed: {call.Exception.Message}");
-            return ($"Error: the arguments for '{call.Name}' could not be parsed: {call.Exception.Message}", [], null, null, false, false, null);
+            return new ToolInvocation($"Error: the arguments for '{call.Name}' could not be parsed: {call.Exception.Message}");
         }
 
         // A leaked </parameter=name> folded one argument into another (2026-10-17, LeakedParameters): split back before the tool reads
@@ -3416,7 +3426,7 @@ public sealed class Assistant
         {
             string refusal = App.CompactionText.PrunedStubSentResult(stubbed);
             DiagnosticLog.Info(Category, ToolErrorLogLine(call.Name, refusal));
-            return (refusal, [], null, null, true, false, null);
+            return new ToolInvocation(refusal, Refused: true);
         }
 
         // A cut result copied back (2026-11-09, ConversationCompactor.CutMarkedArgument): a write of a file the guard cut to fit would delete
@@ -3427,7 +3437,7 @@ public sealed class Assistant
         {
             string refusal = App.CompactionText.CutResultSentResult(marked);
             DiagnosticLog.Info(Category, ToolErrorLogLine(call.Name, refusal));
-            return (refusal, [], null, null, true, false, null);
+            return new ToolInvocation(refusal, Refused: true);
         }
 
         // A key the tool doesn't take (2026-11-15, feature idea #42, ToolArgumentCheck): the call is refused, naming the likely name, so nothing
@@ -3439,7 +3449,7 @@ public sealed class Assistant
         {
             string refusal = checkedArguments.Text!;
             DiagnosticLog.Info(Category, ToolErrorLogLine(call.Name, refusal));
-            return (refusal, [], null, null, true, true, null);
+            return new ToolInvocation(refusal, Refused: true, ArgumentError: true);
         }
 
         // A list-only twin's other forms (2026-11-15, the tool-arguments review's #7, #106): plan mode offers gitlib_tag, gitlib_branch and
@@ -3447,38 +3457,45 @@ public sealed class Assistant
         if ((tool as NeonSidekick.Llm.Tools.IListOnlyTwin)?.Refusal(call.Arguments) is { } listOnly)
         {
             DiagnosticLog.Info(Category, ToolErrorLogLine(call.Name, listOnly));
-            return (listOnly, [], null, null, true, false, null);
+            return new ToolInvocation(listOnly, Refused: true);
         }
 
-        var (text, images, diff, shown, source) = await InvokeAsync(tool, call, cancellationToken).ConfigureAwait(false);
+        var answer = await InvokeAsync(tool, call, cancellationToken).ConfigureAwait(false);
 
-        // Never after an Error: answer (#112): "ignored: …" beside a failure reads as its cause.
-        if (checkedArguments.Note is { } note && !TurnTrace.IsError(text))
+        // Never after an Error: answer (#112): "ignored: …" beside a failure reads as its cause. Before a fenced answer's closing quote note
+        // (2026-11-16, the web-tools review's #70, #74), so the note stays the last line, the sign the user's views unfence by.
+        if (checkedArguments.Note is { } note && !TurnTrace.IsError(answer.Text))
         {
-            text += "\n" + note;
+            string text = answer.Text;
+            answer = answer with
+            {
+                Text = NeonSidekick.Llm.Tools.UntrustedText.EndsWithNote(text)
+                    ? NeonSidekick.Llm.Tools.UntrustedText.WithoutNote(text) + "\n" + note + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote
+                    : text + "\n" + note,
+            };
         }
 
-        return (text, images, diff, shown, false, false, source);
+        return answer;
     }
 
     /// <summary>The invocation itself, shared by the model's calls and the opening call: a throwing tool is a sentence, only cancellation escapes.</summary>
-    private static async Task<(string Text, IReadOnlyList<ImageAttachment> Images, FileDiff? Diff, string? Shown, NeonSidekick.Llm.Tools.WebSource? Source)> InvokeAsync(AIFunction tool, FunctionCallContent call, CancellationToken cancellationToken)
+    private static async Task<ToolInvocation> InvokeAsync(AIFunction tool, FunctionCallContent call, CancellationToken cancellationToken)
     {
         long started = Stopwatch.GetTimestamp();
-        (string Text, IReadOnlyList<ImageAttachment> Images, FileDiff? Diff, string? Shown, NeonSidekick.Llm.Tools.WebSource? Source) answer;
+        ToolInvocation answer;
         try
         {
             var arguments = new AIFunctionArguments(call.Arguments ?? new Dictionary<string, object?>());
             object? value = await tool.InvokeAsync(arguments, cancellationToken).ConfigureAwait(false);
             answer = value switch
             {
-                null => ("(no result)", [], null, null, null),
-                string s => (s, [], null, null, null),
-                ToolImageResult pictures => (pictures.Text, pictures.Images, null, null, null),
-                ToolDiffResult changed => (changed.Text, [], changed.Diff, null, null),
-                ToolShownResult shown => (shown.Text, [], null, shown.Shown, null),
-                ToolSourcedResult sourced => (sourced.Text, [], null, null, sourced.Source),
-                _ => (value.ToString() ?? "(no result)", [], null, null, null),
+                null => new ToolInvocation("(no result)"),
+                string s => new ToolInvocation(s),
+                ToolImageResult pictures => new ToolInvocation(pictures.Text, pictures.Images),
+                ToolDiffResult changed => new ToolInvocation(changed.Text, Diff: changed.Diff),
+                ToolShownResult shown => new ToolInvocation(shown.Text, Shown: shown.Shown),
+                ToolSourcedResult sourced => new ToolInvocation(sourced.Text, Source: sourced.Source),
+                _ => new ToolInvocation(value.ToString() ?? "(no result)"),
             };
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -3488,7 +3505,7 @@ public sealed class Assistant
         catch (Exception ex)
         {
             DiagnosticLog.Warn(Category, $"Tool '{call.Name}' threw.", ex);
-            answer = (ToolFailed(call.Name, ex.Message), [], null, null, null);
+            answer = new ToolInvocation(ToolFailed(call.Name, ex.Message));
         }
 
         // The result's shape for the log (2026-09-19): every call — the model's, the opening

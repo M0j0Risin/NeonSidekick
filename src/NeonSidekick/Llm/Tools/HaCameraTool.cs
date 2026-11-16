@@ -55,7 +55,7 @@ public sealed class HaCameraTool : HaTool
 
     protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
-        string? target = Optional(arguments, TargetArgument);
+        string? target = OptionalName(arguments, TargetArgument);
         var (camera, refused) = await ResolveAsync(Ha, target, HaText.NotACamera, cancellationToken).ConfigureAwait(false);
         if (camera is null)
         {
@@ -134,7 +134,7 @@ public sealed class HaCameraTool : HaTool
             return (camera, null);
         }
 
-        IReadOnlyList<HaEntity> candidates = target is null ? read.Of(Domain) : read.Resolve(target, [Domain]).Entities;
+        IReadOnlyList<HaEntity> candidates = target is null ? read.Of(Domain) : read.Resolve(target, [Domain], fenced: true).Entities;
         var available = candidates.Where(c => !c.Unavailable).Take(2).ToList();
         return candidates.Count > 1 && available.Count == 1 ? (available[0], null) : (null, error);
     }

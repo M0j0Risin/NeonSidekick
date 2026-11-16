@@ -91,8 +91,9 @@ public static class AdvisorRecent
                         break;
                     case FunctionResultContent result:
                         string body = result.Result?.ToString() ?? "";
-                        // A fence the cut leaves open closed, and the quote note kept (2026-11-15, the web-tools plan's §3).
-                        body = Llm.Tools.UntrustedText.CutKeepingNote(body, AdvisorText.ToolResultChars, "…");
+                        // A fence the cut leaves open closed (2026-11-15, the web-tools plan's §3); CutClosed adds no mark of its own, so a
+                        // plain result is cut exactly as before (2026-11-16, the web-tools review's #79).
+                        body = body.Length > AdvisorText.ToolResultChars ? Llm.Tools.UntrustedText.CutClosed(body, AdvisorText.ToolResultChars) + "…" : body;
                         if (!string.IsNullOrWhiteSpace(body))
                         {
                             lines.Add(AdvisorText.RecentLine("tool", body));

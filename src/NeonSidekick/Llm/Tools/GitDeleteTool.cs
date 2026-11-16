@@ -83,7 +83,7 @@ public sealed class GitDeleteTool : GitTool
         }
 
         string kind = ToolArguments.ReadString(arguments, KindArgument);
-        string name = ToolArguments.ReadString(arguments, NameArgument);
+        string name = ToolArguments.ReadName(arguments, NameArgument);
         string path = ReadPath(arguments);
         return OffThread(() => Describe(kind, name, index, path), cancellationToken);
     }

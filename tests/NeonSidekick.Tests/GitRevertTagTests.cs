@@ -643,7 +643,8 @@ public sealed class GitRevertTagTests : IDisposable
         Assert.Equal(GitOutcome.Ok, report.Outcome);
         Assert.False(report.Truncated);
         Assert.Equal(
-            $"4 tags, newest first:\n  a-new {second[..7]} {GitText.Outside(GitText.AnnotatedSubject("Two"))}\n  b-new {second[..7]} ⟪second⟫\n  z-old {first[..7]} ⟪first⟫\n  blobtag {blob[..7]} " + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote,
+            // A tag's name fenced (a clone's, #20); an annotated one's mark the app's, outside the fence (#25).
+            $"4 tags, newest first:\n  ⟪a-new⟫ {second[..7]} {GitText.AnnotatedSubject("⟪Two⟫")}\n  ⟪b-new⟫ {second[..7]} ⟪second⟫\n  ⟪z-old⟫ {first[..7]} ⟪first⟫\n  ⟪blobtag⟫ {blob[..7]} " + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote,
             GitText.Tags(report));
         Assert.Equal(["a-new", "b-new", "z-old", "blobtag"], _git.Refs("").Tags.Select(t => t.Name));   // gitlib_branch list: the same read
         Assert.StartsWith("4 tags, newest first (the newest " + GitAccess.MaxTags.ToString(System.Globalization.CultureInfo.InvariantCulture) + "):\n",

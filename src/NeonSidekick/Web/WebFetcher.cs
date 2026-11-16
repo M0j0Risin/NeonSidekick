@@ -15,7 +15,11 @@ namespace NeonSidekick.Web;
 /// plan's gaps 15 and 23): a PDF answer is read with pdf.js; false leaves it a refusal that names its media type, for a caller that
 /// only asks what the address is (<c>convert_to_pdf</c>'s bot-check probe).
 /// </summary>
-public sealed record FetchOptions(FetchEngine Engine, string BrowserPath, NetworkReach Reach, Uri? Referer = null, string? Accept = null, bool ReadPdf = true);
+/// <param name="RawBody">
+/// The body as the server sent it (2026-11-16, the web-tools review's #55): asked with <c>Accept-Encoding: identity</c> through a pool that
+/// unpacks nothing (<see cref="WebHttp.RawBodyKey"/>), so a download's digest is of the server's bytes. <c>download_file</c> with a digest.
+/// </param>
+public sealed record FetchOptions(FetchEngine Engine, string BrowserPath, NetworkReach Reach, Uri? Referer = null, string? Accept = null, bool ReadPdf = true, bool RawBody = false);
 
 /// <summary>
 /// A fetched page or the reason there is none. <see cref="Page"/> is the converted HTML;
@@ -78,6 +82,12 @@ public sealed class OpenedDownload : IDisposable
 
     internal static OpenedDownload Fail(FetchOutcome outcome, string url, string detail, int status = 0) =>
         new(outcome, url, url, status, "", "", 0, detail);
+
+    /// <summary>
+    /// The response's first <c>Content-Encoding</c>, or <c>""</c> (2026-11-16, the web-tools review's #55): on a raw download nothing strips
+    /// it, so a server that compressed the bytes anyway is named when their digest doesn't match.
+    /// </summary>
+    public string ContentEncoding { get; init; } = "";
 
     public FetchOutcome Outcome { get; }
     public string Url { get; }
@@ -285,6 +295,16 @@ public sealed class WebFetcher
     {
         ArgumentNullException.ThrowIfNull(url);
         return url.Fragment.Length == 0 ? url.AbsoluteUri : url.GetComponents(UriComponents.AbsoluteUri & ~UriComponents.Fragment, UriFormat.UriEscaped);
+    }
+
+    /// <summary>
+    /// <see cref="PageKey(Uri)"/> of an address as text (2026-11-16, the web-tools review's #150: the sources' trace and web_fetch's header each
+    /// had a copy of the rule): the text as it is when it is no absolute URL.
+    /// </summary>
+    public static string PageKey(string url)
+    {
+        ArgumentNullException.ThrowIfNull(url);
+        return Uri.TryCreate(url, UriKind.Absolute, out var parsed) ? PageKey(parsed) : url;
     }
 
     /// <summary>The fragment of <paramref name="url"/>, unescaped and without its <c>#</c>; null when it has none (2026-10-17).</summary>
@@ -549,6 +569,12 @@ public sealed class WebFetcher
 
                 // Every hop comes from the page the fetch did (none when typed), its site folded over the chain, as Chrome's redirects do.
                 BrowserHeaders.Apply(request, ClaimFor(current, claimed), options.Referer, options.Accept, BrowserHeaders.SiteOf(options.Referer, chain));
+                if (options.RawBody)
+                {
+                    request.Options.Set(WebHttp.RawBodyKey, true);
+                    request.Headers.Remove("Accept-Encoding");
+                    request.Headers.TryAddWithoutValidation("Accept-Encoding", "identity");
+                }
 
                 response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, budget.Token).ConfigureAwait(false);
                 int status = (int)response.StatusCode;
@@ -758,7 +784,7 @@ public sealed class WebFetcher
             PageText? page = IsHtml(mediaType) ? HtmlToMarkdown.Convert(text, current) : null;
             if (status >= 400)
             {
-                string detail = $"HTTP {status.ToString(CultureInfo.InvariantCulture)} {response.ReasonPhrase}".TrimEnd();
+                string detail = WebText.HttpDetail(status, response.ReasonPhrase);
                 var outcome = IsBlockedStatus(status) ? FetchOutcome.Blocked : FetchOutcome.Failed;
 
                 // A rate limit names its wait; a bot check that does (a 503 challenge page) is still a bot check, the browser's to try.
@@ -848,7 +874,7 @@ public sealed class WebFetcher
         var current = arrival.Final;
         if (status >= 400)
         {
-            string detail = $"HTTP {status.ToString(CultureInfo.InvariantCulture)} {response.ReasonPhrase}".TrimEnd();
+            string detail = WebText.HttpDetail(status, response.ReasonPhrase);
             DiagnosticLog.Info(Category, $"GET {current} → {detail} ({mediaType}).");
             var retryAfter = RateLimitWait(response.Headers, status, _time.GetUtcNow());
             return new FetchResult(IsBlockedStatus(status) ? FetchOutcome.Blocked : FetchOutcome.Failed, url.AbsoluteUri, current.AbsoluteUri, status, mediaType, null, "", WebText.HttpEngine, detail, false, retryAfter);
@@ -903,48 +929,53 @@ public sealed class WebFetcher
         }
 
         string name = FileNameOf(response) is { Length: > 0 } given ? given : Uri.UnescapeDataString(current.Segments.LastOrDefault() ?? "").Trim('/');
-        var answer = PdfAnswerPage(read, name.Length > 0 ? name : current.Host);
+        // A PDF with no file name has no title (2026-11-16, the web-tools review's #154): its source falls back to the host.
+        var answer = PdfAnswerPage(read, name);
         return new FetchResult(FetchOutcome.Ok, url.AbsoluteUri, current.AbsoluteUri, status, "application/pdf", answer, answer.Markdown, WebText.PdfEngine, "", false);
     }
 
-    /// <summary>A PDF read as a fetch's text: the outline's two levels, the pages under their headings (labels beside), and what was left.</summary>
-    public static string PdfAnswerText(PdfRead read) => PdfAnswerPage(read, "").Markdown;
-
     /// <summary>
-    /// <see cref="PdfAnswerText"/> as a page (2026-11-15, the web-tools plan's §1): its <see cref="PageText.Headings"/> recorded as the text is
-    /// built, so a page whose own text says "--- page 7 ---" can't move one. The outline's items, each at its page's marker (one past the
-    /// pages read has no offset), or with no outline the page markers themselves; <see cref="PageText.More"/> the note a PDF read in part ends with.
+    /// A PDF read as a fetch's page (2026-11-15, the web-tools plan's §1): the outline's two levels, the pages under their headings (labels
+    /// beside), its <see cref="PageText.Headings"/> recorded as the text is built, so a page whose own text says "--- page 7 ---" can't move
+    /// one. The outline's items, each at its page's marker (one past the pages read has no offset), or with no outline the page markers
+    /// themselves, the app's own (<see cref="PageHeading.Own"/>). Since 2026-11-16 (the web-tools review's #2, #31, #63) the notes of a PDF
+    /// with no text or read in part live only on <see cref="PageText.More"/>, appended by each answer after its last fence, and the outline
+    /// block and the markers are <see cref="PageText.AppSpans"/>.
     /// </summary>
     public static PageText PdfAnswerPage(PdfRead read, string title)
     {
         ArgumentNullException.ThrowIfNull(read);
         ArgumentNullException.ThrowIfNull(title);
         var sb = new System.Text.StringBuilder();
+        var spans = new List<(int Start, int Length)>();
         if (read.Outline is { Count: > 0 } outline)
         {
             Pdf.PdfText.AppendOutline(sb, outline);
+            spans.Add((0, sb.Length));
         }
 
         var markers = new List<PageHeading>(read.Pages.Count);
         foreach (var page in read.Pages)
         {
             string? label = read.Labels is { } labels && page.Number <= labels.Count ? labels[page.Number - 1] : null;
-            int at = sb.Length > 0 ? sb.Length + 1 : 0;
-            Pdf.PdfText.AppendPage(sb, page.Number, label, page.Text);
-            markers.Add(new PageHeading(1, Pdf.PdfText.PageHeading(page.Number, label), at, page.Number));
+            string heading = Pdf.PdfText.PageHeading(page.Number, label);
+            int at = Pdf.PdfText.AppendPage(sb, page.Number, label, page.Text);
+            spans.Add((at, heading.Length));
+            markers.Add(new PageHeading(1, heading, at, page.Number, Own: true));
         }
 
+        var notes = new List<string>(2);
         if (read.Pages.All(p => p.Text.Length == 0))
         {
-            sb.Append('\n').Append(WebText.PdfNoText);
+            notes.Add(WebText.PdfNoText);
         }
 
-        string? more = null;
         if (read.Pages.Count < read.PageCount)
         {
-            more = WebText.PdfMore(read.Pages.Count, read.PageCount);
-            sb.Append('\n').Append(more);
+            notes.Add(WebText.PdfMore(read.Pages.Count, read.PageCount));
         }
+
+        string? more = notes.Count == 0 ? null : string.Join('\n', notes);
 
         IReadOnlyList<PageHeading> headings = markers;
         if (read.Outline is { Count: > 0 } items)
@@ -959,7 +990,7 @@ public sealed class WebFetcher
                 item.Page is { } p && pageAt.TryGetValue(p, out var at) ? at : null, item.Page))];
         }
 
-        return new PageText(title, sb.ToString()) { Headings = headings, More = more };
+        return new PageText(title, sb.ToString()) { Headings = headings, More = more, AppSpans = spans };
     }
 
     /// <summary>
@@ -1042,7 +1073,7 @@ public sealed class WebFetcher
                 string fileName = FileNameOf(response);
                 if (status >= 400)
                 {
-                    string detail = $"HTTP {status.ToString(CultureInfo.InvariantCulture)} {response.ReasonPhrase}".TrimEnd();
+                    string detail = WebText.HttpDetail(status, response.ReasonPhrase);
                     DiagnosticLog.Info(Category, $"GET {current} → {detail}.");
                     var outcome = IsBlockedStatus(status) ? FetchOutcome.Blocked : FetchOutcome.Failed;
                     var retryAfter = RateLimitWait(response.Headers, status, _time.GetUtcNow());
@@ -1059,7 +1090,10 @@ public sealed class WebFetcher
                 // The hop's budget timed the headers; the body has its own clock (DownloadTimeout, or SaveAsync's stall).
                 arrival.Budget.CancelAfter(Timeout.InfiniteTimeSpan);
                 kept = true;
-                return new OpenedDownload(FetchOutcome.Ok, url.AbsoluteUri, current.AbsoluteUri, status, mediaType, fileName, declared, "", response, arrival);
+                return new OpenedDownload(FetchOutcome.Ok, url.AbsoluteUri, current.AbsoluteUri, status, mediaType, fileName, declared, "", response, arrival)
+                {
+                    ContentEncoding = response.Content.Headers.ContentEncoding.FirstOrDefault() ?? "",
+                };
             }
             finally
             {

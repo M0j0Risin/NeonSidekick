@@ -16,10 +16,16 @@ public sealed record SearchOutcome(IReadOnlyList<SearchResult> Results, string E
     /// <summary>The engines that answered a ranged metasearch, for its header (2026-11-15, the web-tools plan's §4, feature idea #25); empty otherwise.</summary>
     public string Scope { get; init; } = "";
 
+    /// <summary>
+    /// What a ranged search's answer adds when engines sat it out (2026-11-16, the web-tools review's #16, #26): the metasearch's
+    /// <see cref="WebText.NoResultsSinceHint"/> when its <c>Skipped</c> named one, a SearXNG instance's "may" form, since it never says;
+    /// empty for a search with no range or none left out.
+    /// </summary>
+    public string SinceHint { get; init; } = "";
+
     public static SearchOutcome Failed(string error) => new([], error);
 }
 
-/// <summary>The search seam: the built-in metasearch or a SearXNG instance; a fake in tests.</summary>
 /// <summary><c>web_search</c>'s <c>since</c> (2026-11-15, the web-tools plan's §4, feature idea #25): results from the past day, week, month or year.</summary>
 public enum SearchSince
 {
@@ -29,6 +35,7 @@ public enum SearchSince
     Year,
 }
 
+/// <summary>The search seam: the built-in metasearch or a SearXNG instance; a fake in tests.</summary>
 public interface ISearchEngine
 {
     /// <summary>The name on the result header (<see cref="WebText.MetaSearchName"/> / <see cref="WebText.SearxngName"/>).</summary>
@@ -85,6 +92,9 @@ public sealed class SearxngSearch : ISearchEngine
         _ => "year",
     };
 
+    /// <summary>The four ranges in order, for reading a word back (2026-11-16, the web-tools review's #52: one map, <see cref="TimeRangeWord"/>).</summary>
+    public static readonly IReadOnlyList<SearchSince> Ranges = [SearchSince.Day, SearchSince.Week, SearchSince.Month, SearchSince.Year];
+
     /// <summary>
     /// The instance's own results page for <paramref name="query"/>, the one a person reads: <see cref="QueryUrl"/> without the JSON
     /// format (2026-10-13, the Browser window's address box searching words). Pinned.
@@ -103,7 +113,11 @@ public sealed class SearxngSearch : ISearchEngine
         return root.EndsWith("/search", StringComparison.OrdinalIgnoreCase) ? root[..^"/search".Length] : root;
     }
 
-    /// <summary>The hits out of the JSON body: <c>results[].title / url / content</c>. Pure; pinned.</summary>
+    /// <summary>
+    /// The hits out of the JSON body: <c>results[].title / url / content</c>. Since 2026-11-16 (the web-tools review's #82) each URL is vetted
+    /// as the metasearch's are (<see cref="Files.SafeText.WebLink"/>): one the app wouldn't show is dropped before any count, and a kept one
+    /// is its vetted target, so no hit's address can carry a line break out of its place. Pure; pinned.
+    /// </summary>
     public static IReadOnlyList<SearchResult> Parse(string json)
     {
         ArgumentNullException.ThrowIfNull(json);
@@ -124,12 +138,12 @@ public sealed class SearxngSearch : ISearchEngine
                 }
 
                 string url = Read(item, "url");
-                if (url.Length == 0)
+                if (url.Length == 0 || Files.SafeText.WebLink(url) is not { } link)
                 {
                     continue;
                 }
 
-                results.Add(new SearchResult(HtmlToMarkdown.Collapse(Read(item, "title")), url, HtmlToMarkdown.Collapse(Read(item, "content"))));
+                results.Add(new SearchResult(HtmlToMarkdown.Collapse(Read(item, "title")), link.Target, HtmlToMarkdown.Collapse(Read(item, "content"))));
             }
         }
         catch (JsonException)
@@ -170,7 +184,8 @@ public sealed class SearxngSearch : ISearchEngine
             string body = await response.Content.ReadAsStringAsync(budget.Token).ConfigureAwait(false);
             var results = Parse(body);
             DiagnosticLog.Info(Category, $"SearXNG \"{query}\": {results.Count.ToString(CultureInfo.InvariantCulture)} results from {shown}.");
-            return new SearchOutcome(results.Take(max).ToArray(), "");
+            // The instance skips engines without a date filter and never says which: the hint says more "may" answer.
+            return new SearchOutcome(results.Take(max).ToArray(), "") { SinceHint = since is null ? "" : WebText.NoResultsSinceMayHint };
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

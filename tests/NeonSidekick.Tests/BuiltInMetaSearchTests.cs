@@ -75,7 +75,8 @@ public class BuiltInMetaSearchTests
 
         Assert.False(outcome.Ok);
         Assert.Contains(expected, outcome.Error);
-        Assert.Contains("two: two said no", outcome.Error);
+        Assert.Contains("two: ⟪two said no⟫", outcome.Error);   // the engine's message fenced (2026-11-16, #123), the note last
+        Assert.EndsWith(NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, outcome.Error, StringComparison.Ordinal);
     }
 
     private static async Task<List<DiagnosticEvent>> LoggedDuring(Func<Task> act)
@@ -177,7 +178,7 @@ public class BuiltInMetaSearchTests
         Assert.False(outcome.Ok);
         Assert.StartsWith("Error: " + WebText.MetaSearchName, outcome.Error);
         Assert.Contains(expected, outcome.Error);
-        Assert.Contains("one: one said no", outcome.Error);
+        Assert.Contains("one: ⟪one said no⟫", outcome.Error);
         Assert.Empty(outcome.Results);
     }
 

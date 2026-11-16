@@ -451,7 +451,7 @@ internal sealed partial class ChatScreen
             arguments[YouTubePlayTool.StartArgument] = at.ToString(System.Globalization.CultureInfo.InvariantCulture);
         }
 
-        return Llm.Tools.UntrustedText.Unfenced((string)(await PlayToolFor(player).InvokeAsync(arguments, cancellationToken).ConfigureAwait(false))!);
+        return await InvokeForUserAsync(PlayToolFor(player), arguments, cancellationToken).ConfigureAwait(false);
     }
 
     // A playlist through youtube_play (2026-10-08): from entry (0-based here, 1-based on the tool), or the video named in it.
@@ -473,8 +473,15 @@ internal sealed partial class ChatScreen
             arguments[YouTubePlayTool.StartArgument] = seconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
         }
 
-        return Llm.Tools.UntrustedText.Unfenced((string)(await PlayToolFor(player).InvokeAsync(arguments, cancellationToken).ConfigureAwait(false))!);
+        return await InvokeForUserAsync(PlayToolFor(player), arguments, cancellationToken).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// A YouTube tool run for the user's own view (2026-11-16, the web-tools review's #169: the one copy of the unfence-cast): its answer with
+    /// the fences and the quote note taken off. Never for an answer the model reads.
+    /// </summary>
+    private static async Task<string> InvokeForUserAsync(AIFunction tool, AIFunctionArguments arguments, CancellationToken cancellationToken) =>
+        Llm.Tools.UntrustedText.Unfenced((string)(await tool.InvokeAsync(arguments, cancellationToken).ConfigureAwait(false))!);
 
     private async Task<string> ControlVideoAsync(IVideoPlayer player, string action, double? value, CancellationToken cancellationToken)
     {
@@ -484,7 +491,7 @@ internal sealed partial class ChatScreen
             arguments[YouTubeControlTool.ValueArgument] = number.ToString(System.Globalization.CultureInfo.InvariantCulture);
         }
 
-        return Llm.Tools.UntrustedText.Unfenced((string)(await ControlToolFor(player).InvokeAsync(arguments, cancellationToken).ConfigureAwait(false))!);
+        return await InvokeForUserAsync(ControlToolFor(player), arguments, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

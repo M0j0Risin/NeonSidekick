@@ -104,7 +104,7 @@ public sealed class GitDiffTool : GitTool
 
         // A commit's diff names its subject, fenced (2026-11-15): the note last. The other kinds hold only the files' text.
         string diff = GitText.Diff(report, under == "." ? "" : under);
-        return report.Kind == GitDiffKind.Commit && !string.IsNullOrWhiteSpace(diff) ? UntrustedText.WithNote(diff) : diff;
+        return report.Kind == GitDiffKind.Commit ? UntrustedText.WithNote(diff) : diff;
     }
 
     protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
@@ -121,9 +121,9 @@ public sealed class GitDiffTool : GitTool
         }
 
         string path = ReadPath(arguments);
-        string reference = ToolArguments.ReadString(arguments, ReferenceArgument);
-        string from = ToolArguments.ReadString(arguments, FromArgument);
-        string to = ToolArguments.ReadString(arguments, ToArgument);
+        string reference = ToolArguments.ReadName(arguments, ReferenceArgument);
+        string from = ToolArguments.ReadName(arguments, FromArgument);
+        string to = ToolArguments.ReadName(arguments, ToArgument);
         return OffThread(() => Describe(path, reference, from, to, staged ?? false, max), cancellationToken);
     }
 }

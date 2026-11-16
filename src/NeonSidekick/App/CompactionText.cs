@@ -157,7 +157,8 @@ public static class CompactionText
         var lines = new List<string>();
         if (result.Summary is { } summary)
         {
-            lines.AddRange(SummaryLines(summary));
+            // The user's copy drops the marks (2026-11-16, the web-tools review's #180), as every other user view of fenced text does.
+            lines.AddRange(SummaryLines(Llm.Tools.UntrustedText.Unfenced(summary)));
         }
 
         foreach (var entry in result.Entries)

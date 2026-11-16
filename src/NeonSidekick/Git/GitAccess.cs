@@ -425,6 +425,7 @@ public sealed class GitAccess
             List<FileDiff> files;
             bool filesTruncated;
             string label;
+            string? subject = null;
             switch (request.Kind)
             {
                 case GitDiffKind.Unstaged:
@@ -444,8 +445,10 @@ public sealed class GitAccess
                     }
 
                     (files, filesTruncated) = Compare(repo, location, commit!.Parents.FirstOrDefault()?.Tree, commit.Tree, prefix, pathsOnly, cap, cancellationToken);
-                    // The commit's subject is its author's words: fenced in place (2026-11-15, the web-tools plan's §3), the note after the diff.
-                    label = Short(commit) + " (" + GitText.Outside(commit.MessageShort) + ")";
+                    // The commit's subject is its author's words, carried apart and fenced where the answer is written (2026-11-16, the web-tools
+                    // review's #15: the data layer wrote the fence).
+                    label = Short(commit);
+                    subject = commit.MessageShort;
                     break;
                 }
 
@@ -486,7 +489,7 @@ public sealed class GitAccess
             maxLines = Math.Max(1, maxLines);
             bool truncated = all.Count > maxLines;
             string patch = string.Join("\n", truncated ? all.Take(maxLines) : all);
-            return new GitDiffReport(GitOutcome.Ok, "", request.Kind, label, files.Select(f => f.Change).ToList(), filesTruncated, patch, added, deleted, truncated, all.Count);
+            return new GitDiffReport(GitOutcome.Ok, "", request.Kind, label, files.Select(f => f.Change).ToList(), filesTruncated, patch, added, deleted, truncated, all.Count, subject);
         });
     }
 
@@ -589,9 +592,9 @@ public sealed class GitAccess
     private static GitRef TagRow(Tag tag, Commit? target)
     {
         string subject = tag.Annotation is { } annotation
-            ? GitText.AnnotatedSubject((annotation.Message ?? "").Split('\n')[0].TrimEnd())
+            ? (annotation.Message ?? "").Split('\n')[0].TrimEnd()
             : target?.MessageShort ?? "";
-        return new GitRef(tag.FriendlyName, target is null ? tag.Target.Sha[..ShortShaLength] : Short(target), subject);
+        return new GitRef(tag.FriendlyName, target is null ? tag.Target.Sha[..ShortShaLength] : Short(target), subject, Annotated: tag.Annotation is not null);
     }
 
     /// <summary>

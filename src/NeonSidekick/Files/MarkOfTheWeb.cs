@@ -49,13 +49,77 @@ public static class MarkOfTheWeb
     public static bool IsFromInternet(string path)
     {
         ArgumentNullException.ThrowIfNull(path);
-        if (Read(path) is not { } mark)
+        if (ReadCapped(path) is not { } mark)
         {
             return false;
         }
 
-        string text = System.Text.Encoding.UTF8.GetString(mark);
+        string text = Decode(mark);
         return OperatingSystem.IsWindows() ? IsInternetZone(text) : IsInternetQuarantine(text);
+    }
+
+    /// <summary>
+    /// Whether the file <paramref name="path"/> names in <paramref name="files"/> came from the internet (2026-11-16, the web-tools review's #58:
+    /// moved here from <c>ReadPdfTool.Marked</c>): false when it doesn't resolve.
+    /// </summary>
+    public static bool IsFromInternet(WorkingDirectory files, string path)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+        return files.Resolve(path, forWrite: false, out string full) == FileOutcome.Ok && IsFromInternet(full);
+    }
+
+    /// <summary>The most of a mark <see cref="IsFromInternet"/> reads (2026-11-16, the web-tools review's #50): a zone or a quarantine value is a few lines.</summary>
+    public const int MaxVerdictBytes = 4096;
+
+    /// <summary>
+    /// The first <see cref="MaxVerdictBytes"/> of the mark, for a verdict only (2026-11-16, the web-tools review's #50: a stream of any size was read
+    /// whole on every read_pdf call). <see cref="Read"/> stays whole: it is the copy path, and a cut mark written onto another file is a broken one.
+    /// </summary>
+    private static byte[]? ReadCapped(string source)
+    {
+        try
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                string stream = source + ZoneStream;
+                if (!File.Exists(stream))
+                {
+                    return null;
+                }
+
+                using var read = new FileStream(stream, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                var buffer = new byte[MaxVerdictBytes];
+                int total = 0;
+                for (int got; total < buffer.Length && (got = read.Read(buffer, total, buffer.Length - total)) > 0;)
+                {
+                    total += got;
+                }
+
+                return buffer[..total];
+            }
+
+            return OperatingSystem.IsMacOS() && MacQuarantine.Read(source, QuarantineAttribute) is { } value ? value[..Math.Min(value.Length, MaxVerdictBytes)] : null;
+        }
+        catch (Exception ex) when (WorkingDirectory.IsFileFailure(ex))
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// A mark's bytes as text (2026-11-16, the web-tools review's #129): UTF-16 LE when it starts with that byte-order mark (some tools write
+    /// <c>Zone.Identifier</c> so), else UTF-8, a UTF-8 mark dropped. Pure.
+    /// </summary>
+    public static string Decode(byte[] mark)
+    {
+        ArgumentNullException.ThrowIfNull(mark);
+        if (mark.Length >= 2 && mark[0] == 0xFF && mark[1] == 0xFE)
+        {
+            return System.Text.Encoding.Unicode.GetString(mark, 2, (mark.Length - 2) & ~1);
+        }
+
+        int skip = mark.Length >= 3 && mark[0] == 0xEF && mark[1] == 0xBB && mark[2] == 0xBF ? 3 : 0;
+        return System.Text.Encoding.UTF8.GetString(mark, skip, mark.Length - skip);
     }
 
     /// <summary>
@@ -114,10 +178,7 @@ public static class MarkOfTheWeb
         ArgumentNullException.ThrowIfNull(url);
         if (OperatingSystem.IsWindows())
         {
-            string host = Uri.TryCreate(url, UriKind.Absolute, out var parsed) && parsed.UserInfo.Length > 0
-                ? new UriBuilder(parsed) { UserName = "", Password = "" }.Uri.AbsoluteUri
-                : url;
-            host = host.Replace("\r", "", StringComparison.Ordinal).Replace("\n", "", StringComparison.Ordinal);
+            string host = SafeText.WithoutUserInfo(url).Replace("\r", "", StringComparison.Ordinal).Replace("\n", "", StringComparison.Ordinal);
             return System.Text.Encoding.UTF8.GetBytes("[ZoneTransfer]\r\nZoneId=3\r\nHostUrl=" + host + "\r\n");
         }
 

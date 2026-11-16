@@ -47,9 +47,9 @@ Under *Web tools*.
 * **A page that refuses a plain fetch**, or needs scripts, is tried again in a headless Edge, Chrome or Brave (Chromium on a Mac), per *Web browser mode*. Its cookies stay in `%TEMP%\NeonSidekick\browser` (`$TMPDIR/NeonSidekick/browser` on a Mac).
 * **Bot checks:** one that clears by itself is waited on briefly; one that wants a click goes to the Browser window, or is reported blocked.
 * **Pacing:** a short rate limit is waited out, and one site gets at most a request a second.
-* **Recent results:** `web_search`'s `since` (`day`, `week`, `month`, `year`) asks only the engines with a date filter: Brave, Startpage, and the Brave API with a key. With none of them on, it's refused; the header names those that answered.
+* **Recent results:** `web_search`'s `since` (`day`, `week`, `month`, `year`) asks only the engines with a date filter: Brave, Startpage, and the Brave API with a key. On a SearXNG instance, engines without one sit it out.
 * **Checked downloads:** `download_file` with a `sha256` or `sha512` keeps the file only when it matches, and says so; a mismatch saves nothing.
-* **Long pages:** `web_fetch`'s `outline` lists a page's headings and `find` the passages holding every word given, each with the offset to read from. Neither downloads the page twice.
+* **Long pages:** `web_fetch`'s `outline` lists a page's headings and `find` the passages holding every word given, each with the offset to read from. With `offset`, either list goes on from there.
 * **Sources:** each page `web_fetch` reads and file `download_file` saves is listed under the reply ([INTERFACE.md](INTERFACE.md#the-screen)) and kept with the session.
 * **Page text is untrusted:** what a page, a search result or a saved link's title says reaches the model fenced as quoted data (`⟪ ⟫`); your screen shows it without the marks. Shell output (a `curl`) isn't fenced.
 
@@ -187,7 +187,7 @@ With *File checkpoints* on, each turn keeps what the file tools changed, so `/un
 * **Limits:** 32 MB; a locked PDF is refused. Chinese, Japanese and Korean read. `share`, or a `\\server\share` path, reads one on an offered UNC share in place.
 * **Kept apart:** read in a page cut off from the network, in its own browser profile, never the web tools' cookies.
 * **On the web:** `web_fetch` reads a PDF link's outline and first 40 pages; `download_file` then `read_pdf` reads the rest.
-* **Downloaded files:** a PDF carrying the mark of the web (a browser's or `download_file`'s) reaches the model fenced as untrusted (`⟪ ⟫`); your own read as they are.
+* **Downloaded files:** a PDF carrying the mark of the web (Windows' internet or restricted zone, or a browser's quarantine) reaches the model fenced as untrusted (`⟪ ⟫`); your own read as they are.
 
 #### Reading Office files
 
@@ -198,7 +198,7 @@ With *File checkpoints* on, each turn keeps what the file tools changed, so `/un
 * **PowerPoint:** slides in order; `slides` picks some (`"2-5"`), `notes: true` adds speaker notes; hidden slides are marked.
 * **Not read:** headers and footers, a sheet's notes and comments, charts and pictures (a marker stands in), pivot caches, slide comments, a layout's text. Macros never run, and nothing outside the file is fetched.
 * **Refused, saying what to do:** old `.doc`/`.xls`/`.ppt`, `.xlsb`, OpenDocument, protected, labeled or damaged files. Up to 100 MB; a file open in Office still reads. `share` reads one on an offered UNC share.
-* **Downloaded files:** one carrying the mark of the web reaches the model fenced as untrusted (`⟪ ⟫`), like a downloaded PDF; your own read as they are.
+* **Downloaded files:** fenced as a downloaded PDF is ([Reading PDFs](#reading-pdfs)).
 
 #### Writing Office files
 
@@ -254,6 +254,7 @@ Under *Video tools* (`/tools` › Files › Video); off in a new profile. They p
 * **The default app:** a file goes there when no window can play it; the app can't see or control it there.
 * **The Web UI** serves only the file playing, to a signed-in page; over Tailscale Funnel see [*Web UI video files over Funnel*](SETTINGS.md#web-ui).
 * `/view clip.mp4` and `/video` play a file whatever *Video tools* says ([COMMANDS.md](COMMANDS.md#pictures-camera-and-screen)).
+* A file's own title (its metadata) reaches the model fenced (`⟪ ⟫`); `/video` shows it bare.
 
 #### Video files on a Mac
 
@@ -311,7 +312,7 @@ Under *GitLib tools*: git inside the app, for when the model should never run `g
 
 * `gitlib_discard` and `gitlib_delete` lose work for good; `gitlib_delete` starts off.
 * Commits, reverts and annotated tags need *GitLib user email* and *GitLib user name*, which `/gituser` writes into the repository.
-* **Commit text is untrusted:** a clone carries whoever wrote its commits, so authors, subjects, messages and tag messages reach the model fenced (`⟪ ⟫`). File contents and diffs aren't.
+* **Commit text is untrusted:** a clone carries whoever wrote its commits, so authors, subjects, messages, tag messages, stash messages and remote branch and tag names reach the model fenced (`⟪ ⟫`). File contents and diffs aren't.
 
 | Tool | Arguments | What it does |
 |---|---|---|
@@ -336,7 +337,7 @@ Under *GitLib tools*: git inside the app, for when the model should never run `g
 Under *Docker tools*, over *Docker engine pipe* (a socket on a Mac, [below](#docker-on-a-mac)); the app never starts Docker Desktop. A container is named by its name, a unique part of it, or a 4+ character id prefix.
 
 * `/docker` runs them yourself ([COMMANDS.md](COMMANDS.md)); `--docker-check` tests them against the real engine.
-* **Container text is untrusted:** `docker_logs`' lines and `docker_inspect`'s labels and command reach the model fenced (`⟪ ⟫`); `/docker logs` shows them bare.
+* **Container text is untrusted:** `docker_logs`' lines and `docker_inspect`'s labels, command and health-check output reach the model fenced (`⟪ ⟫`); `/docker logs` shows them bare.
 * **Changes need two keys:** *Docker writes* offers them, and each call asks you first (headless refuses). `docker_remove` and `docker_prune` start off even then. Every change is logged.
 * **Secrets:** `docker_inspect` shows environment variable names, never values, and hides secret-looking labels and passwords. Logs can't be redacted, so the model is told never to repeat a secret from them.
 
@@ -1082,7 +1083,7 @@ Under *Home Assistant tools*, with *Home Assistant URL* and *Home Assistant API 
 | `ha_assist` | `text` | Hands a sentence to Home Assistant's Assist agent; refused under `off`. Under `ask` it shows the whole sentence for your yes (`conversation.process` in the safe services skips asking). |
 
 * **`ha_assist` when it asks** refuses a sentence over 200 characters, or with a line break or an invisible character, since the question must show it whole.
-* **Home text is untrusted:** states, attributes, history, to-do items and Assist's replies reach the model fenced (`⟪ ⟫`), since integrations and anyone in the household write them; `/ha` shows them bare.
+* **Home text is untrusted:** entity and list names, states, attributes, history, to-do items and Assist's replies reach the model fenced (`⟪ ⟫`), since integrations and anyone in the household write them; `/ha` shows them bare.
 
 ### Shopping list
 
@@ -1151,6 +1152,7 @@ Under *Advisors enabled*. Advisors are other profiles of this home, each in a ro
 
 * Offered while an advisor is listed; in plan mode the model consults fitting advisors before presenting a plan. Each advisor keeps one thread per conversation.
 * An advisor on the Claude Code server runs its own `claude` process, until the conversation ends or this chat's server or model changes.
+* An answer drawn from web pages reaches the model fenced (`⟪ ⟫`).
 
 ### Plan
 

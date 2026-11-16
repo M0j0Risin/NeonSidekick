@@ -55,7 +55,8 @@ public sealed class DockerInspectTool : DockerTool
             return reply.Error;
         }
 
-        // The image's labels, entrypoint and command are its author's words: the body under the header fenced (2026-11-15, the web-tools plan's §3).
-        return DockerInspect.Summary(reply.Body) is { } summary ? UntrustedText.FenceBody("Docker inspect: " + summary) :DockerText.BadAnswer("/containers/" + container.Name + "/json");
+        // The image's labels, entrypoint, command and health checks are its author's words (2026-11-15, the web-tools plan's §3), each fenced
+        // where it is written since 2026-11-16 (the review's #69, #179), the note last.
+        return DockerInspect.Summary(reply.Body, fenced: true) is { } summary ? UntrustedText.WithNote("Docker inspect: " + summary) : DockerText.BadAnswer("/containers/" + container.Name + "/json");
     }
 }

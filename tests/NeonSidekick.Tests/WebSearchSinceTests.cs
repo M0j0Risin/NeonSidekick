@@ -55,6 +55,15 @@ public sealed class WebSearchSinceTests
         Assert.Equal("https://searx.example/search?q=x&format=json&language=en", SearxngSearch.QueryUrl(new Uri("https://searx.example/"), "x").AbsoluteUri);
     }
 
+    /// <summary>A SearXNG hit is vetted as the built-in one's are (2026-11-16, the web-tools review's #82): a disguised address is dropped.</summary>
+    [Fact]
+    public void ASearxngHit_WithAnAddressNoLinkWouldTake_IsDropped()
+    {
+        var hits = SearxngSearch.Parse("""{"results":[{"url":"https://bad.example/a\nb","title":"Bad","content":""},{"url":"https://ok.example/","title":"Ok","content":""}]}""");
+
+        Assert.Equal(["https://ok.example/"], hits.Select(h => h.Url));
+    }
+
     [Fact]
     public void TheHeader_NamesTheRange_AndTheEnginesThatAnswered()
     {
@@ -63,7 +72,9 @@ public sealed class WebSearchSinceTests
         Assert.StartsWith("Searched \"x\" (1 result, past week; brave, startpage):", WebText.Results("x", [hit], WebText.MetaSearchName, SearchSince.Week, "brave, startpage"), StringComparison.Ordinal);
         Assert.StartsWith("Searched \"x\" (1 result, past day, " + WebText.SearxngName + "):", WebText.Results("x", [hit], WebText.SearxngName, SearchSince.Day), StringComparison.Ordinal);
         Assert.StartsWith("Searched \"x\" (1 result, " + WebText.MetaSearchName + "):", WebText.Results("x", [hit], WebText.MetaSearchName), StringComparison.Ordinal);
-        Assert.Equal("Searched \"x\" (past year, " + WebText.SearxngName + "): no results" + WebText.NoResultsSinceHint, WebText.Results("x", [], WebText.SearxngName, SearchSince.Year));
+        // The hint is the engine's to give (2026-11-16, the web-tools review's #16): only when an engine sat the range out.
+        Assert.Equal("Searched \"x\" (past year, " + WebText.SearxngName + "): no results" + WebText.NoResultsSinceMayHint, WebText.Results("x", [], WebText.SearxngName, SearchSince.Year, hint: WebText.NoResultsSinceMayHint));
+        Assert.Equal("Searched \"x\" (past year, " + WebText.SearxngName + "): no results", WebText.Results("x", [], WebText.SearxngName, SearchSince.Year));
         Assert.Equal("Searched \"x\" (" + WebText.SearxngName + "): no results", WebText.Results("x", [], WebText.SearxngName));
     }
 

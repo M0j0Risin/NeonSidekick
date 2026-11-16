@@ -90,8 +90,8 @@ public sealed class GitTagTool : GitTool, IListOnlyTwin
             return new ValueTask<object?>(refused);
         }
 
-        string name = ToolArguments.ReadString(arguments, NameArgument);
-        string reference = ToolArguments.ReadString(arguments, ReferenceArgument);
+        string name = ToolArguments.ReadName(arguments, NameArgument);
+        string reference = ToolArguments.ReadName(arguments, ReferenceArgument);
         string message = ToolArguments.ReadString(arguments, MessageArgument);
         string path = ReadPath(arguments);
         return OffThread(() => Describe(name, reference, message, path), cancellationToken);

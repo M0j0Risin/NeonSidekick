@@ -351,7 +351,9 @@ public class WebFetcherTests
 
         var page = await Fetcher().FetchAsync(new Uri("https://example.com/long.pdf"), Options(), CancellationToken.None);
 
-        Assert.EndsWith(WebText.PdfMore(WebFetcher.MaxPdfPages, 120), page.Page!.Markdown, StringComparison.Ordinal);   // the first 40 read
+        // The note rides beside the text (2026-11-16, the web-tools review's #2, #31): each answer adds it once, after the last fence.
+        Assert.Equal(WebText.PdfMore(WebFetcher.MaxPdfPages, 120), page.Page!.More);   // the first 40 read
+        Assert.DoesNotContain(WebText.PdfMore(WebFetcher.MaxPdfPages, 120), page.Page.Markdown, StringComparison.Ordinal);
         Assert.Equal("(pages 1–2 of 120; for the rest, save it with download_file and read it with read_pdf, pages \"3-\")", WebText.PdfMore(2, 120));
 
         _browser.PdfReadPages.Clear();
@@ -359,7 +361,7 @@ public class WebFetcherTests
         PdfPages("", "");
         _http.Map("https://example.com/scan.pdf", (_, _) => Task.FromResult(Pdf()));
         var scan = await Fetcher().FetchAsync(new Uri("https://example.com/scan.pdf"), Options(), CancellationToken.None);
-        Assert.EndsWith(WebText.PdfNoText, scan.Page!.Markdown, StringComparison.Ordinal);
+        Assert.Contains(WebText.PdfNoText, scan.Page!.More, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -543,7 +545,8 @@ public class WebFetcherTests
         var page = await Fetcher().FetchAsync(new Uri("https://example.com/gone"), Options(), CancellationToken.None);
 
         Assert.Equal(FetchOutcome.Failed, page.Outcome);
-        Assert.Equal("Error: could not fetch 'https://example.com/gone': HTTP 404 Not Found", page.Error);
+        // The server's reason phrase fenced, the note last (2026-11-16, the web-tools review's #123).
+        Assert.Equal("Error: could not fetch 'https://example.com/gone': HTTP 404 ⟪Not Found⟫" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, page.Error);
         Assert.Empty(_browser.Runs);
     }
 
@@ -741,7 +744,7 @@ public class WebFetcherTests
         var page = await Timed().FetchAsync(new Uri("https://example.com/"), Options(), CancellationToken.None);
 
         Assert.Equal(FetchOutcome.Blocked, page.Outcome);
-        Assert.Equal(WebText.Blocked("https://example.com/", "HTTP 429 Too Many Requests" + WebText.AskedToWait(TimeSpan.FromMinutes(2))), page.Error);
+        Assert.Equal(WebText.Error(FetchOutcome.Blocked, "https://example.com/", WebText.HttpDetail(429, "Too Many Requests") + WebText.AskedToWait(TimeSpan.FromMinutes(2))), page.Error);
         Assert.Single(_http.Requests);
         Assert.Empty(_browser.Runs);
     }
@@ -758,7 +761,7 @@ public class WebFetcherTests
         var page = await fetch;
 
         Assert.Equal(FetchOutcome.Blocked, page.Outcome);
-        Assert.EndsWith(WebText.AskedToWait(TimeSpan.FromSeconds(1)) + ")", page.Error);
+        Assert.EndsWith(WebText.AskedToWait(TimeSpan.FromSeconds(1)) + ")", NeonSidekick.Llm.Tools.UntrustedText.WithoutNote(page.Error!));
         Assert.Equal(2, _http.Requests.Count);
         Assert.Empty(_browser.Runs);
     }
@@ -778,7 +781,7 @@ public class WebFetcherTests
 
         Assert.Equal(FetchOutcome.Blocked, page.Outcome);
         Assert.Equal(TimeSpan.FromSeconds(3), page.RetryAfter);
-        Assert.EndsWith(WebText.AskedToWait(TimeSpan.FromSeconds(3)) + ")", page.Error);
+        Assert.EndsWith(WebText.AskedToWait(TimeSpan.FromSeconds(3)) + ")", NeonSidekick.Llm.Tools.UntrustedText.WithoutNote(page.Error!));
         Assert.Equal(2, asked);
         Assert.Empty(_browser.Runs);
     }
@@ -880,7 +883,7 @@ public class WebFetcherTests
         var page = await Fetcher().FetchAsync(new Uri("https://example.com/"), Options(), CancellationToken.None);
 
         Assert.Equal(FetchOutcome.Blocked, page.Outcome);
-        Assert.Equal("Error: 'https://example.com/' refused the request (HTTP 403 Forbidden; no headless browser was found to try instead)", page.Error);
+        Assert.Equal("Error: 'https://example.com/' refused the request (HTTP 403 ⟪Forbidden⟫; no headless browser was found to try instead)" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, page.Error);
         Assert.Empty(_browser.Runs);
     }
 
@@ -894,7 +897,7 @@ public class WebFetcherTests
         var page = await Fetcher().FetchAsync(new Uri("https://example.com/"), Options(), CancellationToken.None);
 
         Assert.Equal(FetchOutcome.Blocked, page.Outcome);
-        Assert.Equal("Error: 'https://example.com/' refused the request (HTTP 403 Forbidden; the headless browser failed too: exit code 21)", page.Error);
+        Assert.Equal("Error: 'https://example.com/' refused the request (HTTP 403 ⟪Forbidden⟫; the headless browser failed too: exit code 21)" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, page.Error);
     }
 
     [Fact]
@@ -1027,7 +1030,7 @@ public class WebFetcherTests
         var page = await Fetcher().FetchAsync(new Uri("https://example.com/"), Options(FetchEngine.HttpClient), CancellationToken.None);
 
         Assert.Equal(FetchOutcome.Blocked, page.Outcome);
-        Assert.Equal("Error: 'https://example.com/' refused the request (HTTP 403 Forbidden)", page.Error);
+        Assert.Equal("Error: 'https://example.com/' refused the request (HTTP 403 ⟪Forbidden⟫)" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, page.Error);
         Assert.Empty(_browser.Runs);
     }
 
@@ -1140,12 +1143,12 @@ public class WebFetcherTests
 
         var gone = await Fetcher().DownloadAsync(new Uri("https://example.com/gone"), Options(), CancellationToken.None);
         Assert.Equal(FetchOutcome.Failed, gone.Outcome);
-        Assert.Equal("Error: could not fetch 'https://example.com/gone': HTTP 404 Not Found", gone.Error);
+        Assert.Equal("Error: could not fetch 'https://example.com/gone': HTTP 404 ⟪Not Found⟫" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, gone.Error);
         Assert.Empty(gone.Bytes);
 
         var wall = await Fetcher().DownloadAsync(new Uri("https://example.com/wall"), Options(), CancellationToken.None);
         Assert.Equal(FetchOutcome.Blocked, wall.Outcome);
-        Assert.Equal("Error: 'https://example.com/wall' refused the request (HTTP 403 Forbidden)", wall.Error);
+        Assert.Equal("Error: 'https://example.com/wall' refused the request (HTTP 403 ⟪Forbidden⟫)" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, wall.Error);
         Assert.Empty(_browser.Runs);
 
         // A refused connection is the failure's message, as a page's is.

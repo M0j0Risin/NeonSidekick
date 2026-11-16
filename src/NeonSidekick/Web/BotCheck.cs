@@ -128,13 +128,14 @@ public static class BotCheck
 
     /// <summary>
     /// The pane's short reason from a refusal's detail: its first clause (<c>HTTP 403 Forbidden</c> out of <c>HTTP 403 Forbidden; the
-    /// headless browser failed too: …</c>). Pure; pinned.
+    /// headless browser failed too: …</c>). The pane is the user's, so a server's fenced reason phrase (<see cref="WebText.HttpDetail"/>,
+    /// 2026-11-16) shows without the marks. Pure; pinned.
     /// </summary>
     public static string WhyOf(string detail)
     {
         ArgumentNullException.ThrowIfNull(detail);
         int cut = detail.IndexOf(';', StringComparison.Ordinal);
-        return (cut >= 0 ? detail[..cut] : detail).Trim();
+        return Llm.Tools.UntrustedText.Unfenced((cut >= 0 ? detail[..cut] : detail).Trim());
     }
 
     /// <summary>

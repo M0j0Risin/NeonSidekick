@@ -506,7 +506,7 @@ The tools most profiles use, and the pane's own options.
 | Web browser network mode | Where a fetch may reach: `internet` (public addresses), `lan` (the app's computer and the LAN, its adapters' prefixes included) or `both`. | `internet` |
 | Web search method | `metasearch` (built in: asks the engines in *Web metasearch engines*, never opens a bot check, skips an engine that refuses) or `searxng`. A profile keeps its saved method; the old `duckduckgo` reads as `metasearch`. | `metasearch` |
 | Web search max results | Hits per search (1–20). | 20 |
-| Web metasearch engines | Which engines `metasearch` asks: Bing, Brave, DuckDuckGo, Startpage and Wikipedia. With none on, a search says so and asks nobody. Only some filter by date ([`since`](TOOLS.md#web)). | all |
+| Web metasearch engines | Which engines `metasearch` asks: Bing, Brave, DuckDuckGo, Startpage and Wikipedia. With none on, a search asks nobody; only some filter by date ([`since`](TOOLS.md#web)). | all |
 | Web metasearch safe search | The filter `metasearch` asks for: `off`, `moderate` or `strict`. It reaches Bing, Brave and Startpage, and can't change DuckDuckGo's own default. | `off` |
 | Web metasearch Brave API key | A [Brave Search API](https://brave.com/search/api/) key. While set, Brave is asked through its API instead of its results page; searches count against your Brave plan. Saved encrypted. | empty |
 | Web SearXNG URL | The SearXNG instance, for `searxng`. With no usable address, `searxng` uses the metasearch. | empty |

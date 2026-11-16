@@ -14,11 +14,14 @@ public static class ArgumentText
     /// <summary>The most of an argument a refusal repeats.</summary>
     public const int EchoChars = 40;
 
-    /// <summary><paramref name="raw"/> as a refusal repeats it.</summary>
+    /// <summary>
+    /// <paramref name="raw"/> as a refusal repeats it. Its fence marks become look-alikes (2026-11-16, the web-tools review's #105): the model's
+    /// own words, echoed bare, can never open or close a fence.
+    /// </summary>
     public static string Echo(string raw)
     {
         ArgumentNullException.ThrowIfNull(raw);
-        return UntrustedText.Name(UntrustedText.Cut(raw.Length > 4 * EchoChars ? raw[..(4 * EchoChars)] : raw, EchoChars));
+        return UntrustedText.Defang(UntrustedText.Name(UntrustedText.Cut(raw.Length > 4 * EchoChars ? raw[..(4 * EchoChars)] : raw, EchoChars)));
     }
 
     public static string Missing(string argument) => $"Error: {argument} is required.";
@@ -57,6 +60,13 @@ public static class AdminArguments
     /// <summary>A string argument, or null when missing, null or blank.</summary>
     public static string? Optional(AIFunctionArguments arguments, string name) =>
         ToolArguments.ReadString(arguments, name).Trim() is { Length: > 0 } text ? text : null;
+
+    /// <summary>
+    /// <see cref="Optional"/> for a name the model may copy from a fenced list (2026-11-16, the web-tools review's #166): a value both opened and
+    /// closed by the fence's marks is read without them (<see cref="UntrustedText.Unquoted"/>).
+    /// </summary>
+    public static string? OptionalName(AIFunctionArguments arguments, string name) =>
+        Optional(arguments, name) is { } text && UntrustedText.Unquoted(text).Trim() is { Length: > 0 } bare ? bare : null;
 
     /// <summary>Whether <paramref name="name"/> was given a value: present and not JSON null (E7).</summary>
     public static bool Given(AIFunctionArguments arguments, string name)

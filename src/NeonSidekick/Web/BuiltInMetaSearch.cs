@@ -40,13 +40,18 @@ public sealed class BuiltInMetaSearch
     /// <summary>The library's name for Brave over its API, which stands in for <c>brave</c> while a key is set. Not one of <see cref="EngineNames"/>: the menu has one Brave row.</summary>
     internal const string BraveApiName = "braveapi";
 
+    /// <summary>Brave's name in <see cref="EngineNames"/>, the setting's word for both Braves (2026-11-16, the web-tools review's #39).</summary>
+    private const string BraveName = "brave";
+
+    /// <summary>An engine's name as the setting and the answers say it: <see cref="BraveApiName"/> reads as <see cref="BraveName"/>.</summary>
+    private static string SettingName(string library) => library == BraveApiName ? BraveName : library;
+
     // The same language the other two engines ask for.
     private const string Locale = "en-US";
     private const string Category = "Web";
 
     private readonly MetaSearch _search;
     private readonly SearchPacer _pacer;
-    private readonly IReadOnlyList<string> _engineNames;
     private readonly IReadOnlyList<IEngine> _engines;
 
     /// <summary>
@@ -80,7 +85,6 @@ public sealed class BuiltInMetaSearch
         _pacer = new SearchPacer(time, MinInterval);
         var client = new HttpClient(new HostClientHandler(http), disposeHandler: true) { Timeout = Timeout.InfiniteTimeSpan, MaxResponseContentBufferSize = MaxResponseBytes };
         var asked = (engines ?? RealEngines(time, CurrentBraveApiKey)).ToList();
-        _engineNames = asked.Select(e => e.Name).ToList();
         _engines = asked;
         _search = new MetaSearch(asked, client, new MetaSearchOptions(), time);
     }
@@ -101,10 +105,10 @@ public sealed class BuiltInMetaSearch
     /// </summary>
     private IReadOnlySet<string> LibraryNames(IReadOnlyList<string>? saved, bool braveKey)
     {
-        string unused = braveKey ? "brave" : BraveApiName;
+        string unused = braveKey ? BraveName : BraveApiName;
         return saved is null
-            ? _engineNames.Where(name => name != unused).ToHashSet(StringComparer.Ordinal)
-            : EnginesOn(saved).Select(name => braveKey && name == "brave" ? BraveApiName : name).ToHashSet(StringComparer.Ordinal);
+            ? _engines.Select(e => e.Name).Where(name => name != unused).ToHashSet(StringComparer.Ordinal)
+            : EnginesOn(saved).Select(name => braveKey && name == BraveName ? BraveApiName : name).ToHashSet(StringComparer.Ordinal);
     }
 
     /// <summary>
@@ -159,7 +163,7 @@ public sealed class BuiltInMetaSearch
 
     /// <summary>The setting's names of the engines that can filter by date, for the refusal.</summary>
     private IReadOnlyList<string> Filtering() =>
-        [.. _engines.Where(e => e.TimeRangeSupport).Select(e => e.Name == BraveApiName ? "brave" : e.Name).Distinct(StringComparer.Ordinal)];
+        [.. _engines.Where(e => e.TimeRangeSupport).Select(e => SettingName(e.Name)).Distinct(StringComparer.Ordinal)];
 
     private static TimeRange RangeOf(SearchSince since) => since switch
     {
@@ -176,7 +180,6 @@ public sealed class BuiltInMetaSearch
 
         public Task<SearchOutcome> SearchAsync(string query, int max, FetchOptions options, CancellationToken cancellationToken, SearchSince? since = null) =>
             engines is { Count: 0 } ? Task.FromResult(SearchOutcome.Failed(WebText.MetaSearchNoEngines))
-            : since is not null && !core.CanFilter(engines) ? Task.FromResult(SearchOutcome.Failed(WebText.MetaSearchNoTimeRange(core.Filtering())))
             : core.SearchAsync(query, max, options, engines, safeSearch, braveApiKey, since, cancellationToken);
     }
 
@@ -196,6 +199,12 @@ public sealed class BuiltInMetaSearch
             return SearchOutcome.Failed(WebText.MetaSearchNeedsInternet);
         }
 
+        // After the lan check (2026-11-16, the web-tools review's #102): under lan no engine could run, so asking to turn one on misleads.
+        if (since is not null && !CanFilter(engines))
+        {
+            return SearchOutcome.Failed(WebText.MetaSearchNoTimeRange(Filtering()));
+        }
+
         var asked = new EngineQuery(query.Trim(), SafeSearch: safeSearch, Locale: Locale, Engines: engines, TimeRange: since is { } recent ? RangeOf(recent) : null);
         if (_search.AnyAvailable(asked))
         {
@@ -203,13 +212,16 @@ public sealed class BuiltInMetaSearch
         }
 
         var response = await _search.SearchAsync(asked, cancellationToken).ConfigureAwait(false);
-        string failures = string.Join("; ", response.Failures.Select(f => f.Engine + ": " + f.Message));
+        // Each engine's message can carry the server's own words (an API's error, a parser's): fenced, the engine's name bare (2026-11-16,
+        // the web-tools review's #123). The port is untouched.
+        string failures = string.Join("; ", response.Failures.Select(f => f.Engine + ": " + Llm.Tools.UntrustedText.Quote(Llm.Tools.UntrustedText.OneLine(Llm.Tools.UntrustedText.Cut(f.Message)))));
+        string logged = string.Join("; ", response.Failures.Select(f => f.Engine + ": " + f.Message));   // the log is the user's: bare
 
         // Info, not a warning (2026-11-06): warnings reach the transcript and headless output, and a slow or resting engine would print a
         // line on every search. A search this leaves empty tells the model why, below.
         if (failures.Length > 0)
         {
-            DiagnosticLog.Info(Category, $"Metasearch \"{query}\": no answer from some engines. {failures}");
+            DiagnosticLog.Info(Category, $"Metasearch \"{query}\": no answer from some engines. {logged}");
         }
 
         // The app's one rule for links, before anything is counted: a hit it couldn't show takes no slot, and only such hits are no results.
@@ -227,7 +239,10 @@ public sealed class BuiltInMetaSearch
         if (usable.Count == 0 && response.Failures.Count > 0)
         {
             bool refused = response.Timings.Count == 0 && response.Failures.All(f => IsRefusal(f.Kind == EngineFailureKind.Suspended ? f.RestCause : f.Kind));
-            return SearchOutcome.Failed(refused ? WebText.MetaSearchRefused(failures) : WebText.SearchFailed(WebText.MetaSearchName, failures));
+            // A ranged search that left engines out says so even when the ones it asked failed or rest (2026-11-16, the web-tools review's
+            // #99): the model drops since instead of retrying the same.
+            string hint = SinceHintOf(since, response);
+            return SearchOutcome.Failed(refused ? WebText.MetaSearchRefused(failures, hint) : WebText.SearchFailed(WebText.MetaSearchName, failures, hint));
         }
 
         var results = usable
@@ -237,9 +252,13 @@ public sealed class BuiltInMetaSearch
         DiagnosticLog.Info(Category, $"Metasearch \"{query}\": {results.Length.ToString(CultureInfo.InvariantCulture)} results.");
 
         // A ranged search names the engines that answered, so a thin result reads as thin (the others sat it out, response.Skipped).
-        string scope = since is null ? "" : string.Join(", ", response.Timings.Select(t => t.Engine == BraveApiName ? "brave" : t.Engine));
-        return new SearchOutcome(results, "") { Scope = scope };
+        string scope = since is null ? "" : string.Join(", ", response.Timings.Select(t => SettingName(t.Engine)));
+        return new SearchOutcome(results, "") { Scope = scope, SinceHint = SinceHintOf(since, response) };
     }
+
+    // The hint a ranged search adds when its Skipped named an engine (2026-11-16, the web-tools review's #16, #26); empty otherwise.
+    private static string SinceHintOf(SearchSince? since, MetaSearchResponse response) =>
+        since is not null && response.Skipped.Count > 0 ? WebText.NoResultsSinceHint : "";
 
     private static bool IsRefusal(EngineFailureKind? kind) =>
         kind is EngineFailureKind.AccessDenied or EngineFailureKind.Captcha or EngineFailureKind.TooManyRequests;

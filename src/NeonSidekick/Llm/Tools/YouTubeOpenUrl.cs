@@ -38,7 +38,9 @@ public static class YouTubeOpenUrl
         }
 
         var arguments = new AIFunctionArguments { [YouTubePlayTool.VideoArgument] = link };
-        string answer = UntrustedText.Unfenced((string)(await play().InvokeAsync(arguments, cancellationToken).ConfigureAwait(false))!);
+        // The model reads this line (2026-11-16, the web-tools review's #75): the fence stays, the note comes off, since open_url joins one
+        // line per link and adds the note once at its end.
+        string answer = UntrustedText.WithoutNote((string)(await play().InvokeAsync(arguments, cancellationToken).ConfigureAwait(false))!);
         if (!answer.StartsWith("Error: ", StringComparison.Ordinal))
         {
             return new YouTubeLinkOutcome(answer, OnePlayer: target != YouTubeOpenLinksInKind.DefaultBrowser);

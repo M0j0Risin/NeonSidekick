@@ -39,6 +39,32 @@ public class WebHttpWireTests
         Assert.Contains(lines, l => l.Equals("Cookie: sid=1", StringComparison.OrdinalIgnoreCase));
     }
 
+    /// <summary>
+    /// A download with a digest (2026-11-16, the web-tools review's #55): asked with <c>identity</c> alone, its gzip body arrives as the server
+    /// sent it, and the response's <c>Content-Encoding</c> is kept to name.
+    /// </summary>
+    [Fact]
+    public async Task ARawDownload_AsksForIdentity_AndKeepsTheBodyAsSent()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        int port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        using var http = WebHttp.Create(new LanPolicy(() => NetworkReach.Both), new CookieContainer());
+        var fetcher = new WebFetcher(http, new FakeHeadlessBrowser { Executable = null });
+
+        var served = ServeOnceAsync(listener);
+        using var opened = await fetcher.OpenDownloadAsync(new Uri($"http://127.0.0.1:{port}/f.gz"), new FetchOptions(FetchEngine.HttpClient, "", NetworkReach.Both, RawBody: true), 1_000_000, CancellationToken.None);
+        using var body = new MemoryStream();
+        var saved = await fetcher.SaveAsync(opened, body, 1_000_000, CancellationToken.None);
+        var lines = await served;
+
+        Assert.True(saved.Ok, saved.Detail);
+        Assert.Contains(lines, l => l.Equals("Accept-Encoding: identity", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("gzip", opened.ContentEncoding);
+        byte[] bytes = body.ToArray();
+        Assert.Equal([0x1F, 0x8B], bytes[..2]);
+    }
+
     /// <summary>Reads one request's head, answers it with <see cref="Page"/> gzipped, and returns the head's lines.</summary>
     private static async Task<List<string>> ServeOnceAsync(TcpListener listener)
     {

@@ -1161,17 +1161,25 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
         switch (change)
         {
             case FeedChange.Appended appended:
-                Events.Publish(new WebEvent("append", () => JsonSerializer.Serialize(appended.Entry, WebUiJsonContext.Default.WebEntry)));
+                // The 📚 line goes with its HTML (2026-11-16, the web-tools review's #174): it is finished as it is added, so the page never
+                // draws its Markdown first.
+                var entry = appended.Entry.Kind == TranscriptFeed.KindName(FeedKind.Sources)
+                    ? appended.Entry with { Html = Feed.HtmlOf(appended.Entry.Seq, (Func<string, string, string>)WebUiMarkdown.ToHtml) }
+                    : appended.Entry;
+                Events.Publish(new WebEvent("append", () => JsonSerializer.Serialize(entry, WebUiJsonContext.Default.WebEntry)));
                 break;
             case FeedChange.Grew grew:
                 Events.Publish(new WebEvent("delta", () => JsonSerializer.Serialize(new WebDelta(grew.Seq, grew.At, grew.Text), WebUiJsonContext.Default.WebDelta)));
+                break;
+            case FeedChange.Ended { Kind: FeedKind.Sources }:
+                // The 📚 line's HTML went with its append.
                 break;
             case FeedChange.Ended ended:
                 // A reply's Markdown as HTML; a thinking block its summary, a run or an output their end alone (2026-10-15). The HTML through the
                 // entry's own cache (2026-10-19, the review: rendered here a second time beside the snapshot's), rendered here only once the feed has
                 // let it go.
                 Events.Publish(new WebEvent("end", () => JsonSerializer.Serialize(
-                    new WebEnd(ended.Seq, ended.Kind is FeedKind.Assistant or FeedKind.Sources ? Feed.HtmlOf(ended.Seq, (Func<string, string, string>)WebUiMarkdown.ToHtml) ?? WebUiMarkdown.ToHtml(ended.Markdown, TranscriptFeed.IdPrefix(ended.Seq)) : null, ended.Summary),
+                    new WebEnd(ended.Seq, ended.Kind is FeedKind.Assistant ? Feed.HtmlOf(ended.Seq, (Func<string, string, string>)WebUiMarkdown.ToHtml) ?? WebUiMarkdown.ToHtml(ended.Markdown, TranscriptFeed.IdPrefix(ended.Seq)) : null, ended.Summary),
                     WebUiJsonContext.Default.WebEnd)));
                 break;
             case FeedChange.Replaced replaced:

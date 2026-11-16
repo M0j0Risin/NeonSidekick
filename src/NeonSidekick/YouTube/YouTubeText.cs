@@ -188,7 +188,7 @@ public static class YouTubeText
     /// for the user; blank text stays blank, so a fallback around it is never fenced.
     /// </summary>
     private static string Outside(string? text, bool fenced) =>
-        string.IsNullOrWhiteSpace(text) ? text ?? "" : fenced ? Llm.Tools.UntrustedText.Fenced(text) : text;
+        fenced ? Llm.Tools.UntrustedText.QuoteOr(text, text ?? "") : text ?? "";
 
     /// <summary>The picker's title over a playlist's entries (2026-10-08).</summary>
     public static string PlaylistPickTitle(YouTubePlaylist playlist)
@@ -306,7 +306,8 @@ public static class YouTubeText
                 : $"Opening video {snapshot.VideoId} in {PlaceName(snapshot.Place)}; youtube_status says when it plays.";
         }
 
-        // The model's form (2026-11-15, the web-tools plan's §3) fences the title and channel in place of the quotes; the user's keeps them.
+        // The model's form (2026-11-15, the web-tools plan's §3) fences the title inside the app's quotes, and the channel; the user's form
+        // is bare.
         string title = string.IsNullOrWhiteSpace(snapshot.Title) ? "video " + snapshot.VideoId : $"\"{(forUser ? snapshot.Title : Llm.Tools.UntrustedText.Fenced(snapshot.Title))}\"";
         string author = string.IsNullOrWhiteSpace(snapshot.Author) ? "" : $" ({Outside(snapshot.Author, !forUser)})";
         string id = string.IsNullOrWhiteSpace(snapshot.Title) ? "" : $" · video {snapshot.VideoId}";
@@ -614,8 +615,7 @@ public static class YouTubeText
         return video.Title is { Length: > 0 } title ? Quoted(title, fenced) : "video " + video.Id;
     }
 
-    // A title in a sentence: in quotes for the user, fenced for the model (2026-11-15).
-    // The fence sits inside the quotes (2026-11-15), so the unfenced view the user sees reads as it always has.
+    // A title in a sentence, in the app's quotes, fenced inside them for the model (2026-11-15), so the user's unfenced view reads as it always has.
     private static string Quoted(string title, bool fenced) => $"\"{(fenced ? Llm.Tools.UntrustedText.Fenced(title) : title)}\"";
 
     // A name that leads a sentence: "video …" and "playlist …" capitalized.

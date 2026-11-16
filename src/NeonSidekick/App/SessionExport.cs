@@ -80,92 +80,24 @@ public static partial class SessionExport
         return OutputNames.Stamped(title.ToString(), TimeZoneInfo.ConvertTime(summary.StartedAt, zone), SessionText.ExportStem);
     }
 
-    /// <summary>
-    /// <paramref name="text"/> as plain Markdown text: a backslash before each character that would make it something else (<c>\ ` * _ [ ] &lt; &gt; # |</c>,
-    /// and since 2026-10-30 <c>$ = ~ &amp; %</c>, review F50: Obsidian read <c>$…$</c> as math, <c>==</c> and <c>~~</c> as marks, <c>&amp;amp;</c> as an
-    /// entity and <c>%%</c> as a comment), for the app's own lines — the title and the facts — so "Fix the *bug* in [x]" shows as typed. Pure.
-    /// </summary>
-    public static string MarkdownText(string text)
-    {
-        ArgumentNullException.ThrowIfNull(text);
-        var escaped = new StringBuilder(text.Length + 8);
-        foreach (char c in text)
-        {
-            if (c is '\\' or '`' or '*' or '_' or '[' or ']' or '<' or '>' or '#' or '|' or '$' or '=' or '~' or '&' or '%')
-            {
-                escaped.Append('\\');
-            }
-
-            escaped.Append(c);
-        }
-
-        return escaped.ToString();
-    }
+    /// <summary><see cref="MarkdownEscape.Text"/>: the app's own lines as plain Markdown text (moved down 2026-11-16, the web-tools review's #94).</summary>
+    public static string MarkdownText(string text) => MarkdownEscape.Text(text);
 
     /// <summary>
-    /// One source as a Markdown item (2026-11-15, the web-tools plan's §2): <c>[title](&lt;url&gt;) (host)</c> by
-    /// <see cref="Web.WebText.SourceLabel"/>'s one rule, the label escaped (<see cref="MarkdownText"/>), the destination the address as a link
-    /// opens it (<see cref="SafeText.WebLink"/>'s target: its host in ASCII, spaces escaped) in angle brackets, so a URL with parentheses
-    /// stays whole. One the vetting refuses is its label alone, as the transcript's line shows it. The Web UI's line and both exports. Pure.
+    /// A turn's sources as a Markdown list under its heading, the searches counted on a line after the list (2026-11-16, the web-tools
+    /// review's #175: a bullet beside the real sources read as one); empty for none.
     /// </summary>
-    public static string SourceMarkdown(Llm.Tools.WebSource source)
+    private static string SourcesList(SessionTurn turn)
     {
-        ArgumentNullException.ThrowIfNull(source);
-        var (label, host) = Web.WebText.SourceLabel(source);
-        string shown = MarkdownText(Llm.Tools.UntrustedText.OneLine(label));
-        string tail = host is null ? "" : " (" + MarkdownText(host) + ")";
-        if (SafeText.WebLink(source.Url) is { } link && link.Uri.Scheme != Uri.UriSchemeMailto)
-        {
-            string target = link.Target.Replace("<", "%3C", StringComparison.Ordinal).Replace(">", "%3E", StringComparison.Ordinal);
-            return "[" + shown + "](<" + target + ">)" + tail;
-        }
-
-        return shown + tail;
-    }
-
-    /// <summary>A turn's sources as Markdown items, every page and file, then the searches counted; empty when only searches were made.</summary>
-    public static IReadOnlyList<string> SourceItems(IReadOnlyList<Llm.Tools.WebSource> sources)
-    {
-        ArgumentNullException.ThrowIfNull(sources);
-        if (!Web.WebText.HasSourcesLine(sources))
-        {
-            return [];
-        }
-
-        var items = sources.Where(s => s.Kind != Llm.Tools.WebSourceKind.Search).Select(SourceMarkdown).ToList();
-        int searches = sources.Count(s => s.Kind == Llm.Tools.WebSourceKind.Search);
-        if (searches > 0)
-        {
-            items.Add(SessionText.ExportSourcesSearches(searches));
-        }
-
-        return items;
-    }
-
-    /// <summary>The Web UI's 📚 line (2026-11-15): the glyph, then every source's item, then the searches, on one line. Empty for none.</summary>
-    public static string SourcesLineMarkdown(IReadOnlyList<Llm.Tools.WebSource> sources)
-    {
-        ArgumentNullException.ThrowIfNull(sources);
-        if (!Web.WebText.HasSourcesLine(sources))
+        var items = Web.WebSources.Items(turn.SourceList);
+        if (items.Count == 0)
         {
             return "";
         }
 
-        var items = sources.Where(s => s.Kind != Llm.Tools.WebSourceKind.Search).Select(SourceMarkdown).ToList();
-        int searches = sources.Count(s => s.Kind == Llm.Tools.WebSourceKind.Search);
-        if (searches > 0)
-        {
-            items.Add(Web.WebText.SourcesSearches(searches));
-        }
-
-        return Web.WebText.SourcesGlyph + " " + string.Join(Web.WebText.SourcesSeparator, items);
-    }
-
-    // A turn's sources as a Markdown list under its heading; empty for none.
-    private static string SourcesList(SessionTurn turn)
-    {
-        var items = SourceItems(turn.SourceList);
-        return items.Count == 0 ? "" : SessionText.ExportSourcesHeading + "\n\n" + string.Concat(items.Select(item => "- " + item + "\n"));
+        int searches = Web.WebSources.Searches(turn.SourceList);
+        return SessionText.ExportSourcesHeading + "\n\n" + string.Concat(items.Select(item => "- " + item + "\n"))
+            + (searches > 0 ? "\n" + SessionText.ExportSourcesSearches(searches) + "\n" : "");
     }
 
     /// <summary>

@@ -140,7 +140,7 @@ public sealed class ReadOfficeTool : FileTool, IAcceptsArguments
         {
             var files = FilesFor(path);
             // A downloaded document's text is its author's (2026-11-15, the web-tools plan's §3): fenced when the file carries the mark of the web.
-            return await Task.Run(() => ReadPdfTool.Scope(ReadPdfTool.Marked(files, path))(OfficeReader.Read(files, path, request, cancellationToken)), cancellationToken).ConfigureAwait(false);
+            return await Task.Run(() => OfficeReader.Read(files, path, request, cancellationToken, MarkOfTheWeb.IsFromInternet(files, path)), cancellationToken).ConfigureAwait(false);
         }
 
         return await ReadOnShareAsync(share, path, request, cancellationToken).ConfigureAwait(false);
@@ -204,7 +204,7 @@ public sealed class ReadOfficeTool : FileTool, IAcceptsArguments
 
         // The root named for the share while the answer is built (read_pdf's rule, review H2).
         using var naming = FileText.NamingRoot(UncText.ShareName(target));
-        var read = await _unc.RunAsync(target, write: false, files => ReadPdfTool.Scope(ReadPdfTool.Marked(files, relative))(OfficeReader.Read(files, relative, request, cancellationToken)), cancellationToken).ConfigureAwait(false);
+        var read = await _unc.RunAsync(target, write: false, files => OfficeReader.Read(files, relative, request, cancellationToken, MarkOfTheWeb.IsFromInternet(files, relative)), cancellationToken).ConfigureAwait(false);
         return read.Error ?? read.Value;
     }
 

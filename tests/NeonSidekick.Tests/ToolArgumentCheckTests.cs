@@ -368,6 +368,11 @@ public class ToolArgumentCheckTests
         Assert.False(result.ArgumentError);
         Assert.Equal("done\n(ignored: query; none takes no arguments)", result.Text);
 
+        // A fenced answer keeps its quote note last (2026-11-16, the web-tools review's #70): the note the user's views unfence by.
+        var fencedTool = new NoArgumentTool("⟪page⟫\n" + UntrustedText.QuoteNote);
+        var fenced = await Assistant.InvokeToolWithDiffAsync([fencedTool], new FunctionCallContent("c3", "none", Args(("query", "x"))), CancellationToken.None);
+        Assert.Equal("⟪page⟫\n(ignored: query; none takes no arguments)\n" + UntrustedText.QuoteNote, fenced.Text);
+
         var failing = new NoArgumentTool("Error: nothing to do.");
         var failed = await Assistant.InvokeToolWithDiffAsync([failing], new FunctionCallContent("c2", "none", Args(("query", "x"))), CancellationToken.None);
         Assert.Equal("Error: nothing to do.", failed.Text);

@@ -287,7 +287,9 @@ public sealed class OpenUrlTool : AIFunction, IAcceptsArguments
         }
 
         urls.AddRange(several);
-        return await OpenAsync(urls, cancellationToken).ConfigureAwait(false);
+
+        // A YouTube line holds a fenced title (YouTubeOpenUrl): the note once, at the end of the whole answer, never inside a nested one.
+        return UntrustedText.WithNote(await OpenAsync(urls, cancellationToken).ConfigureAwait(false));
     }
 }
 

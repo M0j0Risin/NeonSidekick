@@ -408,12 +408,13 @@ public sealed class GitToolsTests : IDisposable
         Assert.Equal("No stashes", await Invoke(Tool<GitStashTool>(), ("action", "list")));
 
         Write("a.txt", "two\n");
-        Assert.Equal("Stashed 1 file as stash@{0}: On main: wip", await Invoke(Tool<GitStashTool>(), ("action", "push"), ("message", "wip")));
-        Assert.Matches(@"^1 stash:\nstash@\{0\} [0-9a-f]{7} On main: wip$", await Invoke(Tool<GitStashTool>(), ("action", "list")));
+        // A stash's message fenced (2026-11-16, the web-tools review's #68): the default one quotes HEAD's subject.
+        Assert.Equal("Stashed 1 file as stash@{0}: ⟪On main: wip⟫" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, await Invoke(Tool<GitStashTool>(), ("action", "push"), ("message", "wip")));
+        Assert.Matches(@"^1 stash:\nstash@\{0\} [0-9a-f]{7} ⟪On main: wip⟫\n", await Invoke(Tool<GitStashTool>(), ("action", "list")));
         Assert.Equal("Error: there is no stash@{3}", await Invoke(Tool<GitStashTool>(), ("action", "pop"), ("index", 3)));
-        Assert.Equal("Applied stash@{0}: On main: wip (1 file back)", await Invoke(Tool<GitStashTool>(), ("action", "apply")));
+        Assert.Equal("Applied stash@{0}: ⟪On main: wip⟫ (1 file back)" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, await Invoke(Tool<GitStashTool>(), ("action", "apply")));
         await Invoke(Tool<GitDiscardTool>(), ("paths", new[] { "a.txt" }));
-        Assert.Equal("Popped stash@{0}: On main: wip (1 file back)", await Invoke(Tool<GitStashTool>(), ("action", "pop")));
+        Assert.Equal("Popped stash@{0}: ⟪On main: wip⟫ (1 file back)" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, await Invoke(Tool<GitStashTool>(), ("action", "pop")));
         Assert.Equal("No stashes", await Invoke(Tool<GitStashTool>(), ("action", "list")));
         Assert.Equal("Error: 'drop' is not an action here", await Invoke(Tool<GitStashTool>(), ("action", "drop")));
         Assert.Equal("Error: 'two' is not a whole number for 'index'", await Invoke(Tool<GitStashTool>(), ("action", "pop"), ("index", "two")));
@@ -464,7 +465,7 @@ public sealed class GitToolsTests : IDisposable
         Assert.Equal($"Deleted branch feature (was {first[..7]})", await Invoke(Tool<GitDeleteTool>(), ("kind", "branch"), ("name", "feature")));
         Assert.Equal($"Deleted tag v1 (was {first[..7]})", await Invoke(Tool<GitDeleteTool>(), ("kind", "tag"), ("name", "v1")));
         Assert.Equal("Error: 'v1' names no commit, branch or tag", await Invoke(Tool<GitDeleteTool>(), ("kind", "tag"), ("name", "v1")));
-        Assert.Equal("Dropped stash@{0}: On main: keep", await Invoke(Tool<GitDeleteTool>(), ("kind", "stash")));
+        Assert.Equal("Dropped stash@{0}: ⟪On main: keep⟫" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, await Invoke(Tool<GitDeleteTool>(), ("kind", "stash")));
         Assert.Equal("Error: there is no stash@{0}", await Invoke(Tool<GitDeleteTool>(), ("kind", "stash"), ("index", 0)));
         Assert.Equal("Error: give the branch's name", await Invoke(Tool<GitDeleteTool>(), ("kind", "branch")));
         Assert.Equal("Error: 'remote' is not a kind here", await Invoke(Tool<GitDeleteTool>(), ("kind", "remote"), ("name", "origin")));
@@ -604,6 +605,6 @@ public sealed class GitToolsTests : IDisposable
         Assert.Equal(GitText.TagNeedsName, await Invoke(tag, ("message", "notes")));
         Assert.Equal($"Tagged {first[..7]} as v1 (annotated)", await Invoke(tag, ("name", "v1"), ("message", "One")));
         Assert.Equal("Error: 'v1' exists already", await Invoke(tag, ("name", "v1")));
-        Assert.Equal($"1 tag, newest first:\n  v1 {first[..7]} {GitText.Outside(GitText.AnnotatedSubject("One"))}" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, await Invoke(tag, ("name", "")));
+        Assert.Equal($"1 tag, newest first:\n  ⟪v1⟫ {first[..7]} {GitText.AnnotatedSubject("⟪One⟫")}" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, await Invoke(tag, ("name", "")));
     }
 }

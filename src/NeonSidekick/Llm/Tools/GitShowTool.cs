@@ -48,7 +48,7 @@ public sealed class GitShowTool : GitTool
     protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
-        string reference = ToolArguments.ReadString(arguments, ReferenceArgument);
+        string reference = ToolArguments.ReadName(arguments, ReferenceArgument);
         string path = ReadPath(arguments);
         return OffThread(() => Describe(reference, path), cancellationToken);
     }

@@ -57,7 +57,7 @@ public sealed class WebLinksTool : AIFunction
     protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
-        return new ValueTask<object?>(List(_hooks.Links().List(), ToolArguments.ReadString(arguments, FilterArgument).Trim(), _hooks.Time.LocalTimeZone));
+        return new ValueTask<object?>(List(_hooks.Links().List(), ToolArguments.ReadName(arguments, FilterArgument).Trim(), _hooks.Time.LocalTimeZone));
     }
 
     /// <summary>The answer over <paramref name="links"/>: the caption, a row per kept link (at most <see cref="MaxListed"/>), the line past the cap. Pure.</summary>

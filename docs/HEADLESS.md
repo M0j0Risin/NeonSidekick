@@ -71,8 +71,8 @@ You:
 
 - First the version, `Headless mode` and the server (or `LLM: no server …` and what to do), then a line on the MCP servers if any are set up.
 - `You: ` is printed before each line is read, even from a pipe, so a reply often starts `You: Neon: `.
-- `[tool]` lines trace tool calls and their results (maybe over several lines). A conversation's opening calls (the clock while *Clock tools* is on, the working directory, memory) print before `Neon: `.
-- `[notice]`, `[warning]`, `[error]` and `[category] message` lines are notices and diagnostics (warnings and errors only; `--log` has the rest). Thinking and the 📚 sources line are never printed, though a session still keeps its sources for `/sessions export`.
+- `[tool]` lines trace tool calls and their results as the model reads them, fences included. A conversation's opening calls (clock, working directory, memory) print before `Neon: `.
+- `[notice]`, `[warning]`, `[error]` and `[category] message` lines are notices and diagnostics (warnings and errors only; `--log` has the rest). Thinking and the 📚 sources line are never printed.
 - Each **line** of input is one message; blank lines are skipped. Ctrl+C ends the run; a reply cut short ends with `(canceled)`.
 
 ## Slash commands in headless mode

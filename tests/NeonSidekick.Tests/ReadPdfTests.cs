@@ -460,7 +460,7 @@ public sealed class ReadPdfTests : IDisposable
         var outline = Enumerable.Range(1, 50).Select(i => new PdfOutlineItem(new string('t', 200), 1, i)).ToList();
         var read = new PdfRead(true, "", 1, [new PdfPageRead(1, "body", null, 0, 0)]) { Outline = outline };
 
-        string text = WebFetcher.PdfAnswerText(read);
+        string text = WebFetcher.PdfAnswerPage(read, "").Markdown;
 
         string head = text[..text.IndexOf("--- page 1", StringComparison.Ordinal)];
         Assert.True(head.Length <= PdfText.MaxOutlineChars + PdfText.OutlineMore.Length + 2, head.Length.ToString(System.Globalization.CultureInfo.InvariantCulture));

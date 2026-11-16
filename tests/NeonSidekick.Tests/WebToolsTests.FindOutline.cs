@@ -36,7 +36,7 @@ public sealed partial class WebToolsTests
         Assert.StartsWith("⟪## Care", atCare[(atCare.IndexOf("\n\n", StringComparison.Ordinal) + 2)..], StringComparison.Ordinal);
 
         string found = await Fetch(("url", "https://example.com/manual#setup"), ("find", "\"Warranty\" PARTS"));
-        Assert.StartsWith("⟪Manual⟫ — https://example.com/manual (find \"\"Warranty\" PARTS\": 1 match in ", found, StringComparison.Ordinal);
+        Assert.StartsWith("⟪Manual⟫ — https://example.com/manual (find \"" + WebText.FindWordsShown(["warranty", "parts"]) + "\": 1 passage in ", found, StringComparison.Ordinal);
         int at = int.Parse(found.Split('\n')[2][1..], System.Globalization.CultureInfo.InvariantCulture);
         string atFound = await Fetch(("url", "https://example.com/manual"), ("offset", at));
         Assert.Contains("the warranty covers parts", atFound, StringComparison.Ordinal);
@@ -52,17 +52,15 @@ public sealed partial class WebToolsTests
         string none = await Fetch(("url", "https://example.com/manual"), ("find", "refund"));
 
         Assert.Contains("(find \"refund\": no passage holds every word in ", none, StringComparison.Ordinal);
-        Assert.EndsWith(WebText.FindNoneHint(["Setup", "Care"]) + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, none, StringComparison.Ordinal);
+        Assert.EndsWith(WebText.FindNoneHint(["⟪Setup⟫", "⟪Care⟫"]) + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, none, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task FindAndOutline_ExcludeOffset_AndEachOther_ButDefaultsCountAsNotGiven()
+    public async Task FindAndOutline_ExcludeEachOther_ButDefaultsCountAsNotGiven()
     {
         LongManual();
 
         Assert.Equal(WebText.FindAndOutline, await Fetch(("url", "https://example.com/manual"), ("find", "x"), ("outline", true)));
-        Assert.Equal(WebText.WholePageNoOffset("find"), await Fetch(("url", "https://example.com/manual"), ("find", "x"), ("offset", 5)));
-        Assert.Equal(WebText.WholePageNoOffset("outline"), await Fetch(("url", "https://example.com/manual"), ("outline", true), ("offset", 5)));
         Assert.Equal(WebText.FindNoWords, await Fetch(("url", "https://example.com/manual"), ("find", "\" ... \"")));
         Assert.Empty(_http.Requests);
 
@@ -70,6 +68,52 @@ public sealed partial class WebToolsTests
         string plain = await Fetch(("url", "https://example.com/manual"), ("find", "  "), ("outline", false), ("offset", 0));
         Assert.StartsWith("⟪Manual⟫ — https://example.com/manual (chars 1–32,000 of ", plain, StringComparison.Ordinal);
         Assert.Equal("Error: 'maybe' is not true or false for 'outline'", await Fetch(("url", "https://example.com/manual"), ("outline", "maybe")));
+    }
+
+    /// <summary>With <c>offset</c>, either list goes on from there (2026-11-16, the web-tools review's #17).</summary>
+    [Fact]
+    public async Task FindAndOutline_WithAnOffset_ListOnlyWhatComesAfterIt()
+    {
+        LongManual();
+        string outline = await Fetch(("url", "https://example.com/manual"), ("outline", true));
+        int care = int.Parse(outline.Split('\n')[3].Trim().Split(' ')[0], System.Globalization.CultureInfo.InvariantCulture);
+
+        string later = await Fetch(("url", "https://example.com/manual"), ("outline", true), ("offset", care));
+        Assert.Contains("(outline: 1 heading from offset ", later, StringComparison.Ordinal);
+        Assert.DoesNotContain("Setup", later, StringComparison.Ordinal);
+        Assert.Contains("⟪Care⟫", later, StringComparison.Ordinal);
+
+        string found = await Fetch(("url", "https://example.com/manual"), ("find", "warranty"));
+        int at = int.Parse(found.Split('\n')[2][1..], System.Globalization.CultureInfo.InvariantCulture);
+        string past = await Fetch(("url", "https://example.com/manual"), ("find", "warranty"), ("offset", at + 1));
+        Assert.Contains("no passage holds every word", past, StringComparison.Ordinal);
+        Assert.Single(_http.Requests);
+    }
+
+    /// <summary>A word typed with its punctuation still finds (2026-11-16, the web-tools review's #132).</summary>
+    [Fact]
+    public async Task Find_IgnoresAWordsPunctuation()
+    {
+        LongManual();
+
+        Assert.Contains(": 1 passage in ", await Fetch(("url", "https://example.com/manual"), ("find", "warranty, (parts).")), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A window of bidi controls stays within the cap once each is escaped (2026-11-16, the web-tools review's #112), and the next offset
+    /// is where it stopped.
+    /// </summary>
+    [Fact]
+    public async Task AWindowOfEscapedCharacters_StaysWithinTheCap()
+    {
+        _http.Map("https://example.com/rlo", HttpStatusCode.OK, "<title>R</title><p>" + new string('\u202E', 40_000) + "</p>", "text/html");
+
+        string answer = await Fetch(("url", "https://example.com/rlo"));
+
+        int open = answer.IndexOf('⟪', answer.IndexOf("\n\n", StringComparison.Ordinal));
+        int close = answer.LastIndexOf("⟫\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, StringComparison.Ordinal);   // the note holds a ⟫ of its own
+        Assert.InRange(close - open - 1, 1, WebFetchTool.MaxChars);
+        Assert.Contains("\\u202E", answer, StringComparison.Ordinal);
     }
 
     [Fact]

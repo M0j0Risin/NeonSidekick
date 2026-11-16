@@ -23,6 +23,19 @@ public static class SafeText
     public const int MaxWebLinkLength = 2000;
 
     /// <summary>
+    /// <paramref name="url"/> with any user name and password taken out (<c>http://me:secret@ha:8123/</c> reads <c>http://ha:8123/</c>), the
+    /// one copy of the rule (2026-11-16, the web-tools review's #36: the sources, the mark of the web and the profile copy each had one).
+    /// Anything that isn't an absolute address with user info, a label among them, comes back as it is. Pure.
+    /// </summary>
+    public static string WithoutUserInfo(string url)
+    {
+        ArgumentNullException.ThrowIfNull(url);
+        return Uri.TryCreate(url, UriKind.Absolute, out var parsed) && parsed.UserInfo.Length > 0
+            ? new UriBuilder(parsed) { UserName = "", Password = "" }.Uri.AbsoluteUri
+            : url;
+    }
+
+    /// <summary>
     /// The cheap level: an <c>http://</c>, <c>https://</c> or <c>mailto:</c> prefix (any case) and <see cref="IsSafeWebChars"/> — one loop,
     /// no parse.
     /// </summary>

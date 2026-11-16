@@ -70,7 +70,7 @@ public sealed class WebSaveLinkTool : AIFunction
         ArgumentNullException.ThrowIfNull(arguments);
         string action = ToolArguments.ReadString(arguments, ActionArgument).Trim().ToLowerInvariant();
         string url = ToolArguments.ReadString(arguments, UrlArgument).Trim();
-        string name = ToolArguments.ReadString(arguments, NameArgument);
+        string name = ToolArguments.ReadName(arguments, NameArgument);
         return action switch
         {
             Add => await AddAsync(url, name).ConfigureAwait(false),
@@ -153,7 +153,7 @@ public sealed class WebSaveLinkTool : AIFunction
         }
 
         _hooks.Changed?.Invoke();
-        return action == Remove ? BrowserLinkText.Removed(link) : BrowserLinkText.Renamed(link, BrowserLinks.CleanName(name));
+        return action == Remove ? BrowserLinkText.RemovedForModel(link) : BrowserLinkText.Renamed(link, BrowserLinks.CleanName(name));
     }
 
     /// <summary>The page the Browser window shows, waited on at most <see cref="BrowserLinks.CurrentPageWait"/>; null with no window hook or no page.</summary>

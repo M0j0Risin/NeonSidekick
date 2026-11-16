@@ -1128,7 +1128,7 @@ public static partial class SmokeChecks
 
                 // A source too (2026-11-15, the web-tools plan's §2): turn_sources written in the turn's transaction and read back by Load's join.
                 store.AppendTurn(id, "the smoke test wrote this", "and the reply answered", 2, ["read_file", "patch_file"], ["smoke-skill"], 1, 1, 2, false,
-                    [new Llm.Tools.WebSource(Llm.Tools.WebSourceKind.Page, "https://example.com/", "Example")]);
+                    [new Web.WebSource(Web.WebSourceKind.Page, "https://example.com/", "Example")]);
                 var history = new List<ChatMessage> { new(ChatRole.User, "the smoke test wrote this"), new(ChatRole.Assistant, "and the reply answered") };
                 store.SaveHistory(id, Sessions.SessionHistory.ToJson(history));
                 var hits = store.Search("smoke", 5);

@@ -91,7 +91,9 @@ public sealed partial class WebToolsTests
     {
         string answer = await OpenAsync(YouTubeOpen(YouTubeOpenLinksInKind.DefaultBrowser), "https://www.youtube.com/watch?v=" + Bunny, "https://youtu.be/jNQXAC9IVRw");
 
-        Assert.Equal(2, answer.Split('\n').Length);
+        // A line per link, each title fenced for the model (2026-11-16, the web-tools review's #75), and the note once, last.
+        Assert.Equal(3, answer.Split('\n').Length);
+        Assert.EndsWith("\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, answer, StringComparison.Ordinal);
         Assert.Equal(2, _video.Plays.Count);   // a hand-off each, in the app: here the fake plays both
     }
 

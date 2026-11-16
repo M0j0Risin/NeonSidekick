@@ -68,41 +68,54 @@ public sealed class WebSearchTool : AIFunction
     /// <c>since</c> as a range (2026-11-15, the web-tools plan's §4, feature idea #25): the four words trimmed and in any case, blank as not given (null, no error); anything else an
     /// error.
     /// </summary>
+    /// <remarks>Read back through <see cref="SearxngSearch.TimeRangeWord"/>, the one map (2026-11-16, the web-tools review's #52).</remarks>
     public static (SearchSince? Since, string? Error) ParseSince(string raw)
     {
         ArgumentNullException.ThrowIfNull(raw);
-        return raw.Trim().ToLowerInvariant() switch
+        string word = raw.Trim().ToLowerInvariant();
+        if (word.Length == 0)
         {
-            "" => (null, null),
-            "day" => (SearchSince.Day, null),
-            "week" => (SearchSince.Week, null),
-            "month" => (SearchSince.Month, null),
-            "year" => (SearchSince.Year, null),
-            _ => (null, WebText.BadSince(raw)),
-        };
+            return (null, null);
+        }
+
+        foreach (var range in SearxngSearch.Ranges)
+        {
+            if (SearxngSearch.TimeRangeWord(range) == word)
+            {
+                return (range, null);
+            }
+        }
+
+        return (null, WebText.BadSince(raw));
     }
 
     /// <summary>The search, results kept to <paramref name="since"/> when given.</summary>
-    public async Task<string> SearchAsync(string query, int? maxResults, SearchSince? since, CancellationToken cancellationToken)
+    public async Task<string> SearchAsync(string query, int? maxResults, SearchSince? since, CancellationToken cancellationToken) =>
+        (await SearchCoreAsync(query, maxResults, since, cancellationToken).ConfigureAwait(false)).Text;
+
+    // The answer, and whether it listed any result: only such a search is counted under the reply (2026-11-16, the web-tools review's #35).
+    private async Task<(string Text, bool Found)> SearchCoreAsync(string query, int? maxResults, SearchSince? since, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
         if (string.IsNullOrWhiteSpace(query))
         {
-            return WebText.NoQuery;
+            return (WebText.NoQuery, false);
         }
 
         var effective = _effective();
         int count = maxResults ?? DefaultCount(effective);
         if (count < MinResults || count > MaxResults)
         {
-            return WebText.BadResultCount;
+            return (WebText.BadResultCount, false);
         }
 
         var engine = _web.Engine(effective);
         var options = WebAccess.Options(effective);
         var outcome = await engine.SearchAsync(query.Trim(), count, options, cancellationToken, since).ConfigureAwait(false);
 
-        return outcome.Ok ? WebText.Results(query.Trim(), outcome.Results, engine.Name, since, outcome.Scope) : outcome.Error;
+        return outcome.Ok
+            ? (WebText.Results(query.Trim(), outcome.Results, engine.Name, since, outcome.Scope, outcome.SinceHint), outcome.Results.Count > 0)
+            : (outcome.Error, false);
     }
 
     protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
@@ -119,6 +132,8 @@ public sealed class WebSearchTool : AIFunction
             return sinceError;
         }
 
-        return await SearchAsync(ToolArguments.ReadString(arguments, QueryArgument), max, since, cancellationToken).ConfigureAwait(false);
+        // A search that listed results is counted under the reply as a source with no address (the web-tools plan's §2); any other is not.
+        var (text, found) = await SearchCoreAsync(ToolArguments.ReadString(arguments, QueryArgument), max, since, cancellationToken).ConfigureAwait(false);
+        return ToolSourcedResult.Of(text, found ? new WebSource(WebSourceKind.Search, "", "") : null);
     }
 }

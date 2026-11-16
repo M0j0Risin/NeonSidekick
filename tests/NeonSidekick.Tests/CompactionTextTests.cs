@@ -87,6 +87,8 @@ public class CompactionTextTests
             ["A summary.", "Two lines.", "(✂️ read_file · 500 characters)", "(✂️ 1 picture from view_image)", "(🗜️ 4 messages protected at the start)", "(🗜️ 2 messages protected at the end)"],
             CompactionText.DetailLines(new ConversationCompactor.Result(38, 7, 2, null, Summarised: true) { Summary = "A summary.\nTwo lines.", Entries = entries, OpeningKept = 4, RecentKept = 2 }));
         Assert.Equal(["(✂️ read_file · 500 characters)", "(🗜️ 0 messages protected at the start)", "(🗜️ 12 messages protected at the end)"], CompactionText.DetailLines(new ConversationCompactor.Result(12, 12, 1, null) { Entries = [entries[0]], RecentKept = 12 }));
+        // A summary keeping a page's fact fenced shows it without the marks (2026-11-16, the web-tools review's #180).
+        Assert.Equal("The page said ‹‹hi›› 5.", CompactionText.DetailLines(new ConversationCompactor.Result(38, 7, 0, null, Summarised: true) { Summary = "The page said ⟪‹‹hi›› 5⟫." })[0]);
         // A bare result still closes with the two counts: the detail is never empty.
         Assert.Equal(["(🗜️ 0 messages protected at the start)", "(🗜️ 0 messages protected at the end)"], CompactionText.DetailLines(new ConversationCompactor.Result(38, 7, 0, null, Summarised: true)));
     }

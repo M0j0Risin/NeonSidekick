@@ -82,7 +82,7 @@ public partial class ChatScreenTests
         await RunAsync();
 
         Assert.Empty(_browserWindow!.Solves);
-        Assert.All(WebResults(), r => Assert.EndsWith("; the user declined to solve it in the Browser window)", r));
+        Assert.All(WebResults(), r => Assert.EndsWith("; the user declined to solve it in the Browser window)", NeonSidekick.Llm.Tools.UntrustedText.WithoutNote(r!)));
         Assert.Equal(2, WebResults().Count);
     }
 
@@ -95,7 +95,7 @@ public partial class ChatScreenTests
         await RunAsync();
 
         Assert.Equal(2, _browserWindow!.Solves.Count);
-        Assert.All(WebResults(), r => Assert.EndsWith("; the Browser window got HTTP 403 too, with no check to solve)", r));
+        Assert.All(WebResults(), r => Assert.EndsWith("; the Browser window got HTTP 403 too, with no check to solve)", NeonSidekick.Llm.Tools.UntrustedText.WithoutNote(r!)));
     }
 
     [Fact]
@@ -109,7 +109,7 @@ public partial class ChatScreenTests
         Assert.DoesNotContain("wants a person to pass", output);
         Assert.Contains("Solve the check for example.com in the Browser window", output);
         Assert.True(_browserWindow!.CancelSeen);
-        Assert.EndsWith("; the user gave up on it in the Browser window)", Assert.Single(WebResults()));
+        Assert.EndsWith("; the user gave up on it in the Browser window)", NeonSidekick.Llm.Tools.UntrustedText.WithoutNote(Assert.Single(WebResults())!));
     }
 
     [Theory]
@@ -122,7 +122,7 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.DoesNotContain("wants a person to pass", output);
-        Assert.Equal("Error: 'https://example.com/' refused the request (HTTP 403 Forbidden; no headless browser was found to try instead)", Assert.Single(WebResults()));
+        Assert.Equal("Error: 'https://example.com/' refused the request (HTTP 403 ⟪Forbidden⟫; no headless browser was found to try instead)" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, Assert.Single(WebResults()));
         Assert.Empty(_browserWindow?.Solves ?? []);
     }
 

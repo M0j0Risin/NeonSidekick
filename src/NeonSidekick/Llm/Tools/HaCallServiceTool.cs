@@ -71,7 +71,7 @@ public sealed class HaCallServiceTool : HaTool
         }
 
         IReadOnlyList<HaEntity> targets = [];
-        if (Optional(arguments, EntityArgument) is { } entity)
+        if (OptionalName(arguments, EntityArgument) is { } entity)
         {
             var (_, match) = await ResolveAsync(entity, [], cancellationToken).ConfigureAwait(false);
             if (match.Error is not null)

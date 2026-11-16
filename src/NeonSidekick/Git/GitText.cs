@@ -157,6 +157,15 @@ public static class GitText
     /// <summary>An annotated tag's row subject (2026-11-15, #130): its own message's first line, marked.</summary>
     public static string AnnotatedSubject(string subject) => "(annotated) " + subject;
 
+    /// <summary>A tag row's subject: an annotated tag's marked (<see cref="AnnotatedSubject"/>, the mark outside), the words fenced (#25).</summary>
+    private static string TagSubject(GitRef tag) => tag.Annotated ? AnnotatedSubject(Outside(tag.Subject)) : Outside(tag.Subject);
+
+    /// <summary>
+    /// A ref name from another clone (2026-11-16, the web-tools review's #20): a remote-tracking branch, an upstream, a tag. A clone carries
+    /// whoever named them, so they are fenced as its commits' words are; the user's local branches stay bare.
+    /// </summary>
+    private static string ForeignName(string name) => Llm.Tools.UntrustedText.Fenced(name);
+
     public static string NoRepository(string root) => $"Error: '{root}' is not inside a git repository; /cwd into one, or ask the user to git init it";
     public static string AboveSandbox(string workTree) => $"Error: the repository's root '{workTree}' is above the working directory, so the git tools cannot reach it; the user can /cwd to the repository's root";
     public static string Bare(string path) => $"Error: '{path}' is a bare repository (no working tree)";
@@ -428,20 +437,10 @@ public static class GitText
 
     /// <summary>
     /// A commit's words (an author, a subject, a message) as an answer shows them (2026-11-15, the web-tools plan's §3): fenced, since a
-    /// clone carries whoever wrote them; blank stays blank. An annotated tag's <see cref="AnnotatedSubject"/> keeps its mark outside.
+    /// clone carries whoever wrote them; blank stays blank. An annotated tag's mark is the row's (<see cref="GitRef.Annotated"/>, 2026-11-16, the
+    /// web-tools review's #25), never read back out of the words.
     /// </summary>
-    public static string Outside(string? text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return text ?? "";
-        }
-
-        const string Annotated = "(annotated) ";
-        return text.StartsWith(Annotated, StringComparison.Ordinal)
-            ? Annotated + (text.Length > Annotated.Length ? Llm.Tools.UntrustedText.Fenced(text[Annotated.Length..]) : "")
-            : Llm.Tools.UntrustedText.Fenced(text);
-    }
+    public static string Outside(string? text) => string.IsNullOrWhiteSpace(text) ? text ?? "" : Llm.Tools.UntrustedText.Fenced(text);
 
     // ---- show ----
 
@@ -524,7 +523,7 @@ public static class GitText
         {
             GitDiffKind.Unstaged => "Unstaged changes",
             GitDiffKind.Staged => "Staged changes",
-            GitDiffKind.Commit => "Changes in " + report.Label,
+            GitDiffKind.Commit => "Changes in " + Labelled(report),
             _ => "Changes from " + report.Label,
         };
         string under = path.Length > 0 ? " under " + path : "";
@@ -534,7 +533,7 @@ public static class GitText
             {
                 GitDiffKind.Unstaged => "No unstaged changes" + under,
                 GitDiffKind.Staged => "No staged changes" + under,
-                _ => "No changes " + (report.Kind == GitDiffKind.Commit ? "in " : "from ") + report.Label + under,
+                _ => "No changes " + (report.Kind == GitDiffKind.Commit ? "in " + Labelled(report) : "from " + report.Label) + under,
             };
         }
 
@@ -598,6 +597,10 @@ public static class GitText
         return authors.Any(a => a.Length > 0) ? sb.Append('\n').Append(Llm.Tools.UntrustedText.QuoteNote).ToString() : sb.ToString();
     }
 
+    // A commit diff's label with its subject fenced beside it: abc1234 (⟪subject⟫).
+    private static string Labelled(GitDiffReport report) =>
+        report.Subject is { } subject ? report.Label + " (" + Outside(subject) + ")" : report.Label;
+
     // ---- refs ----
 
     /// <summary><c>3 branches (current: main), 2 remote-tracking, 4 tags:</c> then the rows.</summary>
@@ -620,17 +623,17 @@ public static class GitText
         sb.Append(report.Truncated ? " (cut at the caps):" : ":");
         foreach (var b in report.Local)
         {
-            sb.Append('\n').Append(b.Current ? "* " : "  ").Append(b.Name).Append(' ').Append(b.Short).Append(b.Upstream is { } up ? " [" + up + "]" : "").Append(' ').Append(Outside(b.Subject));
+            sb.Append('\n').Append(b.Current ? "* " : "  ").Append(b.Name).Append(' ').Append(b.Short).Append(b.Upstream is { } up ? " [" + ForeignName(up) + "]" : "").Append(' ').Append(Outside(b.Subject));
         }
 
         foreach (var b in report.Remote)
         {
-            sb.Append("\n  ").Append(b.Name).Append(' ').Append(b.Short).Append(' ').Append(Outside(b.Subject));
+            sb.Append("\n  ").Append(ForeignName(b.Name)).Append(' ').Append(b.Short).Append(' ').Append(Outside(b.Subject));
         }
 
         foreach (var t in report.Tags)
         {
-            sb.Append("\n  tag ").Append(t.Name).Append(' ').Append(t.Short).Append(' ').Append(Outside(t.Subject));
+            sb.Append("\n  tag ").Append(ForeignName(t.Name)).Append(' ').Append(t.Short).Append(' ').Append(TagSubject(t));
         }
 
         return Llm.Tools.UntrustedText.WithNote(sb.ToString());
@@ -667,7 +670,7 @@ public static class GitText
         sb.Append(report.Truncated ? " (the newest " + N(GitAccess.MaxTags) + "):" : ":");
         foreach (var t in report.Tags)
         {
-            sb.Append("\n  ").Append(t.Name).Append(' ').Append(t.Short).Append(' ').Append(Outside(t.Subject));
+            sb.Append("\n  ").Append(ForeignName(t.Name)).Append(' ').Append(t.Short).Append(' ').Append(TagSubject(t));
         }
 
         return Llm.Tools.UntrustedText.WithNote(sb.ToString());
@@ -698,8 +701,12 @@ public static class GitText
 
     // ---- stash ----
 
-    public static string Stashed(GitStashResult result) => $"Stashed {Count(result.Files, "file")} as {GitAccess.StashName(0)}: {result.Message}";
-    public static string StashApplied(GitStashResult result, bool pop) => $"{(pop ? "Popped" : "Applied")} {GitAccess.StashName(result.Index)}: {result.Message} ({Count(result.Files, "file")} back)";
+    // Stash messages fenced (2026-11-16, the web-tools review's #68): the default "WIP on main: abc <subject>" quotes HEAD's subject, a clone's words.
+    public static string Stashed(GitStashResult result) =>
+        Llm.Tools.UntrustedText.WithNote($"Stashed {Count(result.Files, "file")} as {GitAccess.StashName(0)}: {Outside(result.Message)}");
+
+    public static string StashApplied(GitStashResult result, bool pop) =>
+        Llm.Tools.UntrustedText.WithNote($"{(pop ? "Popped" : "Applied")} {GitAccess.StashName(result.Index)}: {Outside(result.Message)} ({Count(result.Files, "file")} back)");
 
     public static string Stashes(GitStashResult result)
     {
@@ -713,10 +720,10 @@ public static class GitText
         sb.Append(Count(result.Stashes.Count, "stash", "stashes")).Append(result.Truncated ? " (the first " + N(GitAccess.MaxStashes) + "):" : ":");
         foreach (var s in result.Stashes)
         {
-            sb.Append('\n').Append(GitAccess.StashName(s.Index)).Append(' ').Append(s.Short).Append(' ').Append(s.Message);
+            sb.Append('\n').Append(GitAccess.StashName(s.Index)).Append(' ').Append(s.Short).Append(' ').Append(Outside(s.Message));
         }
 
-        return sb.ToString();
+        return Llm.Tools.UntrustedText.WithNote(sb.ToString());
     }
 
     // ---- discard / delete ----
@@ -736,7 +743,7 @@ public static class GitText
         {
             GitDeleteKind.Branch => $"Deleted branch {result.Name} (was {result.Short})",
             GitDeleteKind.Tag => $"Deleted tag {result.Name} (was {result.Short})",
-            _ => $"Dropped {result.Name}: {result.Message}",
+            _ => Llm.Tools.UntrustedText.WithNote($"Dropped {result.Name}: {Outside(result.Message)}"),
         };
     }
 

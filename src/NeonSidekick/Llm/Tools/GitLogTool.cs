@@ -82,7 +82,7 @@ public sealed class GitLogTool : GitTool
         }
 
         string path = ReadPath(arguments);
-        string reference = ToolArguments.ReadString(arguments, ReferenceArgument);
+        string reference = ToolArguments.ReadName(arguments, ReferenceArgument);
         return OffThread(() => Describe(path, reference, max, filter), cancellationToken);
     }
 

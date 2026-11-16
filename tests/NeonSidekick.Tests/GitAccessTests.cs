@@ -477,7 +477,8 @@ public sealed class GitAccessTests : IDisposable
         var committed = _git.Commit("", "second", amend: false, allowEmpty: false);
         Assert.Equal(1, committed.Files);
         var byCommit = _git.Diff(new GitDiffRequest(GitDiffKind.Commit, "", Reference: "HEAD"), 500);
-        Assert.Equal(committed.Short + " (⟪second⟫)", byCommit.Label);   // the commit's subject fenced (2026-11-15)
+        Assert.Equal(committed.Short, byCommit.Label);   // the subject carried apart, fenced where the answer is written (2026-11-16, #15)
+        Assert.Equal("second", byCommit.Subject);
         Assert.Equal([new GitChange('M', "a.txt", null, 1, 1, false)], byCommit.Files);
 
         CommitFile(_root, "b.txt", "b\n", "third");

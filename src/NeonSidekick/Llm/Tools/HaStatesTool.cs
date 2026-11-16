@@ -51,18 +51,24 @@ public sealed class HaStatesTool : HaTool
             return error;
         }
 
-        // States and attribute values are the integrations' words: the body under the header fenced (2026-11-15, the web-tools plan's §3).
-        return UntrustedText.FenceBody(List(snapshot, Optional(arguments, QueryArgument), Optional(arguments, DomainArgument), Optional(arguments, AreaArgument)));
+        // States and attribute values are the integrations' words (2026-11-15, the web-tools plan's §3), each fenced in place since 2026-11-16
+        // (the review's #166), the note last. A query or an area copied from a fenced list is read without its marks.
+        return UntrustedText.WithNote(List(snapshot, OptionalName(arguments, QueryArgument), Optional(arguments, DomainArgument), OptionalName(arguments, AreaArgument), fenced: true));
     }
 
-    /// <summary>The listing for a snapshot and the three filters. Pure.</summary>
-    public static string List(HaSnapshot snapshot, string? query, string? domain, string? area)
+    /// <summary>
+    /// The listing for a snapshot and the three filters. Pure. <paramref name="fenced"/> for the model: Home Assistant's names fenced in
+    /// place, the model's own filter words echoed (<see cref="ArgumentText.Echo"/>); <c>/ha</c> passes false.
+    /// </summary>
+    public static string List(HaSnapshot snapshot, string? query, string? domain, string? area, bool fenced = false)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         if (query is not null && snapshot.Find(query) is { } exact)
         {
-            return HaText.Full(exact);
+            return HaText.Full(exact, fenced);
         }
+
+        string Echoed(string words) => fenced ? ArgumentText.Echo(words) : words;
 
         IEnumerable<HaEntity> pool = snapshot.Entities;
         var filters = new List<string>(3);
@@ -70,7 +76,7 @@ public sealed class HaStatesTool : HaTool
         {
             string d = domain.Trim().TrimEnd('.').ToLowerInvariant();
             pool = pool.Where(e => string.Equals(e.Domain, d, StringComparison.Ordinal));
-            filters.Add("domain " + d);
+            filters.Add("domain " + Echoed(d));
         }
 
         if (area is not null)
@@ -79,7 +85,7 @@ public sealed class HaStatesTool : HaTool
             var room = snapshot.Areas.FirstOrDefault(a => HaSnapshot.Normalize(a.Name) == wanted || HaSnapshot.Normalize(a.Id.Replace('_', ' ')) == wanted);
             pool = room is null ? pool.Where(e => e.Area is { } name && HaSnapshot.Normalize(name).Contains(wanted, StringComparison.Ordinal))
                 : pool.Where(e => room.EntityIds.Contains(e.Id, StringComparer.Ordinal));
-            filters.Add("area " + (room?.Name ?? area.Trim()));
+            filters.Add("area " + (room is null ? Echoed(area.Trim()) : HaText.Outside(room.Name, fenced)));
         }
 
         if (query is not null)
@@ -90,10 +96,10 @@ public sealed class HaStatesTool : HaTool
                 string hay = HaSnapshot.Normalize(e.Name + " " + e.Id.Replace('_', ' '));
                 return words.All(w => hay.Contains(w, StringComparison.Ordinal));
             });
-            filters.Add("'" + query.Trim() + "'");
+            filters.Add("'" + Echoed(query.Trim()) + "'");
         }
 
         var all = pool.ToList();
-        return HaText.States(all.Take(MaxLines).ToList(), all.Count, string.Join(", ", filters));
+        return HaText.States(all.Take(MaxLines).ToList(), all.Count, string.Join(", ", filters), fenced);
     }
 }

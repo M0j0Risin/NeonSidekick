@@ -63,7 +63,7 @@ public sealed class GitDiscardTool : GitTool
             return new ValueTask<object?>(GitText.DiscardNamedNothing);
         }
 
-        string reference = ToolArguments.ReadString(arguments, ReferenceArgument);
+        string reference = ToolArguments.ReadName(arguments, ReferenceArgument);
         string path = ReadPath(arguments);
         return OffThread(() => Describe(paths, reference, path), cancellationToken);
     }

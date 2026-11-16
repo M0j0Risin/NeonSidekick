@@ -190,8 +190,9 @@ public sealed class TranscriptFeed
 
     /// <summary>
     /// The 📚 line (2026-11-15, the web-tools plan's §2): an entry of <see cref="FeedKind.Sources"/> holding <paramref name="markdown"/>, its
-    /// links, added and ended at once. A live add carries no HTML (only a snapshot does), so the end that follows it does: the page draws
-    /// the plain text until then, as it does a reply's.
+    /// links, added and ended at once. The feed renders nothing: the session that owns the renderer sends the append with its HTML and the
+    /// end alone (2026-11-16, the web-tools review's #174), so the page never shows the raw Markdown. Called from the reply's end, which
+    /// closed the open entry and the run already (#191).
     /// </summary>
     public long AddSources(string markdown)
     {
@@ -200,8 +201,6 @@ public sealed class TranscriptFeed
         var changes = new List<FeedChange>(4);
         lock (_gate)
         {
-            Add(changes, CloseOpen());
-            Add(changes, EndRunLocked());
             var entry = Push(FeedKind.Sources, markdown, null, failed: false);
             entry.Ended = true;
             added = entry.ToWeb(null);

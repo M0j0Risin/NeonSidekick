@@ -594,8 +594,8 @@ public sealed class BotCheckTests : IDisposable
         string result = await fetch.FetchAsync("https://example.com/", null, CancellationToken.None);
         await fetch.FetchAsync("https://example.com/", null, CancellationToken.None);
 
-        Assert.StartsWith("Error: 'https://example.com/' refused the request (HTTP 403 Forbidden; the headless browser failed too", result, StringComparison.Ordinal);
-        Assert.EndsWith("; the user declined to solve it in the Browser window)", result, StringComparison.Ordinal);
+        Assert.StartsWith("Error: 'https://example.com/' refused the request (HTTP 403 ⟪Forbidden⟫; the headless browser failed too", result, StringComparison.Ordinal);
+        Assert.EndsWith("; the user declined to solve it in the Browser window)", NeonSidekick.Llm.Tools.UntrustedText.WithoutNote(result), StringComparison.Ordinal);
         Assert.Equal(2, _asked.Count);   // a failure is never cached; the screen answers the turn's second ask itself
     }
 
@@ -640,18 +640,18 @@ public sealed class BotCheckTests : IDisposable
         _http.Map("https://example.com/f.bin", HttpStatusCode.Forbidden, "<p>denied</p>", "text/html");
         var download = new DownloadFileTool(_web, _files, () => _settings, Solve);
         string again = await download.DownloadAsync("https://example.com/f.bin", null, overwrite: false, CancellationToken.None);
-        Assert.Equal("Error: 'https://example.com/f.bin' refused the request (HTTP 403 Forbidden" + BotCheckText.ClearedButClientRefused + ")", again);
+        Assert.Equal("Error: 'https://example.com/f.bin' refused the request (HTTP 403 ⟪Forbidden⟫" + BotCheckText.ClearedButClientRefused + ")" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, again);
 
         // A refusal served as XML (S3's AccessDenied, 2026-10-20) is no page to solve: not shown.
         _asked.Clear();
         _http.Map("https://example.com/h.bin", HttpStatusCode.Forbidden, "<Error><Code>AccessDenied</Code></Error>", "application/xml");
-        Assert.Equal("Error: 'https://example.com/h.bin' refused the request (HTTP 403 Forbidden)", await download.DownloadAsync("https://example.com/h.bin", null, overwrite: false, CancellationToken.None));
+        Assert.Equal("Error: 'https://example.com/h.bin' refused the request (HTTP 403 ⟪Forbidden⟫)" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, await download.DownloadAsync("https://example.com/h.bin", null, overwrite: false, CancellationToken.None));
         Assert.Empty(_asked);
         _asked.Clear();
 
         _answer = r => BotCheckResult.Ended(BotCheckEnd.Declined, r.Url.AbsoluteUri);
         string declined = await download.DownloadAsync("https://example.com/f.bin", null, overwrite: false, CancellationToken.None);
-        Assert.EndsWith("; the user declined to solve it in the Browser window)", declined, StringComparison.Ordinal);
+        Assert.EndsWith("; the user declined to solve it in the Browser window)", NeonSidekick.Llm.Tools.UntrustedText.WithoutNote(declined), StringComparison.Ordinal);
 
         _asked.Clear();
         _http.Map("https://example.com/g.bin", HttpStatusCode.TooManyRequests, "slow", "text/plain");
