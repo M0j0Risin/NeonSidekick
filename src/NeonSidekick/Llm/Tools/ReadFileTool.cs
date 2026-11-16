@@ -19,22 +19,19 @@ public sealed class ReadFileTool : FileTool
     public const string StartLineArgument = "start_line";
     public const string MaxLinesArgument = "max_lines";
 
-    /// <summary>The most files one call reads; the rest are named for the next call.</summary>
-    public const int MaxPaths = 20;
-
     /// <summary>
-    /// The least of the shared limit a file in a batch is read with: below it the rest go on the not-read list rather than each getting a
-    /// sliver (a read always gives a file's first line, cut to the cap).
+    /// The least of the shared limit a file in a batch is cut to: below it a file that doesn't fit goes on the not-read list rather than
+    /// coming back as a sliver. A file that fits whole is still read (2026-11-15, the tool-arguments review's #14).
     /// </summary>
     public const int MinBatchChars = 2_000;
 
     private static readonly JsonElement Schema = ToolSchema.Parse(
-        """
+        $$"""
         {
           "type": "object",
           "properties": {
             "path": { "type": "string", "description": "The file to read, relative to the working directory." },
-            "paths": { "type": "array", "items": { "type": "string" }, "description": "Several files to read in one call (at most 20), each relative to the working directory; they share one size limit. Leave path out when you give this." },
+            "paths": { "type": "array", "items": { "type": "string" }, "description": "Several files to read in one call (at most {{MaxPathsText}}), each relative to the working directory; they share one size limit. Leave path out when you give this." },
             "start_line": { "type": "integer", "description": "The first line to return; 1 is the top. A negative number counts from the end: -20 is the last 20 lines. Leave it out to start at the top." },
             "max_lines": { "type": "integer", "description": "How many lines to return at most. Leave it out for the whole file. To read on after a partial read, call again with the start_line its header names." }
           }
@@ -52,57 +49,104 @@ public sealed class ReadFileTool : FileTool
         "a negative start_line counts from the end (-20 = the last 20 lines), max_lines limits how much comes back; " +
         "a partial read's header ends with the start_line that continues it (next: start_line 201) — call again with that to read on, never from the top again. " +
         "The text comes back as it is in the file, so it can be copied into patch_file's old_text; search_files finds where a phrase is. " +
-        "paths reads several files at once (up to 20), sharing one size limit; start_line and max_lines go with one file.";
+        "paths reads several files at once (up to " + MaxPathsText + "), sharing one size limit; start_line and max_lines go with one file.";
 
     public override JsonElement JsonSchema => Schema;
 
     public string Describe(string path, int? startLine, int? maxLines) => FileText.Read(ReadOne(path, startLine, maxLines, WorkingDirectory.MaxReadChars));
 
-    /// <summary>
-    /// The result for several files (2026-11-15): <see cref="FileText.ReadMany"/> (or <see cref="FileText.NoneRead"/> when none could be read),
-    /// then each file's block, read in order with what the shared <see cref="WorkingDirectory.MaxReadChars"/> has left; once less than
-    /// <see cref="MinBatchChars"/> is left, the rest are named by <see cref="FileText.NotRead"/>, and past <see cref="MaxPaths"/> by
-    /// <see cref="FileText.MorePaths"/>.
-    /// </summary>
+    /// <summary>What a file in a batch leaves marked, applied once the batch is answered (2026-11-15, the tool-arguments review's #51).</summary>
+    internal sealed record BatchMark(string Path, SeenStamp? Seen, bool Whole);
+
+    /// <summary>A batch's answer and the marks it leaves.</summary>
+    internal sealed record BatchRead(string Text, IReadOnlyList<BatchMark> Marks);
+
+    /// <summary><see cref="ReadMany"/> with its marks applied at once: for a caller that awaits nothing.</summary>
     public string DescribeMany(IReadOnlyList<string> paths, CancellationToken cancellationToken = default)
+    {
+        var batch = ReadMany(paths, cancellationToken);
+        Apply(batch.Marks);
+        return batch.Text;
+    }
+
+    /// <summary>
+    /// The result for several files (2026-11-15; reworked by the tool-arguments review's #14, #44, #45, #83, #95, #107, #122, #147, #151):
+    /// <see cref="FileText.ReadMany"/> (or <see cref="FileText.NoneRead"/> when none could be read and none are left), then each file's block
+    /// under <see cref="FileText.BatchSeparator"/>, in order. The shared <see cref="WorkingDirectory.MaxReadChars"/> counts each whole block.
+    /// A file's size on disk is checked against what is left before it is decoded (a character takes at least a byte, so this errs safe):
+    /// a file that fits is read whole; the first that doesn't is read cut to what is left, if that is at least <see cref="MinBatchChars"/>,
+    /// and every later one that doesn't fit goes on the not-read list undecoded. A refusal shows in place. Past <see cref="FileTool.MaxPaths"/>
+    /// the rest are not tried; one <see cref="FileText.NotRead"/> line names everything left. Nothing is marked here: the caller applies
+    /// <see cref="BatchRead.Marks"/> once the answer is in hand (#51: a batch Esc cut short runs on and must mark nothing).
+    /// </summary>
+    internal BatchRead ReadMany(IReadOnlyList<string> paths, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(paths);
         var blocks = new List<string>();
-        var notRead = new List<string>();
+        var marks = new List<BatchMark>();
+        var names = new List<string>();
+        var pastLimit = new List<string>();
         int budget = WorkingDirectory.MaxReadChars;
         int refused = 0;
+        bool cut = false;
         foreach (string path in paths.Take(MaxPaths))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (budget < MinBatchChars)
+            bool fits = SizeOf(path) is not { } bytes || bytes <= budget;
+            if (!fits && (cut || budget < MinBatchChars))
             {
-                notRead.Add(path);
+                pastLimit.Add(path);
                 continue;
             }
 
-            var read = ReadOne(path, null, null, budget);
-            if (read.Outcome != FileOutcome.Ok)
+            cut |= !fits;
+            var read = Files.ReadText(path, null, null, Math.Max(budget, 1));
+            if (read.Outcome == FileOutcome.Ok)
+            {
+                names.Add(read.Relative);
+                marks.Add(new BatchMark(path, read.Seen, read.Whole));
+            }
+            else
             {
                 refused++;
             }
 
-            budget -= read.Text.Length;
-            blocks.Add(FileText.Read(read));
+            string block = FileText.BatchSeparator(read.Relative) + "\n" + FileText.Read(read, inBatch: true);
+            budget -= block.Length;
+            blocks.Add(block);
         }
 
-        string first = refused == blocks.Count ? FileText.NoneRead(blocks.Count) : FileText.ReadMany(blocks.Count, refused);
-        var tail = new List<string>();
-        if (notRead.Count > 0)
+        var pastCap = paths.Skip(MaxPaths).ToList();
+        bool left = pastLimit.Count + pastCap.Count > 0;
+        string first = names.Count == 0 && !left ? FileText.NoneRead(paths.Count) : FileText.ReadMany(names.Count, paths.Count, refused, names);
+        string tail = left ? "\n\n" + FileText.NotRead(pastLimit, pastCap, WorkingDirectory.MaxReadChars, MaxPaths) : "";
+        return new BatchRead(first + "\n" + string.Join("\n\n", blocks) + tail, marks);
+    }
+
+    /// <summary>A file's size on disk before it is read (#14), or null for anything the read itself will refuse without decoding.</summary>
+    private long? SizeOf(string path)
+    {
+        try
         {
-            tail.Add(FileText.NotRead(notRead, WorkingDirectory.MaxReadChars));
+            return Files.Resolve(path, forWrite: false, out string full) == FileOutcome.Ok && File.Exists(full) ? new FileInfo(full).Length : null;
         }
-
-        if (paths.Count > MaxPaths)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            tail.Add(FileText.MorePaths(paths.Skip(MaxPaths).ToList()));
+            return null;
         }
+    }
 
-        return first + "\n" + string.Join("\n\n", blocks) + (tail.Count == 0 ? "" : "\n\n" + string.Join("\n", tail));
+    /// <summary>A batch's marks, as <see cref="ReadOne"/> leaves a single read's.</summary>
+    private void Apply(IReadOnlyList<BatchMark> marks)
+    {
+        foreach (var mark in marks)
+        {
+            Files.MarkViewed(mark.Path, mark.Seen);
+            if (mark.Whole)
+            {
+                Files.MarkSeen(mark.Path, mark.Seen);
+            }
+        }
     }
 
     /// <summary>One file read with <paramref name="maxChars"/> as its cap, marked viewed when text came back and seen only when whole.</summary>
@@ -138,26 +182,35 @@ public sealed class ReadFileTool : FileTool
             return ClockText.BadInteger(MaxLinesArgument, raw);
         }
 
-        if (!TryReadPaths(arguments, out var paths, out string error))
+        if (!TryReadPaths(arguments, out var named, out string error))
         {
             return error;
         }
 
-        switch (paths.Count)
+        if (named.Count == 0)
         {
-            case 0:
-                return FileText.PathsRequired;
-            case 1:
-                // One file: synchronous, exactly as before.
-                return Describe(paths[0], start, max);
+            // A paths sent that names nothing is its own answer (#143), not "path is required".
+            return ToolArguments.Has(arguments, PathsArgument) ? FileText.PathsNamedNothing : FileText.PathsRequired;
         }
 
-        if (start is not null || max is not null)
+        // Each file once, by where it resolves (#15, #16): paths ["a", "./a"] reads as path "a" does.
+        var paths = Unique(named);
+        if (paths.Count == 1)
+        {
+            // One file: synchronous, exactly as before.
+            return Describe(paths[0], start, max);
+        }
+
+        // Only a value the one-file read takes as a window (#151): start_line 0 or 1 and max_lines 0 or less are its defaults.
+        if (start is not (null or 0 or 1) || max is > 0)
         {
             return FileText.WindowNeedsOneFile;
         }
 
-        // Off the turn's thread (2026-11-15: up to 20 files of up to 8 MB each are decoded to count their lines), Esc between files.
-        return await Task.Run(() => DescribeMany(paths, cancellationToken), cancellationToken).WaitAsync(cancellationToken).ConfigureAwait(false);
+        // Off the turn's thread (2026-11-15: up to 20 files of up to 8 MB each are decoded to count their lines), Esc between files. The
+        // marks after the await (#51): a batch Esc left behind runs on, and marks nothing.
+        var batch = await Task.Run(() => ReadMany(paths, cancellationToken), cancellationToken).WaitAsync(cancellationToken).ConfigureAwait(false);
+        Apply(batch.Marks);
+        return batch.Text;
     }
 }

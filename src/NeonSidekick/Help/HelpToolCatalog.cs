@@ -98,7 +98,7 @@ internal static class HelpToolCatalog
         T(GitStageTool.ToolName, ToolsText.GitTabTitle, SettingsField.GitLibTools, "Stages or unstages changes for the next commit."),
         T(GitCommitTool.ToolName, ToolsText.GitTabTitle, SettingsField.GitLibTools, "Commits what is staged with the message given, as the user's git identity."),
         T(GitStashTool.ToolName, ToolsText.GitTabTitle, SettingsField.GitLibTools, "Puts the working tree's changes aside as a stash and brings them back."),
-        T(GitRevertTool.ToolName, ToolsText.GitTabTitle, SettingsField.GitLibTools, "Undoes a commit with a new commit that reverses it; refuses while there are uncommitted changes."),
+        T(GitRevertTool.ToolName, ToolsText.GitTabTitle, SettingsField.GitLibTools, "Undoes a commit on the current branch with a new commit that reverses it; refuses while there are uncommitted changes."),
         T(GitTagTool.ToolName, ToolsText.GitTabTitle, SettingsField.GitLibTools, "Lists the git tags, or tags a commit, lightweight or with a message."),
         T(GitDiscardTool.ToolName, ToolsText.GitTabTitle, SettingsField.GitLibTools, "Throws uncommitted changes away for good, for the paths named or the whole tree."),
         T(GitDeleteTool.ToolName, ToolsText.GitTabTitle, SettingsField.GitLibTools, "Removes a local branch, a tag or a stash."),
@@ -413,7 +413,8 @@ internal static class HelpToolCatalog
         ArgumentNullException.ThrowIfNull(entry);
         string? needs = entry.Needs.Count == 0 ? null : string.Join("; ", entry.Needs.Select(n => NeedText(n, windows)));
         string? macLine = mac && HelpMac.Tools.TryGetValue(entry.Name, out var line) ? line : null;
-        return HelpText.Tool(entry.Name, entry.Does, entry.Group, SwitchText(entry, windows), PlanTools.Allowed(entry.Name), entry.Headless, entry.NeedsPane, needs, entry.Setup, macLine, live?.Line(entry));
+        return HelpText.Tool(entry.Name, entry.Does, entry.Group, SwitchText(entry, windows),
+            PlanTools.Allowed(entry.Name) ? HelpText.PlanOffered : PlanTools.ReadForms.Contains(entry.Name) ? HelpText.PlanListOnly : HelpText.PlanNotOffered, entry.Headless, entry.NeedsPane, needs, entry.Setup, macLine, live?.Line(entry));
     }
 
     /// <summary>A group: its switch and live line, then each tool with what it does.</summary>

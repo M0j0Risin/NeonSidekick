@@ -107,6 +107,12 @@ public sealed class ProcessTool : AIFunction
             return ShellText.BadAction(action, string.Join(", ", Actions));
         }
 
+        // Only log reads limit (#153): refused elsewhere, so a hint toward it never leads to a value silently dropped.
+        if (action != LogAction && ToolArguments.Has(arguments, LimitArgument))
+        {
+            return ArgumentText.NotReadBy(LimitArgument, action, LogAction);
+        }
+
         int maxChars = Math.Clamp(_effective().ShellOutputMaxChars, AppSettingsData.MinShellOutputMaxChars, AppSettingsData.MaxShellOutputMaxChars);
         if (action == ListAction)
         {

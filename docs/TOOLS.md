@@ -24,9 +24,10 @@ Settings in *italics* are in [SETTINGS.md](SETTINGS.md), with their values and d
 
 * **A group appears only when it can work:** Obsidian needs a vault, the databases and UNC a connection or share you ticked, Home Assistant its URL and key, ComfyUI its URL and a workflow.
 * **Headless** leaves some tools out, and refuses anything that would stop to ask you: [Before you start](HEADLESS.md#before-you-start).
-* **Plan mode** ([COMMANDS.md](COMMANDS.md#plan-mode)) keeps the reading tools, `ask_user`, `camera_capture`, the screen tools and `neon_advisor`, and adds `present_plan`. It drops the MCP tools and every tool that changes or starts something (`start_timer`, `open`, `process`, `image_edit`…).
+* **Plan mode** ([COMMANDS.md](COMMANDS.md#plan-mode)) keeps the reading tools, `ask_user`, `camera_capture`, the screen tools and `neon_advisor`, and adds `present_plan`. `gitlib_tag`, `gitlib_branch` and `gitlib_stash` stay for listing only. It drops the MCP tools and every tool that changes or starts something (`start_timer`, `open`, `process`, `image_edit`…).
 * **Code audit** ([COMMANDS.md](COMMANDS.md#code-audit)) keeps the file, picture, PDF and git reads, `neon_advisor`, `neon_help`, `get_current_time`, `load_skill`, `recall_memory` and `ask_user`, and adds `present_audit`. The web's reads join under *Code audit web research*; an advisor in a pass gets the same set.
 * **On a Mac:** what runs there is in [MAC.md](MAC.md#what-works); a group that behaves differently has its own "… on a Mac" section below.
+* **A misnamed argument is answered:** a call with an argument the tool doesn't take runs nothing and is told the likely name. A tool that takes no arguments runs, with a note; an MCP tool is checked only when its schema is closed.
 
 ## Core
 
@@ -127,12 +128,12 @@ Under *File tools*. Paths are relative to the working directory; nothing outside
 |---|---|---|
 | `get_working_directory` | — | The working directory's path. Called at the start of every conversation. |
 | `search_files` | `text?, path?, files?, regex?, context?, output?, order?, limit?, depth?` | Searches text files for a word, phrase or regex. Without `text`, lists a folder, a tree (`depth` 2–4), matching names or the newest files (the `images` folder too). |
-| `file_info` | `path?, paths?` | A file's size, time, lines, words, line ending and BOM, or a folder's counts; also whether something exists; `paths` checks several. |
-| `read_file` | `path?, paths?, start_line?, max_lines?` | Reads a text file or part of it in its encoding (UTF-8, UTF-16 or UTF-32, else Windows-1252 as a guess the header names); `paths` reads up to 20 sharing one 32,000-character limit, and a longer line is cut. |
+| `file_info` | `path?, paths?` | A file's size, time, lines, words, line ending and BOM, or a folder's counts; also whether something exists. No path is the working directory; `paths` checks up to 20. |
+| `read_file` | `path?, paths?, start_line?, max_lines?` | Reads a text file or part of it (a negative `start_line` counts from the end) in its encoding: UTF-8, UTF-16 or UTF-32, else Windows-1252 as a guess the header names. `paths` reads up to 20 whole, sharing 32,000 characters; a line over 32,000 characters is cut. |
 | `read_pdf` | `path, pages?, pictures?, find?, fields?, share?` | A PDF's text page by page; `find` lists pages holding words, `pictures` sends pages as pictures, `fields` lists a form's fields ([Reading PDFs](#reading-pdfs)). |
 | `read_office` | `path, sheet?, range?, slides?, notes?, formulas?, from_char?, share?` | A Word document as Markdown, an Excel workbook's sheets and cells as tables, or a PowerPoint deck's slides ([Reading Office files](#reading-office-files)). |
 | `write_file` | `path, content, mode?` | Writes a text file: `create` (default), `overwrite` or `append`. Without a mode it replaces only a file the model read whole, wrote or patched, unchanged since. Keeps the file's encoding, BOM and line ending; an append stops at 8 MB. |
-| `patch_file` | `path, old_text?, new_text?, replace_all?, edits?` | Replaces `old_text` once (or everywhere, with `replace_all`), tolerating spacing, indentation and quote differences. `edits` makes several changes in order, all or none. An edit already made isn't made twice; the result stays under 8 MB. |
+| `patch_file` | `path, old_text?, new_text?, replace_all?, edits?` | Replaces `old_text` once (or everywhere, with `replace_all`), tolerating spacing, indentation and quotes; a one-line `old_text` must match closely. `edits` makes several changes in order, all or none, and skips one already made. |
 | `create_directory` | `path` | Creates a folder and any missing parents. |
 | `move` | `from, to, overwrite?` | Renames or moves a file or folder; replaces nothing unless `overwrite`, and says what it replaced. |
 | `copy` | `from, to, overwrite?` | Copies under the same rule; a folder over a folder merges. Hidden files come along; every `.git` and guarded file is left out and named. Refused if it would leave under 1 GB free. |
@@ -315,8 +316,8 @@ Under *GitLib tools*: git inside the app, for when the model should never run `g
 | `gitlib_stage` | `action, paths, path?` | `stage` or `unstage` paths, or `.` for everything under `path`. |
 | `gitlib_commit` | `message, amend?, allow_empty?, path?` | Commits what is staged as `user.name` / `user.email`. |
 | `gitlib_stash` | `action, message?, index?, include_untracked?, path?` | `push`, `pop`, `apply` or `list` stashes. |
-| `gitlib_revert` | `ref, message?, path?` | Undoes a commit with a new one; refuses while there are uncommitted changes, and a revert that would conflict changes nothing. |
-| `gitlib_tag` | `name?, ref?, message?, path?` | Lists the tags, or tags a commit: lightweight, or annotated with a message. Never moves an existing tag. |
+| `gitlib_revert` | `ref, message?, path?` | Undoes a commit on the current branch with a new one. Refuses with uncommitted changes, mid-merge, on a detached HEAD or over a file git doesn't track; a conflict changes nothing. |
+| `gitlib_tag` | `name?, ref?, message?, path?` | Lists the tags newest first, or tags a commit: lightweight, or annotated with a message. Never moves a tag or takes a name a branch, tag or commit already has. |
 | `gitlib_discard` | `paths?, ref?, path?` | Throws away uncommitted changes in `paths`, or resets hard (untracked files stay). |
 | `gitlib_delete` | `kind, name?, index?, path?` | Removes a local `branch` (never the checked-out one), a `tag`, or a `stash` by index. |
 
@@ -1117,8 +1118,7 @@ Under *Agent skills*.
 | `skill_editor` | `action, scope?, name, description?, instructions?, path?, content?, old_text?, new_text?, replace_all?, summary?` | Creates or updates a skill in `profile` (default) or `global` scope (*Global skills*); `write_file` and `edit_file` change a supporting file, `edit_file` on `SKILL.md` part of its instructions. |
 
 * `skill_editor` never deletes, and never touches an external skill or one you [locked](SETTINGS.md#locking-a-skill) or disabled.
-* **Writes need their text:** `skill_editor`'s `write_file`, `write_file`, `unc_write` and `vault_write` refuse a call with no `content`; `edit_file`, `patch_file` and `unc_patch` one with no `new_text`, as does each of their `edits`. An empty `""` is allowed; a pruned stub copied from the history is not.
-* **A misnamed argument is answered:** a tool sent an argument it doesn't take runs nothing and names the right one.
+* **Writes need their text:** `skill_editor`'s `write_file`, `write_file`, `unc_write` and `vault_write` refuse a call with no `content`; `edit_file`, `patch_file` and `unc_patch` one with no `new_text`, as does each item of `patch_file`'s and `unc_patch`'s `edits`. An empty `""` is allowed; a pruned stub copied from the history is not.
 * **A cut result isn't written back:** a write, command or MCP tool whose arguments hold a cut result's marker is refused; reads and searches pass it. A cut `read_file` no longer counts as read, so `write_file` without a mode won't replace that file.
 * **A skill's files by full path:** the file tools refuse a path inside a skill folder and name `load_skill` instead.
 

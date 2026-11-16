@@ -258,7 +258,7 @@ public enum SettingsField
     /// <summary>Typed: the seconds one MCP server gets to connect and list its tools, 5 to 300 (<see cref="Settings.AppSettingsData.McpConnectTimeoutSeconds"/>). The Options tab of <c>/mcp</c>' second row (2026-09-20); no reconnect (read at the next connect).</summary>
     McpConnectTimeoutSeconds,
 
-    /// <summary>Whether a turn offers the eleven git tools (<see cref="Settings.AppSettingsData.GitLibTools"/>). The GitLib tab of <c>/tools</c>' first row (2026-09-20; off by default since 2026-09-21; <c>Git native tools</c> from 2026-09-21, <c>GitLib tools</c> since 2026-09-30); a toggle, no reconnect (read at each turn).</summary>
+    /// <summary>Whether a turn offers the thirteen git tools (<see cref="Settings.AppSettingsData.GitLibTools"/>). The GitLib tab of <c>/tools</c>' first row (2026-09-20; off by default since 2026-09-21; <c>Git native tools</c> from 2026-09-21, <c>GitLib tools</c> since 2026-09-30); a toggle, no reconnect (read at each turn).</summary>
     GitLibTools,
 
     /// <summary>Typed: the most patch lines one <c>gitlib_diff</c> shows, 20 to 5000 (<see cref="Settings.AppSettingsData.GitLibDiffMaxLines"/>). The GitLib tab's second row; no reconnect (read at each call).</summary>

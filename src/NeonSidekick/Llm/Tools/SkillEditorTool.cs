@@ -219,9 +219,13 @@ public sealed class SkillEditorTool : AIFunction, IRefusesPrunedStubs, IAcceptsA
     /// With the file actions off, their arguments too: a <c>write_file</c> sent anyway is answered that it is not an action, which says more
     /// than naming its arguments would.
     /// </summary>
-    public IReadOnlyCollection<string> ExtraArguments => _files is null
-        ? [ScopeArgument, PathArgument, ContentArgument, OldTextArgument, NewTextArgument, ReplaceAllArgument]
-        : [ScopeArgument];
+    public IReadOnlyCollection<string> ExtraArguments => _files is null ? FilesOffExtras : FilesOnExtras;
+
+    /// <summary>The file actions' own arguments, which <c>create</c> and <c>update</c> refuse (#131). Before its users: statics run in order.</summary>
+    private static readonly string[] FileArguments = [PathArgument, ContentArgument, OldTextArgument, NewTextArgument, ReplaceAllArgument];
+
+    private static readonly string[] FilesOffExtras = [ScopeArgument, .. FileArguments];
+    private static readonly string[] FilesOnExtras = [ScopeArgument];
 
     public override string Name => ToolName;
 
@@ -460,8 +464,12 @@ public sealed class SkillEditorTool : AIFunction, IRefusesPrunedStubs, IAcceptsA
     protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
-        switch (ToolArguments.ReadString(arguments, ActionArgument).Trim().ToLowerInvariant())
+        string action = ToolArguments.ReadString(arguments, ActionArgument).Trim().ToLowerInvariant();
+        switch (action)
         {
+            // A file argument beside create or update (2026-11-15, #131) was dropped silently; a harmless value (an empty one, false) is not one.
+            case UpdateAction or CreateAction when FileArgumentsSent(arguments) is { Count: > 0 } sent:
+                return SkillText.FileArgumentsOnSkill(action, sent, _files is not null);
             // A missing content or new_text is not "" (2026-10-17, the toki-pona session: write_file sent with old_text and new_text and no
             // content emptied a 27 KB file). Here, where absent is told from empty; DescribeWrite/DescribeEdit take plain strings.
             case WriteFileAction when _files is not null && !ToolArguments.Has(arguments, ContentArgument):
@@ -507,6 +515,9 @@ public sealed class SkillEditorTool : AIFunction, IRefusesPrunedStubs, IAcceptsA
             ToolArguments.ReadString(arguments, SummaryArgument),
             cancellationToken).ConfigureAwait(false);
     }
+
+    private static List<string> FileArgumentsSent(AIFunctionArguments arguments) =>
+        [.. FileArguments.Where(name => arguments.TryGetValue(name, out var value) && !ToolArgumentCheck.Harmless(value))];
 }
 
 /// <summary>

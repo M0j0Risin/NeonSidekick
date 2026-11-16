@@ -30,9 +30,9 @@ public sealed class GitLogTool : GitTool
             "ref": { "type": "string", "description": "The commit to start from: a branch, a tag, a sha, HEAD~3. Leave it out for HEAD." },
             "max_commits": { "type": "integer", "description": "How many commits at most, 1 to 200. Leave it out for the user's default." },
             "since": { "type": "string", "description": "Only commits from then on: an age (30m, 2h, 1d, 1w) or a moment (2026-10-14T21:00, in the user's time zone unless it gives an offset)." },
-            "until": { "type": "string", "description": "Only commits until then: an age or a moment; a bare date means its midnight." },
-            "author": { "type": "string", "description": "Only commits whose author's name or email holds this, case ignored." },
-            "grep": { "type": "string", "description": "Only commits whose message holds this, case ignored." }
+            "until": { "type": "string", "description": "Only commits until then: an age or a moment; a bare date means the end of that day." },
+            "author": { "type": "string", "description": "Only commits whose author's name or email holds this: plain text, case ignored, not a regex." },
+            "grep": { "type": "string", "description": "Only commits whose message holds this: plain text, case ignored, not a regex." }
           }
         }
         """);
@@ -94,12 +94,18 @@ public sealed class GitLogTool : GitTool
     private GitLogFilter? ReadFilter(AIFunctionArguments arguments, out string? error)
     {
         var now = Git.Now;
-        var (since, sinceError) = AdminArguments.Moment(arguments, SinceArgument, now, Zone, end: false, GitText.BadTime);
-        var (until, untilError) = AdminArguments.Moment(arguments, UntilArgument, now, Zone, end: true, GitText.BadTime);
+        var (since, sinceError) = AdminArguments.Moment(arguments, SinceArgument, now, Zone, end: false, ArgumentText.BadTime);
+        var (until, untilError) = AdminArguments.Moment(arguments, UntilArgument, now, Zone, end: true, ArgumentText.BadTime);
         error = sinceError ?? untilError;
         if (error is not null)
         {
             return null;
+        }
+
+        // A bare date's until is the end of that day (#42), as a reader means "until 2026-11-14".
+        if (until is { } end && AdminArguments.Optional(arguments, UntilArgument) is { } untilText && IsBareDate(untilText, end))
+        {
+            until = EndOfDay(end, Zone);
         }
 
         if (since is not null && until is not null && since > until)
@@ -108,8 +114,9 @@ public sealed class GitLogTool : GitTool
             return null;
         }
 
-        string? author = AdminArguments.Optional(arguments, AuthorArgument);
-        string? grep = AdminArguments.Optional(arguments, GrepArgument);
+        // Read raw (#156): " fix" and "fix" are different searches; only a blank one is left out.
+        string? author = Raw(arguments, AuthorArgument);
+        string? grep = Raw(arguments, GrepArgument);
         foreach (var (name, text) in (ReadOnlySpan<(string, string?)>)[(AuthorArgument, author), (GrepArgument, grep)])
         {
             if (text is { Length: > ArgumentText.MaxTextChars })
@@ -120,5 +127,26 @@ public sealed class GitLogTool : GitTool
         }
 
         return new GitLogFilter(since, until, author, grep);
+    }
+
+    private static string? Raw(AIFunctionArguments arguments, string name) =>
+        ToolArguments.ReadString(arguments, name) is { } text && !string.IsNullOrWhiteSpace(text) ? text : null;
+
+    /// <summary>
+    /// Whether <paramref name="text"/> named a bare date (2026-11-15, #42): no age (an age read at midnight lands on one too), no time, no
+    /// offset, and <paramref name="moment"/> at midnight.
+    /// </summary>
+    internal static bool IsBareDate(string text, DateTimeOffset moment) =>
+        !TimeArgument.IsAge(text) && !text.Contains(':', StringComparison.Ordinal) && !TimeArgument.HasOffsetText(text) && moment.TimeOfDay == TimeSpan.Zero;
+
+    /// <summary>
+    /// 23:59:59 of <paramref name="midnight"/>'s day in <paramref name="zone"/> (#42), its offset the zone's for that time, so a day with a
+    /// DST change is honored. Inclusive, as commit times are whole seconds.
+    /// </summary>
+    internal static DateTimeOffset EndOfDay(DateTimeOffset midnight, TimeZoneInfo zone)
+    {
+        ArgumentNullException.ThrowIfNull(zone);
+        var last = DateTime.SpecifyKind(midnight.DateTime.Date.AddDays(1).AddSeconds(-1), DateTimeKind.Unspecified);
+        return new DateTimeOffset(last, zone.GetUtcOffset(last));
     }
 }

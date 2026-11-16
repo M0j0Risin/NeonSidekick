@@ -34,6 +34,20 @@ public sealed class McpPipeServer : IAsyncDisposable
         }
         """);
 
+    /// <summary>
+    /// <see cref="Schema"/> closed with <c>additionalProperties: false</c> (2026-11-15, the tool-arguments review's #2): the argument check
+    /// judges a server's tool only then, so a test of that path asks for it.
+    /// </summary>
+    private static readonly JsonElement ClosedSchema = ToolSchema.Parse("""
+        {
+          "type": "object",
+          "properties": {
+            "text": { "type": "string", "description": "What to echo back." }
+          },
+          "additionalProperties": false
+        }
+        """);
+
     private readonly Pipe _clientToServer = new();
     private readonly Pipe _serverToClient = new();
     private readonly CancellationTokenSource _stop = new();
@@ -64,9 +78,10 @@ public sealed class McpPipeServer : IAsyncDisposable
     /// <summary>The client side of the pipes: what <c>McpClient.CreateAsync</c> takes. One client per server.</summary>
     public IClientTransport ClientTransport => new StreamClientTransport(_clientToServer.Writer.AsStream(), _serverToClient.Reader.AsStream());
 
-    /// <summary>Starts a server listing <paramref name="tools"/>; it runs until disposed.</summary>
-    public static McpPipeServer Start(IReadOnlyList<(string Name, string Description)> tools, string serverName = "neon-pipe")
+    /// <summary>Starts a server listing <paramref name="tools"/>, their schema closed when <paramref name="closed"/>; it runs until disposed.</summary>
+    public static McpPipeServer Start(IReadOnlyList<(string Name, string Description)> tools, string serverName = "neon-pipe", bool closed = false)
     {
+        var schema = closed ? ClosedSchema : Schema;
         ArgumentNullException.ThrowIfNull(tools);
         var server = new McpPipeServer(tools);
         var options = new McpServerOptions
@@ -77,7 +92,7 @@ public sealed class McpPipeServer : IAsyncDisposable
             {
                 ListToolsHandler = (_, _) => ValueTask.FromResult(new ListToolsResult
                 {
-                    Tools = tools.Select(t => new Tool { Name = t.Name, Description = t.Description, InputSchema = Schema }).ToList(),
+                    Tools = tools.Select(t => new Tool { Name = t.Name, Description = t.Description, InputSchema = schema }).ToList(),
                 }),
                 CallToolHandler = (request, _) => ValueTask.FromResult(server.Call(request.Params)),
             },

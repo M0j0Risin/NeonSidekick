@@ -173,9 +173,65 @@ public class PlanTests : IDisposable
         var names = EveryToolName();
 
         Assert.True(names.Count > 50, string.Join(", ", names));
-        Assert.All(names, name => Assert.True(PlanTools.ReadOnly.Contains(name) ^ PlanTools.Mutating.Contains(name), $"{name}: add it to PlanTools.ReadOnly or PlanTools.Mutating"));
-        Assert.Empty(PlanTools.ReadOnly.Intersect(PlanTools.Mutating));
-        Assert.Empty(PlanTools.ReadOnly.Concat(PlanTools.Mutating).Except(names));
+        int Lists(string name) => (PlanTools.ReadOnly.Contains(name) ? 1 : 0) + (PlanTools.Mutating.Contains(name) ? 1 : 0) + (PlanTools.ReadForms.Contains(name) ? 1 : 0);
+        Assert.All(names, name => Assert.True(Lists(name) == 1, $"{name}: add it to one of PlanTools.ReadOnly, PlanTools.ReadForms or PlanTools.Mutating"));
+        Assert.Empty(PlanTools.ReadOnly.Concat(PlanTools.Mutating).Concat(PlanTools.ReadForms).Except(names));
+    }
+
+    private static FunctionCallContent Call(string name, params (string Key, object? Value)[] arguments) =>
+        new("c1", name, arguments.ToDictionary(a => a.Key, a => a.Value));
+
+    [Fact]
+    public void TheReadForms_AreClassedByTheCall_TheirListFormAReadAndTheRestAChange()
+    {
+        Assert.Equal([GitBranchTool.ToolName, GitStashTool.ToolName, GitTagTool.ToolName], PlanTools.ReadForms.Order(StringComparer.Ordinal));
+
+        Assert.True(PlanTools.Allowed(Call(GitTagTool.ToolName)));
+        Assert.True(PlanTools.Allowed(Call(GitTagTool.ToolName, ("name", "  "), ("path", "sub"))));
+        Assert.False(PlanTools.Allowed(Call(GitTagTool.ToolName, ("name", "v1"))));
+        Assert.True(PlanTools.Allowed(Call(GitBranchTool.ToolName, ("action", " LIST "))));
+        Assert.True(PlanTools.Allowed(Call(GitStashTool.ToolName, ("action", JsonDocument.Parse("\"list\"").RootElement.Clone()))));
+        Assert.False(PlanTools.Allowed(Call(GitBranchTool.ToolName, ("action", "create"), ("name", "x"))));
+        Assert.False(PlanTools.Allowed(Call(GitStashTool.ToolName, ("action", "pop"))));
+        Assert.False(PlanTools.Allowed(Call(GitStashTool.ToolName)));   // no action: not the list form
+        Assert.True(PlanTools.Allowed(Call("read_file", ("path", "a"))));
+        Assert.False(PlanTools.Allowed(Call("write_file", ("path", "a"))));
+
+        // By name alone they are not read-only (the advisors' list), but plan mode offers them.
+        Assert.All(PlanTools.ReadForms, name => Assert.False(PlanTools.Allowed(name)));
+        Assert.All(PlanTools.ReadForms, name => Assert.True(PlanTools.Offered(name)));
+
+        // /rewind's list: a list isn't a change, a tag is.
+        Assert.False(ConversationRewind.Changes(Call(GitTagTool.ToolName), null));
+        Assert.True(ConversationRewind.Changes(Call(GitTagTool.ToolName, ("name", "v1")), null));
+    }
+
+    [Fact]
+    public async Task AListOnlyTwin_RefusesItsOtherForms_AndRunsItsListForm_WhileTheFullToolRefusesNothing()
+    {
+        var git = new NeonSidekick.Git.GitAccess(_files, _time);
+        var full = new GitBranchTool(git, () => new NeonSidekick.Settings.AppSettingsData());
+        var twin = full.AsListOnly();
+
+        Assert.Equal(full.Name, twin.Name);
+        Assert.Equal(full.JsonSchema.GetRawText(), twin.JsonSchema.GetRawText());
+        Assert.Same(twin, ((IListOnlyTwin)twin).AsListOnly());
+        Assert.EndsWith(" " + PlanText.ListOnlyNote, twin.Description, StringComparison.Ordinal);
+        Assert.DoesNotContain(PlanText.ListOnlyNote, full.Description, StringComparison.Ordinal);
+
+        var create = new AIFunctionArguments(new Dictionary<string, object?> { ["action"] = "create", ["name"] = "x" });
+        string refusal = PlanText.ListOnlyRefusal(GitBranchTool.ToolName, PlanText.ActionListForm);
+        Assert.Equal(refusal, ((IListOnlyTwin)twin).Refusal(create));
+        Assert.Equal(refusal, await twin.InvokeAsync(create));
+        Assert.Null(full.Refusal(create));
+        var list = new AIFunctionArguments(new Dictionary<string, object?> { ["action"] = "list" });
+        Assert.Null(((IListOnlyTwin)twin).Refusal(list));
+        Assert.NotEqual(refusal, await twin.InvokeAsync(list));   // it ran (no repository here: git's own answer)
+
+        var tag = new GitTagTool(git, () => new NeonSidekick.Settings.AppSettingsData()).AsListOnly();
+        Assert.Equal(PlanText.ListOnlyRefusal(GitTagTool.ToolName, PlanText.TagListForm), ((IListOnlyTwin)tag).Refusal(new Dictionary<string, object?> { ["name"] = "v1" }));
+        var stash = new GitStashTool(git, () => new NeonSidekick.Settings.AppSettingsData()).AsListOnly();
+        Assert.Equal(PlanText.ListOnlyRefusal(GitStashTool.ToolName, PlanText.ActionListForm), ((IListOnlyTwin)stash).Refusal(new Dictionary<string, object?> { ["action"] = "push" }));
     }
 
     [Fact]
@@ -185,9 +241,9 @@ public class PlanTests : IDisposable
         var write = new StubTool("write_file");
         var mcp = new StubTool("srv__read_file");
 
-        var widened = PlanTools.Widen(new HashSet<string> { "zip" }, [read, write], null, [mcp]);
+        var widened = PlanTools.Widen(new HashSet<string> { "zip" }, [read, write, new StubTool(GitTagTool.ToolName), new StubTool(GitCommitTool.ToolName)], null, [mcp]);
 
-        Assert.Equal(["srv__read_file", "write_file", "zip"], widened.Order(StringComparer.Ordinal));
+        Assert.Equal([GitCommitTool.ToolName, "srv__read_file", "write_file", "zip"], widened.Order(StringComparer.Ordinal));   // gitlib_tag stays, as its twin
     }
 
     [Fact]

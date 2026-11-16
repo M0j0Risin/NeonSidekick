@@ -75,6 +75,13 @@ public static class NativeRedirect
 
         // The verb straight after the program alone (2026-10-12): git -C sub status runs in sub, where git_status never looks.
         string prefix = CommandPrefix.Of(segments[0], skipOptions: false, kind);
+        if (PastTheVerb(prefix, segments[0], kind) is { } form)
+        {
+            // A form the verb's tool can't do (2026-11-15, the tool-arguments review's #32): to gitlib_delete when the turn offers it, else
+            // the shell keeps the line; a form with no tool at all (Delete is null) stays the shell's.
+            return form.Delete && offered.Contains(Llm.Tools.GitDeleteTool.ToolName) ? (form.Prefix, Llm.Tools.GitDeleteTool.ToolName) : null;
+        }
+
         return Table.TryGetValue(prefix, out string? tool) && offered.Contains(tool)
             && !(macAware && OperatingSystem.IsMacOS() && DescribesCommand(prefix, kind))
             ? (prefix, tool)
@@ -89,6 +96,46 @@ public static class NativeRedirect
     /// </summary>
     public static (string Prefix, string Tool)? For(string command, IReadOnlySet<string> offered, ShellKind kind) =>
         For(command, offered, kind, macAware: true);
+
+    /// <summary>
+    /// The forms of a git verb its own tool can't do (2026-11-15, the tool-arguments review's #32: <see cref="CommandPrefix.Of"/> stops at
+    /// <c>git tag</c>, so <c>git tag -d v1</c> went to <c>gitlib_tag</c>, which made the model loop). Read past the verb: a delete flag
+    /// anywhere after it (<c>git branch -v -d x</c>), or the first word after <c>stash</c> that isn't an option. <c>git tag -d</c>,
+    /// <c>git branch -d/-D/--delete</c> and <c>git stash drop</c> are deletes (<c>gitlib_delete</c>; the branch and stash forms are a widening
+    /// found in pass 39); <c>git revert --abort/--continue/--quit/--skip</c> and <c>git stash clear</c> have no tool. Null for any other line.
+    /// </summary>
+    private static (string Prefix, bool Delete)? PastTheVerb(string prefix, string segment, ShellKind kind)
+    {
+        if (prefix is not ("git tag" or "git branch" or "git stash" or "git revert"))
+        {
+            return null;
+        }
+
+        string verb = prefix[4..];
+        var tokens = CommandPrefix.Tokens(segment, kind, out _);
+        int at = tokens.FindIndex(t => t.Equals(verb, StringComparison.OrdinalIgnoreCase));
+        var rest = tokens.Skip(at + 1).ToList();
+        bool Has(params string[] flags) => rest.Any(t => flags.Contains(t, StringComparer.Ordinal));
+        switch (prefix)
+        {
+            case "git tag" when Has("-d", "--delete"):
+                return ("git tag -d", true);
+            case "git branch" when Has("-d", "-D", "--delete"):
+                return ("git branch -d", true);
+            case "git revert" when Has("--abort", "--continue", "--quit", "--skip"):
+                return ("git revert --abort", false);
+            case "git stash":
+                string? sub = rest.FirstOrDefault(t => !t.StartsWith('-'))?.ToLowerInvariant();
+                return sub switch
+                {
+                    "drop" => ("git stash drop", true),
+                    "clear" => ("git stash clear", false),
+                    _ => null,
+                };
+            default:
+                return null;
+        }
+    }
 
     /// <summary>Whether <paramref name="prefix"/> in <paramref name="kind"/> is the Unix shells' <c>type</c>, a command's description. Pure.</summary>
     public static bool DescribesCommand(string prefix, ShellKind kind) =>

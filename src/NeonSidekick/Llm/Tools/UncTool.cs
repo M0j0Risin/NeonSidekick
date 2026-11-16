@@ -93,9 +93,10 @@ public abstract class UncTool : AIFunction
             {
                 return change(files, relative, target);
             }
-            catch
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                // Thrown after it began: what changed is not known, so it is logged as partway (review J8).
+                // Thrown after it began: what changed is not known, so it is logged as partway (review J8). A cancel is not (2026-11-15, the
+                // tool-arguments review's #17, #30): the edits check it last before the save, so nothing was written.
                 UncAccess.Audit(target, action, relative, to, partial: true);
                 throw;
             }

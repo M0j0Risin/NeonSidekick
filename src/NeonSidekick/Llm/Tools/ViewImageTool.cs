@@ -110,24 +110,22 @@ public sealed class ViewImageTool : FileTool
     public (string Text, IReadOnlyList<ImageAttachment> Images) Load(IReadOnlyList<string> given, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(given);
-        var paths = given.Select(p => p.Trim()).Where(p => p.Length > 0).Distinct(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal).ToList();
-        int limit = Limit;
+        var paths = given.Select(p => p.Trim()).Where(p => p.Length > 0).Distinct(PathTextComparer).ToList();
         var lines = new List<string>(paths.Count);
         var images = new List<ImageAttachment>(paths.Count);
-        foreach (var path in paths.Take(limit))
+        // The shared loop (2026-11-15, the tool-arguments review's #47), with this tool's own cap, the setting.
+        string? rest = EachUpTo(paths, Limit, path =>
         {
-            cancellationToken.ThrowIfCancellationRequested();
             var result = FilesFor(path).ReadImage(path);
             lines.Add(FileText.Image(result));
             if (result.Outcome == FileOutcome.Ok && result.Image is { } image)
             {
                 images.Add(image);
             }
-        }
-
-        if (paths.Count > limit)
+        }, cancellationToken);
+        if (rest is not null)
         {
-            lines.Add(FileText.MorePaths(paths.Skip(limit).ToList()));
+            lines.Add(rest);
         }
 
         return (string.Join("\n", lines), images);

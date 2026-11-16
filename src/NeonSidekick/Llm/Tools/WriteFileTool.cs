@@ -19,7 +19,7 @@ public sealed class WriteFileTool : FileTool, IRefusesPrunedStubs, IAcceptsArgum
     public const string ToolName = "write_file";
 
     /// <summary>The edit tool's arguments, read only to point an edit sent here at <c>patch_file</c>.</summary>
-    public static readonly IReadOnlyCollection<string> EditArguments = [PatchFileTool.OldTextArgument, PatchFileTool.NewTextArgument, PatchFileTool.EditsArgument];
+    public static readonly IReadOnlyCollection<string> EditArguments = [PatchFileTool.OldTextArgument, PatchFileTool.NewTextArgument, PatchFileTool.ReplaceAllArgument, PatchFileTool.EditsArgument];
 
     /// <summary>
     /// <c>old_text</c>, <c>new_text</c> and <c>edits</c>, read for the "use patch_file" refusal (<see cref="WriteFileTool.SentEdit"/>), never run (2026-11-15, #42).
@@ -164,6 +164,12 @@ public sealed class WriteFileTool : FileTool, IRefusesPrunedStubs, IAcceptsArgum
             return new ValueTask<object?>(FileText.ContentRequired(PatchFileTool.ToolName, SentEdit(arguments)));
         }
 
+        // Content and an edit both (#1, #67): a whole-file write would drop the edit, so neither runs.
+        if (SentEdit(arguments))
+        {
+            return new ValueTask<object?>(FileText.ContentWithEdit(PatchFileTool.ToolName));
+        }
+
         if (StubSent(arguments, ContentArgument) is { } stub)
         {
             return new ValueTask<object?>(stub);
@@ -194,9 +200,19 @@ public sealed class WriteFileTool : FileTool, IRefusesPrunedStubs, IAcceptsArgum
     public static string? StubSent(AIFunctionArguments arguments, string argument) =>
         Llm.ConversationCompactor.IsPrunedStub(ToolArguments.ReadString(arguments, argument)) ? FileText.PrunedStubSent(argument) : null;
 
-    /// <summary>Whether a call sent an edit's arguments (<c>old_text</c> or <c>new_text</c>) in place of a write's <c>content</c> (2026-10-17).</summary>
-    public static bool SentEdit(AIFunctionArguments arguments) =>
-        EditArguments.Any(name => ToolArguments.Has(arguments, name));
+    /// <summary>
+    /// Whether a call sent an edit (2026-10-17) with a real value (2026-11-15, the tool-arguments review's #1/#22): a non-blank
+    /// <c>old_text</c>, a non-empty <c>new_text</c>, <c>replace_all: true</c>, or a non-empty <c>edits</c>. A schema-filling
+    /// <c>old_text: ""</c> beside <c>content</c> is no edit, so the write goes ahead.
+    /// </summary>
+    public static bool SentEdit(AIFunctionArguments arguments)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+        return ToolArguments.ReadString(arguments, PatchFileTool.OldTextArgument).Trim().Length > 0
+            || ToolArguments.ReadString(arguments, PatchFileTool.NewTextArgument).Length > 0
+            || (ToolArguments.TryReadBoolean(arguments, PatchFileTool.ReplaceAllArgument, out bool? all, out _) && all == true)
+            || (arguments.TryGetValue(PatchFileTool.EditsArgument, out var edits) && !ToolArgumentCheck.Harmless(edits));
+    }
 }
 
 /// <summary>What <c>write_file</c> does with a file that is there: refuses (<see cref="Create"/>), replaces it, or adds to its end.</summary>

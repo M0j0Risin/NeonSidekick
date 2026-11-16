@@ -107,8 +107,22 @@ public abstract class ServerTool<TAccess> : AIFunction, IAcceptsArguments where 
     /// <summary>The refusal of <see cref="RetiredArgument"/>.</summary>
     protected abstract string RetiredRefusal { get; }
 
-    /// <summary>The retired argument, read for <see cref="RetiredRefusal"/>'s own words rather than the generic misnamed-argument answer (2026-11-15, #42).</summary>
-    public IReadOnlyCollection<string> ExtraArguments => RetiredArgument is { } retired ? [retired] : [];
+    /// <summary>
+    /// The retired argument, read for <see cref="RetiredRefusal"/>'s own words rather than the generic misnamed-argument answer (2026-11-15, #42);
+    /// and on a query tool while nothing may be saved, the export's three (the tool-arguments review's #27): its schema leaves them out then, yet
+    /// <see cref="ReadExport"/> answers them with the save refusal, which says why. One cached list per state (#82).
+    /// </summary>
+    public IReadOnlyCollection<string> ExtraArguments => ReadsExport && !CanSave
+        ? _exportExtras ??= [.. Retired(), ToArgument, SheetArgument, OverwriteArgument]
+        : _plainExtras ??= Retired();
+
+    private string[]? _plainExtras;
+    private string[]? _exportExtras;
+
+    private string[] Retired() => RetiredArgument is { } retired ? [retired] : [];
+
+    /// <summary>Whether the tool reads <c>to</c>, <c>sheet</c> and <c>overwrite</c> (<see cref="ReadExport"/>): the six query tools.</summary>
+    protected virtual bool ReadsExport => false;
 
     /// <summary>
     /// Every tool's call: refused when it still names the retired argument (a model that remembers it would otherwise believe it reached
@@ -136,7 +150,7 @@ public abstract class ServerTool<TAccess> : AIFunction, IAcceptsArguments where 
     /// The export's arguments read: the target, or null with no <c>to</c>; the refusal for an <c>overwrite</c> that is not a boolean, or a
     /// <c>sheet</c> or <c>overwrite</c> sent with no <c>to</c> (they would otherwise be dropped, and the rows returned to the chat).
     /// </summary>
-    protected static string? ReadExport(AIFunctionArguments arguments, out ExportTarget? export)
+    protected string? ReadExport(AIFunctionArguments arguments, out ExportTarget? export)
     {
         ArgumentNullException.ThrowIfNull(arguments);
         export = null;
@@ -148,7 +162,21 @@ public abstract class ServerTool<TAccess> : AIFunction, IAcceptsArguments where 
         string? sheet = Optional(arguments, SheetArgument);
         if (Optional(arguments, ToArgument) is not { } to)
         {
-            return sheet is not null ? OfficeText.NeedsTo(SheetArgument) : overwrite == true ? OfficeText.NeedsTo(OverwriteArgument) : null;
+            if (sheet is null && overwrite != true)
+            {
+                return null;
+            }
+
+            // Nothing may be saved now (#27): sheet or overwrite: true asks for a save, so the save refusal answers, never NeedsTo, which
+            // would send the model off to add a to that can't work. With to, ExportAsync judges the root itself (once before the query, once
+            // before the commit), so it is read here only when no export follows. overwrite: false asks nothing and runs the query.
+            var root = ExportRoot?.Invoke();
+            if (root is not { Root: not null })
+            {
+                return root?.Refusal ?? FileText.SaveNotHere;
+            }
+
+            return OfficeText.NeedsTo(sheet is not null ? SheetArgument : OverwriteArgument);
         }
 
         export = new ExportTarget(to, sheet, overwrite ?? false);

@@ -149,8 +149,10 @@ public sealed class UndoTextTests
     {
         var sets = new[] { CheckpointTools.Tracked, CheckpointTools.Untracked.Keys.ToHashSet(StringComparer.Ordinal), CheckpointTools.NoFiles };
 
-        Assert.All(PlanTools.Mutating, name => Assert.True(sets.Count(s => s.Contains(name)) == 1, name + ": add it to one of CheckpointTools' lists"));
-        Assert.All(sets.SelectMany(s => s), name => Assert.True(PlanTools.Mutating.Contains(name) || PlanTools.ReadOnly.Contains(name), name + " is no tool"));
+        // A read form's write forms change something too (2026-11-15, the tool-arguments review's #7, #106).
+        var changing = PlanTools.Mutating.Concat(PlanTools.ReadForms).ToList();
+        Assert.All(changing, name => Assert.True(sets.Count(s => s.Contains(name)) == 1, name + ": add it to one of CheckpointTools' lists"));
+        Assert.All(sets.SelectMany(s => s), name => Assert.True(changing.Contains(name) || PlanTools.ReadOnly.Contains(name), name + " is no tool"));
         Assert.Equal(sets.Sum(s => s.Count), sets.SelectMany(s => s).Distinct(StringComparer.Ordinal).Count());
     }
 

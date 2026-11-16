@@ -40,6 +40,26 @@ public class AskUserToolTests
 
     private Task<object?> InvokeAsync(string questionsJson) => _tool.InvokeAsync(Args(Json(questionsJson)), CancellationToken.None).AsTask();
 
+    /// <summary>
+    /// A question's field beside a non-empty questions list would be skipped (2026-11-15, the tool-arguments review's #110: a top-level
+    /// multiple: true ran single-choice), so the call is refused and nothing asked; an empty value beside it is harmless.
+    /// </summary>
+    [Fact]
+    public async Task AQuestionsFieldBesideTheList_IsRefused_NothingAsked()
+    {
+        var arguments = new AIFunctionArguments(new Dictionary<string, object?>
+        {
+            [AskUserTool.QuestionsArgument] = Json(TwoQuestions),
+            [AskUserTool.MultipleArgument] = true,
+            [AskUserTool.TitleArgument] = "",
+        });
+        string answer = (string)(await _tool.InvokeAsync(arguments, CancellationToken.None))!;
+        Assert.StartsWith("Error: ", answer, StringComparison.Ordinal);
+        Assert.Contains("'multiple'", answer, StringComparison.Ordinal);
+        Assert.DoesNotContain("'title'", answer, StringComparison.Ordinal);
+        Assert.Empty(_asked);
+    }
+
     [Fact]
     public void Name_Description_AndSchema_ArePinned()
     {

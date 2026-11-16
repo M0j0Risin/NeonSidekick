@@ -90,6 +90,30 @@ public sealed class TurnToolsTests
         Assert.DoesNotContain(Names(set), n => n.Contains("plan", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// The git tools that list as well as change (2026-11-15, the tool-arguments review's #7, #106): offered while planning as their list-only
+    /// twins, the full tools otherwise; a plain write tool of the group still dropped.
+    /// </summary>
+    [Fact]
+    public void Planning_OffersTheListAndChangeGitTools_AsTheirListOnlyTwins()
+    {
+        var time = new Fakes.ManualTimeProvider();
+        var git = new NeonSidekick.Git.GitAccess(new NeonSidekick.Files.WorkingDirectory(() => Path.GetTempPath(), time), time);
+        var settings = new NeonSidekick.Settings.AppSettingsData();
+        AIFunction[] gitTools = [new NeonSidekick.Llm.Tools.GitStatusTool(git, () => settings), new NeonSidekick.Llm.Tools.GitCommitTool(git, () => settings),
+            new NeonSidekick.Llm.Tools.GitBranchTool(git, () => settings), new NeonSidekick.Llm.Tools.GitStashTool(git, () => settings), new NeonSidekick.Llm.Tools.GitTagTool(git, () => settings)];
+        var create = new Dictionary<string, object?> { ["action"] = "create", ["name"] = "x" };
+
+        var planning = ChatScreen.ComposeTurnTools(Inputs() with { Git = gitTools, GitEnabled = true, PlanReadOnly = true });
+        var offered = planning.Tools.Where(t => t.Name.StartsWith("gitlib_", StringComparison.Ordinal)).ToList();
+        Assert.Equal(["gitlib_status", "gitlib_branch", "gitlib_stash", "gitlib_tag"], offered.Select(t => t.Name));
+        Assert.NotNull(((NeonSidekick.Llm.Tools.IListOnlyTwin)offered.Single(t => t.Name == "gitlib_branch")).Refusal(create));
+
+        var normal = ChatScreen.ComposeTurnTools(Inputs() with { Git = gitTools, GitEnabled = true });
+        Assert.Contains("gitlib_commit", Names(normal));
+        Assert.Null(((NeonSidekick.Llm.Tools.IListOnlyTwin)normal.Tools.Single(t => t.Name == "gitlib_branch")).Refusal(create));
+    }
+
     [Fact]
     public void ToolsOff_IsEmpty()
     {

@@ -2226,7 +2226,7 @@ public sealed class AppSettingsData
     public const int DefaultGitLibLogMaxCommits = 20;
 
     /// <summary>
-    /// Whether a turn offers the model the eleven git tools over the repository at or under the working
+    /// Whether a turn offers the model the thirteen git tools over the repository at or under the working
     /// directory (2026-09-20; <c>Git native tools</c> from 2026-09-21, <c>GitLib tools</c> since 2026-09-30); read at each turn like <see cref="WebTools"/>, no reconnect.
     /// Off — the default since 2026-09-21 (the user's call, like <see cref="McpServers"/>): the model reaches git
     /// through the shell unless the profile opts in — the default rules lose their git sentence and

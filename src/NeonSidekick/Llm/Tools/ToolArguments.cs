@@ -19,8 +19,14 @@ public static class ToolArguments
     public static bool Has(AIFunctionArguments arguments, string name)
     {
         ArgumentNullException.ThrowIfNull(arguments);
-        return arguments.TryGetValue(name, out var value) && value is not null and not JsonElement { ValueKind: JsonValueKind.Null or JsonValueKind.Undefined };
+        return arguments.TryGetValue(name, out var value) && IsGiven(value);
     }
+
+    /// <summary>
+    /// Whether a value counts as sent (2026-11-15, the tool-arguments review's #46: the rule was written three times, and the compactor's copy
+    /// missed <c>Undefined</c>): anything but null, a JSON <c>null</c> and an undefined element. An explicit <c>""</c> or <c>false</c> is a value.
+    /// </summary>
+    public static bool IsGiven(object? value) => value is not null and not JsonElement { ValueKind: JsonValueKind.Null or JsonValueKind.Undefined };
 
     /// <summary>The string argument, or empty when missing or null. A non-string JSON value is its raw text.</summary>
     public static string ReadString(AIFunctionArguments arguments, string name)
@@ -340,23 +346,42 @@ public static class ToolArguments
 
     /// <summary>
     /// A string that is a list of strings written as text (2026-11-15, feature idea #31: <c>"paths": "[\"a.txt\",\"b.txt\"]"</c> read as one
-    /// path named <c>[…]</c>): its strings into <paramref name="into"/> and true, through <see cref="LooseJson.TryParse"/> as
-    /// <see cref="TryReadObjectList"/> reads one. Only text that starts with <c>[</c> and ends with <c>]</c> once trimmed, so the parser's
-    /// first-value cut never reads <c>["x"] y</c> as a list; and only an array of strings, so a YAML-style <c>[a, b]</c> (a vault tag list) or
-    /// a path with brackets stays one string. False, <paramref name="into"/> untouched, for anything else.
+    /// path named <c>[…]</c>): its strings into <paramref name="into"/> and true, through <see cref="ParseEncodedList"/>, the core the object
+    /// lists share (the tool-arguments review's #39, #116). Only an array of strings, so a YAML-style <c>[a, b]</c> (a vault tag list) or a path
+    /// with brackets stays one string, and <c>["a"] … ["b"]</c> is one odd path, never <c>a</c> alone. A list that fails, or reads with a
+    /// control character in it, is tried again with its lone backslashes doubled (#92: <c>["docs\notes.txt"]</c> held a line break), the
+    /// second reading kept when it parses clean. False, <paramref name="into"/> untouched, for anything else.
     /// </summary>
     private static bool TakeEncodedStrings(string text, List<string> into)
     {
-        string trimmed = text.Trim();
-        if (trimmed.Length < 2 || trimmed[0] != '[' || trimmed[^1] != ']')
+        var items = ReadEncodedStrings(text);
+        if (items is null || items.Exists(HoldsControl))
+        {
+            var doubled = ReadEncodedStrings(LooseJson.DoubleLoneBackslashes(text));
+            if (doubled is not null && !doubled.Exists(HoldsControl))
+            {
+                items = doubled;
+            }
+        }
+
+        if (items is null)
         {
             return false;
         }
 
-        using var document = LooseJson.TryParse(trimmed);
+        into.AddRange(items);
+        return true;
+
+        static bool HoldsControl(string item) => item.AsSpan().IndexOfAnyInRange('\0', '\u001f') >= 0;
+    }
+
+    /// <summary>The strings of a list written as text, or null when it isn't one, or holds anything but strings.</summary>
+    private static List<string>? ReadEncodedStrings(string text)
+    {
+        using var document = ParseEncodedList(text, objects: false);
         if (document is null || document.RootElement.ValueKind != JsonValueKind.Array)
         {
-            return false;
+            return null;
         }
 
         var items = new List<string>();
@@ -364,14 +389,25 @@ public static class ToolArguments
         {
             if (item.ValueKind != JsonValueKind.String)
             {
-                return false;
+                return null;
             }
 
             items.Add(item.GetString() ?? "");
         }
 
-        into.AddRange(items);
-        return true;
+        return items;
+    }
+
+    /// <summary>
+    /// The one reading of a list written as text (2026-11-15, the tool-arguments review's #39, #53, #116), for string and object lists alike: the
+    /// trimmed text must start with <c>[</c> (or <c>{</c>, a lone object, when <paramref name="objects"/>), then parse whole through
+    /// <see cref="LooseJson.TryParse"/>, whose first-value cut takes only a tail of closing brackets. Null for anything else; the caller disposes.
+    /// </summary>
+    internal static JsonDocument? ParseEncodedList(string text, bool objects)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        string trimmed = text.Trim();
+        return trimmed.Length >= 2 && (trimmed[0] == '[' || (objects && trimmed[0] == '{')) ? LooseJson.TryParse(trimmed) : null;
     }
 
     /// <summary>
@@ -449,7 +485,8 @@ public static class ToolArguments
                 return true;
             }
 
-            using var document = LooseJson.TryParse(text);
+            // Never cut to a first value that isn't the whole (#39): "{..}, {..}" is refused as not a list.
+            using var document = ParseEncodedList(text, objects: true);
             return document is not null
                 && document.RootElement.ValueKind is JsonValueKind.Array or JsonValueKind.Object
                 && TakeListOrObject(document.RootElement, into);
@@ -475,7 +512,10 @@ public static class ToolArguments
 /// Then, when the text still does not parse, the same two over <see cref="FirstValue"/>: the text
 /// cut at the end of its first complete <c>[…]</c> / <c>{…}</c> (2026-09-16, after SGLang handed
 /// <c>ask_user</c> its list as a string ending <c>}]}</c> — the outer object's brace sliced in with
-/// the value, so a well-formed list was refused for the one character after it). Pure; never throws.
+/// the value, so a well-formed list was refused for the one character after it). Only when what
+/// follows that value is closing brackets and braces (2026-11-15, the tool-arguments review's #39,
+/// #53): <c>["a"] x ["b"]</c> read as <c>["a"]</c> dropped the rest unseen. Every control character
+/// in a string is escaped by <see cref="Normalize"/> (#125). Pure; never throws.
 /// </summary>
 public static class LooseJson
 {
@@ -490,8 +530,14 @@ public static class LooseJson
             return whole;
         }
 
+        // The first value only when nothing but closing brackets follows it: SGLang's sliced-in "}]}", never a second value or a remark.
         string? first = FirstValue(text);
-        return first is null ? null : Parse(first) ?? Parse(Normalize(first));
+        if (first is null || !text.AsSpan(text.AsSpan().IndexOfAny('[', '{') + first.Length).TrimStart(" \t\r\n]}").IsEmpty)
+        {
+            return null;
+        }
+
+        return Parse(first) ?? Parse(Normalize(first));
 
         static JsonDocument? Parse(string candidate)
         {
@@ -592,6 +638,58 @@ public static class LooseJson
         return null;
     }
 
+    /// <summary>
+    /// <paramref name="text"/> with each lone backslash inside a string doubled (2026-11-15, the tool-arguments review's #92: a Windows path
+    /// written into a list as text, <c>["docs\notes.txt"]</c>, read <c>\n</c> as a line break). Lone: not half of <c>\\</c>, and not escaping
+    /// the string's own quote (<c>\"</c>, or <c>\'</c> in a single-quoted one), so <c>"say \"hi\".txt"</c> keeps its quotes. Outside strings,
+    /// unchanged. A path ending in <c>\</c> before its closing quote stays unterminated, so it still fails to parse.
+    /// </summary>
+    public static string DoubleLoneBackslashes(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        var sb = new System.Text.StringBuilder(text.Length + 8);
+        char quote = '\0';
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (quote == '\0')
+            {
+                if (c is '"' or '\'')
+                {
+                    quote = c;
+                }
+
+                sb.Append(c);
+                continue;
+            }
+
+            if (c == '\\')
+            {
+                char next = i + 1 < text.Length ? text[i + 1] : '\0';
+                if (next == '\\' || next == quote)
+                {
+                    sb.Append(c).Append(next);
+                    i++;
+                }
+                else
+                {
+                    sb.Append("\\\\");
+                }
+
+                continue;
+            }
+
+            if (c == quote)
+            {
+                quote = '\0';
+            }
+
+            sb.Append(c);
+        }
+
+        return sb.ToString();
+    }
+
     /// <summary>The index after the string starting at <paramref name="at"/> (its quote style, backslash escapes stepped over), or the text's end when unterminated.</summary>
     private static int SkipString(string text, int at)
     {
@@ -647,6 +745,7 @@ public static class LooseJson
                 return i + 1;
             }
 
+            // A raw control character is no JSON (#125): a tab as \t, the rest as \uXXXX; a CR dropped and an LF \n, so CRLF reads as LF.
             switch (c)
             {
                 case '"':
@@ -656,6 +755,12 @@ public static class LooseJson
                     break;
                 case '\n':
                     sb.Append("\\n");
+                    break;
+                case '\t':
+                    sb.Append("\\t");
+                    break;
+                case < ' ':
+                    sb.Append("\\u").Append(((int)c).ToString("x4", System.Globalization.CultureInfo.InvariantCulture));
                     break;
                 default:
                     sb.Append(c);

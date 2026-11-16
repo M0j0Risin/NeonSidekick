@@ -172,6 +172,23 @@ public sealed class FileDiffTests : IDisposable
         Assert.IsType<string>(refused);
     }
 
+    /// <summary>
+    /// Content and an edit both (2026-11-15, the tool-arguments review's #1, #67): which was meant is unknown, so nothing is written; an empty
+    /// old_text a schema-filling model adds beside content is no edit, and the write goes ahead.
+    /// </summary>
+    [Fact]
+    public async Task WriteFile_ContentWithAnEdit_IsRefused_ButAnEmptyEditIsNot()
+    {
+        var tool = new WriteFileTool(_files);
+        object? refused = await tool.InvokeAsync(new AIFunctionArguments(new Dictionary<string, object?> { ["path"] = "both.txt", ["content"] = "all\n", ["old_text"] = "a", ["new_text"] = "b" }));
+        Assert.Equal(FileText.ContentWithEdit(PatchFileTool.ToolName), refused);
+        Assert.False(File.Exists(Path.Combine(_root, "both.txt")));
+
+        object? written = await tool.InvokeAsync(new AIFunctionArguments(new Dictionary<string, object?> { ["path"] = "both.txt", ["content"] = "all\n", ["old_text"] = "", ["replace_all"] = false }));
+        Assert.IsType<ToolDiffResult>(written);
+        Assert.Equal("all\n", File.ReadAllText(Path.Combine(_root, "both.txt")));
+    }
+
     [Fact]
     public async Task WriteFile_AnswersTheDiff_ItsDescribeStaysText()
     {

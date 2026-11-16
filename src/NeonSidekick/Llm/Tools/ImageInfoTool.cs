@@ -73,9 +73,6 @@ public sealed class ImageInfoTool : FileTool
         return await Task.Run(() => Describe(Files, paths, effective, Images, cancellationToken), cancellationToken).WaitAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>The most pictures one call describes; the rest are named for the next (review G19).</summary>
-    public const int MaxPaths = 20;
-
     /// <summary>The answer for <paramref name="paths"/>: one line each, success or error, then the formats line. A full path in <paramref name="images"/> is read there.</summary>
     public static string Describe(WorkingDirectory files, IReadOnlyList<string> paths, AppSettingsData effective, WorkingDirectory? images = null, CancellationToken cancellationToken = default)
     {
@@ -83,23 +80,21 @@ public sealed class ImageInfoTool : FileTool
         ArgumentNullException.ThrowIfNull(paths);
         ArgumentNullException.ThrowIfNull(effective);
         var lines = new List<string>(Math.Min(paths.Count, MaxPaths) + 2);
-        foreach (var path in paths.Distinct(StringComparer.OrdinalIgnoreCase).Take(MaxPaths))
+        // The shared loop and cap (2026-11-15, the tool-arguments review's #47).
+        string? rest = EachUpTo(paths.Distinct(StringComparer.OrdinalIgnoreCase).ToList(), MaxPaths, path =>
         {
-            cancellationToken.ThrowIfCancellationRequested();
             var read = For(files, images, path).ReadBytes(path, ImageEditor.MaxSourceBytes);
             if (read.Outcome != FileOutcome.Ok || read.Bytes is null)
             {
                 lines.Add(read.Outcome == FileOutcome.TooBig ? read.Relative + ": " + ImageText.SourceTooBig : FileText.Error(read.Outcome, read.Relative, "read", read.Detail));
-                continue;
+                return;
             }
 
             lines.Add(ImageEditor.Info(read.Bytes) is { } info ? ImageText.Info(read.Relative, info, MetadataStripper.Survey(read.Bytes)) : FileText.NotAnImage(read.Relative));
-        }
-
-        var rest = paths.Distinct(StringComparer.OrdinalIgnoreCase).Skip(MaxPaths).ToList();
-        if (rest.Count > 0)
+        }, cancellationToken);
+        if (rest is not null)
         {
-            lines.Add(FileText.MorePaths(rest));
+            lines.Add(rest);
         }
 
         lines.Add(ImageText.Formats(ImageFormats.WritableFormats(), ImageEditTool.QualityOf(effective), ImageWords.MetadataName(effective.ImageEditMetadata), ImageEditTool.OutputFolderFor(effective.ImageEditOutputFolder, images?.Root) ?? ""));

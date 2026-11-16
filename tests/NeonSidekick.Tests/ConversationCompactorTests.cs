@@ -1460,26 +1460,46 @@ public class ConversationCompactorTests
         Assert.Equal(new[] { NeonSidekick.Llm.Tools.LoadSkillTool.ToolName, "echo" }, openCuts.Select(c => c.Tool));
     }
 
-    /// <summary>A read of several files holding a plan (2026-11-15) is kept whole by the cut, and never stubbed as a superseded plan read: its other files go with it.</summary>
-    [Fact]
-    public void APlanAmongPaths_IsNeverCut_NorStubbed()
+    private static List<ChatMessage> ReadPaths(string json)
     {
-        using var paths = System.Text.Json.JsonDocument.Parse("[\"notes.md\", \".neon/plans/guide.md\"]");
-        List<ChatMessage> messages =
+        using var paths = System.Text.Json.JsonDocument.Parse(json);
+        return
         [
             User("go"),
             new(ChatRole.Assistant, [new FunctionCallContent("c2", NeonSidekick.Llm.Tools.ReadFileTool.ToolName, new Dictionary<string, object?> { ["paths"] = paths.RootElement.Clone() })]),
             Calls(("c4", "echo")),
             new(ChatRole.Tool, [new FunctionResultContent("c2", Lines(500, 50)), new FunctionResultContent("c4", Lines(200, 50))]),
         ];
+    }
 
+    /// <summary>
+    /// A read of several files holding a plan (2026-11-15) is never stubbed as a superseded plan read: its other files go with it. Since the
+    /// tool-arguments review's #31, #58 it is cut as any read is; only a read of plans alone stays whole.
+    /// </summary>
+    [Fact]
+    public void APlanAmongPaths_IsCut_ButNeverStubbed_AndPlansAloneStayWhole()
+    {
+        var messages = ReadPaths("[\"notes.md\", \".neon/plans/guide.md\"]");
         var (_, cuts, _, _, _) = ConversationCompactor.CutLatestResults(messages, 0, protectSkills: true);
-        Assert.Equal(new[] { "echo" }, cuts.Select(c => c.Tool));
+        Assert.Equal(new[] { NeonSidekick.Llm.Tools.ReadFileTool.ToolName, "echo" }, cuts.Select(c => c.Tool));
 
         List<ChatMessage> presented = [.. messages, Present("p1", Long(3000)), Result("p1", "saved")];
         var (stubbed, pruned, _) = ConversationCompactor.StubSupersededPlans(presented);
         Assert.Equal(0, pruned);
         Assert.Equal(presented, stubbed);
+
+        var plans = ReadPaths("[\".neon/plans/a.md\", \".neon/plans/b.md\"]");
+        var (_, planCuts, _, _, _) = ConversationCompactor.CutLatestResults(plans, 0, protectSkills: true);
+        Assert.Equal(new[] { "echo" }, planCuts.Select(c => c.Tool));
+    }
+
+    /// <summary>The tool-arguments review's #23: a one-item <c>paths</c> naming a plan is a plan read as <c>path</c> is, and stubbed once superseded.</summary>
+    [Fact]
+    public void AOneItemPathsOfAPlan_IsStubbed_AsPathIs()
+    {
+        List<ChatMessage> presented = [.. ReadPaths("[\".neon/plans/guide.md\"]"), Present("p1", Long(3000)), Result("p1", "saved")];
+        var (_, pruned, _) = ConversationCompactor.StubSupersededPlans(presented);
+        Assert.Equal(1, pruned);
     }
 
     [Fact]

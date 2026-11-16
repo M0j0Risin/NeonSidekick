@@ -14,6 +14,9 @@ namespace NeonSidekick.Llm.Tools;
 /// </summary>
 public sealed class MySqlQueryTool : MySqlTool
 {
+    /// <summary>Reads <c>to</c>, <c>sheet</c> and <c>overwrite</c> (2026-11-15, #27: known while nothing may be saved, so the save refusal answers).</summary>
+    protected override bool ReadsExport => true;
+
     public const string ToolName = "mysql_query";
     public const string SqlArgument = "sql";
     public const string ParamsArgument = "params";

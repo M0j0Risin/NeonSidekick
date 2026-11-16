@@ -253,4 +253,21 @@ public class TurnTraceTests
         trace.Observe(new TurnEvent.ToolResult("write_file", "c1", "Error: content holds a tool result that was cut", GuardRefused: true));
         Assert.Equal((1, 0, false), (trace.ToolCalls, trace.Errors, trace.Recovered));
     }
+
+    /// <summary>
+    /// An argument refusal ran nothing either, but the model misread the tool (2026-11-15, the tool-arguments review's #19): one error, and the
+    /// good call after it the recovery.
+    /// </summary>
+    [Fact]
+    public void AnArgumentRefusal_IsAnError_AndAGoodCallAfterItRecovers()
+    {
+        var trace = new TurnTrace();
+        trace.Observe(new TurnEvent.ToolCall("web_search", "c1", "{\"limit\":5}"));
+        trace.Observe(new TurnEvent.ToolResult("web_search", "c1", "Error: web_search takes no argument 'limit'; it is 'max_results'. It takes: query, max_results. Nothing ran.", GuardRefused: true, ArgumentError: true));
+        Assert.Equal((1, false), (trace.Errors, trace.Recovered));
+
+        trace.Observe(new TurnEvent.ToolCall("web_search", "c2", "{\"max_results\":5}"));
+        trace.Observe(new TurnEvent.ToolResult("web_search", "c2", "1. Example — https://example.invalid"));
+        Assert.Equal((2, 1, true), (trace.ToolCalls, trace.Errors, trace.Recovered));
+    }
 }

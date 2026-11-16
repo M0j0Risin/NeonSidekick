@@ -94,6 +94,15 @@ public sealed class ProcessToolTests : IDisposable
         await session.Watched.WaitAsync(TimeSpan.FromSeconds(60));   // the registry's watcher, done: no fixed wait (2026-10-24, the CI-like run)
     }
 
+    /// <summary>Only log reads limit (2026-11-15, the tool-arguments review's #153): on any other action it is refused, never dropped silently.</summary>
+    [Fact]
+    public async Task Limit_OnAnActionButLog_IsRefused()
+    {
+        string answer = await Invoke(("action", "list"), ("limit", 5));
+        Assert.Equal(ArgumentText.NotReadBy("limit", "list", "log"), answer);
+        Assert.DoesNotContain(ShellText.ListHeader(0, 0), answer, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Name_Schema_AndDescription_ArePinned()
     {

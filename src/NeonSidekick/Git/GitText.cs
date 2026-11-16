@@ -13,6 +13,12 @@ namespace NeonSidekick.Git;
 public static class GitText
 {
     public const string Legend = "A added · M modified · D deleted · R renamed · T type changed · ? untracked · U conflict";
+    /// <summary>
+    /// <c>gitlib_discard</c> given a <c>paths</c> that names nothing (2026-11-15, the tool-arguments review's #50): read as "everything" it
+    /// hard-reset the tree.
+    /// </summary>
+    public const string DiscardNamedNothing = "Error: paths names nothing; name the paths, or leave paths out to discard everything. Nothing was discarded.";
+
     public const string NoPaths = "Error: give the paths to act on (\".\" for everything changed under \"path\")";
     public const string NoMessage = "Error: give the commit message";
     public const string NoName = "Error: give the branch's name";
@@ -46,11 +52,110 @@ public static class GitText
     /// <summary>A revert that would change nothing (2026-11-15). Pinned.</summary>
     public static string NothingToRevert(string sha) => $"Error: reverting {sha} would change nothing (its changes are undone already); nothing was committed";
 
-    /// <summary>A revert that conflicted and was put back (2026-11-15); <paramref name="detail"/> is <c>abc1234 conflicts in a.txt, b.txt</c>. Pinned.</summary>
+    /// <summary>A revert that conflicts (2026-11-15; run in memory, nothing was written); <paramref name="detail"/> is <see cref="ConflictsIn"/>. Pinned.</summary>
     public static string RevertConflicts(string detail) => $"Error: reverting {detail}; nothing changed";
 
-    /// <summary>A tag name git can't hold (2026-11-15). Pinned.</summary>
-    public static string BadTagName(string name) => $"Error: '{Llm.Tools.ArgumentText.Echo(name)}' is not a valid tag name";
+    /// <summary><c>abc1234 conflicts in a.txt, b.txt</c>, the paths whole (2026-11-15, the tool-arguments review's #124).</summary>
+    public static string ConflictsIn(string sha, string names) => sha + " conflicts in " + names;
+
+    /// <summary>
+    /// git's default message for a revert (2026-11-15, the tool-arguments review's #9: moved here from <see cref="GitAccess"/>), used when the
+    /// model gives none. Pinned against git's own wording.
+    /// </summary>
+    public static string RevertMessage(string subject, string sha) => "Revert \"" + subject + "\"\n\nThis reverts commit " + sha + ".\n";
+
+    /// <summary>The reflog line a revert's ref move writes (2026-11-15).</summary>
+    public static string RevertReflog(string subject) => "revert: " + subject;
+
+    /// <summary>The word for an operation in progress (2026-11-15, #40), as git's own messages name it.</summary>
+    public static string OperationWord(LibGit2Sharp.CurrentOperation operation) => operation switch
+    {
+        LibGit2Sharp.CurrentOperation.Merge => "merge",
+        LibGit2Sharp.CurrentOperation.Revert or LibGit2Sharp.CurrentOperation.RevertSequence => "revert",
+        LibGit2Sharp.CurrentOperation.CherryPick or LibGit2Sharp.CurrentOperation.CherryPickSequence => "cherry-pick",
+        LibGit2Sharp.CurrentOperation.Bisect => "bisect",
+        LibGit2Sharp.CurrentOperation.ApplyMailbox or LibGit2Sharp.CurrentOperation.ApplyMailboxOrRebase => "git am",
+        _ => "rebase",
+    };
+
+    /// <summary>A revert while git is mid-operation (2026-11-15, #40). Pinned.</summary>
+    public static string OperationInProgress(string operation) => $"Error: a {operation} is in progress in the repository; ask the user to finish or abort it first";
+
+    /// <summary>A revert on a detached HEAD (2026-11-15, #96). Pinned.</summary>
+    public const string Detached = "Error: HEAD is detached (no branch is checked out); switch to a branch first, so the revert lands on it";
+
+    /// <summary>The detail of a revert of a commit off the branch (2026-11-15, #91).</summary>
+    public static string NotOnBranchDetail(string sha, string branch) => sha + " is not in " + branch + "'s history";
+
+    /// <summary>A revert of a commit off the branch (2026-11-15, #91). Pinned.</summary>
+    public static string NotOnBranch(string detail) => $"Error: {detail}; revert only a commit on the branch checked out";
+
+    /// <summary>Something on disk where a revert would add a file (2026-11-15, #8, #20). Pinned.</summary>
+    public static string InTheWay(string names) => $"Error: the revert would add {names}, but something git doesn't track is there already; ask the user to move it aside first";
+
+    /// <summary>A touched path marked assume-unchanged (2026-11-15, #73). Pinned.</summary>
+    public static string AssumeUnchanged(string names) => $"Error: {names} is marked assume-unchanged, so its local changes can't be seen; ask the user to clear the mark (git update-index --no-assume-unchanged) first";
+
+    /// <summary>A path holding a glob character (2026-11-15): the git library would read it as a pattern. Pinned.</summary>
+    public static string GlobPath(string names) => $"Error: {names} holds *, ? or [, which the git library reads as a pattern; use git for it";
+
+    /// <summary>A revert that would move a submodule's pointer (2026-11-15). Pinned.</summary>
+    public static string SubmoduleChange(string path) => $"Error: the revert would move the submodule {path}; revert it with git";
+
+    /// <summary>A revert whose tree is too large to walk whole (2026-11-15). Pinned.</summary>
+    public static string TooLargeToRevert(string sha) => $"Error: reverting {sha} touches a tree too large to walk here; revert it with git";
+
+    /// <summary>A checkout refused for local changes, naming the paths (2026-11-15, a revert's). Pinned.</summary>
+    public static string CheckoutConflictIn(string names) => $"Error: that would overwrite local changes in {names}; commit or stash them first";
+
+    /// <summary>
+    /// The detail of a revert whose checkout or ref move failed (2026-11-15): libgit2's message, and the files the put-back couldn't restore
+    /// when there are any.
+    /// </summary>
+    public static string RevertFailed(string why, string left) => left.Length == 0 ? why + "; nothing was changed" : why + "; " + left + " may be left changed, so check gitlib_status";
+
+    /// <summary>A refused revert's sentence (2026-11-15): <see cref="Error"/>, but a checkout conflict names its paths.</summary>
+    public static string RevertError(GitRevertResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        return result.Outcome == GitOutcome.CheckoutConflict && result.Detail.Length > 0 ? CheckoutConflictIn(result.Detail) : Error(result.Outcome, result.Detail);
+    }
+
+    /// <summary>A branch or tag name git can't hold, or one that would read two ways (2026-11-15). Pinned.</summary>
+    public static string BadRefName(string name) => $"Error: '{Llm.Tools.ArgumentText.Echo(name)}' can't be a branch or tag name (git can't hold it, or it would read as something else)";
+
+    /// <summary>A new name that already names something else (2026-11-15, the tool-arguments review's #24, #64, #139). Pinned.</summary>
+    public static string NameTaken(string detail) => $"Error: {detail}; pick another name, so it reads one way in every git tool";
+
+    /// <summary><c>'main' already names a branch</c>: <see cref="NameTaken"/>'s detail.</summary>
+    public static string NameTakenDetail(string name, string what) => $"'{Llm.Tools.ArgumentText.Echo(name)}' already names {what}";
+
+    public const string TakenByBranch = "a branch";
+    public const string TakenByTag = "a tag";
+    public const string TakenByRemote = "a remote branch";
+    public const string TakenByFolder = "a folder of refs, or sits in one";
+    public const string TakenByObject = "a commit or another object (as a sha)";
+
+    /// <summary>A tag named <c>list</c> (2026-11-15): the model meant the list. Pinned.</summary>
+    public const string TagNamedList = "Error: 'list' isn't taken as a tag name here; leave name out to list the tags";
+
+    /// <summary>
+    /// An annotated tag with no identity to sign it (2026-11-15, the tool-arguments review's #94): <see cref="NoIdentity"/> speaks of commits, and
+    /// a lightweight tag needs none. Pinned.
+    /// </summary>
+    public const string NoTagIdentity = "Error: git has no user.name / user.email to sign an annotated tag; ask the user to set them (/gituser), or leave message out for a lightweight tag";
+
+    /// <summary>A tagger with a line break or NUL in the name or email (2026-11-15, #97). Pinned.</summary>
+    public const string BadTagger = "Error: git's user.name or user.email holds a line break or NUL, which would corrupt the tag; ask the user to fix it";
+
+    /// <summary>A tag message holding NUL (2026-11-15, #135). Pinned.</summary>
+    public const string MessageHasNul = "Error: the tag message holds a NUL character; leave it out";
+
+    /// <summary>A tag message line git would read as a signature's start (2026-11-15, #135). Pinned.</summary>
+    public static string SignatureLine(string line) => $"Error: the tag message's line '{Llm.Tools.ArgumentText.Echo(line)}' would read to git as a signature; leave that line out";
+
+    /// <summary>An annotated tag's row subject (2026-11-15, #130): its own message's first line, marked.</summary>
+    public static string AnnotatedSubject(string subject) => "(annotated) " + subject;
 
     public static string NoRepository(string root) => $"Error: '{root}' is not inside a git repository; /cwd into one, or ask the user to git init it";
     public static string AboveSandbox(string workTree) => $"Error: the repository's root '{workTree}' is above the working directory, so the git tools cannot reach it; the user can /cwd to the repository's root";
@@ -62,7 +167,7 @@ public static class GitText
     public static string RefNotFound(string reference) => $"Error: '{reference}' names no commit, branch or tag";
     public static string RefAmbiguous(string reference) => $"Error: '{reference}' is ambiguous; give a longer sha or the full name";
     public static string NoStash(string index) => $"Error: there is no stash@{{{index}}}";
-    public static string NameConflict(string name) => $"Error: '{name}' exists already";
+    public static string NameConflict(string name) => $"Error: '{Llm.Tools.ArgumentText.Echo(name)}' exists already";
     public static string CannotDeleteCurrentBranch(string name) => $"Error: '{name}' is the branch checked out; switch to another first";
     public static string CannotStageRoot(string path) => $"Error: '{path}' is the repository itself; give \".\" to stage everything under \"path\"";
     public static string Binary(string path) => $"Error: '{path}' is binary";
@@ -114,8 +219,19 @@ public static class GitText
         GitOutcome.DirtyTree => DirtyTree,
         GitOutcome.MergeCommit => MergeCommit(detail),
         GitOutcome.NothingToRevert => NothingToRevert(detail),
-        GitOutcome.BadName => BadTagName(detail),
+        GitOutcome.BadName => BadRefName(detail),
+        GitOutcome.NameTaken => NameTaken(detail),
+        GitOutcome.BadTagger => BadTagger,
+        GitOutcome.BadMessage => detail.Length == 0 ? MessageHasNul : SignatureLine(detail),
         GitOutcome.RevertConflicted => RevertConflicts(detail),
+        GitOutcome.OperationInProgress => OperationInProgress(detail),
+        GitOutcome.Detached => Detached,
+        GitOutcome.NotOnBranch => NotOnBranch(detail),
+        GitOutcome.InTheWay => InTheWay(detail),
+        GitOutcome.AssumeUnchanged => AssumeUnchanged(detail),
+        GitOutcome.GlobPath => GlobPath(detail),
+        GitOutcome.SubmoduleChange => SubmoduleChange(detail),
+        GitOutcome.TooLargeToRevert => TooLargeToRevert(detail),
         _ => Failed(detail),
     };
 
@@ -245,6 +361,10 @@ public static class GitText
         {
             sb.Append(" (more before them)");
         }
+        else if (report.MaybeMore)
+        {
+            sb.Append(" (more may be before them)");
+        }
 
         sb.Append(searched);
 
@@ -278,20 +398,23 @@ public static class GitText
 
         if (filter.Since is { } since)
         {
-            sb.Append(" since ").Append(When(since, zone));
+            sb.Append(" since ").Append(Moment(since, zone));
         }
 
         if (filter.Until is { } until)
         {
-            sb.Append(" until ").Append(When(until, zone));
+            sb.Append(" until ").Append(Moment(until, zone));
         }
 
         return sb.ToString();
     }
 
-    /// <summary>A <c>since</c> or <c>until</c> that is no time (2026-11-15), worded as the event logs'. Pinned.</summary>
-    public static string BadTime(string argument, string text) =>
-        $"Error: {argument} '{Llm.Tools.ArgumentText.Echo(text)}' is not an age (30m, 2h, 1d, 1w) or a moment (2026-10-14T21:00).";
+    /// <summary>A filter's moment in the header (2026-11-15, the tool-arguments review's #56): <see cref="When"/>, with the seconds when they aren't zero.</summary>
+    public static string Moment(DateTimeOffset when, TimeZoneInfo zone)
+    {
+        var local = TimeZoneInfo.ConvertTime(when, zone);
+        return local.Second == 0 ? When(when, zone) : local.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+    }
 
     /// <summary>A window that ends before it starts (2026-11-15). Pinned.</summary>
     public const string SinceAfterUntil = "Error: since is later than until; nothing could match.";
@@ -507,8 +630,8 @@ public static class GitText
         return $"Tagged {result.Short} as {result.Name} ({(result.Annotated ? "annotated" : "lightweight")})";
     }
 
-    /// <summary><c>3 tags:</c> then a row each, as <see cref="Refs"/> shows them; <see cref="NoTags"/> for none. Pinned.</summary>
-    public static string Tags(GitRefsReport report)
+    /// <summary><c>3 tags, newest first:</c> then a row each, as <see cref="Refs"/> shows them; <see cref="NoTags"/> for none. Pinned.</summary>
+    public static string Tags(GitTagsReport report)
     {
         ArgumentNullException.ThrowIfNull(report);
         if (report.Tags.Count == 0)
@@ -516,8 +639,8 @@ public static class GitText
             return NoTags;
         }
 
-        var sb = new StringBuilder(Count(report.Tags.Count, "tag"));
-        sb.Append(report.TagsTruncated ? " (cut at " + N(GitAccess.MaxTags) + "):" : ":");
+        var sb = new StringBuilder(Count(report.Tags.Count, "tag")).Append(", newest first");
+        sb.Append(report.Truncated ? " (the newest " + N(GitAccess.MaxTags) + "):" : ":");
         foreach (var t in report.Tags)
         {
             sb.Append("\n  ").Append(t.Name).Append(' ').Append(t.Short).Append(' ').Append(t.Subject);

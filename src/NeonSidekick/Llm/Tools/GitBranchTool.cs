@@ -6,7 +6,7 @@ using NeonSidekick.Settings;
 namespace NeonSidekick.Llm.Tools;
 
 /// <summary><c>gitlib_branch(action, name?, new_name?, start_point?, switch_to?, path?)</c>: the branches and tags (<c>list</c>), a new branch (<c>create</c>), a checkout (<c>switch</c>), a rename.</summary>
-public sealed class GitBranchTool : GitTool
+public sealed class GitBranchTool : GitTool, IListOnlyTwin
 {
     public const string ToolName = "gitlib_branch";
     public const string ActionArgument = "action";
@@ -30,19 +30,32 @@ public sealed class GitBranchTool : GitTool
             "new_name": { "type": "string", "description": "For rename: the new name." },
             "start_point": { "type": "string", "description": "For create: the commit the branch starts at (a sha, a branch, a tag). Leave it out for HEAD." },
             "switch_to": { "type": "boolean", "description": "For create: true also checks the new branch out." },
-            {{PathProperty}}
+            {{RepoPathProperty}}
           },
           "required": ["action"]
         }
         """);
 
-    public GitBranchTool(GitAccess git, Func<AppSettingsData> effective) : base(git, effective)
+    private readonly bool _listOnly;
+
+    public GitBranchTool(GitAccess git, Func<AppSettingsData> effective) : this(git, effective, listOnly: false)
     {
     }
 
+    private GitBranchTool(GitAccess git, Func<AppSettingsData> effective, bool listOnly) : base(git, effective) => _listOnly = listOnly;
+
+    /// <summary>Plan mode's twin (2026-11-15, the tool-arguments review's #7, #106): the list form alone.</summary>
+    public AIFunction AsListOnly() => _listOnly ? this : new GitBranchTool(Git, EffectiveSource, listOnly: true);
+
+    /// <inheritdoc/>
+    public string? Refusal(IDictionary<string, object?>? arguments) =>
+        _listOnly && !Plans.PlanTools.IsListForm(ToolName, arguments) ? Plans.PlanText.ListOnlyRefusal(ToolName, Plans.PlanText.ActionListForm) : null;
+
     public override string Name => ToolName;
 
-    public override string Description =>
+    public override string Description => _listOnly ? FullDescription + " " + Plans.PlanText.ListOnlyNote : FullDescription;
+
+    private const string FullDescription =
         "Lists, creates, switches to or renames git branches. A switch never overwrites local changes (commit or stash them first); " +
         "deleting a branch is gitlib_delete's job.";
 
@@ -112,6 +125,11 @@ public sealed class GitBranchTool : GitTool
     protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
+        if (Refusal(arguments) is { } refused)
+        {
+            return new ValueTask<object?>(refused);
+        }
+
         if (!ToolArguments.TryReadBoolean(arguments, SwitchToArgument, out var switchTo, out var raw))
         {
             return new ValueTask<object?>(Files.FileText.BadBoolean(SwitchToArgument, raw));

@@ -191,6 +191,19 @@ public static class SkillText
     public static string NoContent(bool sentEdit) =>
         $"Error: {SkillEditorTool.ContentArgument} is required: the whole file (\"\" for an empty one)" + (sentEdit ? $"; to change part of it use action {SkillEditorTool.EditFileAction}" : "");
 
+    /// <summary>
+    /// A file argument sent with <c>create</c> or <c>update</c> (2026-11-15, the tool-arguments review's #131: dropped silently, so a model that
+    /// meant to write a file believed it had). <paramref name="keys"/> are echoed; <paramref name="filesOffered"/> points at the file actions.
+    /// </summary>
+    public static string FileArgumentsOnSkill(string action, IReadOnlyList<string> keys, bool filesOffered)
+    {
+        ArgumentNullException.ThrowIfNull(keys);
+        string names = string.Join(", ", keys.Select(key => "'" + ArgumentText.Echo(key) + "'"));
+        return $"Error: {action} doesn't take {names}; a skill's text goes in {SkillEditorTool.InstructionsArgument}"
+            + (filesOffered ? $", and a file in its folder through action {SkillEditorTool.WriteFileAction} or {SkillEditorTool.EditFileAction}" : "")
+            + ". Nothing changed.";
+    }
+
     /// <summary><c>edit_file</c> with no <c>new_text</c> at all (2026-10-17): read as <c>""</c> it removed old_text. Pinned.</summary>
     public static string NoNewText => $"Error: {SkillEditorTool.NewTextArgument} is required: the text to put in place of old_text (\"\" removes it)";
 

@@ -72,6 +72,12 @@ public sealed class UncWriteTool : UncTool, IRefusesPrunedStubs, IAcceptsArgumen
             return FileText.ContentRequired(UncPatchTool.ToolName, WriteFileTool.SentEdit(arguments));
         }
 
+        // Content and an edit both (2026-11-15, #1, #67): neither runs.
+        if (WriteFileTool.SentEdit(arguments))
+        {
+            return FileText.ContentWithEdit(UncPatchTool.ToolName);
+        }
+
         if (WriteFileTool.StubSent(arguments, ContentArgument) is { } stub)
         {
             return stub;

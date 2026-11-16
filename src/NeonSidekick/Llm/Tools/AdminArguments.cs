@@ -23,12 +23,25 @@ public static class ArgumentText
 
     public static string Missing(string argument) => $"Error: {argument} is required.";
 
+    /// <summary>
+    /// A count argument sent to an action that doesn't read it (2026-11-15, the tool-arguments review's #153: <c>limit</c> on
+    /// <c>process</c> list ran with it ignored, so a hint toward it led nowhere): the call is refused and the readers named.
+    /// </summary>
+    public static string NotReadBy(string argument, string action, string readers) =>
+        $"Error: {action} doesn't read {argument}; only {readers} does. Leave it out. Nothing ran.";
+
     /// <summary>The longest text term a search takes (2026-10-23, K6).</summary>
     public const int MaxTextChars = 256;
 
     public static string TooLong(string argument, int max) => $"Error: {argument} is longer than {max.ToString(CultureInfo.InvariantCulture)} characters.";
 
     public static string NotBoolean(string argument, string raw) => $"Error: {argument} '{Echo(raw)}' is not true or false.";
+
+    /// <summary>
+    /// A time argument that is no time (2026-11-15, the tool-arguments review's #114: one sentence for <c>gitlib_log</c> and the event-log tools,
+    /// beside <see cref="AdminArguments.Moment"/>). Pinned.
+    /// </summary>
+    public static string BadTime(string argument, string text) => $"Error: {argument} '{Echo(text)}' is not an age (30m, 2h, 1d, 1w) or a moment (2026-10-14T21:00).";
 
     public static string OutOfRange(string argument, string given, long min, long max) =>
         $"Error: {argument} '{Echo(given)}' is out of range; it must be {min.ToString(CultureInfo.InvariantCulture)} to {max.ToString(CultureInfo.InvariantCulture)}.";
@@ -49,7 +62,7 @@ public static class AdminArguments
     public static bool Given(AIFunctionArguments arguments, string name)
     {
         ArgumentNullException.ThrowIfNull(arguments);
-        return arguments.TryGetValue(name, out object? value) && value is not null && value is not JsonElement { ValueKind: JsonValueKind.Null or JsonValueKind.Undefined };
+        return arguments.TryGetValue(name, out object? value) && ToolArguments.IsGiven(value);
     }
 
     /// <summary>A boolean argument: <paramref name="fallback"/> when missing, the refusal when it is not one.</summary>

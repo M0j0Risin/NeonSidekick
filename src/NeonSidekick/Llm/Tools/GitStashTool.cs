@@ -6,11 +6,10 @@ using NeonSidekick.Settings;
 namespace NeonSidekick.Llm.Tools;
 
 /// <summary><c>gitlib_stash(action, message?, index?, include_untracked?, path?)</c>: saves the working tree's changes aside (<c>push</c>), brings them back (<c>pop</c>, <c>apply</c>), lists them; dropping one is <c>gitlib_delete</c>'s.</summary>
-public sealed class GitStashTool : GitTool
+public sealed class GitStashTool : GitTool, IListOnlyTwin
 {
     public const string ToolName = "gitlib_stash";
     public const string ActionArgument = "action";
-    public const string MessageArgument = "message";
     public const string IndexArgument = "index";
     public const string IncludeUntrackedArgument = "include_untracked";
 
@@ -28,19 +27,32 @@ public sealed class GitStashTool : GitTool
             "message": { "type": "string", "description": "For push: what the stash holds." },
             "index": { "type": "integer", "description": "For pop and apply: the stash's number (stash@{2} is 2). Leave it out for 0." },
             "include_untracked": { "type": "boolean", "description": "For push: true also stashes the untracked files." },
-            {{PathProperty}}
+            {{RepoPathProperty}}
           },
           "required": ["action"]
         }
         """);
 
-    public GitStashTool(GitAccess git, Func<AppSettingsData> effective) : base(git, effective)
+    private readonly bool _listOnly;
+
+    public GitStashTool(GitAccess git, Func<AppSettingsData> effective) : this(git, effective, listOnly: false)
     {
     }
 
+    private GitStashTool(GitAccess git, Func<AppSettingsData> effective, bool listOnly) : base(git, effective) => _listOnly = listOnly;
+
+    /// <summary>Plan mode's twin (2026-11-15, the tool-arguments review's #7, #106): the list form alone.</summary>
+    public AIFunction AsListOnly() => _listOnly ? this : new GitStashTool(Git, EffectiveSource, listOnly: true);
+
+    /// <inheritdoc/>
+    public string? Refusal(IDictionary<string, object?>? arguments) =>
+        _listOnly && !Plans.PlanTools.IsListForm(ToolName, arguments) ? Plans.PlanText.ListOnlyRefusal(ToolName, Plans.PlanText.ActionListForm) : null;
+
     public override string Name => ToolName;
 
-    public override string Description =>
+    public override string Description => _listOnly ? FullDescription + " " + Plans.PlanText.ListOnlyNote : FullDescription;
+
+    private const string FullDescription =
         "Puts the working tree's changes aside and brings them back: push saves them as a stash and cleans the tree, pop or apply restores stash@{index}, list shows them. " +
         "Dropping a stash is gitlib_delete's job.";
 
@@ -78,6 +90,11 @@ public sealed class GitStashTool : GitTool
     protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
+        if (Refusal(arguments) is { } refused)
+        {
+            return new ValueTask<object?>(refused);
+        }
+
         if (!ToolArguments.TryReadInt32(arguments, IndexArgument, out var index, out var raw))
         {
             return new ValueTask<object?>(ClockText.BadInteger(IndexArgument, raw));

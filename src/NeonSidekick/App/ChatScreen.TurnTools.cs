@@ -203,7 +203,9 @@ internal sealed partial class ChatScreen
         if (plan is not null || inputs.PlanReadOnly)
         {
             // Plan mode (2026-09-26): every tool it does not allow joins the /tools list for this turn, so a group
-            // loses them as it loses a tool switched off, and a group left empty takes its rule with it.
+            // loses them as it loses a tool switched off, and a group left empty takes its rule with it. The git tools that list as well as
+            // change stay as their list-only twins (2026-11-15, the tool-arguments review's #7, #106).
+            gitTools = ListOnlyTwins.Of(gitTools);
             disabledTools = PlanTools.Widen(disabledTools, standingTools, fileTools, imageTools, videoTools, webTools, gitTools, shellTools, obsidianTools, sqlTools, oracleTools, mysqlTools, sqliteTools, duckDbTools, postgresTools, uncTools, dockerTools, eventLogTools, networkTools, serviceTools, taskTools, directoryTools, monitorTools, comfyTools, memoryTools, skillTools, sessionTools, askTools, mcpTools, homeTools, printTools, youTubeTools, shoppingTools, neonAdvisorTools);
         }
 

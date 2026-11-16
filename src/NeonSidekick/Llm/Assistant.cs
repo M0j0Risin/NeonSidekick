@@ -225,7 +225,7 @@ public sealed class Assistant
         NeonSidekick.Llm.Tools.GitDiffTool.ToolName + " the changes, " + NeonSidekick.Llm.Tools.GitBlameTool.ToolName + " who wrote a line; " +
         NeonSidekick.Llm.Tools.GitStageTool.ToolName + ", " + NeonSidekick.Llm.Tools.GitCommitTool.ToolName + ", " + NeonSidekick.Llm.Tools.GitBranchTool.ToolName + ", " + NeonSidekick.Llm.Tools.GitStashTool.ToolName +
         ", " + NeonSidekick.Llm.Tools.GitRevertTool.ToolName + " and " + NeonSidekick.Llm.Tools.GitTagTool.ToolName +
-        " change it — commit, revert or tag only what the user asked for, with the message they gave or a short imperative one, and never remove or overwrite work the user did not name.";
+        " change it — commit, revert or tag only what the user asked for; a commit takes the message they gave or a short imperative one, a revert or tag a message only when they gave one; never remove or overwrite work the user did not name.";
 
     /// <summary>
     /// The sentence the default rules gain while the vault tools are offered (the setting <c>Obsidian tools</c> on and
@@ -2388,12 +2388,12 @@ public sealed class Assistant
 
                 // A call the length limit cut off (2026-10-18) is answered by why the reply ended, never run; any other parse failure as before.
                 // A call that runs is timed, its asks apart (2026-11-02, the review: the screen's clock counted panes no tool opened).
-                (string Text, IReadOnlyList<ImageAttachment> Images, FileDiff? Diff, string? Shown, bool Refused) invoked;
+                (string Text, IReadOnlyList<ImageAttachment> Images, FileDiff? Diff, string? Shown, bool Refused, bool ArgumentError) invoked;
                 TimeSpan? took = null;
                 TimeSpan asked = default;
                 if (cutOff && call.Exception is not null)
                 {
-                    invoked = (CutOffAnswer(call.Name, usage, cutOffTools, turnGuard), [], null, null, false);
+                    invoked = (CutOffAnswer(call.Name, usage, cutOffTools, turnGuard), [], null, null, false, false);
                 }
                 else
                 {
@@ -2401,7 +2401,7 @@ public sealed class Assistant
                     (invoked, took, asked) = (timed.Result, timed.Took, timed.Asked);
                 }
 
-                var (result, pictures, diff, shown, refused) = invoked;
+                var (result, pictures, diff, shown, refused, argumentError) = invoked;
                 // A tool whose pictures are the user's alone (ToolPicturesUnseen) still hands them to the screen below; the model's
                 // copy of the result says so, so it never describes a picture it was not shown.
                 bool seen = !ToolPicturesUnseen.Contains(call.Name);
@@ -2422,7 +2422,7 @@ public sealed class Assistant
                     pictureKeys.Add(CutKey(call));
                 }
 
-                yield return new TurnEvent.ToolResult(call.Name, call.CallId, result, pictures.Count > 0 ? pictures : null, diff, shown, took, asked, refused);
+                yield return new TurnEvent.ToolResult(call.Name, call.CallId, result, pictures.Count > 0 ? pictures : null, diff, shown, took, asked, refused, argumentError);
             }
 
             _history.AddToolResults(results);
@@ -3298,7 +3298,7 @@ public sealed class Assistant
     /// (<see cref="ProjectFileAsk"/> and <c>ask_user</c> offered), a yes runs the call again with the file allowed for that one call — the
     /// refused attempt wrote nothing — and a no answers <see cref="Files.FileText.ProjectFileDeclined"/>.
     /// </summary>
-    private async Task<(string Text, IReadOnlyList<ImageAttachment> Images, FileDiff? Diff, string? Shown, bool Refused)> InvokeGuardedAsync(FunctionCallContent call, CancellationToken cancellationToken)
+    private async Task<(string Text, IReadOnlyList<ImageAttachment> Images, FileDiff? Diff, string? Shown, bool Refused, bool ArgumentError)> InvokeGuardedAsync(FunctionCallContent call, CancellationToken cancellationToken)
     {
         var journal = Journal;
 
@@ -3314,7 +3314,7 @@ public sealed class Assistant
         }
         finally
         {
-            if (!refusedByGate && !Plans.PlanTools.Allowed(call.Name))
+            if (!refusedByGate && !Plans.PlanTools.Allowed(call))
             {
                 journal?.NoteTool(call.Name);
             }
@@ -3322,10 +3322,10 @@ public sealed class Assistant
     }
 
     /// <summary><see cref="InvokeGuardedAsync"/>'s body: the call under the project-file watch, and the ask and the re-run after a yes.</summary>
-    private async Task<(string Text, IReadOnlyList<ImageAttachment> Images, FileDiff? Diff, string? Shown, bool Refused)> InvokeWatchedAsync(FunctionCallContent call, Files.FileJournal? journal, CancellationToken cancellationToken)
+    private async Task<(string Text, IReadOnlyList<ImageAttachment> Images, FileDiff? Diff, string? Shown, bool Refused, bool ArgumentError)> InvokeWatchedAsync(FunctionCallContent call, Files.FileJournal? journal, CancellationToken cancellationToken)
     {
         var slot = new Files.ProjectFileSlot();
-        (string Text, IReadOnlyList<ImageAttachment> Images, FileDiff? Diff, string? Shown, bool Refused) answer;
+        (string Text, IReadOnlyList<ImageAttachment> Images, FileDiff? Diff, string? Shown, bool Refused, bool ArgumentError) answer;
         using (Files.WriteGuard.Watch(slot))
         using (Files.FileJournal.Enter(journal))
         {
@@ -3345,7 +3345,7 @@ public sealed class Assistant
 
         if (allowed == false)
         {
-            return (Files.FileText.ProjectFileDeclined(Path.GetFileName(refused)), [], null, null, false);
+            return (Files.FileText.ProjectFileDeclined(Path.GetFileName(refused)), [], null, null, false, false);
         }
 
         using (Files.WriteGuard.AllowProjectFile())
@@ -3367,7 +3367,7 @@ public sealed class Assistant
     /// </summary>
     public static async Task<(string Text, IReadOnlyList<ImageAttachment> Images)> InvokeToolAsync(IReadOnlyList<AIFunction> tools, FunctionCallContent call, CancellationToken cancellationToken)
     {
-        var (text, images, _, _, _) = await InvokeToolWithDiffAsync(tools, call, cancellationToken).ConfigureAwait(false);
+        var (text, images, _, _, _, _) = await InvokeToolWithDiffAsync(tools, call, cancellationToken).ConfigureAwait(false);
         return (text, images);
     }
 
@@ -3377,7 +3377,7 @@ public sealed class Assistant
     /// <see cref="ToolShownResult"/>'s line for the user alone (later on 2026-10-03, the forbidden strings), null otherwise. <c>Refused</c>
     /// (2026-11-10, review P20-1/P22-2) is true for the loop's own refusal of a copied stub or cut marker, which ran nothing.
     /// </summary>
-    public static async Task<(string Text, IReadOnlyList<ImageAttachment> Images, FileDiff? Diff, string? Shown, bool Refused)> InvokeToolWithDiffAsync(IReadOnlyList<AIFunction> tools, FunctionCallContent call, CancellationToken cancellationToken)
+    public static async Task<(string Text, IReadOnlyList<ImageAttachment> Images, FileDiff? Diff, string? Shown, bool Refused, bool ArgumentError)> InvokeToolWithDiffAsync(IReadOnlyList<AIFunction> tools, FunctionCallContent call, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(tools);
         ArgumentNullException.ThrowIfNull(call);
@@ -3389,19 +3389,21 @@ public sealed class Assistant
         if (tool is null)
         {
             DiagnosticLog.Info(Category, $"The model called unknown tool '{call.Name}'.");
-            return ($"Error: unknown tool '{call.Name}'.", [], null, null, false);
+            return ($"Error: unknown tool '{call.Name}'.", [], null, null, false, false);
         }
 
         if (call.Exception is not null)
         {
             // The adapter puts a JSON parse failure here instead of throwing.
             DiagnosticLog.Info(Category, $"Arguments for tool '{call.Name}' could not be parsed: {call.Exception.Message}");
-            return ($"Error: the arguments for '{call.Name}' could not be parsed: {call.Exception.Message}", [], null, null, false);
+            return ($"Error: the arguments for '{call.Name}' could not be parsed: {call.Exception.Message}", [], null, null, false, false);
         }
 
         // A leaked </parameter=name> folded one argument into another (2026-10-17, LeakedParameters): split back before the tool reads
         // them, and written onto the call so the history and the session store hold it as it ran.
-        if (call.Arguments is { } sent && LeakedParameters.Repair(sent, tool.JsonSchema, out var repaired) is var fixedUp && !ReferenceEquals(fixedUp, sent))
+        // The schema read once (2026-11-15, the tool-arguments review's #98): an MCP tool's or a twin's getter may build it each time.
+        var schema = tool.JsonSchema;
+        if (call.Arguments is { } sent && LeakedParameters.Repair(sent, schema, out var repaired) is var fixedUp && !ReferenceEquals(fixedUp, sent))
         {
             call.Arguments = fixedUp;
             DiagnosticLog.Info(Category, LeakedParameters.LogLine(call.Name, repaired));
@@ -3414,47 +3416,49 @@ public sealed class Assistant
         {
             string refusal = App.CompactionText.PrunedStubSentResult(stubbed);
             DiagnosticLog.Info(Category, ToolErrorLogLine(call.Name, refusal));
-            return (refusal, [], null, null, true);
+            return (refusal, [], null, null, true, false);
         }
 
         // A cut result copied back (2026-11-09, ConversationCompactor.CutMarkedArgument): a write of a file the guard cut to fit would delete
         // its middle. Every argument of a tool that may change something (2026-11-10, D3: not one plan mode's read-only list allows, so a read,
         // a search, neon_help or an advisor's question passes a marker through, while every write, command, MCP tool and later tool is
         // checked), lists included; no tool words this refusal its own way, so IRefusesPrunedStubs doesn't apply.
-        if (!Plans.PlanTools.Allowed(call.Name) && ConversationCompactor.CutMarkedArgument(call.Arguments) is { } marked)
+        if (!Plans.PlanTools.Allowed(call) && ConversationCompactor.CutMarkedArgument(call.Arguments) is { } marked)
         {
             string refusal = App.CompactionText.CutResultSentResult(marked);
             DiagnosticLog.Info(Category, ToolErrorLogLine(call.Name, refusal));
-            return (refusal, [], null, null, true);
+            return (refusal, [], null, null, true, false);
         }
 
-        // A key the tool doesn't take (2026-11-15, feature idea #42, ToolArgumentCheck): a count synonym is read as the tool's own name, written
-        // onto the call as the leaked-parameter repair is; any other refuses the call, naming the right one, so nothing runs unfiltered unknown
-        // to the model. A tool with no arguments runs, its result ending with a note of what went unread.
-        var checkedArguments = ToolArgumentCheck.Check(tool, call.Arguments);
+        // A key the tool doesn't take (2026-11-15, feature idea #42, ToolArgumentCheck): the call is refused, naming the likely name, so nothing
+        // runs unfiltered unknown to the model; never renamed (the review's #3, the user's call: a count synonym can mean another thing). A
+        // tool with no arguments, or a commentary key, runs, its result ending with a note of what went unread. The refusal is flagged
+        // ArgumentError (#19): nothing ran, so the undo journal skips it, but TurnTrace counts it as the model's mistake and its recovery.
+        var checkedArguments = ToolArgumentCheck.Check(tool, schema, call.Arguments);
         if (checkedArguments.Verdict == ArgumentVerdict.Refused)
         {
             string refusal = checkedArguments.Text!;
             DiagnosticLog.Info(Category, ToolErrorLogLine(call.Name, refusal));
-            return (refusal, [], null, null, true);
+            return (refusal, [], null, null, true, true);
         }
 
-        if (checkedArguments.Verdict == ArgumentVerdict.Renamed)
+        // A list-only twin's other forms (2026-11-15, the tool-arguments review's #7, #106): plan mode offers gitlib_tag, gitlib_branch and
+        // gitlib_stash to list alone. The loop's gate, not the tool's answer: nothing runs, so nothing is journaled.
+        if ((tool as NeonSidekick.Llm.Tools.IListOnlyTwin)?.Refusal(call.Arguments) is { } listOnly)
         {
-            call.Arguments = checkedArguments.Arguments;
-            foreach (var (from, to) in checkedArguments.Renames)
-            {
-                DiagnosticLog.Info(Category, TurnText.RenameLogLine(call.Name, from, to));
-            }
+            DiagnosticLog.Info(Category, ToolErrorLogLine(call.Name, listOnly));
+            return (listOnly, [], null, null, true, false);
         }
 
         var (text, images, diff, shown) = await InvokeAsync(tool, call, cancellationToken).ConfigureAwait(false);
-        if (checkedArguments.Note is { } note)
+
+        // Never after an Error: answer (#112): "ignored: …" beside a failure reads as its cause.
+        if (checkedArguments.Note is { } note && !TurnTrace.IsError(text))
         {
             text += "\n" + note;
         }
 
-        return (text, images, diff, shown, false);
+        return (text, images, diff, shown, false, false);
     }
 
     /// <summary>The invocation itself, shared by the model's calls and the opening call: a throwing tool is a sentence, only cancellation escapes.</summary>

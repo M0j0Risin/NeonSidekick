@@ -202,6 +202,30 @@ public sealed class AuditReuseTests : IDisposable
         Assert.Equal([PresentAuditTool.ToolName, PatchFileTool.ToolName, UncPatchTool.ToolName], ConversationCompactor.RecordedArguments);
     }
 
+    /// <summary>
+    /// A lone-object edits is measured as a list is (2026-11-15, the tool-arguments review's #65): one edit's text may be as long as any, and it
+    /// is recorded in the file itself.
+    /// </summary>
+    [Fact]
+    public void Compactor_StubsALoneObjectEdits_InAnEarlierIteration()
+    {
+        string json = "{\"old_text\":\"a\",\"new_text\":\"" + new string('x', 4000) + "\"}";
+        using var document = JsonDocument.Parse(json);
+        var edit = document.RootElement.Clone();
+        var history = new ConversationHistory("s");
+        history.AddUser("edit");
+        history.AddMessage(Call("e1", PatchFileTool.ToolName, PatchFileTool.EditsArgument, edit));
+        history.AddToolResults([new FunctionResultContent("e1", "edited")]);
+        history.AddMessage(Call("e2", PatchFileTool.ToolName, PatchFileTool.EditsArgument, edit));
+        history.AddToolResults([new FunctionResultContent("e2", "edited")]);
+        var messages = history.Messages.ToList();
+
+        var (pruned, _) = ConversationCompactor.PruneRecent(messages);
+
+        Assert.Equal(ConversationCompactor.PrunedArgumentStub(edit.GetRawText().Length), ((FunctionCallContent)pruned[1].Contents[0]).Arguments![PatchFileTool.EditsArgument]);
+        Assert.Same(messages[3], pruned[3]);
+    }
+
     [Fact]
     public void Compactor_LeavesAShortArray_AndAnyOtherShape()
     {

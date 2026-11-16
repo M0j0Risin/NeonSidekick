@@ -29,7 +29,7 @@ public static class ConfigChecks
         }
 
         string key = extra.Keys.First();
-        return ComputerText.UnknownKey(key, Nearest(key, KnownKeys(entry)));
+        return ComputerText.UnknownKey(key, Llm.Tools.NearestName.Nearest(key, KnownKeys(entry)));
     }
 
     /// <summary>The file-level keys beside <paramref name="section"/> as problems (one each).</summary>
@@ -44,59 +44,5 @@ public static class ConfigChecks
     {
         ArgumentNullException.ThrowIfNull(entry);
         return entry.Properties.Where(p => !p.IsExtensionData).Select(p => p.Name).ToList();
-    }
-
-    /// <summary>The known key nearest <paramref name="key"/> (case ignored, within a third of its length in edits), or null.</summary>
-    public static string? Nearest(string key, IEnumerable<string> known)
-    {
-        ArgumentNullException.ThrowIfNull(key);
-        ArgumentNullException.ThrowIfNull(known);
-        string wanted = key.Trim().ToLowerInvariant();
-        string? best = null;
-        int bestDistance = int.MaxValue;
-        foreach (string name in known)
-        {
-            int distance = Distance(wanted, name.ToLowerInvariant());
-            if (distance < bestDistance)
-            {
-                best = name;
-                bestDistance = distance;
-            }
-        }
-
-        return best is not null && bestDistance <= Math.Max(1, wanted.Length / 3) ? best : null;
-    }
-
-    /// <summary>
-    /// The edit distance (insert, delete, change, and two neighbors swapped) between two short words. A swap counts as one edit (2026-11-15,
-    /// feature idea #42: a tool argument typed <c>qurey</c> was two edits from <c>query</c>, past a five-letter key's third).
-    /// </summary>
-    private static int Distance(string a, string b)
-    {
-        var before = new int[b.Length + 1];
-        var previous = new int[b.Length + 1];
-        var current = new int[b.Length + 1];
-        for (int j = 0; j <= b.Length; j++)
-        {
-            previous[j] = j;
-        }
-
-        for (int i = 1; i <= a.Length; i++)
-        {
-            current[0] = i;
-            for (int j = 1; j <= b.Length; j++)
-            {
-                int change = previous[j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1);
-                current[j] = Math.Min(change, Math.Min(previous[j] + 1, current[j - 1] + 1));
-                if (i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1])
-                {
-                    current[j] = Math.Min(current[j], before[j - 2] + 1);
-                }
-            }
-
-            (before, previous, current) = (previous, current, before);
-        }
-
-        return previous[b.Length];
     }
 }

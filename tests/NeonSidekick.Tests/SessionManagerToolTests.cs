@@ -162,6 +162,15 @@ public class SessionManagerToolTests : IDisposable
         Assert.Equal("Error: '' is not one of search, list, read for 'action'", await Invoke());
     }
 
+    /// <summary>Only search and list read max_results (2026-11-15, the tool-arguments review's #153): read refuses it.</summary>
+    [Fact]
+    public async Task MaxResults_OnRead_IsRefused()
+    {
+        long id = Seed("Notes", ("hi", "hello"));
+        Assert.Equal(ArgumentText.NotReadBy("max_results", "read", "search and list"), await Invoke(("action", "read"), ("id", id), ("max_results", 3)));
+        Assert.DoesNotContain("Error", await Invoke(("action", "list"), ("max_results", 3)), StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Cancellation_Propagates()
     {

@@ -94,6 +94,22 @@ public static class PlanText
     public const string NotPlanningError ="Plan mode is not on: /plan <what you want done> starts it";
 
     /// <summary>
+    /// A list-only twin's refusal (2026-11-15, the tool-arguments review's #7, #106): plan mode offers <c>gitlib_tag</c>, <c>gitlib_branch</c> and
+    /// <c>gitlib_stash</c> for their list form alone. <paramref name="listForm"/> is <see cref="TagListForm"/> or <see cref="ActionListForm"/>.
+    /// </summary>
+    public static string ListOnlyRefusal(string tool, string listForm) =>
+        $"Error: plan mode offers {tool} for listing only ({listForm}); nothing was changed, and the rest waits until the plan is approved";
+
+    /// <summary>How <c>gitlib_tag</c> lists.</summary>
+    public const string TagListForm = "leave name out";
+
+    /// <summary>How <c>gitlib_branch</c> and <c>gitlib_stash</c> list.</summary>
+    public const string ActionListForm = "action list";
+
+    /// <summary>The twin's description's last sentence.</summary>
+    public const string ListOnlyNote = "While planning it only lists; anything else waits until the plan is approved.";
+
+    /// <summary>
     /// <c>/plan gaps [model|advisor|any] [passes]</c> (2026-10-13): the gap-closing loop started by typing, the reviewer its one word; a pass
     /// count (2026-10-17, the user's ask) caps this run instead of <see cref="Settings.AppSettingsData.PlanGapPasses"/>.
     /// </summary>

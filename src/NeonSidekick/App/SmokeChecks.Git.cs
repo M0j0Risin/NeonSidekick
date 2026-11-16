@@ -9,7 +9,7 @@ public static partial class SmokeChecks
     /// <summary>
     /// <c>git:roundtrip</c> (2026-09-20): the git tools' whole path on the published binary — a temp sandbox
     /// with a repository made by LibGit2Sharp (a local identity, so the machine's git config never matters),
-    /// then every <see cref="GitAccess"/> operation the eleven tools call, in the order a session would:
+    /// then every <see cref="GitAccess"/> operation the thirteen tools call, in the order a session would:
     /// status on the unborn tree, stage, commit, log, a branch created and switched to, a change, the diff
     /// unstaged / staged / by commit (the app's own <see cref="UnifiedDiff"/>: LibGit2Sharp's
     /// <c>Diff.Compare&lt;T&gt;</c> killed the process under NativeAOT in the spike — libgit2sharp#2082 — so
@@ -211,7 +211,8 @@ public static partial class SmokeChecks
 
             legs.Add("branch deleted");
             // The tag and revert legs (2026-11-15), last, on the clean tree the delete leaves: an annotated tag is written as raw bytes (the
-            // GitBuf prettify is empty on the published exe), and a revert commits through the app's own commit for the same reason.
+            // GitBuf prettify is empty on the published exe), and a revert is built in memory (2026-11-15: RevertCommit, CreateCommit with the
+            // prettify off, CheckoutPaths, the branch ref moved), proven here with HEAD still on its branch and the status clean.
             var tagged = git.CreateTag("", "v1", "", "Release one\n\nnotes");
             using (var repo = new Repository(root))
             {
@@ -228,7 +229,8 @@ public static partial class SmokeChecks
             using (var repo = new Repository(root))
             {
                 if (reverted.Outcome != GitOutcome.Ok || !repo.Head.Tip.MessageShort.StartsWith("Revert \"third\"", StringComparison.Ordinal)
-                    || repo.Info.CurrentOperation != CurrentOperation.None || File.ReadAllText(file) != "one\n")
+                    || repo.Info.CurrentOperation != CurrentOperation.None || File.ReadAllText(file) != "one\n"
+                    || repo.Info.IsHeadDetached || repo.RetrieveStatus(new StatusOptions { IncludeUntracked = false }).IsDirty)
                 {
                     return Fail(name, "revert", reverted.Outcome, reverted.Detail + " subject=" + repo.Head.Tip.MessageShort);
                 }

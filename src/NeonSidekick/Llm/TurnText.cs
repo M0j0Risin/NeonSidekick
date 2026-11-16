@@ -112,10 +112,13 @@ public static class TurnText
 
     /// <summary>
     /// The answer to a call carrying an argument its tool does not take (2026-11-15, feature idea #42: <c>web_search {limit: 5}</c> ran as if
-    /// unfiltered, and the model believed it had filtered). Each key is named with what it should have been, then the tool's own names; nothing
-    /// ran. <paramref name="keys"/> are already echoed (<see cref="Tools.ArgumentText.Echo"/>) and hinted by <see cref="ArgumentHint"/>. Pinned.
+    /// unfiltered, and the model believed it had filtered). Each key is named with what it likely should have been, then the tool's own names
+    /// (the first <paramref name="takes"/>, <paramref name="moreTakes"/> counted, #76); nothing ran. Several keys read "doesn't take 'a' or 'b'"
+    /// (#108: "takes no arguments 'a' and 'b'" read as a tool with none). <paramref name="keys"/> and <paramref name="takes"/> are already echoed
+    /// (<see cref="Tools.ArgumentText.Echo"/>) and hinted by <see cref="NearestHint"/>, <see cref="SynonymHint"/>, <see cref="BothSentHint"/>,
+    /// <see cref="CaseTwinHint"/> or <see cref="RowsShownHint"/>. Pinned.
     /// </summary>
-    public static string UnknownArguments(string tool, IReadOnlyList<(string Key, string? Hint)> keys, int more, IReadOnlyList<string> takes)
+    public static string UnknownArguments(string tool, IReadOnlyList<(string Key, string? Hint)> keys, int more, IReadOnlyList<string> takes, int moreTakes = 0)
     {
         ArgumentNullException.ThrowIfNull(keys);
         ArgumentNullException.ThrowIfNull(takes);
@@ -127,42 +130,47 @@ public static class TurnText
         else
         {
             var items = keys.Select(k => "'" + k.Key + "'" + (k.Hint is { } hint ? " (" + hint + ")" : "")).ToList();
-            if (more > 0)
-            {
-                items.Add("and " + more.ToString(CultureInfo.InvariantCulture) + " more");
-                named = "takes no arguments " + string.Join(", ", items);
-            }
-            else
-            {
-                named = "takes no arguments " + string.Join(", ", items.Take(items.Count - 1)) + " and " + items[^1];
-            }
+            named = more > 0
+                ? "doesn't take " + string.Join(", ", items) + ", or " + more.ToString(CultureInfo.InvariantCulture) + " more"
+                : "doesn't take " + string.Join(", ", items.Take(items.Count - 1)) + " or " + items[^1];
         }
 
-        return "Error: " + tool + " " + named + (named.EndsWith('?') ? " " : ". ") + "It takes: " + string.Join(", ", takes) + ". Nothing ran.";
+        string list = string.Join(", ", takes) + (moreTakes > 0 ? ", and " + moreTakes.ToString(CultureInfo.InvariantCulture) + " more" : "");
+        return "Error: " + tool + " " + named + (named.EndsWith('?') ? " " : ". ") + "It takes: " + list + ". Nothing ran.";
     }
 
-    /// <summary>The hint beside a misnamed argument: the name nearest it. Pinned.</summary>
+    /// <summary>The hint beside a misnamed argument: the name it likely meant. Pinned.</summary>
     public static string NearestHint(string name) => "did you mean '" + name + "'?";
 
-    /// <summary>The hint beside a count synonym in a call refused for another key: the tool's own name for it. Pinned.</summary>
+    /// <summary>The hint beside a count name the tool calls by another: the tool's own name for it. Pinned.</summary>
     public static string SynonymHint(string name) => "it is '" + name + "'";
 
-    /// <summary>The hint beside a count synonym sent with the tool's own name for it too: the model contradicted itself. Pinned.</summary>
+    /// <summary>The hint beside a count name sent with the tool's own name for it too: the model contradicted itself. Pinned.</summary>
     public static string BothSentHint(string name) => "send only '" + name + "'";
 
     /// <summary>
-    /// The line after the result of a tool that takes no arguments and was sent some (2026-11-15, #42): it ran, since nothing could have
-    /// been filtered, and the model learns the keys went unread. <paramref name="keys"/> are already echoed. Pinned.
+    /// The hint beside a key that differs from a sent one only in case (2026-11-15, the review's #121: <c>{path, Path}</c>). <paramref name="key"/>
+    /// is already echoed. Pinned.
     /// </summary>
-    public static string IgnoredArguments(string tool, IReadOnlyList<string> keys, int more)
+    public static string CaseTwinHint(string key, string sent) => "drop '" + key + "'; '" + sent + "' was sent";
+
+    /// <summary>
+    /// The hint beside a count name on a statement tool (2026-11-15, the review's #41): its <paramref name="rows"/> limits only what is shown,
+    /// so no count name is pointed there. Pinned.
+    /// </summary>
+    public static string RowsShownHint(string rows) => rows + " only limits the rows shown; put any limit in the statement itself";
+
+    /// <summary>
+    /// The line after the result of a call whose keys went unread (2026-11-15, #42): a tool that takes no arguments ran, since nothing could
+    /// have been filtered, or a commentary key (#55) was left aside. <paramref name="keys"/> are already echoed. Pinned.
+    /// </summary>
+    public static string IgnoredArguments(string tool, IReadOnlyList<string> keys, int more, bool takesArguments = false)
     {
         ArgumentNullException.ThrowIfNull(keys);
         string list = string.Join(", ", keys) + (more > 0 ? ", and " + more.ToString(CultureInfo.InvariantCulture) + " more" : "");
-        return "(ignored: " + list + "; " + tool + " takes no arguments)";
+        string why = !takesArguments ? tool + " takes no arguments" : tool + " doesn't read " + (keys.Count + more == 1 ? "it" : "them");
+        return "(ignored: " + list + "; " + why + ")";
     }
-
-    /// <summary>The <c>--log</c> line for a count synonym read as the tool's own name (2026-11-15, #42), shaped like <see cref="LeakedParameters.LogLine"/>. Pinned.</summary>
-    internal static string RenameLogLine(string tool, string from, string to) => "Tool " + tool + ": read " + from + " as " + to;
 
     /// <summary><paramref name="notice"/> as the user reads it: <see cref="AskAgain"/> after a notice that asks for it, unless a loop's pass runs (F96).</summary>
     public static string Shown(TurnEvent.Notice notice, bool loopPass)

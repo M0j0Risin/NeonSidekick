@@ -45,10 +45,11 @@ public static partial class ConversationCompactor
     /// <summary>
     /// The tools whose list arguments are recorded elsewhere (2026-10-18, the code audit): <c>present_audit</c>'s findings, retractions,
     /// revisions, nits, questions and coverage are in the report on disk, so a long array of them is stubbed too, as a long string is;
-    /// since 2026-11-15 <c>patch_file</c>'s and <c>unc_patch</c>'s <c>edits</c> too, recorded in the file itself as a <c>write_file</c> body is
-    /// (a lone-object <c>edits</c> stays whole: one edit is no longer than the single form's <c>new_text</c>, which isn't pruned either).
-    /// No other tool's arrays are touched. Only a <see cref="System.Text.Json.JsonElement"/> array is measured (by its JSON's length): any other
-    /// shape is left alone rather than serialized, since serializing an unknown type is the reflection path NativeAOT forbids. Pinned.
+    /// since 2026-11-15 <c>patch_file</c>'s and <c>unc_patch</c>'s <c>edits</c> too, recorded in the file itself as a <c>write_file</c> body is.
+    /// A lone-object <c>edits</c> is measured as a list is (the tool-arguments review's #65: it was left whole on the premise that one edit is
+    /// no longer than the single form's <c>new_text</c>, yet one edit's text may be as long as any). No other tool's arguments are touched. Only a
+    /// <see cref="System.Text.Json.JsonElement"/> array or object is measured (by its JSON's length): any other shape is left alone rather than
+    /// serialized, since serializing an unknown type is the reflection path NativeAOT forbids. Pinned.
     /// </summary>
     public static readonly IReadOnlyList<string> RecordedArguments = [Tools.PresentAuditTool.ToolName, Tools.PatchFileTool.ToolName, Tools.UncPatchTool.ToolName];
 
@@ -856,23 +857,27 @@ public static partial class ConversationCompactor
     }
 
     /// <summary>
-    /// Whether <paramref name="call"/> is a <c>read_file</c> of a plan file alone (2026-11-09; split 2026-11-15), for <see cref="StubSupersededPlans"/>:
-    /// not an opening call, its <c>path</c> passing <see cref="IsPlanPath"/>, and no <c>paths</c> — a read of several files keeps its others, so
-    /// it is never stubbed.
+    /// The files a <c>read_file</c> call named (2026-11-15, the tool-arguments review's #23, #31, #58: one reading for both checks below), as
+    /// the tool reads <c>path</c> and <c>paths</c> (<see cref="Tools.FileTool.TryReadPaths"/>); null for any other call, an opening call, or a
+    /// <c>paths</c> that doesn't parse.
     /// </summary>
-    private static bool IsPlanRead(FunctionCallContent call) =>
+    private static IReadOnlyList<string>? ReadPaths(FunctionCallContent call) =>
         call.Name == Tools.ReadFileTool.ToolName && call.Arguments is { } arguments && !Assistant.IsOpeningCallId(call.CallId)
-        && !(arguments.TryGetValue(Tools.FileTool.PathsArgument, out object? paths) && paths is not null and not System.Text.Json.JsonElement { ValueKind: System.Text.Json.JsonValueKind.Null })
-        && arguments.TryGetValue(Tools.FileTool.PathArgument, out object? path) && ArgumentText(path) is { } text && IsPlanPath(text);
+        && Tools.FileTool.TryReadPaths(new AIFunctionArguments(arguments), out var paths, out _) ? paths : null;
 
     /// <summary>
-    /// Whether <paramref name="call"/> is a <c>read_file</c> naming a plan file in <c>path</c> or any of <c>paths</c> (2026-11-15), for
-    /// <see cref="CutLatestResults"/>' exemption: such a read is kept whole. The list is read as the tool reads it
-    /// (<see cref="Tools.FileTool.TryReadPaths"/>).
+    /// Whether <paramref name="call"/> is a <c>read_file</c> of one plan file alone (2026-11-09; split 2026-11-15), for <see cref="StubSupersededPlans"/>:
+    /// it named exactly one path (in <c>path</c> or a one-item <c>paths</c>, #23) and that path passes <see cref="IsPlanPath"/>. A read of
+    /// several files keeps its others, so it is never stubbed.
     /// </summary>
-    private static bool ReadsAPlan(FunctionCallContent call) =>
-        call.Name == Tools.ReadFileTool.ToolName && call.Arguments is { } arguments && !Assistant.IsOpeningCallId(call.CallId)
-        && Tools.FileTool.TryReadPaths(new AIFunctionArguments(arguments), out var paths, out _) && paths.Any(IsPlanPath);
+    private static bool IsPlanRead(FunctionCallContent call) => ReadPaths(call) is [var one] && IsPlanPath(one);
+
+    /// <summary>
+    /// Whether <paramref name="call"/> is a <c>read_file</c> of plan files only (2026-11-15), for <see cref="CutLatestResults"/>' exemption:
+    /// such a read is kept whole. A read that also names another file is cut as any read is (#31, #58: one plan among twenty large files
+    /// kept them all whole).
+    /// </summary>
+    private static bool ReadsAPlan(FunctionCallContent call) => ReadPaths(call) is { Count: > 0 } paths && paths.All(IsPlanPath);
 
     /// <summary>A <c>present_plan</c> call (not an opening one) whose <c>markdown</c> is real text, not missing and not a stub (2026-10-18).</summary>
     private static bool IsRealPresentation(AIContent content) =>
@@ -896,9 +901,12 @@ public static partial class ConversationCompactor
             || normal.Contains("/" + Plans.PlanSlug.Folder + "/", StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>A <see cref="System.Text.Json.JsonElement"/> array's JSON (2026-10-18, <see cref="RecordedArguments"/>); null for any other shape, never serialized.</summary>
+    /// <summary>
+    /// A <see cref="System.Text.Json.JsonElement"/> array's or object's JSON (2026-10-18, <see cref="RecordedArguments"/>; an object since
+    /// 2026-11-15, #65); null for any other shape, never serialized.
+    /// </summary>
     private static string? ArrayText(object? value) =>
-        value is System.Text.Json.JsonElement { ValueKind: System.Text.Json.JsonValueKind.Array } element ? element.GetRawText() : null;
+        value is System.Text.Json.JsonElement { ValueKind: System.Text.Json.JsonValueKind.Array or System.Text.Json.JsonValueKind.Object } element ? element.GetRawText() : null;
 
     /// <summary>A call argument's text: a string, or a JSON string element; null for any other shape.</summary>
     internal static string? ArgumentText(object? value) => value switch

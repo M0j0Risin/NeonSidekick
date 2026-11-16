@@ -29,7 +29,7 @@ public sealed class GitDeleteTool : GitTool
             "kind": { "type": "string", "enum": ["branch", "tag", "stash"], "description": "What to remove: a local branch by name (not the one checked out), a tag by name, or a stash by index." },
             "name": { "type": "string", "description": "The branch or tag." },
             "index": { "type": "integer", "description": "For stash: its number (stash@{1} is 1)." },
-            {{PathProperty}}
+            {{RepoPathProperty}}
           },
           "required": ["kind"]
         }

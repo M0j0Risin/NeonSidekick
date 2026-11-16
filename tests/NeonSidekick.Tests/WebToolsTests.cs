@@ -188,6 +188,12 @@ public sealed partial class WebToolsTests : IDisposable
         Assert.Equal(WebText.OpenedInWindow("https://a.example/") + "\n" + WebText.OneAtATime(["https://b.example/", "c.example"]), answer);
         Assert.Equal([new Uri("https://a.example/")], window);
         Assert.Empty(_opened);
+
+        // The window's schema names url alone, yet a list reaches it (2026-11-15, the tool-arguments review's #6): the argument check passes urls.
+        var listed = new Dictionary<string, object?> { ["urls"] = Json("[\"https://a.example/\"]") };
+        Assert.False(open.JsonSchema.GetProperty("properties").TryGetProperty("urls", out _));
+        Assert.Equal(NeonSidekick.Llm.ArgumentVerdict.Pass, NeonSidekick.Llm.ToolArgumentCheck.Check(open, open.JsonSchema, listed).Verdict);
+
         Assert.Equal(WebText.NotHttp("ftp://x.example/"), await open.InvokeAsync(Args(("url", "ftp://x.example/")), CancellationToken.None));
         Assert.Single(window);
 

@@ -63,6 +63,52 @@ public sealed class NativeRedirectTests
         Assert.Null(NativeRedirect.For(command, Everything));
     }
 
+    /// <summary>
+    /// A git verb's forms its own tool can't do (2026-11-15, the tool-arguments review's #32, widened in pass 39): a delete goes to gitlib_delete
+    /// when the turn offers it, else the shell keeps it; a form with no tool at all stays the shell's. The plain verb still goes to its tool.
+    /// </summary>
+    [Theory]
+    [InlineData("git tag -d v1", "git tag -d")]
+    [InlineData("git tag --delete v1", "git tag -d")]
+    [InlineData("git tag -f -d v1", "git tag -d")]
+    [InlineData("git branch -d topic", "git branch -d")]
+    [InlineData("git branch -D topic", "git branch -d")]
+    [InlineData("git branch --delete topic", "git branch -d")]
+    [InlineData("git branch -v -d x", "git branch -d")]   // a flag after another flag
+    [InlineData("git stash drop", "git stash drop")]
+    [InlineData("git stash drop stash@{1}", "git stash drop")]
+    [InlineData("git stash -q drop", "git stash drop")]
+    public void ADeleteForm_GoesToGitDelete_OnlyWhenOffered(string command, string prefix)
+    {
+        var offered = new HashSet<string>(Everything, StringComparer.Ordinal) { GitDeleteTool.ToolName };
+        Assert.Equal((prefix, GitDeleteTool.ToolName), NativeRedirect.For(command, offered));
+        Assert.Null(NativeRedirect.For(command, Everything));   // gitlib_delete off (as out of the box): never the verb's own tool
+    }
+
+    [Theory]
+    [InlineData("git revert --abort")]
+    [InlineData("git revert --continue")]
+    [InlineData("git revert --quit")]
+    [InlineData("git revert --skip")]
+    [InlineData("git stash clear")]
+    public void AFormWithNoTool_IsTheShells(string command)
+    {
+        var offered = new HashSet<string>(Everything, StringComparer.Ordinal) { GitDeleteTool.ToolName };
+        Assert.Null(NativeRedirect.For(command, offered));
+    }
+
+    [Theory]
+    [InlineData("git tag v1", "git tag", "gitlib_tag")]
+    [InlineData("git tag", "git tag", "gitlib_tag")]
+    [InlineData("git branch -v", "git branch", "gitlib_branch")]
+    [InlineData("git stash list", "git stash", "gitlib_stash")]
+    [InlineData("git stash", "git stash", "gitlib_stash")]
+    [InlineData("git revert abc1234", "git revert", "gitlib_revert")]
+    public void TheVerbsOwnForms_StillGoToItsTool(string command, string prefix, string tool)
+    {
+        Assert.Equal((prefix, tool), NativeRedirect.For(command, new HashSet<string>(Everything, StringComparer.Ordinal) { GitDeleteTool.ToolName }));
+    }
+
     [Fact]
     public void ATool_NotOffered_LeavesTheShellItsLine()
     {

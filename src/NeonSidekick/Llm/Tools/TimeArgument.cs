@@ -70,6 +70,12 @@ public static partial class TimeArgument
         }
     }
 
+    /// <summary>Whether <paramref name="text"/> is an age (2026-11-15, the tool-arguments review's #42: an age read at midnight is no bare date).</summary>
+    internal static bool IsAge(string text) => Age().IsMatch((text ?? "").Trim());
+
+    /// <summary>Whether <paramref name="text"/> ends in an offset or <c>Z</c> (2026-11-15, #42).</summary>
+    internal static bool HasOffsetText(string text) => HasOffset().IsMatch((text ?? "").Trim());
+
     [GeneratedRegex(@"^(?<part>\d+(?:\.\d+)?\s*[smhdw])+$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex Age();
 

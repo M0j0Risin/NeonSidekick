@@ -89,8 +89,17 @@ public static class FileText
     /// <summary>A required path argument left out (2026-09-18: a `write_file` with `content` alone was told `'' is a folder`). Pinned.</summary>
     public static string PathRequired(string argument) => $"Error: {argument} is required: the file or folder, relative to {RootName}";
 
-    /// <summary><see cref="PathRequired"/> for a tool that takes one path or several (2026-11-15, <c>read_file</c>'s <c>paths</c>). Pinned.</summary>
-    public static string PathsRequired => $"Error: path (or paths, for several) is required: the file or folder, relative to {RootName}";
+    /// <summary>
+    /// <see cref="PathRequired"/> for a tool that takes one path or several (2026-11-15, <c>read_file</c>'s <c>paths</c>; "the file" since the
+    /// tool-arguments review's #127, as <c>read_file</c> reads no folder). Pinned.
+    /// </summary>
+    public static string PathsRequired => $"Error: path (or paths, for several) is required: the file, relative to {RootName}";
+
+    /// <summary>
+    /// A <c>paths</c> sent that names nothing, <c>[]</c> or blanks alone (2026-11-15, the tool-arguments review's #143: <c>file_info</c> read it
+    /// as the working directory). Pinned.
+    /// </summary>
+    public const string PathsNamedNothing = "Error: paths names nothing: list the files, or leave paths out";
 
     /// <summary>A window asked of a read of several files (2026-11-15): start_line and max_lines name one file's lines. Pinned.</summary>
     public const string WindowNeedsOneFile = "Error: start_line and max_lines go with one file; read the files one at a time for a window";
@@ -102,6 +111,13 @@ public static class FileText
     /// </summary>
     public static string ContentRequired(string patchTool, bool sentEdit) =>
         "Error: content is required: the whole text to write (\"\" for an empty file)" + (sentEdit ? "; to change part of a file use " + patchTool : "");
+
+    /// <summary>
+    /// A write given <c>content</c> and an edit argument too (2026-11-15, the tool-arguments review's #1, #67): which was meant is unknown, so
+    /// nothing is written. <paramref name="patchTool"/> is where an edit belongs.
+    /// </summary>
+    public static string ContentWithEdit(string patchTool) =>
+        "Error: content replaces the whole file, and an edit belongs to " + patchTool + "; send one or the other. Nothing was written.";
 
     /// <summary>
     /// A write whose <paramref name="argument"/> is a pruned stub copied back from the history (2026-10-17, with call arguments pruned:
@@ -321,6 +337,19 @@ public static class FileText
         $"Error: every backslash run in old_text is twice as long as in '{path}'; read the file again and pass old_text and new_text with the backslashes as the file has them";
 
     /// <summary>A <c>patch_file</c> whose <c>new_text</c> is in the file and whose <c>old_text</c> is not: done before, nothing written (2026-09-19). Not an error. Pinned.</summary>
+    /// <summary>
+    /// An <c>edits</c> list that leaves the file as it was (2026-11-15, the tool-arguments review's #61, #134): nothing saved or journaled. Not an
+    /// error, as <see cref="AlreadyApplied"/> isn't. Pinned.
+    /// </summary>
+    public static string NoNetChange(string path) => $"nothing changed in {path}: the edits leave it as it was, so nothing was saved";
+
+    /// <summary>
+    /// An edit of a list whose <c>new_text</c> is in the file and whose <c>old_text</c> isn't, beside edits that still apply (2026-11-15, the
+    /// tool-arguments review's #5, #137): skipped, it broke all or none. The "edit N of M" prefix names it. Pinned.
+    /// </summary>
+    public static string NewTextOnly(string path) =>
+        $"Error: its new_text is in {path} but its old_text isn't, while other edits still apply; nothing changed. Read the file and send the edits that are left";
+
     public static string AlreadyApplied(string path) =>
         $"nothing changed in {path}: it already holds new_text and old_text is not in it, so the edit appears to be applied; do not send it again";
 
@@ -529,6 +558,8 @@ public static class FileText
             FileOutcome.ApproximateAll => ApproximateAll(path, Int(detail)),
             FileOutcome.EscapeDrift => EscapeDriftSentence(path, detail),
             FileOutcome.AlreadyApplied => AlreadyApplied(path),
+            FileOutcome.NoNetChange => NoNetChange(path),
+            FileOutcome.NewTextOnly => NewTextOnly(path),
             FileOutcome.FolderInTheWay => FolderInTheWay(path),
             FileOutcome.GitProtected => GitProtected(path),
             FileOutcome.DatabaseProtected => DatabaseProtected(path),
@@ -922,29 +953,99 @@ public static class FileText
     public const string BomNote = "UTF-8 BOM";
 
     /// <summary>
-    /// The first line of a read of several files (2026-11-15, feature idea #31): how many were read and refused, so a refusal in the first
-    /// file doesn't make the whole result read as failed. Pinned.
+    /// The first line of a read of several files (2026-11-15, feature idea #31; the tool-arguments review's #95, #157): how many were read of
+    /// how many named, and how many refused, so a refusal in the first file doesn't make the whole result read as failed; then the files
+    /// read, by name, as many as keep the line within <see cref="UI.TranscriptRenderer.ToolTextLimit"/> cells (the quiet transcript note
+    /// shows this line), the rest counted. <c>read 3 files: a.txt, b.txt, c.txt</c>, <c>read 1 of 3 files (2 refused): a.txt</c>.
     /// </summary>
-    public static string ReadMany(int files, int refused) =>
-        "read " + Count(files, "file", "files") + (refused > 0 ? " (" + refused.ToString(CultureInfo.InvariantCulture) + " refused)" : "") + ":";
+    public static string ReadMany(int read, int named, int refused, IReadOnlyList<string> names)
+    {
+        ArgumentNullException.ThrowIfNull(names);
+        string head = "read " + (read == named ? Count(read, "file", "files") : read.ToString(CultureInfo.InvariantCulture) + " of " + Count(named, "file", "files"))
+            + (refused > 0 ? " (" + refused.ToString(CultureInfo.InvariantCulture) + " refused)" : "") + ":";
+        if (names.Count == 0)
+        {
+            return head;
+        }
+
+        var line = new StringBuilder(head);
+        for (int i = 0; i < names.Count; i++)
+        {
+            string next = (i == 0 ? " " : ", ") + Shown(names[i]);
+            int left = names.Count - i - 1;
+            string more = left > 0 ? ", and " + left.ToString(CultureInfo.InvariantCulture) + " more" : "";
+            if (i > 0 && UI.TextCells.Width(line + next + more) > UI.TranscriptRenderer.ToolTextLimit)
+            {
+                return line + ", and " + (names.Count - i).ToString(CultureInfo.InvariantCulture) + " more";
+            }
+
+            line.Append(next);
+        }
+
+        return line.ToString();
+    }
+
+    /// <summary>
+    /// The line that opens each file's block in a read of several (2026-11-15, the tool-arguments review's #95): the file's name between rules,
+    /// so one file's text never runs into the next file's header. Pinned.
+    /// </summary>
+    public static string BatchSeparator(string name) => "===== " + Shown(name) + " =====";
+
+    /// <summary>
+    /// The first line of a <c>file_info</c> of several paths (2026-11-15, the tool-arguments review's #78): how many were inspected of how many
+    /// named, and how many answered an error. Never an <c>Error:</c> itself: a missing path is an answer here. Pinned.
+    /// </summary>
+    public static string InfoMany(int shown, int named, int errors) =>
+        "inspected " + (shown == named ? Count(shown, "path", "paths") : shown.ToString(CultureInfo.InvariantCulture) + " of " + Count(named, "path", "paths"))
+        + (errors > 0 ? " (" + errors.ToString(CultureInfo.InvariantCulture) + " with an error)" : "") + ":";
 
     /// <summary>The first line when none of several files could be read: an <c>Error:</c>, so the call counts as failed. Pinned.</summary>
     public static string NoneRead(int files) => "Error: none of the " + files.ToString(CultureInfo.InvariantCulture) + " files could be read:";
 
     /// <summary>
-    /// The line after a read of several files once their shared limit ran out (2026-11-15): the files not read, and the call that reads them.
-    /// At most <see cref="MaxMoreNamed"/> names, the rest counted. Pinned.
+    /// The line after a read of several files that left some unread (2026-11-15; one line for both since the tool-arguments review's #45):
+    /// those past the shared <paramref name="limit"/> and those past the <paramref name="cap"/> of a call, and the one call that reads them all.
+    /// Names through <see cref="Names"/>. Pinned.
     /// </summary>
-    public static string NotRead(IReadOnlyList<string> rest, int limit)
+    public static string NotRead(IReadOnlyList<string> pastLimit, IReadOnlyList<string> pastCap, int limit, int cap)
     {
-        ArgumentNullException.ThrowIfNull(rest);
-        string names = string.Join(", ", rest.Take(MaxMoreNamed)) + (rest.Count > MaxMoreNamed ? ", and " + (rest.Count - MaxMoreNamed).ToString(CultureInfo.InvariantCulture) + " more" : "");
-        return rest.Count.ToString(CultureInfo.InvariantCulture) + " more not read, past the " + limit.ToString("N0", CultureInfo.InvariantCulture)
-            + "-character limit the files share; call again with paths: " + names;
+        ArgumentNullException.ThrowIfNull(pastLimit);
+        ArgumentNullException.ThrowIfNull(pastCap);
+        var why = new List<string>(2);
+        if (pastLimit.Count > 0)
+        {
+            why.Add(pastLimit.Count.ToString(CultureInfo.InvariantCulture) + " past the " + limit.ToString("N0", CultureInfo.InvariantCulture) + "-character limit the files share");
+        }
+
+        if (pastCap.Count > 0)
+        {
+            why.Add(pastCap.Count.ToString(CultureInfo.InvariantCulture) + " past the " + cap.ToString(CultureInfo.InvariantCulture) + " files a call reads");
+        }
+
+        return (pastLimit.Count + pastCap.Count).ToString(CultureInfo.InvariantCulture) + " more not read (" + string.Join("; ", why)
+            + "); call again with paths: " + Names([.. pastLimit, .. pastCap]);
+    }
+
+    /// <summary>
+    /// Paths as a list line names them (2026-11-15, the tool-arguments review's #37, #113: one helper for every "call again with paths" line):
+    /// each shown with its hidden characters escaped (<see cref="Shown"/>, never cut, so the next call can copy it), at most
+    /// <see cref="MaxMoreNamed"/>, then <c>and N more</c>.
+    /// </summary>
+    public static string Names(IReadOnlyList<string> names)
+    {
+        ArgumentNullException.ThrowIfNull(names);
+        return string.Join(", ", names.Take(MaxMoreNamed).Select(name => Shown(name)))
+            + (names.Count > MaxMoreNamed ? ", and " + (names.Count - MaxMoreNamed).ToString(CultureInfo.InvariantCulture) + " more" : "");
     }
 
     /// <summary>The read result: a header naming the window, then the text as it is (numbered on request until 2026-09-19).</summary>
-    public static string Read(ReadResult result)
+    public static string Read(ReadResult result) => Read(result, inBatch: false);
+
+    /// <summary>
+    /// <see cref="Read(ReadResult)"/>, with <paramref name="inBatch"/> for a file in a read of several (2026-11-15, the tool-arguments review's
+    /// #122): a cut file's header then says to read it alone, since a window goes with one file.
+    /// </summary>
+    public static string Read(ReadResult result, bool inBatch)
     {
         ArgumentNullException.ThrowIfNull(result);
         if (result.Outcome != FileOutcome.Ok)
@@ -952,7 +1053,7 @@ public static class FileText
             return Error(result.Outcome, Shown(result.Relative), "read", result.Detail);
         }
 
-        string header = ReadHeader(result);
+        string header = ReadHeader(result, inBatch);
         if (result.Text.Length == 0)
         {
             return header;
@@ -995,8 +1096,7 @@ public static class FileText
     {
         ArgumentNullException.ThrowIfNull(rest);
         // At most MaxMoreNamed names, the rest counted (2026-10-22, review T9: every remaining path was echoed).
-        string names = string.Join(", ", rest.Take(MaxMoreNamed)) + (rest.Count > MaxMoreNamed ? ", and " + (rest.Count - MaxMoreNamed).ToString(CultureInfo.InvariantCulture) + " more" : "");
-        return rest.Count.ToString(CultureInfo.InvariantCulture) + " more not shown; call again with paths: " + names;
+        return rest.Count.ToString(CultureInfo.InvariantCulture) + " more not shown; call again with paths: " + Names(rest);
     }
 
     /// <summary>A picture read where no picture codecs are (review K11). Prompt text.</summary>
@@ -1020,7 +1120,10 @@ public static class FileText
     }
 
     /// <summary><c>notes.txt (lines 1–40 of 48):</c>, or the empty and past-the-end forms.</summary>
-    public static string ReadHeader(ReadResult result)
+    public static string ReadHeader(ReadResult result) => ReadHeader(result, inBatch: false);
+
+    /// <summary><see cref="ReadHeader(ReadResult)"/>; in a read of several, a partial file's next step is to read it alone (#122).</summary>
+    public static string ReadHeader(ReadResult result, bool inBatch)
     {
         ArgumentNullException.ThrowIfNull(result);
         string total = result.TotalLines.ToString(CultureInfo.InvariantCulture);
@@ -1044,7 +1147,7 @@ public static class FileText
             ? "; line " + result.CutLine.ToString(CultureInfo.InvariantCulture) + " is " + result.CutLength.ToString("N0", CultureInfo.InvariantCulture) + " characters long, cut at " + result.Cap.ToString("N0", CultureInfo.InvariantCulture)
             : "";
         string encoding = result.Encoding is { } name ? "; read as " + name : "";
-        string next = result.ToLine < result.TotalLines ? NextHint(result.ToLine + 1) : "";
+        string next = result.ToLine < result.TotalLines ? (inBatch ? AloneHint(result.ToLine + 1) : NextHint(result.ToLine + 1)) : "";
         return Shown(result.Relative) + " (" + window + tail + cut + encoding + next + "):";
     }
 
@@ -1053,6 +1156,12 @@ public static class FileText
     /// 1,900-line file 22 times running): the call that continues it, spelled out.
     /// </summary>
     public static string NextHint(int startLine) => "; next: start_line " + startLine.ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// <see cref="NextHint"/> for a file cut in a read of several (2026-11-15, the tool-arguments review's #122): a window goes with one file,
+    /// so the call that continues it reads the file alone.
+    /// </summary>
+    public static string AloneHint(int startLine) => "; next: read it alone with start_line " + startLine.ToString(CultureInfo.InvariantCulture);
 
     // ---- write side ----
 
@@ -1110,7 +1219,12 @@ public static class FileText
         // A patch_file edits list (2026-11-15): its refusal names the edit, its success every edit's lines.
         if (result.FailedEdit > 0)
         {
-            return EditOfList(result.FailedEdit, result.EditCount, Edited(result with { FailedEdit = 0 }));
+            return EditOfList(result.FailedEdit, result.EditCount, Edited(result with { FailedEdit = 0 }), shifted: !result.FailedBeforeRun);
+        }
+
+        if (result.Outcome == FileOutcome.NoNetChange)
+        {
+            return NoNetChange(Shown(result.Relative));
         }
 
         if (result.Edits.Count > 0 && result.Outcome == FileOutcome.Ok)
@@ -1169,13 +1283,14 @@ public static class FileText
 
     /// <summary>
     /// A refusal of edit <paramref name="number"/> of a list of <paramref name="count"/> (2026-11-15): <c>Error: edit 3 of 5 (lines as edits 1–2
-    /// left them): …</c>, the line numbers it names being those of the text the earlier edits left. Nothing was saved. Pinned.
+    /// left them): …</c>, the line numbers it names being those of the text the earlier edits left. Nothing was saved. Without
+    /// <paramref name="shifted"/> (2026-11-15, the tool-arguments review's #68: a refusal found before any edit ran) the clause is left out. Pinned.
     /// </summary>
-    public static string EditOfList(int number, int count, string refusal)
+    public static string EditOfList(int number, int count, string refusal, bool shifted = true)
     {
         ArgumentNullException.ThrowIfNull(refusal);
         string body = refusal.StartsWith("Error: ", StringComparison.Ordinal) ? refusal["Error: ".Length..] : refusal;
-        string earlier = number switch
+        string earlier = !shifted ? "" : number switch
         {
             1 => "",
             2 => " (lines as edit 1 left them)",
@@ -1186,27 +1301,15 @@ public static class FileText
 
     /// <summary>
     /// A list's success (2026-11-15, feature idea #30): <c>edited x with 3 edits (lines 4–6, 18, 40–41; now N lines, W words)</c>, a note per edit
-    /// matched other than exactly or skipped as already in the file, then the regions around the edits numbered, merged where they touch — or,
-    /// over <see cref="WorkingDirectory.MaxEditRegionLines"/> in all, <see cref="RegionTooBig"/>. A <c>replace_all</c> edit over several places is
-    /// in the line list alone, as the single form shows one.
+    /// matched other than exactly, per <c>replace_all</c> (how many places, #138) and per removal ("removed at line N"), then the regions around
+    /// the edits numbered, merged where they touch, up to <see cref="WorkingDirectory.MaxEditRegionLines"/> in all; the edits past that are
+    /// named (#129), and only then does it say to read the lines (#105). A <c>replace_all</c> edit over several places is in the line list alone,
+    /// as the single form shows one.
     /// </summary>
     public static string EditedMany(EditResult result)
     {
         ArgumentNullException.ThrowIfNull(result);
-        var ranges = result.Edits.SelectMany(p => p.Ranges).OrderBy(r => r.From).ToList();
-        var merged = new List<(int From, int To)>();
-        foreach (var r in ranges)
-        {
-            if (merged.Count > 0 && r.From <= merged[^1].To + 1)
-            {
-                merged[^1] = (merged[^1].From, Math.Max(merged[^1].To, r.To));
-            }
-            else
-            {
-                merged.Add(r);
-            }
-        }
-
+        var merged = WorkingDirectory.MergeRanges(result.Edits.SelectMany(p => p.Ranges));
         string listed = string.Join(", ", merged.Take(MaxListedLines).Select(r => r.From == r.To
             ? r.From.ToString(CultureInfo.InvariantCulture)
             : r.From.ToString(CultureInfo.InvariantCulture) + "–" + r.To.ToString(CultureInfo.InvariantCulture))) + (merged.Count > MaxListedLines ? ", …" : "");
@@ -1214,26 +1317,43 @@ public static class FileText
             .Append(" (").Append(merged.Count == 1 && merged[0].From == merged[0].To ? "line " : "lines ").Append(listed).Append(Now(result)).Append(')');
         foreach (var part in result.Edits)
         {
-            if (part.AlreadyApplied)
+            string number = part.Number.ToString(CultureInfo.InvariantCulture);
+            if (StrategyNote(part.Strategy) is { Length: > 0 } note)
             {
-                sb.Append(" (edit ").Append(part.Number.ToString(CultureInfo.InvariantCulture)).Append(" was in the file already; skipped)");
+                sb.Append(" (edit ").Append(number).Append(": ").Append(note.Trim().TrimStart('('));
             }
-            else if (StrategyNote(part.Strategy) is { Length: > 0 } note)
+
+            if (part.Places > 0)
             {
-                sb.Append(" (edit ").Append(part.Number.ToString(CultureInfo.InvariantCulture)).Append(": ").Append(note.Trim().TrimStart('('));
+                sb.Append(" (edit ").Append(number).Append(" replaced ").Append(Count(part.Places, "place", "places")).Append(')');
             }
+            else if (part.Removed && part.Ranges.Count > 0)
+            {
+                sb.Append(" (edit ").Append(number).Append(" removed at line ").Append(part.Ranges[0].From.ToString(CultureInfo.InvariantCulture)).Append(')');
+            }
+        }
+
+        if (result.NotShown.Count > 0)
+        {
+            sb.Append(RegionsNotShown(result.NotShown));
         }
 
         if (result.Blocks.Count > 0)
         {
             sb.Append(":\n").Append(string.Join("\n…\n", result.Blocks.Select(b => Numbered(b.Lines, b.From, b.From + b.Lines.Count - 1))));
         }
-        else if (result.Edits.Any(p => !p.AlreadyApplied && !p.Several))
-        {
-            sb.Append(RegionTooBig);
-        }
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// The edits whose regions didn't fit (2026-11-15, the tool-arguments review's #129): named, with where to see them. Pinned.
+    /// </summary>
+    public static string RegionsNotShown(IReadOnlyList<int> numbers)
+    {
+        ArgumentNullException.ThrowIfNull(numbers);
+        string names = string.Join(", ", numbers.Select(n => n.ToString(CultureInfo.InvariantCulture)));
+        return (numbers.Count == 1 ? "; edit " : "; edits ") + names + " not shown" + RegionTooBig;
     }
 
     /// <summary>An <c>edits</c> value that is no list of objects (2026-11-15), echoed short. Pinned.</summary>
@@ -1254,17 +1374,21 @@ public static class FileText
     /// <summary>A <c>patch_file</c> call with both forms (2026-11-15). Pinned.</summary>
     public const string EditFormsBoth = "Error: give either old_text and new_text, or edits, not both";
 
-    /// <summary>The prefix an <c>edits</c> item's own refusal carries (2026-11-15): <c>edit 3 of 5: </c> before the item's error, its <c>Error:</c> first. Pinned.</summary>
-    public static string EditItem(int number, int count, string refusal)
-    {
-        ArgumentNullException.ThrowIfNull(refusal);
-        string body = refusal.StartsWith("Error: ", StringComparison.Ordinal) ? refusal["Error: ".Length..] : refusal;
-        return "Error: edit " + number.ToString(CultureInfo.InvariantCulture) + " of " + count.ToString(CultureInfo.InvariantCulture) + ": " + body;
-    }
+    /// <summary>
+    /// The prefix an <c>edits</c> item's own refusal carries (2026-11-15): <c>edit 3 of 5: </c> before the item's error, its <c>Error:</c> first;
+    /// <see cref="EditOfList"/>'s, nothing having run (#38). Pinned.
+    /// </summary>
+    public static string EditItem(int number, int count, string refusal) => EditOfList(number, count, refusal, shifted: false);
 
-    /// <summary>An <c>edits</c> item holding a key it doesn't take (2026-11-15), with the nearest real one when there is one. Pinned.</summary>
-    public static string EditUnknownKey(string key, string? nearest) =>
-        "Error: an edit takes old_text, new_text and replace_all, not '" + key + "'" + (nearest is null ? "" : "; did you mean '" + nearest + "'?");
+    /// <summary>
+    /// An <c>edits</c> item holding a key it doesn't take (2026-11-15), with the likely one when there is one (<paramref name="hint"/>,
+    /// <see cref="Llm.ToolArgumentCheck"/>'s: the nearest name, or another agent's name for it). Pinned.
+    /// </summary>
+    public static string EditUnknownKey(string key, string? hint) =>
+        "Error: an edit takes old_text, new_text and replace_all, not '" + key + "'" + (hint is null ? "" : "; " + hint);
+
+    /// <summary>An <c>edits</c> item's field as a refusal names it (2026-11-15, the tool-arguments review's #13): <c>edit 3's new_text</c>.</summary>
+    public static string EditField(int number, string field) => "edit " + number.ToString(CultureInfo.InvariantCulture) + "'s " + field;
 
     /// <summary>An <c>edits</c> item that is no object of strings (2026-11-15). Pinned.</summary>
     public const string EditNotText = "Error: old_text and new_text must be text";

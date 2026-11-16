@@ -70,8 +70,9 @@ public sealed class TurnTrace
                 break;
 
             case TurnEvent.ToolResult result:
-                // The loop's own refusal of a copied stub or cut marker (2026-11-10, review P20-1/P22-2) is no lesson: nothing ran.
-                if (_seeded.Contains(result.CallId) || result.GuardRefused)
+                // The loop's own refusal of a copied stub or cut marker (2026-11-10, review P20-1/P22-2) is no lesson: nothing ran. An
+                // argument refusal (2026-11-15, #19) is: the model misread the tool, and what it called next is how it recovered.
+                if (_seeded.Contains(result.CallId) || (result.GuardRefused && !result.ArgumentError))
                 {
                     break;
                 }

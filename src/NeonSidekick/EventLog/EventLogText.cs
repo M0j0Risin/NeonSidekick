@@ -153,7 +153,7 @@ public static class EventLogText
 
     public static string BadAudit(string text) => $"Error: audit '{Llm.Tools.ArgumentText.Echo(text)}' is not success, failure or any.";
 
-    public static string BadTime(string argument, string text) => $"Error: {argument} '{Llm.Tools.ArgumentText.Echo(text)}' is not an age (30m, 2h, 1d, 1w) or a moment (2026-10-14T21:00).";
+    public static string BadTime(string argument, string text) => Llm.Tools.ArgumentText.BadTime(argument, text);
 
     public static string BadRecord(string text) => $"Error: '{text}' is not a record number.";
 

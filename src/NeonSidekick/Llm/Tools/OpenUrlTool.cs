@@ -27,7 +27,7 @@ namespace NeonSidekick.Llm.Tools;
 /// through <c>Web browser open</c>, its note (if any) before that line. The hook passes on whatever is not a video or <c>list=</c> link,
 /// whatever YouTube refused in the player, and everything while YouTube tools are off. Headless gives no hook.</para>
 /// </summary>
-public sealed class OpenUrlTool : AIFunction
+public sealed class OpenUrlTool : AIFunction, IAcceptsArguments
 {
     public const string ToolName = "open_url";
     public const string UrlArgument = "url";
@@ -90,6 +90,14 @@ public sealed class OpenUrlTool : AIFunction
           "one link in url, or up to " + MaxUrls.ToString(System.Globalization.CultureInfo.InvariantCulture) + " in urls.";
 
     public override JsonElement JsonSchema => InWindow ? WindowSchema : Schema;
+
+    /// <summary>
+    /// <see cref="UrlsArgument"/> under the Browser window (2026-11-15, the tool-arguments review's #6): its schema names <c>url</c> alone, yet the
+    /// window still answers a list (the first link opened, the rest named), so the argument check lets it through.
+    /// </summary>
+    public IReadOnlyCollection<string> ExtraArguments => InWindow ? WindowExtras : [];
+
+    private static readonly string[] WindowExtras = [UrlsArgument];
 
     /// <summary>Whether links go to the Browser window now: <c>Web browser open</c> is <c>browser-window</c> and there is a window to ask.</summary>
     private bool InWindow => _openInWindow is not null && _effective is not null && OpenLinksIn.Resolve(_effective()) == OpenLinksInKind.BrowserWindow;

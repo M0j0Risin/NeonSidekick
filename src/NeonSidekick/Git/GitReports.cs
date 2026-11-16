@@ -54,10 +54,16 @@ public sealed record GitLogReport(GitOutcome Outcome, string Detail, string Refe
 
     /// <summary>The most commits the walk looks at (<see cref="GitAccess.MaxLogWalk"/>), for the header's note.</summary>
     public int WalkCap { get; init; } = GitAccess.MaxLogWalk;
+
+    /// <summary>
+    /// A filtered walk filled its list and then reached <see cref="WalkCap"/> with no further match (2026-11-15, the tool-arguments review's
+    /// #146): more may be before them, not known to be.
+    /// </summary>
+    public bool MaybeMore { get; init; }
 }
 
 /// <summary>
-/// <c>gitlib_log</c>'s filters (2026-11-15, feature idea #44): the author date within <see cref="Since"/> and <see cref="Until"/> (both
+/// <c>gitlib_log</c>'s filters (2026-11-15, feature idea #44): the committer date (#28) within <see cref="Since"/> and <see cref="Until"/> (both
 /// inclusive), <see cref="Author"/> in the name or email and <see cref="Grep"/> in the message, case ignored. Null for each not given.
 /// </summary>
 public sealed record GitLogFilter(DateTimeOffset? Since = null, DateTimeOffset? Until = null, string? Author = null, string? Grep = null)
@@ -158,9 +164,12 @@ public sealed record GitMergeBaseReport(GitOutcome Outcome, string Detail, strin
 public sealed record GitRefsReport(GitOutcome Outcome, string Detail, string? Current, bool Detached, IReadOnlyList<GitRef> Local, IReadOnlyList<GitRef> Remote, IReadOnlyList<GitRef> Tags, bool Truncated)
 {
     public static GitRefsReport Refused(GitOutcome outcome, string detail = "") => new(outcome, detail, null, false, [], [], [], false);
+}
 
-    /// <summary>The tag list alone was cut at <see cref="GitAccess.MaxTags"/> (2026-11-15: <see cref="Truncated"/> is any of the three caps), for <c>gitlib_tag</c>'s list.</summary>
-    public bool TagsTruncated { get; init; }
+/// <summary>The tags alone (2026-11-15, <c>gitlib_tag</c>'s list): newest target first, and whether they were cut at <see cref="GitAccess.MaxTags"/>.</summary>
+public sealed record GitTagsReport(GitOutcome Outcome, string Detail, IReadOnlyList<GitRef> Tags, bool Truncated)
+{
+    public static GitTagsReport Refused(GitOutcome outcome, string detail = "") => new(outcome, detail, [], false);
 }
 
 /// <summary>

@@ -25,8 +25,23 @@ public sealed class PatchFileTool : FileTool, IRefusesPrunedStubs
     public const string ReplaceAllArgument = "replace_all";
     public const string EditsArgument = "edits";
 
+    /// <summary>
+    /// The names an <c>edits</c> item takes (2026-11-15, the tool-arguments review's #12, #70: one definition, which the item schema, the
+    /// reader and <c>unc_patch</c> all take). Before <see cref="Schema"/>: statics run in order.
+    /// </summary>
+    internal static readonly string[] EditKeys = [OldTextArgument, NewTextArgument, ReplaceAllArgument];
+
+    /// <summary>An <c>edits</c> item's schema, built from <see cref="EditKeys"/> (#141, #148), for <c>patch_file</c> and <c>unc_patch</c> alike.</summary>
+    internal static readonly string EditItemSchema =
+        "{ \"type\": \"object\", \"properties\": { "
+        + string.Join(", ", EditKeys.Select(key => "\"" + key + "\": { \"type\": \"" + (key == ReplaceAllArgument ? "boolean" : "string") + "\" }"))
+        + " }, \"required\": [\"" + OldTextArgument + "\", \"" + NewTextArgument + "\"] }";
+
+    /// <summary>The cap as the <c>edits</c> descriptions write it (#150): from <see cref="WorkingDirectory.MaxEdits"/>, never by hand.</summary>
+    internal static readonly string MaxEditsText = WorkingDirectory.MaxEdits.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
     private static readonly JsonElement Schema = ToolSchema.Parse(
-        """
+        $$"""
         {
           "type": "object",
           "properties": {
@@ -34,7 +49,7 @@ public sealed class PatchFileTool : FileTool, IRefusesPrunedStubs
             "old_text": { "type": "string", "description": "The text to replace, copied from the file as read_file shows it (without the line numbers an edit result shows). It must occur exactly once unless replace_all is true; include surrounding lines to make it unique. Small differences in spacing, indentation, quotes and dashes are tolerated." },
             "new_text": { "type": "string", "description": "The text to put in its place. Empty removes old_text." },
             "replace_all": { "type": "boolean", "description": "true replaces every occurrence of old_text (a rename across the file), matched as written or with spacing and indentation tolerated, never by similarity. Default false: exactly one." },
-            "edits": { "type": "array", "items": { "type": "object", "properties": { "old_text": { "type": "string" }, "new_text": { "type": "string" }, "replace_all": { "type": "boolean" } }, "required": ["old_text", "new_text"] }, "description": "Several changes to this file in one call (at most 50), each {old_text, new_text, replace_all?} as above, applied in order, each to the text the one before left; all or none. Leave old_text and new_text out when you give this." }
+            "edits": { "type": "array", "items": {{EditItemSchema}}, "description": "Several changes to this file in one call (at most {{MaxEditsText}}), each {old_text, new_text, replace_all?} as above, applied in order, each to the text the one before left; all or none. Leave old_text and new_text out when you give this." }
           },
           "required": ["path"]
         }
@@ -59,23 +74,37 @@ public sealed class PatchFileTool : FileTool, IRefusesPrunedStubs
     public string Describe(string path, string oldText, string newText, bool replaceAll = false) =>
         FileText.Edited(Files.EditText(path, oldText, newText, replaceAll));
 
-    /// <summary>The names an <c>edits</c> item takes.</summary>
-    private static readonly string[] EditKeys = [OldTextArgument, NewTextArgument, ReplaceAllArgument];
-
     /// <summary>
-    /// Which form a call is (2026-11-15): any of <c>old_text</c>, <c>new_text</c> or <c>replace_all</c> makes it the single form, which keeps
-    /// its answers; <c>edits</c> the list. Both, or neither, is the refusal; null otherwise, <paramref name="list"/> saying which.
+    /// Which form a call is (2026-11-15). A key counts only with a real value (the tool-arguments review's #22, #69, #84: a schema-filling
+    /// <c>old_text: ""</c> beside <c>edits</c> was "both forms"): a non-blank <c>old_text</c>, a non-empty <c>new_text</c> or
+    /// <c>replace_all: true</c> for the single form, a non-empty <c>edits</c> for the list. Both is the refusal. With neither, a call that sent a
+    /// single-form key keeps its own answers (old_text empty, new_text required), one that sent <c>edits</c> its empty-list answer, and one
+    /// that sent nothing the form refusal. Null otherwise, <paramref name="list"/> saying which.
     /// </summary>
     internal static string? EditForm(AIFunctionArguments arguments, out bool list)
     {
-        bool single = EditKeys.Any(name => ToolArguments.Has(arguments, name));
-        list = ToolArguments.Has(arguments, EditsArgument);
-        return (single, list) switch
+        ArgumentNullException.ThrowIfNull(arguments);
+        bool single = ToolArguments.ReadString(arguments, OldTextArgument).Trim().Length > 0
+            || ToolArguments.ReadString(arguments, NewTextArgument).Length > 0
+            || (ToolArguments.TryReadBoolean(arguments, ReplaceAllArgument, out bool? all, out _) && all == true);
+        list = arguments.TryGetValue(EditsArgument, out var edits) && !ToolArgumentCheck.Harmless(edits);
+        if (single && list)
         {
-            (true, true) => FileText.EditFormsBoth,
-            (false, false) => FileText.EditFormRequired,
-            _ => null,
-        };
+            return FileText.EditFormsBoth;
+        }
+
+        if (single || list)
+        {
+            return null;
+        }
+
+        if (EditKeys.Any(name => ToolArguments.Has(arguments, name)))
+        {
+            return null;
+        }
+
+        list = ToolArguments.Has(arguments, EditsArgument);
+        return list ? null : FileText.EditFormRequired;
     }
 
     /// <summary>
@@ -109,32 +138,32 @@ public sealed class PatchFileTool : FileTool, IRefusesPrunedStubs
 
         for (int i = 0; i < items.Count; i++)
         {
-            if (ReadEdit(items[i], i + 1) is not { } step)
+            // Each item judged once (#13): its refusal, or its step.
+            string itemError = ItemError(items[i], i + 1);
+            if (itemError.Length > 0)
             {
-                error = FileText.EditItem(i + 1, items.Count, ItemError(items[i], i + 1));
+                error = FileText.EditItem(i + 1, items.Count, itemError);
                 return false;
             }
 
-            found.Add(step);
+            var item = items[i];
+            found.Add(new EditStep(
+                item.TryGetProperty(OldTextArgument, out var o) && o.ValueKind == JsonValueKind.String ? o.GetString() ?? "" : "",
+                item.GetProperty(NewTextArgument).GetString() ?? "",
+                item.TryGetProperty(ReplaceAllArgument, out var r) && (r.ValueKind == JsonValueKind.True || (r.ValueKind == JsonValueKind.String && bool.TryParse(r.GetString()?.Trim(), out bool b) && b))));
         }
 
         return true;
 
-        static EditStep? ReadEdit(JsonElement item, int number) => ItemError(item, number).Length == 0
-            ? new EditStep(
-                item.TryGetProperty(OldTextArgument, out var o) && o.ValueKind == JsonValueKind.String ? o.GetString() ?? "" : "",
-                item.GetProperty(NewTextArgument).GetString() ?? "",
-                item.TryGetProperty(ReplaceAllArgument, out var r) && (r.ValueKind == JsonValueKind.True || (r.ValueKind == JsonValueKind.String && bool.TryParse(r.GetString()?.Trim(), out bool b) && b)))
-            : null;
-
         static string ItemError(JsonElement item, int number)
         {
+            // An unknown key through the call check's own rules (#12): a harmless value or a commentary key left aside, any other hinted.
+            var sent = item.EnumerateObject().Where(p => EditKeys.Contains(p.Name, StringComparer.Ordinal) && !ToolArgumentCheck.Harmless(p.Value)).Select(p => p.Name).ToHashSet(StringComparer.Ordinal);
             foreach (var property in item.EnumerateObject())
             {
-                if (!EditKeys.Contains(property.Name, StringComparer.Ordinal) && property.Value.ValueKind != JsonValueKind.Null)
+                if (!EditKeys.Contains(property.Name, StringComparer.Ordinal) && !ToolArgumentCheck.Unread(property.Name, property.Value))
                 {
-                    string? nearest = property.Name.Length > ToolArgumentCheck.MaxNearestChars ? null : Computers.ConfigChecks.Nearest(property.Name, EditKeys);
-                    return FileText.EditUnknownKey(ArgumentText.Echo(property.Name), nearest);
+                    return FileText.EditUnknownKey(ArgumentText.Echo(property.Name), ToolArgumentCheck.Hint(property.Name, EditKeys, sent));
                 }
             }
 
@@ -149,9 +178,15 @@ public sealed class PatchFileTool : FileTool, IRefusesPrunedStubs
                 return FileText.EditNotText;
             }
 
+            // A pruned stub copied back, in either text (#13: its old_text too).
             if (ConversationCompactor.IsPrunedStub(newText.GetString() ?? ""))
             {
-                return FileText.PrunedStubSent(EditsArgument + "[" + number.ToString(System.Globalization.CultureInfo.InvariantCulture) + "]." + NewTextArgument);
+                return FileText.PrunedStubSent(FileText.EditField(number, NewTextArgument));
+            }
+
+            if (item.TryGetProperty(OldTextArgument, out var oldStub) && oldStub.ValueKind == JsonValueKind.String && ConversationCompactor.IsPrunedStub(oldStub.GetString() ?? ""))
+            {
+                return FileText.PrunedStubSent(FileText.EditField(number, OldTextArgument));
             }
 
             if (item.TryGetProperty(ReplaceAllArgument, out var all)

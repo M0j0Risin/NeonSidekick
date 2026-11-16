@@ -8,8 +8,10 @@ namespace NeonSidekick.Plans;
 /// the clock, memory's recall, the skills' load, the sessions' search and the question pane; anything
 /// else is dropped while planning, <see cref="Mutating"/> and whatever is not named at all — every MCP
 /// tool (nothing tells a server's reads from its writes) and any tool added later, until someone
-/// decides it may stay. A test holds every tool the app builds to exactly one of the two lists, so a
-/// new tool is a decision, not an accident. Pure.
+/// decides it may stay. A test holds every tool the app builds to exactly one of the lists, so a
+/// new tool is a decision, not an accident. Since 2026-11-15 (the tool-arguments review's #7, #106, the user's call) a third list,
+/// <see cref="ReadForms"/>: tools that list as well as change, offered while planning as their list-only twins
+/// (<see cref="Llm.Tools.IListOnlyTwin"/>) and classed by the call (<see cref="Allowed(FunctionCallContent)"/>). Pure.
 /// </summary>
 public static class PlanTools
 {
@@ -92,7 +94,7 @@ public static class PlanTools
     {
         "start_timer", "stop_timer",
         "write_file", "patch_file", "create_directory", "move", "copy", "delete", "zip", "unzip", "open", "convert_to_pdf", "convert_to_docx", "convert_to_xlsx", "pdf_edit", "image_edit", "set_splash_image",
-        "gitlib_stage", "gitlib_commit", "gitlib_stash", "gitlib_revert", "gitlib_tag", "gitlib_discard", "gitlib_delete", "gitlib_branch",
+        "gitlib_stage", "gitlib_commit", "gitlib_revert", "gitlib_discard", "gitlib_delete",
         "run_command", "process", "execute_code",
         "download_file", "open_url",
         // the saved links (later still on 2026-10-13): a link saved, removed or renamed
@@ -172,13 +174,50 @@ public static class PlanTools
         return union;
     }
 
-    /// <summary>Whether plan mode keeps <paramref name="tool"/>.</summary>
+    /// <summary>
+    /// The tools whose list form reads and whose other forms change something (2026-11-15, #7, #106): <c>gitlib_tag</c> without a name,
+    /// <c>gitlib_branch</c> and <c>gitlib_stash</c> with <c>action: list</c>. Plan mode offers their list-only twins.
+    /// </summary>
+    public static readonly IReadOnlySet<string> ReadForms = new HashSet<string>(StringComparer.Ordinal)
+    {
+        Llm.Tools.GitTagTool.ToolName, Llm.Tools.GitBranchTool.ToolName, Llm.Tools.GitStashTool.ToolName,
+    };
+
+    /// <summary>Whether plan mode keeps <paramref name="tool"/> whole: <see cref="ReadOnly"/>. The advisors' list reads this, never the twins.</summary>
     public static bool Allowed(string tool) => ReadOnly.Contains(tool);
+
+    /// <summary>Whether plan mode offers <paramref name="tool"/> at all: whole, or as its list-only twin (<see cref="ReadForms"/>).</summary>
+    public static bool Offered(string tool) => ReadOnly.Contains(tool) || ReadForms.Contains(tool);
+
+    /// <summary>
+    /// Whether <paramref name="call"/> only reads (2026-11-15, #7, #106): a <see cref="ReadOnly"/> tool, or a <see cref="ReadForms"/> tool's list
+    /// form. The undo journal, <c>/rewind</c>'s list and the cut-marker check read this, so a list never counts as a change.
+    /// </summary>
+    public static bool Allowed(FunctionCallContent call)
+    {
+        ArgumentNullException.ThrowIfNull(call);
+        return ReadOnly.Contains(call.Name) || IsListForm(call.Name, call.Arguments);
+    }
+
+    /// <summary>Whether a call of <paramref name="tool"/> with <paramref name="arguments"/> is a <see cref="ReadForms"/> tool's list form.</summary>
+    public static bool IsListForm(string tool, IDictionary<string, object?>? arguments)
+    {
+        if (!ReadForms.Contains(tool))
+        {
+            return false;
+        }
+
+        var read = arguments as AIFunctionArguments ?? new AIFunctionArguments(arguments ?? new Dictionary<string, object?>());
+        return tool == Llm.Tools.GitTagTool.ToolName
+            ? string.IsNullOrWhiteSpace(Llm.Tools.ToolArguments.ReadString(read, Llm.Tools.GitTagTool.NameArgument))
+            : Llm.Tools.ToolArguments.ReadString(read, Llm.Tools.GitBranchTool.ActionArgument).Trim()
+                .Equals(Llm.Tools.GitBranchTool.ListAction, StringComparison.OrdinalIgnoreCase);
+    }
 
     /// <summary>
     /// <paramref name="disabled"/> (the <c>/tools</c> list) widened by every tool of <paramref name="groups"/>
     /// plan mode drops, so each group loses them exactly as it loses a tool switched off — an emptied group
-    /// is the group's switch off, its rule gone with it.
+    /// is the group's switch off, its rule gone with it. A <see cref="ReadForms"/> tool stays, as its twin (<see cref="Offered"/>).
     /// </summary>
     public static IReadOnlySet<string> Widen(IReadOnlySet<string>? disabled, params IReadOnlyList<AIFunction>?[] groups)
     {
@@ -193,7 +232,7 @@ public static class PlanTools
 
             foreach (var tool in group)
             {
-                if (!Allowed(tool.Name))
+                if (!Offered(tool.Name))
                 {
                     widened.Add(tool.Name);
                 }

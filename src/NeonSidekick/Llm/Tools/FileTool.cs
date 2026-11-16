@@ -48,8 +48,66 @@ public abstract class FileTool : AIFunction
     public const string PathsArgument = "paths";
 
     /// <summary>
+    /// The most paths one call of <c>read_file</c>, <c>file_info</c> or <c>image_info</c> takes (2026-11-15, the tool-arguments review's #47:
+    /// three equal copies became this one); the rest are named for the next call. <c>view_image</c> keeps its own setting.
+    /// </summary>
+    public const int MaxPaths = 20;
+
+    /// <summary><see cref="MaxPaths"/> as the model text writes it (#47): from the constant, never by hand.</summary>
+    internal static readonly string MaxPathsText = MaxPaths.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// How two path texts compare (2026-11-15, #15, #16): case ignored on Windows and macOS, whose file systems ignore it by default, and
+    /// kept on Linux.
+    /// </summary>
+    internal static StringComparer PathTextComparer => OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+
+    /// <summary>
+    /// <paramref name="paths"/> with each file once (2026-11-15, the tool-arguments review's #15, #16, #71): two paths are one when they
+    /// resolve to the same full path, each against its own root (<see cref="FilesFor"/>), so <c>a</c> and <c>./a</c> read once. A path that
+    /// doesn't resolve is compared by its text and keeps its own refusal line. The first spelling is kept, in order.
+    /// </summary>
+    protected IReadOnlyList<string> Unique(IReadOnlyList<string> paths)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+        var seen = new HashSet<string>(PathTextComparer);
+        var kept = new List<string>(paths.Count);
+        foreach (string path in paths)
+        {
+            string key = FilesFor(path).Resolve(path, forWrite: false, out string full) == FileOutcome.Ok
+                ? "full:" + Path.TrimEndingDirectorySeparator(full)
+                : "text:" + path;
+            if (seen.Add(key))
+            {
+                kept.Add(path);
+            }
+        }
+
+        return kept;
+    }
+
+    /// <summary>
+    /// The one "first N, Esc between them, the rest named" loop (2026-11-15, #47) of <c>file_info</c>, <c>image_info</c> and <c>view_image</c>:
+    /// <paramref name="each"/> runs over the first <paramref name="cap"/> paths, the token checked before each; the answer's last line,
+    /// <see cref="FileText.MorePaths"/> naming the rest, or null when none are left.
+    /// </summary>
+    internal static string? EachUpTo(IReadOnlyList<string> paths, int cap, Action<string> each, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+        ArgumentNullException.ThrowIfNull(each);
+        foreach (string path in paths.Take(cap))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            each(path);
+        }
+
+        return paths.Count > cap ? FileText.MorePaths(paths.Skip(cap).ToList()) : null;
+    }
+
+    /// <summary>
     /// The files a call names (2026-11-15, feature ideas #31 and #45): <c>path</c> first, then <c>paths</c> (a list, a lone string, or a list
-    /// written as text, <see cref="ToolArguments.TryReadStringList"/>), trimmed, blanks dropped, duplicates removed with the OS's comparer. None
+    /// written as text, <see cref="ToolArguments.TryReadStringList"/>), trimmed, blanks dropped, duplicates removed by text (<see cref="PathTextComparer"/>;
+    /// the tools then remove those that resolve to one file, <see cref="Unique"/>). None
     /// when neither names one: the caller decides whether that is the root or an error. False with <see cref="FileText.BadStringList"/> when
     /// <c>paths</c> is no list of strings. Shared with <c>ChatScreen.ForgetCutRead</c> and <c>ConversationCompactor.ReadsAPlan</c>, so all
     /// three agree on what a past call named.
@@ -68,7 +126,7 @@ public abstract class FileTool : AIFunction
         paths = ((string[])[ToolArguments.ReadString(arguments, PathArgument), .. listed])
             .Select(p => p.Trim())
             .Where(p => p.Length > 0)
-            .Distinct(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal)
+            .Distinct(PathTextComparer)
             .ToList();
         return true;
     }

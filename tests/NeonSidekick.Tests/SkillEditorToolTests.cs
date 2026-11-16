@@ -43,6 +43,24 @@ public class SkillEditorToolTests : IDisposable
     private async Task<string> Invoke(params (string Name, object? Value)[] values) =>
         (string)(await _tool.InvokeAsync(Args(values), CancellationToken.None))!;
 
+    /// <summary>
+    /// A file argument beside create or update (2026-11-15, the tool-arguments review's #131) is refused, files on or off, nothing proposed; an
+    /// empty one is harmless.
+    /// </summary>
+    [Fact]
+    public async Task AFileArgument_OnCreateOrUpdate_IsRefused()
+    {
+        string off = await Invoke(("action", "create"), ("name", "notes"), ("description", "d"), ("instructions", "i"), ("path", "data.json"));
+        Assert.Equal(SkillText.FileArgumentsOnSkill("create", ["path"], filesOffered: false), off);
+
+        var withFiles = new SkillEditorTool(() => _roots, () => false, new SkillFileAccess(TimeProvider.System));
+        string on = (string)(await withFiles.InvokeAsync(Args(("action", "update"), ("name", "notes"), ("content", "x"), ("replace_all", true)), CancellationToken.None))!;
+        Assert.Equal(SkillText.FileArgumentsOnSkill("update", ["content", "replace_all"], filesOffered: true), on);
+
+        string harmless = await Invoke(("action", "create"), ("name", "notes"), ("description", "d"), ("instructions", "i"), ("path", ""), ("replace_all", false));
+        Assert.DoesNotContain("doesn't take", harmless, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Schema_IsPinned()
     {

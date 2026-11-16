@@ -50,10 +50,14 @@ public sealed class AskUserTool : AIFunction, IAcceptsArguments
 {
     public const string ToolName = "ask_user";
 
-    /// <summary>Any key: the tool reads several shapes of one question and answers the rest with <see cref="AskUserText.SentKeys"/> (2026-11-15, #42).</summary>
-    public IReadOnlyCollection<string> ExtraArguments => [];
+    /// <summary>
+    /// The one question's fields the tool reads at the top level, when <see cref="QuestionsArgument"/> is absent (2026-11-15, the
+    /// tool-arguments review's #110: it accepted any key, so a misspelled one went unanswered). Beside a non-empty list they are refused
+    /// (<see cref="AskUserText.FieldsBesideQuestions"/>).
+    /// </summary>
+    public IReadOnlyCollection<string> ExtraArguments => TopLevelFields;
 
-    public bool AcceptsAnyArgument => true;
+    private static readonly string[] TopLevelFields = [QuestionArgument, TextArgument, TitleArgument, TypeArgument, OptionsArgument, ChoicesArgument, MultiArgument, MultipleArgument];
 
     public const string QuestionsArgument = "questions";
     public const string QuestionArgument = "question";
@@ -193,6 +197,13 @@ public sealed class AskUserTool : AIFunction, IAcceptsArguments
             }
 
             return AskUserText.NoQuestions(raw.Length > 0 ? raw : AskUserText.SentKeys(arguments.Keys), limits.MaxQuestions);
+        }
+
+        // A question's field beside the list (#110) would be skipped: questions: [...] with a top-level multiple: true ran single-choice.
+        var beside = TopLevelFields.Where(name => arguments.TryGetValue(name, out var value) && !ToolArgumentCheck.Harmless(value)).ToList();
+        if (beside.Count > 0)
+        {
+            return AskUserText.FieldsBesideQuestions(beside);
         }
 
         if (objects.Count > limits.MaxQuestions)

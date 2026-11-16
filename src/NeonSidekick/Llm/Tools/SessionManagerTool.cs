@@ -126,6 +126,12 @@ public sealed class SessionManagerTool : AIFunction
 
             case ReadAction:
             {
+                // Only search and list read max_results (#153).
+                if (maxResults is not null)
+                {
+                    return ArgumentText.NotReadBy(MaxResultsArgument, ReadAction, SearchAction + " and " + ListAction);
+                }
+
                 if (id is not { } wanted)
                 {
                     return SessionText.NoId;

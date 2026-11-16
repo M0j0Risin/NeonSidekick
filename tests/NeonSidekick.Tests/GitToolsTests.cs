@@ -1,4 +1,5 @@
 using System.Text.Json;
+using LibGit2Sharp;
 using Microsoft.Extensions.AI;
 using NeonSidekick.Git;
 using NeonSidekick.Llm.Tools;
@@ -136,7 +137,7 @@ public sealed class GitToolsTests : IDisposable
             Tool<GitStashTool>().Description);
         Assert.Equal(
             "Undoes a commit with a new commit that reverses its changes; nothing is lost, and the reverted commit stays in the history. " +
-            "Refuses while there are uncommitted changes, and for a merge commit; a revert that would conflict is put back and its files named. " +
+            "Refuses while there are uncommitted changes, for a merge commit, and for a commit not on the current branch; a revert that would conflict changes nothing and names its files. " +
             "It never rewrites history, and leaves nothing half done to abort.",
             Tool<GitRevertTool>().Description);
         Assert.Equal(
@@ -434,6 +435,11 @@ public sealed class GitToolsTests : IDisposable
         Assert.Equal("one\n", File.ReadAllText(Path.Combine(_root, "a.txt")));
         Assert.Equal("Error: 'new.txt' is not there", await Invoke(Tool<GitDiscardTool>(), ("paths", new[] { "new.txt" })));   // untracked: not in HEAD
         Assert.Equal("Error: 'nope' names no commit, branch or tag", await Invoke(Tool<GitDiscardTool>(), ("ref", "nope")));
+
+        // A list that names nothing is never "everything" (2026-11-15, #50): a JSON [] or blanks are refused, the tree left as it was.
+        Assert.Equal(GitText.DiscardNamedNothing, await Invoke(Tool<GitDiscardTool>(), ("paths", JsonDocument.Parse("[]").RootElement.Clone())));
+        Assert.Equal(GitText.DiscardNamedNothing, await Invoke(Tool<GitDiscardTool>(), ("paths", new[] { " ", "" })));
+        Assert.Equal("y\n", File.ReadAllText(Path.Combine(_root, "b.txt")));
         Assert.Equal($"Reset hard to {first[..7]} ({first[..7]}: first): 1 file changed; untracked files left alone", await Invoke(Tool<GitDiscardTool>(), ("ref", first[..7])));
         Assert.False(File.Exists(Path.Combine(_root, "b.txt")));
         Assert.True(File.Exists(Path.Combine(_root, "new.txt")));
@@ -503,7 +509,7 @@ public sealed class GitToolsTests : IDisposable
         string window = await Invoke(log, ("since", "2026-09-01T12:02"), ("until", "2026-09-01T12:02"));
         Assert.StartsWith("1 commit since 2026-09-01 12:02 until 2026-09-01 12:02 on main, newest first:\n", window, StringComparison.Ordinal);
         Assert.EndsWith("second", window, StringComparison.Ordinal);
-        Assert.Equal("No commits since 2026-09-04 14:05 on main", await Invoke(log, ("since", "1w")));   // the clock's now less a week, in the user's zone
+        Assert.Equal("No commits since 2026-09-04 14:05:30 on main", await Invoke(log, ("since", "1w")));   // the clock's now less a week, in the user's zone; seconds shown when not zero (#56)
         Assert.StartsWith("2 commits by test matching \"I\" on main", await Invoke(log, ("author", "test"), ("grep", "I")), StringComparison.Ordinal);
         Assert.StartsWith("3 commits on main", await Invoke(log, ("author", " "), ("since", "")), StringComparison.Ordinal);   // blank is not given
     }
@@ -515,10 +521,59 @@ public sealed class GitToolsTests : IDisposable
         Commit("a.txt", "1\n", "first");
         var log = Tool<GitLogTool>();
 
-        Assert.Equal(GitText.BadTime("since", "soon"), await Invoke(log, ("since", "soon")));
+        Assert.Equal(ArgumentText.BadTime("since", "soon"), await Invoke(log, ("since", "soon")));
         Assert.Equal("Error: until 'soon' is not an age (30m, 2h, 1d, 1w) or a moment (2026-10-14T21:00).", await Invoke(log, ("until", "soon")));
         Assert.Equal(GitText.SinceAfterUntil, await Invoke(log, ("since", "2026-09-02"), ("until", "2026-09-01")));
         Assert.Equal(ArgumentText.TooLong("grep", ArgumentText.MaxTextChars), await Invoke(log, ("grep", new string('x', ArgumentText.MaxTextChars + 1))));
+    }
+
+    [Fact]
+    public async Task Log_ABareDateUntil_MeansTheEndOfThatDay_ButAnAgeReadAtMidnight_IsThatMoment()
+    {
+        Repo();
+        using (var repo = new Repository(_root))
+        {
+            File.WriteAllText(Path.Combine(_root, "a.txt"), "noon\n");
+            Commands.Stage(repo, "a.txt");
+            var noon = new Signature("Bob", "bob@example.invalid", new DateTimeOffset(2026, 9, 11, 12, 0, 0, TimeSpan.FromHours(-7)));
+            repo.Commit("at noon", noon, noon);
+        }
+
+        var log = Tool<GitLogTool>();
+        Assert.Contains("at noon", await Invoke(log, ("until", "2026-09-11")), StringComparison.Ordinal);
+        Assert.DoesNotContain("at noon", await Invoke(log, ("until", "2026-09-10")), StringComparison.Ordinal);
+        Assert.Contains("at noon", await Invoke(log, ("until", "2026-09-11T12:00")), StringComparison.Ordinal);   // a time is that moment
+        Assert.DoesNotContain("at noon", await Invoke(log, ("until", "2026-09-11T11:59")), StringComparison.Ordinal);
+
+        // The clock at local midnight to the second: 1d back lands on a midnight too, but it is an age, not a date.
+        _time.Advance(new TimeSpan(9, 54, 30));
+        Assert.Equal(TimeSpan.Zero, TimeZoneInfo.ConvertTime(_time.GetUtcNow(), ManualTimeProvider.DefaultZone).TimeOfDay);
+        Assert.DoesNotContain("at noon", await Invoke(log, ("until", "1d")), StringComparison.Ordinal);
+
+        var end = GitLogTool.EndOfDay(new DateTimeOffset(2026, 9, 11, 0, 0, 0, TimeSpan.FromHours(-7)), ManualTimeProvider.DefaultZone);
+        Assert.Equal(new DateTimeOffset(2026, 9, 11, 23, 59, 59, TimeSpan.FromHours(-7)), end);
+    }
+
+    [Fact]
+    public async Task Tag_NamedList_AsksToLeaveTheNameOut_AndNoIdentity_HasTheTagsOwnSentence()
+    {
+        Repo();
+        Commit("a.txt", "1\n", "first");
+        var tag = Tool<GitTagTool>();
+        Assert.Equal(GitText.TagNamedList, await Invoke(tag, ("name", "list")));
+        Assert.Equal(GitText.NoTags, await Invoke(tag));
+        using (var repo = new Repository(_root))
+        {
+            repo.Config.Unset("user.name", ConfigurationLevel.Local);
+            repo.Config.Unset("user.email", ConfigurationLevel.Local);
+        }
+
+        string answer = await Invoke(tag, ("name", "v1"), ("message", "Release"));
+        if (answer != GitText.NoTagIdentity)
+        {
+            // A machine with a global identity signs the tag anyway; the sentence is then held by the mapping alone.
+            Assert.StartsWith("Tagged ", answer, StringComparison.Ordinal);
+        }
     }
 
     [Fact]
@@ -549,6 +604,6 @@ public sealed class GitToolsTests : IDisposable
         Assert.Equal(GitText.TagNeedsName, await Invoke(tag, ("message", "notes")));
         Assert.Equal($"Tagged {first[..7]} as v1 (annotated)", await Invoke(tag, ("name", "v1"), ("message", "One")));
         Assert.Equal("Error: 'v1' exists already", await Invoke(tag, ("name", "v1")));
-        Assert.Equal($"1 tag:\n  v1 {first[..7]} first", await Invoke(tag, ("name", "")));
+        Assert.Equal($"1 tag, newest first:\n  v1 {first[..7]} {GitText.AnnotatedSubject("One")}", await Invoke(tag, ("name", "")));
     }
 }

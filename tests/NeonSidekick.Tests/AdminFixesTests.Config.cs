@@ -83,6 +83,18 @@ public sealed partial class AdminFixesTests : IDisposable
         Assert.Equal(ComputerText.UnknownKey("log", "logs"), Assert.Single(logProblems).Reason);
     }
 
+    /// <summary>
+    /// DA1: two neighbors swapped count as one edit (2026-11-15, the tool-arguments review's #144: the rule moved to <see cref="NeonSidekick.Llm.Tools.NearestName"/>
+    /// and stays for config keys), so "hsot" is answered with "host".
+    /// </summary>
+    [Fact]
+    public void DA1_ASwappedKey_IsAnsweredWithTheOneMeant()
+    {
+        var (computers, problems) = ServiceConfigFile.Family.Load(Write("services.json", "{ \"computers\": { \"app01\": { \"hsot\": \"app01.example\" } } }"));
+        Assert.Empty(computers);
+        Assert.Contains(problems, p => p.Name == "app01" && p.Reason == ComputerText.UnknownKey("hsot", "host"));
+    }
+
     /// <summary>Q1, C7: a name given twice (spaces and case aside) loads neither; an entry with a key twice is refused, and its password never written.</summary>
     [Fact]
     public void Q1_C7_ANameOrAKeyGivenTwice_IsRefused()

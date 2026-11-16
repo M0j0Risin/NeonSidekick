@@ -16,8 +16,17 @@ public abstract class GitTool : AIFunction
     public const string PathArgument = "path";
     public const string ReferenceArgument = "ref";
 
-    /// <summary>The <c>path</c> property every schema carries.</summary>
+    /// <summary>The <c>path</c> property of the tools a path narrows: status, log, show, diff, stage, discard.</summary>
     public const string PathProperty = "\"path\": { \"type\": \"string\", \"description\": \"A file or folder relative to the working directory to narrow the call to (and where the repository is looked for); leave it out for the whole working directory.\" }";
+
+    /// <summary>
+    /// The <c>path</c> property of the tools whose path only finds the repository (2026-11-15, the tool-arguments review's #123, widened in pass
+    /// 38): commit, branch, stash, delete, revert and tag act on the whole repository, so "narrow" would mislead.
+    /// </summary>
+    public const string RepoPathProperty = "\"path\": { \"type\": \"string\", \"description\": \"A file or folder relative to the working directory: where the repository is looked for; leave it out for the working directory. It narrows nothing: the call acts on the whole repository.\" }";
+
+    /// <summary>The <c>message</c> argument of commit, stash, revert and tag (2026-11-15, the tool-arguments review's #103: one name).</summary>
+    public const string MessageArgument = "message";
 
     private readonly GitAccess _git;
     private readonly Func<AppSettingsData> _effective;
@@ -31,6 +40,9 @@ public abstract class GitTool : AIFunction
     protected GitAccess Git => _git;
 
     protected AppSettingsData Effective => _effective();
+
+    /// <summary>The settings source itself, for a twin built from this tool (<see cref="IListOnlyTwin"/>).</summary>
+    protected Func<AppSettingsData> EffectiveSource => _effective;
 
     /// <summary>The zone the moments are shown in: the clock's.</summary>
     protected TimeZoneInfo Zone => _git.Zone;

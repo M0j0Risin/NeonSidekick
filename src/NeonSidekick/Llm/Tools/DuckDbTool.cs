@@ -223,6 +223,9 @@ public sealed class DuckDbDescribeTool : DuckDbTool
 /// </summary>
 public sealed class DuckDbQueryTool : DuckDbTool
 {
+    /// <summary>Reads <c>to</c>, <c>sheet</c> and <c>overwrite</c> (2026-11-15, #27: known while nothing may be saved, so the save refusal answers).</summary>
+    protected override bool ReadsExport => true;
+
     public const string ToolName = "duckdb_query";
     public const string SqlArgument = "sql";
     public const string ParamsArgument = "params";

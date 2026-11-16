@@ -254,7 +254,7 @@ public static class HelpText
     /// One tool in full (2026-10-25, the neon_help plan's Step 1): what it does, its group, its switch and where it is, plan mode, headless,
     /// the pane, its needs and setup, the Mac's line, and the live line last (so a cut never leaves it without its tool). Pinned by heading.
     /// </summary>
-    public static string Tool(string name, string does, string group, string? switchLine, bool planMode, bool headless, bool needsPane, string? needs, string? setup, string? mac, string? live)
+    public static string Tool(string name, string does, string group, string? switchLine, string planMode, bool headless, bool needsPane, string? needs, string? setup, string? mac, string? live)
     {
         var sb = new StringBuilder(ToolHeading(name, does)).Append("\n  Group: ").Append(group);
         if (switchLine is not null)
@@ -262,7 +262,7 @@ public static class HelpText
             sb.Append("\n  Switch: ").Append(switchLine);
         }
 
-        sb.Append("\n  Plan mode: ").Append(planMode ? "offered (it only reads)" : "not offered");
+        sb.Append("\n  Plan mode: ").Append(planMode);
         sb.Append("\n  Headless: ").Append(headless ? "offered" : "not offered (it needs the screen)");
         if (needsPane)
         {
@@ -354,6 +354,11 @@ public static class HelpText
     public const string LiveToolsOff = SystemPromptSummary.ToolsOffSuffix;
     public const string LiveNotHeadless = "a headless run never offers it";
     public const string LivePlanMode = "plan mode offers only the tools that read";
+
+    /// <summary><see cref="Tool"/>'s plan-mode fact: whole, list only (2026-11-15, the tool-arguments review's #7, #106), or not offered.</summary>
+    public const string PlanOffered = "offered (it only reads)";
+    public const string PlanListOnly = "offered to list only (its other forms wait until the plan is approved)";
+    public const string PlanNotOffered = "not offered";
     public const string LiveOffByName = "switched off on /tools › Offered";
     public const string LiveMcpOffByName = "switched off on /mcp › Tools";
     public const string LiveNoMcpServer = "no MCP server here offers it";

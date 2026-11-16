@@ -79,7 +79,7 @@ public sealed record HelpLive(
         string? why = !ToolsEnabled ? HelpText.LiveToolsOff
             : Headless && !entry.Headless ? HelpText.LiveNotHeadless
             : entry.Switch is null ? entry.Setup
-            : PassReason(entry.Name) ?? (Planning && !PlanTools.Allowed(entry.Name) ? HelpText.LivePlanMode : null)
+            : PassReason(entry.Name) ?? (Planning && !PlanTools.Offered(entry.Name) ? HelpText.LivePlanMode : null)
               ?? (DisabledByName.Contains(entry.Name) ? HelpText.LiveOffByName : null)
               ?? (GroupOffered(entry.Switch.Value) ? null : GroupReason(entry.Switch.Value))
               ?? ToolNote(entry.Name)
@@ -102,7 +102,7 @@ public sealed record HelpLive(
         string? why = !ToolsEnabled ? HelpText.LiveToolsOff
             : Headless && tools.All(t => !t.Headless) ? HelpText.LiveNotHeadless
             : field is null ? tools[0].Setup
-            : Planning && tools.All(t => !PlanTools.Allowed(t.Name)) ? HelpText.LivePlanMode
+            : Planning && tools.All(t => !PlanTools.Offered(t.Name)) ? HelpText.LivePlanMode
             : GroupReason(field.Value);
         return HelpText.LiveNotOffered(why);
     }

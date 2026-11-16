@@ -134,6 +134,24 @@ public sealed class QueryExportTests : IDisposable
         Assert.Empty(Workbooks());
     }
 
+    /// <summary>
+    /// With nothing to save to, sheet alone and overwrite: true are answered by the save refusal too (2026-11-15, the tool-arguments review's
+    /// #27: they got "needs to", which sent the model off to add a to that can't work); overwrite: false asks nothing and the query runs.
+    /// </summary>
+    [Fact]
+    public async Task NoRoot_RefusesSheetAndOverwriteTrue_WithTheSaveSentence()
+    {
+        Assert.Equal(FileText.SaveNotHere, await Invoke(Sqlite(canSave: false), ("sql", "SELECT id FROM things"), ("database", "shop.db"), ("sheet", "Ids")));
+        Assert.Equal(FileText.SaveNotHere, await Invoke(Sqlite(canSave: false), ("sql", "SELECT id FROM things"), ("database", "shop.db"), ("overwrite", true)));
+        Assert.DoesNotContain("Error", await Invoke(Sqlite(canSave: false), ("sql", "SELECT id FROM things"), ("database", "shop.db"), ("overwrite", false)), StringComparison.Ordinal);
+
+        _saveRoot = SaveRoot.Refused(FileText.SaveInPlanMode);
+        Assert.Equal(FileText.SaveInPlanMode, await Invoke(Sqlite(), ("sql", "SELECT id FROM things"), ("database", "shop.db"), ("sheet", "Ids")));
+        var tool = Sqlite();
+        Assert.Contains("sheet", ((NeonSidekick.Llm.Tools.IAcceptsArguments)tool).ExtraArguments);
+        Assert.Empty(Workbooks());
+    }
+
     [Fact]
     public async Task ARootClosedBeforeTheCommit_WritesNothing()
     {

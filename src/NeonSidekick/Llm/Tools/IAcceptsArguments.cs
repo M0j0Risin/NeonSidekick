@@ -9,7 +9,4 @@ public interface IAcceptsArguments
 {
     /// <summary>The undeclared names the tool reads.</summary>
     IReadOnlyCollection<string> ExtraArguments { get; }
-
-    /// <summary>True when the tool answers any key itself (<c>ask_user</c>, whose refusal lists what was sent): the check passes every call.</summary>
-    bool AcceptsAnyArgument => false;
 }

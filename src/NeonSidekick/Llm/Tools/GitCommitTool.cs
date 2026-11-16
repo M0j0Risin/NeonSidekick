@@ -9,7 +9,6 @@ namespace NeonSidekick.Llm.Tools;
 public sealed class GitCommitTool : GitTool
 {
     public const string ToolName = "gitlib_commit";
-    public const string MessageArgument = "message";
     public const string AmendArgument = "amend";
     public const string AllowEmptyArgument = "allow_empty";
 
@@ -21,7 +20,7 @@ public sealed class GitCommitTool : GitTool
             "message": { "type": "string", "description": "The commit message: a short imperative subject line, a blank line and details when they help." },
             "amend": { "type": "boolean", "description": "true: replace the last commit with the index and this message instead of adding a new one." },
             "allow_empty": { "type": "boolean", "description": "true: commit even when nothing is staged." },
-            {{PathProperty}}
+            {{RepoPathProperty}}
           },
           "required": ["message"]
         }

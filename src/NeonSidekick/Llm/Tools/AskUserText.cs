@@ -70,6 +70,17 @@ public static class AskUserText
     }
 
     /// <summary>More questions than the cap (<c>Ask max questions</c>) allows.</summary>
+    /// <summary>
+    /// A question's field sent at the top level beside a non-empty <c>questions</c> list (2026-11-15, the tool-arguments review's #110):
+    /// it would be skipped, so the call is refused and the fields named, each echoed.
+    /// </summary>
+    public static string FieldsBesideQuestions(IReadOnlyList<string> keys)
+    {
+        ArgumentNullException.ThrowIfNull(keys);
+        string names = string.Join(", ", keys.Select(key => "'" + ArgumentText.Echo(key) + "'"));
+        return $"Error: {names} sent beside questions; a question's fields go inside its item of questions. Nothing was asked.";
+    }
+
     public static string TooManyQuestions(int maxQuestions) => $"Error: at most {N(maxQuestions)} questions per call; ask the most important ones first.";
 
     public static string NoQuestionText(int number) => $"Error: question {N(number)} has no question text.";

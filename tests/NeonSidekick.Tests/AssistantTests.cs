@@ -257,8 +257,8 @@ public class AssistantTests
     {
         Assert.Equal(
             "The working directory may be a git repository (or hold one): gitlib_status shows its state, gitlib_log its history, gitlib_show a commit or a file at a commit, " +
-            "gitlib_diff the changes, gitlib_blame who wrote a line; gitlib_stage, gitlib_commit, gitlib_branch, gitlib_stash, gitlib_revert and gitlib_tag change it — commit, revert or tag only what the user asked for, " +
-            "with the message they gave or a short imperative one, and never remove or overwrite work the user did not name.",
+            "gitlib_diff the changes, gitlib_blame who wrote a line; gitlib_stage, gitlib_commit, gitlib_branch, gitlib_stash, gitlib_revert and gitlib_tag change it — commit, revert or tag only what the user asked for; " +
+            "a commit takes the message they gave or a short imperative one, a revert or tag a message only when they gave one; never remove or overwrite work the user did not name.",
             Assistant.GitRule);
         Assert.DoesNotContain("gitlib_discard", Assistant.GitRule);
         Assert.DoesNotContain("gitlib_delete", Assistant.GitRule);
@@ -4278,6 +4278,35 @@ public class AssistantTests
         Assert.Equal(["write_file"], journal.Tools);
         var results = events.OfType<TurnEvent.ToolResult>().ToList();
         Assert.True(results.Single(r => r.CallId == "c1").GuardRefused);
+        Assert.False(results.Single(r => r.CallId == "c2").GuardRefused);
+    }
+
+    /// <summary>
+    /// A list-only twin's write form (2026-11-15, the tool-arguments review's #7, #106) is the loop's gate: refused, flagged, never journaled; its
+    /// list form runs and, being a read, isn't journaled either.
+    /// </summary>
+    [Fact]
+    public async Task Journal_SkipsAListOnlyTwinsWriteForm_AndItsListForm()
+    {
+        var time = new ManualTimeProvider();
+        var git = new NeonSidekick.Git.GitAccess(new Files.WorkingDirectory(() => Path.GetTempPath(), time), time);
+        var twin = new GitTagTool(git, () => new NeonSidekick.Settings.AppSettingsData()).AsListOnly();
+        var (client, _, assistant) = Build(new AIFunction[] { twin });
+        var journal = new FileJournal("j", [], _ => null, 1_000_000);
+        assistant.Journal = journal;
+        client.Enqueue(
+            FakeChatClient.Call("c1", GitTagTool.ToolName, new Dictionary<string, object?> { ["name"] = "v1" }),
+            FakeChatClient.Call("c2", GitTagTool.ToolName, new Dictionary<string, object?>()));
+        client.EnqueueText("done");
+
+        var events = await Run(assistant, "go");
+
+        Assert.Empty(journal.Tools);
+        var results = events.OfType<TurnEvent.ToolResult>().ToList();
+        var refused = results.Single(r => r.CallId == "c1");
+        Assert.True(refused.GuardRefused);
+        Assert.False(refused.ArgumentError);
+        Assert.Equal(NeonSidekick.Plans.PlanText.ListOnlyRefusal(GitTagTool.ToolName, NeonSidekick.Plans.PlanText.TagListForm), refused.Text);
         Assert.False(results.Single(r => r.CallId == "c2").GuardRefused);
     }
 

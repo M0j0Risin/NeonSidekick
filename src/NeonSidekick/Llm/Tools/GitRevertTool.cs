@@ -13,7 +13,6 @@ namespace NeonSidekick.Llm.Tools;
 public sealed class GitRevertTool : GitTool
 {
     public const string ToolName = "gitlib_revert";
-    public const string MessageArgument = "message";
 
     private static readonly JsonElement Schema = ToolSchema.Parse(
         $$"""
@@ -22,7 +21,7 @@ public sealed class GitRevertTool : GitTool
           "properties": {
             "ref": { "type": "string", "description": "The commit to undo: a sha, a branch, a tag, HEAD, HEAD~1." },
             "message": { "type": "string", "description": "The new commit's message. Leave it out for git's: Revert \"<subject>\" and the commit it reverts." },
-            {{PathProperty}}
+            {{RepoPathProperty}}
           },
           "required": ["ref"]
         }
@@ -36,7 +35,7 @@ public sealed class GitRevertTool : GitTool
 
     public override string Description =>
         "Undoes a commit with a new commit that reverses its changes; nothing is lost, and the reverted commit stays in the history. " +
-        "Refuses while there are uncommitted changes, and for a merge commit; a revert that would conflict is put back and its files named. " +
+        "Refuses while there are uncommitted changes, for a merge commit, and for a commit not on the current branch; a revert that would conflict changes nothing and names its files. " +
         "It never rewrites history, and leaves nothing half done to abort.";
 
     public override JsonElement JsonSchema => Schema;
@@ -49,7 +48,7 @@ public sealed class GitRevertTool : GitTool
         }
 
         var result = Git.Revert(path, reference, message);
-        return result.Outcome == GitOutcome.Ok ? GitText.Reverted(result) : GitText.Error(result.Outcome, result.Detail);
+        return result.Outcome == GitOutcome.Ok ? GitText.Reverted(result) : GitText.RevertError(result);
     }
 
     protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)

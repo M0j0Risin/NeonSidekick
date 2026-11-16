@@ -86,6 +86,18 @@ public sealed class OfficeToolsTests : IDisposable
         Assert.Contains("2026-10-30", Cells(book, "Sheet1"));
     }
 
+    /// <summary>
+    /// Columns written as text with a second list after the first (2026-11-15, the tool-arguments review's #53) are never cut to the first:
+    /// the text stays one column name, so nothing the model sent is dropped unseen.
+    /// </summary>
+    [Fact]
+    public async Task ColumnsAsText_WithASecondList_AreNeverCutToTheFirst()
+    {
+        string result = await Xlsx(("columns", "[\"a\"] x [\"b\"]"), ("rows", Json("[[1]]")), ("to", "cut.xlsx"));
+        Assert.StartsWith("Made cut.xlsx", result);
+        Assert.Contains("[\"a\"] x [\"b\"]", Cells(Bytes("cut.xlsx"), "Sheet1"));
+    }
+
     private static string Part(byte[] book, string name) => OfficeWriterTests.Part(book, name);
 
     [Fact]

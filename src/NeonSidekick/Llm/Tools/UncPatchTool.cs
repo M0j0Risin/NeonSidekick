@@ -22,7 +22,7 @@ public sealed class UncPatchTool : UncTool, IRefusesPrunedStubs
     public const string EditsArgument = PatchFileTool.EditsArgument;
 
     private static readonly JsonElement Schema = ToolSchema.Parse(
-        """
+        $$"""
         {
           "type": "object",
           "properties": {
@@ -31,7 +31,7 @@ public sealed class UncPatchTool : UncTool, IRefusesPrunedStubs
             "old_text": { "type": "string", "description": "The exact text to replace, copied from unc_read; enough of it to match one place." },
             "new_text": { "type": "string", "description": "What goes in its place." },
             "replace_all": { "type": "boolean", "description": "true to replace every place old_text matches. Default false: it must match exactly one." },
-            "edits": { "type": "array", "items": { "type": "object", "properties": { "old_text": { "type": "string" }, "new_text": { "type": "string" }, "replace_all": { "type": "boolean" } }, "required": ["old_text", "new_text"] }, "description": "Several changes in one call (at most 50), each {old_text, new_text, replace_all?}, in order, all or none. Leave old_text and new_text out when you give this." }
+            "edits": { "type": "array", "items": {{PatchFileTool.EditItemSchema}}, "description": "Several changes in one call (at most {{PatchFileTool.MaxEditsText}}), each {old_text, new_text, replace_all?}, in order, all or none. Leave old_text and new_text out when you give this." }
           },
           "required": ["path"]
         }

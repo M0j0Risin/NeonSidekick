@@ -247,15 +247,58 @@ public class ToolArgumentsTests
         Assert.Equal("multi", objects.Single().GetProperty("type").GetString());
         Assert.Equal(6, objects.Single().GetProperty("options").GetArrayLength());
 
-        // The same in Python quoting, and a remark after the list.
+        // The same in Python quoting. A remark or a second value after the list is refused (2026-11-15, the tool-arguments review's #39): only
+        // closing brackets may follow the first value, so nothing is dropped unseen.
         Assert.True(ToolArguments.TryReadObjectList(Args("[{'question': 'Q?', 'options': ['a', 'b']}]}"), "x", out objects, out _));
         Assert.Equal("Q?", objects.Single().GetProperty("question").GetString());
-        Assert.True(ToolArguments.TryReadObjectList(Args("[{\"question\": \"Q?\", \"options\": [\"a\", \"b\"]}] — asked as a list"), "x", out objects, out _));
-        Assert.Single(objects);
+        Assert.False(ToolArguments.TryReadObjectList(Args("[{\"question\": \"Q?\", \"options\": [\"a\", \"b\"]}] — asked as a list"), "x", out objects, out _));
+        Assert.False(ToolArguments.TryReadObjectList(Args("{\"question\": \"A?\"}, {\"question\": \"B?\"}"), "x", out objects, out _));
+        Assert.Empty(objects);
 
         // A list that never closes is still refused: nothing is invented.
         Assert.False(ToolArguments.TryReadObjectList(Args("[{\"question\": \"Q?\", \"options\": [\"a\", \"b\""), "x", out objects, out _));
         Assert.Empty(objects);
+    }
+
+    /// <summary>
+    /// A list of strings written as text (2026-11-15, the tool-arguments review's #39, #92): a second list after the first is one odd string,
+    /// never the first alone; a lone backslash in a Windows path is read as a backslash; a string's escaped quotes stay quotes.
+    /// </summary>
+    [Fact]
+    public void TryReadStringList_AnEncodedList_IsReadWhole_AndItsBackslashesAsPaths()
+    {
+        const string two = "[\"a\"] x [\"b\"]";
+        Assert.True(ToolArguments.TryReadStringList(Args(two), "x", out var values, out _));
+        Assert.Equal([two], values);
+
+        Assert.True(ToolArguments.TryReadStringList(Args("[\"docs\\notes.txt\", \"C:\\Users\\bob\\a.txt\"]"), "x", out values, out _));
+        Assert.Equal(["docs\\notes.txt", "C:\\Users\\bob\\a.txt"], values);
+
+        Assert.True(ToolArguments.TryReadStringList(Args("[\"say \\\"hi\\\".txt\"]"), "x", out values, out _));
+        Assert.Equal(["say \"hi\".txt"], values);
+
+        // A real escape still reads as one, and a path ending in a backslash before its quote stays one unparsed string.
+        Assert.True(ToolArguments.TryReadStringList(Args("[\"caf\\u00e9.txt\"]"), "x", out values, out _));
+        Assert.Equal(["caf\u00e9.txt"], values);
+        const string trailing = "[\"C:\\temp\\\"]";
+        Assert.True(ToolArguments.TryReadStringList(Args(trailing), "x", out values, out _));
+        Assert.Equal([trailing], values);
+
+        // SGLang's closing brace after the list is still taken.
+        Assert.True(ToolArguments.TryReadStringList(Args("[\"a.txt\", \"b.txt\"]}"), "x", out values, out _));
+        Assert.Equal(["a.txt", "b.txt"], values);
+    }
+
+    /// <summary>A raw control character in a hand-written string is escaped, not left to fail the parse (#125); a CRLF still reads as LF.</summary>
+    [Fact]
+    public void LooseJson_EscapesEveryControlCharacter_InAString()
+    {
+        using var tabbed = LooseJson.TryParse("['a\tb', 'c\u0001d', 'e\r\nf']");
+        Assert.NotNull(tabbed);
+        Assert.Equal(["a\tb", "c\u0001d", "e\nf"], tabbed!.RootElement.EnumerateArray().Select(e => e.GetString()));
+        Assert.Null(LooseJson.TryParse("[\"a\"] x [\"b\"]"));
+        Assert.Null(LooseJson.TryParse("[1] [2]"));
+        Assert.Equal("[\"a\\\\b\", \"c\\\"d\"]", LooseJson.DoubleLoneBackslashes("[\"a\\b\", \"c\\\"d\"]"));
     }
 
     [Theory]

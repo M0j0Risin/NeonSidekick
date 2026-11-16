@@ -56,6 +56,13 @@ public sealed class GitDiscardTool : GitTool
             return new ValueTask<object?>(Files.FileText.BadStringList(PathsArgument, raw));
         }
 
+        // A list sent that names nothing (2026-11-15, the tool-arguments review's #50): left out means "everything" here alone, so an empty or
+        // blank list (a JSON [] included) is refused rather than read as a hard reset of the whole tree.
+        if (ToolArguments.Has(arguments, PathsArgument) && paths.All(string.IsNullOrWhiteSpace))
+        {
+            return new ValueTask<object?>(GitText.DiscardNamedNothing);
+        }
+
         string reference = ToolArguments.ReadString(arguments, ReferenceArgument);
         string path = ReadPath(arguments);
         return OffThread(() => Describe(paths, reference, path), cancellationToken);

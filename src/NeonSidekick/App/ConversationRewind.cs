@@ -338,7 +338,7 @@ public static partial class ConversationRewind
     public static bool Changes(FunctionCallContent call, FunctionResultContent? result)
     {
         ArgumentNullException.ThrowIfNull(call);
-        if (!PlanTools.Allowed(call.Name))
+        if (!PlanTools.Allowed(call))
         {
             return true;
         }
