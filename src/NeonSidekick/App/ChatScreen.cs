@@ -7797,6 +7797,34 @@ internal sealed partial class ChatScreen
     };
 
     /// <summary>
+    /// The tools whose answers fence outside text (2026-11-15, the web-tools plan's §3, feature idea #39), beside the GitLib, Home Assistant
+    /// and Docker families and every MCP tool (<see cref="IsFencedResult"/>): their results reach the screen unfenced.
+    /// </summary>
+    public static readonly IReadOnlySet<string> FencedResultTools = new HashSet<string>(StringComparer.Ordinal)
+    {
+        WebSearchTool.ToolName,
+        WebFetchTool.ToolName,
+        WebSaveLinkTool.ToolName,
+        WebLinksTool.ToolName,
+        ReadPdfTool.ToolName,
+        ReadOfficeTool.ToolName,
+        YouTubeSearchTool.ToolName,
+        YouTubePlayTool.ToolName,
+        YouTubeControlTool.ToolName,
+        YouTubeStatusTool.ToolName,
+        YouTubePlaylistTool.ToolName,
+        YouTubeSaveTool.ToolName,
+        YouTubeSavedTool.ToolName,
+        PlayVideoTool.ToolName,
+        VideoControlTool.ToolName,
+    };
+
+    /// <summary>Whether <paramref name="name"/>'s results are fenced for the model, so the user's view unfences them.</summary>
+    public static bool IsFencedResult(string name) =>
+        FencedResultTools.Contains(name) || GitToolNames.Contains(name) || HomeAssistantToolNames.Contains(name) || DockerToolNames.Contains(name)
+        || name.Contains(Mcp.McpToolName.Separator, StringComparison.Ordinal);
+
+    /// <summary>
     /// The tools whose call line the transcript skips, showing the result alone as one dim
     /// <c>🛠️</c> line: the result sentence says it all and the arguments would repeat it
     /// (<c>ask_user</c>'s answers one line each, <see cref="TranscriptRenderer.ToolNotes"/>).
@@ -8957,7 +8985,7 @@ internal sealed partial class ChatScreen
             var byRow = RestoredPictures.ByRow(pictures);
             foreach (var turn in record.Turns)
             {
-                ReplayTurn(turn.UserText, turn.ReplyText, turn.ToolCalls, styled, byRow.GetValueOrDefault(turn.Ordinal), box);
+                ReplayTurn(turn.UserText, turn.ReplyText, turn.ToolCalls, styled, byRow.GetValueOrDefault(turn.Ordinal), box, turn.SourceList);
             }
         }
 
@@ -16816,7 +16844,7 @@ internal sealed partial class ChatScreen
                     {
                         // Its calls and tokens (2026-10-10; 0 and 0 until then, from the days a bot had no tools).
                         var (botTrace, botUsage) = _lastBotTurn;
-                        _sessions.AppendTurn(id, turnText, BotChat.Signed(lines[^1]), botTrace.ToolCalls, botTrace.ToolNames, botTrace.LoadedSkills, Math.Max(botTrace.Errors, _lastTurnFailed ? 1 : 0), botUsage.Input, botUsage.Output, _lastTurnCancelled);
+                        _sessions.AppendTurn(id, turnText, BotChat.Signed(lines[^1]), botTrace.ToolCalls, botTrace.ToolNames, botTrace.LoadedSkills, Math.Max(botTrace.Errors, _lastTurnFailed ? 1 : 0), botUsage.Input, botUsage.Output, _lastTurnCancelled, botTrace.Sources);
                         _sessions.SaveHistory(id, SessionHistory.ToJson(BotChat.StoredHistory(starter, lines, castNames, topic)));
                     }
                 }
@@ -18726,7 +18754,7 @@ internal sealed partial class ChatScreen
                 assistant.History.RemoveLastTurn();
             }
 
-            _transcript.EndAssistant(ReplyFooter(bot is null, outcome, (failed || sawError) && reply.Length == 0 && trace.ToolCalls == 0, turnStarted, trace));
+            _transcript.EndAssistant(ReplyFooter(bot is null, outcome, (failed || sawError) && reply.Length == 0 && trace.ToolCalls == 0, turnStarted, trace), trace.Sources);
             // A reflection that ended during the reply reports here, under it, never inside it.
             DrainLearn();
             // A reply that ran to its end with no usage report is counted as unreported; a cut or
@@ -18866,7 +18894,7 @@ internal sealed partial class ChatScreen
         }
 
         var usage = _session.Usage.LastReply;
-        int? ordinal = _sessions.AppendTurn(id, pass?.Line ?? text, reply, trace.ToolCalls, trace.ToolNames, trace.LoadedSkills, trace.Errors, usage.Input, usage.Output, cancelled);
+        int? ordinal = _sessions.AppendTurn(id, pass?.Line ?? text, reply, trace.ToolCalls, trace.ToolNames, trace.LoadedSkills, trace.Errors, usage.Input, usage.Output, cancelled, trace.Sources);
         StampTurn(assistant.History, ordinal);
         SaveSessionHistory(assistant);
         if (first && !cancelled && pass is null && SessionNamingMode.Resolve(effective) == SessionNaming.ModelWritten)
@@ -19425,6 +19453,13 @@ internal sealed partial class ChatScreen
             // (2026-10-29) writes nothing, so a server's reasoning on either side of it stays one block.
             _thinkingSince = null;
             thoughts.End();
+        }
+
+        // The model reads outside text fenced (2026-11-15, the web-tools plan's §3); the user's view of it drops the marks and the note,
+        // once, ahead of every path a result takes to the transcript and the Web UI. The history keeps the fenced text.
+        if (evt is TurnEvent.ToolResult fencedResult && IsFencedResult(fencedResult.Name))
+        {
+            evt = fencedResult with { Text = UntrustedText.Unfenced(fencedResult.Text) };
         }
 
         switch (evt)

@@ -38,7 +38,7 @@ public static class YouTubeOpenUrl
         }
 
         var arguments = new AIFunctionArguments { [YouTubePlayTool.VideoArgument] = link };
-        string answer = (string)(await play().InvokeAsync(arguments, cancellationToken).ConfigureAwait(false))!;
+        string answer = UntrustedText.Unfenced((string)(await play().InvokeAsync(arguments, cancellationToken).ConfigureAwait(false))!);
         if (!answer.StartsWith("Error: ", StringComparison.Ordinal))
         {
             return new YouTubeLinkOutcome(answer, OnePlayer: target != YouTubeOpenLinksInKind.DefaultBrowser);

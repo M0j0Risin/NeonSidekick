@@ -87,6 +87,6 @@ public sealed class WebLinksTool : AIFunction
             sb.Append('\n').Append(BrowserLinkText.ToolMore(kept.Count - MaxListed));
         }
 
-        return sb.ToString();
+        return UntrustedText.WithNote(sb.ToString());
     }
 }

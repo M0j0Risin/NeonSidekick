@@ -293,6 +293,12 @@ public static class SessionText
     /// <summary>The note under a turn the keys cut short (American spelling since 2026-10-30, review F98).</summary>
     public const string ExportCancelledNote = "(canceled)";
 
+    /// <summary>The heading over a turn's sources in an export (2026-11-15, the web-tools plan's §2).</summary>
+    public const string ExportSourcesHeading = "Sources:";
+
+    /// <summary>The export list's last item: the turn's searches, counted, never listed.</summary>
+    public static string ExportSourcesSearches(int searches) => "and " + Web.WebText.SourcesSearches(searches);
+
     /// <summary>The note under a turn a picture of which wouldn't read, so the export left it out (2026-10-30, review F10).</summary>
     public const string ExportPictureDroppedNote = "(a picture that couldn't be read is left out)";
 

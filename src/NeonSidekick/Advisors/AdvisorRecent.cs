@@ -91,7 +91,8 @@ public static class AdvisorRecent
                         break;
                     case FunctionResultContent result:
                         string body = result.Result?.ToString() ?? "";
-                        body = body.Length > AdvisorText.ToolResultChars ? body[..AdvisorText.ToolResultChars] + "…" : body;
+                        // A fence the cut leaves open closed, and the quote note kept (2026-11-15, the web-tools plan's §3).
+                        body = Llm.Tools.UntrustedText.CutKeepingNote(body, AdvisorText.ToolResultChars, "…");
                         if (!string.IsNullOrWhiteSpace(body))
                         {
                             lines.Add(AdvisorText.RecentLine("tool", body));

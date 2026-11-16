@@ -60,12 +60,12 @@ public class WebTextTests
     [Fact]
     public void FetchHeader_NamesTheWindow_AndTheContinuation()
     {
-        Assert.Equal("Example Domain — https://example.com/ (chars 1–2,100 of 2,100, http)", WebText.FetchHeader("Example Domain", "https://example.com/", 1, 2100, 2100, "http", null));
+        Assert.Equal("⟪Example Domain⟫ — https://example.com/ (chars 1–2,100 of 2,100, http)", WebText.FetchHeader("Example Domain", "https://example.com/", 1, 2100, 2100, "http", null));
         Assert.Equal("(untitled) — https://a/ (chars 1–32,000 of 88,400; continue with offset 32000, headless browser)", WebText.FetchHeader("", "https://a/", 1, 32000, 88400, "headless browser", 32000));
         Assert.Equal("(untitled) — https://a/ (no readable text, http)", WebText.EmptyPage(" ", "https://a/", "http"));
         // A fragment's window (2026-10-17): found, named after the window; not found, said first.
-        Assert.Equal("D — https://a/ (chars 18,402–33,107 of 33,107, from #epiku, http)", WebText.FetchHeader("D", "https://a/", 18402, 33107, 33107, "http", null, "epiku"));
-        Assert.Equal("D — https://a/ (#epiku not found, from the top; chars 1–32,000 of 33,107; continue with offset 32000, http)", WebText.FetchHeader("D", "https://a/", 1, 32000, 33107, "http", 32000, "epiku", anchorMissing: true));
+        Assert.Equal("⟪D⟫ — https://a/ (chars 18,402–33,107 of 33,107, from #epiku, http)", WebText.FetchHeader("D", "https://a/", 18402, 33107, 33107, "http", null, "epiku"));
+        Assert.Equal("⟪D⟫ — https://a/ (#epiku not found, from the top; chars 1–32,000 of 33,107; continue with offset 32000, http)", WebText.FetchHeader("D", "https://a/", 1, 32000, 33107, "http", 32000, "epiku", anchorMissing: true));
     }
 
     [Fact]
@@ -78,7 +78,7 @@ public class WebTextTests
         };
 
         Assert.Equal(
-            "Searched \"rust async traits\" (2 results, DuckDuckGo):\n1. Async fn in traits — https://blog.rust-lang.org/a\n   Stabilised in 1.75.\n2. (untitled) — https://docs.rs/async-trait",
+            "Searched \"rust async traits\" (2 results, DuckDuckGo):\n1. ⟪Async fn in traits⟫ — https://blog.rust-lang.org/a\n   ⟪Stabilised in 1.75.⟫\n2. (untitled) — https://docs.rs/async-trait\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote,
             WebText.Results("rust async traits", results, "DuckDuckGo"));
         Assert.Equal("Searched \"x\" (1 result, SearXNG):", WebText.SearchHeader("x", 1, "SearXNG"));
         Assert.Equal("Searched \"x\" (DuckDuckGo): no results", WebText.Results("x", [], "DuckDuckGo"));

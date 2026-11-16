@@ -52,6 +52,9 @@ public sealed class BraveApiEngine : IEngine
     /// <inheritdoc/>
     public bool Paging => true;
 
+    /// <summary>Brave's API filters by <c>freshness</c> (SearXNG's braveapi.py sends an undocumented <c>time_range</c> instead).</summary>
+    public bool TimeRangeSupport => true;
+
     /// <inheritdoc/>
     public async Task<IReadOnlyList<EngineResult>> SearchAsync(EngineQuery query, HttpClient http, CancellationToken cancellationToken)
     {
@@ -99,6 +102,11 @@ public sealed class BraveApiEngine : IEngine
             .Append("&offset=").Append((query.PageNumber - 1).ToString(CultureInfo.InvariantCulture))
             .Append("&text_decorations=false")
             .Append("&safesearch=").Append(safeSearch);
+        if (BraveEngine.TimeRangeWord(query.TimeRange) is { } freshness)
+        {
+            url.Append("&freshness=").Append(freshness);
+        }
+
         return new Uri(url.ToString());
     }
 

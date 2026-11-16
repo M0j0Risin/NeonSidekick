@@ -25,6 +25,12 @@ public enum FeedKind
 
     /// <summary>A tool run's head (2026-10-15): its summary over the tool lines that carry its seq.</summary>
     Run,
+
+    /// <summary>
+    /// The 📚 line under a reply (2026-11-15, the web-tools plan's §2): the pages and files the turn read, as Markdown links rendered on the
+    /// server like a reply's, pushed and ended in one step.
+    /// </summary>
+    Sources,
 }
 
 /// <summary>What changed in the feed: an entry added, text grown on one, an entry ended or its text replaced, one removed, or everything cleared.</summary>
@@ -178,6 +184,31 @@ public sealed class TranscriptFeed
         }
 
         changes.Add(new FeedChange.Appended(added));
+        RaiseAll(changes);
+        return added.Seq;
+    }
+
+    /// <summary>
+    /// The 📚 line (2026-11-15, the web-tools plan's §2): an entry of <see cref="FeedKind.Sources"/> holding <paramref name="markdown"/>, its
+    /// links, added and ended at once. A live add carries no HTML (only a snapshot does), so the end that follows it does: the page draws
+    /// the plain text until then, as it does a reply's.
+    /// </summary>
+    public long AddSources(string markdown)
+    {
+        ArgumentNullException.ThrowIfNull(markdown);
+        WebEntry added;
+        var changes = new List<FeedChange>(4);
+        lock (_gate)
+        {
+            Add(changes, CloseOpen());
+            Add(changes, EndRunLocked());
+            var entry = Push(FeedKind.Sources, markdown, null, failed: false);
+            entry.Ended = true;
+            added = entry.ToWeb(null);
+        }
+
+        changes.Add(new FeedChange.Appended(added));
+        changes.Add(new FeedChange.Ended(added.Seq, markdown, FeedKind.Sources));
         RaiseAll(changes);
         return added.Seq;
     }
@@ -731,6 +762,7 @@ public sealed class TranscriptFeed
         FeedKind.Thinking => "thinking",
         FeedKind.Output => "output",
         FeedKind.Run => "run",
+        FeedKind.Sources => "sources",
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
     };
 
@@ -808,7 +840,7 @@ public sealed class TranscriptFeed
         /// <summary>A finished reply's Markdown as HTML, rendered once and cached (re-rendered only if its text changed); null for anything else.</summary>
         public string? Html(Func<string, string, string> html)
         {
-            if (Kind != FeedKind.Assistant || NoReply)
+            if (Kind is not (FeedKind.Assistant or FeedKind.Sources) || NoReply)
             {
                 return null;
             }

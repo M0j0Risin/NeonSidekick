@@ -366,7 +366,10 @@ public static partial class HaText
     /// <summary>An entity as a candidate: <c>Den (light.den_den)</c>.</summary>
     public static string Label(HaEntity entity) => $"{entity.Name} ({entity.Id})";
 
-    /// <summary>A service's own answer (<c>?return_response</c>) or the changed states, for the generic tool: the header and the body cut short.</summary>
+    /// <summary>
+    /// A service's own answer (<c>?return_response</c>) or the changed states, for the generic tool: the header and the body cut short.
+    /// No caller yet: whoever wires this fences the body through <c>UntrustedText.FenceBody</c> (2026-11-15, the web-tools plan's §3).
+    /// </summary>
     public static string ServiceAnswer(string header, string body)
     {
         ArgumentNullException.ThrowIfNull(header);
@@ -380,8 +383,11 @@ public static partial class HaText
         return header + "\n" + Clip(text, 2000);
     }
 
-    /// <summary>Assist's answer: its kind and what it said.</summary>
-    public static string AssistAnswer(string body)
+    /// <summary>
+    /// Assist's answer: its kind and what it said. For the model (<paramref name="fenced"/>, (2026-11-15, the web-tools plan's §3)) Home Assistant's words are
+    /// fenced in place in both forms, the quote note on the next line; the app's <c>(no words)</c> stays bare, with no note.
+    /// </summary>
+    public static string AssistAnswer(string body, bool fenced = false)
     {
         ArgumentNullException.ThrowIfNull(body);
         try
@@ -391,8 +397,9 @@ public static partial class HaText
             string kind = HaJson.String(response, "response_type") ?? "";
             string speech = response.ValueKind == JsonValueKind.Object && response.TryGetProperty("speech", out var s)
                 && s.TryGetProperty("plain", out var plain) ? HaJson.String(plain, "speech") ?? "" : "";
-            string said = speech.Trim().Length > 0 ? speech.Trim() : "(no words)";
-            return kind == "error" ? "Error: Assist could not do it: " + said : "Assist (" + (kind.Length > 0 ? kind.Replace('_', ' ') : "answer") + "): " + said;
+            string said = speech.Trim().Length > 0 ? (fenced ? Llm.Tools.UntrustedText.Fenced(speech.Trim()) : speech.Trim()) : "(no words)";
+            string answer = kind == "error" ? "Error: Assist could not do it: " + said : "Assist (" + (kind.Length > 0 ? kind.Replace('_', ' ') : "answer") + "): " + said;
+            return fenced ? Llm.Tools.UntrustedText.WithNote(answer) : answer;
         }
         catch (JsonException)
         {

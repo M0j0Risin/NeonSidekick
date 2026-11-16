@@ -1171,7 +1171,7 @@ public sealed class WebUiSession : IWebUiBackend, IDisposable
                 // entry's own cache (2026-10-19, the review: rendered here a second time beside the snapshot's), rendered here only once the feed has
                 // let it go.
                 Events.Publish(new WebEvent("end", () => JsonSerializer.Serialize(
-                    new WebEnd(ended.Seq, ended.Kind == FeedKind.Assistant ? Feed.HtmlOf(ended.Seq, (Func<string, string, string>)WebUiMarkdown.ToHtml) ?? WebUiMarkdown.ToHtml(ended.Markdown, TranscriptFeed.IdPrefix(ended.Seq)) : null, ended.Summary),
+                    new WebEnd(ended.Seq, ended.Kind is FeedKind.Assistant or FeedKind.Sources ? Feed.HtmlOf(ended.Seq, (Func<string, string, string>)WebUiMarkdown.ToHtml) ?? WebUiMarkdown.ToHtml(ended.Markdown, TranscriptFeed.IdPrefix(ended.Seq)) : null, ended.Summary),
                     WebUiJsonContext.Default.WebEnd)));
                 break;
             case FeedChange.Replaced replaced:

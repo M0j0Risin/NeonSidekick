@@ -4,6 +4,7 @@ using ModelContextProtocol;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using NeonSidekick.Llm;
+using NeonSidekick.Llm.Tools;
 using NeonSidekick.Mcp;
 
 namespace NeonSidekick.Tests;
@@ -85,14 +86,14 @@ public class McpToolTests
     [Fact]
     public void Render_JoinsTextBlocks_DropsTheOthersWithAPinnedLine_AndPrefixesAnError()
     {
-        Assert.Equal("one\ntwo", McpTool.Render(new CallToolResult { Content = [new TextContentBlock { Text = "one" }, new TextContentBlock { Text = "two" }] }));
+        Assert.Equal("⟪one⟫\n⟪two⟫\n" + UntrustedText.QuoteNote, McpTool.Render(new CallToolResult { Content = [new TextContentBlock { Text = "one" }, new TextContentBlock { Text = "two" }] }));
         Assert.Equal("(no content)", McpTool.Render(new CallToolResult { Content = [] }));
         Assert.Equal("(an image block was dropped)", McpTool.Render(new CallToolResult { Content = [new ImageContentBlock { Data = new byte[] { 1 }, MimeType = "image/png" }] }));
         Assert.Equal("(an audio block was dropped)", McpTool.Render(new CallToolResult { Content = [new AudioContentBlock { Data = new byte[] { 1 }, MimeType = "audio/wav" }] }));
         Assert.Equal("(a resource_link block was dropped)", McpText.BlockDropped("resource_link"));
-        Assert.Equal("text\n(an image block was dropped)", McpTool.Render(new CallToolResult { Content = [new TextContentBlock { Text = "text" }, new ImageContentBlock { Data = new byte[] { 1 }, MimeType = "image/png" }] }));
-        Assert.Equal("Error: boom", McpTool.Render(new CallToolResult { Content = [new TextContentBlock { Text = "boom" }], IsError = true }));
-        Assert.Equal("Error: already", McpTool.Render(new CallToolResult { Content = [new TextContentBlock { Text = "Error: already" }], IsError = true }));
+        Assert.Equal("⟪text⟫\n(an image block was dropped)\n" + UntrustedText.QuoteNote, McpTool.Render(new CallToolResult { Content = [new TextContentBlock { Text = "text" }, new ImageContentBlock { Data = new byte[] { 1 }, MimeType = "image/png" }] }));
+        Assert.Equal("Error: ⟪boom⟫\n" + UntrustedText.QuoteNote, McpTool.Render(new CallToolResult { Content = [new TextContentBlock { Text = "boom" }], IsError = true }));
+        Assert.Equal("Error: ⟪Error: already⟫\n" + UntrustedText.QuoteNote, McpTool.Render(new CallToolResult { Content = [new TextContentBlock { Text = "Error: already" }], IsError = true }));
         Assert.Equal("Error: (no content)", McpTool.Render(new CallToolResult { Content = [], IsError = true }));
         Assert.Equal("Error: ", McpText.ErrorPrefix);
         Assert.True(Assistant.IsToolError(McpTool.Render(new CallToolResult { Content = [new TextContentBlock { Text = "x" }], IsError = true })));
@@ -126,12 +127,12 @@ public class McpToolTests
         Assert.True(echo.JsonSchema.GetProperty("properties").TryGetProperty("text", out _));
 
         var (text, images) = await Assistant.InvokeToolAsync(tools, new FunctionCallContent("c1", "pipe__echo", new Dictionary<string, object?> { ["text"] = "ping" }), CancellationToken.None);
-        Assert.Equal("echo: ping", text);
+        Assert.Equal("⟪echo: ping⟫\n" + UntrustedText.QuoteNote, text);
         Assert.Empty(images);
         Assert.Equal(("echo", """{"text":"ping"}"""), server.Calls[0]);
 
         var (error, _) = await Assistant.InvokeToolAsync(tools, new FunctionCallContent("c2", "pipe__fail", new Dictionary<string, object?>()), CancellationToken.None);
-        Assert.Equal("Error: boom", error);
+        Assert.Equal("Error: ⟪boom⟫" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, error);
         var (picture, none) = await Assistant.InvokeToolAsync(tools, new FunctionCallContent("c3", "pipe__image", new Dictionary<string, object?>()), CancellationToken.None);
         Assert.Equal(McpText.ImageDropped, picture);
         Assert.Empty(none);

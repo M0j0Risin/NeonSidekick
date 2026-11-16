@@ -2117,7 +2117,7 @@ public sealed partial class SidekickApp
                     if (sessionId is { } id)
                     {
                         var usage = session.Usage.LastRequest;
-                        ChatScreen.StampTurn(assistant.History, sessions.AppendTurn(id, inPass?.Line ?? text, turn.Reply, turn.Trace.ToolCalls, turn.Trace.ToolNames, turn.Trace.LoadedSkills, turn.Trace.Errors, usage.Input, usage.Output, turn.Cancelled));
+                        ChatScreen.StampTurn(assistant.History, sessions.AppendTurn(id, inPass?.Line ?? text, turn.Reply, turn.Trace.ToolCalls, turn.Trace.ToolNames, turn.Trace.LoadedSkills, turn.Trace.Errors, usage.Input, usage.Output, turn.Cancelled, turn.Trace.Sources));
                         sessions.SaveHistory(id, Sessions.SessionHistory.ToJson(assistant.History.Messages, plan.ToStored(), planState.Executing, claudeSessionId, EffectiveSettings.SessionSaveThinking, claudeServerSessionId, advisorThreads: advisorThreads.Snapshot(), advisorSessions: advisorThreads.Sessions()));
                     }
                 }

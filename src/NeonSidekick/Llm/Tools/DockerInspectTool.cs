@@ -55,6 +55,7 @@ public sealed class DockerInspectTool : DockerTool
             return reply.Error;
         }
 
-        return DockerInspect.Summary(reply.Body) is { } summary ? "Docker inspect: " + summary : DockerText.BadAnswer("/containers/" + container.Name + "/json");
+        // The image's labels, entrypoint and command are its author's words: the body under the header fenced (2026-11-15, the web-tools plan's §3).
+        return DockerInspect.Summary(reply.Body) is { } summary ? UntrustedText.FenceBody("Docker inspect: " + summary) :DockerText.BadAnswer("/containers/" + container.Name + "/json");
     }
 }

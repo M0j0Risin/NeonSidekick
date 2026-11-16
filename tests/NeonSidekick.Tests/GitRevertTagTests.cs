@@ -167,7 +167,7 @@ public sealed class GitRevertTagTests : IDisposable
         Assert.False(repo.Info.IsHeadDetached);   // the branch's own ref moved, never HEAD itself
         Assert.Equal("main", repo.Head.FriendlyName);
         Assert.False(repo.RetrieveStatus().IsDirty);   // index and work tree both match the new commit
-        Assert.Equal($"Reverted {second[..7]} with {result.Short} on main: Revert \"second\" (1 file)", GitText.Reverted(result));
+        Assert.Equal($"Reverted {second[..7]} with {result.Short} on main: ⟪Revert \"second\"⟫ (1 file)" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, GitText.Reverted(result));
     }
 
     [Fact]
@@ -643,7 +643,7 @@ public sealed class GitRevertTagTests : IDisposable
         Assert.Equal(GitOutcome.Ok, report.Outcome);
         Assert.False(report.Truncated);
         Assert.Equal(
-            $"4 tags, newest first:\n  a-new {second[..7]} {GitText.AnnotatedSubject("Two")}\n  b-new {second[..7]} second\n  z-old {first[..7]} first\n  blobtag {blob[..7]} ",
+            $"4 tags, newest first:\n  a-new {second[..7]} {GitText.Outside(GitText.AnnotatedSubject("Two"))}\n  b-new {second[..7]} ⟪second⟫\n  z-old {first[..7]} ⟪first⟫\n  blobtag {blob[..7]} " + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote,
             GitText.Tags(report));
         Assert.Equal(["a-new", "b-new", "z-old", "blobtag"], _git.Refs("").Tags.Select(t => t.Name));   // gitlib_branch list: the same read
         Assert.StartsWith("4 tags, newest first (the newest " + GitAccess.MaxTags.ToString(System.Globalization.CultureInfo.InvariantCulture) + "):\n",

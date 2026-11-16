@@ -23,7 +23,14 @@ public sealed record SessionSummary(long Id, DateTimeOffset StartedAt, DateTimeO
 /// calls answered with an error; then the request's tokens and whether the keys cut it short.
 /// The replay never shows the names (one <c>🛠️ N tool calls</c> line per turn as ever).
 /// </summary>
-public sealed record SessionTurn(int Ordinal, DateTimeOffset At, string UserText, string ReplyText, int ToolCalls, IReadOnlyList<string> ToolNames, IReadOnlyList<string> SkillsLoaded, int Errors, long InputTokens, long OutputTokens, bool Cancelled);
+public sealed record SessionTurn(int Ordinal, DateTimeOffset At, string UserText, string ReplyText, int ToolCalls, IReadOnlyList<string> ToolNames, IReadOnlyList<string> SkillsLoaded, int Errors, long InputTokens, long OutputTokens, bool Cancelled, IReadOnlyList<Llm.Tools.WebSource>? Sources = null)
+{
+    /// <summary>
+    /// What the turn took from the web (2026-11-15, the web-tools plan's §2, <see cref="Llm.TurnTrace.Sources"/>), from <c>turn_sources</c>:
+    /// the 📚 line a load or a rewind redraws and the export's list. Empty for an older row, or a turn that read nothing.
+    /// </summary>
+    public IReadOnlyList<Llm.Tools.WebSource> SourceList => Sources ?? [];
+}
 
 /// <summary>A whole session: the row, its turns in order and the stored history (<see cref="SessionHistory"/>).</summary>
 public sealed record SessionRecord(SessionSummary Summary, IReadOnlyList<SessionTurn> Turns, string HistoryJson);
@@ -91,6 +98,7 @@ public sealed class SessionStore : IDisposable
     /// day was not worth the code, the fixtures and a smoke leg. The <c>command_history</c> table (2026-09-25,
     /// <c>Keep message history</c>) left it at 3: an added table is <c>IF NOT EXISTS</c> on every open, so a file
     /// from before gains it and an older build reads past it; no row it knew changed shape.
+    /// <c>turn_sources</c> (2026-11-15, the web-tools plan's §2: each turn's pages, downloads and searches) followed the same way.
     /// </summary>
     public const int SchemaVersion = 3;
 
@@ -191,7 +199,11 @@ public sealed class SessionStore : IDisposable
     /// Appends one completed turn to session <paramref name="id"/> and bumps its turn count and <c>updated_at</c>; the names go in joined by <see cref="NameSeparator"/>.
     /// Returns the new row's ordinal (2026-09-30: the screen stamps it on the turn's message for <c>/rewind</c>, <see cref="Llm.ConversationHistory.TurnOrdinalKey"/>), or null while the store is unavailable or the write failed.
     /// </summary>
-    public int? AppendTurn(long id, string userText, string replyText, int toolCalls, IReadOnlyList<string> toolNames, IReadOnlyList<string> skillsLoaded, int errors, long inputTokens, long outputTokens, bool cancelled)
+    /// <remarks>
+    /// <paramref name="sources"/> (2026-11-15, the web-tools plan's §2) go in <c>turn_sources</c> in the same transaction, one row each in
+    /// order; a <see cref="Llm.Tools.WebSourceKind.Search"/> with no URL or title, so replay and export count searches without storing a query.
+    /// </remarks>
+    public int? AppendTurn(long id, string userText, string replyText, int toolCalls, IReadOnlyList<string> toolNames, IReadOnlyList<string> skillsLoaded, int errors, long inputTokens, long outputTokens, bool cancelled, IReadOnlyList<Llm.Tools.WebSource>? sources = null)
     {
         ArgumentNullException.ThrowIfNull(userText);
         ArgumentNullException.ThrowIfNull(replyText);
@@ -223,6 +235,11 @@ public sealed class SessionStore : IDisposable
                 insert.Parameters.AddWithValue("$output", outputTokens);
                 insert.Parameters.AddWithValue("$cancelled", cancelled ? 1 : 0);
                 insert.ExecuteNonQuery();
+                if (sources is { Count: > 0 })
+                {
+                    InsertSources(connection, transaction, sources);
+                }
+
                 using var bump = connection.CreateCommand();
                 bump.Transaction = transaction;
                 bump.CommandText = "UPDATE sessions SET turns = turns + 1, updated_at = $updated WHERE id = $id";
@@ -245,6 +262,52 @@ public sealed class SessionStore : IDisposable
             }
         }
     }
+
+    // The turn just inserted's sources (2026-11-15), keyed by its row id, in order.
+    private static void InsertSources(SqliteConnection connection, SqliteTransaction transaction, IReadOnlyList<Llm.Tools.WebSource> sources)
+    {
+        using var insert = connection.CreateCommand();
+        insert.Transaction = transaction;
+        var seq = insert.Parameters.Add("$seq", SqliteType.Integer);
+        var kind = insert.Parameters.Add("$kind", SqliteType.Text);
+        var url = insert.Parameters.Add("$url", SqliteType.Text);
+        var title = insert.Parameters.Add("$title", SqliteType.Text);
+        long turn;
+        using (var last = connection.CreateCommand())
+        {
+            last.Transaction = transaction;
+            last.CommandText = "SELECT last_insert_rowid()";
+            turn = (long)last.ExecuteScalar()!;
+        }
+
+        insert.CommandText = "INSERT INTO turn_sources(turn_id, seq, kind, url, title) VALUES ($turn, $seq, $kind, $url, $title)";
+        insert.Parameters.AddWithValue("$turn", turn);
+        for (int i = 0; i < sources.Count; i++)
+        {
+            seq.Value = i;
+            kind.Value = SourceKindName(sources[i].Kind);
+            url.Value = sources[i].Url;
+            title.Value = sources[i].Title;
+            insert.ExecuteNonQuery();
+        }
+    }
+
+    /// <summary>A source kind's name in <c>turn_sources.kind</c>. Contract: an older or newer build reads these.</summary>
+    public static string SourceKindName(Llm.Tools.WebSourceKind kind) => kind switch
+    {
+        Llm.Tools.WebSourceKind.Download => "download",
+        Llm.Tools.WebSourceKind.Search => "search",
+        _ => "page",
+    };
+
+    /// <summary><see cref="SourceKindName"/> read back; null for a name this build doesn't know, which is skipped.</summary>
+    public static Llm.Tools.WebSourceKind? SourceKindOf(string name) => name switch
+    {
+        "page" => Llm.Tools.WebSourceKind.Page,
+        "download" => Llm.Tools.WebSourceKind.Download,
+        "search" => Llm.Tools.WebSourceKind.Search,
+        _ => null,
+    };
 
     /// <summary>
     /// Cuts session <paramref name="id"/> back to its first <paramref name="keepThrough"/> turns (2026-09-30, <c>/rewind</c>), in one
@@ -453,6 +516,39 @@ public sealed class SessionStore : IDisposable
                     while (reader.Read())
                     {
                         turns.Add(new SessionTurn(reader.GetInt32(0), Parse(reader.GetString(1)), reader.GetString(2), reader.GetString(3), reader.GetInt32(4), SplitNames(reader.GetString(5)), SplitNames(reader.GetString(6)), reader.GetInt32(7), reader.GetInt64(8), reader.GetInt64(9), reader.GetInt32(10) != 0));
+                    }
+                }
+
+                // Each turn's sources (2026-11-15, the web-tools plan's §2), joined by ordinal in the same read.
+                var sources = new Dictionary<int, List<Llm.Tools.WebSource>>();
+                using (var command = connection.CreateCommand())
+                {
+                    command.CommandText = "SELECT t.ordinal, s.kind, s.url, s.title FROM turn_sources s JOIN turns t ON t.id = s.turn_id WHERE t.session_id = $id ORDER BY t.ordinal, s.seq";
+                    command.Parameters.AddWithValue("$id", id);
+                    using var reader = command.ExecuteReader();
+                    while (reader.Read())
+                    {
+                        if (SourceKindOf(reader.GetString(1)) is { } kind)
+                        {
+                            int ordinal = reader.GetInt32(0);
+                            if (!sources.TryGetValue(ordinal, out var list))
+                            {
+                                sources[ordinal] = list = [];
+                            }
+
+                            list.Add(new Llm.Tools.WebSource(kind, reader.GetString(2), reader.GetString(3)));
+                        }
+                    }
+                }
+
+                if (sources.Count > 0)
+                {
+                    for (int i = 0; i < turns.Count; i++)
+                    {
+                        if (sources.TryGetValue(turns[i].Ordinal, out var list))
+                        {
+                            turns[i] = turns[i] with { Sources = list };
+                        }
                     }
                 }
 
@@ -1390,6 +1486,13 @@ public sealed class SessionStore : IDisposable
             id INTEGER PRIMARY KEY,
             at TEXT NOT NULL,
             text TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS turn_sources(
+            turn_id INTEGER NOT NULL REFERENCES turns(id) ON DELETE CASCADE,
+            seq INTEGER NOT NULL,
+            kind TEXT NOT NULL,
+            url TEXT NOT NULL,
+            title TEXT NOT NULL,
+            PRIMARY KEY (turn_id, seq));
         """ + SchemaFts;
 
     /// <summary>The FTS5 external-content table over <c>turns</c> and its three sync triggers.</summary>

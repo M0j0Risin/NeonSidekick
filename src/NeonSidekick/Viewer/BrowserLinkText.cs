@@ -202,8 +202,24 @@ public static class BrowserLinkText
     /// <summary>A row of <c>web_links</c>: <c>3. News — https://example.com/ · saved 2026-10-13 18:00</c>, the number its place in the whole list.</summary>
     public static string ToolRow(int number, BrowserLink link, TimeZoneInfo zone)
     {
+        ArgumentNullException.ThrowIfNull(link);
         ArgumentNullException.ThrowIfNull(zone);
-        return PrintedRow(number, link) + " · saved " + Sessions.SessionText.Moment(link.Added, zone);
+        // A link saved without a name is named by its page's title (2026-11-15, the web-tools plan's §3): the model reads every name fenced.
+        string at = number.ToString(CultureInfo.InvariantCulture) + ". ";
+        string row = at + (link.Name is { Length: > 0 } name ? Llm.Tools.UntrustedText.Fenced(name) + " — " + link.Url : link.Url);
+        return row + " · saved " + Sessions.SessionText.Moment(link.Added, zone);
+    }
+
+    /// <summary>
+    /// <c>web_save_link</c>'s answer for a save (2026-11-15): <see cref="Saved"/>, but a name the model didn't give (a page's title) fenced,
+    /// the note under it.
+    /// </summary>
+    public static string SavedForModel(BrowserLink link, bool nameFromPage)
+    {
+        ArgumentNullException.ThrowIfNull(link);
+        return nameFromPage && link.Name is { Length: > 0 } name
+            ? $"Saved \"{Llm.Tools.UntrustedText.Fenced(name)}\" ({link.Url}).\n{Llm.Tools.UntrustedText.QuoteNote}"
+            : Saved(link);
     }
 
     /// <summary><c>web_links</c>' first line: how many links, and how many of them the filter kept.</summary>
@@ -229,7 +245,9 @@ public static class BrowserLinkText
 
     /// <summary>An add of an address saved already: its name, and the rename that changes it (only a missing name was filled).</summary>
     public static string AlreadySavedForModel(BrowserLink link) =>
-        link.Name is { Length: > 0 } ? $"{link.Url} is saved already, as {Name(link)}; web_save_link with action rename changes its name." : $"{link.Url} is saved already.";
+        link.Name is { Length: > 0 } name
+            ? $"{link.Url} is saved already, as \"{Llm.Tools.UntrustedText.Fenced(name)}\"; web_save_link with action rename changes its name.\n{Llm.Tools.UntrustedText.QuoteNote}"
+            : $"{link.Url} is saved already.";
 
     /// <summary>An action that is none of add, remove, rename.</summary>
     public static string NotAnAction(string action) => ErrorPrefix + $"\"{action}\" is not an action: use add, remove or rename.";

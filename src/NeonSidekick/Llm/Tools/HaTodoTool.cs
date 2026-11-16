@@ -82,7 +82,8 @@ public sealed class HaTodoTool : HaTool
             }
 
             var reply = await Ha.CallAsync("todo", service, [list.Id], null, cancellationToken, returnResponse: true).ConfigureAwait(false);
-            return reply.Ok ? HaText.TodoItems(list, reply.Body) : reply.Error;
+            // Items anyone in the household can add: the body under the header fenced (2026-11-15, the web-tools plan's §3).
+            return reply.Ok ? UntrustedText.FenceBody(HaText.TodoItems(list, reply.Body)) : reply.Error;
         }
 
         string data = HaJson.Object(w =>

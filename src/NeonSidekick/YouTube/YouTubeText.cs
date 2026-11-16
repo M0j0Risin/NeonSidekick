@@ -69,7 +69,8 @@ public static class YouTubeText
     /// A search's answer: a header (the transcript's note) and a numbered line per hit, its id last for youtube_play: a video's
     /// <c>id</c>, a playlist's <c>playlist</c> and a channel's <c>channel</c> (2026-10-08, the other kinds).
     /// </summary>
-    public static string Results(string query, IReadOnlyList<YouTubeHit> hits, YouTubeKind kind = YouTubeKind.Video)
+    /// <remarks>The tool's answer is <paramref name="fenced"/> (2026-11-15, the web-tools plan's §3): each title and channel fenced in place.</remarks>
+    public static string Results(string query, IReadOnlyList<YouTubeHit> hits, YouTubeKind kind = YouTubeKind.Video, bool fenced = false)
     {
         ArgumentNullException.ThrowIfNull(hits);
         if (hits.Count == 0)
@@ -81,8 +82,8 @@ public static class YouTubeText
         for (int i = 0; i < hits.Count; i++)
         {
             var hit = hits[i];
-            string facts = string.Join(" · ", Facts(hit, withId: true));
-            lines.Add($"{(i + 1).ToString(CultureInfo.InvariantCulture)}. {hit.Title}{(hit.Kind == YouTubeKind.Channel ? " · " : " — ")}{facts}");
+            string facts = string.Join(" · ", Facts(hit, withId: true, fenced: fenced));
+            lines.Add($"{(i + 1).ToString(CultureInfo.InvariantCulture)}. {Outside(hit.Title, fenced)}{(hit.Kind == YouTubeKind.Channel ? " · " : " — ")}{facts}");
         }
 
         return string.Join('\n', lines);
@@ -98,15 +99,15 @@ public static class YouTubeText
 
     // A hit's facts after its title: a video's channel, length, views and year; a playlist's channel, count and year; a channel's
     // subscribers and videos; then its id when asked for.
-    private static IEnumerable<string> Facts(YouTubeHit hit, bool withId, bool withYear = true)
+    private static IEnumerable<string> Facts(YouTubeHit hit, bool withId, bool withYear = true, bool fenced = false)
     {
         string year = withYear ? hit.Published?.Year.ToString(CultureInfo.InvariantCulture) ?? "" : "";
         string count = hit.Count is { } n ? Views(n) + (n == 1 ? " video" : " videos") : "";
         var parts = hit.Kind switch
         {
-            YouTubeKind.Playlist => [hit.Channel, count, year, withId ? "playlist " + hit.Id : ""],
+            YouTubeKind.Playlist => [Outside(hit.Channel, fenced), count, year, withId ? "playlist " + hit.Id : ""],
             YouTubeKind.Channel => [Views(hit.Subscribers) is { Length: > 0 } subs ? subs + " subscribers" : "", count, withId ? "channel " + hit.Id : ""],
-            _ => new[] { hit.Channel, Length(hit), Views(hit.Views) is { Length: > 0 } views ? views + " views" : "", year, withId ? "id " + hit.Id : "" },
+            _ => new[] { Outside(hit.Channel, fenced), Length(hit), Views(hit.Views) is { Length: > 0 } views ? views + " views" : "", year, withId ? "id " + hit.Id : "" },
         };
         return parts.Where(p => p.Length > 0);
     }
@@ -159,26 +160,35 @@ public static class YouTubeText
     /// youtube_playlist's answer (2026-10-08): the playlist, then a numbered line per entry — its place in the list, the number
     /// youtube_play's <c>entry</c> takes — a deleted or private one said so.
     /// </summary>
-    public static string PlaylistEntries(YouTubePlaylist playlist, IReadOnlyList<YouTubePlaylistEntry> entries)
+    /// <remarks>The tool's answer is <paramref name="fenced"/> (2026-11-15): the playlist's, each entry's title and channel fenced in place.</remarks>
+    public static string PlaylistEntries(YouTubePlaylist playlist, IReadOnlyList<YouTubePlaylistEntry> entries, bool fenced = false)
     {
         ArgumentNullException.ThrowIfNull(playlist);
         ArgumentNullException.ThrowIfNull(entries);
-        string by = playlist.Channel.Length > 0 ? " by " + playlist.Channel : "";
+        string by = playlist.Channel.Length > 0 ? " by " + Outside(playlist.Channel, fenced) : "";
         string shown = entries.Count < playlist.Count ? $", the first {entries.Count.ToString(CultureInfo.InvariantCulture)} listed" : "";
-        var lines = new List<string> { $"Playlist {Named(playlist)}{by}: {playlist.Count.ToString(CultureInfo.InvariantCulture)} {Noun(YouTubeKind.Video, playlist.Count)}{shown}; youtube_play with playlist {playlist.Id} and an entry number plays from it:" };
+        var lines = new List<string> { $"Playlist {Named(playlist, fenced)}{by}: {playlist.Count.ToString(CultureInfo.InvariantCulture)} {Noun(YouTubeKind.Video, playlist.Count)}{shown}; youtube_play with playlist {playlist.Id} and an entry number plays from it:" };
         foreach (var entry in entries)
         {
             string number = (entry.Position + 1).ToString(CultureInfo.InvariantCulture);
             lines.Add(entry.Available
-                ? $"{number}. {entry.Title} — {entry.Channel} · id {entry.VideoId}"
-                : $"{number}. ({entry.Title.ToLowerInvariant()}, which the player skips)");
+                ? $"{number}. {Outside(entry.Title, fenced)} — {Outside(entry.Channel, fenced)} · id {entry.VideoId}"
+                : $"{number}. ({Outside(entry.Title.ToLowerInvariant(), fenced)}, which the player skips)");
         }
 
         return string.Join('\n', lines);
     }
 
-    // A playlist in a sentence: its title in quotes, or its id when YouTube named none (a channel's uploads).
-    private static string Named(YouTubePlaylist playlist) => playlist.Title.Length > 0 ? $"\"{playlist.Title}\"" : playlist.Id;
+    // A playlist in a sentence: its title in quotes (fenced for the model), or its id when YouTube named none (a channel's uploads).
+    private static string Named(YouTubePlaylist playlist, bool fenced = false) =>
+        playlist.Title.Length == 0 ? playlist.Id : $"\"{(fenced ? Llm.Tools.UntrustedText.Fenced(playlist.Title) : playlist.Title)}\"";
+
+    /// <summary>
+    /// YouTube's words (a title, a channel) as an answer shows them (2026-11-15, the web-tools plan's §3): fenced for the model, as written
+    /// for the user; blank text stays blank, so a fallback around it is never fenced.
+    /// </summary>
+    private static string Outside(string? text, bool fenced) =>
+        string.IsNullOrWhiteSpace(text) ? text ?? "" : fenced ? Llm.Tools.UntrustedText.Fenced(text) : text;
 
     /// <summary>The picker's title over a playlist's entries (2026-10-08).</summary>
     public static string PlaylistPickTitle(YouTubePlaylist playlist)
@@ -296,8 +306,9 @@ public static class YouTubeText
                 : $"Opening video {snapshot.VideoId} in {PlaceName(snapshot.Place)}; youtube_status says when it plays.";
         }
 
-        string title = string.IsNullOrWhiteSpace(snapshot.Title) ? "video " + snapshot.VideoId : $"\"{snapshot.Title}\"";
-        string author = string.IsNullOrWhiteSpace(snapshot.Author) ? "" : $" ({snapshot.Author})";
+        // The model's form (2026-11-15, the web-tools plan's §3) fences the title and channel in place of the quotes; the user's keeps them.
+        string title = string.IsNullOrWhiteSpace(snapshot.Title) ? "video " + snapshot.VideoId : $"\"{(forUser ? snapshot.Title : Llm.Tools.UntrustedText.Fenced(snapshot.Title))}\"";
+        string author = string.IsNullOrWhiteSpace(snapshot.Author) ? "" : $" ({Outside(snapshot.Author, !forUser)})";
         string id = string.IsNullOrWhiteSpace(snapshot.Title) ? "" : $" · video {snapshot.VideoId}";
         return StateWord(snapshot.State, "Cued (press play to start)") + " " + title + author + WhereAndSound(snapshot) + id + InPlaylist(snapshot) + OnTheTab(snapshot);
     }
@@ -371,8 +382,8 @@ public static class YouTubeText
     /// The status with a browser in the picture (2026-10-16): <paramref name="handoff"/>'s line when the last video went to one, else
     /// <see cref="Status(VideoSnapshot?)"/>. Shared by youtube_status and <c>/youtube status</c>.
     /// </summary>
-    public static string StatusOrHandoff(VideoSnapshot? snapshot, VideoHandoff? handoff) =>
-        snapshot is null && handoff is not null ? HandedOffStatus(handoff) : Status(snapshot);
+    public static string StatusOrHandoff(VideoSnapshot? snapshot, VideoHandoff? handoff, bool forUser = false) =>
+        snapshot is null && handoff is not null ? HandedOffStatus(handoff) : Status(snapshot, forUser);
 
     /// <summary>A browser's name in a sentence: <c>the app's Browser window</c> or <c>the user's default browser</c>.</summary>
     public static string BrowserName(YouTubeOpenLinksInKind to) => to == YouTubeOpenLinksInKind.BrowserWindow ? "the app's Browser window" : "the user's default browser";
@@ -592,16 +603,20 @@ public static class YouTubeText
     /// How a saved video is named in a sentence: its title in quotes once the player has told it, else its id. A playlist (2026-11-08)
     /// says so: <c>the playlist "Title"</c>, or <c>playlist PL…</c>.
     /// </summary>
-    public static string Name(YouTubeSaved video)
+    public static string Name(YouTubeSaved video, bool fenced = false)
     {
         ArgumentNullException.ThrowIfNull(video);
         if (video.Playlist)
         {
-            return video.Title is { Length: > 0 } listTitle ? $"the playlist \"{listTitle}\"" : "playlist " + video.Id;
+            return video.Title is { Length: > 0 } listTitle ? "the playlist " + Quoted(listTitle, fenced) : "playlist " + video.Id;
         }
 
-        return video.Title is { Length: > 0 } title ? $"\"{title}\"" : "video " + video.Id;
+        return video.Title is { Length: > 0 } title ? Quoted(title, fenced) : "video " + video.Id;
     }
+
+    // A title in a sentence: in quotes for the user, fenced for the model (2026-11-15).
+    // The fence sits inside the quotes (2026-11-15), so the unfenced view the user sees reads as it always has.
+    private static string Quoted(string title, bool fenced) => $"\"{(fenced ? Llm.Tools.UntrustedText.Fenced(title) : title)}\"";
 
     // A name that leads a sentence: "video …" and "playlist …" capitalized.
     private static string Lead(string name) => name.Length > 0 && char.IsAsciiLetterLower(name[0]) ? char.ToUpperInvariant(name[0]) + name[1..] : name;
@@ -657,10 +672,10 @@ public static class YouTubeText
         duration > 0 ? $"at {YouTubeIds.FormatTime(position)} of {YouTubeIds.FormatTime(duration)}" : $"at {YouTubeIds.FormatTime(position)}";
 
     /// <summary>A saved video as the pane's row and the printed list's: <c>Title — Channel · at 12:34 of 45:00</c>; a playlist's title after <see cref="PlaylistMark"/>.</summary>
-    public static string SavedRow(YouTubeSaved video)
+    public static string SavedRow(YouTubeSaved video, bool fenced = false)
     {
         ArgumentNullException.ThrowIfNull(video);
-        return SavedTitle(video) + (video.Author is { Length: > 0 } author ? " — " + author : "") + " · " + Place(video);
+        return SavedTitle(video, fenced) + (video.Author is { Length: > 0 } author ? " — " + Outside(author, fenced) : "") + " · " + Place(video);
     }
 
     /// <summary>The saved pane's title column at most (2026-10-08): a longer title is cut with an ellipsis, the footer showing it whole. Pinned.</summary>
@@ -700,8 +715,11 @@ public static class YouTubeText
     }
 
     // A row's title: a playlist's after its mark (2026-11-08), and an untitled one's id said as what it is.
-    private static string SavedTitle(YouTubeSaved video) =>
-        video.Playlist ? PlaylistMark + " " + (video.Title ?? "playlist " + video.Id) : video.Title ?? "video " + video.Id;
+    private static string SavedTitle(YouTubeSaved video, bool fenced = false)
+    {
+        string title = video.Title is { } named ? Outside(named, fenced) : (video.Playlist ? "playlist " : "video ") + video.Id;
+        return video.Playlist ? PlaylistMark + " " + title : title;
+    }
 
     /// <summary><paramref name="text"/> in exactly <paramref name="width"/> cells: cut with an ellipsis, or padded with blanks.</summary>
     private static string Cell(string text, int width)
@@ -774,7 +792,8 @@ public static class YouTubeText
     }
 
     /// <summary>youtube_saved's answer: a numbered line per video, its id last for youtube_play.</summary>
-    public static string SavedList(IReadOnlyList<YouTubeSaved> videos)
+    /// <remarks>The tool's answer is <paramref name="fenced"/> (2026-11-15): each title and channel fenced in place.</remarks>
+    public static string SavedList(IReadOnlyList<YouTubeSaved> videos, bool fenced = false)
     {
         ArgumentNullException.ThrowIfNull(videos);
         if (videos.Count == 0)
@@ -785,23 +804,23 @@ public static class YouTubeText
         var lines = new List<string> { $"Saved YouTube videos ({videos.Count.ToString(CultureInfo.InvariantCulture)}); youtube_play resumes each where it was left:" };
         for (int i = 0; i < videos.Count; i++)
         {
-            lines.Add($"{(i + 1).ToString(CultureInfo.InvariantCulture)}. {SavedRow(videos[i])} · {(videos[i].Playlist ? "playlist id" : "id")} {videos[i].Id}");
+            lines.Add($"{(i + 1).ToString(CultureInfo.InvariantCulture)}. {SavedRow(videos[i], fenced)} · {(videos[i].Playlist ? "playlist id" : "id")} {videos[i].Id}");
         }
 
         return string.Join('\n', lines);
     }
 
     /// <summary>A save done, or found done already.</summary>
-    public static string Saved(YouTubeSaved video, YouTubeSaveOutcome outcome) => outcome switch
+    public static string Saved(YouTubeSaved video, YouTubeSaveOutcome outcome, bool fenced = false) => outcome switch
     {
-        YouTubeSaveOutcome.AlreadySaved => $"{Lead(Name(video))} is saved already ({Place(video)}).",
+        YouTubeSaveOutcome.AlreadySaved => $"{Lead(Name(video, fenced))} is saved already ({Place(video)}).",
         YouTubeSaveOutcome.Failed => "Error: " + SaveFailed,
-        _ when video.Playlist => $"Saved {Name(video)}; it resumes at the entry and place it is left at.",
-        _ => $"Saved {Name(video)}; it resumes where it is left.",
+        _ when video.Playlist => $"Saved {Name(video, fenced)}; it resumes at the entry and place it is left at.",
+        _ => $"Saved {Name(video, fenced)}; it resumes where it is left.",
     };
 
     /// <summary>A saved video taken off the list.</summary>
-    public static string Unsaved(YouTubeSaved video) => $"Removed {Name(video)} from the saved videos.";
+    public static string Unsaved(YouTubeSaved video, bool fenced = false) => $"Removed {Name(video, fenced)} from the saved videos.";
 
     /// <summary>The question before the pane's remove selected.</summary>
     public static string RemovePrompt(YouTubeSaved video) => $"📺 Remove {Name(video)} from the saved videos?";

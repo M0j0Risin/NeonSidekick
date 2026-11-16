@@ -119,11 +119,11 @@ public sealed class DockerLogsTool : DockerTool
             return logs.Error;
         }
 
-        return Render(container.Name, logs.Lines, tail, grep, logs.Capped);
+        return Render(container.Name, logs.Lines, tail, grep, logs.Capped, fenced: true);
     }
 
     /// <summary>The answer: the header, then the lines (the grep's last <paramref name="tail"/> matches), the oldest cut to fit <see cref="MaxChars"/>. Pure.</summary>
-    public static string Render(string name, IReadOnlyList<string> lines, int tail, string? grep, bool capped)
+    public static string Render(string name, IReadOnlyList<string> lines, int tail, string? grep, bool capped, bool fenced = false)
     {
         ArgumentNullException.ThrowIfNull(lines);
         IReadOnlyList<string> kept = grep is null ? lines.TakeLast(tail).ToList() : lines.Where(l => l.Contains(grep, StringComparison.OrdinalIgnoreCase)).TakeLast(tail).ToList();
@@ -148,7 +148,11 @@ public sealed class DockerLogsTool : DockerTool
         }
 
         string header = DockerText.LogsHeader(name, body.Count, grep is null ? tail : null, grep, capped);
-        return header + "\n" + (from > 0 ? DockerText.LogsCut(from) + "\n" : "") + string.Join('\n', body);
+        string joined = string.Join('\n', body);
+        // The tool's answer (2026-11-15, the web-tools plan's §3): the container's lines are its programs' words, one fence under the
+        // app's header and cut note, the quote note last. /docker logs shows them bare.
+        string shown = fenced ? UntrustedText.Fenced(joined) + "\n" + UntrustedText.QuoteNote : joined;
+        return header + "\n" + (from > 0 ? DockerText.LogsCut(from) + "\n" : "") + shown;
     }
 
     /// <summary>

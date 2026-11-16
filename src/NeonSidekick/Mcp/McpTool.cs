@@ -104,21 +104,30 @@ public sealed class McpTool : AIFunction
     /// <summary>
     /// The result as the model's one string: the text blocks joined by a line break, an image block
     /// <see cref="McpText.ImageDropped"/>, any other kind <see cref="McpText.BlockDropped"/>, nothing at all
-    /// <see cref="McpText.NoContent"/>; an <c>isError</c> result prefixed <see cref="McpText.ErrorPrefix"/>
-    /// unless it already starts with <c>Error</c>. Pure.
+    /// <see cref="McpText.NoContent"/>. Since 2026-11-15 (the web-tools plan's §3, feature idea #39) each text block is the server's and
+    /// fenced on its own (<see cref="Llm.Tools.UntrustedText.Fenced"/>), the app's notes between them bare, and
+    /// <see cref="Llm.Tools.UntrustedText.QuoteNote"/> is the last line. An <c>isError</c> result, MCP's signal for a failed call, always
+    /// starts <see cref="McpText.ErrorPrefix"/>, ahead of the first fence (it was left off one whose text began "Error" until then: fenced,
+    /// that text would no longer read as failed). A result without <c>isError</c> whose text says "Error" reads as the server's text. Pure.
     /// </summary>
     public static string Render(CallToolResult result)
     {
         ArgumentNullException.ThrowIfNull(result);
         var sb = new StringBuilder();
+        bool fenced = false;
         foreach (var block in result.Content ?? [])
         {
-            string piece = block switch
+            string piece;
+            if (block is TextContentBlock text)
             {
-                TextContentBlock text => text.Text ?? "",
-                ImageContentBlock => McpText.ImageDropped,
-                _ => McpText.BlockDropped(block.Type ?? "unknown"),
-            };
+                piece = Llm.Tools.UntrustedText.Fenced(text.Text ?? "");
+                fenced = true;
+            }
+            else
+            {
+                piece = block is ImageContentBlock ? McpText.ImageDropped : McpText.BlockDropped(block.Type ?? "unknown");
+            }
+
             if (sb.Length > 0)
             {
                 sb.Append('\n');
@@ -128,8 +137,11 @@ public sealed class McpTool : AIFunction
         }
 
         string rendered = sb.Length > 0 ? sb.ToString() : McpText.NoContent;
-        return result.IsError == true && !rendered.StartsWith("Error", StringComparison.Ordinal)
-            ? McpText.ErrorPrefix + rendered
-            : rendered;
+        if (fenced)
+        {
+            rendered += "\n" + Llm.Tools.UntrustedText.QuoteNote;
+        }
+
+        return result.IsError == true ? McpText.ErrorPrefix + rendered : rendered;
     }
 }

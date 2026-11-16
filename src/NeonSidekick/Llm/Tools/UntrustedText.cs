@@ -36,6 +36,66 @@ public static class UntrustedText
     public static string Fenced(string text) => Quote(Scrub(text));
 
     /// <summary>
+    /// A tool's answer with everything under its first line fenced (2026-11-15, the web-tools plan's §3, feature idea #39): the header
+    /// stays line one, the tool's own words, so the transcript's one-line note reads it; the rest, a page's or a server's text, goes
+    /// through <see cref="Fenced"/> as one block, the blank lines between them kept outside; <see cref="QuoteNote"/> is the last line. An
+    /// answer starting with <c>Error</c> passes unchanged, so the failure contract holds; so does a one-line answer or one with nothing
+    /// under its header. A header holding outside text fences it in place before this runs. Pure.
+    /// </summary>
+    public static string FenceBody(string answer)
+    {
+        ArgumentNullException.ThrowIfNull(answer);
+        if (answer.StartsWith("Error", StringComparison.Ordinal))
+        {
+            return answer;
+        }
+
+        int newline = answer.IndexOf('\n');
+        if (newline < 0)
+        {
+            return answer;
+        }
+
+        int start = newline;
+        while (start < answer.Length && answer[start] is '\n' or '\r')
+        {
+            start++;
+        }
+
+        string body = answer[start..].TrimEnd('\n', '\r');
+        if (body.Trim().Length == 0)
+        {
+            return answer;
+        }
+
+        return answer[..start] + Fenced(body) + "\n" + QuoteNote;
+    }
+
+    /// <summary>
+    /// <paramref name="text"/> fenced in place inside the app's own sentence, or the app's placeholder for it left bare (2026-11-15): a fence
+    /// would say the outside wrote <paramref name="placeholder"/>. Null, empty or blank text is the placeholder.
+    /// </summary>
+    public static string QuoteOr(string? text, string placeholder)
+    {
+        ArgumentNullException.ThrowIfNull(placeholder);
+        return string.IsNullOrWhiteSpace(text) ? placeholder : Fenced(text);
+    }
+
+    /// <summary>Whether <paramref name="text"/> holds a fence, so an answer built of fenced values ends with <see cref="QuoteNote"/>.</summary>
+    public static bool HasFence(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return text.Contains(QuoteOpen, StringComparison.Ordinal);
+    }
+
+    /// <summary><paramref name="answer"/> with <see cref="QuoteNote"/> on its last line when it holds a fence and doesn't end with the note already.</summary>
+    public static string WithNote(string answer)
+    {
+        ArgumentNullException.ThrowIfNull(answer);
+        return HasFence(answer) && !answer.EndsWith(QuoteNote, StringComparison.Ordinal) ? answer + "\n" + QuoteNote : answer;
+    }
+
+    /// <summary>
     /// <paramref name="text"/> with every C0 and C1 control character (and DEL) replaced by U+FFFD, a tab and a newline kept, a carriage
     /// return dropped (2026-10-15: an event is anyone's text; for tool answers, the Web UI, sessions and headless alike). Since 2026-10-23
     /// (the admin review's A4, mechanism 3) the bidi overrides, embeddings and isolates (U+202A–U+202E, U+2066–U+2069), which reorder what
@@ -150,6 +210,39 @@ public static class UntrustedText
         ArgumentNullException.ThrowIfNull(tail);
         ArgumentNullException.ThrowIfNull(cutNote);
         return body.Length + tail.Length <= max ? body + tail : CutFenced(body, Math.Max(0, max - tail.Length - cutNote.Length)) + cutNote + tail;
+    }
+
+    /// <summary>
+    /// <paramref name="text"/> held to <paramref name="max"/> characters for a reader of the history (2026-11-15, the web-tools plan's §3: an
+    /// advisor's recent context cut a fenced page raw, leaving ⟪ open and the note gone): a fence the cut leaves open closed, a surrogate
+    /// pair kept whole, <paramref name="cutMark"/> where it was cut, and a closing <see cref="QuoteNote"/> kept whole after it. Pure.
+    /// </summary>
+    public static string CutKeepingNote(string text, int max, string cutMark)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(cutMark);
+        if (text.Length <= max)
+        {
+            return text;
+        }
+
+        if (!text.EndsWith(QuoteNote, StringComparison.Ordinal))
+        {
+            return CutClosed(text, max) + cutMark;
+        }
+
+        string body = text[..^QuoteNote.Length].TrimEnd('\n', '\r');
+        return CutClosed(body, Math.Max(0, max - QuoteNote.Length - 1)) + cutMark + "\n" + QuoteNote;
+    }
+
+    /// <summary>
+    /// <paramref name="text"/>'s first <paramref name="room"/> characters for a reader's cut (2026-11-15): <see cref="CutFenced"/> when it holds a
+    /// fence, else the plain surrogate-safe cut, so text with no fence keeps every character it kept before. Pure.
+    /// </summary>
+    public static string CutClosed(string text, int room)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return text.Contains(QuoteOpen, StringComparison.Ordinal) ? CutFenced(text, room) : Files.TextCut.Safe(text, Math.Clamp(room, 0, text.Length));
     }
 
     /// <summary>

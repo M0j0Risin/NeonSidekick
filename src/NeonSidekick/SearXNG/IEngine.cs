@@ -29,6 +29,9 @@ public interface IEngine
     /// <summary>Whether the engine can answer for a page after the first.</summary>
     bool Paging { get; }
 
+    /// <summary>Whether the engine can limit its results to a <see cref="EngineQuery.TimeRange"/>. SearXNG's module default is false.</summary>
+    bool TimeRangeSupport => false;
+
     /// <summary>The engine's hits in its own order. Empty when it has nothing, or can't serve this query.</summary>
     /// <exception cref="EngineException">The engine was refused or its answer was unusable.</exception>
     Task<IReadOnlyList<EngineResult>> SearchAsync(EngineQuery query, HttpClient http, CancellationToken cancellationToken);

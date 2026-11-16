@@ -515,7 +515,7 @@ public sealed class HomeAssistantTests : IDisposable
         _settings.HomeAssistantActionPolicy = HaPolicy.Off;
         var tool = new HaTodoTool(ha, Answer(null));
 
-        Assert.Equal("Shopping list: 1 open item\n- milk", await Invoke(tool, ("action", "list")));
+        Assert.Equal("Shopping list: 1 open item\n⟪- milk⟫" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, await Invoke(tool, ("action", "list")));
         Assert.Equal(HaText.PolicyOff, await Invoke(tool, ("action", "add"), ("item", "eggs")));
 
         _settings.HomeAssistantActionPolicy = HaPolicy.Ask;
@@ -595,7 +595,7 @@ public sealed class HomeAssistantTests : IDisposable
         _settings.HomeAssistantAssistAgent = "conversation.google_ai";
         var tool = new HaAssistTool(_ha, Answer(true));
 
-        Assert.Equal("Assist (action done): Turned off the lights", await Invoke(tool, ("text", "turn off the kitchen")));
+        Assert.Equal("Assist (action done): ⟪Turned off the lights⟫" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, await Invoke(tool, ("text", "turn off the kitchen")));
         Assert.Equal("""{"text":"turn off the kitchen","agent_id":"conversation.google_ai"}""", _stub.Requests[^1].Body);
 
         _settings.HomeAssistantActionPolicy = HaPolicy.Off;
@@ -617,7 +617,7 @@ public sealed class HomeAssistantTests : IDisposable
         Assert.Equal(0, Sent());
         Assert.Equal("Let the model tell Home Assistant's Assist this?\n\"unlock the front door\"", _asked[^1]);
 
-        Assert.Equal("Assist (action done): Unlocked the front door", await Invoke(new HaAssistTool(_ha, Answer(true)), ("text", "unlock the front door")));
+        Assert.Equal("Assist (action done): ⟪Unlocked the front door⟫" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, await Invoke(new HaAssistTool(_ha, Answer(true)), ("text", "unlock the front door")));
         Assert.Equal(1, Sent());
 
         // Allowed, or conversation.process on the safe list: it runs unasked.
@@ -682,7 +682,7 @@ public sealed class HomeAssistantTests : IDisposable
         Assert.Contains("\nsource_list: [\"STR-AN1000\", \"HDMI 1\", \"HDMI 2\", \"HDMI 3 (eARC/ARC)\", \"HDMI 4\", \"Video\"]", one);
 
         string scenes = await Invoke(tool, ("domain", "scene"), ("area", "den"));
-        Assert.Equal("2 entities matching domain scene, area Den\nscene.den_den_relax · Den Relax · unknown · in Den\nscene.den_den_read · Den Read · unknown · in Den", scenes);
+        Assert.Equal("2 entities matching domain scene, area Den\n⟪scene.den_den_relax · Den Relax · unknown · in Den\nscene.den_den_read · Den Read · unknown · in Den⟫" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, scenes);
     }
 
     [Fact]
@@ -693,7 +693,7 @@ public sealed class HomeAssistantTests : IDisposable
 
         string text = await Invoke(tool, ("entity", "pantry motion"), ("hours", 2));
 
-        Assert.Equal("Sensor 1 - Pantry Motion (binary_sensor.sensor_1_pantry_motion): 1 state in the last 2 hours\nFri 13:00 on", text);
+        Assert.Equal("Sensor 1 - Pantry Motion (binary_sensor.sensor_1_pantry_motion): 1 state in the last 2 hours\n⟪Fri 13:00 on⟫" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, text);
         Assert.Equal(HaClient.HistoryPath("binary_sensor.sensor_1_pantry_motion", ManualTimeProvider.DefaultUtcNow.AddHours(-2), ManualTimeProvider.DefaultUtcNow), _stub.Requests[^1].Uri.PathAndQuery);
         Assert.StartsWith("Error: '0' is not a whole number from 1 to 336", await Invoke(tool, ("entity", "pantry motion"), ("hours", 0)));
     }
@@ -703,7 +703,7 @@ public sealed class HomeAssistantTests : IDisposable
     {
         string text = await Invoke(new HaOverviewTool(_ha));
 
-        Assert.StartsWith("Home Assistant: 3 of 8 lights on\n- Den: 2 of 3 on", text);
+        Assert.StartsWith("Home Assistant: 3 of 8 lights on\n⟪- Den: 2 of 3 on", text);
     }
 
     [Fact]

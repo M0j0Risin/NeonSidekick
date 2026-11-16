@@ -26,9 +26,9 @@ public sealed partial class YouTubeSavedToolsTests
         _lists.Found[List] = new YouTubePlaylistInfo(List, "The list", "Its channel", Zoo);
         var save = SaveLists();
 
-        Assert.Equal("Saved the playlist \"The list\"; it resumes at the entry and place it is left at.", await Call(save, ("action", "add"), ("playlist", "https://www.youtube.com/playlist?list=" + List)));
+        Assert.Equal("Saved the playlist \"⟪The list⟫\"; it resumes at the entry and place it is left at." + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, await Call(save, ("action", "add"), ("playlist", "https://www.youtube.com/playlist?list=" + List)));
         Assert.Equal((true, "The list", "Its channel", (string?)null, (string?)Zoo), (Library().Find(List)!.Playlist, Library().Find(List)!.Title, Library().Find(List)!.Author, Library().Find(List)!.EntryVideo, Library().Find(List)!.Thumbnail));
-        Assert.Equal("The playlist \"The list\" is saved already (not played yet).", await Call(save, ("action", "add"), ("playlist", List)));
+        Assert.Equal("The playlist \"⟪The list⟫\" is saved already (not played yet)." + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, await Call(save, ("action", "add"), ("playlist", List)));
         Assert.Equal([List], _lists.Asked);   // saved already: not asked again
 
         Assert.Equal("Saved playlist UUSMOQeBJ2RAnuFungnQOxLg; it resumes at the entry and place it is left at.", await Call(save, ("action", "add"), ("playlist", Channel)));   // its uploads, not found: untitled
@@ -40,7 +40,7 @@ public sealed partial class YouTubeSavedToolsTests
         var playing = Library().Find("PLcurrentcurrentcur")!;
         Assert.Equal((1, (string?)Zoo, 3), (playing.Entry, playing.EntryVideo, playing.Count));   // where the list is
 
-        Assert.Equal("Removed the playlist \"The list\" from the saved videos.", await Call(save, ("action", "remove"), ("playlist", "1")));
+        Assert.Equal("Removed the playlist \"⟪The list⟫\" from the saved videos." + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, await Call(save, ("action", "remove"), ("playlist", "1")));
         Assert.Equal("Removed playlist UUSMOQeBJ2RAnuFungnQOxLg from the saved videos.", await Call(save, ("action", "remove"), ("playlist", "https://www.youtube.com/channel/" + Channel)));
         Assert.Equal("Removed playlist PLcurrentcurrentcur from the saved videos.", await Call(save, ("action", "remove"), ("playlist", "current")));
         Assert.Equal([Other], Library().List().Select(v => v.Id));
@@ -69,7 +69,7 @@ public sealed partial class YouTubeSavedToolsTests
         var saved = ChatScreen.YouTubeTools(search, _player, () => _settings, _time, Library).Single(t => t.Name == YouTubeSavedTool.ToolName);
         string listed = await Call(saved);
 
-        Assert.Contains("1. ▤ The list — Its channel · not played yet · playlist id " + List, listed);
+        Assert.Contains("1. ▤ ⟪The list⟫ — ⟪Its channel⟫ · not played yet · playlist id " + List, listed);
         Assert.Equal(((string?)null, (string?)Zoo), (Library().Find(List)!.EntryVideo, Library().Find(List)!.Thumbnail));   // the list's thumbnail, shown only
     }
 

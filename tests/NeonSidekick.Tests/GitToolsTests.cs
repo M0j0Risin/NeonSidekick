@@ -202,7 +202,7 @@ public sealed class GitToolsTests : IDisposable
         string second = Commit("a.txt", "two\n", "second");
 
         string log = await Invoke(Tool<GitLogTool>());
-        Assert.Matches($@"^2 commits on main, newest first:\n{second[..7]} 2026-09-01 12:\d\d Test User: second\n{first[..7]} 2026-09-01 12:\d\d Test User: first$", log);
+        Assert.Matches($@"^2 commits on main, newest first:\n{second[..7]} 2026-09-01 12:\d\d ⟪Test User⟫: ⟪second⟫\n{first[..7]} 2026-09-01 12:\d\d ⟪Test User⟫: ⟪first⟫\n" + System.Text.RegularExpressions.Regex.Escape(NeonSidekick.Llm.Tools.UntrustedText.QuoteNote) + "$", log);
         _settings.GitLibLogMaxCommits = 1;
         Assert.StartsWith("1 commit on main, newest first (more before them):\n", await Invoke(Tool<GitLogTool>()));
         Assert.StartsWith("2 commits on main", await Invoke(Tool<GitLogTool>(), ("max_commits", 5)));
@@ -222,8 +222,8 @@ public sealed class GitToolsTests : IDisposable
         string second = Commit(Path.Combine("src", "b.txt"), "b1\nb2\n", "second\n\nBody.\n");
 
         string show = await Invoke(Tool<GitShowTool>(), ("ref", second[..7]));
-        Assert.StartsWith($"Commit {second[..7]} by Test User at 2026-09-01 ", show);
-        Assert.EndsWith(": second\nsecond\n\nBody.\nFiles changed (1, +2 −0):\nA src\\b.txt (+2 −0)", show);
+        Assert.StartsWith($"Commit {second[..7]} by ⟪Test User⟫ at 2026-09-01 ", show);
+        Assert.EndsWith(": ⟪second⟫\n⟪second\n\nBody.⟫\nFiles changed (1, +2 −0):\nA src\\b.txt (+2 −0)" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, show);
         Assert.Equal($"a.txt at {second[..7]} (1 line):\none\n", await Invoke(Tool<GitShowTool>(), ("ref", "HEAD"), ("path", "a.txt")));
         Assert.Equal($"src\\ at {second[..7]} (1 entry):\nb.txt", await Invoke(Tool<GitShowTool>(), ("ref", "HEAD"), ("path", "src")));
         Assert.Equal("Error: give the commit to show (a sha, a branch, a tag, HEAD~1)", await Invoke(Tool<GitShowTool>()));
@@ -240,8 +240,8 @@ public sealed class GitToolsTests : IDisposable
         string second = Commit(Path.Combine("src", "b.txt"), "b1\nb2\n", "second\n\nBody.\n");
 
         string show = await Invoke(Tool<GitShowTool>(), ("ref", second[..7]));
-        Assert.StartsWith($"Commit {second[..7]} by Test User at 2026-09-01 ", show);
-        Assert.EndsWith(": second\nsecond\n\nBody.\nFiles changed (1, +2 −0):\nA src/b.txt (+2 −0)", show);
+        Assert.StartsWith($"Commit {second[..7]} by ⟪Test User⟫ at 2026-09-01 ", show);
+        Assert.EndsWith(": ⟪second⟫\n⟪second\n\nBody.⟫\nFiles changed (1, +2 −0):\nA src/b.txt (+2 −0)" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, show);
         Assert.Equal($"a.txt at {second[..7]} (1 line):\none\n", await Invoke(Tool<GitShowTool>(), ("ref", "HEAD"), ("path", "a.txt")));
         Assert.Equal($"src/ at {second[..7]} (1 entry):\nb.txt", await Invoke(Tool<GitShowTool>(), ("ref", "HEAD"), ("path", "src")));
         Assert.Equal("Error: give the commit to show (a sha, a branch, a tag, HEAD~1)", await Invoke(Tool<GitShowTool>()));
@@ -266,7 +266,7 @@ public sealed class GitToolsTests : IDisposable
         string committed = await Invoke(Tool<GitCommitTool>(), ("message", "second"));
         Assert.Matches(@"^Committed [0-9a-f]{7} on main: second \(1 file, \+1 −1\)$", committed);
         string sha = committed[10..17];
-        Assert.StartsWith($"Changes in {sha} (second) (1 file, +1 −1):", await Invoke(Tool<GitDiffTool>(), ("ref", "HEAD")));
+        Assert.StartsWith($"Changes in {sha} (⟪second⟫) (1 file, +1 −1):", await Invoke(Tool<GitDiffTool>(), ("ref", "HEAD")));
         Assert.StartsWith($"Changes from {first[..7]} to {sha} (1 file, +1 −1):", await Invoke(Tool<GitDiffTool>(), ("from", first[..7]), ("to", "HEAD")));
         Assert.Equal("Error: 'zzz' is not there", await Invoke(Tool<GitDiffTool>(), ("ref", "HEAD"), ("path", "zzz")));
 
@@ -304,8 +304,8 @@ public sealed class GitToolsTests : IDisposable
         string second = Commit("a.txt", "one\n2\n", "second");
 
         string blame = await Invoke(Tool<GitBlameTool>(), ("path", "a.txt"));
-        Assert.Equal($"Blame of a.txt lines 1–2 of 2 at main (2 commits):\n{first[..7]} 2026-09-01 Test User 1│one\n{second[..7]} 2026-09-01 Test User 2│2", blame);
-        Assert.Equal($"Blame of a.txt lines 2–2 of 2 at main (1 commit):\n{second[..7]} 2026-09-01 Test User 2│2", await Invoke(Tool<GitBlameTool>(), ("path", "a.txt"), ("from_line", 2)));
+        Assert.Equal($"Blame of a.txt lines 1–2 of 2 at main (2 commits):\n{first[..7]} 2026-09-01 ⟪Test User⟫ 1│one\n{second[..7]} 2026-09-01 ⟪Test User⟫ 2│2" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, blame);
+        Assert.Equal($"Blame of a.txt lines 2–2 of 2 at main (1 commit):\n{second[..7]} 2026-09-01 ⟪Test User⟫ 2│2" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, await Invoke(Tool<GitBlameTool>(), ("path", "a.txt"), ("from_line", 2)));
         Assert.Equal("Error: give the file to blame", await Invoke(Tool<GitBlameTool>()));
         Assert.Equal("Error: from_line must be 1 or more", await Invoke(Tool<GitBlameTool>(), ("path", "a.txt"), ("from_line", 0)));
         Assert.Equal("Error: 'x' is not a whole number for 'to_line'", await Invoke(Tool<GitBlameTool>(), ("path", "a.txt"), ("to_line", "x")));
@@ -320,7 +320,7 @@ public sealed class GitToolsTests : IDisposable
 
         string blame = await Invoke(Tool<GitBlameTool>(), ("path", "a.txt"));
         Assert.StartsWith("Blame of a.txt lines 1–200 of 250 at main (1 commit):\n", blame);
-        Assert.EndsWith("\n[… 50 more lines; continue with from_line 201]", blame);
+        Assert.EndsWith("\n[… 50 more lines; continue with from_line 201]" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, blame);
         Assert.StartsWith("Blame of a.txt lines 201–250 of 250 at main (1 commit):\n", await Invoke(Tool<GitBlameTool>(), ("path", "a.txt"), ("from_line", 201)));
     }
 
@@ -332,13 +332,13 @@ public sealed class GitToolsTests : IDisposable
         Repo();
         string first = Commit("a.txt", "one\n", "first");
 
-        Assert.Equal($"1 branch (current: main):\n* main {first[..7]} first", await Invoke(Tool<GitBranchTool>(), ("action", "list")));
+        Assert.Equal($"1 branch (current: main):\n* main {first[..7]} ⟪first⟫" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, await Invoke(Tool<GitBranchTool>(), ("action", "list")));
         Assert.Equal($"Created branch feature at {first[..7]}", await Invoke(Tool<GitBranchTool>(), ("action", "create"), ("name", "feature")));
         Assert.Equal("Error: 'feature' exists already", await Invoke(Tool<GitBranchTool>(), ("action", "create"), ("name", "feature")));
         Assert.Equal($"Created branch topic at {first[..7]} and switched to it", await Invoke(Tool<GitBranchTool>(), ("action", "create"), ("name", "topic"), ("switch_to", true)));
         Assert.Equal($"Switched to branch feature ({first[..7]})", await Invoke(Tool<GitBranchTool>(), ("action", "switch"), ("name", "feature")));
         Assert.Equal("Renamed branch topic to other", await Invoke(Tool<GitBranchTool>(), ("action", "rename"), ("name", "topic"), ("new_name", "other")));
-        Assert.Equal($"3 branches (current: feature):\n* feature {first[..7]} first\n  main {first[..7]} first\n  other {first[..7]} first", await Invoke(Tool<GitBranchTool>(), ("action", "list")));
+        Assert.Equal($"3 branches (current: feature):\n* feature {first[..7]} ⟪first⟫\n  main {first[..7]} ⟪first⟫\n  other {first[..7]} ⟪first⟫" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, await Invoke(Tool<GitBranchTool>(), ("action", "list")));
         Assert.Equal("Error: give the branch's name", await Invoke(Tool<GitBranchTool>(), ("action", "switch")));
         Assert.Equal("Error: give the branch's new name", await Invoke(Tool<GitBranchTool>(), ("action", "rename"), ("name", "main")));
         Assert.Equal("Error: 'nope' names no commit, branch or tag", await Invoke(Tool<GitBranchTool>(), ("action", "switch"), ("name", "nope")));
@@ -440,10 +440,10 @@ public sealed class GitToolsTests : IDisposable
         Assert.Equal(GitText.DiscardNamedNothing, await Invoke(Tool<GitDiscardTool>(), ("paths", JsonDocument.Parse("[]").RootElement.Clone())));
         Assert.Equal(GitText.DiscardNamedNothing, await Invoke(Tool<GitDiscardTool>(), ("paths", new[] { " ", "" })));
         Assert.Equal("y\n", File.ReadAllText(Path.Combine(_root, "b.txt")));
-        Assert.Equal($"Reset hard to {first[..7]} ({first[..7]}: first): 1 file changed; untracked files left alone", await Invoke(Tool<GitDiscardTool>(), ("ref", first[..7])));
+        Assert.Equal($"Reset hard to {first[..7]} ({first[..7]}: ⟪first⟫): 1 file changed; untracked files left alone" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, await Invoke(Tool<GitDiscardTool>(), ("ref", first[..7])));
         Assert.False(File.Exists(Path.Combine(_root, "b.txt")));
         Assert.True(File.Exists(Path.Combine(_root, "new.txt")));
-        Assert.Equal("Reset hard to main (" + first[..7] + ": first): 0 files changed; untracked files left alone", await Invoke(Tool<GitDiscardTool>()));
+        Assert.Equal("Reset hard to main (" + first[..7] + ": ⟪first⟫): 0 files changed; untracked files left alone" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, await Invoke(Tool<GitDiscardTool>()));
     }
 
     [Fact]
@@ -508,7 +508,7 @@ public sealed class GitToolsTests : IDisposable
 
         string window = await Invoke(log, ("since", "2026-09-01T12:02"), ("until", "2026-09-01T12:02"));
         Assert.StartsWith("1 commit since 2026-09-01 12:02 until 2026-09-01 12:02 on main, newest first:\n", window, StringComparison.Ordinal);
-        Assert.EndsWith("second", window, StringComparison.Ordinal);
+        Assert.EndsWith("⟪second⟫" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, window, StringComparison.Ordinal);
         Assert.Equal("No commits since 2026-09-04 14:05:30 on main", await Invoke(log, ("since", "1w")));   // the clock's now less a week, in the user's zone; seconds shown when not zero (#56)
         Assert.StartsWith("2 commits by test matching \"I\" on main", await Invoke(log, ("author", "test"), ("grep", "I")), StringComparison.Ordinal);
         Assert.StartsWith("3 commits on main", await Invoke(log, ("author", " "), ("since", "")), StringComparison.Ordinal);   // blank is not given
@@ -587,7 +587,7 @@ public sealed class GitToolsTests : IDisposable
         Assert.Equal(GitText.NoRevertReference, await Invoke(revert));
         Assert.Equal(GitText.NoRevertReference, await Invoke(revert, ("ref", "  ")));
         string done = await Invoke(revert, ("ref", second[..7]));
-        Assert.Matches("^Reverted " + second[..7] + " with [0-9a-f]{7} on main: Revert \"second\" \\(1 file\\)$", done);
+        Assert.Matches("^Reverted " + second[..7] + " with [0-9a-f]{7} on main: ⟪Revert \"second\"⟫ \\(1 file\\)\n" + System.Text.RegularExpressions.Regex.Escape(NeonSidekick.Llm.Tools.UntrustedText.QuoteNote) + "$", done);
         Assert.Equal("one\n", File.ReadAllText(Path.Combine(_root, "a.txt")));
         Assert.Equal(GitText.NothingToRevert(second[..7]), await Invoke(revert, ("ref", second[..7]), ("message", "again")));
     }
@@ -604,6 +604,6 @@ public sealed class GitToolsTests : IDisposable
         Assert.Equal(GitText.TagNeedsName, await Invoke(tag, ("message", "notes")));
         Assert.Equal($"Tagged {first[..7]} as v1 (annotated)", await Invoke(tag, ("name", "v1"), ("message", "One")));
         Assert.Equal("Error: 'v1' exists already", await Invoke(tag, ("name", "v1")));
-        Assert.Equal($"1 tag, newest first:\n  v1 {first[..7]} {GitText.AnnotatedSubject("One")}", await Invoke(tag, ("name", "")));
+        Assert.Equal($"1 tag, newest first:\n  v1 {first[..7]} {GitText.Outside(GitText.AnnotatedSubject("One"))}" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, await Invoke(tag, ("name", "")));
     }
 }

@@ -1149,9 +1149,10 @@ public sealed class TranscriptRenderer : INoticeSink
     /// blank line separates it from what follows. Safe to call when no reply is open, and the
     /// caller's <c>finally</c> should always call it: a reply left open swallows every later line.
     /// <paramref name="footer"/> (2026-11-01, the reply footer) is a dim line under the reply's last, ahead of the blank line: the screen
-    /// only, never the page's feed; nothing with no reply open.
+    /// only, never the page's feed; nothing with no reply open. <paramref name="sources"/> (2026-11-15, the web-tools plan's §2) draw the
+    /// 📚 line above it (<see cref="SourcesLine"/>), on the screen and as the feed's own entry; its own gate, so the two never gate each other.
     /// </summary>
-    public void EndAssistant(string? footer = null)
+    public void EndAssistant(string? footer = null, IReadOnlyList<Llm.Tools.WebSource>? sources = null)
     {
         Feed?.End();
         EndThinking();
@@ -1161,6 +1162,11 @@ public sealed class TranscriptRenderer : INoticeSink
         if (!_assistantOpen)
         {
             return;
+        }
+
+        if (Web.WebText.HasSourcesLine(sources))
+        {
+            Feed?.AddSources(App.SessionExport.SourcesLineMarkdown(sources!));
         }
 
         _heldWhitespace.Clear();
@@ -1186,6 +1192,7 @@ public sealed class TranscriptRenderer : INoticeSink
                     CommitSlot();
                 }
 
+                WriteSources(sources);
                 WriteFooter(footer);
                 _console.WriteLine();
             }
@@ -1205,6 +1212,7 @@ public sealed class TranscriptRenderer : INoticeSink
                 _console.WriteLine();
             }
 
+            WriteSources(sources);
             WriteFooter(footer);
             _console.WriteLine();
         }
@@ -1212,6 +1220,68 @@ public sealed class TranscriptRenderer : INoticeSink
         _state = LineState.AtLineStart;
         _assistantOpen = false;
         _pane?.ForgoMessageStart();   // a reply that committed nothing leaves no mark for the next notice
+    }
+
+    /// <summary>The 📚 line at a line's start (2026-11-15); nothing for a turn that read no page and saved no file.</summary>
+    private void WriteSources(IReadOnlyList<Llm.Tools.WebSource>? sources)
+    {
+        if (Web.WebText.HasSourcesLine(sources))
+        {
+            _console.Write(SourcesLine(sources!));
+            _console.WriteLine();
+        }
+    }
+
+    /// <summary>
+    /// The 📚 line under a reply (2026-11-15, the web-tools plan's §2, feature idea #27): <c>📚 Title (host) · 📥 file (host) · +3 more ·
+    /// 2 searches</c>. Each title is the page's own words, so it is shown through <see cref="Llm.Tools.UntrustedText.Name"/> (one line, bidi
+    /// and zero-width escaped) and appended as plain text, never markup, its host after it in the dim color, and it carries its URL as the
+    /// reply's links do (<see cref="LinkText.WebTarget"/>: the hover hint, the link chord, OSC 8); one the vetting refuses stays plain text.
+    /// The first <see cref="Web.WebText.SourcesShown"/>, then a count, so a resize's reflow keeps it whole: it wraps like any line. Pure.
+    /// </summary>
+    public static Paragraph SourcesLine(IReadOnlyList<Llm.Tools.WebSource> sources)
+    {
+        ArgumentNullException.ThrowIfNull(sources);
+        var dim = Theme.DimText;
+        var line = new Paragraph();
+        line.Append(Web.WebText.SourcesGlyph + " ", dim);
+        var listed = sources.Where(s => s.Kind != Llm.Tools.WebSourceKind.Search).ToList();
+        int searches = sources.Count - listed.Count;
+        bool first = true;
+        void Separator()
+        {
+            if (!first)
+            {
+                line.Append(Web.WebText.SourcesSeparator, dim);
+            }
+
+            first = false;
+        }
+
+        foreach (var source in listed.Take(Web.WebText.SourcesShown))
+        {
+            Separator();
+            var (label, host) = Web.WebText.SourceLabel(source);
+            line.Append(Llm.Tools.UntrustedText.Name(label), Theme.Assistant, MarkdownView.LinkOf(LinkText.WebTarget(source.Url)));
+            if (host is not null)
+            {
+                line.Append(" (" + Llm.Tools.UntrustedText.Name(host) + ")", dim);
+            }
+        }
+
+        if (listed.Count > Web.WebText.SourcesShown)
+        {
+            Separator();
+            line.Append(Web.WebText.SourcesMore(listed.Count - Web.WebText.SourcesShown), dim);
+        }
+
+        if (searches > 0)
+        {
+            Separator();
+            line.Append(Web.WebText.SourcesSearches(searches), dim);
+        }
+
+        return line;
     }
 
     /// <summary>The reply footer's dim line at a line's start (2026-11-01); nothing for null or empty.</summary>

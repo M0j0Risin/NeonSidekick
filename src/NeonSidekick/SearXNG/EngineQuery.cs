@@ -15,6 +15,22 @@ public enum SafeSearch
     Strict = 2,
 }
 
+/// <summary>How recent the results must be, as SearXNG's <c>time_range</c> (<c>day</c>, <c>week</c>, <c>month</c>, <c>year</c>).</summary>
+public enum TimeRange
+{
+    /// <summary>The past day.</summary>
+    Day,
+
+    /// <summary>The past week.</summary>
+    Week,
+
+    /// <summary>The past month.</summary>
+    Month,
+
+    /// <summary>The past year.</summary>
+    Year,
+}
+
 /// <summary>One search.</summary>
 /// <param name="Query">The search terms.</param>
 /// <param name="PageNumber">The page wanted, from 1. Engines without paging sit out any later page.</param>
@@ -22,13 +38,15 @@ public enum SafeSearch
 /// <param name="Locale"><c>all</c>, a language such as <c>de</c>, or a region such as <c>de-DE</c>.</param>
 /// <param name="TimeoutLimit">Caps this search's timeout, as SearXNG's <c>timeout_limit</c> does; null for none.</param>
 /// <param name="Engines">The names of the engines to ask, as a SearXNG query's <c>engines</c> does; null for all of them.</param>
+/// <param name="TimeRange">How recent the results must be; null for any time. Engines without <see cref="IEngine.TimeRangeSupport"/> sit it out.</param>
 public sealed record EngineQuery(
     string Query,
     int PageNumber = 1,
     SafeSearch SafeSearch = SafeSearch.Off,
     string Locale = EngineQuery.AllLocales,
     TimeSpan? TimeoutLimit = null,
-    IReadOnlySet<string>? Engines = null)
+    IReadOnlySet<string>? Engines = null,
+    TimeRange? TimeRange = null)
 {
     /// <summary>The locale meaning no preference.</summary>
     public const string AllLocales = "all";

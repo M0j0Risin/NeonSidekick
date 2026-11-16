@@ -51,7 +51,11 @@ public sealed class YouTubePlaylistTool : AIFunction
 
     public override JsonElement JsonSchema => Schema;
 
-    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    // The answer with the quote note last when YouTube's words were fenced in it (2026-11-15, the web-tools plan's §3).
+    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) =>
+        await AnswerAsync(arguments, cancellationToken).ConfigureAwait(false) is var result && result is string answer ? UntrustedText.WithNote(answer) : result;
+
+    private async ValueTask<object?> AnswerAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
         if (!ToolArguments.TryReadInt32(arguments, MaxArgument, out int? max, out string raw))
@@ -81,6 +85,6 @@ public sealed class YouTubePlaylistTool : AIFunction
         }
 
         var outcome = await _search.PlaylistAsync(list, max ?? YouTubeDataApi.DefaultPlaylistEntries, YouTubeDataApi.Key(_effective()) ?? "", cancellationToken).ConfigureAwait(false);
-        return outcome.Ok ? YouTubeText.PlaylistEntries(outcome.Playlist!, outcome.Entries) : YouTubeText.Failure(outcome.Failure, outcome.Detail);
+        return outcome.Ok ? YouTubeText.PlaylistEntries(outcome.Playlist!, outcome.Entries, fenced: true) : YouTubeText.Failure(outcome.Failure, outcome.Detail);
     }
 }

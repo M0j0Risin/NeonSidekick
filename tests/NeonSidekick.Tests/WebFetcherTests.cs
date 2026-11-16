@@ -373,9 +373,9 @@ public class WebFetcherTests
         string first = await tool.FetchAsync("https://example.com/big.pdf", null, CancellationToken.None);
         string second = await tool.FetchAsync("https://example.com/big.pdf", 32_000, CancellationToken.None);
 
-        Assert.StartsWith("big.pdf — https://example.com/big.pdf (chars 1–32,000 of ", first, StringComparison.Ordinal);
+        Assert.StartsWith("⟪big.pdf⟫ — https://example.com/big.pdf (chars 1–32,000 of ", first, StringComparison.Ordinal);
         Assert.Contains(WebText.PdfEngine, first.Split('\n')[0], StringComparison.Ordinal);
-        Assert.StartsWith("big.pdf — https://example.com/big.pdf (chars 32,001–", second, StringComparison.Ordinal);
+        Assert.StartsWith("⟪big.pdf⟫ — https://example.com/big.pdf (chars 32,001–", second, StringComparison.Ordinal);
         Assert.Single(_browser.PdfReads);
     }
 

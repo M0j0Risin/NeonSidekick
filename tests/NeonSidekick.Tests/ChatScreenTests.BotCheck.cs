@@ -70,7 +70,7 @@ public partial class ChatScreenTests
         Assert.Equal(new Uri("https://example.com/"), asked.Url);
         Assert.Equal(BotCheckUse.Fetch, asked.Use);
         string result = Assert.Single(WebResults())!;
-        Assert.StartsWith("Example Domain — https://example.com/ (chars 1–", result);
+        Assert.StartsWith("⟪Example Domain⟫ — https://example.com/ (chars 1–", result);   // the model's form, fenced (2026-11-15)
         Assert.Contains(", browser window)", result);
     }
 

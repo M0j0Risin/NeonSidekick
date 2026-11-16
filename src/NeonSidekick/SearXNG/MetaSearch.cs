@@ -28,7 +28,11 @@ public sealed record MetaSearchResponse(
     IReadOnlyList<MergedResult> Results,
     IReadOnlyList<EngineFailure> Failures,
     IReadOnlyList<EngineTiming> Timings,
-    bool HasMorePages);
+    bool HasMorePages)
+{
+    /// <summary>The engines that sat out a time-ranged search for want of <see cref="IEngine.TimeRangeSupport"/>. Not in SearXNG, which skips them silently.</summary>
+    public IReadOnlyList<string> Skipped { get; init; } = [];
+}
 
 /// <summary>
 /// Asks several engines at once and merges what they find: SearXNG's <c>searx/search/__init__.py</c> and its online processor.
@@ -79,7 +83,8 @@ public sealed class MetaSearch
         var started = _time.GetUtcNow();
         var failures = new List<EngineFailure>();
         var asked = new List<IEngine>();
-        Select(query, asked, failures);
+        var skipped = new List<string>();
+        Select(query, asked, failures, skipped);
 
         var container = new ResultContainer(_engines);
         var timings = new List<EngineTiming>();
@@ -105,7 +110,7 @@ public sealed class MetaSearch
             }
         }
 
-        return new MetaSearchResponse(container.GetOrderedResults(), failures, timings, asked.Any(engine => engine.Paging));
+        return new MetaSearchResponse(container.GetOrderedResults(), failures, timings, asked.Any(engine => engine.Paging)) { Skipped = skipped };
     }
 
     /// <summary>Whether a search would ask any engine, as one with every engine resting or left out asks none.</summary>
@@ -114,11 +119,11 @@ public sealed class MetaSearch
     {
         ArgumentNullException.ThrowIfNull(query);
         var asked = new List<IEngine>();
-        Select(query, asked, []);
+        Select(query, asked, [], []);
         return asked.Count > 0;
     }
 
-    private void Select(EngineQuery query, List<IEngine> asked, List<EngineFailure> failures)
+    private void Select(EngineQuery query, List<IEngine> asked, List<EngineFailure> failures, List<string> skipped)
     {
         foreach (var engine in _order)
         {
@@ -131,6 +136,13 @@ public sealed class MetaSearch
             // get_params: an engine without paging sits out later pages.
             if (query.PageNumber > 1 && !engine.Paging)
             {
+                continue;
+            }
+
+            // get_params: an engine without time_range_support sits out a time-ranged search, before the resting check as paging is.
+            if (query.TimeRange is not null && !engine.TimeRangeSupport)
+            {
+                skipped.Add(engine.Name);
                 continue;
             }
 

@@ -81,16 +81,16 @@ public sealed class WebLinksToolsTests : IDisposable
         var zone = _time.LocalTimeZone;
 
         Assert.Equal(
-            BrowserLinkText.ToolCaption(3, 3, "") + "\n" +
-            BrowserLinkText.ToolRow(1, list[0], zone) + "\n" + BrowserLinkText.ToolRow(2, list[1], zone) + "\n" + BrowserLinkText.ToolRow(3, list[2], zone),
+            UntrustedText.WithNote(BrowserLinkText.ToolCaption(3, 3, "") + "\n" +
+            BrowserLinkText.ToolRow(1, list[0], zone) + "\n" + BrowserLinkText.ToolRow(2, list[1], zone) + "\n" + BrowserLinkText.ToolRow(3, list[2], zone)),
             await Call(new WebLinksTool(Headless())));
 
         // Words in any order, each in the name or the address; the numbers stay the whole list's.
         Assert.Equal(
-            BrowserLinkText.ToolCaption(3, 1, "tutorial python") + "\n" + BrowserLinkText.ToolRow(1, list[0], zone),
+            UntrustedText.WithNote(BrowserLinkText.ToolCaption(3, 1, "tutorial python") + "\n" + BrowserLinkText.ToolRow(1, list[0], zone)),
             await Call(new WebLinksTool(Headless()), ("filter", "tutorial python")));
         Assert.Equal(
-            BrowserLinkText.ToolCaption(3, 1, "example.org") + "\n" + BrowserLinkText.ToolRow(3, list[2], zone),
+            UntrustedText.WithNote(BrowserLinkText.ToolCaption(3, 1, "example.org") + "\n" + BrowserLinkText.ToolRow(3, list[2], zone)),
             await Call(new WebLinksTool(Headless()), ("filter", "example.org")));
         Assert.Equal(BrowserLinkText.NoneMatch("python news", 3), await Call(new WebLinksTool(Headless()), ("filter", "python news")));
     }
@@ -157,7 +157,7 @@ public sealed class WebLinksToolsTests : IDisposable
     {
         _window.Current = ("https://example.com/docs", "The Docs");
 
-        Assert.Equal(BrowserLinkText.Saved(new BrowserLink("https://example.com/docs", "The Docs", _time.GetUtcNow())), await Save(("action", "add"), ("url", "current")));
+        Assert.Equal(BrowserLinkText.SavedForModel(new BrowserLink("https://example.com/docs", "The Docs", _time.GetUtcNow()), nameFromPage: true), await Save(("action", "add"), ("url", "current")));
         Assert.Equal(BrowserLinkText.Renamed(Links().List()[0], "Docs"), await Save(("action", "rename"), ("url", "current"), ("name", "Docs")));
         Assert.Equal("Docs", Links().List()[0].Name);
         Assert.Equal(BrowserLinkText.Removed(Links().List()[0]), await Save(("action", "remove"), ("url", "CURRENT")));

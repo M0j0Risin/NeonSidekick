@@ -83,6 +83,7 @@ public sealed class WebSaveLinkTool : AIFunction
     {
         string address;
         string? named = BrowserLinks.CleanName(name);
+        bool fromPage = false;
         if (url.Equals(Current, StringComparison.OrdinalIgnoreCase))
         {
             if (await CurrentPageAsync().ConfigureAwait(false) is not { } page)
@@ -91,7 +92,11 @@ public sealed class WebSaveLinkTool : AIFunction
             }
 
             address = page.Url;
-            named ??= BrowserLinks.UsableTitle(page.Title, page.Url);
+            if (named is null)
+            {
+                named = BrowserLinks.UsableTitle(page.Title, page.Url);
+                fromPage = named is not null;
+            }
         }
         else if (WebFetcher.ParseUrl(url) is { } parsed)
         {
@@ -109,7 +114,7 @@ public sealed class WebSaveLinkTool : AIFunction
         }
 
         _hooks.Changed?.Invoke();
-        return outcome == BrowserLinkOutcome.AlreadySaved ? BrowserLinkText.AlreadySavedForModel(saved!) : BrowserLinkText.Saved(saved!);
+        return outcome == BrowserLinkOutcome.AlreadySaved ? BrowserLinkText.AlreadySavedForModel(saved!) : BrowserLinkText.SavedForModel(saved!, fromPage);
     }
 
     private async Task<string> ChangeAsync(string action, string url, string name)

@@ -42,6 +42,68 @@ public static class MarkOfTheWeb
     public const string Agent = "NeonSidekick";
 
     /// <summary>
+    /// Whether <paramref name="path"/> came from the internet by its mark (2026-11-15, the web-tools plan's §3: <c>read_pdf</c> and
+    /// <c>read_office</c> fence a downloaded document's text): <see cref="IsInternetZone"/> on Windows, <see cref="IsInternetQuarantine"/> on a
+    /// Mac. No mark, or one that won't read (a volume with no streams), is the user's own file. Read on every call.
+    /// </summary>
+    public static bool IsFromInternet(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        if (Read(path) is not { } mark)
+        {
+            return false;
+        }
+
+        string text = System.Text.Encoding.UTF8.GetString(mark);
+        return OperatingSystem.IsWindows() ? IsInternetZone(text) : IsInternetQuarantine(text);
+    }
+
+    /// <summary>
+    /// A <c>Zone.Identifier</c>'s verdict (2026-11-15): its <c>[ZoneTransfer]</c> section's <c>ZoneId</c> is 3 (Internet) or 4 (Restricted). A
+    /// mark with no readable zone counts as from the internet, since someone wrote it; zones 0–2 (this computer, the intranet, trusted) don't. Pure.
+    /// </summary>
+    public static bool IsInternetZone(string mark)
+    {
+        ArgumentNullException.ThrowIfNull(mark);
+        bool inSection = false;
+        foreach (string raw in mark.Split('\n'))
+        {
+            string line = raw.Trim().TrimStart('﻿');
+            if (line.StartsWith('['))
+            {
+                inSection = line.Equals("[ZoneTransfer]", StringComparison.OrdinalIgnoreCase);
+                continue;
+            }
+
+            if (inSection && line.StartsWith("ZoneId", StringComparison.OrdinalIgnoreCase) && line.IndexOf('=') is var equals and > 0
+                && line[..equals].Trim().Equals("ZoneId", StringComparison.OrdinalIgnoreCase))
+            {
+                return !int.TryParse(line[(equals + 1)..].Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out int zone)
+                    || zone >= 3;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// A <c>com.apple.quarantine</c> value's verdict (2026-11-15): <c>flags;time;agent;event</c>, from the internet when its fourth field is an
+    /// event UUID (what a browser or Mail records with the origin) or its agent is <see cref="Agent"/> (the app's own downloads). Sandboxed
+    /// apps (Preview, TextEdit) write a short value with neither onto documents they only open or save, so those stay the user's own. Pure.
+    /// </summary>
+    public static bool IsInternetQuarantine(string value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        string[] fields = value.Trim('\0', ' ', '\n', '\r').Split(';');
+        if (fields.Length >= 3 && fields[2].Equals(Agent, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        return fields.Length >= 4 && Guid.TryParse(fields[3].Trim(), out _);
+    }
+
+    /// <summary>
     /// The mark for a file the app downloaded from <paramref name="url"/> at <paramref name="now"/> (2026-10-23, the Mac pass, the user's
     /// call: <c>download_file</c> wrote none, so what the model fetched and unzipped opened as the user's own): Windows' <c>Zone.Identifier</c>
     /// for the Internet zone with the address (any user name and password taken out), as Edge writes it; a Mac's quarantine as a browser

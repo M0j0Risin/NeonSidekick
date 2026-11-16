@@ -168,6 +168,9 @@ body[data-user-line="slab"] .entry.user { color: var(--text); background: var(--
 .entry.tool, .entry.result, .entry.picture { color: var(--dim); font-size: 14px; white-space: pre-wrap; }
 .entry.result { padding-left: 18px; }
 .entry.result.failed { color: var(--warn); }
+/* The sources under a reply (2026-11-15): dim, its links the page's own color. */
+.entry.sources { color: var(--dim); font-size: 0.9em; margin-top: -4px; }
+.entry.sources .body p { margin: 0; }
 .entry.notice { color: var(--dim); font-style: italic; white-space: pre-wrap; }
 /* A notice's tone (2026-10-21, TranscriptFeed.ToneWord; dim is the notice's own look): progress is a review's pass, done and stop lines, the
    theme's accentTertiary style as the terminal draws them (bold, not italic). */

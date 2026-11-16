@@ -13,17 +13,32 @@ public sealed record SearchOutcome(IReadOnlyList<SearchResult> Results, string E
 {
     public bool Ok => Error.Length == 0;
 
+    /// <summary>The engines that answered a ranged metasearch, for its header (2026-11-15, the web-tools plan's §4, feature idea #25); empty otherwise.</summary>
+    public string Scope { get; init; } = "";
+
     public static SearchOutcome Failed(string error) => new([], error);
 }
 
 /// <summary>The search seam: the built-in metasearch or a SearXNG instance; a fake in tests.</summary>
+/// <summary><c>web_search</c>'s <c>since</c> (2026-11-15, the web-tools plan's §4, feature idea #25): results from the past day, week, month or year.</summary>
+public enum SearchSince
+{
+    Day,
+    Week,
+    Month,
+    Year,
+}
+
 public interface ISearchEngine
 {
     /// <summary>The name on the result header (<see cref="WebText.MetaSearchName"/> / <see cref="WebText.SearxngName"/>).</summary>
     string Name { get; }
 
-    /// <summary>At most <paramref name="max"/> hits for <paramref name="query"/>; <paramref name="options"/> is how the engine's own page is fetched.</summary>
-    Task<SearchOutcome> SearchAsync(string query, int max, FetchOptions options, CancellationToken cancellationToken);
+    /// <summary>
+    /// At most <paramref name="max"/> hits for <paramref name="query"/>; <paramref name="options"/> is how the engine's own page is fetched;
+    /// <paramref name="since"/> keeps only recent ones, null for any time.
+    /// </summary>
+    Task<SearchOutcome> SearchAsync(string query, int max, FetchOptions options, CancellationToken cancellationToken, SearchSince? since = null);
 }
 
 /// <summary>
@@ -50,12 +65,25 @@ public sealed class SearxngSearch : ISearchEngine
     public string Name => WebText.SearxngName;
 
     /// <summary>The instance's search URL for <paramref name="query"/>: the base with <c>/search</c> and the JSON format. Pinned.</summary>
-    public static Uri QueryUrl(Uri baseUrl, string query)
+    public static Uri QueryUrl(Uri baseUrl, string query, SearchSince? since = null)
     {
         ArgumentNullException.ThrowIfNull(baseUrl);
         ArgumentNullException.ThrowIfNull(query);
-        return new Uri(Root(baseUrl) + "/search?q=" + Uri.EscapeDataString(query.Trim()) + "&format=json&language=en");
+        string range = since is { } recent ? "&time_range=" + TimeRangeWord(recent) : "";
+        return new Uri(Root(baseUrl) + "/search?q=" + Uri.EscapeDataString(query.Trim()) + "&format=json&language=en" + range);
     }
+
+    /// <summary>
+    /// SearXNG's <c>time_range</c> word (2026-11-15, the web-tools plan's §4, feature idea #25): its <c>parse_time_range</c> takes these four, lowercase, and fails the search on any
+    /// other spelling, so this is a fixed map, never the enum's name. Pinned.
+    /// </summary>
+    public static string TimeRangeWord(SearchSince since) => since switch
+    {
+        SearchSince.Day => "day",
+        SearchSince.Week => "week",
+        SearchSince.Month => "month",
+        _ => "year",
+    };
 
     /// <summary>
     /// The instance's own results page for <paramref name="query"/>, the one a person reads: <see cref="QueryUrl"/> without the JSON
@@ -115,10 +143,10 @@ public sealed class SearxngSearch : ISearchEngine
     private static string Read(JsonElement item, string name) =>
         item.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() ?? "" : "";
 
-    public async Task<SearchOutcome> SearchAsync(string query, int max, FetchOptions options, CancellationToken cancellationToken)
+    public async Task<SearchOutcome> SearchAsync(string query, int max, FetchOptions options, CancellationToken cancellationToken, SearchSince? since = null)
     {
         ArgumentNullException.ThrowIfNull(query);
-        var url = QueryUrl(_baseUrl, query);
+        var url = QueryUrl(_baseUrl, query, since);
         string shown = _baseUrl.GetLeftPart(UriPartial.Authority);
         try
         {

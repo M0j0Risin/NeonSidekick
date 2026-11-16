@@ -387,7 +387,7 @@ public class ToolArgumentCheckTests
         Assert.Empty(server.Calls);
 
         var (text, _) = await Assistant.InvokeToolAsync([tool], new FunctionCallContent("c2", "pipe__echo", Args(("text", "ping"))), CancellationToken.None);
-        Assert.Equal("echo: ping", text);
+        Assert.Equal("⟪echo: ping⟫" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, text);
     }
 
     /// <summary>An open server schema (no additionalProperties) passes an undeclared key through to the server (#2).</summary>

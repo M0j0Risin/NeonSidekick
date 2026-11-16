@@ -8,7 +8,28 @@ namespace NeonSidekick.Web;
 /// start of the Markdown line it fell on, so <c>web_fetch</c> can start at a URL's fragment; null when the page has none, and always for
 /// a PDF or a text answer.
 /// </summary>
-public sealed record PageText(string Title, string Markdown, IReadOnlyDictionary<string, int>? Anchors = null);
+public sealed record PageText(string Title, string Markdown, IReadOnlyDictionary<string, int>? Anchors = null)
+{
+    /// <summary>
+    /// The page's headings in order (2026-11-15, the web-tools plan's §1, <c>web_fetch</c>'s <c>outline</c>), recorded where the text is
+    /// written, never parsed back out of it: an HTML page's <c>h1</c>–<c>h6</c> (a paragraph starting "# " is no heading), a PDF's outline
+    /// titles or its page markers. Null for a text answer.
+    /// </summary>
+    public IReadOnlyList<PageHeading>? Headings { get; init; }
+
+    /// <summary>
+    /// The note a PDF read in part ends with (<see cref="WebText.PdfMore"/>), kept apart too so <c>find</c> and <c>outline</c>, which never
+    /// show the text's end, can end with it; null otherwise.
+    /// </summary>
+    public string? More { get; init; }
+}
+
+/// <summary>
+/// One heading of a page (2026-11-15): its level (1 for an <c>h1</c> or a PDF outline's top), its text without the Markdown marker, and
+/// where its line starts in the page's text. A PDF outline item pointing past the pages read has no <paramref name="Offset"/>, only its
+/// <paramref name="Page"/>.
+/// </summary>
+public sealed record PageHeading(int Level, string Text, int? Offset, int? Page = null);
 
 /// <summary>
 /// HTML to light Markdown over <see cref="HtmlTokenizer"/>: headings as <c>#</c>, links as
@@ -160,9 +181,60 @@ public static class HtmlToMarkdown
                 Pop();
             }
 
-            string markdown = Tidy(_out.ToString(), _anchors, out var anchors);
-            return new PageText(Collapse(_title.ToString()), markdown, anchors);
+            var offsets = new List<(string Id, int Offset)>(_anchors.Count + _headings.Count);
+            offsets.AddRange(_anchors);
+            offsets.AddRange(_headings.Select(h => ("", h.Offset)));
+            string markdown = Tidy(_out.ToString(), offsets, out var mapped);
+            IReadOnlyDictionary<string, int>? anchors = null;
+            if (_anchors.Count > 0 && mapped is not null)
+            {
+                var map = new Dictionary<string, int>(_anchors.Count, StringComparer.Ordinal);
+                for (int i = 0; i < _anchors.Count; i++)
+                {
+                    map[_anchors[i].Id] = mapped[i];
+                }
+
+                anchors = map;
+            }
+
+            return new PageText(Collapse(_title.ToString()), markdown, anchors) { Headings = mapped is null ? [] : Headings(markdown, mapped) };
         }
+
+        // Each heading's text read from its line in the result, the marker off; one whose line no longer starts with its marker (a
+        // link card wrote it over as one line) is no heading.
+        private List<PageHeading> Headings(string markdown, int[] mapped)
+        {
+            var headings = new List<PageHeading>(_headings.Count);
+            int last = -1;
+            for (int i = 0; i < _headings.Count; i++)
+            {
+                var (level, _) = _headings[i];
+                int at = mapped[_anchors.Count + i];
+                if (at <= last || at >= markdown.Length)
+                {
+                    continue;
+                }
+
+                int end = markdown.IndexOf('\n', at);
+                string line = markdown[at..(end < 0 ? markdown.Length : end)];
+                string marker = new string('#', level) + " ";
+                if (!line.StartsWith(marker, StringComparison.Ordinal) || line.Length == marker.Length)
+                {
+                    continue;
+                }
+
+                headings.Add(new PageHeading(level, line[marker.Length..].Trim(), at));
+                last = at;
+            }
+
+            return headings;
+        }
+
+        /// <summary>The most headings a page keeps (2026-11-15); past it a page's later headings are not recorded.</summary>
+        public const int MaxHeadings = 10_000;
+
+        // Each h1–h6's level and the start of its marker in the output as written (2026-11-15); Truncate drops any it cuts away.
+        private readonly List<(int Level, int Offset)> _headings = new();
 
         /// <summary>The most anchors a page keeps (2026-10-17); past it a page's later ids are not recorded.</summary>
         public const int MaxAnchors = 10_000;
@@ -427,6 +499,10 @@ public static class HtmlToMarkdown
                     if (Collapse(Since(frame.Start)).Length == 0)
                     {
                         Truncate(frame.Start - frame.Marker.Length);
+                    }
+                    else if (_headings.Count < MaxHeadings && _skip == 0)
+                    {
+                        _headings.Add((frame.Marker.Length - 1, frame.Start - frame.Marker.Length));
                     }
 
                     BlockBreak();
@@ -700,6 +776,12 @@ public static class HtmlToMarkdown
                 {
                     _anchors[i] = (_anchors[i].Id, _out.Length);
                 }
+
+                // A heading in what was cut is gone: whatever is written over it (a link card's one line) has no marker.
+                while (_headings.Count > 0 && _headings[^1].Offset >= _out.Length)
+                {
+                    _headings.RemoveAt(_headings.Count - 1);
+                }
             }
         }
 
@@ -803,7 +885,7 @@ public static class HtmlToMarkdown
         /// <paramref name="anchors"/> comes out as the start of its line in the result (2026-10-17): a line dropped as blank sends it to
         /// the next line kept, and with none after, to the last; null when there are none.
         /// </summary>
-        private static string Tidy(string text, List<(string Id, int Offset)> anchors, out IReadOnlyDictionary<string, int>? mapped)
+        private static string Tidy(string text, List<(string Id, int Offset)> anchors, out int[]? mapped)
         {
             var lines = text.Split('\n');
             var sb = new StringBuilder(text.Length);
@@ -840,7 +922,8 @@ public static class HtmlToMarkdown
             return sb.ToString();
         }
 
-        private static Dictionary<string, int> MapAnchors(string[] lines, int[] starts, List<(string Id, int Offset)> anchors)
+        // Each offset (an anchor's, then each heading's, in the order given) mapped into the result.
+        private static int[] MapAnchors(string[] lines, int[] starts, List<(string Id, int Offset)> anchors)
         {
             // The kept line at or after each line, else the last kept one (0 for an empty result).
             var target = new int[lines.Length];
@@ -862,9 +945,10 @@ public static class HtmlToMarkdown
                 lineStarts[i] = lineStarts[i - 1] + lines[i - 1].Length + 1;
             }
 
-            var map = new Dictionary<string, int>(anchors.Count, StringComparer.Ordinal);
-            foreach (var (id, offset) in anchors)
+            var map = new int[anchors.Count];
+            for (int k = 0; k < anchors.Count; k++)
             {
+                int offset = anchors[k].Offset;
                 int line = Array.BinarySearch(lineStarts, offset);
                 line = line >= 0 ? line : ~line - 1;
                 line = Math.Clamp(line, 0, lines.Length - 1);
@@ -876,7 +960,7 @@ public static class HtmlToMarkdown
                     line++;
                 }
 
-                map[id] = target[line] >= 0 ? target[line] : last;
+                map[k] = target[line] >= 0 ? target[line] : last;
             }
 
             return map;

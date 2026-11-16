@@ -41,6 +41,7 @@ From top to bottom:
 * **Message jumps:** Ctrl+↑/↓ goes to the previous or next message (Option+↑/↓ on a Mac, [MAC.md](MAC.md#keys--mouse)).
 * **Scrolled up**, a row under the transcript counts the rows written since you left the bottom and names the top message; a double-click goes back down.
 * **Links and paths:** Ctrl+click opens a link in your browser, or a path in `/browse`; hovering shows where it goes. A Mac's chord differs ([MAC.md](MAC.md#keys--mouse)).
+* **Sources:** under a reply that read the web, 📚 lists the pages it read and 📥 the files it saved, each title followed by its site, and counts its searches. Each title is a link, opened as above.
 * **The picture strip**, while there are ComfyUI pictures: 🎞️ opens the [picture viewer](#the-picture-viewer), × closes the strip.
 * **The upper rule:** the session's name (a double-click renames it), **⤡** (a click folds or unfolds everything, like Ctrl+O), and 🎞️ to bring a closed picture strip back.
 * **[The input line](#the-input-line).** A dim ☺ at its right end opens the emoji picker (*Emoji picker*).
@@ -650,7 +651,7 @@ The page is plain HTTP. Tailscale Serve puts HTTPS in front of it with a real ce
 
 #### What the page shows
 
-* **The transcript** as the terminal shows it: your lines, the replies (Markdown), pictures, tool lines, notices, thinking (*LLM show thinking*), diffs and folded tool runs; not the panes you open at the PC.
+* **The transcript** as the terminal shows it: your lines, the replies (Markdown), each reply's 📚 sources, pictures, tool lines, notices, thinking (*LLM show thinking*), diffs and folded tool runs; not the panes you open at the PC.
 * **Folds** follow *Diff max lines*, *Diff collapse count* and *Tool collapse count*; a tap opens one. ↕ opens or closes every fold, as Ctrl+O does; ⤒ and ⤓ go to the top and bottom.
 * It starts afresh when the screen does (`/clear`, a rewind, a resume, a theme change, a profile switch).
 * **The status row** over the message box shows the PC's spinner and clock while it works, and the usage at the right (`~` while estimated under *LLM mid-turn usage*). A tap on the usage opens the `/usage` figures in a card (typed `/usage` stays refused).

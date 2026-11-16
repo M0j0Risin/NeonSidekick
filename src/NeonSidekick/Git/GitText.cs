@@ -374,7 +374,7 @@ public static class GitText
             sb.Append('\n').Append(CommitRow(commit, zone));
         }
 
-        return sb.ToString();
+        return Llm.Tools.UntrustedText.WithNote(sb.ToString());
     }
 
     /// <summary>The filters as the header names them (2026-11-15): <c> by bob matching "parser" since … until …</c>; empty for none.</summary>
@@ -419,9 +419,29 @@ public static class GitText
     /// <summary>A window that ends before it starts (2026-11-15). Pinned.</summary>
     public const string SinceAfterUntil = "Error: since is later than until; nothing could match.";
 
-    /// <summary><c>abc1234 2026-09-20 14:05 Chris: subject</c>.</summary>
+    /// <summary>
+    /// <c>abc1234 2026-09-20 14:05 ⟪Chris⟫: ⟪subject⟫</c>: the author and the subject are whoever made the commit's words, fenced in place
+    /// (2026-11-15, the web-tools plan's §3).
+    /// </summary>
     public static string CommitRow(GitCommitInfo commit, TimeZoneInfo zone) =>
-        $"{commit.Short} {When(commit.When, zone)} {commit.Author}: {commit.Subject}";
+        $"{commit.Short} {When(commit.When, zone)} {Outside(commit.Author)}: {Outside(commit.Subject)}";
+
+    /// <summary>
+    /// A commit's words (an author, a subject, a message) as an answer shows them (2026-11-15, the web-tools plan's §3): fenced, since a
+    /// clone carries whoever wrote them; blank stays blank. An annotated tag's <see cref="AnnotatedSubject"/> keeps its mark outside.
+    /// </summary>
+    public static string Outside(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return text ?? "";
+        }
+
+        const string Annotated = "(annotated) ";
+        return text.StartsWith(Annotated, StringComparison.Ordinal)
+            ? Annotated + (text.Length > Annotated.Length ? Llm.Tools.UntrustedText.Fenced(text[Annotated.Length..]) : "")
+            : Llm.Tools.UntrustedText.Fenced(text);
+    }
 
     // ---- show ----
 
@@ -434,15 +454,16 @@ public static class GitText
         var sb = new StringBuilder();
         if (report.Path is null)
         {
-            sb.Append("Commit ").Append(commit.Short).Append(" by ").Append(commit.Author).Append(" at ").Append(When(commit.When, zone)).Append(": ").Append(commit.Subject);
+            // The author, subject and message fenced (2026-11-15, the web-tools plan's §3); the files changed are the app's list.
+            sb.Append("Commit ").Append(commit.Short).Append(" by ").Append(Outside(commit.Author)).Append(" at ").Append(When(commit.When, zone)).Append(": ").Append(Outside(commit.Subject));
             string body = commit.Message.Trim();
             if (body.Length > commit.Subject.Length)
             {
-                sb.Append('\n').Append(body);
+                sb.Append('\n').Append(Outside(body));
             }
 
             sb.Append('\n').Append(FilesChanged(report.Changes, report.ChangesTruncated));
-            return sb.ToString();
+            return Llm.Tools.UntrustedText.WithNote(sb.ToString());
         }
 
         if (report.Text is null)
@@ -560,10 +581,13 @@ public static class GitText
         sb.Append("Blame of ").Append(report.Path).Append(" lines ").Append(N(report.From)).Append('–').Append(N(report.To)).Append(" of ").Append(N(report.TotalLines))
           .Append(" at ").Append(report.Reference).Append(" (").Append(Count(report.Commits, "commit")).Append("):");
         int width = N(report.To).Length;
-        int author = report.Lines.Count == 0 ? 0 : report.Lines.Max(l => l.Author.Length);
-        foreach (var line in report.Lines)
+        // Each author fenced in place (2026-11-15, the web-tools plan's §3); the lines are the file's, as read_file leaves them.
+        var authors = report.Lines.Select(l => Outside(l.Author)).ToList();
+        int author = authors.Count == 0 ? 0 : authors.Max(a => a.Length);
+        for (int i = 0; i < report.Lines.Count; i++)
         {
-            sb.Append('\n').Append(line.Short).Append(' ').Append(Day(line.When, zone)).Append(' ').Append(line.Author.PadRight(author)).Append(' ').Append(N(line.Number).PadLeft(width)).Append('│').Append(line.Text);
+            var line = report.Lines[i];
+            sb.Append('\n').Append(line.Short).Append(' ').Append(Day(line.When, zone)).Append(' ').Append(authors[i].PadRight(author)).Append(' ').Append(N(line.Number).PadLeft(width)).Append('│').Append(line.Text);
         }
 
         if (report.To < report.TotalLines)
@@ -571,7 +595,7 @@ public static class GitText
             sb.Append("\n[… ").Append(N(report.TotalLines - report.To)).Append(" more lines; continue with from_line ").Append(N(report.To + 1)).Append(']');
         }
 
-        return sb.ToString();
+        return authors.Any(a => a.Length > 0) ? sb.Append('\n').Append(Llm.Tools.UntrustedText.QuoteNote).ToString() : sb.ToString();
     }
 
     // ---- refs ----
@@ -596,20 +620,20 @@ public static class GitText
         sb.Append(report.Truncated ? " (cut at the caps):" : ":");
         foreach (var b in report.Local)
         {
-            sb.Append('\n').Append(b.Current ? "* " : "  ").Append(b.Name).Append(' ').Append(b.Short).Append(b.Upstream is { } up ? " [" + up + "]" : "").Append(' ').Append(b.Subject);
+            sb.Append('\n').Append(b.Current ? "* " : "  ").Append(b.Name).Append(' ').Append(b.Short).Append(b.Upstream is { } up ? " [" + up + "]" : "").Append(' ').Append(Outside(b.Subject));
         }
 
         foreach (var b in report.Remote)
         {
-            sb.Append("\n  ").Append(b.Name).Append(' ').Append(b.Short).Append(' ').Append(b.Subject);
+            sb.Append("\n  ").Append(b.Name).Append(' ').Append(b.Short).Append(' ').Append(Outside(b.Subject));
         }
 
         foreach (var t in report.Tags)
         {
-            sb.Append("\n  tag ").Append(t.Name).Append(' ').Append(t.Short).Append(' ').Append(t.Subject);
+            sb.Append("\n  tag ").Append(t.Name).Append(' ').Append(t.Short).Append(' ').Append(Outside(t.Subject));
         }
 
-        return sb.ToString();
+        return Llm.Tools.UntrustedText.WithNote(sb.ToString());
     }
 
     public static string Created(GitBranchResult result) => $"Created branch {result.Name} at {result.Short}";
@@ -620,7 +644,7 @@ public static class GitText
     public static string Reverted(GitRevertResult result)
     {
         ArgumentNullException.ThrowIfNull(result);
-        return $"Reverted {result.Target} with {result.Short} on {result.Branch}: {result.Subject} ({Count(result.Files, "file")})";
+        return Llm.Tools.UntrustedText.WithNote($"Reverted {result.Target} with {result.Short} on {result.Branch}: {Outside(result.Subject)} ({Count(result.Files, "file")})");
     }
 
     /// <summary><c>Tagged abc1234 as v1.0 (annotated)</c>. Pinned.</summary>
@@ -643,10 +667,10 @@ public static class GitText
         sb.Append(report.Truncated ? " (the newest " + N(GitAccess.MaxTags) + "):" : ":");
         foreach (var t in report.Tags)
         {
-            sb.Append("\n  ").Append(t.Name).Append(' ').Append(t.Short).Append(' ').Append(t.Subject);
+            sb.Append("\n  ").Append(t.Name).Append(' ').Append(t.Short).Append(' ').Append(Outside(t.Subject));
         }
 
-        return sb.ToString();
+        return Llm.Tools.UntrustedText.WithNote(sb.ToString());
     }
     public static string CreatedAndSwitched(GitBranchResult result) => $"Created branch {result.Name} at {result.Short} and switched to it";
     public static string Switched(GitBranchResult result) => $"Switched to branch {result.Name} ({result.Short})";
@@ -701,7 +725,7 @@ public static class GitText
     {
         ArgumentNullException.ThrowIfNull(result);
         return result.Paths.Count == 0
-            ? $"Reset hard to {result.Reference} ({result.Short}: {result.Subject}): {Count(result.Files, "file")} changed; untracked files left alone"
+            ? Llm.Tools.UntrustedText.WithNote($"Reset hard to {result.Reference} ({result.Short}: {Outside(result.Subject)}): {Count(result.Files, "file")} changed; untracked files left alone")
             : $"Discarded changes in {Count(result.Paths.Count, "path")} (back to {result.Reference}): {string.Join(", ", result.Paths)}";
     }
 

@@ -42,7 +42,7 @@ public partial class YouTubeToolsTests
 
         string result = await Call(Search(), ("query", " big buck bunny "));
 
-        Assert.Equal("YouTube: 2 videos for \"big buck bunny\":\n1. Big Buck Bunny — Blender · 10:35 · 21M views · 2014 · id aqz-KE-bpKQ\n2. lofi hip hop radio — Lofi Girl · live · 947 views · id jfKfPfyJRdk", result);
+        Assert.Equal("YouTube: 2 videos for \"big buck bunny\":\n1. ⟪Big Buck Bunny⟫ — ⟪Blender⟫ · 10:35 · 21M views · 2014 · id aqz-KE-bpKQ\n2. ⟪lofi hip hop radio⟫ — ⟪Lofi Girl⟫ · live · 947 views · id jfKfPfyJRdk" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, result);
         Assert.Equal(("big buck bunny", 2, "AIza-k"), _search.Last);
     }
 
@@ -78,7 +78,7 @@ public partial class YouTubeToolsTests
         Assert.Equal(_time.GetUtcNow() - TimeSpan.FromDays(7), given.Since);
 
         _search.Hits = [new YouTubeHit("PLabcdefghijklmnop", "Chill beats", "Lofi Girl", new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero), null, null, Kind: YouTubeKind.Playlist, Count: 42)];
-        Assert.Equal("YouTube: 1 playlist for \"lofi\":\n1. Chill beats — Lofi Girl · 42 videos · 2020 · playlist PLabcdefghijklmnop", await Call(Search(), ("query", "lofi"), ("kind", "playlist")));
+        Assert.Equal("YouTube: 1 playlist for \"lofi\":\n1. ⟪Chill beats⟫ — ⟪Lofi Girl⟫ · 42 videos · 2020 · playlist PLabcdefghijklmnop" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, await Call(Search(), ("query", "lofi"), ("kind", "playlist")));
         Assert.Equal(YouTubeKind.Playlist, _search.LastFilters!.Kind);
     }
 
@@ -143,7 +143,7 @@ public partial class YouTubeToolsTests
         string result = await Call(Play(), ("video", "https://youtu.be/aqz-KE-bpKQ?t=30"));
 
         Assert.Equal(new VideoRequest(Bunny, 30), Assert.Single(_player.Plays));
-        Assert.Equal("Playing \"Big Buck Bunny 60fps 4K - Official Blender Foundation Short Film\" (Blender) at 0:30 of 10:35, volume 100% · video aqz-KE-bpKQ", result);
+        Assert.Equal("Playing \"⟪Big Buck Bunny 60fps 4K - Official Blender Foundation Short Film⟫\" (⟪Blender⟫) at 0:30 of 10:35, volume 100% · video aqz-KE-bpKQ" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, result);
     }
 
     [Fact]
@@ -154,7 +154,7 @@ public partial class YouTubeToolsTests
         string result = await Call(Play(), ("video", "https://www.youtube.com/watch?v=aqz-KE-bpKQ&t=30"), ("start", "1:30"));
 
         Assert.Equal(new VideoRequest(Bunny, 90, autoplay: false), Assert.Single(_player.Plays));
-        Assert.StartsWith("Cued (press play to start) \"Big Buck Bunny", result, StringComparison.Ordinal);
+        Assert.StartsWith("Cued (press play to start) \"⟪Big Buck Bunny", result, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -231,7 +231,7 @@ public partial class YouTubeToolsTests
         Assert.False(call.IsCompleted);                                                         // the ready report: not yet playing
         _player.Report(new VideoSnapshot(VideoState.Playing, Bunny, "Big Buck Bunny", "Blender", 0.01, 635, Version: opening.Version + 2));
 
-        Assert.StartsWith("Playing \"Big Buck Bunny\"", await call, StringComparison.Ordinal);
+        Assert.StartsWith("Playing \"⟪Big Buck Bunny⟫\"", await call, StringComparison.Ordinal);
     }
 
     /// <summary>A play the browser keeps from starting stays cued: at the cap that is the answer, and the truth.</summary>
@@ -245,7 +245,7 @@ public partial class YouTubeToolsTests
         Assert.False(call.IsCompleted);
         _time.Advance(YouTubeWait.Play);
 
-        Assert.StartsWith("Cued (press play to start) \"Big Buck Bunny\"", await call, StringComparison.Ordinal);
+        Assert.StartsWith("Cued (press play to start) \"⟪Big Buck Bunny⟫\"", await call, StringComparison.Ordinal);
     }
 
     /// <summary>A player that never starts: at the cap the newest report answers (still opening, so status says to look later).</summary>
@@ -271,11 +271,11 @@ public partial class YouTubeToolsTests
 
         string result = await Call(Play(), ("video", "https://www.youtube.com/playlist?list=" + List));
         Assert.Equal(VideoRequest.Playlist(List), _player.Plays[^1]);
-        Assert.EndsWith(" · video aqz-KE-bpKQ · entry 1 of 3 in playlist " + List, result);
+        Assert.EndsWith(" · video aqz-KE-bpKQ · entry 1 of 3 in playlist " + List + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, result);
 
         result = await Call(Play(), ("playlist", List), ("entry", 2));
         Assert.Equal(VideoRequest.Playlist(List, 1), _player.Plays[^1]);
-        Assert.EndsWith(" · entry 2 of 3 in playlist " + List, result);
+        Assert.EndsWith(" · entry 2 of 3 in playlist " + List + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, result);
 
         await Call(Play(), ("video", "https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=" + List + "&t=20"));
         Assert.Equal(VideoRequest.Playlist(List, 0, "dQw4w9WgXcQ", 20), _player.Plays[^1]);
@@ -301,7 +301,7 @@ public partial class YouTubeToolsTests
         Assert.False(call.IsCompleted);
         _player.Report(new VideoSnapshot(VideoState.Playing, "jNQXAC9IVRw", "Me at the zoo", "jawed", 0, 19, PlaylistId: List, PlaylistEntry: 1, PlaylistCount: 3));
 
-        Assert.StartsWith("Playing \"Me at the zoo\"", await call, StringComparison.Ordinal);
+        Assert.StartsWith("Playing \"⟪Me at the zoo⟫\"", await call, StringComparison.Ordinal);
         Assert.EndsWith(" The playlist moves on to the next entry.", YouTubeText.Status(opening with { VideoId = "aaaaaaaaaaa", Error = 150, Skipping = true }));
     }
 
@@ -321,14 +321,14 @@ public partial class YouTubeToolsTests
         _player.Report(new VideoSnapshot(VideoState.Paused, "SLUoz187oSA", "Entry one", "YouTube", 0, 45, PlaylistId: List, PlaylistEntry: 0, PlaylistCount: 200, Version: opening.Version + 1));
         Assert.False(play.IsCompleted);
         _player.Report(new VideoSnapshot(VideoState.Playing, "SLUoz187oSA", "Entry one", "YouTube", 0.1, 45, PlaylistId: List, PlaylistEntry: 0, PlaylistCount: 200));
-        Assert.StartsWith("Playing \"Entry one\"", await play, StringComparison.Ordinal);
+        Assert.StartsWith("Playing \"⟪Entry one⟫\"", await play, StringComparison.Ordinal);
 
         var next = Call(Control(), ("action", "next"));
         _player.Report(_player.Snapshot! with { State = VideoState.Paused, PlaylistEntry = 1 });   // the old video, the new number
         Assert.False(next.IsCompleted);
         _player.Report(new VideoSnapshot(VideoState.Playing, "1yfCBYdjLHU", "Entry two", "YouTube", 0.1, 30, PlaylistId: List, PlaylistEntry: 1, PlaylistCount: 200));
         string moved = await next;
-        Assert.StartsWith("Playing \"Entry two\"", moved, StringComparison.Ordinal);
+        Assert.StartsWith("Playing \"⟪Entry two⟫\"", moved, StringComparison.Ordinal);
         Assert.Contains("entry 2 of 200", moved);
     }
 
@@ -361,8 +361,8 @@ public partial class YouTubeToolsTests
 
         string listed = await Call(Playlist(), ("playlist", "https://www.youtube.com/playlist?list=" + List), ("max", 2));
         Assert.Equal(
-            "Playlist \"Shorts\" by Blender: 3 videos, the first 2 listed; youtube_play with playlist " + List + " and an entry number plays from it:\n" +
-            "1. Big Buck Bunny — Blender · id aqz-KE-bpKQ\n2. (deleted video, which the player skips)",
+            "Playlist \"⟪Shorts⟫\" by ⟪Blender⟫: 3 videos, the first 2 listed; youtube_play with playlist " + List + " and an entry number plays from it:\n" +
+            "1. ⟪Big Buck Bunny⟫ — ⟪Blender⟫ · id aqz-KE-bpKQ\n2. (⟪deleted video⟫, which the player skips)" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote,
             listed);
         Assert.Equal((List, 2), _search.LastPlaylist);
 
@@ -395,7 +395,7 @@ public partial class YouTubeToolsTests
         Assert.Contains(" at 0:00 of ", await Call(Control(), ("action", "back"), ("value", "5m")));  // never before the start
         Assert.Contains(" at 10:35 of ", await Call(Control(), ("action", "forward"), ("value", "1h"))); // never past the end
         Assert.Contains("volume 40%", await Call(Control(), ("action", "volume"), ("value", "40%")));
-        Assert.EndsWith("volume 40%, muted · video aqz-KE-bpKQ", await Call(Control(), ("action", "mute")));
+        Assert.EndsWith("volume 40%, muted · video aqz-KE-bpKQ" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, await Call(Control(), ("action", "mute")));
         Assert.DoesNotContain("muted", await Call(Control(), ("action", "unmute")));
         Assert.StartsWith("Playing", await Call(Control(), ("action", "PLAY")), StringComparison.Ordinal);
         Assert.Equal(
@@ -458,7 +458,7 @@ public partial class YouTubeToolsTests
         Assert.Equal(YouTubeText.NoVideo, await Call(status));
 
         _player.Report(new VideoSnapshot(VideoState.Playing, "jfKfPfyJRdk", "lofi hip hop radio", "Lofi Girl", 3725, 0, 25, true));
-        Assert.Equal("Playing \"lofi hip hop radio\" (Lofi Girl) at 1:02:05, volume 25%, muted · video jfKfPfyJRdk", await Call(status));
+        Assert.Equal("Playing \"⟪lofi hip hop radio⟫\" (⟪Lofi Girl⟫) at 1:02:05, volume 25%, muted · video jfKfPfyJRdk" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, await Call(status));
 
         _player.Report(new VideoSnapshot(VideoState.Failed, Bunny, Failure: VideoText.Failed("Controller", unchecked((int)0x80004005))));
         Assert.Equal("Error: " + VideoText.Failed("Controller", unchecked((int)0x80004005)), await Call(status));

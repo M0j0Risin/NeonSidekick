@@ -68,14 +68,15 @@ public sealed class HaAssistTool : HaTool
             return refused;
         }
 
-        return await AskAsync(Ha, text, cancellationToken).ConfigureAwait(false);
+        return await AskAsync(Ha, text, cancellationToken, fenced: true).ConfigureAwait(false);
     }
 
     /// <summary>
     /// Assist's answer to <paramref name="text"/>, unjudged: the tool gates first, and <c>/ha say</c> is the user's own. The
-    /// snapshot is marked stale after, since Assist may have acted.
+    /// snapshot is marked stale after, since Assist may have acted. The tool's answer is <paramref name="fenced"/> (2026-11-15, the web-tools plan's §3); the
+    /// user's views read it bare.
     /// </summary>
-    public static async Task<string> AskAsync(HaSession ha, string text, CancellationToken cancellationToken)
+    public static async Task<string> AskAsync(HaSession ha, string text, CancellationToken cancellationToken, bool fenced = false)
     {
         ArgumentNullException.ThrowIfNull(ha);
         ArgumentNullException.ThrowIfNull(text);
@@ -86,6 +87,6 @@ public sealed class HaAssistTool : HaTool
 
         var reply = await client.ConversationAsync(text, ha.Effective.HomeAssistantAssistAgent, ha.Timeout, cancellationToken).ConfigureAwait(false);
         ha.Invalidate();
-        return reply.Ok ? HaText.AssistAnswer(reply.Body) : reply.Error!;
+        return reply.Ok ? HaText.AssistAnswer(reply.Body, fenced) : reply.Error!;
     }
 }

@@ -51,7 +51,8 @@ public sealed class HaStatesTool : HaTool
             return error;
         }
 
-        return List(snapshot, Optional(arguments, QueryArgument), Optional(arguments, DomainArgument), Optional(arguments, AreaArgument));
+        // States and attribute values are the integrations' words: the body under the header fenced (2026-11-15, the web-tools plan's §3).
+        return UntrustedText.FenceBody(List(snapshot, Optional(arguments, QueryArgument), Optional(arguments, DomainArgument), Optional(arguments, AreaArgument)));
     }
 
     /// <summary>The listing for a snapshot and the three filters. Pure.</summary>

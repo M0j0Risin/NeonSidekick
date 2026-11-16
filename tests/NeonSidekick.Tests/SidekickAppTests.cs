@@ -924,8 +924,8 @@ public partial class SidekickAppTests : IDisposable
 
         Assert.Contains("LLM: http://127.0.0.1:1234/v1 model=llama (probed http://127.0.0.1:1234/v1)" + Environment.NewLine + "🔌 MCP: 1 server, 2 tools" + Environment.NewLine, output);
         Assert.Contains("[tool] pipe__echo {\"text\":\"ping\"}", output);
-        Assert.Contains("[tool] pipe__echo -> echo: ping", output);
-        Assert.Contains("[tool] pipe__echo -> echo: ping" + Environment.NewLine + "It said ping.", output);   // the Neon: prefix went out before the tool lines, as for any tool
+        Assert.Contains("[tool] pipe__echo -> ⟪echo: ping⟫\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, output);   // the model's text as is, fenced (2026-11-15)
+        Assert.Contains(NeonSidekick.Llm.Tools.UntrustedText.QuoteNote + Environment.NewLine + "It said ping.", output);   // the Neon: prefix went out before the tool lines, as for any tool
         var offered = _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray();
         Assert.Equal(["pipe__echo", "pipe__fail"], offered[^2..]);
         Assert.Equal(SkilledPrompt(false, [], web: true, mcp: true), _chat.Requests[0][0].Text);

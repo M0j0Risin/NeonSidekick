@@ -97,7 +97,14 @@ public sealed class GitDiffTool : GitTool
 
         var report = Git.Diff(request, lines);
         string under = path.Trim().Trim('\\', '/');
-        return report.Outcome == GitOutcome.Ok ? GitText.Diff(report, under == "." ? "" : under) : GitText.Error(report.Outcome, report.Detail);
+        if (report.Outcome != GitOutcome.Ok)
+        {
+            return GitText.Error(report.Outcome, report.Detail);
+        }
+
+        // A commit's diff names its subject, fenced (2026-11-15): the note last. The other kinds hold only the files' text.
+        string diff = GitText.Diff(report, under == "." ? "" : under);
+        return report.Kind == GitDiffKind.Commit && !string.IsNullOrWhiteSpace(diff) ? UntrustedText.WithNote(diff) : diff;
     }
 
     protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)

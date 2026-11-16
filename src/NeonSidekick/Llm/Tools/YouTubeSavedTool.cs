@@ -37,10 +37,14 @@ public sealed class YouTubeSavedTool : AIFunction
 
     public override JsonElement JsonSchema => Schema;
 
-    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    // The answer with the quote note last when YouTube's words were fenced in it (2026-11-15, the web-tools plan's §3).
+    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) =>
+        await AnswerAsync(arguments, cancellationToken).ConfigureAwait(false) is var result && result is string answer ? UntrustedText.WithNote(answer) : result;
+
+    private async ValueTask<object?> AnswerAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         var library = _library();
         await YouTubeTitles.FillMissingAsync(library, _lookup, _playlistLookup, cancellationToken).ConfigureAwait(false);
-        return YouTubeText.SavedList(library.List());
+        return YouTubeText.SavedList(library.List(), fenced: true);
     }
 }

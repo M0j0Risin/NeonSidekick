@@ -79,13 +79,13 @@ public sealed partial class WebToolsTests : IDisposable
         Assert.Equal(32_000, WebFetchTool.MaxChars);
 
         var search = _search.JsonSchema;
-        Assert.Equal(new[] { "query", "max_results" }, search.GetProperty("properties").EnumerateObject().Select(p => p.Name));
+        Assert.Equal(new[] { "query", "max_results", "since" }, search.GetProperty("properties").EnumerateObject().Select(p => p.Name));
         Assert.Equal("integer", search.GetProperty("properties").GetProperty("max_results").GetProperty("type").GetString());
         Assert.Equal(new[] { "query" }, search.GetProperty("required").EnumerateArray().Select(e => e.GetString()));
         Assert.Contains("web_fetch", _search.Description);
 
         var fetch = _fetch.JsonSchema;
-        Assert.Equal(new[] { "url", "offset" }, fetch.GetProperty("properties").EnumerateObject().Select(p => p.Name));
+        Assert.Equal(new[] { "url", "offset", "find", "outline" }, fetch.GetProperty("properties").EnumerateObject().Select(p => p.Name));
         Assert.Equal(new[] { "url" }, fetch.GetProperty("required").EnumerateArray().Select(e => e.GetString()));
         Assert.Contains("32000 characters at a time", _fetch.Description);
         Assert.Contains("web_search", _fetch.Description);
@@ -97,13 +97,14 @@ public sealed partial class WebToolsTests : IDisposable
         Assert.Equal("Opens a web page in the user's own browser, on their screen. Use it when they ask to open, show or see a link rather than to have it read out; one link in url, or up to 5 in urls.", _open.Description);
 
         var download = _download.JsonSchema;
-        Assert.Equal(new[] { "url", "path", "overwrite" }, download.GetProperty("properties").EnumerateObject().Select(p => p.Name));
+        Assert.Equal(new[] { "url", "path", "overwrite", "sha256", "sha512" }, download.GetProperty("properties").EnumerateObject().Select(p => p.Name));
         Assert.Equal("boolean", download.GetProperty("properties").GetProperty("overwrite").GetProperty("type").GetString());
         Assert.Equal(new[] { "url" }, download.GetProperty("required").EnumerateArray().Select(e => e.GetString()));
         Assert.Equal(
             "Downloads a file from the web — a picture, a PDF, an archive, a data file, a page's source — and saves it under the working directory (the user's cwd / current directory), creating any missing folders; nothing is read or opened. " +
             "path is the file to write, or a folder to put it in under the file's own name; without it the file lands at the top under its own name. " +
-            "A file that already exists is left alone unless overwrite is true. " +   // its .trash clause went with File safe edits (2026-10-01)
+            "A file that already exists is left alone unless overwrite is true. " +
+            "With sha256 or sha512 the file is checked against it and not kept when it doesn't match. " +   // 2026-11-15, the web-tools plan's §5; its .trash clause went with File safe edits (2026-10-01)
             "Up to 50 MB. To read a page use web_fetch; to look at a saved picture use view_image.",
             _download.Description);
         Assert.Equal(DownloadFileTool.DescriptionFor(50_000_000), _download.Description);
@@ -312,7 +313,7 @@ public sealed partial class WebToolsTests : IDisposable
         Assert.Equal(WebText.MetaSearchName, _web.Engine(_settings).Name);
 
         _settings.WebSearchMethod = "searxng";
-        Assert.Equal("Searched \"x\" (1 result, SearXNG):\n1. A — https://a/\n   one", await _search.InvokeAsync(Args(("query", "x")), CancellationToken.None));
+        Assert.Equal("Searched \"x\" (1 result, SearXNG):\n1. ⟪A⟫ — https://a/\n   ⟪one⟫" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, await _search.InvokeAsync(Args(("query", "x")), CancellationToken.None));
 
         // searxng with no usable URL falls back to the metasearch quietly; the URL keeps its value across a switch back.
         _settings.WebSearxngUrl = "not a url";
@@ -361,7 +362,7 @@ public sealed partial class WebToolsTests : IDisposable
         _http.Map("https://a.example/", (r, _) => { seen.Add(r); return Task.FromResult(StubHttpMessageHandler.Json(HttpStatusCode.OK, Article, "text/html")); });
 
         await _search.InvokeAsync(Args(("query", "x")), CancellationToken.None);
-        await _fetch.InvokeAsync(Args(("url", "https://a.example/")), CancellationToken.None);
+        ToolAnswers.Text(await _fetch.InvokeAsync(Args(("url", "https://a.example/")), CancellationToken.None));
 
         var request = Assert.Single(seen);
         Assert.False(request.Headers.Contains("Referer"));
@@ -375,9 +376,9 @@ public sealed partial class WebToolsTests : IDisposable
     {
         _http.Map("https://example.com/", HttpStatusCode.OK, Article, "text/html");
 
-        string answer = (string)(await _fetch.InvokeAsync(Args(("url", "https://example.com/")), CancellationToken.None))!;
+        string answer = (string)(ToolAnswers.Text(await _fetch.InvokeAsync(Args(("url", "https://example.com/")), CancellationToken.None)))!;
 
-        Assert.Equal("Example Domain — https://example.com/ (chars 1–79 of 79, http)\n\n# Example Domain\n\nThis domain is for use in illustrative examples in documents.", answer);
+        Assert.Equal("⟪Example Domain⟫ — https://example.com/ (chars 1–79 of 79, http)\n\n⟪# Example Domain\n\nThis domain is for use in illustrative examples in documents.⟫" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, answer);
     }
 
     [Fact]
@@ -385,10 +386,10 @@ public sealed partial class WebToolsTests : IDisposable
     {
         _http.Map("https://example.com/", HttpStatusCode.OK, Article, "text/html");
 
-        Assert.StartsWith("Example Domain — https://example.com/ (", (string)(await _fetch.InvokeAsync(Args(("url", "example.com")), CancellationToken.None))!);
-        Assert.Equal(WebText.NoUrl, await _fetch.InvokeAsync(new AIFunctionArguments(), CancellationToken.None));
-        Assert.Equal("Error: 'ftp://x/' is not an http or https URL", await _fetch.InvokeAsync(Args(("url", " ftp://x/ ")), CancellationToken.None));
-        Assert.Equal(@"Error: 'C:\notes.txt' is not an http or https URL", await _fetch.InvokeAsync(Args(("url", @"C:\notes.txt")), CancellationToken.None));
+        Assert.StartsWith("⟪Example Domain⟫ — https://example.com/ (", (string)(ToolAnswers.Text(await _fetch.InvokeAsync(Args(("url", "example.com")), CancellationToken.None)))!);
+        Assert.Equal(WebText.NoUrl, ToolAnswers.Text(await _fetch.InvokeAsync(new AIFunctionArguments(), CancellationToken.None)));
+        Assert.Equal("Error: 'ftp://x/' is not an http or https URL", ToolAnswers.Text(await _fetch.InvokeAsync(Args(("url", " ftp://x/ ")), CancellationToken.None)));
+        Assert.Equal(@"Error: 'C:\notes.txt' is not an http or https URL", ToolAnswers.Text(await _fetch.InvokeAsync(Args(("url", @"C:\notes.txt")), CancellationToken.None)));
     }
 
     [Fact]
@@ -397,22 +398,22 @@ public sealed partial class WebToolsTests : IDisposable
         string longText = string.Join(" ", Enumerable.Range(0, 9000).Select(i => "w" + i));   // ~ 50k chars
         _http.Map("https://example.com/long", HttpStatusCode.OK, "<title>Long</title><p>" + longText + "</p>", "text/html");
 
-        string first = (string)(await _fetch.InvokeAsync(Args(("url", "https://example.com/long")), CancellationToken.None))!;
+        string first = (string)(ToolAnswers.Text(await _fetch.InvokeAsync(Args(("url", "https://example.com/long")), CancellationToken.None)))!;
         string header = first.Split('\n')[0];
-        Assert.StartsWith("Long — https://example.com/long (chars 1–32,000 of ", header);
+        Assert.StartsWith("⟪Long⟫ — https://example.com/long (chars 1–32,000 of ", header);
         Assert.EndsWith("; continue with offset 32000, http)", header);
-        Assert.Equal(WebFetchTool.MaxChars, first.Length - header.Length - 2);
+        Assert.Equal(WebFetchTool.MaxChars, first.Length - header.Length - 2 - "⟪⟫\n".Length - NeonSidekick.Llm.Tools.UntrustedText.QuoteNote.Length);   // the window, fenced, the note last
 
-        string second = (string)(await _fetch.InvokeAsync(Args(("url", "https://example.com/long"), ("offset", Json("32000"))), CancellationToken.None))!;
-        Assert.StartsWith("Long — https://example.com/long (chars 32,001–", second.Split('\n')[0]);
+        string second = (string)(ToolAnswers.Text(await _fetch.InvokeAsync(Args(("url", "https://example.com/long"), ("offset", Json("32000"))), CancellationToken.None)))!;
+        Assert.StartsWith("⟪Long⟫ — https://example.com/long (chars 32,001–", second.Split('\n')[0]);
         Assert.EndsWith(", http)", second.Split('\n')[0]);
         Assert.DoesNotContain("continue with offset", second);
-        Assert.Equal(longText[32000..], second[(second.IndexOf("\n\n", StringComparison.Ordinal) + 2)..]);
+        Assert.Equal("⟪" + longText[32000..] + "⟫" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, second[(second.IndexOf("\n\n", StringComparison.Ordinal) + 2)..]);
         Assert.Single(_http.Requests);
 
-        Assert.Equal("Error: offset 90000 is past the end of the page (" + longText.Length.ToString("N0", System.Globalization.CultureInfo.InvariantCulture) + " characters)", await _fetch.InvokeAsync(Args(("url", "https://example.com/long"), ("offset", 90000)), CancellationToken.None));
-        Assert.Equal(WebText.NegativeOffset, await _fetch.InvokeAsync(Args(("url", "https://example.com/long"), ("offset", -1)), CancellationToken.None));
-        Assert.Equal("Error: 'x' is not a whole number for 'offset'", await _fetch.InvokeAsync(Args(("url", "https://example.com/long"), ("offset", "x")), CancellationToken.None));
+        Assert.Equal("Error: offset 90000 is past the end of the page (" + longText.Length.ToString("N0", System.Globalization.CultureInfo.InvariantCulture) + " characters)", ToolAnswers.Text(await _fetch.InvokeAsync(Args(("url", "https://example.com/long"), ("offset", 90000)), CancellationToken.None)));
+        Assert.Equal(WebText.NegativeOffset, ToolAnswers.Text(await _fetch.InvokeAsync(Args(("url", "https://example.com/long"), ("offset", -1)), CancellationToken.None)));
+        Assert.Equal("Error: 'x' is not a whole number for 'offset'", ToolAnswers.Text(await _fetch.InvokeAsync(Args(("url", "https://example.com/long"), ("offset", "x")), CancellationToken.None)));
         Assert.Single(_http.Requests);
     }
 
@@ -430,31 +431,31 @@ public sealed partial class WebToolsTests : IDisposable
             "<p><b><span id=\"ken_ala\" title=\"Anchor:ken ala\" class=\"wst-anchor\">ken ala</span></b>: cannot.</p><p>" + filler + "</p>" +
             "<h2 id=\"Soweli\">soweli</h2><p>animal</p>", "text/html");
 
-        string ken = (string)(await _fetch.InvokeAsync(Args(("url", "https://example.com/dict#ken_ala")), CancellationToken.None))!;
+        string ken = (string)(ToolAnswers.Text(await _fetch.InvokeAsync(Args(("url", "https://example.com/dict#ken_ala")), CancellationToken.None)))!;
         string header = ken.Split('\n')[0];
-        Assert.StartsWith("Dict — https://example.com/dict (chars ", header, StringComparison.Ordinal);
+        Assert.StartsWith("⟪Dict⟫ — https://example.com/dict (chars ", header, StringComparison.Ordinal);
         Assert.EndsWith(", from #ken_ala, http)", header, StringComparison.Ordinal);
-        Assert.StartsWith("**ken ala**: cannot.", ken[(ken.IndexOf("\n\n", StringComparison.Ordinal) + 2)..], StringComparison.Ordinal);
+        Assert.StartsWith("⟪**ken ala**: cannot.", ken[(ken.IndexOf("\n\n", StringComparison.Ordinal) + 2)..], StringComparison.Ordinal);
 
         // Ignoring case when nothing matches exactly; a heading's id starts at its heading.
-        string soweli = (string)(await _fetch.InvokeAsync(Args(("url", "https://example.com/dict#soweli")), CancellationToken.None))!;
-        Assert.StartsWith("## soweli\n\nanimal", soweli[(soweli.IndexOf("\n\n", StringComparison.Ordinal) + 2)..], StringComparison.Ordinal);
+        string soweli = (string)(ToolAnswers.Text(await _fetch.InvokeAsync(Args(("url", "https://example.com/dict#soweli")), CancellationToken.None)))!;
+        Assert.StartsWith("⟪## soweli\n\nanimal", soweli[(soweli.IndexOf("\n\n", StringComparison.Ordinal) + 2)..], StringComparison.Ordinal);
 
         // One the page lacks: from the top, said so.
-        string epiku = (string)(await _fetch.InvokeAsync(Args(("url", "https://example.com/dict#epiku")), CancellationToken.None))!;
-        Assert.StartsWith("Dict — https://example.com/dict (#epiku not found, from the top; chars 1–", epiku, StringComparison.Ordinal);
-        Assert.StartsWith("## a", epiku[(epiku.IndexOf("\n\n", StringComparison.Ordinal) + 2)..], StringComparison.Ordinal);
+        string epiku = (string)(ToolAnswers.Text(await _fetch.InvokeAsync(Args(("url", "https://example.com/dict#epiku")), CancellationToken.None)))!;
+        Assert.StartsWith("⟪Dict⟫ — https://example.com/dict (#epiku not found, from the top; chars 1–", epiku, StringComparison.Ordinal);
+        Assert.StartsWith("⟪## a", epiku[(epiku.IndexOf("\n\n", StringComparison.Ordinal) + 2)..], StringComparison.Ordinal);
 
         // An offset given wins over the fragment.
-        string offset = (string)(await _fetch.InvokeAsync(Args(("url", "https://example.com/dict#soweli"), ("offset", Json("5"))), CancellationToken.None))!;
-        Assert.StartsWith("Dict — https://example.com/dict (chars 6–", offset, StringComparison.Ordinal);
+        string offset = (string)(ToolAnswers.Text(await _fetch.InvokeAsync(Args(("url", "https://example.com/dict#soweli"), ("offset", Json("5"))), CancellationToken.None)))!;
+        Assert.StartsWith("⟪Dict⟫ — https://example.com/dict (chars 6–", offset, StringComparison.Ordinal);
         Assert.DoesNotContain("#soweli", offset.Split('\n')[0], StringComparison.Ordinal);
 
         Assert.Single(_http.Requests);   // every fragment, one download
 
         // A text answer has no anchors: the fragment is ignored.
         _http.Map("https://example.com/a.txt", HttpStatusCode.OK, "plain", "text/plain");
-        Assert.Equal("(untitled) — https://example.com/a.txt (chars 1–5 of 5, http)\n\nplain", await _fetch.InvokeAsync(Args(("url", "https://example.com/a.txt#x")), CancellationToken.None));
+        Assert.Equal("(untitled) — https://example.com/a.txt (chars 1–5 of 5, http)\n\n⟪plain⟫" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, ToolAnswers.Text(await _fetch.InvokeAsync(Args(("url", "https://example.com/a.txt#x")), CancellationToken.None)));
     }
 
     [Fact]
@@ -462,7 +463,7 @@ public sealed partial class WebToolsTests : IDisposable
     {
         _http.Map("https://example.com/a.json", HttpStatusCode.OK, "{\"a\":1}", "application/json");
 
-        Assert.Equal("(untitled) — https://example.com/a.json (chars 1–7 of 7, http)\n\n{\"a\":1}", await _fetch.InvokeAsync(Args(("url", "https://example.com/a.json")), CancellationToken.None));
+        Assert.Equal("(untitled) — https://example.com/a.json (chars 1–7 of 7, http)\n\n⟪{\"a\":1}⟫" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, ToolAnswers.Text(await _fetch.InvokeAsync(Args(("url", "https://example.com/a.json")), CancellationToken.None)));
     }
 
     [Fact]
@@ -470,7 +471,7 @@ public sealed partial class WebToolsTests : IDisposable
     {
         _http.Map("https://example.com/empty", HttpStatusCode.OK, "<title>Blank</title><script>x()</script>", "text/html");
 
-        Assert.Equal("Blank — https://example.com/empty (no readable text, http)", await _fetch.InvokeAsync(Args(("url", "https://example.com/empty")), CancellationToken.None));
+        Assert.Equal("⟪Blank⟫ — https://example.com/empty (no readable text, http)" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, ToolAnswers.Text(await _fetch.InvokeAsync(Args(("url", "https://example.com/empty")), CancellationToken.None)));
     }
 
     [Fact]
@@ -480,23 +481,23 @@ public sealed partial class WebToolsTests : IDisposable
         _browser.Html = Article;
 
         _settings.WebBrowserMode = "httpclient";
-        Assert.Equal("Error: 'https://example.com/' refused the request (HTTP 403 Forbidden)", await _fetch.InvokeAsync(Args(("url", "https://example.com/")), CancellationToken.None));
+        Assert.Equal("Error: 'https://example.com/' refused the request (HTTP 403 Forbidden)", ToolAnswers.Text(await _fetch.InvokeAsync(Args(("url", "https://example.com/")), CancellationToken.None)));
         Assert.Empty(_browser.Runs);
 
         _settings.WebBrowserMode = "default";
-        Assert.StartsWith("Example Domain — https://example.com/ (chars 1–79 of 79, headless browser)", (string)(await _fetch.InvokeAsync(Args(("url", "https://example.com/")), CancellationToken.None))!);
+        Assert.StartsWith("⟪Example Domain⟫ — https://example.com/ (chars 1–79 of 79, headless browser)", (string)(ToolAnswers.Text(await _fetch.InvokeAsync(Args(("url", "https://example.com/")), CancellationToken.None)))!);
         Assert.Single(_browser.Runs);
 
         _settings.WebBrowserPath = @"D:\tools\chrome.exe";
         _settings.WebBrowserMode = "chromium";
-        await _fetch.InvokeAsync(Args(("url", "https://example.com/other")), CancellationToken.None);
+        ToolAnswers.Text(await _fetch.InvokeAsync(Args(("url", "https://example.com/other")), CancellationToken.None));
         Assert.Equal(@"D:\tools\chrome.exe", _browser.LocateCalls[^1]);
 
         _settings.WebBrowserMode = "httpclient";
-        Assert.Equal(WebText.LanRefused("10.0.0.5"), await _fetch.InvokeAsync(Args(("url", "http://10.0.0.5/")), CancellationToken.None));
+        Assert.Equal(WebText.LanRefused("10.0.0.5"), ToolAnswers.Text(await _fetch.InvokeAsync(Args(("url", "http://10.0.0.5/")), CancellationToken.None)));
         _settings.WebBrowserNetworkMode = "both";
         _http.Map("http://10.0.0.5/", HttpStatusCode.OK, "<p>router</p>", "text/html");
-        Assert.Equal("(untitled) — http://10.0.0.5/ (chars 1–6 of 6, http)\n\nrouter", await _fetch.InvokeAsync(Args(("url", "http://10.0.0.5/")), CancellationToken.None));
+        Assert.Equal("(untitled) — http://10.0.0.5/ (chars 1–6 of 6, http)\n\n⟪router⟫" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, ToolAnswers.Text(await _fetch.InvokeAsync(Args(("url", "http://10.0.0.5/")), CancellationToken.None)));
     }
 
     [Fact]
@@ -507,7 +508,7 @@ public sealed partial class WebToolsTests : IDisposable
         _settings.WebBrowserNetworkMode = "lan";
         _http.Map("https://example.com/", HttpStatusCode.OK, "<p>hi</p>", "text/html");
 
-        Assert.Equal(WebText.InternetRefused("example.com"), await _fetch.InvokeAsync(Args(("url", "https://example.com/")), CancellationToken.None));
+        Assert.Equal(WebText.InternetRefused("example.com"), ToolAnswers.Text(await _fetch.InvokeAsync(Args(("url", "https://example.com/")), CancellationToken.None)));
         Assert.Empty(_http.Requests);
     }
 
@@ -517,9 +518,9 @@ public sealed partial class WebToolsTests : IDisposable
         _http.Map("https://example.com/flaky", HttpStatusCode.ServiceUnavailable, "<p>later</p>", "text/html");
         _settings.WebBrowserMode = "httpclient";
 
-        Assert.StartsWith("Error: 'https://example.com/flaky' refused the request", (string)(await _fetch.InvokeAsync(Args(("url", "https://example.com/flaky")), CancellationToken.None))!);
+        Assert.StartsWith("Error: 'https://example.com/flaky' refused the request", (string)(ToolAnswers.Text(await _fetch.InvokeAsync(Args(("url", "https://example.com/flaky")), CancellationToken.None)))!);
         Assert.Equal(0, _web.Pages.Count);
-        await _fetch.InvokeAsync(Args(("url", "https://example.com/flaky")), CancellationToken.None);
+        ToolAnswers.Text(await _fetch.InvokeAsync(Args(("url", "https://example.com/flaky")), CancellationToken.None));
         Assert.Equal(2, _http.Requests.Count);
     }
 
@@ -545,7 +546,7 @@ public sealed partial class WebToolsTests : IDisposable
         // 2026-09-18: any media type, the bytes whole, the sentence naming the path, the size, the type and the URL; a picture says view_image.
         _http.Map("https://example.com/cat.png", (_, _) => Task.FromResult(StubHttpMessageHandler.Bytes(HttpStatusCode.OK, Png, "image/png")));
 
-        string result = (string)(await _download.InvokeAsync(Args(("url", "https://example.com/cat.png")), CancellationToken.None))!;
+        string result = (string)(ToolAnswers.Text(await _download.InvokeAsync(Args(("url", "https://example.com/cat.png")), CancellationToken.None)))!;
 
         Assert.Equal("downloaded cat.png (16 B, image/png) from https://example.com/cat.png; view_image shows it", result);
         Assert.Equal(Png, Saved("cat.png"));
@@ -561,7 +562,7 @@ public sealed partial class WebToolsTests : IDisposable
     {
         _http.Map("https://example.com/tool.zip", (_, _) => Task.FromResult(StubHttpMessageHandler.Bytes(HttpStatusCode.OK, [1, 2, 3], "application/zip")));
 
-        await _download.InvokeAsync(Args(("url", "https://example.com/tool.zip")), CancellationToken.None);
+        ToolAnswers.Text(await _download.InvokeAsync(Args(("url", "https://example.com/tool.zip")), CancellationToken.None));
 
         byte[]? mark = MarkOfTheWeb.Read(Path.Combine(_root, "tool.zip"));
         Assert.Equal(MarkOfTheWeb.ForDownload("https://example.com/tool.zip", _time.GetUtcNow()), mark);
@@ -619,7 +620,7 @@ public sealed partial class WebToolsTests : IDisposable
         Assert.StartsWith("Error: '../x.html' is outside the working directory", await _download.DownloadAsync("https://example.com/", "../x.html", false, CancellationToken.None));
         Assert.Equal(WebText.NoDownloadUrl, await _download.DownloadAsync("  ", null, false, CancellationToken.None));
         Assert.Equal(WebText.NotHttp("ftp://x/y"), await _download.DownloadAsync("ftp://x/y", null, false, CancellationToken.None));
-        Assert.Equal("Error: 'maybe' is not true or false for 'overwrite'", await _download.InvokeAsync(Args(("url", "https://example.com/"), ("overwrite", "maybe")), CancellationToken.None));
+        Assert.Equal("Error: 'maybe' is not true or false for 'overwrite'", ToolAnswers.Text(await _download.InvokeAsync(Args(("url", "https://example.com/"), ("overwrite", "maybe")), CancellationToken.None)));
     }
 
     [Fact]

@@ -89,7 +89,11 @@ public sealed class YouTubeSaveTool : AIFunction
         _ => Schema,
     };
 
-    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    // The answer with the quote note last when YouTube's words were fenced in it (2026-11-15, the web-tools plan's §3).
+    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) =>
+        await AnswerAsync(arguments, cancellationToken).ConfigureAwait(false) is var result && result is string answer ? UntrustedText.WithNote(answer) : result;
+
+    private async ValueTask<object?> AnswerAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
         string action = ToolArguments.ReadString(arguments, ActionArgument).Trim().ToLowerInvariant();
@@ -119,13 +123,13 @@ public sealed class YouTubeSaveTool : AIFunction
         if (playlist.Length > 0)
         {
             return action == "add"
-                ? await AddPlaylistAsync(_library(), _player, playlist, _playlistLookup, cancellationToken).ConfigureAwait(false)
-                : RemovePlaylist(_library(), _player, playlist);
+                ? await AddPlaylistAsync(_library(), _player, playlist, _playlistLookup, cancellationToken, fenced: true).ConfigureAwait(false)
+                : RemovePlaylist(_library(), _player, playlist, fenced: true);
         }
 
         return action == "add"
-            ? await AddAsync(_library(), _player, video, _lookup, cancellationToken).ConfigureAwait(false)
-            : Remove(_library(), _player, video);
+            ? await AddAsync(_library(), _player, video, _lookup, cancellationToken, fenced: true).ConfigureAwait(false)
+            : Remove(_library(), _player, video, fenced: true);
     }
 
     /// <summary>
@@ -143,9 +147,10 @@ public sealed class YouTubeSaveTool : AIFunction
     /// <paramref name="lookup"/> first when not saved yet. <c>current</c> is refused for a mix, an id without a known prefix (it could never
     /// play again by itself) and a list that hasn't said its entry yet; its place is read again after the lookup, while the same list
     /// plays, so a slow lookup doesn't save where it was a moment ago. The answer as a sentence; <c>Error: </c> leads a refusal. Shared with
-    /// <c>/youtube save</c>, headless and the Web UI.
+    /// <c>/youtube save</c>, headless and the Web UI. <paramref name="fenced"/> (the tool's own call, 2026-11-15) fences the title for the model;
+    /// the app's callers show it to the user as it is.
     /// </summary>
-    public static async Task<string> AddPlaylistAsync(YouTubeLibrary library, IVideoPlayer? player, string playlist, YouTubePlaylistLookup? lookup, CancellationToken cancellationToken)
+    public static async Task<string> AddPlaylistAsync(YouTubeLibrary library, IVideoPlayer? player, string playlist, YouTubePlaylistLookup? lookup, CancellationToken cancellationToken, bool fenced = false)
     {
         ArgumentNullException.ThrowIfNull(library);
         var named = Named(player, playlist);
@@ -155,18 +160,18 @@ public sealed class YouTubeSaveTool : AIFunction
         }
 
         var info = library.Find(named.List) is null && lookup is not null ? await lookup(named.List, cancellationToken).ConfigureAwait(false) : null;
-        return Save(library, player, named, info);
+        return Save(library, player, named, info, fenced);
     }
 
     /// <summary>
     /// <see cref="AddPlaylistAsync"/>'s core without a lookup (2026-11-08, the Web UI's ☆ list; split from it in the review, as <see cref="Add"/>
     /// is from <see cref="AddAsync"/>): a playlist saved untitled until the list is next read.
     /// </summary>
-    public static string AddPlaylist(YouTubeLibrary library, IVideoPlayer? player, string playlist)
+    public static string AddPlaylist(YouTubeLibrary library, IVideoPlayer? player, string playlist, bool fenced = false)
     {
         ArgumentNullException.ThrowIfNull(library);
         var named = Named(player, playlist);
-        return named.Refusal ?? Save(library, player, named, null);
+        return named.Refusal ?? Save(library, player, named, null, fenced);
     }
 
     // What a save names: the list playing (its first read) or the list a link or id gives, with the link's place; else the refusal.
@@ -209,7 +214,7 @@ public sealed class YouTubeSaveTool : AIFunction
 
     // The save itself: a list playing at its place (read again now, while the same list plays and says its entry; else the first read's),
     // or a named list at its link's place; with what the lookup found.
-    private static string Save(YouTubeLibrary library, IVideoPlayer? player, NamedList named, YouTubePlaylistInfo? info)
+    private static string Save(YouTubeLibrary library, IVideoPlayer? player, NamedList named, YouTubePlaylistInfo? info, bool fenced)
     {
         YouTubeSaveOutcome outcome;
         if (named.Playing is { } first)
@@ -223,7 +228,7 @@ public sealed class YouTubeSaveTool : AIFunction
             outcome = library.AddPlaylist(named.List, info?.Title, info?.Author, info?.Count ?? 0, named.Entry, named.Video, named.Start, 0, info?.ThumbnailVideo);
         }
 
-        return library.Find(named.List) is { } saved ? YouTubeText.Saved(saved, outcome) : "Error: " + YouTubeText.SaveFailed;
+        return library.Find(named.List) is { } saved ? YouTubeText.Saved(saved, outcome, fenced) : "Error: " + YouTubeText.SaveFailed;
     }
 
     /// <summary>
@@ -231,7 +236,7 @@ public sealed class YouTubeSaveTool : AIFunction
     /// that reads as a playlist removes that saved list or nothing (2026-11-08, the review: a <c>watch?v=…&amp;list=…</c> link with the list
     /// not saved once removed its video instead). Shared with <c>/youtube unsave</c>.
     /// </summary>
-    public static string RemovePlaylist(YouTubeLibrary library, IVideoPlayer? player, string playlist)
+    public static string RemovePlaylist(YouTubeLibrary library, IVideoPlayer? player, string playlist, bool fenced = false)
     {
         ArgumentNullException.ThrowIfNull(library);
         var saved = playlist.Equals(Current, StringComparison.OrdinalIgnoreCase)
@@ -243,7 +248,7 @@ public sealed class YouTubeSaveTool : AIFunction
             return YouTubeText.NotSaved(playlist);
         }
 
-        return library.Remove(saved.Id) ? YouTubeText.Unsaved(saved) : "Error: " + YouTubeText.SaveFailed;
+        return library.Remove(saved.Id) ? YouTubeText.Unsaved(saved, fenced) : "Error: " + YouTubeText.SaveFailed;
     }
 
     /// <summary>
@@ -251,21 +256,21 @@ public sealed class YouTubeSaveTool : AIFunction
     /// looked up through <paramref name="lookup"/> first when it is not saved yet. The answer as a sentence; <c>Error: </c> leads a
     /// refusal. Shared with <c>/youtube save</c> and headless.
     /// </summary>
-    public static async Task<string> AddAsync(YouTubeLibrary library, IVideoPlayer? player, string video, YouTubeLookup? lookup, CancellationToken cancellationToken)
+    public static async Task<string> AddAsync(YouTubeLibrary library, IVideoPlayer? player, string video, YouTubeLookup? lookup, CancellationToken cancellationToken, bool fenced = false)
     {
         ArgumentNullException.ThrowIfNull(library);
         if (video.Length > 0 && !video.Equals(Current, StringComparison.OrdinalIgnoreCase) && YouTubeIds.TryParse(video, out string id, out _)
             && lookup is not null && library.Find(id) is null && await lookup(id, cancellationToken).ConfigureAwait(false) is { } info)
         {
             var outcome = library.Add(id, info.Title, info.Author, info.Duration);
-            return library.Find(id) is { } saved ? YouTubeText.Saved(saved, outcome) : "Error: " + YouTubeText.SaveFailed;
+            return library.Find(id) is { } saved ? YouTubeText.Saved(saved, outcome, fenced) : "Error: " + YouTubeText.SaveFailed;
         }
 
-        return Add(library, player, video);
+        return Add(library, player, video, fenced);
     }
 
     /// <summary><see cref="AddAsync"/> without a lookup: a video saved by its id or link is untitled until it plays.</summary>
-    public static string Add(YouTubeLibrary library, IVideoPlayer? player, string video)
+    public static string Add(YouTubeLibrary library, IVideoPlayer? player, string video, bool fenced = false)
     {
         ArgumentNullException.ThrowIfNull(library);
         YouTubeSaveOutcome outcome;
@@ -295,14 +300,14 @@ public sealed class YouTubeSaveTool : AIFunction
             return YouTubeText.NotAVideo(video);
         }
 
-        return library.Find(id) is { } saved ? YouTubeText.Saved(saved, outcome) : "Error: " + YouTubeText.SaveFailed;
+        return library.Find(id) is { } saved ? YouTubeText.Saved(saved, outcome, fenced) : "Error: " + YouTubeText.SaveFailed;
     }
 
     /// <summary>
     /// <paramref name="video"/> taken off the list: <see cref="Current"/> the window's video, else its number, id or link
     /// (<see cref="YouTubeLibrary.Resolve"/>). Shared with <c>/youtube unsave</c>.
     /// </summary>
-    public static string Remove(YouTubeLibrary library, IVideoPlayer? player, string video)
+    public static string Remove(YouTubeLibrary library, IVideoPlayer? player, string video, bool fenced = false)
     {
         ArgumentNullException.ThrowIfNull(library);
         var saved = video.Equals(Current, StringComparison.OrdinalIgnoreCase)
@@ -313,6 +318,6 @@ public sealed class YouTubeSaveTool : AIFunction
             return YouTubeText.NotSaved(video);
         }
 
-        return library.Remove(saved.Id) ? YouTubeText.Unsaved(saved) : "Error: " + YouTubeText.SaveFailed;
+        return library.Remove(saved.Id) ? YouTubeText.Unsaved(saved, fenced) : "Error: " + YouTubeText.SaveFailed;
     }
 }

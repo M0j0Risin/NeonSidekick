@@ -35,6 +35,9 @@ public sealed class BraveEngine : IEngine
     /// <inheritdoc/>
     public bool Paging => true;
 
+    /// <summary><c>settings.yml</c> sets <c>time_range_support: true</c> for <c>brave_category: search</c>.</summary>
+    public bool TimeRangeSupport => true;
+
     /// <inheritdoc/>
     public async Task<IReadOnlyList<EngineResult>> SearchAsync(EngineQuery query, HttpClient http, CancellationToken cancellationToken)
     {
@@ -66,8 +69,23 @@ public sealed class BraveEngine : IEngine
             url.Append("&offset=").Append((query.PageNumber - 1).ToString(CultureInfo.InvariantCulture));
         }
 
+        if (TimeRangeWord(query.TimeRange) is { } tf)
+        {
+            url.Append("&tf=").Append(tf);
+        }
+
         return new Uri(url.ToString());
     }
+
+    /// <summary>brave.py's <c>time_range_map</c>: <c>pd</c>, <c>pw</c>, <c>pm</c>, <c>py</c>; null for no range. The Brave API's <c>freshness</c> takes the same.</summary>
+    internal static string? TimeRangeWord(TimeRange? range) => range switch
+    {
+        TimeRange.Day => "pd",
+        TimeRange.Week => "pw",
+        TimeRange.Month => "pm",
+        TimeRange.Year => "py",
+        _ => null,
+    };
 
     internal static string BuildCookie(EngineQuery query)
     {

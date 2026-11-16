@@ -49,7 +49,7 @@ public static class FileNames
     private static bool IsFormat(char c) => CharUnicodeInfo.GetUnicodeCategory(c) == UnicodeCategory.Format;
 
     /// <summary>Whether the character at <paramref name="i"/> is a zero-width joiner with a shown character on each side.</summary>
-    private static bool IsJoining(string text, int i) =>
+    internal static bool IsJoining(string text, int i) =>
         text[i] == ZeroWidthJoiner && i > 0 && i < text.Length - 1 && !IsFormat(text[i - 1]) && !IsFormat(text[i + 1]) && !char.IsWhiteSpace(text[i - 1]) && !char.IsWhiteSpace(text[i + 1]);
 
     /// <summary>

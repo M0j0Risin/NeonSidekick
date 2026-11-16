@@ -174,8 +174,17 @@ public sealed class ReadPdfTool : FileTool, IAcceptsArguments
             return refused;
         }
 
-        return await AnswerAsync(key!, display, token => Task.FromResult(Bytes(files, path)), request, text => text, cancellationToken).ConfigureAwait(false);
+        // A downloaded document's text is its author's (2026-11-15, the web-tools plan's §3): fenced when the file carries the mark of the web,
+        // read on every call, since read_pdf's cache keys a document by a stamp an unblock doesn't change.
+        return await AnswerAsync(key!, display, token => Task.FromResult(Bytes(files, path)), request, Scope(Marked(files, path)), cancellationToken).ConfigureAwait(false);
     }
+
+    /// <summary>Whether the file <paramref name="path"/> names carries the mark of the web (<see cref="MarkOfTheWeb.IsFromInternet"/>).</summary>
+    internal static bool Marked(WorkingDirectory files, string path) =>
+        files.Resolve(path, forWrite: false, out string full) == FileOutcome.Ok && MarkOfTheWeb.IsFromInternet(full);
+
+    /// <summary>An answer as the model reads it: everything under its header fenced for a marked file, as it is for the user's own.</summary>
+    internal static Func<string, string> Scope(bool marked) => marked ? UntrustedText.FenceBody : text => text;
 
     private async Task<object?> ReadOnShareAsync(string? share, string path, Request request, CancellationToken cancellationToken)
     {
@@ -190,13 +199,14 @@ public sealed class ReadPdfTool : FileTool, IAcceptsArguments
             return error!;
         }
 
-        var stamped = await _unc.RunAsync(target, write: false, files => (Refused: Stamped(files, relative, out var key, out string display), Key: key, Display: display), cancellationToken).ConfigureAwait(false);
+        // The mark read under the call's impersonation, beside the stamp (2026-11-15): NTFS shares carry the stream.
+        var stamped = await _unc.RunAsync(target, write: false, files => (Refused: Stamped(files, relative, out var key, out string display), Key: key, Display: display, Marked: Marked(files, relative)), cancellationToken).ConfigureAwait(false);
         if (stamped.Error is { } failed)
         {
             return failed;
         }
 
-        var (refused, docKey, shown) = stamped.Value;
+        var (refused, docKey, shown, marked) = stamped.Value;
         if (refused is not null)
         {
             return UncText.Scoped(refused, target);
@@ -211,7 +221,7 @@ public sealed class ReadPdfTool : FileTool, IAcceptsArguments
         {
             var read = await _unc.RunAsync(target, write: false, files => Bytes(files, relative), token).ConfigureAwait(false);
             return read.Error is { } e ? (null, e) : read.Value;
-        }, request, text => text, cancellationToken).ConfigureAwait(false);
+        }, request, Scope(marked), cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>Whether a call without a share means one: a full path outside the working directory (and the images folder) while a share is offered (<c>open</c>'s rule).</summary>

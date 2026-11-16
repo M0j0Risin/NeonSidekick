@@ -73,7 +73,11 @@ public sealed class YouTubeSearchTool : AIFunction
 
     public override JsonElement JsonSchema => Schema;
 
-    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    // The answer with the quote note last when YouTube's words were fenced in it (2026-11-15, the web-tools plan's §3).
+    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) =>
+        await AnswerAsync(arguments, cancellationToken).ConfigureAwait(false) is var result && result is string answer ? UntrustedText.WithNote(answer) : result;
+
+    private async ValueTask<object?> AnswerAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
         if (!ToolArguments.TryReadInt32(arguments, MaxArgument, out var max, out var raw))
@@ -121,7 +125,7 @@ public sealed class YouTubeSearchTool : AIFunction
         }
 
         var outcome = await _search.SearchAsync(query, count, filters, YouTubeDataApi.Key(effective) ?? "", cancellationToken).ConfigureAwait(false);
-        return outcome.Ok ? YouTubeText.Results(query, outcome.Hits.Take(count).ToList(), filters.Kind) : YouTubeText.Failure(outcome.Failure, outcome.Detail);
+        return outcome.Ok ? YouTubeText.Results(query, outcome.Hits.Take(count).ToList(), filters.Kind, fenced: true) : YouTubeText.Failure(outcome.Failure, outcome.Detail);
     }
 
     // An optional word: null when left out or empty, so the saved choice stands.

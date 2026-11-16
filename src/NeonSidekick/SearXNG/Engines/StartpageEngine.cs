@@ -49,6 +49,9 @@ public sealed partial class StartpageEngine : IEngine
     /// <inheritdoc/>
     public bool Paging => true;
 
+    /// <summary>startpage.py's <c>time_range_support = True</c>.</summary>
+    public bool TimeRangeSupport => true;
+
     /// <inheritdoc/>
     public async Task<IReadOnlyList<EngineResult>> SearchAsync(EngineQuery query, HttpClient http, CancellationToken cancellationToken)
     {
@@ -168,7 +171,14 @@ public sealed partial class StartpageEngine : IEngine
             new("cat", "web"),
             new("t", "device"),
             new("sc", code),
-            new("with_date", ""),
+            new("with_date", query.TimeRange switch
+            {
+                TimeRange.Day => "d",
+                TimeRange.Week => "w",
+                TimeRange.Month => "m",
+                TimeRange.Year => "y",
+                _ => "",
+            }),
             new("abd", "1"),
             new("abe", "1"),
             new("qsr", "all"),

@@ -144,7 +144,7 @@ internal sealed partial class ChatScreen
                 }
 
                 var arguments = new Microsoft.Extensions.AI.AIFunctionArguments { [YouTubePlayTool.VideoArgument] = url };
-                string answer = (string)(await PlayToolFor(_videoPlayer!).InvokeAsync(arguments, CancellationToken.None).ConfigureAwait(false))!;
+                string answer = Llm.Tools.UntrustedText.Unfenced((string)(await PlayToolFor(_videoPlayer!).InvokeAsync(arguments, CancellationToken.None).ConfigureAwait(false))!);
                 if (answer.StartsWith("Error: ", StringComparison.Ordinal))
                 {
                     DiagnosticLog.Info(YouTubeCategory, $"The video window's link {url} did not play ({answer}); the default browser has it.");

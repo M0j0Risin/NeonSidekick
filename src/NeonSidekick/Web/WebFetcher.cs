@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
+using System.Security.Cryptography;
 using NeonSidekick.Diagnostics;
 
 namespace NeonSidekick.Web;
@@ -104,6 +105,9 @@ public sealed class OpenedDownload : IDisposable
 public sealed record SavedBody(FetchOutcome Outcome, string Url, long Bytes, string Detail)
 {
     public bool Ok => Outcome == FetchOutcome.Ok;
+
+    /// <summary>The saved bytes' digest in lowercase hex when one was asked (2026-11-15, the web-tools plan's §5, feature idea #29); null otherwise.</summary>
+    public string? Digest { get; init; }
 
     /// <summary>The tool's sentence for a failed save.</summary>
     public string Error => WebText.Error(Outcome, Url, Detail);
@@ -899,24 +903,35 @@ public sealed class WebFetcher
         }
 
         string name = FileNameOf(response) is { Length: > 0 } given ? given : Uri.UnescapeDataString(current.Segments.LastOrDefault() ?? "").Trim('/');
-        string text = PdfAnswerText(read);
-        return new FetchResult(FetchOutcome.Ok, url.AbsoluteUri, current.AbsoluteUri, status, "application/pdf", new PageText(name.Length > 0 ? name : current.Host, text), text, WebText.PdfEngine, "", false);
+        var answer = PdfAnswerPage(read, name.Length > 0 ? name : current.Host);
+        return new FetchResult(FetchOutcome.Ok, url.AbsoluteUri, current.AbsoluteUri, status, "application/pdf", answer, answer.Markdown, WebText.PdfEngine, "", false);
     }
 
     /// <summary>A PDF read as a fetch's text: the outline's two levels, the pages under their headings (labels beside), and what was left.</summary>
-    public static string PdfAnswerText(PdfRead read)
+    public static string PdfAnswerText(PdfRead read) => PdfAnswerPage(read, "").Markdown;
+
+    /// <summary>
+    /// <see cref="PdfAnswerText"/> as a page (2026-11-15, the web-tools plan's §1): its <see cref="PageText.Headings"/> recorded as the text is
+    /// built, so a page whose own text says "--- page 7 ---" can't move one. The outline's items, each at its page's marker (one past the
+    /// pages read has no offset), or with no outline the page markers themselves; <see cref="PageText.More"/> the note a PDF read in part ends with.
+    /// </summary>
+    public static PageText PdfAnswerPage(PdfRead read, string title)
     {
         ArgumentNullException.ThrowIfNull(read);
+        ArgumentNullException.ThrowIfNull(title);
         var sb = new System.Text.StringBuilder();
         if (read.Outline is { Count: > 0 } outline)
         {
             Pdf.PdfText.AppendOutline(sb, outline);
         }
 
+        var markers = new List<PageHeading>(read.Pages.Count);
         foreach (var page in read.Pages)
         {
             string? label = read.Labels is { } labels && page.Number <= labels.Count ? labels[page.Number - 1] : null;
+            int at = sb.Length > 0 ? sb.Length + 1 : 0;
             Pdf.PdfText.AppendPage(sb, page.Number, label, page.Text);
+            markers.Add(new PageHeading(1, Pdf.PdfText.PageHeading(page.Number, label), at, page.Number));
         }
 
         if (read.Pages.All(p => p.Text.Length == 0))
@@ -924,12 +939,27 @@ public sealed class WebFetcher
             sb.Append('\n').Append(WebText.PdfNoText);
         }
 
+        string? more = null;
         if (read.Pages.Count < read.PageCount)
         {
-            sb.Append('\n').Append(WebText.PdfMore(read.Pages.Count, read.PageCount));
+            more = WebText.PdfMore(read.Pages.Count, read.PageCount);
+            sb.Append('\n').Append(more);
         }
 
-        return sb.ToString();
+        IReadOnlyList<PageHeading> headings = markers;
+        if (read.Outline is { Count: > 0 } items)
+        {
+            var pageAt = new Dictionary<int, int?>();
+            foreach (var marker in markers)
+            {
+                pageAt.TryAdd(marker.Page!.Value, marker.Offset);
+            }
+
+            headings = [.. items.Select(item => new PageHeading(Math.Max(item.Level, 1), item.Title,
+                item.Page is { } p && pageAt.TryGetValue(p, out var at) ? at : null, item.Page))];
+        }
+
+        return new PageText(title, sb.ToString()) { Headings = headings, More = more };
     }
 
     /// <summary>
@@ -1054,10 +1084,12 @@ public sealed class WebFetcher
     /// (<see cref="FetchOutcome.Timeout"/>, <see cref="WebText.Stalled"/>), so a big file on a slow link finishes and a dead one
     /// does not hang the turn. The caller's cancel (ESC) escapes.
     /// </summary>
-    public async Task<SavedBody> SaveAsync(OpenedDownload opened, Stream target, long maxBytes, CancellationToken cancellationToken)
+    /// <remarks><paramref name="hash"/> (2026-11-15, the web-tools plan's §5, feature idea #29): the digest of the bytes written, fed as they stream, on <see cref="SavedBody.Digest"/>.</remarks>
+    public async Task<SavedBody> SaveAsync(OpenedDownload opened, Stream target, long maxBytes, CancellationToken cancellationToken, HashAlgorithmName? hash = null)
     {
         ArgumentNullException.ThrowIfNull(opened);
         ArgumentNullException.ThrowIfNull(target);
+        using var digest = hash is { } algorithm ? IncrementalHash.CreateHash(algorithm) : null;
         var current = new Uri(opened.FinalUrl);
         var watch = Stopwatch.StartNew();
         long total = 0;
@@ -1086,11 +1118,12 @@ public sealed class WebFetcher
                 }
 
                 await target.WriteAsync(chunk.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+                digest?.AppendData(chunk, 0, read);
             }
 
             await target.FlushAsync(cancellationToken).ConfigureAwait(false);
             DiagnosticLog.Info(Category, $"GET {current} → {opened.Status.ToString(CultureInfo.InvariantCulture)} {(opened.MediaType.Length == 0 ? "(no type)" : opened.MediaType)}, {total.ToString(CultureInfo.InvariantCulture)} B saved in {watch.ElapsedMilliseconds.ToString(CultureInfo.InvariantCulture)} ms.");
-            return new SavedBody(FetchOutcome.Ok, opened.Url, total, "");
+            return new SavedBody(FetchOutcome.Ok, opened.Url, total, "") { Digest = digest is null ? null : Convert.ToHexStringLower(digest.GetHashAndReset()) };
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {

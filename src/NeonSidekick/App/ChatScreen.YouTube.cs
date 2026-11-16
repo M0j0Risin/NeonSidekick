@@ -184,7 +184,7 @@ internal sealed partial class ChatScreen
         if (line.Verb == YouTubeVerb.Status)
         {
             // A video file open (2026-11-12): /video's, so its status points there, as the control verbs' answers do.
-            Show(player.FileSnapshot() is { } file ? VideoText.FileIsOpen(file.FileName, "/video") : YouTubeText.StatusOrHandoff(player.Snapshot, YouTubeHandoff()), sink);
+            Show(player.FileSnapshot() is { } file ? VideoText.FileIsOpen(file.FileName, "/video") : YouTubeText.StatusOrHandoff(player.Snapshot, YouTubeHandoff(), forUser: true), sink);
             return;
         }
 
@@ -451,7 +451,7 @@ internal sealed partial class ChatScreen
             arguments[YouTubePlayTool.StartArgument] = at.ToString(System.Globalization.CultureInfo.InvariantCulture);
         }
 
-        return (string)(await PlayToolFor(player).InvokeAsync(arguments, cancellationToken).ConfigureAwait(false))!;
+        return Llm.Tools.UntrustedText.Unfenced((string)(await PlayToolFor(player).InvokeAsync(arguments, cancellationToken).ConfigureAwait(false))!);
     }
 
     // A playlist through youtube_play (2026-10-08): from entry (0-based here, 1-based on the tool), or the video named in it.
@@ -473,7 +473,7 @@ internal sealed partial class ChatScreen
             arguments[YouTubePlayTool.StartArgument] = seconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
         }
 
-        return (string)(await PlayToolFor(player).InvokeAsync(arguments, cancellationToken).ConfigureAwait(false))!;
+        return Llm.Tools.UntrustedText.Unfenced((string)(await PlayToolFor(player).InvokeAsync(arguments, cancellationToken).ConfigureAwait(false))!);
     }
 
     private async Task<string> ControlVideoAsync(IVideoPlayer player, string action, double? value, CancellationToken cancellationToken)
@@ -484,7 +484,7 @@ internal sealed partial class ChatScreen
             arguments[YouTubeControlTool.ValueArgument] = number.ToString(System.Globalization.CultureInfo.InvariantCulture);
         }
 
-        return (string)(await ControlToolFor(player).InvokeAsync(arguments, cancellationToken).ConfigureAwait(false))!;
+        return Llm.Tools.UntrustedText.Unfenced((string)(await ControlToolFor(player).InvokeAsync(arguments, cancellationToken).ConfigureAwait(false))!);
     }
 
     /// <summary>

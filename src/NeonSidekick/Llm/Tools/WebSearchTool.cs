@@ -19,6 +19,8 @@ public sealed class WebSearchTool : AIFunction
     public const string QueryArgument = "query";
     public const string MaxResultsArgument = "max_results";
 
+    public const string SinceArgument = "since";
+
     public const int MinResults = AppSettingsData.MinWebSearchMaxResults;
     public const int MaxResults = AppSettingsData.MaxWebSearchMaxResults;
 
@@ -28,7 +30,8 @@ public sealed class WebSearchTool : AIFunction
           "type": "object",
           "properties": {
             "query": { "type": "string", "description": "What to search for, as you would type it into a search engine." },
-            "max_results": { "type": "integer", "description": "How many results to return, 1 to 20. Leave it out for the user's default." }
+            "max_results": { "type": "integer", "description": "How many results to return, 1 to 20. Leave it out for the user's default." },
+            "since": { "type": "string", "enum": ["day", "week", "month", "year"], "description": "Keeps only results from the past day, week, month or year. Fewer engines answer with it." }
           },
           "required": ["query"]
         }
@@ -59,7 +62,28 @@ public sealed class WebSearchTool : AIFunction
     }
 
     /// <summary>The search itself, apart from the argument reading: the result text the model reads.</summary>
-    public async Task<string> SearchAsync(string query, int? maxResults, CancellationToken cancellationToken)
+    public Task<string> SearchAsync(string query, int? maxResults, CancellationToken cancellationToken) => SearchAsync(query, maxResults, null, cancellationToken);
+
+    /// <summary>
+    /// <c>since</c> as a range (2026-11-15, the web-tools plan's §4, feature idea #25): the four words trimmed and in any case, blank as not given (null, no error); anything else an
+    /// error.
+    /// </summary>
+    public static (SearchSince? Since, string? Error) ParseSince(string raw)
+    {
+        ArgumentNullException.ThrowIfNull(raw);
+        return raw.Trim().ToLowerInvariant() switch
+        {
+            "" => (null, null),
+            "day" => (SearchSince.Day, null),
+            "week" => (SearchSince.Week, null),
+            "month" => (SearchSince.Month, null),
+            "year" => (SearchSince.Year, null),
+            _ => (null, WebText.BadSince(raw)),
+        };
+    }
+
+    /// <summary>The search, results kept to <paramref name="since"/> when given.</summary>
+    public async Task<string> SearchAsync(string query, int? maxResults, SearchSince? since, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
         if (string.IsNullOrWhiteSpace(query))
@@ -76,9 +100,9 @@ public sealed class WebSearchTool : AIFunction
 
         var engine = _web.Engine(effective);
         var options = WebAccess.Options(effective);
-        var outcome = await engine.SearchAsync(query.Trim(), count, options, cancellationToken).ConfigureAwait(false);
+        var outcome = await engine.SearchAsync(query.Trim(), count, options, cancellationToken, since).ConfigureAwait(false);
 
-        return outcome.Ok ? WebText.Results(query.Trim(), outcome.Results, engine.Name) : outcome.Error;
+        return outcome.Ok ? WebText.Results(query.Trim(), outcome.Results, engine.Name, since, outcome.Scope) : outcome.Error;
     }
 
     protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
@@ -89,6 +113,12 @@ public sealed class WebSearchTool : AIFunction
             return ClockText.BadInteger(MaxResultsArgument, raw);
         }
 
-        return await SearchAsync(ToolArguments.ReadString(arguments, QueryArgument), max, cancellationToken).ConfigureAwait(false);
+        var (since, sinceError) = ParseSince(ToolArguments.ReadString(arguments, SinceArgument));
+        if (sinceError is not null)
+        {
+            return sinceError;
+        }
+
+        return await SearchAsync(ToolArguments.ReadString(arguments, QueryArgument), max, since, cancellationToken).ConfigureAwait(false);
     }
 }

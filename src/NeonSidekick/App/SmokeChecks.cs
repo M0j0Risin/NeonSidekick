@@ -369,7 +369,8 @@ public static partial class SmokeChecks
         var tool = new Mcp.McpTool("smoke", client, listed[0], Mcp.McpToolName.Prefixed("smoke", listed[0].Name));
         var call = new FunctionCallContent("smoke1", tool.Name, new Dictionary<string, object?> { ["text"] = "ping" });
         var (text, _) = await Assistant.InvokeToolAsync([tool], call, budget.Token).ConfigureAwait(false);
-        string expected = Mcp.McpPipeServer.EchoPrefix + "ping";
+        // Fenced as the server's text (2026-11-15, the web-tools plan's §3), the note last: the published exe proves the fence too.
+        string expected = Llm.Tools.UntrustedText.Fenced(Mcp.McpPipeServer.EchoPrefix + "ping") + "\n" + Llm.Tools.UntrustedText.QuoteNote;
         return text == expected
             ? new SmokeCheck(name, true, $"{listed.Count} tool listed as {tool.Name} ({client.ServerInfo.Name} {client.ServerInfo.Version}); echo answered through McpTool")
             : new SmokeCheck(name, false, $"echo answered \"{text}\", expected \"{expected}\"");
@@ -1125,7 +1126,9 @@ public static partial class SmokeChecks
                     return new SmokeCheck(name, false, "the store did not open (see the log)");
                 }
 
-                store.AppendTurn(id, "the smoke test wrote this", "and the reply answered", 2, ["read_file", "patch_file"], ["smoke-skill"], 1, 1, 2, false);
+                // A source too (2026-11-15, the web-tools plan's §2): turn_sources written in the turn's transaction and read back by Load's join.
+                store.AppendTurn(id, "the smoke test wrote this", "and the reply answered", 2, ["read_file", "patch_file"], ["smoke-skill"], 1, 1, 2, false,
+                    [new Llm.Tools.WebSource(Llm.Tools.WebSourceKind.Page, "https://example.com/", "Example")]);
                 var history = new List<ChatMessage> { new(ChatRole.User, "the smoke test wrote this"), new(ChatRole.Assistant, "and the reply answered") };
                 store.SaveHistory(id, Sessions.SessionHistory.ToJson(history));
                 var hits = store.Search("smoke", 5);
@@ -1136,7 +1139,7 @@ public static partial class SmokeChecks
                 var loaded = store.Load(id);
                 int restored = loaded is null ? 0 : Sessions.SessionHistory.FromJson(loaded.HistoryJson).Count;
                 int purged = store.PurgeAll();
-                bool telemetry = loaded is { Turns: [{ ToolNames: ["read_file", "patch_file"], SkillsLoaded: ["smoke-skill"], Errors: 1 }] }
+                bool telemetry = loaded is { Turns: [{ ToolNames: ["read_file", "patch_file"], SkillsLoaded: ["smoke-skill"], Errors: 1, Sources: [{ Url: "https://example.com/", Title: "Example" }] }] }
                     && usage is { Turns: 1, Sessions: 1, WithErrors: 1 } && mark is { Skill: "smoke-skill" } && store.LastReflectionWrite() is null;
                 // The skill records (2026-09-30): skills.db on the same SQLite, a row created, used, read back and deleted; since
                 // 2026-10-02 an event and a revision on it too, gone with the row (the foreign keys on).

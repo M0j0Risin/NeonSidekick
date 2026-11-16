@@ -191,6 +191,7 @@ public static class ToolAnswers
     {
         ToolDiffResult changed => changed.Text,
         ToolShownResult shown => shown.Text,
+        ToolSourcedResult sourced => sourced.Text,
         _ => (string)answer!,
     };
 }

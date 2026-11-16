@@ -576,7 +576,7 @@ public sealed class BotCheckTests : IDisposable
         string first = await fetch.FetchAsync("https://example.com/", null, CancellationToken.None);
         string second = await fetch.FetchAsync("https://example.com/", null, CancellationToken.None);
 
-        Assert.StartsWith("Example Domain — https://example.com/ (chars 1–", first, StringComparison.Ordinal);
+        Assert.StartsWith("⟪Example Domain⟫ — https://example.com/ (chars 1–", first, StringComparison.Ordinal);
         Assert.Contains(", browser window)", first, StringComparison.Ordinal);
         Assert.Equal(first, second);
         var asked = Assert.Single(_asked);

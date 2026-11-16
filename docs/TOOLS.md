@@ -37,16 +37,21 @@ Under *Web tools*.
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `web_search` | `query, max_results?` | Searches with *Web search method* (the built-in metasearch or SearXNG): title, URL, snippet. |
-| `web_fetch` | `url, offset?` | A page as Markdown, 32,000 characters at a time (a `#anchor` starts there). Also text, JSON, XML, CSV, and a PDF's outline and first 40 pages ([Reading PDFs](#reading-pdfs)). |
+| `web_search` | `query, max_results?, since?` | Searches with *Web search method* (the built-in metasearch or SearXNG): title, URL, snippet. |
+| `web_fetch` | `url, offset?, find?, outline?` | A page as Markdown, 32,000 characters at a time (a `#anchor` starts there). Also text, JSON, XML, CSV, and a PDF's outline and first 40 pages ([Reading PDFs](#reading-pdfs)). |
 | `open_url` | `url?, urls?` | Opens up to five links in your browser, or one in the [Browser window](#the-browser-window) under *Web browser open*; a YouTube link where *YouTube open links in* says. |
 | `web_links` | `filter?` | Your saved links (as `/browser list` shows), at most 100; `filter` keeps those holding all its words. |
 | `web_save_link` | `action, url, name?` | `add`, `remove` or `rename` a saved link; `url` may be its `web_links` number, or `current` for the Browser window's page. |
-| `download_file` | `url, path?, overwrite?` | Downloads into the working directory (needs *File tools*), up to *Web download max (MB)*. Marked as from the internet (Mark of the Web, a Mac's quarantine), so SmartScreen, Gatekeeper and Office's Protected View check it; `unzip` passes the mark on. |
+| `download_file` | `url, path?, overwrite?, sha256?, sha512?` | Downloads into the working directory (needs *File tools*), up to *Web download max (MB)*. Marked as from the internet (Mark of the Web, a Mac's quarantine), so SmartScreen, Gatekeeper and Office's Protected View check it; `unzip` passes the mark on. |
 
 * **A page that refuses a plain fetch**, or needs scripts, is tried again in a headless Edge, Chrome or Brave (Chromium on a Mac), per *Web browser mode*. Its cookies stay in `%TEMP%\NeonSidekick\browser` (`$TMPDIR/NeonSidekick/browser` on a Mac).
 * **Bot checks:** one that clears by itself is waited on briefly; one that wants a click goes to the Browser window, or is reported blocked.
 * **Pacing:** a short rate limit is waited out, and one site gets at most a request a second.
+* **Recent results:** `web_search`'s `since` (`day`, `week`, `month`, `year`) asks only the engines with a date filter: Brave, Startpage, and the Brave API with a key. With none of them on, it's refused; the header names those that answered.
+* **Checked downloads:** `download_file` with a `sha256` or `sha512` keeps the file only when it matches, and says so; a mismatch saves nothing.
+* **Long pages:** `web_fetch`'s `outline` lists a page's headings and `find` the passages holding every word given, each with the offset to read from. Neither downloads the page twice.
+* **Sources:** each page `web_fetch` reads and file `download_file` saves is listed under the reply ([INTERFACE.md](INTERFACE.md#the-screen)) and kept with the session.
+* **Page text is untrusted:** what a page, a search result or a saved link's title says reaches the model fenced as quoted data (`⟪ ⟫`); your screen shows it without the marks. Shell output (a `curl`) isn't fenced.
 
 #### The Browser window
 
@@ -182,6 +187,7 @@ With *File checkpoints* on, each turn keeps what the file tools changed, so `/un
 * **Limits:** 32 MB; a locked PDF is refused. Chinese, Japanese and Korean read. `share`, or a `\\server\share` path, reads one on an offered UNC share in place.
 * **Kept apart:** read in a page cut off from the network, in its own browser profile, never the web tools' cookies.
 * **On the web:** `web_fetch` reads a PDF link's outline and first 40 pages; `download_file` then `read_pdf` reads the rest.
+* **Downloaded files:** a PDF carrying the mark of the web (a browser's or `download_file`'s) reaches the model fenced as untrusted (`⟪ ⟫`); your own read as they are.
 
 #### Reading Office files
 
@@ -192,6 +198,7 @@ With *File checkpoints* on, each turn keeps what the file tools changed, so `/un
 * **PowerPoint:** slides in order; `slides` picks some (`"2-5"`), `notes: true` adds speaker notes; hidden slides are marked.
 * **Not read:** headers and footers, a sheet's notes and comments, charts and pictures (a marker stands in), pivot caches, slide comments, a layout's text. Macros never run, and nothing outside the file is fetched.
 * **Refused, saying what to do:** old `.doc`/`.xls`/`.ppt`, `.xlsb`, OpenDocument, protected, labeled or damaged files. Up to 100 MB; a file open in Office still reads. `share` reads one on an offered UNC share.
+* **Downloaded files:** one carrying the mark of the web reaches the model fenced as untrusted (`⟪ ⟫`), like a downloaded PDF; your own read as they are.
 
 #### Writing Office files
 
@@ -304,6 +311,7 @@ Under *GitLib tools*: git inside the app, for when the model should never run `g
 
 * `gitlib_discard` and `gitlib_delete` lose work for good; `gitlib_delete` starts off.
 * Commits, reverts and annotated tags need *GitLib user email* and *GitLib user name*, which `/gituser` writes into the repository.
+* **Commit text is untrusted:** a clone carries whoever wrote its commits, so authors, subjects, messages and tag messages reach the model fenced (`⟪ ⟫`). File contents and diffs aren't.
 
 | Tool | Arguments | What it does |
 |---|---|---|
@@ -328,6 +336,7 @@ Under *GitLib tools*: git inside the app, for when the model should never run `g
 Under *Docker tools*, over *Docker engine pipe* (a socket on a Mac, [below](#docker-on-a-mac)); the app never starts Docker Desktop. A container is named by its name, a unique part of it, or a 4+ character id prefix.
 
 * `/docker` runs them yourself ([COMMANDS.md](COMMANDS.md)); `--docker-check` tests them against the real engine.
+* **Container text is untrusted:** `docker_logs`' lines and `docker_inspect`'s labels and command reach the model fenced (`⟪ ⟫`); `/docker logs` shows them bare.
 * **Changes need two keys:** *Docker writes* offers them, and each call asks you first (headless refuses). `docker_remove` and `docker_prune` start off even then. Every change is logged.
 * **Secrets:** `docker_inspect` shows environment variable names, never values, and hides secret-looking labels and passwords. Logs can't be redacted, so the model is told never to repeat a secret from them.
 
@@ -470,6 +479,7 @@ Under *YouTube tools*. Videos play where *YouTube open links in* says:
 | `youtube_save` | `action, video?, playlist?` | `add` a video or a playlist (`current` for the player's), or `remove` one (also by number). |
 
 * **The key:** searches and playlists need one, and each search spends daily quota; playing needs none. Watch Later and private playlists are out of reach (the app never signs in).
+* **Titles are untrusted:** video, playlist and channel names reach the model fenced (`⟪ ⟫`); `/youtube` shows them bare.
 * **Saved videos and playlists** are your bookmarks, per profile, in `youtube.json`; one resumes a few seconds before where you left it, or starts over once finished. A playlist (▤) resumes at its entry and place. `/youtube` (or `/youtube list`), `/youtube save` and `/youtube unsave` manage them.
 * **In a browser** the app can't see or control the video: `youtube_status` says only where it went. In the Web UI's tab, a video waits for a tab in view. A video YouTube won't embed goes to the browser through `open_url`.
 
@@ -1072,6 +1082,7 @@ Under *Home Assistant tools*, with *Home Assistant URL* and *Home Assistant API 
 | `ha_assist` | `text` | Hands a sentence to Home Assistant's Assist agent; refused under `off`. Under `ask` it shows the whole sentence for your yes (`conversation.process` in the safe services skips asking). |
 
 * **`ha_assist` when it asks** refuses a sentence over 200 characters, or with a line break or an invisible character, since the question must show it whole.
+* **Home text is untrusted:** states, attributes, history, to-do items and Assist's replies reach the model fenced (`⟪ ⟫`), since integrations and anyone in the household write them; `/ha` shows them bare.
 
 ### Shopping list
 
@@ -1170,6 +1181,7 @@ Under *MCP servers enabled*. An MCP (Model Context Protocol) server is an outsid
 
 * Each connected server is a tool group, its tools named `<server>__<tool>` (`gateway__get_current_time`). `/mcp` switches servers and single tools.
 * Servers connect in the background (🔌 on the status bar); a reply started meanwhile gets those already connected.
+* **Server text is untrusted:** each text a tool returns reaches the model fenced (`⟪ ⟫`); a failed call starts `Error:`. A server's tool descriptions aren't fenced: trusting a server is your choice in `mcp.json`.
 * **`mcp.json`** (`/mcp`'s **edit** rows open it) takes Claude Desktop's and Claude Code's shape, so a block copied from them works. A server has a `command` (with `args`, `env`, `cwd`) or a `url` (with `headers`), never both:
 
 ```json

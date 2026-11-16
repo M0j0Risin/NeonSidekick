@@ -519,12 +519,12 @@ public sealed partial class DockerTests : IDisposable
     public async Task Logs_ResolvesTheName_AsksTheEngine_AndReadsTheFrames()
     {
         string result = await Invoke<DockerLogsTool>(("container", "mysql"), ("tail", 20), ("since", "10m"), ("timestamps", true));
-        Assert.Equal("Docker logs: mysql_dev · last 3 lines\nready\nwarning: low disk\nquery ok", result);
+        Assert.Equal("Docker logs: mysql_dev · last 3 lines\n⟪ready\nwarning: low disk\nquery ok⟫" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, result);
         var asked = _stub.Requests.Last();
         Assert.Equal("/v1.47/containers/" + MysqlId + "/logs", asked.Uri.AbsolutePath);
         Assert.Equal("?stdout=1&stderr=1&tail=20&since=" + (_time.UtcNow.ToUnixTimeSeconds() - 600).ToString(System.Globalization.CultureInfo.InvariantCulture) + "&timestamps=1", asked.Uri.Query);
 
-        Assert.Equal("Docker logs: mysql_dev · 1 line matching 'disk'\nwarning: low disk", await Invoke<DockerLogsTool>(("container", "mysql_dev"), ("grep", "disk")));
+        Assert.Equal("Docker logs: mysql_dev · 1 line matching 'disk'\n⟪warning: low disk⟫" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, await Invoke<DockerLogsTool>(("container", "mysql_dev"), ("grep", "disk")));
         Assert.Contains("tail=" + DockerLogsTool.GrepWindow.ToString(System.Globalization.CultureInfo.InvariantCulture), _stub.Requests.Last().Uri.Query);
         _ = await Invoke<DockerLogsTool>(("container", "mysql_dev"), ("stream", "stderr"));
         Assert.StartsWith("?stdout=0&stderr=1&tail=100", _stub.Requests.Last().Uri.Query);

@@ -47,6 +47,20 @@ public sealed class TurnTrace
     /// <summary>The distinct names of the model's own calls in first-call order (seeded pairs excluded) — the session store's <c>tool_names</c> (2026-09-19).</summary>
     public IReadOnlyList<string> ToolNames => _names;
 
+    private readonly List<WebSource> _sources = [];
+    private readonly HashSet<(WebSourceKind, string)> _sourceKeys = [];
+
+    /// <summary>
+    /// What the turn took from the web (2026-11-15, the web-tools plan's §2, feature idea #27), in first-use order: each page read and file
+    /// saved once (a page by <see cref="Web.WebFetcher.PageKey"/>, so <c>…#a</c> and <c>…#b</c> are one; a page and a download of one address
+    /// stay two), and one <see cref="WebSourceKind.Search"/> per search that answered, counted, never listed. A URL loses any
+    /// <c>user:password@</c>, and a title is one line of at most <see cref="MaxSourceTitleChars"/>, before it is kept.
+    /// </summary>
+    public IReadOnlyList<WebSource> Sources => _sources;
+
+    /// <summary>The longest source title kept (2026-11-15): a page picks its own, so a very long one can't bloat the store or the export.</summary>
+    public const int MaxSourceTitleChars = 200;
+
     /// <summary>Counts <paramref name="evt"/>; every other event is ignored.</summary>
     public void Observe(TurnEvent evt)
     {
@@ -92,6 +106,11 @@ public sealed class TurnTrace
                     if (Errors > 0)
                     {
                         Recovered = true;
+                    }
+
+                    if (!result.GuardRefused)
+                    {
+                        NoteSource(result);
                     }
 
                     if (string.Equals(result.Name, SkillEditorTool.ToolName, StringComparison.Ordinal))
@@ -147,6 +166,39 @@ public sealed class TurnTrace
 
         Turns++;
     }
+
+    private void NoteSource(TurnEvent.ToolResult result)
+    {
+        if (string.Equals(result.Name, WebSearchTool.ToolName, StringComparison.Ordinal))
+        {
+            _sources.Add(new WebSource(WebSourceKind.Search, "", ""));
+            return;
+        }
+
+        if (Kept(result.Source) is { } source && _sourceKeys.Add((source.Kind, KeyOf(source.Url))))
+        {
+            _sources.Add(source);
+        }
+    }
+
+    /// <summary>A source as it is kept: its URL without credentials, its title one line and cut; null for none, or one with no URL.</summary>
+    public static WebSource? Kept(WebSource? source)
+    {
+        if (source is null || source.Kind == WebSourceKind.Search || string.IsNullOrWhiteSpace(source.Url))
+        {
+            return null;
+        }
+
+        string url = source.Url.Trim();
+        if (Uri.TryCreate(url, UriKind.Absolute, out var parsed) && parsed.UserInfo.Length > 0)
+        {
+            url = new UriBuilder(parsed) { UserName = "", Password = "" }.Uri.AbsoluteUri;
+        }
+
+        return source with { Url = url, Title = UntrustedText.Cut(UntrustedText.OneLine(source.Title), MaxSourceTitleChars) };
+    }
+
+    private static string KeyOf(string url) => Uri.TryCreate(url, UriKind.Absolute, out var parsed) ? Web.WebFetcher.PageKey(parsed) : url;
 
     /// <summary>How many turns <see cref="Absorb"/> folded in; zero for a single turn's own trace.</summary>
     public int Turns { get; private set; }

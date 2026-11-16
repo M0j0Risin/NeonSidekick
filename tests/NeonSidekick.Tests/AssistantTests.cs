@@ -194,12 +194,12 @@ public class AssistantTests
     public void SystemPrompt_WebOn_AppendsTheWebRule_ToTheDefaultRulesOnly()
     {
         Assert.Equal(
-            "For anything on the web — current facts, news, prices, documentation, a page the user names — search with web_search and read a page with web_fetch (offset continues a long one); say what you looked at. " +
+            "For anything on the web — current facts, news, prices, documentation, a page the user names — search with web_search and read a page with web_fetch (offset continues a long one; for a long page, outline or find first, then offset); say what you looked at. " +
             "To open a page for the user — when they ask to open, show or see a link rather than have it read out — call open_url.",
             Assistant.WebRule);
         // The download sentence (2026-09-18) rides the web rule only with the file tools on: download_file writes the sandbox.
         Assert.Equal(
-            "To save a file or a picture from the web into the working directory call download_file with its URL (and a path when the user names one); it saves without reading — view_image or read_file look at the result.",
+            "To save a file or a picture from the web into the working directory call download_file with its URL (and a path when the user names one, and the published sha256 when there is one); it saves without reading — view_image or read_file look at the result.",
             Assistant.DownloadRule);
         Assert.Equal(DefaultWebSystemPrompt, Assistant.SystemPrompt(false, null, web: true));
         Assert.Equal(Assistant.DefaultSystemPrompt, Assistant.SystemPrompt(false, null, web: false));

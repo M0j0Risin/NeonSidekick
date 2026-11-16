@@ -78,6 +78,7 @@ public sealed class HaHistoryTool : HaTool
         int hours = given ?? DefaultHours;
         var now = Ha.Time.GetUtcNow();
         var reply = await client.HistoryAsync(entity.Id, now.AddHours(-hours), now, Ha.Timeout, cancellationToken).ConfigureAwait(false);
-        return reply.Ok ? HaText.History(entity, reply.Body, hours, _zone) : reply.Error;
+        // States and attribute values are the integrations' words: the body under the header fenced (2026-11-15, the web-tools plan's §3).
+        return reply.Ok ? UntrustedText.FenceBody(HaText.History(entity, reply.Body, hours, _zone)) : reply.Error;
     }
 }

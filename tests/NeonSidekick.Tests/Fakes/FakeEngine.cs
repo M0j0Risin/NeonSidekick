@@ -26,6 +26,8 @@ internal sealed class FakeEngine(string name, Func<EngineQuery, CancellationToke
 
     public bool Paging { get; init; }
 
+    public bool TimeRangeSupport { get; init; }
+
     public int Calls { get; private set; }
 
     public List<EngineQuery> Queries { get; } = [];

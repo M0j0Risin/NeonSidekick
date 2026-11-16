@@ -178,6 +178,30 @@ public static class WebText
     /// <summary>What the metasearch says with every engine switched off, or only names it doesn't know (2026-11-06).</summary>
     public const string MetaSearchNoEngines = "Error: no search engine is turned on in Web metasearch engines";
 
+    /// <summary>
+    /// A ranged metasearch with no engine turned on that filters by date (2026-11-15, the web-tools plan's §4, feature idea #25): the ones that can, so turning them on reads as a
+    /// choice.
+    /// </summary>
+    public static string MetaSearchNoTimeRange(IReadOnlyList<string> filtering) =>
+        "Error: none of the engines turned on in Web metasearch engines filters by date; " + string.Join(" and ", filtering) + " do. Search without since, or turn one on.";
+
+    /// <summary><c>since</c> that is none of the four words (2026-11-15, the web-tools plan's §4, feature idea #25).</summary>
+    public static string BadSince(string raw) =>
+        "Error: since must be day, week, month or year, not \"" + Llm.Tools.ArgumentText.Echo(raw) + "\".";
+
+    /// <summary>The range as a header names it: <c>past week</c>.</summary>
+    public static string SinceShown(SearchSince since) => "past " + SearxngSearch.TimeRangeWord(since);
+
+    /// <summary>
+    /// What a header names after the count (2026-11-15, the web-tools plan's §4, feature idea #25): the engine alone; with a range, <c>past week, searxng</c>, or the engines
+    /// that answered a metasearch, <c>past week; brave, startpage</c>.
+    /// </summary>
+    public static string SearchedBy(string engine, SearchSince? since, string scope) =>
+        since is not { } recent ? engine : scope.Length > 0 ? SinceShown(recent) + "; " + scope : SinceShown(recent) + ", " + engine;
+
+    /// <summary>A ranged search's empty answer adds that the range left engines out, so silence isn't read as nothing published.</summary>
+    public const string NoResultsSinceHint = "; without since, more engines answer";
+
     /// <summary>What the metasearch says under network mode <c>lan</c> (2026-11-06): it has no engine on the LAN to ask.</summary>
     public const string MetaSearchNeedsInternet = "Error: the built-in metasearch asks search engines on the internet, which Web browser network mode 'lan' keeps off limits";
 
@@ -193,6 +217,32 @@ public static class WebText
     /// <see cref="ViewImageNote"/>; a file outcome that is not Ok is <see cref="Files.FileText.Error"/>'s
     /// sentence with the verb <c>download</c>. Pinned.
     /// </summary>
+    /// <summary>
+    /// A <c>sha256</c> or <c>sha512</c> that isn't 64 or 128 hex digits (2026-11-15, the web-tools plan's §5, feature idea #29), refused before any download, the value repeated
+    /// safely.
+    /// </summary>
+    public static string BadDigest(string argument, int digits, string raw) =>
+        $"Error: {argument} must be {digits.ToString(CultureInfo.InvariantCulture)} hex digits, not \"{Llm.Tools.ArgumentText.Echo(raw)}\"; nothing was downloaded.";
+
+    /// <summary>Both digests given (2026-11-15, the web-tools plan's §5, feature idea #29).</summary>
+    public const string BothDigests = "Error: give sha256 or sha512, not both; nothing was downloaded.";
+
+    /// <summary>
+    /// A download whose digest isn't the one asked (2026-11-15, the web-tools plan's §5, feature idea #29): both in full, and that nothing was kept; a <c>.gz</c>, <c>.tgz</c> or
+    /// <c>.br</c> adds that the server may have had it unpacked in transit, so it isn't called tampered.
+    /// </summary>
+    public static string HashMismatch(string algorithm, string expected, string actual, string url, string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        string unpacked = name.EndsWith(".gz", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".tgz", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".br", StringComparison.OrdinalIgnoreCase)
+            ? " The server may have sent it compressed and had it unpacked in transit."
+            : "";
+        return $"Error: {url} does not match the {algorithm} given (expected {expected}, got {actual}); the file was not kept.{unpacked}";
+    }
+
+    /// <summary>The note a matching download ends with (2026-11-15, the web-tools plan's §5, feature idea #29): <c>; SHA-256 verified</c>.</summary>
+    public static string Verified(string algorithm) => "; " + algorithm + " verified";
+
     public static string Downloaded(Files.WriteResult result, string url, string mediaType)
     {
         ArgumentNullException.ThrowIfNull(result);
@@ -280,7 +330,7 @@ public static class WebText
         ArgumentNullException.ThrowIfNull(url);
         ArgumentNullException.ThrowIfNull(engine);
         var sb = new StringBuilder();
-        sb.Append(string.IsNullOrWhiteSpace(title) ? Untitled : title).Append(" — ").Append(url).Append(" (");
+        sb.Append(TitleShown(title)).Append(" — ").Append(url).Append(" (");
         if (anchor is not null && anchorMissing)
         {
             sb.Append('#').Append(anchor).Append(" not found, from the top; ");
@@ -301,38 +351,160 @@ public static class WebText
         return sb.Append(", ").Append(engine).Append(')').ToString();
     }
 
-    /// <summary>An empty page: the header alone says so.</summary>
+    /// <summary>An empty page: the header alone says so, and a page's own title is fenced, the note under it (2026-11-15).</summary>
     public static string EmptyPage(string title, string url, string engine) =>
-        $"{(string.IsNullOrWhiteSpace(title) ? Untitled : title)} — {url} (no readable text, {engine})";
+        Llm.Tools.UntrustedText.WithNote($"{TitleShown(title)} — {url} (no readable text, {engine})");
+
+    /// <summary>
+    /// A page's title as an answer shows it (2026-11-15, the web-tools plan's §3): the page's own words fenced as untrusted, one line; the
+    /// app's <see cref="Untitled"/> for none, bare, since a fence would say the page wrote it.
+    /// </summary>
+    public static string TitleShown(string? title) =>
+        string.IsNullOrWhiteSpace(title) ? Untitled : Llm.Tools.UntrustedText.Quote(Llm.Tools.UntrustedText.OneLine(title));
+
+    // ── web_fetch's find and outline (2026-11-15, the web-tools plan's §1) ──
+
+    /// <summary><c>find</c> and <c>outline</c> asked together. Prompt text.</summary>
+    public const string FindAndOutline = "Error: find and outline each cover the whole page: ask for one of them";
+
+    /// <summary><c>find</c> or <c>outline</c> asked with an <c>offset</c>. Prompt text.</summary>
+    public static string WholePageNoOffset(string argument) =>
+        $"Error: {argument} covers the whole page, so it takes no offset; read a part it names with offset alone";
+
+    /// <summary>A <c>find</c> with nothing to look for once quotes and punctuation are set aside. Prompt text.</summary>
+    public const string FindNoWords = "Error: find needs a word to look for, not only quotes or punctuation";
+
+    /// <summary>The header over <c>outline</c>'s list: its first line, the transcript's one-line note.</summary>
+    public static string OutlineHeader(string title, string url, int headings, int total, string engine) =>
+        $"{Titled(title)} — {url} (outline: {headings.ToString("N0", CultureInfo.InvariantCulture)} {(headings == 1 ? "heading" : "headings")} " +
+        $"in {total.ToString("N0", CultureInfo.InvariantCulture)} chars; read a part with offset, {engine})";
+
+    /// <summary>A page with no headings: the header alone, with the length, so the model pages by <c>offset</c>.</summary>
+    public static string NoHeadings(string title, string url, int total, string engine) =>
+        $"{Titled(title)} — {url} (outline: no headings in {total.ToString("N0", CultureInfo.InvariantCulture)} chars; read it with offset, {engine})";
+
+    /// <summary>The line ending an outline cut at its cap.</summary>
+    public static string OutlineMore(int left) => $"({left.ToString("N0", CultureInfo.InvariantCulture)} more)";
+
+    /// <summary>A PDF outline item on a page past the ones read: in place of its offset.</summary>
+    public static string HeadingNotRead(int? page) =>
+        page is { } p ? $"(page {p.ToString(CultureInfo.InvariantCulture)}, not read)" : "(not read)";
+
+    /// <summary>The header over <c>find</c>'s passages: <c>… (find "warranty": 4 of 7 matches in 45,000 chars, http)</c>.</summary>
+    public static string FindHeader(string title, string url, string query, int shown, int total, int chars, string engine) =>
+        $"{Titled(title)} — {url} (find \"{query}\": " +
+        (shown == total ? $"{total.ToString("N0", CultureInfo.InvariantCulture)} {(total == 1 ? "match" : "matches")}" : $"{shown.ToString(CultureInfo.InvariantCulture)} of {total.ToString("N0", CultureInfo.InvariantCulture)} matches") +
+        $" in {chars.ToString("N0", CultureInfo.InvariantCulture)} chars; read on with offset, {engine})";
+
+    /// <summary>A <c>find</c> that matched nothing: the header says so, with the length.</summary>
+    public static string FindNone(string title, string url, string query, int chars, string engine) =>
+        $"{Titled(title)} — {url} (find \"{query}\": no passage holds every word in {chars.ToString("N0", CultureInfo.InvariantCulture)} chars, {engine})";
+
+    /// <summary>Under <see cref="FindNone"/>: the page's first headings, where else to look.</summary>
+    public static string FindNoneHint(IReadOnlyList<string> headings) =>
+        "Its first headings: " + string.Join("; ", headings.Select(h => Llm.Tools.UntrustedText.Quote(Llm.Tools.UntrustedText.OneLine(h)))) + ". Try other words, or outline.";
+
+    /// <summary>Under <see cref="FindNone"/> on a page with no headings.</summary>
+    public const string FindNoneNoHeadings = "Try other words, or read it with offset.";
+
+    /// <summary>One passage's line above its text: where it starts, for <c>offset</c>.</summary>
+    public static string PassageAt(int offset) => "@" + offset.ToString(CultureInfo.InvariantCulture);
+
+    private static string Titled(string title) => TitleShown(title);
+
+    // ── The sources under a reply (2026-11-15, the web-tools plan's §2, feature idea #27) ──
+
+    /// <summary>The line's glyph (the user's pick, 2026-11-15; 🔗 is the UNC tools' already).</summary>
+    public const string SourcesGlyph = "📚";
+
+    /// <summary>A download's mark on its label: the app's download glyph.</summary>
+    public const string DownloadMark = App.BackgroundJobText.DownloadGlyph;
+
+    /// <summary>How many sources the transcript's line names before "+N more"; the feed and the exports list them all.</summary>
+    public const int SourcesShown = 5;
+
+    /// <summary>Between two items of the line.</summary>
+    public const string SourcesSeparator = " · ";
+
+    /// <summary>The sources past <see cref="SourcesShown"/>, counted.</summary>
+    public static string SourcesMore(int more) => "+" + more.ToString(CultureInfo.InvariantCulture) + " more";
+
+    /// <summary>The searches the turn made, counted, never listed.</summary>
+    public static string SourcesSearches(int searches) =>
+        searches.ToString(CultureInfo.InvariantCulture) + (searches == 1 ? " search" : " searches");
+
+    /// <summary>
+    /// One source as every view names it (2026-11-15): its title, else its host alone, so a page with no title is never an empty link;
+    /// a download marked <see cref="DownloadMark"/>. <c>Host</c> is set only beside a title (the page's own words, so the address it came
+    /// from follows it); null when the label is the host already. The host is the final URL's, in its ASCII form, never the title's.
+    /// </summary>
+    public static (string Label, string? Host) SourceLabel(Llm.Tools.WebSource source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        string host = SourceHost(source.Url);
+        string title = source.Title.Trim();
+        string mark = source.Kind == Llm.Tools.WebSourceKind.Download ? DownloadMark + " " : "";
+        if (title.Length == 0)
+        {
+            return (mark + (host.Length > 0 ? host : source.Url), null);
+        }
+
+        return (mark + title, host.Length > 0 ? host : null);
+    }
+
+    /// <summary>The host of <paramref name="url"/> as a link opens it (its ASCII form); empty for one that doesn't parse.</summary>
+    public static string SourceHost(string url)
+    {
+        ArgumentNullException.ThrowIfNull(url);
+        if (Files.SafeText.WebLink(url) is { } link && link.Uri.Scheme != Uri.UriSchemeMailto)
+        {
+            try
+            {
+                return link.Uri.IdnHost;
+            }
+            catch (UriFormatException)
+            {
+                return "";
+            }
+        }
+
+        return Uri.TryCreate(url, UriKind.Absolute, out var parsed) ? parsed.Host : "";
+    }
+
+    /// <summary>Whether a turn's sources draw a line: a page or a download read; searches alone don't.</summary>
+    public static bool HasSourcesLine(IReadOnlyList<Llm.Tools.WebSource>? sources) =>
+        sources is not null && sources.Any(s => s.Kind != Llm.Tools.WebSourceKind.Search);
 
     public static string SearchHeader(string query, int count, string engine) =>
         $"Searched \"{query}\" ({count.ToString(CultureInfo.InvariantCulture)} {(count == 1 ? "result" : "results")}, {engine}):";
 
-    public static string NoResults(string query, string engine) => $"Searched \"{query}\" ({engine}): no results";
+    public static string NoResults(string query, string engine, SearchSince? since = null, string scope = "") =>
+        $"Searched \"{query}\" ({SearchedBy(engine, since, scope)}): no results{(since is null ? "" : NoResultsSinceHint)}";
 
     /// <summary>The numbered results under the header: <c>1. Title — url</c> and the snippet indented under it.</summary>
-    public static string Results(string query, IReadOnlyList<SearchResult> results, string engine)
+    public static string Results(string query, IReadOnlyList<SearchResult> results, string engine, SearchSince? since = null, string scope = "")
     {
         ArgumentNullException.ThrowIfNull(query);
         ArgumentNullException.ThrowIfNull(results);
         if (results.Count == 0)
         {
-            return NoResults(query, engine);
+            return NoResults(query, engine, since, scope);
         }
 
-        var sb = new StringBuilder(SearchHeader(query, results.Count, engine));
+        // Each hit's title and snippet are the page's words, fenced (2026-11-15, the web-tools plan's §3); the URL stays bare.
+        var sb = new StringBuilder(SearchHeader(query, results.Count, SearchedBy(engine, since, scope)));
         for (int i = 0; i < results.Count; i++)
         {
             var r = results[i];
             sb.Append('\n').Append((i + 1).ToString(CultureInfo.InvariantCulture)).Append(". ")
-                .Append(string.IsNullOrWhiteSpace(r.Title) ? Untitled : r.Title).Append(" — ").Append(r.Url);
+                .Append(TitleShown(r.Title)).Append(" — ").Append(r.Url);
             if (!string.IsNullOrWhiteSpace(r.Snippet))
             {
-                sb.Append("\n   ").Append(r.Snippet);
+                sb.Append("\n   ").Append(Llm.Tools.UntrustedText.Quote(Llm.Tools.UntrustedText.OneLine(r.Snippet)));
             }
         }
 
-        return sb.ToString();
+        return Llm.Tools.UntrustedText.WithNote(sb.ToString());
     }
 
     /// <summary>A byte count as a size: <c>213.4 KB</c>, <c>1.2 MB</c>, <c>512 B</c>. Pinned.</summary>

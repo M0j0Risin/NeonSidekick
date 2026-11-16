@@ -444,7 +444,8 @@ public sealed class GitAccess
                     }
 
                     (files, filesTruncated) = Compare(repo, location, commit!.Parents.FirstOrDefault()?.Tree, commit.Tree, prefix, pathsOnly, cap, cancellationToken);
-                    label = Short(commit) + " (" + commit.MessageShort + ")";
+                    // The commit's subject is its author's words: fenced in place (2026-11-15, the web-tools plan's §3), the note after the diff.
+                    label = Short(commit) + " (" + GitText.Outside(commit.MessageShort) + ")";
                     break;
                 }
 

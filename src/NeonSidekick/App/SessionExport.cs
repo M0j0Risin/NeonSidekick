@@ -33,7 +33,9 @@ public sealed record SessionExportDocument(string Text, IReadOnlyList<ExportPict
 /// A stored session written out (2026-10-29, the feature ideas' second: nothing wrote one out, and the user wanted one to share or to keep in the
 /// Obsidian vault). The turn rows are the text as the transcript showed it, every turn; the pictures come from the stored history, matched to the
 /// rows by ordinal (<see cref="RestoredPictures.ByRow"/>), so a turn whose pictures a compact or the picture budget took out exports without them.
-/// Never exported (the user's call): thinking, and the tools' arguments and results — the tool line names the tools. The app's own labels lose
+/// Never exported (the user's call): thinking, and the tools' arguments and results — the tool line names the tools. The one piece of tool
+/// data it carries (2026-11-15, the web-tools plan's §2) is each turn's sources: the pages read and files saved, linked, and its searches
+/// counted, never their queries. The app's own labels lose
 /// their local paths (<see cref="PasteBlocks.WithoutSavedPaths"/>); what the user and the model wrote is kept as it is.
 /// <list type="bullet">
 /// <item>Markdown: YAML front matter (Obsidian's properties), a <c>#</c> title and the facts line, then a <c>## Turn n</c> section a turn; the
@@ -98,6 +100,72 @@ public static partial class SessionExport
         }
 
         return escaped.ToString();
+    }
+
+    /// <summary>
+    /// One source as a Markdown item (2026-11-15, the web-tools plan's §2): <c>[title](&lt;url&gt;) (host)</c> by
+    /// <see cref="Web.WebText.SourceLabel"/>'s one rule, the label escaped (<see cref="MarkdownText"/>), the destination the address as a link
+    /// opens it (<see cref="SafeText.WebLink"/>'s target: its host in ASCII, spaces escaped) in angle brackets, so a URL with parentheses
+    /// stays whole. One the vetting refuses is its label alone, as the transcript's line shows it. The Web UI's line and both exports. Pure.
+    /// </summary>
+    public static string SourceMarkdown(Llm.Tools.WebSource source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        var (label, host) = Web.WebText.SourceLabel(source);
+        string shown = MarkdownText(Llm.Tools.UntrustedText.OneLine(label));
+        string tail = host is null ? "" : " (" + MarkdownText(host) + ")";
+        if (SafeText.WebLink(source.Url) is { } link && link.Uri.Scheme != Uri.UriSchemeMailto)
+        {
+            string target = link.Target.Replace("<", "%3C", StringComparison.Ordinal).Replace(">", "%3E", StringComparison.Ordinal);
+            return "[" + shown + "](<" + target + ">)" + tail;
+        }
+
+        return shown + tail;
+    }
+
+    /// <summary>A turn's sources as Markdown items, every page and file, then the searches counted; empty when only searches were made.</summary>
+    public static IReadOnlyList<string> SourceItems(IReadOnlyList<Llm.Tools.WebSource> sources)
+    {
+        ArgumentNullException.ThrowIfNull(sources);
+        if (!Web.WebText.HasSourcesLine(sources))
+        {
+            return [];
+        }
+
+        var items = sources.Where(s => s.Kind != Llm.Tools.WebSourceKind.Search).Select(SourceMarkdown).ToList();
+        int searches = sources.Count(s => s.Kind == Llm.Tools.WebSourceKind.Search);
+        if (searches > 0)
+        {
+            items.Add(SessionText.ExportSourcesSearches(searches));
+        }
+
+        return items;
+    }
+
+    /// <summary>The Web UI's 📚 line (2026-11-15): the glyph, then every source's item, then the searches, on one line. Empty for none.</summary>
+    public static string SourcesLineMarkdown(IReadOnlyList<Llm.Tools.WebSource> sources)
+    {
+        ArgumentNullException.ThrowIfNull(sources);
+        if (!Web.WebText.HasSourcesLine(sources))
+        {
+            return "";
+        }
+
+        var items = sources.Where(s => s.Kind != Llm.Tools.WebSourceKind.Search).Select(SourceMarkdown).ToList();
+        int searches = sources.Count(s => s.Kind == Llm.Tools.WebSourceKind.Search);
+        if (searches > 0)
+        {
+            items.Add(Web.WebText.SourcesSearches(searches));
+        }
+
+        return Web.WebText.SourcesGlyph + " " + string.Join(Web.WebText.SourcesSeparator, items);
+    }
+
+    // A turn's sources as a Markdown list under its heading; empty for none.
+    private static string SourcesList(SessionTurn turn)
+    {
+        var items = SourceItems(turn.SourceList);
+        return items.Count == 0 ? "" : SessionText.ExportSourcesHeading + "\n\n" + string.Concat(items.Select(item => "- " + item + "\n"));
     }
 
     /// <summary>
@@ -324,6 +392,11 @@ public static partial class SessionExport
                 md.Write("\n" + ToolLine(turn, CodeSpan) + "\n");
             }
 
+            if (SourcesList(turn) is { Length: > 0 } sources)
+            {
+                md.Write("\n" + sources);
+            }
+
             if (shown is not null && Links(shown.Tools) is { } toolError)
             {
                 return toolError;
@@ -355,12 +428,13 @@ public static partial class SessionExport
         * { box-sizing: border-box; }
         body { margin: 0 auto; max-width: 52rem; padding: 1.5rem 1rem 3rem; background: var(--bg); color: var(--ink); font-family: "Segoe UI", system-ui, -apple-system, sans-serif; font-size: 16px; line-height: 1.5; }
         header h1 { color: var(--accent); margin: 0 0 0.25rem; font-size: 1.6rem; line-height: 1.25; overflow-wrap: anywhere; }
-        .facts, .tools, .note, .turn h2 { color: var(--dim); }
+        .facts, .tools, .note, .sources, .turn h2 { color: var(--dim); }
         .facts { margin: 0 0 1.5rem; font-size: 0.9rem; }
         .turn { border-top: 1px solid var(--line); padding: 1rem 0; }
         .turn h2 { font-size: 0.85rem; font-weight: 600; margin: 0 0 0.75rem; }
         .user { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--user-bg, var(--panel)); color: var(--user); font-weight: var(--user-weight); font-style: var(--user-font-style); text-decoration: var(--user-decoration); border-radius: 6px; padding: 0.6rem 0.8rem; }
-        .tools { font-size: 0.9rem; margin: 0.75rem 0; }
+        .tools, .sources { font-size: 0.9rem; margin: 0.75rem 0; }
+        .sources p, .sources ul { margin: 0.25rem 0; }
         .note { font-style: italic; }
         img { display: block; max-width: 100%; height: auto; margin: 0.75rem 0; border-radius: 4px; }
         .reply { overflow-wrap: anywhere; }
@@ -488,6 +562,12 @@ public static partial class SessionExport
             if (turn.ToolCalls > 0)
             {
                 html.Write("<p class=\"tools\">" + WebUtility.HtmlEncode(ToolLine(turn, n => n)) + "</p>\n");
+            }
+
+            // The sources as the same Markdown list, rendered as the replies are, so every link is vetted and none is built by hand.
+            if (SourcesList(turn) is { Length: > 0 } sources)
+            {
+                html.Write("<div class=\"sources\">\n" + PdfHtml.Markdown(sources, _ => null, WebUiMarkdown.SafeLink, softBreaksAsLines: true, idPrefix: "s" + (i + 1).ToString(CultureInfo.InvariantCulture) + "-") + "</div>\n");
             }
 
             if (shown is not null)

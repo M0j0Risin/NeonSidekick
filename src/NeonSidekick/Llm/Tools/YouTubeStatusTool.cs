@@ -56,5 +56,5 @@ public sealed class YouTubeStatusTool : AIFunction
     protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) =>
         ValueTask.FromResult<object?>(_player.FileSnapshot() is { } file
             ? VideoText.FileIsOpen(file.FileName, _videoPointer?.Invoke())
-            : YouTubeText.StatusOrHandoff(_player.Snapshot, _handoff?.Invoke()));
+            : UntrustedText.WithNote(YouTubeText.StatusOrHandoff(_player.Snapshot, _handoff?.Invoke())));
 }

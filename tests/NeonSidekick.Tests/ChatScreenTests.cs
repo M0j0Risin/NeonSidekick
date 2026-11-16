@@ -4555,7 +4555,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("     → echo: ping\n", output);       // the result under it
         Assert.Contains("It said ping.", output);
         var result = Assert.Single(_chat.Requests[1][^1].Contents.OfType<FunctionResultContent>());
-        Assert.Equal("echo: ping", result.Result);
+        Assert.Equal("⟪echo: ping⟫" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, result.Result);   // fenced for the model; the line above shows it bare
         Assert.Equal([("echo", """{"text":"ping"}""")], _mcpServers.Server("pipe").Calls);
     }
 
@@ -5411,7 +5411,7 @@ public partial class ChatScreenTests : IDisposable
         var search = Assert.Single(_chat.Requests[1][^1].Contents.OfType<FunctionResultContent>());
         Assert.StartsWith("Searched \"rust async traits\" (2 results, SearXNG):\n1. ", (string)search.Result!);
         var fetch = Assert.Single(_chat.Requests[2][^1].Contents.OfType<FunctionResultContent>());
-        Assert.Equal("Traits for Async — https://doc.rust-lang.org/book/ch17-05-traits-for-async.html (chars 1–37 of 37, http)\n\n# Traits for Async\n\nThe Future trait.", fetch.Result);
+        Assert.Equal("⟪Traits for Async⟫ — https://doc.rust-lang.org/book/ch17-05-traits-for-async.html (chars 1–37 of 37, http)\n\n⟪# Traits for Async\n\nThe Future trait.⟫" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, fetch.Result);
     }
 
     [Fact]

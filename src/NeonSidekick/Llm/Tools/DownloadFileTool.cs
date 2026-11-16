@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using NeonSidekick.Files;
@@ -31,6 +32,8 @@ public sealed class DownloadFileTool : AIFunction
     public const string UrlArgument = "url";
     public const string PathArgument = FileTool.PathArgument;
     public const string OverwriteArgument = FileTool.OverwriteArgument;
+    public const string Sha256Argument = "sha256";
+    public const string Sha512Argument = "sha512";
 
     private static readonly JsonElement Schema = ToolSchema.Parse(
         """
@@ -39,7 +42,9 @@ public sealed class DownloadFileTool : AIFunction
           "properties": {
             "url": { "type": "string", "description": "The file's address (http or https)." },
             "path": { "type": "string", "description": "Where to save it, relative to the working directory: a file name, or a folder to put it in (the file keeps its own name). Leave it out to save it at the top under its own name." },
-            "overwrite": { "type": "boolean", "description": "true to replace a file that already exists. Without it an existing file is left alone." }
+            "overwrite": { "type": "boolean", "description": "true to replace a file that already exists. Without it an existing file is left alone." },
+            "sha256": { "type": "string", "description": "The file's published SHA-256, in hex: a file that doesn't match is not kept." },
+            "sha512": { "type": "string", "description": "The file's published SHA-512, in hex, instead of sha256." }
           },
           "required": ["url"]
         }
@@ -78,6 +83,7 @@ public sealed class DownloadFileTool : AIFunction
         "Downloads a file from the web — a picture, a PDF, an archive, a data file, a page's source — and saves it under the working directory (the user's cwd / current directory), creating any missing folders; nothing is read or opened. " +
         "path is the file to write, or a folder to put it in under the file's own name; without it the file lands at the top under its own name. " +
         "A file that already exists is left alone unless overwrite is true. " +
+        "With sha256 or sha512 the file is checked against it and not kept when it doesn't match. " +
         "Up to " + WebText.Size(maxBytes) + ". To read a page use " + WebFetchTool.ToolName + "; to look at a saved picture use " + ViewImageTool.ToolName + ".";
 
     public override JsonElement JsonSchema => Schema;
@@ -118,7 +124,12 @@ public sealed class DownloadFileTool : AIFunction
         return folder.Length == 0 || folder is "." ? name : folder.TrimEnd('/', '\\') + "/" + name;
     }
 
-    /// <summary>A candidate file name with any path and the characters Windows refuses stripped, trimmed of dots and blanks; <c>""</c> when nothing is left.</summary>
+    /// <summary>
+    /// A candidate file name with any path and the characters Windows refuses stripped, trimmed of dots and blanks; <c>""</c> when nothing is
+    /// left. A character that hides how the name reads (<see cref="NameScrub.Hides"/>: bidi, zero-width, controls) becomes <c>-</c> (2026-11-15, the web-tools plan's §5, feature idea #29),
+    /// as <see cref="FileNames.Safe"/> does: a server's <c>invoice\u202Efdp.exe</c> would show as <c>invoiceexe.pdf</c>. A zero-width joiner inside an
+    /// emoji stays.
+    /// </summary>
     public static string Sanitise(string name)
     {
         ArgumentNullException.ThrowIfNull(name);
@@ -126,11 +137,12 @@ public sealed class DownloadFileTool : AIFunction
         string tail = cut >= 0 ? name[(cut + 1)..] : name;
         var invalid = Path.GetInvalidFileNameChars();
         var kept = new System.Text.StringBuilder(tail.Length);
-        foreach (char c in tail)
+        for (int i = 0; i < tail.Length; i++)
         {
+            char c = tail[i];
             if (Array.IndexOf(invalid, c) < 0)
             {
-                kept.Append(c);
+                kept.Append(NameScrub.Hides(c) && !FileNames.IsJoining(tail, i) ? '-' : c);
             }
         }
 
@@ -138,17 +150,58 @@ public sealed class DownloadFileTool : AIFunction
         return kept.ToString().Trim().TrimEnd('.').Trim();
     }
 
-    public async Task<string> DownloadAsync(string url, string? path, bool overwrite, CancellationToken cancellationToken)
+    public async Task<string> DownloadAsync(string url, string? path, bool overwrite, CancellationToken cancellationToken) =>
+        (await DownloadSourcedAsync(url, path, overwrite, null, cancellationToken).ConfigureAwait(false)).Text;
+
+    /// <summary>A digest the downloaded bytes must match (2026-11-15, the web-tools plan's §5, feature idea #29): the algorithm, its name as the answer says it, and the hex in lowercase.</summary>
+    internal sealed record Expected(HashAlgorithmName Algorithm, string Name, string Hex);
+
+    /// <summary>
+    /// The <c>sha256</c> / <c>sha512</c> arguments (2026-11-15, the web-tools plan's §5, feature idea #29): blank ones as not given; both given an error; a value read with spaces
+    /// dropped, case ignored and a <c>sha256:</c> prefix tolerated, refused unless it is 64 (or 128) hex digits. Pure.
+    /// </summary>
+    internal static (Expected? Digest, string? Error) ReadDigest(string sha256, string sha512)
+    {
+        ArgumentNullException.ThrowIfNull(sha256);
+        ArgumentNullException.ThrowIfNull(sha512);
+        bool has256 = sha256.Trim().Length > 0;
+        bool has512 = sha512.Trim().Length > 0;
+        if (has256 && has512)
+        {
+            return (null, WebText.BothDigests);
+        }
+
+        if (!has256 && !has512)
+        {
+            return (null, null);
+        }
+
+        var (argument, raw, digits, algorithm, name) = has256
+            ? (Sha256Argument, sha256, 64, HashAlgorithmName.SHA256, "SHA-256")
+            : (Sha512Argument, sha512, 128, HashAlgorithmName.SHA512, "SHA-512");
+        string hex = string.Concat(raw.Where(c => !char.IsWhiteSpace(c))).ToLowerInvariant();
+        if (hex.StartsWith(argument + ":", StringComparison.Ordinal))
+        {
+            hex = hex[(argument.Length + 1)..];
+        }
+
+        return hex.Length == digits && hex.All(char.IsAsciiHexDigit)
+            ? (new Expected(algorithm, name, hex), null)
+            : (null, WebText.BadDigest(argument, digits, raw));
+    }
+
+    // The answer and, for a file saved, what it was (2026-11-15).
+    private async Task<(string Text, WebSource? Source)> DownloadSourcedAsync(string url, string? path, bool overwrite, Expected? expected, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(url))
         {
-            return WebText.NoDownloadUrl;
+            return (WebText.NoDownloadUrl, null);
         }
 
         var parsed = WebFetcher.ParseUrl(url);
         if (parsed is null)
         {
-            return WebText.NotHttp(url.Trim());
+            return (WebText.NotHttp(url.Trim()), null);
         }
 
         var effective = _effective();
@@ -164,7 +217,7 @@ public sealed class DownloadFileTool : AIFunction
                 {
                     if (await _web.Fetcher.SolvedElsewhereAsync(parsed, solved, options, cancellationToken).ConfigureAwait(false) is { } elsewhere)
                     {
-                        return WebText.Error(opened.Outcome, opened.Url, opened.Detail + elsewhere);
+                        return (WebText.Error(opened.Outcome, opened.Url, opened.Detail + elsewhere), null);
                     }
 
                     _web.Fetcher.Adopt(solved.Cookies, solved.Identity, parsed);
@@ -172,16 +225,16 @@ public sealed class DownloadFileTool : AIFunction
                     opened = await _web.Fetcher.OpenDownloadAsync(parsed, options, maxBytes, cancellationToken).ConfigureAwait(false);
                     if (!opened.Ok)
                     {
-                        return opened.Outcome == FetchOutcome.Blocked ? WebText.Error(opened.Outcome, opened.Url, opened.Detail + BotCheckText.ClearedButClientRefused) : opened.Error;
+                        return (opened.Outcome == FetchOutcome.Blocked ? WebText.Error(opened.Outcome, opened.Url, opened.Detail + BotCheckText.ClearedButClientRefused) : opened.Error, null);
                     }
                 }
                 else if (solved is not null)
                 {
-                    return WebText.Error(opened.Outcome, opened.Url, opened.Detail + BotCheckText.For(solved));
+                    return (WebText.Error(opened.Outcome, opened.Url, opened.Detail + BotCheckText.For(solved)), null);
                 }
             }
 
-            return await SaveAsync(opened, path, overwrite, maxBytes, parsed, cancellationToken).ConfigureAwait(false);
+            return await SaveAsync(opened, path, overwrite, maxBytes, parsed, expected, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -190,35 +243,49 @@ public sealed class DownloadFileTool : AIFunction
     }
 
     // The opened download saved under the sandbox, or why not.
-    private async Task<string> SaveAsync(OpenedDownload opened, string? path, bool overwrite, long maxBytes, Uri parsed, CancellationToken cancellationToken)
+    private async Task<(string Text, WebSource? Source)> SaveAsync(OpenedDownload opened, string? path, bool overwrite, long maxBytes, Uri parsed, Expected? expected, CancellationToken cancellationToken)
     {
         if (!opened.Ok)
         {
-            return opened.Error;
+            return (opened.Error, null);
         }
 
         var final = Uri.TryCreate(opened.FinalUrl, UriKind.Absolute, out var finalUrl) ? finalUrl : parsed;
         string? target = FileNameFor(path, opened.FileName, final, _files.IsExistingDirectory);
         if (target is null)
         {
-            return WebText.NoFileName(opened.Url);
+            return (WebText.NoFileName(opened.Url), null);
         }
 
         // The sandbox's refusals (outside, a folder in the way, a file there without overwrite) before a byte is read.
         var begun = _files.BeginWrite(target, overwrite, out var pending);
         if (pending is null)
         {
-            return WebText.Downloaded(begun, opened.Url, opened.MediaType);
+            return (WebText.Downloaded(begun, opened.Url, opened.MediaType), null);
         }
 
         using (pending)
         {
-            var saved = await _web.Fetcher.SaveAsync(opened, pending.Stream, maxBytes, cancellationToken).ConfigureAwait(false);
+            var saved = await _web.Fetcher.SaveAsync(opened, pending.Stream, maxBytes, cancellationToken, expected?.Algorithm).ConfigureAwait(false);
             // Marked as from the internet, as a browser marks its downloads (2026-10-23, the Mac pass, the user's call): Gatekeeper, SmartScreen
             // and Office's Protected View look at what the model fetched, and unzip carries the mark to what is inside.
-            return saved.Ok
-                ? WebText.Downloaded(pending.Commit(MarkOfTheWeb.ForDownload(opened.FinalUrl.Length > 0 ? opened.FinalUrl : opened.Url, _web.Time.GetUtcNow())), opened.Url, opened.MediaType)
-                : saved.Error;
+            if (!saved.Ok)
+            {
+                return (saved.Error, null);
+            }
+
+            // A digest that doesn't match keeps nothing (2026-11-15, the web-tools plan's §5, feature idea #29): the pending write is dropped uncommitted, its temporary sibling with
+            // it, and a file there under overwrite stays as it was.
+            if (expected is not null && !string.Equals(saved.Digest, expected.Hex, StringComparison.Ordinal))
+            {
+                return (WebText.HashMismatch(expected.Name, expected.Hex, saved.Digest ?? "", opened.Url, target), null);
+            }
+
+            string from = opened.FinalUrl.Length > 0 ? opened.FinalUrl : opened.Url;
+            var written = pending.Commit(MarkOfTheWeb.ForDownload(from, _web.Time.GetUtcNow()));
+            string text = WebText.Downloaded(written, opened.Url, opened.MediaType) + (expected is not null && written.Outcome == Files.FileOutcome.Ok ? WebText.Verified(expected.Name) : "");
+            // The file saved, named as the answer names it, for the 📥 under the reply (2026-11-15, the web-tools plan's §2).
+            return (text, written.Outcome == Files.FileOutcome.Ok ? new WebSource(WebSourceKind.Download, from, Path.GetFileName(written.Relative)) : null);
         }
     }
 
@@ -229,7 +296,14 @@ public sealed class DownloadFileTool : AIFunction
             return FileText.BadBoolean(OverwriteArgument, raw);
         }
 
+        var (expected, digestError) = ReadDigest(ToolArguments.ReadString(arguments, Sha256Argument), ToolArguments.ReadString(arguments, Sha512Argument));
+        if (digestError is not null)
+        {
+            return digestError;
+        }
+
         string path = ToolArguments.ReadString(arguments, PathArgument);
-        return await DownloadAsync(ToolArguments.ReadString(arguments, UrlArgument), path, overwrite ?? false, cancellationToken).ConfigureAwait(false);
+        var (text, source) = await DownloadSourcedAsync(ToolArguments.ReadString(arguments, UrlArgument), path, overwrite ?? false, expected, cancellationToken).ConfigureAwait(false);
+        return source is null ? text : new ToolSourcedResult(text, source);
     }
 }

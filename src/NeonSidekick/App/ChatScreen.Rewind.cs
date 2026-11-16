@@ -208,7 +208,7 @@ internal sealed partial class ChatScreen
                 var byRow = RestoredPictures.ByRow(pictures);
                 foreach (var stored in record.Turns)
                 {
-                    ReplayTurn(stored.UserText, stored.ReplyText, stored.ToolCalls, styled, byRow.GetValueOrDefault(stored.Ordinal), box);
+                    ReplayTurn(stored.UserText, stored.ReplyText, stored.ToolCalls, styled, byRow.GetValueOrDefault(stored.Ordinal), box, stored.SourceList);
                 }
             }
             else
@@ -305,7 +305,7 @@ internal sealed partial class ChatScreen
     /// user's ask) the turn's <paramref name="pictures"/> are drawn where a live turn drew them: <c>/imagine</c>'s before the
     /// user's row, the user's own under it, the tools' after the tool line.
     /// </summary>
-    private void ReplayTurn(string userText, string replyText, int toolCalls, bool styled, TurnPictures? pictures = null, UI.ThumbnailBox? box = null)
+    private void ReplayTurn(string userText, string replyText, int toolCalls, bool styled, TurnPictures? pictures = null, UI.ThumbnailBox? box = null, IReadOnlyList<Llm.Tools.WebSource>? sources = null)
     {
         // Every turn's pictures: drawn with a box, offered to the Web UI's page alone without (later on 2026-10-14).
         var drawn = pictures is { Any: true } turn ? turn : null;
@@ -332,7 +332,8 @@ internal sealed partial class ChatScreen
             // The profile's avatar (2026-10-10): a session is its profile's, so its replies wear today's face; Claude's keep the dot.
             _transcript.BeginAssistant(styled, claude ? null : UI.TranscriptRenderer.GlyphFor(_effective().ModelAvatar));
             _transcript.AppendDelta(replyText);
-            _transcript.EndAssistant();
+            // The turn's stored sources (2026-11-15, the web-tools plan's §2): a resumed session shows where its answers came from.
+            _transcript.EndAssistant(sources: sources);
         }
 
         _log.Add(userText, replyText);

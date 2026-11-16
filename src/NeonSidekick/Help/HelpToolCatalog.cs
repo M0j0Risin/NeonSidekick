@@ -289,12 +289,12 @@ internal static class HelpToolCatalog
         // Advisors
         T(NeonAdvisorTool.ToolName, ToolsText.AdvisorsGroupTitle, SettingsField.Advisors, "Asks one of the user's advisors, another profile with its own model, for its view.", setup: "needs a profile in *Advisor list*"),
         // Web
-        T(WebSearchTool.ToolName, WebGroup, SettingsField.WebTools, "Searches the web and gives back the top results."),
-        T(WebFetchTool.ToolName, WebGroup, SettingsField.WebTools, "Fetches a web page and gives back its readable text as Markdown, a part at a time."),
+        T(WebSearchTool.ToolName, WebGroup, SettingsField.WebTools, "Searches the web and gives back the top results, from the past day, week, month or year if asked."),
+        T(WebFetchTool.ToolName, WebGroup, SettingsField.WebTools, "Fetches a web page and gives back its readable text as Markdown, a part at a time, or its headings, or the passages holding given words."),
         T(OpenUrlTool.ToolName, WebGroup, SettingsField.WebTools, "Opens a web page in the user's browser on their screen."),
         T(WebLinksTool.ToolName, WebGroup, SettingsField.WebTools, "Lists the user's saved web links."),
         T(WebSaveLinkTool.ToolName, WebGroup, SettingsField.WebTools, "Saves, removes or renames one of the user's saved web links."),
-        T(DownloadFileTool.ToolName, WebGroup, SettingsField.WebTools, "Downloads a file from the web into the working directory, unread and unopened.", needs: [SettingsField.FileTools]),
+        T(DownloadFileTool.ToolName, WebGroup, SettingsField.WebTools, "Downloads a file from the web into the working directory, unread and unopened, checked against a SHA-256 or SHA-512 when one is given.", needs: [SettingsField.FileTools]),
         // Memory
         T(SaveMemoryTool.ToolName, MemoryGroup, SettingsField.MemoryMode, "Saves one lasting fact about the user, known in every later session.", needs: [SettingsField.MemoryMode], setup: "only while *Memory mode* is read-write"),
         T(RecallMemoryTool.ToolName, MemoryGroup, SettingsField.MemoryMode, "Gives back every fact saved about the user, oldest first."),

@@ -73,7 +73,7 @@ Elsewhere:
 | `/sessions [<id>]` | Lists the stored sessions, or restores one with its pictures (`#12` works too). |
 | `/sessions purge <id>\|all`, `/sessions purge older <age>` | Deletes one stored session, all, or those older than an age (`30` days, `12h`, `1d 6h`), with their file checkpoints: those turns can't be undone. |
 | `/sessions title [<text>]`, `/rename [<name>]` | Renames the current session; alone, opens a box with its name. |
-| `/sessions export [<id>] [md\|html]` | Writes a session (this one without an id) into the working folder, never over a file: Markdown with Obsidian properties and a pictures folder, or one HTML page in your theme. |
+| `/sessions export [<id>] [md\|html]` | Writes a session (this one without an id) into the working folder, never over a file: Markdown with Obsidian properties and a pictures folder, or one HTML page in your theme, with each turn's sources. |
 | `/memory` | Lists the memories, to edit, disable (kept, never offered to the model), forget or add one. |
 | `/memory read-write\|read-only\|off\|on` | Sets *Memory mode* (`on` is read-write). |
 | `/memory forget\|edit` | Forgets every memory after a yes, or opens `memory.json` in your editor. |

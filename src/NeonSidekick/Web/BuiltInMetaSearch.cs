@@ -47,6 +47,7 @@ public sealed class BuiltInMetaSearch
     private readonly MetaSearch _search;
     private readonly SearchPacer _pacer;
     private readonly IReadOnlyList<string> _engineNames;
+    private readonly IReadOnlyList<IEngine> _engines;
 
     /// <summary>
     /// The Brave Search API key of the search under way, read by <see cref="BraveApiEngine"/>. Async-local, not a field, so two searches under
@@ -80,6 +81,7 @@ public sealed class BuiltInMetaSearch
         var client = new HttpClient(new HostClientHandler(http), disposeHandler: true) { Timeout = Timeout.InfiniteTimeSpan, MaxResponseContentBufferSize = MaxResponseBytes };
         var asked = (engines ?? RealEngines(time, CurrentBraveApiKey)).ToList();
         _engineNames = asked.Select(e => e.Name).ToList();
+        _engines = asked;
         _search = new MetaSearch(asked, client, new MetaSearchOptions(), time);
     }
 
@@ -149,18 +151,36 @@ public sealed class BuiltInMetaSearch
         }
     }
 
+    /// <summary>
+    /// Whether one of <paramref name="engines"/> can filter by date (2026-11-15, the web-tools plan's §4, feature idea #25). Every one that can't sits a ranged search out, so with
+    /// none the search is refused before any request, naming the engines that can.
+    /// </summary>
+    private bool CanFilter(IReadOnlySet<string> engines) => _engines.Any(e => engines.Contains(e.Name) && e.TimeRangeSupport);
+
+    /// <summary>The setting's names of the engines that can filter by date, for the refusal.</summary>
+    private IReadOnlyList<string> Filtering() =>
+        [.. _engines.Where(e => e.TimeRangeSupport).Select(e => e.Name == BraveApiName ? "brave" : e.Name).Distinct(StringComparer.Ordinal)];
+
+    private static TimeRange RangeOf(SearchSince since) => since switch
+    {
+        SearchSince.Day => TimeRange.Day,
+        SearchSince.Week => TimeRange.Week,
+        SearchSince.Month => TimeRange.Month,
+        _ => TimeRange.Year,
+    };
+
     /// <summary>One search's settings over the shared instance.</summary>
     private sealed class Configured(BuiltInMetaSearch core, IReadOnlySet<string> engines, SafeSearch safeSearch, string? braveApiKey) : ISearchEngine
     {
         public string Name => WebText.MetaSearchName;
 
-        public Task<SearchOutcome> SearchAsync(string query, int max, FetchOptions options, CancellationToken cancellationToken) =>
-            engines is { Count: 0 }
-                ? Task.FromResult(SearchOutcome.Failed(WebText.MetaSearchNoEngines))
-                : core.SearchAsync(query, max, options, engines, safeSearch, braveApiKey, cancellationToken);
+        public Task<SearchOutcome> SearchAsync(string query, int max, FetchOptions options, CancellationToken cancellationToken, SearchSince? since = null) =>
+            engines is { Count: 0 } ? Task.FromResult(SearchOutcome.Failed(WebText.MetaSearchNoEngines))
+            : since is not null && !core.CanFilter(engines) ? Task.FromResult(SearchOutcome.Failed(WebText.MetaSearchNoTimeRange(core.Filtering())))
+            : core.SearchAsync(query, max, options, engines, safeSearch, braveApiKey, since, cancellationToken);
     }
 
-    private async Task<SearchOutcome> SearchAsync(string query, int max, FetchOptions options, IReadOnlySet<string> engines, SafeSearch safeSearch, string? braveApiKey, CancellationToken cancellationToken)
+    private async Task<SearchOutcome> SearchAsync(string query, int max, FetchOptions options, IReadOnlySet<string> engines, SafeSearch safeSearch, string? braveApiKey, SearchSince? since, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
         ArgumentNullException.ThrowIfNull(options);
@@ -176,7 +196,7 @@ public sealed class BuiltInMetaSearch
             return SearchOutcome.Failed(WebText.MetaSearchNeedsInternet);
         }
 
-        var asked = new EngineQuery(query.Trim(), SafeSearch: safeSearch, Locale: Locale, Engines: engines);
+        var asked = new EngineQuery(query.Trim(), SafeSearch: safeSearch, Locale: Locale, Engines: engines, TimeRange: since is { } recent ? RangeOf(recent) : null);
         if (_search.AnyAvailable(asked))
         {
             await _pacer.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -215,7 +235,10 @@ public sealed class BuiltInMetaSearch
             .Select(r => new SearchResult(HtmlToMarkdown.Collapse(r.Hit.Title), r.Link!.Target, HtmlToMarkdown.Collapse(r.Hit.Content)))
             .ToArray();
         DiagnosticLog.Info(Category, $"Metasearch \"{query}\": {results.Length.ToString(CultureInfo.InvariantCulture)} results.");
-        return new SearchOutcome(results, "");
+
+        // A ranged search names the engines that answered, so a thin result reads as thin (the others sat it out, response.Skipped).
+        string scope = since is null ? "" : string.Join(", ", response.Timings.Select(t => t.Engine == BraveApiName ? "brave" : t.Engine));
+        return new SearchOutcome(results, "") { Scope = scope };
     }
 
     private static bool IsRefusal(EngineFailureKind? kind) =>
