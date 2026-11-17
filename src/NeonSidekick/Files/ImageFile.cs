@@ -418,8 +418,10 @@ public static class ImageFile
     /// model as a JPEG at <see cref="JpegQuality"/> even when it fits — a 1152×896 render is ~1.6 MB as PNG and ~250 KB
     /// as JPEG, and every request carries it again. One with transparency stays as it would have been (a JPEG would
     /// flatten it); a JPEG source is as before. Only the bytes for the model: the file on disk is the caller's and is never touched.
+    /// <paramref name="maxSide"/> is the longest side kept (2026-11-17, the admin-themes-render review's #78: a collage fits each picture to its
+    /// tile, not to <see cref="MaxSide"/>), held to 64 to 4096.
     /// </summary>
-    public static bool TryLoad(byte[] bytes, string name, out ImageAttachment? image, out ImageLoadFailure failure, bool photo)
+    public static bool TryLoad(byte[] bytes, string name, out ImageAttachment? image, out ImageLoadFailure failure, bool photo, int maxSide = MaxSide)
     {
         ArgumentNullException.ThrowIfNull(bytes);
         ArgumentNullException.ThrowIfNull(name);
@@ -453,7 +455,8 @@ public static class ImageFile
                 return false;
             }
 
-            bool fits = frame.Width <= MaxSide && frame.Height <= MaxSide;
+            maxSide = Math.Clamp(maxSide, 64, 4096);
+            bool fits = frame.Width <= maxSide && frame.Height <= maxSide;
             string source = loaded.MimeType ?? "";
             bool keepsPng = string.Equals(source, Png, StringComparison.OrdinalIgnoreCase);
             bool keepsJpeg = string.Equals(source, Jpeg, StringComparison.OrdinalIgnoreCase);
@@ -471,8 +474,8 @@ public static class ImageFile
             string mediaType = toJpeg ? Jpeg : SentAs(source);
             var settings = new ProcessImageSettings
             {
-                Width = MaxSide,
-                Height = MaxSide,
+                Width = maxSide,
+                Height = maxSide,
                 ResizeMode = CropScaleMode.Max,
                 EncoderOptions = mediaType == Jpeg ? new JpegEncoderOptions(JpegQuality, ChromaSubsampleMode.Default, false) : PngEncoderOptions.Default,
             };

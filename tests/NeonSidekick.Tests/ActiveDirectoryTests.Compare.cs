@@ -95,6 +95,49 @@ public sealed partial class ActiveDirectoryTests
         Assert.True(answer.Failed);
         Assert.NotNull(answer.Candidates);   // that side's own answer: its candidates, no compare
         Assert.Null(answer.Other);
+
+        // What a pick needs (2026-11-17, the review's #31): the settled side by DN, the candidates for the other.
+        Assert.Equal(new ComparePending("grace", "Twin", Grace, null, PickingOther: true, null, false), answer.Compare);
+        var first = CompareOf("Twin", "grace");
+        Assert.Equal(new ComparePending("Twin", "grace", null, null, PickingOther: false, null, false), first.Compare);
+        Assert.Null(CompareOf("grace", "nobody-here").Compare);   // only an ambiguous side carries it
+    }
+
+    /// <summary>A pick on an ambiguous side's candidates re-runs the compare with that account, not one account's groups (2026-11-17, #31).</summary>
+    [Fact]
+    public async Task Compare_APickedCandidate_ReRunsTheCompare()
+    {
+        Gaps();
+        for (int i = 0; i < 2; i++)
+        {
+            string n = i.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            _system.Add("CN=Twin" + n + ",OU=Staff," + Base, ("objectClass", "user"), ("sAMAccountName", "twin" + n), ("displayName", "Twin"));
+        }
+
+        var refused = CompareOf("grace", "Twin");
+        string twin0 = "CN=Twin0,OU=Staff," + Base;
+        var picked = await DirectoryCommand.CompareAsync(Access(), null, refused.Compare!, new DirectoryRowTarget(twin0, "twin0"), CancellationToken.None);
+        Assert.False(picked.Failed);
+        Assert.Equal(DirectoryQueries.MemberOfCompareKind, picked.Answer!.Kind);
+        Assert.Equal(Grace, picked.Answer.Self!.Dn);
+        Assert.Equal(twin0, picked.Answer.Other!.Dn);
+    }
+
+    /// <summary>
+    /// A side read only in part marks the other's only list (2026-11-17, #112); two names sharing their first 40 characters still name two
+    /// sections and two columns (#15).
+    /// </summary>
+    [Fact]
+    public void Compare_PartialSides_AndLongTwinNames()
+    {
+        Assert.Equal("only ⟪a⟫ (12; ⟪b⟫'s list is partial, some may be shared)", DirectoryText.OnlyTitle("⟪a⟫", 12, "⟪b⟫"));
+        Assert.Equal("only ⟪a⟫ (12)", DirectoryText.OnlyTitle("⟪a⟫", 12));
+        string stem = new('x', 40);
+        var (a, b) = DirectoryText.SideNames(stem + "-alpha", stem + "-beta");
+        Assert.NotEqual(a, b);
+        Assert.EndsWith(" (1)", a, StringComparison.Ordinal);
+        Assert.EndsWith(" (2)", b, StringComparison.Ordinal);
+        Assert.Equal(("grace", "erin"), DirectoryText.SideNames("grace", "erin"));
     }
 
     [Fact]
@@ -151,7 +194,11 @@ public sealed partial class ActiveDirectoryTests
         Assert.Contains("memberof grace compare:", DirectoryCommand.Complete("memberof grace co", ["lab"]).Select(c => c.Text));
         Assert.Contains("[compare:<name>]", DirectoryCommand.Usage);
         Assert.Equal("memberof grace compare erin nested", DirectoryCommand.MemberOfQuestion("grace", true, null, "erin"));
-        Assert.Equal("the groups grace and erin belong to at any depth, side by side", DirectoryCommand.DescribeCompare("grace", "erin", true));
+        Assert.Equal("the groups grace and erin belong to at any depth, side by side", DirectoryText.DescribeCompare("grace", "erin", true));
+        Assert.Equal("the groups the users grace and erin belong to, side by side", DirectoryText.DescribeCompare("grace", "erin", false, "user", "user"));
+        Assert.Equal("the groups the user grace and the group admins belong to, side by side", DirectoryText.DescribeCompare("grace", "admins", false, "user", "group"));
+        Assert.Equal("the groups grace and admins belong to, side by side", DirectoryText.DescribeCompare("grace", "admins", false, "user", null));
+        Assert.Equal("the groups the users grace and erin belong to, side by side", DirectoryCommand.Describe(DirectoryCommand.Parse("memberof grace compare:erin type:user").Args!));
         Assert.Equal("the groups grace and erin belong to, side by side", DirectoryCommand.Describe(DirectoryCommand.Parse("memberof grace compare:erin").Args!));
 
         Gaps();

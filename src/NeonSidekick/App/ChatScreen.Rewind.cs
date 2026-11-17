@@ -273,69 +273,155 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// One stored turn back on screen, as <see cref="RestoreSession"/> draws it: the user's row, a <c>🛠️ N tool calls</c> line
-    /// when the model called any, and the reply through the live slot, under Claude's name for a <c>/claude</c> exchange. The
-    /// pair also goes into the <c>/copy</c> log. With <paramref name="box"/> (<c>Show image thumbnails</c> on, 2026-10-10, the
-    /// user's ask) the turn's <paramref name="pictures"/> are drawn where a live turn drew them: <c>/imagine</c>'s before the
-    /// user's row, the user's own under it, the tools' after the tool line.
-    /// </summary>
-    /// <summary>
     /// The conversation drawn again from what is kept (2026-11-16, plan sharded-hugging-puppy, lifted out of <see cref="RewindTo"/> for the theme
     /// repaint): the Web UI's copy emptied (the replay fills it again), the screen redrawn (<see cref="RedrawScreen"/>), then
     /// <paramref name="afterRedraw"/> (a rewind's own forgetting), then each turn as a resume draws it — the stored session's turns when there is
     /// a row, else the history's — with its pictures. <paramref name="refillStrip"/> puts the turns' pictures back in the picture strip: a rewind
     /// empties it first; a theme change keeps it, so it passes false, or every picture would be listed twice.
+    /// <paramref name="theme"/> (2026-11-17, the admin-themes-render review's #1, #40, #85, #90, #154, the user's call) is a theme change's
+    /// repaint: the Web UI's copy is kept as it is (its colors come from CSS, so nothing on the page needs drawing again), the <c>/copy</c> log
+    /// is left alone, at most <see cref="ThemeRepaintTurns"/> of the latest turns are drawn under a dim line naming the rest, the history is
+    /// drawn instead of a stored row holding fewer turns (turns made while logging was off), and each picture keeps the id it was given.
     /// </summary>
-    private void RepaintConversation(bool styled, bool refillStrip, Action? afterRedraw = null)
+    private void RepaintConversation(bool styled, bool refillStrip, Action? afterRedraw = null, bool theme = false)
     {
-        // The Web UI's copy starts afresh (2026-10-14); the kept turns' replay below fills it again.
-        _webUi.Feed.Clear();
-        RedrawScreen();
-        afterRedraw?.Invoke();
-        // The kept turns' pictures back in the strip and, with thumbnails on, the transcript (2026-10-10, the user's ask).
-        var pictures = RestoredPictures.Turns(_session.History.Messages);
-        var box = ReplayPictures(pictures, refillStrip);
-        if (_sessionId is { } id && _sessions.Load(id) is { } record)
+        // The page's two inputs held off for a theme's replay (#154): what it shows already is the conversation.
+        var feed = _transcript.Feed;
+        var committed = _pane.Committed;
+        if (theme)
         {
-            var byRow = RestoredPictures.ByRow(pictures);
-            foreach (var stored in record.Turns)
-            {
-                ReplayTurn(stored.UserText, stored.ReplyText, stored.ToolCalls, styled, byRow.GetValueOrDefault(stored.Ordinal), box, stored.SourceList);
-            }
+            _transcript.Feed = null;
+            _pane.Committed = null;
         }
         else
         {
-            var replays = ConversationRewind.Replay(_session.History.Messages);
-            for (int i = 0; i < replays.Count; i++)
+            // The Web UI's copy starts afresh (2026-10-14); the kept turns' replay below fills it again.
+            _webUi.Feed.Clear();
+        }
+
+        try
+        {
+            RedrawScreen();
+            afterRedraw?.Invoke();
+            ReplayKept(styled, refillStrip, theme);
+        }
+        finally
+        {
+            if (theme)
             {
-                var replay = replays[i];
-                if (replay.Summary)
-                {
-                    _transcript.Notice(RewindText.CompactedNotice);
-                }
-                else
-                {
-                    // Both lists hold one entry per turn start, in order.
-                    ReplayTurn(replay.UserText, replay.ReplyText, replay.ToolCalls, styled, i < pictures.Count ? pictures[i] : null, box);
-                }
+                _transcript.Feed = feed;
+                _pane.Committed = committed;
             }
         }
     }
 
-    private void ReplayTurn(string userText, string replyText, int toolCalls, bool styled, TurnPictures? pictures = null, UI.ThumbnailBox? box = null, IReadOnlyList<Web.WebSource>? sources = null)
+    /// <summary><see cref="RepaintConversation"/>'s turns: the stored row's, else the history's, the latest <see cref="ThemeRepaintTurns"/> for a theme.</summary>
+    private void ReplayKept(bool styled, bool refillStrip, bool theme)
+    {
+        // The kept turns' pictures back in the strip and, with thumbnails on, the transcript (2026-10-10, the user's ask).
+        var pictures = RestoredPictures.Turns(_session.History.Messages);
+        var box = ReplayPictures(pictures, refillStrip);
+        var record = _sessionId is { } id ? _sessions.Load(id) : null;
+        IReadOnlyList<RewindReplay>? replays = null;
+        if (theme && record is not null)
+        {
+            // Fewer stored turns than the history holds (#85: turns made with Session logging off) draws the history. After /compact the
+            // history holds fewer, the normal case, and the stored turns are drawn whole.
+            replays = ConversationRewind.Replay(_session.History.Messages);
+            if (record.Turns.Count < replays.Count(r => !r.Summary))
+            {
+                record = null;
+            }
+        }
+
+        if (record is not null)
+        {
+            int skip = theme ? Math.Max(0, record.Turns.Count - ThemeRepaintTurns) : 0;
+            EarlierTurnsLine(skip);
+            var byRow = RestoredPictures.ByRow(pictures);
+            foreach (var stored in record.Turns.Skip(skip))
+            {
+                ReplayTurn(stored.UserText, stored.ReplyText, stored.ToolCalls, styled, byRow.GetValueOrDefault(stored.Ordinal), box, stored.SourceList, log: !theme);
+            }
+
+            return;
+        }
+
+        replays ??= ConversationRewind.Replay(_session.History.Messages);
+        int left = theme ? Math.Max(0, replays.Count(r => !r.Summary) - ThemeRepaintTurns) : 0;
+        EarlierTurnsLine(left);
+        int seen = 0;
+        for (int i = 0; i < replays.Count; i++)
+        {
+            var replay = replays[i];
+            if (replay.Summary)
+            {
+                // A summary sits before the turns: drawn only when none is left out, else the earlier-turns line stands in its place (gap pass 249).
+                if (left == 0)
+                {
+                    _transcript.Notice(RewindText.CompactedNotice);
+                }
+            }
+            else if (seen++ >= left)
+            {
+                // Both lists hold one entry per turn start, in order; skipping never renumbers them.
+                ReplayTurn(replay.UserText, replay.ReplyText, replay.ToolCalls, styled, i < pictures.Count ? pictures[i] : null, box, log: !theme);
+            }
+        }
+    }
+
+    /// <summary>The <c>/copy</c> log's exchanges, for the tests that hold a theme repaint to leaving it alone (2026-11-17, #1).</summary>
+    internal int CopyLogCountForTests => _log.Count;
+
+    /// <summary>
+    /// A pane's hand-over of <paramref name="changes"/> at a turn's end, for the tests that hold a run's theme repaint to the idle line
+    /// (2026-11-17, the admin-themes-render review's #76): <paramref name="run"/> as <see cref="EndTurnAsync"/> passes it.
+    /// </summary>
+    internal Task HandOverForTestsAsync(SettingsChanges changes, bool run) => ApplySettingsChangesAsync(changes, CancellationToken.None, run);
+
+    /// <summary>The pictures registered for a double-click, for the tests that hold a second theme repaint to adding none (#90).</summary>
+    internal int PictureCountForTests
+    {
+        get
+        {
+            lock (_pictures)
+            {
+                return _pictures.Count;
+            }
+        }
+    }
+
+    /// <summary>The theme repaint's dim line above the first turn drawn, when <paramref name="skipped"/> turns were left out (#40).</summary>
+    private void EarlierTurnsLine(int skipped)
+    {
+        if (skipped > 0)
+        {
+            _transcript.Notice(UI.ThemeText.EarlierTurns(skipped), UI.NoticeTone.Dim);
+        }
+    }
+
+    /// <summary>
+    /// One stored turn back on screen, as <see cref="RestoreSession"/> draws it: the user's row, a <c>🛠️ N tool calls</c> line
+    /// when the model called any, and the reply through the live slot, under Claude's name for a <c>/claude</c> exchange. The
+    /// pair also goes into the <c>/copy</c> log, unless <paramref name="log"/> is false (a theme repaint, 2026-11-17, #1: the turns are in it
+    /// already). With <paramref name="box"/> (<c>Show image thumbnails</c> on, 2026-10-10, the user's ask) the turn's
+    /// <paramref name="pictures"/> are drawn where a live turn drew them: <c>/imagine</c>'s before the user's row, the user's own under it,
+    /// the tools' after the tool line.
+    /// </summary>
+    private void ReplayTurn(string userText, string replyText, int toolCalls, bool styled, TurnPictures? pictures = null, UI.ThumbnailBox? box = null, IReadOnlyList<Web.WebSource>? sources = null, bool log = true)
     {
         // Every turn's pictures: drawn with a box, offered to the Web UI's page alone without (later on 2026-10-14).
         var drawn = pictures is { Any: true } turn ? turn : null;
-        ReplayThumbnails(drawn?.Imagined, box, sandbox: true);
+        ReplayThumbnails(drawn?.Imagined, box, sandbox: true, log);
         _transcript.User(userText);
         // A dropped picture's path is full; a pasted one's has none, as live (its bytes are kept for a double-click).
-        ReplayThumbnails(drawn?.Own, box, sandbox: false);
+        ReplayThumbnails(drawn?.Own, box, sandbox: false, log);
         if (toolCalls > 0)
         {
             _transcript.ToolNote(SessionText.ToolCallsNote(toolCalls));
         }
 
-        ReplayThumbnails(drawn?.Tools, box, sandbox: true);
+        ReplayThumbnails(drawn?.Tools, box, sandbox: true, log);
 
         // A turn that read pages but said nothing (cancelled, failed) still opens its reply (2026-11-16, the web-tools review's #9): the
         // end writes the no-reply line itself, as the live turn showed it, and the sources under it.
@@ -359,11 +445,19 @@ internal sealed partial class ChatScreen
             _transcript.EndAssistant(sources: sources);
         }
 
-        _log.Add(userText, replyText);
+        if (log)
+        {
+            _log.Add(userText, replyText);
+        }
     }
 
-    /// <summary>A restored turn's pictures as thumbnails at <paramref name="box"/>, as <see cref="ToolThumbnails"/> draws a live one's; without a box, offered to the Web UI's page alone.</summary>
-    private void ReplayThumbnails(IReadOnlyList<DataContent>? pictures, UI.ThumbnailBox? box, bool sandbox)
+    /// <summary>
+    /// A restored turn's pictures as thumbnails at <paramref name="box"/>, as <see cref="ToolThumbnails"/> draws a live one's; without a box,
+    /// offered to the Web UI's page alone. A theme repaint (<paramref name="log"/> false, 2026-11-17, #90, #154) gives each picture the id an
+    /// earlier repaint gave it (<see cref="ReplayedPictureId"/>), so repaints don't pile copies into the picture list, and offers the page
+    /// nothing: its copy is kept.
+    /// </summary>
+    private void ReplayThumbnails(IReadOnlyList<DataContent>? pictures, UI.ThumbnailBox? box, bool sandbox, bool log = true)
     {
         if (pictures is not { Count: > 0 })
         {
@@ -372,13 +466,39 @@ internal sealed partial class ChatScreen
 
         if (box is { } size)
         {
-            var (tiles, ids, web) = ReadThumbnails(RestoredImages(pictures), size, sandbox);
-            _transcript.Images(tiles, ids, web);
+            if (log)
+            {
+                var (tiles, ids, web) = ReadThumbnails(RestoredImages(pictures), size, sandbox);
+                _transcript.Images(tiles, ids, web);
+            }
+            else
+            {
+                var images = RestoredImages(pictures, out var sources);
+                var (tiles, ids, web) = ReadThumbnails(images, size, sandbox, (i, webOnly) => ReplayedPictureId(sources[i], images[i], sandbox, webOnly));
+                _transcript.Images(tiles, ids, web);
+            }
         }
-        else
+        else if (log)
         {
             WebOnlyPictures(RestoredImages(pictures), sandbox);
         }
+    }
+
+    /// <summary>
+    /// The id a theme repaint draws <paramref name="source"/> under (2026-11-17, #90): the one an earlier repaint registered it as, else a new
+    /// one, kept against the history's own picture. A live turn's picture was registered from its attachment, with no history picture to key
+    /// on, so the first repaint after a turn adds one entry per picture and later ones add none.
+    /// </summary>
+    private int ReplayedPictureId(DataContent source, ImageAttachment image, bool sandbox, bool webOnly)
+    {
+        if (_replayedPictureIds.TryGetValue(source, out var known))
+        {
+            return known.Value;
+        }
+
+        int id = RegisterPicture(image, sandbox, webOnly);
+        _replayedPictureIds.AddOrUpdate(source, new System.Runtime.CompilerServices.StrongBox<int>(id));
+        return id;
     }
 
     /// <summary>
@@ -403,15 +523,20 @@ internal sealed partial class ChatScreen
     /// a double-click and the strip's order find its file as they did live; one with none is named as a pasted one is. A picture whose
     /// bytes no longer read is left out.
     /// </summary>
-    private static List<ImageAttachment> RestoredImages(IReadOnlyList<DataContent> pictures)
+    private static List<ImageAttachment> RestoredImages(IReadOnlyList<DataContent> pictures) => RestoredImages(pictures, out _);
+
+    /// <summary>As <see cref="RestoredImages(IReadOnlyList{DataContent})"/>, with the history's picture each one came from, one per image returned (2026-11-17, #90).</summary>
+    private static List<ImageAttachment> RestoredImages(IReadOnlyList<DataContent> pictures, out List<DataContent> sources)
     {
         var images = new List<ImageAttachment>(pictures.Count);
+        sources = new List<DataContent>(pictures.Count);
         foreach (var picture in pictures)
         {
             string name = ConversationHistory.PicturePath(picture) ?? ImageFile.ClipboardName(images.Count + 1);
             if (ImageFile.TryLoad(picture.Data.ToArray(), name, out var image, out _) && image is not null)
             {
                 images.Add(image with { Path = name });
+                sources.Add(picture);
             }
         }
 

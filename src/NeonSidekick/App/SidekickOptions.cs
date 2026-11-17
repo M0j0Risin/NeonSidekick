@@ -113,7 +113,7 @@ public sealed record SidekickOptions(
     /// <summary><c>--eventlog-check &lt;computer&gt;</c> (2026-10-15): run <see cref="App.EventLogCheck"/> over that computer of <c>eventlog.json</c> (or <c>local</c>) and exit 0/1 — the event-log tools' proof, reads only.</summary>
     public string? EventLogCheck { get; init; }
 
-    /// <summary><c>--network-check &lt;host&gt;</c> (2026-10-15, the admin-tools plan): DNS, ping, the port and TLS on 443 against that host, and the certificate store opened; exit 0/1. Reads only.</summary>
+    /// <summary><c>--network-check &lt;host&gt;</c> (2026-10-15, the admin-tools plan): DNS, ping, the port and TLS on 443 against that host, an HTTP HEAD of its root (2026-11-17), and the certificate store opened; exit 0/1. Reads only.</summary>
     public string? NetworkCheck { get; init; }
 
     /// <summary><c>--services-check &lt;computer&gt;</c> (2026-10-15): the services listed on that computer of <c>services.json</c> (or <c>local</c>) and one read whole; exit 0/1. Changes nothing.</summary>
@@ -208,7 +208,7 @@ public sealed record SidekickOptions(
         "  --postgres-check <connection>  prove the PostgreSQL tools against that connection of postgres.json (reads only), exit 0/1\n" +
         "  --unc-check <share>          prove the UNC tools against that share of unc.json (reads only), exit 0/1\n" +
         "  --eventlog-check <computer>  prove the event-log tools against that computer of eventlog.json, or local (reads only), exit 0/1\n" +
-        "  --network-check <host>       prove the network tools against that host: DNS, ping, port 443, TLS (reads only), exit 0/1\n" +
+        "  --network-check <host>       prove the network tools against that host: DNS, ping, port 443, TLS, an HTTP HEAD (reads only), exit 0/1\n" +
         "  --services-check <computer>  prove the services tools against that computer of services.json, or local (reads only; Windows), exit 0/1\n" +
         "  --tasks-check <computer>     prove the task tools against that computer of tasks.json, or local (reads only; Windows), exit 0/1\n" +
         "  --ad-check <domain>          prove the directory tools against that domain of ad.json, or current (reads only), exit 0/1\n" +

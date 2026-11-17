@@ -196,4 +196,99 @@ public partial class ChatScreenTests
         Assert.DoesNotContain(ThemeText.EditDiscardQuestion, output);
         Assert.Contains("  ✗ " + SettingsMenu.ThemeNameError("synthwave-custom", ThemeCatalog.Scan(_settings.ThemesDirectory).Names)[..40], output);
     }
+
+    /// <summary>
+    /// The editor's lines come after the repaint (2026-11-17, the admin-themes-render review's #18, #34): the save's line follows the theme's
+    /// own saved line, so the redraw never wipes it.
+    /// </summary>
+    [Fact]
+    public async Task ThemeEdit_TheSavesLine_ComesAfterTheRepaint()
+    {
+        using var theme = new ThemeScope();
+        EditorPane();
+        WriteMine();
+        _settings.Update(d => { d.TtsOutput = false; d.Theme = "mine"; });
+        ThemeName.Apply(_settings.Current, _settings.ThemesDirectory);
+        StepsWhenIdle(Line("/theme edit"), Keys2([.. Enumerable.Repeat(Keys.Down, DimRow), Keys.Right, Keys.Char('s')]), Line("/exit"));
+
+        string output = await RunAsync();
+
+        string saved = BeforePath(ThemeText.EditSaved("mine", MineTheme()), MineTheme());
+        string themeLine = SettingsMenu.SavedNotice(SettingsField.Theme, _settings.Current, _settings.ProfileDirectory);
+        Assert.True(output.LastIndexOf(saved, StringComparison.Ordinal) > output.LastIndexOf(themeLine, StringComparison.Ordinal), output);
+    }
+
+    /// <summary>
+    /// A built-in's copy says what was copied, not "edit it, then /theme" (#194), keeps its role words (#98), and a no to the copy says
+    /// unchanged (#195); d with a change asks (#45).
+    /// </summary>
+    [Fact]
+    public async Task ThemeEdit_ABuiltInsCopy_SaysCopied_KeepsItsWords_AndDAsks()
+    {
+        using var theme = new ThemeScope();
+        EditorPane();
+        _settings.Update(d => { d.TtsOutput = false; d.Theme = "synthwave"; });
+        PushLine("/theme edit bauhaus");
+        PushKeys(Keys.Char('y'));
+        PushKeys(Keys.Enter);                    // yes: bauhaus-custom made
+        PushKeys(Keys.Right);                    // primary lighter
+        PushKeys(Keys.Char('d'));                // a change: asks
+        PushKeys(Keys.Char('n'));
+        PushKeys(Keys.Enter);                    // no: the editor again
+        PushKeys(Keys.Char('d'));
+        PushKeys(Keys.Char('y'));
+        PushKeys(Keys.Enter);                    // yes: dropped
+        PushLine("/theme edit noir");
+        PushKeys(Keys.Char('n'));
+        PushKeys(Keys.Enter);                    // no copy
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        string copy = Path.Combine(_settings.ThemesDirectory, "bauhaus-custom.json");
+        Assert.Contains("\"bg\": \"secondary\"", File.ReadAllText(copy), StringComparison.Ordinal);
+        Assert.Contains("Copied bauhaus to bauhaus-custom", output);   // its path wraps to a line of its own
+        Assert.DoesNotContain(ThemeText.ExportDone("bauhaus-custom", copy)[..30], output);
+        Assert.Contains(ThemeText.EditDiscardQuestion, output);
+        Assert.Equal(Theme.ToHex(ThemeLibrary.Get("bauhaus").Primary), ColorIn(copy, "primary"));
+        Assert.False(File.Exists(Path.Combine(_settings.ThemesDirectory, "noir-custom.json")));
+        Assert.Contains("  · " + SettingsMenu.UnchangedNotice, output);
+    }
+
+    /// <summary>A name not found is the one tried: the theme in force when none is given (#93).</summary>
+    [Fact]
+    public async Task ThemeEdit_AMissedName_NamesTheOneTried()
+    {
+        using var theme = new ThemeScope();
+        EditorPane();
+        _settings.Update(d => { d.TtsOutput = false; d.Theme = "synthwave"; });
+        PushLine("/theme edit nope");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("No theme named \"nope\"", output);
+        Assert.DoesNotContain("No theme named \"\"", output);
+    }
+
+    /// <summary>A file deleted while the editor was open is offered back (#214): yes writes the opened text with the new color.</summary>
+    [Fact]
+    public async Task ThemeEdit_AFileGoneAtSave_WritesTheOpenedTextWithTheColors()
+    {
+        using var theme = new ThemeScope();
+        EditorPane();
+        string json = WriteMine();
+        _settings.Update(d => { d.TtsOutput = false; d.Theme = "synthwave"; });
+        StepsWhenIdle(
+            Line("/theme edit mine"),
+            input => { File.Delete(MineTheme()); input.Push(Keys.Right, Keys.Char('s')); },
+            Keys2(Keys.Char('y'), Keys.Enter),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        var lighter = HslColor.From(ShippedThemes.Synthwave.Primary).WithLightness(SettingsMenu.EditLightnessStep).ToColor();
+        Assert.Equal(json.Replace("\"primary\": \"" + Theme.ToHex(ShippedThemes.Synthwave.Primary) + "\"", "\"primary\": \"" + Theme.ToHex(lighter) + "\"", StringComparison.Ordinal),
+            File.ReadAllText(MineTheme()));
+    }
 }

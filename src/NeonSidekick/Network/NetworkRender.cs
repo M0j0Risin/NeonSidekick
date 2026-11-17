@@ -39,6 +39,20 @@ public static class NetworkRender
         }
 
         /// <summary>
+        /// A line part the app wrote that may already hold a fenced quote (2026-11-17, the review's #19, #91: a hop's problem naming the
+        /// server's Location or .NET's words about its bytes), so the note goes under the answer.
+        /// </summary>
+        public string Holding(string text)
+        {
+            if (text.Contains(UntrustedText.QuoteOpen, StringComparison.Ordinal))
+            {
+                _fenced = true;
+            }
+
+            return text;
+        }
+
+        /// <summary>
         /// Adds a line, or counts it as left out once the cap is near. A long line is cut to what is left rather than dropped with every line after
         /// it (2026-10-23, the admin review's K2: a certificate with 50 long names hid net_tls's chain status and policy errors).
         /// </summary>
@@ -263,11 +277,15 @@ public static class NetworkRender
         ArgumentNullException.ThrowIfNull(report);
         var last = report.Hops.Count > 0 ? report.Hops[^1] : null;
         var answered = report.Hops.LastOrDefault(h => h.Status is not null);
-        string outcome = answered is { Status: { } code } && answered == last ? code.ToString(CultureInfo.InvariantCulture)
-            : answered is { Status: { } earlier } ? earlier.ToString(CultureInfo.InvariantCulture) + ", then " + (last?.Problem ?? "no answer")
-            : last?.Problem ?? "no answer";
-        string count = report.Hops.Count == 1 ? "1 request" : report.Hops.Count.ToString(CultureInfo.InvariantCulture) + " requests";
+        bool lastAnswered = answered is not null && answered == last;
+        string outcome = answered is { Status: { } code } && lastAnswered ? code.ToString(CultureInfo.InvariantCulture)
+            : answered is { Status: { } earlier } ? earlier.ToString(CultureInfo.InvariantCulture) + NetworkText.HttpThen + (last?.Problem ?? NetworkText.HttpNoAnswer)
+            : last?.Problem ?? NetworkText.HttpNoAnswer;
+
+        // Refused hops sent nothing (2026-11-17, #212).
+        string count = NetworkText.HttpRequests(report.Hops.Count(h => h.Sent));
         var answer = new Answer("HTTP " + report.Asked.AbsoluteUri + ": " + outcome + " (" + count + ", " + Ms(report.Total) + ")");
+        answer.Holding(outcome);
         for (int i = 0; i < report.Hops.Count; i++)
         {
             var hop = report.Hops[i];
@@ -282,19 +300,21 @@ public static class NetworkRender
                 }
 
                 line.Append(", ").Append(hop.Version).Append(", ").Append(Ms(hop.Elapsed));
-                if (hop.Location is { } location)
+
+                // Only a redirect's Location is where it goes (2026-11-17, #208): a 201's names the new thing, not a hop.
+                if (hop.Location is { } location && status is >= 300 and < 400)
                 {
                     line.Append(" → ").Append(answer.Fence(location));
                 }
 
                 if (hop.Problem is { } stopped)
                 {
-                    line.Append("; ").Append(stopped);
+                    line.Append("; ").Append(answer.Holding(stopped));
                 }
             }
             else
             {
-                line.Append(hop.Problem ?? "no answer");
+                line.Append(answer.Holding(hop.Problem ?? NetworkText.HttpNoAnswer));
             }
 
             answer.Line(line.ToString());
@@ -305,15 +325,20 @@ public static class NetworkRender
             answer.Line("  " + NetworkText.HttpTooManyHops(HttpProbe.MaxHops));
         }
 
-        foreach (var (name, value) in report.Headers)
+        // The headers are the last answer's: a later hop that failed has none, and an earlier hop's would read as its (2026-11-17, #47).
+        if (lastAnswered)
         {
-            answer.Line("  " + name + ": " + answer.Fence(value));
+            foreach (var (name, value) in report.Headers)
+            {
+                answer.Line("  " + name + ": " + answer.Fence(value));
+            }
         }
 
         return answer.ToString();
     }
 
-    private static string Ms(TimeSpan elapsed) => Math.Max(0, elapsed.TotalMilliseconds).ToString("0", CultureInfo.InvariantCulture) + " ms";
+    /// <summary>A time as the lines write it, through the one formatter (2026-11-17, #157): a sub-millisecond time reads "&lt;1 ms" everywhere.</summary>
+    private static string Ms(TimeSpan elapsed) => Ms(Math.Max(0, elapsed.TotalMilliseconds));
 
     // ── Certificate stores ──────────────────────────────────────────────────
 

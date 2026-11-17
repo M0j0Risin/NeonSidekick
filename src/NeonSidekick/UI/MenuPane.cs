@@ -894,6 +894,13 @@ public sealed class MenuPane : INoticeSink
 
                 if (input is InputEvent.Resize)
                 {
+                    if (page.Nudges)
+                    {
+                        // A nudging page's rows are sized to the list (2026-11-17, the admin-themes-render review's #114: the picker's bars):
+                        // the host builds them again at the new width.
+                        return new MenuPick(page.Tab, _cursor, Sub: page.Sub, Refresh: true);
+                    }
+
                     Show();   // laid out at the window's new size with no key (2026-11-02, review P7-3)
                     continue;
                 }
@@ -1143,6 +1150,12 @@ public sealed class MenuPane : INoticeSink
                         nudge += NudgeOf(more)!.Value;
                     }
 
+                    if (nudge == 0)
+                    {
+                        continue;   // presses that cancel out (2026-11-17, #89): nothing to step, and a 0 would read as Enter
+                    }
+
+                    _status.Clear();   // as a pin does (#37)
                     return new MenuPick(page.Tab, _cursor, Sub: page.Sub, Nudge: nudge);
                 }
 
@@ -1375,16 +1388,17 @@ public sealed class MenuPane : INoticeSink
 
     /// <summary>
     /// The cells a row of the list has (2026-11-16, <c>/theme edit</c>'s color bars): the window's, less a <see cref="MenuPage.Side"/>
-    /// column's and its gap when the window holds one, and the last column, never written.
+    /// column's and its gap when the page has one (<paramref name="side"/>, 2026-11-17, #130) and the window holds it, and the last column,
+    /// never written.
     /// </summary>
-    public int ListWidth
+    public int ListWidth(bool side)
     {
-        get
-        {
-            int side = SideWidth(Width);
-            return side > 0 ? Width - 1 - side - SideGap : Width - 1;
-        }
+        int column = side ? SideWidth(Width) : 0;
+        return column > 0 ? Width - 1 - column - SideGap : Width - 1;
     }
+
+    /// <summary>Whether the pane was dismissed by a double-click off it (<see cref="ScreenPane.Dismissed"/>, 2026-11-17, #75): every pick returns null until it closes.</summary>
+    public bool Dismissed => _pane.Dismissed;
 
     /// <summary>
     /// What a key does on a <see cref="MenuPage.Sides"/> page (2026-10-13): Shift/Alt+← −1 (pin left), Shift/Alt+→ +1 (pin right),

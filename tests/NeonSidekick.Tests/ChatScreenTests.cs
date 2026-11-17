@@ -6592,10 +6592,11 @@ public partial class ChatScreenTests : IDisposable
 
     /// <summary>
     /// A light theme's page takes the ink as the terminal's text and cursor colour (2026-11-16, the daylight themes): written after the page's,
-    /// given back when <c>/theme</c> goes to a dark one, and never under <c>Themed background</c> off.
+    /// and a dark one sets its own (2026-11-17, the admin-themes-render review's #158: a light terminal profile under a dark theme hid both),
+    /// given back once, at the exit; never under <c>Themed background</c> off.
     /// </summary>
     [Fact]
-    public async Task WithGeometry_ALightTheme_SetsTheTextAndCursor_ADarkOneGivesThemBack()
+    public async Task WithGeometry_ALightTheme_SetsTheTextAndCursor_ADarkOneSetsItsOwn()
     {
         using var theme = new ThemeScope();
         _settings.Update(d => { d.TtsOutput = false; d.Theme = "paper"; d.WelcomeSplashMode = "off"; });
@@ -6604,6 +6605,7 @@ public partial class ChatScreenTests : IDisposable
         _console.Profile.Height = 20;
         _geometry = new ScreenGeometry(() => null);
         var paper = ThemeLibrary.Get("paper");
+        var synthwave = ThemeLibrary.Get("synthwave");
         PushLine("/theme synthwave");
         PushLine("/exit");
 
@@ -6611,9 +6613,11 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.True(ColorContrast.IsLight(paper.Bg));
         Assert.Contains(ScreenPane.PageBackgroundSequence(paper.Bg) + ScreenPane.PageTextSequence(paper.Ink), output);
+        int dark = output.IndexOf(ScreenPane.PageTextSequence(synthwave.Ink), StringComparison.Ordinal);
+        Assert.True(dark > output.IndexOf(ScreenPane.PageTextSequence(paper.Ink), StringComparison.Ordinal));
         int back = output.IndexOf(ScreenPane.PageTextResetSequence, StringComparison.Ordinal);
-        Assert.True(back > output.IndexOf(ScreenPane.PageTextSequence(paper.Ink), StringComparison.Ordinal));
-        Assert.Equal(1, Count(output, ScreenPane.PageTextResetSequence));   // once, at the switch: the dark page sets none to give back at the end
+        Assert.True(back > dark);
+        Assert.Equal(1, Count(output, ScreenPane.PageTextResetSequence));   // once, at the exit
 
         _settings.Update(d => { d.Theme = "paper"; d.ThemedBackground = false; });
         ThemeName.Apply(_settings.Current, _settings.ThemesDirectory);

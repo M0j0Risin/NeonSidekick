@@ -12,8 +12,15 @@ namespace NeonSidekick.App;
 
 internal sealed partial class ChatScreen
 {
-    /// <summary>The colour of Claude's name over its replies: Claude's own clay, whatever the theme.</summary>
-    internal static readonly Spectre.Console.Color ClaudeColor = new(0xD9, 0x77, 0x57);
+    /// <summary>
+    /// The color of Claude's name over its replies: Claude's own clay, deeper on a light page (2026-11-17, the admin-themes-render review's
+    /// #153), picked as it is drawn or replayed.
+    /// </summary>
+    internal static Spectre.Console.Color ClaudeColor => UI.Theme.PageIsLight ? ClaudeLightColor : ClaudeDarkColor;
+
+    internal static readonly Spectre.Console.Color ClaudeDarkColor = new(0xD9, 0x77, 0x57);
+
+    internal static readonly Spectre.Console.Color ClaudeLightColor = new(0xA8, 0x46, 0x1F);
 
     /// <summary>Claude Code headless: one <c>claude -p</c> child per <c>/claude</c> (<see cref="ClaudeProcess"/>), a fake in the tests.</summary>
     private readonly IClaudeCli _claude;

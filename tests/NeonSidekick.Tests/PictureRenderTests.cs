@@ -23,7 +23,9 @@ public sealed class PictureRenderTests : IDisposable
 
     public void Dispose()
     {
+        // The draw runs in the PDF profile beside it, which goes too (2026-11-17, the admin-themes-render review's #198).
         try { Directory.Delete(_profile, recursive: true); } catch { /* best effort */ }
+        try { Directory.Delete(HeadlessBrowser.PdfFolderFor(_profile), recursive: true); } catch { /* best effort */ }
     }
 
     private async Task<PictureRender?> DrawAsync(RenderJob job)
@@ -48,7 +50,7 @@ public sealed class PictureRenderTests : IDisposable
     [Fact]
     public async Task AMermaidFlowchart_IsDrawn()
     {
-        if (await DrawAsync(new RenderJob("graph TD\n  A[Start] --> B{Ready?}\n  B -->|yes| C[Go]\n  B -->|no| D[Wait]", null, PictureFormat.Png, 1200, 2, "#FFFFFF")) is not { } drawn)
+        if (await DrawAsync(new RenderJob("graph TD\n  A[Start] --> B{Ready?}\n  B -->|yes| C[Go]\n  B -->|no| D[Wait]", null, PictureFormat.Png, 1200, 2, System.Drawing.Color.White, Svg: true)) is not { } drawn)
         {
             return;
         }
@@ -60,7 +62,7 @@ public sealed class PictureRenderTests : IDisposable
     [Fact]
     public async Task BadMermaid_ComesBackAsItsComplaint()
     {
-        if (await DrawAsync(new RenderJob("graph TD\n  A --> \n  ((((", null, PictureFormat.Png, 1200, 2, "#FFFFFF")) is not { } drawn)
+        if (await DrawAsync(new RenderJob("graph TD\n  A --> \n  ((((", null, PictureFormat.Png, 1200, 2, System.Drawing.Color.White, Svg: true)) is not { } drawn)
         {
             return;
         }
@@ -73,7 +75,7 @@ public sealed class PictureRenderTests : IDisposable
     public async Task TheModelsSvg_IsDrawn_OnATransparentGround()
     {
         string page = PicturePage.ForModelSvg("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"300\" height=\"200\"><rect width=\"300\" height=\"200\" fill=\"#3366CC\"/><text x=\"20\" y=\"100\" font-size=\"40\" fill=\"#fff\">Hello</text></svg>", _ => null);
-        if (await DrawAsync(new RenderJob(null, page, PictureFormat.Png, 1200, 1, null)) is not { } drawn)
+        if (await DrawAsync(new RenderJob(null, page, PictureFormat.Png, 1200, 1, null, Svg: true)) is not { } drawn)
         {
             return;
         }
@@ -90,7 +92,7 @@ public sealed class PictureRenderTests : IDisposable
         string page = PicturePage.ForModelHtml(
             "<div style=\"height:120px;background:#C33\">Card</div><img src=\"https://example.com/missing.png\" width=\"50\" height=\"50\">" +
             "<script>document.body.innerHTML = '<div style=\"height:3000px\"></div>';</script>", _ => null);
-        if (await DrawAsync(new RenderJob(null, page, PictureFormat.Png, 600, 1, "#FFFFFF")) is not { } drawn)
+        if (await DrawAsync(new RenderJob(null, page, PictureFormat.Png, 600, 1, System.Drawing.Color.White, Svg: false)) is not { } drawn)
         {
             return;
         }
@@ -105,8 +107,8 @@ public sealed class PictureRenderTests : IDisposable
     {
         var table = new ChartTable();
         Office.TableSource.TextTable("month,sales\nJan,10\nFeb,14\nMar,9", "data", table, CancellationToken.None);
-        string svg = ChartSvg.Svg(new ChartSpec(ChartKind.Bar, Width: 600), table.Data("month", ["sales"], out _)!, out _);
-        if (await DrawAsync(new RenderJob(null, PicturePage.ForTrustedSvg(svg), PictureFormat.Jpeg, 632, 1, ChartSvg.LightGround)) is not { } drawn)
+        string svg = ChartSvg.Svg(new ChartSpec(ChartKind.Bar, Width: 600), table.Data("month", ["sales"], out _)!, out _, out _, out _)!;
+        if (await DrawAsync(new RenderJob(null, PicturePage.ForTrustedSvg(svg), PictureFormat.Jpeg, 632, 1, PictureColors.Light.GroundColor, Svg: true)) is not { } drawn)
         {
             return;
         }

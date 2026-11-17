@@ -1,5 +1,6 @@
 /* NeonSidekick's Web UI (2026-10-14): one fixed dark style, phone first. No inline styles anywhere (the page's policy forbids them). */
 :root {
+  /* WebTheme.PageGround and PageText hold these two for the manifest and the home tiles: change them together. */
   --bg: #120b1f;
   --panel: #1c1230;
   --panel-2: #251940;
@@ -33,6 +34,11 @@
   --diff-add: #10301f;
   --diff-del: #3a1018;
   --radius: 10px;
+  /* The picture overlay's inks (2026-11-17): its grounds stay dark under any theme, so /theme.css never sends these. */
+  --overlay-ink: #efe6ff;
+  --overlay-dim: #9a8bb8;
+  --overlay-accent: #ff4fd8;
+  --overlay-accent-2: #4fe3ff;
   color-scheme: dark;
 }
 
@@ -275,19 +281,19 @@ body[data-user-line="slab"] .entry.user { color: var(--text); background: var(--
   padding: 6px 12px;
   background: rgba(28, 18, 48, 0.9);
 }
-.overlay-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--dim); }
+.overlay-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--overlay-dim); }
 /* Following new pictures (later on 2026-10-15): a small pill before the name; the name gives way on a narrow phone, never the tag. */
 .overlay-live {
   flex: none;
   padding: 1px 8px;
-  border: 1px solid var(--accent);
+  border: 1px solid var(--overlay-accent);
   border-radius: 999px;
-  color: var(--accent);
+  color: var(--overlay-accent);
   font-size: 12px;
   line-height: 18px;
 }
 @media (prefers-reduced-motion: reduce) { .overlay-live { opacity: 0.8; } }
-.overlay-bar a { color: var(--accent-2); white-space: nowrap; }
+.overlay-bar a { color: var(--overlay-accent-2); white-space: nowrap; }
 /* The 🗑️ (later on 2026-10-15): tap twice, the first arming it red for 3 s; the note under the bar says what happened. */
 .overlay-delete { flex: none; min-width: 44px; min-height: 36px; }
 .overlay-delete.armed { background: var(--error, #c0392b); color: #fff; border-color: transparent; }
@@ -300,10 +306,10 @@ body[data-user-line="slab"] .entry.user { color: var(--text); background: var(--
   padding: 6px 12px;
   border-radius: 8px;
   background: rgba(28, 18, 48, 0.95);
-  color: var(--text);
+  color: var(--overlay-ink);
   font-size: 14px;
 }
-.overlay-step { position: absolute; top: 50%; transform: translateY(-50%); font-size: 28px; padding: 6px 14px; background: rgba(37, 25, 64, 0.8); }
+.overlay-step { position: absolute; top: 50%; transform: translateY(-50%); font-size: 28px; padding: 6px 14px; background: rgba(37, 25, 64, 0.8); color: var(--overlay-ink); }
 .overlay-step.prev { left: 8px; }
 .overlay-step.next { right: 8px; }
 
@@ -322,7 +328,7 @@ body[data-user-line="slab"] .entry.user { color: var(--text); background: var(--
 .body th, .body td { border: 1px solid var(--line); padding: 4px 8px; }
 .body blockquote { margin: 0; padding-left: 12px; border-left: 3px solid var(--line); color: var(--dim); }
 
-/* A light theme's /theme.css sends each as --tk-<kind> (2026-11-16, the daylight themes); a dark one keeps these. */
+/* /theme.css sends each as --tk-<kind> for a readable theme (2026-11-17); these stand otherwise. */
 .tk-keyword { color: var(--tk-keyword, #ff79c6); }
 .tk-type { color: var(--tk-type, #ffb86c); }
 .tk-variable { color: var(--tk-variable, #ffb86c); }

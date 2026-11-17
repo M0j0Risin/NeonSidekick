@@ -71,9 +71,17 @@ public sealed class ThemeEditTests
         Assert.Equal((int)Math.Round(19 / 3.0), plain[0].IndexOf('┃', StringComparison.Ordinal) - plain[0].IndexOf('▕', StringComparison.Ordinal) - 1);
         Assert.Equal((int)Math.Round(19 * 0.25), plain[2].IndexOf('┃', StringComparison.Ordinal) - plain[2].IndexOf('▕', StringComparison.Ordinal) - 1);
 
-        // Each cell is the color at its point: the hue bar's first cell is red at this saturation and lightness, the lightness bar's first black.
-        Assert.Contains($"[{Theme.ToHex((hsl with { Hue = 0 }).ToColor())}]█[/]", rows[0], StringComparison.Ordinal);
+        // Each cell is the color at its point: the hue bar's first cell is pure red at any saturation and lightness (2026-11-17, #182), the
+        // saturation bar's first a mid-gray, the lightness bar's first black.
+        Assert.Contains("[#FF0000]█[/]", rows[0], StringComparison.Ordinal);
+        Assert.Contains($"[{Theme.ToHex(new HslColor(120, 0, 50).ToColor())}]█[/]", rows[1], StringComparison.Ordinal);
         Assert.Contains("[#000000]█[/]", rows[2], StringComparison.Ordinal);
+
+        // On white the hue and saturation bars still show their colors, not one white run.
+        var white = SettingsMenu.PickerRows(new HslColor(0, 0, 100), Color.White, new Color(0, 0, 0), 20);
+        Assert.Contains("[#FF0000]█[/]", white[0], StringComparison.Ordinal);
+        Assert.Contains($"[{Theme.ToHex(new HslColor(0, 100, 50).ToColor())}]█[/]", white[1], StringComparison.Ordinal);
+        Assert.Contains('▕', Markup.Remove(white[3]));
         Assert.All(rows, r => Assert.True(Cells(Markup.Remove(r)) <= 119, r));
     }
 

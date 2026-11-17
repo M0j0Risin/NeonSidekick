@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using System.Text.RegularExpressions;
 using NeonSidekick.Web;
 
 namespace NeonSidekick.Pdf;
@@ -13,9 +14,11 @@ namespace NeonSidekick.Pdf;
 /// (<paramref name="resolve"/>), dropped when not; and <see cref="PdfHtml.ContentSecurityPolicy"/> put first, so whatever slips
 /// through loads nothing. A default <c>@page</c> (the request's paper) comes before the page's own styles, and its <c>size</c> again after
 /// them (2026-10-22, review T4: a page's own <c>size: 1mm 1mm</c> won and made a PDF of countless pages), so the page's margins hold but its
-/// paper is the request's. Comments and the doctype's details go; a doctype comes back when the page had one. Pure.
+/// paper is the request's. Comments and the doctype's details go; a doctype comes back when the page had one. A picture an SVG <c>image</c>
+/// names and one a CSS <c>url()</c> names are inlined the same way, anything else in a <c>url()</c> emptied (2026-11-17, the
+/// admin-themes-render review's #28, #113); CDATA text is kept inside SVG and MathML (#161), and a style's CDATA markers dropped (#160). Pure.
 /// </summary>
-public static class PdfHtmlSanitizer
+public static partial class PdfHtmlSanitizer
 {
     /// <summary>The elements dropped with their tags (and a script's or noscript's body).</summary>
     private static readonly HashSet<string> Dropped = new(StringComparer.Ordinal)
@@ -68,6 +71,7 @@ public static class PdfHtmlSanitizer
 
         string? skipping = null;
         string? rawElement = null;
+        int foreign = 0;   // how deep inside svg or math: CDATA is text there, a bogus comment elsewhere (#161)
         foreach (var token in HtmlTokenizer.Tokenize(html))
         {
             if (skipping is not null)
@@ -84,10 +88,22 @@ public static class PdfHtmlSanitizer
             {
                 case HtmlTokenKind.Text:
                     // A style's body is CSS, kept as written but for its '<'s (StyleText); every other text is re-escaped.
-                    output.Append(rawElement == "style" ? StyleText(token.Text) : WebUtility.HtmlEncode(token.Text));
+                    output.Append(rawElement == "style" ? StyleText(token.Text, resolve) : WebUtility.HtmlEncode(token.Text));
+                    break;
+                case HtmlTokenKind.Cdata:
+                    if (foreign > 0)
+                    {
+                        output.Append(WebUtility.HtmlEncode(token.Text));
+                    }
+
                     break;
                 case HtmlTokenKind.Close:
                     rawElement = null;
+                    if (token.Name is "svg" or "math")
+                    {
+                        foreign = Math.Max(0, foreign - 1);
+                    }
+
                     if (!Dropped.Contains(token.Name) && IsName(token.Name))
                     {
                         output.Append("</").Append(token.Name).Append('>');
@@ -96,6 +112,11 @@ public static class PdfHtmlSanitizer
                     break;
                 default:
                     rawElement = HtmlTokenizer.RawTextElements.Contains(token.Name) && !token.SelfClosing ? token.Name : null;
+                    if (token.Name is "svg" or "math" && !token.SelfClosing)
+                    {
+                        foreign++;
+                    }
+
                     if (Dropped.Contains(token.Name))
                     {
                         if (!token.SelfClosing && !HtmlTokenizer.VoidElements.Contains(token.Name) && token.Name is "script" or "noscript")
@@ -132,7 +153,7 @@ public static class PdfHtmlSanitizer
             // A stylesheet from the sandbox becomes a style element; every other link (icons, preloads, imports) goes.
             if (IsStylesheet(token) && token.Attribute("href") is { } href && resolve(href) is { } css)
             {
-                output.Append("<style>").Append(StyleText(Encoding.UTF8.GetString(css))).Append("</style>");
+                output.Append("<style>").Append(StyleText(Encoding.UTF8.GetString(css), resolve)).Append("</style>");
             }
 
             return;
@@ -162,6 +183,17 @@ public static class PdfHtmlSanitizer
             return null;
         }
 
+        if (name == "style")
+        {
+            return StyleUrls(value, resolve);
+        }
+
+        if (element == "image" && (name == "href" || name == "xlink:href"))
+        {
+            // An SVG picture (#28): from the sandbox inlined, a data: picture kept, anything else dropped (the policy would refuse it).
+            return Picture(value, resolve);
+        }
+
         if (name == "src")
         {
             // A picture from the sandbox is inlined; any other src (audio, video, a web picture) would be refused by the policy anyway.
@@ -189,7 +221,43 @@ public static class PdfHtmlSanitizer
     /// meta tag that sent the print browser to an outside file. The tokenizer can't tell a foreign <c>style</c> from an HTML one; with
     /// no <c>&lt;</c> left, neither parse finds a tag. (The <c>&lt;/</c> → <c>&lt;\/</c> rewrite of an inlined sheet, before, stopped only a close.)
     /// </summary>
-    private static string StyleText(string css) => css.Replace("<", "\\3c ", StringComparison.Ordinal);
+    /// <remarks>
+    /// (2026-11-17, #160, #113) First the <c>&lt;![CDATA[</c> and <c>]]&gt;</c> markers go wherever they sit (a raw-text <c>style</c> never
+    /// yields a CDATA token, and the browser reads the markers as broken CSS that ate the first rule), then each <c>url()</c> through
+    /// <see cref="StyleUrls"/>, then the escape.
+    /// </remarks>
+    private static string StyleText(string css, Func<string, byte[]?> resolve) =>
+        StyleUrls(css.Replace("<![CDATA[", "", StringComparison.Ordinal).Replace("]]>", "", StringComparison.Ordinal), resolve)
+            .Replace("<", "\\3c ", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Each CSS <c>url(…)</c>, quoted or not (2026-11-17, #113): a picture <paramref name="resolve"/> finds becomes a <c>data:</c> URI, a
+    /// <c>data:image/</c> one stays, anything else becomes <c>url()</c>, so nothing is fetched and nothing is left for the policy to catch.
+    /// </summary>
+    public static string StyleUrls(string css, Func<string, byte[]?> resolve)
+    {
+        ArgumentNullException.ThrowIfNull(css);
+        ArgumentNullException.ThrowIfNull(resolve);
+        return CssUrl().Replace(css, match =>
+        {
+            string address = (match.Groups[1].Success ? match.Groups[1].Value : match.Groups[2].Success ? match.Groups[2].Value : match.Groups[3].Value).Trim();
+            return Picture(address, resolve) is { } kept ? "url(\"" + kept.Replace("\"", "%22", StringComparison.Ordinal) + "\")" : "url()";
+        });
+    }
+
+    // A picture's address as kept: inlined from the sandbox, a data: picture as it is, else null.
+    private static string? Picture(string address, Func<string, byte[]?> resolve)
+    {
+        if (address.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+        {
+            return address.StartsWith("data:image/", StringComparison.OrdinalIgnoreCase) ? address : null;
+        }
+
+        return address.Length > 0 && PdfHtml.ImageMediaType(PathOf(address)) is { } type && resolve(address) is { } bytes ? PdfHtml.DataUri(bytes, type) : null;
+    }
+
+    [GeneratedRegex(@"url\(\s*(?:""([^""]*)""|'([^']*)'|([^)""'\s]*))\s*\)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex CssUrl();
 
     /// <summary>
     /// Whether a link may stay (2026-10-22, review S7): the scheme read as a browser reads it — tabs and line breaks anywhere removed,

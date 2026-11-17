@@ -12,8 +12,15 @@ namespace NeonSidekick.App;
 
 internal sealed partial class ChatScreen
 {
-    /// <summary>The advisors' name colour over their answers: a steady teal, whatever the theme.</summary>
-    internal static readonly Spectre.Console.Color AdvisorColor = new(0x4F, 0xB8, 0xA8);
+    /// <summary>
+    /// The advisors' name color over their answers: a steady teal, deeper on a light page (2026-11-17, the admin-themes-render review's #153:
+    /// the bright one read at 2:1 on the daylight themes), picked as it is drawn or replayed.
+    /// </summary>
+    internal static Spectre.Console.Color AdvisorColor => Theme.PageIsLight ? AdvisorLightColor : AdvisorDarkColor;
+
+    internal static readonly Spectre.Console.Color AdvisorDarkColor = new(0x4F, 0xB8, 0xA8);
+
+    internal static readonly Spectre.Console.Color AdvisorLightColor = new(0x18, 0x70, 0x64);
 
     /// <summary>Each advisor's thread in this session (2026-10-10): stored with the session, read back by a restore, dropped by <see cref="ForgetSession"/>.</summary>
     private readonly AdvisorThreads _advisorThreads = new();
@@ -167,7 +174,7 @@ internal sealed partial class ChatScreen
         {
             stop.Cancel();
             await watcher.ConfigureAwait(false);
-            await EndTurnAsync(closePane: askCts.IsCancellationRequested, cancellationToken).ConfigureAwait(false);
+            await EndTurnAsync(closePane: askCts.IsCancellationRequested, cancellationToken, run: true).ConfigureAwait(false);
         }
 
         DrainDiagnostics();

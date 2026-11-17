@@ -1153,9 +1153,10 @@ internal sealed partial class ChatScreen
     /// (the reply ended under <c>/help</c>; the user closes it), the acts posted meanwhile run as they come — as the
     /// reply's own wait runs them (<see cref="NextEventAsync"/>; 2026-10-01, the review's finding: Ctrl+Alt+E in a pane the
     /// reply ended under toggled nothing until the pane closed, and twice was no change at all) — and the reconnects the
-    /// quick switches owe follow, quietly.
+    /// quick switches owe follow, quietly. <paramref name="run"/> (2026-11-17, the admin-themes-render review's #76): the turn is a run's
+    /// (botchat, <c>/test</c>, an advisor, a custom command), whose handed-over theme repaints at the idle line.
     /// </summary>
-    private async Task EndTurnAsync(bool closePane, CancellationToken cancellationToken)
+    private async Task EndTurnAsync(bool closePane, CancellationToken cancellationToken, bool run = false)
     {
         _toolsOfferedDirty = true;   // 2026-10-16: the toolbar's 🛠️ worked out again at the next idle line
         _madeFiles.Touch();   // a shell command may have deleted a listed file: the Files tab reads again (2026-11-16, the review's #26)
@@ -1168,7 +1169,7 @@ internal sealed partial class ChatScreen
         }
 
         // What a pane the reply ended under handed back (2026-10-12): carried out first, as the idle line would after that pane.
-        _handoverReset = await ApplyPaneHandoverAsync(cancellationToken).ConfigureAwait(false);
+        _handoverReset = await ApplyPaneHandoverAsync(cancellationToken, run).ConfigureAwait(false);
         await ApplyDeferredAsync(reconnectLlm: true, cancellationToken).ConfigureAwait(false);
     }
 
@@ -1177,7 +1178,7 @@ internal sealed partial class ChatScreen
     /// <see cref="ApplyMenuChangesAsync"/> for the settings changes and an embedded model picked, <see cref="RestoreSession"/> for a session.
     /// True when the profile switched or the conversation was replaced (the turn's tail is about one that is gone). Nothing when nothing was handed.
     /// </summary>
-    private async Task<bool> ApplyPaneHandoverAsync(CancellationToken cancellationToken)
+    private async Task<bool> ApplyPaneHandoverAsync(CancellationToken cancellationToken, bool run = false)
     {
         var changes = _handoverChanges;
         var embedded = _handoverEmbedded;
@@ -1187,7 +1188,7 @@ internal sealed partial class ChatScreen
         bool reset = changes.HasFlag(SettingsChanges.Profile) || changes.HasFlag(SettingsChanges.Conversation);
         if (changes != SettingsChanges.None || embedded is not null)
         {
-            await ApplyMenuChangesAsync(changes, embedded, cancellationToken).ConfigureAwait(false);
+            await ApplyMenuChangesAsync(changes, embedded, cancellationToken, run).ConfigureAwait(false);
         }
 
         if (session is { } id && RestoreSession(id))

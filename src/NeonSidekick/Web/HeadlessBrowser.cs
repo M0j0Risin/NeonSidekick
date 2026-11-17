@@ -129,13 +129,7 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
     public static (int Length, uint Hash) Fingerprint(string html)
     {
         ArgumentNullException.ThrowIfNull(html);
-        uint x = 2166136261;
-        foreach (char c in html)
-        {
-            x = unchecked((x ^ c) * 16777619);
-        }
-
-        return (html.Length, x);
+        return (html.Length, Platform.Fnv1a.Hash(html));
     }
 
     /// <summary>
@@ -770,12 +764,12 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
 
             if (state.Bytes is { } bytes)
             {
-                return new PictureRender(true, "", bytes, state.Width, state.Height) { InJob = run.InJob, Cut = state.Cut };
+                return new PictureRender(true, "", bytes, state.Width, state.Height) { InJob = run.InJob, Cut = state.Cut, Wide = state.Wide };
             }
 
             if (state.TooLarge)
             {
-                return new PictureRender(false, "the picture is too large to hand back", null, 0, 0) { InJob = run.InJob, TooLarge = true };
+                return new PictureRender(false, Render.RenderText.PictureTooLarge, null, 0, 0) { InJob = run.InJob, TooLarge = true };
             }
 
             string detail = state.Failure ?? (run.TimedOut ? $"stopped after {Llm.LlmTimeouts.Format(BrowserPictureRenderer.Timeout)}" : await run.FailureAsync("it drew nothing", cancellationToken).ConfigureAwait(false));
@@ -794,6 +788,7 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         public int Width;
         public int Height;
         public bool Cut;
+        public bool Wide;
         public bool TooLarge;
         public string? MermaidError;
         public string? Failure;
@@ -846,17 +841,25 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         string html = job.Html ?? "";
         if (job.Mermaid is { } source)
         {
+            // Mermaid lays the diagram out at the page's width (2026-11-17, #202: it drew at the browser's default and was framed at the job's).
+            await client.SendAsync("Emulation.setDeviceMetricsOverride", w =>
+            {
+                w.WriteNumber("width", BrowserPictureRenderer.LayoutWidth(job.Width, job.Scale));
+                w.WriteNumber("height", 800);
+                w.WriteNumber("deviceScaleFactor", 1);
+                w.WriteBoolean("mobile", false);
+            }, session, cancellationToken).ConfigureAwait(false);
             var (loaded, loadError) = await LoadIntoPageAsync(client, session, BrowserPictureRenderer.LoadExpression(library!), cancellationToken).ConfigureAwait(false);
             if (loaded is not { } answer || !BrowserPictureRenderer.Loaded(answer))
             {
-                state.Failure = "Mermaid did not load: " + (loadError ?? "mermaid missing");
+                state.Failure = Render.RenderText.MermaidNotLoaded(loadError ?? "mermaid missing");
                 return;
             }
 
             var (drawn, drawError) = await EvaluateAwaitAsync(client, session, BrowserPictureRenderer.MermaidExpression(source, BrowserPictureRenderer.MermaidTheme(job.Background)), cancellationToken).ConfigureAwait(false);
             if (drawn is not { } value)
             {
-                state.Failure = "Mermaid failed: " + drawError;
+                state.Failure = Render.RenderText.MermaidFailed(drawError ?? "no answer");
                 return;
             }
 
@@ -882,7 +885,7 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         await client.SendAsync("Page.enable", null, page, cancellationToken).ConfigureAwait(false);
         await client.SendAsync("Emulation.setDeviceMetricsOverride", w =>
         {
-            w.WriteNumber("width", job.Width);
+            w.WriteNumber("width", BrowserPictureRenderer.LayoutWidth(job.Width, job.Scale));   // #105: held to what MaxPixels takes
             w.WriteNumber("height", 800);
             w.WriteNumber("deviceScaleFactor", job.Scale);
             w.WriteBoolean("mobile", false);
@@ -904,14 +907,14 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
             w.WriteString("frameId", frame);
             w.WriteString("html", html);
         }, page, cancellationToken).ConfigureAwait(false);
-        var (measured, sizeError) = await EvaluateAwaitAsync(client, page, BrowserPictureRenderer.SizeExpression, cancellationToken).ConfigureAwait(false);
+        var (measured, sizeError) = await EvaluateAwaitAsync(client, page, BrowserPictureRenderer.SizeExpression(job.Svg), cancellationToken).ConfigureAwait(false);
         if (measured is not { } size || BrowserPictureRenderer.Size(size) is not { } box)
         {
-            state.Failure = "the page couldn't be measured: " + (sizeError ?? "no size");
+            state.Failure = Render.RenderText.NotMeasured(sizeError ?? "no size");
             return;
         }
 
-        var (width, height) = BrowserPictureRenderer.Clip(box.Width, box.Height, job.Width, job.Scale, out bool cut);
+        var (width, height) = BrowserPictureRenderer.Clip(box.Width, box.Height, job.Width, job.Scale, out bool cut, out bool wide);
         var shot = await client.SendAsync("Page.captureScreenshot", w =>
         {
             w.WriteString("format", job.Format == PictureFormat.Jpeg ? "jpeg" : "png");
@@ -930,9 +933,12 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
             w.WriteBoolean("captureBeyondViewport", true);
         }, page, cancellationToken).ConfigureAwait(false);
         state.Bytes = Convert.FromBase64String(shot.GetProperty("data").GetString() ?? "");
-        state.Width = (int)Math.Round(width * job.Scale);
-        state.Height = (int)Math.Round(height * job.Scale);
+        // The pixel size from the picture's own header (2026-11-17, #209); the CSS size times the scale only when it can't be read.
+        var info = Images.ImageEditor.Info(state.Bytes);
+        state.Width = info?.Width ?? (int)Math.Round(width * job.Scale);
+        state.Height = info?.Height ?? (int)Math.Round(height * job.Scale);
         state.Cut = cut;
+        state.Wide = wide;
     }
 
     /// <summary>What <see cref="WatchEditAsync"/> got to: the new file, or a refusal the caller words, or why it failed.</summary>

@@ -27,7 +27,7 @@ public static class ThemeText
 
     public static string Unreadable(string message) => $"skipped: cannot read it ({message})";
     public static string NotJson(string message) => $"skipped: not a theme file ({message})";
-    public static string BadName(string name) => $"skipped: \"{name}\" is not a theme name (lower-case letters, digits, - and _, up to 32, and not \"{ExportWord}\")";
+    public static string BadName(string name) => $"skipped: \"{name}\" is not a theme name (lower-case letters, digits, - and _, up to 32, and not {Quoted(RefusedOnLoad)})";
     public static string Duplicate(string name, string otherShown) => $"skipped: {otherShown} already names a theme \"{name}\"";
     /// <summary>A file that leaves colour roles unset or unusable (2026-10-05: a theme stands alone, every role its own).</summary>
     public static string MissingColors(IReadOnlyList<string> roles) =>
@@ -51,13 +51,70 @@ public static class ThemeText
     public static string ExportOverrides(string name, string path) => $"Theme {name} written to {path}; it now replaces the built-in {name}. Edit it, then /theme {name}.";
     public static string ExportExists(string path) => $"{path} already exists; give a new name: /theme export <name> <new-name>.";
     public static string ExportNameTaken(string name) => $"A theme named \"{name}\" already exists; give another new name.";
-    public static string ExportBadName(string name) => $"\"{name}\" is not a theme name: lower-case letters, digits, - and _, up to 32, and not \"{ExportWord}\" or \"{EditWord}\".";
+    public static string ExportBadName(string name) => $"\"{name}\" is not a theme name: lower-case letters, digits, - and _, up to 32, and not {Quoted(SubcommandWords)}.";
+
+    /// <summary>The default name of a theme's copy (<c>/theme export</c>'s and <c>/theme edit</c>'s, 2026-11-17, #109).</summary>
+    public static string CopyName(string name) => name + "-custom";
+
+    // ── /theme's sub-commands (2026-11-17, the admin-themes-render review's #217: one list for the handler, completion and the name rules) ──
+
+    /// <summary><c>/theme</c>'s sub-command words, in completion's order; no new theme may take one (<see cref="ThemeFile.IsValidNewName"/>).</summary>
+    public static readonly IReadOnlyList<string> SubcommandWords = [ExportWord, EditWord];
+
+    /// <summary>The notes beside <see cref="SubcommandWords"/>, in the same order.</summary>
+    public static readonly IReadOnlyList<string> SubcommandNotes = [ExportNote, EditNote];
+
+    /// <summary>
+    /// The words added after themes could already carry them: a file named so before still loads and is picked from the list
+    /// (<see cref="ThemeFile.IsValidName"/>), while typed it is the verb.
+    /// </summary>
+    public static readonly IReadOnlyList<string> LoadableSubcommandWords = [EditWord];
+
+    /// <summary>The words <see cref="ThemeFile.IsValidName"/> refuses: <see cref="SubcommandWords"/> less <see cref="LoadableSubcommandWords"/>.</summary>
+    public static IReadOnlyList<string> RefusedOnLoad => [.. SubcommandWords.Except(LoadableSubcommandWords, StringComparer.Ordinal)];
+
+    /// <summary>
+    /// The one of <see cref="SubcommandWords"/> <paramref name="request"/> is or starts with plus a space (any case), and the text after it in
+    /// <paramref name="rest"/>; null (and <paramref name="rest"/> the whole request) for none. Pure.
+    /// </summary>
+    public static string? Subcommand(string request, out string rest)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        foreach (string word in SubcommandWords)
+        {
+            if (request.Equals(word, StringComparison.OrdinalIgnoreCase) || request.StartsWith(word + " ", StringComparison.OrdinalIgnoreCase))
+            {
+                rest = request[word.Length..];
+                return word;
+            }
+        }
+
+        rest = request;
+        return null;
+    }
+
+    private static string Quoted(IReadOnlyList<string> words) => string.Join(" or ", words.Select(w => "\"" + w + "\""));
     public static string ExportFailed(string message) => $"Could not write the theme: {message}";
 
     // ── /theme edit (2026-11-16, plan sharded-hugging-puppy #54) ──────────────
 
     /// <summary><c>/theme</c>'s sub-command that opens the theme editor.</summary>
     public const string EditWord = "edit";
+
+    /// <summary>
+    /// The theme repaint's line above the first turn drawn (2026-11-17, the admin-themes-render review's #40, the user's call: about a screenful
+    /// redrawn), naming the earlier turns left out.
+    /// </summary>
+    public static string EarlierTurns(int count) => count == 1
+        ? "(1 earlier turn isn't redrawn; /sessions shows it)"
+        : string.Create(CultureInfo.InvariantCulture, $"({count} earlier turns aren't redrawn; /sessions shows them)");
+
+    /// <summary>
+    /// A light theme put in force with Themed background off (2026-11-17, #179): the app can't see the terminal's own page, so the line allows
+    /// for a light one.
+    /// </summary>
+    public const string LightNeedsBackground =
+        "A light theme on the terminal's own page can be hard to read: turn on Themed background in /settings › Client › Chat, unless the terminal is light too.";
 
     /// <summary>The note beside <see cref="EditWord"/> in <c>/theme</c>'s argument list.</summary>
     public const string EditNote = "edit a theme's colors";
@@ -66,42 +123,87 @@ public static class ThemeText
     public static string EditTitle(string name) => $"Edit theme · {name}";
 
     /// <summary>The editor's hint row.</summary>
-    public const string EditHint = "↑↓ = color · ←→ = lighter/darker (Shift ×5) · Enter = picker · s = save · r = reset · Esc = close";
+    public const string EditHint = "↑↓ = color · ←→ = lighter/darker (Shift ×5) · Enter = picker · s = save · r = reset · d = discard · Esc = close";
 
     /// <summary>The editor's buttons, with their keys.</summary>
     public const string SaveButton = "save";
     public const string ResetButton = "reset";
     public const string DiscardButton = "discard";
 
-    /// <summary>What each color role colors, in <see cref="ThemeColorSlot"/> order: the editor's row notes and <c>COMMANDS.md</c>'s table say the same.</summary>
+    /// <summary>
+    /// What each color role colors, in <see cref="ThemeColorSlot"/> order: <c>COMMANDS.md</c>'s table in the editor's rows (2026-11-17, #119: the
+    /// docs are the fact's home), lower-case and without the Markdown marks a menu row would draw as typed.
+    /// </summary>
     public static readonly IReadOnlyList<string> RoleNotes =
     [
         "the main accent: headings, borders, keywords",
-        "the counter-accent: your lines, table headers, the selection",
-        "the third accent: section headings, bullets, function calls",
-        "structure: the pane rule, the slab under an off toolbar item",
+        "the counter-accent: your lines, the spinner, table headers, inline code, the selection",
+        "the third accent: section headings, bullets, the quote bar, function calls",
+        "structure: the pane rule, table borders, the slab under a switched-off toolbar item",
         "string literals",
         "numbers",
         "a soft accent: $variables",
         "body text",
-        "dim text, the status and hints bars",
-        "a step quieter than dim: the input row's ghost text",
-        "the background",
+        "dim text, the status bar and the hints bar",
+        "a step quieter than dim (darker on a dark theme, lighter on a light one): the input row's ghost text",
+        "the background (unless Themed background is off), the picture viewer",
         "code blocks, the highlighted menu row",
         "success, enabled, connected",
         "failure, error",
         "a warning",
     ];
 
+    /// <summary>The contrast pairs' names, in the theme file's words (2026-11-17, the admin-themes-render review's #39, #195).</summary>
+    public const string PanelPair = "panelBg on bg";
+    public const string DimmerPair = "dimmer on bg";
+    public const string DeepPair = "deep on bg";
+    public const string InkPair = "ink on bg";
+    public const string InkPanelPair = "ink on panelBg";
+    public const string DimPanelPair = "dim on panelBg";
+    public const string BgPrimaryPair = "bg on primary";
+
+    public static string PanelRolePair(string role) => role + " on panelBg";
+
+    /// <summary>A code style's words on a diff slab: "codeKeyword on the good diff".</summary>
+    public static string SlabPair(string key, string slab) => $"{key} on the {slab} diff";
+
+    /// <summary>A style's words on its own ground: "markdownHeading1 on its own ground".</summary>
+    public static string OwnGroundPair(string key) => key + " on its own ground";
+
+    /// <summary>How many problems the band lists before "and N more" (2026-11-17, #146).</summary>
+    public const int ChecksShown = 3;
+
     /// <summary>The editor's band when every contrast bar is met.</summary>
     public const string ChecksOk = "Contrast OK: every pair meets its bar.";
 
-    /// <summary>The editor's band listing the pairs under their bars (<see cref="ThemeChecks"/>); warnings, never a block on saving.</summary>
-    public static string ChecksWarning(IReadOnlyList<ContrastProblem> problems) =>
-        "⚠ " + string.Join(" · ", problems.Select(p => string.Create(CultureInfo.InvariantCulture, $"{p.Pair} {p.Ratio:0.0}:1, wants {p.Target:0.##}")));
+    /// <summary>
+    /// The editor's band listing the pairs under their bars (<see cref="ThemeChecks"/>); warnings, never a block on saving.
+    /// The first <see cref="ChecksShown"/>, then "and N more" (#146); a ratio is floored to one decimal, so a pair just under its bar never
+    /// reads as meeting it (#106: 4.46 showed as 4.5).
+    /// </summary>
+    public static string ChecksWarning(IReadOnlyList<ContrastProblem> problems)
+    {
+        ArgumentNullException.ThrowIfNull(problems);
+        string shown = string.Join(" · ", problems.Take(ChecksShown).Select(p =>
+            string.Create(CultureInfo.InvariantCulture, $"{p.Pair} {Math.Floor(p.Ratio * 10) / 10:0.0}:1, wants {p.Target:0.##}")));
+        return "⚠ " + shown + (problems.Count > ChecksShown ? string.Create(CultureInfo.InvariantCulture, $" · and {problems.Count - ChecksShown} more") : "");
+    }
 
     /// <summary>A built-in named: the copy to make and edit instead.</summary>
-    public static string EditBuiltInQuestion(string name, string copy) => $"Built-in themes can't be changed. Save a copy as {copy} and edit it?";
+    public static string EditBuiltInQuestion(string copy) => $"Built-in themes can't be changed. Save a copy as {copy} and edit it?";
+
+    /// <summary>The copy made for the editor (2026-11-17, #194: it said "Edit it, then /theme X-custom", while the editor was the edit).</summary>
+    public static string EditCopied(string name, string copy, string path) => $"Copied {name} to {copy} ({path}).";
+
+    /// <summary>The file was gone at save time (2026-11-17, #214).</summary>
+    public static string EditGoneQuestion(string path) =>
+        $"{path} is gone. Write it again as it was when the editor opened, with your colors? Changes made to it since then aren't in that copy.";
+
+    /// <summary>The theme file couldn't be read when the editor opened.</summary>
+    public static string EditUnreadable(string message) => $"Could not read the theme: {message}";
+
+    /// <summary>A theme file whose top is not an object (<see cref="NotJson"/>'s detail).</summary>
+    public const string NotAnObject = "not a JSON object";
 
     /// <summary>A built-in named whose copy already exists: edit that one.</summary>
     public static string EditCopyQuestion(string name, string copy) => $"Built-in themes can't be changed. Edit your copy of {name}, {copy}?";
@@ -137,7 +239,7 @@ public static class ThemeText
     public const string PickerHex = "Hex value";
 
     /// <summary>The picker's hint row.</summary>
-    public const string PickerHint = "↑↓ = bar · ←→ = move (Shift ×5) · Enter = use · Esc = cancel";
+    public const string PickerHint = "↑↓ = bar · ←→ = move (Shift ×5) · Enter = use, or type on Hex value · Esc = cancel";
 
     /// <summary>A typed value that is no color.</summary>
     public static string PickerBadHex(string text) => $"\"{text}\" is not a color: #RRGGBB or #RGB.";

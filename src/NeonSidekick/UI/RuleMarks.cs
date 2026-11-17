@@ -62,7 +62,33 @@ public static class RuleMarks
     /// <summary>The color of <paramref name="name"/> (one of <see cref="Names"/>) on a dark page, or a light one with <paramref name="light"/>.</summary>
     public static Color ColorOf(string name, bool light = false) => (light ? s_lightColors : s_colors)[name];
 
-    /// <summary>The rules' style for <paramref name="name"/> on a dark or a <paramref name="light"/> page; null for none or an unknown name.</summary>
-    public static Style? StyleOf(string? name, bool light = false) =>
-        name is not null && (light ? s_lightColors : s_colors).TryGetValue(name, out var color) ? new Style(color) : (Style?)null;
+    /// <summary>The contrast every mark reaches on its page.</summary>
+    public const double Target = 4.5;
+
+    /// <summary>
+    /// The rules' style for <paramref name="name"/> on <paramref name="page"/> (2026-11-17, the admin-themes-render review's #122, #129): the
+    /// light table on a light page, else the dark one, and a shade under <see cref="Target"/> there moved toward <paramref name="ink"/> just
+    /// far enough (a custom or mid-tone ground; every built-in reads as the tables are). Null for none or an unknown name.
+    /// </summary>
+    public static Style? StyleFor(string? name, Color page, Color ink) =>
+        name is not null && s_colors.ContainsKey(name) ? new Style(Floor(ColorOf(name, ColorContrast.IsLight(page)), page, ink)) : (Style?)null;
+
+    // The color at the target on the page: Theme's bisection, then a byte step at a time where its rounding landed a hair under.
+    private static Color Floor(Color color, Color page, Color ink)
+    {
+        if (ColorContrast.Contrast(color, page) >= Target)
+        {
+            return color;
+        }
+
+        var moved = Theme.Quieted(color, page, ink, Target);
+        for (int step = 0; step < 255 && ColorContrast.Contrast(moved, page) < Target && !moved.Equals(ink); step++)
+        {
+            moved = new Color(Toward(moved.R, ink.R), Toward(moved.G, ink.G), Toward(moved.B, ink.B));
+        }
+
+        return moved;
+    }
+
+    private static byte Toward(byte from, byte to) => from < to ? (byte)(from + 1) : from > to ? (byte)(from - 1) : from;
 }

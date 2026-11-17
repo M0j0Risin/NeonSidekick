@@ -33,7 +33,9 @@ public enum HomeChipMark
 /// One chip as the bar draws it and a click reads it: its reference, glyph, name (whole, and the short one a narrow bar uses),
 /// value, look (a slab — a coloured background — or plain text), what a double-click does (and the call it makes), and the
 /// one-line note a single click shows. <see cref="Label"/> is the user's alias for it (2026-10-12): what the bar draws in place
-/// of <see cref="Name"/>, which the note, the pane and the calls' outcomes keep.
+/// of <see cref="Name"/>, which the note, the pane and the calls' outcomes keep. <see cref="Tint"/> is a lit or alert chip's color before
+/// <see cref="HomeChips.Readable(Color)"/> lifted it for the terminal's page (2026-11-17, the admin-themes-render review's #82): the Web UI's
+/// tile makes it readable on its own page instead; null for an off or plain chip.
 /// </summary>
 public sealed record HomeChip(
     string Reference,
@@ -48,7 +50,8 @@ public sealed record HomeChip(
     HomeChipMark Mark = HomeChipMark.None,
     string? Label = null,
     bool Bare = false,
-    bool Divider = false)
+    bool Divider = false,
+    Color? Tint = null)
 {
     /// <summary>The name the user sees on the chip: their alias, else its name (one rule for the page, the sheet and completion; 2026-10-27, the review).</summary>
     public string Shown => Label is { Length: > 0 } label ? label : Name;
@@ -213,7 +216,7 @@ public static class HomeChips
         }
 
         return new HomeChip(reference, ShoppingGlyph, name, "", count.ToString(CultureInfo.InvariantCulture), count > 0 ? Lit(Theme.Secondary) : Off,
-            HomeChipAction.Detail, null, HomeBarText.ShoppingNote(count), Label: "");
+            HomeChipAction.Detail, null, HomeBarText.ShoppingNote(count), Label: "", Tint: count > 0 ? Theme.Secondary : null);
     }
 
     /// <summary>
@@ -222,7 +225,7 @@ public static class HomeChips
     /// opens the monitors pane (<see cref="HomeChipAction.Detail"/>); a single click flashes a fixed note, no DDC/CI read. Pure.
     /// </summary>
     public static HomeChip MonitorsChip(string reference) =>
-        new(reference, MonitorsGlyph, HomeBarText.MonitorsName, "", "", Lit(Theme.Secondary), HomeChipAction.Detail, null, HomeBarText.MonitorsNote, Label: "", Bare: true);
+        new(reference, MonitorsGlyph, HomeBarText.MonitorsName, "", "", Lit(Theme.Secondary), HomeChipAction.Detail, null, HomeBarText.MonitorsNote, Label: "", Bare: true, Tint: Theme.Secondary);
 
     private static HomeChip Waiting(string reference, string glyph, string name, HomeChipMark mark) =>
         new(reference, glyph, name, ShortOf(name, null), "", Theme.DimText, HomeChipAction.None, null, HomeBarText.NotYet(name), mark);
@@ -255,10 +258,11 @@ public static class HomeChips
         int on = lights.Count(e => e.State == "on");
         string value = lights.Count == 0 ? "" : HomeBarText.Count(on, lights.Count);
         var call = new HaServiceCall("light", on > 0 ? "turn_off" : "turn_on", [], areaId);
-        var style = on > 0 ? Lit(AverageTint(lights.Where(e => e.State == "on")) ?? Theme.Highlight) : Off;
+        Color? tint = on > 0 ? AverageTint(lights.Where(e => e.State == "on")) ?? Theme.Highlight : null;
+        var style = tint is { } lit ? Lit(lit) : Off;
         var action = lights.Count == 0 ? HomeChipAction.Detail : HomeChipAction.Call;
         string note = lights.Count == 0 ? HomeBarText.AreaNoLights(name) : HomeBarText.AreaNote(name, on, lights.Count);
-        return new HomeChip(reference, AreaGlyph, name, ShortOf(name, null), value, style, action, action == HomeChipAction.Call ? call : null, note);
+        return new HomeChip(reference, AreaGlyph, name, ShortOf(name, null), value, style, action, action == HomeChipAction.Call ? call : null, note, Tint: tint);
     }
 
     private static HomeChip EntityChip(string reference, HaLiveEntity entity, HaCatalog? catalog)
@@ -282,21 +286,22 @@ public static class HomeChips
                 // it is on). The click's note still gives it.
                 bool on = state == "on";
                 string brightness = on && entity.Number("brightness") is { } b ? Percent(b / 255 * 100) : "";
-                var style = on ? Lit(LightTint(entity) ?? Theme.Highlight) : Off;
-                return Toggle(reference, glyph, name, shortName, "", style, HaServiceCall.On("light", "toggle", id), on) with { Note = HomeBarText.ToggleNote(name, on, brightness) };
+                Color? tint = on ? LightTint(entity) ?? Theme.Highlight : null;
+                var style = tint is { } lit ? Lit(lit) : Off;
+                return Toggle(reference, glyph, name, shortName, "", style, HaServiceCall.On("light", "toggle", id), on) with { Note = HomeBarText.ToggleNote(name, on, brightness), Tint = tint };
             }
 
             case "switch" or "input_boolean":
             {
                 bool on = state == "on";
-                return Toggle(reference, glyph, name, shortName, "", on ? Lit(Theme.Secondary) : Off, HaServiceCall.On(entity.Domain, "toggle", id), on);
+                return Toggle(reference, glyph, name, shortName, "", on ? Lit(Theme.Secondary) : Off, HaServiceCall.On(entity.Domain, "toggle", id), on) with { Tint = on ? Theme.Secondary : null };
             }
 
             case "fan":
             {
                 bool on = state == "on";
                 string value = on && entity.Number("percentage") is { } p ? Percent(p) : "";
-                return Toggle(reference, glyph, name, shortName, value, on ? Lit(Theme.Secondary) : Off, HaServiceCall.On("fan", "toggle", id), on);
+                return Toggle(reference, glyph, name, shortName, value, on ? Lit(Theme.Secondary) : Off, HaServiceCall.On("fan", "toggle", id), on) with { Tint = on ? Theme.Secondary : null };
             }
 
             case "media_player":
@@ -308,9 +313,10 @@ public static class HomeChips
                 string title = entity.Text("media_title") is { Length: > 0 } t ? t.Trim() : "";
                 string value = off ? "" : playing ? HomeBarText.PlayingMark : state == "paused" ? HomeBarText.PausedMark : "";
                 var call = off ? HaServiceCall.On("media_player", "turn_on", id) : HaServiceCall.On("media_player", "media_play_pause", id);
-                var style = off ? Off : Lit(playing ? Theme.Primary : Theme.Tertiary);
+                Color? tint = off ? null : playing ? Theme.Primary : Theme.Tertiary;
+                var style = tint is { } lit ? Lit(lit) : Off;
                 string note = HomeBarText.MediaNote(name, state, title, off);
-                return new HomeChip(reference, glyph, name, shortName, value.Trim(), style, HomeChipAction.Call, call, note);
+                return new HomeChip(reference, glyph, name, shortName, value.Trim(), style, HomeChipAction.Call, call, note, Tint: tint);
             }
 
             case "scene":
@@ -320,7 +326,7 @@ public static class HomeChips
             {
                 bool running = state == "on";
                 var call = HaServiceCall.On("script", running ? "turn_off" : "turn_on", id);
-                return new HomeChip(reference, glyph, name, shortName, running ? HomeBarText.PlayingMark : "", running ? Lit(Theme.Secondary) : Off, HomeChipAction.Call, call, HomeBarText.ScriptNote(name, running));
+                return new HomeChip(reference, glyph, name, shortName, running ? HomeBarText.PlayingMark : "", running ? Lit(Theme.Secondary) : Off, HomeChipAction.Call, call, HomeBarText.ScriptNote(name, running), Tint: running ? Theme.Secondary : null);
             }
 
             case "cover":
@@ -331,7 +337,8 @@ public static class HomeChips
                 var call = HaServiceCall.On("cover", open ? "close_cover" : "open_cover", id);
                 var action = !open && guarded ? HomeChipAction.Confirm : HomeChipAction.Call;
                 var style = open ? guarded ? Alert(Theme.Warn) : Lit(Theme.Secondary) : Off;
-                return new HomeChip(reference, glyph, name, shortName, value, style, action, call, HomeBarText.CoverNote(name, state, open));
+                Color? tint = open ? guarded ? Theme.Warn : Theme.Secondary : null;
+                return new HomeChip(reference, glyph, name, shortName, value, style, action, call, HomeBarText.CoverNote(name, state, open), Tint: tint);
             }
 
             case "lock":
@@ -341,10 +348,10 @@ public static class HomeChips
                     case "locked":
                         return new HomeChip(reference, glyph, name, shortName, "", Off, HomeChipAction.Confirm, HaServiceCall.On("lock", "unlock", id), HomeBarText.LockNote(name, state));
                     case "unlocked" or "open":
-                        return new HomeChip(reference, glyph, name, shortName, "", Alert(Theme.Warn), HomeChipAction.Call, HaServiceCall.On("lock", "lock", id), HomeBarText.LockNote(name, state));
+                        return new HomeChip(reference, glyph, name, shortName, "", Alert(Theme.Warn), HomeChipAction.Call, HaServiceCall.On("lock", "lock", id), HomeBarText.LockNote(name, state), Tint: Theme.Warn);
                     default:
                         var bad = state == "jammed" ? Alert(Theme.Bad) : Off;
-                        return new HomeChip(reference, glyph, name, shortName, HomeBarText.StateWord(state), bad, HomeChipAction.Detail, null, HomeBarText.LockNote(name, state));
+                        return new HomeChip(reference, glyph, name, shortName, HomeBarText.StateWord(state), bad, HomeChipAction.Detail, null, HomeBarText.LockNote(name, state), Tint: state == "jammed" ? Theme.Bad : null);
                 }
             }
 
@@ -353,12 +360,13 @@ public static class HomeChips
                 bool armed = state.StartsWith("armed", StringComparison.Ordinal) || state is "triggered" or "arming" or "pending";
                 string value = HomeBarText.AlarmWord(state);
                 var style = state == "triggered" ? Alert(Theme.Bad) : armed ? Lit(Theme.Good) : Off;
+                Color? tint = state == "triggered" ? Theme.Bad : armed ? Theme.Good : null;
 
                 // A panel that wants a code cannot be disarmed with a click: its pane says so.
                 bool needsCode = entity.Attributes.TryGetValue("code_format", out var format) && format.ValueKind == System.Text.Json.JsonValueKind.String;
                 var action = armed && !needsCode ? HomeChipAction.Confirm : HomeChipAction.Detail;
                 var call = armed && !needsCode ? HaServiceCall.On("alarm_control_panel", "alarm_disarm", id) : null;
-                return new HomeChip(reference, glyph, name, shortName, value, style, action, call, HomeBarText.AlarmNote(name, value, armed, needsCode));
+                return new HomeChip(reference, glyph, name, shortName, value, style, action, call, HomeBarText.AlarmNote(name, value, armed, needsCode), Tint: tint);
             }
 
             case "binary_sensor":
@@ -367,8 +375,9 @@ public static class HomeChips
                 bool on = state == "on";
                 bool alert = on && deviceClass is "door" or "window" or "garage_door" or "opening" or "moisture" or "smoke" or "gas" or "carbon_monoxide" or "problem" or "safety" or "tamper";
                 string value = HomeBarText.BinaryWord(deviceClass, on);
-                var style = alert ? Alert(deviceClass is "moisture" or "smoke" or "gas" or "carbon_monoxide" or "safety" ? Theme.Bad : Theme.Warn) : new Style(Theme.Ink);
-                return new HomeChip(reference, glyph, name, shortName, value, style, HomeChipAction.Detail, null, HomeBarText.ValueNote(name, value));
+                Color? tint = alert ? deviceClass is "moisture" or "smoke" or "gas" or "carbon_monoxide" or "safety" ? Theme.Bad : Theme.Warn : null;
+                var style = tint is { } warned ? Alert(warned) : new Style(Theme.Ink);
+                return new HomeChip(reference, glyph, name, shortName, value, style, HomeChipAction.Detail, null, HomeBarText.ValueNote(name, value), Tint: tint);
             }
 
             case "sensor":
@@ -400,15 +409,16 @@ public static class HomeChips
                 string current = entity.Number("current_temperature") is { } c ? Number(c) : "";
                 string target = entity.Number("temperature") is { } t ? Number(t) : "";
                 string value = HomeBarText.ClimateValue(current, target);
-                var style = action == "heating" ? Lit(Theme.Warm) : action == "cooling" ? Lit(Theme.Secondary) : state == "off" ? Off : new Style(Theme.Ink);
-                return new HomeChip(reference, glyph, name, shortName, value, style, HomeChipAction.Detail, null, HomeBarText.ClimateNote(name, state, action, value));
+                Color? tint = action == "heating" ? Theme.Warm : action == "cooling" ? Theme.Secondary : null;
+                var style = tint is { } lit ? Lit(lit) : state == "off" ? Off : new Style(Theme.Ink);
+                return new HomeChip(reference, glyph, name, shortName, value, style, HomeChipAction.Detail, null, HomeBarText.ClimateNote(name, state, action, value), Tint: tint);
             }
 
             default:
             {
                 bool on = state == "on";
                 string value = state is "on" or "off" ? "" : Clip(HomeBarText.StateWord(state), TitleCells);
-                return new HomeChip(reference, glyph, name, shortName, value, on ? Lit(Theme.Secondary) : state == "off" ? Off : new Style(Theme.Ink), HomeChipAction.Detail, null, HomeBarText.ValueNote(name, state));
+                return new HomeChip(reference, glyph, name, shortName, value, on ? Lit(Theme.Secondary) : state == "off" ? Off : new Style(Theme.Ink), HomeChipAction.Detail, null, HomeBarText.ValueNote(name, state), Tint: on ? Theme.Secondary : null);
             }
         }
     }
@@ -483,7 +493,7 @@ public static class HomeChips
     /// <summary>
     /// An on chip (2026-10-12, the user's call, twice that day: first the full slabs of a warm bulb's orange or a theme's
     /// violet were overpowering, then the quiet fills that replaced them were still too much): <paramref name="color"/> as the
-    /// words on the page, no fill, lifted by <see cref="Readable"/> when too dark to read. Pure for one theme.
+    /// words on the page, no fill, lifted by <see cref="Readable(Color)"/> when too dark to read. Pure for one theme.
     /// </summary>
     public static Style Lit(Color color) => new(Readable(color));
 
@@ -501,29 +511,35 @@ public static class HomeChips
     public static Style Alert(Color color) => new(color, decoration: Decoration.Bold);
 
     /// <summary>
-    /// The contrast against the page under which a lit chip's colour is moved toward the ink (<see cref="Readable"/>): a deep blue scene
+    /// The contrast against the page under which a lit chip's colour is moved toward the ink (<see cref="Readable(Color, Color, Color)"/>): a deep blue scene
     /// vanished on a dark page, a pale yellow one would on a light page. A luminance floor of 0.35 until 2026-11-16 (the daylight themes),
     /// which only lifted.
     /// </summary>
     public const double ReadableContrast = 3;
 
     /// <summary>
-    /// <paramref name="color"/>, or, when it contrasts with <see cref="Theme.Bg"/> under <see cref="ReadableContrast"/>, the first tenth of
-    /// the way toward <see cref="Theme.Ink"/> that reads (the ink itself at worst): the light's hue kept, its words legible on a dark page
-    /// and a light one alike. Pure for one theme.
+    /// <paramref name="color"/> made readable on the terminal's page (<see cref="Theme.PageGround"/> and <see cref="Theme.PageInk"/>,
+    /// 2026-11-17, the admin-themes-render review's #207: the theme's when <c>Themed background</c> paints it, the terminal's own otherwise).
     /// </summary>
-    public static Color Readable(Color color)
+    public static Color Readable(Color color) => Readable(color, Theme.PageGround, Theme.PageInk);
+
+    /// <summary>
+    /// <paramref name="color"/>, or, when it contrasts with <paramref name="ground"/> under <see cref="ReadableContrast"/>, the first tenth of
+    /// the way toward <paramref name="ink"/> that reads (the ink itself at worst): the light's hue kept, its words legible on a dark page
+    /// and a light one alike. The page's own ground for the Web UI's tiles (#82). Pure.
+    /// </summary>
+    public static Color Readable(Color color, Color ground, Color ink)
     {
         for (int tenths = 0; tenths < 10; tenths++)
         {
-            var moved = Theme.Mix(color, Theme.Ink, tenths / 10.0);
-            if (ColorContrast.Contrast(moved, Theme.Bg) >= ReadableContrast)
+            var moved = Theme.Mix(color, ink, tenths / 10.0);
+            if (ColorContrast.Contrast(moved, ground) >= ReadableContrast)
             {
                 return moved;
             }
         }
 
-        return Theme.Ink;
+        return ink;
     }
 
     /// <summary>A hue (0–360) and saturation (0–100) at full value as a colour. Pure.</summary>

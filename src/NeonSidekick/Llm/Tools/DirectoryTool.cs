@@ -241,7 +241,7 @@ public sealed class AdMemberOfTool(DirectoryAccess access, bool forceRedacted = 
 
     public override string Name => ToolName;
 
-    public override string Description => "Lists every group an Active Directory account (user, computer, group or service account) is in: direct, or nested at any depth with the group each comes through; security and distribution groups, with their type.";
+    public override string Description => "Lists every group an Active Directory account (user, computer, group or service account) is in: direct, or nested at any depth with the group each comes through; security and distribution groups, with their type. With compare, the groups only one of two accounts is in, and those both are.";
 
     public override JsonElement JsonSchema => Schema;
 

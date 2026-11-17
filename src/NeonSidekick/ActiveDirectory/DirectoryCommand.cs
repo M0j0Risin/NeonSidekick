@@ -198,7 +198,8 @@ public static class DirectoryCommand
     public static string Usage =>
         "Usage: /ad <name> · user <name> · group <name> [nested] [members:users|computers|groups] · memberof <name> [nested] [type:"
         + string.Join('|', DirectoryQueries.MemberOfTypes) + "] [compare:<name>] · computer <name> · ou [<path>] · find "
-        + string.Join('|', DirectoryQueries.FindKinds) + " [days] [words] [type:<type>] [field:<field>] [ou:<path>] · domain · domain:<name> and to:<file-or-folder> (a .csv file or a folder) may stand anywhere";
+        + string.Join('|', DirectoryQueries.FindKinds) + " [days] [words] [type:<type>] [field:<field>] [ou:<path>] · domain · domain:<name> and to:<file-or-folder> (a .csv file or a folder); the key words ("
+        + string.Join(", ", Keys.Select(k => k + ":")) + ") may stand anywhere";
 
     private static string Bare(string error) => error.Replace("Error: ", "", StringComparison.Ordinal);
 
@@ -269,7 +270,7 @@ public static class DirectoryCommand
             "name" => DirectoryQueries.FindAnswer(session, source, new FindOptions("name", 0, line.Argument, DirectoryLimits.MaxEntries, Cap: cap), now, zone, deadline),
             _ => DirectoryQueries.FindAnswer(session, source, new FindOptions(line.Verb[5..], line.Days, line.Argument.Length > 0 ? line.Argument : null, DirectoryLimits.MaxEntries, line.Type, line.Ou, line.Field, cap), now, zone, deadline),
         }, Describe(line), cancellationToken, line.Verb != "memberof" ? null
-            : line.Compare is { } compared ? a => DescribeCompare(line.Argument, compared, line.Nested, a.AccountType)
+            : line.Compare is { } compared ? a => DirectoryText.DescribeCompare(line.Argument, compared, line.Nested, a.AccountType, a.OtherAccountType)
             : a => DescribeMemberOf(line.Argument, line.Nested, a.AccountType)).ConfigureAwait(false);
         if (target is not null && result.Answer is { Failed: false } answer)
         {
@@ -364,7 +365,26 @@ public static class DirectoryCommand
         ArgumentNullException.ThrowIfNull(other);
         return RunCardAsync(access, domain, (session, source, deadline) =>
             DirectoryQueries.MemberOfCompare(session, source, account.Name, other.Name, null, nested, DirectoryLimits.MaxEntries, access.Time.LocalTimeZone, deadline, dn: account.Dn, otherDn: other.Dn),
-            DescribeCompare(account.Name, other.Name, nested), cancellationToken, a => DescribeCompare(account.Name, other.Name, nested, a.AccountType));
+            DirectoryText.DescribeCompare(account.Name, other.Name, nested), cancellationToken,
+            a => DirectoryText.DescribeCompare(account.Name, other.Name, nested, a.AccountType, a.OtherAccountType));
+    }
+
+    /// <summary>
+    /// A compare re-run with a candidate picked for its ambiguous side (2026-11-17, the review's #31): the picked DN for that side, the other side
+    /// by the DN already settled or by its name, so a second ambiguous side offers its own candidates with the first kept.
+    /// </summary>
+    public static Task<DirectoryCommandResult> CompareAsync(DirectoryAccess access, string? domain, ComparePending pending, DirectoryRowTarget picked, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(access);
+        ArgumentNullException.ThrowIfNull(pending);
+        ArgumentNullException.ThrowIfNull(picked);
+        string? dn = pending.PickingOther ? pending.Dn : picked.Dn;
+        string? otherDn = pending.PickingOther ? picked.Dn : pending.OtherDn;
+        return RunCardAsync(access, domain, (session, source, deadline) =>
+            DirectoryQueries.MemberOfCompare(session, source, pending.Name, pending.Other, pending.Type, pending.Nested, DirectoryLimits.MaxEntries, access.Time.LocalTimeZone, deadline,
+                dn: dn, otherDn: otherDn),
+            DirectoryText.DescribeCompare(pending.Name, pending.Other, pending.Nested, pending.Type, pending.Type), cancellationToken,
+            a => DirectoryText.DescribeCompare(pending.Name, pending.Other, pending.Nested, a.AccountType, a.OtherAccountType));
     }
 
     /// <summary>
@@ -427,7 +447,8 @@ public static class DirectoryCommand
         {
             "user" => "the user " + line.Argument,
             "group" => DescribeGroup(line.Argument, line.Nested, line.Members ?? "all"),
-            "memberof" when line.Compare is { } other => DescribeCompare(line.Argument, other, line.Nested, line.Type),
+            // One type: filters both lookups, so it names both sides' kind (2026-11-17, #50).
+            "memberof" when line.Compare is { } other => DirectoryText.DescribeCompare(line.Argument, other, line.Nested, line.Type, line.Type),
             "memberof" => DescribeMemberOf(line.Argument, line.Nested, line.Type),
             "computer" => "the computer " + line.Argument,
             "domain" => "the domain",
@@ -458,13 +479,6 @@ public static class DirectoryCommand
     /// </summary>
     public static string DescribeMemberOf(string name, bool nested, string? type = null) =>
         "the groups " + (type is null ? "" : "the " + DirectoryText.KindWord(type) + " ") + name + " belongs to" + (nested ? " at any depth" : "");
-
-    /// <summary>
-    /// Two accounts' groups compared (2026-11-16, #16): the card's title and the ask draft, "the groups alice and bob belong to, side by side".
-    /// Pinned.
-    /// </summary>
-    public static string DescribeCompare(string name, string other, bool nested, string? type = null) =>
-        "the groups " + (type is null ? "" : "the " + DirectoryText.KindWord(type) + "s ") + name + " and " + other + " belong to" + (nested ? " at any depth" : "") + ", side by side";
 
     /// <summary>
     /// The question an account's groups' CSV is named from: nested, the type and a compare's other account kept, so the direct, the nested and the

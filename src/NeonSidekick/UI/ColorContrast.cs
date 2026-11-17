@@ -17,8 +17,9 @@ public static class ColorContrast
 
     /// <summary>
     /// Whether <paramref name="background"/> is a light page (2026-11-16, plan sharded-hugging-puppy #53, the daylight themes): black text has
-    /// more contrast on it than white. The one test every light-or-dark choice reads — the session export, the Web UI's sheet, the robot, the
-    /// terminal's text and cursor colors, the windows' title bars and the rendered diagrams' theme — so they always agree.
+    /// more contrast on it than white. The one test every light-or-dark choice reads — the session export, the Web UI's sheet, the page's
+    /// marks and chips (<see cref="Theme.PageIsLight"/>), the windows' title bars and scroller and the rendered diagrams' theme — so they
+    /// always agree.
     /// </summary>
     public static bool IsLight(Color background) => Contrast(background, Color.Black) > Contrast(background, Color.White);
 

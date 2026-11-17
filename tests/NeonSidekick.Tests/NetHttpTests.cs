@@ -31,9 +31,9 @@ public sealed class NetHttpTests
         ["nas.lan"] = [IPAddress.Parse("192.168.1.20")],
     };
 
-    private NetworkAccess Access(Func<NetworkTarget, HttpMessageHandler>? http = null) =>
-        new(() => _settings, null, _time, (host, _) => _names.TryGetValue(host, out var a) ? Task.FromResult(a) : throw new System.Net.Sockets.SocketException(11001),
-            http: http ?? (target =>
+    private NetworkAccess Access(Func<NetworkTarget, TlsVerdict, HttpMessageHandler>? http = null, Func<string, CancellationToken, Task<IPAddress[]>>? resolve = null) =>
+        new(() => _settings, null, _time, resolve ?? ((host, _) => _names.TryGetValue(host, out var a) ? Task.FromResult(a) : throw new System.Net.Sockets.SocketException(11001)),
+            http: http ?? ((target, _) =>
             {
                 _targets.Add(target);
                 return _stub;
@@ -71,7 +71,7 @@ public sealed class NetHttpTests
         });
         var budget = new NetworkBudget();
         string answer = await Call(new NetHttpTool(Access(), budget), ("url", "example.com"));
-        Assert.StartsWith("HTTP https://example.com/: 200 (1 request, 0 ms)\n", answer);
+        Assert.StartsWith("HTTP https://example.com/: 200 (1 request, <1 ms)\n", answer);
         Assert.Contains("\n  1. GET https://example.com/ → 200 ⟪OK⟫, ", answer);
         Assert.Contains("\n  server: ⟪nginx⟫", answer);
         Assert.Contains("\n  cache-control: ⟪max-age=60⟫", answer);
@@ -186,15 +186,34 @@ public sealed class NetHttpTests
         Assert.Equal(BrowserIdentity.Fallback.UserAgent, agents[1]);
     }
 
+    /// <summary>
+    /// A certificate the validation callback found errors in is an answer worded as <c>net_tls</c> words it (2026-11-17, the review's #63):
+    /// the fake records a name mismatch in the hop's verdict, as the real callback would, then throws as the handshake does.
+    /// </summary>
     [Fact]
     public async Task AnUntrustedCertificate_IsAnAnswer_NotARefusal()
     {
-        var failing = new StubHttpMessageHandler().Map("https://example.com/", (_, _) =>
-            throw new HttpRequestException(HttpRequestError.SecureConnectionError, "The SSL connection could not be established.", new AuthenticationException("The remote certificate is invalid: RemoteCertificateChainErrors")));
-        string answer = await Call(new NetHttpTool(Access(_ => failing), new NetworkBudget()), ("url", "https://example.com/"));
-        Assert.StartsWith("HTTP https://example.com/: the server answered over TLS, but its certificate isn't trusted: ", answer);
-        Assert.Contains("; net_tls shows it", answer);
+        HttpMessageHandler Failing(TlsVerdict verdict) => new StubHttpMessageHandler().Map("https://example.com/", (_, _) =>
+        {
+            verdict.Errors = System.Net.Security.SslPolicyErrors.RemoteCertificateNameMismatch;
+            throw new HttpRequestException(HttpRequestError.SecureConnectionError, "The SSL connection could not be established.", new AuthenticationException("The remote certificate is invalid"));
+        });
+        string answer = await Call(new NetHttpTool(Access((_, verdict) => Failing(verdict)), new NetworkBudget()), ("url", "https://example.com/"));
+        Assert.StartsWith("HTTP https://example.com/: " + NetworkText.HttpUntrusted("name mismatch", command: false) + " (1 request, ", answer);
         Assert.DoesNotContain("Error:", answer);
+        var command = await NetworkCommand.RunAsync(Access((_, verdict) => Failing(verdict)), "http https://example.com/", CancellationToken.None);
+        Assert.Contains(command.Lines, l => l.Contains("; /net tls shows it", StringComparison.Ordinal));
+    }
+
+    /// <summary>A handshake that failed with nothing recorded by the callback is a TLS failure, not an untrusted certificate (#63).</summary>
+    [Fact]
+    public async Task AHandshakeFailure_WithNoCertificateVerdict_IsATlsFailure()
+    {
+        var failing = new StubHttpMessageHandler().Map("https://example.com/", (_, _) =>
+            throw new HttpRequestException(HttpRequestError.SecureConnectionError, "The SSL connection could not be established.", new AuthenticationException("no shared cipher")));
+        string answer = await Call(new NetHttpTool(Access((_, _) => failing), new NetworkBudget()), ("url", "https://example.com/"));
+        Assert.Contains("\n  1. GET https://example.com/ → the TLS handshake failed: ⟪no shared cipher⟫", answer);
+        Assert.EndsWith(UntrustedText.QuoteNote, answer);
     }
 
     [Fact]
@@ -202,7 +221,7 @@ public sealed class NetHttpTests
     {
         var failing = new StubHttpMessageHandler().Map("https://example.com/", (_, _) =>
             throw new HttpRequestException(HttpRequestError.ConnectionError, "refused", new System.Net.Sockets.SocketException(10061)));
-        string answer = await Call(new NetHttpTool(Access(_ => failing), new NetworkBudget()), ("url", "https://example.com/"));
+        string answer = await Call(new NetHttpTool(Access((_, _) => failing), new NetworkBudget()), ("url", "https://example.com/"));
         Assert.Contains("\n  1. GET https://example.com/ → no answer: ", answer);
     }
 
@@ -235,6 +254,188 @@ public sealed class NetHttpTests
         Assert.Contains("http", NetworkText.Verbs);
         Assert.Contains("http <url> [head] [browser] [nofollow]", NetworkText.Usage);
         Assert.Equal(["http x browser", "http x head", "http x nofollow"], NetworkCommand.Complete("http x ").Select(c => c.Text).Order(StringComparer.Ordinal));
+    }
+
+    /// <summary>A Location with <c>://</c> in its query is relative, and followed (2026-11-17, #3): only a scheme at its start makes it absolute.</summary>
+    [Fact]
+    public async Task ARelativeLocation_WithASchemeInItsQuery_IsFollowed()
+    {
+        _stub.Map("https://example.com/login?next=", (_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)));
+        _stub.Map("https://example.com/", (_, _) => Task.FromResult(Redirect("/login?next=https://other.example/")));
+        string answer = await Call(new NetHttpTool(Access(), new NetworkBudget()), ("url", "https://example.com/"));
+        Assert.StartsWith("HTTP https://example.com/: 200 (2 requests, ", answer);
+        Assert.Equal(["example.com", "example.com"], _targets.Select(t => t.Host));
+    }
+
+    /// <summary>
+    /// A typed <c>host:port</c> is a host with a port, not a scheme (2026-11-17, #3, #206), while a Location is read by the scheme pattern
+    /// alone: <c>mailto:</c> stops as not HTTP, the server's text fenced (#19); <c>&lt;https://x&gt;</c> reads as web_fetch reads it (#166).
+    /// </summary>
+    [Fact]
+    public void ParseUrl_HostsWithPorts_SchemesInLocations_AndAngleBrackets()
+    {
+        Assert.Equal("https://example.com:8080/", HttpProbe.ParseUrl("example.com:8080").Url!.AbsoluteUri);
+        Assert.Equal("https://localhost:8080/x", HttpProbe.ParseUrl("localhost:8080/x").Url!.AbsoluteUri);
+        Assert.Equal("https://example.com/", HttpProbe.ParseUrl("<https://example.com/>").Url!.AbsoluteUri);
+        var base_ = new Uri("https://example.com/");
+        Assert.Equal(NetworkText.LocationNotHttp("mailto:x@example.com"), HttpProbe.ParseUrl("mailto:x@example.com", base_).Error);
+        Assert.Contains(UntrustedText.QuoteOpen, NetworkText.LocationNotHttp("mailto:x@example.com"), StringComparison.Ordinal);
+        Assert.Equal(NetworkText.RedirectUserInfo, HttpProbe.ParseUrl("https://user:pw@example.com/", base_).Error);
+        Assert.Equal(NetworkText.UrlUserInfo, HttpProbe.ParseUrl("https://user:pw@example.com/").Error);
+    }
+
+    [Fact]
+    public async Task AMailtoLocation_StopsTheChain_Fenced()
+    {
+        _stub.Map("https://example.com/", (_, _) => Task.FromResult(Redirect("mailto:x@example.com")));
+        string answer = await Call(new NetHttpTool(Access(), new NetworkBudget()), ("url", "https://example.com/"));
+        Assert.Contains("; " + NetworkText.HttpNotFollowedBecause(NetworkText.WithoutError(NetworkText.LocationNotHttp("mailto:x@example.com"))), answer);
+        Assert.Single(_stub.Requests);
+    }
+
+    /// <summary>A Location .NET can't parse is read as sent (#36), still a redirect, and refused by name rather than read as no Location.</summary>
+    [Fact]
+    public async Task AnUnparsableLocation_IsStillARedirect_RefusedByName()
+    {
+        _stub.Map("https://example.com/", (_, _) =>
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.Found);
+            response.Headers.TryAddWithoutValidation("Location", "http://exa mple.com/x");
+            return Task.FromResult(response);
+        });
+        string answer = await Call(new NetHttpTool(Access(), new NetworkBudget()), ("url", "https://example.com/"));
+        Assert.Contains(" → ⟪http://exa mple.com/x⟫; redirect not followed: the server redirected to ", answer);
+        Assert.Single(_stub.Requests);
+    }
+
+    /// <summary>
+    /// <c>/net http</c>'s later hops meet the reach and the lists (2026-11-17, #121, the user's call): a redirect into the LAN under an
+    /// <c>internet</c> reach is refused, while the typed address isn't; and they aren't counted against the turn's hosts.
+    /// </summary>
+    [Fact]
+    public async Task Command_LaterHops_AreJudged_ButNotCounted()
+    {
+        _settings.NetworkToolsReach = "internet";
+        _stub.Map("https://example.com/", (_, _) => Task.FromResult(Redirect("http://nas.lan/admin")));
+        var lan = await NetworkCommand.RunAsync(Access(), "http https://example.com/", CancellationToken.None);
+        Assert.Contains(lan.Lines, l => l.StartsWith("  2. GET ⟪http://nas.lan/admin⟫ → refused: ", StringComparison.Ordinal));
+        Assert.Single(_targets);
+
+        _settings.NetworkToolsReach = "both";
+        _settings.NetworkMaxHostsPerTurn = AppSettingsData.MinNetworkMaxHosts;
+        _names["a.example"] = [IPAddress.Parse("93.184.216.1")];
+        _names["b.example"] = [IPAddress.Parse("93.184.216.2")];
+        _names["c.example"] = [IPAddress.Parse("93.184.216.3")];
+        _stub.Map("https://a.example/", (_, _) => Task.FromResult(Redirect("https://b.example/")));
+        _stub.Map("https://b.example/", (_, _) => Task.FromResult(Redirect("https://c.example/")));
+        _stub.Map("https://c.example/", (_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)));
+        var hosts = await NetworkCommand.RunAsync(Access(), "http https://a.example/", CancellationToken.None);
+        Assert.StartsWith("HTTP https://a.example/: 200 (3 requests, ", hosts.Lines[0], StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A port browsers refuse (2026-11-17, #121): refused on a redirect and on a model's first hop; a port the user typed into <c>/net http</c>
+    /// is kept.
+    /// </summary>
+    [Fact]
+    public async Task BlockedPorts_AreRefused_ButTheUsersTypedPortIsKept()
+    {
+        _stub.Map("https://example.com/", (_, _) => Task.FromResult(Redirect("http://example.com:25/")));
+        string redirected = await Call(new NetHttpTool(Access(), new NetworkBudget()), ("url", "https://example.com/"));
+        Assert.Contains("\n  2. GET ⟪http://example.com:25/⟫ → " + NetworkText.HopBadPort(25), redirected);
+        Assert.StartsWith("HTTP https://example.com/: 301, then " + NetworkText.HopBadPort(25) + " (1 request, ", redirected);
+        Assert.Single(_stub.Requests);
+
+        Assert.Equal(NetworkText.BadPort(25), await Call(new NetHttpTool(Access(), new NetworkBudget()), ("url", "http://example.com:25/")));
+        _stub.Map("http://example.com:25/", (_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)));
+        var typed = await NetworkCommand.RunAsync(Access(), "http http://example.com:25/", CancellationToken.None);
+        Assert.StartsWith("HTTP http://example.com:25/: 200 ", typed.Lines[0], StringComparison.Ordinal);
+        Assert.Equal(83, HttpProbe.BadPorts.Count);
+    }
+
+    /// <summary>
+    /// A slow lookup counts against the hop's budget, on the app's clock (2026-11-17, #4, #71): the hop says it ran out, sends nothing, and the
+    /// check answers rather than throws.
+    /// </summary>
+    [Fact]
+    public async Task ASlowLookup_EndsInAHopLine_OnTheAppsClock()
+    {
+        var looking = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        async Task<IPAddress[]> Slow(string host, CancellationToken cancellationToken)
+        {
+            looking.TrySetResult();
+            await Task.Delay(Timeout.Infinite, cancellationToken);
+            return [];
+        }
+
+        var call = NetworkChecks.HttpAsync(Access(resolve: Slow), new NetworkBudget(), "https://slow.example/", head: false, follow: true, browser: false, CancellationToken.None);
+        await looking.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        _time.Advance(HttpProbe.HopTimeout);
+        var answer = await call.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.StartsWith("HTTP https://slow.example/: " + NetworkText.HttpTimedOut(HttpProbe.HopTimeout) + " (0 requests, ", answer.Text);
+    }
+
+    /// <summary>A judged note shows once, however many hops meet it (2026-11-17, #29).</summary>
+    [Fact]
+    public async Task Command_TheModelsNote_ShowsOnce()
+    {
+        _settings.NetworkDeniedHosts = ["example.com"];
+        _stub.Map("https://example.com/", (_, _) => Task.FromResult(Redirect("/next")));
+        var result = await NetworkCommand.RunAsync(Access(), "http https://example.com/", CancellationToken.None);
+        Assert.NotNull(result.Note);
+        Assert.Equal(1, System.Text.RegularExpressions.Regex.Count(result.Note!, System.Text.RegularExpressions.Regex.Escape(NetworkText.ModelWouldBeRefused("x")[..12])));
+    }
+
+    /// <summary>
+    /// A failed last hop shows no earlier hop's headers (2026-11-17, #47), and a Location beside a status outside 3xx isn't drawn as a hop
+    /// (#208).
+    /// </summary>
+    [Fact]
+    public async Task AFailedLastHop_ShowsNoOldHeaders_AndOnlyARedirectShowsWhereItGoes()
+    {
+        _stub.Map("https://www.example.com/", (_, _) => throw new HttpRequestException(HttpRequestError.ConnectionError, "reset"));
+        _stub.Map("https://example.com/", (_, _) =>
+        {
+            var response = Redirect("https://www.example.com/");
+            response.Headers.TryAddWithoutValidation("Server", "first-hop");
+            return Task.FromResult(response);
+        });
+        string failed = await Call(new NetHttpTool(Access(), new NetworkBudget()), ("url", "https://example.com/"));
+        Assert.DoesNotContain("first-hop", failed);
+
+        _stub.Map("https://cdn.example.net/", (_, _) =>
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.Created);
+            response.Headers.Location = new Uri("https://cdn.example.net/thing/1");
+            return Task.FromResult(response);
+        });
+        string created = await Call(new NetHttpTool(Access(), new NetworkBudget()), ("url", "https://cdn.example.net/"));
+        Assert.DoesNotContain("thing/1", created);
+    }
+
+    /// <summary>Completion leaves out a flag already typed (2026-11-17, #54).</summary>
+    [Fact]
+    public void Command_Completion_LeavesOutTypedFlags()
+    {
+        Assert.Equal(["http x head browser", "http x head nofollow"], NetworkCommand.Complete("http x head ").Select(c => c.Text).Order(StringComparer.Ordinal));
+    }
+
+    /// <summary>The browser mode sends no Referer, <c>Sec-Fetch-Site: none</c> on every hop, and asks for the body as is (#53, #215).</summary>
+    [Fact]
+    public async Task Browser_EveryHop_IsAUserNavigation_WithNoReferer()
+    {
+        var seen = new List<(string? Site, bool Referer, string Encoding)>();
+        HttpResponseMessage Note(HttpRequestMessage request, HttpResponseMessage response)
+        {
+            seen.Add((request.Headers.TryGetValues("Sec-Fetch-Site", out var site) ? site.Single() : null, request.Headers.Contains("Referer"),
+                string.Join(",", request.Headers.GetValues("Accept-Encoding"))));
+            return response;
+        }
+
+        _stub.Map("https://www.example.com/", (request, _) => Task.FromResult(Note(request, new HttpResponseMessage(HttpStatusCode.OK))));
+        _stub.Map("https://example.com/", (request, _) => Task.FromResult(Note(request, Redirect("https://www.example.com/"))));
+        await Call(new NetHttpTool(Access(), new NetworkBudget()), ("url", "https://example.com/"), ("browser", true));
+        Assert.Equal([("none", false, "identity"), ("none", false, "identity")], seen);
     }
 
     [Fact]

@@ -151,7 +151,8 @@ public static class NetworkCommand
             "dns" when words == 2 => DnsWire.Types.Keys,
             "tls" when words == 3 => TlsPreamble.Words.Keys,
             "trace" when words == 2 => ["names"],
-            "http" when words >= 2 => ["head", "browser", "nofollow"],
+            // The words not typed yet (2026-11-17, the review's #54): each is taken once.
+            "http" when words >= 2 => new[] { "head", "browser", "nofollow" }.Except(argText[..last].Split(' ', StringSplitOptions.RemoveEmptyEntries), StringComparer.OrdinalIgnoreCase),
             "certs" => CertificateStores.StoreWords.Concat(CertificateStores.LocationWords),
             _ => [],
         };

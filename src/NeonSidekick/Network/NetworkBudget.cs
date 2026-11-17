@@ -11,6 +11,19 @@ namespace NeonSidekick.Network;
 /// </summary>
 public sealed class NetworkBudget
 {
+    /// <summary>
+    /// A budget that judges but never counts (2026-11-17, the review's #121 and gap pass 25): <c>/net http</c>'s later hops go through
+    /// <see cref="NetworkAccess.TargetAsync"/> with one, so the reach and the lists apply to a host the user never typed, while
+    /// <i>Network max hosts per turn</i> (a turn's limit, possibly under <see cref="HttpProbe.MaxHops"/>) never cuts the user's own check.
+    /// </summary>
+    public NetworkBudget(bool uncounted = false)
+    {
+        Uncounted = uncounted;
+    }
+
+    /// <summary>Whether <see cref="Take"/> counts nothing and refuses nothing.</summary>
+    public bool Uncounted { get; }
+
     private readonly object _gate = new();
     private readonly Dictionary<string, int> _targets = new(StringComparer.Ordinal);
     private readonly HashSet<string> _pairs = new(StringComparer.Ordinal);
@@ -80,6 +93,11 @@ public sealed class NetworkBudget
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(addresses);
         ArgumentNullException.ThrowIfNull(ports);
+        if (Uncounted)
+        {
+            return null;
+        }
+
         var keys = Keys(name, addresses);
         lock (_gate)
         {

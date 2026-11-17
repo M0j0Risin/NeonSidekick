@@ -380,9 +380,6 @@ public static partial class SessionExport
         th, td { border: 1px solid var(--line); padding: 0.3rem 0.6rem; }
         """;
 
-    /// <summary>Each code token's theme slot, for its <c>tk-*</c> class (<see cref="PdfHtml.CodeClass"/>).</summary>
-    private static IReadOnlyList<(CodeTokenKind Kind, ThemeStyleSlot Slot)> CodeSlots => WebTheme.CodeSlots;
-
     /// <summary>
     /// The theme as the page's tokens: the grounds, the inks, the accent, the user's style whole, and the code colors; light or dark by the ground. A
     /// theme whose ink doesn't read on its own grounds (<see cref="WebTheme.Readable"/>) gives way to the default theme, so a page is never unreadable.
@@ -407,7 +404,7 @@ public static partial class SessionExport
         Token("--line", palette.Dim);
         WebTheme.StyleTokens(css, "--user", styles(ThemeStyleSlot.User));
         css.Append("}\n");
-        foreach (var (kind, slot) in CodeSlots)
+        foreach (var (kind, slot) in Theme.CodeSlots)
         {
             var style = styles(slot);
             if (PdfHtml.CodeClass(kind) is { } name && style.Foreground != Color.Default)

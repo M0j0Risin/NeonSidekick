@@ -539,6 +539,54 @@ public class MenuPaneTests : IDisposable
     }
 
     /// <summary>
+    /// A nudging page (2026-11-17, the admin-themes-render review's #89, #130): presses that cancel out are no pick (a 0 would read as Enter),
+    /// and the list's width leaves out a side column only for a page that has one. A resize's refresh (#114) is driven in
+    /// <see cref="ANudgesPage_AResize_ComesBackAsARefresh"/>.
+    /// </summary>
+    [Fact]
+    public async Task ANudgesPage_PressesThatCancel_AreNoPick_TheListWidthReadsTheSide()
+    {
+        using var pane = Pane();
+        pane.Show();
+        var menu = new MenuPane(pane, _keys);
+        var page = Page("one", "two", "three") with { Nudges = true };
+
+        Push(Keys.Right, Keys.Left, Keys.Enter);
+        Assert.Equal(new MenuPick(0, 1), await menu.PickAsync(page, 1, CancellationToken.None));
+
+        int width = _console.Profile.Width;
+        Assert.Equal(width - 1, menu.ListWidth(side: false));
+        int side = MenuPane.SideWidth(width);
+        Assert.Equal(side > 0 ? width - 1 - side - MenuPane.SideGap : width - 1, menu.ListWidth(side: true));
+        Assert.False(menu.Dismissed);
+        menu.Close();
+    }
+
+    /// <summary>A resize under a nudging page comes back as a refresh (2026-11-17, #114), so the host builds its bars at the new width.</summary>
+    [Fact]
+    public async Task ANudgesPage_AResize_ComesBackAsARefresh()
+    {
+        using var pane = Pane();
+        pane.Show();
+        var input = new ScriptedInput();
+        var keys = new KeySource(input, TimeSpan.FromMilliseconds(1)) { Mirror = pane };
+        pane.OverlayResized = () => keys.Post(new InputEvent.Resize());
+        int waits = 0;
+        input.OnWait = () =>
+        {
+            if (++waits == 1)
+            {
+                _console.Profile.Width = 30;
+                _time.Advance(ScreenPane.Tick);
+            }
+        };
+        var menu = new MenuPane(pane, keys);
+
+        Assert.Equal(new MenuPick(0, 1, Refresh: true), await menu.PickAsync(Page("one", "two") with { Nudges = true }, 1, CancellationToken.None));
+        menu.Close();
+    }
+
+    /// <summary>
     /// A <see cref="MenuPage.Removes"/> page (2026-10-16, the user's ask: Delete on every list that removes a row): Delete returns a
     /// <see cref="MenuPick.Remove"/> for the cursor's row, while Shift+↓ stays the arrow it was (no move); a page without it ignores Delete.
     /// </summary>

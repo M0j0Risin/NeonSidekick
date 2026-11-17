@@ -74,7 +74,7 @@ public sealed class BuiltInMetaSearch
         new StartpageEngine(time),
 
         // Wikimedia asks API clients to say who they are and how to reach them: the project's page, not a person's address.
-        new WikipediaEngine { UserAgent = App.SidekickApp.Name + "/" + App.SidekickApp.Version + " (+" + App.AboutText.RepositoryUrl + ")" },
+        new WikipediaEngine { UserAgent = App.SidekickApp.UserAgent() + " (+" + App.AboutText.RepositoryUrl + ")" },
     ];
 
     /// <param name="engines">The engines to ask; null for <see cref="RealEngines"/>, reading this instance's key.</param>

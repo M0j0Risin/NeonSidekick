@@ -14,9 +14,9 @@ namespace NeonSidekick.App;
 /// <see cref="EventLogCheck"/>'s shape): each family's proof on the published binary, nothing changed. The computer or domain is found in the
 /// whole catalog (ticked or not), as the other checks read it. Exit 0 only when every line passes. Not part of the build gate.
 /// </summary>
-internal static class AdminChecks
+internal static partial class AdminChecks
 {
-    /// <summary>The network checks against <paramref name="host"/>, by the user's hand (never judged): DNS, a ping, port 443, TLS, the user store.</summary>
+    /// <summary>The network checks against <paramref name="host"/>, by the user's hand (never judged): DNS, a ping, port 443, TLS, an HTTP HEAD, the user store.</summary>
     public static async Task<int> NetworkAsync(IAnsiConsole console, NetworkAccess access, string host, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(console);
@@ -32,6 +32,12 @@ internal static class AdminChecks
         checks.Add(new SmokeCheck("net:port", !port.Text.StartsWith("Error:", StringComparison.Ordinal) && port.Text.Contains(" open", StringComparison.Ordinal), First(port.Text)));
         var tls = await NetworkChecks.TlsAsync(access, null, host, 443, null, null, cancellationToken).ConfigureAwait(false);
         checks.Add(Line("net:tls", tls));
+
+        // An HTTP HEAD of the host's root, no redirect followed (2026-11-17, the review's #117): passes on any status line, fails on an
+        // "Error:" or a hop with no answer (which Line would pass, as it isn't an "Error:").
+        string url = new UriBuilder(Uri.UriSchemeHttps, host).Uri.AbsoluteUri;
+        var http = await NetworkChecks.HttpAsync(access, null, url, head: true, follow: false, browser: false, cancellationToken).ConfigureAwait(false);
+        checks.Add(new SmokeCheck("net:http", HttpStatusLine().IsMatch(First(http.Text)), First(http.Text)));
         var store = CertificateStores.Read("My", System.Security.Cryptography.X509Certificates.StoreLocation.CurrentUser);
         checks.Add(new SmokeCheck("net:certstore", store.Error is null, store.Error ?? $"{store.Certificates.Count.ToString(CultureInfo.InvariantCulture)} certificates in the user's My store"));
         return Report(console, "NETWORK", checks);
@@ -120,6 +126,10 @@ internal static class AdminChecks
     private static SmokeCheck Line(string name, NetworkAnswer answer) => new(name, !answer.Text.StartsWith("Error:", StringComparison.Ordinal), First(answer.Text));
 
     private static string First(string text) => text.Split('\n')[0];
+
+    /// <summary><c>net:http</c>'s pass: the head names a status, "HTTP https://host/: 200 (…)".</summary>
+    [System.Text.RegularExpressions.GeneratedRegex(@"^HTTP \S+: \d{3}\b", System.Text.RegularExpressions.RegexOptions.CultureInvariant)]
+    private static partial System.Text.RegularExpressions.Regex HttpStatusLine();
 
     private static int Report(IAnsiConsole console, string family, IReadOnlyList<SmokeCheck> checks)
     {

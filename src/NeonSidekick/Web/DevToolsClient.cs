@@ -32,8 +32,21 @@ public sealed class DevToolsClient : IAsyncDisposable
     public const int MaxMessageBytes = 64 * 1024 * 1024;
 
     private static readonly TimeSpan PortPollInterval = TimeSpan.FromMilliseconds(100);
-    private readonly ClientWebSocket _socket = new();
+    private readonly WebSocket _socket;
+    private readonly int _maxMessageBytes;
     private int _nextId;
+
+    public DevToolsClient()
+        : this(new ClientWebSocket(), MaxMessageBytes)
+    {
+    }
+
+    /// <summary>Over a socket already made, with its own cap (the tests' seam: a fake socket and a small cap).</summary>
+    internal DevToolsClient(WebSocket socket, int maxMessageBytes)
+    {
+        _socket = socket ?? throw new ArgumentNullException(nameof(socket));
+        _maxMessageBytes = maxMessageBytes;
+    }
 
     /// <summary>The browser endpoint named by <see cref="ActivePortFile"/>'s text (<c>9222\n/devtools/browser/&lt;id&gt;</c>), on 127.0.0.1; null for anything else. Pure; pinned.</summary>
     public static Uri? ParseActivePort(string text)
@@ -89,8 +102,9 @@ public sealed class DevToolsClient : IAsyncDisposable
     public Task ConnectAsync(Uri endpoint, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(endpoint);
-        _socket.Options.Proxy = null;
-        return _socket.ConnectAsync(endpoint, cancellationToken);
+        var socket = (ClientWebSocket)_socket;
+        socket.Options.Proxy = null;
+        return socket.ConnectAsync(endpoint, cancellationToken);
     }
 
     /// <summary>
@@ -103,7 +117,12 @@ public sealed class DevToolsClient : IAsyncDisposable
         int id = await WriteAsync(method, writeParams, sessionId, cancellationToken).ConfigureAwait(false);
         while (true)
         {
-            using var message = await ReceiveAsync(cancellationToken).ConfigureAwait(false);
+            using var message = await ReceiveAsync(id, cancellationToken).ConfigureAwait(false);
+            if (message is null)
+            {
+                continue;   // an event or another command's reply past the cap: skipped
+            }
+
             var root = message.RootElement;
             if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("id", out var answered) || answered.ValueKind != JsonValueKind.Number || answered.GetInt32() != id)
             {
@@ -153,12 +172,18 @@ public sealed class DevToolsClient : IAsyncDisposable
         return id;
     }
 
-    private async Task<JsonDocument> ReceiveAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// The next message whole; past the cap, null for one that isn't the reply to <paramref name="awaited"/>, drained without keeping its bytes
+    /// (2026-11-17, the admin-themes-render review's #124: a large event during a draw was taken for a picture too large to hand back). A reply
+    /// is told by its start, <c>{"id":N,</c>, which Chromium writes first; only the awaited reply past the cap throws <c>tooLarge</c>.
+    /// </summary>
+    private async Task<JsonDocument?> ReceiveAsync(int awaited, CancellationToken cancellationToken)
     {
         var chunk = ArrayPool<byte>.Shared.Rent(64 * 1024);
         try
         {
             using var message = new MemoryStream();
+            bool skipping = false;
             while (true)
             {
                 var received = await _socket.ReceiveAsync(chunk.AsMemory(), cancellationToken).ConfigureAwait(false);
@@ -167,15 +192,24 @@ public sealed class DevToolsClient : IAsyncDisposable
                     throw new DevToolsException("the browser closed the DevTools connection");
                 }
 
-                message.Write(chunk, 0, received.Count);
-                if (message.Length > MaxMessageBytes)
+                if (!skipping)
                 {
-                    throw new DevToolsException($"a DevTools message over {MaxMessageBytes / (1024 * 1024)} MB", tooLarge: true);
+                    message.Write(chunk, 0, received.Count);
+                    if (message.Length > _maxMessageBytes)
+                    {
+                        if (IsReplyTo(message.GetBuffer().AsSpan(0, (int)message.Length), awaited))
+                        {
+                            throw new DevToolsException(string.Create(CultureInfo.InvariantCulture, $"a DevTools message over {_maxMessageBytes / (1024 * 1024)} MB"), tooLarge: true);
+                        }
+
+                        skipping = true;
+                        message.SetLength(0);
+                    }
                 }
 
                 if (received.EndOfMessage)
                 {
-                    return JsonDocument.Parse(message.GetBuffer().AsMemory(0, (int)message.Length));
+                    return skipping ? null : JsonDocument.Parse(message.GetBuffer().AsMemory(0, (int)message.Length));
                 }
             }
         }
@@ -183,6 +217,33 @@ public sealed class DevToolsClient : IAsyncDisposable
         {
             ArrayPool<byte>.Shared.Return(chunk);
         }
+    }
+
+    // Whether a message's start is the reply to the awaited id: {"id":N, or {"id":N}.
+    private static bool IsReplyTo(ReadOnlySpan<byte> start, int awaited)
+    {
+        ReadOnlySpan<byte> head = "{\"id\":"u8;
+        if (!start.StartsWith(head))
+        {
+            return false;
+        }
+
+        var digits = start[head.Length..];
+        string id = awaited.ToString(CultureInfo.InvariantCulture);
+        if (digits.Length <= id.Length)
+        {
+            return false;
+        }
+
+        for (int k = 0; k < id.Length; k++)
+        {
+            if (digits[k] != (byte)id[k])
+            {
+                return false;
+            }
+        }
+
+        return digits[id.Length] is (byte)',' or (byte)'}';
     }
 
     public ValueTask DisposeAsync()

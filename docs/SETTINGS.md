@@ -51,8 +51,8 @@ Every setting on the `/settings`, `/skills`, `/tools` and `/mcp` panes, its defa
 | Copy user prompt | `/copy` puts your prompt above the reply. | on |
 | User line style | Your sent line, here and on the Web UI's Chat tab: `quiet` (plain), `slab` (on a faint fill) or `bold` (in the user color). | `bold` |
 | Reply footer | A dim line under each reply: time, tokens, speed, tool calls, model, and a tool's time from 2 s (not counting time you spent answering; PC only). | off |
-| Theme | One of sixty-eight built-in themes, dark and light, or your own from the home's `themes` folder ([Custom themes](COMMANDS.md#custom-themes)). A wide window previews the highlighted one. A change keeps the conversation and redraws it as `/sessions` shows a resumed one. A light theme wants *Themed background* on, or a light terminal. | `synthwave` |
-| Themed background | The terminal takes the theme's background while the app runs, and on a light theme its text and cursor colors too. | on |
+| Theme | One of sixty-eight built-in themes, dark and light, or your own ([Custom themes](COMMANDS.md#custom-themes)). A change redraws the latest turns in it (`/sessions` has the rest); a light one wants *Themed background* on, or a light terminal. | `synthwave` |
+| Themed background | The terminal takes the theme's background, text and cursor colors while the app runs. | on |
 | Themed external windows | The [app's own windows](INTERFACE.md#the-apps-windows) wear the theme; off, they stay black. | on |
 | Gradient rules | The rules around the input line and pane headings shade along the theme's gradient. Solid themes and a theme's own `paneRule` stay flat. | on |
 | Welcome splash | What shows under the banner at startup until your first line: `image`, `robot` or `off` ([The welcome splash](INTERFACE.md#the-welcome-splash)). | `off` |

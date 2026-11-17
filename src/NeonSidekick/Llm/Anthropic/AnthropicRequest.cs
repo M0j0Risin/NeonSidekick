@@ -244,12 +244,7 @@ public static class AnthropicRequest
             return name;
         }
 
-        uint hash = 2166136261;
-        foreach (char c in name)
-        {
-            hash = (hash ^ c) * 16777619;
-        }
-
+        uint hash = Platform.Fnv1a.Hash(name);
         string head = clean.Length > MaxToolName - 9 ? clean[..(MaxToolName - 9)] : clean;
         return head + "_" + hash.ToString("x8", CultureInfo.InvariantCulture);
     }

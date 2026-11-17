@@ -375,11 +375,18 @@ public static class NetworkChecks
     /// <paramref name="follow"/> each redirect after it, up to <see cref="HttpProbe.MaxHops"/> requests. Every hop's host is judged and counted
     /// as the other tools' are (<see cref="NetworkAccess.TargetAsync"/>) and reached only at its judged addresses; a refusal on the first is
     /// the answer, on a later one it ends the chain on that hop's line. The body is never read. <paramref name="budget"/> null is <c>/net</c>.
+    /// <para>
+    /// 2026-11-17, the review's fixes: only the address the user typed into <c>/net</c> skips the reach (#121, the user's call) — its later hops
+    /// go through an uncounted budget that judges the reach and the lists without counting hosts; a port browsers refuse is refused on every hop
+    /// but <c>/net</c>'s first; the host's judging sits inside the budgets, so a slow lookup or a spent budget gives a hop line, not a throw (#4);
+    /// any other failure keeps the hops read so far (#138); the budgets run on <see cref="NetworkAccess.Time"/> (#71); a model note shows once (#29).
+    /// </para>
     /// </summary>
     public static async Task<NetworkAnswer> HttpAsync(NetworkAccess access, NetworkBudget? budget, string url, bool head, bool follow, bool browser, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(access);
         ArgumentNullException.ThrowIfNull(url);
+        bool command = budget is null;
         var (asked, problem) = HttpProbe.ParseUrl(url);
         if (asked is null)
         {
@@ -390,13 +397,14 @@ public static class NetworkChecks
         var identity = browser ? access.BrowserIdentity : null;
         var hops = new List<HttpHop>();
         IReadOnlyList<(string, string)> headers = [];
-        string? note = null;
+        var notes = new List<string>();
+        var noted = new HashSet<string>(StringComparer.Ordinal);
         bool cutAtMax = false;
         long started = access.Time.GetTimestamp();
-        using var whole = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        whole.CancelAfter(HttpProbe.TotalTimeout);
+        using var totalTimer = new CancellationTokenSource(HttpProbe.TotalTimeout, access.Time);
+        using var whole = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, totalTimer.Token);
+        var laterHops = budget ?? new NetworkBudget(uncounted: true);
         Uri? current = asked;
-        Uri? referer = null;
         while (current is not null)
         {
             if (hops.Count >= HttpProbe.MaxHops)
@@ -406,7 +414,32 @@ public static class NetworkChecks
             }
 
             int port = current.Port;
-            var target = await access.TargetAsync(current.IdnHost, budget, [port], whole.Token).ConfigureAwait(false);
+            if (HttpProbe.BadPorts.Contains(port) && !(command && hops.Count == 0))
+            {
+                if (hops.Count == 0)
+                {
+                    return new NetworkAnswer(NetworkText.BadPort(port));
+                }
+
+                hops.Add(new HttpHop(method.Method, current, null, null, null, TimeSpan.Zero, Problem: NetworkText.HopBadPort(port), Sent: false));
+                break;
+            }
+
+            long hopStarted = access.Time.GetTimestamp();
+            using var hopTimer = new CancellationTokenSource(HttpProbe.HopTimeout, access.Time);
+            using var hop = CancellationTokenSource.CreateLinkedTokenSource(whole.Token, hopTimer.Token);
+            NetworkResult<NetworkTarget> target;
+            try
+            {
+                // /net's first hop is the user's own (budget null: noted, never refused); every other is judged.
+                target = await access.TargetAsync(current.IdnHost, hops.Count == 0 ? budget : laterHops, [port], hop.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                hops.Add(new HttpHop(method.Method, current, null, null, null, access.Time.GetElapsedTime(hopStarted), Problem: OutOfTime(whole), Sent: false));
+                break;
+            }
+
             if (target.Error is { } refused)
             {
                 if (hops.Count == 0)
@@ -414,22 +447,20 @@ public static class NetworkChecks
                     return new NetworkAnswer(refused);
                 }
 
-                hops.Add(new HttpHop(method.Method, current, null, null, null, TimeSpan.Zero, Problem: refused.Replace("Error: ", "refused: ", StringComparison.Ordinal)));
+                hops.Add(new HttpHop(method.Method, current, null, null, null, TimeSpan.Zero, Problem: NetworkText.HttpRefused(refused), Sent: false));
                 break;
             }
 
             var value = target.Value!;
-            if (value.ModelNote is { } judged)
+            if (value.ModelNote is { } judged && noted.Add(judged))
             {
-                note = note is null ? judged : note + " " + judged;
+                notes.Add(judged);
             }
 
-            long hopStarted = access.Time.GetTimestamp();
-            using var hop = CancellationTokenSource.CreateLinkedTokenSource(whole.Token);
-            hop.CancelAfter(HttpProbe.HopTimeout);
-            using var handler = access.HttpHandler(value);
+            var verdict = new TlsVerdict();
+            using var handler = access.HttpHandler(value, verdict);
             using var client = new HttpClient(handler, disposeHandler: false) { Timeout = Timeout.InfiniteTimeSpan };
-            using var request = HttpProbe.Request(method, current, identity, referer);
+            using var request = HttpProbe.Request(method, current, identity);
             HttpResponseMessage response;
             try
             {
@@ -437,13 +468,18 @@ public static class NetworkChecks
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
-                hops.Add(new HttpHop(method.Method, current, null, null, null, access.Time.GetElapsedTime(hopStarted),
-                    Problem: whole.IsCancellationRequested ? NetworkText.HttpOutOfTime(HttpProbe.TotalTimeout) : NetworkText.HttpTimedOut(HttpProbe.HopTimeout)));
+                hops.Add(new HttpHop(method.Method, current, null, null, null, access.Time.GetElapsedTime(hopStarted), Problem: OutOfTime(whole)));
                 break;
             }
             catch (HttpRequestException ex)
             {
-                hops.Add(new HttpHop(method.Method, current, null, null, null, access.Time.GetElapsedTime(hopStarted), Problem: HttpProbe.Problem(ex, timedOut: false)));
+                hops.Add(new HttpHop(method.Method, current, null, null, null, access.Time.GetElapsedTime(hopStarted), Problem: HttpProbe.Problem(ex, verdict, command)));
+                break;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // A handler's own failure (an InvalidOperationException, an IOException) keeps the hops read so far (#138).
+                hops.Add(new HttpHop(method.Method, current, null, null, null, access.Time.GetElapsedTime(hopStarted), Problem: HttpProbe.Problem(ex, verdict, command)));
                 break;
             }
 
@@ -451,9 +487,11 @@ public static class NetworkChecks
             {
                 var elapsed = access.Time.GetElapsedTime(hopStarted);
                 int status = (int)response.StatusCode;
-                string? location = response.Headers.Location?.OriginalString;
+
+                // As sent (#36): a Location .NET couldn't parse is still a redirect, refused below by name.
+                string? location = HttpProbe.Raw(response, "Location") is { } lines ? lines[0].Trim() : null;
                 headers = HttpProbe.Telling(response);
-                bool redirect = status is >= 300 and < 400 && location is not null;
+                bool redirect = status is >= 300 and < 400 && location is { Length: > 0 };
                 Uri? next = null;
                 string? stop = null;
                 if (redirect && !follow)
@@ -465,7 +503,7 @@ public static class NetworkChecks
                     var (parsed, bad) = HttpProbe.ParseUrl(location!, current);
                     if (parsed is null)
                     {
-                        stop = "redirect not followed: " + bad!.Replace("Error: ", "", StringComparison.Ordinal);
+                        stop = NetworkText.HttpNotFollowedBecause(NetworkText.WithoutError(bad!));
                     }
                     else
                     {
@@ -473,15 +511,18 @@ public static class NetworkChecks
                     }
                 }
 
-                hops.Add(new HttpHop(method.Method, current, status, response.ReasonPhrase, HttpProbe.VersionWord(response.Version), elapsed, location, stop));
-                referer = current;
+                hops.Add(new HttpHop(method.Method, current, status, response.ReasonPhrase, HttpProbe.VersionWord(response.Version), elapsed, location is { Length: > 0 } ? location : null, stop));
                 current = next;
             }
         }
 
-        var report = new HttpReport(asked, hops, headers, access.Time.GetElapsedTime(started), follow, cutAtMax);
-        return new NetworkAnswer(NetworkRender.Http(report), note);
+        var report = new HttpReport(asked, hops, headers, access.Time.GetElapsedTime(started), cutAtMax);
+        return new NetworkAnswer(NetworkRender.Http(report), notes.Count > 0 ? string.Join(" ", notes) : null);
     }
+
+    /// <summary>A budget that fired: the whole check's (its 30 s ran out) or the hop's (no answer within 10 s).</summary>
+    private static string OutOfTime(CancellationTokenSource whole) =>
+        whole.IsCancellationRequested ? NetworkText.HttpOutOfTime(HttpProbe.TotalTimeout) : NetworkText.HttpTimedOut(HttpProbe.HopTimeout);
 
     /// <summary><c>net_certs</c>: a store read, narrowed and listed.</summary>
     public static NetworkAnswer Certificates(NetworkAccess access, string store, System.Security.Cryptography.X509Certificates.StoreLocation location, string? filter, int? expiring, int limit)

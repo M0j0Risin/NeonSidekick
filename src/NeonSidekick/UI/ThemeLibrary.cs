@@ -2,11 +2,16 @@ using NeonSidekick.Diagnostics;
 
 namespace NeonSidekick.UI;
 
-/// <summary>The built-in themes one <see cref="ThemeLibrary.Load"/> made: the themes A to Z, each one's category folder, and the problems.</summary>
+/// <summary>
+/// The built-in themes one <see cref="ThemeLibrary.Load"/> made: the themes A to Z, each one's category folder, the problems, and each one's
+/// file text (2026-11-17, the admin-themes-render review's #98: <c>/theme export</c> and <c>/theme edit</c>'s copy start from it, so its role
+/// words and comments survive).
+/// </summary>
 public sealed record BuiltInThemes(
     IReadOnlyList<ThemePalette> Themes,
     IReadOnlyDictionary<string, string> Categories,
-    IReadOnlyList<ThemeProblem> Problems)
+    IReadOnlyList<ThemeProblem> Problems,
+    IReadOnlyDictionary<string, string>? Sources = null)
 {
     /// <summary>The default theme (<see cref="ThemeName.Default"/>); <see cref="ThemePalette.Emergency"/> when it did not load.</summary>
     public ThemePalette Default { get; } =
@@ -65,6 +70,9 @@ public static class ThemeLibrary
     /// <summary>The category folder of the built-in <paramref name="name"/> (<c>machines</c>), or null.</summary>
     public static string? CategoryOf(string name) => Embedded.Categories.GetValueOrDefault(name);
 
+    /// <summary>The file text the built-in <paramref name="name"/> (any case) was built from, or null for a name that isn't one.</summary>
+    public static string? SourceText(string name) => Embedded.Sources?.GetValueOrDefault(name);
+
     /// <summary>
     /// The built-ins from <paramref name="resources"/>: logical name (<see cref="ResourcePrefix"/><c>&lt;category&gt;/&lt;file&gt;.json</c>,
     /// a backslash taken as a slash) to its text. The seam the tests feed; <see cref="Embedded"/> is this over the manifest. Files are
@@ -75,6 +83,7 @@ public static class ThemeLibrary
         ArgumentNullException.ThrowIfNull(resources);
         var themes = new Dictionary<string, ThemePalette>(StringComparer.OrdinalIgnoreCase);
         var categories = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var sources = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var shownOf = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var problems = new List<ThemeProblem>();
         foreach (var (resource, text) in resources.Select(r => (Normalize(r.Key), r.Value)).OrderBy(r => r.Item1, StringComparer.OrdinalIgnoreCase))
@@ -118,10 +127,11 @@ public static class ThemeLibrary
 
             themes[name] = palette;
             categories[name] = parts[0];
+            sources[name] = text;
             shownOf[name] = shown;
         }
 
-        return new BuiltInThemes([.. themes.Values.OrderBy(t => t.Name, StringComparer.Ordinal)], categories, problems);
+        return new BuiltInThemes([.. themes.Values.OrderBy(t => t.Name, StringComparer.Ordinal)], categories, problems, sources);
     }
 
     private static string Normalize(string resource) => resource.Replace('\\', '/');

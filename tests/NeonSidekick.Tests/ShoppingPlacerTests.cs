@@ -1,3 +1,4 @@
+using NeonSidekick.Files;
 using NeonSidekick.Shopping;
 
 namespace NeonSidekick.Tests;

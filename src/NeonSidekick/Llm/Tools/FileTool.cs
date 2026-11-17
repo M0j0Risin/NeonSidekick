@@ -36,11 +36,7 @@ public abstract class FileTool : AIFunction
     protected WorkingDirectory FilesFor(string path) => For(Files, Images, path);
 
     /// <summary><see cref="FilesFor"/> for a caller without a tool: <paramref name="images"/> when <paramref name="path"/> is a full path in it and not in <paramref name="files"/>. Pure over the two roots.</summary>
-    public static WorkingDirectory For(WorkingDirectory files, WorkingDirectory? images, string path)
-    {
-        ArgumentNullException.ThrowIfNull(files);
-        return images is not null && !files.Contains(path) && images.Contains(path) ? images : files;
-    }
+    public static WorkingDirectory For(WorkingDirectory files, WorkingDirectory? images, string path) => WorkingDirectory.For(files, images, path);
 
     protected static string ReadPath(AIFunctionArguments arguments) => ToolArguments.ReadString(arguments, PathArgument);
 

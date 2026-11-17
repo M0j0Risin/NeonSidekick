@@ -347,7 +347,7 @@ public static partial class HelpSettings
         SettingsField.ObsidianAllowDelete => "Gives the model vault_delete, which moves a note to the system's bin or the vault's .trash, as Obsidian's own setting says. Never deleted for good.",
 
         // /tools › Admin › Network
-        SettingsField.NetworkTools => "Gives the model read-only network checks, one host at a time: DNS, ping, traceroute, open ports and TLS certificates.",
+        SettingsField.NetworkTools => "Gives the model read-only network checks, one host at a time: DNS, ping, traceroute, open ports, TLS certificates and whether a web address answers.",
         SettingsField.NetworkToolsReach => "Where the network tools may reach: same-as-web follows Web browser network mode; internet, lan or both set it for these tools alone.",
         SettingsField.NetworkMaxHostsPerTurn => "The most different hosts the network tools may check in one turn (1–64). Past it, calls are refused.",
         SettingsField.NetworkMaxPortsPerTurn => "The most different host:port pairs the network tools may check in one turn (1–256). Past it, calls are refused.",

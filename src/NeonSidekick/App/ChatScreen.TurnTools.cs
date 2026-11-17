@@ -31,6 +31,13 @@ internal sealed record TurnToolInputs
     public IReadOnlyList<AIFunction>? Images { get; init; }
     public bool ImagesEnabled { get; init; }
 
+    /// <summary>
+    /// Whether a browser is found to draw with (2026-11-17, the admin-themes-render review's #10, #132): asked once per turn, and only with
+    /// <see cref="ImagesEnabled"/> (<see cref="ChatScreen.Drawable"/>); false leaves the render tools out. True by default, so inputs built
+    /// by hand keep them.
+    /// </summary>
+    public bool Drawable { get; init; } = true;
+
     /// <summary>The video file tools (2026-11-12, their own group): offered while <see cref="VideoEnabled"/> (<c>Video tools</c>), whatever <see cref="FilesEnabled"/> says.</summary>
     public IReadOnlyList<AIFunction>? Video { get; init; }
     public bool VideoEnabled { get; init; }
@@ -279,7 +286,7 @@ internal sealed partial class ChatScreen
         IReadOnlyList<AIFunction> tools = shopping ? [.. standingTools, .. shoppingTools!, .. (files ? fileTools! : [])] : offered;
         // The picture tools right after the file tools (2026-10-10, their own group): Image tools is the switch, File tools or not; the picture sentence rides with them.
         // The render tools (2026-11-16, plan sharded-hugging-puppy #9) only while a browser is found to draw with, judged each turn.
-        imageTools = imageTools?.Any(t => t is RenderTool { Available: false }) == true ? [.. imageTools.Where(t => t is not RenderTool { Available: false })] : imageTools;
+        imageTools = !inputs.Drawable && imageTools?.Any(t => t is RenderTool) == true ? [.. imageTools.Where(t => t is not RenderTool)] : imageTools;
         bool images = inputs.ImagesEnabled && imageTools is { Count: > 0 };
         tools = images ? [.. tools, .. imageTools!] : tools;
         // The video file tools right after the picture tools (2026-11-12, their own group): Video tools is the switch; no rule — the descriptions carry it, as YouTube's do.

@@ -74,6 +74,14 @@ public sealed class RenderTests : IDisposable
         return data!;
     }
 
+    // A chart that draws: its SVG, the refusal held null.
+    private static string Draw(ChartSpec spec, ChartData data, out int folded)
+    {
+        string? svg = ChartSvg.Svg(spec, data, out folded, out _, out string? refused);
+        Assert.Null(refused);
+        return svg!;
+    }
+
     // ---- the chart ----
 
     [Fact]
@@ -99,7 +107,7 @@ public sealed class RenderTests : IDisposable
     [Fact]
     public void EscapeAndCut_KeepTheDataText()
     {
-        Assert.Equal("&lt;b&gt;&amp;&quot;x&#39; ", ChartSvg.Escape("<b>&\"x'\u0001"));
+        Assert.Equal("&lt;b&gt;&amp;&quot;x&#39;", ChartSvg.Escape("<b>&\"x'\u0001"));   // XML can't hold U+0001 (#204)
         Assert.Equal("abcd…", ChartSvg.Cut("abcdefghij", 5));
         Assert.Equal("a b", ChartSvg.Cut("a\nb", 10));
     }
@@ -112,7 +120,7 @@ public sealed class RenderTests : IDisposable
         {
             CultureInfo.CurrentCulture = new CultureInfo("de-DE");
             var data = Table("name,score\n<script>x</script>,1.5\nBob,2.25", "name", "score");
-            string svg = ChartSvg.Svg(new ChartSpec(ChartKind.Bar, Title: "Scores & <more>"), data, out int folded);
+            string svg = Draw(new ChartSpec(ChartKind.Bar, Title: "Scores & <more>"), data, out int folded);
             Assert.Equal(0, folded);
             Assert.StartsWith("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1200\" height=\"720\"", svg, StringComparison.Ordinal);
             Assert.DoesNotContain("<script", svg, StringComparison.Ordinal);
@@ -131,12 +139,12 @@ public sealed class RenderTests : IDisposable
     public void TwoSeries_HaveALegend_OneHasNone_AndALineLeavesAGapForABlank()
     {
         var two = Table("month,a,b\nJan,1,2\nFeb,3,4", "month", "a", "b");
-        Assert.Contains(">a</text>", ChartSvg.Svg(new ChartSpec(ChartKind.Bar), two, out _), StringComparison.Ordinal);
+        Assert.Contains(">a</text>", Draw(new ChartSpec(ChartKind.Bar), two, out _), StringComparison.Ordinal);
         var one = Table("month,a\nJan,1\nFeb,3", "month", "a");
-        Assert.DoesNotContain(">a</text>", ChartSvg.Svg(new ChartSpec(ChartKind.Bar), one, out _), StringComparison.Ordinal);
+        Assert.DoesNotContain(">a</text>", Draw(new ChartSpec(ChartKind.Bar), one, out _), StringComparison.Ordinal);
 
         var gap = Table("month,a\nJan,1\nFeb,\nMar,3\nApr,4", "month", "a");
-        string line = ChartSvg.Svg(new ChartSpec(ChartKind.Line), gap, out _);
+        string line = Draw(new ChartSpec(ChartKind.Line), gap, out _);
         string path = Regex.Match(line, "<path d=\"([^\"]+)\"").Groups[1].Value;
         Assert.Equal(2, path.Count(c => c == 'M'));   // the pen lifts over Feb
         Assert.Equal(3, Regex.Matches(line, "<circle ").Count);
@@ -147,7 +155,7 @@ public sealed class RenderTests : IDisposable
     {
         string rows = string.Join('\n', Enumerable.Range(1, 15).Select(i => $"s{i},{i}"));
         var data = Table("slice,value\n" + rows, "slice", "value");
-        string svg = ChartSvg.Svg(new ChartSpec(ChartKind.Pie), data, out int folded);
+        string svg = Draw(new ChartSpec(ChartKind.Pie), data, out int folded);
         Assert.Equal(4, folded);
         Assert.Contains(">" + RenderText.Other + "  ", svg, StringComparison.Ordinal);
         Assert.DoesNotContain(">s1  ", svg, StringComparison.Ordinal);   // the smallest went to Other
@@ -181,7 +189,7 @@ public sealed class RenderTests : IDisposable
     public void ThePalettes_ReadOnTheirGrounds()
     {
         var light = Spectre.Console.Color.White;
-        Assert.True(UI.ThemeFile.TryParseColor(ChartSvg.DarkGround, out var dark));
+        Assert.True(UI.ThemeFile.TryParseColor(PictureColors.Dark.Ground, out var dark));
         foreach (string hex in ChartSvg.LightPalette)
         {
             Assert.True(UI.ThemeFile.TryParseColor(hex, out var color));
@@ -237,7 +245,7 @@ public sealed class RenderTests : IDisposable
         string page = CollageHtml.Page([new CollageItem("image/png", [1, 2, 3], "<b>.jpg"), new CollageItem("image/jpeg", [4], null)], 2, "Trip & <friends>", dark: false);
         Assert.Contains("<figcaption>&lt;b&gt;.jpg</figcaption>", page, StringComparison.Ordinal);
         Assert.Contains("<h1>Trip &amp; &lt;friends&gt;</h1>", page, StringComparison.Ordinal);
-        Assert.Contains("repeat(2, 1fr)", page, StringComparison.Ordinal);
+        Assert.Contains("repeat(2, minmax(0, 1fr))", page, StringComparison.Ordinal);
         Assert.Equal(2, Regex.Matches(page, "<img ").Count);
         Assert.Contains("src=\"data:image/png;base64,AQID\"", page, StringComparison.Ordinal);
         Assert.Contains(PdfHtml.PolicyMeta, page, StringComparison.Ordinal);
@@ -255,9 +263,10 @@ public sealed class RenderTests : IDisposable
         string expression = BrowserPictureRenderer.MermaidExpression("graph TD\nA-->B\n'); alert(1); ('", "default");
         Assert.Contains("securityLevel: 'strict'", expression, StringComparison.Ordinal);
         Assert.DoesNotContain("'); alert(1)", expression, StringComparison.Ordinal);
-        Assert.Equal("default", BrowserPictureRenderer.MermaidTheme("#FFFFFF"));
+        Assert.Equal("default", BrowserPictureRenderer.MermaidTheme(System.Drawing.Color.White));
         Assert.Equal("default", BrowserPictureRenderer.MermaidTheme(null));
-        Assert.Equal("dark", BrowserPictureRenderer.MermaidTheme("#101018"));
+        Assert.Equal("dark", BrowserPictureRenderer.MermaidTheme(System.Drawing.Color.FromArgb(0x10, 0x10, 0x18)));
+        Assert.Equal("default", BrowserPictureRenderer.MermaidTheme(System.Drawing.Color.FromArgb(0, 0x10, 0x10, 0x18)));   // alpha 0 is transparent
 
         using var drawn = JsonDocument.Parse("{\"svg\":\"<svg/>\"}");
         Assert.Equal(("<svg/>", null), BrowserPictureRenderer.MermaidAnswer(drawn.RootElement));
@@ -268,12 +277,17 @@ public sealed class RenderTests : IDisposable
     [Fact]
     public void TheClip_HoldsTheWidthAndTheSides_AndTheGroundIsRgba()
     {
-        Assert.Equal((1200, 2048), BrowserPictureRenderer.Clip(5000, 9000, 1200, 2, out bool cut));
+        Assert.Equal((1200, 2048), BrowserPictureRenderer.Clip(5000, 9000, 1200, 2, out bool cut, out bool wide));
         Assert.True(cut);
-        Assert.Equal((300, 200), BrowserPictureRenderer.Clip(300, 200, 1200, 2, out cut));
+        Assert.True(wide);
+        Assert.Equal((300, 200), BrowserPictureRenderer.Clip(300, 200, 1200, 2, out cut, out wide));
         Assert.False(cut);
+        Assert.False(wide);
         Assert.Equal((0, 0, 0, 0d), BrowserPictureRenderer.Ground(null));
-        Assert.Equal((16, 32, 48, 1d), BrowserPictureRenderer.Ground("#102030"));
+        Assert.Equal((16, 32, 48, 1d), BrowserPictureRenderer.Ground(System.Drawing.Color.FromArgb(0x10, 0x20, 0x30)));
+        Assert.Equal((1, 2, 3, 51 / 255d), BrowserPictureRenderer.Ground(System.Drawing.Color.FromArgb(51, 1, 2, 3)));   // its alpha sent (#55)
+        Assert.Equal(2048, BrowserPictureRenderer.LayoutWidth(4000, 2));   // laid out where the clip can keep it (#105)
+        Assert.Equal(1200, BrowserPictureRenderer.LayoutWidth(1200, 2));
         using var size = JsonDocument.Parse("{\"width\":10.2,\"height\":0}");
         Assert.Equal((11, 1), BrowserPictureRenderer.Size(size.RootElement));
     }
@@ -293,7 +307,7 @@ public sealed class RenderTests : IDisposable
         Assert.StartsWith("Drew diagram-2.png", TextOf(second), StringComparison.Ordinal);
         Assert.Equal(FakeHeadlessBrowser.RenderPng, File.ReadAllBytes(Path.Combine(_root, "diagram.png")));
         var job = _browser.RenderJobs[0];
-        Assert.Equal(("graph TD\nA-->B", (string?)null, PictureFormat.Png, 1200, 2d, "#FFFFFF"), (job.Mermaid, job.Html, job.Format, job.Width, job.Scale, job.Background));
+        Assert.Equal(("graph TD\nA-->B", (string?)null, PictureFormat.Png, 1200, 2d, System.Drawing.Color.White.ToArgb(), true), (job.Mermaid, job.Html, job.Format, job.Width, job.Scale, job.Background?.ToArgb(), job.Svg));
         Assert.Equal(512 * 1024, tool.MaxArgumentChars);
     }
 
@@ -319,7 +333,7 @@ public sealed class RenderTests : IDisposable
         var tool = new RenderPictureTool(_files, _rendering);
         Assert.Equal(RenderText.OneSource, await tool.InvokeAsync(Args()));
         Assert.Equal(RenderText.OneSource, await tool.InvokeAsync(Args(("mermaid", "graph TD"), ("svg", "<svg/>"))));
-        Assert.Equal(RenderText.BadNumber("width", "100", "200–4096"), await tool.InvokeAsync(Args(("mermaid", "graph TD"), ("width", 100))));
+        Assert.Equal(ArgumentText.OutOfRange("width", "100", 200, 4096), await tool.InvokeAsync(Args(("mermaid", "graph TD"), ("width", 100))));
         Assert.Equal(RenderText.BadNumber("scale", "4", "1–3"), await tool.InvokeAsync(Args(("mermaid", "graph TD"), ("scale", 4))));
         Assert.Equal(RenderText.BadBackground("bluish"), await tool.InvokeAsync(Args(("mermaid", "graph TD"), ("background", "bluish"))));
         Assert.Equal(RenderText.BadExtension("d.jpg", ".png"), await tool.InvokeAsync(Args(("mermaid", "graph TD"), ("to", "d.jpg"))));
@@ -355,9 +369,7 @@ public sealed class RenderTests : IDisposable
         Assert.Equal(RenderText.Failed("stopped after 60 s"), await tool.InvokeAsync(Args(("mermaid", "graph TD"))));
         Assert.Empty(Directory.GetFiles(_root));
 
-        Assert.True(tool.Available);
         _browser.Executable = null;
-        Assert.False(tool.Available);
         Assert.Equal(RenderText.NoBrowser(""), await tool.InvokeAsync(Args(("mermaid", "graph TD"))));
     }
 
@@ -375,8 +387,9 @@ public sealed class RenderTests : IDisposable
         Assert.StartsWith("Drew chart-2.png", TextOf(dark), StringComparison.Ordinal);
         Assert.Contains("<svg xmlns", _browser.RenderJobs[0].Html, StringComparison.Ordinal);
         Assert.Contains(">Sales</text>", _browser.RenderJobs[0].Html, StringComparison.Ordinal);
-        Assert.Equal((1200 + (2 * PicturePage.Pad), ChartSvg.LightGround), (_browser.RenderJobs[0].Width, _browser.RenderJobs[0].Background));
-        Assert.Equal(ChartSvg.DarkGround, _browser.RenderJobs[1].Background);
+        Assert.Equal((1200 + (2 * PicturePage.Pad), PictureColors.Light.GroundColor.ToArgb()), (_browser.RenderJobs[0].Width, _browser.RenderJobs[0].Background?.ToArgb()));
+        Assert.Equal(PictureColors.Dark.GroundColor.ToArgb(), _browser.RenderJobs[1].Background?.ToArgb());
+        Assert.True(_browser.RenderJobs[0].Svg);
     }
 
     [Fact]
@@ -407,7 +420,7 @@ public sealed class RenderTests : IDisposable
         string answer = TextOf(await tool.InvokeAsync(Args(("paths", new[] { "a.png", "b.png", "c.txt" }), ("captions", new[] { "names" }), ("title", "Two"))));
 
         Assert.StartsWith("Drew collage.jpg", answer, StringComparison.Ordinal);
-        Assert.EndsWith(RenderText.Skipped(["c.txt"]), answer, StringComparison.Ordinal);
+        Assert.EndsWith(RenderText.Skipped([("c.txt", RenderText.SkipNotPicture)]), answer, StringComparison.Ordinal);
         var job = _browser.RenderJobs.Single();
         Assert.Equal((PictureFormat.Jpeg, 2400), (job.Format, job.Width));
         Assert.Equal(2, Regex.Matches(job.Html!, "<img ").Count);

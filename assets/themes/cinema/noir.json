@@ -15,7 +15,7 @@
     "bg": "#0A0A0A",
     "panelBg": "#1F1F1F",
     "good": "#F5F5F5",
-    "bad": "#DB5D5D",
+    "bad": "#E26060",
     "warn": "#BDBDBD"
   },
   "gradient": [

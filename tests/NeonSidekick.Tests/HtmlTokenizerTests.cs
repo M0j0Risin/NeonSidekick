@@ -47,14 +47,20 @@ public class HtmlTokenizerTests
         Assert.Equal("abcd", string.Concat(tokens.Where(t => t.Kind == HtmlTokenKind.Text).Select(t => t.Text)));
     }
 
+    /// <summary>
+    /// CDATA comes out as its own <see cref="HtmlTokenKind.Cdata"/> token holding its text (2026-11-17, the admin-themes-render review's #161):
+    /// the picture sanitizer keeps it inside SVG, and web_fetch's Markdown drops it as before.
+    /// </summary>
     [Fact]
-    public void Comments_Doctype_Cdata_AndInstructions_AreSkipped()
+    public void Comments_Doctype_AndInstructions_AreSkipped_CdataIsItsOwnToken()
     {
         var tokens = Tokens("<!DOCTYPE html><?xml version=\"1.0\"?><!-- <p>not a tag</p> -->x<![CDATA[ <b>raw</b> ]]>y");
 
-        Assert.Equal(2, tokens.Count);
+        Assert.Equal(3, tokens.Count);
         Assert.Equal("x", tokens[0].Text);
-        Assert.Equal("y", tokens[1].Text);
+        Assert.Equal(HtmlTokenKind.Cdata, tokens[1].Kind);
+        Assert.Equal(" <b>raw</b> ", tokens[1].Text);
+        Assert.Equal("y", tokens[2].Text);
     }
 
     [Fact]

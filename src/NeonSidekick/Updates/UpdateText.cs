@@ -268,7 +268,7 @@ public static class UpdateText
     };
 
     /// <summary>The check's User-Agent: names the app and its version, and nothing about the user.</summary>
-    public static string UserAgent(string version) => "NeonSidekick/" + version;
+    public static string UserAgent(string version) => App.SidekickApp.UserAgent(version);
 
     public static string NotesCut(int more, string link) => string.Create(CultureInfo.InvariantCulture, $"...and {more} more lines: {link}");
 

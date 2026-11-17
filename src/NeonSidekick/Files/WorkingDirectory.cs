@@ -1117,6 +1117,17 @@ public sealed class WorkingDirectory
         }
     }
 
+    /// <summary>
+    /// Where a full path lives (2026-10-09, the user's call, as <c>FileTool.FilesFor</c>; moved here 2026-11-17, the admin-themes-render
+    /// review's #42, so <see cref="SandboxPictures"/> reads the same way without reaching up into the tools): <paramref name="images"/> for a
+    /// full path inside it and not inside <paramref name="files"/>, else <paramref name="files"/>. Pure over the two roots.
+    /// </summary>
+    public static WorkingDirectory For(WorkingDirectory files, WorkingDirectory? images, string path)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+        return images is not null && !files.Contains(path) && images.Contains(path) ? images : files;
+    }
+
     public bool Contains(string path)
     {
         string text = (path ?? "").Trim();

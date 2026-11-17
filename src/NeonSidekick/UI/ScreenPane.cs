@@ -207,10 +207,10 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     private Func<string> _ruleTitle = static () => "";
     private string _drawnRuleTitle = "";
 
-    // The rules' mark (2026-10-18, /mark) and the one last drawn, for the tick: set from the screen's task, read by the draw.
-    // A boxed Style (a struct cannot be volatile); the box drawn last is compared by reference.
-    private volatile object? _ruleMark;
-    private object? _drawnRuleMark;
+    // The rules' mark (2026-10-18, /mark) by name and the style last drawn, for the tick: set from the screen's task, read by the draw. The
+    // name is resolved for the page at each frame (2026-11-17, the admin-themes-render review's #129), and the styles compared by value.
+    private volatile string? _ruleMark;
+    private Style? _drawnRuleMark;
 
     // The gradient rules' stops this frame (2026-11-01, Theme.RuleStops; null = flat): taken once at the top of Draw so the strip,
     // upper and lower rules agree when the menu flips the setting from its own thread mid-frame (plan review D57), and compared by
@@ -1013,13 +1013,15 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     /// <summary>
     /// The color the rules around the draft line are drawn in (2026-10-18, the user's ask: <c>/mark &lt;color&gt;</c>, a window told apart at a
     /// glance; <see cref="RuleMarks"/>): the rule glyphs of the upper and lower rule take it, the session's name, ⤡, 🎞️ and the lower rule's
-    /// title keep their own styles; null is <see cref="Theme.PaneRule"/>, the theme's (so a <c>/theme</c> change keeps a mark). Set from any
-    /// thread; a change redraws at the next tick, as a new rule title does. A frame reads it once, as its upper rule is drawn (2026-10-20, a review:
-    /// each rule read it, so a mark set between them left the upper one in the old color with nothing to redraw it).
+    /// title keep their own styles; null is <see cref="Theme.PaneRule"/>, the theme's (so a <c>/theme</c> change keeps a mark). One of
+    /// <see cref="RuleMarks.Names"/>, its shade picked for the page at each frame (<see cref="RuleMarks.StyleFor"/>, 2026-11-17, #129: a theme
+    /// change or a <c>Themed background</c> flip recolors it). Set from any thread; a change redraws at the next tick, as a new rule title
+    /// does. A frame reads it once, as its upper rule is drawn (2026-10-20, a review: each rule read it, so a mark set between them left the
+    /// upper one in the old color with nothing to redraw it).
     /// </summary>
-    public Style? RuleMark
+    public string? RuleMark
     {
-        get => _ruleMark as Style?;
+        get => _ruleMark;
         set => _ruleMark = value;
     }
 
@@ -1168,8 +1170,8 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>
     /// The terminal's default text and cursor colour (2026-11-16, plan sharded-hugging-puppy #53, the daylight themes): a light page under a
-    /// profile's light-gray text and white cursor would hide both, so the screen answers the theme's ink when its page is light under
-    /// <c>Themed background</c>, else null — a dark theme keeps the profile's. Written and given back as <see cref="PageBackground"/> is (OSC 10
+    /// profile's light-gray text and white cursor would hide both, so the screen answers the theme's ink under <c>Themed background</c>,
+    /// else null. Written and given back as <see cref="PageBackground"/> is (OSC 10
     /// and 12, <see cref="PageTextSequence"/>; OSC 110 and 112 on a null, a close and a dispose). A terminal that ignores them loses nothing.
     /// </summary>
     public Func<Color?> PageText
@@ -7739,7 +7741,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     {
         _drawnLowerRuleTitle = _lowerRuleTitle();
         // The mark the upper rule took this frame (WriteUpperRule): a change since redraws both at the tick.
-        var rule = _drawnRuleMark is Style marked ? marked : Theme.PaneRule;
+        var rule = _drawnRuleMark ?? Theme.PaneRule;
         _drawnLowerRuleMarker = _lowerRuleMarker();
         (_lowerMarkerColumn, _lowerMarkerCells) = (-1, 0);
         if (MarkerFit(_drawnLowerRuleMarker, _drawnLowerRuleTitle, width) is int markerLeft)
@@ -7941,8 +7943,8 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         _drawnRuleTitle = _ruleTitle();
         _drawnFolds = FoldsWanted();
         _drawnReopen = ReopenWanted();
-        _drawnRuleMark = _ruleMark;
-        var rule = _drawnRuleMark is Style marked ? marked : Theme.PaneRule;
+        _drawnRuleMark = RuleMarks.StyleFor(_ruleMark, Theme.PageGround, Theme.PageInk);
+        var rule = _drawnRuleMark ?? Theme.PaneRule;
         var parts = UpperRule(_drawnRuleTitle, _drawnFolds, width, _drawnReopen);
         _foldColumn = parts.FoldColumn;
         _reopenColumn = parts.ReopenColumn;
@@ -8093,7 +8095,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     private bool RuleTitleChanged() =>
         !string.Equals(_ruleTitle(), _drawnRuleTitle, StringComparison.Ordinal) || !string.Equals(_lowerRuleTitle(), _drawnLowerRuleTitle, StringComparison.Ordinal)
         || !string.Equals(_lowerRuleMarker(), _drawnLowerRuleMarker, StringComparison.Ordinal)   // the update's marker (2026-11-04)
-        || !ReferenceEquals(_ruleMark, _drawnRuleMark)   // a /mark (2026-10-18)
+        || !Equals(RuleMarks.StyleFor(_ruleMark, Theme.PageGround, Theme.PageInk), _drawnRuleMark)   // a /mark (2026-10-18), or its page's shade (2026-11-17)
         || !ReferenceEquals(Theme.RuleStops, _drawnRuleStops);   // Gradient rules flipped or the palette changed (2026-11-01)
 
     private void WriteHintRow()

@@ -90,28 +90,13 @@ public sealed class ConvertToXlsxTool : FileTool
         List<IReadOnlyList<RawCell>>? rows = null;
         if (path.Length > 0)
         {
-            var outcome = Files.Resolve(path, forWrite: false, out string full);
-            if (outcome != FileOutcome.Ok)
+            // The one resolver render_chart's from shares (2026-11-17, the admin-themes-render review's #190).
+            if (TableSource.ResolveFile(Files, path, out string full, out string relative) is { } refused)
             {
-                return FileText.Error(outcome, path, "read");
+                return refused;
             }
 
-            if (Directory.Exists(full))
-            {
-                return FileText.Error(FileOutcome.IsDirectory, Files.Relative(full, isDirectory: true), "read");
-            }
-
-            if (!File.Exists(full))
-            {
-                return FileText.Error(FileOutcome.Missing, path, "read");
-            }
-
-            sourceRelative = Files.Relative(full);
-            if (!TableSource.IsTablePath(full))
-            {
-                return OfficeText.NotATableFile(sourceRelative);
-            }
-
+            sourceRelative = relative;
             sourceFull = full;
         }
         else if (ReadTable(arguments, out header, out rows) is { } bad)

@@ -94,8 +94,8 @@ internal sealed partial class ChatScreen
     /// </summary>
     private void InitAdmin(IPinger? pinger, Func<string, CancellationToken, Task<System.Net.IPAddress[]>>? resolve, IServiceSystem? serviceSystem, ITaskSystem? taskSystem, IDirectorySystem? directorySystem, Func<string?>? joinedDomain)
     {
-        // net_http's browser: true speaks as web_fetch's browser does (2026-11-16, #15).
-        _network = new NetworkAccess(_effective, pinger, _time, resolve, identity: () => _web.Browser.Identify(_effective().WebBrowserPath));
+        // net_http's browser: true speaks as web_fetch's HTTP client does (2026-11-16, #15; Chrome's brand, 2026-11-17, #162).
+        _network = new NetworkAccess(_effective, pinger, _time, resolve, identity: () => Web.BrowserIdentity.ForHttp(_web.Browser.Identify(_effective().WebBrowserPath)));
         _networkTools = NetworkTools(_network, _networkBudget);
         _services = new ServiceAccess(serviceSystem, () => ServiceConfigFile.Family.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory), () => _effective().ServiceComputersOffered, _time);
         _serviceTools = ServiceTools(_services, _effective, ConfirmAdminAsync);
@@ -754,6 +754,20 @@ internal sealed partial class ChatScreen
                 }
 
                 stack.Add(new AdCard(result, title, nested, "all"));
+            }
+
+            if (chosen is { } pickedTarget && answer.Compare is { } pending)
+            {
+                // A candidate of an ambiguous compare side re-runs the compare with that account (2026-11-17, the review's #31).
+                var compared = await Read(() => DirectoryCommand.CompareAsync(_directory, card.Result.Domain, pending, pickedTarget, cancellationToken)).ConfigureAwait(false);
+                if (compared.Answer is null || (compared.Failed && compared.Answer.Candidates is null))
+                {
+                    sink.Notice(string.Join(' ', compared.Lines));
+                    continue;
+                }
+
+                Push(compared, compared.Title ?? pickedTarget.Name, pending.Nested);
+                continue;
             }
 
             if (chosen is { } target)

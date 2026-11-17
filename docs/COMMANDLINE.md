@@ -29,7 +29,7 @@ Everything `NeonSidekick.exe` (`./NeonSidekick` on a Mac) takes on its command l
 | `--postgres-check <connection>` | The same for a connection in `postgres.json`. |
 | `--unc-check <share>` | The same for a share in `unc.json`. On a Mac it mounts the share and unmounts it on exit. |
 | `--eventlog-check <computer>` | The same for a computer in `eventlog.json`, or `local`: the sign-in, the newest System event, and whether the Security log is readable. On a Mac only `local`: the unified log, crash reports and install.log. |
-| `--network-check <host>` | Tests the network tools against a host (a DNS lookup, a ping, port 443, a TLS handshake) and opens a certificate store. Reads only. |
+| `--network-check <host>` | Tests the network tools against a host (a DNS lookup, a ping, port 443, a TLS handshake, an HTTP request) and opens a certificate store. Reads only. |
 | `--services-check <computer>` | The same for a computer in `services.json`, or `local`: its services listed and one read in full. Changes nothing. Windows only. |
 | `--tasks-check <computer>` | The same for a computer in `tasks.json`, or `local`: the Task Scheduler connected, the tasks listed and one read. Windows only. |
 | `--ad-check <domain>` | The same for a domain in `ad.json`, or `current`: the bind, the domain's root object and policy, and one user read. On a Mac the bind line says how it connected, and there's no `current`. |

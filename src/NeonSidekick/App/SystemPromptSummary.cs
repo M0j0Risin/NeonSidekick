@@ -488,6 +488,9 @@ public static class SystemPromptSummary
     /// <summary>The note on <c>execute_code</c> while none of the languages <c>Shell code languages</c> names is installed (2026-09-21). Pinned.</summary>
     public const string NoInterpreterSuffix = "no interpreter found for the languages in Shell code languages";
 
+    /// <summary>A render tool's row with no browser found to draw with (2026-11-17, #84).</summary>
+    public const string NoBrowserSuffix = "no browser to draw with";
+
     /// <summary>The note on a tool switched off by name on <c>/tools</c> (2026-09-19). Pinned.</summary>
     public const string DisabledSuffix = "switched off in /tools";
 
@@ -878,6 +881,7 @@ public static class SystemPromptSummary
         IReadOnlyList<AIFunction>? shell = null,
         bool shellEnabled = true,
         bool codeAvailable = true,
+        bool drawable = true,
         IReadOnlyList<AIFunction>? obsidian = null,
         bool obsidianEnabled = true,
         IReadOnlyList<AIFunction>? sql = null,
@@ -962,9 +966,13 @@ public static class SystemPromptSummary
         if (images is { Count: > 0 })
         {
             // The picture tools (2026-10-10, the user's ask: view_image, image_info and image_edit off the Files group): offered while Image tools is on; none without codecs.
-            // The render tools (2026-11-16, #9) are in the group too, the turn's list leaving them out while no browser is found.
+            // The render tools (2026-11-16, #9) are in the group too, the turn's list leaving them out while no browser is found; their rows stay,
+            // dim, with the reason (2026-11-17, the admin-themes-render review's #84: the execute_code shape).
             string imagesNote = !imagesEnabled ? NotOffered(ImagesOffSuffix) : standing;
-            groups.Add(Group(ToolsText.ImageMenuTitle, images, imagesNote, imagesEnabled && toolsEnabled, SettingsField.ImageTools, disabled));
+            var renderNotes = imagesEnabled && !drawable && images.Any(t => t is RenderTool)
+                ? images.OfType<RenderTool>().ToDictionary(t => t.Name, _ => NotOffered(NoBrowserSuffix), StringComparer.Ordinal)
+                : null;
+            groups.Add(Group(ToolsText.ImageMenuTitle, images, imagesNote, imagesEnabled && toolsEnabled, SettingsField.ImageTools, disabled, renderNotes));
         }
 
         if (video is { Count: > 0 })

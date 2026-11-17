@@ -106,7 +106,7 @@ internal sealed partial class ChatScreen
         {
             stop.Cancel();
             await watcher.ConfigureAwait(false);
-            await EndTurnAsync(closePane: cmdCts.IsCancellationRequested, cancellationToken).ConfigureAwait(false);
+            await EndTurnAsync(closePane: cmdCts.IsCancellationRequested, cancellationToken, run: true).ConfigureAwait(false);
         }
 
         if (run is { } done)

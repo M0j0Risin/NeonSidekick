@@ -8,6 +8,12 @@ namespace NeonSidekick.ActiveDirectory;
 public sealed record DirectoryRowTarget(string Dn, string Name);
 
 /// <summary>
+/// A compare refused because one side's name means several accounts (2026-11-17, the review's #31): what a pick among the candidates needs to
+/// re-run the compare — both names, the DN already settled (if any), which side the candidates are for, and the compare's <c>type</c> and nested.
+/// </summary>
+public sealed record ComparePending(string Name, string Other, string? Dn, string? OtherDn, bool PickingOther, string? Type, bool Nested);
+
+/// <summary>
 /// A table's column (2026-10-15, the AD gaps plan): its name (the card's header and the CSV's, <see cref="DirectoryText"/>'s constants), whether
 /// the card may cut it to fit the pane (a name or a description; never an account name or a date), and whether it holds dates (the CSV's header
 /// names the zone and its cells are dates or nothing).
@@ -98,6 +104,9 @@ public sealed class DirectoryAnswer
     /// <summary>With <see cref="Error"/>: the objects a name matches, as a list the card offers (each row opens its own).</summary>
     public DirectoryTable? Candidates { get; set; }
 
+    /// <summary>With <see cref="Candidates"/> on a compare's side: a pick re-runs the compare (2026-11-17, #31), not one account's groups.</summary>
+    public ComparePending? Compare { get; set; }
+
     /// <summary>The card's title for <see cref="Candidates"/> (<c>'john' matches 3 accounts</c>).</summary>
     public string? CandidatesTitle { get; set; }
 
@@ -118,6 +127,9 @@ public sealed class DirectoryAnswer
     /// its title and ask draft name it, so a name a user and a group share is asked about as the one shown.
     /// </summary>
     public string? AccountType { get; set; }
+
+    /// <summary>A compare's second account as a <c>type</c> word (2026-11-17, #50): the title names each account's own kind.</summary>
+    public string? OtherAccountType { get; set; }
 
     /// <summary>The line naming a <c>to</c> save, after everything (the transcript's note finds it by <see cref="DirectoryText.SavedPrefix"/>).</summary>
     public string? Saved { get; set; }

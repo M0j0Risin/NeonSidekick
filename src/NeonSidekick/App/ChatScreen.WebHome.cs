@@ -170,8 +170,11 @@ internal sealed partial class ChatScreen
         // The tiles and the rooms outside the lock, over a copy of the marks (2026-10-19, the review: the PC bar's draw takes _homeGate under the
         // pane's lock, and a big catalog's rooms held it there).
         HomeChipMark MarkOf(string reference) => marks.GetValueOrDefault(reference);
-        var tiles = WebHomeView.Tiles(items, live, MarkOf, effective.HomeBarAliases, effective.HomeBarGlyphs, effective.WebUiHomeControls);
-        var rooms = WebHomeView.Rooms(live, items, MarkOf, HomeRoomDomains);
+        // The page's own ground and ink, the theme's when /theme.css sends them (2026-11-17, #82): the tiles' colors are made readable there.
+        var palette = UI.Theme.Current;
+        var page = (WebTheme.GroundOf(palette, effective.WebUiProfileTheme), WebTheme.InkOf(palette, effective.WebUiProfileTheme));
+        var tiles = WebHomeView.Tiles(items, live, MarkOf, effective.HomeBarAliases, effective.HomeBarGlyphs, effective.WebUiHomeControls, page);
+        var rooms = WebHomeView.Rooms(live, items, MarkOf, HomeRoomDomains, page);
         Volatile.Write(ref _homeReach, new HomeReachCache(HomeItemsKey(items), live, WebHomeView.Reach(items, live.Catalog, HomeRoomDomains, rooms)));
         var ids = new HashSet<string>(HomeBarItems.EntityIds(items, live.Catalog), StringComparer.Ordinal);
         // The scenes too, so their names come with their states (the registry often has none).

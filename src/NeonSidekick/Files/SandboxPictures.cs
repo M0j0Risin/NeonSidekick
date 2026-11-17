@@ -5,13 +5,19 @@ namespace NeonSidekick.Files;
 /// 2026-10-29, the Office writing plan, so <c>convert_to_pdf</c> and <c>convert_to_docx</c> find the same pictures): an address relative to
 /// <c>folder</c> (the source's own) or a <c>file:</c> URL, <c>?</c> and <c>#</c> cut, judged by
 /// <see cref="WorkingDirectory.Resolve(string, bool, out string)"/>; a web address, a missing file or one outside is null. Counts what it
-/// hands out against <paramref name="budget"/>; past it <see cref="OverBudget"/> is set and nothing more is handed out.
+/// hands out against <paramref name="budget"/>; past it <see cref="OverBudget"/> is set and nothing more is handed out. With
+/// <paramref name="images"/> (2026-11-17, the admin-themes-render review's #42, <c>render_picture</c>), a full path in the profile's images
+/// folder is read there, by <see cref="WorkingDirectory.For"/>'s rule; every address left out is kept in <see cref="Missed"/> for the answer.
 /// </summary>
-public sealed class SandboxPictures(WorkingDirectory files, string folder, long budget)
+public sealed class SandboxPictures(WorkingDirectory files, string folder, long budget, WorkingDirectory? images = null)
 {
+    private readonly List<string> _missed = [];
     private long _total;
 
     public bool OverBudget { get; private set; }
+
+    /// <summary>The addresses asked for and not handed out (missing, outside, too large, over the budget), in order, each once.</summary>
+    public IReadOnlyList<string> Missed => _missed;
 
     /// <summary>
     /// A Markdown picture as a <c>data:</c> URI for a page, or null. A <c>data:</c> address is decoded, held to the types a page shows and
@@ -29,10 +35,10 @@ public sealed class SandboxPictures(WorkingDirectory files, string folder, long 
         string? full = Locate(address);
         if (full is null || Pdf.PdfHtml.ImageMediaType(full) is not { } type)
         {
-            return null;
+            return Miss<string>(address);
         }
 
-        return Read(full, ImageFile.MaxFileBytes) is { } bytes ? Pdf.PdfHtml.DataUri(bytes, type) : null;
+        return Read(full, ImageFile.MaxFileBytes) is { } bytes ? Pdf.PdfHtml.DataUri(bytes, type) : Miss<string>(address);
     }
 
     /// <summary>A file a page names, its bytes, or null (missing, outside, over <see cref="ImageFile.MaxFileBytes"/> or the budget).</summary>
@@ -42,8 +48,29 @@ public sealed class SandboxPictures(WorkingDirectory files, string folder, long 
     /// <see cref="Bytes(string)"/> for only the files <paramref name="accept"/> takes by their path, judged before anything is read or counted
     /// (2026-10-29, review P3-1: a document's WebP and video links spent the budget though none could be embedded).
     /// </summary>
-    public byte[]? Bytes(string address, Func<string, bool>? accept) =>
-        Locate(address) is { } full && (accept is null || accept(full)) ? Read(full, ImageFile.MaxFileBytes) : null;
+    public byte[]? Bytes(string address, Func<string, bool>? accept)
+    {
+        ArgumentNullException.ThrowIfNull(address);
+        if (Locate(address) is not { } full)
+        {
+            return Miss<byte[]>(address);
+        }
+
+        return accept is not null && !accept(full) ? null : Read(full, ImageFile.MaxFileBytes) ?? Miss<byte[]>(address);
+    }
+
+    // An address left out, kept once.
+    private T? Miss<T>(string address)
+        where T : class
+    {
+        string shown = address.Trim();
+        if (shown.Length > 0 && !_missed.Contains(shown, StringComparer.Ordinal))
+        {
+            _missed.Add(shown);
+        }
+
+        return null;
+    }
 
     /// <summary>
     /// Bytes from elsewhere (a <c>data:</c> picture decoded) counted against the same caps: false when over a picture's cap or the budget,
@@ -161,7 +188,7 @@ public sealed class SandboxPictures(WorkingDirectory files, string folder, long 
             }
         }
 
-        return files.Resolve(candidate, forWrite: false, out string full) == FileOutcome.Ok && File.Exists(full) ? full : null;
+        return WorkingDirectory.For(files, images, candidate).Resolve(candidate, forWrite: false, out string full) == FileOutcome.Ok && File.Exists(full) ? full : null;
     }
 
     private byte[]? Read(string full, long cap)

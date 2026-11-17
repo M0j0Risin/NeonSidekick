@@ -2671,8 +2671,8 @@ public sealed class AppSettingsData
     // no process-start site, no shipped DLL; the Mac too). On /tools › Admin's Network menu, its first (Core's, after Web, until 2026-10-16).
 
     /// <summary>
-    /// Whether a turn offers the network tools (2026-10-15): <c>net_dns</c>, <c>net_ping</c>, <c>net_trace</c>, <c>net_port</c> and
-    /// <c>net_tls</c>, read-only, judged by <see cref="NetworkToolsReach"/> and the host lists; <c>net_certs</c> too with
+    /// Whether a turn offers the network tools (2026-10-15): <c>net_dns</c>, <c>net_ping</c>, <c>net_trace</c>, <c>net_port</c>,
+    /// <c>net_tls</c> and <c>net_http</c> (2026-11-16), read-only, judged by <see cref="NetworkToolsReach"/> and the host lists; <c>net_certs</c> too with
     /// <see cref="NetworkCertificateStores"/>. Read at each turn. Off by default, as every tool group. No variable. <c>/net</c> works either way.
     /// </summary>
     public bool NetworkTools { get; set; }

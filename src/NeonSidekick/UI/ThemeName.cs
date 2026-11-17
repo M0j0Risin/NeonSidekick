@@ -82,12 +82,14 @@ public static class ThemeName
 
     /// <summary>
     /// Puts <paramref name="effective"/>'s theme in force (<see cref="Theme.Use"/>), among the built-ins, and its <c>Gradient rules</c>
-    /// (<see cref="Theme.UseRuleGradient"/>, 2026-11-01: startup, a theme change and a profile switch all come through here).
+    /// (<see cref="Theme.UseRuleGradient"/>, 2026-11-01: startup, a theme change and a profile switch all come through here) and its
+    /// <c>Themed background</c> (<see cref="Theme.UseThemedBackground"/>, 2026-11-17).
     /// </summary>
     public static void Apply(AppSettingsData effective)
     {
         Theme.Use(Resolve(effective));
         Theme.UseRuleGradient(effective.GradientRules);
+        Theme.UseThemedBackground(effective.ThemedBackground);
     }
 
     /// <summary>Puts <paramref name="effective"/>'s theme in force, among the built-ins and the themes of <paramref name="themesDirectory"/>, and its <c>Gradient rules</c>.</summary>
@@ -95,5 +97,6 @@ public static class ThemeName
     {
         Theme.Use(Resolve(effective, themesDirectory));
         Theme.UseRuleGradient(effective.GradientRules);
+        Theme.UseThemedBackground(effective.ThemedBackground);
     }
 }

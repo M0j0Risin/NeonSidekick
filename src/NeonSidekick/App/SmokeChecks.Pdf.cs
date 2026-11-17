@@ -1,3 +1,4 @@
+using System.Globalization;
 using NeonSidekick.Pdf;
 using NeonSidekick.Printing;
 using NeonSidekick.Web;
@@ -198,14 +199,14 @@ public static partial class SmokeChecks
 
         try
         {
-            var drawn = browser.RenderPictureAsync(executable, new RenderJob("graph LR\n  A[Smoke] --> B[Check]", null, PictureFormat.Png, 800, 1, "#FFFFFF"), CancellationToken.None).GetAwaiter().GetResult();
+            var drawn = browser.RenderPictureAsync(executable, new RenderJob("graph LR\n  A[Smoke] --> B[Check]", null, PictureFormat.Png, 800, 1, System.Drawing.Color.White, Svg: true), CancellationToken.None).GetAwaiter().GetResult();
             byte[] signature = [0x89, 0x50, 0x4E, 0x47];
             string wrong =
                 !drawn.Ok ? "the draw failed: " + (drawn.MermaidError ?? drawn.Detail)
                 : drawn.Bytes is not { Length: > 500 } bytes || !bytes.AsSpan(0, 4).SequenceEqual(signature) ? "the picture is no PNG"
-                : drawn.Width < 50 || drawn.Height < 20 ? $"the picture is {drawn.Width}x{drawn.Height}"
+                : drawn.Width < 50 || drawn.Height < 20 ? string.Create(CultureInfo.InvariantCulture, $"the picture is {drawn.Width}x{drawn.Height}")
                 : BrowserLeftovers(drawn.InJob, HeadlessBrowser.PdfFolderFor(folder)) ?? "";
-            return new SmokeCheck(name, wrong.Length == 0, wrong.Length > 0 ? wrong : $"{PdfText.BrowserName(executable)} drew a Mermaid flowchart ({drawn.Width}x{drawn.Height}, {drawn.Bytes!.Length} B){LeftNothing}");
+            return new SmokeCheck(name, wrong.Length == 0, wrong.Length > 0 ? wrong : string.Create(CultureInfo.InvariantCulture, $"{PdfText.BrowserName(executable)} drew a Mermaid flowchart ({drawn.Width}x{drawn.Height}, {drawn.Bytes!.Length} B){LeftNothing}"));
         }
         catch (Exception ex)
         {

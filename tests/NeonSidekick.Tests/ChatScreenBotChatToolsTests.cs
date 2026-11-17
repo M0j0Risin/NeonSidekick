@@ -76,8 +76,10 @@ public partial class ChatScreenTests
     {
         BotChatFixture();
         ComfyServer();   // pony offered to the main chat
-        // The picture tools on too (2026-10-12): set_splash_image is theirs since, and still never a bot's.
-        _settings.Update(d => { d.ImageTools = true; d.BotChatLimitedTools = [GetCurrentTimeTool.ToolName, GenerateImageTool.ToolName, SetSplashImageTool.ToolName]; });
+        _browser.Executable = @"C:\edge\msedge.exe";   // a browser to draw with, so the render tools are offered
+        // The picture tools on too (2026-10-12): set_splash_image is theirs since, and still never a bot's; nor is render_chart (2026-11-17,
+        // the user's call on the admin-themes-render review's #127), while render_picture stays.
+        _settings.Update(d => { d.ImageTools = true; d.BotChatLimitedTools = [GetCurrentTimeTool.ToolName, GenerateImageTool.ToolName, SetSplashImageTool.ToolName, RenderChartTool.ToolName, RenderPictureTool.ToolName]; });
         _chat.EnqueueText("Hello from Neon.");
         _chat.EnqueueText("Ada ", "answers.");
         EscDuringRequest(2);
@@ -90,6 +92,8 @@ public partial class ChatScreenTests
         Assert.Contains(GetCurrentTimeTool.ToolName, bot);
         Assert.DoesNotContain(GenerateImageTool.ToolName, bot);
         Assert.DoesNotContain(SetSplashImageTool.ToolName, bot);
+        Assert.DoesNotContain(RenderChartTool.ToolName, bot);
+        Assert.Contains(RenderPictureTool.ToolName, bot);
     }
 
     /// <summary>

@@ -274,7 +274,7 @@ Which commands the Web UI's page may send, and how each shows there: [Commands f
 Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#network) among them.
 
 * **Reach:** each works with its tools off, reaching only the computers or domains ticked for them.
-* **`/net`** ignores *Network tools reach*, the host lists and the per-turn budget; a dim line says when the model's own call would be refused.
+* **`/net`** ignores *Network tools reach*, the host lists and the per-turn budget, except where `/net http` follows a redirect: those hops meet the reach, the lists and the blocked ports. A dim line says when the model's own call would be refused.
 * **On a Mac:** `/services` and `/tasks` are Windows only; `/eventlog` reads the Mac's own logs ([MAC.md](MAC.md#what-works)).
 * **Without a pane** (the Web UI, headless), `/eventlog` and `/services` print a list. The panes' keys: [Pane keys](INTERFACE.md#pane-keys).
 * **Words:** quote a value with spaces (`folder:"\Microsoft\Windows\Windows Defender"`, `computer:"app 01"`). A term's value follows the colon at once; a single-value term is given once.
@@ -297,7 +297,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 | `/ad <name> [domain:<name>]` | Looks a name up in Active Directory (account, display name, cn, mail, UPN or description) and opens the matches as a card with **copy** and **ask**. Read-only. See [Active Directory](TOOLS.md#active-directory). |
 | `/ad user <name>` | A user's card: enabled, locked and when (**Search 4740** when the PDC emulator is a ticked event-log computer), bad passwords, password expiry, last sign-in, groups, manager, direct reports, title, department and OU. |
 | `/ad group <name> [nested] [members:users\|computers\|groups] [to:<file-or-folder>]` | A group's card and members, direct or nested (each with the group it comes through). |
-| `/ad memberof <name> [nested] [type:user\|group\|computer\|service] [compare:<name>] [to:<file-or-folder>]` | The groups an account belongs to, direct or nested (each with the group it comes through); on the card **n** switches. `compare:` lists the groups only one of two accounts is in, and those both are (quote a name with spaces: `compare:"Bob Smith"`). |
+| `/ad memberof <name> [nested] [type:user\|group\|computer\|service] [compare:<name>] [to:<file-or-folder>]` | The groups an account is in, direct or nested, each with the group it comes through; **n** on the card switches. `compare:` lists the groups only one of two accounts is in and those both are (quote a name with spaces). |
 | `/ad computer <name>` | A computer's card, or a managed service account's. |
 | `/ad ou [<path>] [to:<file-or-folder>]` | The OU tree, or one OU (`Neon/Engineering`, a DN or a name): its owner, linked GPOs and objects. |
 | `/ad find <kind> [<days>] [<words>] [type:<type>] [field:<field>] [ou:<path>] [to:<file-or-folder>]` | The kinds of `ad_find`: `locked`, `password_expiring`, `disabled`, `stale_users`, `stale_computers`, `name`, `field`, `os`, `password_never_expires`, `account_expiring`, `created`, `privileged`, `empty_groups`. |
@@ -635,9 +635,9 @@ The sixty-eight built-in themes are JSON files in [`assets/themes`](../assets/th
 
 Your own are JSON files in the home's `themes` folder (and subfolders one level deep), shared by every profile and read again whenever a theme list opens; one named like a built-in replaces it.
 
-Start with `/theme export <name> [<new-name>]`: it writes `themes/<new-name>.json` (`<name>-custom` by default) with every color filled in, never over a file.
+Start with `/theme export <name> [<new-name>]`: it writes `themes/<new-name>.json` (`<name>-custom` by default) with every color filled in (a built-in's copy is its file with the new name, role words and comments kept), never over a file.
 
-`/theme edit [<name>]` changes the colors in the app: each role with its swatch, the theme previewed beside the list and pairs that read poorly listed under it. Enter opens a hue, saturation and lightness picker, or type a hex value. A built-in offers its `<name>-custom` copy; a save rewrites only `colors`.
+`/theme edit [<name>]` changes the colors in the app: each role with its swatch, the theme previewed beside the list and pairs that read poorly listed under it. Its keys and the picker's are in [Pane keys](INTERFACE.md#pane-keys). A built-in offers its `<name>-custom` copy; a save changes only the colors you changed, and keeps the file's comments and layout.
 
 ```jsonc
 {

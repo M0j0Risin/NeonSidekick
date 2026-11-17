@@ -796,19 +796,7 @@ public static class DirectoryQueries
             + (total > limit ? "; " + DirectoryText.FirstGroupsListed(limit, limit < DirectoryLimits.MaxEntries, canSave) : "")
             + (read.Walk.Cut ? "; " + DirectoryText.GroupsCapNote(cap) : "")
             + (read.Stopped ? "; " + DirectoryText.StoppedAtTimeLimit : "");
-        var table = new DirectoryTable([new(DirectoryText.ColName, Flexible: true), new(DirectoryText.ColType), new(DirectoryText.ColAccount), new(DirectoryText.ColVia, Flexible: true)])
-        {
-            Shown = limit,
-            CutReserve = 600,
-            CutNote = left => DirectoryText.MoreGroups(left, canSave),
-        };
-        foreach (var g in read.Listed)
-        {
-            var shape = ShapeOf(g, nested);
-            table.Rows.Add(new DirectoryRow(shape.Lead + shape.PrimaryMark + ")" + shape.How, [g.Name, shape.Kind, shape.Account, shape.Via], g.Dn, g.Name, Opens: g.Entry is not null));
-        }
-
-        answer.Tables.Add(table);
+        answer.Tables.Add(OnlyTable(read.Listed, nested, limit, canSave, cutReserve: 600, title: null, section: null));
         answer.Notes.AddRange(read.Notes);
         return answer;
     }
@@ -827,22 +815,27 @@ public static class DirectoryQueries
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(other);
         zone ??= TimeZoneInfo.Utc;
-        var (a, refusalA) = ReadMemberOf(session, source, name, type, nested, deadline, dn, cap);
-        if (a is null)
+
+        // Both accounts found before either is walked (2026-11-17, the review's #14): one account named twice is refused at once.
+        var foundA = FindMemberOfAccount(session, source, name, type, deadline, dn);
+        if (foundA.Account is null)
         {
-            return refusalA!;
+            return Pending(foundA.Refusal!, new ComparePending(name, other, Dn: null, OtherDn: otherDn, PickingOther: false, type, nested));
         }
 
-        var (b, refusalB) = ReadMemberOf(session, source, other, type, nested, deadline, otherDn, cap);
-        if (b is null)
+        var foundB = FindMemberOfAccount(session, source, other, type, deadline, otherDn);
+        if (foundB.Account is null)
         {
-            return refusalB!;
+            return Pending(foundB.Refusal!, new ComparePending(name, other, Dn: foundA.Account.Dn, OtherDn: null, PickingOther: true, type, nested));
         }
 
-        if (string.Equals(a.Account.Dn, b.Account.Dn, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(foundA.Account.Dn, foundB.Account.Dn, StringComparison.OrdinalIgnoreCase))
         {
             return DirectoryAnswer.Refused(DirectoryText.CompareSameAccount(name, other));
         }
+
+        var a = WalkMemberOf(session, source, foundA.Account, name, foundA.Also, nested, deadline, cap);
+        var b = WalkMemberOf(session, source, foundB.Account, other, foundB.Also, nested, deadline, cap);
 
         var inB = b.Listed.ToDictionary(g => g.Dn, StringComparer.OrdinalIgnoreCase);
         var inA = a.Listed.Select(g => g.Dn).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -854,6 +847,7 @@ public static class DirectoryQueries
         answer.Self = new DirectoryRowTarget(a.Account.Dn, name);
         answer.Other = new DirectoryRowTarget(b.Account.Dn, other);
         answer.AccountType = a.AccountType;
+        answer.OtherAccountType = b.AccountType;
         answer.Partial = a.Partial || b.Partial;
         bool over = onlyA.Count > limit || onlyB.Count > limit || both.Count > limit;
         answer.Head = DirectoryText.MemberOfCompareHead(a.Kind, a.Shown, b.Kind, b.Shown, source.Where, nested, onlyA.Count, onlyB.Count, both.Count, a.Cut || b.Cut)
@@ -872,10 +866,15 @@ public static class DirectoryQueries
         }
 
         // Only A, only B, then both (the plan's order): the differences are the point of the question, so the first two leave room for the third.
-        answer.Tables.Add(OnlyTable(a, onlyA, nested, limit, canSave, cutReserve: 5000));
-        answer.Tables.Add(OnlyTable(b, onlyB, nested, limit, canSave, cutReserve: 3000));
+        // A side read only in part may hide a shared group in the other's only list, which says so (2026-11-17, #112); the two names are made
+        // together, so two that share their first 40 characters still name two sections and two columns (#15).
+        var (sideA, sideB) = DirectoryText.SideNames(a.AccountName, b.AccountName);
+        answer.Tables.Add(OnlyTable(onlyA, nested, limit, canSave, cutReserve: 5000,
+            DirectoryText.OnlyTitle(a.Shown, onlyA.Count, b.Partial ? b.Shown : null), DirectoryText.OnlySection(sideA)));
+        answer.Tables.Add(OnlyTable(onlyB, nested, limit, canSave, cutReserve: 3000,
+            DirectoryText.OnlyTitle(b.Shown, onlyB.Count, a.Partial ? a.Shown : null), DirectoryText.OnlySection(sideB)));
         var bothTable = new DirectoryTable([new(DirectoryText.ColName, Flexible: true), new(DirectoryText.ColType), new(DirectoryText.ColAccount),
-            new(DirectoryText.ViaColumn(a.AccountName), Flexible: true), new(DirectoryText.ViaColumn(b.AccountName), Flexible: true)])
+            new(DirectoryText.ViaColumn(sideA), Flexible: true), new(DirectoryText.ViaColumn(sideB), Flexible: true)])
         {
             Title = DirectoryText.BothTitle(both.Count),
             TitleInModel = true,
@@ -888,8 +887,10 @@ public static class DirectoryQueries
         {
             var sa = ShapeOf(ga, nested);
             var sb = ShapeOf(gb, nested);
-            string line = sa.Lead + ") " + a.Shown + " " + sa.Word + "; " + b.Shown + " " + sb.Word;
-            bothTable.Rows.Add(new DirectoryRow(line, [ga.Name, sa.Kind, sa.Account, sa.Via ?? DirectoryText.DirectWord, sb.Via ?? DirectoryText.DirectWord], ga.Dn, ga.Name, Opens: ga.Entry is not null));
+            // A side in a group by no Via it could read is blank, never "direct" (2026-11-17, #174).
+            string line = sa.Lead + ") " + Side(a.Shown, sa.Word) + "; " + Side(b.Shown, sb.Word);
+            bothTable.Rows.Add(new DirectoryRow(line, [ga.Name, sa.Kind, sa.Account, sa.Via ?? (ga.Direct ? DirectoryText.DirectWord : null), sb.Via ?? (gb.Direct ? DirectoryText.DirectWord : null)],
+                ga.Dn, ga.Name, Opens: ga.Entry is not null));
         }
 
         answer.Tables.Add(bothTable);
@@ -901,13 +902,34 @@ public static class DirectoryQueries
     /// <summary>The compare's card kind (2026-11-16, #16): its <c>n</c> re-runs the compare by both DNs, never one account's groups.</summary>
     public const string MemberOfCompareKind = "memberof-compare";
 
-    private static DirectoryTable OnlyTable(MemberOfRead read, List<UpGroup> groups, bool nested, int limit, bool canSave, int cutReserve)
+    /// <summary>A side of a both row: its account as the head writes it, and how it is in the group when that is known.</summary>
+    private static string Side(string shown, string word) => word.Length > 0 ? shown + " " + word : shown;
+
+    /// <summary>
+    /// A refusal for a compare's side, carrying what a pick on its candidates needs to re-run the compare (2026-11-17, the review's #31): only an
+    /// ambiguous side has candidates; the other refusals answer alone.
+    /// </summary>
+    private static DirectoryAnswer Pending(DirectoryAnswer refusal, ComparePending pending)
+    {
+        if (refusal.Candidates is not null)
+        {
+            refusal.Compare = pending;
+        }
+
+        return refusal;
+    }
+
+    /// <summary>
+    /// A list of groups with how the account is in each (2026-11-17, the review's #103: one account's card and a compare's only lists share it):
+    /// <paramref name="title"/> and <paramref name="section"/> null for one account's card, which has neither.
+    /// </summary>
+    private static DirectoryTable OnlyTable(List<UpGroup> groups, bool nested, int limit, bool canSave, int cutReserve, string? title, string? section)
     {
         var table = new DirectoryTable([new(DirectoryText.ColName, Flexible: true), new(DirectoryText.ColType), new(DirectoryText.ColAccount), new(DirectoryText.ColVia, Flexible: true)])
         {
-            Title = DirectoryText.OnlyTitle(read.Shown, groups.Count),
-            TitleInModel = true,
-            Section = DirectoryText.OnlySection(read.AccountName),
+            Title = title,
+            TitleInModel = title is not null,
+            Section = section,
             Shown = limit,
             CutReserve = cutReserve,
             CutNote = left => DirectoryText.MoreGroups(left, canSave),
@@ -935,6 +957,17 @@ public static class DirectoryQueries
     private static (MemberOfRead? Read, DirectoryAnswer? Refusal) ReadMemberOf(IDirectorySession session, DirectorySource source, string name, string? type, bool nested,
         DirectoryDeadline deadline, string? dn, int cap)
     {
+        var found = FindMemberOfAccount(session, source, name, type, deadline, dn);
+        return found.Account is null ? (null, found.Refusal) : (WalkMemberOf(session, source, found.Account, name, found.Also, nested, deadline, cap), null);
+    }
+
+    /// <summary>
+    /// The account a name (or <paramref name="dn"/>) means, and the other kinds of account the name means too (2026-11-17, the review's #14: the
+    /// lookups split from the walk, so a compare refuses one account named twice before walking either); or the refusal that answers instead.
+    /// </summary>
+    private static (DirectoryEntry? Account, List<string> Also, DirectoryAnswer? Refusal) FindMemberOfAccount(IDirectorySession session, DirectorySource source, string name,
+        string? type, DirectoryDeadline deadline, string? dn)
+    {
         string baseDn = source.Domain.BaseDn;
         DirectoryEntry? account = null;
         if (dn is not null)
@@ -942,7 +975,7 @@ public static class DirectoryQueries
             (account, _) = OneOf(session, baseDn, LdapFilter.ByDn(LdapFilter.MemberOfKinds, dn), AdAttributes.MemberOfAccount, deadline.Limit);
             if (account is null)
             {
-                return (null, DirectoryAnswer.Refused(DirectoryText.Gone(name, source.Where)));
+                return (null, [], DirectoryAnswer.Refused(DirectoryText.Gone(name, source.Where)));
             }
         }
         else
@@ -952,7 +985,7 @@ public static class DirectoryQueries
                 var read = session.Search(baseDn, DirectoryScope.Subtree, filter, AdAttributes.MemberOfAccount, MaxCandidates + 1, paged: false, deadline.Limit);
                 if (read.Entries.Count > 1)
                 {
-                    return (null, Ambiguous(name, read.Entries));
+                    return (null, [], Ambiguous(name, read.Entries));
                 }
 
                 if (read.Entries.Count == 1)
@@ -963,18 +996,28 @@ public static class DirectoryQueries
 
                 if (read.TimedOut)
                 {
-                    return (null, DirectoryAnswer.Refused(DirectoryText.LookupTimedOut(name, source.Where)));
+                    return (null, [], DirectoryAnswer.Refused(DirectoryText.LookupTimedOut(name, source.Where)));
                 }
             }
 
             if (account is null)
             {
-                return (null, DirectoryAnswer.Refused(DirectoryText.NotFound(type is null ? "account" : DirectoryText.KindWord(type), name, source.Where)));
+                return (null, [], DirectoryAnswer.Refused(DirectoryText.NotFound(type is null ? "account" : DirectoryText.KindWord(type), name, source.Where)));
             }
         }
 
+        var also = type is null ? OtherKindsNamed(session, baseDn, name, source.Domain.DomainName, TypeWord(account), deadline) : [];
+        return (account, also, null);
+    }
+
+    /// <summary>
+    /// One found account's groups, read as <see cref="MemberOfAnswer"/> always read them (2026-11-17, #14's walking half): its direct list, its
+    /// primary group and, with <paramref name="nested"/>, every group above; <paramref name="name"/> and <paramref name="also"/> for the notes.
+    /// </summary>
+    private static MemberOfRead WalkMemberOf(IDirectorySession session, DirectorySource source, DirectoryEntry account, string name, List<string> also, bool nested,
+        DirectoryDeadline deadline, int cap)
+    {
         string? accountType = TypeWord(account);
-        var also = type is null ? OtherKindsNamed(session, baseDn, name, source.Domain.DomainName, accountType, deadline) : [];
         string head = HeadOf(session, source.Domain);
         var attributes = nested ? AdAttributes.MemberOfWalkUp : AdAttributes.MemberOfWalk;
         var (direct, directShort, directStopped) = WholeValues(session, account, "memberOf", cap, deadline);
@@ -1009,7 +1052,7 @@ public static class DirectoryQueries
         bool partial = cut || stopped || (nested && (walk.Short || walk.Groups.Values.Any(g => g.State is DirectoryText.NotRead or DirectoryText.NotReadable)));
         // As the account's own card writes it (the review's 55): a user's plain, the others fenced.
         string shown = kind == "user" ? Plain(accountName) : Fence(accountName);
-        return (new MemberOfRead(account, accountType, kind, accountName, shown, listed, walk, cut, stopped, partial, notes), null);
+        return new MemberOfRead(account, accountType, kind, accountName, shown, listed, walk, cut, stopped, partial, notes);
     }
 
     /// <summary>
@@ -1030,7 +1073,7 @@ public static class DirectoryQueries
         string lead = Fence(g.Name) + " (" + groupKind + (groupAccount is not null && !string.Equals(groupAccount, g.Name, StringComparison.OrdinalIgnoreCase) ? " " + Plain(groupAccount) : "");
         string mark = !g.Direct && g.Primary ? ", " + DirectoryText.PrimaryGroupWord : "";
         string how = g.Direct && nested ? " " + DirectoryText.DirectWord : through ? " via " + Fence(g.Via[0]) + more : "";
-        string word = g.Direct ? DirectoryText.DirectWord : g.Primary ? DirectoryText.PrimaryGroupWord : through ? "via " + Fence(g.Via[0]) + more : DirectoryText.DirectWord;
+        string word = g.Direct ? DirectoryText.DirectWord : g.Primary ? DirectoryText.PrimaryGroupWord : through ? "via " + Fence(g.Via[0]) + more : "";
         return new GroupShape(lead, mark, how, word, groupKind, groupAccount, via);
     }
 

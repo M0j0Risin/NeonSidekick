@@ -812,23 +812,30 @@ public sealed partial class WebUiTests : IDisposable
 
     /// <summary>
     /// A light theme's sheet (2026-11-16, plan sharded-hugging-puppy #53) gives app.css's dark-only colors the theme's: the scheme, the gradient's
-    /// far end, the diff slabs, the code block's ground, the text on the accent and on the error, and the code colors. A dark theme's gives none
-    /// of them, so app.css's own stand.
+    /// far end, the diff slabs, the code block's ground, the text on the accent and on the error, and the code colors. A readable dark theme's
+    /// sends all but the scheme and the gradient's far end (2026-11-17, the admin-themes-render review's #123, #39), and an unreadable one none.
     /// </summary>
     [Fact]
-    public void ALightThemesSheet_SetsTheLightColors_ADarkOnesLeavesAppCss()
+    public void ALightThemesSheet_SetsTheLightColors_ADarkOnesSendsAllButTheLightPair()
     {
         static UI.ThemePalette Named(string name) => UI.ThemeLibrary.All.Single(p => p.Name == name);
-        string[] tokens = ["  color-scheme: light;\n", "  --bg-mix: ", "  --diff-add: ", "  --diff-del: ", "  --code-bg: ", "  --on-accent: ", "  --on-error: ", "  --tk-keyword: ", "  --tk-string: ", "  --tk-comment: "];
+        string[] lightPair = ["  color-scheme: light;\n", "  --bg-mix: "];
+        string[] tokens = ["  --diff-add: ", "  --diff-del: ", "  --code-bg: ", "  --on-accent: ", "  --on-error: ", "  --tk-keyword: ", "  --tk-string: ", "  --tk-comment: "];
 
         foreach (var light in UI.ThemeLibrary.All.Where(p => p.SourcePath is null && UI.ColorContrast.IsLight(p.Bg)))
         {
             string css = WebTheme.Css(light, on: true);
-            Assert.All(tokens, token => Assert.Contains(token, css, StringComparison.Ordinal));
+            Assert.All(lightPair.Concat(tokens), token => Assert.Contains(token, css, StringComparison.Ordinal));
         }
 
-        string dark = WebTheme.Css(Named("synthwave"), on: true);
-        Assert.All(tokens, token => Assert.DoesNotContain(token, dark, StringComparison.Ordinal));
+        var synthwave = Named("synthwave");
+        string dark = WebTheme.Css(synthwave, on: true);
+        Assert.All(lightPair, token => Assert.DoesNotContain(token, dark, StringComparison.Ordinal));
+        Assert.All(tokens, token => Assert.Contains(token, dark, StringComparison.Ordinal));
+        Assert.Contains("  --diff-add: " + WebTheme.Hex(UI.Theme.Mix(synthwave.Bg, synthwave.Good, UI.Theme.DiffSlabShare)) + ";\n", dark, StringComparison.Ordinal);
+
+        string unreadable = WebTheme.Css(synthwave with { Ink = synthwave.Bg }, on: true);
+        Assert.All(tokens, token => Assert.DoesNotContain(token, unreadable, StringComparison.Ordinal));
         Assert.Equal(8, UI.ThemeLibrary.All.Count(p => UI.ColorContrast.IsLight(p.Bg)));
     }
 

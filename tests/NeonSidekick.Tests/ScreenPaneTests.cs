@@ -330,14 +330,14 @@ public partial class ScreenPaneTests : IDisposable
         Assert.DoesNotContain(Fg(green), Output);
 
         int mark = Output.Length;
-        pane.RuleMark = RuleMarks.StyleOf("green");
+        pane.RuleMark = "green";
         _time.Advance(ScreenPane.Tick);
         string marked = Output[mark..];
         Assert.Contains(Fg(green) + "─", marked);
         Assert.Contains(Fg(rule) + " my-session ", marked);   // the name keeps the theme's rule style
         Color secondary = Theme.AccentSecondary.Foreground;
         Assert.Contains(Fg(secondary) + "▶ 3", marked);       // the lower rule's title keeps its own
-        Assert.Equal(green, pane.RuleMark!.Value.Foreground);
+        Assert.Equal("green", pane.RuleMark);
 
         // Unchanged: nothing redrawn.
         mark = Output.Length;

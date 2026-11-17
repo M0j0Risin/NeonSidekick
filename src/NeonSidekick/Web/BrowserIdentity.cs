@@ -63,6 +63,17 @@ public sealed partial record BrowserIdentity(BrowserBrand Brand, int Major, Brow
     /// <summary>Chrome at <see cref="FallbackMajor"/> on this machine's platform: what the HTTP client claims with no browser to read.</summary>
     public static BrowserIdentity Fallback { get; } = new(BrowserBrand.Chrome, FallbackMajor, CurrentPlatform);
 
+    /// <summary>
+    /// The browser an HTTP client claims (2026-10-11, shared with <c>net_http</c> on 2026-11-17, the review's #162): Chrome at
+    /// <paramref name="identified"/>'s major version — Edge and Brave share Chromium's numbering — whichever is installed: the commonest brand,
+    /// and a plain HTTP client's TLS fingerprint is no browser's anyway.
+    /// </summary>
+    public static BrowserIdentity ForHttp(BrowserIdentity identified)
+    {
+        ArgumentNullException.ThrowIfNull(identified);
+        return identified with { Brand = BrowserBrand.Chrome };
+    }
+
     /// <summary>The platform this process runs on.</summary>
     public static BrowserPlatform CurrentPlatform =>
         OperatingSystem.IsWindows() ? BrowserPlatform.Windows : OperatingSystem.IsMacOS() ? BrowserPlatform.MacOS : BrowserPlatform.Linux;

@@ -149,10 +149,41 @@ public static class TableSource
         Path.GetExtension(path.Trim()).ToLowerInvariant() is ".csv" or ".tsv" or ".json";
 
     /// <summary>
-    /// The file at <paramref name="full"/> written into <paramref name="sheet"/>: null when done, else the refusal (<paramref name="display"/>
-    /// names it). <paramref name="cancellationToken"/> stops it between rows.
+    /// A table file named by the model, resolved in <paramref name="files"/> (2026-11-17, the admin-themes-render review's #190: one resolver for
+    /// <c>convert_to_xlsx</c> and <c>render_chart</c>): null with <paramref name="full"/> and its <paramref name="relative"/> name when it is a
+    /// <c>.csv</c>, <c>.tsv</c> or <c>.json</c> file there, else the refusal (outside, a folder, missing, not a table).
     /// </summary>
-    public static string? Write(string full, string display, ISheetRows sheet, CancellationToken cancellationToken)
+    public static string? ResolveFile(WorkingDirectory files, string path, out string full, out string relative)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+        ArgumentNullException.ThrowIfNull(path);
+        relative = path;
+        var outcome = files.Resolve(path, forWrite: false, out full);
+        if (outcome != FileOutcome.Ok)
+        {
+            return FileText.Error(outcome, path, "read");
+        }
+
+        if (Directory.Exists(full))
+        {
+            return FileText.Error(FileOutcome.IsDirectory, files.Relative(full, isDirectory: true), "read");
+        }
+
+        if (!File.Exists(full))
+        {
+            return FileText.Error(FileOutcome.Missing, path, "read");
+        }
+
+        relative = files.Relative(full);
+        return IsTablePath(full) ? null : OfficeText.NotATableFile(relative);
+    }
+
+    /// <summary>
+    /// The file at <paramref name="full"/> written into <paramref name="sheet"/>: null when done, else the refusal (<paramref name="display"/>
+    /// names it). <paramref name="cancellationToken"/> stops it between rows; a delimited file is judged no further than
+    /// <paramref name="maxRows"/> (2026-11-17, #69: a chart reads its first thousand rows, not a sheet's million).
+    /// </summary>
+    public static string? Write(string full, string display, ISheetRows sheet, CancellationToken cancellationToken, int maxRows = SheetWriter.MaxDataRows)
     {
         ArgumentNullException.ThrowIfNull(sheet);
         string extension = Path.GetExtension(full).ToLowerInvariant();
@@ -179,7 +210,7 @@ public static class TableSource
         {
             try
             {
-                return ReadDelimited(full, display, sheet, codec, strict, tsv, () => Stamp(full) == stamp, cancellationToken);
+                return ReadDelimited(full, display, sheet, codec, strict, tsv, () => Stamp(full) == stamp, cancellationToken, maxRows);
             }
             catch (DecoderFallbackException) when (strict)
             {
@@ -193,23 +224,14 @@ public static class TableSource
     /// <see cref="Write"/>'s CSV or TSV in <paramref name="codec"/>: the delimiter probed, then <see cref="Rows"/>. With <paramref name="strict"/>
     /// the probe and the judging pass throw <see cref="DecoderFallbackException"/> at a byte that isn't UTF-8; the writing pass never does.
     /// </summary>
-    private static string? ReadDelimited(string full, string display, ISheetRows sheet, TextCodec codec, bool strict, bool tsv, Func<bool> unchanged, CancellationToken cancellationToken)
+    private static string? ReadDelimited(string full, string display, ISheetRows sheet, TextCodec codec, bool strict, bool tsv, Func<bool> unchanged, CancellationToken cancellationToken, int maxRows)
     {
-        char delimiter = '\t';
-        bool skipFirst = false;
-        if (!tsv)
+        // A .tsv file probes too (2026-11-17, #70): its own sep= line wins over the extension.
+        char delimiter;
+        bool skipFirst;
+        using (var probe = OpenText(full, codec, strict))
         {
-            using var probe = OpenText(full, codec, strict);
-            string first = FirstLine(probe);
-            if (first.StartsWith("sep=", StringComparison.OrdinalIgnoreCase) && first.Length == 5)
-            {
-                delimiter = first[4];
-                skipFirst = true;
-            }
-            else
-            {
-                delimiter = Delimiter(first);
-            }
+            delimiter = Probe(FirstLine(probe), tsv, out skipFirst);
         }
 
         int opened = 0;
@@ -222,7 +244,7 @@ public static class TableSource
                 FirstLine(reader);
             }
 
-            foreach (var record in tsv ? Lines(reader) : Delimited(reader, delimiter))
+            foreach (var record in delimiter == '\t' ? Lines(reader) : Delimited(reader, delimiter))
             {
                 yield return record;
             }
@@ -230,7 +252,7 @@ public static class TableSource
 
         try
         {
-            return Rows(Records, display, sheet, cancellationToken, unchanged);
+            return Rows(Records, display, sheet, cancellationToken, unchanged, maxRows);
         }
         catch (UnclosedQuoteException ex)
         {
@@ -270,14 +292,30 @@ public static class TableSource
     }
 
     /// <summary>
+    /// A delimited text's delimiter from its first line (2026-11-17, #70, the one probe for a file and for <c>render_chart</c>'s text): Excel's
+    /// <c>sep=X</c> line (any case, exactly one character after it) names it and is skipped (<paramref name="skipFirst"/>), so the next line is
+    /// the header; else a tab for a <c>.tsv</c> file, else <see cref="Delimiter"/>.
+    /// </summary>
+    public static char Probe(string firstLine, bool tsvByExtension, out bool skipFirst)
+    {
+        ArgumentNullException.ThrowIfNull(firstLine);
+        string line = firstLine.TrimEnd('\r');
+        skipFirst = line.Length == 5 && line.StartsWith("sep=", StringComparison.OrdinalIgnoreCase);
+        return skipFirst ? line[4] : tsvByExtension ? '\t' : Delimiter(line);
+    }
+
+    /// <summary>
     /// A CSV's delimiter from its first line: <c>;</c> only when more of them than of <c>,</c> stand outside quotes, so a tie (none of
-    /// either included) stays <c>,</c> (2026-10-29, review P1-16: <c>"Smith, J";Age</c> held a comma inside quotes and was read as commas).
+    /// either included) stays <c>,</c> (2026-10-29, review P1-16: <c>"Smith, J";Age</c> held a comma inside quotes and was read as commas);
+    /// a tab only when more tabs than either stand outside quotes (2026-11-17, #65: a quoted cell holding a tab no longer made a comma
+    /// table TSV).
     /// </summary>
     public static char Delimiter(string firstLine)
     {
         ArgumentNullException.ThrowIfNull(firstLine);
         int commas = 0;
         int semicolons = 0;
+        int tabs = 0;
         bool quoted = false;
         foreach (char ch in firstLine)
         {
@@ -293,9 +331,13 @@ public static class TableSource
             {
                 semicolons++;
             }
+            else if (!quoted && ch == '\t')
+            {
+                tabs++;
+            }
         }
 
-        return semicolons > commas ? ';' : ',';
+        return tabs > commas && tabs > semicolons ? '\t' : semicolons > commas ? ';' : ',';
     }
 
     /// <summary>
@@ -447,31 +489,38 @@ public static class TableSource
             text = reader.ReadToEnd();
         }
 
-        return JsonTable(text, display, sheet, cancellationToken);
+        return ParseJson(text, out var document, out string? problem) ? JsonRows(document!, display, sheet, cancellationToken) : OfficeText.BadJson(display, problem!);
     }
 
     /// <summary>
     /// A table given as text (2026-11-16, plan sharded-hugging-puppy #9: <c>render_chart</c>'s <c>data</c>) into <paramref name="sheet"/>, read as
-    /// a file of it would be: a JSON array (of objects, or of arrays with the header first) when it starts with <c>[</c>, else CSV with its
-    /// delimiter probed, or TSV when the first line holds a tab and no comma or semicolon. Null when done, else the refusal.
+    /// a file of it would be: a JSON array (of objects, or of arrays with the header first) when it starts with <c>[</c> or <c>{</c> and parses
+    /// (2026-11-17, #87: text that only starts like JSON is read as CSV; #118: an object is refused as no array), else delimited text through
+    /// <see cref="Probe"/> (a <c>sep=</c> line, or the delimiter counted outside quotes). Blank lines before the header go, but not a leading
+    /// tab (#64: a header with an empty corner cell). At most <paramref name="maxRows"/> rows are judged (#69). Null when done, else the refusal.
     /// </summary>
-    public static string? TextTable(string text, string display, ISheetRows sheet, CancellationToken cancellationToken)
+    public static string? TextTable(string text, string display, ISheetRows sheet, CancellationToken cancellationToken, int maxRows = SheetWriter.MaxDataRows)
     {
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(sheet);
-        string trimmed = text.Trim();
-        if (trimmed.StartsWith('['))
+        string start = text.TrimStart();
+        if ((start.StartsWith('[') || start.StartsWith('{')) && ParseJson(start, out var document, out _))
         {
-            return JsonTable(trimmed, display, sheet, cancellationToken);
+            return JsonRows(document!, display, sheet, cancellationToken);
         }
 
-        string first = trimmed.Split('\n', 2)[0].TrimEnd('\r');
-        bool tsv = first.Contains('\t', StringComparison.Ordinal) && !first.Contains(',', StringComparison.Ordinal) && !first.Contains(';', StringComparison.Ordinal);
-        char delimiter = tsv ? '\t' : Delimiter(first);
+        string trimmed = text.TrimStart('\r', '\n').TrimEnd();
+        int end = trimmed.IndexOf('\n', StringComparison.Ordinal);
+        char delimiter = Probe(end < 0 ? trimmed : trimmed[..end], tsvByExtension: false, out bool skipFirst);   // line 1 alone, not a copy of the rest (#201)
         IEnumerable<List<string>> Records()
         {
             using var reader = new StringReader(trimmed);
-            foreach (var record in tsv ? Lines(reader) : Delimited(reader, delimiter))
+            if (skipFirst)
+            {
+                FirstLine(reader);
+            }
+
+            foreach (var record in delimiter == '\t' ? Lines(reader) : Delimited(reader, delimiter))
             {
                 yield return record;
             }
@@ -479,7 +528,7 @@ public static class TableSource
 
         try
         {
-            return Rows(Records, display, sheet, cancellationToken);
+            return Rows(Records, display, sheet, cancellationToken, maxRows: maxRows);
         }
         catch (UnclosedQuoteException ex)
         {
@@ -487,18 +536,26 @@ public static class TableSource
         }
     }
 
-    private static string? JsonTable(string text, string display, ISheetRows sheet, CancellationToken cancellationToken)
+    /// <summary>JSON text parsed as a table's JSON is (comments and trailing commas allowed): false with the parser's complaint.</summary>
+    private static bool ParseJson(string text, out JsonDocument? document, out string? problem)
     {
-        JsonDocument document;
         try
         {
             document = JsonDocument.Parse(text, new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip, MaxDepth = 256 });
+            problem = null;
+            return true;
         }
         catch (JsonException ex)
         {
-            return OfficeText.BadJson(display, ex.Message);
+            document = null;
+            problem = ex.Message;
+            return false;
         }
+    }
 
+    /// <summary>A parsed JSON table into <paramref name="sheet"/>, the document disposed: an array of objects, or of arrays with the header first.</summary>
+    private static string? JsonRows(JsonDocument document, string display, ISheetRows sheet, CancellationToken cancellationToken)
+    {
         using (document)
         {
             var root = document.RootElement;

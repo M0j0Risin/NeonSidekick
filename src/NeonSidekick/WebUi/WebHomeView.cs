@@ -42,7 +42,8 @@ public static class WebHomeView
         Func<string, HomeChipMark> mark,
         IReadOnlyDictionary<string, string>? aliases,
         IReadOnlyDictionary<string, string>? glyphs,
-        bool controls)
+        bool controls,
+        (Color Ground, Color Ink)? page = null)
     {
         ArgumentNullException.ThrowIfNull(items);
         ArgumentNullException.ThrowIfNull(live);
@@ -59,7 +60,7 @@ public static class WebHomeView
                 continue;
             }
 
-            var (tone, color) = ToneOf(chip, stale);
+            var (tone, color) = ToneOf(chip, stale, page);
             string action = !controls ? "none" : chip.Action switch
             {
                 HomeChipAction.Call => "call",
@@ -78,11 +79,14 @@ public static class WebHomeView
     /// <summary>
     /// A chip's tone as the page colors it, from the look the bar chose: <c>alert</c> (bold), <c>off</c> (the dim words), <c>stale</c> (the feed not
     /// live, or nothing to do: unavailable, not read yet), <c>plain</c> (a sensor's value in the ink), else <c>on</c>; with the chip's own color for
-    /// an on or alert one (a light's tint, a playing player's primary). Pure.
+    /// an on or alert one (a light's tint, a playing player's primary), made readable on the page's own ground (2026-11-17, the admin-themes-render
+    /// review's #82: the terminal's lift was for the terminal's page). <paramref name="page"/> is the page's ground and ink
+    /// (<see cref="WebTheme.GroundOf"/>), <c>app.css</c>'s own by default. Pure.
     /// </summary>
-    public static (string Tone, string? Color) ToneOf(HomeChip chip, bool stale)
+    public static (string Tone, string? Color) ToneOf(HomeChip chip, bool stale, (Color Ground, Color Ink)? page = null)
     {
         ArgumentNullException.ThrowIfNull(chip);
+        var (ground, ink) = page ?? (WebTheme.PageGroundColor, WebTheme.PageTextColor);
         var style = chip.Style;
         if (stale || (chip.Action == HomeChipAction.None && chip.Value == "?"))
         {
@@ -91,7 +95,7 @@ public static class WebHomeView
 
         if ((style.Decoration & Decoration.Bold) != 0)
         {
-            return ("alert", "#" + style.Foreground.ToHex());
+            return ("alert", "#" + HomeChips.Readable(chip.Tint ?? style.Foreground, ground, ink).ToHex());
         }
 
         if (style.Foreground == UI.Theme.Dim)
@@ -104,7 +108,7 @@ public static class WebHomeView
             return ("plain", null);
         }
 
-        return ("on", "#" + style.Foreground.ToHex());
+        return ("on", "#" + HomeChips.Readable(chip.Tint ?? style.Foreground, ground, ink).ToHex());
     }
 
     /// <summary>
@@ -199,7 +203,7 @@ public static class WebHomeView
     /// <see cref="HaCatalog.Areas"/>' order (by floor, then name), the device boxes by name, no area last. <paramref name="controls"/> is the
     /// page's to disable with; the rows' controls are what the device offers. Pure.
     /// </summary>
-    public static IReadOnlyList<WebHomeRoom> Rooms(HaLiveSnapshot live, IReadOnlyList<string> homeBarItems, Func<string, HomeChipMark> mark, IReadOnlyList<string> roomDomains)
+    public static IReadOnlyList<WebHomeRoom> Rooms(HaLiveSnapshot live, IReadOnlyList<string> homeBarItems, Func<string, HomeChipMark> mark, IReadOnlyList<string> roomDomains, (Color Ground, Color Ink)? page = null)
     {
         ArgumentNullException.ThrowIfNull(live);
         ArgumentNullException.ThrowIfNull(homeBarItems);
@@ -313,7 +317,7 @@ public static class WebHomeView
             if (reference is not null)
             {
                 var chip = HomeChips.Build(reference, live.Entities, catalog, mark(reference), stale);
-                (tone, color) = ToneOf(chip, stale);
+                (tone, color) = ToneOf(chip, stale, page);
                 marked = MarkWord(chip.Mark);
                 value = total > 0 ? WebUiText.RoomLightsOn(on, total) : null;
                 switchedOn = HomeBarItems.TryParse(reference, out var kind, out string switchId) && kind == HomeItemKind.Entity
@@ -323,7 +327,7 @@ public static class WebHomeView
 
             // A device's row drops its box's name in front (2026-10-17, the user's phone: "Living Room Table Lamp Back" in Living Room), as the
             // scenes' labels do; the full name stays its title, its switch's label and its sheet's.
-            var devices = members.Select(m => Device(m, live, catalog, mark, stale))
+            var devices = members.Select(m => Device(m, live, catalog, mark, stale, page))
                 .Select(d => named && LabelIn(d.Name, name) is var label && label != d.Name ? d with { Short = label } : d)
                 .ToList();
             return new WebHomeRoom(key, reference, name, onBar.Contains(key, StringComparer.Ordinal), value, tone, marked, color, switchedOn, devices, scenes);
@@ -365,12 +369,12 @@ public static class WebHomeView
     /// fan or <c>input_boolean</c> (Toggle), a <c>button</c> labeled with it for a player, a cover or a lock (asking where the bar asks), <c>none</c>
     /// for a thermostat (the room pane's Space skips it too) or a device unavailable or not read yet. Pure.
     /// </summary>
-    private static WebHomeDevice Device(string id, HaLiveSnapshot live, HaCatalog catalog, Func<string, HomeChipMark> mark, bool stale)
+    private static WebHomeDevice Device(string id, HaLiveSnapshot live, HaCatalog catalog, Func<string, HomeChipMark> mark, bool stale, (Color Ground, Color Ink)? page)
     {
         var entity = live.Entities.GetValueOrDefault(id);
         string reference = HomeBarItems.Entity(id);
         var chip = HomeChips.Build(reference, live.Entities, catalog, mark(reference), stale);
-        var (tone, color) = ToneOf(chip, stale);
+        var (tone, color) = ToneOf(chip, stale, page);
         string state = DeviceState(entity);
         if (entity is { Domain: "light", State: "on" } && entity.Number("brightness") is { } brightness)
         {

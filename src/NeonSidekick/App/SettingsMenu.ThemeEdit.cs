@@ -1,4 +1,6 @@
 using System.Text;
+using System.Text.Encodings.Web;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using NeonSidekick.Files;
 using NeonSidekick.Settings;
@@ -12,10 +14,12 @@ namespace NeonSidekick.App;
 /// hand in its JSON): the theme's fifteen colors as a list, each with its swatch and hex and what it colors, the theme drawn live beside it
 /// (<see cref="ThemePreview"/>, never put in force), and the contrast bars it misses under it (<see cref="ThemeChecks"/>, warnings that never
 /// block a save). ←/→ step the cursor's color lighter or darker; Enter opens the color picker (hue, saturation and lightness bars, and a typed
-/// hex value: the user's pick after the mockup); <c>s</c> saves, <c>r</c> puts the row back, Esc with changes asks. A built-in can't be
-/// changed: its <c>&lt;name&gt;-custom</c> copy is offered, made by <c>/theme export</c>'s path, or the one already made. A save rewrites
-/// only the file's <c>colors</c> (a <see cref="JsonNode"/> edit: its gradient, styles, description, unknown keys and key order stay; a JSONC
-/// comment does not), atomically, asking first when the file changed on disk since the editor opened.
+/// hex value: the user's pick after the mockup); <c>s</c> saves, <c>r</c> puts the row back, <c>d</c> and Esc with changes ask. A built-in
+/// can't be changed: its <c>&lt;name&gt;-custom</c> copy is offered, made by <c>/theme export</c>'s path, or the one already made. A save
+/// changes only the roles changed, in the file's own bytes (<see cref="ThemeFileSplice"/>, 2026-11-17, the admin-themes-render review's #25,
+/// #26, #156, #163: its comments, layout, key spelling and line endings stay), atomically, asking first when the file changed on disk since the
+/// editor opened, or offering to write it again when it is gone (#214). Every line it says is held (<see cref="HeldNotices"/>) and printed by
+/// <c>/theme</c> after any repaint, so none is wiped (#18, #34).
 /// </summary>
 internal sealed partial class SettingsMenu
 {
@@ -35,169 +39,296 @@ internal sealed partial class SettingsMenu
     private static readonly IReadOnlyList<MenuButton> EditButtons =
         [new(ThemeText.SaveButton, 's'), new(ThemeText.ResetButton, 'r'), new(ThemeText.DiscardButton, 'd')];
 
+    /// <summary>The fallback save's writer: indented, and a <c>&lt;</c> or an accent in a description written as itself.</summary>
+    private static readonly JsonSerializerOptions RelaxedIndented = new(SettingsImportFixups.Indented) { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+
+    /// <summary>
+    /// The theme file as the editor opened it (2026-11-17, #66, #165): its bytes, their text and encoding, and its write time, read together
+    /// once the theme is chosen, so the changed-file check and a gone file's rewrite start from what the editor showed.
+    /// </summary>
+    private sealed record OpenedTheme(ThemePalette Palette, byte[] Bytes, string Text, DateTime Time);
+
+    /// <summary>
+    /// Lines said while the pane is open (2026-11-17, #18, #34, #168): the editor's and its copy's, held until <c>/theme</c> has repainted
+    /// (<see cref="PrintHeld"/>), so the repaint never wipes them and none lands under the pane.
+    /// </summary>
+    private sealed class HeldNotices : INoticeSink
+    {
+        private readonly List<(int Kind, string Text)> _lines = [];
+
+        public void Notice(string text) => _lines.Add((0, text));
+
+        public void Warning(string text) => _lines.Add((1, text));
+
+        public void Error(string text) => _lines.Add((2, text));
+
+        /// <summary>The held lines to <paramref name="sink"/>, in the order said, then forgotten.</summary>
+        public void PrintTo(INoticeSink sink)
+        {
+            foreach (var (kind, text) in _lines)
+            {
+                switch (kind)
+                {
+                    case 0: sink.Notice(text); break;
+                    case 1: sink.Warning(text); break;
+                    default: sink.Error(text); break;
+                }
+            }
+
+            _lines.Clear();
+        }
+    }
+
+    private readonly HeldNotices _held = new();
+
+    /// <summary><c>/theme</c>'s held lines (<see cref="HeldNotices"/>) to the transcript; called after any repaint, and on every path.</summary>
+    public void PrintHeld() => _held.PrintTo(Flow);
+
     /// <summary>
     /// The editor: true when it saved the theme in force (so <c>/theme</c> repaints the screen in it, as a pick does), false for another
-    /// theme, a discard, a refusal or Esc.
+    /// theme, a discard, a refusal or Esc. Its lines are held (<see cref="PrintHeld"/>).
     /// </summary>
     private async Task<bool> EditThemeAsync(string args, CancellationToken cancellationToken)
     {
         string request = args.Trim();
+        // The name tried (2026-11-17, #93): the theme in force when none is given, so a miss never reads 'No theme named ""'.
+        string asked = request.Length > 0 ? request : Theme.Current.Name;
         var scan = ScanThemes();
-        if (!ThemeName.TryParse(request.Length > 0 ? request : Theme.Current.Name, scan.Themes, out var palette))
+        if (!ThemeName.TryParse(asked, scan.Themes, out var palette))
         {
-            Flow.Error(ThemeNameError(request, scan.Names));
+            _held.Error(ThemeNameError(asked, scan.Names));
             return false;
         }
 
         if (!_pane.Enabled)
         {
-            Flow.Error(ThemeText.EditNeedsPane);
+            _held.Error(ThemeText.EditNeedsPane);
             return false;
         }
 
-        (bool InForce, string? Notice) outcome = (false, null);
-        var held = new List<(bool Error, string Text)>();
+        (bool InForce, string Notice) outcome;
         try
         {
-            if (palette.IsBuiltIn)
+            var opened = palette.IsBuiltIn
+                ? await CopyToEditAsync(palette, scan, cancellationToken).ConfigureAwait(false)
+                : Open(palette);
+            if (opened is null)
             {
-                if (await CopyToEditAsync(palette, held, cancellationToken).ConfigureAwait(false) is not { } copy)
-                {
-                    return false;
-                }
-
-                palette = copy;
+                return false;
             }
 
-            outcome = await EditLoopAsync(palette, cancellationToken).ConfigureAwait(false);
+            outcome = await EditLoopAsync(opened, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
             _pane.Close();
         }
 
-        // Said once the pane is gone, so the lines land in the transcript, not under the pane: the copy's, then the save's.
-        foreach (var (error, text) in held)
-        {
-            if (error)
-            {
-                Flow.Error(text);
-            }
-            else
-            {
-                Flow.Notice(text);
-            }
-        }
-
-        if (outcome.Notice is { } notice)
-        {
-            Flow.Notice(notice);
-        }
-
+        _held.Notice(outcome.Notice);
         return outcome.InForce;
     }
 
-    /// <summary>A built-in's copy to edit: the one made before, or one made now on a yes; null on a no or a failed export.</summary>
-    private async Task<ThemePalette?> CopyToEditAsync(ThemePalette builtIn, List<(bool Error, string Text)> held, CancellationToken cancellationToken)
+    /// <summary>
+    /// A built-in's copy to edit: the one made before, or one made now on a yes, read as it stands; null on a no (<see cref="UnchangedNotice"/>
+    /// held), a failed export or an unreadable file (the error held). <paramref name="scan"/> is the command's own, so warnings print once (#59, #142).
+    /// </summary>
+    private async Task<OpenedTheme?> CopyToEditAsync(ThemePalette builtIn, ThemeScan scan, CancellationToken cancellationToken)
     {
-        string copyName = builtIn.Name + "-custom";
-        var scan = ScanThemes();
+        string copyName = ThemeText.CopyName(builtIn.Name);
         if (ThemeName.TryParse(copyName, scan.Themes, out var existing) && !existing.IsBuiltIn)
         {
-            return await ConfirmAsync(ThemeText.EditCopyQuestion(builtIn.Name, copyName), cancellationToken, close: false).ConfigureAwait(false) ? existing : null;
+            if (!await ConfirmAsync(ThemeText.EditCopyQuestion(builtIn.Name, copyName), cancellationToken, close: false).ConfigureAwait(false))
+            {
+                _held.Notice(UnchangedNotice);
+                return null;
+            }
+
+            return Open(existing);
         }
 
-        if (!await ConfirmAsync(ThemeText.EditBuiltInQuestion(builtIn.Name, copyName), cancellationToken, close: false).ConfigureAwait(false))
+        if (!await ConfirmAsync(ThemeText.EditBuiltInQuestion(copyName), cancellationToken, close: false).ConfigureAwait(false))
+        {
+            _held.Notice(UnchangedNotice);
+            return null;
+        }
+
+        if (ExportTheme(builtIn.Name, _held, quiet: true, scan) is not { } made
+            || !ThemeName.TryParse(made, ScanThemes(report: false).Themes, out var copy) || copy.IsBuiltIn)
         {
             return null;
         }
 
-        ExportTheme(builtIn.Name, held);
-        return ThemeName.TryParse(copyName, ScanThemes().Themes, out var made) && !made.IsBuiltIn ? made : null;
+        var opened = Open(copy);
+        if (opened is not null)
+        {
+            _held.Notice(ThemeText.EditCopied(builtIn.Name, made, copy.SourcePath!));
+        }
+
+        return opened;
     }
 
-    /// <summary>The editor's list until a save, a discard or Esc: whether the save was of the theme in force, and its notice (null for none saved).</summary>
-    private async Task<(bool InForce, string? Notice)> EditLoopAsync(ThemePalette palette, CancellationToken cancellationToken)
+    /// <summary>A user theme's file read as the editor opens it: the write time first, so a write in between reads as a change; null (the error held) when it can't be read.</summary>
+    private OpenedTheme? Open(ThemePalette palette)
     {
         string path = palette.SourcePath!;
-        DateTime opened = File.GetLastWriteTimeUtc(path);
+        try
+        {
+            var time = File.GetLastWriteTimeUtc(path);
+            byte[] bytes = File.ReadAllBytes(path);
+            return new OpenedTheme(palette, bytes, TextFile.Decode(bytes, out _), time);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _held.Error(ThemeText.EditUnreadable(ex.Message));
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The editor's list until a save, a discard or Esc: whether the save was of the theme in force, and the line to say (the save's, or
+    /// <see cref="UnchangedNotice"/>, #195). A pane dismissed by a double-click off it, or the token, leaves at once with the edits dropped (#75).
+    /// </summary>
+    private async Task<(bool InForce, string Notice)> EditLoopAsync(OpenedTheme opened, CancellationToken cancellationToken)
+    {
+        var palette = opened.Palette;
         var original = palette.Colors();
         var working = (Color[])original.Clone();
+        // Each row's hue, saturation and lightness kept through the nudges (2026-11-17, #6): at 0 or 100 lightness the color alone has no hue.
+        var hsls = original.Select(HslColor.From).ToArray();
+        var data = ThemeFile.Parse(opened.Text, out _);
+        bool Gone() => _pane.Dismissed || cancellationToken.IsCancellationRequested;
+        bool Changed() => !working.SequenceEqual(original);
         int cursor = 0;
         while (true)
         {
-            var current = WithColors(palette, working);
+            // Once a pass (#151): the preview through the file's own styles and gradient (#38, #99), its band and the settings it reads.
+            var current = Preview(palette, data, working);
+            string band = ChecksBand(current);
+            var effective = EffectiveNow();
             var page = new MenuPage(ThemeText.EditTitle(palette.Name), EditRows(current, original), ThemeText.EditHint)
             {
                 Buttons = EditButtons,
                 Nudges = true,
-                Side = (_, width, rows) => ThemePreview.Lines(current, width, rows, SidekickApp.BannerTitle.Trim(), SidekickApp.Version, EffectiveNow().ThemedBackground, EffectiveNow().DiffCollapseCount),
-                Footer = (_, _) => new MenuFooter(ChecksBand(current)),
+                Side = (_, width, rows) => ThemePreview.Lines(current, width, rows, SidekickApp.BannerTitle.Trim(), SidekickApp.Version, effective.ThemedBackground, effective.DiffCollapseCount),
+                Footer = (_, _) => new MenuFooter(band),
             };
             if (await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { } pick)
             {
-                if (!working.SequenceEqual(original)
-                    && !await ConfirmAsync(ThemeText.EditDiscardQuestion, cancellationToken, close: false).ConfigureAwait(false))
+                if (Gone() || !Changed()
+                    || await ConfirmAsync(ThemeText.EditDiscardQuestion, cancellationToken, close: false).ConfigureAwait(false) || Gone())
                 {
-                    continue;
+                    return (false, UnchangedNotice);
                 }
 
-                return (false, null);
+                continue;   // a real "No": the editor stays
             }
 
             cursor = pick.Row;
+            if (pick.Refresh)
+            {
+                continue;   // a resize (#114): the rows built again at the new width
+            }
+
             if (pick.Nudge != 0)
             {
-                working[cursor] = HslColor.From(working[cursor]).WithLightness(pick.Nudge * EditLightnessStep).ToColor();
+                hsls[cursor] = hsls[cursor].WithLightness(pick.Nudge * EditLightnessStep);
+                working[cursor] = hsls[cursor].ToColor();
                 continue;
             }
 
             switch (pick.Button)
             {
                 case 0:
-                    if (await SaveEditAsync(palette, path, opened, working, original, cancellationToken).ConfigureAwait(false) is { } saved)
+                    if (await SaveEditAsync(opened, working, original, cancellationToken).ConfigureAwait(false) is { } saved)
                     {
                         return saved;
+                    }
+
+                    if (Gone())
+                    {
+                        return (false, UnchangedNotice);
                     }
 
                     continue;
                 case 1:
                     working[cursor] = original[cursor];
+                    hsls[cursor] = HslColor.From(original[cursor]);
                     continue;
                 case 2:
-                    return (false, null);
+                    // d asks when there are changes (#45), as Esc does.
+                    if (!Changed() || await ConfirmAsync(ThemeText.EditDiscardQuestion, cancellationToken, close: false).ConfigureAwait(false) || Gone())
+                    {
+                        return (false, UnchangedNotice);
+                    }
+
+                    continue;
             }
 
-            if (await PickColorAsync(current, (ThemeColorSlot)cursor, original[cursor], cancellationToken).ConfigureAwait(false) is { } picked)
+            // The picker opens on the row's color as it stands, its "was" that color (#164), and hands back the hue it ended on (#6).
+            if (await PickColorAsync(current, (ThemeColorSlot)cursor, working[cursor], hsls[cursor], cancellationToken).ConfigureAwait(false) is { } picked)
             {
-                working[cursor] = picked;
+                working[cursor] = picked.Color;
+                hsls[cursor] = picked.Hsl;
             }
         }
     }
 
     /// <summary>
-    /// The save: only <c>colors</c> rewritten, atomically. Null when nothing was written and the editor goes on (no changes, a changed file
-    /// kept, a failure: said on the status line); else whether the theme saved is the one in force, and the line saying so.
+    /// The theme as the file would load with <paramref name="colors"/> (#38, #99): <see cref="ThemeFile.Build"/> over the file's own data, so
+    /// a derived gradient and a style naming a role follow the new colors; <see cref="WithColors"/> when the file doesn't build.
     /// </summary>
-    private async Task<(bool InForce, string Notice)?> SaveEditAsync(ThemePalette palette, string path, DateTime opened, Color[] working, Color[] original, CancellationToken cancellationToken)
+    private static ThemePalette Preview(ThemePalette palette, ThemeFileData? data, IReadOnlyList<Color> colors)
     {
+        if (data is null)
+        {
+            return WithColors(palette, colors);
+        }
+
+        data.Colors = Enumerable.Range(0, ThemeKeys.Colors.Count).ToDictionary(i => ThemeKeys.Colors[i], i => Theme.ToHex(colors[i]));
+        return ThemeFile.Build(palette.Name, data, palette.SourcePath, new List<string>(), out _) ?? WithColors(palette, colors);
+    }
+
+    /// <summary>
+    /// The save: only the roles changed written, in the file's own bytes, atomically. Null when nothing was written and the editor goes on (no
+    /// changes, a changed or gone file kept, a failure: said on the status line); else whether the theme saved is the one in force, and the
+    /// line saying so.
+    /// </summary>
+    private async Task<(bool InForce, string Notice)?> SaveEditAsync(OpenedTheme opened, Color[] working, Color[] original, CancellationToken cancellationToken)
+    {
+        var palette = opened.Palette;
+        string path = palette.SourcePath!;
         if (working.SequenceEqual(original))
         {
             _pane.Notice(ThemeText.EditUnchanged);
             return null;
         }
 
-        if (File.Exists(path) && File.GetLastWriteTimeUtc(path) != opened
-            && !await ConfirmAsync(ThemeText.EditChangedQuestion(path), cancellationToken, close: false).ConfigureAwait(false))
+        bool gone = !File.Exists(path);
+        if (gone
+            ? !await ConfirmAsync(ThemeText.EditGoneQuestion(path), cancellationToken, close: false).ConfigureAwait(false)
+            : File.GetLastWriteTimeUtc(path) != opened.Time
+                && !await ConfirmAsync(ThemeText.EditChangedQuestion(path), cancellationToken, close: false).ConfigureAwait(false))
         {
             return null;
         }
 
+        var changes = Enumerable.Range(0, working.Length).Where(i => !working[i].Equals(original[i]))
+            .Select(i => (ThemeKeys.Colors[i], Theme.ToHex(working[i]))).ToList();
         try
         {
-            WorkingDirectory.WriteAtomically(path, Encoding.UTF8.GetBytes(WithColorsJson(File.ReadAllText(path), working)));
+            byte[] source = gone ? opened.Bytes : File.ReadAllBytes(path);
+            string text = TextFile.Decode(source, out var codec);
+            byte[]? bytes = codec.Form is TextForm.Utf8 or TextForm.Utf8Bom ? ThemeFileSplice.SetColors(source, changes) : null;
+            bytes ??= codec.Encode(WithColorsJson(text, changes, text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n"));
+            if (bytes is null)
+            {
+                _pane.Error(ThemeText.EditFailed(FileText.CannotEncode(path, codec.Label ?? "UTF-8")));
+                return null;
+            }
+
+            WorkingDirectory.WriteAtomically(path, bytes);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or ArgumentException)
         {
             _pane.Error(ThemeText.EditFailed(ex.Message));
             return null;
@@ -208,15 +339,22 @@ internal sealed partial class SettingsMenu
         return (inForce, inForce ? ThemeText.EditSaved(palette.Name, path) : ThemeText.EditSavedNotInForce(palette.Name, path));
     }
 
+    /// <summary><see cref="WithColorsJson(string, IReadOnlyList{ValueTuple{string, string}}, string)"/> with all fifteen roles set to <paramref name="colors"/>. Pure.</summary>
+    internal static string WithColorsJson(string fileText, IReadOnlyList<Color> colors) =>
+        WithColorsJson(fileText, Enumerable.Range(0, ThemeKeys.Colors.Count).Select(i => (ThemeKeys.Colors[i], Theme.ToHex(colors[i]))).ToList());
+
     /// <summary>
-    /// <paramref name="fileText"/> with its <c>colors</c> object's fifteen roles set to <paramref name="colors"/>: the object's other keys and
-    /// order kept, a role it lacks added, and every other key of the file as it was. Pure.
+    /// The fallback save (a file <see cref="ThemeFileSplice"/> can't splice: no <c>colors</c> object, a reader's refusal, another encoding):
+    /// <paramref name="fileText"/> with each of <paramref name="changes"/> set onto the key its <c>colors</c> object has for that role (any
+    /// case, in its spelling), a role it lacks added, and every other key as it was; written indented, ending in <paramref name="newline"/>.
+    /// Comments don't survive this one. Pure.
     /// </summary>
-    internal static string WithColorsJson(string fileText, IReadOnlyList<Color> colors)
+    internal static string WithColorsJson(string fileText, IReadOnlyList<(string Key, string Hex)> changes, string newline = "\n")
     {
+        ArgumentNullException.ThrowIfNull(changes);
         if (JsonNode.Parse(fileText, documentOptions: SettingsImportFixups.ReadOptions) is not JsonObject root)
         {
-            throw new System.Text.Json.JsonException(ThemeText.NotJson("not a JSON object"));
+            throw new JsonException(ThemeText.NotJson(ThemeText.NotAnObject));
         }
 
         if (root["colors"] is not JsonObject block)
@@ -225,25 +363,27 @@ internal sealed partial class SettingsMenu
             root["colors"] = block;
         }
 
-        for (int i = 0; i < ThemeKeys.Colors.Count; i++)
+        foreach (var (key, hex) in changes)
         {
-            block[ThemeKeys.Colors[i]] = Theme.ToHex(colors[i]);
+            string spelled = block.Select(p => p.Key).LastOrDefault(k => string.Equals(k, key, StringComparison.OrdinalIgnoreCase)) ?? key;
+            block[spelled] = hex;
         }
 
-        return root.ToJsonString(SettingsImportFixups.Indented) + "\n";
+        return root.ToJsonString(RelaxedIndented).Replace("\n", newline, StringComparison.Ordinal) + newline;
     }
 
-    /// <summary>One row per color role: the role, its swatch on the page's color, its hex, a mark when changed, and what it colors.</summary>
+    /// <summary>One row per color role: the role, its swatch framed on the page's color (#149: a <c>bg</c> swatch shows), its hex, a mark when changed, and what it colors.</summary>
     private static List<string> EditRows(ThemePalette current, IReadOnlyList<Color> original)
     {
         var rows = new List<string>(ThemeKeys.Colors.Count);
         string bg = Theme.ToHex(current.Bg);
+        string dim = Theme.DimText.ToMarkup();
         for (int i = 0; i < ThemeKeys.Colors.Count; i++)
         {
             var color = current.ColorOf((ThemeColorSlot)i);
             string changed = color.Equals(original[i]) ? " " : "•";
-            rows.Add(Markup.Escape(ThemeKeys.Colors[i].PadRight(RoleColumn)) + $" [{Theme.ToHex(color)} on {bg}]██[/] " + Theme.ToHex(color) + " " + changed + "  "
-                + $"[{Theme.DimText.ToMarkup()}]" + Markup.Escape(ThemeText.RoleNotes[i]) + "[/]");
+            rows.Add(Markup.Escape(ThemeKeys.Colors[i].PadRight(RoleColumn)) + $" [{dim}]▕[/][{Theme.ToHex(color)} on {bg}]██[/][{dim}]▏[/] " + Theme.ToHex(color) + " " + changed + "  "
+                + $"[{dim}]" + Markup.Escape(ThemeText.RoleNotes[i]) + "[/]");
         }
 
         return rows;
@@ -266,22 +406,23 @@ internal sealed partial class SettingsMenu
     /// The color picker for <paramref name="slot"/> (2026-11-16, the user's pick: hue, saturation and lightness bars over a swatch grid or the
     /// system's dialog, so it works alike in Windows Terminal, on a Mac and over SSH): ↑↓ pick a bar, ←/→ move it, the theme's preview beside
     /// it drawn with the candidate; Enter on a bar uses the color, Enter on the hex row types one; Esc goes back with the color as it was
-    /// (null). The starting color is kept as it is until a bar moves, so a value that only went out and back is never rewritten.
+    /// (null). The bars start at <paramref name="startHsl"/>, the row's own (#6), while the color itself is kept as it is until a bar moves,
+    /// so a value that only went out and back is never rewritten. The pick comes back with the hue, saturation and lightness it ended on.
     /// </summary>
-    private async Task<Color?> PickColorAsync(ThemePalette current, ThemeColorSlot slot, Color was, CancellationToken cancellationToken)
+    private async Task<(Color Color, HslColor Hsl)?> PickColorAsync(ThemePalette current, ThemeColorSlot slot, Color was, HslColor startHsl, CancellationToken cancellationToken)
     {
-        var start = current.ColorOf(slot);
-        var hsl = HslColor.From(start);
-        Color? exact = start;
+        var hsl = startHsl;
+        Color? exact = current.ColorOf(slot);
         int cursor = 0;
         while (true)
         {
             var candidate = exact ?? hsl.ToColor();
             var shown = WithColors(current, current.Colors().Select((c, i) => i == (int)slot ? candidate : c).ToArray());
+            var effective = EffectiveNow();
             var page = new MenuPage(ThemeText.PickerTitle(current.Name, ThemeKeys.Colors[(int)slot], Theme.ToHex(was)), PickerRows(hsl, candidate, current.Bg, PickerBarWidth()), ThemeText.PickerHint)
             {
                 Nudges = true,
-                Side = (_, width, rows) => ThemePreview.Lines(shown, width, rows, SidekickApp.BannerTitle.Trim(), SidekickApp.Version, EffectiveNow().ThemedBackground, EffectiveNow().DiffCollapseCount),
+                Side = (_, width, rows) => ThemePreview.Lines(shown, width, rows, SidekickApp.BannerTitle.Trim(), SidekickApp.Version, effective.ThemedBackground, effective.DiffCollapseCount),
             };
             if (await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { } pick)
             {
@@ -289,6 +430,11 @@ internal sealed partial class SettingsMenu
             }
 
             cursor = pick.Row;
+            if (pick.Refresh)
+            {
+                continue;   // a resize (#114): the bars built again at the new width, never read as Enter
+            }
+
             if (pick.Nudge != 0)
             {
                 if (cursor < 3)
@@ -302,7 +448,7 @@ internal sealed partial class SettingsMenu
 
             if (cursor < 3)
             {
-                return candidate;
+                return (candidate, hsl);
             }
 
             var typed = await _pane.EditAsync(page with { Hint = EditKeys }, cursor, _input, Theme.ToHex(candidate), allowEmpty: false, cancellationToken).ConfigureAwait(false);
@@ -313,7 +459,7 @@ internal sealed partial class SettingsMenu
 
             if (ThemeFile.TryParseColor(text, out var parsed))
             {
-                return parsed;
+                return (parsed, HslColor.From(parsed));
             }
 
             _pane.Error(ThemeText.PickerBadHex(text.Trim()));
@@ -328,12 +474,14 @@ internal sealed partial class SettingsMenu
         _ => hsl.WithLightness(steps * PickerPercentStep),
     };
 
-    /// <summary>The bars' width in the pane as it is now: the list's cells less the label, the value and the ends, held to its range.</summary>
-    private int PickerBarWidth() => Math.Clamp(_pane.ListWidth - 2 - 12 - 2 - 6, PickerBarMin, PickerBarMax);
+    /// <summary>The bars' width in the pane as it is now: the list's cells beside the picker's preview, less the label, the value and the ends, held to its range.</summary>
+    private int PickerBarWidth() => Math.Clamp(_pane.ListWidth(side: true) - 2 - 12 - 2 - 6, PickerBarMin, PickerBarMax);
 
     /// <summary>
-    /// The picker's four rows: each bar <paramref name="width"/> cells, a cell the color at that point with the others held, the current
-    /// point a <c>┃</c> in whichever of black and white reads on it, and the value after it; then the hex row with the candidate's swatch. Pure.
+    /// The picker's four rows: each bar <paramref name="width"/> cells, a cell the color at that point, the current point a <c>┃</c> in whichever
+    /// of black and white reads on it, and the value after it; then the hex row with the candidate's swatch, framed (#149). The hue bar is drawn
+    /// at full saturation and half lightness, the saturation bar at half lightness (2026-11-17, #182: at white or black they were one color); the
+    /// lightness bar holds the others. Pure.
     /// </summary>
     internal static List<string> PickerRows(HslColor hsl, Color candidate, Color bg, int width)
     {
@@ -353,12 +501,13 @@ internal sealed partial class SettingsMenu
         }
 
         string Value(string text) => " " + text.PadLeft(4);
+        string dim = Theme.DimText.ToMarkup();
         return
         [
-            ThemeText.PickerHue.PadRight(12) + Bar(t => hsl with { Hue = t * 360 }, hsl.Hue / 360) + Value(Whole(hsl.Hue) + "°"),
-            ThemeText.PickerSaturation.PadRight(12) + Bar(t => hsl with { Saturation = t * 100 }, hsl.Saturation / 100) + Value(Whole(hsl.Saturation) + "%"),
+            ThemeText.PickerHue.PadRight(12) + Bar(t => new HslColor(t * 360, 100, 50), hsl.Hue / 360) + Value(Whole(hsl.Hue) + "°"),
+            ThemeText.PickerSaturation.PadRight(12) + Bar(t => hsl with { Saturation = t * 100, Lightness = 50 }, hsl.Saturation / 100) + Value(Whole(hsl.Saturation) + "%"),
             ThemeText.PickerLightness.PadRight(12) + Bar(t => hsl with { Lightness = t * 100 }, hsl.Lightness / 100) + Value(Whole(hsl.Lightness) + "%"),
-            ThemeText.PickerHex.PadRight(12) + $"[{Theme.ToHex(candidate)} on {Theme.ToHex(bg)}]██████[/] " + Theme.ToHex(candidate),
+            ThemeText.PickerHex.PadRight(12) + $"[{dim}]▕[/][{Theme.ToHex(candidate)} on {Theme.ToHex(bg)}]██████[/][{dim}]▏[/] " + Theme.ToHex(candidate),
         ];
     }
 

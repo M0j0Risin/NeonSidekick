@@ -316,13 +316,23 @@ public sealed class WebFetcher
     }
 
     /// <summary>
+    /// A typed address's text with its white space and angle brackets off (<c>&lt;https://x&gt;</c>, as mail and Markdown wrap one): the first
+    /// step of every URL the tools read, <c>net_http</c>'s included (2026-11-17, the review's #166).
+    /// </summary>
+    public static string UrlText(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return text.Trim().Trim('<', '>');
+    }
+
+    /// <summary>
     /// What the model typed as a URL: an absolute http(s) URL as is, a bare <c>example.com/page</c>
     /// with <c>https://</c> put in front; null for anything else (a path, another scheme, blank).
     /// </summary>
     public static Uri? ParseUrl(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        string trimmed = text.Trim().Trim('<', '>');
+        string trimmed = UrlText(text);
         if (trimmed.Length == 0)
         {
             return null;
@@ -1192,7 +1202,7 @@ public sealed class WebFetcher
     /// Edge and Brave share Chromium's numbering — else <see cref="BrowserIdentity.Fallback"/>. Chrome, whichever is installed:
     /// the commonest brand, and the HTTP leg's TLS fingerprint is no browser's anyway.
     /// </summary>
-    private BrowserIdentity HttpIdentity(FetchOptions options) => _browser.Identify(options.BrowserPath) with { Brand = BrowserBrand.Chrome };
+    private BrowserIdentity HttpIdentity(FetchOptions options) => BrowserIdentity.ForHttp(_browser.Identify(options.BrowserPath));
 
     /// <summary>
     /// What the client claims on <paramref name="url"/>'s host: the browser that handed it cookies sent there (<see cref="Adopt"/>; the

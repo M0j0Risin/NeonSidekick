@@ -509,7 +509,7 @@ public static class Theme
     /// <paramref name="stop"/> moved toward <paramref name="bg"/> (or, when it contrasts less than <paramref name="target"/>, toward
     /// <paramref name="ink"/>) until its contrast with <paramref name="bg"/> is <paramref name="target"/>, found by bisection.
     /// </summary>
-    private static Color Quieted(Color stop, Color bg, Color ink, double target)
+    internal static Color Quieted(Color stop, Color bg, Color ink, double target)
     {
         bool louder = ColorContrast.Contrast(stop, bg) >= target;
 
@@ -549,6 +549,55 @@ public static class Theme
 
     /// <summary>Whether <c>Gradient rules</c> is in force, whatever the palette (<c>/theme</c>'s preview shades its pane rule for any theme).</summary>
     public static bool RuleGradientOn => s_ruleGradient;
+
+    /// <summary>
+    /// The code token kinds and the style each wears, as the terminal colors them: the session export's classes, the Web UI's <c>--tk-*</c>
+    /// tokens and <see cref="ThemeChecks"/>' code pairs read one map (2026-11-16; here since 2026-11-17, the admin-themes-render review's #43,
+    /// #100, so <c>UI/</c> doesn't reach into the Web UI).
+    /// </summary>
+    public static readonly IReadOnlyList<(CodeTokenKind Kind, ThemeStyleSlot Slot)> CodeSlots =
+    [
+        (CodeTokenKind.Keyword, ThemeStyleSlot.CodeKeyword),
+        (CodeTokenKind.Type, ThemeStyleSlot.CodeType),
+        (CodeTokenKind.String, ThemeStyleSlot.CodeString),
+        (CodeTokenKind.Number, ThemeStyleSlot.CodeNumber),
+        (CodeTokenKind.Comment, ThemeStyleSlot.CodeComment),
+        (CodeTokenKind.Punctuation, ThemeStyleSlot.CodePunctuation),
+        (CodeTokenKind.Function, ThemeStyleSlot.CodeFunction),
+        (CodeTokenKind.Variable, ThemeStyleSlot.CodeVariable),
+        (CodeTokenKind.Attribute, ThemeStyleSlot.CodeAttribute),
+        (CodeTokenKind.Tag, ThemeStyleSlot.CodeTag),
+        (CodeTokenKind.Heading, ThemeStyleSlot.CodeHeading),
+        (CodeTokenKind.Inserted, ThemeStyleSlot.CodeInserted),
+        (CodeTokenKind.Deleted, ThemeStyleSlot.CodeDeleted),
+    ];
+
+    /// <summary>Whether the terminal's page wears the theme (the setting <c>Themed background</c>); on by default, as the setting is.</summary>
+    private static volatile bool s_themedBackground = true;
+
+    /// <summary>
+    /// Puts <c>Themed background</c> in force (2026-11-17, the admin-themes-render review's #101, #122, #207): read by <see cref="PageGround"/>
+    /// and <see cref="PageInk"/>, so a flip shows at the next frame. Beside <see cref="UseRuleGradient"/>, wherever it is set.
+    /// </summary>
+    public static void UseThemedBackground(bool on) => s_themedBackground = on;
+
+    /// <summary>The page a terminal keeps for its own when the theme doesn't paint it: unknown, so taken as dark, Windows Terminal's default.</summary>
+    public static readonly Color TerminalGround = new(0x0C, 0x0C, 0x0C);
+
+    /// <summary>The text on <see cref="TerminalGround"/>: Windows Terminal's default foreground.</summary>
+    public static readonly Color TerminalInk = new(0xCC, 0xCC, 0xCC);
+
+    /// <summary>The page the words are drawn on: <see cref="Bg"/> while <c>Themed background</c> is on, else <see cref="TerminalGround"/>.</summary>
+    public static Color PageGround => s_themedBackground ? Bg : TerminalGround;
+
+    /// <summary>The page's text: <see cref="Ink"/> while <c>Themed background</c> is on, else <see cref="TerminalInk"/>.</summary>
+    public static Color PageInk => s_themedBackground ? Ink : TerminalInk;
+
+    /// <summary>
+    /// Whether the page the words are drawn on is light (2026-11-17, #101, #153, #207): the one test <c>/mark</c>, the home chips and the
+    /// advisor's and Claude's names read, so they agree with what the terminal shows.
+    /// </summary>
+    public static bool PageIsLight => ColorContrast.IsLight(PageGround);
 
     /// <summary>The palette in force's <see cref="QuietStops"/>, built once when it is put in force; null for a solid theme or its own <c>paneRule</c>.</summary>
     public static Color[]? QuietGradient => s_current.QuietGradient;

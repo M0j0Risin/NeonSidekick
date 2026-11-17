@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using NeonSidekick.Emojis;
 using NeonSidekick.Files;
 using NeonSidekick.Llm;
@@ -4673,7 +4674,7 @@ internal sealed partial class SettingsMenu
         }
     }
 
-    /// <summary>Whether <paramref name="field"/> is refused while a reply runs: the profile, the working directory, every reconnecting row, the tools flip, the theme (a change starts the screen over, 2026-09-23) and the Web UI's rows (2026-10-14: a reply's hand-over drops the restart's flag). Pure.</summary>
+    /// <summary>Whether <paramref name="field"/> is refused while a reply runs: the profile, the working directory, every reconnecting row, the tools flip, the theme (a change redraws the screen, 2026-11-16) and the Web UI's rows (2026-10-14: a reply's hand-over drops the restart's flag). Pure.</summary>
     public static bool RefusedMidTurn(SettingsField field) =>
         field is SettingsField.Profile or SettingsField.WorkingDirectory or SettingsField.LlmOfferTools or SettingsField.Theme
         || IsLlmField(field) || IsTtsField(field) || IsVoiceField(field) || IsMcpField(field) || IsWebUiField(field) || IsWebVoiceField(field);
@@ -8409,6 +8410,13 @@ internal sealed partial class SettingsMenu
             Theme.UseRuleGradient(on);
         }
 
+        if (field == SettingsField.ThemedBackground)
+        {
+            // The same for Themed background (2026-11-17, the admin-themes-render review's #101): it raises no flag either, and the page's
+            // ground and ink (Theme.PageGround) read it at each frame.
+            Theme.UseThemedBackground(on);
+        }
+
         return true;
     }
 
@@ -10333,24 +10341,26 @@ internal sealed partial class SettingsMenu
     /// screen is drawn again in it and says so itself — and returns true only when the theme in force changed;
     /// the one already in force says <see cref="ThemeAlreadyNotice"/>, ESC <see cref="UnchangedNotice"/>.
     /// Without menus the guard prints. The user's themes (2026-10-01) are read afresh each time, their
-    /// files' problems said as warnings; <c>/theme export …</c> is <see cref="ExportTheme"/>, <c>/theme edit …</c> <see cref="EditThemeAsync"/>.
+    /// files' problems said as warnings; <c>/theme export …</c> is <see cref="ExportTheme"/>, <c>/theme edit …</c> <see cref="EditThemeAsync"/>
+    /// (one of <see cref="ThemeText.SubcommandWords"/>, 2026-11-17, #217). The editor's lines are held: the caller prints them with
+    /// <see cref="PrintHeld"/> after any repaint.
     /// </summary>
     public async Task<bool> PickThemeAsync(string requestedName, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(requestedName);
         string request = requestedName.Trim();
-        if (request.Equals(ThemeText.ExportWord, StringComparison.OrdinalIgnoreCase)
-            || request.StartsWith(ThemeText.ExportWord + " ", StringComparison.OrdinalIgnoreCase))
+        switch (ThemeText.Subcommand(request, out string rest))
         {
-            ExportTheme(request[ThemeText.ExportWord.Length..]);
-            return false;
-        }
-
-        if (request.Equals(ThemeText.EditWord, StringComparison.OrdinalIgnoreCase)
-            || request.StartsWith(ThemeText.EditWord + " ", StringComparison.OrdinalIgnoreCase))
-        {
-            // /theme edit (2026-11-16, plan sharded-hugging-puppy #54): true only when it saved the theme in force, so /theme repaints in it.
-            return await EditThemeAsync(request[ThemeText.EditWord.Length..], cancellationToken).ConfigureAwait(false);
+            case ThemeText.ExportWord:
+                ExportTheme(rest);
+                return false;
+            case ThemeText.EditWord:
+                // /theme edit (2026-11-16, plan sharded-hugging-puppy #54): true only when it saved the theme in force, so /theme repaints in it.
+                return await EditThemeAsync(rest, cancellationToken).ConfigureAwait(false);
+            case null:
+                break;
+            default:
+                throw new System.Diagnostics.UnreachableException("A /theme sub-command with no handler: " + rest);
         }
 
         var scan = ScanThemes();
@@ -10383,49 +10393,43 @@ internal sealed partial class SettingsMenu
     /// <c>&lt;name&gt;-custom</c>, so an export never replaces the theme it copies; a built-in's name makes the file its
     /// override (later on 2026-10-01, the user's call: <see cref="ThemeCatalog"/>'s file wins, and the export says so).
     /// Never overwrites a file and never takes a name a user theme already has, an override's included. Nothing is put in force.
-    /// <paramref name="held"/> (2026-11-16, <c>/theme edit</c>'s copy) keeps the lines instead of printing them, for a caller with the pane
-    /// open: printed then, they landed under it. Each is (whether it is an error, the text).
+    /// A built-in's file is its own text with the new name (2026-11-17, the admin-themes-render review's #98, <see cref="ThemeLibrary.SourceText"/>),
+    /// so its role words (a heading's <c>"bg": "secondary"</c>) and comments survive; a user theme's is written whole. <paramref name="sink"/>
+    /// (2026-11-16, <c>/theme edit</c>'s copy) takes the lines instead of the transcript, for a caller with the pane open; <paramref name="quiet"/>
+    /// leaves out the done line, which that caller words itself (#194); <paramref name="scan"/> is the caller's, so warnings print once (#142).
+    /// Returns the name written, null on a refusal (said).
     /// </summary>
-    private void ExportTheme(string args, List<(bool Error, string Text)>? held = null)
+    private string? ExportTheme(string args, INoticeSink? sink = null, bool quiet = false, ThemeScan? scan = null)
     {
-        void Error(string text)
-        {
-            if (held is not null)
-            {
-                held.Add((true, text));
-            }
-            else
-            {
-                Flow.Error(text);
-            }
-        }
+        var output = sink ?? Flow;
+        void Error(string text) => output.Error(text);
 
         string[] words = args.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (words.Length is 0 or > 2)
         {
             Error(ThemeText.ExportUsage);
-            return;
+            return null;
         }
 
-        var scan = ScanThemes();
+        scan ??= ScanThemes();
         if (!ThemeName.TryParse(words[0], scan.Themes, out var palette))
         {
             Error(ThemeNameError(words[0], scan.Names));
-            return;
+            return null;
         }
 
-        string newName = words.Length == 2 ? words[1].ToLowerInvariant() : palette.Name + "-custom";
+        string newName = words.Length == 2 ? words[1].ToLowerInvariant() : ThemeText.CopyName(palette.Name);
         if (!ThemeFile.IsValidNewName(newName))
         {
             Error(ThemeText.ExportBadName(newName));
-            return;
+            return null;
         }
 
         bool named = ThemeName.TryParse(newName, scan.Themes, out var taken);
         if (named && !taken.IsBuiltIn)
         {
             Error(ThemeText.ExportNameTaken(newName));
-            return;
+            return null;
         }
 
         string path = Path.Combine(_settings.ThemesDirectory, newName + ".json");
@@ -10433,36 +10437,62 @@ internal sealed partial class SettingsMenu
         {
             Directory.CreateDirectory(_settings.ThemesDirectory);
             using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
-            using var writer = new StreamWriter(stream);
-            writer.Write(ThemeFile.Export(palette, newName));
+            stream.Write(ExportBytes(palette, newName));
         }
         catch (IOException) when (File.Exists(path))
         {
             Error(ThemeText.ExportExists(path));
-            return;
+            return null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             Error(ThemeText.ExportFailed(ex.Message));
-            return;
+            return null;
         }
 
-        string done = named ? ThemeText.ExportOverrides(newName, path) : ThemeText.ExportDone(newName, path);
-        if (held is not null)
+        if (!quiet)
         {
-            held.Add((false, done));
+            output.Notice(named ? ThemeText.ExportOverrides(newName, path) : ThemeText.ExportDone(newName, path));
         }
-        else
-        {
-            Sink.Notice(done);
-        }
+
+        return newName;
     }
 
-    /// <summary>The themes as of now, the built-ins and the user's, each file's problem said as a warning.</summary>
-    private ThemeScan ScanThemes()
+    /// <summary>
+    /// The exported file's bytes: a built-in's own text with its <c>name</c> set to <paramref name="newName"/> (none set when it has none: the
+    /// file's name then names it), else <see cref="ThemeFile.Export"/>'s whole file, as for a user theme or a text the splice refuses.
+    /// </summary>
+    internal static byte[] ExportBytes(ThemePalette palette, string newName)
+    {
+        if (palette.IsBuiltIn && ThemeLibrary.SourceText(palette.Name) is { } source)
+        {
+            byte[] text = Encoding.UTF8.GetBytes(source);
+            if (ThemeFileSplice.SetName(text, newName) is { } renamed)
+            {
+                return renamed;
+            }
+
+            if (ThemeFile.Parse(source, out _) is { Name: null })
+            {
+                return text;
+            }
+        }
+
+        return Encoding.UTF8.GetBytes(ThemeFile.Export(palette, newName));
+    }
+
+    /// <summary>
+    /// The themes as of now, the built-ins and the user's, each file's problem said as a warning; <paramref name="report"/> false (2026-11-17,
+    /// #142) for a look-up after a write, whose warnings the command's first scan already said.
+    /// </summary>
+    private ThemeScan ScanThemes(bool report = true)
     {
         var scan = ThemeCatalog.Scan(_settings.ThemesDirectory);
-        ThemeCatalog.Report(scan);
+        if (report)
+        {
+            ThemeCatalog.Report(scan);
+        }
+
         return scan;
     }
 

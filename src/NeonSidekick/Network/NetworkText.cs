@@ -228,6 +228,29 @@ public static class NetworkText
     /// <summary>A URL carrying a user name or password: none is ever sent. Pinned.</summary>
     public const string UrlUserInfo = "Error: the address carries a user name or password; net_http sends no credentials, so leave them out.";
 
+    /// <summary>
+    /// A redirect's Location that isn't a web address with one host (2026-11-17, the review's #19): the server's text, fenced, never judged as a
+    /// host it didn't write.
+    /// </summary>
+    public static string BadRedirect(string location) =>
+        "Error: the server redirected to " + UntrustedText.Fenced(Short(location)) + ", which is not a web address with one host name or address";
+
+    /// <summary>A redirect's Location with a scheme other than http or https (#19, #206), fenced.</summary>
+    public static string LocationNotHttp(string location) =>
+        "Error: the server redirected to " + UntrustedText.Fenced(Short(location)) + ", which is not an http or https address";
+
+    /// <summary>A redirect's Location carrying a user name or password (2026-11-17, #213): not followed, and the credentials not repeated.</summary>
+    public const string RedirectUserInfo = "Error: the server redirected to an address with a user name or password in it";
+
+    /// <summary>
+    /// A first hop on a port browsers refuse (2026-11-17, #121, the Fetch standard's port blocking, <see cref="HttpProbe.BadPorts"/>). Pinned.
+    /// </summary>
+    public static string BadPort(int port) =>
+        "Error: port " + port.ToString(CultureInfo.InvariantCulture) + " is one browsers refuse for web requests, and net_http refuses it too.";
+
+    /// <summary>A later hop's redirect to a blocked port, ending the chain on that hop's line.</summary>
+    public static string HopBadPort(int port) => "refused: port " + port.ToString(CultureInfo.InvariantCulture) + " is one browsers block";
+
     /// <summary><c>method</c> other than get or head. Pinned.</summary>
     public static string BadMethod(string method) => $"Error: method '{Short(method)}' is not get or head.";
 
@@ -238,13 +261,40 @@ public static class NetworkText
     /// A hop whose server answered over TLS with a certificate this machine doesn't trust: an answer (the server is there), never a refusal;
     /// <c>net_tls</c> shows the certificate.
     /// </summary>
-    public static string HttpUntrusted(string detail) => "the server answered over TLS, but its certificate isn't trusted: " + Short(detail) + "; net_tls shows it";
+    /// <param name="detail">What the certificate check found, in <c>net_tls</c>'s words (<see cref="TlsProbe.PolicyWords"/>, 2026-11-17, #63).</param>
+    /// <param name="command">
+    /// <c>/net</c>'s hand, which names <c>/net tls</c>; the tool's names <c>net_tls</c> (2026-11-17, #150).
+    /// </param>
+    public static string HttpUntrusted(string detail, bool command) =>
+        "the server answered over TLS, but its certificate isn't trusted: " + Short(detail) + (command ? "; /net tls shows it" : "; net_tls shows it");
 
-    /// <summary>A hop whose TLS handshake failed for another reason.</summary>
-    public static string HttpTlsFailed(string detail) => "the TLS handshake failed: " + Short(detail);
+    /// <summary>A hop whose TLS handshake failed for another reason: .NET's words, which can quote the server's bytes, fenced (2026-11-17, #91).</summary>
+    public static string HttpTlsFailed(string detail) => "the TLS handshake failed: " + UntrustedText.Fenced(Short(detail));
 
-    /// <summary>A hop that got no answer: the connection's own words.</summary>
-    public static string HttpFailed(string detail) => "no answer: " + Short(detail);
+    /// <summary>A hop that got no answer: the connection's own words, fenced (#91).</summary>
+    public static string HttpFailed(string detail) => HttpNoAnswer + ": " + UntrustedText.Fenced(Short(detail));
+
+    /// <summary>A hop, or a whole check, with no answer.</summary>
+    public const string HttpNoAnswer = "no answer";
+
+    /// <summary>The head's link between the last status and a later hop's problem (2026-11-17, #8).</summary>
+    public const string HttpThen = ", then ";
+
+    /// <summary>The head's count of requests sent (#8, #212): "1 request", "0 requests".</summary>
+    public static string HttpRequests(int sent) => EventLog.EventLogText.Count(sent, "request");
+
+    /// <summary>A redirect not followed, and why (#8).</summary>
+    public static string HttpNotFollowedBecause(string why) => "redirect not followed: " + why;
+
+    /// <summary>A later hop refused before any request: <see cref="NetworkAccess.TargetAsync"/>'s refusal, its "Error: " cut (#8).</summary>
+    public static string HttpRefused(string why) => "refused: " + WithoutError(why);
+
+    /// <summary>A refusal's sentence without its leading <c>Error: </c>, for a hop line or a stop (not prose surgery: only the lead).</summary>
+    public static string WithoutError(string refusal)
+    {
+        ArgumentNullException.ThrowIfNull(refusal);
+        return refusal.StartsWith("Error: ", StringComparison.Ordinal) ? refusal["Error: ".Length..] : refusal;
+    }
 
     /// <summary>A redirect not followed because the check's whole time ran out.</summary>
     public static string HttpOutOfTime(TimeSpan total) => "stopped: the check's " + total.TotalSeconds.ToString("0", CultureInfo.InvariantCulture) + " s ran out";
@@ -252,8 +302,8 @@ public static class NetworkText
     /// <summary>A redirect not followed past the hop cap.</summary>
     public static string HttpTooManyHops(int max) => "stopped after " + max.ToString(CultureInfo.InvariantCulture) + " requests; the redirects go on";
 
-    /// <summary>A redirect not followed: <c>follow</c> was off.</summary>
-    public const string HttpNotFollowed = "redirect not followed (follow is off)";
+    /// <summary>A redirect not followed: <c>follow</c> was off, or <c>/net http</c>'s <c>nofollow</c> (2026-11-17, #216: neutral for both callers).</summary>
+    public const string HttpNotFollowed = "redirect not followed, as asked";
 
     // ── Certificate stores ──────────────────────────────────────────────────
 

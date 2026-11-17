@@ -772,6 +772,9 @@ internal sealed partial class ChatScreen
     // The picture tools (2026-10-10): their own group under Image tools, File tools' until then.
     private readonly IReadOnlyList<AIFunction> _imageTools;
 
+    /// <summary>The render tools' browser look-up (2026-11-17, #10): kept so each turn asks it once, through <see cref="Drawable"/>.</summary>
+    private readonly Render.PictureRendering _rendering;
+
     /// <summary>The video file tools (2026-11-12, <see cref="VideoTools"/>): their own group under <c>Video tools</c>, built once.</summary>
     private readonly IReadOnlyList<AIFunction> _videoTools;
     private readonly WebAccess _web;
@@ -872,6 +875,12 @@ internal sealed partial class ChatScreen
 
     // Every picture drawn, by id (its index); read on the watcher task too, so under its own lock.
     private readonly List<PictureSource> _pictures = [];
+
+    /// <summary>
+    /// The ids a theme repaint gave the history's pictures (2026-11-17, the admin-themes-render review's #90), so the next repaint reuses them:
+    /// <see cref="_pictures"/> is never emptied, so an id stays good for the screen's life, and a history dropped by <c>/clear</c> lets its keys go.
+    /// </summary>
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<DataContent, System.Runtime.CompilerServices.StrongBox<int>> _replayedPictureIds = new();
 
     /// <summary>The session's ComfyUI pictures over the pane's upper rule (later still on 2026-09-24): filled by <see cref="AddToPictureStrip"/>, emptied with every new conversation.</summary>
     private readonly PictureStrip _pictureStrip = new();
@@ -1453,7 +1462,8 @@ internal sealed partial class ChatScreen
         // The PDF editor (2026-10-14, the PDF plan's phase 4b): pdf_edit and /pdf's edits, pdf-lib in the same browser.
         _pdfEditing = new PdfEditing(_web.Browser, _files, () => _web.Browser.Locate(_effective().WebBrowserPath), _time);
         _fileTools = FileTools(_files, () => WorkingDirectory.IsDefault(_effective().WorkingDirectory), _openFile, _effective, _unc, _pdf, _images, OpenPictureForModel, _pdfReading, _pdfEditing, _time, _docx);   // one converter for the tool and /docx (review P1-18)
-        _imageTools = ImageTools(_files, _effective, _images, () => _settings.ProfileSplashDirectory, new Render.PictureRendering(_web.Browser, () => _effective().WebBrowserPath));
+        _rendering = new Render.PictureRendering(_web.Browser, () => _effective().WebBrowserPath);
+        _imageTools = ImageTools(_files, _effective, _images, () => _settings.ProfileSplashDirectory, _rendering);
         _timers = new TimerBoard(time, SignalAlert);
         // The timer tone (2026-10-18, the user's ask): a device of its own from the app's playback factory; none in tests by default.
         _tones = new TimerTonePlayer(tonePlayback, time);
@@ -1609,8 +1619,8 @@ internal sealed partial class ChatScreen
             HintLayout = HintSlots,
             // The theme's bg as the terminal's page (2026-10-03, the user's ask), per frame so /theme and the switch show at once.
             PageBackground = () => _effective().ThemedBackground ? Theme.Bg : null,
-            // The ink as the text and cursor colour on a light page (2026-11-16, the daylight themes); a dark one keeps the profile's.
-            PageText = () => _effective().ThemedBackground && ColorContrast.IsLight(Theme.Bg) ? Theme.Ink : null,
+            // The ink as the text and cursor color whenever the page wears the theme (#158: a light terminal profile under a dark theme hid both).
+            PageText = () => _effective().ThemedBackground ? Theme.Ink : null,
             // The strip at the row's start in every state (the spinner and a menu's hint included):
             // the brain while a reflection runs, the tag while the model writes a session title,
             // then the speech switches as of the last connect, the wake word and the interrupt
@@ -4995,7 +5005,7 @@ internal sealed partial class ChatScreen
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
         var fileTools = _fileTools;
         bool files = effective.FileTools && Without(fileTools, disabled).Count > 0;
-        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, MemoryMode.Enabled(effective), effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, memorySave: MemoryMode.Saves(effective), skillInstalled: Catalog(effective).Count > 0, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: SqlToolsFor(_sqlTools, effective, _pane.Enabled, _sql.Catalog()), sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisors: AdvisorsListed(effective) ? _neonAdvisorTools : null, advisorsEnabled: AdvisorsOffered(effective), homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: OracleToolsFor(_oracleTools, effective, _pane.Enabled, _oracle.Catalog()), oracleEnabled: OracleOffered(effective, _oracle), mysql: MySqlToolsFor(_mysqlTools, effective, _pane.Enabled, _mysql.Catalog()), mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), files), uncEnabled: UncOffered(effective, _unc), docker: DockerToolsFor(_dockerTools, effective), dockerEnabled: DockerOffered(effective), camera: _cameraTools, cameraEnabled: CameraOffered(effective), help: _helpTools, screen: _screenTools, screenEnabled: ScreenOffered(effective), images: _imageTools, imagesEnabled: effective.ImageTools, video: _videoTools, videoEnabled: VideoOffered(effective), sqlite: SqliteToolsFor(_sqliteTools, effective, _pane.Enabled), sqliteEnabled: SqliteOffered(effective, _sqlite), duckDb: DuckDbToolsFor(_duckDbTools, effective, _pane.Enabled), duckDbEnabled: DuckDbOffered(effective, _duckDb), postgres: PostgresToolsFor(_postgresTools, effective, _pane.Enabled, _postgres.Catalog()), postgresEnabled: PostgresOffered(effective, _postgres), youTube: _youTubeTools, youTubeEnabled: YouTubeOffered(effective, _youTubeTools), youTubeKey: YouTube.YouTubeDataApi.Key(effective) is not null, shopping: _shoppingTools, shoppingEnabled: ShoppingOffered(effective), eventLog: _eventLogTools, eventLogEnabled: EventLogOffered(effective, _eventLog, _macLog), eventLogTicked: _macLog.Log is not null ? _macLog.LocalTicked : _eventLog.Catalog().Computers.Count > 0, timersEnabled: TimersOffered(effective), admin: AdminGroups(effective), clockEnabled: ClockOffered(effective), helpEnabled: HelpOffered(effective), monitors: MonitorGroup(effective), homeNotes: HomeToolNotes());
+        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, MemoryMode.Enabled(effective), effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, memorySave: MemoryMode.Saves(effective), skillInstalled: Catalog(effective).Count > 0, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), drawable: Drawable(effective.ImageTools, _rendering), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: SqlToolsFor(_sqlTools, effective, _pane.Enabled, _sql.Catalog()), sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisors: AdvisorsListed(effective) ? _neonAdvisorTools : null, advisorsEnabled: AdvisorsOffered(effective), homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: OracleToolsFor(_oracleTools, effective, _pane.Enabled, _oracle.Catalog()), oracleEnabled: OracleOffered(effective, _oracle), mysql: MySqlToolsFor(_mysqlTools, effective, _pane.Enabled, _mysql.Catalog()), mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), files), uncEnabled: UncOffered(effective, _unc), docker: DockerToolsFor(_dockerTools, effective), dockerEnabled: DockerOffered(effective), camera: _cameraTools, cameraEnabled: CameraOffered(effective), help: _helpTools, screen: _screenTools, screenEnabled: ScreenOffered(effective), images: _imageTools, imagesEnabled: effective.ImageTools, video: _videoTools, videoEnabled: VideoOffered(effective), sqlite: SqliteToolsFor(_sqliteTools, effective, _pane.Enabled), sqliteEnabled: SqliteOffered(effective, _sqlite), duckDb: DuckDbToolsFor(_duckDbTools, effective, _pane.Enabled), duckDbEnabled: DuckDbOffered(effective, _duckDb), postgres: PostgresToolsFor(_postgresTools, effective, _pane.Enabled, _postgres.Catalog()), postgresEnabled: PostgresOffered(effective, _postgres), youTube: _youTubeTools, youTubeEnabled: YouTubeOffered(effective, _youTubeTools), youTubeKey: YouTube.YouTubeDataApi.Key(effective) is not null, shopping: _shoppingTools, shoppingEnabled: ShoppingOffered(effective), eventLog: _eventLogTools, eventLogEnabled: EventLogOffered(effective, _eventLog, _macLog), eventLogTicked: _macLog.Log is not null ? _macLog.LocalTicked : _eventLog.Catalog().Computers.Count > 0, timersEnabled: TimersOffered(effective), admin: AdminGroups(effective), clockEnabled: ClockOffered(effective), helpEnabled: HelpOffered(effective), monitors: MonitorGroup(effective), homeNotes: HomeToolNotes());
         return groups.SelectMany(g => g.Tools.Where(t => g.Offers(t.Name)).Select(t => new CompletionItem(t.Name, t.Description))).ToList();
     }
 
@@ -5650,7 +5660,7 @@ internal sealed partial class ChatScreen
                 // The built-ins and the user's themes (2026-10-01), then export and edit (2026-11-16); after "export " or "edit " the names
                 // again, built-ins too (an edit offers a built-in's copy), for the first word only.
                 var themes = sources.Themes?.Invoke() ?? ThemeName.Names.Select(name => new CompletionItem(name, ThemeName.Describe(name))).ToList();
-                foreach (string word in (ReadOnlySpan<string>)[ThemeText.ExportWord, ThemeText.EditWord])
+                foreach (string word in ThemeText.SubcommandWords)
                 {
                     string head = word + " ";
                     if (argText.StartsWith(head, StringComparison.OrdinalIgnoreCase))
@@ -5662,7 +5672,7 @@ internal sealed partial class ChatScreen
                 }
 
                 return MentionCompleter.Matches(
-                    [.. themes, new CompletionItem(ThemeText.ExportWord, ThemeText.ExportNote), new CompletionItem(ThemeText.EditWord, ThemeText.EditNote)], argText);
+                    [.. themes, .. ThemeText.SubcommandWords.Zip(ThemeText.SubcommandNotes, (word, note) => new CompletionItem(word, note))], argText);
             }
 
             case SlashCommand.Perf:
@@ -6619,7 +6629,7 @@ internal sealed partial class ChatScreen
         disabled ??= TurnDisabled(effective);
         var fileTools = _fileTools;
         bool files = effective.FileTools && Without(fileTools, disabled).Count > 0;   // the turn's rule (PrepareTurn): an emptied file group is the switch off
-        return WithPlanGroup(SystemPromptSummary.OfferedOnly(SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, MemoryMode.Enabled(effective), effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, memorySave: MemoryMode.Saves(effective), mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianOffered(effective) ? ObsidianToolsFor(_vaultTools, effective) : null, sql: SqlOffered(effective, _sql) ? SqlToolsFor(_sqlTools, effective, _pane.Enabled, _sql.Catalog()) : null, comfy: ComfyOffered(effective, _comfy) ? _comfyTools : null, advisors: AdvisorsListed(effective) ? _neonAdvisorTools : null, advisorsEnabled: AdvisorsOffered(effective), homeAssistant: HomeAssistantOffered(effective) ? _haTools : null, oracle: OracleOffered(effective, _oracle) ? OracleToolsFor(_oracleTools, effective, _pane.Enabled, _oracle.Catalog()) : null, mysql: MySqlOffered(effective, _mysql) ? MySqlToolsFor(_mysqlTools, effective, _pane.Enabled, _mysql.Catalog()) : null, unc: UncOffered(effective, _unc) ? UncToolsFor(_uncTools, effective, _unc.Catalog(), files) : null, docker: DockerOffered(effective) ? DockerToolsFor(_dockerTools, effective) : null, camera: CameraOffered(effective) ? _cameraTools : null, help: _helpTools, screen: ScreenOffered(effective) ? _screenTools : null, images: _imageTools, imagesEnabled: effective.ImageTools, video: VideoOffered(effective) ? _videoTools : null, sqlite: SqliteOffered(effective, _sqlite) ? SqliteToolsFor(_sqliteTools, effective, _pane.Enabled) : null, duckDb: DuckDbOffered(effective, _duckDb) ? DuckDbToolsFor(_duckDbTools, effective, _pane.Enabled) : null, postgres: PostgresOffered(effective, _postgres) ? PostgresToolsFor(_postgresTools, effective, _pane.Enabled, _postgres.Catalog()) : null, youTube: YouTubeOffered(effective, _youTubeTools) ? YouTubeToolsFor(_youTubeTools, effective) : null, shopping: ShoppingOffered(effective) ? _shoppingTools : null, eventLog: EventLogOffered(effective, _eventLog, _macLog) ? _eventLogTools : null, eventLogTicked: _macLog.Log is not null ? _macLog.LocalTicked : _eventLog.Catalog().Computers.Count > 0, timersEnabled: TimersOffered(effective), admin: AdminGroups(effective), clockEnabled: ClockOffered(effective), helpEnabled: HelpOffered(effective), monitors: MonitorGroup(effective), homeNotes: HomeToolNotes())));   // the vault group only with a vault (2026-09-22): /sys stays as it was for a profile that never names one
+        return WithPlanGroup(SystemPromptSummary.OfferedOnly(SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, MemoryMode.Enabled(effective), effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, memorySave: MemoryMode.Saves(effective), mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), drawable: Drawable(effective.ImageTools, _rendering), obsidian: ObsidianOffered(effective) ? ObsidianToolsFor(_vaultTools, effective) : null, sql: SqlOffered(effective, _sql) ? SqlToolsFor(_sqlTools, effective, _pane.Enabled, _sql.Catalog()) : null, comfy: ComfyOffered(effective, _comfy) ? _comfyTools : null, advisors: AdvisorsListed(effective) ? _neonAdvisorTools : null, advisorsEnabled: AdvisorsOffered(effective), homeAssistant: HomeAssistantOffered(effective) ? _haTools : null, oracle: OracleOffered(effective, _oracle) ? OracleToolsFor(_oracleTools, effective, _pane.Enabled, _oracle.Catalog()) : null, mysql: MySqlOffered(effective, _mysql) ? MySqlToolsFor(_mysqlTools, effective, _pane.Enabled, _mysql.Catalog()) : null, unc: UncOffered(effective, _unc) ? UncToolsFor(_uncTools, effective, _unc.Catalog(), files) : null, docker: DockerOffered(effective) ? DockerToolsFor(_dockerTools, effective) : null, camera: CameraOffered(effective) ? _cameraTools : null, help: _helpTools, screen: ScreenOffered(effective) ? _screenTools : null, images: _imageTools, imagesEnabled: effective.ImageTools, video: VideoOffered(effective) ? _videoTools : null, sqlite: SqliteOffered(effective, _sqlite) ? SqliteToolsFor(_sqliteTools, effective, _pane.Enabled) : null, duckDb: DuckDbOffered(effective, _duckDb) ? DuckDbToolsFor(_duckDbTools, effective, _pane.Enabled) : null, postgres: PostgresOffered(effective, _postgres) ? PostgresToolsFor(_postgresTools, effective, _pane.Enabled, _postgres.Catalog()) : null, youTube: YouTubeOffered(effective, _youTubeTools) ? YouTubeToolsFor(_youTubeTools, effective) : null, shopping: ShoppingOffered(effective) ? _shoppingTools : null, eventLog: EventLogOffered(effective, _eventLog, _macLog) ? _eventLogTools : null, eventLogTicked: _macLog.Log is not null ? _macLog.LocalTicked : _eventLog.Catalog().Computers.Count > 0, timersEnabled: TimersOffered(effective), admin: AdminGroups(effective), clockEnabled: ClockOffered(effective), helpEnabled: HelpOffered(effective), monitors: MonitorGroup(effective), homeNotes: HomeToolNotes())));   // the vault group only with a vault (2026-09-22): /sys stays as it was for a profile that never names one
     }
 
     /// <summary>Whether <c>execute_code</c> has a language to run (2026-09-21): the setting's languages, one of them installed.</summary>
@@ -6738,7 +6748,7 @@ internal sealed partial class ChatScreen
     /// <remarks><paramref name="skillInstalled"/> (2026-10-25): null scans the skill folders as before; the manual's live line passes the last scan's answer.</remarks>
     private IReadOnlyList<ToolGroup> ToolsGroups(AppSettingsData effective, IReadOnlySet<string> disabled, bool? skillInstalled = null)
     {
-        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, MemoryMode.Enabled(effective), effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, memorySave: MemoryMode.Saves(effective), skillInstalled: skillInstalled ?? Catalog(effective).Count > 0, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: SqlToolsFor(_sqlTools, effective, _pane.Enabled, _sql.Catalog()), sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisors: AdvisorsListed(effective) ? _neonAdvisorTools : null, advisorsEnabled: AdvisorsOffered(effective), homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: OracleToolsFor(_oracleTools, effective, _pane.Enabled, _oracle.Catalog()), oracleEnabled: OracleOffered(effective, _oracle), mysql: MySqlToolsFor(_mysqlTools, effective, _pane.Enabled, _mysql.Catalog()), mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), effective.FileTools), uncEnabled: UncOffered(effective, _unc), docker: DockerToolsFor(_dockerTools, effective), dockerEnabled: DockerOffered(effective), camera: _cameraTools, cameraEnabled: CameraOffered(effective), help: _helpTools, screen: _screenTools, screenEnabled: ScreenOffered(effective), images: _imageTools, imagesEnabled: effective.ImageTools, video: _videoTools, videoEnabled: VideoOffered(effective), sqlite: SqliteToolsFor(_sqliteTools, effective, _pane.Enabled), sqliteEnabled: SqliteOffered(effective, _sqlite), duckDb: DuckDbToolsFor(_duckDbTools, effective, _pane.Enabled), duckDbEnabled: DuckDbOffered(effective, _duckDb), postgres: PostgresToolsFor(_postgresTools, effective, _pane.Enabled, _postgres.Catalog()), postgresEnabled: PostgresOffered(effective, _postgres), youTube: _youTubeTools, youTubeEnabled: YouTubeOffered(effective, _youTubeTools), youTubeKey: YouTube.YouTubeDataApi.Key(effective) is not null, shopping: _shoppingTools, shoppingEnabled: ShoppingOffered(effective), eventLog: _eventLogTools, eventLogEnabled: EventLogOffered(effective, _eventLog, _macLog), eventLogTicked: _macLog.Log is not null ? _macLog.LocalTicked : _eventLog.Catalog().Computers.Count > 0, timersEnabled: TimersOffered(effective), admin: AdminGroups(effective), clockEnabled: ClockOffered(effective), helpEnabled: HelpOffered(effective), monitors: MonitorGroup(effective), homeNotes: HomeToolNotes());
+        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, MemoryMode.Enabled(effective), effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, memorySave: MemoryMode.Saves(effective), skillInstalled: skillInstalled ?? Catalog(effective).Count > 0, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), drawable: Drawable(effective.ImageTools, _rendering), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: SqlToolsFor(_sqlTools, effective, _pane.Enabled, _sql.Catalog()), sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisors: AdvisorsListed(effective) ? _neonAdvisorTools : null, advisorsEnabled: AdvisorsOffered(effective), homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: OracleToolsFor(_oracleTools, effective, _pane.Enabled, _oracle.Catalog()), oracleEnabled: OracleOffered(effective, _oracle), mysql: MySqlToolsFor(_mysqlTools, effective, _pane.Enabled, _mysql.Catalog()), mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), effective.FileTools), uncEnabled: UncOffered(effective, _unc), docker: DockerToolsFor(_dockerTools, effective), dockerEnabled: DockerOffered(effective), camera: _cameraTools, cameraEnabled: CameraOffered(effective), help: _helpTools, screen: _screenTools, screenEnabled: ScreenOffered(effective), images: _imageTools, imagesEnabled: effective.ImageTools, video: _videoTools, videoEnabled: VideoOffered(effective), sqlite: SqliteToolsFor(_sqliteTools, effective, _pane.Enabled), sqliteEnabled: SqliteOffered(effective, _sqlite), duckDb: DuckDbToolsFor(_duckDbTools, effective, _pane.Enabled), duckDbEnabled: DuckDbOffered(effective, _duckDb), postgres: PostgresToolsFor(_postgresTools, effective, _pane.Enabled, _postgres.Catalog()), postgresEnabled: PostgresOffered(effective, _postgres), youTube: _youTubeTools, youTubeEnabled: YouTubeOffered(effective, _youTubeTools), youTubeKey: YouTube.YouTubeDataApi.Key(effective) is not null, shopping: _shoppingTools, shoppingEnabled: ShoppingOffered(effective), eventLog: _eventLogTools, eventLogEnabled: EventLogOffered(effective, _eventLog, _macLog), eventLogTicked: _macLog.Log is not null ? _macLog.LocalTicked : _eventLog.Catalog().Computers.Count > 0, timersEnabled: TimersOffered(effective), admin: AdminGroups(effective), clockEnabled: ClockOffered(effective), helpEnabled: HelpOffered(effective), monitors: MonitorGroup(effective), homeNotes: HomeToolNotes());
         return groups;
     }
 
@@ -6752,7 +6762,7 @@ internal sealed partial class ChatScreen
         var effective = _effective();
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
         _interpreters.Revalidate();
-        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, MemoryMode.Enabled(effective), effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, memorySave: MemoryMode.Saves(effective), skillInstalled: Catalog(effective).Count > 0, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: SqlToolsFor(_sqlTools, effective, _pane.Enabled, _sql.Catalog()), sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisors: AdvisorsListed(effective) ? _neonAdvisorTools : null, advisorsEnabled: AdvisorsOffered(effective), homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: OracleToolsFor(_oracleTools, effective, _pane.Enabled, _oracle.Catalog()), oracleEnabled: OracleOffered(effective, _oracle), mysql: MySqlToolsFor(_mysqlTools, effective, _pane.Enabled, _mysql.Catalog()), mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), effective.FileTools), uncEnabled: UncOffered(effective, _unc), docker: DockerToolsFor(_dockerTools, effective), dockerEnabled: DockerOffered(effective), camera: _cameraTools, cameraEnabled: CameraOffered(effective), help: _helpTools, screen: _screenTools, screenEnabled: ScreenOffered(effective), images: BotImageTools(), imagesEnabled: effective.ImageTools, sqlite: SqliteToolsFor(_sqliteTools, effective, _pane.Enabled), sqliteEnabled: SqliteOffered(effective, _sqlite), duckDb: DuckDbToolsFor(_duckDbTools, effective, _pane.Enabled), duckDbEnabled: DuckDbOffered(effective, _duckDb), postgres: PostgresToolsFor(_postgresTools, effective, _pane.Enabled, _postgres.Catalog()), postgresEnabled: PostgresOffered(effective, _postgres), youTube: _youTubeTools, youTubeEnabled: YouTubeOffered(effective, _youTubeTools), youTubeKey: YouTube.YouTubeDataApi.Key(effective) is not null, shopping: _shoppingTools, shoppingEnabled: ShoppingOffered(effective), eventLog: _eventLogTools, eventLogEnabled: EventLogOffered(effective, _eventLog, _macLog), eventLogTicked: _macLog.Log is not null ? _macLog.LocalTicked : _eventLog.Catalog().Computers.Count > 0, timersEnabled: TimersOffered(effective), admin: AdminGroups(effective), clockEnabled: ClockOffered(effective), helpEnabled: HelpOffered(effective), monitors: MonitorGroup(effective));
+        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, _fileTools, _memoryTools, MemoryMode.Enabled(effective), effective.LlmOfferTools, _webTools, effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, memorySave: MemoryMode.Saves(effective), skillInstalled: Catalog(effective).Count > 0, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), drawable: Drawable(effective.ImageTools, _rendering), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: SqlToolsFor(_sqlTools, effective, _pane.Enabled, _sql.Catalog()), sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisors: AdvisorsListed(effective) ? _neonAdvisorTools : null, advisorsEnabled: AdvisorsOffered(effective), homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: OracleToolsFor(_oracleTools, effective, _pane.Enabled, _oracle.Catalog()), oracleEnabled: OracleOffered(effective, _oracle), mysql: MySqlToolsFor(_mysqlTools, effective, _pane.Enabled, _mysql.Catalog()), mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), effective.FileTools), uncEnabled: UncOffered(effective, _unc), docker: DockerToolsFor(_dockerTools, effective), dockerEnabled: DockerOffered(effective), camera: _cameraTools, cameraEnabled: CameraOffered(effective), help: _helpTools, screen: _screenTools, screenEnabled: ScreenOffered(effective), images: BotImageTools(), imagesEnabled: effective.ImageTools, sqlite: SqliteToolsFor(_sqliteTools, effective, _pane.Enabled), sqliteEnabled: SqliteOffered(effective, _sqlite), duckDb: DuckDbToolsFor(_duckDbTools, effective, _pane.Enabled), duckDbEnabled: DuckDbOffered(effective, _duckDb), postgres: PostgresToolsFor(_postgresTools, effective, _pane.Enabled, _postgres.Catalog()), postgresEnabled: PostgresOffered(effective, _postgres), youTube: _youTubeTools, youTubeEnabled: YouTubeOffered(effective, _youTubeTools), youTubeKey: YouTube.YouTubeDataApi.Key(effective) is not null, shopping: _shoppingTools, shoppingEnabled: ShoppingOffered(effective), eventLog: _eventLogTools, eventLogEnabled: EventLogOffered(effective, _eventLog, _macLog), eventLogTicked: _macLog.Log is not null ? _macLog.LocalTicked : _eventLog.Catalog().Computers.Count > 0, timersEnabled: TimersOffered(effective), admin: AdminGroups(effective), clockEnabled: ClockOffered(effective), helpEnabled: HelpOffered(effective), monitors: MonitorGroup(effective));
         return BotChat.LimitedGroups(groups, BotLimitedToolNames());
     }
 
@@ -6760,7 +6770,14 @@ internal sealed partial class ChatScreen
     /// The picture tools a bot may have: every one but <c>set_splash_image</c> (2026-10-12, when it left the ComfyUI group for the
     /// picture tools, the user's call: a bot would write the loaded profile's splash folder).
     /// </summary>
-    private IReadOnlyList<AIFunction> BotImageTools() => _imageTools.Where(t => t is not SetSplashImageTool).ToList();
+    // render_chart stays the main chat's (2026-11-17, the user's call on the review's #127): a bot draws pictures and collages, not charts.
+    private IReadOnlyList<AIFunction> BotImageTools() => _imageTools.Where(t => t is not SetSplashImageTool and not RenderChartTool).ToList();
+
+    /// <summary>
+    /// Whether the render tools are offered (2026-11-17, #10, #84, #132): <c>Image tools</c> on and a browser found, asked in that order, so the
+    /// browser is never looked for with the tools off. One answer per turn, shared by the turn's list and the summaries.
+    /// </summary>
+    internal static bool Drawable(bool imagesOn, Render.PictureRendering rendering) => imagesOn && rendering.Executable is not null;
 
     /// <summary>
     /// Every tool name a <c>/botchat</c> bot may be offered (2026-10-22, the user's ask, when <c>Botchat tools enabled</c> went): the
@@ -8193,6 +8210,7 @@ internal sealed partial class ChatScreen
         FilesEnabled = effective.FileTools,
         Images = _imageTools,
         ImagesEnabled = effective.ImageTools,
+        Drawable = Drawable(effective.ImageTools, _rendering),
         Video = _videoTools,
         VideoEnabled = VideoOffered(effective),
         Ask = AskOffered(effective) ? _askTools : null,
@@ -12200,6 +12218,14 @@ internal sealed partial class ChatScreen
 
             while (!cancellationToken.IsCancellationRequested)
             {
+                // A theme a run handed over (2026-11-17, #76): repainted first, so every line below lands after it, never wiped by it.
+                if (_themeRepaintPending && !_botChatRunning)
+                {
+                    _themeRepaintPending = false;
+                    RepaintTheme();
+                    ThemeLines();
+                }
+
                 DrainDiagnostics();
                 // The Web UI's notices (a sign-in, the server's start) and, as a backstop, its server as the settings now say (2026-10-14).
                 PrintWebNotices();
@@ -13159,6 +13185,8 @@ internal sealed partial class ChatScreen
             ForgetReading();
             ForgetSession();
             LeavePlanOnReset();
+            // The wipe drew the screen in the theme in force (2026-11-17, gap pass 153): a repaint a run left for the idle line is done.
+            _themeRepaintPending = false;
         }
     }
 
@@ -13169,23 +13197,58 @@ internal sealed partial class ChatScreen
     /// what it keeps (<see cref="RepaintConversation"/>: each turn as a resume draws it), and the history, the session row, usage, the plan, the
     /// queue and the picture strip stay. From 2026-09-23 until then it started over like <c>/clear</c>. The splash comes only on an empty
     /// conversation, as at the start, and <c>Welcome splash</c> <c>disabled</c> still skips it; the saved line goes under it all.
+    /// In three steps since 2026-11-17 (the admin-themes-render review's #76, #179, #196): <see cref="ApplyTheme"/>, <see cref="RepaintTheme"/>
+    /// (the latest <see cref="ThemeRepaintTurns"/> turns; nothing without the pane), <see cref="ThemeLines"/> — a run's hand-over takes the
+    /// first alone and leaves the other two for the idle line (<see cref="_themeRepaintPending"/>).
     /// </summary>
     private void RestartInTheme()
     {
-        ThemeName.Apply(_effective(), _settings.ThemesDirectory);
-        SetMark(_markName);   // the mark's shade follows the page, light or dark (2026-11-16, #53)
+        ApplyTheme();
+        RepaintTheme();
+        ThemeLines();
+    }
+
+    /// <summary>The most turns a theme repaint draws again (2026-11-17, the user's call: about a screenful; turn heights vary too much to measure screens).</summary>
+    public const int ThemeRepaintTurns = 20;
+
+    /// <summary>
+    /// A theme change handed over during a run (botchat, <c>/test</c>, an advisor, a custom command; 2026-11-17, #76, the user's call): put in
+    /// force at once, its repaint and lines left for the idle line, which runs them once, in the newest theme. <c>/clear</c> and a profile switch
+    /// drop it, each drawing the screen itself.
+    /// </summary>
+    private bool _themeRepaintPending;
+
+    /// <summary>The theme the settings name put in force, so what follows draws in it; the mark's shade follows on the pane's next frame.</summary>
+    private void ApplyTheme() => ThemeName.Apply(_effective(), _settings.ThemesDirectory);
+
+    /// <summary>The batch repaint in the theme in force, and the splash on an empty conversation; nothing without the pane (#196).</summary>
+    private void RepaintTheme()
+    {
+        if (!_pane.Enabled)
+        {
+            return;
+        }
+
         bool empty = _session.History.TurnCount == 0;
         using (_pane.Batch())
         {
-            RepaintConversation(StyledReply(_effective().TranscriptMarkdown, _pane.Enabled), refillStrip: false);
+            RepaintConversation(StyledReply(_effective().TranscriptMarkdown, _pane.Enabled), refillStrip: false, theme: true);
         }
 
         if (empty)
         {
             ShowSplash();
         }
+    }
 
+    /// <summary>The theme's saved line, then, for a light theme on the terminal's own page, the line that says so (#179); after the repaint, so it never wipes them.</summary>
+    private void ThemeLines()
+    {
         _transcript.Notice(SettingsMenu.SavedNotice(SettingsField.Theme, _settings.Current, _settings.ProfileDirectory));
+        if (ColorContrast.IsLight(Theme.Bg) && !_effective().ThemedBackground)
+        {
+            _transcript.Warning(ThemeText.LightNeedsBackground);
+        }
     }
 
     /// <summary>
@@ -14735,8 +14798,9 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// What the settings menu's changes ask for once it closed (out of <see cref="OpenSettingsAsync"/> on 2026-10-12, for a pane a reply
     /// ended under too): an embedded model picked installed and connected, a profile switch's reconnects, else each session's own.
+    /// <paramref name="run"/> is a run's hand-over (2026-11-17, #76): a theme change's repaint waits for the idle line.
     /// </summary>
-    private async Task ApplyMenuChangesAsync(SettingsChanges changes, EmbeddedLlm.EmbeddedModel? embeddedPick, CancellationToken cancellationToken)
+    private async Task ApplyMenuChangesAsync(SettingsChanges changes, EmbeddedLlm.EmbeddedModel? embeddedPick, CancellationToken cancellationToken, bool run = false)
     {
         // An embedded model used or installed from the catalog (2026-09-29): its own install and connect below stand for
         // the LLM reconnect any other change on the tab asked for.
@@ -14755,7 +14819,7 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        await ApplySettingsChangesAsync(changes, cancellationToken).ConfigureAwait(false);
+        await ApplySettingsChangesAsync(changes, cancellationToken, run).ConfigureAwait(false);
         if (embeddedPick is not null)
         {
             await UseEmbeddedModelAsync(embeddedPick, reasoning: false, cancellationToken).ConfigureAwait(false);
@@ -14766,13 +14830,16 @@ internal sealed partial class ChatScreen
     /// The reconnects a settings change asks for, short of a profile switch: the LLM, speech, voice
     /// and MCP sessions each when their fields changed, quietly (the pane that closed — or the
     /// <c>/profile reload</c> notice, 2026-09-21 — was the feedback, so a reconnect prints only what
-    /// went wrong), and the conversation forgotten when the tools switch flipped.
+    /// went wrong), and the conversation forgotten when the tools switch flipped. The theme's repaint comes before every line a change
+    /// prints (2026-11-17, the admin-themes-render review's #7, #159): the conversation forgotten quietly, the repaint, then the tools line and
+    /// the reconnects, so the redraw never wipes them. <paramref name="run"/> (#76): a run's hand-over, whose repaint waits for the idle line.
     /// </summary>
-    private async Task ApplySettingsChangesAsync(SettingsChanges changes, CancellationToken cancellationToken)
+    private async Task ApplySettingsChangesAsync(SettingsChanges changes, CancellationToken cancellationToken, bool run = false)
     {
         // Gradient rules (2026-11-01): idempotent, so every pass sets it (a /profile reload, a menu closing at idle); the stops' reference
         // changes only on a real flip, which the input rules redraw for on the pane's tick.
         Theme.UseRuleGradient(_effective().GradientRules);
+        Theme.UseThemedBackground(_effective().ThemedBackground);   // the same for Themed background (2026-11-17, #101)
 
         if (changes.HasFlag(SettingsChanges.WebUi))
         {
@@ -14784,6 +14851,42 @@ internal sealed partial class ChatScreen
         {
             // The avatar changed (2026-10-10): the title wears the new one at once.
             ApplyWindowTitle();
+        }
+
+        if (changes.HasFlag(SettingsChanges.Conversation))
+        {
+            // The history's shape follows the LLM offer tools switch (see SettingsChanges.Conversation):
+            // forgotten like /clear, without the wipe — the pane's status line was the feedback
+            // for the row, the line below it for the conversation, said once the theme has repainted.
+            _session.History.Clear();
+            DropQueue();
+            _lastTrace = null;
+            _learnTrace = null;
+            _session.Usage.ResetConversation();
+            _pictureStrip.Clear();
+            _log.Clear();
+            ForgetSession();
+            LeavePlanOnReset();
+        }
+
+        if (changes.HasFlag(SettingsChanges.Theme))
+        {
+            // After the conversation switch (2026-11-16): the repaint keeps the conversation, so a pane that flipped LLM offer tools too
+            // clears the history first, then the screen is drawn once in the new colours. During a run only the theme is put in force.
+            if (run)
+            {
+                ApplyTheme();
+                _themeRepaintPending = true;
+            }
+            else
+            {
+                RestartInTheme();
+            }
+        }
+
+        if (changes.HasFlag(SettingsChanges.Conversation))
+        {
+            _transcript.Notice(ToolsChangedNotice(_effective().LlmOfferTools));
         }
 
         if (changes.HasFlag(SettingsChanges.Llm))
@@ -14811,30 +14914,6 @@ internal sealed partial class ChatScreen
         if (changes.HasFlag(SettingsChanges.Mcp))
         {
             await ConnectMcpAsync(cancellationToken).ConfigureAwait(false);
-        }
-
-        if (changes.HasFlag(SettingsChanges.Conversation))
-        {
-            // The history's shape follows the LLM offer tools switch (see SettingsChanges.Conversation):
-            // forgotten like /clear, without the wipe — the pane's status line was the feedback
-            // for the row, this line is it for the conversation.
-            _session.History.Clear();
-            DropQueue();
-            _lastTrace = null;
-            _learnTrace = null;
-            _session.Usage.ResetConversation();
-            _pictureStrip.Clear();
-            _log.Clear();
-            ForgetSession();
-            LeavePlanOnReset();
-            _transcript.Notice(ToolsChangedNotice(_effective().LlmOfferTools));
-        }
-
-        if (changes.HasFlag(SettingsChanges.Theme))
-        {
-            // After the conversation switch (2026-11-16): the repaint keeps the conversation, so a pane that flipped LLM offer tools too
-            // clears the history first, then the screen is drawn once in the new colours.
-            RestartInTheme();
         }
     }
 
@@ -14978,6 +15057,8 @@ internal sealed partial class ChatScreen
                     RestartInTheme();
                 }
 
+                // The editor's lines after any repaint (2026-11-17, the admin-themes-render review's #18, #34), on every path.
+                _menu.PrintHeld();
                 return false;
 
             case SlashCommand.Avatar:
@@ -16006,8 +16087,9 @@ internal sealed partial class ChatScreen
 
         _web.Fetcher.ForgetAdopted();
         DiagnosticLog.Debug(AppSettings.Category, AppSettings.NotDefaultLogLine(SettingsDiff.NotDefault(_effective())));
-        // The new profile's theme (2026-09-23) before the wipe below, so the fresh screen wears it.
+        // The new profile's theme (2026-09-23) before the wipe below, so the fresh screen wears it; a repaint a run left is done by it (#76).
         ThemeName.Apply(_effective(), _settings.ThemesDirectory);
+        _themeRepaintPending = false;
         ApplyWindowTitle();
         _session.History.Clear();
         // The phone's uploads are the old profile's (2026-11-16, #39): the dropped lines' text goes back, their attachments and the held ones let go,
@@ -16870,7 +16952,7 @@ internal sealed partial class ChatScreen
                 }
 
                 var outcome = await RunTurnAsync(assistant, sentText, seenImages, cancellationToken, bot, replay, picture, ladder, turnId, botVoice).ConfigureAwait(false);
-                await EndTurnAsync(closePane: outcome is not (TurnOutcome.Continue or TurnOutcome.Withdrawn), cancellationToken).ConfigureAwait(false);
+                await EndTurnAsync(closePane: outcome is not (TurnOutcome.Continue or TurnOutcome.Withdrawn), cancellationToken, run: true).ConfigureAwait(false);
                 if (outcome == TurnOutcome.Exit)
                 {
                     return true;
@@ -17764,7 +17846,7 @@ internal sealed partial class ChatScreen
             pauseCts.Cancel();
             stop.Cancel();
             await watcher.ConfigureAwait(false);
-            await EndTurnAsync(closePane: waitCts.IsCancellationRequested, cancellationToken).ConfigureAwait(false);
+            await EndTurnAsync(closePane: waitCts.IsCancellationRequested, cancellationToken, run: true).ConfigureAwait(false);
         }
 
         // Ctrl+Alt+B (2026-10-11, RequestBotEnd) ends the chat as the ladder's last press does, without cancelling the wait.
@@ -19022,15 +19104,17 @@ internal sealed partial class ChatScreen
     /// </summary>
     /// <remarks>
     /// Every picture is registered for the Web UI's page too (later on 2026-10-14): <c>WebIds</c> holds them all, a codec-refused one among them
-    /// (registered web-only), while the PC's double-click and drag see only <c>TileIds</c>.
+    /// (registered web-only), while the PC's double-click and drag see only <c>TileIds</c>. <paramref name="idFor"/> (2026-11-17, a theme
+    /// repaint's, #90) gives the id for the image at an index, web-only or not, in place of registering it anew; the live callers pass none.
     /// </remarks>
-    private (List<ImageThumbnail> Tiles, List<int> TileIds, List<int> WebIds) ReadThumbnails(IReadOnlyList<ImageAttachment> images, ThumbnailBox box, bool sandbox)
+    private (List<ImageThumbnail> Tiles, List<int> TileIds, List<int> WebIds) ReadThumbnails(IReadOnlyList<ImageAttachment> images, ThumbnailBox box, bool sandbox, Func<int, bool, int>? idFor = null)
     {
         var tiles = new List<ImageThumbnail>(images.Count);
         var ids = new List<int>(images.Count);
         var web = new List<int>(images.Count);
-        foreach (var image in images)
+        for (int index = 0; index < images.Count; index++)
         {
+            var image = images[index];
             // An attached PDF has no thumbnail (2026-10-14): its label on the line says what it is.
             if (image.IsDocument)
             {
@@ -19039,14 +19123,14 @@ internal sealed partial class ChatScreen
 
             if (ImageThumbnail.Read(image, box.Columns, box.MaxRows) is { } thumbnail)
             {
-                int id = RegisterPicture(image, sandbox);
+                int id = idFor?.Invoke(index, false) ?? RegisterPicture(image, sandbox);
                 tiles.Add(thumbnail);
                 ids.Add(id);
                 web.Add(id);
             }
             else
             {
-                web.Add(RegisterPicture(image, sandbox, webOnly: true));
+                web.Add(idFor?.Invoke(index, true) ?? RegisterPicture(image, sandbox, webOnly: true));
             }
         }
 

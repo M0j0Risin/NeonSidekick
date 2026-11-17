@@ -238,7 +238,6 @@ public sealed class MadeFilesTests : IDisposable
         Assert.False(MadeFiles.IsUnder(@"E:\a.txt", Drive));
     }
 
-    /// <summary>A capture's write is never listed (the review's #127); the write itself still lands.</summary>
     /// <summary>A drawn chart (2026-11-16, plan sharded-hugging-puppy #9) is listed like any write: the tool saves through <c>WriteBytes</c>.</summary>
     [Fact]
     public async Task ARenderedChart_IsListed()
@@ -255,6 +254,7 @@ public sealed class MadeFilesTests : IDisposable
         Assert.Equal(["chart.png"], Names());
     }
 
+    /// <summary>A capture's write is never listed (the review's #127); the write itself still lands.</summary>
     [Fact]
     public void AnUnlistedWrite_LandsButIsNotListed()
     {

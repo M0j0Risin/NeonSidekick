@@ -11,7 +11,8 @@ public sealed record ContrastProblem(string Pair, double Ratio, double Target);
 /// seen (2.5) and the deep slab under a switched-off toolbar item (1.6), the dim text and every accent read on the panel (4.5), code colors on
 /// both diff slabs (3) — with body text read (4.5) and the page's color carried on the primary (4.5: the log window's selection and the picture
 /// menu's highlight put it there). The built-ins are held to none failing; <c>/theme edit</c> lists them as warnings that never block a save.
-/// Pure.
+/// The code pairs and a style's own ground are judged on the styles as the terminal resolves them (2026-11-17, the admin-themes-render
+/// review's #100: a file's role words and its <c>styles</c> moved what the role pairs judged), named by the style's key. Pure.
 /// </summary>
 public static class ThemeChecks
 {
@@ -44,24 +45,36 @@ public static class ThemeChecks
             }
         }
 
-        Need("panelBg on bg", palette.PanelBg, palette.Bg, PanelTarget);
-        Need("dimmer on bg", palette.Dimmer, palette.Bg, DimmerTarget);
-        Need("deep on bg", palette.Deep, palette.Bg, DeepTarget);
-        Need("ink on bg", palette.Ink, palette.Bg, TextTarget);
-        Need("ink on panelBg", palette.Ink, palette.PanelBg, TextTarget);
-        Need("dim on panelBg", palette.Dim, palette.PanelBg, TextTarget);
+        Need(ThemeText.PanelPair, palette.PanelBg, palette.Bg, PanelTarget);
+        Need(ThemeText.DimmerPair, palette.Dimmer, palette.Bg, DimmerTarget);
+        Need(ThemeText.DeepPair, palette.Deep, palette.Bg, DeepTarget);
+        Need(ThemeText.InkPair, palette.Ink, palette.Bg, TextTarget);
+        Need(ThemeText.InkPanelPair, palette.Ink, palette.PanelBg, TextTarget);
+        Need(ThemeText.DimPanelPair, palette.Dim, palette.PanelBg, TextTarget);
         foreach (var (name, color) in Accents(palette))
         {
-            Need(name + " on panelBg", color, palette.PanelBg, TextTarget);
+            Need(ThemeText.PanelRolePair(name), color, palette.PanelBg, TextTarget);
         }
 
-        Need("bg on primary", palette.Bg, palette.Primary, TextTarget);
+        Need(ThemeText.BgPrimaryPair, palette.Bg, palette.Primary, TextTarget);
+        var styles = Theme.StylesBuilt(palette);
         foreach (var (slab, under) in new[] { ("good", palette.Good), ("bad", palette.Bad) })
         {
             var fill = Theme.Mix(palette.Bg, under, Theme.DiffSlabShare);
-            foreach (var (name, color) in Code(palette))
+            foreach (var (_, slot) in Theme.CodeSlots)
             {
-                Need(name + " on the " + slab + " diff", color, fill, CodeTarget);
+                var ink = styles(slot).Foreground;
+                Need(ThemeText.SlabPair(ThemeKeys.Styles[(int)slot], slab), ink == Color.Default ? palette.Ink : ink, fill, CodeTarget);
+            }
+        }
+
+        // A style that sets both its words and its own ground (a heading's "bg": "secondary") reads on that ground.
+        foreach (var slot in Enum.GetValues<ThemeStyleSlot>())
+        {
+            var style = styles(slot);
+            if (style.Foreground != Color.Default && style.Background != Color.Default)
+            {
+                Need(ThemeText.OwnGroundPair(ThemeKeys.Styles[(int)slot]), style.Foreground, style.Background, TextTarget);
             }
         }
 
@@ -71,8 +84,4 @@ public static class ThemeChecks
     private static (string, Color)[] Accents(ThemePalette p) =>
         [("primary", p.Primary), ("secondary", p.Secondary), ("tertiary", p.Tertiary), ("highlight", p.Highlight), ("warm", p.Warm), ("tint", p.Tint),
          ("good", p.Good), ("bad", p.Bad), ("warn", p.Warn)];
-
-    private static (string, Color)[] Code(ThemePalette p) =>
-        [("primary", p.Primary), ("secondary", p.Secondary), ("tertiary", p.Tertiary), ("highlight", p.Highlight), ("warm", p.Warm), ("tint", p.Tint),
-         ("dim", p.Dim), ("ink", p.Ink)];
 }

@@ -342,9 +342,10 @@ public static class DirectoryText
     /// <c>/ad</c>, which lists 1,000), save with <c>to</c> only where a save is possible (the code review's 6). Pinned. Not
     /// <see cref="FirstListed"/>, whose "narrow with members" names an argument <c>ad_memberof</c> has not.
     /// </summary>
-    public static string FirstGroupsListed(int limit, bool canRaise, bool canSave)
+    /// <param name="lead">The words before the count (2026-11-17, the review's #17): a compare's lists pass <c>each list's first </c>.</param>
+    public static string FirstGroupsListed(int limit, bool canRaise, bool canSave, string lead = "the first ")
     {
-        string first = "the first " + limit.ToString("N0", CultureInfo.InvariantCulture) + " listed";
+        string first = lead + limit.ToString("N0", CultureInfo.InvariantCulture) + " listed";
         var ways = new List<string>();
         if (canRaise)
         {
@@ -439,28 +440,66 @@ public static class DirectoryText
 
     /// <summary>Each of a compare's lists cut to the limit: <see cref="FirstGroupsListed"/>'s ways, per list.</summary>
     public static string FirstGroupsListedEach(int limit, bool canRaise, bool canSave) =>
-        FirstGroupsListed(limit, canRaise, canSave).Replace("the first ", "each list's first ", StringComparison.Ordinal);
+        FirstGroupsListed(limit, canRaise, canSave, "each list's first ");
 
     /// <summary>A note about one side of a compare: its account as the head writes it, then the note.</summary>
     public static string SideNote(string account, string note) => account + ": " + note;
 
-    /// <summary>The list of groups only one account is in: its title with its count (the card's heading, and the model's with a colon).</summary>
-    public static string OnlyTitle(string account, int count) => "only " + account + " (" + count.ToString(CultureInfo.InvariantCulture) + ")";
+    /// <summary>
+    /// The list of groups only one account is in: its title with its count (the card's heading, and the model's with a colon). When the other
+    /// side's list was read only in part (<paramref name="otherCut"/>, its name as the head writes it; 2026-11-17, the review's #112), a group
+    /// shown here may be one both are in: "only alice (12; bob's list is partial, some may be shared)".
+    /// </summary>
+    public static string OnlyTitle(string account, int count, string? otherCut = null) =>
+        "only " + account + " (" + count.ToString(CultureInfo.InvariantCulture) + (otherCut is null ? "" : "; " + otherCut + "'s list is partial, some may be shared") + ")";
 
     /// <summary>The groups both accounts are in: the title with its count.</summary>
     public static string BothTitle(int count) => BothSection + " (" + count.ToString(CultureInfo.InvariantCulture) + ")";
 
-    /// <summary>The CSV's <c>section</c> for the groups only one account is in: the account's name on one line, unfenced (a spreadsheet's cell).</summary>
-    public static string OnlySection(string accountName) => "only " + SectionName(accountName);
+    /// <summary>The CSV's <c>section</c> for the groups only one account is in: the side's name from <see cref="SideNames"/>, unfenced (a spreadsheet's cell).</summary>
+    public static string OnlySection(string sideName) => "only " + sideName;
 
     /// <summary>The CSV's <c>section</c> for the groups both are in.</summary>
     public const string BothSection = "both";
 
-    /// <summary>The both list's column for how one account is in each group: <c>via alice</c> (the card's header and the CSV's).</summary>
-    public static string ViaColumn(string accountName) => ColVia + " " + SectionName(accountName);
+    /// <summary>The both list's column for how one account is in each group: <c>via alice</c> (the card's header and the CSV's), the side's name from <see cref="SideNames"/>.</summary>
+    public static string ViaColumn(string sideName) => ColVia + " " + sideName;
 
     /// <summary>A name as a header or a section: one line, cut to 40, every disguising character escaped (a header is not cleaned when drawn).</summary>
-    private static string SectionName(string name) => DirectoryRender.Clean(Llm.Tools.UntrustedText.Cut(Llm.Tools.UntrustedText.OneLine(name), 40));
+    private static string SectionName(string name) => SectionName(name, 40);
+
+    private static string SectionName(string name, int cut) => DirectoryRender.Clean(Llm.Tools.UntrustedText.Cut(Llm.Tools.UntrustedText.OneLine(name), cut));
+
+    /// <summary>
+    /// A compare's two sides as its sections and columns name them (2026-11-17, the review's #15), finished: each cut to 40, unless the two come
+    /// out equal, when each is cut to 36 and marked " (1)" and " (2)", so two names sharing their first 40 characters still name two sections and
+    /// two columns. The equality is judged on the cleaned names.
+    /// </summary>
+    public static (string A, string B) SideNames(string a, string b)
+    {
+        ArgumentNullException.ThrowIfNull(a);
+        ArgumentNullException.ThrowIfNull(b);
+        string sideA = SectionName(a);
+        string sideB = SectionName(b);
+        return string.Equals(sideA, sideB, StringComparison.Ordinal)
+            ? (SectionName(a, 36) + " (1)", SectionName(b, 36) + " (2)")
+            : (sideA, sideB);
+    }
+
+    /// <summary>
+    /// A compare card's title (2026-11-17, the review's #50 and #81: moved here, each name with its own kind): "the groups the users alice and
+    /// bob belong to, side by side" when both kinds are known and equal, "the groups the user alice and the group admins belong to, side by side"
+    /// when they differ, and no kind words with either unknown; <paramref name="nested"/> adds " at any depth".
+    /// </summary>
+    public static string DescribeCompare(string name, string other, bool nested, string? type = null, string? otherType = null)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(other);
+        string who = type is null || otherType is null ? name + " and " + other
+            : string.Equals(type, otherType, StringComparison.Ordinal) ? KindWord(type) + "s " + name + " and " + other
+            : KindWord(type) + " " + name + " and the " + KindWord(otherType) + " " + other;
+        return "the groups " + (type is null || otherType is null ? "" : "the ") + who + " belong to" + (nested ? " at any depth" : "") + ", side by side";
+    }
 
     /// <summary>Two names that found one account: nothing to compare. Pinned.</summary>
     public static string CompareSameAccount(string name, string other) =>

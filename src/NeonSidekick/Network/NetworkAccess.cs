@@ -61,7 +61,7 @@ public sealed class NetworkAccess
     /// </param>
     public NetworkAccess(Func<AppSettingsData> effective, IPinger? pinger, TimeProvider time, Func<string, CancellationToken, Task<IPAddress[]>>? resolve = null,
         Func<IPAddress, int, CancellationToken, Task<PortState>>? connect = null, Func<string, ushort, CancellationToken, Task<DnsOutcome>>? systemQuery = null,
-        Func<NetworkTarget, HttpMessageHandler>? http = null, Func<Web.BrowserIdentity>? identity = null)
+        Func<NetworkTarget, TlsVerdict, HttpMessageHandler>? http = null, Func<Web.BrowserIdentity>? identity = null)
     {
         _http = http ?? HttpProbe.Handler;
         _identity = identity;
@@ -75,11 +75,14 @@ public sealed class NetworkAccess
 
     public IPinger? Pinger { get; }
 
-    private readonly Func<NetworkTarget, HttpMessageHandler> _http;
+    private readonly Func<NetworkTarget, TlsVerdict, HttpMessageHandler> _http;
     private readonly Func<Web.BrowserIdentity>? _identity;
 
-    /// <summary>A handler whose connections go only to <paramref name="target"/>'s judged addresses (one per <c>net_http</c> hop).</summary>
-    public HttpMessageHandler HttpHandler(NetworkTarget target) => _http(target);
+    /// <summary>
+    /// A handler whose connections go only to <paramref name="target"/>'s judged addresses (one per <c>net_http</c> hop), its certificate check
+    /// recorded in <paramref name="verdict"/> (2026-11-17, #63).
+    /// </summary>
+    public HttpMessageHandler HttpHandler(NetworkTarget target, TlsVerdict verdict) => _http(target, verdict);
 
     /// <summary>The browser <c>net_http</c>'s <c>browser: true</c> speaks as, read at each call.</summary>
     public Web.BrowserIdentity BrowserIdentity => _identity?.Invoke() ?? Web.BrowserIdentity.Fallback;

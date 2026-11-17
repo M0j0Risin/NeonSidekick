@@ -284,9 +284,12 @@ public sealed class OfficeToolsTests : IDisposable
     [InlineData("a;b,c", ',')]
     [InlineData("a;b;c,d", ';')]
     [InlineData("", ',')]
+    [InlineData("a\tb\tc,d", '\t')]
+    [InlineData("a\tb,c", ',')]
+    [InlineData("\"x\ty\",b", ',')]
     public void TheDelimiter_IsCountedOutsideQuotes_ATieStaysComma(string first, char expected)
     {
-        // 2026-10-29, review P1-16.
+        // 2026-10-29, review P1-16; tabs counted too (2026-11-17, the admin-themes-render review's #65), winning only outright.
         Assert.Equal(expected, TableSource.Delimiter(first));
     }
 

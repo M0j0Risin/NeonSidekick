@@ -14,11 +14,13 @@ public sealed class ThemeScope : IDisposable
     {
         Theme.Use(ShippedThemes.Synthwave);
         Theme.UseRuleGradient(true);   // the app's default (2026-11-01, Gradient rules)
+        Theme.UseThemedBackground(true);   // and Themed background's (2026-11-17)
     }
 
     public void Dispose()
     {
         Theme.Use(ShippedThemes.Synthwave);
         Theme.UseRuleGradient(true);
+        Theme.UseThemedBackground(true);
     }
 }

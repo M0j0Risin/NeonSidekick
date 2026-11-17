@@ -126,7 +126,7 @@ public sealed partial class WebUiTests
     }
 
     [Fact]
-    public void TheSheet_SendsTheSpeakerColors_InTheTerminalsOrder_ReadableOrNot()
+    public void TheSheet_SendsTheSpeakerColors_InTheTerminalsOrder_UnlessUnreadableAndLight()
     {
         foreach (var palette in UI.ThemeLibrary.All)
         {
@@ -143,6 +143,39 @@ public sealed partial class WebUiTests
         Assert.False(WebTheme.Readable(unreadable));
         Assert.Contains("  --speaker-2: " + WebTheme.Hex(unreadable.Tertiary) + ";\n", WebTheme.Css(unreadable, on: true), StringComparison.Ordinal);
         Assert.DoesNotContain("--speaker-", WebTheme.Css(UI.Theme.Current, on: false), StringComparison.Ordinal);
+
+        // An unreadable light theme lends none (2026-11-17, the admin-themes-render review's #86): its deep accents were made for its own light page.
+        var paper = UI.ThemeLibrary.All.Single(p => p.Name == "paper");
+        string pale = WebTheme.Css(paper with { Ink = paper.Bg }, on: true);
+        foreach (string token in new[] { "--speaker-", "--accent", "--user", "--ok:", "--error:", "--warn:" })
+        {
+            Assert.DoesNotContain(token, pale, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// The page's colors as the home tiles read them (2026-11-17, #82): the theme's ground and ink when the sheet sends them, else app.css's own,
+    /// whose two constants match its text; a deep blue light reads on app.css's dark page while the PC's chip keeps the light page's shade.
+    /// </summary>
+    [Fact]
+    public void TheTiles_ReadOnThePagesOwnGround()
+    {
+        Assert.Equal(WebTheme.PageGround, WebTheme.Hex(WebTheme.PageGroundColor));
+        Assert.Equal(WebTheme.PageText, WebTheme.Hex(WebTheme.PageTextColor));
+        var paper = UI.ThemeLibrary.All.Single(p => p.Name == "paper");
+        Assert.Equal(paper.Bg, WebTheme.GroundOf(paper, on: true));
+        Assert.Equal(WebTheme.PageGroundColor, WebTheme.GroundOf(paper, on: false));
+        Assert.Equal(WebTheme.PageTextColor, WebTheme.InkOf(paper, on: false));
+
+        var deepBlue = new Spectre.Console.Color(0x10, 0x20, 0x90);
+        var chip = new App.HomeChip("entity:light.a", "💡", "A", "", "", App.HomeChips.Lit(deepBlue), App.HomeChipAction.Call, null, "", Tint: deepBlue);
+        var (tone, color) = WebHomeView.ToneOf(chip, stale: false);
+        Assert.Equal("on", tone);
+        UI.ThemeFile.TryParseColor(color!, out var drawn);
+        Assert.True(UI.ColorContrast.Contrast(drawn, WebTheme.PageGroundColor) >= App.HomeChips.ReadableContrast);
+        var (_, onPaper) = WebHomeView.ToneOf(chip, stale: false, (paper.Bg, paper.Ink));
+        UI.ThemeFile.TryParseColor(onPaper!, out var light);
+        Assert.Equal(deepBlue, light);   // already readable on paper: kept as it is
     }
 
     [Fact]

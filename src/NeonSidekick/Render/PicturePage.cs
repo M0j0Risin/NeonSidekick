@@ -54,7 +54,9 @@ public sealed record CollageItem(string MediaType, byte[] Bytes, string? Caption
 /// <summary>
 /// A collage's page (2026-11-16, plan sharded-hugging-puppy #9): the pictures in a grid of <paramref name="columns"/>, each fitted into its
 /// cell keeping its shape, a caption under it, a title over all. Every text is HTML-escaped (a file named <c>&lt;b&gt;.jpg</c> stays text);
-/// the pictures are <c>data:</c>, fitted beforehand so the page stays small. Pure.
+/// the pictures are <c>data:</c>, fitted beforehand so the page stays small. The colors are <see cref="PictureColors"/>' (2026-11-17, the
+/// admin-themes-render review's #41); the columns are <c>minmax(0, 1fr)</c> and a figure may shrink below its caption (#32), so a long
+/// caption is cut with its ellipsis instead of holding its column open. Pure.
 /// </summary>
 public static class CollageHtml
 {
@@ -66,13 +68,14 @@ public static class CollageHtml
     public static string Page(IReadOnlyList<CollageItem> items, int columns, string? title, bool dark)
     {
         ArgumentNullException.ThrowIfNull(items);
-        string ground = dark ? "#17151F" : "#FFFFFF", ink = dark ? "#ECEAF2" : "#1F2328", quiet = dark ? "#A8A3B8" : "#57606A", tile = dark ? "#221F2C" : "#F3F4F6";
+        var colors = PictureColors.For(dark);
+        string ground = colors.Ground, ink = colors.Ink, quiet = colors.Quiet, tile = colors.Tile;
         var page = new System.Text.StringBuilder();
         page.Append("<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\">\n").Append(PdfHtml.PolicyMeta).Append('\n')
             .Append("<style>html, body { margin: 0; background: ").Append(ground).Append("; color: ").Append(ink).Append("; font-family: 'Segoe UI', system-ui, -apple-system, Arial, sans-serif; }")
             .Append(" main { padding: 24px; } h1 { margin: 0 0 18px; font-size: 30px; font-weight: 600; text-align: center; }")
-            .Append(" .grid { display: grid; grid-template-columns: repeat(").Append(columns.ToString(System.Globalization.CultureInfo.InvariantCulture)).Append(", 1fr); gap: 14px; }")
-            .Append(" figure { margin: 0; } .tile { aspect-ratio: 4 / 3; background: ").Append(tile).Append("; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; }")
+            .Append(" .grid { display: grid; grid-template-columns: repeat(").Append(columns.ToString(System.Globalization.CultureInfo.InvariantCulture)).Append(", minmax(0, 1fr)); gap: 14px; }")
+            .Append(" figure { margin: 0; min-width: 0; } .tile { aspect-ratio: 4 / 3; background: ").Append(tile).Append("; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; }")
             .Append(" img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }")
             .Append(" figcaption { margin-top: 6px; font-size: 15px; color: ").Append(quiet).Append("; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }</style>\n")
             .Append("</head><body><main>");

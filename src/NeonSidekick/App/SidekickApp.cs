@@ -466,6 +466,12 @@ public sealed partial class SidekickApp
         }
     }
 
+    /// <summary>
+    /// The app's User-Agent (2026-11-17, the review's #186: one helper for every request that names the app): <c>NeonSidekick/</c> and
+    /// <paramref name="version"/>, or the running <see cref="Version"/>; nothing about the user.
+    /// </summary>
+    public static string UserAgent(string? version = null) => Name + "/" + (version ?? Version);
+
     /// <summary>What <c>--version</c> prints.</summary>
     public static string VersionLine => $"{Name} {Version}";
 
@@ -972,7 +978,8 @@ public sealed partial class SidekickApp
         var pdfEditing = new Pdf.PdfEditing(_web.Browser, files, () => _web.Browser.Locate(EffectiveSettings.WebBrowserPath), _time);
         var fileTools = ChatScreen.FileTools(files, () => WorkingDirectory.IsDefault(EffectiveSettings.WorkingDirectory), PersonaFile.OpenInEditor, () => EffectiveSettings, unc, pdf, images, reading: pdfReading, editing: pdfEditing, time: _time, docx: docx);
         // The picture tools (2026-10-10): their own group, Image tools the switch.
-        var imageTools = ChatScreen.ImageTools(files, () => EffectiveSettings, images, () => _settings.ProfileSplashDirectory, new Render.PictureRendering(_web.Browser, () => EffectiveSettings.WebBrowserPath));   // the render tools headless too (2026-11-16, #9)
+        var rendering = new Render.PictureRendering(_web.Browser, () => EffectiveSettings.WebBrowserPath);
+        var imageTools = ChatScreen.ImageTools(files, () => EffectiveSettings, images, () => _settings.ProfileSplashDirectory, rendering);   // the render tools headless too (2026-11-16, #9)
         // The skills need no console either (2026-09-16); the two settings decide per turn. The skill records (2026-09-30) are the home's.
         using var skillStore = new SkillRecordStore(_settings.StorageDirectory);
         _headlessSkillRecords = new SkillRecords(skillStore, () => SkillRoots.For(_settings, _externalSkills), _time);
@@ -1041,7 +1048,7 @@ public sealed partial class SidekickApp
         // The admin families (2026-10-15, the admin-tools plan): every read headless too, never a change (no pane to ask on); one scan budget, reset each turn.
         // The monitors (2026-10-23, the monitors plan): /monitor over the bare system, no board and no clock; no tools headless (no pane to ask on).
         var monitorActions = _monitorSystem is null ? null : new Monitors.MonitorActions(new Monitors.MonitorCalls(_monitorSystem, _time), time: _time);
-        var network = new Network.NetworkAccess(() => EffectiveSettings, _pinger, _time, identity: () => _web.Browser.Identify(EffectiveSettings.WebBrowserPath));
+        var network = new Network.NetworkAccess(() => EffectiveSettings, _pinger, _time, identity: () => Web.BrowserIdentity.ForHttp(_web.Browser.Identify(EffectiveSettings.WebBrowserPath)));
         var networkBudget = new Network.NetworkBudget();
         object? networkBudgetRun = null;   // the Ralph run the budget lasts for (2026-10-23, DA8)
         var networkTools = ChatScreen.NetworkTools(network, networkBudget);
@@ -1126,6 +1133,7 @@ public sealed partial class SidekickApp
                 FilesEnabled = effective.FileTools,
                 Images = imageTools,
                 ImagesEnabled = effective.ImageTools,
+                Drawable = ChatScreen.Drawable(effective.ImageTools, rendering),
                 Sessions = sessionTools,
                 SessionsEnabled = effective.SessionTool,
                 Mcp = mcp.Tools,

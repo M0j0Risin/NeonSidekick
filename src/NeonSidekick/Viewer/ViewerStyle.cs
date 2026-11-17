@@ -7,8 +7,8 @@ namespace NeonSidekick.Viewer;
 /// The picture viewer's colours from the theme in force (later on 2026-09-27, the user's call: the window in the app's look,
 /// not the stock light bar), as Win32 COLORREFs (<c>0x00BBGGRR</c>). The title bar is Windows' own, recoloured through DWM
 /// — not a caption drawn by hand, which would mean redoing the buttons, snap layouts, dragging and resizing (the user's
-/// call): Windows 11 takes <see cref="Caption"/>, <see cref="CaptionText"/> and <see cref="Border"/>, Windows 10 only the
-/// dark bar, anything older nothing. <see cref="Background"/> fills round the picture and the empty window,
+/// call): Windows 11 takes <see cref="Caption"/>, <see cref="CaptionText"/> and <see cref="Border"/>, a light bar on a light
+/// theme and a dark one on a dark theme; Windows 10 only a plain bar, anything older nothing. <see cref="Background"/> fills round the picture and the empty window,
 /// <see cref="Text"/> is the line the window shows with no picture. Pure; <see cref="PictureWindow"/> applies it.
 /// </summary>
 public readonly record struct ViewerStyle(uint Caption, uint CaptionText, uint Border, uint Background, uint Text)

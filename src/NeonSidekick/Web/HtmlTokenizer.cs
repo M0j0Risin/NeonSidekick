@@ -11,6 +11,12 @@ public enum HtmlTokenKind
 
     /// <summary>Text between tags, entities decoded; inside <c>script</c> / <c>style</c> the raw body.</summary>
     Text,
+
+    /// <summary>
+    /// A <c>&lt;![CDATA[…]]&gt;</c> section's text, raw (2026-11-17, the admin-themes-render review's #161): text inside SVG or MathML, a bogus
+    /// comment in plain HTML, so each reader decides; the Markdown converter drops it as before.
+    /// </summary>
+    Cdata,
 }
 
 /// <summary>One token of a page. <see cref="Name"/> is the lower-cased tag name (empty for text).</summary>
@@ -23,8 +29,8 @@ public sealed record HtmlToken(HtmlTokenKind Kind, string Name, string Text, IRe
 /// <summary>
 /// A hand-rolled HTML scanner — the ONE HTML reader in the app (the Markdown converter walks its tokens; the DuckDuckGo result parser
 /// did too until the scrape went, 2026-11-07). It knows what it needs and no more: tags with
-/// attributes (quoted or bare, entities decoded), text with entities decoded, comments / doctype /
-/// CDATA / processing instructions skipped, the raw-text elements (<c>script</c>, <c>style</c>,
+/// attributes (quoted or bare, entities decoded), text with entities decoded, comments / doctype (its internal subset too) /
+/// processing instructions skipped, CDATA as a <see cref="HtmlTokenKind.Cdata"/> token, the raw-text elements (<c>script</c>, <c>style</c>,
 /// <c>textarea</c>, <c>title</c>) read to their end tag without looking for tags inside, the void
 /// elements never expecting a close. It never throws on malformed input: a stray <c>&lt;</c> is
 /// text, an unterminated tag runs to the end.
@@ -42,6 +48,46 @@ public static class HtmlTokenizer
     {
         "script", "style", "textarea", "title",
     };
+
+    /// <summary>
+    /// Where a <c>&lt;!…&gt;</c> or <c>&lt;?…&gt;</c> ends: at its first <c>&gt;</c>, but a doctype's internal subset (<c>[…]</c> before its
+    /// <c>&gt;</c>, quoted strings in it skipped whole) is passed first (2026-11-17, #192: <c>&lt;!DOCTYPE svg [&lt;!ENTITY x "a&gt;b"&gt;]&gt;</c>
+    /// ended inside the subset and spilled the rest as text).
+    /// </summary>
+    private static int DeclarationEnd(string html, int i)
+    {
+        int n = html.Length;
+        int close = html.IndexOf('>', i + 2);
+        if (!StartsWithIgnoringCase(html, i, "<!DOCTYPE"))
+        {
+            return close < 0 ? n : close + 1;
+        }
+
+        int open = html.IndexOf('[', i + 9);
+        if (open < 0 || (close >= 0 && close < open))
+        {
+            return close < 0 ? n : close + 1;
+        }
+
+        int k = open + 1;
+        while (k < n && html[k] != ']')
+        {
+            if (html[k] is '"' or '\'')
+            {
+                int quote = html.IndexOf(html[k], k + 1);
+                k = quote < 0 ? n : quote + 1;
+                continue;
+            }
+
+            k++;
+        }
+
+        close = k < n ? html.IndexOf('>', k + 1) : -1;
+        return close < 0 ? n : close + 1;
+    }
+
+    private static bool StartsWithIgnoringCase(string html, int i, string prefix) =>
+        i + prefix.Length <= html.Length && string.Compare(html, i, prefix, 0, prefix.Length, StringComparison.OrdinalIgnoreCase) == 0;
 
     public static IEnumerable<HtmlToken> Tokenize(string html)
     {
@@ -72,6 +118,7 @@ public static class HtmlTokenizer
             {
                 if (text.Length > 0) { yield return TextToken(text); }
                 int end = html.IndexOf("]]>", i + 9, StringComparison.Ordinal);
+                yield return new HtmlToken(HtmlTokenKind.Cdata, "", html[(i + 9)..(end < 0 ? n : end)], null, false);
                 i = end < 0 ? n : end + 3;
                 continue;
             }
@@ -79,8 +126,7 @@ public static class HtmlTokenizer
             if (i + 1 < n && (html[i + 1] == '!' || html[i + 1] == '?'))
             {
                 if (text.Length > 0) { yield return TextToken(text); }
-                int end = html.IndexOf('>', i + 2);
-                i = end < 0 ? n : end + 1;
+                i = DeclarationEnd(html, i);
                 continue;
             }
 

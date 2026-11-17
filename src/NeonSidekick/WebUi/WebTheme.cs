@@ -26,6 +26,15 @@ public static class WebTheme
     /// <summary>The page's own ground (<c>app.css</c>'s <c>--bg</c>), the manifest's colors while the theme is off.</summary>
     public const string PageGround = "#120b1f";
 
+    /// <summary>The page's own text (<c>app.css</c>'s <c>--text</c>).</summary>
+    public const string PageText = "#efe6ff";
+
+    /// <summary><see cref="PageGround"/> as a color (2026-11-17, the admin-themes-render review's #82): the home tiles' ground while the theme is off.</summary>
+    public static readonly Color PageGroundColor = new(0x12, 0x0B, 0x1F);
+
+    /// <summary><see cref="PageText"/> as a color.</summary>
+    public static readonly Color PageTextColor = new(0xEF, 0xE6, 0xFF);
+
     /// <summary>The page's own accent (<c>app.css</c>'s <c>--accent</c>).</summary>
     public const string PageAccent = "#ff4fd8";
 
@@ -46,13 +55,7 @@ public static class WebTheme
             return cached.Key;
         }
 
-        // FNV-1a over the sheet's text: stable across runs, unlike string.GetHashCode.
-        uint hash = 2166136261;
-        foreach (char c in Css(palette, on: true))
-        {
-            hash = (hash ^ c) * 16777619;
-        }
-
+        uint hash = Platform.Fnv1a.Hash(Css(palette, on: true));   // stable across runs, unlike string.GetHashCode
         string key = palette.Name + "~" + hash.ToString("x8", CultureInfo.InvariantCulture);
         s_key = new KeyCache(palette, key);
         return key;
@@ -72,45 +75,47 @@ public static class WebTheme
         // Built here, never the pickers' cache (2026-10-22, a review: a request's thread and the PC's /theme preview rebuilt one shared slot in turn).
         var styles = Theme.StylesBuilt(palette);
         bool readable = Readable(palette);
-        Token("--accent", palette.Primary);
-        Token("--accent-2", palette.Secondary);
-        // A botchat's speakers (2026-11-12, plan what-would-it-take-tingly-ullman): the six hues the terminal names them in, in its order
-        // (ChatScreen.SpeakerColor). Accents, so lent whether or not the theme reads; slot 2 is the palette's Tertiary, not --accent-3.
-        Token("--speaker-0", palette.Primary);
-        Token("--speaker-1", palette.Secondary);
-        Token("--speaker-2", palette.Tertiary);
-        Token("--speaker-3", palette.Highlight);
-        Token("--speaker-4", palette.Warm);
-        Token("--speaker-5", palette.Tint);
-        StyleTokens(css, "--accent-3", styles(ThemeStyleSlot.AccentTertiary), readable);
-        StyleTokens(css, "--user", styles(ThemeStyleSlot.User), readable);
-        Token("--ok", palette.Good);
-        Token("--error", palette.Bad);
-        Token("--warn", palette.Warn);
+
+        // The accents are lent to app.css's dark page unless the theme is an unreadable light one (2026-11-17, the admin-themes-render
+        // review's #86: a daylight theme's deep accents on the dark page): a dark theme's were made for a dark page, read or not.
+        if (readable || !ColorContrast.IsLight(palette.Bg))
+        {
+            Token("--accent", palette.Primary);
+            Token("--accent-2", palette.Secondary);
+            // A botchat's speakers (2026-11-12, plan what-would-it-take-tingly-ullman): the six hues the terminal names them in, in its order
+            // (ChatScreen.SpeakerColor); slot 2 is the palette's Tertiary, not --accent-3.
+            Token("--speaker-0", palette.Primary);
+            Token("--speaker-1", palette.Secondary);
+            Token("--speaker-2", palette.Tertiary);
+            Token("--speaker-3", palette.Highlight);
+            Token("--speaker-4", palette.Warm);
+            Token("--speaker-5", palette.Tint);
+            StyleTokens(css, "--accent-3", styles(ThemeStyleSlot.AccentTertiary), readable);
+            StyleTokens(css, "--user", styles(ThemeStyleSlot.User), readable);
+            Token("--ok", palette.Good);
+            Token("--error", palette.Bad);
+            Token("--warn", palette.Warn);
+        }
+
         if (readable)
         {
             Token("--bg", palette.Bg);
             Token("--panel", palette.PanelBg);
-            Token("--panel-2", Mix(palette.PanelBg, palette.Ink, 0.08));
-            Token("--line", Mix(palette.PanelBg, palette.Dim, 0.35));
+            Token("--panel-2", Theme.Mix(palette.PanelBg, palette.Ink, 0.08));
+            Token("--line", Theme.Mix(palette.PanelBg, palette.Dim, 0.35));
             Token("--text", palette.Ink);
             Token("--dim", palette.Dim);
-        }
 
-        if (readable && ColorContrast.IsLight(palette.Bg))
-        {
-            // A light page (2026-11-16, plan sharded-hugging-puppy #53, the daylight themes): app.css's colors fixed for a dark one given the
-            // theme's — the scheme, the gradient's far end, the diff slabs and the code block's ground as the terminal draws them, the text on
-            // the accent and on the error, and the code colors through the export's map. A dark theme keeps app.css's own.
-            css.Append("  color-scheme: light;\n");
-            Token("--bg-mix", Color.Black);
+            // The diff slabs and the code block's ground as the terminal draws them, the text on the accent and on the error, and the code
+            // colors through the export's map: for any readable theme (2026-11-17, #123, #39: app.css's own were tuned for its #120b1f, not
+            // the theme's ground).
             Token("--diff-add", Theme.Mix(palette.Bg, palette.Good, Theme.DiffSlabShare));
             Token("--diff-del", Theme.Mix(palette.Bg, palette.Bad, Theme.DiffSlabShare));
             var block = styles(ThemeStyleSlot.MarkdownCodeBlock);
             Token("--code-bg", block.Background == Color.Default ? palette.PanelBg : block.Background);
             Token("--on-accent", OnColor(palette.Primary, palette));
             Token("--on-error", OnColor(palette.Bad, palette));
-            foreach (var (kind, slot) in CodeSlots)
+            foreach (var (kind, slot) in Theme.CodeSlots)
             {
                 if (Pdf.PdfHtml.CodeClass(kind) is { } name && styles(slot).Foreground != Color.Default)
                 {
@@ -119,29 +124,32 @@ public static class WebTheme
             }
         }
 
+        if (readable && ColorContrast.IsLight(palette.Bg))
+        {
+            // The scheme and the gradient's far end only on a light page (2026-11-16, the daylight themes); the rest go to any readable theme (#123).
+            css.Append("  color-scheme: light;\n");
+            Token("--bg-mix", Color.Black);
+        }
+
         return css.Append("}\n").ToString();
     }
 
     /// <summary>
-    /// The code token kinds and the style each wears, as the terminal colors them: the session export's classes and the light page's
-    /// <c>--tk-*</c> tokens read one map (2026-11-16; the export's own until then).
+    /// The ground the page shows (2026-11-17, the admin-themes-render review's #82): the theme's <see cref="ThemePalette.Bg"/> while
+    /// <paramref name="on"/> (<i>Web UI profile theme</i>) and the theme <see cref="Readable"/>, else <c>app.css</c>'s own.
     /// </summary>
-    internal static readonly IReadOnlyList<(UI.Markdown.CodeTokenKind Kind, ThemeStyleSlot Slot)> CodeSlots =
-    [
-        (UI.Markdown.CodeTokenKind.Keyword, ThemeStyleSlot.CodeKeyword),
-        (UI.Markdown.CodeTokenKind.Type, ThemeStyleSlot.CodeType),
-        (UI.Markdown.CodeTokenKind.String, ThemeStyleSlot.CodeString),
-        (UI.Markdown.CodeTokenKind.Number, ThemeStyleSlot.CodeNumber),
-        (UI.Markdown.CodeTokenKind.Comment, ThemeStyleSlot.CodeComment),
-        (UI.Markdown.CodeTokenKind.Punctuation, ThemeStyleSlot.CodePunctuation),
-        (UI.Markdown.CodeTokenKind.Function, ThemeStyleSlot.CodeFunction),
-        (UI.Markdown.CodeTokenKind.Variable, ThemeStyleSlot.CodeVariable),
-        (UI.Markdown.CodeTokenKind.Attribute, ThemeStyleSlot.CodeAttribute),
-        (UI.Markdown.CodeTokenKind.Tag, ThemeStyleSlot.CodeTag),
-        (UI.Markdown.CodeTokenKind.Heading, ThemeStyleSlot.CodeHeading),
-        (UI.Markdown.CodeTokenKind.Inserted, ThemeStyleSlot.CodeInserted),
-        (UI.Markdown.CodeTokenKind.Deleted, ThemeStyleSlot.CodeDeleted),
-    ];
+    public static Color GroundOf(ThemePalette palette, bool on)
+    {
+        ArgumentNullException.ThrowIfNull(palette);
+        return on && Readable(palette) ? palette.Bg : PageGroundColor;
+    }
+
+    /// <summary>The page's text beside <see cref="GroundOf"/>: the theme's ink when it sends its grounds, else <c>app.css</c>'s.</summary>
+    public static Color InkOf(ThemePalette palette, bool on)
+    {
+        ArgumentNullException.ThrowIfNull(palette);
+        return on && Readable(palette) ? palette.Ink : PageTextColor;
+    }
 
     /// <summary>The page's ground or its ink, whichever reads better on <paramref name="fill"/>: the text on a button or badge of that color.</summary>
     internal static Color OnColor(Color fill, ThemePalette palette) =>
@@ -189,9 +197,6 @@ public static class WebTheme
         ArgumentNullException.ThrowIfNull(palette);
         return ColorContrast.Contrast(palette.Ink, palette.Bg) >= MinContrast && ColorContrast.Contrast(palette.Ink, palette.PanelBg) >= MinContrast;
     }
-
-    private static Color Mix(Color a, Color b, double t) =>
-        new((byte)Math.Round(a.R + (b.R - a.R) * t), (byte)Math.Round(a.G + (b.G - a.G) * t), (byte)Math.Round(a.B + (b.B - a.B) * t));
 
     /// <summary><c>#rrggbb</c>.</summary>
     public static string Hex(Color color) => "#" + color.ToHex().ToLowerInvariant();

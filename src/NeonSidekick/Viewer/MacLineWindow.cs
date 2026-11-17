@@ -1,6 +1,7 @@
 using System.Runtime.Versioning;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Shell;
+using NeonSidekick.UI;
 using static NeonSidekick.Viewer.AppKitNative;
 
 namespace NeonSidekick.Viewer;
@@ -529,7 +530,8 @@ internal sealed class MacLineWindow : AppKitWindow
         SendVoid(_scroll, Sel("setBackgroundColor:"), NSColor(style.Background));
         SendVoid(_text, Sel("setInsertionPointColor:"), NSColor(style.Text));
         uint bg = style.Background;
-        bool dark = (0.2126 * (bg & 0xFF)) + (0.7152 * ((bg >> 8) & 0xFF)) + (0.0722 * ((bg >> 16) & 0xFF)) < 128;
+        // The one light-or-dark test (2026-11-17, the admin-themes-render review's #79); the COLORREF is 0x00BBGGRR.
+        bool dark = !ColorContrast.IsLight(new Spectre.Console.Color((byte)(bg & 0xFF), (byte)((bg >> 8) & 0xFF), (byte)((bg >> 16) & 0xFF)));
         SendVoidLong(_scroll, Sel("setScrollerKnobStyle:"), dark ? 2 : 1);   // NSScrollerKnobStyleLight on a dark background
         unsafe
         {
